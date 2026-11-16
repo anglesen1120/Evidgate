@@ -350,7 +350,7 @@ import type { FixtureCatalogRow } from './fixture-document';
  * `rerun_label`, so the rerun label and the rerun-scope filter have a row; an `incomplete` run with
  * `decision: null`, `unverified_ref: true`, an `evidence:reprocess` label of its own and a
  * `ref.name` carrying U+202E, the format character `escapeFormatChars`
- * (`features/runs/list/ref-name-display.ts`) exists to expose; and a `canceled` run with no identity
+ * (`shared/ui/values/ref-name-display.ts`) exists to expose; and a `canceled` run with no identity
  * at all (`kind`, `name`, `trigger_event` null, no `decision` member). No row carries a
  * completeness member because the wire has none — the Evidence column is the badge's unavailable
  * state for every row. `run-list-empty` (`=empty`) is the project with no runs, `run-list-250`

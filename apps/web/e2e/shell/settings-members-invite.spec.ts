@@ -15,6 +15,12 @@
 // An active-org switch during reveal cannot be claimed from these fixtures.
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { chooseScope, expectScopeValue, scopeControl } from './scope-controls';
+import {
+  MEMBER_ROWS as ROWS,
+  memberRow,
+  openMemberAction,
+  openMemberMenu,
+} from './member-controls';
 
 import createOk from '../../../../fixtures/web-api/membership-create-ok/input.json';
 import cancelNotPending from '../../../../fixtures/web-api/membership-cancel-not-pending/input.json';
@@ -45,7 +51,6 @@ import {
 const INVITE = '[data-members-dialog="invite"][data-state="open"]';
 const RESEND = '[data-members-dialog="resend"][data-state="open"]';
 const CANCEL = '[data-members-dialog="cancel-invite"][data-state="open"]';
-const ROWS = 'app-members-page [data-members-row]';
 const CREATE_TOKEN = createOk.body.invite_token;
 const RESEND_TOKEN = resendOk.body.invite_token;
 const TOKENS = [CREATE_TOKEN, RESEND_TOKEN];
@@ -68,13 +73,25 @@ async function openMembers(
 }
 
 function pendingRow(page: Page): Locator {
-  return page.locator(`${ROWS}[data-membership-id="${PENDING_ID}"]`);
+  return memberRow(page, PENDING_ID);
 }
 
 function openerFor(page: Page, flow: RevealFlow): Locator {
   return flow === 'invite'
     ? page.locator('app-members-page [data-members-invite-open]')
-    : pendingRow(page).locator('[data-members-resend-open]');
+    : pendingRow(page).locator('[data-members-actions]');
+}
+
+async function openFlow(page: Page, flow: RevealFlow, keyboard = false): Promise<Locator> {
+  if (flow === 'resend') return openMemberAction(page, pendingRow(page), 'resend-open', keyboard);
+  const opener = openerFor(page, flow);
+  if (keyboard) {
+    await opener.focus();
+    await page.keyboard.press('Enter');
+  } else {
+    await opener.click();
+  }
+  return opener;
 }
 
 function dialogFor(page: Page, flow: RevealFlow): Locator {
@@ -83,7 +100,7 @@ function dialogFor(page: Page, flow: RevealFlow): Locator {
 
 /** Starts through user-facing controls; the token is always the corpus's full raw answer. */
 async function issueInvite(page: Page, flow: RevealFlow): Promise<Locator> {
-  await openerFor(page, flow).click();
+  await openFlow(page, flow);
   const dialog = dialogFor(page, flow);
   await expect(dialog).toBeVisible();
   if (flow === 'invite')
@@ -194,7 +211,7 @@ for (const locale of LOCALES) {
       await expectNoRetainedToken(page);
       // Reopening starts a new form/confirmation, never a second look at the old plaintext.
       await expect(page.locator('app-members-page')).toHaveAttribute('data-members-phase', 'ready');
-      await openerFor(page, flow).click();
+      await openFlow(page, flow);
       await expect(dialog).toBeVisible();
       await expect(dialog.getByTestId('reveal-value')).toHaveCount(0);
       await expectNoRetainedToken(page);
@@ -207,7 +224,7 @@ for (const locale of LOCALES) {
       await openMembers(page, locale, [
         flow === 'invite' ? MEMBERS_CREATE_REPLAY : MEMBERS_RESEND_REPLAY,
       ]);
-      await openerFor(page, flow).click();
+      await openFlow(page, flow);
       const dialog = dialogFor(page, flow);
       if (flow === 'invite')
         await dialog.locator('input[type="email"]').fill(createOk.body.invited_email);
@@ -231,9 +248,7 @@ for (const locale of LOCALES) {
     }) => {
       await context.grantPermissions(['clipboard-read', 'clipboard-write']);
       await openMembers(page, locale, [MEMBERS_RESEND_OK]);
-      const opener = openerFor(page, flow);
-      await opener.focus();
-      await page.keyboard.press('Enter');
+      const opener = await openFlow(page, flow, true);
       const dialog = dialogFor(page, flow);
       await expect(dialog).toBeVisible();
       await expectFocusInside(dialog);
@@ -270,11 +285,11 @@ for (const locale of LOCALES) {
       await openMembers(page, locale, [
         action === 'resend' ? MEMBERS_RESEND_NOT_PENDING : MEMBERS_CANCEL_NOT_PENDING,
       ]);
-      await pendingRow(page)
-        .locator(
-          action === 'resend' ? '[data-members-resend-open]' : '[data-members-cancel-invite-open]',
-        )
-        .click();
+      await openMemberAction(
+        page,
+        pendingRow(page),
+        action === 'resend' ? 'resend-open' : 'cancel-invite-open',
+      );
       const dialog = page.locator(action === 'resend' ? RESEND : CANCEL);
       await dialog.locator('[data-members-submit]').click();
       await expectVerbatimRefusal(
@@ -289,8 +304,7 @@ for (const locale of LOCALES) {
   // AC2 + F12: cancel has an explicit confirmation and announces success only after the 204.
   test(`cancel 204 closes its confirmation and recovers focus (${locale})`, async ({ page }) => {
     await openMembers(page, locale, [MEMBERS_CANCEL_OK]);
-    const opener = pendingRow(page).locator('[data-members-cancel-invite-open]');
-    await opener.click();
+    await openMemberAction(page, pendingRow(page), 'cancel-invite-open');
     const dialog = page.locator(CANCEL);
     await expect(dialog).toBeVisible();
     await expect(dialog.locator('strong')).toHaveText(PENDING_EMAIL);
@@ -313,17 +327,30 @@ for (const locale of LOCALES) {
     const pendingCount = membershipsList.body.items.filter(
       (member) => member.status === 'pending',
     ).length;
-    await expect(page.locator(`${ROWS} [data-members-resend-open]`)).toHaveCount(pendingCount);
-    await expect(page.locator(`${ROWS} [data-members-cancel-invite-open]`)).toHaveCount(
-      pendingCount,
-    );
-    for (const member of membershipsList.body.items.filter((item) => item.status !== 'pending')) {
-      const row = page.locator(`${ROWS}[data-membership-id="${member.id}"]`);
-      await expect(row).toHaveAttribute('data-members-status', member.status);
-      await expect(
-        row.locator('[data-members-resend-open], [data-members-cancel-invite-open]'),
-      ).toHaveCount(0);
+    let resends = 0;
+    let cancellations = 0;
+    for (const member of membershipsList.body.items) {
+      const row = memberRow(page, member.id);
+      await expect(row.locator('[data-members-row]')).toHaveAttribute(
+        'data-members-status',
+        member.status,
+      );
+      if (member.status === 'removed') {
+        await expect(row.locator('[data-members-actions]')).toHaveCount(0);
+        continue;
+      }
+      await openMemberMenu(page, row);
+      const expected = member.status === 'pending' ? 1 : 0;
+      const resend = page.locator('[data-members-resend-open]');
+      const cancel = page.locator('[data-members-cancel-invite-open]');
+      await expect(resend).toHaveCount(expected);
+      await expect(cancel).toHaveCount(expected);
+      resends += await resend.count();
+      cancellations += await cancel.count();
+      await page.keyboard.press('Escape');
     }
+    expect(resends).toBe(pendingCount);
+    expect(cancellations).toBe(pendingCount);
     await page.goto(withVariants(membersPath(locale), [MEMBERS_READONLY_GRANTS]));
     await expect(page.locator('app-members-page')).toHaveAttribute('data-members-phase', 'ready');
     await expect(pendingRow(page)).toHaveCount(1);
@@ -365,7 +392,7 @@ for (const locale of LOCALES) {
       await openMembers(page, locale, [MEMBERS_RESEND_OK]);
       await expect(page.locator('html')).toHaveAttribute('lang', locale);
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-      await openerFor(page, 'invite').click();
+      await openFlow(page, 'invite');
       const invite = page.locator(INVITE);
       await expect(invite).toBeVisible();
       await waitForDialogAnimations(page, INVITE);
@@ -376,7 +403,7 @@ for (const locale of LOCALES) {
       await expectNoA11yViolations(page, `invite reveal ${locale}/${theme}`);
       await invite.getByTestId('reveal-dismiss').click();
       await expectNoRetainedToken(page);
-      await openerFor(page, 'resend').click();
+      await openFlow(page, 'resend');
       const resend = page.locator(RESEND);
       await expect(resend).toBeVisible();
       await waitForDialogAnimations(page, RESEND);
@@ -386,7 +413,7 @@ for (const locale of LOCALES) {
       await expectNoA11yViolations(page, `resend reveal ${locale}/${theme}`);
       await resend.getByTestId('reveal-dismiss').click();
       await expectNoRetainedToken(page);
-      await pendingRow(page).locator('[data-members-cancel-invite-open]').click();
+      await openMemberAction(page, pendingRow(page), 'cancel-invite-open');
       await expect(page.locator(CANCEL)).toBeVisible();
       await waitForDialogAnimations(page, CANCEL);
       await expectNoA11yViolations(page, `cancel confirmation ${locale}/${theme}`);
@@ -418,7 +445,7 @@ for (const flow of ['invite', 'resend'] as const) {
     await page.goBack();
     await expect(page.locator('app-members-page')).toHaveAttribute('data-members-phase', 'ready');
     await expectNoRetainedToken(page);
-    await openerFor(page, flow).click();
+    await openFlow(page, flow);
     await expect(dialogFor(page, flow).getByTestId('reveal-value')).toHaveCount(0);
   });
 }

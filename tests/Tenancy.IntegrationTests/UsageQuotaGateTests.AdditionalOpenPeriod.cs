@@ -14,7 +14,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_NullPeriodWithFullAdjacentMonths_CarriesOnlyThePreviousLimit()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         var token = TestContext.Current.CancellationToken;
         await using var services = world.Api.Services.CreateAsyncScope();
         var provider = services.ServiceProvider;
@@ -60,7 +60,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_NullPeriodWhileHostCrossesMonthBoundary_UsesOneFixedDatabaseTransactionMonth()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         var token = TestContext.Current.CancellationToken;
         var (month, _) = await world.DatabaseMonthsAsync();
         var boundary = DateTimeOffset.ParseExact(month + "-01", "yyyy-MM-dd", CultureInfo.InvariantCulture,

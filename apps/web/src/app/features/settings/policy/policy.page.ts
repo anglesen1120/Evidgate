@@ -19,6 +19,12 @@ import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSkeleton } from '@evidgate/ui/skeleton';
+import { HlmTabsImports } from '@evidgate/ui/tabs';
+import {
+  DesktopMutationDirective,
+  DesktopRequiredNoticeComponent,
+  NarrowMutationPolicy,
+} from '../../../shared/ui/narrow';
 import type { PublishedRevision } from '../../../core/data/policy-data.service';
 import { SessionStore } from '../../../core/session/session.store';
 import { PolicyProjectReads } from './policy-reads';
@@ -27,6 +33,7 @@ import { PolicySummaryComponent } from './policy-summary.component';
 import { PublishDialogComponent } from './publish-dialog.component';
 import { RevisionDiffComponent } from './revision-diff.component';
 import { RevisionListComponent } from './revision-list.component';
+import { RevisionDetailComponent } from './revision-detail.component';
 
 @Component({
   selector: 'app-policy-page',
@@ -37,6 +44,10 @@ import { RevisionListComponent } from './revision-list.component';
     HlmInput,
     HlmLabel,
     HlmSkeleton,
+    HlmTabsImports,
+    DesktopMutationDirective,
+    DesktopRequiredNoticeComponent,
+    RevisionDetailComponent,
     PolicySummaryComponent,
     RevisionListComponent,
     RevisionDiffComponent,
@@ -56,9 +67,23 @@ export class PolicyPage {
   private readonly route = inject(ActivatedRoute);
   private readonly injector = inject(Injector);
   protected readonly canWrite = computed(() => this.session.has('policy:write'));
+  protected readonly mutationPolicy = inject(NarrowMutationPolicy);
+  protected readonly sectionSize = 'section' as const;
+  protected readonly valuesTab = 'values' as const;
+  protected readonly compareTab = 'compare' as const;
+  protected readonly activationTab = 'activation' as const;
   protected readonly revisionId = signal(this.route.snapshot.queryParamMap.get('revision') ?? '');
-  protected readonly targetId = signal<string | null>(null);
+  protected readonly targetId = signal<string | null>(
+    this.route.snapshot.queryParamMap.get('revision'),
+  );
   protected readonly published = signal<PublishedRevision | null>(null);
+  protected readonly selectedRevisionId = computed(() => {
+    const rows = this.store.revisions();
+    const requested = this.targetId();
+    if (rows.some((row) => row.id === requested)) return requested;
+    const head = rows.find((row) => row.id === this.store.headRevisionId());
+    return head?.id ?? rows.at(-1)?.id ?? null;
+  });
   protected readonly paging = signal(false);
   private readonly dialog = viewChild(PublishDialogComponent);
   private readonly heading = viewChild.required<ElementRef<HTMLHeadingElement>>('heading');
@@ -67,7 +92,6 @@ export class PolicyPage {
     description: $localize`:@@settings.policy.description:Inspect policy revisions and compare their fields. Open a revision using its identifier.`,
     revisionId: $localize`:@@settings.policy.revision-id:Revision ID`,
     open: $localize`:@@settings.policy.open:Open revision`,
-    narrow: $localize`:@@settings.policy.narrow:Inspection only on narrow screens. Use a wider screen to publish a revision.`,
     publish: $localize`:@@settings.policy.publish-title:Publish revision`,
     idle: $localize`:@@settings.policy.no-selection:No revision selected. Enter a revision ID to inspect its policy.`,
     notFound: $localize`:@@settings.policy.not-found:Revision not found.`,
@@ -78,6 +102,12 @@ export class PolicyPage {
     created: $localize`:@@settings.policy.published-new:New revision published.`,
     unchanged: $localize`:@@settings.policy.published-unchanged:Policy unchanged. Existing revision returned.`,
     revision: $localize`:@@settings.policy.revision:Revision`,
+    values: $localize`:@@settings.policy.values-title:Policy values`,
+    compare: $localize`:@@settings.policy.diff-title:Compare revisions`,
+    valuesTab: $localize`:@@settings.policy.tab.values:Values`,
+    compareTab: $localize`:@@settings.policy.tab.compare:Compare`,
+    activation: $localize`:@@settings.policy.activation:Activation`,
+    detailTabs: $localize`:@@settings.policy.detail-tabs:Selected revision details`,
   };
   constructor() {
     if (this.revisionId()) void this.store.open(this.revisionId());
@@ -114,16 +144,26 @@ export class PolicyPage {
     if (this.store.publishing() || this.store.phase() === 'loading') return;
     this.dialog()?.close();
     this.published.set(null);
-    this.targetId.set(null);
+    this.targetId.set(this.revisionId().trim());
     void this.store.open(this.revisionId());
   }
   protected openPublish(event: Event): void {
-    if (!(event.currentTarget instanceof HTMLElement) || !this.canWrite()) return;
-    const id = this.targetId() ?? this.store.headRevisionId();
+    if (
+      !(event.currentTarget instanceof HTMLElement) ||
+      !this.canWrite() ||
+      !this.mutationPolicy.allowsMutation()
+    )
+      return;
+    const id = this.selectedRevisionId();
     if (id) void this.dialog()?.open(id, event.currentTarget);
   }
   protected onPublished(result: PublishedRevision): void {
     this.published.set(result);
+    this.targetId.set(result.revision.id);
+  }
+  protected selectRevision(id: string | null): void {
+    if (this.store.publishing() || this.store.phase() === 'loading') return;
+    if (id && this.store.revisions().some((row) => row.id === id)) this.targetId.set(id);
   }
   protected async loadMore(): Promise<void> {
     if (this.paging() || this.store.publishing()) return;

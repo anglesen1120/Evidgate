@@ -5,10 +5,12 @@
 >
   <header class="grid gap-(--eg-space-3)">
     <h1
+      hlmCardTitle
+      [size]="pageHeadingSize"
       #pageHeading
       id="onboarding-title"
       tabindex="-1"
-      class="m-0 font-(family-name:--eg-font-display) text-2xl font-(weight:--eg-weight-semibold) focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+      class="m-0 focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
     >
       {{ title }}
     </h1>
@@ -17,7 +19,7 @@
 
   @switch (store.status()) {
     @case ('loading') {
-      <app-loading-pattern />
+      <app-loading-pattern [label]="loadingLabel" />
     }
     @case ('error') {
       @switch (store.failure()) {
@@ -47,7 +49,14 @@
         class="min-w-0 gap-(--eg-space-5) p-(--eg-space-6)"
         aria-labelledby="onboarding-progress-title"
       >
-        <h2 hlmCardTitle id="onboarding-progress-title">{{ progressLabel }}</h2>
+        <div class="flex min-w-0 flex-wrap items-start justify-between gap-(--eg-space-4)">
+          <h2 hlmCardTitle [size]="sectionHeadingSize" id="onboarding-progress-title">
+            {{ progressLabel }}
+          </h2>
+          <p class="m-0 text-sm tabular-nums" data-testid="onboarding-progress-count">
+            {{ progressText() }}
+          </p>
+        </div>
         <ol
           class="m-0 grid list-none gap-(--eg-space-4) p-0 min-[768px]:grid-cols-2 min-[1280px]:grid-cols-5"
           data-testid="onboarding-stepper"
@@ -57,18 +66,12 @@
               class="group min-w-0"
               [attr.data-testid]="'onboarding-step-' + step.number"
               [attr.data-done]="store.done()[step.number]"
+              [attr.data-current]="store.viewStep() === step.number"
               [attr.aria-current]="store.viewStep() === step.number ? 'step' : null"
             >
-              <button
-                type="button"
-                hlmBtn
-                [variant]="ghostVariant"
-                class="h-full min-h-(--eg-control-touch) w-full items-start justify-start gap-(--eg-space-3) whitespace-normal border border-input bg-(--eg-surface) p-(--eg-space-3) text-start text-(--eg-text) hover:bg-(--eg-accent-soft) hover:text-(--eg-text) group-aria-[current=step]:border-primary group-aria-[current=step]:bg-(--eg-accent-soft) min-[768px]:flex-col"
-                [disabled]="!canSelect(step.number)"
-                (click)="store.selectStep(step.number)"
-              >
+              <div class="flex min-w-0 items-start gap-(--eg-space-3)">
                 <span
-                  class="grid min-h-(--eg-control-sm) min-w-(--eg-control-sm) shrink-0 place-items-center rounded-full bg-(--eg-neutral-bg) text-sm text-(--eg-neutral-fg) group-aria-[current=step]:bg-(--eg-info-bg) group-aria-[current=step]:text-(--eg-info-fg)"
+                  class="grid min-h-(--eg-control-sm) min-w-(--eg-control-sm) shrink-0 place-items-center rounded-full bg-(--eg-neutral-bg) text-sm text-(--eg-neutral-fg) group-data-[current=true]:bg-(--eg-info-bg) group-data-[current=true]:text-(--eg-info-fg)"
                   aria-hidden="true"
                   >{{ step.number }}</span
                 >
@@ -78,93 +81,173 @@
                     {{ store.done()[step.number] ? completedLabel : incompleteLabel }}
                   </span>
                 </span>
-              </button>
+              </div>
             </li>
           }
         </ol>
+        <div
+          class="h-(--eg-space-3) overflow-hidden rounded-sm bg-(--eg-neutral-bg)"
+          role="progressbar"
+          [attr.aria-label]="progressLabel"
+          [attr.aria-valuemin]="0"
+          [attr.aria-valuemax]="steps.length"
+          [attr.aria-valuenow]="completedCount()"
+          [attr.aria-valuetext]="progressText()"
+        >
+          <div
+            class="h-full bg-primary"
+            [style.width.%]="(completedCount() / steps.length) * 100"
+          ></div>
+        </div>
       </section>
 
-      <div
-        class="grid min-w-0 items-start gap-(--eg-space-5) min-[1280px]:grid-cols-[minmax(0,1fr)_var(--eg-rail-width)]"
+      <section
+        hlmCard
+        class="min-w-0 gap-(--eg-space-5) p-(--eg-space-6)"
+        aria-labelledby="onboarding-details-title"
       >
-        <section
-          hlmCard
-          class="block min-w-0 p-(--eg-space-6)"
-          aria-labelledby="onboarding-step-title"
+        <h2 hlmCardTitle [size]="sectionHeadingSize" id="onboarding-details-title">
+          {{ stepDetailsLabel }}
+        </h2>
+        <div
+          class="grid min-w-0 items-start gap-(--eg-space-7) min-[1280px]:grid-cols-[minmax(max-content,1fr)_minmax(0,3fr)]"
         >
-          <h2
-            hlmCardTitle
-            #stepHeading
-            id="onboarding-step-title"
-            tabindex="-1"
-            class="mb-(--eg-space-5)"
-          >
-            {{ steps[store.viewStep() - 1]?.label }}
-          </h2>
-          @if (store.viewStep() === 1) {
-            @if (store.project(); as project) {
-              <p class="mt-(--eg-space-3) text-sm text-muted-foreground">
-                {{ projectCreatedLabel }}
-              </p>
-              <p class="mt-(--eg-space-3) [overflow-wrap:anywhere]">{{ project.name }}</p>
-            } @else {
-              <app-onboarding-create-project [orgId]="orgId()" />
-            }
-          } @else if (store.viewStep() === 2) {
-            @if (store.project(); as project) {
-              <app-onboarding-connect-ci [orgId]="orgId()" [projectId]="project.id" />
-            }
-          } @else if (store.viewStep() === 5) {
-            <!-- Keep an explicit unavailable state when no confirmed project exists. -->
-            @if (store.project(); as project) {
-              <app-onboarding-enable-collection
-                [orgId]="orgId()"
-                [projectId]="project.id"
-                (activationConfirmed)="store.recordActivation(orgId(), $event)"
-              />
-            } @else {
-              <app-onboarding-step-pending />
-            }
-          } @else {
-            <app-onboarding-step-pending />
-          }
-          <footer class="mt-(--eg-space-7) border-t border-border pt-(--eg-space-5)">
-            @if (!store.canGoNext()) {
-              <p id="onboarding-next-reason" class="m-0 text-sm text-muted-foreground">
-                {{ store.viewStep() === 5 ? finalReason : gatedReason }}
-              </p>
-            }
-            <div class="mt-(--eg-space-4) flex flex-wrap justify-end gap-(--eg-space-3)">
-              <button
-                type="button"
-                hlmBtn
-                [variant]="outlineVariant"
-                class="min-h-(--eg-control-touch) max-w-full whitespace-normal"
-                data-testid="onboarding-back"
-                [disabled]="!store.canGoBack()"
-                (click)="store.back()"
-              >
-                {{ backLabel }}
-              </button>
-              <button
-                type="button"
-                hlmBtn
-                class="min-h-(--eg-control-touch) max-w-full whitespace-normal"
-                data-testid="onboarding-next"
-                [disabled]="!store.canGoNext()"
-                [attr.aria-describedby]="!store.canGoNext() ? 'onboarding-next-reason' : null"
-                (click)="store.next()"
-              >
-                {{ nextLabel }}
-              </button>
+          <nav class="min-w-0" [attr.aria-label]="stepSelectLabel">
+            <div class="grid min-w-0 gap-(--eg-space-3) min-[1280px]:hidden">
+              <label hlmLabel for="onboarding-step-select">{{ stepSelectLabel }}</label>
+              <hlm-select [value]="store.viewStep()" (valueChange)="selectStep($event)">
+                <hlm-select-trigger
+                  [buttonId]="'onboarding-step-select'"
+                  class="h-auto min-h-(--eg-control-touch) w-full min-w-0 max-w-full whitespace-normal"
+                >
+                  <hlm-select-value />
+                </hlm-select-trigger>
+                <hlm-select-content *hlmSelectPortal>
+                  @for (step of steps; track step.number) {
+                    <hlm-select-item [value]="step.number" [disabled]="!canSelect(step.number)">
+                      {{ step.number }} · {{ step.label }}
+                    </hlm-select-item>
+                  }
+                </hlm-select-content>
+              </hlm-select>
             </div>
-          </footer>
-        </section>
-        <app-onboarding-evidence-panel
-          [progress]="store.progress()"
-          [refreshFailed]="store.refreshFailure() !== null"
-        />
-      </div>
+            <ol class="m-0 hidden list-none gap-(--eg-space-3) p-0 min-[1280px]:grid">
+              @for (step of steps; track step.number) {
+                <li class="min-w-0" [attr.data-done]="store.done()[step.number]">
+                  <button
+                    hlmBtn
+                    [variant]="ghostVariant"
+                    class="h-auto min-h-(--eg-control-touch) w-full justify-start gap-(--eg-space-3) whitespace-nowrap text-start aria-[current=step]:bg-(--eg-accent-soft) aria-[current=step]:text-foreground"
+                    type="button"
+                    [attr.data-testid]="'onboarding-select-step-' + step.number"
+                    [attr.aria-current]="store.viewStep() === step.number ? 'step' : null"
+                    [disabled]="!canSelect(step.number)"
+                    (click)="store.selectStep(step.number)"
+                  >
+                    <span aria-hidden="true">{{ step.number }}</span>
+                    <span class="min-w-0">{{ step.label }}</span>
+                  </button>
+                </li>
+              }
+            </ol>
+          </nav>
+          <section class="min-w-0" aria-labelledby="onboarding-step-title">
+            <h2
+              hlmCardTitle
+              [size]="sectionHeadingSize"
+              #stepHeading
+              id="onboarding-step-title"
+              tabindex="-1"
+              class="mb-(--eg-space-5)"
+            >
+              {{ steps[store.viewStep() - 1]?.label }}
+            </h2>
+            @if (store.project(); as project) {
+              <div [hidden]="store.viewStep() !== 2">
+                <app-onboarding-connect-ci
+                  [orgId]="orgId()"
+                  [projectId]="project.id"
+                  [active]="store.viewStep() === 2"
+                />
+              </div>
+            }
+            @if (store.viewStep() === 1) {
+              @if (store.project(); as project) {
+                <p class="mt-(--eg-space-3) text-sm text-muted-foreground">
+                  {{ projectCreatedLabel }}
+                </p>
+                <p class="mt-(--eg-space-3) [overflow-wrap:anywhere]">{{ project.name }}</p>
+              } @else {
+                <app-onboarding-create-project [orgId]="orgId()" />
+              }
+            } @else if (store.viewStep() === 5) {
+              <!-- Keep an explicit unavailable state when no confirmed project exists. -->
+              @if (store.project(); as project) {
+                <app-onboarding-enable-collection
+                  [orgId]="orgId()"
+                  [projectId]="project.id"
+                  (activationConfirmed)="store.recordActivation(orgId(), $event)"
+                />
+              } @else {
+                <app-onboarding-step-pending />
+              }
+            } @else if (store.viewStep() !== 2) {
+              <app-onboarding-step-pending
+                [orgId]="orgId()"
+                [progress]="store.progress()"
+                [step]="store.viewStep()"
+              />
+            }
+            <footer class="mt-(--eg-space-7) border-t border-border pt-(--eg-space-5)">
+              @if (!store.canGoNext() && completionLink() === null) {
+                <p id="onboarding-next-reason" class="m-0 text-sm text-muted-foreground">
+                  {{ store.viewStep() === 5 ? finalReason : gatedReason }}
+                </p>
+              }
+              <div class="mt-(--eg-space-4) flex flex-wrap justify-end gap-(--eg-space-3)">
+                <button
+                  type="button"
+                  hlmBtn
+                  [variant]="outlineVariant"
+                  class="min-h-(--eg-control-touch) max-w-full whitespace-normal"
+                  data-testid="onboarding-back"
+                  [disabled]="!store.canGoBack()"
+                  (click)="store.back()"
+                >
+                  {{ backLabel }}
+                </button>
+                @if (completionLink(); as link) {
+                  <a
+                    hlmBtn
+                    class="h-auto min-h-(--eg-control-touch) max-w-full whitespace-normal"
+                    data-testid="onboarding-complete"
+                    [routerLink]="link"
+                  >
+                    {{ openProjectLabel }}
+                  </a>
+                } @else {
+                  <button
+                    type="button"
+                    hlmBtn
+                    [variant]="store.canGoNext() ? 'default' : outlineVariant"
+                    class="min-h-(--eg-control-touch) max-w-full whitespace-normal"
+                    data-testid="onboarding-next"
+                    [disabled]="!store.canGoNext()"
+                    [attr.aria-describedby]="!store.canGoNext() ? 'onboarding-next-reason' : null"
+                    (click)="store.next()"
+                  >
+                    {{ nextLabel }}
+                  </button>
+                }
+              </div>
+            </footer>
+          </section>
+        </div>
+      </section>
+      <app-onboarding-evidence-panel
+        [progress]="store.progress()"
+        [refreshFailed]="store.refreshFailure() !== null"
+      />
     }
   }
 </section>

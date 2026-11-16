@@ -4,12 +4,16 @@ import {
   DestroyRef,
   effect,
   inject,
+  input,
   output,
   signal,
   untracked,
 } from '@angular/core';
 import { HlmAlertImports } from '@evidgate/ui/alert';
-import { HlmBadge } from '@evidgate/ui/badge';
+import {
+  StatusPillComponent,
+  type StatusTone,
+} from '../../../shared/ui/chips/status-pill.component';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmLabel } from '@evidgate/ui/label';
@@ -21,11 +25,18 @@ import { PolicyStore } from './policy.store';
 @Component({
   selector: 'app-revision-diff',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmLabel, HlmSelectImports],
+  imports: [
+    HlmAlertImports,
+    StatusPillComponent,
+    HlmButton,
+    HlmCardImports,
+    HlmLabel,
+    HlmSelectImports,
+  ],
   host: { class: 'block min-w-0' },
   template: `
     <section hlmCard class="gap-4 p-4" aria-labelledby="policy-diff-title">
-      <h3 hlmCardTitle id="policy-diff-title" class="m-0 text-base">{{ copy.title }}</h3>
+      <h3 hlmCardTitle [size]="subsectionSize" id="policy-diff-title">{{ copy.title }}</h3>
       <div class="grid min-w-0 gap-3 md:grid-cols-2">
         <div class="grid min-w-0 gap-2">
           <label hlmLabel for="policy-diff-base">{{ copy.base }}</label>
@@ -112,8 +123,8 @@ import { PolicyStore } from './policy.store';
                   [attr.data-diff-path]="row.path"
                 >
                   <div class="flex flex-wrap items-center gap-2">
-                    <strong hlmBadge [variant]="'outline'">{{ kindLabel(row.kind) }}</strong
-                    ><code class="font-mono wrap-anywhere">{{ pathLabel(row.path) }}</code>
+                    <app-status-pill [tone]="kindTone(row.kind)" [label]="kindLabel(row.kind)" />
+                    <code class="font-mono wrap-anywhere">{{ pathLabel(row.path) }}</code>
                   </div>
                   <dl
                     class="m-0 grid min-w-0 gap-3 md:grid-cols-2 [&>div]:min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_pre]:m-0 [&_pre]:whitespace-pre-wrap [&_pre]:font-mono [&_pre]:wrap-anywhere"
@@ -148,6 +159,8 @@ import { PolicyStore } from './policy.store';
 export class RevisionDiffComponent {
   protected readonly store = inject(PolicyStore);
   readonly targetChanged = output<string | null>();
+  readonly selectedRevisionId = input<string | null>(null);
+  protected readonly subsectionSize = 'subsection' as const;
   protected readonly revisionLabel = (value: unknown): string => {
     const revision = this.store.revisions().find((row) => row.id === value);
     return revision ? `${this.copy.revision} ${revision.revision_no}` : this.copy.choose;
@@ -181,7 +194,9 @@ export class RevisionDiffComponent {
     effect(() => {
       const rows = this.store.revisions();
       const head = this.store.headRevisionId();
+      const selected = this.selectedRevisionId();
       untracked(() => {
+        if (selected && rows.some((row) => row.id === selected)) this.targetId.set(selected);
         if (!rows.some((row) => row.id === this.targetId())) {
           const target = rows.find((row) => row.id === head) ?? rows[rows.length - 1];
           this.targetId.set(target?.id ?? '');
@@ -209,6 +224,9 @@ export class RevisionDiffComponent {
   }
   protected kindLabel(kind: 'added' | 'removed' | 'changed'): string {
     return this.copy[kind];
+  }
+  protected kindTone(kind: 'added' | 'removed' | 'changed'): StatusTone {
+    return kind === 'added' ? 'info' : kind === 'removed' ? 'neutral' : 'warning';
   }
   // Pointers can contain a whole body key; keep the visible label within the value budget.
   protected pathLabel(path: string): string {

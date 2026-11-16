@@ -17,7 +17,6 @@ export const API_TOKENS_COPY = {
   emptyTitle: $localize`:@@settings.api-tokens.empty-title:No API tokens yet`,
   emptyDescription: $localize`:@@settings.api-tokens.empty-description:Create a token with an expiry and only the permissions your script needs.`,
   noProjects: $localize`:@@settings.api-tokens.no-projects:Select a project to manage its API tokens.`,
-  narrow: $localize`:@@settings.api-tokens.narrow:Use a desktop to create or revoke API tokens.`,
   next: $localize`:@@settings.api-tokens.next:Next tokens`,
   first: $localize`:@@settings.api-tokens.first:First tokens`,
   pages: $localize`:@@settings.api-tokens.pages:API token pages`,

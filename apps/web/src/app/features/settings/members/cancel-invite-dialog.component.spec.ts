@@ -8,6 +8,7 @@ import type { Intent } from '../../../core/http/intent';
 import { SessionStore } from '../../../core/session/session.store';
 import { CancelInviteDialogComponent } from './cancel-invite-dialog.component';
 import { MembersStore } from './members.store';
+import { MEMBERS_DESKTOP } from './members-page.test-fixtures';
 
 const MEMBER: MembershipView = {
   id: 'pending',
@@ -44,6 +45,7 @@ describe('CancelInviteDialog pending invitation confirmation', () => {
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
+        MEMBERS_DESKTOP,
         MembersStore,
         { provide: MembersDataService, useValue: data },
         { provide: SessionStore, useValue: { has: () => allowed } },

@@ -117,6 +117,10 @@ function dsnValue(value) {
 
 const shellSingleQuoted = (value) => `'${value.replaceAll("'", "'\\''")}'`;
 
+// A plain token stays as the template wrote it; anything the shell would split or expand is quoted.
+const shellValue = (value) =>
+  /^[A-Za-z0-9_.,:/@%+=-]*$/.test(value) ? value : shellSingleQuoted(value);
+
 // A mode-600 temp file with an unpredictable name, then rename: a crash never leaves a half
 // file, and a leftover temp file is removed on failure.
 function writePrivate(path, content) {
@@ -132,6 +136,54 @@ function writePrivate(path, content) {
   }
 }
 
+function tryLock(lock) {
+  try {
+    mkdirSync(lock);
+  } catch {
+    return false;
+  }
+  try {
+    writeFileSync(join(lock, 'pid'), String(process.pid));
+  } catch (error) {
+    rmSync(lock, { recursive: true, force: true });
+    throw error;
+  }
+  return true;
+}
+
+function holderIsGone(lock) {
+  let pid;
+  try {
+    pid = Number(readFileSync(join(lock, 'pid'), 'utf8'));
+  } catch {
+    return false;
+  }
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    return error.code === 'ESRCH';
+  }
+}
+
+// Removes a lock whose holder is dead. Takers serialise on a gate directory and re-judge the
+// holder inside it: a dead holder never removes its own lock and a live run only creates the
+// lock while it is absent, so the lock judged dead cannot be swapped for a fresh one before the
+// remove. Renaming the lock without the gate could move a fresh lock a rival had just taken.
+// The gate is never reclaimed, whatever its age: reclaiming it would reopen the same window one
+// level up. A taker killed inside the gate (a few microseconds) leaves it for the operator, as
+// the failure message says.
+function takeOverStale(lock) {
+  const gate = `${lock}.takeover`;
+  if (!tryLock(gate)) return;
+  try {
+    if (holderIsGone(lock)) rmSync(lock, { recursive: true, force: true });
+  } finally {
+    rmSync(gate, { recursive: true, force: true });
+  }
+}
+
 // One run at a time per target: two concurrent runs would each generate and overwrite.
 function withLock(path, action) {
   // A symlinked target (also a dangling one) is refused before any read, write or chmod.
@@ -142,10 +194,14 @@ function withLock(path, action) {
   }
   const lock = `${path}.lock`;
   mkdirSync(dirname(path), { recursive: true });
-  try {
-    mkdirSync(lock);
-  } catch {
-    fail(`${lock} exists: another run is in progress (remove the directory if none is)`);
+  if (!tryLock(lock)) {
+    // A SIGKILL leaves the lock behind; its owner pid tells a dead holder from a live one. A lock
+    // without a readable pid (empty, garbage, zero) is treated as held.
+    if (holderIsGone(lock)) takeOverStale(lock);
+    if (!tryLock(lock))
+      fail(
+        `${lock} exists: another run is in progress (remove ${lock} and ${lock}.takeover if none is)`,
+      );
   }
   // fail() exits the process, so the lock is released on exit rather than in a finally.
   process.on('exit', () => rmSync(lock, { recursive: true, force: true }));
@@ -211,8 +267,9 @@ function generateDev(root, rules, file, template) {
   const templateContent = existsSync(template) ? readFileSync(template, 'utf8') : '';
   for (const rule of rules) {
     const committed = valueOf(templateContent, rule.name);
+    // Template values are plain strings; the quoting only guards spaces, quotes and shell syntax.
     if (rule.kind === 'template-provided' && missing(rule.name) && committed)
-      append(rule.name, committed);
+      append(rule.name, shellValue(committed));
   }
   const absent = rules
     .filter((r) => r.kind === 'template-provided' && missing(r.name))

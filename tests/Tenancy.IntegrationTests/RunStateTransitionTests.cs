@@ -31,17 +31,16 @@ namespace Tenancy.IntegrationTests;
 /// when the winner commits.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class RunStateTransitionTests
+public sealed class RunStateTransitionTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) : IClassFixture<TenancyHostPool>
 {
     /// <summary>The outbox task type an applied transition writes (00 §5.3, 05.3.1 §7).</summary>
     private const string StateChangedTask = "orchestrator.run.state_changed";
 
     /// <summary>The audit action an applied transition writes (00 §7, 05.3.1 §7).</summary>
     private const string StateChangedAction = "run.state_changed";
-
-    private readonly PostgresTenancyFixture _fixture;
-
-    public RunStateTransitionTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly PostgresTenancyFixture _fixture = fixture;
+    // Reuse one API host per class; each world still owns its tenant data. Dedicated databases and overlapping worlds keep private hosts.
+    private readonly TenancyHostPool _hosts = hosts;
 
     // ------------------------------------------------------------------ AC1: every declared edge
 
@@ -54,7 +53,7 @@ public sealed class RunStateTransitionTests
     [Fact]
     public async Task TransitionRun_ForwardChain_AppliesEachDeclaredEdge()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         // `created → queued`: the one edge with no production caller (05.2.1-T4 inserts the run as `queued`),
         // so the run is seeded in `created` to exercise it.
@@ -102,7 +101,7 @@ public sealed class RunStateTransitionTests
     [Fact]
     public async Task TransitionRun_SideExits_ApplyFromEveryDeclaredSource()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         foreach (var (from, to) in new[]
                  {
@@ -139,7 +138,7 @@ public sealed class RunStateTransitionTests
     [Fact]
     public async Task TransitionRun_SameOrPassedState_NoOp()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await RunInStateAsync(world, "running");
         var version = await VersionAsync(world, runId);
         version.ShouldBe(1, "queued -> running is one apply");
@@ -167,7 +166,7 @@ public sealed class RunStateTransitionTests
     [Fact]
     public async Task TransitionRun_TerminalState_NoOpReturnsCurrentState()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         foreach (var terminal in new[] { "complete", "incomplete", "canceled" })
         {
@@ -201,7 +200,7 @@ public sealed class RunStateTransitionTests
     [Fact]
     public async Task TransitionRun_ForwardSkip_RejectedAndNotApplied()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         // `incomplete` is reachable only from `queued`, `running` and `collecting`: a run cannot be closed
         // before its plan is committed, so `created -> incomplete` is a forward-skip like `running -> complete`.
@@ -233,7 +232,7 @@ public sealed class RunStateTransitionTests
     [Fact]
     public async Task TransitionRun_UnknownToState_RequestInvalid()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateQueuedRunAsync(world);
 
         var result = await TransitionAsync(world, runId, "finished");
@@ -253,7 +252,7 @@ public sealed class RunStateTransitionTests
     [Fact]
     public async Task TransitionRun_NullOrEmptyToState_RequestInvalid()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateQueuedRunAsync(world);
 
         foreach (var to in new[] { null!, string.Empty })
@@ -281,7 +280,7 @@ public sealed class RunStateTransitionTests
     [Fact]
     public async Task TransitionRun_UnknownOrForeignRun_NotFound()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var otherUser = Guid.CreateVersion7();
         var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
@@ -317,7 +316,7 @@ public sealed class RunStateTransitionTests
     [Fact]
     public async Task TransitionRun_StaleVersion_412()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateQueuedRunAsync(world);
 
         await using (var stale = await RunTransitionScope.BeginAsync(world.Api, world.Org, world.Project))
@@ -360,7 +359,7 @@ public sealed class RunStateTransitionTests
     [Fact]
     public async Task TransitionRun_StaleVersionOnNoOp_ReturnsCurrentState()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await RunInStateAsync(world, "running");
         var version = await VersionAsync(world, runId);
         version.ShouldBe(1, "queued -> running is one apply");
@@ -410,7 +409,7 @@ public sealed class RunStateTransitionTests
     [Fact]
     public async Task TransitionRun_WritesOutboxAndAudit_SameTransaction()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateQueuedRunAsync(world);
 
         // Rolled back: the handler wrote on the transaction — the audit flush is the pipeline's own step just
@@ -595,7 +594,7 @@ public sealed class RunStateTransitionTests
     [Fact]
     public async Task TransitionRun_CommandCounter_Bounded()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateQueuedRunAsync(world);
 
         await using var scope = await RunTransitionScope.BeginAsync(world.Api, world.Org, world.Project);

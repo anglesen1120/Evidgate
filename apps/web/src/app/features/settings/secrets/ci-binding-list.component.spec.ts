@@ -90,7 +90,14 @@ describe('CiBindingListComponent (09.7.1-F15)', () => {
         row.repository_full_name,
       );
       expect(root.textContent).toContain(row.provider);
-      expect(root.querySelector(`time[datetime="${row.created_at}"]`)).not.toBeNull();
+      expect(root.querySelector(`time[datetime="${row.created_at}"]`)?.textContent).toContain(
+        'UTC',
+      );
+      if (row.activated_at) {
+        expect(root.querySelector(`time[datetime="${row.activated_at}"]`)?.textContent).toContain(
+          'UTC',
+        );
+      }
     }
   });
 

@@ -75,6 +75,10 @@ public sealed class DeadLetterFunctionTests
                 "select outcome from evidgate.replay_dead_letter_task(@id, @actor)",
                 ("id", foreignTask),
                 ("actor", actor))).ShouldBe("not_found");
+
+            // Without a commit the scope rolls back, so the row and audit assertions below would
+            // pass even if the function had updated the foreign row and reported a wrong outcome.
+            await scope.CommitAsync();
         }
 
         (await _fixture.ScalarAsync<string>(

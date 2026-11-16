@@ -66,10 +66,12 @@ test.describe('W3 — step 5, enable collection', () => {
     await expect(page.locator('[data-testid="enable-collection-enabled"]')).toBeVisible();
     await expect(page.locator('[data-testid="enable-collection-policy-preview"]')).toHaveCount(0);
 
-    // 3. Back follows the terminal panel; Next is disabled on the last step.
+    // 3. Back follows the terminal panel; completion replaces Next with Open project.
     await pressTab(page);
     await expectKeyboardFocus(page, backButton(page), 'Back after the terminal panel');
-    await expect(nextButton(page)).toBeDisabled();
+    await expect(nextButton(page)).toHaveCount(0);
+    await expect(page.getByTestId('onboarding-complete')).toBeVisible();
+    await expectCurrentStep(page, 5);
   });
 
   test('an unreadable activation keeps the confirm disabled and out of the tab order', async ({

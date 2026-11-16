@@ -1,11 +1,42 @@
 import { provideZonelessChangeDetection, signal } from '@angular/core';
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { TestBed } from '@angular/core/testing';
+import type { ComponentFixture } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import type { HealingSwitchView } from '@evidgate/sdk';
 
 import type { ApiError } from '../../core/http/api-error';
 import { SessionStore } from '../../core/session/session.store';
+import { NarrowMutationPolicy } from '../../shared/ui/narrow/narrow-mutation-policy';
+import { stubScopeBrowserApis } from '../../shell/layout/scope.fixture';
 import { refusal, switchRow } from './healing-switch.test-support';
 import { SwitchScopeControl } from './switch-scope-control.component';
+
+class ModeHarness extends ComponentHarness {
+  static hostSelector = 'app-switch-scope-control';
+  readonly trigger = this.locatorFor('button[role="combobox"]');
+  readonly options = this.documentRootLocatorFactory().locatorForAll('[role="option"]');
+
+  async choose(label: string): Promise<void> {
+    await (await this.trigger()).click();
+    for (const option of await this.options()) {
+      if ((await option.text()).trim() === label) {
+        await option.click();
+        return;
+      }
+    }
+    throw new Error(`Missing mode ${label}`);
+  }
+}
+
+function changeMode(fixture: ComponentFixture<SwitchScopeControl>, value: unknown): void {
+  fixture.debugElement.query(By.css('hlm-select')).triggerEventHandler('valueChange', value);
+}
+
+function modeTrigger(root: HTMLElement): HTMLButtonElement | null {
+  return root.querySelector<HTMLButtonElement>('button[role="combobox"]');
+}
 
 function mount(inputs: {
   scope?: 'system' | 'tenant' | 'project';
@@ -19,10 +50,17 @@ function mount(inputs: {
   // The page names the project scope after the current project, so the fake session carries a
   // name; the shared fake session keeps ids only and is not enough for that label.
   const currentProject = signal({ id: 'p-1', name: 'Storefront' });
+  const desktop = signal(true);
+  const policy = {
+    canMutate: desktop,
+    narrow: () => !desktop(),
+    allowsMutation: () => desktop(),
+  };
   TestBed.configureTestingModule({
     imports: [SwitchScopeControl],
     providers: [
       provideZonelessChangeDetection(),
+      { provide: NarrowMutationPolicy, useValue: policy },
       {
         provide: SessionStore,
         useValue: { currentProject, has: () => true },
@@ -40,11 +78,11 @@ function mount(inputs: {
   fixture.detectChanges();
   const emitted: { mode: string; reason: string | null }[] = [];
   fixture.componentInstance.submitted.subscribe((event) => emitted.push(event));
-  return { fixture, root: fixture.nativeElement as HTMLElement, emitted };
+  return { fixture, root: fixture.nativeElement as HTMLElement, emitted, desktop };
 }
 
 function scopeCard(root: HTMLElement): HTMLElement {
-  const element = root.querySelector<HTMLElement>('[data-healing-scope]');
+  const element = root.querySelector<HTMLElement>('[data-healing-editor]');
   if (element === null) throw new Error('the scope card did not render');
   return element;
 }
@@ -61,7 +99,15 @@ function enterReason(root: HTMLElement, text: string): void {
 }
 
 describe('SwitchScopeControl', () => {
-  afterEach(() => TestBed.resetTestingModule());
+  let restoreBrowserApis: () => void;
+  beforeEach(() => {
+    restoreBrowserApis = stubScopeBrowserApis();
+  });
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    restoreBrowserApis();
+    vi.unstubAllGlobals();
+  });
 
   it('renders the system row read-only with no editor and no write control', () => {
     const { root } = mount({
@@ -71,34 +117,33 @@ describe('SwitchScopeControl', () => {
     });
 
     expect(scopeCard(root).textContent).toContain('Only the platform operator');
-    expect(field(root, 'stored-mode')?.textContent).toContain('Shadow');
-    expect(field(root, 'set-by')?.textContent?.trim()).toBe('Hidden');
-    expect(field(root, 'reason')?.textContent?.trim()).toBe('Hidden');
     expect(root.querySelector('select')).toBeNull();
     expect(root.querySelector('textarea')).toBeNull();
     expect(field(root, 'save')).toBeNull();
   });
 
-  it('shows a stored tenant row with the dash for a value nobody recorded', () => {
-    const { root } = mount({ scope: 'tenant', row: switchRow('tenant', 'shadow') });
-
-    expect(field(root, 'reason')?.textContent?.trim()).toBe('—');
+  it('defaults to shadow when no scope stores a row', () => {
+    const { root } = mount({ scope: 'tenant' });
+    expect(modeTrigger(root)?.textContent).toContain('Shadow');
   });
 
-  it('offers exactly the three settable modes and selects the stored one', () => {
-    const { root } = mount({ scope: 'tenant', row: switchRow('tenant', 'disabled') });
-
-    const select = root.querySelector<HTMLSelectElement>('select');
-    expect(select).not.toBeNull();
-    expect([...(select?.options ?? [])].map((option) => option.value)).toEqual([
-      'enabled',
-      'shadow',
-      'disabled',
-    ]);
-    expect(select?.value).toBe('disabled');
+  it('offers exactly the three settable modes and selects the stored one', async () => {
+    const { fixture, root } = mount({
+      scope: 'tenant',
+      row: switchRow('tenant', 'disabled'),
+      editable: true,
+    });
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, ModeHarness);
+    expect(modeTrigger(root)?.textContent).toContain('Disabled');
+    await (await harness.trigger()).click();
+    expect(
+      await Promise.all(
+        (await harness.options()).map(async (option) => (await option.text()).trim()),
+      ),
+    ).toEqual(['Enabled', 'Shadow', 'Disabled']);
   });
 
-  it('keeps the editor focusable but inert under a blocked system scope and names it', () => {
+  it('disables the Helm select under a blocked system scope and keeps the explanation visible', () => {
     const { fixture, root, emitted } = mount({
       scope: 'tenant',
       row: switchRow('tenant', 'shadow'),
@@ -106,22 +151,18 @@ describe('SwitchScopeControl', () => {
       editable: true,
     });
 
-    const select = root.querySelector<HTMLSelectElement>('select');
+    const select = modeTrigger(root);
     if (select === null) throw new Error('the mode select did not render');
-    expect(select.disabled).toBe(false);
-    expect(select.getAttribute('aria-disabled')).toBe('true');
-    select.focus();
-    expect(document.activeElement).toBe(select);
+    expect(select.disabled).toBe(true);
 
     const note = field(root, 'note');
     expect(note?.textContent).toContain('system scope takes precedence');
     const describedBy = select.getAttribute('aria-describedby') ?? '';
     expect(describedBy.split(' ')).toContain(note?.id);
 
-    select.value = 'disabled';
-    select.dispatchEvent(new Event('change'));
+    changeMode(fixture, 'disabled');
     fixture.detectChanges();
-    expect(select.value).toBe('shadow');
+    expect(select.textContent).toContain('Shadow');
     expect(emitted).toEqual([]);
     expect(field(root, 'save')).toBeNull();
   });
@@ -135,9 +176,7 @@ describe('SwitchScopeControl', () => {
     });
 
     expect(field(root, 'note')?.textContent).toContain('tenant scope takes precedence');
-    const select = root.querySelector<HTMLSelectElement>('select');
-    expect(select?.disabled).toBe(false);
-    expect(select?.getAttribute('aria-disabled')).toBe('true');
+    expect(modeTrigger(root)?.disabled).toBe(true);
   });
 
   it('removes the save control without healing:configure while keeping the modes visible', () => {
@@ -147,24 +186,20 @@ describe('SwitchScopeControl', () => {
       editable: false,
     });
 
-    const select = root.querySelector<HTMLSelectElement>('select');
-    expect(select?.disabled).toBe(false);
-    expect(select?.getAttribute('aria-disabled')).toBe('true');
+    expect(modeTrigger(root)?.disabled).toBe(true);
     expect(field(root, 'note')?.textContent).toContain('needs permission to configure healing');
     expect(field(root, 'save')).toBeNull();
   });
 
-  it('submits the chosen mode and the trimmed reason', () => {
+  it('submits the chosen mode and the trimmed reason', async () => {
     const { fixture, root, emitted } = mount({
       scope: 'tenant',
       row: switchRow('tenant', 'shadow'),
       editable: true,
     });
 
-    const select = root.querySelector<HTMLSelectElement>('select');
-    if (select === null) throw new Error('the mode select did not render');
-    select.value = 'disabled';
-    select.dispatchEvent(new Event('change'));
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, ModeHarness);
+    await harness.choose('Disabled');
     const reason = root.querySelector<HTMLTextAreaElement>('textarea');
     if (reason === null) throw new Error('the reason field did not render');
     reason.value = '  Holding repairs during the release  ';
@@ -236,7 +271,7 @@ describe('SwitchScopeControl', () => {
   it('labels the project scope with the current project name', () => {
     const { root } = mount({ scope: 'project', row: switchRow('project', 'shadow') });
 
-    expect(root.querySelector('h2')?.textContent).toContain('Storefront');
+    expect(root.querySelector('h3')?.textContent).toContain('Storefront');
   });
 
   it('shows the saving label and blocks the editor while the write is in flight', () => {
@@ -248,9 +283,7 @@ describe('SwitchScopeControl', () => {
     });
 
     expect(field(root, 'save')?.textContent).toContain('Saving');
-    const select = root.querySelector<HTMLSelectElement>('select');
-    expect(select?.disabled).toBe(false);
-    expect(select?.getAttribute('aria-disabled')).toBe('true');
+    expect(modeTrigger(root)?.disabled).toBe(true);
     expect(root.querySelector<HTMLTextAreaElement>('textarea')?.readOnly).toBe(true);
   });
 
@@ -262,13 +295,10 @@ describe('SwitchScopeControl', () => {
       saving: true,
     });
 
-    const select = root.querySelector<HTMLSelectElement>('select');
-    if (select === null) throw new Error('the mode select did not render');
-    select.value = 'disabled';
-    select.dispatchEvent(new Event('change'));
+    changeMode(fixture, 'disabled');
     fixture.detectChanges();
 
-    expect(select.value).toBe('shadow');
+    expect(modeTrigger(root)?.textContent).toContain('Shadow');
     expect(emitted).toEqual([]);
   });
 
@@ -347,4 +377,50 @@ describe('SwitchScopeControl', () => {
       'request body too large',
     );
   });
+  it('retains the draft across narrow mode and refuses a stale save without replaying it', () => {
+    const { fixture, root, emitted, desktop } = mount({
+      scope: 'tenant',
+      row: switchRow('tenant', 'shadow'),
+      editable: true,
+      error: refusal('validation', 422, 'Review the stored scope.').error,
+    });
+    changeMode(fixture, 'disabled');
+    enterReason(root, 'Giữ nguyên bản nháp trong khi đổi kích thước');
+    fixture.detectChanges();
+    const staleSave = field(root, 'save');
+    desktop.set(false);
+    staleSave?.click();
+    expect(emitted).toEqual([]);
+    fixture.detectChanges();
+    expect(modeTrigger(root)).toBeNull();
+    expect(root.querySelector('textarea')).toBeNull();
+    expect(field(root, 'save')).toBeNull();
+    expect(field(root, 'error')?.textContent).toContain('Review the stored scope.');
+    desktop.set(true);
+    fixture.detectChanges();
+    expect(modeTrigger(root)?.textContent).toContain('Disabled');
+    expect(root.querySelector('textarea')?.value).toBe(
+      'Giữ nguyên bản nháp trong khi đổi kích thước',
+    );
+    expect(emitted).toEqual([]);
+    field(root, 'save')?.click();
+    expect(emitted).toEqual([
+      { mode: 'disabled', reason: 'Giữ nguyên bản nháp trong khi đổi kích thước' },
+    ]);
+  });
+
+  it.each([{ value: 'unavailable' }, { value: '' }, { value: null }, { value: ['enabled'] }])(
+    'refuses an unsupported Helm value: $value',
+    ({ value }) => {
+      const { fixture, root, emitted } = mount({
+        scope: 'tenant',
+        row: switchRow('tenant', 'shadow'),
+        editable: true,
+      });
+      changeMode(fixture, value);
+      fixture.detectChanges();
+      field(root, 'save')?.click();
+      expect(emitted).toEqual([{ mode: 'shadow', reason: null }]);
+    },
+  );
 });

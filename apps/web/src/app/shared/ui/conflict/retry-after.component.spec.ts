@@ -164,4 +164,23 @@ describe('RetryAfterComponent', () => {
     fixture.detectChanges();
     expect(root.querySelectorAll('dt')).toHaveLength(0);
   });
+
+  it('lets the waiting recovery label reflow and grow without changing eligibility', () => {
+    const { button, root } = render(30, false);
+    for (const token of [
+      'h-auto',
+      'min-w-0',
+      'max-w-full',
+      'whitespace-normal',
+      'min-h-(--eg-control-md)',
+      'py-(--eg-space-2)',
+      'pointer-coarse:min-h-(--eg-control-touch)',
+      'pointer-coarse:min-w-(--eg-control-touch)',
+    ]) {
+      expect(button.classList.contains(token)).toBe(true);
+    }
+    expect(button.disabled).toBe(true);
+    expect(button.textContent).toContain('Retry available after the wait');
+    expect(root.classList.contains('min-w-0')).toBe(true);
+  });
 });

@@ -18,7 +18,7 @@ public sealed partial class CancelRunEndpointTests
     [InlineData("canceled")]
     public async Task CancelRun_AlreadyTerminal_NoOp202(string terminal)
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CancelRunTestData.RunInStateAsync(_fixture, world, terminal);
 
         var version = await CancelRunTestData.VersionAsync(_fixture, world, runId);
@@ -45,7 +45,7 @@ public sealed partial class CancelRunEndpointTests
     [Fact]
     public async Task CancelRun_Repeated_NoDuplicateRequestRow()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
 
         for (var attempt = 1; attempt <= 3; attempt++)
@@ -70,7 +70,7 @@ public sealed partial class CancelRunEndpointTests
     [Fact]
     public async Task CancelRun_Concurrent_OneRow_No500()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
 
         var answers = await Task.WhenAll(

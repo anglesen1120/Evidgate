@@ -54,7 +54,8 @@ internal interface IGitHubInstallationStore
 }
 
 /// <summary>Dapper implementation of both stores and of the token source's installation resolver.</summary>
-internal sealed class GitHubInstallationStore(ITenantDb db) : IGitHubInstallStateStore, IGitHubInstallationStore, IGitHubInstallationResolver
+internal sealed class GitHubInstallationStore(ITenantDb db)
+    : IGitHubInstallStateStore, IGitHubInstallationStore, IGitHubInstallationResolver, IGitHubInstallationOwnership
 {
     /// <summary>How many unspent install states one user may hold; each start route call adds one.</summary>
     internal const int MaxLiveStatesPerUser = 20;
@@ -82,12 +83,24 @@ internal sealed class GitHubInstallationStore(ITenantDb db) : IGitHubInstallStat
         returning id
         """;
 
-    private const string DisconnectSql = """
+    internal const string DisconnectSql = """
         update public.github_installation
         set state = 'deleted', suspended_at = null
         where org_id = @org_id and id = @id and state <> 'deleted'
         returning installation_id
         """;
+
+    private const string OwnedActiveSql = """
+        select 1
+        from public.github_installation
+        where org_id = @org_id and installation_id = @installation_id and state = 'active'
+        """;
+
+    /// <summary>
+    /// The same proof, holding a share lock that conflicts with the disconnect's update until the transaction ends.
+    /// A disconnect that commits first makes this answer no row; one that arrives later waits for the caller's commit.
+    /// </summary>
+    internal const string LockActiveSql = OwnedActiveSql + "\n        for share";
 
     /// <summary>
     /// Takes the per-(org,user) state lock of the running transaction before the cap is counted: two starts of one
@@ -233,6 +246,36 @@ internal sealed class GitHubInstallationStore(ITenantDb db) : IGitHubInstallStat
         }
 
         return Result.Success(row.InstallationId);
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> OwnsActiveAsync(Guid orgId, long installationId, CancellationToken cancellationToken)
+    {
+        if (installationId <= 0)
+        {
+            return false;
+        }
+
+        var owned = await db
+            .ScalarAsync<int?>(OwnedActiveSql, new { org_id = orgId, installation_id = installationId }, cancellationToken)
+            .ConfigureAwait(false);
+
+        return owned is not null;
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> LockActiveAsync(Guid orgId, long installationId, CancellationToken cancellationToken)
+    {
+        if (installationId <= 0)
+        {
+            return false;
+        }
+
+        var owned = await db
+            .ScalarAsync<int?>(LockActiveSql, new { org_id = orgId, installation_id = installationId }, cancellationToken)
+            .ConfigureAwait(false);
+
+        return owned is not null;
     }
 
     private static GitHubInstallationRow ToRow(Row row)

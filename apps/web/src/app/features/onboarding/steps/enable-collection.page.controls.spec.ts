@@ -1,12 +1,17 @@
-import { provideZonelessChangeDetection, signal } from '@angular/core';
+import { registerLocaleData } from '@angular/common';
+import localeVi from '@angular/common/locales/vi';
+import { LOCALE_ID, provideZonelessChangeDetection, signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import type { PolicyActivationStateDto } from '@evidgate/sdk';
 
 import { OnboardingDataService } from '../../../core/data/onboarding-data.service';
 import { ApiRequestError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
+import { OnboardingViewport } from '../onboarding-viewport.testing';
 import { EnableCollectionPage } from './enable-collection.page';
 import { requiredElement } from './step-controls.testing';
+
+registerLocaleData(localeVi);
 
 const ACTIVATION: PolicyActivationStateDto = {
   project_id: 'project-1',
@@ -30,21 +35,25 @@ function unreadable(): ApiRequestError {
   });
 }
 
-describe('EnableCollectionPage Helm controls', () => {
+describe.each(['en-US', 'vi'])('EnableCollectionPage Helm controls (%s)', (locale) => {
   let fixture: ComponentFixture<EnableCollectionPage>;
   let root: HTMLElement;
+  let viewport: OnboardingViewport;
   const permitted = signal(true);
   const readPolicyActivation = vi.fn<OnboardingDataService['readPolicyActivation']>();
   const createPolicyRevision = vi.fn<OnboardingDataService['createPolicyRevision']>();
 
   beforeEach(async () => {
     permitted.set(true);
+    viewport = new OnboardingViewport();
     readPolicyActivation.mockReset().mockResolvedValue(null);
     createPolicyRevision.mockReset();
     await TestBed.configureTestingModule({
       imports: [EnableCollectionPage],
       providers: [
         provideZonelessChangeDetection(),
+        { provide: LOCALE_ID, useValue: locale },
+        viewport.provider,
         {
           provide: OnboardingDataService,
           useValue: { readPolicyActivation, createPolicyRevision },
@@ -92,6 +101,7 @@ describe('EnableCollectionPage Helm controls', () => {
     expect(status.textContent).toContain('Reading');
     expect(status.getAttribute('tabindex')).toBe('-1');
     expect(status.classList).toContain('min-h-(--eg-leading-sm)');
+    expect(status.classList).not.toContain('sr-only');
     expect(
       requiredElement<HTMLButtonElement>(root, '[data-testid="enable-collection-confirm"]')
         .disabled,
@@ -126,8 +136,50 @@ describe('EnableCollectionPage Helm controls', () => {
     expect(enabled.classList).toContain('bg-(--eg-success-bg)');
     expect(enabled.classList).toContain('text-(--eg-success-fg)');
     expect(requiredElement(root, '#enable-enabled-heading').getAttribute('tabindex')).toBe('-1');
+    const status = requiredElement(root, '[data-testid="enable-collection-busy"]');
+    expect(status.getAttribute('role')).toBe('status');
+    expect(status.textContent?.trim()).toBe('');
+    expect(status.classList).toContain('sr-only');
     expect(root.querySelector('[data-testid="enable-collection-confirm"]')).toBeNull();
+    const time = enabled.querySelector('time');
+    expect(time?.getAttribute('datetime')).toBe(ACTIVATION.activated_at);
+    expect(time?.textContent).toBe(
+      locale === 'vi' ? '01:00:00 27/10/2026' : '10/27/2026, 1:00:00\u202fAM',
+    );
     expect(root.textContent).not.toMatch(/\bPASS\b|\bFAIL\b/);
+  });
+
+  it('announces localized policy labels and sanitized diagnostic paths as text', async () => {
+    createPolicyRevision.mockRejectedValueOnce(
+      new ApiRequestError({
+        kind: 'validation',
+        status: 422,
+        code: 'validation_failed',
+        message: 'Invalid policy.',
+        requestId: null,
+        retryable: false,
+        details: [
+          { path: '/mode', reason: 'invalid_value' },
+          { path: '/late_evidence_window_minutes', reason: 'Out of range.' },
+          { path: '/internal/\u202E<img src=x onerror=alert(1)>', reason: 'Not\u0007 accepted.' },
+        ],
+        retryAfterSeconds: null,
+      }),
+    );
+    await mount();
+    requiredElement<HTMLButtonElement>(root, '[data-testid="enable-collection-confirm"]').click();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      const details = requiredElement(root, '[data-testid="enable-collection-details"]');
+      expect(details.textContent).toContain('Mode: invalid_value');
+      expect(details.textContent).toContain('Late-evidence window: Out of range.');
+      expect(details.textContent).toContain('Submitted value: Not accepted.');
+      expect(details.textContent).toContain('/mode');
+      expect(details.textContent).toContain('/internal/<img src=x onerror=alert(1)>');
+      expect(details.querySelector('img')).toBeNull();
+      expect(details.querySelectorAll('code bdi')).toHaveLength(3);
+      expect(details.textContent).not.toMatch(/[\p{Cc}\p{Cf}]/u);
+    });
   });
 
   it('keeps missing-permission feedback connected to the disabled Helm confirm', async () => {
@@ -140,5 +192,52 @@ describe('EnableCollectionPage Helm controls', () => {
     expect(confirm.disabled).toBe(true);
     expect(confirm.getAttribute('aria-describedby')).toContain('enable-permission');
     expect(requiredElement(root, '#enable-permission').textContent?.trim()).not.toBe('');
+  });
+  it.each([320, 390, 767])(
+    'keeps the policy readable at %ipx and refuses a stale desktop confirm',
+    async (width) => {
+      await mount();
+      const form = requiredElement<HTMLFormElement>(root, 'form');
+      viewport.setWidth(width);
+      form.requestSubmit();
+      await fixture.whenStable();
+      expect(root.querySelector('[data-testid="enable-collection-confirm"]')).toBeNull();
+      expect(root.querySelector('[data-testid="enable-collection-policy-preview"]')).not.toBeNull();
+      expect(root.querySelector('app-desktop-required-notice')?.textContent).toMatch(/desktop/i);
+      expect(createPolicyRevision).not.toHaveBeenCalled();
+      viewport.setWidth(768);
+      await fixture.whenStable();
+      expect(
+        requiredElement<HTMLButtonElement>(root, '[data-testid="enable-collection-confirm"]')
+          .disabled,
+      ).toBe(false);
+    },
+  );
+
+  it('keeps read-only recovery available on narrow screens', async () => {
+    viewport.setWidth(390);
+    readPolicyActivation.mockRejectedValue(unreadable());
+    await mount();
+    const recovery = requiredElement<HTMLButtonElement>(
+      root,
+      '[data-testid="enable-collection-read-again"]',
+    );
+    readPolicyActivation.mockResolvedValue(null);
+    recovery.click();
+    await fixture.whenStable();
+    await vi.waitFor(() => expect(readPolicyActivation).toHaveBeenCalledTimes(2));
+    expect(createPolicyRevision).not.toHaveBeenCalled();
+    expect(root.querySelector('[data-testid="enable-collection-confirm"]')).toBeNull();
+  });
+
+  it('shows the complete selectable hash without adding a terminal tab stop', async () => {
+    readPolicyActivation.mockResolvedValue(ACTIVATION);
+    await mount();
+    const hash = requiredElement<HTMLElement>(root, '[data-testid="enable-policy-hash"]');
+    expect(hash.textContent?.trim()).toBe(ACTIVATION.hash);
+    expect(hash.classList).toContain('select-text');
+    expect(hash.classList).toContain('wrap-anywhere');
+    expect(hash.tabIndex).toBe(-1);
+    expect(hash.querySelector('button, a, input, [tabindex]')).toBeNull();
   });
 });

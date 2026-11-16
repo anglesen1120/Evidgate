@@ -67,6 +67,7 @@ export class NavViewService {
         .map(({ entry, link }) => ({
           id: entry.id,
           label: entry.label,
+          shortLabel: entry.shortLabel ?? entry.label,
           icon: entry.icon,
           link,
         }));

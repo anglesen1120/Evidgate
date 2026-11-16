@@ -1,10 +1,5 @@
 <header class="settings-header grid gap-2 wrap-anywhere">
-  <h1
-    class="m-0 font-[family-name:var(--eg-font-display)] text-xl md:text-2xl"
-    i18n="@@settings.title"
-  >
-    Settings
-  </h1>
+  <h1 hlmCardTitle [size]="pageHeadingSize" class="m-0" i18n="@@settings.title">Settings</h1>
   @if (session.currentOrg(); as org) {
     <p class="m-0 text-sm text-muted-foreground" i18n="@@settings.scope">
       Organization: {{ org.name }}
@@ -25,26 +20,23 @@
         <label hlmLabel for="settings-destination" i18n="@@settings.choose"
           >Choose a settings destination</label
         >
-        <select
-          hlmInput
-          class="w-full min-w-0 min-h-[var(--eg-control-touch)]"
-          #destination
-          id="settings-destination"
-          (change)="selectDestination(destination)"
+        <hlm-select
+          [value]="activeSegment()"
+          [itemToString]="destinationLabel"
+          (valueChange)="selectDestination($event)"
         >
-          @if (!activeSegment()) {
-            <option value="" disabled i18n="@@settings.choose">
-              Choose a settings destination
-            </option>
-          }
-          @for (tab of tabs(); track tab.id) {
-            <!-- `[selected]` is the one source of the select's value: it survives options being
-                 created or replaced, which a `[value]` binding on the select does not. -->
-            <option [value]="tab.segment" [selected]="activeSegment() === tab.segment">
-              {{ tab.label }}
-            </option>
-          }
-        </select>
+          <hlm-select-trigger
+            [buttonId]="'settings-destination'"
+            class="w-full min-w-0 min-h-[var(--eg-control-touch)] whitespace-normal"
+          >
+            <hlm-select-value [placeholder]="choose" />
+          </hlm-select-trigger>
+          <hlm-select-content *hlmSelectPortal [aria-label]="choose">
+            @for (tab of tabs(); track tab.id) {
+              <hlm-select-item [value]="tab.segment">{{ tab.label }}</hlm-select-item>
+            }
+          </hlm-select-content>
+        </hlm-select>
       </div>
       <ul class="settings-links m-0 hidden list-none gap-1 p-0 md:grid">
         @for (tab of tabs(); track tab.id) {
@@ -66,7 +58,7 @@
       </ul>
     </nav>
   }
-  <div hlmCard class="settings-content min-w-0 gap-0 p-3 md:p-4">
+  <div class="settings-content min-w-0">
     <router-outlet />
     @if (activeSegment() === 'quota-retention') {
       <app-retention-form />

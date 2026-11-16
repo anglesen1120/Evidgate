@@ -114,13 +114,12 @@ const PLAIN_ROWS: readonly FixtureAuditRow[] = SUPPORT_ROWS.filter(
   (row) => supportMarker(row) === null,
 );
 
-/** The rows `[data-audit-row]` of the page, in DOM order — one spelling for every case. */
-const AUDIT_ROWS = 'app-audit-table [data-audit-row]';
+/** The shared table's real records enclose every cell; the actor marker is only one fact. */
+const AUDIT_ROWS = 'app-audit-table [data-row-id]';
+const SUPPORT_ROWS_SELECTOR = `${AUDIT_ROWS}:has([data-audit-support="true"])`;
+const PLAIN_ROWS_SELECTOR = `${AUDIT_ROWS}:has([data-audit-support="false"])`;
 
-/** The scroll region the table lives in: a named, keyboard-scrollable region, not the page. */
-const TABLE_REGION = 'app-audit-table [role="region"]';
-
-/** The support-access chip of one row, and the tooltip that carries its grant id. */
+/** The support-access chip is inside each record's explicit event-details disclosure. */
 const SUPPORT_CHIPS = `${AUDIT_ROWS} .support-access`;
 
 /** The tab's own phase hook, awaited before any content claim (loading → ready). */
@@ -182,10 +181,10 @@ test.describe('AC7: an audit:read session reads the log and exports it', () => {
       );
       expect(
         await page
-          .locator(`${AUDIT_ROWS} td:nth-child(3)`)
+          .locator(`${AUDIT_ROWS} [data-column-priority="primary"] .value`)
           .evaluateAll((cells) => cells.map((cell) => (cell as HTMLElement).innerText.trim())),
       ).toEqual(DEFAULT_ROWS.map((row) => row.action));
-      await expect(page.locator(`${AUDIT_ROWS}[data-audit-support="true"]`)).toHaveCount(0);
+      await expect(page.locator(SUPPORT_ROWS_SELECTOR)).toHaveCount(0);
       await expect(page.locator(SUPPORT_CHIPS)).toHaveCount(0);
 
       // The export control is part of the page, idle until it is used.
@@ -254,21 +253,17 @@ test.describe('AC8: the support-access chip marks exactly the flagged rows', () 
 
       // One render holds both cases: flagged rows with a chip, plain rows without one.
       await expect(page.locator(AUDIT_ROWS)).toHaveCount(SUPPORT_ROWS.length);
-      await expect(page.locator(`${AUDIT_ROWS}[data-audit-support="true"]`)).toHaveCount(
-        FLAGGED_ROWS.length,
-      );
-      await expect(page.locator(`${AUDIT_ROWS}[data-audit-support="false"]`)).toHaveCount(
-        PLAIN_ROWS.length,
-      );
+      await expect(page.locator(SUPPORT_ROWS_SELECTOR)).toHaveCount(FLAGGED_ROWS.length);
+      await expect(page.locator(PLAIN_ROWS_SELECTOR)).toHaveCount(PLAIN_ROWS.length);
       await expect(page.locator(SUPPORT_CHIPS)).toHaveCount(FLAGGED_ROWS.length);
 
       // Which rows: the flagged ones are the corpus rows carrying the marker, in the server's
       // newest-first order — and no plain row carries a chip.
-      expect(await renderedTimestamps(page, `${AUDIT_ROWS}[data-audit-support="true"]`)).toEqual(
+      expect(await renderedTimestamps(page, SUPPORT_ROWS_SELECTOR)).toEqual(
         FLAGGED_ROWS.map((row) => row.created_at),
       );
       for (const row of PLAIN_ROWS) {
-        const plain = page.locator(`${AUDIT_ROWS}[data-audit-support="false"]`, {
+        const plain = page.locator(PLAIN_ROWS_SELECTOR, {
           has: page.locator(`time[datetime="${row.created_at}"]`),
         });
         await expect(plain).toHaveCount(1);
@@ -280,11 +275,11 @@ test.describe('AC8: the support-access chip marks exactly the flagged rows', () 
       for (const row of FLAGGED_ROWS) {
         const grantId = supportMarker(row)?.grantId ?? '';
         expect(grantId, `the corpus flags ${row.id} with a grant id`).not.toBe('');
-        const chip = page
-          .locator(AUDIT_ROWS, {
-            has: page.locator(`time[datetime="${row.created_at}"]`),
-          })
-          .getByRole('button');
+        const record = page.locator(AUDIT_ROWS, {
+          has: page.locator(`time[datetime="${row.created_at}"]`),
+        });
+        await record.locator('[data-audit-details] summary').click();
+        const chip = record.locator('.support-access');
         await expect(chip).toHaveClass(/support-access/);
         await expect(chip).toHaveAccessibleName(/\S/);
         await chip.focus();
@@ -312,19 +307,22 @@ test.describe('AC8: the support-access chip marks exactly the flagged rows', () 
       );
       await expectAuditReady(page);
 
-      // Native buttons are the first two keyboard stops inside the table.
-      const region = page.locator(TABLE_REGION);
-      await expect(region).toHaveCount(1);
-      await expect(region).toHaveAttribute('tabindex', '0');
-      await region.focus();
-
+      // Event details is a keyboard disclosure; Request Copy then Support access are its exact stops.
       for (const row of FLAGGED_ROWS) {
+        const record = page.locator(AUDIT_ROWS, {
+          has: page.locator(`time[datetime="${row.created_at}"]`),
+        });
+        const details = record.locator('[data-audit-details]');
+        const summary = details.locator('summary');
+        await summary.focus();
+        await page.keyboard.press('Enter');
+        await expect(details).toHaveAttribute('open', '');
         await page.keyboard.press('Tab');
-        const chip = page
-          .locator(AUDIT_ROWS, {
-            has: page.locator(`time[datetime="${row.created_at}"]`),
-          })
-          .getByRole('button');
+        const requestCopy = details.locator('app-copyable-identifier').first().getByRole('button');
+        await expect(requestCopy).toHaveCount(1);
+        await expect(requestCopy).toBeFocused();
+        await page.keyboard.press('Tab');
+        const chip = record.locator('.support-access');
         await expect(chip).toBeFocused();
         await expect(chip).toHaveClass(/support-access/);
         await expect(chip).toHaveAccessibleName(/\S/);
@@ -421,7 +419,7 @@ test.describe('the Audit tab is WCAG 2.2 AA clean (00 §5.6 W9)', () => {
 });
 
 test.describe('at 360px the page does not scroll sideways', () => {
-  test('the table lives in its own scroll region and the document keeps its width', async ({
+  test('labelled audit records retain full details without sideways document scroll', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 360, height: 740 });
@@ -434,26 +432,37 @@ test.describe('at 360px the page does not scroll sideways', () => {
     await expectAuditReady(page);
     await expect(page.locator(AUDIT_ROWS)).toHaveCount(SUPPORT_ROWS.length);
 
-    // The wide part of the tab is the table; it sits in a region with `overflow: auto` and a
-    // `tabindex`, so it scrolls on its own and the document never grows past the viewport.
-    const region = page.locator(TABLE_REGION);
-    await expect(region).toHaveCount(1);
-    await expect(region).toHaveAttribute('tabindex', '0');
+    const records = page.locator('app-audit-table app-data-table-records').getByRole('list');
+    await expect(records).toBeVisible();
+    await expect(records.getByRole('listitem')).toHaveCount(SUPPORT_ROWS.length);
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
     expect(overflow).toBeLessThanOrEqual(0);
-    const caption = region.locator('caption');
-    await expect(caption).toHaveCSS('display', 'block');
+    const caption = page.locator('app-audit-table app-data-table > .caption');
+    await expect(caption).toBeVisible();
+    await expect(records).toHaveAccessibleName((await caption.innerText()).trim());
     const captionBox = await caption.boundingBox();
-    const tableBox = await region.locator('table').boundingBox();
+    const tableBox = await page.locator('app-audit-table app-data-table').boundingBox();
     if (captionBox === null || tableBox === null)
-      throw new Error('audit caption or table has no box');
+      throw new Error('audit caption or records have no box');
     expect(captionBox.width).toBeCloseTo(tableBox.width, 0);
+    for (const record of await records.getByRole('listitem').all()) {
+      const terms = record.locator(':scope > dl > .eg-table-fact > dt');
+      expect(await terms.count()).toBeGreaterThan(0);
+      await expect(record.locator(':scope > dl > .eg-table-fact > dd')).toHaveCount(
+        await terms.count(),
+      );
+      for (const term of await terms.all()) await expect(term).toBeVisible();
+    }
     for (const row of FLAGGED_ROWS) {
       const supportRow = page.locator(AUDIT_ROWS, {
         has: page.locator(`time[datetime="${row.created_at}"]`),
       });
+      const details = supportRow.locator('[data-audit-details]');
+      await details.locator('summary').focus();
+      await page.keyboard.press('Enter');
+      await expect(details).toHaveAttribute('open', '');
       const description = supportRow.locator('.support-access + span');
       await expect(description).toBeVisible();
       const grantId = supportMarker(row)?.grantId;
@@ -461,9 +470,8 @@ test.describe('at 360px the page does not scroll sideways', () => {
       await expect(description).toContainText(grantId);
     }
 
-    // Keyboard users can still reach the overflow: the region is focusable and reports itself as a
-    // named region (its `aria-label` is the table caption).
-    expect(((await region.getAttribute('aria-label')) ?? '').trim().length).toBeGreaterThan(0);
+    // Narrow inspection needs no overflow region: disclosures remain keyboard-operable above.
+    await expect(page.locator('app-audit-table [role="region"]')).toHaveCount(0);
 
     await expectNoA11yViolations(page, 'audit support 360px en/light');
   });

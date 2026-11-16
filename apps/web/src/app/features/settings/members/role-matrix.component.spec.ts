@@ -87,6 +87,89 @@ describe('RoleMatrixComponent responsive records', () => {
     expect(cells[1]?.querySelector('[data-granted]')).toBeNull();
   });
 
+  it('uses intrinsic headers and boolean values instead of generic workflow-status minima', async () => {
+    const { root } = await render();
+    const headers = root.querySelectorAll<HTMLElement>('thead th[data-column-role="status"]');
+    expect(headers).toHaveLength(ROLES.length);
+    for (const header of headers) {
+      expect(header.style.getPropertyValue('min-inline-size')).toBe('max-content');
+      expect(header.style.getPropertyValue('inline-size')).toBe('1%');
+      expect(header.style.getPropertyValue('max-inline-size')).toBe('none');
+      expect(header.classList.contains('md:whitespace-nowrap')).toBe(true);
+    }
+    for (const cell of root.querySelectorAll<HTMLElement>('tbody td')) {
+      expect(cell.style.getPropertyValue('min-inline-size')).toBe('0px');
+      expect(cell.style.getPropertyValue('inline-size')).toBe('');
+      expect(cell.style.getPropertyValue('max-inline-size')).toBe('none');
+      expect(cell.querySelector('span.md\\:whitespace-nowrap')).not.toBeNull();
+    }
+  });
+
+  it('keeps nine complete comparison role names without character-count width guesses', async () => {
+    const { fixture, root } = await render();
+    const roles = Array.from({ length: 9 }, (_, index) => ({
+      ...ROLES[0]!,
+      id: `comparison-${index}`,
+      name: index === 8 ? 'Fully preserved organization role label' : `Role ${index}`,
+    }));
+    fixture.componentRef.setInput('matrix', {
+      columns: roles,
+      rows: [{ membership: MEMBER, granted: new Set(['comparison-0']) }],
+    });
+    await fixture.whenStable();
+    const headers = [...root.querySelectorAll<HTMLElement>('thead th[data-column-role="status"]')];
+    expect(headers.map((header) => header.textContent)).toEqual(roles.map((role) => role.name));
+    expect(root.querySelectorAll('tbody td')).toHaveLength(9);
+    for (const header of headers)
+      expect(header.style.getPropertyValue('min-inline-size')).toBe('max-content');
+    expectTableSemantics(root);
+  });
+
+  it('defaults mobile records to granted roles and explicitly expands the full matrix', async () => {
+    const { fixture, root } = await render();
+    const summary = root.querySelector('[data-members-granted-summary]');
+    expect(summary?.textContent).toContain(MEMBER.invited_email);
+    expect(summary?.textContent).toContain(ROLES[0]?.name);
+    expect(summary?.textContent).not.toContain(ROLES[1]?.name);
+    const button = root.querySelector<HTMLButtonElement>('button[aria-controls]');
+    if (!button) throw new Error('Expected full-matrix disclosure');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(root.querySelector('#members-full-matrix')?.classList.contains('max-md:hidden')).toBe(
+      true,
+    );
+    button.click();
+    await fixture.whenStable();
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    expect(button.textContent).toContain('Show granted roles only');
+    expect(root.querySelector('[data-members-granted-summary]')).toBeNull();
+    expect(root.querySelector('#members-full-matrix')?.classList.contains('max-md:hidden')).toBe(
+      false,
+    );
+    const table = root.querySelector('table');
+    expect(table?.classList.contains('max-md:min-w-0')).toBe(true);
+    expect(table?.classList.contains('max-md:max-w-full')).toBe(true);
+    for (const cell of root.querySelectorAll('tbody th, tbody td')) {
+      expect(cell.classList.contains('max-md:w-full')).toBe(true);
+      expect(cell.classList.contains('max-md:min-w-0')).toBe(true);
+      expect(cell.classList.contains('max-md:max-w-full')).toBe(true);
+    }
+    button.click();
+    await fixture.whenStable();
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(root.querySelector('[data-members-granted-summary]')).not.toBeNull();
+  });
+
+  it('names an empty grant set without inventing assigned roles', async () => {
+    const { fixture, root } = await render();
+    fixture.componentRef.setInput('matrix', {
+      columns: ROLES,
+      rows: [{ membership: MEMBER, granted: new Set<string>() }],
+    });
+    await fixture.whenStable();
+    const summary = root.querySelector('[data-members-granted-summary]');
+    expect(summary?.textContent).toContain('No roles assigned');
+    for (const role of ROLES) expect(summary?.textContent).not.toContain(role.name);
+  });
   it('keeps role catalogue unavailability distinct from an empty membership list', async () => {
     const { fixture, root } = await render();
     fixture.componentRef.setInput('matrix', { columns: [], rows: [] });
@@ -106,18 +189,14 @@ describe('RoleMatrixComponent responsive records', () => {
     fixture.componentRef.setInput('members', [MEMBER]);
     await fixture.whenStable();
     const root = fixture.nativeElement as HTMLElement;
-    expectTableSemantics(root);
-    expect(root.querySelector('.member-identity > span:last-child')?.textContent).toBe(
+    expect(root.querySelectorAll('[role="table"]')).toHaveLength(1);
+    const identity = root.querySelector('td[data-column-kind="email"]');
+    expect(identity?.querySelector('app-data-table-value')?.textContent).toContain(
       MEMBER.invited_email,
     );
-    expect(
-      Array.from(root.querySelectorAll('tbody .record-label')).map((label) => label.textContent),
-    ).toEqual(['Member', 'Status', 'Organization roles']);
-    for (const cell of root.querySelectorAll('tbody td')) {
-      const headers = cell.getAttribute('headers')?.split(' ') ?? [];
-      expect(headers).toHaveLength(2);
-      for (const id of headers) expect(root.querySelector(`[id="${id}"]`)).not.toBeNull();
-    }
+    expect(identity?.getAttribute('data-column-priority')).toBe('primary');
+    expect(root.querySelectorAll('thead th')).toHaveLength(3);
+    expect(root.querySelector('table')?.classList.contains('eg-table-layout')).toBe(true);
     expect(root.querySelector('.role-name')?.textContent).toBe(ROLES[0]?.name);
     expect(root.querySelector('.mutation')).toBeNull();
   });

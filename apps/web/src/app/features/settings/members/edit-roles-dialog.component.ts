@@ -21,6 +21,7 @@ import type { MembershipView } from '@evidgate/sdk';
 import { createIntent, type Intent } from '../../../core/http/intent';
 import { SessionStore } from '../../../core/session/session.store';
 import { RetryAfterComponent } from '../../../shared/ui/conflict/retry-after.component';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { MEMBERS_COPY } from './member-list.component';
 import { MembersStore, type MutationState, type RoleChange } from './members.store';
 
@@ -172,6 +173,7 @@ type RoleOperation = Pick<RoleChange, 'kind' | 'roleId'>;
 export class EditRolesDialogComponent {
   protected readonly store = inject(MembersStore);
   protected readonly session = inject(SessionStore);
+  protected readonly viewport = inject(NarrowMutationPolicy);
   protected readonly copy = MEMBERS_COPY;
   readonly completed = output<void>();
   protected readonly opened = signal(false);
@@ -319,7 +321,7 @@ export class EditRolesDialogComponent {
 
   protected async submit(): Promise<void> {
     const member = this.member();
-    if (!this.opened() || !member || !this.canSave()) return;
+    if (!this.opened() || !this.viewport.allowsMutation() || !member || !this.canSave()) return;
     const changes = this.diff().map((change): RoleChange => {
       const key = this.operationKey(change);
       let intent = this.intents.get(key);

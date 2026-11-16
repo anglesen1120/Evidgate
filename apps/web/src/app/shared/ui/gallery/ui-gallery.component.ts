@@ -23,6 +23,7 @@ import {
   type StatusTone,
 } from '../chips';
 import { DataTableComponent, type DataTableColumn } from '../data-table';
+import type { DataTableColumnWidth } from '../data-table/data-table-column';
 import {
   DATA_TABLE_FIXTURE_COLUMNS,
   dataTableFixtureRows,
@@ -41,6 +42,23 @@ import {
 import { DecisionChipComponent, EvidenceBadgeComponent, OutcomePillComponent } from '../verdict';
 import { ConnectStepRevealComponent } from '../reveal/connect-step-reveal.component';
 import { RevealSlot } from '../reveal/one-time-reveal.slot';
+import { PageHeaderComponent } from '../page-header/page-header.component';
+import { GalleryCompositionComponent } from './gallery-composition.component';
+import { GalleryStatesComponent } from './gallery-states.component';
+import { GalleryTablesComponent } from './gallery-tables.component';
+
+/**
+ * Intrinsic specimen budgets: the identity column stays bounded, the narrative context absorbs
+ * spare room and utility columns keep their content width (no header wrapping, no ribbon tables).
+ */
+const SPECIMEN_COLUMN_WIDTHS: Readonly<Record<string, DataTableColumnWidth>> = {
+  hash: { min: '12ch', preferred: '28ch', max: '36ch' },
+  note: { preferred: 'auto' },
+  // Header-owned minimums: the empty specimen has no body row to size its columns, so
+  // `preferred: '1%'` collapsed the count and action headers into two and three lines.
+  attempts: { min: '12ch', preferred: '15ch' },
+  mutation: { min: '16ch', preferred: '21ch' },
+};
 
 /** Isolated specimens; only explicit commands change local demo state. No API calls. */
 @Component({
@@ -69,6 +87,10 @@ import { RevealSlot } from '../reveal/one-time-reveal.slot';
     ConflictDialogComponent,
     RetryAfterComponent,
     RequestStateComponent,
+    PageHeaderComponent,
+    GalleryCompositionComponent,
+    GalleryStatesComponent,
+    GalleryTablesComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './ui-gallery.component.html',
@@ -76,6 +98,8 @@ import { RevealSlot } from '../reveal/one-time-reveal.slot';
   host: { class: 'block min-w-0 bg-background text-foreground font-sans text-base' },
 })
 export class UiGalleryComponent {
+  protected readonly galleryTitle = $localize`:@@shared.gallery.title:Shared UI state gallery`;
+  protected readonly galleryIntroduction = $localize`:@@shared.gallery.introduction:Render-only examples of evidence, decisions and their independent states.`;
   protected readonly reveal = inject(RevealSlot);
   private readonly injector = inject(Injector);
   private readonly revealOpener = viewChild<ElementRef<HTMLButtonElement>>('revealOpener');
@@ -175,6 +199,7 @@ export class UiGalleryComponent {
     DATA_TABLE_FIXTURE_COLUMNS.map((column) => ({
       ...column,
       header: this.columnHeader(column.id),
+      ...(SPECIMEN_COLUMN_WIDTHS[column.id] ? { width: SPECIMEN_COLUMN_WIDTHS[column.id] } : {}),
     }));
   protected readonly smallRows = dataTableFixtureRows(12);
   protected readonly virtualRows = dataTableFixtureRows(250);

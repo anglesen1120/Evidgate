@@ -66,6 +66,7 @@ import {
   openPublish,
   expectRevisionSelection,
   focusInside,
+  showPolicySection,
 } from './settings-policy.support';
 
 for (const locale of LOCALES) {
@@ -81,6 +82,13 @@ for (const locale of LOCALES) {
     expect(field.y + field.height).toBeCloseTo(action.y + action.height, 0);
     expect(field.x + field.width).toBeLessThan(action.x);
     expect(field.width).toBeGreaterThan(action.width);
+    expect(field.width).toBeLessThanOrEqual(420);
+    await expect(page.locator('#policy-revision-id')).toHaveValue(HEAD_ID);
+    expect(
+      await page
+        .locator('#policy-revision-id')
+        .evaluate((input) => input.scrollWidth <= input.clientWidth),
+    ).toBe(true);
   });
   // AC3: the served list, its head marking, the mode chip and the diff panel's own state.
   test(`revision list, head marking, mode chip and diff state (${locale})`, async ({ page }) => {
@@ -89,7 +97,8 @@ for (const locale of LOCALES) {
       const row = page.locator(ROWS).nth(index);
       await expect(row).toHaveAttribute('data-revision-no', String(revision.revision_no));
       await expect(row).toHaveAttribute('data-revision-state', revision.state);
-      await expect(row.locator('code')).toHaveText(revision.hash.slice(0, 12));
+      await expect(row.locator('.identifier-accessible')).toContainText(revision.hash);
+      await expect(row.locator('app-copy-value-button')).toHaveCount(1);
     }
     // Exactly one row is the head the list's ETag named, and it is the newest one.
     const headRow = page.locator(HEAD_ROW);
@@ -97,8 +106,10 @@ for (const locale of LOCALES) {
     await expect(headRow).toHaveAttribute('data-revision-no', HEAD_NO);
     // The activation read serves `advisory` for the review project, so the chip shows that mode
     // verbatim — never a mode inferred from a revision's `state`.
+    await showPolicySection(page, 'app-policy-summary');
     await expect(page.locator(MODE)).toHaveAttribute('data-mode', activationRead.body.mode);
     await expect(page.locator(MODE)).toHaveText(/\S/);
+    await showPolicySection(page, DIFF);
     await expect(page.locator('#policy-diff-base')).toBeEnabled();
     await expect(page.locator('#policy-diff-target')).toBeEnabled();
     await expectRevisionSelection(page, 'policy-diff-base', PREVIOUS_ID);
@@ -209,6 +220,7 @@ for (const locale of LOCALES) {
     await expect(page.locator(SUBMIT)).toHaveCount(0);
     await expect(page.locator(`${PAGE} [data-policy-narrow-notice]`)).toHaveCount(0);
     await expect(page.locator(ROWS)).toHaveCount(revisions.body.items.length);
+    await showPolicySection(page, 'app-policy-summary');
     await expect(page.locator(MODE)).toBeVisible();
   });
 
@@ -223,6 +235,11 @@ for (const locale of LOCALES) {
       HEAD_ID,
       afterPublish.body.items.length,
     );
+    const selectedHead = page.locator(`${HEAD_ROW} [data-policy-select]`);
+    await selectedHead.click();
+    await expect(selectedHead).toHaveAttribute('aria-pressed', 'true');
+    await page.locator('#policy-diff-base').click();
+    await page.getByRole('listbox').locator(`[data-value="${HEAD_ID}"]`).click();
     const dialog = await openPublish(page, PUBLISHED_SEED);
     // The post-publish list's head is revision 4, so the panel compares the head document the
     // session opened (a003) against the revision-4 document — a real pair of two corpus documents.
@@ -390,8 +407,8 @@ for (const locale of LOCALES) {
     const notice = page.locator(`${PAGE} [data-policy-narrow-notice]`);
     await expect(notice).toBeVisible();
     await expect(notice).toHaveText(/\S/);
-    // CSS-hidden, and therefore not a keyboard stop either.
-    await expect(page.locator(OPEN_PUBLISH)).toBeHidden();
+    // Mutation controls are absent, not merely CSS-hidden or keyboard-inaccessible.
+    await expect(page.locator(OPEN_PUBLISH)).toHaveCount(0);
     await expect(page.locator(`${ROWS}:visible`)).toHaveCount(revisions.body.items.length);
     await expect(page.locator(DIFF)).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(

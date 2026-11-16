@@ -20,7 +20,7 @@ import {
   validateEnvelope,
   warningsOf,
 } from './identity-resolve.testing.js';
-import { PLACEHOLDER_EXECUTION_KEY } from './identity.js';
+import { computeExecutionKey } from './executionKey.js';
 import type { SidecarFs } from './sidecar.js';
 
 describe('reporter identity wiring', () => {
@@ -43,7 +43,9 @@ describe('reporter identity wiring', () => {
       expect(envelope?.ext.case_id, type).toBe(CASE_A);
       expect(envelope?.ext.variant_hash, type).toBe(EMPTY_VARIANT_HASH);
       expect(envelope?.ext.target_env, type).toBe('chromium');
-      expect(envelope?.execution_key, type).toBe(PLACEHOLDER_EXECUTION_KEY);
+      expect(envelope?.execution_key, type).toBe(
+        computeExecutionKey(CASE_A, EMPTY_VARIANT_HASH, 'chromium'),
+      );
     }
   });
 

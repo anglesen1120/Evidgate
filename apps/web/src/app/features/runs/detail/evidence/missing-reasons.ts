@@ -1,7 +1,8 @@
 import type { MissingReason } from '../../../../shared/ui/annotations/missing-reason-list.component';
-import { escapeFormatChars } from '../../list/ref-name-display';
+import { escapeFormatChars } from '../../../../shared/ui/values/ref-name-display';
 import { MISSING_CODES, type MissingCode } from '../decision/decision-view-model';
 import { evidenceHref, type EvidenceTarget } from './run-evidence-anchors';
+import { missingReasonExplanation } from '../reason-explanation';
 
 /**
  * A relation the caller established from run data (manifest slot, attempt row) between one wire
@@ -27,28 +28,6 @@ const TARGET_KIND: Record<MissingCode, TargetKind> = {
   stale_epoch: 'producer',
   missing_result: 'attempt',
 };
-
-/** Translated explanation; the wire literal itself is never replaced by it. */
-function explanation(code: MissingCode): string {
-  switch (code) {
-    case 'missing_shard':
-      return $localize`:@@runs.evidence.reason.missing-shard:Shard evidence is missing.`;
-    case 'count_mismatch':
-      return $localize`:@@runs.evidence.reason.count-mismatch:Collected and expected counts do not match.`;
-    case 'artifact_missing':
-      return $localize`:@@runs.evidence.reason.artifact-missing:A required artifact is missing.`;
-    case 'build_mismatch':
-      return $localize`:@@runs.evidence.reason.build-mismatch:The reported build does not match the manifest.`;
-    case 'unknown_status':
-      return $localize`:@@runs.evidence.reason.unknown-status:A reported result status is not recognized.`;
-    case 'setup_error':
-      return $localize`:@@runs.evidence.reason.setup-error:Test setup reported an error.`;
-    case 'stale_epoch':
-      return $localize`:@@runs.evidence.reason.stale-epoch:Evidence belongs to a stale producer epoch.`;
-    case 'missing_result':
-      return $localize`:@@runs.evidence.reason.missing-result:An expected test result is missing.`;
-  }
-}
 
 function isMissingCode(code: string): code is MissingCode {
   return MISSING_CODES.some((known) => known === code);
@@ -107,8 +86,8 @@ export function missingReasonEntries(
       code: escapeFormatChars(code),
       text:
         targets.length > 0 || kind === 'none'
-          ? explanation(code)
-          : $localize`:@@runs.evidence.target-unavailable:${explanation(code)}:EXPLANATION: Target details unavailable`,
+          ? missingReasonExplanation(code)
+          : $localize`:@@runs.evidence.target-unavailable:${missingReasonExplanation(code)}:EXPLANATION: Target details unavailable`,
     });
     for (const target of targets) entries.push(targetEntry(target));
   }

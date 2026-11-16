@@ -57,9 +57,7 @@ for (const locale of LOCALES) {
     await detail.openDetail(runDetailPath({ locale, decision: 'evaluated-fail-missing-shard' }));
 
     // Evidence is the default tab, so the missing shard is readable without switching tabs.
-    await expect(detail.evidencePanel.locator('[data-evidence-missing] .reason-code')).toHaveText(
-      MISSING_SHARD,
-    );
+    await expect(detail.missingReasonCode).toHaveText(MISSING_SHARD);
 
     await detail.showDecision();
     await expect(detail.decisionChip).toHaveAttribute('data-tone', 'danger');

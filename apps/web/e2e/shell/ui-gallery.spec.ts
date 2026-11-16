@@ -1,6 +1,6 @@
-// 09.1.1-T4.4 (plan 09.1.1 §10 T4, §2 AC6; 00 §5.6 W9; T7 hand-over): the shared-UI data table as
-// it behaves in a real Chromium at the narrow end — 360px is the width the owner reported mid-word
-// breaks and wrapped badges at in earlier design rounds, so it is the width that can regress.
+// The shared-UI data table as it behaves in a real Chromium at the narrow end — 360px is the width
+// the owner reported mid-word breaks and wrapped badges at in earlier design rounds, so it is the
+// width that can regress.
 //
 // Everything here is a layout property jsdom cannot have: real scroll boxes, a classic scrollbar
 // that takes width, a sticky header, the top layer of a native popover, and the accessibility tree
@@ -10,11 +10,15 @@
 // width the user can never see.
 //
 // Defects this file finds in `shared/ui` are REPORTED, not fixed (the task owns `shell/**` only).
+//
+// The table has two anatomies: below a 768px container it renders stacked records, at or above it a
+// single real table (header row + body rows in one grid). So the 360px reflow budget covers the
+// narrow end, table mechanics are asserted at the narrowest width where the table renders, and
+// value clipping is asserted on the fixed-layout (virtual) table, whose equal column shares clip
+// every value regardless of the container width.
 import { expect, test, type Page } from '@playwright/test';
 
 import { localePath, LOCALES, THEMES } from './support';
-
-const HASH_OF_FIRST_ROW = 'sha256:demo-evidence-0-0123456789abcdef';
 
 /** `/dev/ui-gallery` is review-only and has no shell, so a theme is just the attribute on `<html>`. */
 async function openGallery(
@@ -24,7 +28,11 @@ async function openGallery(
 ): Promise<void> {
   await page.goto(localePath(locale, '/dev/ui-gallery'));
   await expect(page.locator('h1').first()).toBeVisible();
-  await expect(page.locator('[data-demo="table-small"] .body-table tr').first()).toBeVisible();
+  // Below the 768px breakpoint the table renders as stacked records, so readiness is the first
+  // data row of either anatomy inside the scroll box, not a `<tbody>` row.
+  await expect(
+    page.locator('[data-demo="table-small"] :is(tbody tr, li.eg-table-record)').first(),
+  ).toBeVisible();
   await page.evaluate((choice) => {
     if (choice === 'light') document.documentElement.removeAttribute('data-theme');
     else document.documentElement.setAttribute('data-theme', choice);
@@ -51,14 +59,13 @@ async function tableMetrics(page: Page): Promise<{
   header: Box;
   headerCells: readonly { left: number; width: number }[];
   bodyCells: readonly { left: number; width: number }[];
-  scrollbarWidth: number;
-  viewportWidth: number;
 }> {
   return page.evaluate(() => {
     const root = document.querySelector('[data-demo="table-small"]') as HTMLElement;
     const scroll = root.querySelector('.scroll') as HTMLElement;
-    const header = root.querySelector('.header-table') as HTMLElement;
-    const bodyRow = root.querySelector('.body-table tr') as HTMLElement;
+    // One table, one grid: the header row's first cell is the sticky element (`thead th` carries
+    // the sticky rule) and the body's first row is the first `tbody` row.
+    const header = root.querySelector('thead tr > *') as HTMLElement;
     const box = (element: Element) => {
       const rect = element.getBoundingClientRect();
       return {
@@ -70,8 +77,8 @@ async function tableMetrics(page: Page): Promise<{
         height: Math.round(rect.height * 100) / 100,
       };
     };
-    const cells = (table: Element) =>
-      Array.from(table.querySelectorAll('tr:first-child > .cell')).map((cell) => {
+    const cells = (selector: string) =>
+      Array.from(root.querySelectorAll(selector)).map((cell) => {
         const rect = cell.getBoundingClientRect();
         return {
           left: Math.round(rect.left * 100) / 100,
@@ -87,15 +94,13 @@ async function tableMetrics(page: Page): Promise<{
         clientHeight: scroll.clientHeight,
       },
       header: box(header),
-      headerCells: cells(header),
-      bodyCells: cells(bodyRow),
-      scrollbarWidth: scroll.offsetWidth - scroll.clientWidth,
-      viewportWidth: window.innerWidth,
+      headerCells: cells('thead tr > *'),
+      bodyCells: cells('tbody tr:first-child > *'),
     };
   });
 }
 
-test.describe('the gallery never scrolls sideways (T7, 360px)', () => {
+test.describe('the gallery never scrolls sideways at 360px', () => {
   test.use({ viewport: { width: 360, height: 800 } });
 
   for (const locale of LOCALES) {
@@ -143,56 +148,53 @@ test.describe('the gallery never scrolls sideways (T7, 360px)', () => {
 });
 
 for (const locale of LOCALES) {
-  test.describe(`table mechanics, ${locale} bundle (T7)`, () => {
-    test.use({ viewport: { width: 360, height: 800 } });
+  test.describe(`table mechanics, ${locale} bundle`, () => {
+    // Below its 768px container breakpoint the table renders as stacked records (approved
+    // redesign), so table mechanics are asserted at the narrowest width where the table itself
+    // renders; the 360px reflow budget above still covers the narrow end.
+    test.use({ viewport: { width: 900, height: 800 } });
 
-    test('the small table really scrolls and its header sticks above the body', async ({
+    test('the ordinary specimen flows with the page, the virtual one keeps its window', async ({
       page,
     }) => {
       await openGallery(page, locale, 'light');
-      const scroll = page.locator('[data-demo="table-small"] .scroll');
-      const before = await tableMetrics(page);
+      const metrics = await tableMetrics(page);
 
-      // A reserved viewport of eight rows over twelve rows: the box has somewhere to scroll to, and
-      // a classic scrollbar that takes layout width (the alignment case below depends on it).
-      expect(before.scroll.scrollHeight).toBeGreaterThan(before.scroll.clientHeight);
-      expect(
-        before.scrollbarWidth,
-        'a classic scrollbar gutter is present, so the header and body share the width the user sees',
-      ).toBeGreaterThan(0);
-      expect(before.scroll.scrollWidth).toBeLessThanOrEqual(before.scroll.clientWidth);
+      // Page flow: the twelve-row example is not an inner row viewport any
+      // more, so every row is laid out in the document and the page owns the vertical scrollbar.
+      expect(metrics.scroll.scrollHeight).toBeLessThanOrEqual(metrics.scroll.clientHeight + 1);
+      expect(await page.locator('[data-demo="table-small"] tbody tr[data-row-id]').count()).toBe(
+        12,
+      );
+      expect(metrics.scroll.scrollWidth).toBeLessThanOrEqual(metrics.scroll.clientWidth);
+      expect(metrics.headerCells.length).toBe(4);
 
-      await scroll.hover();
-      await page.mouse.wheel(0, 320);
-      await expect.poll(() => scroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-
-      const scrolled = await tableMetrics(page);
-      // The header is still pinned to the top of the box it scrolls inside: no gap above it, and it
-      // did not scroll away with the body.
-      expect(Math.abs(scrolled.header.top - scrolled.scroll.top)).toBeLessThanOrEqual(1.5);
-      // And the columns still line up: a sticky header that loses the scrollbar's width drifts by
-      // exactly that width on the last column.
-      expect(scrolled.headerCells).toEqual(scrolled.bodyCells);
-      expect(scrolled.headerCells.length).toBe(4);
+      // The virtual example keeps its bounded window: 250 rows in a viewport of eight is the
+      // contract that window was built for, not a defect.
+      const virtual = await page.evaluate(() => {
+        const root = document.querySelector('[data-demo="table-virtual"]') as HTMLElement;
+        const viewport = root.querySelector('cdk-virtual-scroll-viewport') as HTMLElement;
+        return { scrollHeight: viewport.scrollHeight, clientHeight: viewport.clientHeight };
+      });
+      expect(virtual.scrollHeight).toBeGreaterThan(virtual.clientHeight);
     });
 
     test('a clipped value opens a native popover in the top layer, unclipped', async ({ page }) => {
       await openGallery(page, locale, 'light');
 
-      const values = page.locator('[data-demo="table-small"] .body-table .value.clipped');
+      // The virtual table is the fixed-layout one: its columns get an equal share of the box, so the
+      // whole hash does not fit and every rendered value is clipped. The plain table gives the
+      // identity column its content width, so nothing there is clipped.
+      const values = page.locator('[data-demo="table-virtual"] .body-table .value.clipped');
       expect(
         await values.count(),
-        'the hash column is truncated, so at least the visible rows are clipped',
+        'the fixed-layout hash column is narrower than the whole value',
       ).toBeGreaterThan(0);
 
-      // Scroll the table to its end, then use a cell that is still visible there: a popover whose
-      // anchor is scrolled out of the box would be positioned off-screen for the wrong reason.
-      const scroll = page.locator('[data-demo="table-small"] .scroll');
-      await scroll.evaluate((element) => {
-        element.scrollTop = element.scrollHeight;
-      });
-
-      const value = values.last();
+      const value = values.first();
+      // Bring the anchor into the viewport: the popover is placed next to it, and the hit test below
+      // has to land on painted pixels.
+      await value.scrollIntoViewIfNeeded();
       const cell = value.locator('..');
       const popover = cell.locator('.full-value');
       await value.focus();
@@ -239,12 +241,18 @@ for (const locale of LOCALES) {
   });
 }
 
-test.describe('a clipped value in the accessibility tree (T7 report item)', () => {
-  test.use({ viewport: { width: 360, height: 800 } });
+test.describe('a clipped value in the accessibility tree', () => {
+  // Table mode: the cell/`td` exposure below is the table anatomy a real table exposes.
+  test.use({ viewport: { width: 900, height: 800 } });
 
   test('counts the copies Chromium exposes, closed and open', async ({ page }) => {
     await openGallery(page, 'en', 'light');
-    const cell = page.locator('[data-demo="table-small"] .body-table tr:first-child td').first();
+    // The fixed-layout table truncates its text column, so this cell holds the clipped-value
+    // anatomy: `.value` (customary clipping, full text) plus the `.full-value` popover. The identity
+    // column renders the copyable-identifier component instead, with its own disclosure dialog.
+    const cell = page.locator('[data-demo="table-virtual"] tbody tr:first-child > td').nth(1);
+    const fullValue = ((await cell.locator('.value').textContent()) ?? '').trim();
+    expect(fullValue, 'the value cell carries text').not.toBe('');
 
     // The DOM contract first: one visible value (the accessible copy) and one popover that is
     // hidden from assistive technology and not rendered until it opens.
@@ -253,7 +261,7 @@ test.describe('a clipped value in the accessibility tree (T7 report item)', () =
         Array.from(element.querySelectorAll('span')).filter(
           (span) => (span.textContent ?? '').trim() === value,
         ).length,
-      HASH_OF_FIRST_ROW,
+      fullValue,
     );
     expect(domCopies, 'visible span + aria-hidden popover').toBe(2);
 
@@ -262,11 +270,13 @@ test.describe('a clipped value in the accessibility tree (T7 report item)', () =
     // and tooltip nodes.
     const exposures = (snapshot: string) => {
       const lines = snapshot.split('\n');
-      const name = lines.filter((line) => /^\s*-\s+cell\b/.test(line)).join(' ');
+      // A name with punctuation is quoted by the snapshot (`- 'cell "…"'`), so the role token may sit
+      // behind a quote character.
+      const name = lines.filter((line) => /^\s*-\s+'?cell\b/.test(line)).join(' ');
       return {
-        nameCopies: name.split(HASH_OF_FIRST_ROW).length - 1,
+        nameCopies: name.split(fullValue).length - 1,
         tooltipCopies: lines.filter((line) => /^\s*-\s+tooltip/.test(line)).length,
-        rawCopies: snapshot.split(HASH_OF_FIRST_ROW).length - 1,
+        rawCopies: snapshot.split(fullValue).length - 1,
       };
     };
 
@@ -293,7 +303,7 @@ test.describe('a clipped value in the accessibility tree (T7 report item)', () =
   });
 });
 
-test.describe('column alignment at a desktop width (T7)', () => {
+test.describe('column alignment at a desktop width', () => {
   test.use({ viewport: { width: 1280, height: 900 } });
 
   test('header and body columns share one grid', async ({ page }) => {
@@ -302,4 +312,124 @@ test.describe('column alignment at a desktop width (T7)', () => {
     expect(metrics.headerCells).toEqual(metrics.bodyCells);
     expect(Math.abs(metrics.header.top - metrics.scroll.top)).toBeLessThanOrEqual(1.5);
   });
+});
+
+test.describe('table specimen layout pins', () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test('column budgets bound the identity column and flex the context', async ({ page }) => {
+    await openGallery(page, 'en', 'light');
+    const widths = await page.evaluate(() => {
+      const table = document.querySelector('[data-demo="table-small"] table') as HTMLElement;
+      const cells = Array.from(table.querySelectorAll('thead th'));
+      const tableWidth = table.getBoundingClientRect().width;
+      const [identity = 0, context = 0, attempts = 0, mutation = 0] = cells.map(
+        (cell) => cell.getBoundingClientRect().width,
+      );
+      return { tableWidth, identity, context, attempts, mutation };
+    });
+
+    // The identity column is bounded, the narrative column takes the spare room, and the utility
+    // columns stay near their content width instead of stretching.
+    expect(widths.identity).toBeLessThan(widths.context);
+    expect(widths.identity).toBeLessThan(widths.tableWidth * 0.4);
+    expect(widths.attempts).toBeLessThan(widths.context);
+    expect(widths.mutation).toBeLessThan(widths.context);
+  });
+
+  test('the short-key form and its actions keep an expected content width', async ({ page }) => {
+    await openGallery(page, 'en', 'light');
+    const boxes = await page.evaluate(() => {
+      // The section is labelled by `#gallery-fields` (an `h2`), so the form is its sibling.
+      const form = document.querySelector('section[aria-labelledby="gallery-fields"] form');
+      if (!(form instanceof HTMLElement)) throw new Error('Expected the gallery field specimen');
+      const input = form.querySelector('input');
+      const submit = form.querySelector('button[type="submit"]');
+      if (!(input instanceof HTMLElement) || !(submit instanceof HTMLElement)) {
+        throw new Error('Expected the specimen input and submit action');
+      }
+      const section = form.parentElement;
+      if (!(section instanceof HTMLElement)) throw new Error('Expected the specimen section');
+      return {
+        input: input.getBoundingClientRect().width,
+        submit: submit.getBoundingClientRect().width,
+        section: section.getBoundingClientRect().width,
+      };
+    });
+
+    // A short key is entered in a bounded field, and the save action is content-sized, not a band.
+    expect(boxes.input).toBeLessThan(boxes.section);
+    expect(boxes.input).toBeLessThanOrEqual(460);
+    expect(boxes.submit).toBeLessThan(300);
+  });
+
+  test('the role specimen reflows to labelled records instead of hiding columns', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 768, height: 900 });
+    await openGallery(page, 'en', 'light');
+    const specimen = page.locator('[data-demo="gallery-column-roles"]');
+
+    await expect(specimen.locator('table'), 'no table squeezes columns out of view').toHaveCount(0);
+    await expect(specimen.locator('li.eg-table-record')).toHaveCount(2);
+    await expect(specimen.locator('dt')).toHaveCount(8);
+    await expect(specimen.locator('app-hash-chip')).toHaveCount(2);
+    await expect(specimen.locator('app-status-pill')).toHaveCount(2);
+
+    // The copy utility keeps a one-line label, so its action never wraps into a tall sliver.
+    const copyLines = await specimen
+      .locator('app-copy-value-button button')
+      .first()
+      .evaluate((button) => {
+        const range = document.createRange();
+        range.selectNodeContents(button);
+        return range.getClientRects().length;
+      });
+    expect(copyLines).toBe(1);
+
+    await page.setViewportSize({ width: 390, height: 900 });
+    await expect(specimen.locator('dt')).toHaveCount(8);
+  });
+});
+
+test.describe('heading integrity', () => {
+  for (const locale of LOCALES) {
+    test(`short specimen headers stay on one line: ${locale}`, async ({ page }) => {
+      for (const width of [1440, 1280, 1024]) {
+        await page.setViewportSize({ width, height: 900 });
+        await openGallery(page, locale, 'light');
+        const groups = await page.evaluate(() => {
+          const read = (demo: string) =>
+            Array.from(document.querySelectorAll(`[data-demo="${demo}"] thead th`)).map((cell) => {
+              const range = document.createRange();
+              range.selectNodeContents(cell);
+              return {
+                text: (cell.textContent ?? '').trim(),
+                lines: range.getClientRects().length,
+                height: Math.round(cell.getBoundingClientRect().height),
+              };
+            });
+          return { small: read('table-small'), empty: read('table-empty') };
+        });
+
+        for (const name of ['small', 'empty'] as const) {
+          const headers = groups[name];
+          expect(
+            headers,
+            `${width}px ${locale} ${name}: table mode with four headers`,
+          ).toHaveLength(4);
+          for (const header of headers) {
+            expect(
+              header.lines,
+              `${width}px ${locale} ${name} "${header.text}" must stay on one line`,
+            ).toBe(1);
+            expect(
+              header.height,
+              `${width}px ${locale} ${name} "${header.text}" header height`,
+            ).toBeLessThanOrEqual(48);
+          }
+        }
+      }
+    });
+  }
 });

@@ -19,7 +19,7 @@ import {
 } from '@angular/router';
 import { combineLatest, filter, map } from 'rxjs';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmInput } from '@evidgate/ui/input';
+import { HlmSelectImports } from '@evidgate/ui/select';
 import { HlmLabel } from '@evidgate/ui/label';
 import { NotFoundPatternComponent } from '../../../shared/ui/states/not-found-pattern.component';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
@@ -31,12 +31,19 @@ import { ApiTokenCreateDialogComponent } from './api-token-create-dialog.compone
 import { ApiTokenRevokeDialogComponent } from './api-token-revoke-dialog.component';
 import { API_TOKENS_WRITE_COPY } from './api-tokens-write.copy';
 import { retryReadyFor } from './api-token-retry';
+import { SectionHeaderImports } from '../../../shared/ui/page-header';
+import { DesktopMutationDirective } from '../../../shared/ui/narrow/desktop-mutation.directive';
+import { DesktopRequiredNoticeComponent } from '../../../shared/ui/narrow/desktop-required-notice.component';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 
 @Component({
   selector: 'app-api-tokens-page',
   imports: [
     HlmButton,
-    HlmInput,
+    HlmSelectImports,
+    SectionHeaderImports,
+    DesktopMutationDirective,
+    DesktopRequiredNoticeComponent,
     HlmLabel,
     RequestStateComponent,
     NotFoundPatternComponent,
@@ -48,42 +55,55 @@ import { retryReadyFor } from './api-token-retry';
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0 text-sm text-foreground wrap-anywhere' },
   template: `
-    <header class="mb-4 grid min-w-0 gap-2">
-      <h2 tabindex="-1" class="m-0 font-[family-name:var(--eg-font-display)] text-2xl">
-        {{ copy.title }}
-      </h2>
-      <p class="m-0 text-muted-foreground">{{ copy.description }}</p>
-    </header>
-    @if (store.session.projects().length > 0) {
-      <div class="mb-4 grid gap-2">
-        <label hlmLabel for="api-tokens-project">{{ copy.project }}</label>
-        <select
-          hlmInput
-          id="api-tokens-project"
-          class="min-h-[var(--eg-control-touch)]"
-          [value]="store.selectedProject()"
-          (change)="selectProject($event)"
-        >
-          @for (project of store.session.projects(); track project.id) {
-            <option [value]="project.id">{{ project.name }}</option>
-          }
-        </select>
-      </div>
-    }
-    @if (store.canWrite() && store.scope() && store.phase() !== 'forbidden') {
-      <p class="text-muted-foreground md:hidden">{{ copy.narrow }}</p>
-      @if (store.phase() !== 'empty') {
+    <app-section-header tabindex="-1" [title]="copy.title" [description]="copy.description">
+      @if (store.canWrite() && store.scope() && store.phase() !== 'forbidden') {
         <button
+          *appDesktopMutation
+          appSectionHeaderActions
           hlmBtn
           type="button"
-          class="mb-4 hidden min-h-[var(--eg-control-touch)] md:inline-flex"
           data-api-create
           [disabled]="store.creating() || store.revoking()"
-          (click)="store.openCreate()"
+          (click)="openCreate()"
         >
           {{ copy.create }}
         </button>
       }
+    </app-section-header>
+    @if (store.session.projects().length > 0) {
+      <div
+        class="my-[var(--eg-space-7)] grid min-w-0 max-w-full gap-[var(--eg-space-2)] sm:max-w-lg"
+      >
+        <label hlmLabel for="api-tokens-project">{{ copy.project }}</label>
+        <hlm-select
+          [value]="store.selectedProject()"
+          [itemToString]="projectLabel"
+          (valueChange)="selectProject($event)"
+        >
+          <hlm-select-trigger
+            [buttonId]="'api-tokens-project'"
+            [aria-describedby]="'api-tokens-project-value'"
+            class="w-full min-h-[var(--eg-control-touch)]"
+          >
+            <hlm-select-value [placeholder]="copy.project" />
+          </hlm-select-trigger>
+          <hlm-select-content *hlmSelectPortal [aria-label]="copy.project">
+            @for (project of store.session.projects(); track project.id) {
+              <hlm-select-item class="whitespace-normal wrap-anywhere" [value]="project.id">{{
+                project.name
+              }}</hlm-select-item>
+            }
+          </hlm-select-content>
+        </hlm-select>
+        <p
+          id="api-tokens-project-value"
+          class="m-0 wrap-anywhere"
+          [textContent]="projectLabel(store.selectedProject())"
+        ></p>
+      </div>
+    }
+    @if (store.canWrite() && store.scope() && store.phase() !== 'forbidden') {
+      <app-desktop-required-notice />
     }
     @if (store.phase() === 'forbidden') {
       <app-not-found-pattern />
@@ -130,18 +150,6 @@ import { retryReadyFor } from './api-token-retry';
           }
         </nav>
       </app-request-state>
-      @if (store.phase() === 'empty' && store.canWrite() && store.scope()) {
-        <button
-          hlmBtn
-          type="button"
-          class="mt-3 hidden min-h-[var(--eg-control-touch)] md:inline-flex"
-          data-api-create
-          [disabled]="store.creating() || store.revoking()"
-          (click)="store.openCreate()"
-        >
-          {{ copy.create }}
-        </button>
-      }
     }
     <p role="status">{{ revoked() ? writeCopy.revoked : '' }}</p>
     @if (store.createOpen()) {
@@ -158,6 +166,9 @@ import { retryReadyFor } from './api-token-retry';
 })
 export class ApiTokensPage {
   protected readonly store = inject(ApiTokensStore);
+  private readonly viewport = inject(NarrowMutationPolicy);
+  protected readonly projectLabel = (value: unknown): string =>
+    this.store.session.projects().find((project) => project.id === value)?.name ?? '';
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   /**
@@ -265,12 +276,15 @@ export class ApiTokensPage {
     });
   }
 
-  protected selectProject(event: Event): void {
-    const target = event.target;
-    if (!(target instanceof HTMLSelectElement)) return;
+  protected openCreate(): void {
+    if (this.viewport.allowsMutation()) this.store.openCreate();
+  }
+
+  protected selectProject(value: unknown): void {
+    if (typeof value !== 'string') return;
     const before = this.store.selectedProject();
     this.historyIntent = 'project';
-    this.store.selectProject(target.value);
+    this.store.selectProject(value);
     // The store refuses an id its list does not hold and ignores the project already selected; a
     // click that changes nothing lends no claim to a write that comes later.
     if (this.store.selectedProject() === before) this.historyIntent = null;

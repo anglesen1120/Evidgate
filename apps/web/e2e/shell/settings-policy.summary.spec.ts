@@ -1,5 +1,5 @@
 // The two project-scoped reads (activation, head): a refusal is a summary state, not an error.
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import activationRead from '../../../../fixtures/web-api/policy-activation-read-ok/input.json';
 import head from '../../../../fixtures/web-api/policy-revision-head/input.json';
@@ -25,7 +25,8 @@ import {
   ACTIVATION_FORBIDDEN,
   ACTIVATION_RATE_LIMITED,
   HEAD_NOT_FOUND,
-  visit,
+  visit as visitPolicy,
+  showPolicySection,
 } from './settings-policy.support';
 
 /**
@@ -36,6 +37,11 @@ const LABELS: Record<ShellLocale, { summary: string; activation: string; head: s
   en: { summary: 'Project policy', activation: 'Activation', head: 'Head revision' },
   vi: { summary: 'Chính sách của dự án', activation: 'Kích hoạt', head: 'Phiên bản mới nhất' },
 };
+
+async function visit(page: Page, locale: ShellLocale, variants: readonly string[]): Promise<void> {
+  await visitPolicy(page, locale, variants);
+  await showPolicySection(page, SUMMARY);
+}
 
 for (const locale of LOCALES) {
   // The activation and head reads (both project-scoped): the summary renders what the server said,
@@ -48,12 +54,12 @@ for (const locale of LOCALES) {
     await expect(page.locator(`${HEAD_READ} dt`)).toHaveText(copy.head);
     await expect(page.locator(MODE)).toHaveAttribute('data-mode', activationRead.body.mode);
     // The revision in force is the activation's own id, never a row's `state`.
-    await expect(page.locator(ACTIVATION_REVISION)).toHaveText(
+    await expect(page.locator(`${ACTIVATION_REVISION} .identifier-accessible`)).toContainText(
       activationRead.body.policy_revision_id,
     );
     // The head read names the newest revision, the same one the list marks as its head.
     await expect(page.locator(HEAD_READ_NO)).toHaveAttribute('data-revision-no', HEAD_NO);
-    await expect(page.locator(`${HEAD_READ} code`)).toHaveText(head.body.id);
+    await expect(page.locator(`${HEAD_READ} .identifier-accessible`)).toContainText(head.body.id);
     await expectNoA11yViolations(page, `policy summary (${locale})`);
   });
 

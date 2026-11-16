@@ -39,7 +39,7 @@ const cases = [
   { locale: 'vi', theme: 'dark' },
 ] as const;
 
-describe('UiGalleryComponent axe acceptance (AC8 / AC9)', () => {
+describe('UiGalleryComponent axe acceptance', () => {
   let previousTheme: string | null;
   let previousLang: string | null;
 
@@ -75,7 +75,8 @@ describe('UiGalleryComponent axe acceptance (AC8 / AC9)', () => {
       try {
         await fixture.whenStable();
         expect(document.body.contains(root)).toBe(true);
-        expect(root.querySelectorAll('app-data-table')).toHaveLength(3);
+        // Three fixture specimens plus the column-role specimen in the tables group.
+        expect(root.querySelectorAll('app-data-table')).toHaveLength(4);
         expect(root.querySelector('app-waiver-banner time')).not.toBeNull();
         for (const selector of [
           'app-loading-pattern',

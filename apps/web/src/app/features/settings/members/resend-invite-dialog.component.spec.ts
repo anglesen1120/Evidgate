@@ -9,6 +9,7 @@ import { SessionStore } from '../../../core/session/session.store';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
 import { MembersStore } from './members.store';
 import { ResendInviteDialogComponent } from './resend-invite-dialog.component';
+import { MEMBERS_DESKTOP } from './members-page.test-fixtures';
 
 const MEMBER: MembershipView = {
   id: 'pending',
@@ -51,6 +52,7 @@ describe('ResendInviteDialog one-time lifecycle', () => {
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
+        MEMBERS_DESKTOP,
         MembersStore,
         { provide: MembersDataService, useValue: data },
         { provide: SessionStore, useValue: { has: () => allowed } },

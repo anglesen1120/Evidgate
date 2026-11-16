@@ -99,23 +99,6 @@ const TERMINAL_CELLS = `${ENABLED} > dl > div`;
 /** The advisory-mode sentence the terminal panel carries only for an `advisory` read. */
 const TERMINAL_ADVISORY = `${ENABLED} [data-testid="enable-collection-terminal-advisory"]`;
 
-/** How much of the digest the panel shows (`default-policy.ts`, `HASH_ABBREVIATION_LENGTH`). */
-const HASH_ABBREVIATION_LENGTH = 12;
-
-/**
- * The hash as the terminal panel renders it: the `sha256:` prefix plus the first twelve digest
- * characters and an ellipsis, or the whole value when the digest is already that short. Computed
- * here from the fixture's own hash rather than exported from the app, so the panel's claim is
- * checked against the document instead of against the code that made it.
- */
-function abbreviatedHash(hash: string): string {
-  const prefix = hash.startsWith('sha256:') ? 'sha256:' : '';
-  const digest = hash.slice(prefix.length);
-  return digest.length <= HASH_ABBREVIATION_LENGTH
-    ? hash
-    : `${prefix}${digest.slice(0, HASH_ABBREVIATION_LENGTH)}…`;
-}
-
 /** One `<dd>` of the terminal panel's metadata list, by its template position. */
 function terminalCell(page: Page, index: number) {
   return page.locator(TERMINAL_CELLS).nth(index).locator('dd');
@@ -152,7 +135,7 @@ async function expectNoAcknowledgement(page: Page): Promise<void> {
 
 /**
  * The terminal panel a `getPolicyActivation` 200 renders. Every value it shows is the read's own —
- * the project, the revision, the abbreviated hash, the mode, who activated it and when — because
+ * the project, the revision, the complete hash, the mode, who activated it and when — because
  * nothing was confirmed on this visit, and it shows no confirm and no preview: the preview belongs
  * to the confirm the server's answer makes unnecessary.
  */
@@ -177,7 +160,7 @@ async function expectTerminalFromRead(
   await expect(page.locator(TERMINAL_CELLS)).toHaveCount(6);
   await expect(terminalCell(page, 0)).toHaveText(read.body.project_id);
   await expect(terminalCell(page, 1)).toHaveText(read.body.policy_revision_id);
-  await expect(terminalCell(page, 2)).toHaveText(abbreviatedHash(read.body.hash));
+  await expect(terminalCell(page, 2)).toHaveText(read.body.hash);
   if (read.body.mode === 'advisory') {
     // `advisory` is the one mode with a translated label, so the cell is asserted non-empty and the
     // mode is proven by the sentence only that mode renders.

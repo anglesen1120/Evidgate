@@ -1,0 +1,51 @@
+[
+  {
+    "name": "basic",
+    "case_id": "0198f3c2-7a41-7c9e-8b1d-2f6a5e4d3c10",
+    "variant_hash": "sha256:abababababababababababababababababababababababababababababababab",
+    "target_env": "staging",
+    "expect": "7f2377271d8a3896c82fee314b9b4bd65d38b98a77d991a01f8d0135fb24b6df"
+  },
+  {
+    "name": "other_variant",
+    "case_id": "0198f3c2-7a41-7c9e-8b1d-2f6a5e4d3c10",
+    "variant_hash": "sha256:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+    "target_env": "staging",
+    "expect": "2967bb5f304ac3d4fd9aef681cffd9a124cbeff0e5282fb352dd636d8f53735d"
+  },
+  {
+    "name": "other_env",
+    "case_id": "0198f3c2-7a41-7c9e-8b1d-2f6a5e4d3c10",
+    "variant_hash": "sha256:abababababababababababababababababababababababababababababababab",
+    "target_env": "prod-eu_1",
+    "expect": "3c79eec3a134bc9516f2cbfb432dcc2c0288b8181beb5648e935f925fb8ddc5a"
+  },
+  {
+    "name": "other_case",
+    "case_id": "0198f3c2-7a41-7c9e-8b1d-2f6a5e4d3c11",
+    "variant_hash": "sha256:abababababababababababababababababababababababababababababababab",
+    "target_env": "staging",
+    "expect": "9101b4263c0cdea06618f258c4459433c34e1b5bc02ac6e86942873939f69c15"
+  },
+  {
+    "name": "boundary_ab_c",
+    "case_id": "0198f3c2-7a41-7c9e-8b1d-2f6a5e4d3c10",
+    "variant_hash": "ab",
+    "target_env": "c",
+    "expect": "b5e2a244bc0270f03a8161d6def7f5668e99bc5bb431f07362f15fa99b0111b1"
+  },
+  {
+    "name": "boundary_a_bc",
+    "case_id": "0198f3c2-7a41-7c9e-8b1d-2f6a5e4d3c10",
+    "variant_hash": "a",
+    "target_env": "bc",
+    "expect": "3bd22b091ae09ff0a46778de70abceb62340111fb3a1296d05baa5a6a49ab722"
+  },
+  {
+    "name": "non_ascii_env",
+    "case_id": "0198f3c2-7a41-7c9e-8b1d-2f6a5e4d3c10",
+    "variant_hash": "sha256:abababababababababababababababababababababababababababababababab",
+    "target_env": "môi-trường",
+    "expect": "f73b9667b518fcd951e845ae62d1e7b8fac0edce271ffbf59ef308eeea8b7588"
+  }
+]

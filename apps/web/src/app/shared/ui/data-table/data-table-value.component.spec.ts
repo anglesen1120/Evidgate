@@ -69,6 +69,34 @@ describe('DataTableValueComponent', () => {
     await fixture.whenStable();
   }
 
+  it.each([
+    ['id\u202Erev', 'id⟨U+202E⟩rev'],
+    ['zero\u200Bwidth\u{E0001}', 'zero⟨U+200B⟩width⟨U+E0001⟩'],
+    ['\u2066<script>safe</script>\u2069', '⟨U+2066⟩<script>safe</script>⟨U+2069⟩'],
+    ['محاولة 合計 Tiếng Việt', 'محاولة 合計 Tiếng Việt'],
+  ])(
+    'isolates and safely displays supplied format characters in preview and disclosure: %s',
+    async (raw, escaped) => {
+      fixture.componentRef.setInput('value', raw);
+      await fixture.whenStable();
+      expect(value.querySelector('bdi')?.textContent).toBe(escaped);
+      expect(value.textContent).not.toMatch(/\p{Cf}/u);
+      expect(fixture.componentInstance.value()).toBe(raw);
+      await clip();
+      expect(root.querySelector('[popover] > bdi')?.textContent).toBe(escaped);
+      expect(root.querySelector('[popover]')?.textContent).not.toMatch(/\p{Cf}/u);
+      expect(root.querySelector('script,img')).toBeNull();
+    },
+  );
+
+  it.each([0, 42, ''])('keeps an isolated number or empty value unchanged: %s', async (raw) => {
+    fixture.componentRef.setInput('value', raw);
+    fixture.componentRef.setInput('truncate', false);
+    await fixture.whenStable();
+    expect(value.querySelector('bdi')?.textContent).toBe(String(raw));
+    expect(value.hasAttribute('tabindex')).toBe(false);
+  });
+
   it('R4: guards zero-layout jsdom and never focuses content which is not actually clipped', () => {
     expect(value.hasAttribute('tabindex')).toBe(false);
     expect(value.hasAttribute('aria-hidden')).toBe(false);
@@ -168,6 +196,38 @@ describe('DataTableValueComponent', () => {
     vi.advanceTimersByTime(250);
     expect(hide).toHaveBeenCalledTimes(1);
     vi.useRealTimers();
+  });
+
+  it('forces fixed-row narratives into recoverable one-line previews and detects vertical text loss', async () => {
+    fixture.componentRef.setInput('truncate', false);
+    fixture.componentRef.setInput('fixedRow', true);
+    await fixture.whenStable();
+    expect(value.classList.contains('truncate')).toBe(true);
+    vi.spyOn(value, 'clientWidth', 'get').mockReturnValue(100);
+    vi.spyOn(value, 'scrollWidth', 'get').mockReturnValue(100);
+    vi.spyOn(value, 'clientHeight', 'get').mockReturnValue(20);
+    vi.spyOn(value, 'scrollHeight', 'get').mockReturnValue(40);
+    measure();
+    await fixture.whenStable();
+    expect(value.getAttribute('role')).toBe('button');
+    expect(value.getAttribute('tabindex')).toBe('0');
+    expect(root.querySelector('[popover]')?.textContent).toBe(fixture.componentInstance.value());
+    expect(root.classList.contains('overflow-hidden')).toBe(false);
+  });
+
+  it('supports Enter and Space disclosure without scrolling the page, then Escape dismissal', async () => {
+    await clip();
+    value.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await fixture.whenStable();
+    expect(show).toHaveBeenCalledTimes(1);
+    expect(value.getAttribute('aria-expanded')).toBe('true');
+    value.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await fixture.whenStable();
+    expect(value.getAttribute('aria-expanded')).toBe('false');
+    const space = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+    value.dispatchEvent(space);
+    expect(space.defaultPrevented).toBe(true);
+    expect(show).toHaveBeenCalledTimes(2);
   });
 
   it.each([

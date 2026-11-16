@@ -2,14 +2,24 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
-  effect,
   input,
   output,
-  signal,
+  TemplateRef,
+  viewChild,
 } from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
-import { HlmTableImports } from '@evidgate/ui/table';
+import { HlmIcon } from '@evidgate/ui/icon';
+import { HlmLabel } from '@evidgate/ui/label';
+import { HlmSelectImports } from '@evidgate/ui/select';
+import { BrnSelectTrigger } from '@spartan-ng/brain/select';
+import { DataTableComponent } from '../../../../shared/ui/data-table/data-table.component';
+import type {
+  DataTableCellContext,
+  DataTableColumn,
+} from '../../../../shared/ui/data-table/data-table-column';
+import { NumberValueComponent } from '../../../../shared/ui/values/number-value.component';
+import { CopyableIdentifierComponent } from '../../../../shared/ui/values/copyable-identifier.component';
 
 import type { ApiError } from '../../../../core/http/api-error';
 import { StatusPillComponent } from '../../../../shared/ui/chips/status-pill.component';
@@ -18,7 +28,7 @@ import { ErrorPatternComponent } from '../../../../shared/ui/states/error-patter
 import { ForbiddenPatternComponent } from '../../../../shared/ui/states/forbidden-pattern.component';
 import { LoadingPatternComponent } from '../../../../shared/ui/states/loading-pattern.component';
 import { NotFoundPatternComponent } from '../../../../shared/ui/states/not-found-pattern.component';
-import { escapeFormatChars } from '../../list/ref-name-display';
+import { escapeFormatChars } from '../../../../shared/ui/values/ref-name-display';
 import type {
   ReleaseComponentView,
   ReleaseDetailViewModel,
@@ -32,7 +42,13 @@ import type {
     HlmButton,
     HlmCard,
     HlmCardTitle,
-    HlmTableImports,
+    HlmIcon,
+    HlmLabel,
+    HlmSelectImports,
+    BrnSelectTrigger,
+    DataTableComponent,
+    NumberValueComponent,
+    CopyableIdentifierComponent,
     StatusPillComponent,
     RetryAfterComponent,
     LoadingPatternComponent,
@@ -44,10 +60,18 @@ import type {
   templateUrl: './release-panel.component.html',
   host: {
     class:
-      'block min-w-0 text-foreground wrap-anywhere [&_dl]:m-0 [&_dl]:grid [&_dl]:gap-(--eg-space-5) [&_dl]:grid-cols-1 min-[768px]:[&_dl]:grid-cols-2 [&_dl>div]:min-w-0 [&_dt]:mb-(--eg-space-2) [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:grid [&_dd]:justify-items-start [&_dd]:gap-(--eg-space-2) [&_bdi]:max-w-full [&_bdi]:font-mono [&_table]:w-full [&_table]:table-fixed [&_table]:border-collapse [&_th]:text-start [&_th]:align-top [&_th]:font-normal [&_td]:align-top [&_td]:font-mono',
+      'block min-w-0 text-foreground wrap-anywhere [&_dl]:m-0 [&_dl]:grid [&_dl]:gap-(--eg-space-5) [&_dl]:grid-cols-1 min-[768px]:[&_dl]:grid-cols-2 [&_dl>div]:min-w-0 [&_dt]:mb-(--eg-space-2) [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:grid [&_dd]:justify-items-start [&_dd]:gap-(--eg-space-2) [&_bdi]:max-w-full [&_bdi]:font-mono',
   },
 })
 export class ReleasePanelComponent {
+  protected readonly sectionSize = 'section' as const;
+  protected readonly rowId = (component: ReleaseComponentView) => component.componentKey;
+  private readonly componentCell =
+    viewChild.required<TemplateRef<DataTableCellContext<ReleaseComponentView>>>('componentCell');
+  private readonly digestCell =
+    viewChild.required<TemplateRef<DataTableCellContext<ReleaseComponentView>>>('digestCell');
+  private readonly environmentCell =
+    viewChild.required<TemplateRef<DataTableCellContext<ReleaseComponentView>>>('environmentCell');
   readonly releases = input<readonly { releaseId: string; name: string | null }[]>([]);
   readonly selectedReleaseId = input<string | null>(null);
   readonly selectRelease = output<string>();
@@ -60,9 +84,6 @@ export class ReleasePanelComponent {
   readonly retry = output<void>();
 
   protected readonly display = escapeFormatChars;
-  protected readonly copyStatus = signal('');
-  /** The component key whose digest is being written; only one copy runs at a time. */
-  protected readonly copying = signal<string | null>(null);
   protected readonly copy = {
     title: $localize`:@@runs.detail.release.title:Release`,
     loading: $localize`:@@runs.detail.release.loading:Loading release`,
@@ -80,13 +101,64 @@ export class ReleasePanelComponent {
     environment: $localize`:@@runs.detail.release.environment:Environment revision`,
     bound: $localize`:@@runs.detail.release.bound:Bound`,
     noComponents: $localize`:@@runs.detail.release.no-components:This release declares no components`,
-    copyDigest: $localize`:@@runs.detail.release.copy-digest:Copy full digest`,
-    copyFailed: $localize`:@@runs.detail.release.copy-failed:Copy failed. Select and copy the full digest shown above.`,
   };
   /** The served components, or an empty list before a release lands. */
   protected readonly components = computed<readonly ReleaseComponentView[]>(
     () => this.release()?.components ?? [],
   );
+  protected readonly selectedReleaseLabel = computed(() => {
+    const selected = this.releases().find(
+      (binding) => binding.releaseId === this.selectedReleaseId(),
+    );
+    return selected ? this.releaseLabel(selected) : this.copy.selectLabel;
+  });
+  protected readonly columns = computed<readonly DataTableColumn<ReleaseComponentView>[]>(() => [
+    {
+      id: 'component',
+      header: this.copy.component,
+      cell: this.rowId,
+      role: 'identity',
+      kind: 'name',
+      priority: 'primary',
+      overflow: 'wrap',
+      width: {
+        min: 'calc(12ch + 2 * var(--eg-space-4))',
+        preferred: '1%',
+        max: 'calc(20ch + 2 * var(--eg-space-4))',
+      },
+      cellTemplate: this.componentCell(),
+    },
+    {
+      id: 'digest',
+      header: this.copy.digest,
+      cell: (component) => this.display(component.digest),
+      role: 'identity',
+      kind: 'identifier',
+      priority: 'secondary',
+      overflow: 'wrap',
+      width: {
+        min: 'calc(24ch + 2 * var(--eg-space-4))',
+        preferred: 'auto',
+        max: 'calc(32ch + 2 * var(--eg-space-4))',
+      },
+      cellTemplate: this.digestCell(),
+    },
+    {
+      id: 'environment',
+      header: this.copy.environment,
+      cell: (component) => this.display(component.environmentRevisionId),
+      role: 'identity',
+      kind: 'identifier',
+      priority: 'secondary',
+      overflow: 'wrap',
+      width: {
+        min: 'calc(24ch + 2 * var(--eg-space-4))',
+        preferred: 'auto',
+        max: 'calc(32ch + 2 * var(--eg-space-4))',
+      },
+      cellTemplate: this.environmentCell(),
+    },
+  ]);
   /** The component keys `bound_runs` bound to the run being viewed, re-read per `runId`. */
   protected readonly boundKeys = computed<ReadonlySet<string>>(() => {
     const release = this.release();
@@ -107,39 +179,22 @@ export class ReleasePanelComponent {
       : null;
   });
 
-  constructor() {
-    effect(() => {
-      this.release();
-      this.copyStatus.set('');
-    });
+  protected releaseLabel(binding: { releaseId: string; name: string | null }): string {
+    return this.display(binding.name?.trim() ? binding.name : binding.releaseId);
   }
-  protected copyDigestLabel(rawKey: string): string {
-    const componentKey = this.display(rawKey);
-    return $localize`:@@runs.detail.release.copy-digest-for:Copy full digest for component ${componentKey}:key:`;
-  }
-  protected async copyDigest(component: ReleaseComponentView): Promise<void> {
-    if (this.copying() !== null) return;
-    const releaseId = this.release()?.releaseId ?? null;
-    const componentKey = this.display(component.componentKey);
-    this.copying.set(component.componentKey);
-    this.copyStatus.set('');
-    try {
-      // What is pasted has to be what the table shows: a digest whose visible form differs would
-      // paste invisible format characters, so it is refused instead of copied.
-      if (this.display(component.digest) !== component.digest) {
-        if (this.release()?.releaseId === releaseId) this.copyStatus.set(this.copy.copyFailed);
-        return;
-      }
-      await navigator.clipboard.writeText(component.digest);
-      if (this.release()?.releaseId === releaseId) {
-        this.copyStatus.set(
-          $localize`:@@runs.detail.release.copied-for:Digest copied for component ${componentKey}:key:`,
-        );
-      }
-    } catch {
-      if (this.release()?.releaseId === releaseId) this.copyStatus.set(this.copy.copyFailed);
-    } finally {
-      this.copying.set(null);
+
+  protected readonly releaseItemLabel = (value: unknown): string => {
+    const binding = this.releases().find((release) => release.releaseId === value);
+    return binding ? this.releaseLabel(binding) : '';
+  };
+
+  protected chooseRelease(value: unknown): void {
+    if (typeof value === 'string' && this.releases().some((row) => row.releaseId === value)) {
+      this.selectRelease.emit(value);
     }
+  }
+  protected digestLabel(rawKey: string): string {
+    const componentKey = this.display(rawKey);
+    return $localize`:@@runs.detail.release.digest-for:Digest for component ${componentKey}:key:`;
   }
 }

@@ -6,7 +6,6 @@
 import type { FullResult } from '@playwright/test/reporter';
 
 import { EXT_SCHEMA } from './envelope.js';
-import { PLACEHOLDER_EXECUTION_KEY } from './identity.js';
 import type { DraftBuilder } from './reporterDraft.js';
 import { failureCode, toError } from './reporterFailure.js';
 import type { IdentityBookkeeping } from './reporterIdentity.js';
@@ -37,7 +36,7 @@ export class RunEndSequence {
           this.deps.draft({
             type: 'run.log',
             attempt_no: 1,
-            execution_key: PLACEHOLDER_EXECUTION_KEY,
+            execution_key: this.deps.identity.runKey,
             status: result.status,
             ext: { schema: EXT_SCHEMA, marker: 'run_end' },
           }),

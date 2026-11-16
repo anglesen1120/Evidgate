@@ -16,7 +16,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaCounter_HasFillfactor80Reloption()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
 
         (await world.ScalarAsync<string>(
             "select coalesce(array_to_string(reloptions, ','), '') from pg_catalog.pg_class "
@@ -29,7 +29,7 @@ public sealed partial class UsageQuotaGateTests
     {
         // A private database: the counters are table-wide, so no other test's update may be in them.
         await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture, database: dedicated.Name);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, database: dedicated.Name, hosts: _hosts);
         await SeedAsync(world, used: 0m);
 
         // Nine unit calls cross the warning line (8 of 10), which also writes warned_at.

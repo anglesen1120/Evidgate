@@ -103,8 +103,12 @@ for (const locale of LOCALES) {
       await action.focus();
       await page.keyboard.press('Enter');
       await expect(page.locator('[data-api-revoke-dialog]')).toBeVisible();
+      const dialog = page.getByRole('alertdialog');
+      await expect(dialog).toHaveAccessibleName(/\S/u);
+      await expect(dialog).toHaveAttribute('aria-modal', 'true');
+      await expect(page.getByRole('dialog')).toHaveCount(0);
       await waitForDialogAnimations(page, '[data-api-revoke-dialog]');
-      await page.locator('[data-api-revoke-cancel]').focus();
+      await expect(page.locator('[data-api-revoke-cancel]')).toBeFocused();
       for (let index = 0; index < 5; index++) {
         await page.keyboard.press('Tab');
         expect(

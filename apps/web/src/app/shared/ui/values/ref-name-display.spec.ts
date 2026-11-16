@@ -1,18 +1,8 @@
-// 09.3.1-T1 (plan 09.3.1 §10 T1.1, Notes line 226; hand-over from 05.2.2-T1, #99): the run list's
-// ref-name escaping.
-//
-// The value under test is attacker-adjacent: a CI caller supplies `ref_name` and the run list
-// renders it beside state and decision chips, so a hidden bidi override is a spoofing vector, not a
-// cosmetic detail. The cases below are the whole category (`Cf`), not the one character the plan
-// names: the bidi overrides and isolates, the zero-width joiner and the astral language-tag
-// character, each of which must become its own visible token. The negative controls are the
-// neighbours a naive `replace` breaks: an emoji (a surrogate pair, not a Cf character), a combining
-// mark (`Mn`), a zero-width space (U+200B is `Zs`, deliberately not escaped — it is invisible but it
-// is not a format character, and escaping it would misreport the category) and a plain name.
+// Format characters are a spoofing surface; ordinary Unicode must remain byte-identical.
 
-import { escapeFormatChars, escapeFormatLabel } from './ref-name-display';
+import { escapeFormatChars, escapeFormatLabel, hasFormatChars } from './ref-name-display';
 
-describe('escapeFormatChars (09.3.1-T1)', () => {
+describe('escapeFormatChars', () => {
   it('leaves a plain ref name byte-identical', () => {
     expect(escapeFormatChars('refs/heads/feature/payments')).toBe('refs/heads/feature/payments');
   });
@@ -21,7 +11,7 @@ describe('escapeFormatChars (09.3.1-T1)', () => {
     expect(escapeFormatChars('')).toBe('');
   });
 
-  it('replaces the right-to-left override the plan names with a visible token', () => {
+  it('replaces a right-to-left override with a visible token', () => {
     // The classic spoof: a name that renders as `feature/exe.txt` but is stored with the override.
     expect(escapeFormatChars('feature/\u202Eexe.txt')).toBe('feature/⟨U+202E⟩exe.txt');
   });
@@ -77,4 +67,22 @@ describe('escapeFormatChars (09.3.1-T1)', () => {
     expect(escapeFormatLabel('failed\u202Esubset')).toBe('failed⟨U+202E⟩subset');
     expect(escapeFormatLabel('plain_label')).toBe('plain_label');
   });
+});
+
+describe('hasFormatChars', () => {
+  it.each(['\u202E', '\u200B', '\u200C', '\u200D', '\u{E0001}'])(
+    'detects format character %j consistently across repeated calls',
+    (character) => {
+      const value = `feature/${character}release`;
+      expect(hasFormatChars(value)).toBe(true);
+      expect(hasFormatChars(value)).toBe(true);
+    },
+  );
+
+  it.each(['', 'refs/heads/main', '🚀/v1', 'e\u0301', 'feature/إصلاح'])(
+    'does not flag ordinary Unicode %j',
+    (value) => {
+      expect(hasFormatChars(value)).toBe(false);
+    },
+  );
 });

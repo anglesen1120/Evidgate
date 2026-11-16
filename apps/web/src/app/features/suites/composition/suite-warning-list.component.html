@@ -4,7 +4,7 @@
   data-testid="suite-warnings"
   [attr.aria-label]="copy.title"
 >
-  <h2 hlmCardTitle class="m-0 text-base">{{ copy.title }}</h2>
+  <h2 hlmCardTitle [size]="sectionHeadingSize">{{ copy.title }}</h2>
   @if (warnings(); as items) {
     @if (items.length === 0) {
       <p data-testid="suite-warnings-empty">{{ copy.empty }}</p>

@@ -115,11 +115,18 @@ describe('EvidencePanelComponent', () => {
     expect(region?.hasAttribute('hlmCard')).toBe(true);
     expect(root.querySelector('#evidence-title')?.getAttribute('tabindex')).toBe('-1');
     expect(root.querySelector('#evidence-title')?.textContent?.trim()).toBe('Evidence');
+    expect(
+      root
+        .querySelector('#evidence-title')
+        ?.classList.contains(
+          'scroll-mt-[calc(var(--eg-topbar-height,calc(2*var(--eg-space-12)))+var(--eg-space-4))]',
+        ),
+    ).toBe(true);
   });
 
   it('shows the neutral badge and unavailable reasons while the revision is not known', async () => {
     const { root } = await render();
-    expect(badge(root)?.textContent).toContain('Evidence status unavailable');
+    expect(badge(root)?.textContent).toContain('Completeness: Unavailable');
     expect(root.textContent).toContain('No live evaluation recorded for this revision');
     expect(root.textContent).toContain('Missing evidence reasons unavailable');
     expect(root.querySelector('ul.reason-list')).toBeNull();
@@ -130,7 +137,7 @@ describe('EvidencePanelComponent', () => {
   it('binds the pinned revision row even while the live decision is pending', async () => {
     const pinned = revision({ revision_no: 3, evaluation_id: 'evaluation-3' });
     const { root } = await render({ pinnedRevision: 3, pinned });
-    expect(badge(root)?.textContent).toContain('Evidence incomplete');
+    expect(badge(root)?.textContent).toContain('Completeness: Incomplete');
     expect(root.querySelector('[data-evidence-missing]')?.textContent).toContain('count_mismatch');
     expect(root.querySelector('[data-evidence-evaluation]')?.textContent).toContain('evaluation-3');
     // The pending line belongs to "no revision data at all", not to a loaded historical row.
@@ -144,7 +151,7 @@ describe('EvidencePanelComponent', () => {
       pinnedRevision: 4,
       pinned,
     });
-    expect(badge(root)?.textContent).toContain('Evidence incomplete');
+    expect(badge(root)?.textContent).toContain('Completeness: Incomplete');
     expect(root.querySelector('[data-evidence-missing]')?.textContent).toContain('missing_shard');
     expect(root.querySelector('.reason-empty')).toBeNull();
   });
@@ -161,7 +168,7 @@ describe('EvidencePanelComponent', () => {
       pinnedRevision: 3,
       pinned,
     });
-    expect(badge(root)?.textContent).toContain('Evidence complete');
+    expect(badge(root)?.textContent).toContain('Completeness: Complete');
     expect(root.querySelector('.reason-empty')?.textContent?.trim()).toBe(
       'No missing evidence reasons reported',
     );
@@ -187,7 +194,7 @@ describe('EvidencePanelComponent', () => {
     const root = fixture.nativeElement as HTMLElement;
     expect(root.textContent).toContain('Missing evidence reasons unavailable');
     expect(root.querySelector('.reason-empty')).toBeNull();
-    expect(badge(root)?.textContent).toContain('Evidence incomplete');
+    expect(badge(root)?.textContent).toContain('Completeness: Incomplete');
   });
 
   it('shows the empty state, and no selector, for a successful empty revision list', async () => {
@@ -206,7 +213,7 @@ describe('EvidencePanelComponent', () => {
       revisionsError: unavailable,
     });
     expect(root.querySelector('app-error-pattern')?.textContent).toContain('request-revisions');
-    expect(badge(root)?.textContent).toContain('Evidence incomplete');
+    expect(badge(root)?.textContent).toContain('Completeness: Incomplete');
     expect(root.querySelector('[data-evidence-missing]')?.textContent).toContain('missing_shard');
   });
 
@@ -287,7 +294,7 @@ describe('EvidencePanelComponent', () => {
       revisions: [revision({ revision_no: 4 })],
       revisionsStatus: 'ready',
     });
-    expect(badge(root)?.textContent).toContain('Evidence incomplete');
+    expect(badge(root)?.textContent).toContain('Completeness: Incomplete');
     // The evaluation reference comes from the revision row, never from the unanswered decision.
     expect(root.querySelector('[data-evidence-evaluation]')).not.toBeNull();
     expect(root.textContent).not.toContain('Historical decision details');
@@ -298,7 +305,7 @@ describe('EvidencePanelComponent', () => {
   it('keeps the pin readable from its own row while the decision has not answered', async () => {
     const pinned = revision({ revision_no: 3, completeness: 'incomplete' });
     const { root } = await render({ decision: null, pinnedRevision: 3, pinned });
-    expect(badge(root)?.textContent).toContain('Evidence incomplete');
+    expect(badge(root)?.textContent).toContain('Completeness: Incomplete');
     expect(root.querySelector('[data-evidence-missing]')?.textContent).toContain('count_mismatch');
   });
 
@@ -465,5 +472,24 @@ describe('EvidencePanelComponent', () => {
     });
     link.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(false);
+  });
+  it('copies the pinned evaluation reference without substituting the newer live evaluation', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    const pinned = revision({ evaluation_id: 'evaluation-3' });
+    const { root, fixture } = await render({
+      decision: evaluated(),
+      pinnedRevision: 3,
+      pinned,
+    });
+    root
+      .querySelector<HTMLButtonElement>('[data-evidence-evaluation] app-copy-value-button button')
+      ?.click();
+    await fixture.whenStable();
+    expect(writeText).toHaveBeenCalledWith('evaluation-3');
+    expect(fixture.componentInstance.pinnedRevision()).toBe(3);
+    fixture.componentRef.setInput('pinned', revision({ evaluation_id: null }));
+    await fixture.whenStable();
+    expect(root.querySelector('[data-evidence-evaluation] app-copy-value-button')).toBeNull();
   });
 });

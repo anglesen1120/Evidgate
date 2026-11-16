@@ -1,18 +1,6 @@
-// The wizard's step 5. The page reads the project's activation on entry and on every org/project
-// scope change: a 200 restores the terminal panel without a command, and only a 404 (the data
-// service's null) permits the default-policy confirm. A forbidden read keeps the preview read-only,
-// every other failure uses the shared error panel, and the derived step comes from that same server
-// read — no localStorage, session flag or cookie remembers completion.
-//
-// One intent keeps its activation key and appended revision through explicit retries; the runner
-// never retries or starts a second in-flight chain. A confirm can replace only a policy activated
-// after the absent-activation read, and that warning is always described by the button.
-//
-// The heading takes focus after a successful read or confirm. Refusals use app-error-pattern so the
-// typed server message, code and request id survive instead of being replaced by fixed copy, and a
-// failed read keeps its own `Retry-After` window: both read controls stay disabled until it elapses,
-// and a re-read the visitor asked for returns focus to the named failure heading or to the recovery
-// control a 403 leaves.
+// Only an absent server activation permits confirmation. Retries keep the same intent and revision;
+// forbidden or failed reads stay read-only. Completion never comes from browser storage.
+// User-requested recovery retains the existing heading/focus and Retry-After contracts.
 
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -21,6 +9,7 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  LOCALE_ID,
   computed,
   effect,
   inject,
@@ -47,7 +36,13 @@ import {
   focusWaitingLine,
   requestRefusalFocus,
 } from '../../../shared/a11y/step-focus';
-import { ErrorPatternComponent } from '../../../shared/ui/states';
+import { shortDateFormat } from '../../../shared/time/short-date-format';
+import { ErrorPatternComponent, InlineFeedbackComponent } from '../../../shared/ui/states';
+import {
+  DesktopMutationDirective,
+  DesktopRequiredNoticeComponent,
+  NarrowMutationPolicy,
+} from '../../../shared/ui/narrow';
 import {
   DEFAULT_ADVISORY_POLICY,
   activationInstantLabel,
@@ -80,6 +75,9 @@ interface AppendedRevision {
     HlmAlertImports,
     HlmButton,
     HlmCardImports,
+    InlineFeedbackComponent,
+    DesktopMutationDirective,
+    DesktopRequiredNoticeComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './enable-collection.page.html',
@@ -92,6 +90,9 @@ export class EnableCollectionPage {
   private readonly data = inject(OnboardingDataService);
   private readonly session = inject(SessionStore);
   private readonly destroyRef = inject(DestroyRef);
+  protected readonly policy = inject(NarrowMutationPolicy);
+  protected readonly subsectionHeadingSize = 'subsection' as const;
+  protected readonly dateTimeFormat = shortDateFormat(inject(LOCALE_ID), true, 'medium');
   /** The clock the confirm's and the read's `Retry-After` windows are measured against. */
   private readonly now = inject(READ_CLOCK);
   /** The failed read's window; the runner owns the same rule for the confirm. */
@@ -166,7 +167,10 @@ export class EnableCollectionPage {
   /** Only a failure the contract calls retryable offers the same-intent retry action. */
   protected readonly retryEligible = computed(
     () =>
-      this.permitted() && this.activationRead().kind === 'none' && this.activation.retryEligible(),
+      this.policy.canMutate() &&
+      this.permitted() &&
+      this.activationRead().kind === 'none' &&
+      this.activation.retryEligible(),
   );
   /**
    * A retryable failure whose `Retry-After` window is still open disables the confirm natively —
@@ -182,6 +186,7 @@ export class EnableCollectionPage {
   protected readonly confirmDisabled = computed(
     () =>
       this.busy() ||
+      !this.policy.canMutate() ||
       !this.permitted() ||
       this.activationRead().kind !== 'none' ||
       this.waitingForRetryAfter(),
@@ -197,7 +202,9 @@ export class EnableCollectionPage {
   /** The failure the panel renders: a failed read first, then a refused confirm. */
   protected readonly failureView = computed(() => this.readFailure() ?? this.failure());
   /** The envelope's field rows of whichever failure is on screen. */
-  protected readonly details = computed(() => fieldDetails(this.failureView()?.details ?? []));
+  protected readonly details = computed(() =>
+    fieldDetails(this.failureView()?.details ?? [], 'collection'),
+  );
   /**
    * The terminal panel's sentence. Only this page's own confirm can report what changed, and its
    * answer is always the default policy in `advisory` mode; a read-only panel says where it came
@@ -255,10 +262,6 @@ export class EnableCollectionPage {
       ? appended.revision.revision_no
       : null;
   });
-  /** The page renders the envelope's detail paths itself, so it renders them sanitised. */
-  protected clean(value: string | null | undefined): string {
-    return sanitizeLabel(value ?? '');
-  }
   /** The terminal heading takes focus on success (see the focus effect in the constructor). */
   private readonly enabledHeadingRef = viewChild<ElementRef<HTMLElement>>('enabledHeadingTarget');
 
@@ -376,7 +379,7 @@ export class EnableCollectionPage {
 
   /** The confirm action, once per user intent (guarded by the runner while it runs). */
   protected async confirm(): Promise<void> {
-    if (this.confirmDisabled()) return;
+    if (!this.policy.allowsMutation() || this.confirmDisabled()) return;
     focusWaitingLine(this.busyStatusRef);
     await this.activation.run();
     requestRefusalFocus(this.announceConfirmFailure, this.failure());
@@ -389,7 +392,7 @@ export class EnableCollectionPage {
       await this.readActivation(true);
       return;
     }
-    if (!this.retryEligible()) return;
+    if (!this.policy.allowsMutation() || !this.retryEligible()) return;
     focusWaitingLine(this.busyStatusRef);
     await this.activation.retry();
     requestRefusalFocus(this.announceConfirmFailure, this.failure());

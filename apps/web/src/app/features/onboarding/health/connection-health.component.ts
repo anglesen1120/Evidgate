@@ -1,8 +1,17 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  LOCALE_ID,
+} from '@angular/core';
 import type { CiBindingView, IngestTokenView } from '@evidgate/sdk';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmAlertImports } from '@evidgate/ui/alert';
+
+import { shortDateFormat } from '../../../shared/time/short-date-format';
 
 import {
   StatusPillComponent,
@@ -30,7 +39,13 @@ import type {
       aria-labelledby="connection-health-title"
     >
       <header class="flex flex-wrap items-center justify-between gap-(--eg-space-3)">
-        <h3 hlmCardTitle id="connection-health-title">{{ title }}</h3>
+        <h3
+          hlmCardTitle
+          [size]="subsectionHeadingSize"
+          class="m-0"
+          id="connection-health-title"
+          [textContent]="title"
+        ></h3>
         <app-status-pill [tone]="tones[health().state]" [label]="stateLabels[health().state]" />
       </header>
       <p>{{ reasonLabels[health().reason] }}</p>
@@ -53,7 +68,7 @@ import type {
                 <p>
                   {{ expiresLabel }}
                   <time [attr.datetime]="row.expiresAt">{{
-                    row.expiresAt | date: 'yyyy-MM-dd HH:mm:ss' : '+0000'
+                    row.expiresAt | date: dateTimeFormat : '+0000'
                   }}</time>
                 </p>
               }
@@ -61,7 +76,7 @@ import type {
                 <p>
                   {{ overlapLabel }}
                   <time [attr.datetime]="row.overlapEndsAt">{{
-                    row.overlapEndsAt | date: 'yyyy-MM-dd HH:mm:ss' : '+0000'
+                    row.overlapEndsAt | date: dateTimeFormat : '+0000'
                   }}</time>
                 </p>
               }
@@ -75,9 +90,7 @@ import type {
       >
         <strong>{{ lastUseLabel }}</strong>
         @if (health().lastTokenUseAt; as lastUse) {
-          <time [attr.datetime]="lastUse">{{
-            lastUse | date: 'yyyy-MM-dd HH:mm:ss' : '+0000'
-          }}</time>
+          <time [attr.datetime]="lastUse">{{ lastUse | date: dateTimeFormat : '+0000' }}</time>
         } @else {
           <span>{{ notRecorded }}</span>
         }
@@ -97,6 +110,8 @@ export class ConnectionHealthComponent {
   readonly tokens = input.required<readonly IngestTokenView[]>();
   readonly bindingsTruncated = input(false);
   readonly tokensTruncated = input(false);
+  protected readonly subsectionHeadingSize = 'subsection' as const;
+  protected readonly dateTimeFormat = shortDateFormat(inject(LOCALE_ID), true, '24h');
 
   protected readonly rows = computed(() => {
     const tokens = new Map(this.tokens().map((token) => [token.id, token]));
@@ -143,7 +158,7 @@ export class ConnectionHealthComponent {
     string
   > = {
     active: $localize`:@@onboarding.health.status-active:Active`,
-    pending_verification: $localize`:@@onboarding.health.status-pending:Pending verification`,
+    pending_verification: $localize`:@@onboarding.health.status-awaiting:Awaiting CI`,
     disabled: $localize`:@@onboarding.health.status-disabled:Disabled`,
     rotated: $localize`:@@onboarding.health.status-rotated:Rotated`,
     expired: $localize`:@@onboarding.health.status-expired:Expired`,

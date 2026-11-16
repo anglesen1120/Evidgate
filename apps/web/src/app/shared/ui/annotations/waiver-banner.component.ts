@@ -1,6 +1,15 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  LOCALE_ID,
+} from '@angular/core';
 import { HlmAlert, HlmAlertDescription, HlmAlertTitle } from '@evidgate/ui/alert';
+
+import { shortDateFormat } from '../../time/short-date-format';
 
 export type WaiverState = 'active' | 'expired' | 'revoked';
 
@@ -56,7 +65,7 @@ export type WaiverState = 'active' | 'expired' | 'revoked';
           <dt class="font-semibold" i18n="@@shared.waiver-banner.expires">Expires</dt>
           <dd class="m-0 min-w-0 max-w-full">
             @if (utcExpiry(); as expiry) {
-              <time [attr.datetime]="expiry">{{ expiry | date: 'medium' : '+0000' }}</time>
+              <time [attr.datetime]="expiry">{{ expiry | date: dateTimeFormat : '+0000' }}</time>
             } @else {
               <span i18n="@@shared.waiver-banner.expiry-unavailable">Expiry unavailable</span>
             }
@@ -81,6 +90,7 @@ export class WaiverBanner {
   readonly approver = input.required<string>();
   readonly expiresAt = input.required<string | Date>();
   readonly state = input<WaiverState>('active');
+  protected readonly dateTimeFormat = shortDateFormat(inject(LOCALE_ID), true, 'medium');
 
   protected readonly tone = computed(() => {
     switch (this.state()) {

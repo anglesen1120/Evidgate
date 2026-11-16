@@ -112,6 +112,40 @@ internal sealed partial class GitHubClient
     }
 
     /// <summary>
+    /// <c>GET /repositories/{id}</c> with a token of an installation the caller already validated.
+    /// </summary>
+    /// <remarks>
+    /// The org-keyed overload resolves the tenant's active installation, which needs an open tenant scope. A caller that
+    /// proved ownership in an earlier unit and then calls GitHub outside every transaction holds the id instead, and
+    /// binding the read to that exact id is also stricter: the answer describes the installation the caller named.
+    /// </remarks>
+    /// <param name="installationId">Numeric installation id the caller's own unit validated.</param>
+    /// <param name="repositoryId">Numeric repository id.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    public async Task<Result<GitHubRepository>> GetRepositoryAsync(
+        long installationId,
+        long repositoryId,
+        CancellationToken cancellationToken)
+    {
+        if (installationId <= 0 || repositoryId <= 0)
+        {
+            return Result.Failure<GitHubRepository>(InvalidParameters());
+        }
+
+        var path = string.Create(CultureInfo.InvariantCulture, $"repositories/{repositoryId}");
+        var document = await SendWithValidatedTokenAsync(
+                installationId, repositoryId, path, "get-repository", cancellationToken)
+            .ConfigureAwait(false);
+        if (!document.IsSuccess)
+        {
+            return Result.Failure<GitHubRepository>(document.Error!);
+        }
+
+        using var parsed = document.Value;
+        return ParseRepository(parsed.RootElement, repositoryId);
+    }
+
+    /// <summary>
     /// <c>GET /repositories/{id}/git/trees/{sha}?recursive=1</c> with an installation token. The
     /// <c>truncated</c> flag is surfaced unchanged so the caller can refuse an incomplete tree.
     /// </summary>
@@ -223,6 +257,50 @@ internal sealed partial class GitHubClient
         long repositoryId,
         CancellationToken cancellationToken) =>
         _tokens.GetAsync(orgId, GitHubFeature.Catalog, [repositoryId], cancellationToken);
+
+    private Task<Result<GitHubInstallationToken>> MintAsync(
+        long installationId,
+        long repositoryId,
+        CancellationToken cancellationToken) =>
+        _tokens.GetAsync(installationId, GitHubFeature.Catalog, [repositoryId], cancellationToken);
+
+    /// <summary>The same read-and-refresh path over a token of an installation the caller validated.</summary>
+    private async Task<Result<JsonDocument>> SendWithValidatedTokenAsync(
+        long installationId,
+        long repositoryId,
+        string path,
+        string operation,
+        CancellationToken cancellationToken)
+    {
+        var token = await MintAsync(installationId, repositoryId, cancellationToken).ConfigureAwait(false);
+        if (!token.IsSuccess)
+        {
+            return Result.Failure<JsonDocument>(token.Error!);
+        }
+
+        var first = await SendAsync(path, token.Value.Token, operation, cancellationToken).ConfigureAwait(false);
+        if (first.Error?.Code != GitHubErrorCodes.Unauthorized)
+        {
+            return first;
+        }
+
+        // The eviction is worth a log line; the tenant is unknown on this path, so the id is the identity reported.
+        _tokens.Invalidate(token.Value.Token);
+
+        var refreshed = await MintAsync(installationId, repositoryId, cancellationToken).ConfigureAwait(false);
+        if (!refreshed.IsSuccess)
+        {
+            return Result.Failure<JsonDocument>(refreshed.Error!);
+        }
+
+        var retried = await SendAsync(path, refreshed.Value.Token, operation, cancellationToken).ConfigureAwait(false);
+        if (retried.Error?.Code == GitHubErrorCodes.Unauthorized)
+        {
+            _tokens.Invalidate(refreshed.Value.Token);
+        }
+
+        return retried;
+    }
 
     private async Task<Result<JsonDocument>> SendAsync(
         string relativePath,

@@ -1,5 +1,5 @@
 <section hlmCard aria-labelledby="manifest-title" class="gap-(--eg-space-5) p-(--eg-space-5)">
-  <h2 hlmCardTitle id="manifest-title" class="m-0">{{ copy.title }}</h2>
+  <h2 hlmCardTitle [size]="sectionSize" id="manifest-title" class="m-0">{{ copy.title }}</h2>
   <dl>
     <div>
       <dt>{{ copy.hash }}</dt>
@@ -7,19 +7,14 @@
         @let hash = summary().manifestHash;
         @if (hash !== null) {
           <bdi>{{ display(hash) }}</bdi>
-          <!-- Keep the in-flight control focusable; the handler refuses duplicate copies. -->
-          <button
-            hlmBtn
-            [variant]="'outline'"
-            type="button"
-            class="min-h-(--eg-control-touch) h-auto whitespace-normal text-start transition-none"
-            [attr.aria-busy]="copying()"
-            (click)="copyHash()"
-          >
-            {{ copy.copyHash }}
-          </button>
+          <app-copy-value-button
+            [value]="hash"
+            [label]="copy.hash"
+            [copyLabel]="copy.copyHash"
+            [size]="'lg'"
+          />
         } @else {
-          <app-status-pill [tone]="'neutral'" label="" />
+          <span class="text-muted-foreground">{{ copy.notProvided }}</span>
         }
       </dd>
     </div>
@@ -29,8 +24,9 @@
         @let suite = summary().suiteRevisionId;
         @if (suite !== null) {
           <bdi>{{ display(suite) }}</bdi>
+          <app-copy-value-button [value]="suite" [label]="copy.suite" />
         } @else {
-          <app-status-pill [tone]="'neutral'" label="" />
+          <span class="text-muted-foreground">{{ copy.notProvided }}</span>
         }
       </dd>
     </div>
@@ -40,8 +36,9 @@
         @let policy = summary().policyRevisionId;
         @if (policy !== null) {
           <bdi>{{ display(policy) }}</bdi>
+          <app-copy-value-button [value]="policy" [label]="copy.policy" />
         } @else {
-          <app-status-pill [tone]="'neutral'" label="" />
+          <span class="text-muted-foreground">{{ copy.notProvided }}</span>
         }
       </dd>
     </div>
@@ -49,9 +46,9 @@
       <dt>{{ copy.shards }}</dt>
       <dd data-manifest-shards>
         @if (summary().shardCount !== null) {
-          {{ summary().shardCount }}
+          <app-number-value [value]="summary().shardCount" />
         } @else {
-          <app-status-pill [tone]="'neutral'" label="" />
+          <span class="text-muted-foreground">{{ copy.notProvided }}</span>
         }
       </dd>
     </div>
@@ -71,15 +68,9 @@
             </ul>
           }
         } @else {
-          <app-status-pill [tone]="'neutral'" label="" />
+          <span class="text-muted-foreground">{{ copy.notProvided }}</span>
         }
       </dd>
     </div>
   </dl>
-  <p
-    class="m-0 min-h-(--eg-leading-sm) text-muted-foreground"
-    role="status"
-    [attr.aria-live]="'polite'"
-    [textContent]="copyStatus()"
-  ></p>
 </section>

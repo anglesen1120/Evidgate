@@ -16,10 +16,11 @@ namespace Architecture.Tests;
 /// scan; a real call is then pinned separately by <see cref="The_allowed_file_carries_the_definer_call"/>.
 /// <c>migrations/</c> is excluded: the file that defines the function necessarily names it.
 /// <para>
-/// Four test files legitimately name it: <c>HealingSwitchSchemaTests</c> and its
+/// Five test files legitimately name it: <c>HealingSwitchSchemaTests</c> and its
 /// <c>PlatformOperator</c> part exercise the definer against a database (grants, the tenant-context refusal, the
 /// upsert, the audit row), <c>Isolation.Tests/Rls/ResolverTests</c> maps the function to the migration that defines it
-/// for the RLS resolver, and this boundary test declares the needle and the allowlist. Any
+/// for the RLS resolver, <c>Migrator.IntegrationTests/PlatformOperatorUpgradeMigrationTests</c> asserts the 0105
+/// upgrade keeps the definer's grants, and this boundary test declares the needle and the allowlist. Any
 /// <em>other</em> test naming it fails the scan, because a test that can call the definer can also write the platform
 /// row behind the operator gate.
 /// </para>
@@ -33,12 +34,14 @@ public sealed class HealingSystemSwitchBoundaryTests
 
     /// <summary>
     /// The only test files that may spell the call: the definer's own integration suite, the RLS resolver's
-    /// function-to-migration table, and this boundary test’s own needle (declared above).
+    /// function-to-migration table, the migrator's 0105 upgrade test (asserts the upgrade keeps the definer's
+    /// grants), and this boundary test’s own needle (declared above).
     /// </summary>
     private static readonly string[] AllowedTestFiles =
     [
         "tests/Architecture.Tests/HealingSystemSwitchBoundaryTests.cs",
         "tests/Isolation.Tests/Rls/ResolverTests.cs",
+        "tests/Migrator.IntegrationTests/PlatformOperatorUpgradeMigrationTests.cs",
         "tests/Tenancy.IntegrationTests/HealingSwitchSchemaTests.PlatformOperator.cs",
         "tests/Tenancy.IntegrationTests/HealingSwitchSchemaTests.cs",
     ];

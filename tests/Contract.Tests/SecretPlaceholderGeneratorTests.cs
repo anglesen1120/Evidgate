@@ -16,7 +16,7 @@ namespace Contract.Tests;
 /// <see cref="ISecretProvider"/>, a rerun changes nothing, no value reaches the output and an
 /// inventory entry without a rule fails before anything is written.
 /// </summary>
-public sealed class SecretPlaceholderGeneratorTests : IDisposable
+public sealed partial class SecretPlaceholderGeneratorTests : IDisposable
 {
     private static readonly string Script = Path.Combine(ContractPaths.RepoRoot, "scripts", "env", "secret-placeholders.mjs");
 
@@ -253,6 +253,75 @@ public sealed class SecretPlaceholderGeneratorTests : IDisposable
         run.ExitCode.ShouldNotBe(0);
         run.Output.ShouldContain("another run is in progress");
         File.Exists(EnvFile).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task LockLeftByAKilledProcess_NoLongerBlocksTheNextRun()
+    {
+        var deadPid = await DeadPidAsync();
+        Directory.CreateDirectory(EnvFile + ".lock");
+        await File.WriteAllTextAsync(Path.Combine(EnvFile + ".lock", "pid"), deadPid.ToString(System.Globalization.CultureInfo.InvariantCulture), TestContext.Current.CancellationToken);
+
+        var run = await RunAsync("dev");
+
+        run.ExitCode.ShouldBe(0, run.Output);
+        File.Exists(EnvFile).ShouldBeTrue();
+        Directory.Exists(EnvFile + ".lock").ShouldBeFalse("the run releases the lock it took over");
+    }
+
+    [Fact]
+    public async Task LockHeldByALiveProcess_StillBlocksTheRun()
+    {
+        Directory.CreateDirectory(EnvFile + ".lock");
+        await File.WriteAllTextAsync(Path.Combine(EnvFile + ".lock", "pid"), Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture), TestContext.Current.CancellationToken);
+
+        var run = await RunAsync("dev");
+
+        run.ExitCode.ShouldNotBe(0);
+        run.Output.ShouldContain("another run is in progress");
+        Directory.Exists(EnvFile + ".lock").ShouldBeTrue("a live holder's lock is never removed");
+        File.Exists(EnvFile).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task TemplateValueWithSpaceAndDollar_IsWrittenQuotedAndSourcesBack()
+    {
+        const string Value = "two words $HOME";
+        var template = Path.Combine(_root, ".env.dev.template");
+        var lines = (await File.ReadAllLinesAsync(template, TestContext.Current.CancellationToken))
+            .Select(line => line.StartsWith("EVIDGATE_S3_ACCESS_KEY=", StringComparison.Ordinal) ? "EVIDGATE_S3_ACCESS_KEY=two words $HOME" : line);
+        await File.WriteAllLinesAsync(template, lines, TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(EnvFile, "EVIDGATE_DB_PORT=5432\n", TestContext.Current.CancellationToken);
+
+        (await RunAsync("dev")).ExitCode.ShouldBe(0);
+
+        (await RunShellAsync($"set -a; . '{EnvFile}'; printf '%s' \"$EVIDGATE_S3_ACCESS_KEY\"")).ShouldBe(Value);
+    }
+
+    [Fact]
+    public async Task TemplateValueWithApostrophe_IsWrittenQuotedAndSourcesBack()
+    {
+        const string Value = "owner's key";
+        var template = Path.Combine(_root, ".env.dev.template");
+        var lines = (await File.ReadAllLinesAsync(template, TestContext.Current.CancellationToken))
+            .Select(line => line.StartsWith("EVIDGATE_S3_ACCESS_KEY=", StringComparison.Ordinal) ? "EVIDGATE_S3_ACCESS_KEY=owner's key" : line);
+        await File.WriteAllLinesAsync(template, lines, TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(EnvFile, "EVIDGATE_DB_PORT=5432\n", TestContext.Current.CancellationToken);
+
+        (await RunAsync("dev")).ExitCode.ShouldBe(0);
+
+        (await RunShellAsync($"set -a; . '{EnvFile}'; printf '%s' \"$EVIDGATE_S3_ACCESS_KEY\"")).ShouldBe(Value);
+    }
+
+    private static async Task<int> DeadPidAsync()
+    {
+        var start = new ProcessStartInfo("node") { RedirectStandardOutput = true };
+        start.ArgumentList.Add("-e");
+        start.ArgumentList.Add("0");
+        using var process = Process.Start(start)!;
+        var pid = process.Id;
+        await process.WaitForExitAsync(TestContext.Current.CancellationToken);
+        return pid;
     }
 
     private static async Task<string> RunShellAsync(string script)

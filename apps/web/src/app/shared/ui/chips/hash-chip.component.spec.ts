@@ -1,4 +1,3 @@
-// State sheet: docs/design/web/state-sheet.md#hash-chip
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
@@ -14,109 +13,87 @@ describe('HashChipComponent', () => {
     }).compileComponents();
   });
 
-  afterEach(() => vi.restoreAllMocks());
-
-  it.each([
-    'default',
-    'hover',
-    'focus-visible',
-    'active',
-    'disabled',
-    'loading',
-    'empty',
-    'error',
-    'success',
-  ])('keeps the %s state render-only without a request/verdict transition', (state) => {
-    const fetch = vi.spyOn(globalThis, 'fetch');
-    const fixture = TestBed.createComponent(HashChipComponent);
-    fixture.componentRef.setInput('value', state === 'empty' ? '' : HASH);
-    fixture.detectChanges();
-    const root = fixture.nativeElement as HTMLElement;
-    expect(root.querySelector('[hlmBadge]')?.getAttribute('data-slot')).toBe('badge');
-    expect(root.querySelector('[hlmBadge]')?.classList.contains('font-mono')).toBe(true);
-    expect(
-      root.querySelector('[tabindex], [role], [aria-disabled], [aria-busy], button, a'),
-    ).toBeNull();
-    expect(root.querySelector('[title], svg')).toBeNull();
-    expect(root.textContent).not.toMatch(/\b(?:PASS|FAIL|Complete)\b/);
-    expect(root.querySelector('[class*="success"], [class*="danger"]')).toBeNull();
-    expect(fetch).not.toHaveBeenCalled();
-    if (state === 'empty') {
-      expect(root.textContent?.trim()).toBe('Hash unavailable');
-      expect(root.querySelector('[data-full-value]')).toBeNull();
-    } else {
-      expect(root.querySelector('.identity-chip__value')?.textContent).toBe('0123456789ab…');
-      expect(root.querySelector('[data-full-value]')?.getAttribute('data-full-value')).toBe(HASH);
-      const fullValue = root.querySelector('.hash-chip__full-value');
-      expect(fullValue?.textContent).toBe(HASH);
-      expect(fullValue?.classList.contains('sr-only')).toBe(true);
-      expect(fullValue?.closest('[aria-hidden="true"], [hidden]')).toBeNull();
-      expect(root.querySelector('.identity-chip__value')?.getAttribute('aria-hidden')).toBe('true');
-    }
-  });
-
-  it.each([null, undefined, '', '   '])('makes absent hash %s explicit', (value) => {
-    const fixture = TestBed.createComponent(HashChipComponent);
-    fixture.componentRef.setInput('value', value);
-    fixture.detectChanges();
-    const root = fixture.nativeElement as HTMLElement;
-    expect(root.textContent?.trim()).toBe('Hash unavailable');
-    expect(root.querySelector('[data-full-value], .hash-chip__full-value')).toBeNull();
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it.each([
-    [12, '0123456789ab…'],
-    [4, '0123…'],
-    [1, '0…'],
-    [4.9, '0123…'],
+    [12, '012345…abcdef'],
+    [4, '01…ef'],
+    [1, '0…f'],
+    [4.9, '01…ef'],
     [0, HASH],
     [-1, HASH],
     [Number.NaN, HASH],
     [Number.POSITIVE_INFINITY, HASH],
     [HASH.length, HASH],
-    [HASH.length + 1, HASH],
-  ])('uses abbreviation count %s without losing the full hash', (abbreviate, visible) => {
+  ])(
+    'splits budget %s between both ends without losing the original',
+    async (abbreviate, visible) => {
+      const fixture = TestBed.createComponent(HashChipComponent);
+      fixture.componentRef.setInput('value', HASH);
+      fixture.componentRef.setInput('abbreviate', abbreviate);
+      await fixture.whenStable();
+      const root = fixture.nativeElement as HTMLElement;
+      const badge = root.querySelector('[hlmBadge]');
+      expect(root.querySelector('.identity-chip__value')?.textContent).toBe(visible);
+      expect(badge?.getAttribute('data-full-value')).toBe(HASH);
+      expect(badge?.classList.contains('font-mono')).toBe(true);
+      expect(badge?.classList.contains('min-h-[var(--eg-space-7)]')).toBe(true);
+      if (visible !== HASH) {
+        expect(badge?.querySelector('.sr-only')?.textContent).toBe(HASH);
+        expect(badge?.querySelector('[popover]')?.textContent).toBe(HASH);
+        expect(badge?.getAttribute('tabindex')).toBe('0');
+      } else {
+        expect(badge?.querySelector('[popover]')).toBeNull();
+      }
+      expect(root.querySelector('button')?.getAttribute('aria-label')).toBe('Copy hash');
+      expect(root.querySelector('[title]')).toBeNull();
+    },
+  );
+
+  it.each([null, undefined, '', '   '])(
+    'has no copy/disclosure for missing hash %s',
+    async (value) => {
+      const fixture = TestBed.createComponent(HashChipComponent);
+      fixture.componentRef.setInput('value', value);
+      await fixture.whenStable();
+      const root = fixture.nativeElement as HTMLElement;
+      expect(root.textContent?.trim()).toBe('Hash unavailable');
+      expect(root.querySelector('[data-full-value], [popover], button')).toBeNull();
+    },
+  );
+
+  it('copies the complete original with a contextual accessible action', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
     const fixture = TestBed.createComponent(HashChipComponent);
     fixture.componentRef.setInput('value', HASH);
-    fixture.componentRef.setInput('abbreviate', abbreviate);
-    fixture.detectChanges();
+    fixture.componentRef.setInput('copyLabel', 'Copy policy hash');
+    await fixture.whenStable();
     const root = fixture.nativeElement as HTMLElement;
-    expect(root.querySelector('.identity-chip__value')?.textContent).toBe(visible);
-    expect(root.querySelector('[data-full-value]')?.getAttribute('data-full-value')).toBe(HASH);
-    if (visible === HASH) {
-      expect(root.querySelector('[aria-hidden], .hash-chip__full-value')).toBeNull();
-    }
+    const button = root.querySelector<HTMLButtonElement>('button');
+    expect(button?.getAttribute('aria-label')).toBe('Copy policy hash');
+    button?.click();
+    await fixture.whenStable();
+    expect(writeText).toHaveBeenCalledWith(HASH);
+    expect(writeText).not.toHaveBeenCalledWith('012345…abcdef');
+    expect(root.querySelector('[role="status"]')?.textContent).toContain('copied');
   });
 
-  it.each(['a', '0123456789ab', 'mã-định-danh'])('keeps short identity %s verbatim', (value) => {
+  it('retains an untrusted full identifier as text and fits a shrinkable label', async () => {
     const fixture = TestBed.createComponent(HashChipComponent);
-    fixture.componentRef.setInput('value', value);
-    fixture.detectChanges();
-    const root = fixture.nativeElement as HTMLElement;
-    expect(root.textContent?.trim()).toBe(value);
-    expect(root.querySelector('.hash-chip__full-value')).toBeNull();
-  });
-
-  it('uses the wrapping value structure for long full identifiers without rendering markup', () => {
-    const fixture = TestBed.createComponent(HashChipComponent);
-    const value = '<img src=x onerror=alert(1)>'.repeat(24);
+    const value = '<img src=x onerror=alert(1)>'.repeat(12);
     fixture.componentRef.setInput('value', value);
     fixture.componentRef.setInput('abbreviate', 0);
-    fixture.detectChanges();
+    await fixture.whenStable();
     const root = fixture.nativeElement as HTMLElement;
-    expect(root.querySelector('.hash-chip .identity-chip__value')?.textContent).toBe(value);
+    expect(root.querySelector('.identity-chip__value')?.textContent).toBe(value);
+    expect(
+      root.querySelector('.identity-chip__value')?.classList.contains('whitespace-nowrap'),
+    ).toBe(true);
     expect(root.querySelector('img, [title]')).toBeNull();
     expect(root.querySelector('[data-full-value]')?.getAttribute('data-full-value')).toBe(value);
-  });
-
-  it('replaces unavailable copy when the supplied hash arrives without fetching', async () => {
-    const fixture = TestBed.createComponent(HashChipComponent);
-    fixture.componentRef.setInput('value', '');
-    await fixture.whenStable();
-    fixture.componentRef.setInput('value', HASH);
-    await fixture.whenStable();
-    const root = fixture.nativeElement as HTMLElement;
-    expect(root.textContent).not.toContain('Hash unavailable');
-    expect(root.querySelector('.hash-chip__full-value')?.textContent).toBe(HASH);
   });
 });

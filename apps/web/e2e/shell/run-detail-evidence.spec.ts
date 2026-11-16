@@ -4,9 +4,8 @@
 // Every case names the state it wants per operation, because the dev backend selects a document by
 // `?fixture.variant.<operationId>=<variant>` and answers 501 for anything the corpus does not hold
 // (the default `ok` decision body is `pending`, so a case that wants a verdict must ask for it).
-// Assertions key on the `data-*` hooks of the two regions, never on a translated label — except
-// where the label itself is the contract (the newer-revision banner), and then both locales are
-// asserted separately.
+// Assertions key on the regions' data hooks, except where localized labels are the contract:
+// revision timestamps and the newer-revision banner are asserted exactly in both locales.
 import { expect, test, type Page } from '@playwright/test';
 import revisionsDocument from '../../../../fixtures/web-api/run-evidence-revisions/input.json';
 import {
@@ -22,6 +21,19 @@ const REVISIONS = revisionsDocument.body.items;
 const NEWEST_REVISION = REVISIONS[0]!;
 const INCOMPLETE_REVISION = REVISIONS[1]!;
 const OLDEST_REVISION = REVISIONS[2]!;
+
+const REVISION_TIMESTAMPS: Record<ShellLocale, Readonly<Record<number, string>>> = {
+  en: {
+    1: '10/31/2026, 8:00\u202fAM',
+    2: '10/31/2026, 9:12\u202fAM',
+    3: '10/31/2026, 10:30\u202fAM',
+  },
+  vi: {
+    1: '08:00 31/10/2026',
+    2: '09:12 31/10/2026',
+    3: '10:30 31/10/2026',
+  },
+};
 
 const BANNER_TITLE: Record<ShellLocale, string> = {
   en: 'A newer revision exists',
@@ -39,9 +51,11 @@ const DECISION_TAB: Record<ShellLocale, string> = {
   vi: 'Quyết định hiện hành mới nhất',
 };
 
-/** `Revision N · <timestamp> UTC` is the trigger and the option text; the number is the key. */
-function revisionText(locale: ShellLocale, revisionNo: number): RegExp {
-  return new RegExp(`^${locale === 'vi' ? 'Phiên bản' : 'Revision'} ${revisionNo} · `);
+/** Full labels pin the fixture's clock, short date and UTC suffix independently of production. */
+function revisionText(locale: ShellLocale, revisionNo: number): string {
+  const timestamp = REVISION_TIMESTAMPS[locale][revisionNo];
+  if (!timestamp) throw new Error(`Missing expected timestamp for revision ${revisionNo}`);
+  return `${locale === 'vi' ? 'Phiên bản' : 'Revision'} ${revisionNo} · ${timestamp} UTC`;
 }
 
 async function showTab(page: Page, name: string): Promise<void> {
@@ -58,7 +72,7 @@ async function showEvidence(page: Page, locale: ShellLocale): Promise<void> {
 
 async function chooseRevision(page: Page, locale: ShellLocale, revisionNo: number): Promise<void> {
   await page.locator('[data-evidence-revision-select]').click();
-  await page.getByRole('option', { name: revisionText(locale, revisionNo) }).click();
+  await page.getByRole('option', { name: revisionText(locale, revisionNo), exact: true }).click();
 }
 
 /** One review address: the review route, the run, and one variant per operation it reads. */
@@ -155,9 +169,9 @@ for (const locale of LOCALES) {
       'data-tone',
       'warning',
     );
-    await expect(page.locator('#evidence-panel [data-evidence-missing] .reason-code')).toHaveText(
-      INCOMPLETE_REVISION.missing,
-    );
+    await expect(
+      page.locator('#evidence-panel [data-evidence-missing] .reason-code code'),
+    ).toHaveText(INCOMPLETE_REVISION.missing);
     await expect(page.locator('#evidence-panel [data-evidence-selected]')).toContainText(
       String(INCOMPLETE_REVISION.revision_no),
     );
@@ -185,7 +199,9 @@ for (const locale of LOCALES) {
       'success',
     );
     await expect(decision.locator('[data-decision-no-reasons]')).toBeVisible();
-    await expect(decision.locator('[data-decision-mode] dd')).toHaveText('live');
+    await expect(decision.locator('[data-decision-mode] dd')).toHaveText(
+      locale === 'vi' ? 'Đánh giá trực tiếp' : 'Live evaluation',
+    );
     await expect(decision.locator('[data-decision-revision] dd')).toHaveText(
       String(OLDEST_REVISION.revision_no),
     );
@@ -220,7 +236,7 @@ for (const locale of LOCALES) {
     await ready(page);
 
     const select = page.locator('[data-evidence-revision-select]');
-    await expect(select).toContainText(revisionText(locale, NEWEST_REVISION.revision_no));
+    await expect(select).toHaveText(revisionText(locale, NEWEST_REVISION.revision_no));
     await expect(page.locator('#evidence-panel [data-evidence-newer]')).toHaveCount(0);
 
     await chooseRevision(page, locale, INCOMPLETE_REVISION.revision_no);
@@ -241,9 +257,9 @@ for (const locale of LOCALES) {
       'data-tone',
       'warning',
     );
-    await expect(page.locator('#evidence-panel [data-evidence-missing] .reason-code')).toHaveText(
-      INCOMPLETE_REVISION.missing,
-    );
+    await expect(
+      page.locator('#evidence-panel [data-evidence-missing] .reason-code code'),
+    ).toHaveText(INCOMPLETE_REVISION.missing);
     await expect(page.locator('#evidence-panel [data-evidence-evaluation]')).toContainText(
       String(INCOMPLETE_REVISION.evaluation_id),
     );
@@ -261,7 +277,7 @@ for (const locale of LOCALES) {
     await ready(page);
 
     const select = page.locator('[data-evidence-revision-select]');
-    await expect(select).toContainText(revisionText(locale, OLDEST_REVISION.revision_no));
+    await expect(select).toHaveText(revisionText(locale, OLDEST_REVISION.revision_no));
     await expect(page.locator('#evidence-panel [data-evidence-newer]')).toBeVisible();
     await expect(page.locator('#evidence-panel [data-evidence-historical]')).toBeVisible();
     await expect(page.locator('#evidence-panel [data-evidence-selected]')).toContainText(
@@ -314,7 +330,7 @@ for (const locale of LOCALES) {
     await ready(page);
     // The decision region owns its failure (the corpus answers a retryable 503 with Retry-After,
     // so the region renders the refusal window); the revision list still answers.
-    await expect(page.locator('[data-evidence-revision-select]')).toContainText(
+    await expect(page.locator('[data-evidence-revision-select]')).toHaveText(
       revisionText(locale, NEWEST_REVISION.revision_no),
     );
     await showDecision(page, locale);
@@ -347,9 +363,9 @@ for (const locale of LOCALES) {
 
       await page.goto(detailPath(locale, 'evaluated-fail-missing-shard'));
       await ready(page);
-      await expect(page.locator('#evidence-panel [data-evidence-missing] .reason-code')).toHaveText(
-        INCOMPLETE_REVISION.missing,
-      );
+      await expect(
+        page.locator('#evidence-panel [data-evidence-missing] .reason-code code'),
+      ).toHaveText(INCOMPLETE_REVISION.missing);
       await expectNoA11yViolations(page, `run detail incomplete evidence ${locale}/${theme}`);
 
       await page.goto(

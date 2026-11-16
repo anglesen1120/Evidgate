@@ -11,16 +11,12 @@ import { IDENTITY_BADGE_CLASSES } from './badge-classes';
     <span hlmBadge [variant]="'outline'" class="identity-chip revision-chip" [class]="badgeClasses">
       @if (hasRevision()) {
         @if (label()) {
-          <span class="identity-chip__label min-w-0 whitespace-normal [overflow-wrap:anywhere]">{{
-            label()
-          }}</span>
+          <span class="identity-chip__label min-w-0 whitespace-nowrap">{{ label() }}</span>
         }
-        <span class="identity-chip__value min-w-0 whitespace-normal [overflow-wrap:anywhere]">{{
-          identity()
-        }}</span>
+        <span class="identity-chip__value min-w-0 whitespace-nowrap">{{ identity() }}</span>
       } @else {
         <span
-          class="identity-chip__label min-w-0 whitespace-normal [overflow-wrap:anywhere]"
+          class="identity-chip__label min-w-0 whitespace-nowrap"
           i18n="@@shared.revision-chip.unavailable"
         >
           Revision unavailable

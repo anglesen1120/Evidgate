@@ -15,6 +15,7 @@ import {
 import { RetryAfterComponent } from '../../../../shared/ui/conflict';
 import { ErrorPatternComponent } from '../../../../shared/ui/states/error-pattern.component';
 import { LoadingPatternComponent } from '../../../../shared/ui/states/loading-pattern.component';
+import { CopyValueButtonComponent } from '../../../../shared/ui/values/copy-value-button.component';
 import { EvidenceBadgeComponent } from '../../../../shared/ui/verdict/evidence-badge.component';
 import type { Completeness } from '../../../../shared/ui/verdict/verdict-values';
 import type { DecisionViewModel } from '../decision/decision-view-model';
@@ -45,12 +46,15 @@ import { resolveEvidenceAnchor } from './run-evidence-anchors';
     ErrorPatternComponent,
     RetryAfterComponent,
     MissingReasonList,
+    CopyValueButtonComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0', '(click)': 'onReasonLinkClick($event)' },
   templateUrl: './evidence-panel.component.html',
 })
 export class EvidencePanelComponent {
+  protected readonly sectionSize = 'section' as const;
+  protected readonly subsectionSize = 'subsection' as const;
   /** `null` while the decision read has not answered: the panel shows its own revision state. */
   readonly decision = input<DecisionViewModel | null>(null);
   /** The revision the URL/view is pinned to; `null` until a pin is chosen. */

@@ -1,7 +1,8 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
 import { activeElement, LOCALES, type ShellLocale } from './support';
 import { runDetailPath } from './run-detail.support';
+import { tabThroughRunControls, tabThroughTableScroller } from './run-table-keyboard.support';
 
 const COPY: Record<
   ShellLocale,
@@ -28,6 +29,38 @@ async function ready(page: Page): Promise<void> {
     'data-run-detail-status',
     'ready',
   );
+}
+
+async function expectDigest(release: Locator, value: string): Promise<void> {
+  const field = release.locator('[data-release-digest]');
+  const disclosure = field.locator('button[aria-haspopup="dialog"]');
+  if (await disclosure.count()) {
+    await disclosure.click();
+    const dialog = release.page().getByRole('dialog');
+    await expect(dialog.locator('code.full-value bdi')).toHaveText(value);
+    await release.page().keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+    await expect(disclosure).toBeFocused();
+  } else {
+    await expect(field.locator('code.full-value bdi')).toHaveText(value);
+  }
+}
+
+async function expectActiveOption(selector: Locator, option: Locator): Promise<void> {
+  const id = await option.getAttribute('id');
+  if (id === null) throw new Error('Release option has no active-descendant id');
+  await expect(selector).toHaveAttribute('aria-activedescendant', id);
+}
+
+async function openReleaseChooser(page: Page, selector: Locator): Promise<void> {
+  await expect(selector).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(selector).toHaveAttribute('aria-expanded', 'true');
+  const listbox = page.getByRole('listbox');
+  await expect(listbox).toBeVisible();
+  await expect(listbox.getByRole('option')).toHaveCount(2);
+  // Wait for Brain's post-render selected-item activation before navigating.
+  await expectActiveOption(selector, listbox.getByRole('option', { selected: true }));
 }
 
 for (const locale of LOCALES) {
@@ -67,8 +100,8 @@ for (const locale of LOCALES) {
     const release = page.getByRole('region', { name: COPY[locale].release, exact: true });
     await expect(release.locator('[data-release-name]')).toContainText('Storefront release');
     await expect(release.locator('[data-release-component]')).toHaveCount(1);
-    await expect(release.locator('[data-release-digest]')).toHaveText(`sha256:${'a'.repeat(64)}`);
-    await expect(release.getByRole('group')).toHaveCount(0);
+    await expectDigest(release, `sha256:${'a'.repeat(64)}`);
+    await expect(release.getByRole('combobox')).toHaveCount(0);
     await expect(release.locator('[data-release-unbound]')).toHaveCount(0);
     await expectNoA11yViolations(page, `bound release ${locale}`);
   });
@@ -77,15 +110,40 @@ for (const locale of LOCALES) {
     await page.goto(runDetailPath({ locale, run: 'releases' }));
     await ready(page);
     const release = page.getByRole('region', { name: COPY[locale].release, exact: true });
-    const buttons = release.getByRole('group', { name: COPY[locale].selector }).getByRole('button');
-    await expect(buttons).toHaveCount(2);
-    await expect(buttons.nth(0)).toHaveAttribute('aria-pressed', 'true');
-    await expect(buttons.nth(1)).toHaveAttribute('aria-pressed', 'false');
-    await buttons.nth(1).click();
-    await expect(buttons.nth(1)).toHaveAttribute('aria-pressed', 'true');
+    const selector = release.getByRole('combobox', { name: COPY[locale].selector });
+    await selector.click();
+    const options = page.getByRole('option');
+    await expect(options).toHaveCount(2);
+    await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true');
+    await expect(options.nth(1)).toHaveAttribute('aria-selected', 'false');
+    const name = await options.nth(1).textContent();
+    await options.nth(1).click();
+    await expect(selector).toHaveText(name ?? '');
     await expect(release.locator('[data-release-name]')).toContainText('API release');
     await expect(release.locator('[data-release-component]')).toHaveCount(1);
-    await expect(release.locator('[data-release-digest]')).toHaveText(`sha256:${'b'.repeat(64)}`);
+    await expectDigest(release, `sha256:${'b'.repeat(64)}`);
+  });
+}
+
+for (const locale of LOCALES) {
+  test(`release typeahead searches the visible name rather than the id (${locale})`, async ({
+    page,
+  }) => {
+    await page.goto(runDetailPath({ locale, run: 'releases' }));
+    await ready(page);
+    const release = page.locator('app-release-panel');
+    const selector = release.getByRole('combobox');
+    await selector.focus();
+    await openReleaseChooser(page, selector);
+    const target = page.getByRole('option', { name: /^API release/ });
+    await expect(target).toHaveAttribute('data-value', '018f0000-0000-7000-8000-000000000092');
+    await page.keyboard.type('API');
+    await expectActiveOption(selector, target);
+    await expect(release.locator('[data-release-name]')).toContainText('Storefront');
+    await page.keyboard.press('Enter');
+    await expect(selector).toHaveAttribute('aria-expanded', 'false');
+    await expect(selector).toBeFocused();
+    await expect(release.locator('[data-release-name]')).toContainText('API release');
   });
 }
 
@@ -93,39 +151,69 @@ test('the unbound regions add no keyboard stops', async ({ page }) => {
   await page.goto(runDetailPath({ run: 'canceled' }));
   await ready(page);
   await expect(page.locator('app-run-timeline button, app-release-panel button')).toHaveCount(0);
-  const copyHash = page.getByRole('button', { name: 'Copy full manifest hash' });
-  await copyHash.focus();
-  await page.keyboard.press('Tab');
-  await expect(page.locator('[data-producer-scroll]')).toBeFocused();
+  const manifest = page.locator('app-manifest-panel');
+  const copies = manifest.locator('app-copy-value-button button');
+  await expect(copies).toHaveCount(3);
+  await copies.first().focus();
+  for (const copy of (await copies.all()).slice(1)) {
+    await page.keyboard.press('Tab');
+    await expect(copy).toBeFocused();
+  }
+  const producers = page.locator('#producers');
+  await tabThroughTableScroller(page, producers);
+  await tabThroughRunControls(page, producers, 2);
   await page.keyboard.press('Tab');
   expect((await activeElement(page)).tag).toBe('body');
+  const producerCopies = producers.locator('app-copy-value-button button');
+  for (const copy of (await producerCopies.all()).reverse()) {
+    await page.keyboard.press('Shift+Tab');
+    await expect(copy).toBeFocused();
+  }
+  const scroller = producers.locator('.scroll[tabindex="0"]');
+  if (await scroller.count()) {
+    await page.keyboard.press('Shift+Tab');
+    await expect(scroller).toBeFocused();
+  }
   await page.keyboard.press('Shift+Tab');
-  await page.keyboard.press('Shift+Tab');
-  await expect(copyHash).toBeFocused();
+  await expect(copies.last()).toBeFocused();
   await expectNoA11yViolations(page, 'unbound release and timeline');
 });
 
-test('release selector and digest buttons are keyboard stops after the producer table', async ({
+test('the compact release chooser and both identifier actions preserve keyboard reachability', async ({
   page,
 }) => {
   await page.goto(runDetailPath({ run: 'releases' }));
   await ready(page);
   const release = page.locator('app-release-panel');
-  const selectors = release.getByRole('group').getByRole('button');
+  const selector = release.getByRole('combobox');
   await expect(release.locator('[data-release-digest]')).toBeVisible();
-  await page.getByRole('button', { name: 'Copy full manifest hash' }).focus();
+  const manifestCopies = page.locator('app-manifest-panel app-copy-value-button button');
+  await expect(manifestCopies).toHaveCount(3);
+  await manifestCopies.first().focus();
+  for (const copy of (await manifestCopies.all()).slice(1)) {
+    await page.keyboard.press('Tab');
+    await expect(copy).toBeFocused();
+  }
+  await tabThroughTableScroller(page, page.locator('#producers'));
+  await tabThroughRunControls(page, page.locator('#producers'), 2);
   await page.keyboard.press('Tab');
-  await expect(page.locator('[data-producer-scroll]')).toBeFocused();
-  await page.keyboard.press('Tab');
-  await expect(selectors.nth(0)).toBeFocused();
-  await page.keyboard.press('Tab');
-  await expect(selectors.nth(1)).toBeFocused();
+  await expect(selector).toBeFocused();
+  await openReleaseChooser(page, selector);
+  const options = page.getByRole('option');
+  await page.keyboard.press('End');
+  await expectActiveOption(selector, options.last());
   await page.keyboard.press('Enter');
+  await expect(selector).toHaveAttribute('aria-expanded', 'false');
+  await expect(selector).toBeFocused();
   await expect(release.locator('[data-release-name]')).toContainText('API release');
-  await page.keyboard.press('Tab');
-  await expect(
-    release.getByRole('button', { name: 'Copy full digest for component api', exact: true }),
-  ).toBeFocused();
+  const identifierControls = release.locator('app-copyable-identifier .actions button');
+  await expect(identifierControls).toHaveCount(4);
+  await expect(release.locator('app-copy-value-button button')).toHaveCount(2);
+  for (const control of await identifierControls.all()) {
+    await page.keyboard.press('Tab');
+    await expect(control).toBeFocused();
+    await expect(control).toHaveAccessibleName(/\S/);
+  }
   await page.keyboard.press('Tab');
   expect((await activeElement(page)).tag).toBe('body');
   await expectNoA11yViolations(page, 'two-release selector');
@@ -142,7 +230,7 @@ for (const status of ['forbidden', 'not-found'] as const) {
 }
 
 for (const locale of LOCALES) {
-  test(`at 320px long release selectors and both regions wrap without horizontal scroll (${locale})`, async ({
+  test(`at 320px full release names remain recoverable in a compact chooser (${locale})`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 320, height: 800 });
@@ -154,13 +242,17 @@ for (const locale of LOCALES) {
         true,
       );
     }
-    const selectors = page.locator('app-release-panel [role="group"] button');
-    await expect(selectors).toHaveCount(2);
-    for (const button of await selectors.all()) {
-      expect(
-        await button.evaluate((element) => element.getBoundingClientRect().height),
-      ).toBeGreaterThanOrEqual(44);
-    }
+    const selector = page.locator('app-release-panel').getByRole('combobox');
+    await expect(selector).toHaveCount(1);
+    const box = await selector.boundingBox();
+    expect(box?.height).toBe(44);
+    await selector.click();
+    const options = page.getByRole('option');
+    await expect(options).toHaveCount(2);
+    const selectedName = await options.nth(1).textContent();
+    await options.nth(1).click();
+    await expect(selector).toHaveText(selectedName ?? '');
+    await expect(page.locator('#release-choice-name')).toHaveText(selectedName ?? '');
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);
@@ -206,21 +298,33 @@ for (const locale of LOCALES) {
     await page.goto(runDetailPath({ locale, run: 'releases' }));
     await ready(page);
     const release = page.locator('app-release-panel');
-    const buttons = release.getByRole('group').getByRole('button');
-    await expect(release.locator('[data-release-digest]')).toHaveText(`sha256:${'a'.repeat(64)}`);
-    await expect(buttons).toHaveCount(2);
-    await buttons.nth(0).focus();
-    await page.keyboard.press('Tab');
-    await expect(buttons.nth(1)).toBeFocused();
-    await page.keyboard.press('Space');
-    await expect(release.locator('[data-release-digest]')).toHaveText(`sha256:${'b'.repeat(64)}`);
-    await page.keyboard.press('Shift+Tab');
-    await expect(buttons.nth(0)).toBeFocused();
+    const selector = release.getByRole('combobox');
+    const digest = release.locator('[data-release-digest] code.full-value bdi');
+    const options = page.getByRole('option');
+    await expect(digest).toHaveText(`sha256:${'a'.repeat(64)}`);
+    await expect(selector).toHaveCount(1);
+    await selector.focus();
+    await openReleaseChooser(page, selector);
+    await page.keyboard.press('End');
+    await expectActiveOption(selector, options.last());
     await page.keyboard.press('Enter');
-    await expect(release.locator('[data-release-digest]')).toHaveText(`sha256:${'a'.repeat(64)}`);
+    await expect(selector).toHaveAttribute('aria-expanded', 'false');
+    await expect(selector).toBeFocused();
+    await expect(digest).toHaveText(`sha256:${'b'.repeat(64)}`);
+    await openReleaseChooser(page, selector);
+    await page.keyboard.press('Home');
+    await expectActiveOption(selector, options.first());
     await page.keyboard.press('Enter');
-    await expect(buttons.nth(0)).toHaveAttribute('aria-pressed', 'true');
-    await expect(buttons.nth(1)).toHaveAttribute('aria-pressed', 'false');
+    await expect(selector).toHaveAttribute('aria-expanded', 'false');
+    await expect(selector).toBeFocused();
+    await expect(digest).toHaveText(`sha256:${'a'.repeat(64)}`);
+    await openReleaseChooser(page, selector);
+    await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true');
+    await expect(options.nth(1)).toHaveAttribute('aria-selected', 'false');
+    await page.keyboard.press('Enter');
+    await expect(selector).toHaveAttribute('aria-expanded', 'false');
+    await expect(selector).toBeFocused();
+    await expect(digest).toHaveText(`sha256:${'a'.repeat(64)}`);
     const reads = await page.evaluate(() =>
       (window.__evidgateFixtureRequests ?? [])
         .map((request) => new URL(request.url).pathname)

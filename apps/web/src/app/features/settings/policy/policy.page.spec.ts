@@ -1,4 +1,4 @@
-import { signal } from '@angular/core';
+import { computed, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import type {
@@ -9,6 +9,7 @@ import type {
 import type { ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow';
 import { PolicyPage } from './policy.page';
 import type { PolicyReadView } from './policy-reads';
 import { rootElement } from './policy-reads.test-support';
@@ -83,6 +84,7 @@ class FakePolicyStore {
 describe('PolicyPage', () => {
   let store: FakePolicyStore;
   const canWrite = signal(true);
+  const desktop = signal(true);
   const currentOrg = signal<{ id: string } | null>({ id: 'org' });
   const currentProject = signal<{ id: string } | null>(null);
   const projects = signal([{ id: 'project' }]);
@@ -90,6 +92,7 @@ describe('PolicyPage', () => {
   beforeEach(() => {
     store = new FakePolicyStore();
     canWrite.set(true);
+    desktop.set(true);
     currentOrg.set({ id: 'org' });
     currentProject.set(null);
     projects.set([{ id: 'project' }]);
@@ -97,6 +100,14 @@ describe('PolicyPage', () => {
     TestBed.configureTestingModule({
       providers: [
         { provide: ActivatedRoute, useValue: route },
+        {
+          provide: NarrowMutationPolicy,
+          useValue: {
+            canMutate: desktop,
+            narrow: computed(() => !desktop()),
+            allowsMutation: () => desktop(),
+          },
+        },
         {
           provide: SessionStore,
           useValue: {
@@ -122,6 +133,45 @@ describe('PolicyPage', () => {
     await fixture.whenStable();
     return { fixture, root: rootElement(fixture) };
   }
+  it('keeps compact authored tab labels with complete accessible names and unbroken targets', async () => {
+    const { fixture, root } = await render();
+    const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+    expect(tabs.map((tab) => tab.textContent?.trim())).toEqual(['Values', 'Compare', 'Activation']);
+    expect(tabs.map((tab) => tab.getAttribute('aria-label') ?? tab.textContent?.trim())).toEqual([
+      'Policy values',
+      'Compare revisions',
+      'Activation',
+    ]);
+    for (const tab of tabs) {
+      expect(tab.classList.contains('whitespace-nowrap')).toBe(true);
+      expect(tab.classList.contains('min-w-max')).toBe(true);
+      expect(tab.classList.contains('flex-auto')).toBe(true);
+    }
+    const compareTab = tabs[1];
+    if (!compareTab) throw new Error('Expected the policy comparison tab');
+    compareTab.click();
+    await fixture.whenStable();
+    expect(compareTab.getAttribute('aria-selected')).toBe('true');
+  });
+  it.each([true, false])(
+    'bounds the UUID lookup by expected content while retaining the full value with write grant %s',
+    async (writable) => {
+      canWrite.set(writable);
+      route.snapshot.queryParamMap = convertToParamMap({ revision: revision.id });
+      const { root } = await render();
+      const input = root.querySelector<HTMLInputElement>('#policy-revision-id');
+      expect(input?.value).toBe(revision.id);
+      expect(input?.getAttribute('maxlength')).toBeNull();
+      expect(input?.classList.contains('font-mono')).toBe(true);
+      const field = input?.parentElement;
+      expect(field?.classList.contains('w-full')).toBe(true);
+      expect(field?.classList.contains('md:w-[40ch]')).toBe(true);
+      expect(field?.classList.contains('md:max-w-full')).toBe(true);
+      expect(field?.classList.contains('flex-1')).toBe(false);
+      expect(field?.classList.contains('max-w-[40ch]')).toBe(false);
+      expect(root.querySelector('[data-policy-open]')).not.toBeNull();
+    },
+  );
   it('uses an h2 heading and shows revision metadata with the activation mode', async () => {
     const { root } = await render();
     expect(root.querySelector('h2#heading')?.textContent).toMatch(/\S/);
@@ -190,7 +240,7 @@ describe('PolicyPage', () => {
     expect(root.querySelector('#policy-publish-body')).toBeNull();
     expect(root.querySelector('[data-policy-publish-submit]')).toBeNull();
     expect(root.querySelector('app-policy-publish-dialog')).toBeNull();
-    expect(store.loadBody).not.toHaveBeenCalled();
+    expect(store.loadBody).toHaveBeenCalledWith(revision.id);
   });
   it('forwards initial revision query parameter to the store validator', async () => {
     route.snapshot.queryParamMap = convertToParamMap({ revision: revision.id });
@@ -298,7 +348,7 @@ describe('PolicyPage', () => {
   it('requests only one additional page per load-more activation', async () => {
     store.hasMore.set(true);
     const { fixture, root } = await render();
-    root.querySelector<HTMLButtonElement>('app-policy-revision-list button')?.click();
+    root.querySelector<HTMLButtonElement>('[data-policy-more]')?.click();
     await fixture.whenStable();
     expect(store.loadMore).toHaveBeenCalledTimes(1);
     fixture.destroy();
@@ -320,5 +370,49 @@ describe('PolicyPage', () => {
     expect(root.querySelector<HTMLButtonElement>('[data-policy-publish-open]')?.disabled).toBe(
       true,
     );
+  });
+  it('selects a revision from the history and shows its complete body without reopening the list', async () => {
+    const previous: PolicyRevisionDto = {
+      ...revision,
+      id: 'previous',
+      revision_no: 1,
+      state: 'retired',
+      body: { flaky_budget: 0 },
+    };
+    store.revisions.set([previous, revision]);
+    store.loadBody.mockImplementation((...args: unknown[]) =>
+      Promise.resolve(args[0] === previous.id ? previous : revision),
+    );
+    const { fixture, root } = await render();
+    root
+      .querySelector<HTMLButtonElement>(
+        '[data-policy-revision][data-revision-no="1"] [data-policy-select]',
+      )
+      ?.click();
+    await fixture.whenStable();
+    expect(
+      root.querySelector('[data-policy-revision][data-revision-no="1"] [aria-pressed="true"]'),
+    ).not.toBeNull();
+    expect(root.querySelector('[data-policy-selected-metadata]')?.textContent).toContain(
+      previous.id,
+    );
+    expect(root.querySelector('[data-policy-field="flaky_budget"]')?.textContent).toContain('0');
+    expect(store.open).not.toHaveBeenCalled();
+  });
+  it('retains narrow inspection and refuses a publish opener captured before resize', async () => {
+    const { fixture, root } = await render();
+    const opener = root.querySelector<HTMLButtonElement>('[data-policy-publish-open]');
+    desktop.set(false);
+    opener?.click();
+    await fixture.whenStable();
+    expect(root.querySelector('[data-policy-publish-open]')).toBeNull();
+    expect(root.querySelector('[data-policy-narrow-notice]')?.textContent).toContain(
+      'Desktop required',
+    );
+    expect(root.querySelector('[data-policy-open]')).not.toBeNull();
+    expect(root.querySelector('[data-policy-select]')).not.toBeNull();
+    expect(root.querySelector('[data-policy-values]')).not.toBeNull();
+    expect(document.querySelector('[data-policy-publish-dialog]')).toBeNull();
+    expect(store.publish).not.toHaveBeenCalled();
   });
 });

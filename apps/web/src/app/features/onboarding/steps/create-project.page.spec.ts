@@ -8,6 +8,7 @@ import { ApiRequestError, type ApiError } from '../../../core/http/api-error';
 import type { Intent } from '../../../core/http/intent';
 import { SessionStore } from '../../../core/session/session.store';
 import { OnboardingStore } from '../onboarding.store';
+import { provideDesktopOnboardingViewport } from '../onboarding-viewport.testing';
 import { CreateProjectPage } from './create-project.page';
 
 const PROJECT: ProjectDto = {
@@ -60,6 +61,7 @@ describe('CreateProjectPage', () => {
       imports: [CreateProjectPage],
       providers: [
         provideZonelessChangeDetection(),
+        provideDesktopOnboardingViewport(),
         { provide: OnboardingDataService, useValue: { createProject } },
         { provide: OnboardingStore, useValue: { projectCreated, clearCreated } },
         { provide: SessionStore, useValue: { has: () => permitted() } },
@@ -181,7 +183,7 @@ describe('CreateProjectPage', () => {
     expect(root.querySelector('[name="name"]')?.getAttribute('aria-invalid')).toBe('true');
     const input = root.querySelector<HTMLInputElement>('[name="name"]')!;
     expect(input.required).toBe(true);
-    expect(root.querySelector<HTMLFormElement>('form')?.noValidate).toBe(false);
+    expect(root.querySelector<HTMLFormElement>('form')?.noValidate).toBe(true);
   });
 
   it('blocks an empty required slug and associates both fields with their labels', async () => {
@@ -229,6 +231,7 @@ describe('CreateProjectPage', () => {
     const input = root.querySelector<HTMLInputElement>('[name="name"]')!;
     const error = root.querySelector('#onboarding-project-name-error')!;
     expect(error.textContent).toContain('A project with this name already exists.');
+    expect(error.textContent).toContain('Project name:');
     expect(input.getAttribute('aria-invalid')).toBe('true');
     expect(input.getAttribute('aria-describedby')).toContain('onboarding-project-name-error');
     // The details alert speaks the same sentence; the field's own live region must stay off.
@@ -237,6 +240,7 @@ describe('CreateProjectPage', () => {
     expect(alert.getAttribute('role')).toBe('alert');
     const label = alert.getAttribute('aria-labelledby')!;
     expect(root.querySelector(`#${label}`)?.textContent).toContain('The server refused');
+    expect(alert.textContent).toContain('Project name: A project with this name already exists.');
     // Nothing described may point outside the document once the refusal is replaced.
     createProject.mockResolvedValueOnce(PROJECT);
     await submit();
@@ -267,8 +271,8 @@ describe('CreateProjectPage', () => {
     await fixture.whenStable();
     // The edited field answers for itself: its reason and its invalidity go, the other field's stay.
     expect(name.getAttribute('aria-invalid')).toBeNull();
-    expect(name.getAttribute('aria-describedby')).toBe('onboarding-project-name-help');
-    expect(root.querySelector('#onboarding-project-name-error')?.textContent?.trim()).toBe('');
+    expect(name.getAttribute('aria-describedby')).toBe('onboarding-project-name-hint');
+    expect(root.querySelector('#onboarding-project-name-error')).toBeNull();
     expect(slug.getAttribute('aria-invalid')).toBe('true');
     expect(slug.getAttribute('aria-describedby')).toContain('onboarding-project-slug-error');
     expect(root.querySelector('#onboarding-project-slug-error')?.textContent).toContain(
@@ -316,7 +320,7 @@ describe('CreateProjectPage', () => {
     ['forbidden', 403],
     ['not_found', 404],
   ] as const)(
-    'keeps the field live region when the %s refusal renders no details alert',
+    'keeps inline field announcements when the %s refusal renders no details alert',
     async (kind, status) => {
       createProject.mockRejectedValueOnce(
         failure({
@@ -333,7 +337,7 @@ describe('CreateProjectPage', () => {
       expect(root.querySelector('#onboarding-project-failure-heading')).toBeNull();
       const error = root.querySelector('#onboarding-project-name-error')!;
       expect(error.textContent).toContain('No project by that name.');
-      expect(error.getAttribute('aria-live')).toBe('polite');
+      expect(error.closest('[aria-live]')?.getAttribute('aria-live')).toBe('polite');
       // No heading renders, so the waiting line keeps the place and nothing queues a focus move.
       const busy = root.querySelector('[data-testid="onboarding-project-busy"]');
       expect(document.activeElement).toBe(busy);
@@ -355,6 +359,7 @@ describe('CreateProjectPage', () => {
     await submit();
     await settle();
     expect(document.activeElement).toBe(root.querySelector('#onboarding-project-failure-heading'));
+    expect(root.querySelector('#onboarding-project-errors')).toBeNull();
     // The next refusal renders no heading, so the one already in the DOM is on its way out.
     createProject.mockRejectedValueOnce(failure({ kind: 'forbidden', status: 403 }));
     await submit();

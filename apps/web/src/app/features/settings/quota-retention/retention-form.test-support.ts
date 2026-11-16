@@ -6,7 +6,7 @@ import {
   provideHttpClientTesting,
   type TestRequest,
 } from '@angular/common/http/testing';
-import { provideZonelessChangeDetection, signal } from '@angular/core';
+import { computed, provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import type { RetentionPolicy } from '@evidgate/sdk';
@@ -14,9 +14,12 @@ import { expect, vi } from 'vitest';
 
 import { provideApi } from '../../../core/http/api-client';
 import { SessionStore } from '../../../core/session/session.store';
+import { provideLayoutTestStubs, stubLayoutApis } from '../../../shared/testing/layout.testing';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow';
 import { RetentionFormComponent } from './retention-form.component';
 import { RetentionStore } from './retention.store';
 
+provideLayoutTestStubs();
 export const STORED: RetentionPolicy = { artifact_days: 14, metadata_days: 90 };
 export const RETENTION_URL = `${location.origin}/v1/projects/p-1/retention`;
 export const PROJECTS = [
@@ -64,9 +67,11 @@ export function flush(request: TestRequest, body: object = STORED, status = 200)
 }
 
 export function mountRetention(codes = ['project:read', 'project:write']) {
+  stubLayoutApis();
   const permissions = signal(new Set(codes));
   const projects = signal(PROJECTS);
   const org = signal<{ id: string } | null>({ id: 'o-1' });
+  const desktop = signal(true);
   TestBed.configureTestingModule({
     imports: [RetentionFormComponent],
     providers: [
@@ -75,6 +80,14 @@ export function mountRetention(codes = ['project:read', 'project:write']) {
       provideApi(`${location.origin}/v1`),
       provideHttpClientTesting(),
       { provide: PlatformLocation, useClass: BrowserPlatformLocation },
+      {
+        provide: NarrowMutationPolicy,
+        useValue: {
+          canMutate: desktop,
+          narrow: computed(() => !desktop()),
+          allowsMutation: () => desktop(),
+        },
+      },
       {
         provide: SessionStore,
         useValue: {
@@ -153,6 +166,7 @@ export function mountRetention(codes = ['project:read', 'project:write']) {
     permissions,
     projects,
     org,
+    desktop,
     root: fixture.nativeElement as HTMLElement,
   };
 }

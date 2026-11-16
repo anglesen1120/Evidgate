@@ -93,7 +93,7 @@ describe('WaiverBanner (FR-09-2/7)', () => {
         'reviewer-001 <script>not markup</script>',
       );
       expect(root.querySelector('time')?.getAttribute('datetime')).toBe('2026-10-25T00:30:00.000Z');
-      expect(root.querySelector('time')?.textContent).toBe('Oct 25, 2026, 12:30:00\u202fAM');
+      expect(root.querySelector('time')?.textContent).toBe('10/25/2026, 12:30:00\u202fAM');
       expect(root.querySelector('.waiver-utc')?.textContent).toBe('2026-10-25T00:30:00.000Z');
     }
     if (state === 'error') {
@@ -259,7 +259,7 @@ describe('WaiverBanner locale', () => {
     fixture.componentRef.setInput('expiresAt', expiry);
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
-    expect(root.querySelector('time')?.textContent).toBe('00:30:00 25 thg 10, 2026');
+    expect(root.querySelector('time')?.textContent).toBe('00:30:00 25/10/2026');
     expect(root.querySelector('time')?.getAttribute('datetime')).toBe('2026-10-25T00:30:00.000Z');
     expect(root.querySelector('.waiver-utc')?.textContent).toBe('2026-10-25T00:30:00.000Z');
   });

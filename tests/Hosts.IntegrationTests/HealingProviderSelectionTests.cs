@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.SharedKernel.Secrets;
 using Evidgate.Modules.Healing;
 using Evidgate.Modules.Healing.Application;
@@ -73,6 +74,25 @@ public sealed class HealingProviderSelectionTests
         using var provider = services.BuildServiceProvider();
 
         provider.GetRequiredService<IHealingLlmProvider>().ShouldBeOfType<HttpHealingLlmProvider>();
+    }
+
+    /// <summary>
+    /// The daily budget roll is wired by the module itself: a composition that only calls <c>AddHealingModule</c> carries
+    /// the handler for its task type and the schedule that fires it, with no registration of the test's own.
+    /// </summary>
+    [Fact]
+    public async Task The_Module_Registers_The_Budget_Reset_Handler_And_Schedule()
+    {
+        await using var provider = Compose(Environments.Production, provider: "none").BuildServiceProvider();
+
+        provider.GetServices<ITaskHandlerInvoker>()
+            .Count(invoker => invoker.TaskType == HealingLlmBudgetResetSweeps.TaskType)
+            .ShouldBe(1, "removing AddTaskHandler from the module leaves the fired task with no handler");
+
+        var schedule = provider.GetServices<ScheduleDefinition>()
+            .Where(definition => definition.Name == HealingLlmBudgetResetSweeps.ScheduleName)
+            .ShouldHaveSingleItem("removing AddTaskSchedule from the module means the roll never fires");
+        schedule.TaskType.ShouldBe(HealingLlmBudgetResetSweeps.TaskType);
     }
 
     /// <summary>

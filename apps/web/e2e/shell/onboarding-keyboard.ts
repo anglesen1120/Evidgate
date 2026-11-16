@@ -5,7 +5,7 @@
 // a visitor really crosses, so none of these helpers performs one.
 import { expect, type Locator, type Page } from '@playwright/test';
 
-import { stepItem, type StepNumber } from './onboarding-support';
+import type { StepNumber } from './onboarding-support';
 
 /** The shell's skip link: the first stop of a fresh document. */
 export const SKIP_LINK = 'a.skip-link';
@@ -19,9 +19,9 @@ export const STEP_TITLE = '#onboarding-step-title';
  */
 export const QUICKSTART_SNIPPET = '[data-testid="cli-quickstart"] pre';
 
-/** One stepper item's button, addressed by the item's DOM contract rather than by its label. */
+/** Detail navigation owns the buttons; the separate progress list owns current/done facts. */
 export function stepButton(page: Page, step: StepNumber): Locator {
-  return stepItem(page, step).locator('button');
+  return page.getByTestId(`onboarding-select-step-${step}`);
 }
 
 /** Presses Tab `times` times: the only way these specs move focus forward. */
@@ -150,8 +150,6 @@ export async function enabledTabStops(page: Page): Promise<readonly string[]> {
         return element.getClientRects().length > 0;
       })
       .map((element) => {
-        const step = element.closest('[data-testid^="onboarding-step-"]');
-        if (step !== null) return `${step.getAttribute('data-testid')} button`;
         const testId = element.getAttribute('data-testid');
         if (testId !== null) return testId;
         if (element.id !== '') return `#${element.id}`;

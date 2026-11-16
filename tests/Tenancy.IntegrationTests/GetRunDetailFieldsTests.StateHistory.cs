@@ -21,7 +21,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_FreshRun_ServesAnEmptyStateHistoryAndWritesTheCreationMarker()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateQueuedRunAsync(world);
 
         var answer = await GetAsync(world, runId);
@@ -51,7 +51,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_CanceledRun_ServesTheRecordedTransitionWithoutTheCreationRow()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateQueuedRunAsync(world);
         (await CancelRunTestData.CancelAsync(world, runId)).Status.ShouldBe(HttpStatusCode.Accepted);
 
@@ -88,7 +88,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_StateHistory_FollowsTheRowSequenceNotTheRecordedTime()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateQueuedRunAsync(world);
         await _fixture.ExecuteAsync(
             world.Database,
@@ -120,7 +120,7 @@ public sealed partial class GetRunDetailFieldsTests
     {
         // Dedicated: disabling the append-only guard is DDL and takes a table-wide lock no sibling class may share.
         await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
-        await using var world = await RunCreationTests.StartAsync(_fixture, database: owned.Name);
+        await using var world = await RunCreationTests.StartAsync(_fixture, database: owned.Name, hosts: _hosts);
         var runId = await CreateQueuedRunAsync(world);
 
         // The marker is removed as the owner with the table's guard disabled for the one statement and restored before
@@ -156,7 +156,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_StateHistory_IsBoundedToTheContractLimit()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateQueuedRunAsync(world);
         await _fixture.ExecuteAsync(
             world.Database,
@@ -193,8 +193,8 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_StateHistory_IsNotServedToAnotherTenantOrProject()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
-        await using var rival = await RunCreationTests.StartAsync(_fixture, slug: "history-rival");
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
+        await using var rival = await RunCreationTests.StartAsync(_fixture, slug: "history-rival", hosts: _hosts);
         var runId = await CreateQueuedRunAsync(world);
         (await CancelRunTestData.CancelAsync(world, runId)).Status.ShouldBe(HttpStatusCode.Accepted);
         var stored = await _fixture.ScalarAsync<long>(

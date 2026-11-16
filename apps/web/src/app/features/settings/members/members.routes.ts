@@ -1,4 +1,6 @@
 import type { Routes } from '@angular/router';
 import { MembersPage } from './members.page';
 
-export const routes: Routes = [{ path: '', pathMatch: 'full', component: MembersPage }];
+export const routes: Routes = [
+  { path: '', pathMatch: 'full', component: MembersPage, data: { pageHeadingLevel: 1 } },
+];

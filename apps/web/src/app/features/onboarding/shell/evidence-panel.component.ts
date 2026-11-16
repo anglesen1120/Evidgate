@@ -1,50 +1,99 @@
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { DatePipe, DecimalPipe } from '@angular/common';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  LOCALE_ID,
+} from '@angular/core';
 import { HlmCardImports } from '@evidgate/ui/card';
+
+import { shortDateFormat } from '../../../shared/time/short-date-format';
 import type { OnboardingProgress } from '../data/onboarding-progress.service';
+import { activationInstantLabel } from '../steps/default-policy';
 
 @Component({
   selector: 'app-onboarding-evidence-panel',
-  imports: [HlmCardImports],
+  imports: [DatePipe, DecimalPipe, HlmCardImports],
   host: { class: 'block min-w-0' },
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <aside
+    <section
       hlmCard
-      class="gap-(--eg-space-4) p-(--eg-space-6)"
+      class="min-w-0 gap-(--eg-space-4) p-(--eg-space-6)"
       data-testid="onboarding-evidence-panel"
       aria-labelledby="onboarding-evidence-title"
     >
-      <h2 hlmCardTitle id="onboarding-evidence-title">{{ title }}</h2>
+      <h2 hlmCardTitle [size]="sectionHeadingSize" id="onboarding-evidence-title">{{ title }}</h2>
+      <p class="m-0 text-sm text-muted-foreground">{{ sourceLabel }}</p>
       @if (progress(); as resources) {
         @if (resources.project; as createdProject) {
           <dl
-            class="m-0 [&_dt]:text-sm [&_dt]:text-muted-foreground [&_dt:not(:first-child)]:mt-(--eg-space-4) [&_dd]:mx-0 [&_dd]:mb-0 [&_dd]:mt-(--eg-space-2) [&_dd]:[overflow-wrap:anywhere]"
+            class="m-0 grid min-w-0 gap-(--eg-space-5) min-[768px]:grid-cols-2 min-[1280px]:grid-cols-3 [&>div]:min-w-0 [&_dt]:text-sm [&_dt]:text-muted-foreground [&_dd]:mx-0 [&_dd]:mb-0 [&_dd]:mt-(--eg-space-2) [&_dd]:wrap-anywhere"
           >
-            <dt>{{ projectLabel }}</dt>
-            <dd>{{ createdProject.name }}</dd>
-            <dt>{{ identifierLabel }}</dt>
-            <dd class="font-mono text-xs">{{ createdProject.id }}</dd>
+            <div>
+              <dt>{{ projectLabel }}</dt>
+              <dd>{{ createdProject.name }}</dd>
+            </div>
+            <div>
+              <dt>{{ identifierLabel }}</dt>
+              <dd class="font-mono text-sm">
+                <bdi>{{ createdProject.id }}</bdi>
+              </dd>
+            </div>
             @if (resources.bindings.length) {
-              <dt>{{ bindingsLabel }}</dt>
-              <dd>{{ resources.bindings.length }}{{ resources.bindingsTruncated ? '+' : '' }}</dd>
+              <div>
+                <dt>{{ bindingsLabel }}</dt>
+                <dd>
+                  {{ resources.bindings.length | number
+                  }}{{ resources.bindingsTruncated ? '+' : '' }}
+                </dd>
+              </div>
             }
             @if (resources.tokens.length) {
-              <dt>{{ tokensLabel }}</dt>
-              <dd>{{ resources.tokens.length }}{{ resources.tokensTruncated ? '+' : '' }}</dd>
+              <div>
+                <dt>{{ tokensLabel }}</dt>
+                <dd>
+                  {{ resources.tokens.length | number }}{{ resources.tokensTruncated ? '+' : '' }}
+                </dd>
+              </div>
             }
             @if (resources.sampleRun; as run) {
-              <dt>{{ sampleLabel }}</dt>
-              <dd class="font-mono text-xs">{{ run.run_id }}</dd>
+              <div>
+                <dt>{{ sampleLabel }}</dt>
+                <dd class="font-mono text-sm">
+                  <bdi>{{ run.run_id }}</bdi>
+                </dd>
+              </div>
               @if (run.current_evidence_revision_id; as revision) {
-                <dt>{{ evidenceLabel }}</dt>
-                <dd class="font-mono text-xs">{{ revision }}</dd>
+                <div>
+                  <dt>{{ evidenceLabel }}</dt>
+                  <dd class="font-mono text-sm">
+                    <bdi>{{ revision }}</bdi>
+                  </dd>
+                </div>
               }
             }
             @if (activation(); as active) {
-              <dt>{{ activationLabel }}</dt>
-              <dd class="font-mono text-xs">{{ active.policy_revision_id }}</dd>
-              <dt>{{ activatedAtLabel }}</dt>
-              <dd>{{ active.activated_at }}</dd>
+              <div>
+                <dt>{{ activationLabel }}</dt>
+                <dd class="font-mono text-sm">
+                  <bdi>{{ active.policy_revision_id }}</bdi>
+                </dd>
+              </div>
+              <div>
+                <dt>{{ activatedAtLabel }}</dt>
+                <dd>
+                  @if (activatedAt(); as instant) {
+                    <time [attr.datetime]="instant">{{
+                      instant | date: dateTimeFormat : '+0000'
+                    }}</time>
+                  } @else {
+                    {{ unavailable }}
+                  }
+                </dd>
+              </div>
             }
           </dl>
           @if (resources.activation.kind === 'forbidden') {
@@ -74,12 +123,18 @@ import type { OnboardingProgress } from '../data/onboarding-progress.service';
           {{ stale }}
         </p>
       }
-    </aside>
+    </section>
   `,
 })
 export class EvidencePanelComponent {
   readonly progress = input<OnboardingProgress | null>(null);
   readonly refreshFailed = input(false);
+  protected readonly sectionHeadingSize = 'section' as const;
+  protected readonly dateTimeFormat = shortDateFormat(inject(LOCALE_ID), true, 'medium');
+  protected readonly sourceLabel = $localize`:@@onboarding.evidence.source:Read from server-confirmed resources, not browser completion flags.`;
+  protected readonly activatedAt = computed(() =>
+    activationInstantLabel(this.activation()?.activated_at),
+  );
   protected readonly activation = computed(() => {
     const activation = this.progress()?.activation;
     return activation?.kind === 'active' ? activation.state : null;
@@ -95,6 +150,6 @@ export class EvidencePanelComponent {
   protected readonly sampleLabel = $localize`:@@onboarding.evidence.sample:Sample run ID`;
   protected readonly evidenceLabel = $localize`:@@onboarding.evidence.revision:Evidence revision ID`;
   protected readonly activationLabel = $localize`:@@onboarding.evidence.activation:Activated policy revision`;
-  protected readonly activatedAtLabel = $localize`:@@onboarding.evidence.activated-at:Activated at`;
+  protected readonly activatedAtLabel = $localize`:@@onboarding.evidence.activated-at:Activated at (UTC)`;
   protected readonly activationUnavailable = $localize`:@@onboarding.evidence.activation-unavailable:Activation details are unavailable with your current access.`;
 }

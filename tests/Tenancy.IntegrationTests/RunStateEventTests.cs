@@ -13,11 +13,18 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 [Trait("Category", "Docker")]
-public sealed partial class RunStateEventTests
+public sealed partial class RunStateEventTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    // Reuse one API host per class; each world still owns its tenant data.
+    // Dedicated databases and overlapping worlds keep private hosts.
+    private readonly TenancyHostPool _hosts;
 
-    public RunStateEventTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public RunStateEventTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     // ------------------------------------------------------------------ the writer's rows
 
@@ -28,7 +35,7 @@ public sealed partial class RunStateEventTests
     [Fact]
     public async Task CreateRun_AppendsTheCreationRow()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateQueuedRunAsync(world);
 
         (await HistoryAsync(world, runId)).ShouldBe("(insert)->queued", "the create path's INSERT is the creation row");
@@ -44,7 +51,7 @@ public sealed partial class RunStateEventTests
     [Fact]
     public async Task TransitionRun_FromCreatedThroughComplete_AppendsOneRowPerEdge()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         // The one state the API never inserts: the seeder writes the row as `created`, so `created → queued` is this
         // run's first transition rather than a no-op.
@@ -76,7 +83,7 @@ public sealed partial class RunStateEventTests
     [Fact]
     public async Task TransitionRun_SameState_AppendsNoRow()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await RunningRunAsync(world);
         var before = await HistoryAsync(world, runId);
         before.ShouldBe("(insert)->queued,queued->running");
@@ -106,7 +113,7 @@ public sealed partial class RunStateEventTests
     [Fact]
     public async Task CancelRun_AppendsExactlyOneTransitionRow()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await RunningRunAsync(world);
 
         var answer = await CancelRunTestData.CancelAsync(world, runId);
@@ -129,7 +136,7 @@ public sealed partial class RunStateEventTests
     [Fact]
     public async Task SequentialStateWrites_KeepTheSequenceGapless()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateQueuedRunAsync(world);
         var chain = new[] { "running", "collecting", "complete" };
 
@@ -156,7 +163,7 @@ public sealed partial class RunStateEventTests
     [Fact]
     public async Task TwoConcurrentStateWrites_KeepTheSequenceGapless()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateQueuedRunAsync(world);
         var firstUpdated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseFirst = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -221,7 +228,7 @@ public sealed partial class RunStateEventTests
     [Fact]
     public async Task AppRole_HoldsSelectOnly_AndEveryMutationIsRefused()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var database = world.Database;
         var runId = await CreateQueuedRunAsync(world);
 
@@ -276,7 +283,7 @@ public sealed partial class RunStateEventTests
     [Fact]
     public async Task OwnerUpdateOrDelete_IsRefused()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateQueuedRunAsync(world);
 
         // One transaction per attempt: the raised exception aborts the transaction it fired in.

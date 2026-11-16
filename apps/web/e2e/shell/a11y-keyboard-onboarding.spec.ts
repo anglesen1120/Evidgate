@@ -138,7 +138,7 @@ test.describe('W1 — step 1, create project (keyboard walkthrough plan)', () =>
       await enabledTabStops(page),
       'step 1 Tab stops inside the main region (stepper 1, both fields, the submit)',
     ).toEqual([
-      'onboarding-step-1 button',
+      'onboarding-select-step-1',
       'onboarding-project-name',
       '#onboarding-project-slug',
       'onboarding-project-submit',
@@ -365,6 +365,9 @@ test.describe('W2 — step 2, connect CI (OIDC then token)', () => {
       /the GitHub App cannot read this repository/,
     );
     // The field's own node is not a live region while the details alert carries the sentence.
-    await expect(page.locator('#connect-repo-name-error')).not.toHaveAttribute('aria-live', /.*/);
+    await expect(page.locator('#connect-oidc-repo-name-error')).not.toHaveAttribute(
+      'aria-live',
+      /.*/,
+    );
   });
 });

@@ -60,6 +60,7 @@ Full rules, evidence and gates: [`docs/engineering/agent-code-rules.md`](docs/en
 - **Comments say why, in about 3 lines.** No plan/task/review ids in source code; those go in the commit and PR. Update or delete the comments your change makes false.
 - **Search before you write.** Check the helper catalogue (rules §7) and `rg`. A second copy of security, protocol or format logic is a defect: extract it.
 - **Framework first.** No hand-rolled HTTP server, redactor, regex parser, gzip, dialog or store without an ADR.
+- **UI format.** Follow [`docs/engineering/ui-rules.md`](docs/engineering/ui-rules.md) (UI1–UI55): framework components only, consistent chips/tables, long-content recovery and frozen mockup conformance.
 - **No scaffolding in production.** No `InMemory*`, `Mock*` or `Slice*` registered outside `IsDevelopment()`. Delete the skeleton when the real code lands.
 - **Fail closed.** No check may be skipped because of a return type or a missing attribute; every `[Permission]` handler returns `Result`.
 - **An invariant ships with the code that triggers it and a test that makes it fire.** A reason code nothing can set is not done.

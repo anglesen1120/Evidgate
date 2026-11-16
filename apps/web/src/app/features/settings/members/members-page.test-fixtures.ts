@@ -3,8 +3,15 @@ import type { MembershipView, RoleView } from '@evidgate/sdk';
 import { vi } from 'vitest';
 import type { ApiError } from '../../../core/http/api-error';
 import type { Intent } from '../../../core/http/intent';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import type { RolePreview } from './role-preview';
 import type { RoleChange, IssuedInvite } from './members.store';
+
+/** Mutation happy paths opt into desktop; responsive denial specs supply their own policy. */
+export const MEMBERS_DESKTOP = {
+  provide: NarrowMutationPolicy,
+  useValue: { canMutate: () => true, narrow: () => false, allowsMutation: () => true },
+};
 
 export const role: RoleView = {
   id: 'role1',

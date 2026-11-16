@@ -1,60 +1,66 @@
 import type { ErrorEnvelopeDetail } from '@evidgate/sdk';
+import { sanitizeLabel } from './default-policy';
 
-/**
- * One envelope `details` row (00 §9.2) with the field it names, so a page can link a server
- * refusal to the control that carries it instead of printing it beside the form.
- */
+type FieldContext = 'project' | 'connection' | 'collection';
+
+const FIELD_LABELS: Readonly<Record<string, string>> = {
+  slug: $localize`:@@onboarding.create.slug:Project slug`,
+  repository_id: $localize`:@@onboarding.connect.repo-id:GitHub numeric repository ID`,
+  repository_full_name: $localize`:@@onboarding.connect.repo-name:Repository (owner/repo)`,
+  allowed_ref_patterns: $localize`:@@onboarding.connect.refs:Allowed Git ref patterns`,
+  allowed_workflow_refs: $localize`:@@onboarding.connect.workflows:Allowed workflow refs`,
+  project_id: $localize`:@@onboarding.enable.project:Project`,
+  policy_revision_id: $localize`:@@onboarding.enable.revision:Policy revision`,
+  mode: $localize`:@@onboarding.enable.mode:Mode`,
+  hash: $localize`:@@onboarding.enable.hash:Revision hash`,
+  late_evidence_window_minutes: $localize`:@@onboarding.enable.late-window:Late-evidence window`,
+  required_suites: $localize`:@@onboarding.enable.required-suites:Required suites`,
+  required_cases: $localize`:@@onboarding.enable.required-cases:Required cases`,
+  gated_branch: $localize`:@@onboarding.enable.gated-branch:Default branch gated`,
+};
+
+/** One sanitized server detail plus a localized message for inline and summary errors. */
 export interface FieldDetail {
   /** The path without its JSON-pointer prefix or index: `/repository_id[0]` → `repository_id`. */
   readonly field: string;
-  /** The path exactly as the envelope carried it; server text, rendered as text only. */
+  /** Sanitized diagnostic pointer; render only as escaped, bidi-isolated text. */
   readonly path: string;
   readonly reason: string;
+  readonly message: string;
 }
 
-/**
- * Maps an envelope's `details` to the fields they name.
- *
- * The contract does not fix where a detail points: `createProject` names a body member
- * (`name`), while the CI and policy endpoints use a JSON pointer (`/repository_id`). Both
- * spellings reduce to the same key here, which is what lets one lookup serve every form.
- */
-export function fieldDetails(details: readonly ErrorEnvelopeDetail[]): readonly FieldDetail[] {
+/** Resolve server paths to product labels without translating the server's diagnostic reason. */
+export function fieldDetails(
+  details: readonly ErrorEnvelopeDetail[],
+  context: FieldContext,
+): readonly FieldDetail[] {
   return details.map((detail) => {
-    // `path` is optional in the wire schema: a row that names no field ("the body is too
-    // large") still belongs in the summary list, and it links to no control.
-    const path = detail.path ?? '';
+    const path = sanitizeLabel(detail.path ?? '');
+    const field =
+      path
+        .replace(/^\/+/, '')
+        .split(/[[\]/.]/)
+        .shift()
+        ?.trim() ?? '';
+    const nameLabel =
+      context === 'project'
+        ? $localize`:@@onboarding.create.name:Project name`
+        : $localize`:@@onboarding.connect.token-name:Token name`;
+    const knownLabel = Object.hasOwn(FIELD_LABELS, field) ? FIELD_LABELS[field] : undefined;
+    const label =
+      (field === 'name' && context !== 'collection' ? nameLabel : knownLabel) ??
+      $localize`:@@onboarding.fields.generic:Submitted value`;
+    const reason = sanitizeLabel(detail.reason);
     return {
-      field:
-        path
-          .replace(/^\/+/, '')
-          .split(/[[\]/.]/)
-          .shift()
-          ?.trim() ?? '',
+      field,
       path,
-      reason: detail.reason,
+      reason,
+      message: $localize`:@@onboarding.fields.reason:${label}:FIELD_LABEL:: ${reason}:SERVER_REASON:`,
     };
   });
 }
 
-/**
- * The first reason an envelope gave for `field`, or `null`.
- *
- * A field shows one message: the first row is the one a screen reader reads from the control's
- * description, and the summary list keeps every row.
- */
+/** The first localized field message; the summary retains every server reason. */
 export function reasonFor(details: readonly FieldDetail[], field: string): string | null {
-  return details.find((detail) => detail.field === field)?.reason ?? null;
-}
-
-/**
- * The `aria-describedby` value of a control: the ids that resolve to a rendered element, joined.
- *
- * A page must never describe a control with an id no element carries, so a caller passes `null`
- * for a hint or error it does not render in the current state; the empty result removes the
- * attribute instead of leaving a reference that points nowhere.
- */
-export function describedBy(...ids: readonly (string | null | undefined)[]): string | null {
-  const present = ids.filter((id): id is string => typeof id === 'string' && id !== '');
-  return present.length === 0 ? null : present.join(' ');
+  return details.find((detail) => detail.field === field)?.message ?? null;
 }

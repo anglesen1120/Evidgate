@@ -1204,6 +1204,29 @@ export type FixtureDetailDto = {
     head?: FixtureRevisionDto | null;
 };
 
+export type RegisterGitRepoBindingRequest = {
+    /**
+     * Numeric id of the GitHub App installation the customer made on its own account.
+     */
+    installation_id: number;
+    /**
+     * Numeric id GitHub gives the repository; verified through the installation before the write.
+     */
+    repository_id: number;
+};
+
+export type GitRepoBindingDto = {
+    id: string;
+    project_id: string;
+    installation_id: number;
+    repository_id: number;
+    default_branch: string;
+    /**
+     * active while the installation is live; disabled by a suspend event, keeping every row.
+     */
+    sync_state: 'active' | 'disabled';
+};
+
 export type CreateFixtureRequest = {
     fixture_key: string;
     seed_version: string;
@@ -9300,6 +9323,67 @@ export type ListCaseRevisionsResponses = {
 };
 
 export type ListCaseRevisionsResponse = ListCaseRevisionsResponses[keyof ListCaseRevisionsResponses];
+
+export type RegisterGitRepoBindingData = {
+    body: RegisterGitRepoBindingRequest;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/git-repo-bindings';
+};
+
+export type RegisterGitRepoBindingErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type RegisterGitRepoBindingError = RegisterGitRepoBindingErrors[keyof RegisterGitRepoBindingErrors];
+
+export type RegisterGitRepoBindingResponses = {
+    /**
+     * The created binding
+     */
+    201: GitRepoBindingDto;
+};
+
+export type RegisterGitRepoBindingResponse = RegisterGitRepoBindingResponses[keyof RegisterGitRepoBindingResponses];
 
 export type ListFixturesData = {
     body?: never;

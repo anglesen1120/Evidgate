@@ -5,7 +5,7 @@
   aria-labelledby="producers-title"
   class="min-w-0 max-w-full gap-(--eg-space-4) p-(--eg-space-5)"
 >
-  <h2 hlmCardTitle id="producers-title" class="m-0">{{ copy.title }}</h2>
+  <h2 hlmCardTitle [size]="sectionSize" id="producers-title" class="m-0">{{ copy.title }}</h2>
   @if (status() === 'loading') {
     <app-loading-pattern [attr.data-state]="'loading'" [label]="copy.loading" />
   } @else if (status() === 'error') {
@@ -18,7 +18,8 @@
         data-run-after-cancel
         [attr.data-badge]="'after-cancel'"
         [tone]="'info'"
-        [label]="runAfterCancelLabel(runLateCount)"
+        [label]="copy.afterCancel"
+        [detail]="runAfterCancelLabel(runLateCount)"
       />
     }
     @if (rows.length === 0) {
@@ -28,137 +29,15 @@
         [description]="copy.emptyDescription"
       />
     } @else {
-      <div
-        hlmTableContainer
+      <app-data-table
         data-producer-scroll
-        class="table-scroll min-w-0 max-w-full overflow-x-auto rounded-(--eg-radius-md) border border-border focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-(--eg-focus) focus-visible:outline-offset-(--eg-focus-offset)"
-        role="region"
-        tabindex="0"
-        [attr.aria-label]="copy.title"
-        [attr.aria-describedby]="'producers-event-note'"
-      >
-        <table
-          hlmTable
-          class="w-full min-w-[calc(var(--eg-space-12)*16)] border-collapse [&_th]:whitespace-normal [&_th]:wrap-anywhere [&_td]:whitespace-normal [&_td]:wrap-anywhere [&_th]:align-top [&_td]:align-top"
-        >
-          <caption hlmCaption class="sr-only">
-            {{
-              copy.title
-            }}
-          </caption>
-          <thead hlmTHead>
-            <tr hlmTr>
-              <th hlmTh scope="col">{{ copy.producer }}</th>
-              <th hlmTh scope="col">{{ copy.identity }}</th>
-              <th hlmTh scope="col">{{ copy.finalize }}</th>
-              <th hlmTh scope="col">{{ copy.lastSequence }}</th>
-              <th hlmTh scope="col">{{ copy.count }}</th>
-              <th hlmTh scope="col">{{ copy.events }}</th>
-            </tr>
-          </thead>
-          <tbody hlmTBody>
-            @for (slot of pageSlots(); track slot.producerId) {
-              <tr hlmTr [attr.data-producer-slot]="slot.producerId">
-                <th
-                  hlmTh
-                  scope="row"
-                  [id]="producerAnchorId(slot.producerId)"
-                  tabindex="-1"
-                  class="scroll-mt-[calc(2*var(--eg-space-12))] focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-(--eg-focus)"
-                >
-                  <bdi class="font-mono">{{ display(slot.producerId) }}</bdi>
-                </th>
-                <td
-                  hlmTd
-                  [attr.data-fact]="'identity'"
-                  [attr.data-unavailable]="slot.identityState === null ? '' : null"
-                >
-                  @if (slot.identityState !== null) {
-                    <bdi>{{ display(slot.identityState) }}</bdi>
-                  } @else {
-                    <app-status-pill [tone]="'neutral'" [label]="''" />
-                  }
-                </td>
-                <td
-                  hlmTd
-                  [attr.data-fact]="'finalize'"
-                  [attr.data-unavailable]="slot.finalizeStatus === null ? '' : null"
-                >
-                  @if (slot.finalizeStatus !== null) {
-                    <bdi>{{ display(slot.finalizeStatus) }}</bdi>
-                  } @else {
-                    <app-status-pill [tone]="'neutral'" [label]="''" />
-                  }
-                </td>
-                <td
-                  hlmTd
-                  [attr.data-fact]="'last-sequence'"
-                  [attr.data-unavailable]="slot.lastSequence === null ? '' : null"
-                >
-                  @if (slot.lastSequence !== null) {
-                    <span class="font-mono">{{ slot.lastSequence }}</span>
-                  } @else {
-                    <app-status-pill [tone]="'neutral'" [label]="''" />
-                  }
-                </td>
-                <td
-                  hlmTd
-                  [attr.data-fact]="'count'"
-                  [attr.data-unavailable]="slot.count === null ? '' : null"
-                  [attr.data-open-slot]="slot.count !== null && slot.expected === null ? '' : null"
-                  [attr.aria-label]="
-                    slot.count !== null && slot.expected === null
-                      ? openCountLabel(slot.count)
-                      : null
-                  "
-                >
-                  @if (slot.count !== null && slot.expected === null) {
-                    <span class="font-mono">{{ slot.count }}</span
-                    >{{ ' '
-                    }}<span class="text-muted-foreground" aria-hidden="true">{{
-                      copy.openSlot
-                    }}</span>
-                  } @else if (slot.count !== null && slot.expected !== null) {
-                    <span class="font-mono">{{ slot.count }} / {{ slot.expected }}</span>
-                    @if (slot.count !== slot.expected) {
-                      <span
-                        data-count-mismatch
-                        class="mt-(--eg-space-2) flex items-start gap-(--eg-space-2) rounded-(--eg-radius-md) bg-(--eg-warning-bg) p-(--eg-space-2) text-(--eg-warning-fg)"
-                      >
-                        <span aria-hidden="true">≠</span><span>{{ copy.mismatch }}</span>
-                      </span>
-                    }
-                  } @else {
-                    <app-status-pill [tone]="'neutral'" [label]="''" />
-                  }
-                </td>
-                <td hlmTd class="space-y-(--eg-space-2)">
-                  @if (slot.staleEpochEvents === null || slot.afterCancelEvents === null) {
-                    <app-status-pill [tone]="'neutral'" [label]="''" />
-                  }
-                  @if (slot.staleEpochEvents !== null && slot.staleEpochEvents > 0) {
-                    <app-status-pill
-                      [attr.data-badge]="'stale-epoch'"
-                      [tone]="'info'"
-                      [label]="staleEpochLabel(slot.staleEpochEvents)"
-                    />
-                  }
-                  @if (slot.afterCancelEvents !== null && slot.afterCancelEvents > 0) {
-                    <app-status-pill
-                      [attr.data-badge]="'after-cancel'"
-                      [tone]="'info'"
-                      [label]="afterCancelLabel(slot.afterCancelEvents)"
-                    />
-                  }
-                  @if (slot.staleEpochEvents === 0 && slot.afterCancelEvents === 0) {
-                    <span class="text-muted-foreground">{{ copy.noEvents }}</span>
-                  }
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
+        [columns]="columns()"
+        [rows]="pageSlots()"
+        [rowId]="rowId"
+        [caption]="copy.title"
+        [flow]="'page'"
+        [fitToContainer]="true"
+      />
       @if (rows.length > pageSize) {
         <nav
           [attr.aria-label]="copy.pagination"
@@ -191,8 +70,134 @@
       }
     }
   } @else {
-    <p [attr.data-state]="'unavailable'" class="m-0">
-      <app-status-pill [tone]="'neutral'" [label]="''" />
+    <p [attr.data-state]="'unavailable'" class="m-0 text-muted-foreground">
+      {{ copy.notProvided }}
     </p>
   }
 </section>
+
+<ng-template #producerCell let-slot let-stacked="stacked">
+  <div
+    [id]="producerAnchorId(slot.producerId)"
+    [attr.data-producer-slot]="slot.producerId"
+    tabindex="-1"
+    class="flex min-w-0 items-center gap-(--eg-space-2) scroll-mt-[calc(var(--eg-topbar-height,calc(2*var(--eg-space-12)))+var(--eg-space-4))] focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+    [class.flex-wrap]="stacked"
+  >
+    <bdi class="block min-w-0 flex-1"
+      ><app-data-table-value [value]="display(slot.producerId)" [truncate]="!stacked"
+    /></bdi>
+    <app-copy-value-button
+      class="shrink-0"
+      [value]="slot.producerId"
+      [label]="copy.producer"
+      [iconOnly]="true"
+    />
+  </div>
+</ng-template>
+<ng-template #identityCell let-slot>
+  <div
+    [attr.data-fact]="'identity'"
+    [attr.data-unavailable]="slot.identityState === null ? '' : null"
+  >
+    @if (slot.identityState === 'bound' || slot.identityState === 'unbound') {
+      <bdi
+        ><app-status-pill [tone]="'neutral'" [label]="valueLabel('identity', slot.identityState)"
+      /></bdi>
+    } @else if (slot.identityState !== null) {
+      <bdi [textContent]="valueLabel('identity', slot.identityState)"></bdi>
+    } @else {
+      <app-status-pill [tone]="'neutral'" [label]="''" />
+    }
+  </div>
+</ng-template>
+<ng-template #finalizeCell let-slot>
+  <div
+    [attr.data-fact]="'finalize'"
+    [attr.data-unavailable]="slot.finalizeStatus === null ? '' : null"
+  >
+    @if (slot.finalizeStatus === 'open' || slot.finalizeStatus === 'finalized') {
+      <bdi
+        ><app-status-pill [tone]="'neutral'" [label]="valueLabel('producer', slot.finalizeStatus)"
+      /></bdi>
+    } @else if (slot.finalizeStatus !== null) {
+      <bdi [textContent]="valueLabel('producer', slot.finalizeStatus)"></bdi>
+    } @else {
+      <app-status-pill [tone]="'neutral'" [label]="''" />
+    }
+  </div>
+</ng-template>
+<ng-template #sequenceCell let-slot>
+  <div
+    [attr.data-fact]="'last-sequence'"
+    [attr.data-unavailable]="slot.lastSequence === null ? '' : null"
+  >
+    @if (slot.lastSequence !== null) {
+      <app-number-value [value]="slot.lastSequence" />
+    } @else {
+      <span class="text-muted-foreground">{{ copy.notProvided }}</span>
+    }
+  </div>
+</ng-template>
+<ng-template #countCell let-slot let-stacked="stacked">
+  <div
+    class="grid min-w-0 gap-(--eg-space-2)"
+    [class.justify-items-end]="!stacked"
+    [class.justify-items-start]="stacked"
+    [attr.data-fact]="'count'"
+    [attr.data-unavailable]="slot.count === null ? '' : null"
+    [attr.data-open-slot]="slot.count !== null && slot.expected === null ? '' : null"
+    [attr.aria-label]="
+      slot.count !== null && slot.expected === null ? openCountLabel(slot.count) : null
+    "
+  >
+    @if (slot.count !== null && slot.expected === null) {
+      <app-number-value [value]="slot.count" />
+      <app-status-pill
+        [tone]="'neutral'"
+        [label]="copy.expectedUnset"
+        [fullValue]="openCountLabel(slot.count)"
+      />
+    } @else if (slot.count !== null && slot.expected !== null) {
+      <span class="whitespace-nowrap"
+        ><app-number-value [value]="slot.count" /> / <app-number-value [value]="slot.expected"
+      /></span>
+      @if (slot.count !== slot.expected) {
+        <app-status-pill
+          data-count-mismatch
+          [tone]="'warning'"
+          [label]="copy.mismatchShort"
+          [fullValue]="copy.mismatch"
+        />
+      }
+    } @else {
+      <span class="text-muted-foreground">{{ copy.notProvided }}</span>
+    }
+  </div>
+</ng-template>
+<ng-template #eventsCell let-slot>
+  <div class="grid min-w-0 justify-items-start gap-(--eg-space-2)">
+    @if (slot.staleEpochEvents === null || slot.afterCancelEvents === null) {
+      <span class="text-muted-foreground">{{ copy.notProvided }}</span>
+    }
+    @if (slot.staleEpochEvents !== null && slot.staleEpochEvents > 0) {
+      <app-status-pill
+        [attr.data-badge]="'stale-epoch'"
+        [tone]="'info'"
+        [label]="copy.staleEpoch"
+        [detail]="staleEpochLabel(slot.staleEpochEvents)"
+      />
+    }
+    @if (slot.afterCancelEvents !== null && slot.afterCancelEvents > 0) {
+      <app-status-pill
+        [attr.data-badge]="'after-cancel'"
+        [tone]="'info'"
+        [label]="copy.afterCancel"
+        [detail]="afterCancelLabel(slot.afterCancelEvents)"
+      />
+    }
+    @if (slot.staleEpochEvents === 0 && slot.afterCancelEvents === 0) {
+      <span class="text-muted-foreground">{{ copy.noEvents }}</span>
+    }
+  </div>
+</ng-template>

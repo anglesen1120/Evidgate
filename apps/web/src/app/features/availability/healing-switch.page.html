@@ -1,8 +1,8 @@
-<header class="mb-4 grid min-w-0 gap-2">
-  <h1 tabindex="-1" class="m-0 font-[family-name:var(--eg-font-display)] text-2xl">
+<header class="mb-(--eg-space-7) grid min-w-0 gap-(--eg-space-3)">
+  <h1 hlmCardTitle [size]="pageHeadingSize" tabindex="-1">
     {{ copy.title }}
   </h1>
-  <p class="m-0 text-muted-foreground">{{ copy.description }}</p>
+  <p class="m-0 max-w-[65ch] text-muted-foreground">{{ copy.description }}</p>
 </header>
 
 @if (!canRead()) {
@@ -32,8 +32,12 @@
     </button>
   </div>
 } @else if (store.resolution(); as resolution) {
-  <section class="mb-4 grid min-w-0 gap-2" aria-labelledby="healing-switch-posture">
-    <h2 id="healing-switch-posture" class="m-0 text-lg font-semibold">{{ copy.posture }}</h2>
+  <section
+    hlmCard
+    class="mb-(--eg-space-7) grid min-w-0 gap-(--eg-space-3) p-(--eg-space-5)"
+    aria-labelledby="healing-switch-posture"
+  >
+    <h2 hlmCardTitle [size]="sectionHeadingSize" id="healing-switch-posture">{{ copy.posture }}</h2>
     @if (resolution.resolved === 'unavailable') {
       <p class="m-0 font-semibold" data-healing-unavailable-posture>
         {{ copy.unavailableResolved }}
@@ -50,8 +54,55 @@
     }
   </section>
 
-  <section class="mb-4 grid min-w-0 gap-2" aria-labelledby="healing-switch-health">
-    <h2 id="healing-switch-health" class="m-0 text-lg font-semibold">{{ copy.dependencies }}</h2>
+  <section
+    hlmCard
+    class="mb-(--eg-space-7) min-w-0 gap-(--eg-space-5) p-(--eg-space-5)"
+    aria-labelledby="healing-switch-hierarchy"
+  >
+    <h2 hlmCardTitle [size]="sectionHeadingSize" id="healing-switch-hierarchy">
+      {{ copy.hierarchy }}
+    </h2>
+    <app-switch-scope-hierarchy [resolution]="resolution" />
+  </section>
+
+  <section
+    class="mb-(--eg-space-7) grid min-w-0 gap-(--eg-space-5)"
+    aria-labelledby="healing-switch-configuration"
+  >
+    <h2 hlmCardTitle [size]="sectionHeadingSize" id="healing-switch-configuration">
+      {{ copy.configuration }}
+    </h2>
+    @if (hasWritableScope()) {
+      <app-desktop-required-notice />
+    }
+    <div class="grid min-w-0 gap-(--eg-space-5) lg:grid-cols-2" data-healing-controls>
+      <app-switch-scope-control
+        scope="tenant"
+        [row]="resolution.tenant"
+        [blockedBy]="store.blockedBy('tenant')"
+        [editable]="canEdit()"
+        [saving]="store.saving() === 'tenant'"
+        [error]="store.writeError('tenant')"
+        [saved]="store.saved() === 'tenant'"
+        (submitted)="submit('tenant', $event)"
+      />
+      <app-switch-scope-control
+        scope="project"
+        [row]="resolution.project"
+        [blockedBy]="store.blockedBy('project')"
+        [editable]="canEdit()"
+        [saving]="store.saving() === 'project'"
+        [error]="store.writeError('project')"
+        [saved]="store.saved() === 'project'"
+        (submitted)="submit('project', $event)"
+      />
+    </div>
+  </section>
+
+  <section class="grid min-w-0 gap-(--eg-space-3)" aria-labelledby="healing-switch-health">
+    <h2 hlmCardTitle [size]="sectionHeadingSize" id="healing-switch-health">
+      {{ copy.dependencies }}
+    </h2>
     <dl class="m-0 grid min-w-0 gap-2">
       <div class="flex flex-wrap justify-between gap-2">
         <dt>{{ copy.dependencyLlm }}</dt>
@@ -90,30 +141,6 @@
     </dl>
     <p class="m-0 text-sm text-muted-foreground">{{ copy.healthHint }}</p>
   </section>
-
-  <div class="grid min-w-0 gap-4" data-healing-controls>
-    <app-switch-scope-control scope="system" [row]="resolution.system" />
-    <app-switch-scope-control
-      scope="tenant"
-      [row]="resolution.tenant"
-      [blockedBy]="store.blockedBy('tenant')"
-      [editable]="canEdit()"
-      [saving]="store.saving() === 'tenant'"
-      [error]="store.writeError('tenant')"
-      [saved]="store.saved() === 'tenant'"
-      (submitted)="submit('tenant', $event)"
-    />
-    <app-switch-scope-control
-      scope="project"
-      [row]="resolution.project"
-      [blockedBy]="store.blockedBy('project')"
-      [editable]="canEdit()"
-      [saving]="store.saving() === 'project'"
-      [error]="store.writeError('project')"
-      [saved]="store.saved() === 'project'"
-      (submitted)="submit('project', $event)"
-    />
-  </div>
 } @else {
   <p role="status" [attr.aria-busy]="true" class="m-0 min-h-(--eg-control-touch) text-sm">
     {{ copy.loading }}

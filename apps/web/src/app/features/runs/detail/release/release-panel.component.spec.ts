@@ -1,5 +1,8 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { BrnSelect } from '@spartan-ng/brain/select';
+import { DataTableComponent } from '../../../../shared/ui/data-table/data-table.component';
 
 import type { ApiError } from '../../../../core/http/api-error';
 import { stubLayoutApis } from '../../../../shared/testing/layout.testing';
@@ -62,6 +65,18 @@ interface PanelInputs {
   retryEligible?: boolean;
 }
 
+function fullDigest(row: ParentNode): string | null {
+  return (
+    row.querySelector(
+      '[data-release-digest] .identifier-accessible bdi, [data-release-digest] code.full-value bdi',
+    )?.textContent ?? null
+  );
+}
+
+function digestCopy(row: ParentNode): HTMLButtonElement | null {
+  return row.querySelector('[data-release-digest] app-copy-value-button button');
+}
+
 describe('ReleasePanelComponent', () => {
   beforeEach(() => {
     stubLayoutApis();
@@ -96,14 +111,25 @@ describe('ReleasePanelComponent', () => {
     return { fixture, root: fixture.nativeElement as HTMLElement };
   }
 
+  it('keeps the sibling-card inset for both bound and unbound release content', async () => {
+    const { root, fixture } = await render();
+    const section = root.querySelector('[data-release-panel]');
+    expect(section?.classList.contains('p-(--eg-space-5)')).toBe(true);
+    expect(section?.classList.contains('gap-(--eg-space-5)')).toBe(true);
+    fixture.componentRef.setInput('releases', []);
+    await fixture.whenStable();
+    expect(root.querySelector('[data-release-unbound]')).not.toBeNull();
+    expect(section?.classList.contains('p-(--eg-space-5)')).toBe(true);
+  });
+
   it('lists every served component digest in order and marks the bound component', async () => {
     const { root } = await render();
-    const rows = [...root.querySelectorAll('[data-release-component]')];
+    const rows = [...root.querySelectorAll('tr[data-row-id]')];
     expect(rows).toHaveLength(2);
     expect(rows.map((row) => row.querySelector('bdi')?.textContent)).toEqual(['api', 'web']);
-    expect(rows.map((row) => row.querySelector('[data-release-digest]')?.textContent)).toEqual([
-      digest('1'),
-      digest('2'),
+    expect(rows.map(fullDigest)).toEqual([
+      `Digest for component api: ${digest('1')}`,
+      `Digest for component web: ${digest('2')}`,
     ]);
     expect(rows[0]?.textContent).not.toContain('Bound');
     expect(rows[1]?.textContent).toContain('Bound');
@@ -120,7 +146,9 @@ describe('ReleasePanelComponent', () => {
     const section = root.querySelector('section');
     expect(section?.getAttribute('aria-labelledby')).toBe('release-title');
     expect(root.querySelector('#release-title')?.textContent).toBe('Release');
-    expect(root.querySelector('caption')?.textContent?.trim()).toBe('Release components');
+    expect(root.querySelector('app-data-table .caption')?.textContent?.trim()).toBe(
+      'Release components',
+    );
     expect(root.querySelector('[role="status"]')?.getAttribute('aria-live')).toBe('polite');
   });
 
@@ -165,7 +193,7 @@ describe('ReleasePanelComponent', () => {
 
   it('shows no selector for one release', async () => {
     const { root } = await render();
-    expect(root.querySelector('[role="group"]')).toBeNull();
+    expect(root.querySelector('[role="combobox"]')).toBeNull();
     expect(root.querySelector('table')).not.toBeNull();
   });
 
@@ -176,32 +204,54 @@ describe('ReleasePanelComponent', () => {
         { releaseId: 'rel-2', name: null },
       ],
     });
-    const group = root.querySelector('[role="group"]');
-    expect(group?.getAttribute('aria-label')).toBe('Releases bound to this run');
-    const buttons = [...(group?.querySelectorAll('button') ?? [])];
-    expect(buttons.map((button) => button.textContent?.trim())).toEqual([
+    const trigger = root.querySelector<HTMLButtonElement>('[role="combobox"]')!;
+    expect(root.querySelector('label')?.getAttribute('for')).toBe(trigger.id);
+    expect(root.querySelector('label')?.textContent).toBe('Releases bound to this run');
+    expect(trigger.getAttribute('aria-describedby')).toBe('release-choice-name');
+    expect(trigger.textContent?.trim()).toBe('Web⟨U+202E⟩2026');
+    const stringify = fixture.debugElement
+      .query(By.css('hlm-select'))
+      .injector.get(BrnSelect)
+      .itemToString();
+    expect(stringify?.('rel-1')).toBe('Web⟨U+202E⟩2026');
+    expect(stringify?.('rel-2')).toBe('rel-2');
+    const selected = vi.fn();
+    fixture.componentInstance.selectRelease.subscribe(selected);
+    trigger.click();
+    await fixture.whenStable();
+    const options = [...document.querySelectorAll<HTMLElement>('[role="option"]')];
+    expect(options.map((option) => option.textContent?.trim())).toEqual([
       'Web⟨U+202E⟩2026',
       'rel-2',
     ]);
-    expect(buttons.map((button) => button.getAttribute('aria-pressed'))).toEqual(['true', 'false']);
-    const selected = vi.fn();
-    fixture.componentInstance.selectRelease.subscribe(selected);
-    buttons[1]?.click();
+    expect(options.map((option) => option.getAttribute('aria-selected'))).toEqual([
+      'true',
+      'false',
+    ]);
+    options[1]?.click();
+    await fixture.whenStable();
     expect(selected).toHaveBeenCalledExactlyOnceWith('rel-2');
     fixture.componentRef.setInput('selectedReleaseId', 'rel-2');
     await fixture.whenStable();
-    expect(buttons[1]?.getAttribute('aria-pressed')).toBe('true');
+    expect(trigger.textContent?.trim()).toBe('rel-2');
   });
 
   it.each(['', '   ', '\t\n'])('uses the release id for a blank selector name %j', async (name) => {
-    const { root } = await render({
+    const { fixture, root } = await render({
       releases: [
         { releaseId: 'rel-1', name: RELEASE.name },
         { releaseId: 'rel-2', name },
       ],
     });
-    const buttons = root.querySelectorAll('[role="group"] button');
-    expect(buttons[1]?.textContent?.trim()).toBe('rel-2');
+    const stringify = fixture.debugElement
+      .query(By.css('hlm-select'))
+      .injector.get(BrnSelect)
+      .itemToString();
+    expect(stringify?.('rel-2')).toBe('rel-2');
+    root.querySelector<HTMLButtonElement>('[role="combobox"]')?.click();
+    await fixture.whenStable();
+    const options = document.querySelectorAll('[role="option"]');
+    expect(options[1]?.textContent?.trim()).toBe('rel-2');
   });
 
   it('renders the loading state before a release lands', async () => {
@@ -264,7 +314,7 @@ describe('ReleasePanelComponent', () => {
     expect(root.querySelector('[data-release-component]')).toBeNull();
   });
 
-  it('keeps 100 components usable: every row renders, every digest stays whole and wraps', async () => {
+  it('keeps 100 component digests recoverable in order without an inner row cap', async () => {
     const components = Array.from({ length: 100 }, (_, index) => ({
       componentKey: `web-${index}`,
       digest: `sha256:${String(index).padStart(2, '0').repeat(32)}`,
@@ -278,19 +328,22 @@ describe('ReleasePanelComponent', () => {
         version: 100,
       },
     });
-    const rows = [...root.querySelectorAll('[data-release-component]')];
+    const rows = [...root.querySelectorAll('tr[data-row-id]')];
     expect(rows).toHaveLength(100);
-    const served = rows.map((row) => row.querySelector('[data-release-digest]')?.textContent);
-    expect(served).toEqual(components.map((component) => component.digest));
-    expect(served.every((value) => value?.length === 71)).toBe(true);
-    expect(root.textContent).not.toContain('…');
+    const served = rows.map(fullDigest);
+    const expected = components.map(
+      (component) => `Digest for component ${component.componentKey}: ${component.digest}`,
+    );
+    expect(served).toEqual(expected);
+    expect(served.every((value, index) => value?.length === expected[index]!.length)).toBe(true);
+    expect(root.querySelector('.eg-table-long')).toBeNull();
     expect(rows[99]?.textContent).toContain('Bound');
     expect(rows[0]?.textContent).not.toContain('Bound');
-    // The host wraps long identifiers and fixes the table layout, so no cell can overflow at 320px.
+    // Shared auto-layout roles budget identifiers; narrow layouts use shared full-fact records.
     expect(root.classList.contains('wrap-anywhere')).toBe(true);
-    expect(root.querySelector('table')?.classList.contains('table-fixed')).toBe(true);
-    expect(rows[0]?.querySelector('button')?.getAttribute('aria-label')).toBe(
-      'Copy full digest for component web-0',
+    expect(root.querySelector('table')?.classList.contains('eg-table-layout')).toBe(true);
+    expect(digestCopy(rows[0]!)?.getAttribute('aria-label')).toBe(
+      'Copy Digest for component web-0',
     );
   });
 
@@ -298,11 +351,11 @@ describe('ReleasePanelComponent', () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { clipboard: { writeText } });
     const { fixture, root } = await render();
-    root.querySelector<HTMLButtonElement>('[data-release-component] button')?.click();
+    digestCopy(root)?.click();
     await fixture.whenStable();
     expect(writeText).toHaveBeenCalledWith(digest('1'));
     expect(root.querySelector('[role="status"]')?.textContent).toBe(
-      'Digest copied for component api',
+      'Digest for component api copied.',
     );
   });
 
@@ -311,10 +364,17 @@ describe('ReleasePanelComponent', () => {
       clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
     });
     const { fixture, root } = await render();
-    root.querySelector<HTMLButtonElement>('[data-release-component] button')?.click();
+    digestCopy(root)?.click();
     await fixture.whenStable();
-    expect(root.querySelector('[role="status"]')?.textContent).toContain('Copy failed.');
-    expect(root.querySelector('[data-release-digest]')?.textContent).toBe(digest('1'));
+    expect(root.querySelector('[role="status"]')?.textContent).toContain('Could not copy');
+    expect(fullDigest(root)).toBe(`Digest for component api: ${digest('1')}`);
+    root
+      .querySelector<HTMLButtonElement>('[data-release-digest] button[aria-haspopup="dialog"]')!
+      .click();
+    await fixture.whenStable();
+    expect(document.querySelector('[role="dialog"] code.full-value bdi')?.textContent).toBe(
+      digest('1'),
+    );
   });
 
   it('escapes a format character in the label and the announcement of a copied component', async () => {
@@ -328,15 +388,13 @@ describe('ReleasePanelComponent', () => {
         boundRuns: [{ runId: RUN_ID, componentKey }],
       },
     });
-    const button = root.querySelector<HTMLButtonElement>('[data-release-component] button');
-    expect(button?.getAttribute('aria-label')).toBe(
-      'Copy full digest for component web⟨U+202E⟩api',
-    );
+    const button = digestCopy(root);
+    expect(button?.getAttribute('aria-label')).toBe('Copy Digest for component web⟨U+202E⟩api');
     button?.click();
     await fixture.whenStable();
     expect(writeText).toHaveBeenCalledWith(digest('3'));
     expect(root.querySelector('[role="status"]')?.textContent).toBe(
-      'Digest copied for component web⟨U+202E⟩api',
+      'Digest for component web⟨U+202E⟩api copied.',
     );
     expect(root.querySelector('[role="status"]')?.textContent).not.toContain('\u202e');
   });
@@ -351,12 +409,76 @@ describe('ReleasePanelComponent', () => {
         components: [{ componentKey: 'api', digest: served, environmentRevisionId: 'env-api-3' }],
       },
     });
-    expect(root.querySelector('[data-release-digest]')?.textContent).toBe(
-      `sha256:${'4'.repeat(63)}⟨U+202E⟩`,
-    );
-    root.querySelector<HTMLButtonElement>('[data-release-component] button')?.click();
+    expect(fullDigest(root)).toBe(`Digest for component api: sha256:${'4'.repeat(63)}⟨U+202E⟩`);
+    digestCopy(root)?.click();
     await fixture.whenStable();
     expect(writeText).not.toHaveBeenCalled();
-    expect(root.querySelector('[role="status"]')?.textContent).toContain('Copy failed.');
+    expect(root.querySelector('[role="status"]')?.textContent).toContain('Could not copy');
+  });
+
+  it('keeps short names intrinsic and gives digest and revision columns independent budgets', async () => {
+    const { fixture } = await render();
+    const table = fixture.debugElement.query(By.directive(DataTableComponent))
+      .componentInstance as DataTableComponent<unknown>;
+    expect(table.flow()).toBe('page');
+    expect(table.fitToContainer()).toBe(true);
+    expect(table.columns().map((column) => column.width?.preferred)).toEqual([
+      '1%',
+      'auto',
+      'auto',
+    ]);
+    expect(table.columns()[1]?.width?.min).toBe('calc(24ch + 2 * var(--eg-space-4))');
+    expect(table.columns()[2]?.width?.min).toBe('calc(24ch + 2 * var(--eg-space-4))');
+  });
+
+  it('preserves every character of a long supplied name in the compact selector and open options', async () => {
+    const name = `  ${'Customer supplied release name '.repeat(8)}  `;
+    const { fixture, root } = await render({
+      releases: [
+        { releaseId: 'rel-1', name },
+        { releaseId: 'rel-2', name: 'Other' },
+      ],
+    });
+    const trigger = root.querySelector<HTMLButtonElement>('[role="combobox"]')!;
+    expect(trigger.querySelector('bdi')?.textContent).toBe(name);
+    expect(trigger.querySelector('bdi')?.classList.contains('truncate')).toBe(true);
+    expect(root.querySelector('#release-choice-name')?.textContent).toBe(name);
+    trigger.click();
+    await fixture.whenStable();
+    expect(document.querySelector('[role="option"] bdi')?.textContent).toBe(name);
+  });
+
+  it('does not select a fabricated, missing or multiple release value', async () => {
+    const { fixture } = await render({
+      releases: [
+        { releaseId: 'rel-1', name: 'One' },
+        { releaseId: 'rel-2', name: 'Two' },
+      ],
+    });
+    const selected = vi.fn();
+    fixture.componentInstance.selectRelease.subscribe(selected);
+    const select = fixture.debugElement.query(By.css('hlm-select'));
+    for (const value of ['not-served', undefined, ['rel-2']]) {
+      select.triggerEventHandler('valueChange', value);
+    }
+    await fixture.whenStable();
+    expect(selected).not.toHaveBeenCalled();
+    select.triggerEventHandler('valueChange', 'rel-2');
+    expect(selected).toHaveBeenCalledExactlyOnceWith('rel-2');
+  });
+  it('renders every component fact in shared narrow records without clipping the digest', async () => {
+    const { fixture, root } = await render();
+    fixture.debugElement
+      .query(By.directive(DataTableComponent))
+      .injector.get(DataTableComponent)
+      .narrow.set(true);
+    await fixture.whenStable();
+    const records = root.querySelectorAll('.eg-table-record');
+    expect(records).toHaveLength(2);
+    expect(records[0]?.querySelectorAll('dt')).toHaveLength(3);
+    expect(records[0]?.textContent).toContain('api');
+    expect(records[0]?.textContent).toContain(digest('1'));
+    expect(records[0]?.textContent).toContain('env-api-3');
+    expect(root.querySelector('.eg-table-narrow')).not.toBeNull();
   });
 });

@@ -16,17 +16,22 @@ import { ApiTokensStore } from './api-tokens.store';
 import { API_TOKENS_WRITE_COPY } from './api-tokens-write.copy';
 import { ApiTokenWriteErrorComponent } from './api-token-write-error.component';
 import { retryReadyFor } from './api-token-retry';
+import { ApiTokenFactsComponent } from './api-token-facts.component';
+import { API_TOKENS_COPY } from './api-tokens.copy';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 
 @Component({
   selector: 'app-api-token-revoke-dialog',
-  imports: [HlmButton, HlmDialogImports, ApiTokenWriteErrorComponent],
+  imports: [HlmButton, HlmDialogImports, ApiTokenWriteErrorComponent, ApiTokenFactsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <hlm-dialog
       [state]="opened() ? 'open' : 'closed'"
+      [role]="'alertdialog'"
       [closeOnOutsidePointerEvents]="false"
       [disableClose]="true"
       [restoreFocus]="false"
+      [autoFocus]="'[data-api-revoke-cancel]'"
       [aria-label]="copy.revokeTitle"
       (closed)="finishClose()"
     >
@@ -41,8 +46,8 @@ import { retryReadyFor } from './api-token-retry';
           <h2 hlmDialogTitle>{{ copy.revokeTitle }}</h2>
         </header>
         <p hlmDialogDescription>{{ copy.revokeWarning }}</p>
-        <p class="font-semibold">{{ row().name }}</p>
-        <code>{{ row().prefix }}</code>
+        <p class="wrap-anywhere">{{ projectLabel }}: {{ projectName() }}</p>
+        <app-api-token-facts [row]="row()" />
         <app-api-token-write-error [error]="store.revokeError()" />
         <footer hlmDialogFooter class="mt-3">
           <button
@@ -62,6 +67,7 @@ import { retryReadyFor } from './api-token-retry';
             data-api-revoke-submit
             [disabled]="
               store.revoking() ||
+              !viewport.canMutate() ||
               !store.canWrite() ||
               !retryReady() ||
               (store.revokeError() !== null && !store.revokeError()?.retryable)
@@ -80,6 +86,11 @@ export class ApiTokenRevokeDialogComponent {
   readonly dismissed = output<void>();
   readonly completed = output<void>();
   protected readonly store = inject(ApiTokensStore);
+  protected readonly viewport = inject(NarrowMutationPolicy);
+  protected readonly projectLabel = API_TOKENS_COPY.project;
+  protected readonly projectName = (): string =>
+    this.store.session.projects().find((project) => project.id === this.store.selectedProject())
+      ?.name ?? '';
   private readonly document = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly copy = API_TOKENS_WRITE_COPY;
@@ -93,7 +104,13 @@ export class ApiTokenRevokeDialogComponent {
     this.store.resetRevokeError();
   }
   protected async submit(): Promise<void> {
-    if (!this.opened() || !this.store.canWrite() || this.store.revoking() || !this.retryReady())
+    if (
+      !this.opened() ||
+      !this.viewport.allowsMutation() ||
+      !this.store.canWrite() ||
+      this.store.revoking() ||
+      !this.retryReady()
+    )
       return;
     if (this.store.revokeError() && !this.store.revokeError()?.retryable) return;
     this.intent ??= createIntent();
@@ -114,6 +131,7 @@ export class ApiTokenRevokeDialogComponent {
   protected finishClose(): void {
     this.dismissed.emit();
     if (this.opener?.isConnected && !this.opener.matches(':disabled')) this.opener.focus();
-    else this.document.querySelector<HTMLElement>('app-api-tokens-page h2')?.focus();
+    else
+      this.document.querySelector<HTMLElement>('app-api-tokens-page app-section-header')?.focus();
   }
 }

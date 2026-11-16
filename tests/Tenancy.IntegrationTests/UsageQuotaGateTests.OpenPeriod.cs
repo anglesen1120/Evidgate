@@ -18,7 +18,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGateCheck_NullPeriod_IsMeteredAndAnsweredInItsOwnTransactionsMonth()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         var token = TestContext.Current.CancellationToken;
         await using var services = world.Api.Services.CreateAsyncScope();
         var provider = services.ServiceProvider;
@@ -45,7 +45,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGateCheck_NullPeriodBlock_NamesTheRefusingCountersMonth()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         var token = TestContext.Current.CancellationToken;
         await using var services = world.Api.Services.CreateAsyncScope();
         var provider = services.ServiceProvider;
@@ -72,7 +72,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGateCheck_NullPeriodWithoutCounter_AnswersNoMonthInOneStatement()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         world.ClearStatementLog();
 
         var answer = await world.CheckAsync(Request(world, 3m, period: null));
@@ -97,7 +97,7 @@ public sealed partial class UsageQuotaGateTests
             configuration: new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["EVIDGATE:Usage:QuotaGate:Enabled"] = "false",
-            });
+            }, hosts: _hosts);
         var (month, _) = await world.DatabaseMonthsAsync();
         await SeedAsync(world, used: Limit, period: month);
         world.ClearStatementLog();

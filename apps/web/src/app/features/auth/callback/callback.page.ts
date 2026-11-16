@@ -3,6 +3,7 @@
 
 import { ChangeDetectionStrategy, Component, inject, type OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { HlmCardTitle } from '@evidgate/ui/card';
 
 import { SessionStore } from '../../../core/session/session.store';
 import { LoadingPatternComponent } from '../../../shared/ui/states';
@@ -10,7 +11,7 @@ import { validateReturnUrl } from '../../../core/routing/return-url';
 
 @Component({
   selector: 'app-auth-callback',
-  imports: [LoadingPatternComponent],
+  imports: [LoadingPatternComponent, HlmCardTitle],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
@@ -18,10 +19,7 @@ import { validateReturnUrl } from '../../../core/routing/return-url';
       class="callback box-border grid min-h-dvh content-center justify-items-center gap-(--eg-space-4) bg-card px-(--eg-space-5) py-(--eg-space-8) text-center font-sans text-foreground [overflow-wrap:anywhere]"
       aria-labelledby="auth-callback-heading"
     >
-      <h1
-        class="m-0 font-(family-name:--eg-font-display) text-xl font-(weight:--eg-weight-bold)"
-        id="auth-callback-heading"
-      >
+      <h1 hlmCardTitle [size]="pageHeadingSize" id="auth-callback-heading">
         {{ heading }}
       </h1>
       <p
@@ -34,6 +32,7 @@ import { validateReturnUrl } from '../../../core/routing/return-url';
   `,
 })
 export class CallbackPage implements OnInit {
+  readonly pageHeadingSize = 'page' as const;
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly session = inject(SessionStore);

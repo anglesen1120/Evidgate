@@ -8,6 +8,7 @@ import { RouteStubPage } from '../../shell/stub/route-stub.page';
 export const routes: Routes = [
   {
     path: 'revisions/:revisionId',
+    title: $localize`:@@suites.composition.suite-composition:Suite composition`,
     loadComponent: () =>
       import('./composition/suite-composition.component').then(
         (module) => module.SuiteCompositionComponent,

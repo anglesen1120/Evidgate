@@ -6,7 +6,7 @@ import { HlmLabel } from '@evidgate/ui/label';
 
 import { DevSession } from './dev-session';
 
-type SignInState = 'idle' | 'submitting' | 'wrong-secret' | 'unavailable';
+type SignInState = 'idle' | 'submitting' | 'wrong-secret' | 'unavailable' | 'failed';
 
 @Component({
   selector: 'app-dev-sign-in',
@@ -45,7 +45,7 @@ type SignInState = 'idle' | 'submitting' | 'wrong-secret' | 'unavailable';
             [readOnly]="state() === 'submitting'"
             [attr.aria-invalid]="state() === 'wrong-secret' ? 'true' : null"
             [aria-describedby]="
-              state() === 'wrong-secret' || state() === 'unavailable'
+              state() === 'wrong-secret' || state() === 'unavailable' || state() === 'failed'
                 ? 'dev-sign-in-note dev-sign-in-error'
                 : 'dev-sign-in-note'
             "
@@ -78,7 +78,9 @@ type SignInState = 'idle' | 'submitting' | 'wrong-secret' | 'unavailable';
                 ? wrongSecret
                 : state() === 'unavailable'
                   ? unavailable
-                  : ''
+                  : state() === 'failed'
+                    ? failed
+                    : ''
             }}
           </p>
         </form>
@@ -97,6 +99,7 @@ export class DevSignInComponent {
   readonly submitting = $localize`:@@auth.dev.submitting:Signing in and checking your session…`;
   readonly wrongSecret = $localize`:@@auth.dev.wrong-secret:The dev-login secret is incorrect. Try again.`;
   readonly unavailable = $localize`:@@auth.dev.unavailable:Dev sign-in is not enabled. Check the development server configuration.`;
+  readonly failed = $localize`:@@auth.dev.failed:Sign-in could not be completed or your session could not be verified. Check your connection and try again.`;
 
   async submit(event: Event, input: HTMLInputElement): Promise<void> {
     event.preventDefault();
@@ -111,9 +114,13 @@ export class DevSignInComponent {
       await attempt;
       this.state.set('idle');
     } catch (error: unknown) {
-      this.state.set(
-        error instanceof HttpErrorResponse && error.status === 401 ? 'wrong-secret' : 'unavailable',
-      );
+      if (error instanceof HttpErrorResponse && error.url?.endsWith('/v1/dev/session')) {
+        this.state.set(
+          error.status === 401 ? 'wrong-secret' : error.status === 404 ? 'unavailable' : 'failed',
+        );
+      } else {
+        this.state.set('failed');
+      }
     }
   }
 }

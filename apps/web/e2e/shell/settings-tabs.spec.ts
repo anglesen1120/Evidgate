@@ -29,6 +29,7 @@ import {
   settingsTabIds,
   settingsTabPath,
   THEMES,
+  waitForDialogAnimations,
   withVariant,
 } from './support';
 
@@ -225,10 +226,32 @@ test.describe('the Settings shell is WCAG 2.2 AA clean (AC1, 00 §5.6 W9)', () =
     // table in its ready state rather than of a placeholder (09.7.1-T2).
     const members = page.locator('app-members-page');
     await expect(members).toHaveAttribute('data-members-phase', 'ready');
-    const destination = page.locator('app-settings-shell select#settings-destination');
+    const destination = page.locator('app-settings-shell button#settings-destination');
     await expect(destination).toBeVisible();
-    await expect(destination).toHaveValue('members');
-    await expect(destination.locator('option')).toHaveCount(G1_TABS.length);
+    await expect(destination).toHaveRole('combobox');
+    const links = page.locator('app-settings-shell [data-settings-tab]');
+    const labels = (await links.allTextContents()).map((label) => label.trim());
+    const memberLabel = (
+      (await page.locator('[data-settings-tab="members"]').textContent()) ?? ''
+    ).trim();
+    await expect(destination).toHaveText(memberLabel);
+    await destination.click();
+    const listbox = page.getByRole('listbox');
+    await expect(listbox).toHaveAccessibleName(
+      await page.locator('label[for="settings-destination"]').innerText(),
+    );
+    const options = listbox.getByRole('option');
+    await expect(options).toHaveCount(G1_TABS.length);
+    await expect(options).toHaveText(labels);
+    await expect(listbox.getByRole('option', { name: memberLabel, exact: true })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await waitForDialogAnimations(page, 'hlm-select-content[data-state="open"]');
+    await expectNoA11yViolations(page, 'settings destination options 360px en/light');
+    await page.keyboard.press('Escape');
+    await expect(destination).toBeFocused();
+    await expect(listbox).not.toBeVisible();
     for (const link of await page.locator('app-settings-shell [data-settings-tab]').all()) {
       await expect(link).toBeHidden();
     }

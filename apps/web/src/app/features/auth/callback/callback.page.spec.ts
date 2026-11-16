@@ -107,6 +107,15 @@ function setUp(query: Readonly<Record<string, string>>, outcome: FakeSessionOutc
 }
 
 describe('CallbackPage (09.1.1-T5.1)', () => {
+  it('keeps its one callback heading in the shared page role', () => {
+    const { fixture } = setUp({});
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelectorAll('h1')).toHaveLength(1);
+    expect(root.querySelector('#auth-callback-heading')?.getAttribute('data-title-size')).toBe(
+      'page',
+    );
+  });
+
   it('reads only returnUrl: code and state are never touched', async () => {
     const { router, params } = setUp({
       returnUrl: '/orgs/o-1/projects/p-1/overview',

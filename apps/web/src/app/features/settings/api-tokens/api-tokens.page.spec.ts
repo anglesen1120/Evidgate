@@ -2,7 +2,15 @@ import { TestBed } from '@angular/core/testing';
 import type { ApiTokenListResponse, CreateApiTokenRequest } from '@evidgate/sdk';
 import { ApiRequestError } from '../../../core/http/api-error';
 import { createIntent } from '../../../core/http/intent';
-import { CREATED, mount, refusal, ROW, deferred, project } from './api-tokens.test-support';
+import {
+  CREATED,
+  mount,
+  refusal,
+  ROW,
+  deferred,
+  project,
+  chooseTokenProject,
+} from './api-tokens.test-support';
 
 const BODY: CreateApiTokenRequest = {
   name: 'Reader',
@@ -33,6 +41,25 @@ describe('ApiTokensPage states', () => {
     expect(button?.textContent).toContain('Create token');
     button?.click();
     expect(h.store.createOpen()).toBe(true);
+  });
+
+  it('selects a project through Helm options and exposes the complete selected scope', async () => {
+    const h = mount(undefined, {
+      projects: [project('project-1'), project('project-2', 'Other project')],
+    });
+    await h.settle();
+    const trigger = h.root.querySelector<HTMLButtonElement>('#api-tokens-project');
+    expect(trigger?.getAttribute('data-slot')).toBe('select-trigger');
+    trigger?.click();
+    await h.settle();
+    const option = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).find(
+      (item) => item.textContent?.trim() === 'Other project',
+    );
+    expect(option).toBeDefined();
+    option?.click();
+    await h.settle();
+    expect(h.list).toHaveBeenLastCalledWith('project-2', undefined, expect.any(AbortSignal));
+    expect(h.root.querySelector('#api-tokens-project-value')?.textContent).toBe('Other project');
   });
 
   it('omits mutation buttons for a read-only member', async () => {
@@ -72,10 +99,7 @@ describe('ApiTokensPage states', () => {
       query: { project: 'project-1', cursor: 'page-2' },
     });
     await h.settle();
-    const select = h.root.querySelector<HTMLSelectElement>('#api-tokens-project');
-    if (!select) throw new Error('Missing project picker');
-    select.value = 'project-2';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
+    chooseTokenProject(h.fixture, 'project-2');
     await h.settle();
     expect(h.navigate).toHaveBeenCalledWith(
       [],
@@ -135,10 +159,7 @@ describe('ApiTokensPage states', () => {
       query: { project: 'project-1', cursor: 'page-2' },
     });
     await h.settle();
-    const select = h.root.querySelector<HTMLSelectElement>('#api-tokens-project');
-    if (!select) throw new Error('Missing project picker');
-    select.value = 'project-1';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
+    chooseTokenProject(h.fixture, 'project-1');
     await h.settle();
     expect(h.navigate).not.toHaveBeenCalled();
     h.store.reloadFirst();

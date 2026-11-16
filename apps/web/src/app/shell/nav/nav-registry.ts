@@ -342,6 +342,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     permission: 'usage:read',
     area: 'settings',
     label: $localize`:@@shell.nav.quota:Usage & credits`,
+    shortLabel: $localize`:@@shell.nav.quota-short:Usage & credits`,
   },
   {
     id: 'audit',

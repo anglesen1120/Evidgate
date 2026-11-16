@@ -32,7 +32,8 @@ namespace Tenancy.IntegrationTests;
 /// project of another org is invisible to the pre-check instead of being insertable.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed partial class UsageRecordBatchTests
+public sealed partial class UsageRecordBatchTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    : IClassFixture<TenancyHostPool>
 {
     private const string Period = "2026-10";
 
@@ -47,9 +48,11 @@ public sealed partial class UsageRecordBatchTests
     /// <summary>The same instant written from UTC+07:00: the ledger stores the instant, not the offset.</summary>
     private static readonly DateTimeOffset OccurredAtInPlusSeven = OccurredAt.ToOffset(TimeSpan.FromHours(7));
 
-    private readonly PostgresTenancyFixture _fixture;
+    private readonly PostgresTenancyFixture _fixture = fixture;
 
-    public UsageRecordBatchTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    // Reuse both host variants across this class's tenant-isolated shared-database tests.
+    // World disposal returns each lease; the class fixture owns the hosts' final teardown.
+    private readonly TenancyHostPool _hosts = hosts;
 
     /// <summary>
     /// One database and two hosts: <see cref="Api"/> resolves the tenant through the production filter, so the registry
@@ -78,15 +81,14 @@ public sealed partial class UsageRecordBatchTests
     {
         var database = await _fixture.SharedDatabaseAsync();
 
-        var connectionString = _fixture.AppConnectionString(database);
-        var api = TenancyApiFactory.RealResolver(connectionString);
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
 
         // The write path's host: the evaluator is not what this suite tests.
-        var commands = TenancyApiFactory.GrantAll(connectionString);
+        var commands = _hosts.GrantAll(database);
 
         return new World(api, client, commands, database, user, org, project);
     }

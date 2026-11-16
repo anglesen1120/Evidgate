@@ -118,9 +118,10 @@ Legend: ✅ verified with a link · ⚠️ unverified · `[OPEN]` gate not built
 | **A1** | **State.** <br>• Feature state is an `@ngrx/signals` `signalStore` (W4). No hand-rolled `@Injectable` stores. <br>• Shared behaviour is a store feature (`withCursorPaging()`, `withRetryAfter()`) `[OPEN]`, not a copied block. |
 | **A2** | **Effects are for leaving the signal graph only** (DOM, storage, logging). <br>• Derived values use `computed()`. <br>• Values that are derived but also user-writable use `linkedSignal()`. <br>• Async loads keyed on signals use `resource()`/`rxResource()`. <br>• Using an effect to propagate state is discouraged by the framework ✅ [angular.dev: effects](https://angular.dev/guide/signals/effect). <br>• Generation counters for stale async results are a smell that a resource is missing. |
 | **A3** | **Route data.** Route params and query params reach components through `withComponentInputBinding()` + `input()` or `toSignal(paramMap)`. Do not read them once from `route.snapshot`, and do not subscribe manually. |
-| **A4** | **Shared UI primitives.** <br>• Dialogs use CDK `Dialog`, with one focus-trap mechanism. <br>• Lists over 200 rows use `app-data-table`. <br>• Heavy panels use `@defer` (W2). <br>• Don't write `standalone: true`; it is the default. |
+| **A4** | **Shared UI primitives.** <br>• Dialogs use the owned Helm dialog on Brain (`@evidgate/ui/dialog`); [ADR-0011](../adr/0011-spartan-tailwind-foundation.md) is binding, with one focus-trap mechanism. <br>• Lists over 200 rows use `app-data-table`. <br>• Heavy panels use `@defer` (W2). <br>• Don't write `standalone: true`; it is the default. |
 | **A5** | **Permissions in the UI.** <br>• Permission codes come from generated TS constants (from `contracts/permissions.json`), never string literals. <br>• Guards that redirect to sign-in always pass the full original `returnUrl`. |
 | **A6** | **Specs test behaviour.** <br>• Use CDK component harnesses (W9). <br>• No `componentInstance['private']()` and no casting to reach private members. |
+| **A7** | **UI format.** Follow [`docs/engineering/ui-rules.md`](ui-rules.md) (UI1–UI55): framework components only, compact chips, responsive tables, long-content recovery and frozen mockup conformance. |
 
 ---
 

@@ -23,7 +23,6 @@ import { parse as parseYaml } from 'yaml';
 
 import {
   DEFAULT_ADVISORY_POLICY,
-  abbreviatePolicyHash,
   activationInstantLabel,
   policyHashLabel,
   previewDefaultPolicy,
@@ -177,24 +176,17 @@ describe('previewDefaultPolicy', () => {
   });
 });
 
-describe('abbreviatePolicyHash', () => {
-  it('shows the sha256 prefix and twelve hex characters of a full digest', () => {
-    expect(
-      abbreviatePolicyHash('sha256:9f2c1d7b4a6e8f0a1b2c3d4e5f60718293a4b5c6d7e8f9012345678'),
-    ).toBe('sha256:9f2c1d7b4a6e…');
+describe('policyHashLabel', () => {
+  it('preserves every digest character, with or without a sha256 prefix', () => {
+    const digest = '9f2c1d7b4a6e8f0a1b2c3d4e5f60718293a4b5c6d7e8f901234567890abcdef0123';
+    expect(policyHashLabel(`sha256:${digest}`)).toBe(`sha256:${digest}`);
+    expect(policyHashLabel(digest)).toBe(digest);
   });
 
-  it('leaves an already short value whole and invents no prefix', () => {
-    expect(abbreviatePolicyHash('sha256:9f2c1d7b4a6e')).toBe('sha256:9f2c1d7b4a6e');
-    expect(abbreviatePolicyHash('9f2c1d7b4a6e8f0a1b2c3d4e')).toBe('9f2c1d7b4a6e…');
-  });
-
-  it('sanitises before it counts, so an invisible character is never shown as digest text', () => {
-    // Two format characters inside the first twelve: the shown digest is still twelve real
-    // characters, and neither override reaches the page.
-    const value = abbreviatePolicyHash('sha256:9f2c\u202E\u200D1d7b4a6e8f0a');
-    expect(value).toBe('sha256:9f2c1d7b4a6e…');
-    expect([...value].some((character) => /\p{Cf}/u.test(character))).toBe(false);
+  it('removes invisible characters without abbreviating the remaining provenance', () => {
+    expect(policyHashLabel(' sha256:9f2c\u202E\u200D1d7b4a6e8f0a ')).toBe(
+      'sha256:9f2c1d7b4a6e8f0a',
+    );
   });
 });
 
@@ -245,10 +237,9 @@ describe('the display guards for a member the answer may not carry (F5)', () => 
     expect(sanitizedIdentifier(42)).toBeNull();
   });
 
-  it('abbreviates a hash it can read and answers null for one it cannot', () => {
-    expect(policyHashLabel('sha256:9f2c1d7b4a6e8f0a1b2c3d4e5f60718293a4b5c6d7e8f901234')).toBe(
-      'sha256:9f2c1d7b4a6e…',
-    );
+  it('keeps a readable hash whole and answers null for one it cannot read', () => {
+    const hash = 'sha256:9f2c1d7b4a6e8f0a1b2c3d4e5f60718293a4b5c6d7e8f901234';
+    expect(policyHashLabel(hash)).toBe(hash);
     expect(policyHashLabel(undefined)).toBeNull();
     expect(policyHashLabel({ hash: 'x' })).toBeNull();
   });

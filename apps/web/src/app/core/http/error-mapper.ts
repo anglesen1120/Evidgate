@@ -10,8 +10,8 @@
 // — 304, 500 and any other 4xx or 5xx — because guessing there would invent a UI state for
 // something no Evidgate handler produced.
 //
-// Messages and details are server text; they are returned as data and never interpolated into
-// markup or logged here. Nothing from the request (body, query, header value) is copied in.
+// Server messages and details remain unchanged data, never interpolated into markup or logged.
+// Client-owned fallback messages are localized; no request data is copied into either path.
 
 import { isErrorEnvelope } from '@evidgate/sdk';
 import type { ErrorEnvelopeBody, ErrorEnvelopeDetail } from '@evidgate/sdk';
@@ -168,7 +168,7 @@ export function mapNetworkError(): ApiError {
     kind: 'network',
     status: 0,
     code: CODE_NETWORK,
-    message: 'The request did not reach the API; no response was received.',
+    message: $localize`:@@core.http.error.network:The request did not reach the API; no response was received.`,
     requestId: null,
     retryable: true,
     details: NO_DETAILS,
@@ -189,8 +189,7 @@ export function mapTimeoutError(): ApiError {
     kind: 'timeout',
     status: 0,
     code: CODE_TIMEOUT,
-    message:
-      'The API did not answer within the request deadline; the request may or may not have reached the server.',
+    message: $localize`:@@core.http.error.timeout:The API did not answer within the request deadline; the request may or may not have reached the server.`,
     requestId: null,
     retryable: true,
     details: NO_DETAILS,
@@ -221,7 +220,7 @@ export function mapApiError(input: {
       kind: 'unexpected',
       status,
       code: CODE_UNEXPECTED_STATUS,
-      message: 'A success status reached the error mapper; read it through the API gateway.',
+      message: $localize`:@@core.http.error.unexpected-status:A success status reached the error mapper; read it through the API gateway.`,
       requestId: null,
       retryable: false,
       details: NO_DETAILS,
@@ -237,7 +236,7 @@ export function mapApiError(input: {
     kind: kindWithoutEnvelope(status),
     status,
     code: CODE_ENVELOPE_MISSING,
-    message: `The API answered ${status} without the 00 §9.2 error envelope.`,
+    message: $localize`:@@core.http.error.envelope-missing:The API answered ${status}:STATUS: without the 00 §9.2 error envelope.`,
     requestId: null,
     // The two 00 §9.2 backoff statuses and the transient gateway pair are worth the same-intent
     // retry even when the body carries no envelope.

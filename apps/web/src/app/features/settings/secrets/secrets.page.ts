@@ -10,19 +10,33 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { NavigationStart, Router } from '@angular/router';
 import type { IngestTokenView } from '@evidgate/sdk';
 import { HlmAlert } from '@evidgate/ui/alert';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmInput } from '@evidgate/ui/input';
+import { HlmSelectImports } from '@evidgate/ui/select';
+import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmLabel } from '@evidgate/ui/label';
 import { SessionStore } from '../../../core/session/session.store';
 import { RetryAfterComponent } from '../../../shared/ui/conflict/retry-after.component';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
-import { SecretReferenceListComponent, SECRETS_COPY } from './secret-reference-list.component';
+import { SecretReferenceListComponent } from './secret-reference-list.component';
+import { SECRETS_COPY } from './secrets.copy';
+import { RotateConfirmDialogComponent } from './rotate-confirm-dialog.component';
+import { DesktopRequiredNoticeComponent } from '../../../shared/ui/narrow/desktop-required-notice.component';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { RotateRevealDialogComponent } from './rotate-reveal-dialog.component';
 import { SecretsStore } from './secrets.store';
 import { CiBindingListComponent } from './ci-binding-list.component';
+
+type RotationTarget = {
+  readonly reference: IngestTokenView;
+  readonly opener: HTMLElement;
+  readonly projectId: string;
+  readonly projectName: string;
+};
 
 @Component({
   selector: 'app-secrets-page',
@@ -34,7 +48,10 @@ import { CiBindingListComponent } from './ci-binding-list.component';
     CiBindingListComponent,
     HlmAlert,
     HlmButton,
-    HlmInput,
+    HlmSelectImports,
+    HlmCardImports,
+    RotateConfirmDialogComponent,
+    DesktopRequiredNoticeComponent,
     HlmLabel,
   ],
   providers: [SecretsStore, RevealSlot],
@@ -43,158 +60,7 @@ import { CiBindingListComponent } from './ci-binding-list.component';
     class:
       'block min-w-0 font-sans text-sm text-foreground wrap-anywhere [&_p]:m-0 [&_code]:font-mono',
   },
-  template: `
-    <header class="mb-4 grid min-w-0 gap-2">
-      <h2
-        #heading
-        tabindex="-1"
-        class="m-0 font-[family-name:var(--eg-font-display)] text-xl leading-[var(--eg-leading-2xl)] md:text-2xl focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
-      >
-        {{ copy.title }}
-      </h2>
-      <p class="text-muted-foreground">{{ copy.description }}</p>
-    </header>
-    @if (session.projects().length > 0) {
-      <div class="mb-4 grid min-w-0 gap-2">
-        <label hlmLabel for="secrets-project">{{ copy.project }}</label>
-        <select
-          hlmInput
-          class="min-h-[var(--eg-control-touch)]"
-          id="secrets-project"
-          [value]="selectedProject()"
-          (change)="selectProject($event)"
-        >
-          @for (project of session.projects(); track project.id) {
-            <option [value]="project.id">{{ project.name }}</option>
-          }
-        </select>
-      </div>
-    }
-    @if (canWrite()) {
-      <p class="mb-3! text-muted-foreground md:hidden">{{ copy.narrow }}</p>
-    }
-    <p role="status">
-      @if (store.rotateState().phase === 'done') {
-        {{ copy.saved }}
-      }
-    </p>
-    @if (store.rotateState().error; as error) {
-      <div hlmAlert [variant]="'destructive'" class="my-2 bg-[var(--eg-danger-bg)]" role="alert">
-        <p>{{ error.message }}</p>
-        <code>{{ error.code }}</code>
-      </div>
-      @if (error.kind === 'rate_limited') {
-        <app-retry-after
-          [kind]="error.kind"
-          [retryAfterSeconds]="error.retryAfterSeconds"
-          [retryEligible]="
-            rotationRetryReady() && error.retryable && canWrite() && !busy() && !store.rotating()
-          "
-          [busy]="busy() || store.rotating()"
-          [code]="error.code"
-          [requestId]="error.requestId"
-          (retry)="retryRotation()"
-        />
-      } @else if (error.kind === 'unavailable') {
-        <p>{{ copy.rotateUnavailableHint }}</p>
-        <button
-          hlmBtn
-          [variant]="'outline'"
-          type="button"
-          data-rotation-reload
-          [disabled]="busy() || store.rotating() || !readRetryReady()"
-          (click)="reload()"
-        >
-          {{ copy.reload }}
-        </button>
-      }
-    }
-    @if (store.loadError(); as error) {
-      <div hlmAlert [variant]="'destructive'" class="my-2 bg-[var(--eg-danger-bg)]" role="alert">
-        <p>{{ error.message }}</p>
-        <code>{{ error.code }}</code>
-      </div>
-    }
-    <app-request-state
-      [status]="status()"
-      [error]="store.loadError()"
-      [empty]="!selectedProject() || store.rows().length === 0"
-      [emptyTitle]="copy.emptyTitle"
-      [emptyDescription]="selectedProject() ? copy.emptyDescription : copy.noProjects"
-      [retryEligible]="
-        readRetryReady() && (store.loadError()?.retryable ?? false) && !store.rotating()
-      "
-      (retry)="reload()"
-    >
-      <section [attr.aria-busy]="paging() || busy()">
-        <app-secret-reference-list
-          [rows]="visibleRows()"
-          [canWrite]="canWrite()"
-          [busy]="busy() || store.rotating()"
-          [blocked]="!rotationRetryReady()"
-          [busyId]="rotatingId()"
-          (rotate)="rotate($event)"
-        />
-        @if (pagingFailure()) {
-          <p hlmAlert [variant]="'destructive'" class="my-2! bg-[var(--eg-danger-bg)]" role="alert">
-            {{ copy.pagingFailure }}
-          </p>
-        }
-        @if (store.loadError(); as error) {
-          @if (error.kind === 'rate_limited' || error.kind === 'unavailable') {
-            <app-retry-after
-              [kind]="error.kind"
-              [retryAfterSeconds]="error.retryAfterSeconds"
-              [retryEligible]="readRetryReady() && error.retryable && !paging()"
-              [busy]="paging()"
-              [code]="error.code"
-              [requestId]="error.requestId"
-              (retry)="next()"
-            />
-          }
-        }
-        <nav class="mt-3 flex flex-wrap items-center gap-2" [attr.aria-label]="copy.pagesLabel">
-          @if (offset() > 0) {
-            <button
-              hlmBtn
-              [variant]="'outline'"
-              type="button"
-              [disabled]="paging() || busy()"
-              (click)="previous()"
-            >
-              {{ copy.previous }}
-            </button>
-          }
-          @if (hasNext()) {
-            <button
-              hlmBtn
-              [variant]="'outline'"
-              type="button"
-              data-load-more
-              [disabled]="paging() || busy() || !readRetryReady()"
-              [attr.aria-busy]="paging()"
-              (click)="next()"
-            >
-              {{ cachedNext() ? copy.next : copy.more }}
-            </button>
-          }
-        </nav>
-      </section>
-    </app-request-state>
-    @if (canReadBindings() && selectedProject()) {
-      <app-ci-binding-list
-        [rows]="store.ciBindings()"
-        [phase]="store.ciBindingsPhase()"
-        [error]="store.ciBindingsError()"
-        [hasMore]="store.hasMoreCiBindings()"
-        [loadingMore]="bindingsPaging()"
-        [pagingFailure]="bindingsPagingFailure()"
-        (retry)="reloadBindings()"
-        (loadMore)="moreBindings()"
-      />
-    }
-    <app-rotate-reveal-dialog />
-  `,
+  templateUrl: './secrets.page.html',
 })
 export class SecretsPage {
   protected readonly store = inject(SecretsStore);
@@ -202,6 +68,11 @@ export class SecretsPage {
   private readonly slot = inject(RevealSlot);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly copy = SECRETS_COPY;
+  protected readonly viewport = inject(NarrowMutationPolicy);
+  protected readonly sectionSize = 'section' as const;
+  protected readonly projectLabel = (value: unknown): string =>
+    this.session.projects().find((project) => project.id === value)?.name ?? '';
+  protected readonly rotationTarget = signal<RotationTarget | null>(null);
   protected readonly selectedProject = signal<string | null>(null);
   protected readonly canWrite = computed(() => this.session.has('ingest_token:write'));
   protected readonly canReadBindings = computed(() => this.session.has('project:read'));
@@ -241,6 +112,14 @@ export class SecretsPage {
   private retryTarget: { reference: IngestTokenView; opener: HTMLElement } | null = null;
 
   constructor() {
+    inject(Router, { optional: true })
+      ?.events.pipe(takeUntilDestroyed())
+      .subscribe((event) => {
+        if (event instanceof NavigationStart) this.clearScope();
+      });
+    effect(() => {
+      if (!this.canWrite()) untracked(() => this.clearScope());
+    });
     effect(() => {
       const projects = this.session.projects();
       const selected = this.selectedProject();
@@ -292,9 +171,8 @@ export class SecretsPage {
     });
     this.destroyRef.onDestroy(() => this.clearScope());
   }
-  protected selectProject(event: Event): void {
-    if (!(event.target instanceof HTMLSelectElement)) return;
-    const id = event.target.value;
+  protected selectProject(id: unknown): void {
+    if (typeof id !== 'string' || id === this.selectedProject()) return;
     if (!this.session.projects().some((project) => project.id === id)) return;
     this.clearScope();
     this.selectedProject.set(id);
@@ -341,17 +219,35 @@ export class SecretsPage {
       if (project === this.selectedProject()) this.bindingsPaging.set(false);
     }
   }
-  protected async rotate(target: {
-    reference: IngestTokenView;
-    opener: HTMLElement;
-  }): Promise<void> {
+  protected requestRotation(target: { reference: IngestTokenView; opener: HTMLElement }): void {
+    const projectId = this.selectedProject();
+    if (!projectId || this.rotationTarget() || !this.rotationAllowed(target.reference.id)) return;
+    this.rotationTarget.set({ ...target, projectId, projectName: this.projectLabel(projectId) });
+  }
+  protected cancelRotation(): void {
+    const opener = this.rotationTarget()?.opener;
+    this.rotationTarget.set(null);
+    if (opener?.isConnected && !opener.matches(':disabled')) opener.focus();
+    else this.heading().nativeElement.focus();
+  }
+  private rotationAllowed(id: string): boolean {
+    return (
+      this.viewport.allowsMutation() &&
+      this.canWrite() &&
+      !this.busy() &&
+      !this.store.rotating() &&
+      this.rotationRetryReady() &&
+      this.session.projects().some((project) => project.id === this.selectedProject()) &&
+      this.store.rows().some((row) => row.id === id && row.status === 'active')
+    );
+  }
+  protected async confirmRotation(): Promise<void> {
+    const target = this.rotationTarget();
+    this.rotationTarget.set(null);
     if (
-      this.busy() ||
-      this.store.rotating() ||
-      !this.rotationRetryReady() ||
-      !this.canWrite() ||
-      target.reference.status !== 'active' ||
-      !this.selectedProject()
+      !target ||
+      target.projectId !== this.selectedProject() ||
+      !this.rotationAllowed(target.reference.id)
     )
       return;
     const generation = this.generation;
@@ -382,7 +278,7 @@ export class SecretsPage {
       this.store.rotateState().error?.kind === 'rate_limited' &&
       this.store.rotateState().error?.retryable
     )
-      void this.rotate(this.retryTarget);
+      this.requestRotation(this.retryTarget);
   }
   protected previous(): void {
     this.offset.update((value) => Math.max(0, value - 200));
@@ -405,6 +301,7 @@ export class SecretsPage {
   }
   private clearScope(): void {
     this.generation++;
+    this.rotationTarget.set(null);
     this.dialog()?.close(false);
     this.slot.clear();
     this.store.resetRotation();

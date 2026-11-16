@@ -29,6 +29,8 @@ internal static class CatalogModule
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<CreateSuiteCommand>, CreateSuiteCommandValidator>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<CreateFixtureCommand>, CreateFixtureCommandValidator>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<CreateFixtureRevisionCommand>, CreateFixtureRevisionCommandValidator>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<PrepareGitRepoBindingQuery>, PrepareGitRepoBindingQueryValidator>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<RegisterGitRepoBindingCommand>, RegisterGitRepoBindingCommandValidator>());
 
         // The sidecar reader validates against contracts/catalog/sidecar.v1.json; the compiled set is built on first
         // use, so a host that never syncs a tree pays nothing at start-up.
@@ -47,6 +49,11 @@ internal static class CatalogModule
         // The suite write path asks this for the fixture references a revision authors; it reads inside the caller's
         // tenant transaction, like every other catalog read.
         services.TryAddScoped<IFixtureRegistry, FixtureRegistry>();
+
+        // Repository bindings: the store writes inside the caller's tenant transaction, and the registration flow
+        // calls GitHub between its two units, so it is resolved per request rather than owned by a handler.
+        services.TryAddScoped<IGitRepoBindingStore, GitRepoBindingStore>();
+        services.TryAddScoped<GitRepoBindingRegistration>();
 
         return services;
     }

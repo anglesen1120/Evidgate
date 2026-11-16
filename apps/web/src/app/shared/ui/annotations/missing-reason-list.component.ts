@@ -1,9 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmButton } from '@evidgate/ui/button';
-import { hlm } from '@evidgate/ui/utils';
 
-import { BADGE_CLASSES } from '../chips/badge-classes';
+import { CopyableIdentifierComponent } from '../values/copyable-identifier.component';
 
 /** Presentation data, not a wire response: href exists only when the caller has a real target. */
 export type MissingReason = {
@@ -15,7 +13,7 @@ export type MissingReason = {
 @Component({
   selector: 'app-missing-reason-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HlmBadge, HlmButton],
+  imports: [HlmButton, CopyableIdentifierComponent],
   host: { class: 'block min-w-0 font-sans text-sm text-foreground wrap-anywhere' },
   template: `
     @if (heading(); as title) {
@@ -27,14 +25,15 @@ export type MissingReason = {
         [attr.aria-label]="heading() || listLabel"
       >
         @for (reason of safeReasons(); track $index) {
-          <li class="reason min-w-0 whitespace-normal wrap-anywhere">
-            <code
-              hlmBadge
-              [variant]="'outline'"
-              class="reason-code me-(--eg-space-3)"
-              [class]="reasonBadgeClasses"
-              >{{ reason.code }}</code
-            >
+          <li
+            class="reason flex min-w-0 flex-col items-start gap-(--eg-space-2) whitespace-normal wrap-anywhere"
+          >
+            <app-copyable-identifier
+              class="reason-code w-full"
+              [value]="reason.code"
+              [label]="codeLabel"
+              [truncate]="false"
+            />
             @if (reason.href) {
               <a
                 hlmBtn
@@ -62,7 +61,7 @@ export class MissingReasonList {
   /** Caller-supplied headings must already be localized. */
   readonly heading = input<string>();
   protected readonly listLabel = $localize`:@@shared.missing-reason-list.label:Missing evidence reasons`;
-  protected readonly reasonBadgeClasses = hlm(BADGE_CLASSES, 'font-mono text-xs font-normal');
+  protected readonly codeLabel = $localize`:@@shared.missing-reason-list.code:Reason code`;
 
   protected readonly safeReasons = computed(() =>
     this.reasons().map((reason) => {

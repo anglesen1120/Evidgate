@@ -1,142 +1,174 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 import type { IngestTokenView } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmCard } from '@evidgate/ui/card';
+import { HlmCardImports } from '@evidgate/ui/card';
+import { HlmInput } from '@evidgate/ui/input';
+import { HlmLabel } from '@evidgate/ui/label';
+import { HlmSelectImports } from '@evidgate/ui/select';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
+import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
+import { DesktopMutationDirective } from '../../../shared/ui/narrow/desktop-mutation.directive';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
+import { EmptyPatternComponent } from '../../../shared/ui/states/empty-pattern.component';
 import { RotationReminderChipComponent } from './rotation-reminder-chip.component';
-
-export const SECRETS_COPY = {
-  title: $localize`:@@settings.secrets.title:Secret references`,
-  description: $localize`:@@settings.secrets.description:Inspect reference metadata and rotation timing. Current credential values cannot be fetched or displayed.`,
-  project: $localize`:@@settings.secrets.project:Project`,
-  scope: $localize`:@@settings.secrets.scope:Resolution scope`,
-  prefix: $localize`:@@settings.secrets.prefix:Token prefix`,
-  status: $localize`:@@settings.secrets.status:Rotation state`,
-  expires: $localize`:@@settings.secrets.expires:Expires · UTC`,
-  overlap: $localize`:@@settings.secrets.overlap:Overlap ends · UTC`,
-  used: $localize`:@@settings.secrets.used:Last used · UTC`,
-  created: $localize`:@@settings.secrets.created:Created · UTC`,
-  unavailable: $localize`:@@settings.secrets.unavailable:Unavailable`,
-  noExpiry: $localize`:@@settings.secrets.no-expiry:No expiry`,
-  noOverlap: $localize`:@@settings.secrets.no-overlap:No overlap window`,
-  neverUsed: $localize`:@@settings.secrets.never-used:Not used yet`,
-  rotate: $localize`:@@settings.secrets.rotate:Rotate credential`,
-  submitting: $localize`:@@settings.secrets.submitting:Rotating…`,
-  emptyTitle: $localize`:@@settings.secrets.empty-title:No secret references`,
-  emptyDescription: $localize`:@@settings.secrets.empty-description:Ingest token references will appear here for the selected project.`,
-  noProjects: $localize`:@@settings.secrets.no-projects:No projects available in this organization.`,
-  more: $localize`:@@settings.secrets.more:Load more references`,
-  previous: $localize`:@@settings.secrets.previous:Previous references`,
-  next: $localize`:@@settings.secrets.next:Next references`,
-  pagingFailure: $localize`:@@settings.secrets.paging-failure:The next page could not be loaded. References already shown are unchanged.`,
-  saved: $localize`:@@settings.secrets.saved:Rotation recorded. Update your downstream CI with the new credential and verify it there.`,
-  narrow: $localize`:@@settings.secrets.narrow:Use a wider screen to rotate credentials.`,
-  pagesLabel: $localize`:@@settings.secrets.pages-label:Secret references pages`,
-  rotateUnavailableHint: $localize`:@@settings.secrets.rotate-unavailable-hint:The rotation may have been applied. Reload the list and check the status before rotating again.`,
-  reload: $localize`:@@settings.secrets.reload:Reload`,
-};
+import { SecretReferenceFactsComponent } from './secret-reference-facts.component';
+import { SECRETS_COPY, secretStatusLabel } from './secrets.copy';
 
 @Component({
   selector: 'app-secret-reference-list',
-  imports: [StatusPillComponent, RotationReminderChipComponent, HlmButton, HlmCard],
+  imports: [
+    StatusPillComponent,
+    RotationReminderChipComponent,
+    HlmButton,
+    HlmCardImports,
+    HlmInput,
+    HlmLabel,
+    HlmSelectImports,
+    DataTableValueComponent,
+    DesktopMutationDirective,
+    SecretReferenceFactsComponent,
+    EmptyPatternComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: {
-    class:
-      'block min-w-0 [&_h3]:m-0 [&_dd]:m-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_code]:font-mono',
-  },
-  // Inline keeps the explicit metadata bindings visible to the secret-rendering lint rule.
+  host: { class: 'block min-w-0 [&_code]:font-mono' },
   template: `
-    <ul class="m-0 grid list-none gap-3 p-0" [attr.aria-label]="copy.title">
-      @for (row of rows(); track row.id) {
-        <li hlmCard class="min-w-0 gap-3 p-3 wrap-anywhere md:p-4" data-secret-reference>
-          <div class="flex flex-wrap items-start gap-2 md:items-center">
-            <h3 class="min-w-0 basis-full text-base md:basis-auto md:grow">{{ row.name }}</h3>
-            <app-status-pill
-              [tone]="
-                row.status === 'active'
-                  ? 'success'
-                  : row.status === 'expired'
-                    ? 'danger'
-                    : 'neutral'
-              "
-              [dimension]="copy.status"
-              [label]="statusLabel(row.status)"
+    <div class="grid min-w-0 gap-[var(--eg-space-7)] xl:grid-cols-2">
+      <section hlmCard class="min-w-0" aria-labelledby="secret-list-title">
+        <header hlmCardHeader>
+          <h3 hlmCardTitle id="secret-list-title">{{ copy.title }}</h3>
+          <p hlmCardDescription>{{ copy.loadedOnly }}</p>
+        </header>
+        <div hlmCardContent class="grid min-w-0 gap-[var(--eg-space-5)]">
+          <div class="grid min-w-0 gap-[var(--eg-space-2)]">
+            <label hlmLabel for="secret-reference-search">{{ copy.search }}</label>
+            <input
+              hlmInput
+              id="secret-reference-search"
+              type="search"
+              [value]="query()"
+              (input)="search($event)"
             />
-            <app-rotation-reminder-chip [reference]="row" />
-          </div>
-          <dl class="m-0 grid min-w-0 gap-3 md:grid-cols-2 [&>div]:min-w-0">
-            <div>
-              <dt>{{ copy.scope }}</dt>
-              <dd>
-                @for (scope of row.scopes; track scope) {
-                  <code class="block">{{ scope }}</code>
-                } @empty {
-                  {{ copy.unavailable }}
-                }
-              </dd>
-            </div>
-            <div>
-              <dt>{{ copy.prefix }}</dt>
-              <dd>
-                <code>{{ row.prefix }}</code>
-              </dd>
-            </div>
-            <div>
-              <dt>{{ copy.expires }}</dt>
-              <dd>
-                @if (row.expires_at; as date) {
-                  <time [attr.datetime]="date">{{ date }}</time>
-                } @else {
-                  {{ copy.noExpiry }}
-                }
-              </dd>
-            </div>
-            <div>
-              <dt>{{ copy.overlap }}</dt>
-              <dd>
-                @if (row.overlap_ends_at; as date) {
-                  <time [attr.datetime]="date">{{ date }}</time>
-                } @else {
-                  {{ copy.noOverlap }}
-                }
-              </dd>
-            </div>
-            <div>
-              <dt>{{ copy.used }}</dt>
-              <dd>
-                @if (row.last_used_at; as date) {
-                  <time [attr.datetime]="date">{{ date }}</time>
-                } @else {
-                  {{ copy.neverUsed }}
-                }
-              </dd>
-            </div>
-            <div>
-              <dt>{{ copy.created }}</dt>
-              <dd>
-                <time [attr.datetime]="row.created_at">{{ row.created_at }}</time>
-              </dd>
-            </div>
-          </dl>
-          @if (canWrite() && row.status === 'active') {
-            <button
-              hlmBtn
-              [variant]="'outline'"
-              type="button"
-              class="hidden justify-self-start md:inline-flex"
-              data-rotate
-              [disabled]="busy() || blocked()"
-              [attr.data-reference-id]="row.id"
-              [attr.aria-label]="rotateLabel(row.name)"
-              [attr.aria-busy]="busy() && busyId() === row.id"
-              (click)="requestRotate(row, $event)"
+            <label hlmLabel for="secret-reference-state">{{ copy.status }}</label>
+            <hlm-select
+              [value]="state()"
+              [itemToString]="stateLabel"
+              (valueChange)="filterState($event)"
             >
-              {{ busy() && busyId() === row.id ? copy.submitting : copy.rotate }}
-            </button>
-          }
-        </li>
+              <hlm-select-trigger [buttonId]="'secret-reference-state'" class="w-full">
+                <hlm-select-value [placeholder]="copy.allStates" />
+              </hlm-select-trigger>
+              <hlm-select-content *hlmSelectPortal [aria-label]="copy.status">
+                <hlm-select-item [value]="''">{{ copy.allStates }}</hlm-select-item>
+                @for (status of states; track status) {
+                  <hlm-select-item [value]="status">{{ statusLabel(status) }}</hlm-select-item>
+                }
+              </hlm-select-content>
+            </hlm-select>
+          </div>
+          <ul
+            class="m-0 grid min-w-0 list-none gap-[var(--eg-space-4)] p-0"
+            [attr.aria-label]="copy.title"
+          >
+            @for (row of filtered(); track row.id) {
+              <li
+                hlmCard
+                [size]="'sm'"
+                class="min-w-0 gap-[var(--eg-space-3)] p-[var(--eg-space-4)]"
+                data-secret-reference
+                [attr.data-selected]="selected()?.id === row.id"
+              >
+                <div class="flex min-w-0 flex-wrap items-center gap-[var(--eg-space-3)]">
+                  <h3 class="m-0 min-w-0 flex-1 text-sm">
+                    <app-data-table-value [value]="row.name" [truncate]="true" />
+                  </h3>
+                  <app-status-pill
+                    [tone]="
+                      row.status === 'active'
+                        ? 'success'
+                        : row.status === 'expired'
+                          ? 'danger'
+                          : 'neutral'
+                    "
+                    [label]="statusLabel(row.status)"
+                  />
+                  <app-rotation-reminder-chip [reference]="row" />
+                </div>
+                <code class="wrap-anywhere">{{ row.prefix }}</code>
+                <div class="flex flex-wrap gap-[var(--eg-space-3)]">
+                  <button
+                    hlmBtn
+                    [variant]="'outline'"
+                    type="button"
+                    data-secret-inspect
+                    [attr.aria-pressed]="selected()?.id === row.id"
+                    [attr.aria-label]="inspectLabel(row.name)"
+                    (click)="selectedId.set(row.id)"
+                  >
+                    {{ copy.inspect }}
+                  </button>
+                  @if (canWrite() && row.status === 'active') {
+                    <button
+                      *appDesktopMutation
+                      hlmBtn
+                      [variant]="'ghost'"
+                      type="button"
+                      class="w-fit self-start"
+                      data-rotate
+                      [disabled]="busy() || blocked()"
+                      [attr.data-reference-id]="row.id"
+                      [attr.aria-label]="rotateLabel(row.name)"
+                      [attr.aria-busy]="busy() && busyId() === row.id"
+                      (click)="requestRotate(row, $event)"
+                    >
+                      {{ busy() && busyId() === row.id ? copy.submitting : copy.rotate }}
+                    </button>
+                  }
+                </div>
+                @if (viewport.narrow()) {
+                  <app-secret-reference-facts [reference]="row" />
+                }
+              </li>
+            } @empty {
+              <li>
+                <app-empty-pattern
+                  [bare]="true"
+                  [title]="copy.noMatches"
+                  [description]="copy.loadedOnly"
+                />
+                <button hlmBtn [variant]="'outline'" type="button" (click)="clearFilters()">
+                  {{ copy.clear }}
+                </button>
+              </li>
+            }
+          </ul>
+        </div>
+      </section>
+      @if (selected(); as row) {
+        <section
+          hlmCard
+          class="min-w-0 self-start"
+          aria-labelledby="secret-detail-title"
+          data-secret-detail
+        >
+          <header hlmCardHeader>
+            <h3 hlmCardTitle id="secret-detail-title" class="wrap-anywhere">{{ row.name }}</h3>
+            <p hlmCardDescription>{{ copy.lifecycle }}</p>
+          </header>
+          <div hlmCardContent class="grid min-w-0 gap-[var(--eg-space-5)]">
+            <app-secret-reference-facts [reference]="row" />
+            <p class="m-0 text-muted-foreground">{{ copy.metadata }}</p>
+          </div>
+        </section>
       }
-    </ul>
+    </div>
   `,
 })
 export class SecretReferenceListComponent {
@@ -146,26 +178,48 @@ export class SecretReferenceListComponent {
   readonly blocked = input(false);
   readonly busyId = input<string | null>(null);
   readonly rotate = output<{ reference: IngestTokenView; opener: HTMLElement }>();
+  protected readonly viewport = inject(NarrowMutationPolicy);
   protected readonly copy = SECRETS_COPY;
-  protected statusLabel(status: IngestTokenView['status']): string {
-    switch (status) {
-      case 'active':
-        return $localize`:@@settings.secrets.status-active:Active`;
-      case 'rotated':
-        return $localize`:@@settings.secrets.status-rotated:Rotated`;
-      case 'revoked':
-        return $localize`:@@settings.secrets.status-revoked:Revoked`;
-      case 'expired':
-        return $localize`:@@settings.secrets.status-expired:Expired`;
-      default:
-        return status;
-    }
+  protected readonly statusLabel = secretStatusLabel;
+  protected readonly states = ['active', 'rotated', 'revoked', 'expired'] as const;
+  protected readonly query = signal('');
+  protected readonly state = signal('');
+  protected readonly stateLabel = (value: unknown): string =>
+    typeof value === 'string' && value
+      ? secretStatusLabel(value as IngestTokenView['status'])
+      : this.copy.allStates;
+  protected readonly selectedId = signal<string | null>(null);
+  protected readonly filtered = computed(() => {
+    const query = this.query().trim().toLocaleLowerCase();
+    return this.rows().filter(
+      (row) =>
+        (!this.state() || row.status === this.state()) &&
+        `${row.name} ${row.prefix}`.toLocaleLowerCase().includes(query),
+    );
+  });
+  protected readonly selected = computed(
+    () => this.filtered().find((row) => row.id === this.selectedId()) ?? this.filtered()[0] ?? null,
+  );
+  protected search(event: Event): void {
+    if (event.target instanceof HTMLInputElement) this.query.set(event.target.value);
+  }
+  protected filterState(value: unknown): void {
+    if (typeof value === 'string' && (!value || this.states.some((state) => state === value)))
+      this.state.set(value);
+  }
+  protected clearFilters(): void {
+    this.query.set('');
+    this.state.set('');
+  }
+  protected inspectLabel(name: string): string {
+    return $localize`:@@settings.secrets.inspect-named:Inspect reference ${name}:name:`;
   }
   protected rotateLabel(name: string): string {
     return $localize`:@@settings.secrets.rotate-named:Rotate credential ${name}:name:`;
   }
   protected requestRotate(reference: IngestTokenView, event: Event): void {
     if (
+      this.viewport.allowsMutation() &&
       this.canWrite() &&
       !this.busy() &&
       !this.blocked() &&

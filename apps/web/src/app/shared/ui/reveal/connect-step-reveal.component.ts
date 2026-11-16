@@ -23,9 +23,14 @@ let nextRevealId = 0;
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
-    <section hlmCard class="reveal gap-3 p-4 wrap-anywhere" [attr.aria-labelledby]="headingId">
+    <section
+      hlmCard
+      class="reveal min-w-0 max-w-full gap-(--eg-space-4) p-(--eg-space-5) wrap-anywhere"
+      [attr.aria-labelledby]="headingId"
+    >
       <h3
         hlmCardTitle
+        [size]="subsectionHeadingSize"
         class="focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
         #headingControl
         [id]="headingId"
@@ -39,7 +44,7 @@ let nextRevealId = 0;
       <input
         #control
         hlmInput
-        class="min-w-0 w-full font-mono"
+        class="h-auto min-h-(--eg-control-md) min-w-0 w-full max-w-full py-(--eg-space-3) font-mono pointer-coarse:min-h-(--eg-control-touch)"
         [attr.data-testid]="'reveal-value'"
         type="text"
         readonly
@@ -49,11 +54,11 @@ let nextRevealId = 0;
         [aria-describedby]="warningId"
         [value]="value()"
       />
-      <div class="reveal__actions flex flex-wrap gap-2">
+      <div class="reveal__actions flex min-w-0 max-w-full flex-wrap gap-(--eg-space-3)">
         <button
           hlmBtn
           [variant]="'outline'"
-          class="aria-disabled:cursor-default aria-disabled:bg-muted aria-disabled:text-muted-foreground aria-disabled:shadow-none"
+          class="h-auto min-h-(--eg-control-md) min-w-0 max-w-full whitespace-normal wrap-anywhere py-(--eg-space-3) pointer-coarse:min-h-(--eg-control-touch) aria-disabled:cursor-default aria-disabled:bg-muted aria-disabled:text-muted-foreground aria-disabled:shadow-none"
           [attr.data-testid]="'reveal-copy'"
           type="button"
           [attr.aria-disabled]="copying()"
@@ -65,6 +70,7 @@ let nextRevealId = 0;
         <button
           hlmBtn
           [variant]="'ghost'"
+          class="h-auto min-h-(--eg-control-md) min-w-0 max-w-full whitespace-normal wrap-anywhere py-(--eg-space-3) pointer-coarse:min-h-(--eg-control-touch)"
           [attr.data-testid]="'reveal-dismiss'"
           type="button"
           (click)="dismissed.emit()"
@@ -93,6 +99,7 @@ export class ConnectStepRevealComponent {
   readonly copiedLabel = input.required<string>();
   readonly dismissLabel = input.required<string>();
   readonly dismissed = output<void>();
+  protected readonly subsectionHeadingSize = 'subsection' as const;
 
   protected readonly headingId = `connect-reveal-heading-${++nextRevealId}`;
   protected readonly warningId = `${this.headingId}-warning`;

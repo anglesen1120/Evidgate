@@ -1,8 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
+import { HlmCardImports } from '@evidgate/ui/card';
 
 import { SessionStore } from '../../core/session/session.store';
 import { NotFoundPatternComponent } from '../../shared/ui/states/not-found-pattern.component';
+import { DesktopRequiredNoticeComponent } from '../../shared/ui/narrow/desktop-required-notice.component';
+import { NarrowMutationPolicy } from '../../shared/ui/narrow/narrow-mutation-policy';
 import {
   HEALING_SWITCH_COPY,
   healthLabel,
@@ -10,6 +13,7 @@ import {
 } from './healing-switch.copy';
 import { HealingSwitchStore, type SettableMode, type SwitchScope } from './healing-switch.store';
 import { SwitchScopeControl } from './switch-scope-control.component';
+import { SwitchScopeHierarchy } from './switch-scope-hierarchy.component';
 
 /**
  * The Availability screen: the healing kill switch as three stored scopes and the resolved
@@ -18,13 +22,23 @@ import { SwitchScopeControl } from './switch-scope-control.component';
  */
 @Component({
   selector: 'app-healing-switch-page',
-  imports: [HlmButton, NotFoundPatternComponent, SwitchScopeControl],
+  imports: [
+    HlmButton,
+    HlmCardImports,
+    NotFoundPatternComponent,
+    SwitchScopeControl,
+    SwitchScopeHierarchy,
+    DesktopRequiredNoticeComponent,
+  ],
   providers: [HealingSwitchStore],
   templateUrl: './healing-switch.page.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0 text-sm text-foreground wrap-anywhere' },
 })
 export class HealingSwitchPage {
+  protected readonly pageHeadingSize = 'page' as const;
+  protected readonly sectionHeadingSize = 'section' as const;
+  private readonly narrowPolicy = inject(NarrowMutationPolicy);
   protected readonly store = inject(HealingSwitchStore);
   protected readonly session = inject(SessionStore);
   protected readonly copy = HEALING_SWITCH_COPY;
@@ -33,6 +47,11 @@ export class HealingSwitchPage {
   /** The write controls need both the permission and a resolution whose modes are settable. */
   protected readonly canEdit = computed(
     () => this.store.canConfigure() && this.store.resolution()?.resolved !== 'unavailable',
+  );
+  protected readonly hasWritableScope = computed(
+    () =>
+      this.canEdit() &&
+      (this.store.blockedBy('tenant') === null || this.store.blockedBy('project') === null),
   );
 
   protected canRead(): boolean {
@@ -61,6 +80,7 @@ export class HealingSwitchPage {
     scope: 'tenant' | 'project',
     event: { mode: SettableMode; reason: string | null },
   ): void {
+    if (!this.narrowPolicy.allowsMutation()) return;
     void this.store.save(scope, event.mode, event.reason);
   }
 }

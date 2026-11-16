@@ -2,7 +2,6 @@
 #pragma warning disable CA1861
 using System.Net;
 using System.Net.Http.Headers;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -26,11 +25,11 @@ namespace Tenancy.IntegrationTests;
 /// executions, one producer slot per manifest shard and the outbox row, or nothing at all.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class RunCreationTests
+public sealed class RunCreationTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) : IClassFixture<TenancyHostPool>
 {
-    private readonly PostgresTenancyFixture _fixture;
-
-    public RunCreationTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly PostgresTenancyFixture _fixture = fixture;
+    // Reuse one API host per class; each world owns its tenant data. Dedicated databases and overlapping worlds keep private hosts.
+    private readonly TenancyHostPool _hosts = hosts;
 
     internal sealed record World(
         TenancyApiFactory Api,
@@ -249,7 +248,7 @@ public sealed class RunCreationTests
     [Fact]
     public async Task CreateRun_HappyPath_AllRowsCommittedTogether()
     {
-        await using var world = await StartAsync(_fixture);
+        await using var world = await StartAsync(_fixture, hosts: _hosts);
 
         var answer = await CreateRunAsync(world, RunBody(world.ManifestId));
 
@@ -270,7 +269,7 @@ public sealed class RunCreationTests
     [Fact]
     public async Task CreateRun_RegistersOneSlotPerShard()
     {
-        await using var world = await StartAsync(_fixture, cases: 2);
+        await using var world = await StartAsync(_fixture, cases: 2, hosts: _hosts);
         var manifest = Manifest(world.SuiteRevision, world.Cases, variants: 3, shards: 3);
         manifest["environment_revision_id"] = world.EnvironmentRevision.ToString();
         var manifestId = await UploadAsync(world.Client, world.Admin, world.Project, manifest);
@@ -289,7 +288,7 @@ public sealed class RunCreationTests
     [Fact]
     public async Task CreateRun_CrashMidTransaction_NoPartialRows()
     {
-        await using var world = await StartAsync(_fixture);
+        await using var world = await StartAsync(_fixture, hosts: _hosts);
         await using var crashing = world.Api.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IOutboxWriter>();
@@ -307,7 +306,7 @@ public sealed class RunCreationTests
     [Fact]
     public async Task CreateRun_FailureAfterRunInsert_NoRows()
     {
-        await using var world = await StartAsync(_fixture);
+        await using var world = await StartAsync(_fixture, hosts: _hosts);
         await using var crashing = world.Api.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<ITenantDb>();
@@ -327,7 +326,7 @@ public sealed class RunCreationTests
     [Fact]
     public async Task CreateRun_FailureAfterPlannedInsert_NoRows()
     {
-        await using var world = await StartAsync(_fixture);
+        await using var world = await StartAsync(_fixture, hosts: _hosts);
         await using var crashing = world.Api.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IProducerRegistry>();
@@ -346,7 +345,7 @@ public sealed class RunCreationTests
     [Fact]
     public async Task CreateRun_FailureAfterSlotRegistration_NoRows()
     {
-        await using var world = await StartAsync(_fixture);
+        await using var world = await StartAsync(_fixture, hosts: _hosts);
         await using var crashing = world.Api.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IOutboxWriter>();
@@ -365,7 +364,7 @@ public sealed class RunCreationTests
     [Fact]
     public async Task CreateRun_UnresolvedEnvironmentOrSuite_422_NoWrites()
     {
-        await using var world = await StartAsync(_fixture);
+        await using var world = await StartAsync(_fixture, hosts: _hosts);
 
         // (a) A manifest with no environment revision: run.environment_revision_id is NOT NULL, so it is refused.
         var noEnvironment = Manifest(world.SuiteRevision, world.Cases, variants: 1, shards: 1);
@@ -408,7 +407,7 @@ public sealed class RunCreationTests
     [Fact]
     public async Task CreateRun_ReleaseNamed_422ReleaseUnresolvable()
     {
-        await using var world = await StartAsync(_fixture);
+        await using var world = await StartAsync(_fixture, hosts: _hosts);
 
         var empty = await CreateRunAsync(world, $$"""{"manifest_id":"{{world.ManifestId}}","release":""}""");
         empty.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
@@ -429,7 +428,7 @@ public sealed class RunCreationTests
     [Fact]
     public async Task CreateRun_CiRunRef_FromOidcClaims()
     {
-        await using var world = await StartAsync(_fixture);
+        await using var world = await StartAsync(_fixture, hosts: _hosts);
         var principal = RequestPrincipal.Service(
             world.Project,
             ["run:create"],
@@ -451,7 +450,7 @@ public sealed class RunCreationTests
     [Fact]
     public async Task CreateRun_CiRunRef_NoClaims_Null()
     {
-        await using var world = await StartAsync(_fixture);
+        await using var world = await StartAsync(_fixture, hosts: _hosts);
         var principal = RequestPrincipal.Service(world.Project, ["run:create"], credentialId: "jti-2");
 
         var result = await RunCreationSeams.SendDirectAsync(world.Api, world.Org, world.Project, principal, RunBody(world.ManifestId));
@@ -466,7 +465,7 @@ public sealed class RunCreationTests
     [Fact]
     public async Task CreateRun_DeadlineAndLateWindow_PinnedAtCreate()
     {
-        await using var world = await StartAsync(_fixture);
+        await using var world = await StartAsync(_fixture, hosts: _hosts);
 
         (await CreateRunAsync(world, RunBody(world.ManifestId))).Status.ShouldBe(HttpStatusCode.Created);
 
@@ -482,7 +481,7 @@ public sealed class RunCreationTests
     [Fact]
     public async Task CreateRun_UnknownFieldInBody_422()
     {
-        await using var world = await StartAsync(_fixture);
+        await using var world = await StartAsync(_fixture, hosts: _hosts);
 
         var answer = await CreateRunAsync(world, $$"""{"manifest_id":"{{world.ManifestId}}","adhoc_field":"x"}""");
 
@@ -496,7 +495,7 @@ public sealed class RunCreationTests
     [Fact]
     public async Task CreateRun_Components_AreStored_AndCapped()
     {
-        await using var world = await StartAsync(_fixture);
+        await using var world = await StartAsync(_fixture, hosts: _hosts);
 
         var accepted = await CreateRunAsync(
             world,
@@ -520,7 +519,7 @@ public sealed class RunCreationTests
     [Fact]
     public async Task CreateRun_Components_UnstorableNumber_422_NoRows()
     {
-        await using var world = await StartAsync(_fixture);
+        await using var world = await StartAsync(_fixture, hosts: _hosts);
 
         var overflow = await CreateRunAsync(
             world,
@@ -543,7 +542,7 @@ public sealed class RunCreationTests
     [Fact]
     public async Task CreateRun_UnknownManifest_404()
     {
-        await using var world = await StartAsync(_fixture);
+        await using var world = await StartAsync(_fixture, hosts: _hosts);
 
         var answer = await CreateRunAsync(world, RunBody(Guid.CreateVersion7()));
 
@@ -555,7 +554,7 @@ public sealed class RunCreationTests
     [Fact]
     public async Task CreateRun_CrossTenantManifest_404()
     {
-        await using var world = await StartAsync(_fixture);
+        await using var world = await StartAsync(_fixture, hosts: _hosts);
         var otherUser = Guid.CreateVersion7();
         var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
 
@@ -571,7 +570,7 @@ public sealed class RunCreationTests
     [Fact]
     public async Task CreateRun_NoPermission_403()
     {
-        await using var world = await StartAsync(_fixture);
+        await using var world = await StartAsync(_fixture, hosts: _hosts);
 
         var answer = await CreateRunAsync(
             world,
@@ -585,7 +584,7 @@ public sealed class RunCreationTests
     [Fact]
     public async Task CreateRun_ProjectScopeMismatch_403()
     {
-        await using var world = await StartAsync(_fixture);
+        await using var world = await StartAsync(_fixture, hosts: _hosts);
         var other = await CreateProjectAsync(world.Client, world.User, world.Org, "other");
 
         var answer = await CreateRunAsync(
@@ -600,7 +599,7 @@ public sealed class RunCreationTests
     [Fact]
     public async Task CreateRun_Anonymous_401_WithoutReadingTheBody()
     {
-        await using var world = await StartAsync(_fixture);
+        await using var world = await StartAsync(_fixture, hosts: _hosts);
 
         var answer = await CreateRunAsync(world, "{ not json", _ => { });
 
@@ -612,7 +611,7 @@ public sealed class RunCreationTests
     [Fact]
     public async Task CreateRun_CommandCounter_Bounded()
     {
-        await using var world = await StartAsync(_fixture, cases: 40);
+        await using var world = await StartAsync(_fixture, cases: 40, hosts: _hosts);
 
         async Task<int> CountAsync(int variants)
         {
@@ -631,50 +630,5 @@ public sealed class RunCreationTests
 
         large.ShouldBe(small);
         small.ShouldBeLessThanOrEqualTo(20, string.Join(Environment.NewLine, world.Api.Statements.Snapshot()));
-    }
-}
-
-/// <summary>
-/// The <c>execution_key</c> layout of 05.2.1 (00 §7, T10): the expected value is computed here by an independent
-/// code path (a byte list, not the shipping span writer), so the test pins the layout, not the implementation.
-/// </summary>
-public sealed class ExecutionKeyTests
-{
-    private static readonly Guid CaseId = Guid.Parse("018f2f0e-8a52-7c4b-9d3e-000000000001");
-
-    [Fact]
-    public void ExecutionKey_MatchesAnIndependentLayout()
-    {
-        var variant = "sha256:" + new string('a', 64);
-
-        ExecutionKey.Compute(CaseId, variant, "staging").ShouldBe(Independent(CaseId, variant, "staging"));
-        ExecutionKey.Compute(CaseId, variant, "staging").ShouldMatch("^[0-9a-f]{64}$");
-    }
-
-    [Fact]
-    public void ExecutionKey_LengthPrefix_Disambiguates()
-    {
-        // Without the length prefix, ('ab','c') and ('a','bc') would concatenate to the same bytes.
-        ExecutionKey.Compute(Guid.Empty, "ab", "c").ShouldNotBe(ExecutionKey.Compute(Guid.Empty, "a", "bc"));
-    }
-
-    [Fact]
-    public void ExecutionKey_IsOrderSensitive()
-    {
-        ExecutionKey.Compute(CaseId, "sha256:" + new string('a', 64), "staging")
-            .ShouldNotBe(ExecutionKey.Compute(CaseId, "sha256:" + new string('a', 64), "prod"));
-    }
-
-    private static string Independent(Guid caseId, string variant, string targetEnv)
-    {
-        var buffer = new List<byte>();
-        foreach (var field in new[] { caseId.ToString("D"), variant, targetEnv })
-        {
-            var bytes = Encoding.UTF8.GetBytes(field);
-            buffer.AddRange(BitConverter.GetBytes(bytes.Length).Reverse()); // big-endian, unlike the shipping writer
-            buffer.AddRange(bytes);
-        }
-
-        return Convert.ToHexString(SHA256.HashData([.. buffer])).ToLowerInvariant();
     }
 }

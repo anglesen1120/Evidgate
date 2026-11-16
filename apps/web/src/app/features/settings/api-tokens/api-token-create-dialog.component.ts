@@ -27,6 +27,14 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
 import { tokenPermissionChoices } from './api-token-permissions';
 import { ApiTokenWriteErrorComponent } from './api-token-write-error.component';
 import { retryReadyFor } from './api-token-retry';
+import {
+  createFormFeedback,
+  FieldFeedbackComponent,
+  FormErrorSummaryComponent,
+  FormRequiredNoteComponent,
+  type FieldFeedback,
+} from '../../../shared/forms';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 
 /** Keep a refused expiry blocked until that field changes, even when other fields are edited. */
 const EXPIRY_REFUSALS: Record<string, true> = { past: true, out_of_range: true, required: true };
@@ -94,6 +102,9 @@ function parseExpiryMaximum(message: string): ExpiryMaximum | null {
     HlmLabel,
     HlmCheckbox,
     ConnectStepRevealComponent,
+    FieldFeedbackComponent,
+    FormErrorSummaryComponent,
+    FormRequiredNoteComponent,
     ApiTokenWriteErrorComponent,
   ],
   providers: [RevealSlot],
@@ -135,14 +146,16 @@ function parseExpiryMaximum(message: string): ExpiryMaximum | null {
           />
         } @else {
           <form
-            #form
-            (submit)="submit($event, form)"
+            novalidate
+            (submit)="submit($event)"
             (focusin)="refreshClock()"
             (pointerdown)="refreshClock()"
             (keydown)="refreshClock()"
             class="grid min-w-0 gap-3"
             [attr.aria-busy]="store.creating()"
           >
+            <app-form-required-note />
+            <app-form-error-summary [summaryId]="'api-create-summary'" [feedback]="feedback()" />
             <label hlmLabel for="api-create-name">{{ copy.name }}</label>
             <input
               hlmInput
@@ -154,9 +167,13 @@ function parseExpiryMaximum(message: string): ExpiryMaximum | null {
               autocomplete="off"
               [value]="name()"
               [disabled]="locked()"
-              [attr.aria-describedby]="store.createError() ? 'api-create-error' : null"
+              [aria-describedby]="nameField().describedBy()"
+              [attr.aria-invalid]="nameField().ariaInvalid()"
+              [forceInvalid]="nameField().invalid()"
+              (blur)="nameField().blur()"
               (input)="updateName($event)"
             />
+            <app-field-feedback [field]="nameField()" />
             <label hlmLabel for="api-create-expiry">{{ copy.expires }}</label>
             <input
               hlmInput
@@ -168,29 +185,27 @@ function parseExpiryMaximum(message: string): ExpiryMaximum | null {
               [disabled]="locked()"
               [attr.min]="minExpiry()"
               [attr.max]="maxExpiry()"
-              [attr.aria-invalid]="expiryInvalid() || expiryRefused() || !!store.createError()"
-              [attr.aria-describedby]="
-                (expiryRefused()
-                  ? 'api-expiry-required api-expiry-refusal'
-                  : 'api-expiry-required') + (store.createError() ? ' api-create-error' : '')
-              "
+              [attr.aria-invalid]="expiryField().ariaInvalid()"
+              [forceInvalid]="expiryField().invalid()"
+              [aria-describedby]="expiryField().describedBy()"
+              (blur)="expiryField().blur()"
               (input)="updateExpiry($event)"
             />
-            <p
-              id="api-expiry-required"
-              class="m-0 text-sm text-muted-foreground"
-              [attr.role]="expiryInvalid() ? 'status' : null"
+            <app-field-feedback
+              [field]="expiryField()"
+              [attr.data-api-expiry-refusal]="expiryRefused() ? '' : null"
+            />
+            <fieldset
+              id="api-create-permissions"
+              tabindex="-1"
+              class="m-0 min-w-0 rounded-md border border-border p-3"
+              [attr.aria-describedby]="permissionField().describedBy()"
+              [attr.aria-invalid]="permissionField().ariaInvalid()"
+              [disabled]="locked()"
+              (focusout)="permissionField().blur()"
             >
-              {{ copy.required }}
-            </p>
-            @if (expiryRefused()) {
-              <p id="api-expiry-refusal" role="alert" class="m-0 text-sm" data-api-expiry-refusal>
-                {{ expiryRefusal() }}
-              </p>
-            }
-            <fieldset class="m-0 min-w-0 rounded-md border border-border p-3" [disabled]="locked()">
               <legend>{{ copy.permissions }}</legend>
-              <p class="m-0 mb-2 text-sm text-muted-foreground">{{ copy.permissionHint }}</p>
+              <app-field-feedback [field]="permissionField()" />
               @for (code of choices(); track code) {
                 <label
                   hlmLabel
@@ -201,6 +216,8 @@ function parseExpiryMaximum(message: string): ExpiryMaximum | null {
                     [inputId]="'api-permission-' + code"
                     [checked]="selected().has(code)"
                     [disabled]="locked()"
+                    [forceInvalid]="permissionField().invalid()"
+                    [aria-describedby]="permissionField().describedBy()"
                     (checkedChange)="toggle(code, $event)"
                   />{{ code }}
                 </label>
@@ -226,7 +243,13 @@ function parseExpiryMaximum(message: string): ExpiryMaximum | null {
                 hlmBtn
                 type="submit"
                 data-api-create-submit
-                [disabled]="!valid() || store.creating() || !retryReady() || uncertain()"
+                [disabled]="
+                  !valid() ||
+                  !viewport.canMutate() ||
+                  store.creating() ||
+                  !retryReady() ||
+                  uncertain()
+                "
               >
                 {{ store.creating() ? copy.submitting : copy.create }}
               </button>
@@ -239,6 +262,7 @@ function parseExpiryMaximum(message: string): ExpiryMaximum | null {
 })
 export class ApiTokenCreateDialogComponent {
   protected readonly store = inject(ApiTokensStore);
+  protected readonly viewport = inject(NarrowMutationPolicy);
   private readonly session = inject(SessionStore);
   protected readonly slot = inject(RevealSlot);
   private readonly destroyRef = inject(DestroyRef);
@@ -306,6 +330,55 @@ export class ApiTokenCreateDialogComponent {
       this.selected().size > 0,
   );
   protected readonly retryReady = retryReadyFor(this.store.createError);
+  protected readonly feedback = computed(() => {
+    const first = this.choices()[0];
+    return createFormFeedback([
+      {
+        id: 'api-create-name',
+        label: this.copy.name,
+        error: () =>
+          !this.name().trim() || this.name().length > 120
+            ? this.nameCorrection
+            : this.fieldRefusal('name'),
+      },
+      {
+        id: 'api-create-expiry',
+        label: this.copy.expires,
+        hint: this.copy.required,
+        error: () =>
+          this.expiryRefused()
+            ? this.expiryRefusal()
+            : this.expiryInvalid()
+              ? this.copy.required
+              : null,
+      },
+      {
+        id: first ? 'api-permission-' + first : 'api-create-permissions',
+        label: this.copy.permissions,
+        hint: this.copy.permissionHint,
+        error: () =>
+          this.selected().size === 0 ? this.permissionCorrection : this.fieldRefusal('permissions'),
+      },
+    ]);
+  });
+  protected readonly nameField = computed(() => this.field(0));
+  protected readonly expiryField = computed(() => this.field(1));
+  protected readonly permissionField = computed(() => this.field(2));
+  private readonly nameCorrection = $localize`:@@settings.api-tokens.name-correction:Enter a token name of up to 120 characters.`;
+  private readonly permissionCorrection = $localize`:@@settings.api-tokens.permission-correction:Select at least one available permission.`;
+  private field(index: number): FieldFeedback {
+    const field = this.feedback().fields[index];
+    if (!field) throw new Error('Missing token field feedback');
+    return field;
+  }
+  private fieldRefusal(path: string): string | null {
+    const failure = this.store.createError();
+    return failure?.details.some(
+      (detail) => detail.path === path || detail.path?.startsWith(path + '['),
+    )
+      ? failure.message
+      : null;
+  }
   private readonly dialog = viewChild<unknown, ElementRef<HTMLElement>>('dialog', {
     read: ElementRef,
   });
@@ -358,24 +431,24 @@ export class ApiTokenCreateDialogComponent {
     this.intent = null;
     this.store.resetCreateError();
   }
-  protected async submit(event: Event, form: HTMLFormElement): Promise<void> {
+  protected async submit(event: Event): Promise<void> {
     event.preventDefault();
     if (
       !this.opened() ||
       this.revealing() ||
+      !this.viewport.allowsMutation() ||
+      !this.store.canWrite() ||
       this.store.creating() ||
-      !this.valid() ||
       !this.retryReady() ||
-      this.uncertain() ||
-      !form.reportValidity()
+      this.uncertain()
     )
       return;
-    // `valid()` already refuses an unparsable value; re-reading it here keeps `toISOString` from
-    // throwing a RangeError if the two ever disagree.
+    this.refreshClock();
+    if (!this.feedback().submit() || !this.valid()) return;
     const instant = expiryInstant(this.expires());
-    if (instant === null) return;
-    if (instant <= Date.now()) {
+    if (instant === null || instant <= Date.now()) {
       this.elapsed.set(true);
+      this.feedback().submit();
       return;
     }
     this.intent ??= createIntent();
@@ -398,6 +471,7 @@ export class ApiTokenCreateDialogComponent {
       this.expiryRefusal.set(failure.message);
       this.expiryMaximum.set(parseExpiryMaximum(failure.message));
     }
+    if (!answer && failure?.kind === 'validation') this.feedback().submit();
   }
   protected escape(event: Event): void {
     event.preventDefault();
@@ -425,6 +499,7 @@ export class ApiTokenCreateDialogComponent {
   protected finishClose(): void {
     this.store.closeCreate();
     if (this.opener?.isConnected && !this.opener.matches(':disabled')) this.opener.focus();
-    else this.document.querySelector<HTMLElement>('app-api-tokens-page h2')?.focus();
+    else
+      this.document.querySelector<HTMLElement>('app-api-tokens-page app-section-header')?.focus();
   }
 }

@@ -11,6 +11,7 @@ import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
 })
 export class SuiteWarningListComponent {
   readonly warnings = input<readonly string[] | null | undefined>();
+  protected readonly sectionHeadingSize = 'section' as const;
 
   protected readonly copy = {
     title: $localize`:@@suites.warnings.suite-warnings:Suite warnings`,

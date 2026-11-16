@@ -1,4 +1,6 @@
-import { provideZonelessChangeDetection } from '@angular/core';
+import { registerLocaleData } from '@angular/common';
+import localeVi from '@angular/common/locales/vi';
+import { LOCALE_ID, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import type { ProjectDto } from '@evidgate/sdk';
 
@@ -47,7 +49,7 @@ describe('EvidencePanelComponent', () => {
   });
 
   it('keeps the resource card named and read-only without adding keyboard stops', () => {
-    const panel = root.querySelector('aside');
+    const panel = root.querySelector('section[aria-labelledby="onboarding-evidence-title"]');
     expect(panel?.getAttribute('data-slot')).toBe('card');
     expect(panel?.getAttribute('aria-labelledby')).toBe(root.querySelector('h2')?.id);
     expect(root.querySelector('button, a, [tabindex]')).toBeNull();
@@ -77,7 +79,7 @@ describe('EvidencePanelComponent', () => {
     expect(root.querySelector('dl')?.textContent).toContain(PROJECT.id);
     expect(root.querySelector('[data-resource-state="empty"]')).toBeNull();
     expect(root.textContent).not.toContain('will appear here');
-    expect(root.querySelector('aside')?.getAttribute('aria-labelledby')).toBe(
+    expect(root.querySelector('section')?.getAttribute('aria-labelledby')).toBe(
       'onboarding-evidence-title',
     );
   });
@@ -94,15 +96,41 @@ describe('EvidencePanelComponent', () => {
           hash: 'sha256:confirmed-policy',
           mode: 'advisory',
           activated_by: 'member-1',
-          activated_at: '2026-11-04T12:00:00Z',
+          activated_at: '2026-11-04T12:00:00.123456+00:00',
         },
       },
     } satisfies OnboardingProgress);
     await fixture.whenStable();
     expect(root.textContent).toContain('policy-revision-42');
-    expect(root.textContent).toContain('2026-11-04T12:00:00Z');
+    const instant = '2026-11-04T12:00:00.123456+00:00';
+    expect(root.textContent).toContain('Activated at (UTC)');
+    expect(root.querySelector('time')?.getAttribute('datetime')).toBe(instant);
+    expect(root.querySelector('time')?.textContent).toBe('11/4/2026, 12:00:00\u202fPM');
+    expect(root.textContent).not.toContain(instant);
     expect(root.querySelector('[data-resource-state="empty"]')).toBeNull();
     expect(root.textContent).not.toMatch(/\bPASS\b|\bFAIL\b|enabled and collecting/i);
+  });
+
+  it('does not format a malformed activation instant or invent a time for it', async () => {
+    fixture.componentRef.setInput('progress', {
+      ...EMPTY,
+      project: PROJECT,
+      activation: {
+        kind: 'active',
+        state: {
+          project_id: PROJECT.id,
+          policy_revision_id: 'revision-1',
+          hash: 'sha256:confirmed',
+          mode: 'advisory',
+          activated_by: 'member-1',
+          activated_at: 'not-an-instant',
+        },
+      },
+    } satisfies OnboardingProgress);
+    await fixture.whenStable();
+    expect(root.querySelector('time')).toBeNull();
+    expect(root.textContent).not.toContain('not-an-instant');
+    expect(root.textContent).toContain('Created resources are unavailable.');
   });
 
   it('keeps known project details when activation access is unavailable', async () => {
@@ -137,5 +165,38 @@ describe('EvidencePanelComponent', () => {
     await fixture.whenStable();
     expect(root.textContent).toContain('<img src=x onerror=alert(1)>');
     expect(root.querySelector('img, script')).toBeNull();
+  });
+});
+
+describe('EvidencePanelComponent localized activation time', () => {
+  it('uses Vietnamese UTC formatting and preserves the exact offset ISO value', async () => {
+    registerLocaleData(localeVi);
+    await TestBed.configureTestingModule({
+      imports: [EvidencePanelComponent],
+      providers: [provideZonelessChangeDetection(), { provide: LOCALE_ID, useValue: 'vi' }],
+    }).compileComponents();
+    const instant = '2026-11-04T19:00:00.123456+07:00';
+    const fixture = TestBed.createComponent(EvidencePanelComponent);
+    fixture.componentRef.setInput('progress', {
+      ...EMPTY,
+      project: PROJECT,
+      activation: {
+        kind: 'active',
+        state: {
+          project_id: PROJECT.id,
+          policy_revision_id: 'revision-1',
+          hash: 'sha256:confirmed',
+          mode: 'advisory',
+          activated_by: 'member-1',
+          activated_at: instant,
+        },
+      },
+    } satisfies OnboardingProgress);
+    await fixture.whenStable();
+    const root = fixture.nativeElement as HTMLElement;
+    const time = root.querySelector('time');
+    expect(time?.getAttribute('datetime')).toBe(instant);
+    expect(time?.textContent).toBe('12:00:00 04/11/2026');
+    expect(time?.textContent).not.toBe('19:00:00 04/11/2026');
   });
 });

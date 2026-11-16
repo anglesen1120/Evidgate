@@ -52,3 +52,28 @@ public interface IGitHubInstallationResolver
     /// <param name="cancellationToken">Cancels the lookup.</param>
     Task<Result<long>> ResolveAsync(Guid orgId, CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// Proves that an installation id a caller supplied is the calling org's own live installation. The owner of the
+/// installation rows implements it, so a module that stores an installation id never reads another module's table.
+/// </summary>
+public interface IGitHubInstallationOwnership
+{
+    /// <summary>
+    /// Whether <paramref name="installationId"/> is the active installation of <paramref name="orgId"/>. A row of
+    /// another org, a suspended or deleted one and an unknown id all answer false.
+    /// </summary>
+    /// <param name="orgId">The tenant whose installation must match.</param>
+    /// <param name="installationId">The installation id the request supplied.</param>
+    /// <param name="cancellationToken">Cancels the lookup.</param>
+    Task<bool> OwnsActiveAsync(Guid orgId, long installationId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// <see cref="OwnsActiveAsync"/> that also holds a share lock on the installation row until the caller's
+    /// transaction ends, so a disconnect cannot commit between this proof and the write that relies on it.
+    /// </summary>
+    /// <param name="orgId">The tenant whose installation must match.</param>
+    /// <param name="installationId">The installation id the request supplied.</param>
+    /// <param name="cancellationToken">Cancels the lookup.</param>
+    Task<bool> LockActiveAsync(Guid orgId, long installationId, CancellationToken cancellationToken);
+}

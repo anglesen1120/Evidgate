@@ -9,7 +9,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_HistoryBoundaryDescendingClockTimes_ServesSequenceOrder()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateQueuedRunAsync(world);
         await _fixture.ExecuteAsync(world.Database, $"""
             insert into public.run_state_event (id, org_id, run_id, seq, from_state, to_state, occurred_at)
@@ -35,7 +35,7 @@ public sealed partial class GetRunDetailFieldsTests
     [InlineData(65)]
     public async Task GetRun_HistoryBoundaryAtAndAcrossLimit_ServesFirst64Transitions(int count)
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateQueuedRunAsync(world);
         await _fixture.ExecuteAsync(world.Database, $"""
             insert into public.run_state_event (id, org_id, run_id, seq, from_state, to_state, occurred_at)
@@ -64,7 +64,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_HistoryBoundaryCanceledTimestamp_MatchesStoredUtcTimestamp()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateQueuedRunAsync(world);
         (await CancelRunTestData.CancelAsync(world, runId)).Status.ShouldBe(HttpStatusCode.Accepted);
         var answer = await GetAsync(world, runId);

@@ -1,9 +1,13 @@
-import { provideZonelessChangeDetection } from '@angular/core';
+import { registerLocaleData } from '@angular/common';
+import localeVi from '@angular/common/locales/vi';
+import { LOCALE_ID, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import type { CiBindingView, IngestTokenView } from '@evidgate/sdk';
 
 import { deriveConnectionHealth } from './connection-health';
 import { ConnectionHealthComponent } from './connection-health.component';
+
+registerLocaleData(localeVi);
 
 const BINDING: CiBindingView = {
   id: 'binding-1',
@@ -31,7 +35,7 @@ const TOKEN: IngestTokenView = {
   created_at: '2026-10-25T00:00:00Z',
 };
 
-describe('ConnectionHealthComponent', () => {
+describe.each(['en-US', 'vi'])('ConnectionHealthComponent (%s)', (locale) => {
   let fixture: ComponentFixture<ConnectionHealthComponent>;
   let root: HTMLElement;
   let metadata: Omit<Parameters<typeof deriveConnectionHealth>[0], 'now'>;
@@ -51,7 +55,7 @@ describe('ConnectionHealthComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [ConnectionHealthComponent],
-      providers: [provideZonelessChangeDetection()],
+      providers: [provideZonelessChangeDetection(), { provide: LOCALE_ID, useValue: locale }],
     }).compileComponents();
     fixture = TestBed.createComponent(ConnectionHealthComponent);
     metadata = { bindings: [], tokens: [], bindingsTruncated: false, tokensTruncated: false };
@@ -132,7 +136,7 @@ describe('ConnectionHealthComponent', () => {
     expect(root.getAttribute('data-health-state')).toBe('healthy');
     expect(root.textContent).toContain('may be older than the newest use');
     expect(root.querySelector('[data-testid="connection-health-last-use"] time')?.textContent).toBe(
-      '2026-10-25 11:30:00',
+      locale === 'vi' ? '11:30:00 25/10/2026' : '10/25/2026, 11:30:00',
     );
     setMetadata('tokensTruncated', false);
     setMetadata('bindingsTruncated', true);
@@ -141,11 +145,22 @@ describe('ConnectionHealthComponent', () => {
     expect(root.textContent).toContain('Only part of the credential list is shown.');
   });
 
+  it('keeps the last-use clock and provenance when UTC changes the calendar year', async () => {
+    const supplied = '2026-01-01T00:15:04+07:00';
+    setMetadata('tokens', [{ ...TOKEN, last_used_at: supplied }]);
+    await fixture.whenStable();
+    const time = root.querySelector('[data-testid="connection-health-last-use"] time');
+    expect(time?.textContent).toBe(
+      locale === 'vi' ? '17:15:04 31/12/2025' : '12/31/2025, 17:15:04',
+    );
+    expect(time?.getAttribute('datetime')).toBe(supplied);
+  });
+
   it('renders pending bindings as awaiting verification rather than healthy', async () => {
     setMetadata('bindings', [{ ...BINDING, status: 'pending_verification' }]);
     await fixture.whenStable();
     expect(root.getAttribute('data-health-state')).toBe('pending');
-    expect(root.textContent).toContain('Pending verification');
+    expect(root.textContent).toContain('Awaiting CI');
     expect(root.textContent).toContain(
       'Not usable until the first CI exchange verifies this binding.',
     );
@@ -166,10 +181,14 @@ describe('ConnectionHealthComponent', () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]?.textContent).toContain('Not usable: the token has expired.');
     expect(rows[0]?.textContent).toContain('Expires (UTC):');
-    expect(rows[0]?.querySelector('time')?.textContent).toBe('2020-01-01 00:00:00');
+    expect(rows[0]?.querySelector('time')?.textContent).toBe(
+      locale === 'vi' ? '00:00:00 01/01/2020' : '1/1/2020, 00:00:00',
+    );
     expect(rows[1]?.textContent).toContain('Usable during the rotation overlap.');
     expect(rows[1]?.textContent).toContain('Rotation overlap ends (UTC):');
-    expect(rows[1]?.querySelector('time')?.textContent).toBe('2099-01-01 00:00:00');
+    expect(rows[1]?.querySelector('time')?.textContent).toBe(
+      locale === 'vi' ? '00:00:00 01/01/2099' : '1/1/2099, 00:00:00',
+    );
   });
 
   it('renders the supplied health snapshot without deriving a different wall-clock state', async () => {

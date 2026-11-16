@@ -45,7 +45,9 @@ class FakePolicyStore {
     Promise.resolve(id === 'a' ? previous : head),
   );
 }
-describe('RevisionDiffComponent', () => {
+// Applies to every test in this file. Idle wall of the slowest is 330 ms; the smoke run hit the
+// 5000 ms default here after the fuzz stage (CPU contention), so 15 s keeps a ~1.3x margin only (11.3 s of 15 s under smoke load).
+describe('RevisionDiffComponent', { timeout: 15_000 }, () => {
   let store: FakePolicyStore;
   beforeEach(() => {
     store = new FakePolicyStore();
