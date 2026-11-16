@@ -4,9 +4,11 @@ import type { IngestTokenView } from '@evidgate/sdk';
 import fixtureData from '../../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-token/input.json';
 import { SecretReferenceListComponent } from './secret-reference-list.component';
 import { ROTATION_CLOCK } from './rotation-reminder-chip.component';
+import { SECRET_DESKTOP_PROVIDER } from './secrets-page.testing';
 
 const base = fixtureData.body.items[0] as IngestTokenView;
 describe('SecretReferenceListComponent metadata boundary (AC3)', () => {
+  beforeEach(() => TestBed.configureTestingModule({ providers: [SECRET_DESKTOP_PROVIDER] }));
   afterEach(() => {
     TestBed.resetTestingModule();
     clearTranslations();
@@ -22,7 +24,9 @@ describe('SecretReferenceListComponent metadata boundary (AC3)', () => {
       })),
     );
     fixture.detectChanges();
-    const pills = (fixture.nativeElement as HTMLElement).querySelectorAll('.status-pill__label');
+    const pills = (fixture.nativeElement as HTMLElement).querySelectorAll(
+      '[data-secret-reference] .status-pill__label',
+    );
     expect(Array.from(pills, (pill) => pill.textContent?.trim())).toEqual([
       'Active',
       'Rotated',
@@ -53,7 +57,9 @@ describe('SecretReferenceListComponent metadata boundary (AC3)', () => {
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
     expect(
-      Array.from(root.querySelectorAll('.status-pill__label'), (pill) => pill.textContent?.trim()),
+      Array.from(root.querySelectorAll('[data-secret-reference] .status-pill__label'), (pill) =>
+        pill.textContent?.trim(),
+      ),
     ).toEqual(['Đang hoạt động', 'Đã xoay', 'Đã thu hồi', 'Đã hết hạn']);
     expect(root.querySelector('[data-rotate]')?.getAttribute('aria-label')).toBe(
       'Xoay thông tin xác thực CI sản xuất',
@@ -132,7 +138,9 @@ describe('SecretReferenceListComponent metadata boundary (AC3)', () => {
     expect(root.querySelector('[data-secret-reference]')?.getAttribute('data-slot')).toBe('card');
     expect(button?.getAttribute('data-slot')).toBe('button');
     expect(button?.type).toBe('button');
-    expect(root.querySelector('h3')?.textContent).toBe('Long reference '.repeat(20));
+    expect(root.querySelector('[data-secret-reference] h3')?.textContent).toBe(
+      'Long reference '.repeat(20),
+    );
     button?.focus();
     expect(document.activeElement).toBe(button);
     button?.click();

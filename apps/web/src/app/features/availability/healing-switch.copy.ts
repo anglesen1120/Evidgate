@@ -1,12 +1,16 @@
 export const HEALING_SWITCH_COPY = {
   title: $localize`:@@healingswitch.title:Healing switch`,
-  description: $localize`:@@healingswitch.description:Healing proposes and applies repairs. The most restrictive scope wins: disabled over shadow, shadow over enabled.`,
+  description: $localize`:@@healingswitch.description:Healing availability controls proposal review only; it never applies changes during a run. The most restrictive scope wins: disabled over shadow, shadow over enabled.`,
   loading: $localize`:@@healingswitch.loading:Loading the healing switch…`,
   readFailed: $localize`:@@healingswitch.read-failed:The healing switch could not be loaded.`,
   retry: $localize`:@@healingswitch.retry:Reload healing switch`,
   forbidden: $localize`:@@healingswitch.forbidden:You do not have permission to view the healing switch.`,
   noProject: $localize`:@@healingswitch.no-project:Choose a project to view its healing switch.`,
   posture: $localize`:@@healingswitch.posture:Current posture`,
+  hierarchy: $localize`:@@healingswitch.hierarchy:Scope hierarchy`,
+  hierarchyDescription: $localize`:@@healingswitch.hierarchy-description:Stored scope values in precedence order. A child scope cannot widen availability beyond its parent.`,
+  configuration: $localize`:@@healingswitch.configuration:Configure availability`,
+  scope: $localize`:@@healingswitch.scope:Scope`,
   resolvedPrefix: $localize`:@@healingswitch.resolved-prefix:Healing is currently`,
   decidedBySystem: $localize`:@@healingswitch.decided-by-system:The system scope decides this.`,
   decidedByTenant: $localize`:@@healingswitch.decided-by-tenant:The tenant scope decides this.`,
@@ -38,7 +42,7 @@ export const HEALING_SWITCH_COPY = {
   changedAt: $localize`:@@healingswitch.changed-at:Last changed`,
   version: $localize`:@@healingswitch.version:Version`,
   redacted: $localize`:@@healingswitch.redacted:Hidden`,
-  notProvided: $localize`:@@healingswitch.not-provided:—`,
+  notProvided: $localize`:@@healingswitch.not-provided:Not recorded`,
   noRow: $localize`:@@healingswitch.no-row:No switch is stored at this scope.`,
   reasonLabel: $localize`:@@healingswitch.reason-label:Reason (optional)`,
   reasonHint: $localize`:@@healingswitch.reason-hint:Up to 2000 characters, and no more than 4 KB once sent. The reason is stored with the change.`,
@@ -67,6 +71,14 @@ export function modeLabel(mode: HealingMode): string {
     case 'unavailable':
       return HEALING_SWITCH_COPY.modeUnavailable;
   }
+}
+
+export function scopeLabel(scope: 'system' | 'tenant' | 'project', projectName = ''): string {
+  if (scope === 'system') return HEALING_SWITCH_COPY.scopeSystem;
+  if (scope === 'tenant') return HEALING_SWITCH_COPY.scopeTenant;
+  return projectName.length === 0
+    ? HEALING_SWITCH_COPY.scopeProject
+    : `${HEALING_SWITCH_COPY.scopeProject}: ${projectName}`;
 }
 
 /**

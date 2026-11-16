@@ -21,7 +21,8 @@ describe('RotationReminderChipComponent', () => {
     );
     if (label) {
       expect(root.textContent).toContain(label);
-      expect(root.querySelector('[aria-hidden="true"]')?.textContent).toBeTruthy();
+      expect(root.querySelectorAll('svg')).toHaveLength(1);
+      expect(root.querySelector('[aria-hidden="true"]')).not.toBeNull();
     } else expect(root.textContent?.trim()).toBe('');
   });
   it('does not invent a reminder for non-active metadata', () => {

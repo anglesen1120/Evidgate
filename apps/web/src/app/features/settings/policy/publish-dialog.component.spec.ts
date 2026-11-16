@@ -1,6 +1,7 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { PolicyRevisionDto } from '@evidgate/sdk';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow';
 import { MAX_DIFF_VALUE_CHARS } from './policy-diff';
 import type { PublishResult } from './policy.store';
 import { PublishDialogComponent } from './publish-dialog.component';
@@ -333,5 +334,23 @@ describe('PublishDialogComponent', () => {
     await fixture.whenStable();
     expect(store.publish).toHaveBeenCalledExactlyOnceWith(text);
     expect(root.querySelector('[data-policy-publish-local-error]')).toBeNull();
+  });
+  it('refuses a publish when the editor was opened before the viewport became narrow', async () => {
+    const { fixture, textarea, submit } = await render();
+    edit(textarea, '{"flaky_budget":9}');
+    vi.spyOn(TestBed.inject(NarrowMutationPolicy), 'allowsMutation').mockReturnValue(false);
+    submit.click();
+    await fixture.whenStable();
+    expect(store.publish).not.toHaveBeenCalled();
+    expect(textarea.value).toBe('{"flaky_budget":9}');
+  });
+  it('refuses direct editor opening on a narrow viewport before any body read', async () => {
+    vi.spyOn(TestBed.inject(NarrowMutationPolicy), 'allowsMutation').mockReturnValue(false);
+    const fixture = TestBed.createComponent(PublishDialogComponent);
+    const opener = document.createElement('button');
+    await fixture.componentInstance.open(revision.id, opener);
+    await fixture.whenStable();
+    expect(store.loadBody).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-policy-publish-dialog]')).toBeNull();
   });
 });

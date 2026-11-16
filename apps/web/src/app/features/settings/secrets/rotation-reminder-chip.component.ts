@@ -23,7 +23,6 @@ export const ROTATION_CLOCK = new InjectionToken<() => Date>('Settings rotation 
   template: `
     @if (reminder() !== 'none') {
       <span data-rotation-reminder [attr.data-reminder]="reminder()">
-        <span aria-hidden="true">{{ reminder() === 'expired' ? '⊗' : '◷' }}</span>
         <app-status-pill
           [tone]="reminder() === 'expired' ? 'danger' : 'warning'"
           [label]="reminder() === 'expired' ? expired : soon"

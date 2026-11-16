@@ -4,10 +4,10 @@
   }
 
   .spartan-tabs-list {
-    @apply rounded-lg p-(--eg-space-2) group-data-horizontal/tabs:h-9 data-[variant=line]:rounded-none;
+    @apply rounded-md p-(--eg-space-2) group-data-horizontal/tabs:h-9 data-[variant=line]:rounded-none;
   }
 
   .spartan-tabs-trigger {
-    @apply gap-1.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium group-data-[variant=default]/tabs-list:data-active:shadow-sm group-data-[variant=line]/tabs-list:data-active:shadow-none [&_hlm-icon:not([class*='text-'])]:text-[length:--spacing(4)];
+    @apply gap-1.5 rounded-sm border border-transparent px-2 py-1 text-sm font-medium group-data-[variant=default]/tabs-list:data-active:shadow-sm group-data-[variant=line]/tabs-list:data-active:shadow-none [&_hlm-icon:not([class*='text-'])]:text-[length:--spacing(4)];
   }
 }

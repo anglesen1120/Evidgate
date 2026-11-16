@@ -1,3 +1,4 @@
+import { BreakpointObserver } from '@angular/cdk/layout';
 import { DOCUMENT, formatNumber } from '@angular/common';
 import {
   afterNextRender,
@@ -12,16 +13,17 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { combineLatest } from 'rxjs';
+import { combineLatest, map } from 'rxjs';
 import { HlmAlert } from '@evidgate/ui/alert';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
+import { PageHeaderImports } from '../../../shared/ui/page-header';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
 import { RunListTableComponent } from './run-list-table.component';
 import { EMPTY_RUN_LIST_FILTERS, RunListStore } from './run-list.store';
@@ -37,6 +39,7 @@ import { EMPTY_RUN_LIST_FILTERS, RunListStore } from './run-list.store';
     HlmInput,
     HlmLabel,
     HlmSelectImports,
+    PageHeaderImports,
     RequestStateComponent,
     RunListTableComponent,
   ],
@@ -55,6 +58,19 @@ export class RunListPage {
   private readonly router = inject(Router);
   private readonly locale = inject(LOCALE_ID);
   protected draft = { ...EMPTY_RUN_LIST_FILTERS };
+  protected readonly desktopFilters = toSignal(
+    inject(BreakpointObserver)
+      .observe('(min-width: 768px)')
+      .pipe(map(({ matches }) => matches)),
+    { initialValue: false },
+  );
+  protected readonly activeFilterLabel = computed(() => {
+    const count = formatNumber(
+      Object.values(this.store.filters()).filter(Boolean).length,
+      this.locale,
+    );
+    return $localize`:@@runs.list.active-filters:Active filters: ${count}:count:`;
+  });
   protected readonly status = computed<'loading' | 'ready' | 'error'>(() => {
     const status = this.store.status();
     return status === 'idle' ? 'loading' : status;

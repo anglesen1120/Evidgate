@@ -4,7 +4,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { UiGalleryComponent } from './ui-gallery.component';
 
-describe('UiGalleryComponent (AC8 / AC9)', () => {
+describe('UiGalleryComponent', () => {
   let root: HTMLElement;
   let fixture: ComponentFixture<UiGalleryComponent>;
 
@@ -24,9 +24,13 @@ describe('UiGalleryComponent (AC8 / AC9)', () => {
     expect(Array.from(row?.children ?? []).map((element) => element.tagName.toLowerCase())).toEqual(
       ['app-evidence-badge', 'app-outcome-pill', 'app-decision-chip'],
     );
-    expect(row?.querySelector('app-evidence-badge')?.textContent).toContain('Evidence incomplete');
-    expect(row?.querySelector('app-outcome-pill')?.textContent).toContain('No results');
-    expect(row?.querySelector('app-decision-chip')?.textContent).toContain('Not evaluated');
+    expect(row?.querySelector('app-evidence-badge')?.textContent).toMatch(
+      /Completeness:\s*Incomplete/,
+    );
+    expect(row?.querySelector('app-outcome-pill')?.textContent).toMatch(/Outcome:\s*No results/);
+    expect(row?.querySelector('app-decision-chip')?.textContent).toMatch(
+      /Decision:\s*Not evaluated/,
+    );
   });
 
   it('never paints incomplete evidence and a pending decision as success', () => {
@@ -65,8 +69,11 @@ describe('UiGalleryComponent (AC8 / AC9)', () => {
         ?.getAttribute('aria-rowcount'),
     ).toBe('13');
     expect(
-      root.querySelectorAll('[data-demo="table-small"] .body-table [role="row"]'),
+      root.querySelectorAll('[data-demo="table-small"] .body-table [data-row-id]'),
     ).toHaveLength(12);
+    expect(
+      root.querySelectorAll('[data-demo="table-small"] .body-table [aria-rowindex="1"]'),
+    ).toHaveLength(1);
     expect(
       root
         .querySelector('[data-demo=\"table-virtual\"] [role=\"table\"]')
@@ -80,6 +87,22 @@ describe('UiGalleryComponent (AC8 / AC9)', () => {
         .querySelector('[data-demo=\"table-empty\"] [role=\"table\"]')
         ?.getAttribute('aria-rowcount'),
     ).toBe('1');
+    // The column-role specimen uses the shared table too: one component, roles and budgets, no
+    // hand-built table that can hide a column at a narrow width.
+    expect(root.querySelectorAll('app-data-table')).toHaveLength(4);
+    expect(
+      root.querySelectorAll('[data-demo="gallery-column-roles"] tbody tr[data-row-id]'),
+    ).toHaveLength(2);
+    expect(root.querySelector('[data-demo="gallery-column-roles"] app-hash-chip')).not.toBeNull();
+    expect(root.querySelector('[data-demo="gallery-column-roles"] app-status-pill')).not.toBeNull();
+    // The virtual window must stay a virtual window: any `cellTemplate` on its columns flips
+    // `DataTableComponent.customCells` and silently turns the 250-row fixture into a paged table.
+    expect(
+      root.querySelector('[data-demo="table-virtual"] cdk-virtual-scroll-viewport'),
+    ).not.toBeNull();
+    expect(
+      root.querySelectorAll('[data-demo="table-small"] cdk-virtual-scroll-viewport'),
+    ).toHaveLength(0);
   });
 
   it('includes every request pattern and both native retry eligibility states', async () => {

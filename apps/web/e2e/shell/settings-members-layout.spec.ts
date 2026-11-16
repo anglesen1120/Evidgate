@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { MEMBER_ROWS } from './member-controls';
 import {
   LOCALES,
   membersPath,
@@ -17,7 +18,7 @@ for (const locale of LOCALES) {
       await seedStoredTheme(page, theme);
       await page.goto(withVariants(membersPath(locale), [SETTINGS_ADMIN_GRANTS]));
       await expect(page.locator('app-members-page')).toHaveAttribute('data-members-phase', 'ready');
-      const rows = page.locator('app-member-list [data-members-row]');
+      const rows = page.locator(MEMBER_ROWS);
       expect(await rows.count()).toBeGreaterThan(0);
       expect(await rows.locator('.role-name').count()).toBeGreaterThan(1);
       expect(await rows.locator('button').count()).toBeGreaterThan(0);
@@ -55,22 +56,37 @@ for (const locale of LOCALES) {
       }
     });
 
-    test(`narrow member records retain table semantics and accessible labels (${locale}, ${theme})`, async ({
+    test(`narrow members retain labelled facts and full matrix semantics (${locale}, ${theme})`, async ({
       page,
     }) => {
       await page.setViewportSize({ width: 390, height: 844 });
       await seedStoredTheme(page, theme);
       await page.goto(withVariants(membersPath(locale), [SETTINGS_ADMIN_GRANTS]));
       await expect(page.locator('app-members-page')).toHaveAttribute('data-members-phase', 'ready');
-      for (const host of ['app-member-list', 'app-role-matrix']) {
-        const table = page.locator(host).getByRole('table');
-        await expect(table).toBeVisible();
-        expect(await table.getByRole('rowheader').count()).toBeGreaterThan(0);
-        expect(await table.getByRole('cell').count()).toBeGreaterThan(0);
-        for (const label of await table.locator('.record-label').all()) {
+      const records = page.locator('app-member-list app-data-table-records').getByRole('list');
+      await expect(records).toBeVisible();
+      await expect(records).toHaveAccessibleName(/\S/);
+      expect(await records.getByRole('listitem').count()).toBeGreaterThan(0);
+      for (const record of await records.getByRole('listitem').all()) {
+        const terms = record.getByRole('term');
+        expect(await terms.count()).toBeGreaterThan(0);
+        await expect(record.getByRole('definition')).toHaveCount(await terms.count());
+        for (const label of await terms.all()) {
           await expect(label).toBeVisible();
           await expect(label).not.toHaveAttribute('aria-hidden');
         }
+      }
+      await expect(page.locator('[data-members-granted-summary]')).toBeVisible();
+      const expand = page.locator('[aria-controls="members-full-matrix"]');
+      await expand.click();
+      await expect(expand).toHaveAttribute('aria-expanded', 'true');
+      const table = page.locator('app-role-matrix').getByRole('table');
+      await expect(table).toBeVisible();
+      expect(await table.getByRole('rowheader').count()).toBeGreaterThan(0);
+      expect(await table.getByRole('cell').count()).toBeGreaterThan(0);
+      for (const label of await table.locator('.record-label').all()) {
+        await expect(label).toBeVisible();
+        await expect(label).not.toHaveAttribute('aria-hidden');
       }
     });
   }

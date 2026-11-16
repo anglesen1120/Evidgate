@@ -9,6 +9,7 @@ import { SessionStore } from '../../../core/session/session.store';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
 import { MembersStore } from './members.store';
 import { ResendInviteDialogComponent } from './resend-invite-dialog.component';
+import { MEMBERS_DESKTOP } from './members-page.test-fixtures';
 
 const MEMBER: MembershipView = {
   id: 'pending',
@@ -44,6 +45,7 @@ describe('Invite token as an inert literal (09.7.1-T3 F12 QA2)', () => {
     };
     TestBed.configureTestingModule({
       providers: [
+        MEMBERS_DESKTOP,
         MembersStore,
         { provide: MembersDataService, useValue: data },
         { provide: SessionStore, useValue: { has: () => true } },

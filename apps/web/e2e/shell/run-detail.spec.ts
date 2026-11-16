@@ -49,10 +49,12 @@ for (const locale of LOCALES) {
   }) => {
     await page.goto(path(locale));
     await ready(page);
-    await expect(page.locator('[data-run-id]')).toHaveText(RUN.run_id);
+    await expect(page.locator('[data-run-id] > bdi')).toHaveText(RUN.run_id);
     await expect(page.locator('[data-run-version]')).toHaveText(String(RUN.version));
-    await expect(page.locator('[data-run-purpose]')).toHaveText(RUN.purpose);
-    await expect(page.locator('[data-run-evidence-revision]')).toHaveText(
+    await expect(page.locator('[data-run-purpose]')).toHaveText(
+      locale === 'vi' ? 'Chạy lại từ dữ liệu' : 'Replay',
+    );
+    await expect(page.locator('[data-run-evidence-revision] > bdi')).toHaveText(
       RUN.current_evidence_revision_id,
     );
     await expect(page.locator('[data-run-environment] bdi')).toHaveText(
@@ -70,8 +72,8 @@ for (const locale of LOCALES) {
       attemptsFixture.body.items.length,
     );
     await expect(
-      page.locator('app-attempts-table [data-attempts-healing-unavailable] app-status-pill'),
-    ).toHaveText(locale === 'vi' ? 'Chưa có trạng thái' : 'Status unavailable');
+      page.locator('app-attempts-table [data-attempts-healing-unavailable]'),
+    ).toContainText(locale === 'vi' ? 'Chưa được cung cấp' : 'Not provided');
     await expect(page.locator('app-run-detail-page h1')).toHaveCount(1);
     // The default decision fixture is a served `pending` body: its chip is the pending one and no
     // verdict chip or outcome pill exists.
@@ -83,8 +85,8 @@ for (const locale of LOCALES) {
     expect(await page.locator('app-run-detail-page').textContent()).not.toContain('PASS');
     await page.reload();
     await ready(page);
-    await expect(page.locator('[data-run-id]')).toHaveText(RUN.run_id);
-    await expect(page.locator('[data-run-evidence-revision]')).toHaveText(
+    await expect(page.locator('[data-run-id] > bdi')).toHaveText(RUN.run_id);
+    await expect(page.locator('[data-run-evidence-revision] > bdi')).toHaveText(
       RUN.current_evidence_revision_id,
     );
   });
@@ -105,13 +107,17 @@ for (const locale of LOCALES) {
     )!.execution_key;
     const chain = page.locator('app-attempts-table tbody').filter({ hasText: chainKey });
     await expect(chain.locator('[data-attempt-row]')).toHaveCount(2);
-    await expect(chain.locator('[data-attempt-normalised]').first()).toContainText('failed');
-    await expect(chain.locator('[data-attempt-normalised]').last()).toContainText('passed');
+    await expect(chain.locator('[data-attempt-normalised] app-status-pill').first()).toHaveText(
+      locale === 'vi' ? 'Không đạt' : 'Failed',
+    );
+    await expect(chain.locator('[data-attempt-normalised] app-status-pill').last()).toHaveText(
+      locale === 'vi' ? 'Đạt' : 'Passed',
+    );
     await expect(
       page
         .locator('[data-attempt-row]', { hasText: 'BLOCKED_BY_ENV' })
         .locator('[data-attempt-normalised]'),
-    ).not.toContainText('passed');
+    ).not.toContainText(locale === 'vi' ? 'Đạt' : 'Passed');
   });
   test(`empty and unavailable attempts reads render their own states (${locale})`, async ({
     page,
@@ -183,7 +189,7 @@ for (const locale of LOCALES) {
     );
     const before = page.url();
     const first = runList.body.items[0]!;
-    const rowLink = page.locator(`[data-run-row][data-run-id="${first.run_id}"] .identifier a`);
+    const rowLink = page.locator(`[data-run-row][data-run-id="${first.run_id}"] a`);
     await rowLink.focus();
     await page.keyboard.press('Enter');
     await ready(page);
@@ -211,7 +217,7 @@ for (const locale of LOCALES) {
       await page.setViewportSize({ width: 360, height: 800 });
       await page.goto(path(locale, 'detail-ref-format'));
       await ready(page);
-      const back = page.locator('app-run-detail-page header a');
+      const back = page.locator('app-run-detail-page app-page-header a');
       await back.focus();
       await expect(back).toBeFocused();
       expect((await back.boundingBox())?.height).toBeGreaterThanOrEqual(44);

@@ -1,11 +1,20 @@
 <section hlmCard class="gap-(--eg-space-4) p-(--eg-space-5)" aria-labelledby="attempts-title">
-  <h2 hlmCardTitle #heading id="attempts-title" tabindex="-1" class="m-0">{{ copy.title }}</h2>
+  <h2
+    hlmCardTitle
+    [size]="sectionSize"
+    #heading
+    id="attempts-title"
+    tabindex="-1"
+    class="m-0 scroll-mt-[calc(var(--eg-topbar-height,calc(2*var(--eg-space-12)))+var(--eg-space-4))] focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+  >
+    {{ copy.title }}
+  </h2>
   @if (status() === 'loading') {
     <app-loading-pattern />
   } @else if (status() === 'error') {
     <app-error-pattern [error]="error()" [headingLevel]="3" (retry)="requestFirstPageRetry()" />
   } @else if (attempts() === null) {
-    <p data-attempts-unavailable><app-status-pill [tone]="'neutral'" [label]="''" /></p>
+    <p data-attempts-unavailable class="text-muted-foreground">{{ copy.notProvided }}</p>
   } @else if (attempts()?.length === 0) {
     <app-empty-pattern [title]="copy.empty" />
   } @else {
@@ -15,7 +24,7 @@
         data-attempts-healing-unavailable
       >
         <span>{{ copy.healing }}</span>
-        <app-status-pill [tone]="'neutral'" [label]="''" />
+        <span>{{ copy.notProvided }}</span>
       </p>
     }
     <!-- Tailwind's strict max-width variant on the 767 px boundary compiles to `width < 767px`,
@@ -33,7 +42,7 @@
       <table
         hlmTable
         role="table"
-        class="w-full table-fixed border-collapse [@media(max-width:767px)]:block [&_th]:whitespace-normal [&_th]:wrap-anywhere [&_td]:whitespace-normal [&_td]:wrap-anywhere [&_th]:align-top [&_td]:align-top [&_bdi]:block"
+        class="eg-table-layout min-w-0 [min-inline-size:0] w-full border-collapse [@media(max-width:767px)]:block [&_th]:whitespace-normal [&_th]:wrap-normal [&_td]:whitespace-normal [&_td]:wrap-anywhere [&_th]:align-top [&_td]:align-top [&_bdi]:block"
       >
         <caption hlmCaption class="sr-only">
           {{
@@ -42,11 +51,36 @@
         </caption>
         <thead hlmTHead role="rowgroup" class="[@media(max-width:767px)]:sr-only">
           <tr hlmTr role="row">
-            <th hlmTh role="columnheader" scope="col">{{ copy.execution }}</th>
-            <th hlmTh role="columnheader" scope="col">{{ copy.raw }}</th>
-            <th hlmTh role="columnheader" scope="col">{{ copy.normalised }}</th>
-            <th hlmTh role="columnheader" scope="col">{{ copy.duration }}</th>
-            <th hlmTh role="columnheader" scope="col">{{ copy.artifacts }}</th>
+            <th
+              hlmTh
+              [hlmTableColumn]="columnRole.identity"
+              [columnKind]="identifierKind"
+              [columnPriority]="primaryColumn"
+              [columnOverflow]="scanOverflow"
+              role="columnheader"
+              scope="col"
+            >
+              {{ copy.execution }}
+            </th>
+            <th hlmTh [hlmTableColumn]="columnRole.text" role="columnheader" scope="col">
+              {{ copy.raw }}
+            </th>
+            <th
+              hlmTh
+              [hlmTableColumn]="columnRole.status"
+              [style.--eg-table-column-min]="normalisedWidth.min"
+              class="[@media(min-width:768px)]:[min-inline-size:var(--eg-table-column-min)]"
+              role="columnheader"
+              scope="col"
+            >
+              {{ copy.normalised }}
+            </th>
+            <th hlmTh [hlmTableColumn]="columnRole.number" role="columnheader" scope="col">
+              {{ copy.duration }}
+            </th>
+            <th hlmTh [hlmTableColumn]="columnRole.number" role="columnheader" scope="col">
+              {{ copy.artifacts }}
+            </th>
           </tr>
         </thead>
         @for (group of visibleGroups(); track group.executionKey) {
@@ -59,12 +93,16 @@
               <tr
                 hlmTr
                 role="row"
-                class="[@media(max-width:767px)]:block [@media(max-width:767px)]:p-(--eg-space-3)"
+                class="[@media(max-width:767px)]:block [@media(max-width:767px)]:p-(--eg-space-3) [@media(max-width:767px)]:[&>*]:[inline-size:100%] [@media(max-width:767px)]:[&>*]:[min-inline-size:0] [@media(max-width:767px)]:[&>*]:[max-inline-size:none] [@media(max-width:767px)]:[&>*]:[block-size:auto]"
                 data-attempt-row
                 [attr.data-pre-healing]="attempt === group.preHealingFailure ? '' : null"
               >
                 <th
                   hlmTh
+                  [hlmTableColumn]="columnRole.identity"
+                  [columnKind]="identifierKind"
+                  [columnPriority]="primaryColumn"
+                  [columnOverflow]="scanOverflow"
                   role="rowheader"
                   scope="row"
                   class="h-auto text-start font-(weight:--eg-weight-regular) scroll-mt-[calc(2*var(--eg-space-12))] target:outline-(length:--eg-focus-width) target:outline-(--eg-focus) [@media(max-width:767px)]:block"
@@ -76,10 +114,26 @@
                     class="mb-(--eg-space-2) block font-(weight:--eg-weight-semibold) text-muted-foreground [@media(min-width:768px)]:hidden"
                     >{{ copy.execution }}</span
                   >
-                  <bdi class="font-mono">{{ display(attempt.executionKey) }}</bdi>
-                  <span class="attempt-number block text-muted-foreground"
-                    >{{ copy.attempt }} {{ attempt.attemptNo }}</span
+                  <div
+                    class="grid min-w-0 justify-items-start gap-(--eg-space-2)"
+                    data-attempt-identity
                   >
+                    <div class="flex min-w-0 w-full items-center gap-(--eg-space-2)">
+                      <bdi class="min-w-0 max-w-full flex-1"
+                        ><app-data-table-value
+                          [value]="display(attempt.executionKey)"
+                          [truncate]="true"
+                      /></bdi>
+                      <app-copy-value-button
+                        class="shrink-0"
+                        [value]="attempt.executionKey"
+                        [label]="copy.execution"
+                      />
+                    </div>
+                    <span class="attempt-number block text-muted-foreground"
+                      >{{ copy.attempt }} {{ attempt.attemptNo }}</span
+                    >
+                  </div>
                   @if (attempt === group.preHealingFailure) {
                     <div
                       hlmAlert
@@ -94,12 +148,26 @@
                       data-healing-candidate
                     >
                       <strong>{{ copy.candidate }}</strong>
-                      <bdi class="font-mono">{{ display(candidate.candidateHash) }}</bdi>
+                      <bdi
+                        ><app-data-table-value
+                          [value]="display(candidate.candidateHash)"
+                          [truncate]="true"
+                      /></bdi>
+                      <app-copy-value-button
+                        [value]="candidate.candidateHash"
+                        [label]="copy.candidate"
+                      />
                       <span>{{ candidate.mode === 'shadow' ? copy.shadow : copy.official }}</span>
                     </div>
                   }
                 </th>
-                <td hlmTd role="cell" class="[@media(max-width:767px)]:block" data-attempt-raw>
+                <td
+                  hlmTd
+                  [hlmTableColumn]="columnRole.text"
+                  role="cell"
+                  class="[@media(max-width:767px)]:block"
+                  data-attempt-raw
+                >
                   <span
                     aria-hidden="true"
                     class="mb-(--eg-space-2) block font-(weight:--eg-weight-semibold) text-muted-foreground [@media(min-width:768px)]:hidden"
@@ -109,8 +177,10 @@
                 </td>
                 <td
                   hlmTd
+                  [hlmTableColumn]="columnRole.status"
+                  [style.--eg-table-column-min]="normalisedWidth.min"
                   role="cell"
-                  class="[@media(max-width:767px)]:block"
+                  class="[@media(max-width:767px)]:block [@media(min-width:768px)]:[min-inline-size:var(--eg-table-column-min)]"
                   data-attempt-normalised
                 >
                   <span
@@ -122,7 +192,7 @@
                     <bdi
                       ><app-status-pill
                         [tone]="tone(attempt.normalisedStatus)"
-                        [label]="display(attempt.normalisedStatus)"
+                        [label]="valueLabel('attempt', attempt.normalisedStatus)"
                     /></bdi>
                   } @else {
                     <app-status-pill [tone]="'neutral'" [label]="''" />
@@ -131,8 +201,9 @@
                 </td>
                 <td
                   hlmTd
+                  [hlmTableColumn]="columnRole.number"
                   role="cell"
-                  class="tabular-nums [@media(max-width:767px)]:block"
+                  class="tabular-nums [@media(max-width:767px)]:block [@media(max-width:767px)]:text-start"
                   data-attempt-duration
                 >
                   <span
@@ -144,14 +215,15 @@
                     @if (duration(attempt.durationMs); as value) {
                       {{ value }}
                     } @else {
-                      <app-status-pill [tone]="'neutral'" [label]="''" />
+                      <span class="text-muted-foreground">{{ copy.notProvided }}</span>
                     }
                   </span>
                 </td>
                 <td
                   hlmTd
+                  [hlmTableColumn]="columnRole.number"
                   role="cell"
-                  class="tabular-nums [@media(max-width:767px)]:block"
+                  class="tabular-nums [@media(max-width:767px)]:block [@media(max-width:767px)]:text-start"
                   data-attempt-artifacts
                 >
                   <span
@@ -161,9 +233,9 @@
                   >
                   <span data-attempt-value>
                     @if (knownArtifactCount(attempt.artifactCount)) {
-                      {{ attempt.artifactCount }}
+                      <app-number-value [value]="attempt.artifactCount" />
                     } @else {
-                      <app-status-pill [tone]="'neutral'" [label]="''" />
+                      <span class="text-muted-foreground">{{ copy.notProvided }}</span>
                     }
                   </span>
                 </td>

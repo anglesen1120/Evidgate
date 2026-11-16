@@ -130,6 +130,17 @@ describe('AuditExportComponent', () => {
     expect(data.list).not.toHaveBeenCalled();
     expect(click).not.toHaveBeenCalled();
   });
+  it('keeps the CSV utility content-sized and start-aligned without losing its scope', async () => {
+    const { root } = await render();
+    const action = root.querySelector<HTMLButtonElement>('[data-audit-export]');
+    if (!action) throw new Error('Expected export action');
+    expect(action.classList.contains('w-fit')).toBe(true);
+    expect(action.classList.contains('max-w-full')).toBe(true);
+    expect(action.classList.contains('justify-self-start')).toBe(true);
+    expect(action.classList.contains('min-h-[var(--eg-control-touch)]')).toBe(true);
+    expect(action.getAttribute('aria-describedby')).toBe('audit-export-scope-title');
+    expect(data.list).not.toHaveBeenCalled();
+  });
   it('fetches exactly 50 pages of a 15,000 row fixture, downloads once and persistently announces the exact cap', async () => {
     data.rows = Array.from({ length: 15_000 }, (_, index) => entry(index));
     const { fixture, root } = await render();
@@ -314,7 +325,7 @@ describe('AuditExportComponent', () => {
     expect(data.list).toHaveBeenCalledTimes(50);
     expect(root.querySelector('[data-audit-export-capped]')).toBeNull();
     expect(root.querySelector('[data-audit-export-done]')?.textContent).toBe(
-      'Exported 10000 rows.',
+      'Exported 10,000 rows.',
     );
   });
   it('uses the currently applied filters for every export page', async () => {
@@ -329,6 +340,20 @@ describe('AuditExportComponent', () => {
     });
     data.list.mockClear();
     const { fixture, root } = await render();
+    const scope = root.querySelector('section[aria-labelledby="audit-export-scope-title"]');
+    expect(scope?.textContent).toContain('org1');
+    expect(scope?.textContent).toContain('System');
+    expect(scope?.textContent).toContain('run.created');
+    expect(scope?.textContent).toContain('run');
+    const times = scope?.querySelectorAll('time') ?? [];
+    expect([...times].map((time) => time.getAttribute('datetime'))).toEqual([
+      '2026-10-20T00:00:00.000Z',
+      '2026-10-21T00:00:00.000Z',
+    ]);
+    for (const time of times) {
+      expect(time.textContent).toContain('UTC');
+      expect(time.textContent).not.toContain(time.getAttribute('datetime'));
+    }
     root.querySelector<HTMLButtonElement>('[data-audit-export]')!.click();
     await fixture.whenStable();
     expect(data.list).toHaveBeenCalledTimes(2);
@@ -342,5 +367,73 @@ describe('AuditExportComponent', () => {
         limit: 200,
       });
     }
+  });
+  it.each(['en-US', 'vi'])(
+    'formats applied export bounds in %s without changing UTC filter precision',
+    async (locale) => {
+      TestBed.resetTestingModule();
+      registerLocaleData(viLocale);
+      configure(locale);
+      const store = TestBed.inject(AuditStore);
+      const from = '2026-10-20T07:30:00.125+07:00';
+      const to = '2026-10-21T07:30:00.125+07:00';
+      await store.load('org1', { actorType: '', action: '', objectType: '', from, to });
+      const { root } = await render();
+      const times = root.querySelectorAll('time');
+      expect([...times].map((time) => time.getAttribute('datetime'))).toEqual([from, to]);
+      expect(times).toHaveLength(2);
+      expect(times[0]?.textContent).toContain(locale === 'vi' ? '20/10/2026' : '10/20/2026');
+      expect(times[0]?.textContent).toContain('UTC');
+      expect(root.textContent).toContain('From (inclusive');
+      expect(root.textContent).toContain('To (exclusive');
+    },
+  );
+  it('blocks export with an associated explanation until draft filters are applied', async () => {
+    const { fixture, root } = await render();
+    fixture.componentRef.setInput('hasDraftChanges', true);
+    await fixture.whenStable();
+    const action = root.querySelector<HTMLButtonElement>('[data-audit-export]');
+    expect(action?.disabled).toBe(true);
+    expect(action?.getAttribute('aria-describedby')).toBe('audit-export-draft-hint');
+    expect(root.querySelector('#audit-export-draft-hint')?.textContent).toContain('Apply or clear');
+    action?.click();
+    expect(data.list).not.toHaveBeenCalled();
+    fixture.componentRef.setInput('hasDraftChanges', false);
+    await fixture.whenStable();
+    expect(action?.disabled).toBe(false);
+    expect(root.querySelector('#audit-export-draft-hint')).toBeNull();
+    expect(root.querySelector('dl')?.textContent).toContain('No time limit');
+  });
+
+  it.each([
+    ['en', '1,200'],
+    ['vi', '1.200'],
+  ])('formats progress and completion through the %s locale', async (locale, count) => {
+    registerLocaleData(viLocale);
+    configure(locale);
+    data.rows = Array.from({ length: 1_200 }, (_, index) => entry(index));
+    const normal = data.list.getMockImplementation();
+    if (!normal) throw new Error('Expected paged data implementation');
+    const pending = deferred<AuditListResponse>();
+    const last = data.rows.length;
+    data.list.mockImplementation((org, query, cursor) => {
+      if (cursor === String(last)) return pending.promise;
+      return normal(org, query, cursor).then((page) =>
+        page.next_cursor === null ? { ...page, next_cursor: String(last) } : page,
+      );
+    });
+    const { fixture, root } = await render();
+    root.querySelector<HTMLButtonElement>('[data-audit-export]')?.click();
+    await vi.waitFor(() => expect(data.list).toHaveBeenCalledTimes(7));
+    fixture.detectChanges();
+    expect(root.querySelector('[aria-live="polite"]')?.textContent).toContain(
+      `Exporting… ${count} rows`,
+    );
+    pending.resolve({ items: [], next_cursor: null });
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(root.querySelector('[data-audit-export-done]')?.textContent).toBe(
+      `Exported ${count} rows.`,
+    );
   });
 });

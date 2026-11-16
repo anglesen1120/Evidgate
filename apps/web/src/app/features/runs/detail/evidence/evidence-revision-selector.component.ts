@@ -15,6 +15,8 @@ import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
 import { BrnSelectTrigger } from '@spartan-ng/brain/select';
 
+import { shortDateFormat } from '../../../../shared/time/short-date-format';
+
 /** Selection and pagination are intents; only the page decides which revision is authoritative. */
 @Component({
   selector: 'app-evidence-revision-selector',
@@ -62,7 +64,12 @@ export class EvidenceRevisionSelectorComponent {
 
   /** `Revision {revision} · {createdAt} UTC`: the number is the key, the time is context. */
   protected optionLabel(revision: EvidenceRevision): string {
-    const createdAt = formatDate(revision.created_at, 'short', this.locale, 'UTC');
+    const createdAt = formatDate(
+      revision.created_at,
+      shortDateFormat(this.locale, true),
+      this.locale,
+      'UTC',
+    );
     return $localize`:@@runs.evidence.revision-option:Revision ${revision.revision_no}:revision: · ${createdAt}:createdAt: UTC`;
   }
 

@@ -4,6 +4,7 @@ import {
   Injector,
   afterNextRender,
   afterRenderEffect,
+  computed,
   inject,
   signal,
   viewChild,
@@ -16,10 +17,13 @@ import {
   NavigationEnd,
   NavigationError,
   Router,
+  RouterLink,
 } from '@angular/router';
 import { combineLatest, distinctUntilChanged, filter, map } from 'rxjs';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
+import { HlmLabel } from '@evidgate/ui/label';
+import { HlmSelectImports } from '@evidgate/ui/select';
 
 import {
   ErrorPatternComponent,
@@ -39,7 +43,10 @@ import { StepPendingComponent } from './step-pending.component';
   selector: 'app-onboarding-shell',
   imports: [
     HlmButton,
+    RouterLink,
     HlmCardImports,
+    HlmLabel,
+    HlmSelectImports,
     CreateProjectPage,
     ConnectCiPage,
     EnableCollectionPage,
@@ -58,6 +65,22 @@ export class OnboardingShellComponent {
   protected readonly store = inject(OnboardingStore);
   protected readonly outlineVariant = 'outline';
   protected readonly ghostVariant = 'ghost';
+  protected readonly pageHeadingSize = 'page' as const;
+  protected readonly sectionHeadingSize = 'section' as const;
+  protected readonly stepDetailsLabel = $localize`:@@onboarding.shell.step-details:Step details`;
+  protected readonly stepSelectLabel = $localize`:@@onboarding.shell.step-select:Setup step`;
+  protected readonly loadingLabel = $localize`:@@onboarding.shell.loading:Loading project setup`;
+  protected readonly completedCount = computed(() => {
+    const done = this.store.done();
+    let completed = 0;
+    for (const step of this.steps) if (done[step.number]) completed += 1;
+    return completed;
+  });
+  protected readonly progressText = computed(() => {
+    const completed = this.completedCount();
+    const total = this.steps.length;
+    return $localize`:@@onboarding.shell.progress-count:${completed}:COMPLETED: of ${total}:TOTAL: steps complete`;
+  });
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);
@@ -117,6 +140,13 @@ export class OnboardingShellComponent {
   protected readonly incompleteLabel = $localize`:@@onboarding.shell.incomplete:Not complete`;
   protected readonly backLabel = $localize`:@@onboarding.shell.back:Back`;
   protected readonly nextLabel = $localize`:@@onboarding.shell.next:Next`;
+  protected readonly openProjectLabel = $localize`:@@onboarding.shell.open-project:Open project`;
+  protected readonly completionLink = computed(() => {
+    const project = this.store.project();
+    return this.store.viewStep() === 5 && this.store.currentStep() === 'enabled' && project
+      ? ['/orgs', this.orgId(), 'projects', project.id, 'overview']
+      : null;
+  });
   protected readonly retryLabel = $localize`:@@onboarding.shell.retry:Retry loading setup`;
   protected readonly gatedReason = $localize`:@@onboarding.shell.next-disabled:Complete this step before continuing.`;
   protected readonly finalReason = $localize`:@@onboarding.shell.final-step:There is no next setup step.`;
@@ -308,6 +338,11 @@ export class OnboardingShellComponent {
     this.announceCreatedStep.set(false);
     this.focusedToken = this.store.focusToken();
     heading.focus();
+  }
+
+  protected selectStep(value: unknown): void {
+    const step = this.steps.find((candidate) => candidate.number === value);
+    if (step && this.canSelect(step.number)) this.store.selectStep(step.number);
   }
 
   protected canSelect(step: StepNumber): boolean {

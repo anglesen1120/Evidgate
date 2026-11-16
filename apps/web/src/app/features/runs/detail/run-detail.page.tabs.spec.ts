@@ -1,5 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { clearTranslations, loadTranslations } from '@angular/localize';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { ReleasesDataService } from '../../../core/data/releases-data.service';
@@ -35,7 +36,10 @@ describe('RunDetailPage evidence and decision tabs', () => {
       ],
     });
   });
-  afterEach(() => TestBed.resetTestingModule());
+  afterEach(() => {
+    clearTranslations();
+    TestBed.resetTestingModule();
+  });
 
   async function open() {
     const harness = await RouterTestingHarness.create();
@@ -48,7 +52,7 @@ describe('RunDetailPage evidence and decision tabs', () => {
     if (!root) throw new Error('Run detail was not rendered');
     const tabs = [...root.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
     const evidence = tabs.find((tab) => tab.textContent?.trim() === 'Evidence');
-    const decision = tabs.find((tab) => tab.textContent?.trim() === 'Latest live decision');
+    const decision = tabs.find((tab) => tab.hasAttribute('aria-label'));
     if (!evidence || !decision) throw new Error('Detail tab triggers were not rendered');
     return { harness, root, evidence, decision };
   }
@@ -58,6 +62,13 @@ describe('RunDetailPage evidence and decision tabs', () => {
     const tablist = root.querySelector('[role="tablist"]');
     expect(tablist?.getAttribute('aria-label')).toBe('Run sections');
     expect(tablist?.getAttribute('aria-label')).not.toBe(root.querySelector('h1')?.textContent);
+    expect(decision.textContent?.trim()).toBe('Live decision');
+    expect(decision.getAttribute('aria-label')).toBe('Latest live decision');
+    expect(tablist?.classList.contains('flex-wrap')).toBe(true);
+    for (const tab of [evidence, decision]) {
+      expect(tab.classList.contains('whitespace-nowrap')).toBe(true);
+      expect(tab.classList.contains('flex-none')).toBe(true);
+    }
     const panels = [...root.querySelectorAll<HTMLElement>('[role="tabpanel"]')];
     expect(panels).toHaveLength(2);
     expect(evidence.getAttribute('aria-selected')).toBe('true');
@@ -82,6 +93,19 @@ describe('RunDetailPage evidence and decision tabs', () => {
     expect(listAttempts).toHaveBeenCalledTimes(1);
     expect(listEvidenceRevisions).toHaveBeenCalledTimes(1);
     expect(getDecision).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the authored Vietnamese compact tab while retaining the complete live-decision name', async () => {
+    loadTranslations({
+      'runs.detail.decision-tab-compact': 'Quyết định',
+      'runs.decision.title': 'Quyết định trực tiếp mới nhất',
+    });
+    const { decision, root } = await open();
+    expect(decision.textContent?.trim()).toBe('Quyết định');
+    expect(decision.getAttribute('aria-label')).toBe('Quyết định trực tiếp mới nhất');
+    expect(root.querySelector('app-decision-view #decision-title')?.textContent).toContain(
+      'Quyết định trực tiếp mới nhất',
+    );
   });
 
   it('announces an evidence change once, outside the hidden panel, while the decision tab is active', async () => {
@@ -189,22 +213,31 @@ describe('RunDetailPage evidence and decision tabs', () => {
     expect(root.querySelector<HTMLElement>('[role="tabpanel"][hidden]')).toBe(evidencePanel);
   });
 
-  it('keeps the decision panel a Tab stop when the decision renders no control', async () => {
-    getDecision.mockResolvedValue(liveBody({ evidence_revision: 3 }));
-    const { root, harness, decision } = await open();
-    decision.click();
-    await harness.fixture.whenStable();
-    const decisionPanel = root
-      .querySelector('app-decision-view')
-      ?.closest<HTMLElement>('[role="tabpanel"]');
-    if (!decisionPanel) throw new Error('Decision panel was not rendered');
-    expect(root.querySelector('[data-decision-mismatch]')).toBeNull();
-    expect(decisionPanel.querySelector('a[href], button, select, textarea')).toBeNull();
-    expect(decisionPanel.hidden).toBe(false);
-    expect(decisionPanel.getAttribute('tabindex')).toBe('0');
-    expect(decisionPanel.tabIndex).toBe(0);
-    expect(root.querySelector<HTMLElement>('[role="tabpanel"][hidden]')).not.toBe(decisionPanel);
-  });
+  it.each([
+    ['not evaluated', null, 0],
+    ['evaluated', liveBody({ evidence_revision: 3 }), 3],
+  ] as const)(
+    'keeps the decision panel a Tab stop for a %s decision',
+    async (_state, body, copies) => {
+      getDecision.mockResolvedValue(body);
+      const { root, harness, decision } = await open();
+      decision.click();
+      await harness.fixture.whenStable();
+      const decisionPanel = root
+        .querySelector('app-decision-view')
+        ?.closest<HTMLElement>('[role="tabpanel"]');
+      if (!decisionPanel) throw new Error('Decision panel was not rendered');
+      expect(root.querySelector('[data-decision-mismatch]')).toBeNull();
+      expect(decisionPanel.querySelectorAll('app-copy-value-button button')).toHaveLength(copies);
+      if (copies === 0) {
+        expect(decisionPanel.querySelector('a[href], button, select, textarea')).toBeNull();
+      }
+      expect(decisionPanel.hidden).toBe(false);
+      expect(decisionPanel.getAttribute('tabindex')).toBe('0');
+      expect(decisionPanel.tabIndex).toBe(0);
+      expect(root.querySelector<HTMLElement>('[role="tabpanel"][hidden]')).not.toBe(decisionPanel);
+    },
+  );
 
   it('supports arrow, Home and End keyboard selection with roving focus', async () => {
     const { harness, evidence, decision } = await open();

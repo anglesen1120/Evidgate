@@ -18,6 +18,6 @@ export const API_TOKENS_WRITE_COPY = {
   revoked: $localize`:@@settings.api-tokens.revoke-saved:Token revoked. The list is refreshed from the server.`,
   escalation: $localize`:@@settings.api-tokens.escalation:These permissions cannot be granted to this token. Review the server explanation below.`,
   uncertain: $localize`:@@settings.api-tokens.uncertain:The create response was not received. Check the token list and revoke any token you cannot recover before creating another.`,
-  inspect: $localize`:@@settings.api-tokens.inspect:Close and check token list`,
+  inspect: $localize`:@@settings.api-tokens.close-and-check:Close and check token list`,
   actions: $localize`:@@settings.api-tokens.actions:Actions`,
 };

@@ -4,6 +4,7 @@ import {
   DestroyRef,
   type ElementRef,
   computed,
+  effect,
   inject,
   input,
   signal,
@@ -25,10 +26,20 @@ import {
   focusWaitingLine,
   requestRefusalFocus,
 } from '../../../shared/a11y/step-focus';
+import {
+  createFormFeedback,
+  FieldFeedbackComponent,
+  FormErrorSummaryComponent,
+  FormRequiredNoteComponent,
+} from '../../../shared/forms';
+import {
+  DesktopMutationDirective,
+  DesktopRequiredNoticeComponent,
+  NarrowMutationPolicy,
+} from '../../../shared/ui/narrow';
 import { RequestStateComponent } from '../../../shared/ui/states';
 import { OnboardingStore } from '../onboarding.store';
-import { sanitizeLabel } from './default-policy';
-import { describedBy, fieldDetails, reasonFor } from './field-details';
+import { fieldDetails, reasonFor } from './field-details';
 import {
   NO_DISMISSED_REASONS,
   dismissFieldReason,
@@ -38,33 +49,62 @@ import {
 
 @Component({
   selector: 'app-onboarding-create-project',
-  imports: [FormsModule, RequestStateComponent, HlmAlertImports, HlmButton, HlmInput, HlmLabel],
+  imports: [
+    FormsModule,
+    RequestStateComponent,
+    HlmAlertImports,
+    HlmButton,
+    HlmInput,
+    HlmLabel,
+    FieldFeedbackComponent,
+    FormErrorSummaryComponent,
+    FormRequiredNoteComponent,
+    DesktopMutationDirective,
+    DesktopRequiredNoticeComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'grid min-w-0 gap-(--eg-space-5)' },
   template: `
+    <p
+      class="m-0 min-h-(--eg-leading-sm) text-sm focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
+      role="status"
+      tabindex="-1"
+      #busyStatus
+      data-testid="onboarding-project-busy"
+    >
+      @if (busy()) {
+        {{ creatingLabel }}
+      }
+    </p>
+    @if (permitted()) {
+      <app-desktop-required-notice />
+    }
+    @if (policy.narrow()) {
+      <dl class="m-0 grid min-w-0 gap-(--eg-space-4) text-sm [&_dd]:m-0 [&_dd]:wrap-anywhere">
+        <div>
+          <dt>{{ nameLabel }}</dt>
+          <dd>{{ name() || notSetLabel }}</dd>
+        </div>
+        <div>
+          <dt>{{ slugLabel }}</dt>
+          <dd>{{ slug() || notSetLabel }}</dd>
+        </div>
+      </dl>
+      @if (!permitted()) {
+        <p class="m-0 text-sm">{{ permissionReason }}</p>
+      }
+    }
     <form
-      class="grid min-w-0 gap-(--eg-space-5) text-sm text-muted-foreground [&_p]:m-0"
+      *appDesktopMutation
+      class="grid min-w-0 max-w-[65ch] gap-(--eg-space-5) text-sm text-muted-foreground [&_p]:m-0"
       #form="ngForm"
-      ngNativeValidate
+      novalidate
       (ngSubmit)="submit(form)"
       [attr.aria-busy]="busy()"
     >
-      <!-- The request disables both fields and the submit, so the pressed control cannot keep
-           focus: the page moves it here first, which is also where the waiting state is spoken. -->
-      <p
-        class="min-h-(--eg-leading-sm) focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
-        role="status"
-        tabindex="-1"
-        #busyStatus
-        data-testid="onboarding-project-busy"
-      >
-        @if (busy()) {
-          {{ creatingLabel }}
-        }
-      </p>
+      <app-form-required-note />
+      <app-form-error-summary [summaryId]="'onboarding-project-errors'" [feedback]="feedback" />
       <div class="grid min-w-0 gap-(--eg-space-3)">
-        @let nameError =
-          (nameField.touched || submitted()) && !name().trim() ? nameRequired : serverNameError();
         <label hlmLabel for="onboarding-project-name">{{ nameLabel }}</label>
         <input
           hlmInput
@@ -77,35 +117,16 @@ import {
           required
           [attr.pattern]="nonBlankPattern"
           [(ngModel)]="name"
-          #nameField="ngModel"
           (input)="dismissServerReason('name')"
-          (invalid)="submitted.set(true)"
+          (blur)="nameField.blur()"
           [disabled]="busy() || !permitted()"
-          [forceInvalid]="nameError !== null"
-          [attr.aria-invalid]="nameError === null ? null : 'true'"
-          [aria-describedby]="
-            describedBy(
-              'onboarding-project-name-help',
-              nameError === null ? null : 'onboarding-project-name-error'
-            )
-          "
+          [forceInvalid]="nameField.invalid()"
+          [attr.aria-invalid]="nameField.ariaInvalid()"
+          [aria-describedby]="nameField.describedBy()"
         />
-        <p id="onboarding-project-name-help">{{ nameHint }}</p>
-        <!-- A refused field is spoken once, by the details alert; its own live region would repeat
-             the same sentence. When no alert renders (forbidden, not_found), the field keeps it. -->
-        <p
-          id="onboarding-project-name-error"
-          class="text-destructive"
-          [attr.aria-live]="serverNameError() !== null && showsEnvelopeDetails() ? null : 'polite'"
-        >
-          @if (nameError !== null) {
-            {{ nameError }}
-          }
-        </p>
+        <app-field-feedback [field]="nameField" />
       </div>
       <div class="grid min-w-0 gap-(--eg-space-3)">
-        @let slugError =
-          (slugField.touched || submitted()) && !slug().trim() ? slugRequired : serverSlugError();
         <label hlmLabel for="onboarding-project-slug">{{ slugLabel }}</label>
         <input
           hlmInput
@@ -119,29 +140,14 @@ import {
           required
           [attr.pattern]="nonBlankPattern"
           [(ngModel)]="slug"
-          #slugField="ngModel"
           (input)="dismissServerReason('slug')"
-          (invalid)="submitted.set(true)"
+          (blur)="slugField.blur()"
           [disabled]="busy() || !permitted()"
-          [forceInvalid]="slugError !== null"
-          [attr.aria-invalid]="slugError === null ? null : 'true'"
-          [aria-describedby]="
-            describedBy(
-              'onboarding-project-slug-help',
-              slugError === null ? null : 'onboarding-project-slug-error'
-            )
-          "
+          [forceInvalid]="slugField.invalid()"
+          [attr.aria-invalid]="slugField.ariaInvalid()"
+          [aria-describedby]="slugField.describedBy()"
         />
-        <p id="onboarding-project-slug-help">{{ slugHint }}</p>
-        <p
-          id="onboarding-project-slug-error"
-          class="text-destructive"
-          [attr.aria-live]="serverSlugError() !== null && showsEnvelopeDetails() ? null : 'polite'"
-        >
-          @if (slugError !== null) {
-            {{ slugError }}
-          }
-        </p>
+        <app-field-feedback [field]="slugField" />
       </div>
       @if (!permitted()) {
         <p id="onboarding-project-permission">{{ permissionReason }}</p>
@@ -163,7 +169,9 @@ import {
       <app-request-state
         [status]="'error'"
         [error]="failure"
-        [retryEligible]="permitted() && creation.retryEligible() && !draftChanged()"
+        [retryEligible]="
+          policy.canMutate() && permitted() && creation.retryEligible() && !draftChanged()
+        "
         [retryBusy]="busy()"
         (retry)="retry()"
       />
@@ -201,7 +209,7 @@ import {
               </p>
               <ul class="text-destructive">
                 @for (detail of details(); track $index) {
-                  <li>{{ detail.path }} {{ detail.reason }}</li>
+                  <li>{{ detail.message }}</li>
                 }
               </ul>
             </div>
@@ -215,12 +223,12 @@ export class CreateProjectPage {
   readonly orgId = input.required<string>();
   protected readonly name = signal('');
   protected readonly slug = signal('');
-  protected readonly submitted = signal(false);
   private readonly data = inject(OnboardingDataService);
   private readonly store = inject(OnboardingStore);
   private readonly session = inject(SessionStore);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  protected readonly policy = inject(NarrowMutationPolicy);
   /**
    * The body the current Idempotency intent was submitted with; `null` before the first submit.
    * The operation always sends this — not the live draft — so a retry replays the payload the key
@@ -266,15 +274,7 @@ export class CreateProjectPage {
 
   /** The envelope's field rows, so a refusal points at the control it names. */
   protected readonly details = computed(() =>
-    // Sanitised before the field is read, so an invisible character cannot stop a row from
-    // matching its control. The values are still rendered by interpolation only.
-    fieldDetails(
-      (this.creation.error()?.details ?? []).map((detail) =>
-        detail.path === undefined
-          ? { ...detail, reason: sanitizeLabel(detail.reason) }
-          : { ...detail, path: sanitizeLabel(detail.path), reason: sanitizeLabel(detail.reason) },
-      ),
-    ),
+    fieldDetails(this.creation.error()?.details ?? [], 'project'),
   );
   /** The reasons the visitor has answered by editing a field; see `server-reasons.ts`. */
   private readonly dismissed = signal<DismissedReasons>(NO_DISMISSED_REASONS);
@@ -301,7 +301,6 @@ export class CreateProjectPage {
     const failure = this.creation.error();
     return failure !== null && failure.kind !== 'forbidden' && failure.kind !== 'not_found';
   });
-  protected readonly describedBy = describedBy;
   private readonly busyStatus = viewChild<ElementRef<HTMLElement>>('busyStatus');
   private readonly failureHeadingRef = viewChild<ElementRef<HTMLElement>>('failureHeadingEl');
   /**
@@ -321,11 +320,42 @@ export class CreateProjectPage {
   protected readonly creatingLabel = $localize`:@@onboarding.create.submitting:Creating project…`;
   protected readonly failureHeading = $localize`:@@onboarding.create.failure-heading:The project could not be created`;
   protected readonly detailsLabel = $localize`:@@onboarding.create.details-label:The server refused these values`;
-  // HTML validation only: a whitespace-only value is rejected before the request leaves the page.
-  // Bound as an attribute so the template-i18n rule never treats the regex as translatable text.
+  // Native requiredness/pattern metadata remains; the shared summary owns failed-submit focus.
   protected readonly nonBlankPattern = '.*\\S.*';
+  protected readonly notSetLabel = $localize`:@@onboarding.create.not-set:Not set`;
+  protected readonly feedback = createFormFeedback([
+    {
+      id: 'onboarding-project-name',
+      label: this.nameLabel,
+      hint: this.nameHint,
+      error: () => (!this.name().trim() ? this.nameRequired : this.serverNameError()),
+    },
+    {
+      id: 'onboarding-project-slug',
+      label: this.slugLabel,
+      hint: this.slugHint,
+      error: () => (!this.slug().trim() ? this.slugRequired : this.serverSlugError()),
+    },
+  ]);
+  // Envelope rows already announce field reasons; hidden-kind refusals need the inline channel.
+  protected readonly nameField = {
+    ...this.feedback.fields[0]!,
+    announceInline: computed(
+      () => !this.showsEnvelopeDetails() && this.feedback.fields[0]!.announceInline(),
+    ),
+  };
+  protected readonly slugField = {
+    ...this.feedback.fields[1]!,
+    announceInline: computed(
+      () => !this.showsEnvelopeDetails() && this.feedback.fields[1]!.announceInline(),
+    ),
+  };
 
   constructor() {
+    effect(() => {
+      this.orgId();
+      this.feedback.reset();
+    });
     this.destroyRef.onDestroy(() => this.creation.reset());
     // The refusal heading is the page's own focus target: outside every alert, so moving there
     // repeats nothing. The kind is decided before the ref is read, because an effect can run
@@ -338,8 +368,15 @@ export class CreateProjectPage {
   }
 
   protected async submit(form: NgForm): Promise<void> {
-    this.submitted.set(true);
-    if (this.submitDisabled() || form.invalid || !this.name().trim() || !this.slug().trim()) return;
+    if (!this.policy.allowsMutation() || this.submitDisabled()) return;
+    if (form.invalid || !this.name().trim() || !this.slug().trim()) {
+      this.feedback.submit();
+      return;
+    }
+    // A valid local submit owes no summary focus; a server refusal keeps its own focus contract.
+    this.feedback.reset();
+    this.nameField.blur();
+    this.slugField.blur();
     const body: CreateProjectRequest = { name: this.name().trim(), slug: this.slug().trim() };
     // An unchanged body keeps the intent and its key: after an ambiguous network failure the
     // resource may already exist, and a fresh key would let the server create it twice. Only a
@@ -357,7 +394,7 @@ export class CreateProjectPage {
   }
 
   protected async retry(): Promise<void> {
-    if (!this.permitted()) return;
+    if (!this.policy.allowsMutation() || !this.permitted()) return;
     focusWaitingLine(this.busyStatus);
     await this.creation.retry();
     await this.finishCreation();

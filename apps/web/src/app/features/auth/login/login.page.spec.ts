@@ -62,6 +62,13 @@ describe('LoginPage', () => {
   });
 
   it('separates branded preferences, introduction, provider card and private destination context', () => {
+    expect(heading().getAttribute('data-title-size')).toBe('page');
+    expect(root.querySelector('#provider-heading')?.getAttribute('data-title-size')).toBe(
+      'subsection',
+    );
+    expect(root.querySelector('#destination-heading')?.getAttribute('data-title-size')).toBe(
+      'subsection',
+    );
     expect(root.querySelector('.login-topbar .login-brand')?.textContent).toContain('Evidgate');
     expect(root.querySelector('.login-intro h1')).toBe(heading());
     expect(root.querySelector('.login-card')?.getAttribute('aria-labelledby')).toBe(

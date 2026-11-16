@@ -235,4 +235,34 @@ describe('ConnectStepRevealComponent', () => {
     expect(root.querySelector('script')).toBeNull();
     expect(root.textContent).not.toContain(longValue);
   });
+  it.each(['light', 'dark'])(
+    'retains wrapping layout hooks with expanded Vietnamese actions in %s mode',
+    async (theme) => {
+      const previousTheme = document.documentElement.getAttribute('data-theme');
+      document.documentElement.setAttribute('data-theme', theme);
+      try {
+        fixture.componentRef.setInput(
+          'copyLabel',
+          'Sao chép giá trị để lưu vào trình quản lý bí mật CI',
+        );
+        fixture.componentRef.setInput('dismissLabel', 'Ẩn giá trị bí mật sau khi đã lưu an toàn');
+        fixture.componentRef.setInput('value', 'test-once-' + 'x'.repeat(4096));
+        await fixture.whenStable();
+        for (const button of root.querySelectorAll('button')) {
+          expect(button.classList).toContain('h-auto');
+          expect(button.classList).toContain('min-w-0');
+          expect(button.classList).toContain('whitespace-normal');
+          expect(button.classList).toContain('wrap-anywhere');
+        }
+        expect(control().classList).toContain('min-w-0');
+        copy().click();
+        await fixture.whenStable();
+        expect(writeText).toHaveBeenCalledExactlyOnceWith('test-once-' + 'x'.repeat(4096));
+        expect(status().textContent).not.toContain('test-once-');
+      } finally {
+        if (previousTheme === null) document.documentElement.removeAttribute('data-theme');
+        else document.documentElement.setAttribute('data-theme', previousTheme);
+      }
+    },
+  );
 });

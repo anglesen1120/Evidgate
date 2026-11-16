@@ -6,6 +6,7 @@ import type { IngestTokenView } from '@evidgate/sdk';
 import fixtureData from '../../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-token/input.json';
 import { ROTATION_CLOCK } from './rotation-reminder-chip.component';
 import { SecretReferenceListComponent } from './secret-reference-list.component';
+import { SECRET_DESKTOP_PROVIDER } from './secrets-page.testing';
 
 const base = fixtureData.body.items[0] as IngestTokenView;
 const NOW = new Date('2026-10-25T00:00:00Z');
@@ -23,7 +24,7 @@ describe('SecretReferenceList reminder wiring and metadata branches (09.7.1-T3 Q
 
   function mount(rows: readonly IngestTokenView[]): HTMLElement {
     TestBed.configureTestingModule({
-      providers: [{ provide: ROTATION_CLOCK, useValue: () => NOW }],
+      providers: [SECRET_DESKTOP_PROVIDER, { provide: ROTATION_CLOCK, useValue: () => NOW }],
     });
     const fixture = TestBed.createComponent(SecretReferenceListComponent);
     fixture.componentRef.setInput('rows', rows);
@@ -63,8 +64,8 @@ describe('SecretReferenceList reminder wiring and metadata branches (09.7.1-T3 Q
   it('renders an empty scope list as unavailable instead of an empty cell', () => {
     const root = mount([row('no-scopes', { scopes: [] })]);
 
-    const item = root.querySelector('li[data-secret-reference]');
-    expect(item?.textContent).toContain('Unavailable');
+    const detail = root.querySelector('[data-secret-detail]');
+    expect(detail?.textContent).toContain('Unavailable');
     expect(root.querySelector('code.scope')).toBeNull();
   });
 

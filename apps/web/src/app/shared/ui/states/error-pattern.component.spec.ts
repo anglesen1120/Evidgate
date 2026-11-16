@@ -204,4 +204,32 @@ describe('ErrorPatternComponent', () => {
       expect(element.getAttribute('style')).toBe('transition: none !important;');
     }
   });
+
+  it('renders a bare persistent error without a nested card and retains deliberate recovery', () => {
+    fixture.componentRef.setInput('bare', true);
+    fixture.componentRef.setInput('headingLevel', 3);
+    fixture.detectChanges();
+    expect(root.querySelector('[data-slot="card"]')).toBeNull();
+    expect(root.querySelector('section')?.classList.contains('state-panel--bare')).toBe(true);
+    expect(root.querySelector('[role="alert"] h3')?.textContent).toBe('Service unavailable');
+    expect(root.querySelector('.state-panel__description')?.textContent).toBe(failure.message);
+    expect(root.querySelector('[role="alert"]')?.classList.contains('text-start')).toBe(true);
+    const retry = vi.fn();
+    fixture.componentInstance.retry.subscribe(retry);
+    const button = root.querySelector('button')!;
+    button.click();
+    expect(retry).toHaveBeenCalledTimes(1);
+    fixture.componentRef.setInput('retryDisabled', true);
+    fixture.detectChanges();
+    button.click();
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a bare null error neutral without inventing a retry or live alert', () => {
+    fixture.componentRef.setInput('bare', true);
+    fixture.componentRef.setInput('error', null);
+    fixture.detectChanges();
+    expect(root.querySelector('[data-slot="card"], [role="alert"], button')).toBeNull();
+    expect(root.querySelector('h2')?.textContent).toBe('Something went wrong');
+  });
 });

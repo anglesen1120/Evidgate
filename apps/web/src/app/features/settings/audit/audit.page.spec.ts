@@ -149,6 +149,47 @@ describe('AuditPage', () => {
     expect(root.querySelector('#audit-actor')?.textContent).toContain('CI producer');
     expect(root.querySelector('label[for="audit-actor"]')).not.toBeNull();
   });
+  it('keeps exact-code examples visibly associated with both technical filters', async () => {
+    const { root } = await render();
+    for (const [name, id, example] of [
+      ['action', 'audit-action-hint', 'auth.login'],
+      ['objectType', 'audit-object-hint', 'policy_revision'],
+    ]) {
+      expect(root.querySelector(`[name="${name}"]`)?.getAttribute('aria-describedby')).toBe(id);
+      expect(root.querySelector(`#${id}`)?.textContent).toContain(example);
+    }
+  });
+
+  it('blocks unapplied export, states the applied scope, and clears stale completion on filter edits', async () => {
+    const { fixture, root, store } = await render();
+    await store.exportCsv('org1');
+    fixture.detectChanges();
+    expect(root.querySelector('[data-audit-export-done]')?.textContent).toContain(
+      'Exported 2 rows.',
+    );
+    const exportCsv = vi.spyOn(store, 'exportCsv').mockResolvedValue(null);
+    input(root, 'action', 'auth.login');
+    await fixture.whenStable();
+    const action = root.querySelector<HTMLButtonElement>('[data-audit-export]');
+    expect(action?.disabled).toBe(true);
+    action?.click();
+    expect(exportCsv).not.toHaveBeenCalled();
+    expect(root.querySelector('[data-audit-export-done]')).toBeNull();
+    expect(root.querySelector('#audit-export-draft-hint')?.textContent).toContain('Apply or clear');
+    expect(root.querySelector('app-audit-export dl')?.textContent).not.toContain('auth.login');
+    submit(root);
+    await fixture.whenStable();
+    expect(action?.disabled).toBe(false);
+    expect(root.querySelector('app-audit-export dl')?.textContent).toContain('auth.login');
+    expect(root.querySelector('#audit-export-draft-hint')).toBeNull();
+    input(root, 'action', 'run.create');
+    await fixture.whenStable();
+    expect(action?.disabled).toBe(true);
+    root.querySelector<HTMLButtonElement>('[data-audit-clear]')?.click();
+    await fixture.whenStable();
+    expect(action?.disabled).toBe(false);
+    expect(root.querySelector('[data-audit-export-done]')).toBeNull();
+  });
   it('blocks reversed dates inline without calling load and accepts equal boundaries', async () => {
     const { fixture, root, store } = await render();
     const load = vi.spyOn(store, 'load');
@@ -235,7 +276,9 @@ describe('AuditPage', () => {
     const fixture = TestBed.createComponent(AuditPage);
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
-    expect(root.querySelector('app-loading-pattern')).not.toBeNull();
+    const loading = root.querySelector('app-loading-pattern');
+    expect(loading).not.toBeNull();
+    expect(loading?.textContent).toContain('Loading audit activity…');
     expect(root.querySelector('[data-audit-row]')).toBeNull();
     pending.resolve({ items: [], next_cursor: null });
     await fixture.whenStable();
@@ -295,8 +338,8 @@ describe('AuditPage', () => {
     expect(entryPage.root.querySelector('h1')?.textContent).toContain('Audit log');
     expect(entryPage.root.querySelectorAll('h2')).toHaveLength(0);
   });
-  it('bounds semantic rows to 200 and moves windows with heading focus', async () => {
-    const entries = Array.from({ length: 201 }, (_, index) => entry(`row-${index}`));
+  it('bounds rows to 25 and exposes one range and pager below the results', async () => {
+    const entries = Array.from({ length: 51 }, (_, index) => entry(`row-${index}`));
     data.list.mockImplementation((_org, query, cursor) => {
       const start = Number(cursor ?? 0);
       const end = Math.min(start + (query.limit ?? 50), entries.length);
@@ -307,19 +350,34 @@ describe('AuditPage', () => {
     });
     const { fixture, root } = await render();
     expect(data.list).toHaveBeenCalledTimes(1);
-    expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(50);
-    for (let page = 0; page < 4; page++) {
-      root.querySelector<HTMLButtonElement>('[data-audit-load-more]')!.click();
-      await fixture.whenStable();
-    }
-    expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(200);
-    root.querySelector<HTMLButtonElement>('[data-audit-next]')!.click();
+    expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(25);
+    const summaries = () =>
+      [...root.querySelectorAll('[data-audit-row-range]')].map((el) => el.textContent);
+    expect(summaries()).toEqual(['Rows 1–25 of 50 loaded.']);
+    expect(root.querySelectorAll('[data-audit-next]')).toHaveLength(1);
+    expect(root.querySelectorAll('[data-audit-previous]')).toHaveLength(1);
+    const table = root.querySelector('app-audit-table');
+    const navs = root.querySelectorAll('nav');
+    expect(navs).toHaveLength(1);
+    const nav = navs[0];
+    if (!table || !nav) throw new Error('Expected the pager below the table');
+    expect(Boolean(nav.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_PRECEDING)).toBe(
+      true,
+    );
+    expect(nav.closest('[hlmTableContainer]')).toBeNull();
+    root.querySelector<HTMLButtonElement>('[data-audit-next]')?.click();
+    await fixture.whenStable();
+    expect(summaries()).toEqual(['Rows 26–50 of 50 loaded.']);
+    root.querySelector<HTMLButtonElement>('[data-audit-load-more]')?.click();
+    await fixture.whenStable();
+    root.querySelector<HTMLButtonElement>('[data-audit-next]')?.click();
     await fixture.whenStable();
     expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(1);
+    expect(summaries()).toEqual(['Rows 51–51 of 51 loaded.']);
     expect(document.activeElement).toBe(root.querySelector('h2'));
-    root.querySelector<HTMLButtonElement>('[data-audit-previous]')!.click();
+    root.querySelector<HTMLButtonElement>('[data-audit-previous]')?.click();
     await fixture.whenStable();
-    expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(200);
+    expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(25);
   });
   it('stops offering more rows at the list bound and points at the filter', async () => {
     // 20-row pages: the bound is a number of PAGES, so it is reached with 4,000 rows, not 10,000,

@@ -1,13 +1,30 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
-import { HlmTableImports } from '@evidgate/ui/table';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  output,
+  type TemplateRef,
+  viewChild,
+} from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmBadge } from '@evidgate/ui/badge';
+import { HlmDialogImports } from '@evidgate/ui/dialog';
+import { HlmDropdownMenuImports } from '@evidgate/ui/dropdown-menu';
 import type { MembershipView } from '@evidgate/sdk';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
+import {
+  DataTableComponent,
+  type DataTableColumn,
+} from '../../../shared/ui/data-table/data-table.component';
+import type { DataTableCellContext } from '../../../shared/ui/data-table/data-table-column';
 
 export const MEMBERS_COPY = {
   title: $localize`:@@settings.members.title:Members and roles`,
   directory: $localize`:@@settings.members.directory:Members and invitations`,
+  loading: $localize`:@@settings.members.loading:Loading members…`,
   description: $localize`:@@settings.members.description:Manage organization membership. The server decides actual access.`,
   member: $localize`:@@settings.members.member:Member`,
   status: $localize`:@@settings.members.status:Status`,
@@ -17,6 +34,9 @@ export const MEMBERS_COPY = {
   invite: $localize`:@@settings.members.invite:Invite member`,
   cancel: $localize`:@@settings.members.cancel:Cancel`,
   email: $localize`:@@settings.members.email:Email`,
+  emailRequired: $localize`:@@settings.members.email-required:Enter an email address.`,
+  emailInvalid: $localize`:@@settings.members.email-invalid:Enter a valid email address.`,
+  emailTooLong: $localize`:@@settings.members.email-too-long:Use an email address with 320 characters or fewer.`,
   optionalRoles: $localize`:@@settings.members.optional-roles:Initial roles (optional)`,
   send: $localize`:@@settings.members.send:Send invitation`,
   resend: $localize`:@@settings.members.resend:Resend invite`,
@@ -36,6 +56,11 @@ export const MEMBERS_COPY = {
   submitting: $localize`:@@settings.members.submitting:Submitting…`,
   removeTitle: $localize`:@@settings.members.remove-title:Remove this member?`,
   removeDescription: $localize`:@@settings.members.remove-description:Organization access will be revoked. Authored history stays attributed.`,
+  inviteRefused: $localize`:@@settings.members.invite-refused:Invitation not sent`,
+  removeRefused: $localize`:@@settings.members.remove-refused:Member not removed`,
+  correctInvitation: $localize`:@@settings.members.correct-invitation:Correct the email or roles to start a new invitation request.`,
+  fixedInvitation: $localize`:@@settings.members.fixed-invitation:Email and roles are fixed for this attempt. Retry uses the same request. Close this dialog to start a new attempt.`,
+  restartInvitation: $localize`:@@settings.members.restart-invitation:This attempt cannot be changed or sent again. Close this dialog to start a new attempt.`,
   editRoles: $localize`:@@settings.members.edit-roles:Edit roles`,
   editTitle: $localize`:@@settings.members.edit-title:Edit organization roles`,
   editDescription: $localize`:@@settings.members.edit-description:Select the organization roles for this member.`,
@@ -66,7 +91,7 @@ export const MEMBERS_COPY = {
   saved: $localize`:@@settings.members.saved:Membership updated.`,
   loadMoreFailed: $localize`:@@settings.members.load-more-failed:The next members page could not be loaded. The members already shown are unchanged.`,
   narrow: $localize`:@@settings.members.narrow:Use a wider screen to invite, edit or remove members.`,
-  pending: $localize`:@@settings.members.pending:Pending invitation`,
+  pending: $localize`:@@settings.members.pending:Invited`,
   active: $localize`:@@settings.members.active:Active`,
   removed: $localize`:@@settings.members.removed:Removed`,
   revoked: $localize`:@@settings.members.revoked:Revoked`,
@@ -75,157 +100,135 @@ export const MEMBERS_COPY = {
 
 @Component({
   selector: 'app-member-list',
-  imports: [StatusPillComponent, HlmTableImports, HlmButton, HlmBadge],
+  imports: [
+    StatusPillComponent,
+    DataTableComponent,
+    HlmButton,
+    HlmBadge,
+    HlmDialogImports,
+    HlmDropdownMenuImports,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
-    <div
-      hlmTableContainer
-      class="table-scroll min-w-0 max-w-full rounded-md border border-solid border-border bg-card max-md:overflow-visible focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
-      tabindex="0"
-      role="region"
-      [attr.aria-label]="copy.directory"
-    >
-      <table
-        hlmTable
-        role="table"
-        class="w-full table-fixed caption-top border-collapse max-md:block [&_tbody]:max-md:block [&_tr]:max-md:block [&_thead]:max-md:sr-only [&_th]:break-normal [&_td]:break-normal [&_th]:whitespace-normal [&_td]:whitespace-normal [&_tbody_th]:wrap-anywhere [&_tbody_th]:max-md:grid [&_tbody_td]:max-md:grid [&_tbody_th]:max-md:gap-1 [&_tbody_td]:max-md:gap-1 [&_tbody_th]:max-md:min-h-[var(--eg-control-touch)] [&_tbody_td]:max-md:min-h-[var(--eg-control-touch)] [&_tbody_tr]:max-md:border-t"
+    <ng-template #statusCell let-member>
+      <span
+        data-members-row
+        [attr.data-membership-id]="member.id"
+        [attr.data-members-status]="member.status"
       >
-        <caption hlmCaption class="m-0 p-3 text-start font-semibold text-foreground max-md:block">
-          {{
-            copy.directory
-          }}
-        </caption>
-        <thead hlmTHead role="rowgroup" class="bg-secondary">
-          <tr hlmTr role="row">
-            <th hlmTh role="columnheader" scope="col" id="members-member" class="w-1/4">
-              {{ copy.member }}
-            </th>
-            <th hlmTh role="columnheader" scope="col" id="members-status" class="w-1/6">
-              {{ copy.status }}
-            </th>
-            <th hlmTh role="columnheader" scope="col" id="members-roles" class="w-1/4">
-              {{ copy.roles }}
-            </th>
-            @if (canWrite()) {
-              <th
-                hlmTh
-                role="columnheader"
-                scope="col"
-                class="mutation max-md:hidden! md:table-cell"
-              >
-                {{ copy.actions }}
-              </th>
-            }
-          </tr>
-        </thead>
-        <tbody hlmTBody role="rowgroup">
-          @for (member of members(); track member.id) {
-            <tr
-              hlmTr
-              role="row"
-              data-members-row
-              [attr.data-membership-id]="member.id"
-              [attr.data-members-status]="member.status"
+        <app-status-pill
+          [tone]="member.status === 'active' ? 'success' : 'neutral'"
+          [label]="statusLabel(member.status)"
+        />
+      </span>
+    </ng-template>
+    <ng-template #rolesCell let-member let-stacked="stacked">
+      <div class="flex min-w-0 items-center gap-2" [class.flex-wrap]="stacked">
+        @for (role of member.roles.slice(0, 2); track role.id) {
+          <span hlmBadge [variant]="'secondary'" class="role-name min-w-0">{{ role.name }}</span>
+        } @empty {
+          {{ copy.noRoles }}
+        }
+        @if (member.roles.length > 2) {
+          <hlm-dialog>
+            <button
+              hlmBtn
+              hlmDialogTrigger
+              [variant]="'ghost'"
+              type="button"
+              class="shrink-0 min-h-[var(--eg-control-touch)]"
+              [attr.aria-label]="moreRoles(member)"
+              data-members-more-roles
             >
-              <th
-                hlmTh
-                role="rowheader"
-                scope="row"
-                class="member-identity px-3 py-2"
-                [id]="'member-' + member.id"
+              +{{ member.roles.length - 2 }}
+            </button>
+            <hlm-dialog-content *hlmDialogPortal [closeLabel]="copy.cancel">
+              <header hlmDialogHeader>
+                <h2 hlmDialogTitle>{{ copy.roles }}</h2>
+                <p hlmDialogDescription class="m-0 wrap-anywhere">{{ member.invited_email }}</p>
+              </header>
+              <ul class="m-0 grid min-w-0 gap-2 ps-4">
+                @for (role of member.roles; track role.id) {
+                  <li class="wrap-anywhere">{{ role.name }}</li>
+                }
+              </ul>
+              <footer hlmDialogFooter>
+                <button hlmBtn hlmDialogClose [variant]="'outline'" type="button">
+                  {{ copy.cancel }}
+                </button>
+              </footer>
+            </hlm-dialog-content>
+          </hlm-dialog>
+        }
+      </div>
+    </ng-template>
+    <ng-template #actionsCell let-member>
+      @if (member.status !== 'removed') {
+        <button
+          hlmBtn
+          #actionsButton
+          [variant]="'ghost'"
+          type="button"
+          class="mutation min-h-[var(--eg-control-touch)]"
+          [hlmDropdownMenuTrigger]="actionsMenu"
+          data-members-actions
+          [attr.data-members-status]="member.status"
+          [attr.data-membership-id]="member.id"
+        >
+          {{ copy.actions }}<span class="sr-only"> {{ member.invited_email }}</span>
+        </button>
+        <ng-template #actionsMenu>
+          <hlm-dropdown-menu
+            class="min-w-max [&_button]:justify-start [&_button]:text-start [&_button]:whitespace-nowrap"
+          >
+            @if (member.status === 'active' || member.status === 'pending') {
+              <button
+                hlmDropdownMenuItem
+                type="button"
+                data-members-edit-open
+                (triggered)="requestEditRoles(member, actionsButton)"
               >
-                <span
-                  class="record-label block text-xs font-medium text-muted-foreground whitespace-normal md:hidden"
-                  >{{ copy.member }}</span
-                >
-                <span>{{ member.invited_email }}</span>
-              </th>
-              <td hlmTd role="cell" [attr.headers]="'member-' + member.id + ' members-status'">
-                <span
-                  class="record-label block text-xs font-medium text-muted-foreground whitespace-normal md:hidden"
-                  >{{ copy.status }}</span
-                >
-                <app-status-pill
-                  [tone]="member.status === 'active' ? 'success' : 'neutral'"
-                  [label]="statusLabel(member.status)"
-                />
-              </td>
-              <td hlmTd role="cell" [attr.headers]="'member-' + member.id + ' members-roles'">
-                <span
-                  class="record-label block text-xs font-medium text-muted-foreground whitespace-normal md:hidden"
-                  >{{ copy.roles }}</span
-                >
-                <span class="flex min-w-0 flex-wrap items-center gap-2">
-                  @for (role of member.roles; track role.id) {
-                    <span
-                      hlmBadge
-                      [variant]="'secondary'"
-                      class="role-name max-w-full whitespace-normal wrap-anywhere"
-                      >{{ role.name }}</span
-                    >
-                  } @empty {
-                    {{ copy.noRoles }}
-                  }
-                </span>
-              </td>
-              @if (canWrite()) {
-                <td hlmTd role="cell" class="mutation max-md:hidden! md:table-cell">
-                  <div class="flex min-w-0 flex-wrap items-center gap-2">
-                    @if (member.status === 'active' || member.status === 'pending') {
-                      <button
-                        hlmBtn
-                        [variant]="'outline'"
-                        class="h-auto min-h-[var(--eg-control-touch)] max-w-full whitespace-normal wrap-anywhere"
-                        type="button"
-                        data-members-edit-open
-                        (click)="requestEditRoles(member, $event)"
-                      >
-                        {{ copy.editRoles }}
-                      </button>
-                    }
-                    @if (member.status === 'pending') {
-                      <button
-                        hlmBtn
-                        [variant]="'outline'"
-                        class="h-auto min-h-[var(--eg-control-touch)] max-w-full whitespace-normal wrap-anywhere"
-                        type="button"
-                        data-members-resend-open
-                        (click)="requestResend(member, $event)"
-                      >
-                        {{ copy.resend }}
-                      </button>
-                      <button
-                        hlmBtn
-                        [variant]="'outline'"
-                        class="h-auto min-h-[var(--eg-control-touch)] max-w-full whitespace-normal wrap-anywhere"
-                        type="button"
-                        data-members-cancel-invite-open
-                        (click)="requestCancelInvite(member, $event)"
-                      >
-                        {{ copy.cancelInvite }}
-                      </button>
-                    }
-                    @if (member.status !== 'removed') {
-                      <button
-                        hlmBtn
-                        [variant]="'outline'"
-                        class="h-auto min-h-[var(--eg-control-touch)] max-w-full whitespace-normal wrap-anywhere"
-                        type="button"
-                        data-members-remove
-                        (click)="requestRemove(member, $event)"
-                      >
-                        {{ copy.remove }}
-                      </button>
-                    }
-                  </div>
-                </td>
-              }
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
+                {{ copy.editRoles }}
+              </button>
+            }
+            @if (member.status === 'pending') {
+              <button
+                hlmDropdownMenuItem
+                type="button"
+                data-members-resend-open
+                (triggered)="requestResend(member, actionsButton)"
+              >
+                {{ copy.resend }}
+              </button>
+              <button
+                hlmDropdownMenuItem
+                type="button"
+                data-members-cancel-invite-open
+                (triggered)="requestCancelInvite(member, actionsButton)"
+              >
+                {{ copy.cancelInvite }}
+              </button>
+            }
+            <button
+              hlmDropdownMenuItem
+              [variant]="'destructive'"
+              type="button"
+              data-members-remove
+              (triggered)="requestRemove(member, actionsButton)"
+            >
+              {{ copy.remove }}
+            </button>
+          </hlm-dropdown-menu>
+        </ng-template>
+      }
+    </ng-template>
+    <app-data-table
+      [columns]="columns()"
+      [rows]="members()"
+      [rowId]="rowId"
+      [caption]="copy.directory"
+    />
   `,
 })
 export class MemberListComponent {
@@ -236,39 +239,83 @@ export class MemberListComponent {
   readonly resend = output<{ member: MembershipView; opener: HTMLElement }>();
   readonly cancelInvite = output<{ member: MembershipView; opener: HTMLElement }>();
   protected readonly copy = MEMBERS_COPY;
-  protected requestRemove(member: MembershipView, event: Event): void {
-    if (event.currentTarget instanceof HTMLElement)
-      this.remove.emit({ member, opener: event.currentTarget });
+  protected readonly viewport = inject(NarrowMutationPolicy);
+  private readonly statusCell =
+    viewChild<TemplateRef<DataTableCellContext<MembershipView>>>('statusCell');
+  private readonly rolesCell =
+    viewChild<TemplateRef<DataTableCellContext<MembershipView>>>('rolesCell');
+  private readonly actionsCell =
+    viewChild<TemplateRef<DataTableCellContext<MembershipView>>>('actionsCell');
+  protected readonly rowId = (member: MembershipView): string => member.id;
+  protected readonly columns = computed<readonly DataTableColumn<MembershipView>[]>(() => {
+    const status = this.statusCell();
+    const roles = this.rolesCell();
+    const actions = this.actionsCell();
+    if (!status || !roles || !actions) return [];
+    const columns: DataTableColumn<MembershipView>[] = [
+      {
+        id: 'member',
+        header: this.copy.member,
+        role: 'identity',
+        kind: 'email',
+        priority: 'primary',
+        overflow: 'truncate',
+        cell: (member) => member.invited_email,
+      },
+      {
+        id: 'status',
+        header: this.copy.status,
+        role: 'status',
+        cell: (member) => this.statusLabel(member.status),
+        cellTemplate: status,
+      },
+      {
+        id: 'roles',
+        header: this.copy.roles,
+        role: 'text',
+        overflow: 'truncate',
+        cell: () => this.copy.roles,
+        cellTemplate: roles,
+      },
+    ];
+    if (this.canWrite()) {
+      columns.push({
+        id: 'actions',
+        header: this.copy.actions,
+        role: 'actions',
+        mutates: true,
+        cell: () => this.copy.actions,
+        cellTemplate: actions,
+      });
+    }
+    return columns;
+  });
+  protected moreRoles(member: MembershipView): string {
+    const count = member.roles.length - 2;
+    return $localize`:@@settings.members.more-roles:Show ${count}:count: more roles for ${member.invited_email}:email:`;
   }
-  protected requestEditRoles(member: MembershipView, event: Event): void {
-    if (event.currentTarget instanceof HTMLElement)
-      this.editRoles.emit({ member, opener: event.currentTarget });
+  protected requestRemove(member: MembershipView, opener: HTMLElement): void {
+    if (this.viewport.allowsMutation() && this.canWrite() && member.status !== 'removed')
+      this.remove.emit({ member, opener });
   }
-  protected requestResend(member: MembershipView, event: Event): void {
+  protected requestEditRoles(member: MembershipView, opener: HTMLElement): void {
     if (
+      this.viewport.allowsMutation() &&
       this.canWrite() &&
-      member.status === 'pending' &&
-      event.currentTarget instanceof HTMLElement
+      (member.status === 'active' || member.status === 'pending')
     )
-      this.resend.emit({ member, opener: event.currentTarget });
+      this.editRoles.emit({ member, opener });
   }
-  protected requestCancelInvite(member: MembershipView, event: Event): void {
-    if (
-      this.canWrite() &&
-      member.status === 'pending' &&
-      event.currentTarget instanceof HTMLElement
-    )
-      this.cancelInvite.emit({ member, opener: event.currentTarget });
+  protected requestResend(member: MembershipView, opener: HTMLElement): void {
+    if (this.viewport.allowsMutation() && this.canWrite() && member.status === 'pending')
+      this.resend.emit({ member, opener });
+  }
+  protected requestCancelInvite(member: MembershipView, opener: HTMLElement): void {
+    if (this.viewport.allowsMutation() && this.canWrite() && member.status === 'pending')
+      this.cancelInvite.emit({ member, opener });
   }
 
-  /**
-   * The label of one membership status: a closed switch over the five contract values
-   * (`MembershipView['status']`), never an object keyed by server data — `copy[status]` would
-   * answer a prototype member such as `constructor` or the inherited `toString` for a status the
-   * contract does not define. The parameter is widened to `string` because the value arrives from
-   * the wire, so the fallback branch is genuinely reachable: an unknown status is shown as the
-   * server wrote it, as plain text, rather than as an invented or empty label.
-   */
+  // Unknown wire statuses stay literal, never an inherited property of the copy catalogue.
   protected statusLabel(status: string): string {
     switch (status) {
       case 'pending':

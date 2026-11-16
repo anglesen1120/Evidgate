@@ -7,10 +7,8 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
-  LOCALE_ID,
   computed,
   effect,
-  inject,
   input,
   output,
   viewChild,
@@ -18,23 +16,26 @@ import {
 import type { PolicyActivationStateDto, PolicyRevisionSummaryDto } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
+import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
+import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
 import { PolicyModeChipComponent } from './policy-mode-chip.component';
 import type { PolicyReadView } from './policy-reads';
 
 @Component({
   selector: 'app-policy-summary',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HlmButton, HlmCardImports, PolicyModeChipComponent],
+  imports: [
+    HlmButton,
+    HlmCardImports,
+    PolicyModeChipComponent,
+    AbsoluteTimeComponent,
+    CopyableIdentifierComponent,
+  ],
   host: { class: 'block min-w-0' },
   template: `
     @if (activation().phase !== 'idle' || head().phase !== 'idle') {
-      <section
-        hlmCard
-        class="mb-4 gap-4 p-4"
-        aria-labelledby="policy-summary-title"
-        data-policy-summary
-      >
-        <h3 hlmCardTitle id="policy-summary-title" class="m-0 text-base">{{ copy.title }}</h3>
+      <section hlmCard class="gap-4 p-4" aria-labelledby="policy-summary-title" data-policy-summary>
+        <h3 hlmCardTitle [size]="subsectionSize" id="policy-summary-title">{{ copy.title }}</h3>
         <dl
           class="m-0 grid gap-4 [&_dd]:m-0 [&_dd]:wrap-anywhere [&_dt]:text-xs [&_dt]:text-muted-foreground sm:grid-cols-2"
         >
@@ -61,14 +62,16 @@ import type { PolicyReadView } from './policy-reads';
                 @default {
                   <div class="flex flex-wrap items-center gap-2">
                     <app-policy-mode-chip [mode]="activation().value?.mode" />
-                    <code class="font-mono" data-policy-activation-revision>{{
-                      activationRevisionId()
-                    }}</code>
+                    <app-copyable-identifier
+                      data-policy-activation-revision
+                      [value]="activationRevisionId()"
+                      [label]="copy.activation"
+                    />
                   </div>
                   @if (activatedAt(); as at) {
                     <p class="mt-1 text-muted-foreground">
                       {{ copy.activatedAt }}
-                      <time [attr.datetime]="at">{{ formatDate(at) }}</time>
+                      <app-absolute-time [value]="at" />
                     </p>
                   }
                 }
@@ -100,7 +103,7 @@ import type { PolicyReadView } from './policy-reads';
                     <strong data-policy-head-no [attr.data-revision-no]="head().value?.revision_no"
                       >{{ copy.revision }} {{ head().value?.revision_no }}</strong
                     >
-                    <code class="font-mono">{{ headRevisionId() }}</code>
+                    <app-copyable-identifier [value]="headRevisionId()" [label]="copy.head" />
                   </div>
                 }
               }
@@ -155,11 +158,7 @@ export class PolicySummaryComponent {
   /** Asks the page to re-run both reads; the one control that retries them. */
   readonly retry = output<void>();
 
-  private readonly locale = inject(LOCALE_ID);
-  private readonly dates = new Intl.DateTimeFormat(this.locale, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
+  protected readonly subsectionSize = 'subsection' as const;
   private readonly retryButton = viewChild<ElementRef<HTMLButtonElement>>('retryButton');
   /** Set by a press of the retry control: the next failure hands the focus back to it. */
   private retryOwnedFocus = false;
@@ -232,9 +231,5 @@ export class PolicySummaryComponent {
     }
     this.retryOwnedFocus = true;
     this.retry.emit();
-  }
-
-  protected formatDate(value: string): string {
-    return this.dates.format(new Date(value));
   }
 }

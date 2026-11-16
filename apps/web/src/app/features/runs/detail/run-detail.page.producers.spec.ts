@@ -63,12 +63,19 @@ describe('RunDetailPage producer region', () => {
     const root = await open();
     const region = root.querySelector('section#producers[data-producer-status]');
     expect(region?.querySelector('h2')?.textContent).toBe('Producers');
-    const rows = [...root.querySelectorAll<HTMLElement>('tr[data-producer-slot]')];
-    expect(rows.map((row) => row.dataset['producerSlot'])).toEqual(['shard-9', 'shard-2']);
+    const rows = [...root.querySelectorAll<HTMLElement>('tr[data-row-id]')];
+    expect(rows.map((row) => row.dataset['rowId'])).toEqual(['shard-9', 'shard-2']);
     for (const row of rows) {
-      expect(row.querySelectorAll('td[data-fact][data-unavailable]')).toHaveLength(4);
-      expect(row.querySelectorAll('td[data-fact] app-status-pill')).toHaveLength(4);
-      expect(row.querySelector('th')?.id).toBe(producerAnchorId(row.dataset['producerSlot'] ?? ''));
+      expect(row.querySelectorAll('[data-fact][data-unavailable]')).toHaveLength(4);
+      expect(row.querySelectorAll('[data-fact] app-status-pill')).toHaveLength(2);
+      for (const fact of ['last-sequence', 'count']) {
+        const cell = row.querySelector(`[data-fact="${fact}"]`);
+        expect(cell?.textContent?.trim()).toBe('Not provided');
+        expect(cell?.querySelector('app-status-pill')).toBeNull();
+      }
+      expect(row.querySelector('[data-producer-slot]')?.id).toBe(
+        producerAnchorId(row.dataset['rowId'] ?? ''),
+      );
     }
     expect(region?.querySelector('[data-count-mismatch]')).toBeNull();
     expect(region?.querySelector('[data-badge]')).toBeNull();
@@ -97,11 +104,11 @@ describe('RunDetailPage producer region', () => {
       ],
     });
     const root = await open();
-    const row = (id: string) => root.querySelector<HTMLElement>(`tr[data-producer-slot="${id}"]`);
+    const row = (id: string) => root.querySelector<HTMLElement>(`tr[data-row-id="${id}"]`);
     const text = (id: string, fact: string) =>
-      row(id)?.querySelector(`td[data-fact="${fact}"]`)?.textContent?.replace(/\s+/g, ' ').trim();
-    expect(text('shard-1', 'identity')).toBe('bound');
-    expect(text('shard-1', 'finalize')).toBe('finalized');
+      row(id)?.querySelector(`[data-fact="${fact}"]`)?.textContent?.replace(/\s+/g, ' ').trim();
+    expect(text('shard-1', 'identity')).toBe('Bound');
+    expect(text('shard-1', 'finalize')).toBe('Finalized');
     expect(text('shard-1', 'last-sequence')).toBe(String(base.last_sequence));
     expect(text('shard-1', 'count')).toBe(`${base.count} / ${base.expected}`);
     expect(row('shard-1')?.querySelector('[data-count-mismatch], [data-badge]')).toBeNull();
@@ -110,10 +117,13 @@ describe('RunDetailPage producer region', () => {
     expect(row('shard-2')?.querySelector('[data-badge="stale-epoch"]')?.textContent).toContain(
       '2 stale-epoch events',
     );
-    expect(text('shard-3', 'identity')).toBe('unbound');
+    expect(text('shard-3', 'identity')).toBe('Unbound');
     expect(text('shard-3', 'last-sequence')).toBe('4');
-    expect(text('shard-3', 'count')).toBe('4 (expected not set)');
-    expect(row('shard-3')?.querySelectorAll('td[data-unavailable]')).toHaveLength(0);
+    const openCount = row('shard-3')?.querySelector('[data-fact="count"]');
+    expect(openCount?.querySelector('app-number-value')?.textContent).toBe('4');
+    expect(openCount?.querySelector('app-status-pill')?.textContent).toContain('Expected unset');
+    expect(openCount?.getAttribute('aria-label')).toBe('4 served, expected count not set yet');
+    expect(row('shard-3')?.querySelectorAll('[data-fact][data-unavailable]')).toHaveLength(0);
     expect(root.querySelector('#producers [data-completeness]')).toBeNull();
   });
 
@@ -126,7 +136,7 @@ describe('RunDetailPage producer region', () => {
       shard_count: 50,
     });
     const root = await open();
-    expect(root.querySelectorAll('tr[data-producer-slot]')).toHaveLength(0);
+    expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(0);
     expect(root.querySelector('#producers [data-state="empty"]')).not.toBeNull();
     expect(root.querySelector('#producers')?.textContent).not.toContain('finalized');
   });
@@ -146,7 +156,7 @@ describe('RunDetailPage producer region', () => {
       '3 after-cancel events for this run',
     );
     expect(region?.querySelector('tbody [data-badge="after-cancel"]')).toBeNull();
-    expect(region?.querySelectorAll('td[data-fact][data-unavailable]')).toHaveLength(8);
+    expect(region?.querySelectorAll('[data-fact][data-unavailable]')).toHaveLength(8);
     expect(root.querySelector('[data-step="complete"]')?.getAttribute('data-status')).toBe(
       'not-reached',
     );
@@ -190,7 +200,7 @@ describe('RunDetailPage producer region', () => {
     const target = root.querySelector('#producer-shard-255');
     expect(target).not.toBeNull();
     expect(document.activeElement).toBe(target);
-    expect(root.querySelectorAll('tr[data-producer-slot]')).toHaveLength(56);
+    expect(root.querySelectorAll('#producers tr[data-row-id]')).toHaveLength(56);
   });
 
   it('keeps an attempt fragment waiting for the attempts response', async () => {

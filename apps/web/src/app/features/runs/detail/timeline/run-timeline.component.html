@@ -4,7 +4,7 @@
   aria-labelledby="run-timeline-title"
   data-run-timeline
 >
-  <h2 hlmCardTitle id="run-timeline-title" class="m-0">{{ copy.title }}</h2>
+  <h2 hlmCardTitle [size]="sectionSize" id="run-timeline-title" class="m-0">{{ copy.title }}</h2>
   <ol
     class="m-0 grid list-none gap-(--eg-space-3) p-0"
     aria-labelledby="run-timeline-title"
@@ -12,7 +12,7 @@
   >
     @for (step of steps(); track step.state) {
       <li
-        class="flex min-w-0 flex-wrap items-center justify-between gap-(--eg-space-3)"
+        class="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-start gap-x-(--eg-space-3) gap-y-(--eg-space-2) min-[768px]:grid-cols-[12ch_minmax(0,1fr)]"
         [attr.data-step]="step.state"
         [attr.data-status]="step.status"
         [attr.aria-current]="step.status === 'current' ? 'step' : null"
@@ -20,31 +20,41 @@
         <span class="min-w-0 font-(weight:--eg-weight-medium)" data-step-label>{{
           stepLabel(step.state)
         }}</span>
-        @if (step.at; as at) {
-          <time class="min-w-0" data-step-time [attr.datetime]="at">{{
-            at | date: 'medium' : '+0000'
-          }}</time>
-        }
         <app-status-pill
           data-step-status
           [tone]="stepTone(step.status, step.state)"
-          [label]="statusLabel(step.status)"
-          [dimension]="copy.stepStatus"
+          [label]="
+            step.status === 'reached' && (stateHistory() === null || step.state === 'created')
+              ? copy.inferredShort
+              : statusLabel(step.status)
+          "
+          [detail]="
+            step.status === 'reached' && (stateHistory() === null || step.state === 'created')
+              ? copy.inferred
+              : ''
+          "
         />
+        @if (step.at; as at) {
+          <span class="col-span-full min-w-0 tabular-nums" data-step-time>
+            <app-absolute-time [value]="at" />
+          </span>
+        }
       </li>
     }
   </ol>
   @if (stateHistory() === null) {
     <p class="m-0 min-w-0" data-step-times>
-      <app-status-pill [tone]="'neutral'" [label]="copy.historyUnavailable" />
+      {{ copy.historyUnavailable }}
     </p>
   } @else if (stateHistory()?.length === 0) {
     <p class="m-0 min-w-0" data-step-times>
-      <app-status-pill [tone]="'neutral'" [label]="copy.historyEmpty" />
+      {{ copy.historyEmpty }}
     </p>
   }
   @if (canceled()) {
     <div
+      hlmAlert
+      role="note"
       class="grid min-w-0 gap-(--eg-space-2) rounded-(--eg-radius-sm) border border-(--eg-info-fg) bg-(--eg-info-bg) p-(--eg-space-3) text-(--eg-info-fg)"
       data-after-cancel-note
     >
@@ -53,7 +63,9 @@
         @if (afterCancelLabel(); as label) {
           {{ label }}
         } @else {
-          <app-status-pill [tone]="'neutral'" label="" [dimension]="copy.afterCancelEvents" />
+          <span class="text-muted-foreground"
+            >{{ copy.afterCancelEvents }}: {{ copy.notProvided }}</span
+          >
         }
       </p>
     </div>

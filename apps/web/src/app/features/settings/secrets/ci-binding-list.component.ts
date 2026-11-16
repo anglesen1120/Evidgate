@@ -19,6 +19,7 @@ import { HlmCard } from '@evidgate/ui/card';
 import { HlmSkeleton } from '@evidgate/ui/skeleton';
 import type { ApiError } from '../../../core/http/api-error';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
+import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import type { CiBindingsPhase } from './secrets.store';
 
 export const CI_BINDINGS_COPY = {
@@ -50,7 +51,7 @@ export const CI_BINDINGS_COPY = {
 /** Read-only projection: bind named CiBindingView metadata, never enumerate/spread API fields. */
 @Component({
   selector: 'app-ci-binding-list',
-  imports: [StatusPillComponent, HlmAlert, HlmButton, HlmCard, HlmSkeleton],
+  imports: [StatusPillComponent, HlmAlert, HlmButton, HlmCard, HlmSkeleton, AbsoluteTimeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class:
@@ -148,7 +149,7 @@ export const CI_BINDINGS_COPY = {
                     <dt>{{ copy.activated }}</dt>
                     <dd>
                       @if (row.activated_at; as date) {
-                        <time [attr.datetime]="date">{{ date }}</time>
+                        <app-absolute-time [value]="date" />
                       } @else {
                         {{ copy.notActivated }}
                       }
@@ -157,7 +158,7 @@ export const CI_BINDINGS_COPY = {
                   <div>
                     <dt>{{ copy.created }}</dt>
                     <dd>
-                      <time [attr.datetime]="row.created_at">{{ row.created_at }}</time>
+                      <app-absolute-time [value]="row.created_at" />
                     </dd>
                   </div>
                   @for (group of ['refs', 'workflows']; track group) {

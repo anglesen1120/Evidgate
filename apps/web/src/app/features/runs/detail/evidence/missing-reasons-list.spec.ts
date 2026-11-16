@@ -173,7 +173,7 @@ describe('MissingReasonList rendering', () => {
       producerTarget,
       attemptTarget,
     ]);
-    const codes = [...root.querySelectorAll('.reason-code')].map((code) =>
+    const codes = [...root.querySelectorAll('.reason-code code')].map((code) =>
       code.textContent?.trim(),
     );
     expect(codes).toEqual([
@@ -218,7 +218,7 @@ describe('MissingReasonList rendering', () => {
   it('renders an unknown literal as text, creating no element from it', async () => {
     const root = await render(evaluated({ missing: ['shard_gone\u202e<script>'] }));
     expect(root.querySelector('script')).toBeNull();
-    expect(root.querySelector('.reason-code')?.textContent).toBe('shard_gone⟨U+202E⟩<script>');
+    expect(root.querySelector('.reason-code code')?.textContent).toBe('shard_gone⟨U+202E⟩<script>');
     expect(root.querySelector('.reason-text')?.textContent).toContain(
       'Evidence response unavailable:',
     );

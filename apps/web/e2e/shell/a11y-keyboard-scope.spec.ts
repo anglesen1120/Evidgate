@@ -33,7 +33,7 @@ async function settle(page: Page): Promise<void> {
 }
 
 /** Desktop stops in document and visual order. */
-type TopbarStop = 'navigation' | 'theme' | 'organization' | 'project';
+type TopbarStop = 'navigation' | 'theme' | 'organization' | 'project' | 'locale';
 
 /** Walk from the document start without synthetic focus moves. */
 async function walkTopbar(
@@ -59,6 +59,7 @@ async function walkTopbar(
     ['navigation', page.locator('button.nav-toggle')],
     ['organization', page.getByRole('combobox', { name: 'Organization' })],
     ['project', page.getByRole('combobox', { name: 'Project' })],
+    ['locale', page.locator('header.topbar button.locale-toggle')],
     ['theme', page.locator('button.theme-toggle')],
   ];
   const last = stops.findIndex(([name]) => name === stop);
@@ -144,7 +145,13 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
       await page.keyboard.press('Tab');
       await expectFocusVisible(page, navLinks.nth(index));
     }
-    await expect(page.getByRole('navigation')).toHaveAccessibleName('Primary navigation');
+    const primaryNavigation = page.getByRole('navigation', {
+      name: 'Primary navigation',
+      exact: true,
+    });
+    await expect(primaryNavigation).toHaveCount(1);
+    await expect(primaryNavigation).toHaveAccessibleName('Primary navigation');
+    await expect(page.getByRole('navigation', { name: 'Next steps', exact: true })).toHaveCount(1);
 
     // The scope controls precede the trailing theme action in both paint and Tab order.
     const navToggle = page.locator('button.nav-toggle');
@@ -164,6 +171,12 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
     await page.keyboard.press('Tab');
     await expectFocusVisible(page, projectSelect);
     await expectScopeValue(projectSelect, PROJECT_STOREFRONT);
+    const localeToggle = page.locator('header.topbar button.locale-toggle');
+    await page.keyboard.press('Tab');
+    await expectFocusVisible(page, localeToggle);
+    await expect(localeToggle).toHaveAccessibleName(
+      'EN / VI: Switch language between English and Vietnamese',
+    );
     const themeToggle = page.locator('button.theme-toggle');
     await page.keyboard.press('Tab');
     await expectFocusVisible(page, themeToggle);
@@ -172,15 +185,18 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
     // Traversing the switcher is not a commitment; only activating an option navigates.
     expect(new URL(page.url()).pathname).toBe(startPath);
 
-    // The keyboard order IS the visual order here: four stops, one row, left to right.
-    const [navBox, themeBox, orgBox, projectBox] = await Promise.all([
+    // Every named utility has the same exact order in the keyboard walk and the visual row.
+    const [navBox, themeBox, orgBox, projectBox, localeBox] = await Promise.all([
       boxOf(navToggle),
       boxOf(themeToggle),
       boxOf(orgSelect),
       boxOf(projectSelect),
+      boxOf(localeToggle),
     ]);
     expect(themeBox.x, 'theme follows the project selector').toBeGreaterThan(projectBox.x);
     expect(orgBox.x, 'scope follows navigation').toBeGreaterThan(navBox.x);
+    expect(localeBox.x, 'language follows the project selector').toBeGreaterThan(projectBox.x);
+    expect(themeBox.x, 'theme follows language').toBeGreaterThan(localeBox.x);
     expect(
       projectBox.x,
       'the project select is painted right of the organization select',
@@ -189,6 +205,7 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
       ['the theme toggle', themeBox],
       ['the organization select', orgBox],
       ['the project select', projectBox],
+      ['the locale switch', localeBox],
     ] as const) {
       expectSameRow(navBox, box, `${label} shares the toggle's row`);
     }
@@ -272,6 +289,7 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
       page.locator('button.nav-toggle'),
       scopeControl(page, 0),
       scopeControl(page, 1),
+      page.locator('header.topbar button.locale-toggle'),
       page.locator('button.theme-toggle'),
     ];
     for (const stop of stops) {
@@ -348,7 +366,15 @@ for (const width of [360, 390]) {
         await expectFocusVisible(page, links.nth(index));
       }
       await page.keyboard.press('Tab');
+      const localeToggle = aside.locator('button.locale-toggle');
+      await expectFocusVisible(page, localeToggle);
+      await expect(localeToggle).toHaveAccessibleName(
+        'EN / VI: Switch language between English and Vietnamese',
+      );
+      await page.keyboard.press('Tab');
       await expectFocusVisible(page, close);
+      await page.keyboard.press('Shift+Tab');
+      await expectFocusVisible(page, localeToggle);
       await page.keyboard.press('Shift+Tab');
       await expectFocusVisible(page, links.last());
       await page.keyboard.press('Escape');

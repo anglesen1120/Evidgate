@@ -1,6 +1,7 @@
 <div class="grid min-w-0 gap-(--eg-space-3)">
   <label hlmLabel for="evidence-revision-select">{{ copy.revisionLabel }}</label>
   <hlm-select
+    class="block w-full min-w-0 max-w-full min-[768px]:w-fit"
     [value]="selectedValue()"
     [disabled]="revisions().length === 0"
     (valueChange)="choose($event)"

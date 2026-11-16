@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, viewChild } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import {
   ActivatedRoute,
@@ -10,7 +10,8 @@ import {
 } from '@angular/router';
 import { filter, map } from 'rxjs';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmInput } from '@evidgate/ui/input';
+import { HlmSelectImports } from '@evidgate/ui/select';
+import { BrnSelect } from '@spartan-ng/brain/select';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmCardImports } from '@evidgate/ui/card';
 
@@ -25,7 +26,7 @@ import { RetentionFormComponent } from './quota-retention/retention-form.compone
     RouterLinkActive,
     RouterOutlet,
     HlmButton,
-    HlmInput,
+    HlmSelectImports,
     HlmLabel,
     HlmCardImports,
     RetentionFormComponent,
@@ -39,6 +40,11 @@ export class SettingsShellPage {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
+  private readonly destination = viewChild(BrnSelect);
+  protected readonly pageHeadingSize = 'page' as const;
+  protected readonly choose = $localize`:@@settings.choose:Choose a settings destination`;
+  protected readonly destinationLabel = (value: unknown): string =>
+    this.tabs().find((tab) => tab.segment === value)?.label ?? this.choose;
   protected readonly tabs = computed(() => {
     // Read the declared set explicitly: even an injected permission predicate may not track it.
     this.session.permissions();
@@ -54,18 +60,16 @@ export class SettingsShellPage {
     { initialValue: this.route.firstChild?.snapshot?.url[0]?.path ?? '' },
   );
 
-  protected selectDestination(select: HTMLSelectElement): void {
-    const segment = select.value;
-    // Only values from the same permission-filtered list may initiate navigation.
-    if (!this.tabs().some((tab) => tab.segment === segment)) {
-      select.value = this.activeSegment();
+  protected selectDestination(segment: unknown): void {
+    if (segment === this.activeSegment()) return;
+    const resync = (): void => {
+      this.destination()?.value.set(this.activeSegment());
+    };
+    // The permission-filtered registry and the routed segment remain authoritative on refusal.
+    if (typeof segment !== 'string' || !this.tabs().some((tab) => tab.segment === segment)) {
+      resync();
       return;
     }
-    // The router can refuse or abort the navigation while the browser has already moved the native
-    // select to the pick: once it settles, the control shows the segment the router really serves.
-    const resync = (): void => {
-      select.value = this.activeSegment();
-    };
     void this.router.navigate([segment], { relativeTo: this.route }).then(resync, resync);
   }
 }

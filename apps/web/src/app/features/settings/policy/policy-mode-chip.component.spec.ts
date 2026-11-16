@@ -1,16 +1,18 @@
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { PolicyModeChipComponent } from './policy-mode-chip.component';
 import { rootElement } from './policy-reads.test-support';
 
 describe('PolicyModeChipComponent', () => {
   afterEach(() => TestBed.resetTestingModule());
   it.each([
-    ['enforcing', 'enforcing', 'bg-[var(--eg-info-bg)]'],
-    ['advisory', 'advisory', 'bg-[var(--eg-warning-bg)]'],
-    ['future-mode', 'future-mode', 'bg-[var(--eg-neutral-bg)]'],
-    ['', 'unavailable', 'bg-[var(--eg-neutral-bg)]'],
-    [null, 'unavailable', 'bg-[var(--eg-neutral-bg)]'],
-    [undefined, 'unavailable', 'bg-[var(--eg-neutral-bg)]'],
+    ['enforcing', 'enforcing', 'info'],
+    ['advisory', 'advisory', 'warning'],
+    ['future-mode', 'future-mode', 'neutral'],
+    ['', 'unavailable', 'neutral'],
+    [null, 'unavailable', 'neutral'],
+    [undefined, 'unavailable', 'neutral'],
   ] as const)('renders %s as text without inferring a mode', (mode, dataMode, tone) => {
     const fixture = TestBed.createComponent(PolicyModeChipComponent);
     fixture.componentRef.setInput('mode', mode);
@@ -20,10 +22,12 @@ describe('PolicyModeChipComponent', () => {
     expect(chip?.dataset['mode']).toBe(dataMode);
     expect(chip?.textContent).toMatch(/\S/);
     if (mode) expect(chip?.textContent).toContain(mode);
-    expect(chip?.classList.contains(tone)).toBe(true);
-    expect(chip?.getAttribute('data-slot')).toBe('badge');
-    expect(chip?.classList.contains('whitespace-normal')).toBe(true);
-    expect(chip?.hasAttribute('tabindex')).toBe(false);
+    const pill = fixture.debugElement.query(By.directive(StatusPillComponent))
+      .componentInstance as StatusPillComponent;
+    expect(pill.tone()).toBe(tone);
+    expect(pill.label()).toMatch(/\S/);
+    expect(root.querySelector('app-status-pill svg')).not.toBeNull();
+    expect(root.querySelector('[data-policy-mode-raw]')?.textContent ?? '').toBe(mode ?? '');
   });
   it('never advertises the empty string as a mode', () => {
     const fixture = TestBed.createComponent(PolicyModeChipComponent);

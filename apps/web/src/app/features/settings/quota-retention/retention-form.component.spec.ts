@@ -28,19 +28,30 @@ describe('RetentionFormComponent', () => {
   });
 
   it.each([
-    ['', '90'],
-    ['1.5', '90'],
-    ['30', '29'],
-  ])('blocks invalid integer or ordered windows %s / %s', async (artifact, metadata) => {
-    const h = mountRetention();
-    await h.load();
-    await h.edit(artifact, metadata);
-    submit(h.root);
-    await h.settle();
-    expect(h.root.querySelector('[aria-invalid="true"]')).not.toBeNull();
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
-    h.http.expectNone((request) => request.method === 'PUT');
-  });
+    ['', '90', 'retention-artifact'],
+    ['', '', 'retention-artifact'],
+    ['1.5', '90', 'retention-artifact'],
+    ['14', '', 'retention-metadata'],
+    ['30', '29', 'retention-metadata'],
+  ])(
+    'blocks invalid integer or ordered windows %s / %s with a focused linked summary for %s',
+    async (artifact, metadata, field) => {
+      const h = mountRetention();
+      await h.load();
+      await h.edit(artifact, metadata);
+      submit(h.root);
+      await h.settle();
+      expect(h.root.querySelector('[aria-invalid="true"]')).not.toBeNull();
+      const summary = h.root.querySelector<HTMLElement>('#retention-validation-error');
+      expect(document.activeElement).toBe(summary);
+      const link = summary?.querySelector<HTMLAnchorElement>(`a[href="#${field}"]`);
+      expect(link).not.toBeNull();
+      link?.click();
+      expect(document.activeElement).toBe(h.root.querySelector(`#${field}`));
+      expect(document.querySelector('[role="dialog"], [role="alertdialog"]')).toBeNull();
+      h.http.expectNone((request) => request.method === 'PUT');
+    },
+  );
 
   it('does not impose deployment bounds and submits larger integer windows directly', async () => {
     const h = mountRetention();
@@ -52,7 +63,7 @@ describe('RetentionFormComponent', () => {
       artifact_days: 150,
       metadata_days: 200,
     });
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.querySelector('[role="dialog"], [role="alertdialog"]')).toBeNull();
     flush(request, { artifact_days: 150, metadata_days: 200 });
     await h.settle();
     expect(h.root.querySelector('[data-retention-saved]')).not.toBeNull();
@@ -70,7 +81,11 @@ describe('RetentionFormComponent', () => {
       await h.edit(artifact, metadata);
       submit(h.root);
       await h.settle();
-      const dialog = document.querySelector('[role="dialog"]');
+      const dialog = document.querySelector('[role="alertdialog"]');
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+      await vi.waitFor(() =>
+        expect(document.activeElement).toBe(dialogButton('[data-retention-cancel]')),
+      );
       expect(dialog?.textContent).toContain('Review deletion impact');
       expect(dialog?.querySelector(`[data-retention-impact="${field}"]`)).not.toBeNull();
       expect(dialog?.textContent).toContain('eligible for deletion');
@@ -96,6 +111,31 @@ describe('RetentionFormComponent', () => {
     await h.settle();
     dialogButton('[data-retention-cancel]').click();
     await h.settle();
+    await vi.waitFor(() =>
+      expect(document.activeElement).toBe(h.root.querySelector('[data-retention-save]')),
+    );
+    expect(h.store.policy()).toEqual(STORED);
+    expect(await (await (await h.harness()).artifact()).getProperty('value')).toBe('7');
+    expect(await (await (await h.harness()).metadata()).getProperty('value')).toBe('60');
+    h.http.expectNone((request) => request.method === 'PUT');
+  });
+
+  it('Escape dismisses the alertdialog and restores Save focus without sending the lowering draft', async () => {
+    const h = mountRetention();
+    await h.load();
+    await h.edit('7', '60');
+    submit(h.root);
+    await h.settle();
+    const dialog = document.querySelector<HTMLElement>('[role="alertdialog"]');
+    if (!dialog) throw new Error('Expected the deletion-impact alertdialog');
+    dialog.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+    await h.settle();
+    await vi.waitFor(() => {
+      expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+      expect(document.activeElement).toBe(h.root.querySelector('[data-retention-save]'));
+    });
     expect(h.store.policy()).toEqual(STORED);
     expect(await (await (await h.harness()).artifact()).getProperty('value')).toBe('7');
     expect(await (await (await h.harness()).metadata()).getProperty('value')).toBe('60');
@@ -144,6 +184,7 @@ describe('RetentionFormComponent', () => {
         expect(h.root.querySelector('#retention-artifact')?.getAttribute('aria-invalid')).toBe(
           'true',
         );
+        expect(document.activeElement).toBe(h.root.querySelector('#retention-validation-error'));
       }
     },
   );
@@ -152,7 +193,8 @@ describe('RetentionFormComponent', () => {
     const h = mountRetention(['project:read']);
     await h.load();
     expect(h.root.querySelector('#retention-read-only')?.textContent).toContain('Read only');
-    expect(await (await (await h.harness()).artifact()).getProperty('readOnly')).toBe(true);
+    expect(h.root.querySelector('[data-retention-current]')?.textContent).toContain('14');
+    expect(h.root.querySelector('input')).toBeNull();
     expect(h.root.querySelector('[data-retention-save]')).toBeNull();
     expect(await h.store.save({ artifact_days: 30, metadata_days: 90 })).toBe(false);
     h.http.expectNone((request) => request.method === 'PUT');

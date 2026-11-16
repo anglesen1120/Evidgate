@@ -1,6 +1,8 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { stubLayoutApis } from '../../../shared/testing/layout.testing';
+import { CopyValueButtonComponent } from '../../../shared/ui/values/copy-value-button.component';
 import { ManifestPanelComponent } from './manifest-panel.component';
 import type { RunStateDto } from '@evidgate/sdk';
 import ready from '../../../../../../../fixtures/web-api/run-detail/input.json';
@@ -51,14 +53,18 @@ describe('ManifestPanelComponent', () => {
     expect(root.querySelector('app-status-pill')).toBeNull();
   });
   it('labels its Helm card and keeps the full hash selectable with polite copy feedback', async () => {
-    const { root } = await render(manifest);
+    const { root, fixture } = await render(manifest);
     const panel = root.querySelector('section');
     expect(panel?.getAttribute('data-slot')).toBe('card');
     expect(panel?.getAttribute('aria-labelledby')).toBe('manifest-title');
     expect(root.querySelector('#manifest-title')?.textContent).toBe('Manifest summary');
     expect(root.querySelector('[data-manifest-hash] bdi')?.textContent).toBe(manifest.manifestHash);
     expect(root.querySelector('[role="status"]')?.getAttribute('aria-live')).toBe('polite');
-    expect(root.querySelector('button')?.classList.contains('whitespace-normal')).toBe(true);
+    expect(root.querySelector('app-copy-value-button')).not.toBeNull();
+    const hashCopy = fixture.debugElement
+      .query(By.directive(CopyValueButtonComponent))
+      .injector.get(CopyValueButtonComponent);
+    expect(hashCopy.size()).toBe('lg');
   });
   it('renders the getRun fixture manifest verbatim, shard names as declared on the wire', async () => {
     const run = ready.body as RunStateDto;
@@ -78,19 +84,17 @@ describe('ManifestPanelComponent', () => {
     );
     expect(root.querySelector('app-status-pill')).toBeNull();
   });
-  it('renders a null policy revision as unavailable while the other members stay values', async () => {
+  it('renders a missing policy revision as plain not provided while preserving present values', async () => {
     const run = { ...(ready.body as RunStateDto), policy_revision_id: null };
     const { root } = await render(manifestFromRun(run));
-    expect(root.querySelector('[data-manifest-policy] app-status-pill')?.textContent).toContain(
-      'Status unavailable',
-    );
-    expect(root.querySelectorAll('app-status-pill')).toHaveLength(1);
+    expect(root.querySelector('[data-manifest-policy]')?.textContent).toContain('Not provided');
+    expect(root.querySelector('app-status-pill')).toBeNull();
   });
-  it('renders each absent member as the shared unavailable state, never a value-like placeholder', async () => {
+  it('renders absent facts as plain not provided, never a status or a value-like placeholder', async () => {
     const { root } = await render(UNAVAILABLE_MANIFEST);
-    expect(root.querySelectorAll('app-status-pill')).toHaveLength(5);
+    expect(root.querySelector('app-status-pill')).toBeNull();
     for (const value of root.querySelectorAll('dd'))
-      expect(value.textContent).toContain('Status unavailable');
+      expect(value.textContent).toContain('Not provided');
     expect(root.querySelector('button')).toBeNull();
     expect(root.textContent).not.toContain('PASS');
   });
@@ -121,7 +125,8 @@ describe('ManifestPanelComponent', () => {
     root.querySelector('button')!.click();
     await fixture.whenStable();
     expect(writeText).toHaveBeenCalledWith(manifest.manifestHash);
-    expect(root.querySelector('[role="status"]')?.textContent).toBe('Manifest hash copied');
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(root.querySelector('[role="status"]')?.textContent).toBe('Manifest hash copied.');
   });
   it('keeps the copy button enabled and focused while the copy is in flight', async () => {
     let settle!: () => void;
@@ -157,11 +162,11 @@ describe('ManifestPanelComponent', () => {
 
     settle();
     await fixture.whenStable();
-    expect(root.querySelector('[role="status"]')?.textContent).toBe('Manifest hash copied');
+    expect(root.querySelector('[role="status"]')?.textContent).toBe('Manifest hash copied.');
     expect(button.getAttribute('aria-busy')).toBe('false');
     expect(document.activeElement).toBe(button);
   });
-  it('escapes format characters in the displayed hash but copies the exact raw hash', async () => {
+  it('escapes format characters in the displayed hash and refuses clipboard copying', async () => {
     const hash = 'sha256:abc\u202edef';
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { clipboard: { writeText } });
@@ -169,9 +174,16 @@ describe('ManifestPanelComponent', () => {
     const displayed = root.querySelector('[data-manifest-hash] bdi');
     expect(displayed?.textContent).toBe('sha256:abc⟨U+202E⟩def');
     expect(displayed?.textContent).not.toContain('\u202e');
-    root.querySelector('button')!.click();
+    const copyButton = root.querySelector<HTMLButtonElement>(
+      '[data-manifest-hash] app-copy-value-button button',
+    );
+    copyButton?.click();
     await fixture.whenStable();
-    expect(writeText).toHaveBeenCalledWith(hash);
+    expect(writeText).not.toHaveBeenCalled();
+    expect(copyButton?.textContent?.trim()).toBe('Copy failed');
+    expect(
+      root.querySelector('[data-manifest-hash] app-copy-value-button [role="status"]')?.textContent,
+    ).toBe('Could not copy Manifest hash. Show the full value and copy it manually.');
   });
   it('offers manual copying when clipboard access fails and clears feedback for a new summary', async () => {
     vi.stubGlobal('navigator', {
@@ -180,10 +192,12 @@ describe('ManifestPanelComponent', () => {
     const { root, fixture } = await render(manifest);
     root.querySelector('button')!.click();
     await fixture.whenStable();
-    expect(root.querySelector('[role="status"]')?.textContent).toContain('Copy failed.');
+    expect(root.querySelector('[role="status"]')?.textContent).toContain(
+      'Could not copy Manifest hash.',
+    );
     expect(root.querySelector('[data-manifest-hash] bdi')?.textContent).toBe(manifest.manifestHash);
     fixture.componentRef.setInput('summary', UNAVAILABLE_MANIFEST);
     await fixture.whenStable();
-    expect(root.querySelector('[role="status"]')?.textContent).toBe('');
+    expect(root.querySelector('[role="status"]')).toBeNull();
   });
 });

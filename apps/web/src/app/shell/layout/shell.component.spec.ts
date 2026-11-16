@@ -93,11 +93,14 @@ describe('ShellComponent', () => {
   it('keeps the topbar keyboard stops in the order the header reads', () => {
     const topbar = root.querySelector<HTMLElement>('header.topbar')!;
     const stops = Array.from(topbar.querySelectorAll<HTMLElement>('button'));
-    expect(stops).toHaveLength(4);
+    expect(stops).toHaveLength(fixture.componentInstance.canSwitchLocale ? 5 : 4);
     expect(stops[0]?.classList.contains('nav-toggle')).toBe(true);
     expect(stops[1]?.getAttribute('role')).toBe('combobox');
     expect(stops[2]?.getAttribute('role')).toBe('combobox');
-    expect(stops[3]?.classList.contains('theme-toggle')).toBe(true);
+    expect(stops.at(-1)?.classList.contains('theme-toggle')).toBe(true);
+    if (fixture.componentInstance.canSwitchLocale) {
+      expect(stops[3]?.classList.contains('locale-toggle')).toBe(true);
+    }
 
     const theme = topbar.querySelector<HTMLElement>('button.theme-toggle')!;
     const scope = topbar.querySelector<HTMLElement>('app-scope-switcher')!;
@@ -177,6 +180,7 @@ describe('ShellComponent', () => {
     await fixture.whenStable();
     const toggle = root.querySelector<HTMLButtonElement>('.nav-toggle')!;
     toggle.focus();
+    const restoreFocus = vi.spyOn(toggle, 'focus');
     toggle.click();
     await fixture.whenStable();
     const close = root.querySelector<HTMLButtonElement>('.close-button')!;
@@ -198,6 +202,7 @@ describe('ShellComponent', () => {
     expect(root.querySelector('.main-stack')?.hasAttribute('inert')).toBe(false);
     expect(aside.hasAttribute('inert')).toBe(true);
     expect(document.activeElement).toBe(toggle);
+    expect(restoreFocus).toHaveBeenLastCalledWith({ preventScroll: true });
   });
 
   it('leaves the drawer open for the Escape that closes a scope popup, then closes it on the next', async () => {

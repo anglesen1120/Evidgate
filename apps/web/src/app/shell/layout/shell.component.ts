@@ -1,5 +1,6 @@
 import { DOCUMENT } from '@angular/common';
 import { CdkTrapFocus } from '@angular/cdk/a11y';
+import { createBlockScrollStrategy } from '@angular/cdk/overlay';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCard } from '@evidgate/ui/card';
 import {
@@ -8,6 +9,7 @@ import {
   DestroyRef,
   ElementRef,
   Injector,
+  LOCALE_ID,
   afterNextRender,
   computed,
   inject,
@@ -32,6 +34,7 @@ import { QuotaBadgeComponent } from './quota-badge.component';
 import { ShellIconComponent } from './shell-icon.component';
 import { ThemeService } from './theme.service';
 import { trackTopbarHeight } from './topbar-height';
+import { LocaleSwitcherComponent, localeBundlePath } from './locale-switcher.component';
 
 @Component({
   selector: 'app-shell',
@@ -42,6 +45,7 @@ import { trackTopbarHeight } from './topbar-height';
     ScopeSwitcherComponent,
     ShellIconComponent,
     QuotaBadgeComponent,
+    LocaleSwitcherComponent,
     HlmButton,
     HlmCard,
     CdkTrapFocus,
@@ -60,6 +64,10 @@ export class ShellComponent {
   private readonly router = inject(Router);
   private readonly document = inject(DOCUMENT);
   private readonly injector = inject(Injector);
+  private readonly locale = inject(LOCALE_ID);
+  private readonly scrollLock = createBlockScrollStrategy(this.injector);
+  readonly canSwitchLocale =
+    localeBundlePath(this.document.baseURI, this.locale, this.router.url) !== null;
   private readonly destroyRef = inject(DestroyRef);
   private readonly topbar = viewChild<ElementRef<HTMLElement>>('topbar');
   private readonly closeButton = viewChild<ElementRef<HTMLButtonElement>>('closeButton');
@@ -92,6 +100,7 @@ export class ShellComponent {
   private scopeEscape: KeyboardEvent | null = null;
 
   constructor() {
+    this.destroyRef.onDestroy(() => this.scrollLock.disable());
     // The bar is a wrapping flex row, so its height only exists after layout: measure it once the
     // shell has rendered and follow every later resize of the bar itself.
     afterNextRender(
@@ -114,13 +123,17 @@ export class ShellComponent {
         const moveFocus = this.hasNavigated && path !== this.lastPath;
         this.hasNavigated = true;
         this.lastPath = path;
+        this.scrollLock.disable();
         this.drawerOpen.set(false);
         if (moveFocus) this.focusRequest++;
         afterNextRender(
           () => {
             const main = this.main()?.nativeElement;
             if (moveFocus) main?.focus();
-            const heading = main?.querySelector('h1')?.textContent?.trim();
+            let route = this.router.routerState.snapshot.root;
+            while (route.firstChild !== null) route = route.firstChild;
+            // Route metadata stays accurate while an asynchronous page changes loading headings.
+            const heading = route.title ?? main?.querySelector('h1')?.textContent?.trim();
             this.document.title = heading ? `${heading} · Evidgate` : this.brandLabel;
           },
           { injector: this.injector },
@@ -161,11 +174,13 @@ export class ShellComponent {
       this.userCollapsed.set(!this.collapsed());
       return;
     }
+    this.scrollLock.enable();
     this.drawerOpen.set(true);
     this.focusWhenUnblocked('drawer');
   }
 
   closeDrawer(restoreOpener = true): void {
+    this.scrollLock.disable();
     this.drawerOpen.set(false);
     if (restoreOpener) this.focusWhenUnblocked('opener');
     else this.focusRequest++;
@@ -175,6 +190,11 @@ export class ShellComponent {
     if (!this.mobile()) return;
     const destination = this.router.serializeUrl(this.router.createUrlTree(link));
     this.closeDrawer(this.pathOf(destination) === this.pathOf(this.router.url));
+  }
+
+  switchLocale(): void {
+    const destination = localeBundlePath(this.document.baseURI, this.locale, this.router.url);
+    if (destination !== null) this.document.defaultView?.location.assign(destination);
   }
 
   /**
@@ -192,7 +212,7 @@ export class ShellComponent {
           ? this.closeButton()?.nativeElement
           : this.toggleButton()?.nativeElement;
       if (!element?.isConnected) return;
-      if (!element.closest('[inert]')) element.focus();
+      if (!element.closest('[inert]')) element.focus({ preventScroll: true });
       if (this.document.activeElement !== element && framesLeft > 0) {
         this.document.defaultView?.requestAnimationFrame(() => focus(framesLeft - 1));
       }

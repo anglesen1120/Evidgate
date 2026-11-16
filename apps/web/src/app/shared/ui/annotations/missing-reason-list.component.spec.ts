@@ -34,12 +34,14 @@ describe('MissingReasonList (FR-09-2/6)', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it('composes outlined reason badges and native Helm navigation without making plain reasons controls', () => {
+  it('composes copyable reason identifiers and native Helm navigation without making prose a control', () => {
     const fixture = TestBed.createComponent(MissingReasonList);
     fixture.componentRef.setInput('reasons', reasons);
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
-    expect(root.querySelectorAll('[data-slot="badge"]')).toHaveLength(2);
+    expect(root.querySelectorAll('[data-slot="badge"]')).toHaveLength(0);
+    expect(root.querySelectorAll('.reason-code code.full-value')).toHaveLength(2);
+    expect(root.querySelectorAll('button[aria-label="Copy Reason code"]')).toHaveLength(2);
     const link = root.querySelector('a');
     expect(link?.getAttribute('data-slot')).toBe('button');
     expect(link?.getAttribute('href')).toBe(reasons[0]?.href);
@@ -81,11 +83,15 @@ describe('MissingReasonList (FR-09-2/6)', () => {
       }
       expect(fixture.componentInstance.reasons()).toBe(reasons);
     }
-    // Only supplied anchors are focusable: the list itself never becomes a control.
-    expect(root.querySelector('[tabindex], [role="button"], button, [aria-disabled]')).toBeNull();
-    expect(
-      root.querySelector('[role="status"], [aria-busy="true"], [class*="success"]'),
-    ).toBeNull();
+    // Reason prose stays plain; only supplied links and explicitly named copy actions can act.
+    const buttons = root.querySelectorAll('button');
+    expect(buttons).toHaveLength(state === 'empty' ? 0 : reasons.length);
+    buttons.forEach((button) => expect(button.getAttribute('aria-label')).toBe('Copy Reason code'));
+    expect(root.querySelector('[tabindex], [role="button"], [aria-busy="true"]')).toBeNull();
+    root
+      .querySelectorAll('[role="status"]')
+      .forEach((status) => expect(status.textContent).toBe(''));
+    expect(root.querySelector('[class*="success"]')).toBeNull();
     expect(root.textContent).not.toMatch(/\b(PASS|FAIL|complete)\b/);
   });
 
@@ -118,7 +124,7 @@ describe('MissingReasonList (FR-09-2/6)', () => {
     });
   });
 
-  it('preserves long Vietnamese text and identifiers in wrapping structures', () => {
+  it('preserves complete long Vietnamese prose and copyable reason codes outside chips', () => {
     const fixture = TestBed.createComponent(MissingReasonList);
     const text = 'Thiếu bằng chứng từ lần thử gốc; không suy diễn kết quả. '.repeat(30);
     const code = 'stale_epoch_'.repeat(30);
@@ -127,15 +133,13 @@ describe('MissingReasonList (FR-09-2/6)', () => {
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('.reason')?.classList.contains('reason')).toBe(true);
     expect(root.querySelector('.reason-text')?.textContent).toBe(text);
-    const badge = root.querySelector('code');
-    expect(badge?.textContent).toBe(code);
-    expect(badge?.classList.contains('h-auto')).toBe(true);
-    expect(badge?.classList.contains('min-h-[var(--eg-space-6)]')).toBe(true);
-    expect(badge?.classList.contains('whitespace-normal')).toBe(true);
-    expect(badge?.classList.contains('[overflow-wrap:anywhere]')).toBe(true);
-    expect(badge?.classList.contains('max-w-full')).toBe(true);
-    expect(badge?.classList.contains('h-5')).toBe(false);
-    expect(root.querySelector('a, [title]')).toBeNull();
+    const codeValue = root.querySelector('.reason-code code');
+    expect(codeValue?.textContent).toBe(code);
+    expect(codeValue?.classList.contains('full-value')).toBe(true);
+    expect(codeValue?.getAttribute('aria-hidden')).toBeNull();
+    expect(codeValue?.closest('[hlmBadge]')).toBeNull();
+    expect(root.querySelector('button')?.getAttribute('aria-label')).toBe('Copy Reason code');
+    expect(root.querySelector('a, [title], [aria-haspopup]')).toBeNull();
   });
 
   it.each([

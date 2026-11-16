@@ -21,7 +21,7 @@
 // derives from a preceding POST.
 //
 // Every assertion keys on the plan's §10 F6 DOM contract — `app-members-page[data-members-phase]`,
-// rows `[data-members-row][data-membership-id]` and their `.role-name` cells,
+// records `[data-row-id]` and their `.role-name` cells, the portalled row Actions menu,
 // `[data-members-edit-open]`, `[data-members-dialog="edit-roles"]`,
 // `[data-members-role-option][data-role-id]`, `[data-members-submit]`, `[data-members-error]` +
 // `[data-members-error-code]`, `[data-members-last-admin-hint]`,
@@ -29,6 +29,7 @@
 // `[data-members-not-applied-item]` — never on a localized label, so both locale bundles answer the
 // same. Refusal text is read from the corpus JSON the case answers with, never retyped.
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { MEMBER_ROWS, memberRow, openMemberAction, openMemberMenu } from './member-controls';
 
 import getAfterGrant from '../../../../fixtures/web-api/membership-get-after-grant/input.json';
 import grantForbidden from '../../../../fixtures/web-api/membership-role-grant-forbidden/input.json';
@@ -136,9 +137,6 @@ const ROLE_NAMES_AFTER = getAfterGrant.body.roles.map((role) => role.name);
  */
 const HELD_ANSWER = '?fixture.latency=2000';
 
-/** The rows `[data-members-row]` of the page, in DOM order — one spelling for every case. */
-const MEMBER_ROWS = 'app-members-page [data-members-row]';
-
 /** The edit dialog of `app-edit-roles-dialog`, selected by its own `data-members-dialog` value. */
 const EDIT_DIALOG = '[data-members-dialog="edit-roles"][data-state="open"]';
 
@@ -147,11 +145,6 @@ async function expectMembersReady(page: Page): Promise<void> {
   const host = page.locator('app-members-page');
   await expect(host).toHaveCount(1);
   await expect(host).toHaveAttribute('data-members-phase', 'ready');
-}
-
-/** One row of the members table, by membership id. */
-function memberRow(page: Page, membershipId: string): Locator {
-  return page.locator(`${MEMBER_ROWS}[data-membership-id="${membershipId}"]`);
 }
 
 /** The role names a row currently shows, sorted so the case never depends on server order. */
@@ -214,12 +207,13 @@ test.describe('a role change is the server’s answer, never a local guess', () 
       await expectMembersReady(page);
 
       const row = memberRow(page, GRANT_TARGET.id);
-      await expect(row.locator('[data-members-edit-open]')).toHaveCount(1);
+      await openMemberMenu(page, row);
+      await expect(page.locator('[data-members-edit-open]')).toHaveCount(1);
+      await page.keyboard.press('Escape');
       // The starting state is the list's own role set: one role, the one the corpus gives it.
       await expect.poll(() => rowRoleNames(row)).toEqual([...ROLE_NAMES_BEFORE].sort());
 
-      const opener = row.locator('[data-members-edit-open]');
-      await opener.click();
+      const opener = await openMemberAction(page, row, 'edit-open');
       const dialog = page.locator(EDIT_DIALOG);
       await expect(dialog).toBeVisible();
 
@@ -261,7 +255,7 @@ test.describe('the last admin cannot be demoted: the server refuses in its own w
       await expectMembersReady(page);
 
       const row = memberRow(page, SOLE_ADMIN.id);
-      await row.locator('[data-members-edit-open]').click();
+      await openMemberAction(page, row, 'edit-open');
 
       const dialog = page.locator(EDIT_DIALOG);
       await expect(dialog).toBeVisible();
@@ -302,7 +296,7 @@ test.describe('a refused grant is the server’s own message, never the client�
       await expectMembersReady(page);
 
       const row = memberRow(page, GRANT_TARGET.id);
-      await row.locator('[data-members-edit-open]').click();
+      await openMemberAction(page, row, 'edit-open');
 
       const dialog = page.locator(EDIT_DIALOG);
       await expect(dialog).toBeVisible();
@@ -337,7 +331,7 @@ test.describe('a refused grant is the server’s own message, never the client�
       await expectMembersReady(page);
 
       const row = memberRow(page, GRANT_TARGET.id);
-      await row.locator('[data-members-edit-open]').click();
+      await openMemberAction(page, row, 'edit-open');
       const dialog = page.locator(EDIT_DIALOG);
       await expect(dialog).toBeVisible();
       const granted = dialog.locator(
@@ -371,7 +365,7 @@ test.describe('a granted change followed by a refused one is reported as both', 
       await expectMembersReady(page);
 
       const row = memberRow(page, GRANT_TARGET.id);
-      await row.locator('[data-members-edit-open]').click();
+      await openMemberAction(page, row, 'edit-open');
       const dialog = page.locator(EDIT_DIALOG);
       await expect(dialog).toBeVisible();
 
@@ -434,6 +428,7 @@ test.describe('a membership:read session is offered no role edit at all', () => 
       await expect(page.locator(MEMBER_ROWS)).toHaveCount(MEMBERSHIPS.length);
       // ABSENT from the DOM, not disabled: a disabled button would still confirm the action exists.
       await expect(page.locator('app-members-page [data-members-edit-open]')).toHaveCount(0);
+      await expect(page.locator('app-members-page [data-members-actions]')).toHaveCount(0);
       await expect(page.locator('[data-members-dialog="edit-roles"]')).toHaveCount(0);
     });
   }
@@ -451,7 +446,7 @@ test.describe('nothing on the row changes before the server answers', () => {
     const row = memberRow(page, GRANT_TARGET.id);
     await expect.poll(() => rowRoleNames(row)).toEqual([...ROLE_NAMES_BEFORE].sort());
 
-    await row.locator('[data-members-edit-open]').click();
+    await openMemberAction(page, row, 'edit-open');
     const dialog = page.locator(EDIT_DIALOG);
     await expect(dialog).toBeVisible();
     const granted = dialog.locator(
@@ -481,8 +476,7 @@ test.describe('the edit dialog is keyboard-operable', () => {
     await expectMembersReady(page);
 
     const row = memberRow(page, GRANT_TARGET.id);
-    const opener = row.locator('[data-members-edit-open]');
-    await opener.click();
+    const opener = await openMemberAction(page, row, 'edit-open', true);
 
     const dialog = page.locator(EDIT_DIALOG);
     await expect(dialog).toBeVisible();
@@ -547,7 +541,7 @@ test.describe('the edit dialog is keyboard-operable', () => {
     await expect(dialog).not.toBeVisible();
     await expect(opener).toBeFocused();
     // Escape is a cancel: the dialog reopened on a fresh draft, not on the abandoned one.
-    await opener.click();
+    await openMemberAction(page, row, 'edit-open', true);
     await expect(dialog).toBeVisible();
     await expect(
       dialog.locator(
@@ -563,7 +557,7 @@ test.describe('the edit dialog is WCAG 2.2 AA clean and not offered on a narrow 
       await seedStoredTheme(page, theme);
       await page.goto(withVariants(membersPath('en'), [SETTINGS_ADMIN_GRANTS]));
       await expectMembersReady(page);
-      await memberRow(page, GRANT_TARGET.id).locator('[data-members-edit-open]').click();
+      await openMemberAction(page, memberRow(page, GRANT_TARGET.id), 'edit-open');
       await expect(page.locator(EDIT_DIALOG)).toBeVisible();
       await waitForDialogAnimations(page, EDIT_DIALOG);
 
@@ -580,17 +574,15 @@ test.describe('the edit dialog is WCAG 2.2 AA clean and not offered on a narrow 
     await page.goto(withVariants(membersPath('en'), [SETTINGS_ADMIN_GRANTS]));
     await expectMembersReady(page);
 
-    // The mutation column collapses below 768px (`members.page.css:225-232`), so the control is not
-    // offered — and the notice says how to reach it, instead of the buttons shrinking into it.
+    // Narrow records keep every membership and omit mutations rather than shrinking the controls.
     await expect(page.locator('app-members-page .narrow-notice')).toBeVisible();
-    for (const button of await page.locator('app-members-page [data-members-edit-open]').all()) {
-      await expect(button).toBeHidden();
+    await expect(page.locator(MEMBER_ROWS)).toHaveCount(MEMBERSHIPS.length);
+    for (const membership of MEMBERSHIPS) {
+      await expect(memberRow(page, membership.id)).toBeVisible();
     }
-    await expect(page.locator('app-members-page [data-members-edit-open]')).toHaveCount(
-      MEMBERSHIPS.filter(
-        (membership) => membership.status === 'active' || membership.status === 'pending',
-      ).length,
-    );
+    await expect(
+      page.locator('app-members-page [data-members-actions], [data-members-edit-open]'),
+    ).toHaveCount(0);
 
     await expectNoA11yViolations(page, 'members edit-roles 360 en/light');
   });

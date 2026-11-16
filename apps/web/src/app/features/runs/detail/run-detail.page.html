@@ -1,17 +1,14 @@
-<header class="mb-(--eg-space-5) flex flex-wrap items-center justify-between gap-(--eg-space-3)">
-  <h1
-    class="m-0 font-(family-name:--eg-font-display) text-[clamp(var(--eg-text-xl),2vw,var(--eg-text-2xl))] leading-(--eg-leading-2xl)"
-    [textContent]="copy.title"
-  ></h1>
+<app-page-header class="mb-(--eg-space-7) block" [title]="copy.title">
   <a
     hlmBtn
+    appPageHeaderActions
     [variant]="'outline'"
     class="min-h-(--eg-control-touch) text-foreground visited:text-foreground hover:text-foreground"
     routerLink=".."
     [queryParamsHandling]="'preserve'"
     >{{ copy.back }}</a
   >
-</header>
+</app-page-header>
 <app-request-state
   [status]="requestStatus()"
   [error]="store.loadError()"
@@ -19,7 +16,7 @@
   (retry)="reload()"
 >
   @if (store.run(); as run) {
-    <div class="grid min-w-0 gap-(--eg-space-6)">
+    <div class="grid min-w-0 gap-(--eg-space-7)">
       <app-run-header
         [run]="run"
         [runCompleteness]="store.latestRevisionCompleteness()"
@@ -58,16 +55,17 @@
           <button
             type="button"
             [hlmTabsTrigger]="'evidence'"
-            class="min-h-(--eg-control-touch) min-w-0 whitespace-normal wrap-anywhere"
+            class="h-auto min-h-(--eg-control-touch) flex-none whitespace-nowrap"
           >
             {{ copy.evidence }}
           </button>
           <button
             type="button"
             [hlmTabsTrigger]="'decision'"
-            class="min-h-(--eg-control-touch) min-w-0 whitespace-normal wrap-anywhere"
+            class="h-auto min-h-(--eg-control-touch) flex-none whitespace-nowrap"
+            [attr.aria-label]="copy.decision"
           >
-            {{ copy.decision }}
+            {{ copy.decisionTab }}
           </button>
         </div>
         <!-- Brain hardcodes tabindex="0" on every panel and only hides the inactive one, so the
@@ -113,11 +111,21 @@
           />
         </div>
       </div>
-      <app-run-header
-        [run]="run"
-        [runCompleteness]="store.latestRevisionCompleteness()"
-        [view]="'context'"
-      />
+      <div
+        class="grid min-w-0 gap-(--eg-space-7) min-[1280px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
+        data-run-history-context
+      >
+        <app-run-timeline
+          [state]="run.state"
+          [stateHistory]="run.state_history"
+          [afterCancelEvents]="run.after_cancel_events"
+        />
+        <app-run-header
+          [run]="run"
+          [runCompleteness]="store.latestRevisionCompleteness()"
+          [view]="'context'"
+        />
+      </div>
       <app-manifest-panel [summary]="store.manifest()" />
       <app-producer-status-table
         [slots]="producerSlots()"
@@ -136,11 +144,6 @@
         [retryEligible]="releaseRetryEligible()"
         (selectRelease)="store.selectRelease($event)"
         (retry)="retryRelease()"
-      />
-      <app-run-timeline
-        [state]="run.state"
-        [stateHistory]="run.state_history"
-        [afterCancelEvents]="run.after_cancel_events"
       />
     </div>
   }

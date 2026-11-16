@@ -7,6 +7,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
+/** The whole `shared` tree: ids live in `shared/ui/**`, `shared/forms/**` and `shared/time/**`. */
+const sharedDir = resolve(here, '..');
 const localeDir = resolve(here, '../../../locale');
 
 /** Every non-spec source file under `dir`, recursively. */
@@ -21,7 +23,7 @@ function sources(dir: string): string[] {
 /** `@@id` markers in templates and `:@@id:` markers in `$localize` calls. */
 function declaredIds(): string[] {
   const ids = new Set<string>();
-  for (const file of sources(here)) {
+  for (const file of sources(sharedDir)) {
     for (const match of readFileSync(file, 'utf8').matchAll(/@@([a-z][a-z0-9.-]*[a-z0-9])/g)) {
       const id = match[1];
       if (id !== undefined) ids.add(id);
@@ -64,10 +66,15 @@ describe('shared UI message catalogs', () => {
 
   it('translates every shared.* unit into vi (no empty or untranslated English target)', () => {
     // `pending` is the one deliberately untranslated term (the 00 §8.5 decision value).
-    const sameAsSource = new Set(['shared.decision-chip.pending']);
+    // `utc` is a fixed time-zone designator with no Vietnamese form; the UI prints it verbatim
+    // (`shared/time/absolute-time.component.ts`), so source === target is intentional.
+    const sameAsSource: Record<string, true> = {
+      'shared.decision-chip.pending': true,
+      'shared.values.utc': true,
+    };
     const untranslated = [...catalogUnits('messages.vi.xlf')]
       .filter(([id]) => id.startsWith('shared.'))
-      .filter(([id, { source, target }]) => !target || (target === source && !sameAsSource.has(id)))
+      .filter(([id, { source, target }]) => !target || (target === source && !sameAsSource[id]))
       .map(([id]) => id);
     expect(untranslated).toEqual([]);
   });

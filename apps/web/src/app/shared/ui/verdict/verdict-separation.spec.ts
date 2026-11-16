@@ -36,19 +36,19 @@ class VerdictSeparationTestComponent {
 }
 
 const completenessCases = [
-  { value: 'complete', tone: 'success', text: 'Evidence complete' },
-  { value: 'incomplete', tone: 'warning', text: 'Evidence incomplete' },
-  { value: undefined, tone: 'neutral', text: 'Evidence status unavailable' },
-  { value: null, tone: 'neutral', text: 'Evidence status unavailable' },
-  { value: 'unknown', tone: 'neutral', text: 'Evidence status unavailable' },
+  { value: 'complete', tone: 'success', text: 'Complete' },
+  { value: 'incomplete', tone: 'warning', text: 'Incomplete' },
+  { value: undefined, tone: 'neutral', text: 'Unavailable' },
+  { value: null, tone: 'neutral', text: 'Unavailable' },
+  { value: 'unknown', tone: 'neutral', text: 'Unavailable' },
 ] as const;
 const outcomeCases = [
   { value: 'all_passed', tone: 'success', text: 'All tests passed' },
   { value: 'has_failures', tone: 'danger', text: 'Has failures' },
   { value: 'no_results', tone: 'neutral', text: 'No results' },
-  { value: undefined, tone: 'neutral', text: 'Outcome unavailable' },
-  { value: null, tone: 'neutral', text: 'Outcome unavailable' },
-  { value: 'unknown', tone: 'neutral', text: 'Outcome unavailable' },
+  { value: undefined, tone: 'neutral', text: 'Unavailable' },
+  { value: null, tone: 'neutral', text: 'Unavailable' },
+  { value: 'unknown', tone: 'neutral', text: 'Unavailable' },
 ] as const;
 const decisionCases = [
   { value: 'PASS', tone: 'success', text: 'PASS' },
@@ -57,7 +57,7 @@ const decisionCases = [
   { value: undefined, tone: 'pending', text: 'Not evaluated' },
   { value: null, tone: 'pending', text: 'Not evaluated' },
   { value: 'pending', tone: 'pending', text: 'Not evaluated' },
-  { value: 'unknown', tone: 'neutral', text: 'Decision unavailable' },
+  { value: 'unknown', tone: 'neutral', text: 'Unavailable' },
 ] as const;
 
 const cases = completenessCases.flatMap((completeness) =>

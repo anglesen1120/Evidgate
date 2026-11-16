@@ -15,15 +15,15 @@ describe('EvidenceBadgeComponent', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it.each([
-    ['default', 'incomplete', 'warning', 'Evidence incomplete'],
-    ['hover', 'incomplete', 'warning', 'Evidence incomplete'],
-    ['focus-visible', 'incomplete', 'warning', 'Evidence incomplete'],
-    ['active', 'incomplete', 'warning', 'Evidence incomplete'],
-    ['disabled', 'incomplete', 'warning', 'Evidence incomplete'],
-    ['loading', undefined, 'neutral', 'Evidence status unavailable'],
-    ['empty', null, 'neutral', 'Evidence status unavailable'],
-    ['error', 'incomplete', 'warning', 'Evidence incomplete'],
-    ['success', 'complete', 'success', 'Evidence complete'],
+    ['default', 'incomplete', 'warning', 'Incomplete'],
+    ['hover', 'incomplete', 'warning', 'Incomplete'],
+    ['focus-visible', 'incomplete', 'warning', 'Incomplete'],
+    ['active', 'incomplete', 'warning', 'Incomplete'],
+    ['disabled', 'incomplete', 'warning', 'Incomplete'],
+    ['loading', undefined, 'neutral', 'Unavailable'],
+    ['empty', null, 'neutral', 'Unavailable'],
+    ['error', 'incomplete', 'warning', 'Incomplete'],
+    ['success', 'complete', 'success', 'Complete'],
   ] as const)('keeps %s render-only and collection-specific', (_state, value, tone, label) => {
     const fixture = TestBed.createComponent(EvidenceBadgeComponent);
     fixture.componentRef.setInput('completeness', value);
@@ -35,13 +35,13 @@ describe('EvidenceBadgeComponent', () => {
     expect(badge?.getAttribute('data-slot')).toBe('badge');
     expect(badge?.classList.contains(`bg-[var(--eg-${tone}-bg)]`)).toBe(true);
     expect(badge?.classList.contains(`text-[var(--eg-${tone}-fg)]`)).toBe(true);
-    expect(root.querySelector('.verdict__label')?.textContent).toBe('Completeness:');
+    expect(root.querySelector('.verdict__label')?.textContent?.trim()).toBe('Completeness:');
     expect(root.querySelector('.verdict__value')?.textContent).toBe(label);
     expect(root.textContent).not.toMatch(/PASS|FAIL|Passed|passed/);
     expect(
       root.querySelector('[tabindex], [role], [aria-disabled], button, a, [aria-busy]'),
     ).toBeNull();
-    expect(root.querySelector('svg, [data-icon="check"]')).toBeNull();
+    expect(badge?.querySelector('hlm-icon')?.getAttribute('aria-hidden')).toBe('true');
   });
 
   it.each([
@@ -62,8 +62,8 @@ describe('EvidenceBadgeComponent', () => {
     const root = fixture.nativeElement as HTMLElement;
 
     expect(root.querySelector('[data-tone="neutral"]')).not.toBeNull();
-    expect(root.querySelector('[data-tone="success"], .success, svg, img')).toBeNull();
-    expect(root.querySelector('.verdict__value')?.textContent).toBe('Evidence status unavailable');
+    expect(root.querySelector('[data-tone="success"], .success, img')).toBeNull();
+    expect(root.querySelector('.verdict__value')?.textContent).toBe('Unavailable');
     // Identifiers are not completeness values: do not echo or reinterpret them as a verdict.
     expect(root.textContent).not.toMatch(/PASS|FAIL|0f3a9c21|onerror/);
   });
@@ -78,23 +78,40 @@ describe('EvidenceBadgeComponent', () => {
     fixture.componentRef.setInput('completeness', undefined);
     await fixture.whenStable();
     expect(root.querySelector('[data-tone="success"]')).toBeNull();
-    expect(root.querySelector('.verdict__value')?.textContent).toBe('Evidence status unavailable');
+    expect(root.querySelector('.verdict__value')?.textContent).toBe('Unavailable');
   });
 
-  it('keeps the full collection copy in a wrapping value, without title-only content', () => {
+  it('keeps complete explanations outside the short single-line badge', async () => {
     const fixture = TestBed.createComponent(EvidenceBadgeComponent);
-    fixture.detectChanges();
+    fixture.componentRef.setInput('showDetail', true);
+    await fixture.whenStable();
     const root = fixture.nativeElement as HTMLElement;
-
-    expect(root.querySelector('span.verdict > span.verdict__value')?.textContent).toBe(
+    const value = root.querySelector('.verdict__value');
+    expect(value?.textContent).toBe('Unavailable');
+    expect(value?.classList.contains('whitespace-nowrap')).toBe(true);
+    expect(root.querySelector('[hlmBadge] .verdict__detail')).toBeNull();
+    expect(root.querySelector('.verdict__detail')?.textContent?.trim()).toBe(
       'Evidence status unavailable',
     );
-    expect(root.querySelector('[title], [hidden], [aria-hidden]')).toBeNull();
-    const value = root.querySelector<HTMLElement>('.verdict__value');
-    expect(value).not.toBeNull();
-    if (value) {
-      expect(value.classList.contains('whitespace-normal')).toBe(true);
-      expect(value.classList.contains('[overflow-wrap:anywhere]')).toBe(true);
-    }
+    expect(fixture.componentInstance.detail()).toBe('Evidence status unavailable');
+    expect(root.querySelector('[title], [popover]')).toBeNull();
+  });
+
+  it('preserves unknown provenance outside the neutral chip as escaped text', async () => {
+    const fixture = TestBed.createComponent(EvidenceBadgeComponent);
+    fixture.componentRef.setInput('completeness', '<img src=x onerror=alert(1)>');
+    fixture.componentRef.setInput('showDetail', true);
+    await fixture.whenStable();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('.verdict__value')?.textContent).toBe('Unavailable');
+    expect(root.querySelector('.verdict__detail')?.textContent).toContain('<img src=x');
+    expect(fixture.componentInstance.tone()).toBe('neutral');
+    expect(root.querySelector('img, [data-tone="success"]')).toBeNull();
+    const dimension = root.querySelector('.verdict__label')!;
+    expect(dimension.classList.contains('sr-only')).toBe(false);
+    expect(root.querySelector('[hlmBadge]')?.contains(dimension)).toBe(false);
+    fixture.componentRef.setInput('compact', true);
+    await fixture.whenStable();
+    expect(dimension.classList.contains('sr-only')).toBe(true);
   });
 });

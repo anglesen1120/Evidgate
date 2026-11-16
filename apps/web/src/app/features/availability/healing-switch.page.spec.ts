@@ -1,6 +1,4 @@
-import { computed, provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import type { HealingSwitchResolutionView } from '@evidgate/sdk';
 import axe from 'axe-core';
 import { expect, vi } from 'vitest';
 
@@ -11,93 +9,22 @@ import {
   unexceptedViolations,
   type A11yException,
 } from '../../../../e2e/a11y/axe-config';
-import { HealingSwitchDataService } from '../../core/data/healing-switch-data.service';
-import { SessionStore } from '../../core/session/session.store';
-import { HealingSwitchPage } from './healing-switch.page';
-import {
-  CONFIGURE,
-  FakeHealingSwitchData,
-  TRIAGE,
-  fakeSession,
-  refusal,
-  resolution,
-  switchRow,
-} from './healing-switch.test-support';
+import { stubScopeBrowserApis } from '../../shell/layout/scope.fixture';
+import { TRIAGE, refusal, resolution, switchRow } from './healing-switch.test-support';
+import { mount, scopeCard, saveButton, selectOf } from './healing-switch-page.fixture';
 
 const A11Y_EXCEPTIONS: readonly A11yException[] = exceptionsDocument.exceptions;
 
-function mount(
-  options: {
-    codes?: readonly string[];
-    withProject?: boolean;
-    answer?: HealingSwitchResolutionView;
-    holdReads?: boolean;
-    readFailure?: Error | null;
-  } = {},
-) {
-  const base = fakeSession(options.codes ?? [TRIAGE, CONFIGURE]);
-  if (options.withProject === false) base.setProject(null);
-  // The page and its project card name the scope after the current project; the shared fake
-  // carries the resolved project id only.
-  const session = {
-    ...base,
-    currentProject: computed(() => {
-      const project = base.currentProject();
-      return project === null ? null : { ...project, name: 'Storefront' };
-    }),
-  };
-  const data = new FakeHealingSwitchData();
-  if (options.answer !== undefined) data.answer = options.answer;
-  data.holdReads = options.holdReads ?? false;
-  data.readFailure = options.readFailure ?? null;
-  TestBed.configureTestingModule({
-    imports: [HealingSwitchPage],
-    providers: [
-      provideZonelessChangeDetection(),
-      { provide: SessionStore, useValue: session },
-      { provide: HealingSwitchDataService, useValue: data },
-    ],
-  });
-  const fixture = TestBed.createComponent(HealingSwitchPage);
-  const root = fixture.nativeElement as HTMLElement;
-  fixture.detectChanges();
-  // `settle` waits for the read: a held read leaves the app unstable, so an in-flight state is
-  // inspected with `advance`.
-  const settle = async (): Promise<void> => {
-    for (let pass = 0; pass < 3; pass += 1) {
-      TestBed.tick();
-      fixture.detectChanges();
-      await fixture.whenStable();
-    }
-  };
-  const advance = async (): Promise<void> => {
-    TestBed.tick();
-    fixture.detectChanges();
-    await Promise.resolve();
-  };
-  const until = async (predicate: () => boolean): Promise<void> => {
-    await vi.waitFor(() => {
-      fixture.detectChanges();
-      expect(predicate()).toBe(true);
-    });
-  };
-  return { root, data, settle, advance, until };
-}
-
-function scopeCard(root: HTMLElement, scope: string): HTMLElement | null {
-  return root.querySelector<HTMLElement>(`[data-healing-scope="${scope}"]`);
-}
-
-function saveButton(root: HTMLElement, scope: string): HTMLButtonElement | null {
-  return scopeCard(root, scope)?.querySelector<HTMLButtonElement>('[data-healing-save]') ?? null;
-}
-
-function selectOf(root: HTMLElement, scope: string): HTMLSelectElement | null {
-  return scopeCard(root, scope)?.querySelector<HTMLSelectElement>('select') ?? null;
-}
-
 describe('HealingSwitchPage', () => {
-  afterEach(() => TestBed.resetTestingModule());
+  let restoreBrowserApis: () => void;
+  beforeEach(() => {
+    restoreBrowserApis = stubScopeBrowserApis();
+  });
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    restoreBrowserApis();
+    vi.unstubAllGlobals();
+  });
 
   it('refuses the screen without healing:triage and never reads the switch', async () => {
     const { root, data, settle } = mount({ codes: ['project:read'] });
@@ -258,10 +185,8 @@ describe('HealingSwitchPage', () => {
     });
     await settle();
 
-    expect(selectOf(root, 'tenant')?.disabled).toBe(false);
-    expect(selectOf(root, 'tenant')?.getAttribute('aria-disabled')).toBe('true');
-    expect(selectOf(root, 'project')?.disabled).toBe(false);
-    expect(selectOf(root, 'project')?.getAttribute('aria-disabled')).toBe('true');
+    expect(selectOf(root, 'tenant')?.disabled).toBe(true);
+    expect(selectOf(root, 'project')?.disabled).toBe(true);
     expect(saveButton(root, 'tenant')).toBeNull();
     expect(saveButton(root, 'project')).toBeNull();
     expect(scopeCard(root, 'tenant')?.querySelector('[data-healing-note]')?.textContent).toContain(
@@ -279,9 +204,7 @@ describe('HealingSwitchPage', () => {
     await settle();
 
     expect(selectOf(root, 'tenant')?.disabled).toBe(false);
-    expect(selectOf(root, 'tenant')?.hasAttribute('aria-disabled')).toBe(false);
-    expect(selectOf(root, 'project')?.disabled).toBe(false);
-    expect(selectOf(root, 'project')?.getAttribute('aria-disabled')).toBe('true');
+    expect(selectOf(root, 'project')?.disabled).toBe(true);
     expect(scopeCard(root, 'project')?.querySelector('[data-healing-note]')?.textContent).toContain(
       'tenant scope takes precedence',
     );
@@ -294,13 +217,9 @@ describe('HealingSwitchPage', () => {
     expect(root.querySelector('[data-healing-unavailable-posture]')?.textContent).toContain(
       'Healing is unavailable.',
     );
-    const modes = [...root.querySelectorAll('option')].map((option) => option.value);
-    expect(modes).not.toContain('unavailable');
-    expect(new Set(modes)).toEqual(new Set(['enabled', 'shadow', 'disabled']));
-    expect(selectOf(root, 'tenant')?.disabled).toBe(false);
-    expect(selectOf(root, 'tenant')?.getAttribute('aria-disabled')).toBe('true');
-    expect(selectOf(root, 'project')?.disabled).toBe(false);
-    expect(selectOf(root, 'project')?.getAttribute('aria-disabled')).toBe('true');
+    expect(root.querySelectorAll('select')).toHaveLength(0);
+    expect(selectOf(root, 'tenant')?.disabled).toBe(true);
+    expect(selectOf(root, 'project')?.disabled).toBe(true);
     expect(saveButton(root, 'tenant')).toBeNull();
   });
 
@@ -316,8 +235,7 @@ describe('HealingSwitchPage', () => {
 
     expect(saveButton(root, 'tenant')).toBeNull();
     expect(saveButton(root, 'project')).toBeNull();
-    expect(selectOf(root, 'tenant')?.disabled).toBe(false);
-    expect(selectOf(root, 'tenant')?.getAttribute('aria-disabled')).toBe('true');
+    expect(selectOf(root, 'tenant')?.disabled).toBe(true);
     expect(scopeCard(root, 'tenant')?.querySelector('[data-healing-note]')?.textContent).toContain(
       'needs permission to configure healing',
     );
@@ -327,7 +245,9 @@ describe('HealingSwitchPage', () => {
     const { root, settle } = mount();
     await settle();
 
-    expect(scopeCard(root, 'project')?.querySelector('h2')?.textContent).toContain('Storefront');
+    expect(root.querySelector('[data-healing-editor="project"] h3')?.textContent).toContain(
+      'Storefront',
+    );
   });
 
   it('renders a read refusal with the server message and reloads on request', async () => {
@@ -484,10 +404,8 @@ describe('HealingSwitchPage', () => {
     document.body.append(root);
     try {
       const result = await axe.run(root, AXE_JSDOM_RUN_OPTIONS);
-      // A scan that never reached the editors would pass vacuously; this answer leaves both
-      // lower editors inert through `aria-disabled`, which axe must also accept.
-      expect(root.querySelectorAll('select[aria-disabled="true"]')).toHaveLength(2);
-      expect(result.passes.some((rule) => rule.id === 'select-name')).toBe(true);
+      expect(root.querySelectorAll('button[role="combobox"]:disabled')).toHaveLength(2);
+      expect(result.passes.some((rule) => rule.id === 'button-name')).toBe(true);
       expect(formatViolations(unexceptedViolations(result.violations, A11Y_EXCEPTIONS))).toEqual(
         [],
       );

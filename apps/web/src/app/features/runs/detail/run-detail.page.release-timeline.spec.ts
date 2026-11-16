@@ -98,7 +98,7 @@ describe('RunDetailPage release and timeline regions', () => {
     const { root } = await open();
     const timeline = region(root, 'app-run-timeline');
     expect(
-      [...timeline.querySelectorAll('[data-step-time]')].map((time) =>
+      [...timeline.querySelectorAll('[data-step-time] time')].map((time) =>
         time.getAttribute('datetime'),
       ),
     ).toEqual(['2026-11-07T10:00:00Z', '2026-11-07T10:01:00Z', '2026-11-07T10:02:00Z']);
@@ -149,12 +149,12 @@ describe('RunDetailPage release and timeline regions', () => {
     );
     const { root, harness } = await open();
     expect(region(root, '[data-release-name]').textContent).toContain('Web release');
-    const buttons = root.querySelectorAll<HTMLButtonElement>(
-      'app-release-panel [role="group"] button',
-    );
-    expect(buttons).toHaveLength(2);
-    expect(buttons[1]?.textContent).toContain('rel-2');
-    buttons[1]?.click();
+    root.querySelector<HTMLButtonElement>('app-release-panel [role="combobox"]')?.click();
+    await settle(harness);
+    const options = document.querySelectorAll<HTMLElement>('[role="option"]');
+    expect(options).toHaveLength(2);
+    expect(options[1]?.textContent).toContain('rel-2');
+    options[1]?.click();
     await settle(harness);
     expect(getRelease.mock.calls.map(([id]) => id)).toEqual(['rel-1', 'rel-2']);
     expect(region(root, '[data-release-name]').textContent).toContain('API release');
@@ -235,7 +235,9 @@ describe('RunDetailPage release and timeline regions', () => {
       });
     const { root, harness } = await open();
     expect(root.querySelectorAll('[data-release-component]')).toHaveLength(1);
-    root.querySelectorAll<HTMLButtonElement>('app-release-panel [role="group"] button')[1]?.click();
+    root.querySelector<HTMLButtonElement>('app-release-panel [role="combobox"]')?.click();
+    await settle(harness);
+    document.querySelectorAll<HTMLElement>('[role="option"]')[1]?.click();
     await settle(harness);
     expect(root.querySelectorAll('[data-release-component]')).toHaveLength(0);
     expect(region(root, 'app-release-panel app-error-pattern')).not.toBeNull();
@@ -255,5 +257,25 @@ describe('RunDetailPage release and timeline regions', () => {
     const current = timeline.querySelectorAll<HTMLElement>('[aria-current="step"]');
     expect([...current].map((step) => step.dataset['step'])).toEqual(['complete']);
     expect(timeline.querySelector('[data-after-cancel-note]')).toBeNull();
+  });
+  it('uses one shared page heading and places timeline and context as peers after evidence', async () => {
+    const { root } = await open();
+    const titles = root.querySelectorAll('h1');
+    expect(titles).toHaveLength(1);
+    expect(titles[0]?.getAttribute('data-title-size')).toBe('page');
+    expect(titles[0]?.textContent).toBe('Run detail');
+    const pair = root.querySelector('[data-run-history-context]');
+    expect([...(pair?.children ?? [])].map((node) => node.tagName.toLowerCase())).toEqual([
+      'app-run-timeline',
+      'app-run-header',
+    ]);
+    expect(pair?.classList.contains('min-[1280px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]')).toBe(
+      true,
+    );
+    expect(pair?.previousElementSibling?.querySelector('app-evidence-panel')).not.toBeNull();
+    expect(pair?.nextElementSibling?.tagName.toLowerCase()).toBe('app-manifest-panel');
+    for (const heading of root.querySelectorAll('h2[hlmCardTitle]')) {
+      expect(heading.getAttribute('data-title-size')).toBe('section');
+    }
   });
 });

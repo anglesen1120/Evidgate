@@ -18,6 +18,7 @@ import type { MembershipView } from '@evidgate/sdk';
 import { createIntent, type Intent } from '../../../core/http/intent';
 import { SessionStore } from '../../../core/session/session.store';
 import { RetryAfterComponent } from '../../../shared/ui/conflict/retry-after.component';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
 import { InviteRevealComponent } from './invite-reveal.component';
 import { MEMBERS_COPY } from './member-list.component';
@@ -109,6 +110,7 @@ import { MembersStore } from './members.store';
 export class ResendInviteDialogComponent {
   protected readonly store = inject(MembersStore);
   protected readonly session = inject(SessionStore);
+  protected readonly viewport = inject(NarrowMutationPolicy);
   protected readonly copy = MEMBERS_COPY;
   private readonly slot = inject(RevealSlot);
   readonly completed = output<void>();
@@ -180,6 +182,7 @@ export class ResendInviteDialogComponent {
     const member = this.member();
     if (
       !this.opened() ||
+      !this.viewport.allowsMutation() ||
       this.revealing() ||
       !member ||
       !this.intent ||

@@ -6,7 +6,10 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { runDetailPath } from '../shell/run-detail.support';
 import {
+  ENABLE_GRANTS_TOGGLE,
   expectCurrentStep,
+  onboardingPath,
+  seedQueryWith,
   type OnboardingSeed,
   type StepNumber,
 } from '../shell/onboarding-support';
@@ -87,7 +90,14 @@ const FLOWS: readonly CoreFlow[] = [
     name: `onboarding step ${step}`,
     async open(page) {
       const wizard = new OnboardingWizard(page);
-      await wizard.open(LOCALE, seed);
+      if (step === 5) {
+        await page.goto(
+          withVariant(onboardingPath(LOCALE), seedQueryWith(seed, [ENABLE_GRANTS_TOGGLE])),
+        );
+        await expect(wizard.root).toBeVisible();
+      } else {
+        await wizard.open(LOCALE, seed);
+      }
       await expectCurrentStep(page, step);
       await expect(page.locator('#onboarding-step-title')).toBeVisible();
       // The two steps whose body loads on its own, so the text probed below has arrived.
@@ -95,7 +105,10 @@ const FLOWS: readonly CoreFlow[] = [
         await expect(page.locator('[data-testid="connect-ci-page"]')).toBeVisible();
       }
       if (step === 5) {
-        await expect(page.locator('[data-testid="enable-collection-confirm"]')).toBeVisible();
+        // At this probe's 320px width, activation is a readable desktop-required preview.
+        await expect(page.getByTestId('enable-collection-policy-preview')).toBeVisible();
+        await expect(page.getByTestId('enable-collection').getByRole('note')).toBeVisible();
+        await expect(page.getByTestId('enable-collection-confirm')).toHaveCount(0);
       }
     },
   })),

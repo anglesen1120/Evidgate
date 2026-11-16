@@ -61,6 +61,8 @@ export interface NavEntry {
   readonly area: string;
   /** Localised label (`$localize` with an `@@shell.nav.<id>` message id). */
   readonly label: string;
+  /** Optional visible label; `label` remains the complete accessible name. */
+  readonly shortLabel?: string;
 }
 
 /** A group header with its localised label (`@@shell.nav.group.<id>`). */
@@ -73,6 +75,7 @@ export interface NavGroupDef {
 export interface NavItemView {
   readonly id: string;
   readonly label: string;
+  readonly shortLabel?: string;
   readonly icon: NavIconName;
   readonly link: readonly string[];
 }

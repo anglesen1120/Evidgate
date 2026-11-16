@@ -1,132 +1,145 @@
-<header class="mb-[var(--eg-space-5)] grid min-w-0 gap-[var(--eg-space-3)]">
-  <h1
-    class="m-0 font-[family-name:var(--eg-font-display)] text-[length:clamp(var(--eg-text-xl),2vw,var(--eg-text-2xl))] leading-[var(--eg-leading-2xl)] [overflow-wrap:anywhere]"
-    [textContent]="copy.title"
-  ></h1>
-  <p class="m-0 text-muted-foreground [overflow-wrap:anywhere]">{{ copy.description }}</p>
-</header>
-<form
+<app-page-header
+  class="mb-(--eg-space-7) block"
+  [title]="copy.title"
+  [description]="copy.description"
+/>
+<details
   hlmCard
-  class="mb-[var(--eg-space-5)] grid min-w-0 gap-[var(--eg-space-4)] p-[var(--eg-space-5)]"
-  (ngSubmit)="apply()"
-  aria-labelledby="run-filters-title"
-  [attr.aria-describedby]="'run-filter-hint'"
+  class="mb-[var(--eg-space-5)] block min-w-0 p-[var(--eg-space-5)]"
+  [open]="desktopFilters()"
+  data-run-filter-disclosure
 >
-  <h2 hlmCardTitle id="run-filters-title" class="m-0 text-sm">{{ copy.filters }}</h2>
-  <p id="run-filter-hint" class="m-0 text-muted-foreground [overflow-wrap:anywhere]">
-    {{ copy.filterHint }}
-  </p>
-  <div
-    class="grid min-w-0 items-start gap-[var(--eg-space-4)] min-[768px]:grid-cols-2 min-[1280px]:grid-cols-4"
+  <summary
+    class="min-h-(--eg-control-touch) cursor-pointer content-center rounded-(--eg-radius-sm) font-(weight:--eg-weight-semibold) focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
   >
-    <div class="grid min-w-0 gap-[var(--eg-space-2)]">
-      <label hlmLabel for="run-state" class="whitespace-normal">{{ copy.state }}</label>
-      <hlm-select name="state" [(ngModel)]="draft.state" [itemToString]="stateLabel">
-        <hlm-select-trigger
-          [buttonId]="'run-state'"
-          class="w-full min-h-[var(--eg-control-touch)] whitespace-normal"
-        >
-          <hlm-select-value [placeholder]="copy.any" />
-        </hlm-select-trigger>
-        <hlm-select-content *hlmSelectPortal [aria-label]="copy.state" class="animate-none">
-          @for (option of stateOptions; track option.value) {
-            <hlm-select-item
-              [value]="option.value"
-              class="min-h-[var(--eg-control-touch)] whitespace-normal"
-              >{{ option.label }}</hlm-select-item
-            >
-          }
-        </hlm-select-content>
-      </hlm-select>
-    </div>
-    <div class="grid min-w-0 gap-[var(--eg-space-2)]">
-      <label hlmLabel for="run-decision" class="whitespace-normal">{{ copy.decision }}</label>
-      <hlm-select name="decision" [(ngModel)]="draft.decision" [itemToString]="decisionLabel">
-        <hlm-select-trigger
-          [buttonId]="'run-decision'"
-          [aria-describedby]="'run-decision-hint'"
-          class="w-full min-h-[var(--eg-control-touch)] whitespace-normal"
-        >
-          <hlm-select-value [placeholder]="copy.any" />
-        </hlm-select-trigger>
-        <hlm-select-content *hlmSelectPortal [aria-label]="copy.decision" class="animate-none">
-          @for (option of decisionOptions; track option.value) {
-            <hlm-select-item
-              [value]="option.value"
-              class="min-h-[var(--eg-control-touch)] whitespace-normal"
-              >{{ option.label }}</hlm-select-item
-            >
-          }
-        </hlm-select-content>
-      </hlm-select>
-    </div>
-    <div class="grid min-w-0 gap-[var(--eg-space-2)]">
-      <label hlmLabel for="run-scope" class="whitespace-normal">{{ copy.scope }}</label>
-      <hlm-select name="scope" [(ngModel)]="draft.scope" [itemToString]="scopeLabel">
-        <hlm-select-trigger
-          [buttonId]="'run-scope'"
-          class="w-full min-h-[var(--eg-control-touch)] whitespace-normal"
-        >
-          <hlm-select-value [placeholder]="copy.any" />
-        </hlm-select-trigger>
-        <hlm-select-content *hlmSelectPortal [aria-label]="copy.scope" class="animate-none">
-          @for (option of scopeOptions; track option.value) {
-            <hlm-select-item
-              [value]="option.value"
-              class="min-h-[var(--eg-control-touch)] whitespace-normal"
-              >{{ option.label }}</hlm-select-item
-            >
-          }
-        </hlm-select-content>
-      </hlm-select>
-    </div>
-    <div class="grid min-w-0 gap-[var(--eg-space-2)]">
-      <label hlmLabel for="run-ref" class="whitespace-normal">{{ copy.ref }}</label>
-      <input
-        hlmInput
-        class="min-h-[var(--eg-control-touch)] min-w-0 w-full"
-        id="run-ref"
-        name="refName"
-        maxlength="255"
-        [(ngModel)]="draft.refName"
-        [attr.aria-invalid]="store.refRejected() ? 'true' : null"
-        [aria-describedby]="store.refRejected() ? 'run-ref-error' : null"
-      />
-    </div>
-  </div>
-  <p id="run-decision-hint" class="m-0 text-xs text-muted-foreground [overflow-wrap:anywhere]">
-    {{ copy.decisionHint }}
-  </p>
-  @if (store.refRejected()) {
-    <p
-      class="m-0 text-[var(--eg-danger-fg)] [overflow-wrap:anywhere]"
-      id="run-ref-error"
-      role="alert"
+    {{ copy.filters }}
+    <span
+      class="ms-(--eg-space-3) inline-block text-muted-foreground font-(weight:--eg-weight-regular)"
+      >{{ activeFilterLabel() }}</span
     >
-      {{ copy.refRejected }}
+  </summary>
+  <form
+    class="mt-[var(--eg-space-4)] grid min-w-0 gap-[var(--eg-space-4)]"
+    (ngSubmit)="apply()"
+    aria-labelledby="run-filters-title"
+    [attr.aria-describedby]="'run-filter-hint'"
+  >
+    <h2 hlmCardTitle id="run-filters-title" class="sr-only">{{ copy.filters }}</h2>
+    <p id="run-filter-hint" class="m-0 text-muted-foreground [overflow-wrap:anywhere]">
+      {{ copy.filterHint }}
     </p>
-  }
-  <div class="flex flex-wrap gap-[var(--eg-space-3)]">
-    <button
-      hlmBtn
-      type="submit"
-      class="min-h-[var(--eg-control-touch)] whitespace-normal"
-      data-run-apply
+    <div
+      class="grid min-w-0 items-start gap-[var(--eg-space-4)] min-[768px]:grid-cols-2 min-[1280px]:grid-cols-4"
     >
-      {{ copy.apply }}
-    </button>
-    <button
-      hlmBtn
-      [variant]="'outline'"
-      type="button"
-      class="min-h-[var(--eg-control-touch)] whitespace-normal"
-      data-run-clear
-      (click)="clear()"
-    >
-      {{ copy.clear }}
-    </button>
-  </div>
-</form>
+      <div class="grid min-w-0 gap-[var(--eg-space-2)]">
+        <label hlmLabel for="run-state" class="whitespace-normal">{{ copy.state }}</label>
+        <hlm-select name="state" [(ngModel)]="draft.state" [itemToString]="stateLabel">
+          <hlm-select-trigger
+            [buttonId]="'run-state'"
+            class="w-full min-h-[var(--eg-control-touch)] whitespace-normal"
+          >
+            <hlm-select-value [placeholder]="copy.any" />
+          </hlm-select-trigger>
+          <hlm-select-content *hlmSelectPortal [aria-label]="copy.state" class="animate-none">
+            @for (option of stateOptions; track option.value) {
+              <hlm-select-item
+                [value]="option.value"
+                class="min-h-[var(--eg-control-touch)] whitespace-normal"
+                >{{ option.label }}</hlm-select-item
+              >
+            }
+          </hlm-select-content>
+        </hlm-select>
+      </div>
+      <div class="grid min-w-0 gap-[var(--eg-space-2)]">
+        <label hlmLabel for="run-decision" class="whitespace-normal">{{ copy.decision }}</label>
+        <hlm-select name="decision" [(ngModel)]="draft.decision" [itemToString]="decisionLabel">
+          <hlm-select-trigger
+            [buttonId]="'run-decision'"
+            [aria-describedby]="'run-decision-hint'"
+            class="w-full min-h-[var(--eg-control-touch)] whitespace-normal"
+          >
+            <hlm-select-value [placeholder]="copy.any" />
+          </hlm-select-trigger>
+          <hlm-select-content *hlmSelectPortal [aria-label]="copy.decision" class="animate-none">
+            @for (option of decisionOptions; track option.value) {
+              <hlm-select-item
+                [value]="option.value"
+                class="min-h-[var(--eg-control-touch)] whitespace-normal"
+                >{{ option.label }}</hlm-select-item
+              >
+            }
+          </hlm-select-content>
+        </hlm-select>
+      </div>
+      <div class="grid min-w-0 gap-[var(--eg-space-2)]">
+        <label hlmLabel for="run-scope" class="whitespace-normal">{{ copy.scope }}</label>
+        <hlm-select name="scope" [(ngModel)]="draft.scope" [itemToString]="scopeLabel">
+          <hlm-select-trigger
+            [buttonId]="'run-scope'"
+            class="w-full min-h-[var(--eg-control-touch)] whitespace-normal"
+          >
+            <hlm-select-value [placeholder]="copy.any" />
+          </hlm-select-trigger>
+          <hlm-select-content *hlmSelectPortal [aria-label]="copy.scope" class="animate-none">
+            @for (option of scopeOptions; track option.value) {
+              <hlm-select-item
+                [value]="option.value"
+                class="min-h-[var(--eg-control-touch)] whitespace-normal"
+                >{{ option.label }}</hlm-select-item
+              >
+            }
+          </hlm-select-content>
+        </hlm-select>
+      </div>
+      <div class="grid min-w-0 gap-[var(--eg-space-2)]">
+        <label hlmLabel for="run-ref" class="whitespace-normal">{{ copy.ref }}</label>
+        <input
+          hlmInput
+          class="min-h-[var(--eg-control-touch)] min-w-0 w-full"
+          id="run-ref"
+          name="refName"
+          maxlength="255"
+          [(ngModel)]="draft.refName"
+          [attr.aria-invalid]="store.refRejected() ? 'true' : null"
+          [aria-describedby]="store.refRejected() ? 'run-ref-error' : null"
+        />
+      </div>
+    </div>
+    <p id="run-decision-hint" class="m-0 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+      {{ copy.decisionHint }}
+    </p>
+    @if (store.refRejected()) {
+      <p
+        class="m-0 text-[var(--eg-danger-fg)] [overflow-wrap:anywhere]"
+        id="run-ref-error"
+        role="alert"
+      >
+        {{ copy.refRejected }}
+      </p>
+    }
+    <div class="flex flex-wrap gap-[var(--eg-space-3)]">
+      <button
+        hlmBtn
+        type="submit"
+        class="min-h-[var(--eg-control-touch)] whitespace-normal"
+        data-run-apply
+      >
+        {{ copy.apply }}
+      </button>
+      <button
+        hlmBtn
+        [variant]="'outline'"
+        type="button"
+        class="min-h-[var(--eg-control-touch)] whitespace-normal"
+        data-run-clear
+        (click)="clear()"
+      >
+        {{ copy.clear }}
+      </button>
+    </div>
+  </form>
+</details>
 <app-request-state
   [status]="status()"
   [error]="store.loadError()"

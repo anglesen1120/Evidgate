@@ -6,6 +6,7 @@ import type { ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
 import { EditRolesDialogComponent } from './edit-roles-dialog.component';
 import { MembersStore, type MutationState, type RoleChange } from './members.store';
+import { MEMBERS_DESKTOP } from './members-page.test-fixtures';
 
 const admin: RoleView = {
   id: 'admin',
@@ -70,6 +71,7 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
       imports: [EditRolesDialogComponent],
       providers: [
         provideZonelessChangeDetection(),
+        MEMBERS_DESKTOP,
         { provide: MembersStore, useValue: store },
         { provide: SessionStore, useValue: { has: () => canWrite() } },
       ],

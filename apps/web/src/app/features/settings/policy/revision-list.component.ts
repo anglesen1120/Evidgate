@@ -1,20 +1,23 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  LOCALE_ID,
-  inject,
-  input,
-  output,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import type { PolicyRevisionSummaryDto } from '@evidgate/sdk';
-import { HlmBadge } from '@evidgate/ui/badge';
+import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
+import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
+import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
+import { PolicyRevisionStateComponent } from './policy-revision-state.component';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
 
 @Component({
   selector: 'app-policy-revision-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HlmBadge, HlmButton, HlmCardImports],
+  imports: [
+    HlmButton,
+    HlmCardImports,
+    AbsoluteTimeComponent,
+    StatusPillComponent,
+    CopyableIdentifierComponent,
+    PolicyRevisionStateComponent,
+  ],
   host: { class: 'block min-w-0' },
   template: `
     <section
@@ -23,7 +26,7 @@ import { HlmCardImports } from '@evidgate/ui/card';
       aria-labelledby="policy-revisions-title"
       [attr.aria-busy]="busy()"
     >
-      <h3 hlmCardTitle id="policy-revisions-title" class="m-0 text-base">{{ copy.title }}</h3>
+      <h3 hlmCardTitle [size]="subsectionSize" id="policy-revisions-title">{{ copy.title }}</h3>
       @if (rows().length === 0) {
         <p class="m-0 text-muted-foreground">{{ copy.empty }}</p>
       } @else {
@@ -35,13 +38,26 @@ import { HlmCardImports } from '@evidgate/ui/card';
               [attr.data-revision-no]="row.revision_no"
               [attr.data-revision-state]="row.state"
               [attr.data-policy-head]="row.id === headId() ? '' : null"
+              [attr.data-policy-selected]="row.id === selectedId() ? '' : null"
             >
               <div class="flex flex-wrap items-center gap-2">
-                <strong>{{ copy.revision }} {{ row.revision_no }}</strong>
+                <button
+                  hlmBtn
+                  [variant]="'outline'"
+                  type="button"
+                  class="min-h-(--eg-control-touch) max-w-full whitespace-normal"
+                  data-policy-select
+                  [attr.aria-pressed]="row.id === selectedId()"
+                  [attr.aria-controls]="'policy-selected-detail'"
+                  [disabled]="busy()"
+                  (click)="select(row.id)"
+                >
+                  {{ copy.revision }} {{ row.revision_no }}
+                </button>
                 @if (row.id === headId()) {
-                  <span hlmBadge [variant]="'secondary'">{{ copy.head }}</span>
+                  <app-status-pill [tone]="headTone" [label]="copy.head" />
                 }
-                <span hlmBadge [variant]="'outline'">{{ row.state }}</span>
+                <app-policy-revision-state [state]="row.state" />
               </div>
               <dl
                 class="m-0 grid gap-3 [&_dd]:m-0 [&_dd]:wrap-anywhere [&_dt]:text-xs [&_dt]:text-muted-foreground"
@@ -49,15 +65,16 @@ import { HlmCardImports } from '@evidgate/ui/card';
                 <div>
                   <dt>{{ copy.hash }}</dt>
                   <dd>
-                    <code class="font-mono" [attr.aria-label]="row.hash">{{
-                      row.hash.slice(0, 12)
-                    }}</code>
+                    <app-copyable-identifier
+                      [value]="row.hash"
+                      [label]="copy.hash + ' · ' + copy.revision + ' ' + row.revision_no"
+                    />
                   </dd>
                 </div>
                 <div>
                   <dt>{{ copy.created }}</dt>
                   <dd>
-                    <time [attr.datetime]="row.created_at">{{ formatDate(row.created_at) }}</time>
+                    <app-absolute-time [value]="row.created_at" />
                   </dd>
                 </div>
               </dl>
@@ -71,6 +88,7 @@ import { HlmCardImports } from '@evidgate/ui/card';
           [variant]="'outline'"
           class="min-h-[var(--eg-control-touch)] whitespace-normal"
           type="button"
+          data-policy-more
           [disabled]="busy()"
           (click)="loadMore.emit()"
         >
@@ -83,14 +101,16 @@ import { HlmCardImports } from '@evidgate/ui/card';
 export class RevisionListComponent {
   readonly rows = input<readonly PolicyRevisionSummaryDto[]>([]);
   readonly headId = input<string | null>(null);
+  readonly selectedId = input<string | null>(null);
+  readonly selected = output<string>();
+  protected readonly subsectionSize = 'subsection' as const;
+  protected readonly headTone = 'info' as const;
   readonly hasMore = input(false);
   readonly busy = input(false);
   readonly loadMore = output<void>();
-  private readonly locale = inject(LOCALE_ID);
-  private readonly dates = new Intl.DateTimeFormat(this.locale, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
+  protected select(id: string): void {
+    if (!this.busy() && this.rows().some((row) => row.id === id)) this.selected.emit(id);
+  }
   protected readonly copy = {
     title: $localize`:@@settings.policy.revisions:Revisions`,
     empty: $localize`:@@settings.policy.revisions-empty:No revisions available.`,
@@ -100,8 +120,4 @@ export class RevisionListComponent {
     created: $localize`:@@settings.policy.created:Created`,
     more: $localize`:@@settings.policy.more:Load more`,
   };
-  protected formatDate(value: string): string {
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? value : this.dates.format(date);
-  }
 }

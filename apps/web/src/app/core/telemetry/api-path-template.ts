@@ -62,6 +62,7 @@ export const KNOWN_API_SEGMENTS: ReadonlySet<string> = new Set<string>([
   'export',
   'finalize',
   'fixtures',
+  'git-repo-bindings',
   'github',
   'head',
   'healing',

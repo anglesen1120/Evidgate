@@ -215,7 +215,13 @@ test.describe('form refusals announce once and keep the visitor’s place', () =
       page.getByRole('alert').filter({ hasText: 'cannot read this repository' }),
     ).toHaveCount(1);
     await expect(page.locator('#connect-oidc-repo-name')).toHaveAttribute('aria-invalid', 'true');
-    await expect(page.locator('#connect-repo-name-error')).not.toHaveAttribute('aria-live', /.*/);
+    await expect(page.locator('#connect-oidc-repo-name')).toHaveAccessibleDescription(
+      /the GitHub App cannot read this repository/,
+    );
+    await expect(page.locator('#connect-oidc-repo-name-error')).not.toHaveAttribute(
+      'aria-live',
+      /.*/,
+    );
     expect(await danglingDescriptions(page)).toEqual([]);
   });
 

@@ -1,3 +1,4 @@
+import { BreakpointObserver } from '@angular/cdk/layout';
 import { computed, provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import {
@@ -94,7 +95,9 @@ describe('RunListPage', () => {
   let query: BehaviorSubject<ParamMap>;
   let project: BehaviorSubject<ParamMap>;
   let navigate = vi.fn<Router['navigate']>().mockResolvedValue(true);
+  const desktop = new BehaviorSubject({ matches: true, breakpoints: {} });
   beforeEach(() => {
+    desktop.next({ matches: true, breakpoints: {} });
     store = pageStore();
     query = new BehaviorSubject(convertToParamMap({}));
     project = new BehaviorSubject(convertToParamMap({ projectId: 'project-1' }));
@@ -113,6 +116,7 @@ describe('RunListPage', () => {
         provideZonelessChangeDetection(),
         provideRouter([]),
         { provide: ActivatedRoute, useValue: route },
+        { provide: BreakpointObserver, useValue: { observe: () => desktop.asObservable() } },
       ],
     });
     TestBed.overrideComponent(RunListPage, {
@@ -152,6 +156,22 @@ describe('RunListPage', () => {
     option.click();
     await fixture.whenStable();
   }
+  it('collapses mobile filters, counts applied filters and expands at the desktop breakpoint', async () => {
+    desktop.next({ matches: false, breakpoints: {} });
+    const { fixture, root } = await render();
+    const disclosure = root.querySelector<HTMLDetailsElement>('[data-run-filter-disclosure]');
+    expect(disclosure?.open).toBe(false);
+    expect(root.querySelector('summary')?.textContent).toContain('Active filters: 0');
+    root.querySelector('summary')?.click();
+    expect(disclosure?.open).toBe(true);
+    query.next(convertToParamMap({ decision: 'PASS', ref: 'main' }));
+    await fixture.whenStable();
+    expect(root.querySelector('summary')?.textContent).toContain('Active filters: 2');
+    root.querySelector('summary')?.click();
+    desktop.next({ matches: true, breakpoints: {} });
+    await fixture.whenStable();
+    expect(disclosure?.open).toBe(true);
+  });
   it('initializes from ancestor project context and URL filters with one page h1', async () => {
     query.next(
       convertToParamMap({
@@ -199,10 +219,7 @@ describe('RunListPage', () => {
     const title = root.querySelector('h1');
     expect(title).not.toBeNull();
     if (title) {
-      expect(
-        title.classList.contains('text-[length:clamp(var(--eg-text-xl),2vw,var(--eg-text-2xl))]'),
-      ).toBe(true);
-      expect(title.classList.contains('leading-[var(--eg-leading-2xl)]')).toBe(true);
+      expect(title.getAttribute('data-title-size')).toBe('page');
       expect(title.textContent).toBe('Runs');
     }
   });
@@ -285,6 +302,7 @@ describe('RunListPage', () => {
       scope: 'original',
       refName: 'main',
     });
+    expect(root.querySelector('summary')?.textContent).toContain('Active filters: 4');
     expect(navigate).toHaveBeenLastCalledWith(
       [],
       expect.objectContaining({
@@ -306,6 +324,7 @@ describe('RunListPage', () => {
         queryParams: { state: null, decision: null, scope: null, ref: null },
       }),
     );
+    expect(root.querySelector('summary')?.textContent).toContain('Active filters: 0');
   });
   it('restores back/forward query changes and reloads when the project changes', async () => {
     const { fixture, root } = await render();

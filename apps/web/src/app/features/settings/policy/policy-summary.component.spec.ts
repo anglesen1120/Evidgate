@@ -91,9 +91,9 @@ describe('PolicySummaryComponent', () => {
     const { root } = await render(READY_ACTIVATION, READY_HEAD);
     const chip = root.querySelector('[data-policy-mode]');
     expect(chip?.getAttribute('data-mode')).toBe('advisory');
-    expect(root.querySelector('[data-policy-activation-revision]')?.textContent?.trim()).toBe(
-      ACTIVATION.policy_revision_id,
-    );
+    expect(
+      root.querySelector('[data-policy-activation-revision] .identifier-accessible')?.textContent,
+    ).toContain(ACTIVATION.policy_revision_id);
     expect(
       root
         .querySelector('[data-policy-activation-state]')
@@ -102,10 +102,13 @@ describe('PolicySummaryComponent', () => {
     expect(root.querySelector('[data-policy-head-no]')?.textContent).toContain(
       String(HEAD.revision_no),
     );
-    expect(root.querySelector('[data-policy-head-read] code')?.textContent?.trim()).toBe(HEAD.id);
+    expect(
+      root.querySelector('[data-policy-head-read] .identifier-accessible')?.textContent,
+    ).toContain(HEAD.id);
     expect(root.querySelector('[data-policy-activation] time')?.getAttribute('datetime')).toBe(
       ACTIVATION.activated_at,
     );
+    expect(root.querySelector('[data-policy-activation] time')?.textContent).toContain('UTC');
     expect(root.querySelector('[data-policy-reads-error]')).toBeNull();
   });
 

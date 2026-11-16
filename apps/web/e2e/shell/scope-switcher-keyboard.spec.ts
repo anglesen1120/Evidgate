@@ -66,6 +66,13 @@ test.describe('scope switcher keyboard commit (AC4)', () => {
     await expect(projectSelect).toHaveAttribute('aria-expanded', 'false');
     expect(new URL(page.url()).pathname).toBe(before);
     await expectScopeValue(projectSelect, PROJECT_STOREFRONT);
+    const localeToggle = page.locator('header.topbar button.locale-toggle');
+    await expect(localeToggle).toBeFocused();
+    await expect(localeToggle).toHaveAccessibleName(
+      'EN / VI: Switch language between English and Vietnamese',
+    );
+    await page.keyboard.press('Tab');
     await expect(page.locator('button.theme-toggle')).toBeFocused();
+    expect(new URL(page.url()).pathname).toBe(before);
   });
 });

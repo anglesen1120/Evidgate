@@ -2,26 +2,27 @@
   <div class="min-w-0 flex-1 basis-[var(--eg-rail-width)]">
     @if (ownsPageHeading) {
       <h1
+        hlmCardTitle
+        [size]="pageHeadingSize"
         #heading
         tabindex="-1"
-        class="m-0 font-[family-name:var(--eg-font-display)] text-xl md:text-2xl focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring"
+        class="m-0 focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring"
       >
         {{ copy.title }}
       </h1>
     } @else {
       <h2
+        hlmCardTitle
+        [size]="sectionHeadingSize"
         #heading
         tabindex="-1"
-        class="m-0 font-[family-name:var(--eg-font-display)] text-xl md:text-2xl focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring"
+        class="m-0 focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring"
       >
         {{ copy.title }}
       </h2>
     }
     <p class="mt-2! text-muted-foreground">{{ copy.description }}</p>
   </div>
-  @if (session.currentOrg(); as org) {
-    <app-audit-export class="min-w-0 max-w-full" [orgId]="org.id" />
-  }
 </header>
 <form
   hlmCard
@@ -29,11 +30,18 @@
   (ngSubmit)="apply()"
   aria-labelledby="audit-filters-title"
 >
-  <h3 hlmCardTitle id="audit-filters-title" class="m-0 text-base">{{ copy.filters }}</h3>
+  <h3 hlmCardTitle [size]="subsectionHeadingSize" id="audit-filters-title" class="m-0">
+    {{ copy.filters }}
+  </h3>
   <div class="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
     <div class="grid min-w-0 gap-2">
       <label hlmLabel for="audit-actor">{{ copy.actorType }}</label>
-      <hlm-select name="actorType" [(ngModel)]="draft.actorType" [itemToString]="actorLabel">
+      <hlm-select
+        name="actorType"
+        [ngModel]="draft().actorType"
+        (ngModelChange)="updateDraft({ actorType: $event })"
+        [itemToString]="actorLabel"
+      >
         <hlm-select-trigger
           [buttonId]="'audit-actor'"
           class="w-full min-h-[var(--eg-control-touch)] whitespace-normal"
@@ -58,8 +66,11 @@
         id="audit-action"
         name="action"
         maxlength="128"
-        [(ngModel)]="draft.action"
+        [ngModel]="draft().action"
+        (ngModelChange)="updateDraft({ action: $event })"
+        [aria-describedby]="'audit-action-hint'"
       />
+      <p id="audit-action-hint" class="m-0 text-xs text-muted-foreground">{{ copy.actionHint }}</p>
     </div>
     <div class="grid min-w-0 gap-2">
       <label hlmLabel for="audit-object">{{ copy.objectType }}</label>
@@ -69,8 +80,11 @@
         id="audit-object"
         name="objectType"
         maxlength="64"
-        [(ngModel)]="draft.objectType"
+        [ngModel]="draft().objectType"
+        (ngModelChange)="updateDraft({ objectType: $event })"
+        [aria-describedby]="'audit-object-hint'"
       />
+      <p id="audit-object-hint" class="m-0 text-xs text-muted-foreground">{{ copy.objectHint }}</p>
     </div>
     <div class="grid min-w-0 gap-2">
       <label hlmLabel for="audit-from">{{ copy.from }}</label>
@@ -81,7 +95,8 @@
         name="from"
         type="datetime-local"
         step="1"
-        [(ngModel)]="draft.from"
+        [ngModel]="draft().from"
+        (ngModelChange)="updateDraft({ from: $event })"
         [attr.aria-invalid]="invalidRange()"
         [aria-describedby]="
           invalidRange() ? 'audit-date-hint audit-range-error' : 'audit-date-hint'
@@ -97,7 +112,8 @@
         name="to"
         type="datetime-local"
         step="1"
-        [(ngModel)]="draft.to"
+        [ngModel]="draft().to"
+        (ngModelChange)="updateDraft({ to: $event })"
         [attr.aria-invalid]="invalidRange()"
         [aria-describedby]="
           invalidRange() ? 'audit-date-hint audit-range-error' : 'audit-date-hint'
@@ -131,6 +147,13 @@
     </button>
   </div>
 </form>
+@if (session.currentOrg(); as org) {
+  <app-audit-export
+    class="mb-4 min-w-0 max-w-full"
+    [orgId]="org.id"
+    [hasDraftChanges]="unappliedFilters()"
+  />
+}
 @if (status() === 'error') {
   @if (store.loadError(); as failure) {
     @if (
@@ -148,6 +171,7 @@
 }
 <app-request-state
   [status]="status()"
+  [loadingLabel]="copy.loading"
   [error]="store.loadError()"
   [empty]="store.rows().length === 0"
   [emptyTitle]="filtered() ? copy.noMatchTitle : copy.emptyTitle"
@@ -191,6 +215,7 @@
     @if (store.browseCapped()) {
       <p role="status" data-audit-browse-capped>{{ browseCappedText(store.rows().length) }}</p>
     }
+    <p data-audit-row-range>{{ rowRange() }}</p>
     <nav class="flex flex-wrap gap-3" [attr.aria-label]="copy.pagination">
       <button
         hlmBtn

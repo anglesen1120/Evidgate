@@ -1,12 +1,14 @@
 <header class="page-header mb-4 flex flex-wrap items-start justify-between gap-3">
   <div class="min-w-0 flex-1">
-    <h2
-      class="m-0 font-[family-name:var(--eg-font-display)] text-xl md:text-2xl"
-      #heading
-      tabindex="-1"
-    >
-      {{ copy.title }}
-    </h2>
+    @if (ownsPageHeading) {
+      <h1 hlmCardTitle [size]="pageHeadingSize" class="m-0" #heading tabindex="-1">
+        {{ copy.title }}
+      </h1>
+    } @else {
+      <h2 hlmCardTitle [size]="sectionHeadingSize" class="m-0" #heading tabindex="-1">
+        {{ copy.title }}
+      </h2>
+    }
     <p class="m-0 mt-1 text-muted-foreground">{{ copy.description }}</p>
   </div>
   @if (canWrite()) {
@@ -31,6 +33,7 @@
 </p>
 <app-request-state
   [status]="status()"
+  [loadingLabel]="copy.loading"
   [error]="store.loadError()"
   [empty]="store.members().length === 0"
   [emptyTitle]="copy.emptyTitle"
@@ -47,7 +50,6 @@
       (resend)="openResend($event)"
       (cancelInvite)="openCancelInvite($event)"
     />
-    <app-role-matrix [matrix]="visibleMatrix()" />
     @if (pagingAlert(); as failure) {
       <div
         hlmAlert
@@ -87,6 +89,7 @@
         {{ copy.next }}
       </button>
     </nav>
+    <app-role-matrix [matrix]="visibleMatrix()" />
   </section>
 </app-request-state>
 @if (canWrite()) {

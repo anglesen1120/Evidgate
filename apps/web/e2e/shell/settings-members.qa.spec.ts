@@ -28,4 +28,39 @@ for (const locale of LOCALES) {
     expect(value.length).toBe(EMAIL_FIELD_LIMIT);
     expect(value).toBe('a'.repeat(EMAIL_FIELD_LIMIT));
   });
+
+  test(`invite email corrections are localized, linked and focus the summary (${locale})`, async ({
+    page,
+  }) => {
+    const requiredCorrection = locale === 'vi' ? 'Nhập địa chỉ email.' : 'Enter an email address.';
+    const invalidCorrection =
+      locale === 'vi' ? 'Nhập địa chỉ email hợp lệ.' : 'Enter a valid email address.';
+    await page.goto(withVariants(membersPath(locale), [SETTINGS_ADMIN_GRANTS]));
+    await page.locator('app-members-page [data-members-invite-open]').click();
+    const dialog = page.locator('[data-members-dialog="invite"][data-state="open"]');
+    const email = dialog.locator('input[type="email"]');
+    const summary = dialog.locator('#members-invite-validation-summary');
+    const inline = dialog.locator('app-field-feedback p[id]');
+    await expect(dialog.locator('form')).toHaveAttribute('novalidate', '');
+    await dialog.locator('[data-members-submit]').click();
+    await expect(summary).toBeFocused();
+    await expect(summary).toContainText(requiredCorrection);
+    await expect(inline).toHaveText(requiredCorrection);
+    await expect(email).toHaveAttribute('aria-invalid', 'true');
+    const inlineId = await inline.getAttribute('id');
+    if (!inlineId) throw new Error('Expected an invitation field correction id');
+    await expect(email).toHaveAttribute('aria-describedby', inlineId);
+    await summary.locator('a[href="#members-invite-email"]').click();
+    await expect(email).toBeFocused();
+    await email.fill('not-an-email');
+    await expect(inline).toHaveText(invalidCorrection);
+    await expect(summary).toContainText(invalidCorrection);
+    await expect(email).toBeFocused();
+    await email.fill('corrected@example.test');
+    await expect(summary).toBeHidden();
+    await expect(inline).toHaveCount(0);
+    await expect(email).not.toHaveAttribute('aria-invalid', 'true');
+    await expect(email).toBeFocused();
+    await dialog.locator('footer button[type="button"]').click();
+  });
 }

@@ -19,6 +19,7 @@ import { HlmButton } from '@evidgate/ui/button';
 import { HlmTabsImports } from '@evidgate/ui/tabs';
 import { combineLatest } from 'rxjs';
 import type { ApiError } from '../../../core/http/api-error';
+import { PageHeaderImports } from '../../../shared/ui/page-header';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
 import { AttemptsTableComponent } from './attempts/attempts-table.component';
 import { DecisionViewComponent } from './decision/decision-view.component';
@@ -49,6 +50,7 @@ import { RunTimelineComponent } from './timeline/run-timeline.component';
     AttemptsTableComponent,
     HlmButton,
     HlmTabsImports,
+    PageHeaderImports,
   ],
   providers: [RunDetailStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -151,6 +153,7 @@ export class RunDetailPage {
     back: $localize`:@@runs.detail.back:Back to runs`,
     evidence: $localize`:@@runs.evidence.title:Evidence`,
     decision: $localize`:@@runs.decision.title:Latest live decision`,
+    decisionTab: $localize`:@@runs.detail.decision-tab-compact:Live decision`,
   };
   constructor() {
     this.route.fragment.pipe(takeUntilDestroyed()).subscribe((fragment) => {

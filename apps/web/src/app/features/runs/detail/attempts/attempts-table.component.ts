@@ -1,4 +1,4 @@
-import { DOCUMENT } from '@angular/common';
+import { DOCUMENT, formatNumber } from '@angular/common';
 import {
   afterNextRender,
   afterRenderEffect,
@@ -10,6 +10,7 @@ import {
   Injector,
   input,
   linkedSignal,
+  LOCALE_ID,
   output,
   untracked,
   viewChild,
@@ -26,8 +27,13 @@ import {
 import { EmptyPatternComponent } from '../../../../shared/ui/states/empty-pattern.component';
 import { ErrorPatternComponent } from '../../../../shared/ui/states/error-pattern.component';
 import { LoadingPatternComponent } from '../../../../shared/ui/states/loading-pattern.component';
-import { escapeFormatChars } from '../../list/ref-name-display';
+import { CopyValueButtonComponent } from '../../../../shared/ui/values/copy-value-button.component';
+import { DataTableValueComponent } from '../../../../shared/ui/data-table/data-table-value.component';
+import type { DataTableColumnWidth } from '../../../../shared/ui/data-table/data-table-column';
+import { NumberValueComponent } from '../../../../shared/ui/values/number-value.component';
+import { escapeFormatChars } from '../../../../shared/ui/values/ref-name-display';
 import { attemptAnchorId } from '../evidence/run-evidence-anchors';
+import { RUN_DETAIL_NOT_PROVIDED, runValueLabel } from '../run-value-label';
 import { groupAttempts, paginateAttemptGroups } from './attempt-groups';
 import type { AttemptRow } from './attempt-summary';
 
@@ -43,6 +49,9 @@ import type { AttemptRow } from './attempt-summary';
     HlmCard,
     HlmCardTitle,
     HlmTableImports,
+    CopyValueButtonComponent,
+    DataTableValueComponent,
+    NumberValueComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './attempts-table.component.html',
@@ -50,6 +59,20 @@ import type { AttemptRow } from './attempt-summary';
 })
 export class AttemptsTableComponent {
   readonly attempts = input.required<AttemptRow[] | null>();
+  protected readonly sectionSize = 'section' as const;
+  protected readonly columnRole = {
+    identity: 'identity',
+    text: 'text',
+    status: 'status',
+    number: 'number',
+  } as const;
+  protected readonly identifierKind = 'identifier' as const;
+  protected readonly primaryColumn = 'primary' as const;
+  protected readonly scanOverflow = 'truncate' as const;
+  protected readonly normalisedWidth = {
+    min: 'calc(14ch + var(--eg-space-4) * 2)',
+  } as const satisfies DataTableColumnWidth;
+  private readonly locale = inject(LOCALE_ID);
   /** The first page's request state; `ready` with `null` attempts is the unavailable state. */
   readonly status = input<'loading' | 'ready' | 'error'>('ready');
   /** The first page's failure (`status` = error) or the failed follow-up page (`ready`). */
@@ -64,6 +87,7 @@ export class AttemptsTableComponent {
     () => !(this.attempts() ?? []).some((attempt) => attempt.healingCandidate),
   );
   protected readonly display = escapeFormatChars;
+  protected readonly valueLabel = runValueLabel;
   /** Deep-link target identity (`#attempt-<execution_key>-<n>`), shared with the reason links. */
   protected readonly attemptAnchorId = attemptAnchorId;
   protected readonly pages = computed(() =>
@@ -100,6 +124,7 @@ export class AttemptsTableComponent {
     duration: $localize`:@@runs.detail.attempts.duration:Duration`,
     artifacts: $localize`:@@runs.detail.attempts.artifacts:Artifacts`,
     healing: $localize`:@@runs.detail.attempts.healing-candidates:Healing candidates`,
+    notProvided: RUN_DETAIL_NOT_PROVIDED,
     more: $localize`:@@runs.detail.attempts.more:Load more attempts`,
     loadingMore: $localize`:@@runs.detail.attempts.loading-more:Loading more attempts`,
     moreLoaded: $localize`:@@runs.detail.attempts.more-loaded:More attempts loaded`,
@@ -254,8 +279,8 @@ export class AttemptsTableComponent {
   protected duration(milliseconds: number | null | undefined): string | null {
     if (milliseconds == null || !Number.isFinite(milliseconds) || milliseconds < 0) return null;
     return milliseconds < 1000
-      ? `${milliseconds} ms`
-      : `${(milliseconds / 1000).toFixed(2).replace(/\.?0+$/, '')} s`;
+      ? `${formatNumber(milliseconds, this.locale, '1.0-20')} ms`
+      : `${formatNumber(milliseconds / 1000, this.locale, '1.0-2')} s`;
   }
 
   protected turnPage(delta: number): void {

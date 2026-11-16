@@ -1,13 +1,12 @@
-// 09.7.1-T2 fix round F3: the status label is a closed switch over the five contract statuses,
-// not `MEMBERS_COPY[member.status]` — an object indexed by a server string answers inherited
-// members such as `constructor` or `toString` for a value the contract does not define. These
-// specs pin the contract labels and both fallback shapes.
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import type { MembershipView } from '@evidgate/sdk';
+import type { MembershipView, RoleView } from '@evidgate/sdk';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
+import { activeMemberMenuTrigger, memberAction } from './member-actions.test-helpers';
 import { MemberListComponent } from './member-list.component';
+import { MEMBERS_DESKTOP } from './members-page.test-fixtures';
 
-function member(status: MembershipView['status'] | (string & {})): MembershipView {
+function member(status: string): MembershipView {
   return {
     id: `m-${status}`,
     org_id: 'org1',
@@ -20,149 +19,229 @@ function member(status: MembershipView['status'] | (string & {})): MembershipVie
   };
 }
 
-describe('MemberListComponent status labels (09.7.1-T2 F3)', () => {
+function role(name: string, index: number): RoleView {
+  return {
+    id: `role-${index}`,
+    code: `role_${index}`,
+    name,
+    is_builtin: true,
+    created_at: '2026-10-25T00:00:00Z',
+    version: 1,
+  };
+}
+
+describe('MemberListComponent', () => {
   let fixture: ComponentFixture<MemberListComponent>;
   let root: HTMLElement;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [MemberListComponent],
-      providers: [provideZonelessChangeDetection()],
+      providers: [provideZonelessChangeDetection(), MEMBERS_DESKTOP],
     });
     fixture = TestBed.createComponent(MemberListComponent);
     root = fixture.nativeElement as HTMLElement;
   });
-  afterEach(() => TestBed.resetTestingModule());
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    vi.restoreAllMocks();
+  });
 
-  function labelOf(membership: MembershipView): string {
-    fixture.componentRef.setInput('members', [membership]);
-    fixture.detectChanges();
-    return root.querySelector('app-status-pill .status-pill__label')?.textContent?.trim() ?? '';
+  async function render(rows: MembershipView[], writable = false): Promise<void> {
+    fixture.componentRef.setInput('members', rows);
+    fixture.componentRef.setInput('canWrite', writable);
+    await fixture.whenStable();
   }
 
-  const CONTRACT_LABELS: ReadonlyArray<[MembershipView['status'], string]> = [
-    ['pending', 'Pending invitation'],
+  it.each([
+    ['pending', 'Invited'],
     ['active', 'Active'],
     ['removed', 'Removed'],
     ['revoked', 'Revoked'],
     ['expired', 'Expired'],
-  ];
-
-  it.each(CONTRACT_LABELS)('labels a %s membership from the closed lookup', (status, expected) => {
-    expect(labelOf(member(status))).toBe(expected);
+  ])('labels a %s membership from the closed status lookup', async (status, expected) => {
+    await render([member(status)]);
+    expect(root.querySelector('.status-pill__label')?.textContent?.trim()).toBe(expected);
   });
 
-  it('shows an unexpected status as the server wrote it, as plain text', () => {
-    expect(labelOf(member('suspended'))).toBe('suspended');
-    expect(root.querySelector('.status-pill__label')?.textContent?.trim()).toBe('suspended');
+  it.each(['suspended', 'constructor', '__proto__', '<img src=x onerror=alert(1)>'])(
+    'retains the unknown status %s as escaped text, never an inherited copy property',
+    async (status) => {
+      await render([member(status)]);
+      expect(root.querySelector('.status-pill__label')?.textContent?.trim()).toBe(status);
+      expect(root.querySelector('app-status-pill img')).toBeNull();
+      expect(root.querySelector('[data-members-row]')?.getAttribute('data-members-status')).toBe(
+        status,
+      );
+    },
+  );
+
+  it('omits the entire mutation column without membership:write', async () => {
+    await render([member('active')]);
+    expect(root.querySelectorAll('thead th')).toHaveLength(3);
+    expect(root.querySelector('[data-members-actions]')).toBeNull();
+    expect(root.querySelector('app-data-table')).not.toBeNull();
+    expect(root.querySelector('app-data-table')?.textContent).toContain('Members and invitations');
+    expect(
+      root.querySelector('th[data-column-kind="email"]')?.getAttribute('data-column-priority'),
+    ).toBe('primary');
   });
 
-  it('shows a status named "constructor" as that text, not an object prototype member', () => {
-    // `MEMBERS_COPY['constructor']` is `Object`'s constructor function: the old lookup rendered a
-    // function source instead of the server's value.
-    const label = labelOf(member('constructor'));
-    expect(label).toBe('constructor');
-    expect(label).not.toContain('function');
-    expect(root.querySelector('[data-members-row]')?.getAttribute('data-members-status')).toBe(
-      'constructor',
-    );
-  });
-
-  it('keeps an unexpected status out of the DOM as markup: it is interpolated text only', () => {
-    fixture.componentRef.setInput('members', [member('<img src=x onerror=alert(1)>')]);
-    fixture.detectChanges();
-    // The raw value reaches the pill only through interpolation; no element is created from it.
-    expect(root.querySelector('app-status-pill img')).toBeNull();
-    expect(root.querySelector('.status-pill__label')?.textContent?.trim()).toBe(
-      '<img src=x onerror=alert(1)>',
-    );
-  });
-
-  it('omits the write column entirely without membership:write', () => {
-    fixture.componentRef.setInput('canWrite', false);
-    fixture.componentRef.setInput('members', [member('active')]);
-    fixture.detectChanges();
-    expect(root.querySelectorAll('th[scope="col"]')).toHaveLength(3);
-    expect(root.querySelector('[data-members-remove]')).toBeNull();
+  it('uses role-based column budgets and one row menu instead of percentage widths and four actions', async () => {
+    await render([member('pending')], true);
+    expect(root.querySelector('table')?.classList.contains('table-fixed')).toBe(false);
+    expect(root.querySelectorAll('thead th[data-column-role="status"]')).toHaveLength(1);
+    expect(root.querySelectorAll('thead th[data-column-role="actions"]')).toHaveLength(1);
+    expect(root.querySelectorAll('[data-members-actions]')).toHaveLength(1);
+    const trigger = root.querySelector<HTMLButtonElement>('[data-members-actions]');
+    expect(trigger?.hasAttribute('aria-label')).toBe(false);
+    expect(trigger?.textContent).toContain('Actions');
+    expect(trigger?.querySelector('.sr-only')?.textContent?.trim()).toBe('pending@example.test');
     expect(root.querySelector('[data-members-edit-open]')).toBeNull();
-    expect(root.querySelector('table[hlmTable]')).not.toBeNull();
-    const region = root.querySelector('[hlmTableContainer]');
-    expect(region?.getAttribute('tabindex')).toBe('0');
-    expect(region?.getAttribute('aria-label')).toBe('Members and invitations');
+    expect(root.textContent).toContain('No roles assigned');
+    memberAction(root, '[data-members-edit-open]');
+    expect(document.body.querySelectorAll('[role="menuitem"]')).toHaveLength(4);
   });
-
-  it('wraps roles and actions inside their cells and reserves room for status words', () => {
-    const membership = member('pending');
-    fixture.componentRef.setInput('canWrite', true);
-    fixture.componentRef.setInput('members', [membership]);
-    fixture.detectChanges();
-    expect(root.querySelector('table')?.classList.contains('table-fixed')).toBe(true);
-    expect(root.querySelector('#members-status')?.classList.contains('w-1/6')).toBe(true);
-    const actions = root.querySelector('[data-members-edit-open]')?.parentElement;
-    if (actions === null || actions === undefined) throw new Error('row actions not rendered');
-    expect(actions.classList.contains('flex-wrap')).toBe(true);
-    expect(actions.parentElement?.tagName).toBe('TD');
-    expect(actions.querySelectorAll('button')).toHaveLength(4);
-    for (const button of actions.querySelectorAll('button')) {
-      expect(button.classList.contains('whitespace-normal')).toBe(true);
-      expect(button.classList.contains('max-w-full')).toBe(true);
-    }
-    const roles = root.querySelector('td[headers$="members-roles"] > span:last-child');
-    expect(roles?.classList.contains('flex-wrap')).toBe(true);
-    expect(roles?.textContent?.trim()).toBe('No roles assigned');
-  });
-
-  it.each(['active', 'pending'] as const)(
-    'offers editing for a writable %s member and emits its opener',
-    (status) => {
-      const membership = member(status);
-      const editRoles = vi.fn();
-      fixture.componentInstance.editRoles.subscribe(editRoles);
-      fixture.componentRef.setInput('canWrite', true);
-      fixture.componentRef.setInput('members', [membership]);
-      fixture.detectChanges();
-      const opener = root.querySelector<HTMLButtonElement>('[data-members-edit-open]')!;
-      expect(opener.closest('.mutation')).not.toBeNull();
-      expect(opener.hasAttribute('hlmBtn')).toBe(true);
-      expect(opener.getAttribute('type')).toBe('button');
-      opener.click();
-      expect(editRoles).toHaveBeenCalledWith({ member: membership, opener });
+  it.each(['active', 'pending'])(
+    'keeps %s member menu labels unwrapped and start aligned',
+    async (status) => {
+      await render([member(status)], true);
+      const menu = memberAction(root, '[data-members-remove]')?.closest('hlm-dropdown-menu');
+      if (!menu) throw new Error('Expected member actions menu');
+      expect(menu.classList.contains('min-w-max')).toBe(true);
+      for (const layout of ['justify-start', 'text-start', 'whitespace-nowrap'])
+        expect(menu.classList.contains(`[&_button]:${layout}`)).toBe(true);
+      expect(menu.querySelectorAll('[role="menuitem"]')).toHaveLength(status === 'pending' ? 4 : 2);
+      expect(menu.querySelector('[data-members-remove]')?.getAttribute('data-variant')).toBe(
+        'destructive',
+      );
+    },
+  );
+  it.each([360, 376, 480, 767])(
+    'renders complete read-only labelled records at a %spx narrow viewport',
+    async (width) => {
+      vi.spyOn(TestBed.inject(NarrowMutationPolicy), 'narrow').mockReturnValue(true);
+      vi.spyOn(Element.prototype, 'clientWidth', 'get').mockImplementation(function (
+        this: Element,
+      ) {
+        return this.tagName === 'APP-DATA-TABLE' ? width : 0;
+      });
+      const membership = member('pending');
+      await render(
+        [{ ...membership, roles: [role('A long assigned organization role', 0)] }],
+        true,
+      );
+      const records = root.querySelector('app-data-table-records');
+      expect(records).not.toBeNull();
+      expect(root.querySelector('table')).toBeNull();
+      expect(records?.textContent).toContain(membership.invited_email);
+      expect(records?.textContent).toContain('Invited');
+      expect(records?.textContent).toContain('A long assigned organization role');
+      expect(
+        [...root.querySelectorAll('.eg-table-fact dt')].map((label) => label.textContent),
+      ).toEqual(['Member', 'Status', 'Organization roles']);
+      expect(root.querySelector('[data-members-actions]')).toBeNull();
     },
   );
 
-  it.each(['removed', 'revoked', 'expired'] as const)(
+  it('keeps the row menu in stacked containers when the viewport still permits mutations', async () => {
+    vi.spyOn(TestBed.inject(NarrowMutationPolicy), 'narrow').mockReturnValue(false);
+    vi.spyOn(Element.prototype, 'clientWidth', 'get').mockImplementation(function (this: Element) {
+      return this.tagName === 'APP-DATA-TABLE' ? 360 : 0;
+    });
+    await render([member('pending')], true);
+    expect(root.querySelector('app-data-table-records')).not.toBeNull();
+    expect(root.querySelectorAll('[data-members-actions]')).toHaveLength(1);
+    expect(
+      [...root.querySelectorAll('.eg-table-fact dt')].map((label) => label.textContent),
+    ).toEqual(['Member', 'Status', 'Actions', 'Organization roles']);
+    memberAction(root, '[data-members-edit-open]');
+    expect(document.body.querySelectorAll('[role="menuitem"]')).toHaveLength(4);
+  });
+
+  it('caps the scan at two role badges and exposes the exact remaining count and complete names', async () => {
+    const membership = member('active');
+    const names = ['Long organization administrator role', 'Auditor', 'CI producer', 'Maintainer'];
+    await render([{ ...membership, roles: names.map(role) }]);
+    expect(root.querySelectorAll('.role-name')).toHaveLength(2);
+    const disclosure = root.querySelector<HTMLButtonElement>('[data-members-more-roles]')!;
+    expect(disclosure.textContent?.trim()).toBe('+2');
+    expect(disclosure.getAttribute('aria-label')).toContain('2 more roles');
+    expect(root.querySelector('.role-name')?.classList.contains('whitespace-normal')).toBe(false);
+    disclosure.focus();
+    disclosure.click();
+    await fixture.whenStable();
+    const dialog = document.body.querySelector('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    for (const name of names) expect(dialog?.textContent).toContain(name);
+    const close = dialog?.querySelector<HTMLButtonElement>('button[hlmDialogClose]');
+    if (!close) throw new Error('Expected full-role-list close action');
+    close.click();
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(disclosure);
+  });
+
+  it('never adds a +N disclosure for zero, one or two roles', async () => {
+    for (const count of [0, 1, 2]) {
+      await render([{ ...member('active'), roles: ['One', 'Two'].slice(0, count).map(role) }]);
+      expect(root.querySelectorAll('.role-name')).toHaveLength(count);
+      expect(root.querySelector('[data-members-more-roles]')).toBeNull();
+    }
+  });
+
+  it('marks Remove as destructive and emits the persistent row-menu trigger for confirmation', async () => {
+    const membership = member('active');
+    const remove = vi.fn();
+    fixture.componentInstance.remove.subscribe(remove);
+    await render([membership], true);
+    const action = memberAction(root, '[data-members-remove]')!;
+    const opener = activeMemberMenuTrigger();
+    expect(action.getAttribute('data-variant')).toBe('destructive');
+    action.click();
+    expect(remove).toHaveBeenCalledWith({ member: membership, opener });
+    expect(opener.isConnected).toBe(true);
+  });
+
+  it.each(['active', 'pending'])('offers editing for a writable %s member', async (status) => {
+    const membership = member(status);
+    const editRoles = vi.fn();
+    fixture.componentInstance.editRoles.subscribe(editRoles);
+    await render([membership], true);
+    const action = memberAction(root, '[data-members-edit-open]')!;
+    const opener = activeMemberMenuTrigger();
+    expect(action.hasAttribute('hlmDropdownMenuItem')).toBe(true);
+    action.click();
+    expect(editRoles).toHaveBeenCalledWith({ member: membership, opener });
+  });
+
+  it.each(['removed', 'revoked', 'expired'])(
     'never offers editing for a terminal %s member',
-    (status) => {
-      fixture.componentRef.setInput('canWrite', true);
-      fixture.componentRef.setInput('members', [member(status)]);
-      fixture.detectChanges();
-      expect(root.querySelector('[data-members-edit-open]')).toBeNull();
+    async (status) => {
+      await render([member(status)], true);
+      const trigger = root.querySelector<HTMLButtonElement>('[data-members-actions]');
+      trigger?.click();
+      await fixture.whenStable();
+      expect(document.body.querySelector('[data-members-edit-open]')).toBeNull();
     },
   );
-  it.each([false, true])('only offers pending-invite actions when writable=%s', (writable) => {
-    fixture.componentRef.setInput('canWrite', writable);
-    fixture.componentRef.setInput(
-      'members',
-      ['pending', 'active', 'revoked', 'expired', 'removed'].map(member),
-    );
-    fixture.detectChanges();
-    expect(root.querySelectorAll('[data-members-resend-open]')).toHaveLength(writable ? 1 : 0);
-    expect(root.querySelectorAll('[data-members-cancel-invite-open]')).toHaveLength(
-      writable ? 1 : 0,
-    );
-    if (writable) {
-      const resend = vi.fn();
-      const cancel = vi.fn();
-      fixture.componentInstance.resend.subscribe(resend);
-      fixture.componentInstance.cancelInvite.subscribe(cancel);
-      const resendOpener = root.querySelector<HTMLButtonElement>('[data-members-resend-open]')!;
-      const cancelOpener = root.querySelector<HTMLButtonElement>(
-        '[data-members-cancel-invite-open]',
-      )!;
-      resendOpener.click();
-      cancelOpener.click();
-      expect(resend).toHaveBeenCalledWith({ member: member('pending'), opener: resendOpener });
-      expect(cancel).toHaveBeenCalledWith({ member: member('pending'), opener: cancelOpener });
-    }
+
+  it('offers Resend and Cancel only for the writable pending invitation', async () => {
+    const membership = member('pending');
+    const resend = vi.fn();
+    const cancel = vi.fn();
+    fixture.componentInstance.resend.subscribe(resend);
+    fixture.componentInstance.cancelInvite.subscribe(cancel);
+    await render([membership, member('active')], true);
+    const action = memberAction(root, '[data-members-resend-open]')!;
+    const opener = activeMemberMenuTrigger();
+    action.click();
+    expect(resend).toHaveBeenCalledWith({ member: membership, opener });
+    memberAction(root, '[data-members-cancel-invite-open]')!.click();
+    expect(cancel).toHaveBeenCalledWith({ member: membership, opener });
+    fixture.componentRef.setInput('canWrite', false);
+    await fixture.whenStable();
+    expect(root.querySelector('[data-members-actions]')).toBeNull();
+    expect(document.body.querySelector('[data-members-resend-open]')).toBeNull();
+    expect(document.body.querySelector('[data-members-cancel-invite-open]')).toBeNull();
   });
 });

@@ -8,6 +8,7 @@ import { classes } from '@evidgate/ui/utils';
 })
 export class HlmDialogFooter {
   constructor() {
-    classes(() => 'spartan-dialog-footer flex flex-col-reverse gap-2 sm:flex-row sm:justify-end');
+    // Stacked actions follow the same order as keyboard focus.
+    classes(() => 'spartan-dialog-footer flex flex-col gap-2 sm:flex-row sm:justify-end');
   }
 }

@@ -3,6 +3,7 @@
 // opened — without a progress read behind it.
 import {
   Component,
+  Directive,
   computed,
   input,
   output,
@@ -12,7 +13,13 @@ import {
   type WritableSignal,
 } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, Router, type ParamMap } from '@angular/router';
+import {
+  ActivatedRoute,
+  convertToParamMap,
+  Router,
+  RouterLink,
+  type ParamMap,
+} from '@angular/router';
 import { vi, type Mock } from 'vitest';
 import type { PolicyActivationStateDto } from '@evidgate/sdk';
 import { BehaviorSubject, Subject } from 'rxjs';
@@ -24,6 +31,7 @@ import { ConnectCiPage } from '../steps/connect-ci.page';
 import { CreateProjectPage } from '../steps/create-project.page';
 import { EnableCollectionPage } from '../steps/enable-collection.page';
 import { OnboardingShellComponent } from './onboarding-shell.component';
+import { StepPendingComponent } from './step-pending.component';
 
 /** The scope a stub store reports as the one-shot create marker. */
 export interface StubScope {
@@ -138,6 +146,7 @@ export class CreateProjectStub {
 export class ConnectCiStub {
   readonly orgId = input.required<string>();
   readonly projectId = input.required<string>();
+  readonly active = input(true);
 }
 
 @Component({
@@ -156,6 +165,13 @@ export class EnableCollectionStub {
  */
 export function finishedRouter(): { events: Subject<unknown>; currentNavigation: () => unknown } {
   return { events: new Subject<unknown>(), currentNavigation: () => null };
+}
+
+// Tests replace the selector at runtime to intercept RouterLink without changing production templates.
+@Directive({ selector: '[appShellRouterLink]', host: { '[attr.href]': 'href()' } })
+export class ShellRouterLinkStub {
+  readonly routerLink = input.required<readonly string[]>();
+  protected readonly href = computed(() => this.routerLink().join('/'));
 }
 
 export interface MountOptions {
@@ -206,9 +222,16 @@ export async function mountShell(options: MountOptions = {}): Promise<MountedShe
       },
     ],
   })
+    .overrideDirective(ShellRouterLinkStub, { set: { selector: '[routerLink]' } })
     .overrideComponent(OnboardingShellComponent, {
-      remove: { imports: [CreateProjectPage, ConnectCiPage, EnableCollectionPage] },
-      add: { imports: [CreateProjectStub, ConnectCiStub, EnableCollectionStub] },
+      remove: { imports: [CreateProjectPage, ConnectCiPage, EnableCollectionPage, RouterLink] },
+      add: {
+        imports: [CreateProjectStub, ConnectCiStub, EnableCollectionStub, ShellRouterLinkStub],
+      },
+    })
+    .overrideComponent(StepPendingComponent, {
+      remove: { imports: [RouterLink] },
+      add: { imports: [ShellRouterLinkStub] },
     })
     .compileComponents();
   const fixture = TestBed.createComponent(OnboardingShellComponent);

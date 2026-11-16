@@ -1,10 +1,10 @@
 @layer components {
   .spartan-card {
-    @apply ring-foreground/10 bg-card text-card-foreground gap-(--card-spacing) overflow-hidden rounded-xl py-(--card-spacing) text-sm shadow-xs ring-1 [--card-spacing:--spacing(6)] has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(4)] *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl;
+    @apply border border-border bg-card text-card-foreground gap-(--card-spacing) overflow-hidden rounded-md py-(--card-spacing) text-sm shadow-xs [--card-spacing:--spacing(6)] has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(4)] *:[img:first-child]:rounded-t-md *:[img:last-child]:rounded-b-md;
   }
 
   .spartan-card-header {
-    @apply gap-1 rounded-t-xl px-(--card-spacing) [.border-b]:pb-(--card-spacing);
+    @apply gap-1 rounded-t-md px-(--card-spacing) [.border-b]:pb-(--card-spacing);
   }
 
   .spartan-card-title {
@@ -20,6 +20,65 @@
   }
 
   .spartan-card-footer {
-    @apply rounded-b-xl px-(--card-spacing) [.border-t]:pt-(--card-spacing);
+    @apply rounded-b-md px-(--card-spacing) [.border-t]:pt-(--card-spacing);
+  }
+}
+
+@layer utilities {
+  .eg-type-page-title,
+  .eg-type-section-title,
+  .eg-type-subsection-title {
+    margin: var(--eg-space-0);
+    font-family: var(--eg-font-display);
+    font-weight: var(--eg-weight-semibold);
+  }
+
+  .eg-type-page-title {
+    font-size: var(--eg-text-2xl);
+    line-height: var(--eg-leading-2xl);
+  }
+
+  .eg-type-section-title {
+    font-size: var(--eg-text-xl);
+    line-height: var(--eg-leading-xl);
+  }
+
+  .eg-type-subsection-title {
+    font-size: var(--eg-text-lg);
+    line-height: var(--eg-leading-lg);
+  }
+
+  .eg-type-body,
+  .eg-type-caption {
+    margin: var(--eg-space-0);
+    font-family: var(--eg-font-body);
+    font-weight: var(--eg-weight-regular);
+  }
+
+  .eg-type-body {
+    font-size: var(--eg-text-md);
+    line-height: var(--eg-leading-md);
+  }
+
+  .eg-type-caption {
+    font-size: var(--eg-text-xs);
+    line-height: var(--eg-leading-xs);
+  }
+
+  .eg-header-action {
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    block-size: auto;
+    min-block-size: var(--eg-control-md);
+    padding-block: var(--eg-space-2);
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  @media (pointer: coarse) {
+    .eg-header-action {
+      min-inline-size: var(--eg-control-touch);
+      min-block-size: var(--eg-control-touch);
+    }
   }
 }

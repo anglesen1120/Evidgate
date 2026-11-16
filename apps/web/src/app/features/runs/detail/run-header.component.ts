@@ -5,9 +5,12 @@ import { HlmButton } from '@evidgate/ui/button';
 import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
 import { RunStatePillComponent } from '../../../shared/ui/chips/run-state-pill.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
+import { CopyValueButtonComponent } from '../../../shared/ui/values/copy-value-button.component';
+import { NumberValueComponent } from '../../../shared/ui/values/number-value.component';
 import { EvidenceBadgeComponent } from '../../../shared/ui/verdict/evidence-badge.component';
 import type { Completeness } from '../../../shared/ui/verdict/verdict-values';
-import { escapeFormatChars } from '../list/ref-name-display';
+import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
+import { RUN_DETAIL_NOT_PROVIDED, runValueLabel } from './run-value-label';
 
 @Component({
   selector: 'app-run-header',
@@ -19,16 +22,19 @@ import { escapeFormatChars } from '../list/ref-name-display';
     HlmButton,
     HlmCard,
     HlmCardTitle,
+    CopyValueButtonComponent,
+    NumberValueComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './run-header.component.html',
   host: {
     class:
-      'block min-w-0 text-foreground wrap-anywhere [&_dl]:m-0 [&_dl]:grid [&_dl]:gap-(--eg-space-5) [&_dl]:grid-cols-1 min-[768px]:[&_dl]:grid-cols-3 [&_dl>div]:min-w-0 [&_dt]:mb-(--eg-space-2) [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:grid [&_dd]:justify-items-start [&_dd]:gap-(--eg-space-2) [&_bdi]:max-w-full',
+      'block min-w-0 text-foreground wrap-anywhere [&_dl]:m-0 [&_dl]:grid [&_dl]:gap-(--eg-space-5) [&_dl]:grid-cols-1 min-[768px]:[&_dl]:grid-cols-2 [&_dl>div]:min-w-0 [&_dt]:mb-(--eg-space-2) [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:grid [&_dd]:justify-items-start [&_dd]:gap-(--eg-space-2) [&_bdi]:max-w-full',
   },
 })
 export class RunHeaderComponent {
   readonly run = input.required<RunStateDto>();
+  protected readonly sectionSize = 'section' as const;
   readonly view = input<'summary' | 'context'>('summary');
   readonly viewEvidence = output<void>();
   /**
@@ -38,11 +44,13 @@ export class RunHeaderComponent {
    */
   readonly runCompleteness = input<Completeness | null>(null);
   protected readonly display = escapeFormatChars;
+  protected readonly valueLabel = runValueLabel;
   protected readonly copy = {
     id: $localize`:@@runs.detail.id:Run id`,
     state: $localize`:@@runs.detail.state:Collection state`,
     version: $localize`:@@runs.detail.version:Version`,
     purpose: $localize`:@@runs.detail.purpose:Purpose`,
+    notProvided: RUN_DETAIL_NOT_PROVIDED,
     ref: $localize`:@@runs.detail.ref:Ref`,
     refKind: $localize`:@@runs.detail.ref-kind:Ref kind`,
     pr: $localize`:@@runs.detail.pr:Pull request number`,

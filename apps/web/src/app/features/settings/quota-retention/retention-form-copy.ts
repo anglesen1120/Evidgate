@@ -16,7 +16,7 @@ export const RETENTION_COPY = {
   retrySave: $localize`:@@retention.retry-save:Retry saving retention`,
   save: $localize`:@@retention.save:Save retention`,
   saving: $localize`:@@retention.saving:Saving retention…`,
-  saved: $localize`:@@retention.saved:Retention saved. The stored windows are shown below.`,
+  saved: $localize`:@@retention.saved:Retention saved. The stored windows are shown above.`,
   failure: $localize`:@@retention.failure:Retention was not confirmed. Review the values and try again.`,
   warning: $localize`:@@retention.warning:Review deletion impact`,
   impact: $localize`:@@retention.impact:Artifacts or metadata older than the new window become eligible for deletion. Links may become unavailable. The API does not provide affected counts; no count is estimated.`,

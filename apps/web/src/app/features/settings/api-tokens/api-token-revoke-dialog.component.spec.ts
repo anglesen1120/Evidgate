@@ -8,7 +8,7 @@ describe('API token revocation confirmation', () => {
     vi.restoreAllMocks();
   });
 
-  it('opens with metadata, cancels on Escape, and restores the row action focus without a request', async () => {
+  it('opens an alertdialog with metadata, cancels on Escape, and restores row focus without a request', async () => {
     const h = mount();
     await h.settle();
     const opener = h.root.querySelector<HTMLButtonElement>('[data-api-revoke]')!;
@@ -16,8 +16,20 @@ describe('API token revocation confirmation', () => {
     opener.click();
     await h.settle();
     const dialog = control('[data-api-revoke-dialog]');
+    const modal = control('[role="alertdialog"]');
+    expect(modal.contains(dialog)).toBe(true);
+    expect(modal.getAttribute('aria-modal')).toBe('true');
+    expect(modal.getAttribute('aria-label')).toBe('Revoke this API token?');
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(h.revoke).not.toHaveBeenCalled();
     expect(dialog.textContent).toContain(ROW.name);
     expect(dialog.textContent).toContain(ROW.prefix);
+    expect(dialog.textContent).toContain('Storefront');
+    for (const permission of ROW.permissions) expect(dialog.textContent).toContain(permission);
+    expect(dialog.querySelector(`time[datetime="${ROW.expires_at}"]`)?.textContent).toContain(
+      'UTC',
+    );
+    expect(document.activeElement).toBe(dialog.querySelector('[data-api-revoke-cancel]'));
     dialog.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
     );
@@ -27,17 +39,41 @@ describe('API token revocation confirmation', () => {
     expect(document.activeElement).toBe(opener);
   });
 
+  it('lets Cancel dismiss the alertdialog without revocation and restores row focus', async () => {
+    const h = mount();
+    await h.settle();
+    const opener = h.root.querySelector<HTMLButtonElement>('[data-api-revoke]')!;
+    opener.focus();
+    opener.click();
+    await h.settle();
+    const modal = control('[role="alertdialog"]');
+    const cancel = control<HTMLButtonElement>('[data-api-revoke-cancel]');
+    expect(modal.contains(cancel)).toBe(true);
+    expect(document.activeElement).toBe(cancel);
+    cancel.click();
+    await h.settle();
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(h.revoke).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(opener);
+  });
+
   it('confirms once on double click, freezes cancel while pending, and displays only refreshed row state', async () => {
     const h = mount();
     await h.settle();
     h.root.querySelector<HTMLButtonElement>('[data-api-revoke]')!.click();
     await h.settle();
+    const modal = control('[role="alertdialog"]');
     const pending = deferred<void>();
     h.revoke.mockReturnValueOnce(pending.promise);
     const confirm = control<HTMLButtonElement>('[data-api-revoke-submit]');
     confirm.click();
     confirm.click();
     h.fixture.detectChanges();
+    control('[data-api-revoke-dialog]').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+    h.fixture.detectChanges();
+    expect(document.querySelector('[role="alertdialog"]')).toBe(modal);
     expect(h.revoke).toHaveBeenCalledTimes(1);
     expect(h.revoke).toHaveBeenCalledWith(
       ROW.id,

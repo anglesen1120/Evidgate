@@ -15,12 +15,7 @@ import { SessionStore } from '../../core/session/session.store';
     [attr.aria-busy]="retrying()"
     aria-labelledby="unavailable-heading"
   >
-    <h1
-      hlmCardTitle
-      class="m-0 font-(family-name:--eg-font-display) text-xl font-(weight:--eg-weight-bold)"
-      id="unavailable-heading"
-      [textContent]="heading"
-    ></h1>
+    <h1 hlmCardTitle [size]="pageHeadingSize" id="unavailable-heading" [textContent]="heading"></h1>
     <p hlmCardDescription class="m-0">{{ explanation }}</p>
     <button
       hlmBtn
@@ -37,6 +32,7 @@ import { SessionStore } from '../../core/session/session.store';
   </section>`,
 })
 export class ServiceUnavailablePage {
+  readonly pageHeadingSize = 'page' as const;
   private readonly session = inject(SessionStore);
   private readonly router = inject(Router);
   readonly retrying = signal(false);

@@ -2,13 +2,13 @@ import { hlm } from '@evidgate/ui/utils';
 
 import type { StatusTone } from './status-pill.component';
 
-/** Domain badges wrap rather than clipping translated labels at Helm's default height. */
+/** Let the line box grow with enlarged text; only the inner label owns horizontal elision. */
 export const BADGE_CLASSES =
-  'h-auto min-h-[var(--eg-space-6)] max-w-full min-w-0 flex-wrap justify-start gap-[var(--eg-space-1)] whitespace-normal rounded-full px-[var(--eg-space-3)] py-[var(--eg-space-1)] font-sans font-semibold [overflow-wrap:anywhere]';
+  'h-auto min-h-[var(--eg-space-7)] max-w-[min(100%,24ch)] min-w-0 flex-nowrap justify-start gap-[var(--eg-space-1)] whitespace-nowrap rounded-(--eg-radius-sm) overflow-visible px-[var(--eg-space-3)] py-[var(--eg-space-1)] font-sans font-semibold text-[length:var(--eg-text-xs)] leading-(--eg-leading-xs)';
 
 export const IDENTITY_BADGE_CLASSES = hlm(
   BADGE_CLASSES,
-  'items-baseline rounded-sm bg-secondary font-mono font-normal',
+  'rounded-(--eg-radius-sm) bg-secondary font-mono font-normal',
 );
 
 export const BADGE_TONE_CLASSES = {
@@ -20,3 +20,12 @@ export const BADGE_TONE_CLASSES = {
   pending:
     'bg-[var(--eg-pending-bg)] text-[var(--eg-pending-fg)] border-[var(--eg-pending-border)]',
 } as const satisfies Readonly<Record<StatusTone | 'pending', string>>;
+
+export const BADGE_ICON_NAMES = {
+  success: 'lucideCircleCheck',
+  info: 'lucideActivity',
+  warning: 'lucideTriangleAlert',
+  danger: 'lucideOctagonX',
+  neutral: 'lucideCircle',
+  pending: 'lucideClock',
+} as const;
