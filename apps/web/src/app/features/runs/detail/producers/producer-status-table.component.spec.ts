@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { clearTranslations, loadTranslations } from '@angular/localize';
 import { By } from '@angular/platform-browser';
 import { DataTableComponent } from '../../../../shared/ui/data-table/data-table.component';
+import { useLightweightTablePresentation } from '../../../../shared/ui/data-table/data-table-volume.testing';
 import { StatusPillComponent } from '../../../../shared/ui/chips/status-pill.component';
 
 import { stubLayoutApis } from '../../../../shared/testing/layout.testing';
@@ -328,10 +329,11 @@ describe('ProducerStatusTableComponent', () => {
     expect([...root.querySelectorAll('th[data-column-role="number"]')]).toHaveLength(2);
   });
 
-  // Rich 200-row renders use the run list's bounded 15 s DOM-test budget.
+  // Volume cases still render real 200-row tables; retain their existing DOM-test budget.
   it.each([200, 201])(
     'bounds %i producers to pages of at most 200 rows',
     async (count) => {
+      useLightweightTablePresentation();
       const slots = Array.from({ length: count }, (_, index) => ({
         ...FINALIZED,
         producerId: `shard-${index}`,
@@ -361,6 +363,7 @@ describe('ProducerStatusTableComponent', () => {
   );
 
   it('selects the page containing a producer fragment and preserves manual pages on polling', async () => {
+    useLightweightTablePresentation();
     const slots = Array.from({ length: 256 }, (_, index) => ({
       ...FINALIZED,
       producerId: `shard-${index}`,
@@ -377,6 +380,7 @@ describe('ProducerStatusTableComponent', () => {
   });
 
   it('localizes the run-level singular count and page controls into Vietnamese', async () => {
+    useLightweightTablePresentation();
     loadTranslations({
       'runs.detail.producers.run-after-cancel-one': '1 sự kiện sau khi hủy của lượt chạy này',
       'runs.detail.producers.previous': 'Nguồn gửi dữ liệu trước',

@@ -375,6 +375,7 @@ describe('Shared table column layout and reflow', () => {
   });
 
   it('keeps pager focus on interior pages and hands it to the opposite enabled boundary button', async () => {
+    fixture.componentRef.setInput('columns', columns.slice(0, 1));
     fixture.componentRef.setInput('virtualThreshold', 500);
     fixture.componentRef.setInput('rows', dataTableFixtureRows(401));
     await fixture.whenStable();
@@ -386,18 +387,30 @@ describe('Shared table column layout and reflow', () => {
     await fixture.whenStable();
     expect(next!.disabled).toBe(false);
     expect(document.activeElement).toBe(next);
+    expect(root.querySelector('.body-table [data-row-id]')?.getAttribute('data-row-id')).toBe(
+      'demo-200',
+    );
     next!.click();
     await fixture.whenStable();
     expect(next!.disabled).toBe(true);
     expect(document.activeElement).toBe(previous);
+    expect(root.querySelector('.body-table [data-row-id]')?.getAttribute('data-row-id')).toBe(
+      'demo-400',
+    );
     previous!.click();
     await fixture.whenStable();
     expect(previous!.disabled).toBe(false);
     expect(document.activeElement).toBe(previous);
+    expect(root.querySelector('.body-table [data-row-id]')?.getAttribute('data-row-id')).toBe(
+      'demo-200',
+    );
     previous!.click();
     await fixture.whenStable();
     expect(previous!.disabled).toBe(true);
     expect(document.activeElement).toBe(next);
+    expect(root.querySelector('.body-table [data-row-id]')?.getAttribute('data-row-id')).toBe(
+      'demo-0',
+    );
   });
 
   it.each([false, true])(

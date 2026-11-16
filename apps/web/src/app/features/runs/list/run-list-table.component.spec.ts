@@ -5,6 +5,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { By } from '@angular/platform-browser';
 import { DataTableComponent } from '../../../shared/ui/data-table/data-table.component';
+import { useLightweightTablePresentation } from '../../../shared/ui/data-table/data-table-volume.testing';
 import type { RunSummary } from '@evidgate/sdk';
 import { RunListTableComponent } from './run-list-table.component';
 
@@ -31,8 +32,7 @@ function run(index: number, changes: Partial<RunSummary> = {}): RunSummary {
   };
 }
 
-// Applies to every test in this file. Idle wall of the slowest is 330 ms (250-row test); the smoke run hit the
-// 5000 ms default here after the fuzz stage (CPU contention), so 15 s keeps a ~1.3x margin only (11.3 s of 15 s under smoke load).
+// Volume cases still render real 200-row tables; retain their existing DOM-test budget.
 describe('RunListTableComponent', { timeout: 15_000 }, () => {
   beforeEach(() =>
     TestBed.configureTestingModule({
@@ -286,6 +286,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
   it.each([200, 201, 250])(
     'bounds %i rich rows without a fixed-height virtual probe or lost records',
     async (count) => {
+      useLightweightTablePresentation();
       const input = Array.from({ length: count }, (_, index) =>
         run(index, {
           rerun_label: 'reason-'.repeat(80),
