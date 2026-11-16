@@ -14,7 +14,10 @@ describe('RetentionFormComponent presentation safeguards', () => {
   });
 
   it('uses the Helm project combobox and updates the selected project read, not a native select', async () => {
+    // A reused test worker may have restored JSDOM's missing scrolling API.
+    Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
     const h = mountRetention();
+    expect(typeof Element.prototype.scrollIntoView).toBe('function');
     await h.load();
     expect(h.root.querySelector('select')).toBeNull();
     const trigger = h.root.querySelector<HTMLButtonElement>('#retention-project');
