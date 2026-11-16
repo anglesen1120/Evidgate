@@ -14,7 +14,7 @@ import { expect, vi } from 'vitest';
 
 import { provideApi } from '../../../core/http/api-client';
 import { SessionStore } from '../../../core/session/session.store';
-import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
+import { provideLayoutTestStubs, stubLayoutApis } from '../../../shared/testing/layout.testing';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow';
 import { RetentionFormComponent } from './retention-form.component';
 import { RetentionStore } from './retention.store';
@@ -67,6 +67,7 @@ export function flush(request: TestRequest, body: object = STORED, status = 200)
 }
 
 export function mountRetention(codes = ['project:read', 'project:write']) {
+  stubLayoutApis();
   const permissions = signal(new Set(codes));
   const projects = signal(PROJECTS);
   const org = signal<{ id: string } | null>({ id: 'o-1' });
