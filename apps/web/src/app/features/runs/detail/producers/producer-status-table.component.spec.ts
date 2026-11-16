@@ -329,31 +329,38 @@ describe('ProducerStatusTableComponent', () => {
     expect([...root.querySelectorAll('th[data-column-role="number"]')]).toHaveLength(2);
   });
 
-  it.each([200, 201])('bounds %i producers to pages of at most 200 rows', async (count) => {
-    useLightweightTablePresentation();
-    const slots = Array.from({ length: count }, (_, index) => ({
-      ...FINALIZED,
-      producerId: `shard-${index}`,
-    }));
-    const { fixture, root } = await render(slots);
-    expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(200);
-    const next = root.querySelector<HTMLButtonElement>('[data-producer-next]');
-    if (count === 200) {
-      expect(next).toBeNull();
-    } else {
-      expect(next?.disabled).toBe(false);
-      next?.click();
-      await fixture.whenStable();
-      expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(1);
-      expect(root.querySelector('tr[data-row-id]')?.getAttribute('data-row-id')).toBe('shard-200');
-      expect(next?.disabled).toBe(true);
-      expect(root.querySelector('[data-producer-slot]')?.id).toBe('producer-shard-200');
-      expect(root.querySelectorAll('[data-fact]')).toHaveLength(4);
-      root.querySelector<HTMLButtonElement>('[data-producer-previous]')?.click();
-      await fixture.whenStable();
+  // Volume cases still render real 200-row tables; retain their existing DOM-test budget.
+  it.each([200, 201])(
+    'bounds %i producers to pages of at most 200 rows',
+    async (count) => {
+      useLightweightTablePresentation();
+      const slots = Array.from({ length: count }, (_, index) => ({
+        ...FINALIZED,
+        producerId: `shard-${index}`,
+      }));
+      const { fixture, root } = await render(slots);
       expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(200);
-    }
-  });
+      const next = root.querySelector<HTMLButtonElement>('[data-producer-next]');
+      if (count === 200) {
+        expect(next).toBeNull();
+      } else {
+        expect(next?.disabled).toBe(false);
+        next?.click();
+        await fixture.whenStable();
+        expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(1);
+        expect(root.querySelector('tr[data-row-id]')?.getAttribute('data-row-id')).toBe(
+          'shard-200',
+        );
+        expect(next?.disabled).toBe(true);
+        expect(root.querySelector('[data-producer-slot]')?.id).toBe('producer-shard-200');
+        expect(root.querySelectorAll('[data-fact]')).toHaveLength(4);
+        root.querySelector<HTMLButtonElement>('[data-producer-previous]')?.click();
+        await fixture.whenStable();
+        expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(200);
+      }
+    },
+    15_000,
+  );
 
   it('selects the page containing a producer fragment and preserves manual pages on polling', async () => {
     useLightweightTablePresentation();

@@ -32,7 +32,8 @@ function run(index: number, changes: Partial<RunSummary> = {}): RunSummary {
   };
 }
 
-describe('RunListTableComponent', () => {
+// Volume cases still render real 200-row tables; retain their existing DOM-test budget.
+describe('RunListTableComponent', { timeout: 15_000 }, () => {
   beforeEach(() =>
     TestBed.configureTestingModule({
       imports: [RunListTableComponent],
