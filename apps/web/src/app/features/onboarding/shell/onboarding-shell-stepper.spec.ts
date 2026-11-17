@@ -1,4 +1,7 @@
 import { DOWN_ARROW, END, HOME, LEFT_ARROW, RIGHT_ARROW } from '@angular/cdk/keycodes';
+import { ComponentHarness, TestKey } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
+import { OnboardingViewport } from '../onboarding-viewport.testing';
 import type { StepNumber } from '../data/step-derivation';
 import { mountShell } from './onboarding-shell.spec-support';
 
@@ -14,6 +17,22 @@ function currentSteps(root: HTMLElement): (string | null)[] {
   return Array.from(
     root.querySelectorAll('[data-testid="onboarding-stepper"] button[aria-current="step"]'),
   ).map((step) => step.getAttribute('data-testid'));
+}
+
+class NavigatorHarness extends ComponentHarness {
+  static hostSelector = 'app-onboarding-shell';
+  readonly toggle = this.locatorFor('[data-testid="onboarding-step-toggle"]');
+  readonly viewed = this.locatorFor('[data-testid="onboarding-viewed-summary"]');
+  readonly next = this.locatorFor('[data-testid="onboarding-next-summary"]');
+  readonly context = this.locatorForOptional('[data-testid="onboarding-project-context"]');
+  readonly heading = this.locatorFor('#onboarding-step-title');
+  readonly list = this.locatorFor('[data-testid="onboarding-stepper"]');
+  readonly resources = this.locatorFor('[data-testid="onboarding-project-context"] a');
+  readonly ledger = this.locatorFor('#onboarding-resources');
+
+  step(number: StepNumber) {
+    return this.locatorFor(`[data-testid="onboarding-select-step-${number}"]`)();
+  }
 }
 
 describe('the onboarding step navigator', () => {
@@ -142,5 +161,102 @@ describe('the onboarding step navigator', () => {
       new KeyboardEvent('keydown', { key: 'ArrowRight', keyCode: RIGHT_ARROW, bubbles: true }),
     );
     expect(document.activeElement).toBe(stepButton(root, 2));
+  });
+
+  it('discloses the same ordered list and returns focus on Escape without changing the step', async () => {
+    const viewport = new OnboardingViewport();
+    viewport.setWidth(390);
+    const { fixture, store } = await mountShell({ viewport });
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, NavigatorHarness);
+    const toggle = await harness.toggle();
+    expect(await toggle.getAttribute('aria-controls')).toBe('onboarding-step-list');
+    expect(await toggle.getAttribute('aria-expanded')).toBe('false');
+    await toggle.click();
+    expect(await toggle.getAttribute('aria-expanded')).toBe('true');
+    await toggle.sendKeys(TestKey.ESCAPE);
+    expect(await toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(await toggle.isFocused()).toBe(true);
+    await toggle.click();
+    const blocked = await harness.step(5);
+    await blocked.focus();
+    await blocked.click();
+    expect(await toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(store.selectStep).not.toHaveBeenCalled();
+    await blocked.sendKeys(TestKey.ESCAPE);
+    expect(await toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(await toggle.isFocused()).toBe(true);
+    expect(store.viewStep()).toBe(1);
+  });
+
+  it('collapses on a step choice and focuses its heading, including the already viewed step', async () => {
+    const { fixture, store } = await mountShell();
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, NavigatorHarness);
+    const toggle = await harness.toggle();
+    for (const step of [2, 2, 1] as const) {
+      await toggle.click();
+      await (await harness.step(step)).click();
+      expect(await toggle.getAttribute('aria-expanded')).toBe('false');
+      expect(await (await harness.heading()).isFocused()).toBe(true);
+      expect(store.viewStep()).toBe(step);
+    }
+  });
+
+  it('preserves viewing and disclosure state across the 767/768 boundary', async () => {
+    const viewport = new OnboardingViewport();
+    viewport.setWidth(767);
+    const { fixture, store } = await mountShell({ viewport });
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, NavigatorHarness);
+    const toggle = await harness.toggle();
+    await toggle.click();
+    for (const width of [768, 767, 1440, 390]) {
+      viewport.setWidth(width);
+      await fixture.whenStable();
+      expect(await toggle.getAttribute('aria-expanded')).toBe('true');
+      expect(store.viewStep()).toBe(1);
+    }
+    await (await harness.step(2)).click();
+    viewport.setWidth(768);
+    await fixture.whenStable();
+    await (await harness.step(1)).focus();
+    viewport.setWidth(767);
+    await fixture.whenStable();
+    expect(await toggle.isFocused()).toBe(true);
+    expect(store.viewStep()).toBe(2);
+  });
+
+  it.each([
+    [1, 1, 'Viewing 1 of 5: Create project', 'Next required 1 of 5: Create project'],
+    [1, 3, 'Viewing 1 of 5: Create project', 'Next required 3 of 5: Sample run'],
+    [5, 'enabled', 'Viewing 5 of 5: Enable collection', 'All 5 steps complete.'],
+  ] as const)(
+    'summarizes viewed %s and required %s independently',
+    async (viewed, next, viewingText, nextText) => {
+      const { fixture, store } = await mountShell();
+      store.viewStep.set(viewed);
+      store.currentStep.set(next);
+      await fixture.whenStable();
+      const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, NavigatorHarness);
+      expect(await (await harness.viewed()).text()).toBe(viewingText);
+      expect(await (await harness.next()).text()).toContain(nextText);
+    },
+  );
+
+  it('shows only the confirmed project context and links to the single ledger', async () => {
+    const { fixture, root, store } = await mountShell();
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, NavigatorHarness);
+    expect(await (await harness.context())?.text()).toContain('Storefront web');
+    const link = root.querySelector<HTMLAnchorElement>(
+      '[data-testid="onboarding-project-context"] a',
+    );
+    expect(link?.getAttribute('href')).toBe('#onboarding-resources');
+    expect(root.querySelectorAll('#onboarding-resources')).toHaveLength(1);
+    await (await harness.resources()).click();
+    expect(await (await harness.ledger()).isFocused()).toBe(true);
+    store.project.set({ id: 'p1', name: 'Project\u202Ename' });
+    await fixture.whenStable();
+    expect(await (await harness.context())?.text()).toContain('Project⟨U+202E⟩name');
+    store.project.set(null);
+    await fixture.whenStable();
+    expect(await harness.context()).toBeNull();
   });
 });

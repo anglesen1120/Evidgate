@@ -57,9 +57,48 @@
             {{ progressText() }}
           </p>
         </div>
+        <p class="m-0 text-sm min-[768px]:hidden" data-testid="onboarding-viewed-summary">
+          {{ viewedSummary() }}
+        </p>
+        <p class="m-0 min-w-0 text-sm wrap-anywhere" data-testid="onboarding-next-summary">
+          {{ nextSummary() }}
+          @if (store.project()) {
+            <span data-testid="onboarding-project-context">
+              {{ confirmedProjectLabel }} <bdi>{{ confirmedProjectName() }}</bdi
+              >.
+              <a
+                class="inline-flex min-h-(--eg-control-touch) items-center text-primary underline underline-offset-4"
+                href="#onboarding-resources"
+                (click)="focusResources($event)"
+                >{{ resourcesLabel }}</a
+              >
+            </span>
+          }
+        </p>
+        <button
+          hlmBtn
+          #stepToggle
+          [variant]="outlineVariant"
+          type="button"
+          class="h-auto min-h-(--eg-control-touch) w-full justify-between gap-(--eg-space-3) whitespace-normal text-start min-[768px]:hidden"
+          data-testid="onboarding-step-toggle"
+          [attr.aria-expanded]="stepsExpanded()"
+          [attr.aria-controls]="stepListId"
+          (click)="stepsExpanded.set(!stepsExpanded())"
+          (keydown)="navigateSteps($event)"
+        >
+          {{ stepsExpanded() ? hideStepsLabel : showStepsLabel }}
+          <hlm-icon
+            [name]="'lucideChevronDown'"
+            class="shrink-0"
+            [class.rotate-180]="stepsExpanded()"
+          />
+        </button>
         <nav aria-labelledby="onboarding-progress-title" [attr.aria-describedby]="keyboardHelpId">
           <p [id]="keyboardHelpId" class="sr-only">{{ keyboardHelp }}</p>
           <ol
+            [id]="stepListId"
+            [class.hidden]="viewport.narrow() && !stepsExpanded()"
             class="m-0 grid list-none gap-(--eg-space-3) p-0 min-[768px]:grid-cols-5"
             data-testid="onboarding-stepper"
           >
@@ -97,7 +136,7 @@
                     >{{ step.label }}</span
                   >
                   <span
-                    class="col-start-2 flex min-w-0 flex-wrap items-center gap-(--eg-space-2) text-xs wrap-break-word text-muted-foreground min-[768px]:col-span-2 min-[768px]:col-start-1"
+                    class="col-start-2 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-(--eg-space-2) text-xs wrap-break-word text-muted-foreground min-[768px]:col-span-2 min-[768px]:col-start-1 [&_hlm-icon]:shrink-0"
                     [attr.data-step-status]="
                       store.done()[step.number]
                         ? 'complete'
@@ -117,9 +156,10 @@
                       <span>{{ upcomingLabel }}</span>
                     }
                     @if (store.viewStep() === step.number) {
-                      <span class="font-(weight:--eg-weight-semibold) text-foreground">{{
-                        viewingLabel
-                      }}</span>
+                      <span
+                        class="col-start-2 font-(weight:--eg-weight-semibold) text-foreground"
+                        >{{ viewingLabel }}</span
+                      >
                     }
                   </span>
                 </button>
@@ -128,7 +168,11 @@
           </ol>
         </nav>
         @if (hasLockedSteps()) {
-          <p id="onboarding-locked-reason" class="m-0 text-sm text-muted-foreground">
+          <p
+            id="onboarding-locked-reason"
+            [class.hidden]="!stepsExpanded()"
+            class="m-0 text-sm text-muted-foreground min-[768px]:block"
+          >
             {{ lockedStepReason }}
           </p>
         }
@@ -247,6 +291,9 @@
         </div>
       </section>
       <app-onboarding-evidence-panel
+        #resourcesLedger
+        id="onboarding-resources"
+        tabindex="-1"
         [progress]="store.progress()"
         [refreshFailed]="store.refreshFailure() !== null"
       />

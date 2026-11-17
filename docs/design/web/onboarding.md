@@ -6,6 +6,8 @@ Flow id: `onboarding`
 
 Owner direction, 2026-11-17: keep the **five existing steps**, redesign the shell from UX review and pattern research, and update this reference to match. The approved design summary is one top navigator, a full-width body and independent completion/viewing signals. This is approval to implement the design, not a claim of completed QA or feature acceptance.
 
+Owner amendment, 2026-11-18: below 768px use a compact viewed/next-required summary and one disclosure of the same five-button list. Move the shared narrow desktop-required notice ahead of connection health and CLI material, and add confirmed-project/next-action context with an in-page link to the existing ledger. The ≥768px five-column navigator and all mutation guards remain unchanged.
+
 The [primary HTML][primary] now references the current API-backed setup flow instead of the older four-step authoring proposal. [UI53/UI62][rules] record the exception. The [feature contract][feature] remains authoritative for ordering, server-derived progress, permissions, API-token scope, one-time reveal and advisory activation. No product phase, API or authoring-plan contract changes here.
 
 The former four-step G1 authoring mockup, a duplicate vertical tablist/select and a separate CI continuation card are not copied into this shell. A dedicated authoring-onboarding flow would need a separate owner decision; this redesign does not implement it or change the phase map.
@@ -15,7 +17,7 @@ The former four-step G1 authoring mockup, a duplicate vertical tablist/select an
 Help a returning project owner see what the service has confirmed, identify the next required action and revisit an available step without marking anything complete.
 
 1. Page title **Set up your project** and the explanation that viewing does not change progress.
-2. **Setup progress:** one interactive ordered navigator, confirmed completion count and progress bar.
+2. **Setup progress:** confirmed completion count/bar; on narrow screens the viewed and next-required step with n-of-5 context (or all-complete), then one **Show all steps / Xem tất cả các bước** disclosure. A confirmed project adds its name and a **Created resources** in-page link beside the next-action summary; absent projects render no project context.
 3. Full-width body headed by the viewed step's actual name; no generic “Step details” heading or second list.
 4. Existing body actions, followed by **Back → Next** with the same prerequisite/terminal reasons.
 5. **Created resources:** secondary, server-confirmed facts; explicit empty, unavailable and stale states remain distinct.
@@ -43,11 +45,11 @@ The [shell source][shell-source] keeps the current order and delegates selection
 
 ## Interaction and accessibility
 
-- Native **Tab** reaches each of the five step buttons. **Left/Right/Up/Down**, **Home** and **End** move focus only; they never select, complete or fetch a step. **Enter/Space** activates an available button through its native click behavior.
-- Activating a different available step preserves the existing heading-focus/announcement handoff. A blocked activation leaves both the viewed step and focus unchanged.
-- Five focusable step actions deliberately replace the former single enabled action at empty setup: **4 → 8** main-region Tab stops (five steps, two existing fields, one existing submit). This exposes each blocked label/reason without relying on knowledge of an optional arrow shortcut; no form/copy Tab stop was added.
+- Below 768px a native/Helm button exposes `aria-expanded` and `aria-controls` for the single ordered list. **Enter/Space** toggles it; native **Tab** then reaches each of the five step buttons when expanded. **Left/Right/Up/Down**, **Home** and **End** move list focus only, never select, complete or fetch a step.
+- **Enter/Space** activates an available step, collapses the list and focuses the step heading, including a choice of the already viewed step. A blocked activation keeps the list, viewed step and focus unchanged, with the associated prerequisite visible. **Escape** closes a narrow expanded list and returns focus to the disclosure.
+- At ≥768px all five controls remain visible and keep their existing keyboard behavior. Resizing/rotation preserves both viewed and disclosure state; if a collapsed mobile list would hide a focused desktop step, focus returns to the visible disclosure. No duplicate navigator, select, carousel or swipe-only gesture is introduced.
 - Back/Next order, disabled reasons, create-to-project handoff, route reload/resume and terminal focus remain on the existing contract.
-- Mutations retain the narrow read-only policy. Inspecting a step is not a mutation; policy preview and its desktop-required explanation remain reachable on narrow screens.
+- Mutations retain the narrow read-only policy. The existing shared **Desktop required** notice appears just after the connection introduction, before health and CLI material; it is moved, not duplicated, and remains permission-gated. Inspecting a step is not a mutation.
 - One-time values remain confined to the shared reveal boundary and clear through the existing lifecycle. No token scope, reveal component, confirmation dialog or network contract changes in this shell redesign.
 - Existing focus tokens, coarse-pointer targets, dark/light colors and reduced-motion behavior are reused. Status text is ordinary wrapping progress metadata, not a compact single-line domain badge.
 
@@ -55,11 +57,11 @@ The [shell source][shell-source] keeps the current order and delegates selection
 
 | Viewport | Navigator | Body and resources |
 |---|---|---|
-| 390px (also 320px reflow) | Same five controls in one vertical column; no horizontal carousel, duplicate select or abbreviated labels | Full-width stacked regions; existing read-only mutation policy |
+| Below 768px (320/390/767px) | Always-visible full-label viewed/next-required context; one ≥44px disclosure opens the same five controls in one vertical column | Full-width stacked regions; early shared desktop-required notice, unchanged read-only mutation policy |
 | 768 / 1024px | Five equal-width tiles in one horizontal row; labels/status text wrap naturally | Full-width body, no navigation rail beside it |
 | 1280 / 1440px | Same horizontal navigator; existing expanded app navigation is unchanged | Body uses the available content width; ledger remains separate below |
 
-Five Vietnamese labels cannot share a 390px horizontal row without narrow targets, truncation or horizontal scrolling. Stacking the **same** controls below the existing 768px breakpoint preserves their full names, order and minimum 44×44px targets. Narrow tiles use 8px padding and gaps, 14/20 labels and 12/18 metadata; from 768px they use 12px padding and start-aligned grid content so label first lines align. Desktop rows allow wrapping rather than imposing one-line labels. The app adds no animation or new motion duration.
+Five Vietnamese labels cannot share a 390px horizontal row without narrow targets, truncation or horizontal scrolling. A compact summary keeps the task context near the first screen while a single disclosure preserves access to the **same** ordered controls, full names and ≥44×44px targets. Expanded narrow tiles retain 8px padding/gaps, 14/20 labels and 12/18 metadata; from 768px they keep 12px padding and start-aligned grid content so label first lines align. Status icons share the first line with their text, which may wrap independently. The disclosure adds no animation; reduced motion needs no special transition override. The resource ledger remains the single detailed list below the body.
 
 ## Reference assets and specimens
 
@@ -82,13 +84,15 @@ The older images under `images/onboarding/` depict the superseded four-step mock
 - [Angular CDK stepper][cdk]: separate selection from completion and use framework keyboard/focus behavior. Do not import Material's styled stepper, copy a different version's implementation or equate selection with progress.
 - [Carbon progress indicator][carbon]: ordered milestones, whole-label interaction and explicit status. Do not copy disabled-unfocusable steps or label ellipsis: this page requires discoverable reasons and complete Vietnamese names.
 - [Atlassian progress tracker][atlassian]: five stages fit a short ordered flow with revisits. Do not equate visited with complete or force one-line short labels.
+- [Material mobile step text][material-mobile]: retain textual n-of-5 context and confirmed progress; do not replace full labels with dots or copy the legacy styling.
+- [GitHub Primer progressive disclosure][primer-disclosure]: preserve context with one labelled text-and-chevron control; reveal inline content rather than a menu or popover.
 
 A setup checklist was rejected because these are ordered, gated milestones rather than independent tasks. One responsive navigator communicates order and revisitability without maintaining a second navigation surface.
 
 ## Runnable coverage and remaining proposals
 
-- [Unit navigator specs][unit-spec]: one ordered control set, independent viewed/completed signals, guarded focusable future steps, arrow/Home/End behavior, completed setup and loading/remount.
-- [Browser navigator specs][browser-spec]: en/vi × light/dark × 390/768/1024/1280/1440px, geometry/overflow/full labels, axe contrast, focus/activation independence and Vietnamese 320px text/spacing expansion. Zero-complete and all-five-available fixtures also cover 320/767/1279px boundaries and first↔last revisits without changing confirmed progress.
+- [Unit navigator specs][unit-spec]: one ordered control set, independent viewed/completed signals, guarded focusable future steps, arrow/Home/End behavior, disclosure Escape/focus return, collapse/heading focus including reselect, zero/mid/all-complete summaries, resize persistence and confirmed-project ledger links. New interactions use a CDK component harness.
+- [Browser navigator specs][browser-spec]: en/vi × light/dark × 390/768/1024/1280/1440px, collapsed/expanded axe, geometry/overflow/full labels, status icon alignment, keyboard activation and Vietnamese 320px text/spacing expansion. Zero-complete and all-five-available fixtures also cover 320/767/1279px boundaries and first↔last revisits without changing confirmed progress; dedicated checks cover 767/768 rotation and early notice order.
 - Existing onboarding keyboard, refusal, resume, secret-boundary and core-flow suites keep their behavioral assertions while following the current action marker.
 - No shared gallery currently represents this step-navigation pattern; no unrelated gallery specimen is changed.
 - **Proposal:** expose a supported focus-target API on shared PageHeader before replacing the existing shell heading; this task keeps the established reload-failure focus target rather than querying/mutating a shared component's private DOM.
@@ -105,3 +109,5 @@ A setup checklist was rejected because these are ordered, gated milestones rathe
 [cdk]: https://github.com/angular/components/blob/main/src/cdk/stepper/stepper.ts
 [carbon]: https://www.carbondesignsystem.com/building-blocks/core/components/progress-indicator/guidelines
 [atlassian]: https://atlassian.design/components/progress-tracker/usage
+[material-mobile]: https://m1.material.io/components/steppers.html
+[primer-disclosure]: https://primer.style/product/ui-patterns/progressive-disclosure/

@@ -2,6 +2,7 @@ import { FocusKeyManager, type FocusableOption } from '@angular/cdk/a11y';
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   Injector,
   afterNextRender,
   afterRenderEffect,
@@ -12,7 +13,6 @@ import {
   viewChild,
   viewChildren,
 } from '@angular/core';
-import type { ElementRef } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   ActivatedRoute,
@@ -27,6 +27,8 @@ import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmIcon } from '@evidgate/ui/icon';
 
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
+import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
 import {
   ErrorPatternComponent,
   ForbiddenPatternComponent,
@@ -84,6 +86,36 @@ export class OnboardingShellComponent {
   private readonly injector = inject(Injector);
   private readonly heading = viewChild<ElementRef<HTMLHeadingElement>>('stepHeading');
   private readonly stepButtons = viewChildren<ElementRef<HTMLButtonElement>>('stepButton');
+  private readonly stepToggle = viewChild<ElementRef<HTMLButtonElement>>('stepToggle');
+  private readonly resourcesLedger = viewChild<unknown, ElementRef<HTMLElement>>(
+    'resourcesLedger',
+    { read: ElementRef },
+  );
+  protected readonly viewport = inject(NarrowMutationPolicy);
+  protected readonly stepsExpanded = signal(false);
+  protected readonly stepListId = 'onboarding-step-list';
+  protected readonly showStepsLabel = $localize`:@@onboarding.shell.show-steps:Show all steps`;
+  protected readonly hideStepsLabel = $localize`:@@onboarding.shell.hide-steps:Hide steps`;
+  protected readonly confirmedProjectLabel = $localize`:@@onboarding.shell.confirmed-project:Confirmed project:`;
+  protected readonly resourcesLabel = $localize`:@@onboarding.evidence.title:Created resources`;
+  protected readonly confirmedProjectName = computed(() =>
+    escapeFormatChars(this.store.project()?.name ?? ''),
+  );
+  protected readonly viewedSummary = computed(() => {
+    const number = this.store.viewStep();
+    const total = this.steps.length;
+    const label = this.steps[number - 1]?.label ?? '';
+    return $localize`:@@onboarding.shell.viewed-summary:Viewing ${number}:NUMBER: of ${total}:TOTAL:: ${label}:LABEL:`;
+  });
+  protected readonly nextSummary = computed(() => {
+    const number = this.store.currentStep();
+    const total = this.steps.length;
+    if (number === 'enabled') {
+      return $localize`:@@onboarding.shell.all-complete:All ${total}:TOTAL: steps complete.`;
+    }
+    const label = this.steps[number - 1]?.label ?? '';
+    return $localize`:@@onboarding.shell.next-summary:Next required ${number}:NUMBER: of ${total}:TOTAL:: ${label}:LABEL:`;
+  });
   private stepNavigation: FocusKeyManager<FocusableOption> | undefined;
   protected readonly hasLockedSteps = computed(() =>
     this.steps.some((step) => !this.canSelect(step.number)),
@@ -178,6 +210,17 @@ export class OnboardingShellComponent {
     this.wireRouteScope();
     afterRenderEffect(() => this.focusMovedStep());
     afterRenderEffect(() => this.focusReloadFailure());
+    effect(() => {
+      if (!this.viewport.narrow() || this.stepsExpanded()) return;
+      // Return focus before the responsive binding hides the desktop list.
+      if (
+        this.stepButtons().some(
+          ({ nativeElement }) => nativeElement === nativeElement.ownerDocument.activeElement,
+        )
+      ) {
+        this.stepToggle()?.nativeElement.focus();
+      }
+    });
     effect((onCleanup) => {
       const manager = new FocusKeyManager<FocusableOption>(
         this.stepButtons().map(({ nativeElement }) => ({
@@ -367,11 +410,30 @@ export class OnboardingShellComponent {
     heading.focus();
   }
 
+  protected focusResources(event: Event): void {
+    const resources = this.resourcesLedger()?.nativeElement;
+    if (resources === undefined) return;
+    // Fragment-only navigation resolves against the locale base, not this route.
+    event.preventDefault();
+    resources.focus();
+    resources.scrollIntoView?.({ block: 'start' });
+  }
+
   protected selectStep(step: StepNumber): void {
-    if (this.canSelect(step)) this.store.selectStep(step);
+    if (!this.canSelect(step)) return;
+    this.stepsExpanded.set(false);
+    this.store.selectStep(step);
+    // Reopening the viewed step does not bump the store's focus token.
+    this.heading()?.nativeElement.focus();
   }
 
   protected navigateSteps(event: KeyboardEvent): void {
+    if (event.key === 'Escape' && this.viewport.narrow() && this.stepsExpanded()) {
+      event.preventDefault();
+      this.stepsExpanded.set(false);
+      this.stepToggle()?.nativeElement.focus();
+      return;
+    }
     const index = this.stepButtons().findIndex(
       ({ nativeElement }) => nativeElement === event.target,
     );

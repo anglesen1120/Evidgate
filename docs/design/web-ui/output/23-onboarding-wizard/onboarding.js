@@ -4,6 +4,8 @@ const buttons = Array.from(list.querySelectorAll('button[data-onb-step]'));
 const heading = document.getElementById('onb-step-title');
 const back = document.getElementById('onb-back');
 const next = document.getElementById('onb-next');
+const toggle = document.getElementById('onb-step-toggle');
+let expanded = false;
 const setup = new URLSearchParams(window.location.search).get('setup') ?? 'project';
 const confirmed = { empty: 0, project: 1, connected: 2, run: 3, evidence: 4, enabled: 5 };
 const completed = Object.hasOwn(confirmed, setup) ? confirmed[setup] : confirmed.project;
@@ -15,6 +17,28 @@ function setCopy(element, en, vi) {
   element.setAttribute('data-en', en);
   element.setAttribute('data-vi', vi);
   element.textContent = document.documentElement.lang === 'en' ? en : vi;
+}
+
+function renderSummary() {
+  const viewedLabel = buttons[viewed - 1].querySelector('[data-onb-label]');
+  const nextLabel = buttons[required - 1].querySelector('[data-onb-label]');
+  setCopy(document.getElementById('onb-viewed-summary'),
+    `Viewing ${viewed} of 5: ${viewedLabel.dataset.en}`,
+    `Đang xem bước ${viewed}/5: ${viewedLabel.dataset.vi}`);
+  setCopy(document.getElementById('onb-next-summary'),
+    completed === 5 ? 'All 5 steps complete.' : `Next required ${required} of 5: ${nextLabel.dataset.en}`,
+    completed === 5 ? 'Đã hoàn thành tất cả 5 bước.' : `Bước cần làm ${required}/5: ${nextLabel.dataset.vi}`);
+  document.getElementById('onb-project-context').hidden = completed === 0;
+}
+
+function setExpanded(value) {
+  expanded = value;
+  toggle.setAttribute('aria-expanded', String(value));
+  list.dataset.expanded = String(value);
+  document.getElementById('onb-locked-reason').dataset.expanded = String(value);
+  setCopy(document.getElementById('onb-toggle-label'),
+    value ? 'Hide steps' : 'Show all steps',
+    value ? 'Thu gọn các bước' : 'Xem tất cả các bước');
 }
 
 function renderNavigation() {
@@ -78,15 +102,23 @@ function renderBody() {
 }
 
 function selectStep(step) {
-  if (step < 1 || step > required || step === viewed) return;
+  if (step < 1 || step > required) return;
   viewed = step;
   renderNavigation();
   renderBody();
+  renderSummary();
+  setExpanded(false);
   heading.focus();
 }
 
 function moveFocus(event) {
   if (event.altKey || event.ctrlKey || event.metaKey) return;
+  if (event.key === 'Escape' && expanded && window.matchMedia('(max-width: 767px)').matches) {
+    event.preventDefault();
+    setExpanded(false);
+    toggle.focus();
+    return;
+  }
   const index = buttons.indexOf(event.target);
   if (index < 0) return;
   const offsets = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
@@ -103,13 +135,22 @@ for (const button of buttons) {
   button.addEventListener('click', () => selectStep(Number(button.dataset.onbStep)));
 }
 list.addEventListener('keydown', moveFocus);
+toggle.addEventListener('click', () => setExpanded(!expanded));
+toggle.addEventListener('keydown', moveFocus);
+window.matchMedia('(max-width: 767px)').addEventListener('change', (event) => {
+  if (event.matches && !expanded && list.contains(document.activeElement)) toggle.focus();
+});
 back.addEventListener('click', () => selectStep(viewed - 1));
 next.addEventListener('click', () => { if (viewed <= completed) selectStep(viewed + 1); });
 document.addEventListener('eg:locale', () => {
   renderNavigation();
   renderProgress();
   renderBody();
+  renderSummary();
+  setExpanded(expanded);
 });
 renderNavigation();
 renderProgress();
 renderBody();
+renderSummary();
+setExpanded(false);

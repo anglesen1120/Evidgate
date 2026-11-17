@@ -123,9 +123,12 @@
               <p id="onb-count">Đã hoàn thành 1/5 bước</p>
             </header>
             <div class="eg-card__body eg-stack" data-gap="5">
+              <p class="onb-mobile-only" id="onb-viewed-summary">Đang xem bước 2/5: Kết nối CI</p>
+              <p class="onb-context"><span id="onb-next-summary">Bước cần làm 2/5: Kết nối CI</span> <span id="onb-project-context"><span data-en="Confirmed project:" data-vi="Dự án đã xác nhận:">Dự án đã xác nhận:</span> <bdi>Storefront web</bdi>. <a href="#ledger-title" data-en="Created resources" data-vi="Tài nguyên đã tạo">Tài nguyên đã tạo</a></span></p>
+              <button class="eg-btn eg-btn--secondary onb-mobile-only onb-toggle" id="onb-step-toggle" type="button" aria-expanded="false" aria-controls="onb-nav"><span id="onb-toggle-label" data-en="Show all steps" data-vi="Xem tất cả các bước">Xem tất cả các bước</span><svg class="eg-icon eg-icon--sm" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
               <nav aria-labelledby="setup-title" aria-describedby="onb-keyboard-help">
                 <p class="eg-visually-hidden" id="onb-keyboard-help" data-en="Use Tab or arrow keys to move between steps. Press Enter or Space to open a step." data-vi="Dùng phím Tab hoặc các phím mũi tên để di chuyển giữa các bước. Nhấn Enter hoặc dấu cách để mở một bước.">Dùng phím Tab hoặc các phím mũi tên để di chuyển giữa các bước. Nhấn Enter hoặc dấu cách để mở một bước.</p>
-                <ol class="onb-nav" id="onb-nav">
+                <ol class="onb-nav" id="onb-nav" data-expanded="false">
                   <li><button class="eg-btn eg-btn--secondary onb-step" type="button" data-onb-step="1" aria-controls="onb-body">
                     <span class="onb-number" aria-hidden="true">1</span>
                     <span class="onb-label" data-onb-label data-en="Create project" data-vi="Tạo dự án">Tạo dự án</span>
@@ -183,7 +186,7 @@
                   </button></li>
                 </ol>
               </nav>
-              <p id="onb-locked-reason" data-en="Finish earlier steps to open later steps." data-vi="Hoàn tất các bước trước để mở bước tiếp theo.">Hoàn tất các bước trước để mở bước tiếp theo.</p>
+              <p class="onb-locked" id="onb-locked-reason" data-expanded="false" data-en="Finish earlier steps to open later steps." data-vi="Hoàn tất các bước trước để mở bước tiếp theo.">Hoàn tất các bước trước để mở bước tiếp theo.</p>
               <span class="eg-progress__track" id="onb-progress" role="progressbar" aria-labelledby="setup-title" aria-valuemin="0" aria-valuemax="5" aria-valuenow="1" aria-valuetext="Đã hoàn thành 1/5 bước"><span class="eg-progress__fill" id="onb-progress-fill" style="--pct:20%"></span></span>
             </div>
           </section>
@@ -204,6 +207,7 @@
               </div>
               <div class="eg-stack" data-gap="5" data-onb-panel="2">
                 <p data-en="Choose a connection path. You can only continue after the server confirms a CI binding or an ingest token." data-vi="Chọn một cách kết nối. Bạn chỉ có thể tiếp tục sau khi máy chủ xác nhận liên kết CI hoặc mã nạp dữ liệu.">Chọn một cách kết nối. Bạn chỉ có thể tiếp tục sau khi máy chủ xác nhận liên kết CI hoặc mã nạp dữ liệu.</p>
+                <section class="eg-readonly-summary" role="note"><h3 data-en="Desktop required" data-vi="Cần dùng máy tính">Cần dùng máy tính</h3><p data-en="Use a wider screen to make changes. You can still inspect information, copy values and navigate." data-vi="Dùng màn hình rộng hơn để thay đổi. Bạn vẫn có thể xem thông tin, sao chép giá trị và điều hướng.">Dùng màn hình rộng hơn để thay đổi. Bạn vẫn có thể xem thông tin, sao chép giá trị và điều hướng.</p></section>
                 <section class="eg-card" aria-labelledby="onb-health-title">
                   <div class="eg-card__body eg-stack" data-gap="4">
                     <h3 id="onb-health-title" data-en="Connection health" data-vi="Tình trạng kết nối">Tình trạng kết nối</h3>
@@ -221,7 +225,6 @@
                   <section class="eg-card" aria-labelledby="onb-oidc-title">
                     <div class="eg-card__body eg-stack" data-gap="4">
                       <h3 id="onb-oidc-title" data-en="GitHub Actions (OIDC)" data-vi="GitHub Actions (OIDC)">GitHub Actions (OIDC)</h3>
-                      <div class="eg-readonly-summary"><p data-en="No one-time secret is shown. Open on a desktop to create a connection." data-vi="Không hiển thị bí mật dùng một lần. Mở trên máy tính để tạo kết nối.">Không hiển thị bí mật dùng một lần. Mở trên máy tính để tạo kết nối.</p></div>
                       <div class="eg-form" data-eg-mutate>
                         <div class="eg-field"><label class="eg-field__label" for="onb-repo-id" data-en="GitHub repository numeric ID" data-vi="ID dạng số của kho mã GitHub">ID dạng số của kho mã GitHub</label><input class="eg-input" id="onb-repo-id" required autocomplete="off"></div>
                         <div class="eg-field"><label class="eg-field__label" for="onb-repo-name" data-en="Repository (owner/name)" data-vi="Kho mã (chủ sở hữu/tên kho)">Kho mã (chủ sở hữu/tên kho)</label><input class="eg-input" id="onb-repo-name" required autocomplete="off"></div>
@@ -234,7 +237,6 @@
                   <section class="eg-card" aria-labelledby="onb-token-title">
                     <div class="eg-card__body eg-stack" data-gap="4">
                       <h3 id="onb-token-title" data-en="Ingest token" data-vi="Mã nạp dữ liệu">Mã nạp dữ liệu</h3>
-                      <div class="eg-readonly-summary"><p data-en="Open on a desktop to create an ingest token. This reference never displays a one-time value." data-vi="Mở trên máy tính để tạo mã nạp dữ liệu. Bản tham chiếu không hiển thị giá trị dùng một lần.">Mở trên máy tính để tạo mã nạp dữ liệu. Bản tham chiếu không hiển thị giá trị dùng một lần.</p></div>
                       <div class="eg-form" data-eg-mutate>
                         <div class="eg-field"><label class="eg-field__label" for="onb-token-name" data-en="Token name" data-vi="Tên mã nạp dữ liệu">Tên mã nạp dữ liệu</label><input class="eg-input" id="onb-token-name" required autocomplete="off"></div>
                         <button class="eg-btn eg-btn--primary" type="button" disabled data-en="Create ingest token" data-vi="Tạo mã nạp dữ liệu">Tạo mã nạp dữ liệu</button>
@@ -255,7 +257,7 @@
           </section>
 
           <section class="eg-card" aria-labelledby="ledger-title">
-            <header class="eg-card__header"><div class="eg-stack" data-gap="3"><h2 id="ledger-title" data-en="Created resources" data-vi="Tài nguyên đã tạo">Tài nguyên đã tạo</h2><p data-en="Read from server-confirmed resources, not browser completion flags." data-vi="Đọc từ tài nguyên được máy chủ xác nhận, không dựa vào cờ hoàn thành của trình duyệt.">Đọc từ tài nguyên được máy chủ xác nhận, không dựa vào cờ hoàn thành của trình duyệt.</p></div></header>
+            <header class="eg-card__header"><div class="eg-stack" data-gap="3"><h2 id="ledger-title" tabindex="-1" data-en="Created resources" data-vi="Tài nguyên đã tạo">Tài nguyên đã tạo</h2><p data-en="Read from server-confirmed resources, not browser completion flags." data-vi="Đọc từ tài nguyên được máy chủ xác nhận, không dựa vào cờ hoàn thành của trình duyệt.">Đọc từ tài nguyên được máy chủ xác nhận, không dựa vào cờ hoàn thành của trình duyệt.</p></div></header>
             <div class="eg-card__body">
               <p data-onb-ledger-empty hidden data-en="No resources have been created." data-vi="Chưa có tài nguyên nào được tạo.">Chưa có tài nguyên nào được tạo.</p>
               <dl class="onb-ledger" data-onb-ledger-ready><div><dt data-en="Project" data-vi="Dự án">Dự án</dt><dd>Storefront web</dd></div><div><dt data-en="Project ID" data-vi="ID dự án">ID dự án</dt><dd>p-storefront</dd></div><div><dt data-en="CI bindings" data-vi="Liên kết CI">Liên kết CI</dt><dd id="onb-binding-count">0</dd></div><div><dt data-en="Ingest tokens" data-vi="Mã truy cập thu thập">Mã truy cập thu thập</dt><dd>0</dd></div></dl>

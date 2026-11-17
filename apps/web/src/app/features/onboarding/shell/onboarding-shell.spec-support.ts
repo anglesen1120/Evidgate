@@ -26,6 +26,7 @@ import { BehaviorSubject, Subject } from 'rxjs';
 
 import type { StepNumber } from '../data/step-derivation';
 import type { OnboardingProgress } from '../data/onboarding-progress.service';
+import { OnboardingViewport } from '../onboarding-viewport.testing';
 import { OnboardingStore } from '../onboarding.store';
 import { ConnectCiPage } from '../steps/connect-ci.page';
 import { CreateProjectPage } from '../steps/create-project.page';
@@ -175,6 +176,7 @@ export class ShellRouterLinkStub {
 }
 
 export interface MountOptions {
+  readonly viewport?: OnboardingViewport;
   /** The scope the stub store reports as the one-shot create marker; nothing by default. */
   readonly created?: () => StubScope | null;
   /** The project address the route carries; the org root by default. */
@@ -214,6 +216,7 @@ export async function mountShell(options: MountOptions = {}): Promise<MountedShe
     imports: [OnboardingShellComponent],
     providers: [
       provideZonelessChangeDetection(),
+      (options.viewport ?? new OnboardingViewport()).provider,
       { provide: OnboardingStore, useValue: store },
       { provide: Router, useValue: finishedRouter() },
       {

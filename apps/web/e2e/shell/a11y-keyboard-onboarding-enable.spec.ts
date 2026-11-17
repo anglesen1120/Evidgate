@@ -41,6 +41,12 @@ test.describe('W3 — step 5, enable collection', () => {
     // 1. All five stepper buttons are enabled at step 5; the confirm follows them directly. The walk
     //    into the region is the skip link and its Enter, not a programmatic focus move.
     await enterMainByKeyboard(page);
+    await pressTab(page);
+    await expectKeyboardFocus(
+      page,
+      page.locator('[data-testid="onboarding-project-context"] a'),
+      'Created resources',
+    );
     await pressTab(page, 5);
     await expectKeyboardFocus(page, stepButton(page, 5), 'stepper 5 is the last stepper stop');
     await expect(stepButton(page, 5)).toHaveAttribute('aria-current', 'step');
@@ -96,11 +102,10 @@ test.describe('W3 — step 5, enable collection', () => {
     await expect(confirm).toHaveAttribute('aria-describedby', /enable-activation-unreadable/);
     await expect(confirm).not.toHaveAttribute('aria-describedby', /enable-permission/);
 
-    // A keyboard user therefore can never submit a state the server refused to describe: the sixth
-    // Tab after the main region skips the disabled confirm and lands on the refused read's one
-    // recovery — a real button that re-runs the read and never a command — and Back follows it.
+    // After the resource link and five step controls, the seventh Tab skips the disabled confirm
+    // and lands on the refused read's one recovery — a read-only button — before Back.
     await enterMainByKeyboard(page);
-    await pressTab(page, 6);
+    await pressTab(page, 7);
     await expectKeyboardFocus(
       page,
       page.locator('[data-testid="enable-collection-read-again"]'),

@@ -357,7 +357,11 @@ export async function expectCurrentStep(page: Page, step: StepNumber): Promise<v
   const current = currentStepItem(page);
   await expect(current, `the wizard shows one current step`).toHaveCount(1);
   await expect(current).toHaveAttribute('data-testid', `onboarding-step-${step}`);
-  await expect(stepItem(page, step)).toBeVisible();
+  const heading = page.locator('#onboarding-step-title');
+  await expect(heading).toBeVisible();
+  await expect(heading).toHaveText(
+    (await current.locator('[data-step-label]').textContent()) ?? '',
+  );
 }
 
 /** Asserts one stepper item's `data-done` flag. */

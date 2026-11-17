@@ -58,10 +58,10 @@
 }
 
 .onb-status {
-  display: flex;
+  display: grid;
   grid-column: 2;
-  flex-wrap: wrap;
-  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
   gap: var(--eg-space-2);
   min-width: 0;
   overflow-wrap: break-word;
@@ -71,6 +71,7 @@
 }
 
 .onb-viewing {
+  grid-column: 2;
   color: var(--eg-text);
   font-weight: var(--eg-weight-semibold);
 }
@@ -112,7 +113,44 @@
   gap: var(--eg-space-3);
 }
 
+.onb-context {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.onb-context a,
+.onb-toggle.eg-btn {
+  min-height: var(--eg-control-touch);
+}
+
+.onb-context a {
+  display: inline-flex;
+  align-items: center;
+}
+
+.onb-toggle.eg-btn {
+  height: auto;
+  justify-content: space-between;
+  white-space: normal;
+  text-align: start;
+}
+
+.onb-toggle[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+@media (max-width: 767px) {
+  .onb-nav[data-expanded="false"],
+  .onb-locked[data-expanded="false"] {
+    display: none;
+  }
+}
+
 @media (min-width: 768px) {
+  .onb-mobile-only {
+    display: none;
+  }
+
   .onb-nav {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
