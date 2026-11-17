@@ -118,6 +118,22 @@ module.exports = tseslint.config(
       '@angular-eslint/prefer-standalone': 'error',
       '@angular-eslint/prefer-on-push-component-change-detection': 'error',
       '@angular-eslint/no-empty-lifecycle-method': 'error',
+      // The Angular rule set of docs/engineering/ui-rules.md §Angular rules for UI work, TS
+      // half: injection (A8), host metadata over @HostBinding/@HostListener (A9), member
+      // shape (A10) and a reactive context that reads nothing (A2). Each was measured over
+      // apps/web and reported zero violations before it was enabled; inject-at-top and
+      // no-uncalled-signals stay out while the tree still violates them.
+      '@angular-eslint/prefer-inject': 'error',
+      '@angular-eslint/prefer-host-metadata-property': 'error',
+      '@angular-eslint/prefer-output-emitter-ref': 'error',
+      '@angular-eslint/prefer-output-readonly': 'error',
+      '@angular-eslint/prefer-signals': 'error',
+      '@angular-eslint/reactive-context-must-read-signal': 'error',
+      // A14: a lifecycle hook is declared through its interface, never async, never called
+      // by hand.
+      '@angular-eslint/use-lifecycle-interface': 'error',
+      '@angular-eslint/no-async-lifecycle-method': 'error',
+      '@angular-eslint/no-lifecycle-call': 'error',
       // `angular.json` → `projects.web.prefix` is `app`: element selectors are `app-*`
       // kebab-case, attribute selectors on directives are `app*` camelCase.
       '@angular-eslint/component-selector': [
@@ -196,6 +212,12 @@ module.exports = tseslint.config(
       '@angular-eslint/template/prefer-control-flow': 'error',
       '@angular-eslint/template/no-any': 'error',
       '@angular-eslint/template/eqeqeq': 'error',
+      // docs/engineering/ui-rules.md §Angular rules for UI work, template half: `[class.x]`
+      // and `[style.x]` over ngClass/ngStyle (A11), and no control-flow block left empty
+      // after a refactor (W2). Both measured zero violations over apps/web before enabling.
+      '@angular-eslint/template/prefer-class-binding': 'error',
+      '@angular-eslint/template/prefer-style-binding': 'error',
+      '@angular-eslint/template/no-empty-control-flow': 'error',
       // 09.1.1-T6.1 (plans/features/09-web-ui §10 T6.1): every user-visible template string —
       // a text node, a text attribute, or a bound text holding literal letters — must carry an
       // `i18n` marker with an explicit custom id. The id is what `ng extract-i18n` writes into
