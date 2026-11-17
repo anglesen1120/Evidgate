@@ -3,7 +3,6 @@ import { DOCUMENT, LocationStrategy } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
-  DestroyRef,
   ElementRef,
   Injector,
   afterNextRender,
@@ -109,12 +108,6 @@ export class OnboardingShellComponent {
     { read: ElementRef },
   );
   protected readonly stepsExpanded = signal(false);
-  /**
-   * Whether the compact disclosure is where the visitor's focus last went. The wide layout hides
-   * that button, so this is what tells the pass after the wide list renders whose focus it has to
-   * hand to the viewed step instead of leaving it on `<body>`.
-   */
-  protected readonly disclosureFocused = signal(false);
   protected readonly stepListId = 'onboarding-step-list';
   protected readonly showStepsLabel = $localize`:@@onboarding.shell.show-steps:Show all steps`;
   protected readonly hideStepsLabel = $localize`:@@onboarding.shell.hide-steps:Hide steps`;
@@ -220,10 +213,8 @@ export class OnboardingShellComponent {
     this.wireRouteScope();
     handOffCompactNavigatorFocus({
       document: inject(DOCUMENT),
-      destroyRef: inject(DestroyRef),
       narrow: this.viewport.narrow,
       stepsExpanded: this.stepsExpanded,
-      disclosureFocused: this.disclosureFocused,
       toggle: () => this.stepToggle()?.nativeElement,
       stepButtons: () => this.stepButtons().map(({ nativeElement }) => nativeElement),
       viewedButton: () => this.viewedStepButton(),
@@ -444,7 +435,10 @@ export class OnboardingShellComponent {
   }
 
   protected navigateSteps(event: KeyboardEvent): void {
-    if (event.key === 'Escape' && this.viewport.narrow() && this.stepsExpanded()) {
+    // The breakpoint signal reaches this handler a task after the resize, so a key pressed on the
+    // frame the layout changes still reads the old layout from it; the observer answers for the
+    // viewport that is on screen now, like every other mutation guard.
+    if (event.key === 'Escape' && !this.viewport.allowsMutation() && this.stepsExpanded()) {
       event.preventDefault();
       this.stepsExpanded.set(false);
       this.stepToggle()?.nativeElement.focus();

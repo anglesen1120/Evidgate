@@ -1,91 +1,62 @@
-import { afterRenderEffect, effect, type Signal, type WritableSignal } from '@angular/core';
+import { afterRenderEffect, effect, type Signal } from '@angular/core';
 
 /** What the two breakpoint handoffs need to find and move the navigator's focus. */
 export interface CompactNavigatorFocus {
   readonly document: Document;
-  readonly destroyRef: { onDestroy(callback: () => void): void };
   /** True below 768px, where the disclosure owns the list. */
   readonly narrow: Signal<boolean>;
   readonly stepsExpanded: Signal<boolean>;
-  /** Whether the disclosure is where the visitor's focus last went. */
-  readonly disclosureFocused: WritableSignal<boolean>;
   readonly toggle: () => HTMLElement | undefined;
   readonly stepButtons: () => readonly HTMLElement[];
   /** The button of the step on screen: the control that replaces the disclosure from 768px up. */
   readonly viewedButton: () => HTMLElement | undefined;
 }
 
+/** Which control the focus is due to move to once the render for the new layout has happened. */
+type Handoff = 'viewed-step' | 'disclosure' | undefined;
+
 /**
  * Keeps the compact navigator's focus on something visible across the 768px breakpoint. Below it
  * the disclosure owns the list and the list is hidden while collapsed; above it the five-column
- * navigator is always shown and the disclosure is hidden. Each direction therefore hands the focus
- * over while its own control still exists, and leaves focus alone when the visitor is elsewhere.
+ * navigator is always shown and the disclosure is hidden. Both the list and the disclosure take
+ * their visibility from `narrow()`, so the change of layout and the focus handoff happen in the
+ * same render instead of whenever a media query happens to hide the focused button. Focus moves
+ * only when the disclosure or a step button held it, so a visitor reading the page keeps their
+ * place.
  */
 export function handOffCompactNavigatorFocus(options: CompactNavigatorFocus): void {
-  const {
-    document,
-    destroyRef,
-    narrow,
-    stepsExpanded,
-    disclosureFocused,
-    toggle,
-    stepButtons,
-    viewedButton,
-  } = options;
+  const { document, narrow, stepsExpanded, toggle, stepButtons, viewedButton } = options;
 
-  // A hide at the breakpoint blurs to `<body>` and fires neither event, so the disclosure keeps
-  // its claim only until the visitor focuses or presses anywhere else.
-  const forgetUnlessDisclosure = (event: Event): void => {
-    const button = toggle();
-    if (button !== undefined && event.target instanceof Node && button.contains(event.target)) {
+  let handoff: Handoff;
+  let previous: boolean | undefined;
+
+  // Runs before the render that swaps the layouts, while the control that is about to leave the
+  // layout is still the active element: nothing in CSS hides it ahead of this pass any more.
+  effect(() => {
+    const isNarrow = narrow();
+    stepsExpanded();
+    if (previous === undefined) {
+      previous = isNarrow;
       return;
     }
-    disclosureFocused.set(false);
-  };
-  document.addEventListener('focusin', forgetUnlessDisclosure);
-  document.addEventListener('pointerdown', forgetUnlessDisclosure);
-  destroyRef.onDestroy(() => {
-    document.removeEventListener('focusin', forgetUnlessDisclosure);
-    document.removeEventListener('pointerdown', forgetUnlessDisclosure);
+    if (previous === isNarrow) return;
+    previous = isNarrow;
+    const active = document.activeElement;
+    handoff = isNarrow
+      ? active !== null && stepButtons().includes(active as HTMLElement)
+        ? 'disclosure'
+        : undefined
+      : active === toggle()
+        ? 'viewed-step'
+        : undefined;
   });
 
-  // A view effect runs before the render that hides the list, so its button still holds focus.
-  effect(() => {
-    if (!narrow() || stepsExpanded()) return;
-    if (stepButtons().some((button) => button === button.ownerDocument.activeElement)) {
-      toggle()?.focus();
-    }
+  // Runs after that render, so the control being handed the focus is already the one on screen.
+  afterRenderEffect(() => {
+    narrow();
+    const due = handoff;
+    if (due === undefined) return;
+    handoff = undefined;
+    (due === 'disclosure' ? toggle() : viewedButton())?.focus();
   });
-
-  /** Gives the focus the hidden disclosure was holding to the button of the step on screen. */
-  const handToViewedStep = (): void => {
-    if (narrow()) return;
-    // The disclosure is hidden from 768px up but a browser may keep it as the active element, so
-    // holding the focus is what counts, not only the flag the focus event set.
-    const disclosure = toggle();
-    const holdsFocus = disclosure !== undefined && document.activeElement === disclosure;
-    if (!holdsFocus && !disclosureFocused()) return;
-    const button = viewedButton();
-    if (button === undefined) return;
-    disclosureFocused.set(false);
-    // With the list already expanded nothing in the template changes at the breakpoint, so the
-    // browser hides the disclosure and blurs it a frame later, after this pass ran. Re-assert the
-    // focus while `<body>` still holds it and stop the moment the visitor's own focus is elsewhere.
-    let frames = 3;
-    const settle = (): void => {
-      const active = document.activeElement;
-      if (active === button || frames === 0) return;
-      if (active !== null && active !== document.body) return;
-      button.focus();
-      frames -= 1;
-      requestAnimationFrame(settle);
-    };
-    button.focus();
-    requestAnimationFrame(settle);
-  };
-
-  // The wide list is already in the document when the breakpoint flips, and a render pass is not
-  // guaranteed: an expanded list keeps every binding it had. Both paths call the same handoff.
-  effect(handToViewedStep);
-  afterRenderEffect(handToViewedStep);
 }

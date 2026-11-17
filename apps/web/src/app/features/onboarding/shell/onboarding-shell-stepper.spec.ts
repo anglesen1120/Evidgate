@@ -213,20 +213,24 @@ describe('the onboarding step navigator', () => {
     await toggle.focus();
     viewport.setWidth(768);
     await fixture.whenStable();
+    expect(await toggle.hasClass('eg-wide-only-hidden')).toBe(true);
     expect(await (await harness.step(store.viewStep())).isFocused()).toBe(true);
 
     viewport.setWidth(767);
     await fixture.whenStable();
+    expect(await toggle.hasClass('eg-wide-only-hidden')).toBe(false);
     await toggle.click();
     expect(await toggle.getAttribute('aria-expanded')).toBe('true');
     viewport.setWidth(768);
     await fixture.whenStable();
+    expect(await toggle.hasClass('eg-wide-only-hidden')).toBe(true);
     expect(await (await harness.step(store.viewStep())).isFocused()).toBe(true);
     expect(await toggle.getAttribute('aria-expanded')).toBe('true');
     expect(store.viewStep()).toBe(1);
 
     viewport.setWidth(767);
     await fixture.whenStable();
+    expect(await toggle.hasClass('eg-wide-only-hidden')).toBe(false);
     const link = root.querySelector<HTMLAnchorElement>(
       '[data-testid="onboarding-project-context"] a',
     );

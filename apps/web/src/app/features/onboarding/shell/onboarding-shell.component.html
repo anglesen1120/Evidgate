@@ -82,11 +82,11 @@
           #stepToggle
           [variant]="outlineVariant"
           type="button"
-          class="h-auto min-h-(--eg-control-touch) w-full justify-between gap-(--eg-space-3) whitespace-normal text-start min-[768px]:hidden"
+          class="h-auto min-h-(--eg-control-touch) w-full justify-between gap-(--eg-space-3) whitespace-normal text-start"
           data-testid="onboarding-step-toggle"
+          [class.eg-wide-only-hidden]="!viewport.narrow()"
           [attr.aria-expanded]="stepsExpanded()"
           [attr.aria-controls]="stepListId"
-          (focus)="disclosureFocused.set(true)"
           (click)="stepsExpanded.set(!stepsExpanded())"
           (keydown)="navigateSteps($event)"
         >
