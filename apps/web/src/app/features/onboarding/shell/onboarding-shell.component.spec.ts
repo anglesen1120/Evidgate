@@ -163,7 +163,7 @@ describe('OnboardingShellComponent', () => {
     expect(store.viewStep()).toBe(1);
   });
 
-  it('uses an ordered five-step list, permits a completed step and disables future steps', async () => {
+  it('uses one ordered five-step navigator, permits completed steps and explains blocked ones', async () => {
     store.done.update((done) => ({ ...done, 1: true }));
     store.viewStep.set(2);
     await fixture.whenStable();
@@ -171,7 +171,7 @@ describe('OnboardingShellComponent', () => {
     expect(stepper.tagName).toBe('OL');
     expect(stepper.querySelectorAll(':scope > li')).toHaveLength(5);
     expect(stepper.querySelector('[aria-current="step"]')?.getAttribute('data-testid')).toBe(
-      'onboarding-step-2',
+      'onboarding-select-step-2',
     );
     const first = root.querySelector<HTMLButtonElement>(
       '[data-testid="onboarding-select-step-1"]',
@@ -183,8 +183,10 @@ describe('OnboardingShellComponent', () => {
     expect(store.selectStep).toHaveBeenCalledWith(1);
     expect(store.viewStep()).toBe(1);
     expect(
-      root.querySelector<HTMLButtonElement>('[data-testid="onboarding-select-step-3"]')?.disabled,
-    ).toBe(true);
+      root
+        .querySelector<HTMLButtonElement>('[data-testid="onboarding-select-step-3"]')
+        ?.getAttribute('aria-disabled'),
+    ).toBe('true');
     expect(root.querySelector('[data-testid="onboarding-evidence-panel"]')).not.toBeNull();
   });
 

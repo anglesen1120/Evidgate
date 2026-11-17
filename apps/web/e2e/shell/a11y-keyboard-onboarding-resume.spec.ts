@@ -12,14 +12,13 @@ import {
   stepButton,
   STEP_TITLE,
 } from './onboarding-keyboard';
+import { TOKEN_USED_LAST_USED_AT, TOKEN_USED_NAME } from './onboarding-connection-support';
 import {
   backButton,
   expectCurrentStep,
   nextButton,
   onboardingUrl,
   shell,
-  TOKEN_USED_LAST_USED_AT,
-  TOKEN_USED_NAME,
 } from './onboarding-support';
 
 test.describe('W4 — resume at step 3, Back into step 2, health panel and quickstart', () => {
@@ -33,12 +32,15 @@ test.describe('W4 — resume at step 3, Back into step 2, health panel and quick
     await expect(shell(page)).toBeVisible();
     await expectCurrentStep(page, 3);
 
-    // 1. Three enabled stepper buttons at step 3; the step-3 placeholder holds no focusable, so the
-    //    next stop after the stepper is Back. The walk into the region is the skip link and its
-    //    Enter, not a programmatic focus move.
+    // All five steps are discoverable; the last two announce their unmet prerequisite.
     await enterMainByKeyboard(page);
     await pressTab(page, 3);
-    await expectKeyboardFocus(page, stepButton(page, 3), 'stepper 3 is the last stepper stop');
+    await expectKeyboardFocus(page, stepButton(page, 3), 'the current step');
+    for (const step of [4, 5] as const) {
+      await pressTab(page);
+      await expectKeyboardFocus(page, stepButton(page, step), `blocked step ${step}`);
+      await expect(stepButton(page, step)).toHaveAttribute('aria-disabled', 'true');
+    }
     await pressTab(page);
     await expectKeyboardFocus(page, backButton(page), 'Back after the step-3 placeholder');
 

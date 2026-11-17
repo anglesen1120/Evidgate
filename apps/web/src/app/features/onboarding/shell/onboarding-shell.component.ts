@@ -1,3 +1,4 @@
+import { FocusKeyManager, type FocusableOption } from '@angular/cdk/a11y';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -5,9 +6,11 @@ import {
   afterNextRender,
   afterRenderEffect,
   computed,
+  effect,
   inject,
   signal,
   viewChild,
+  viewChildren,
 } from '@angular/core';
 import type { ElementRef } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -22,8 +25,7 @@ import {
 import { combineLatest, distinctUntilChanged, filter, map } from 'rxjs';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
-import { HlmLabel } from '@evidgate/ui/label';
-import { HlmSelectImports } from '@evidgate/ui/select';
+import { HlmIcon } from '@evidgate/ui/icon';
 
 import {
   ErrorPatternComponent,
@@ -45,8 +47,7 @@ import { StepPendingComponent } from './step-pending.component';
     HlmButton,
     RouterLink,
     HlmCardImports,
-    HlmLabel,
-    HlmSelectImports,
+    HlmIcon,
     CreateProjectPage,
     ConnectCiPage,
     EnableCollectionPage,
@@ -64,11 +65,8 @@ import { StepPendingComponent } from './step-pending.component';
 export class OnboardingShellComponent {
   protected readonly store = inject(OnboardingStore);
   protected readonly outlineVariant = 'outline';
-  protected readonly ghostVariant = 'ghost';
   protected readonly pageHeadingSize = 'page' as const;
   protected readonly sectionHeadingSize = 'section' as const;
-  protected readonly stepDetailsLabel = $localize`:@@onboarding.shell.step-details:Step details`;
-  protected readonly stepSelectLabel = $localize`:@@onboarding.shell.step-select:Setup step`;
   protected readonly loadingLabel = $localize`:@@onboarding.shell.loading:Loading project setup`;
   protected readonly completedCount = computed(() => {
     const done = this.store.done();
@@ -85,6 +83,23 @@ export class OnboardingShellComponent {
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);
   private readonly heading = viewChild<ElementRef<HTMLHeadingElement>>('stepHeading');
+  private readonly stepButtons = viewChildren<ElementRef<HTMLButtonElement>>('stepButton');
+  private stepNavigation: FocusKeyManager<FocusableOption> | undefined;
+  protected readonly hasLockedSteps = computed(() =>
+    this.steps.some((step) => !this.canSelect(step.number)),
+  );
+  protected readonly stepIcons = {
+    complete: 'lucideCircleCheck',
+    required: 'lucideClock',
+    upcoming: 'lucideCircle',
+  } as const;
+  protected readonly stepBodyId = 'onboarding-step-body';
+  protected readonly keyboardHelpId = 'onboarding-step-help';
+  protected readonly requiredLabel = $localize`:@@onboarding.shell.required:Next required`;
+  protected readonly upcomingLabel = $localize`:@@onboarding.shell.upcoming:Upcoming`;
+  protected readonly viewingLabel = $localize`:@@onboarding.shell.viewing:Viewing`;
+  protected readonly lockedStepReason = $localize`:@@onboarding.shell.locked-step:Finish earlier steps to open later steps.`;
+  protected readonly keyboardHelp = $localize`:@@onboarding.shell.keyboard-help:Use Tab or arrow keys to move between steps. Press Enter or Space to open a step.`;
 
   /**
    * How far the handoff for the step a create opened has got.
@@ -137,7 +152,6 @@ export class OnboardingShellComponent {
   protected readonly description = $localize`:@@onboarding.shell.description:Resume from server-confirmed resources. Viewing a step does not change your progress.`;
   protected readonly progressLabel = $localize`:@@onboarding.shell.progress:Setup progress`;
   protected readonly completedLabel = $localize`:@@onboarding.shell.complete:Complete`;
-  protected readonly incompleteLabel = $localize`:@@onboarding.shell.incomplete:Not complete`;
   protected readonly backLabel = $localize`:@@onboarding.shell.back:Back`;
   protected readonly nextLabel = $localize`:@@onboarding.shell.next:Next`;
   protected readonly openProjectLabel = $localize`:@@onboarding.shell.open-project:Open project`;
@@ -164,6 +178,19 @@ export class OnboardingShellComponent {
     this.wireRouteScope();
     afterRenderEffect(() => this.focusMovedStep());
     afterRenderEffect(() => this.focusReloadFailure());
+    effect((onCleanup) => {
+      const manager = new FocusKeyManager<FocusableOption>(
+        this.stepButtons().map(({ nativeElement }) => ({
+          focus: () => nativeElement.focus(),
+        })),
+      )
+        .withHorizontalOrientation('ltr')
+        .withVerticalOrientation()
+        .withHomeAndEnd()
+        .withWrap();
+      this.stepNavigation = manager;
+      onCleanup(() => manager.destroy());
+    });
   }
 
   /**
@@ -340,9 +367,17 @@ export class OnboardingShellComponent {
     heading.focus();
   }
 
-  protected selectStep(value: unknown): void {
-    const step = this.steps.find((candidate) => candidate.number === value);
-    if (step && this.canSelect(step.number)) this.store.selectStep(step.number);
+  protected selectStep(step: StepNumber): void {
+    if (this.canSelect(step)) this.store.selectStep(step);
+  }
+
+  protected navigateSteps(event: KeyboardEvent): void {
+    const index = this.stepButtons().findIndex(
+      ({ nativeElement }) => nativeElement === event.target,
+    );
+    if (index < 0) return;
+    this.stepNavigation?.updateActiveItem(index);
+    this.stepNavigation?.onKeydown(event);
   }
 
   protected canSelect(step: StepNumber): boolean {

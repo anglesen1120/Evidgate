@@ -1040,18 +1040,34 @@
           <context context-type="linenumber">154</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="onboarding.shell.step-details" datatype="html">
-        <source>Step details</source>
+      <trans-unit id="onboarding.shell.required" datatype="html">
+        <source>Next required</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/onboarding-shell.component.ts</context>
-          <context context-type="linenumber">70</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="onboarding.shell.step-select" datatype="html">
-        <source>Setup step</source>
+      <trans-unit id="onboarding.shell.upcoming" datatype="html">
+        <source>Upcoming</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/onboarding-shell.component.ts</context>
-          <context context-type="linenumber">71</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.viewing" datatype="html">
+        <source>Viewing</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/onboarding/shell/onboarding-shell.component.ts</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.locked-step" datatype="html">
+        <source>Finish earlier steps to open later steps.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/onboarding/shell/onboarding-shell.component.ts</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="onboarding.shell.keyboard-help" datatype="html">
+        <source>Use Tab or arrow keys to move between steps. Press Enter or Space to open a step.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/onboarding/shell/onboarding-shell.component.ts</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.shell.loading" datatype="html">
@@ -1094,13 +1110,6 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/shell/onboarding-shell.component.ts</context>
           <context context-type="linenumber">139</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="onboarding.shell.incomplete" datatype="html">
-        <source>Not complete</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/onboarding/shell/onboarding-shell.component.ts</context>
-          <context context-type="linenumber">140</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.shell.back" datatype="html">
