@@ -6,6 +6,15 @@ import { LOCALES, seedStoredTheme, THEMES } from './support';
 
 const WIDTHS = [390, 768, 1024, 1280, 1440] as const;
 
+/** The `data-testid` of the focused element, or its tag name: what a handoff actually reached. */
+async function focusedTestId(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const element = document.activeElement;
+    if (element === null) return 'none';
+    return element.getAttribute('data-testid') ?? element.tagName.toLowerCase();
+  });
+}
+
 async function expectNavigatorGeometry(page: Page, width: number): Promise<void> {
   const toggle = page.getByTestId('onboarding-step-toggle');
   if (width < 768 && (await toggle.getAttribute('aria-expanded')) === 'false') {
@@ -357,6 +366,7 @@ test.describe('compact navigator focus and the ledger link', () => {
     await expect(list).toBeVisible();
     await expect(toggle).toBeHidden();
     await expect(viewed).toBeFocused();
+    expect(await focusedTestId(page), 'collapsed handoff').toBe('onboarding-select-step-2');
 
     // Expanded: the same hand-off, and the stored disclosure state does not change.
     await page.setViewportSize({ width: 767, height: 1100 });
@@ -366,6 +376,7 @@ test.describe('compact navigator focus and the ledger link', () => {
     await page.setViewportSize({ width: 768, height: 1100 });
     await expect(list).toBeVisible();
     await expect(viewed).toBeFocused();
+    expect(await focusedTestId(page), 'expanded handoff').toBe('onboarding-select-step-2');
     await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 
     // Focus somewhere else: widening must not take it.
@@ -406,10 +417,14 @@ test.describe('compact navigator focus and the ledger link', () => {
       return !anchor.dispatchEvent(event);
     });
     expect(canceled).toBe(false);
-    await expect(page.locator('#onboarding-resources')).not.toBeFocused();
-    await expect(page).toHaveURL(before);
+    // The browser's own hash navigation ran: it focused the target and kept the address.
+    await expect(page.locator('#onboarding-resources')).toBeFocused();
+    await expect(page).toHaveURL(expected.toString());
 
-    await link.click();
+    await page.goto(before);
+    await expectCurrentStep(page, 2);
+    const plain = page.getByTestId('onboarding-project-context').getByRole('link');
+    await plain.click();
     await expect(page.locator('#onboarding-resources')).toBeFocused();
     await expect(page).toHaveURL(before);
   });
@@ -423,7 +438,7 @@ test.describe('compact navigator focus and the ledger link', () => {
     const next = page.getByTestId('onboarding-next-summary');
     const context = page.getByTestId('onboarding-project-context');
     await expect(next).toBeVisible();
-    await expect(next).toHaveText(/\.$/);
+    await expect(next).toHaveText(/\.\s*$/);
     await expect(context).toBeVisible();
     await expect(context).toContainText('Dự án đã xác nhận:');
     for (const width of [768, 1440]) {

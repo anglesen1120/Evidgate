@@ -57,13 +57,34 @@ export function handOffCompactNavigatorFocus(options: CompactNavigatorFocus): vo
     }
   });
 
-  // A render pass runs after the wide list is in the document, so its button can take the focus
-  // the hidden disclosure was holding.
-  afterRenderEffect(() => {
-    if (narrow() || !disclosureFocused()) return;
+  /** Gives the focus the hidden disclosure was holding to the button of the step on screen. */
+  const handToViewedStep = (): void => {
+    if (narrow()) return;
+    // The disclosure is hidden from 768px up but a browser may keep it as the active element, so
+    // holding the focus is what counts, not only the flag the focus event set.
+    const disclosure = toggle();
+    const holdsFocus = disclosure !== undefined && document.activeElement === disclosure;
+    if (!holdsFocus && !disclosureFocused()) return;
     const button = viewedButton();
     if (button === undefined) return;
     disclosureFocused.set(false);
+    // The browser blurs the element it just hid on a later frame, which would drop this focus on
+    // `<body>`; keep re-asserting it while the body still holds it, and only then.
+    let frames = 3;
+    const settle = (): void => {
+      const active = document.activeElement;
+      if (active === button || frames === 0) return;
+      if (active !== null && active !== document.body) return;
+      button.focus();
+      frames -= 1;
+      requestAnimationFrame(settle);
+    };
     button.focus();
-  });
+    requestAnimationFrame(settle);
+  };
+
+  // The wide list is already in the document when the breakpoint flips, and a render pass is not
+  // guaranteed: an expanded list keeps every binding it had. Both paths call the same handoff.
+  effect(handToViewedStep);
+  afterRenderEffect(handToViewedStep);
 }
