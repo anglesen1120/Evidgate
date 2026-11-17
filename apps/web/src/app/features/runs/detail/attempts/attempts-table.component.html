@@ -89,7 +89,7 @@
             role="rowgroup"
             class="[@media(max-width:767px)]:block [&+tbody]:border-t [&+tbody]:border-border"
           >
-            @for (attempt of group.attempts; track $index) {
+            @for (attempt of group.attempts; track attempt.attemptNo) {
               <tr
                 hlmTr
                 role="row"
