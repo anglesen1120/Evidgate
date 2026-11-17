@@ -45,9 +45,14 @@ export async function enterMainByKeyboard(page: Page): Promise<void> {
 }
 
 /**
- * The focused control is visibly focused, not merely focused. Every focusable in these flows
- * declares the `--eg-focus` ring (2px, 2px offset); an `outline: none` anywhere on that path would
- * leave a keyboard visitor guessing, so the computed outline is what is asserted.
+ * The focused control is visibly focused, not merely focused, and inside the onboarding shell it is
+ * focused the way the product says (UI50): a solid `--eg-focus` ring, 2px wide, 2px offset. An
+ * `outline: none` anywhere on that path would leave a keyboard visitor guessing, so the computed
+ * outline is what is asserted — not the class list that was meant to produce it.
+ *
+ * The app shell's own chrome (the skip link, `main#main-content`) is outside this feature and still
+ * renders the browser's outline; it keeps the older "some outline" check here and its token gap is
+ * reported separately rather than enforced from this walkthrough.
  *
  * Every call follows a Tab or Enter — these specs move focus only with real key presses — which is
  * what makes the assertion honest for the two targets styled `:focus-visible` only
@@ -61,12 +66,24 @@ export async function expectFocusRing(page: Page, context: string): Promise<void
     const element = document.activeElement;
     if (element === null) return null;
     const style = getComputedStyle(element);
+    // Resolve the token through a probe: a custom property may hold any colour syntax, so the
+    // comparison is against what the browser serializes for the very same value.
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--eg-focus)';
+    document.body.appendChild(probe);
+    const tokenColour = getComputedStyle(probe).color;
+    probe.remove();
     return {
       tag: element.tagName.toLowerCase(),
       id: element.id,
       testId: element.getAttribute('data-testid'),
+      onboarding: element.closest('app-onboarding-shell') !== null,
       outlineStyle: style.outlineStyle,
       outlineWidth: style.outlineWidth,
+      outlineOffset: style.outlineOffset,
+      outlineColor: style.outlineColor,
+      token: getComputedStyle(element).getPropertyValue('--eg-focus').trim(),
+      tokenColour,
     };
   });
 
@@ -78,11 +95,22 @@ export async function expectFocusRing(page: Page, context: string): Promise<void
         }`;
 
   expect(focused, `${context}: nothing holds focus`).not.toBeNull();
-  expect(focused?.outlineStyle, `${context}: ${name} renders no focus outline`).not.toBe('none');
-  expect(
-    Number.parseFloat(focused?.outlineWidth ?? '0'),
-    `${context}: ${name} renders a zero-width focus outline`,
-  ).toBeGreaterThan(0);
+  if (focused === null) return;
+  if (!focused.onboarding) {
+    expect(focused.outlineStyle, `${context}: ${name} renders no focus outline`).not.toBe('none');
+    expect(
+      Number.parseFloat(focused.outlineWidth),
+      `${context}: ${name} renders a zero-width focus outline`,
+    ).toBeGreaterThan(0);
+    return;
+  }
+  expect(focused.token, `${context}: ${name} inherits no --eg-focus token`).not.toBe('');
+  expect(focused.outlineStyle, `${context}: ${name} renders no solid focus outline`).toBe('solid');
+  expect(focused.outlineWidth, `${context}: ${name} focus outline is not 2px`).toBe('2px');
+  expect(focused.outlineOffset, `${context}: ${name} focus outline offset is not 2px`).toBe('2px');
+  expect(focused.outlineColor, `${context}: ${name} focus outline is not --eg-focus`).toBe(
+    focused.tokenColour,
+  );
 }
 
 /** Asserts the focused element by identity, then that it is visibly focused. */

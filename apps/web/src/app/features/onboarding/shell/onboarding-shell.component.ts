@@ -1,7 +1,9 @@
 import { FocusKeyManager, type FocusableOption } from '@angular/cdk/a11y';
+import { DOCUMENT, LocationStrategy } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
   Injector,
   afterNextRender,
@@ -41,6 +43,15 @@ import { CreateProjectPage } from '../steps/create-project.page';
 import { ConnectCiPage } from '../steps/connect-ci.page';
 import { EnableCollectionPage } from '../steps/enable-collection.page';
 import { EvidencePanelComponent } from './evidence-panel.component';
+import { handOffCompactNavigatorFocus } from './compact-navigator-focus';
+import {
+  ONBOARDING_STEP_ICONS,
+  ONBOARDING_STEPS,
+  completedStepCount,
+  completionSummary,
+  nextSummary,
+  viewedSummary,
+} from './onboarding-summaries';
 import { StepPendingComponent } from './step-pending.component';
 
 @Component({
@@ -70,20 +81,18 @@ export class OnboardingShellComponent {
   protected readonly pageHeadingSize = 'page' as const;
   protected readonly sectionHeadingSize = 'section' as const;
   protected readonly loadingLabel = $localize`:@@onboarding.shell.loading:Loading project setup`;
-  protected readonly completedCount = computed(() => {
-    const done = this.store.done();
-    let completed = 0;
-    for (const step of this.steps) if (done[step.number]) completed += 1;
-    return completed;
-  });
-  protected readonly progressText = computed(() => {
-    const completed = this.completedCount();
-    const total = this.steps.length;
-    return $localize`:@@onboarding.shell.progress-count:${completed}:COMPLETED: of ${total}:TOTAL: steps complete`;
-  });
+  protected readonly completedCount = computed(() =>
+    completedStepCount(this.store.done(), this.steps),
+  );
+  protected readonly progressText = computed(() =>
+    completionSummary(this.completedCount(), this.steps.length),
+  );
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);
+  private readonly location = inject(LocationStrategy);
+  /** The wizard's own address, kept current so the ledger link keeps its route and query. */
+  private readonly currentUrl = signal('');
   private readonly heading = viewChild<ElementRef<HTMLHeadingElement>>('stepHeading');
   private readonly stepButtons = viewChildren<ElementRef<HTMLButtonElement>>('stepButton');
   private readonly stepToggle = viewChild<ElementRef<HTMLButtonElement>>('stepToggle');
@@ -93,38 +102,37 @@ export class OnboardingShellComponent {
   );
   protected readonly viewport = inject(NarrowMutationPolicy);
   protected readonly stepsExpanded = signal(false);
+  /**
+   * Whether the compact disclosure is where the visitor's focus last went. The wide layout hides
+   * that button, so this is what tells the pass after the wide list renders whose focus it has to
+   * hand to the viewed step instead of leaving it on `<body>`.
+   */
+  protected readonly disclosureFocused = signal(false);
   protected readonly stepListId = 'onboarding-step-list';
   protected readonly showStepsLabel = $localize`:@@onboarding.shell.show-steps:Show all steps`;
   protected readonly hideStepsLabel = $localize`:@@onboarding.shell.hide-steps:Hide steps`;
   protected readonly confirmedProjectLabel = $localize`:@@onboarding.shell.confirmed-project:Confirmed project:`;
   protected readonly resourcesLabel = $localize`:@@onboarding.evidence.title:Created resources`;
+  protected readonly resourcesHref = computed(() => {
+    // `router.url` is the in-app address; the location strategy puts the locale base in front of
+    // it, which is what makes the link resolve to this wizard rather than to the base route.
+    const [path = ''] = this.currentUrl().split('#');
+    return `${this.location.prepareExternalUrl(path)}#onboarding-resources`;
+  });
   protected readonly confirmedProjectName = computed(() =>
     escapeFormatChars(this.store.project()?.name ?? ''),
   );
-  protected readonly viewedSummary = computed(() => {
-    const number = this.store.viewStep();
-    const total = this.steps.length;
-    const label = this.steps[number - 1]?.label ?? '';
-    return $localize`:@@onboarding.shell.viewed-summary:Viewing ${number}:NUMBER: of ${total}:TOTAL:: ${label}:LABEL:`;
-  });
-  protected readonly nextSummary = computed(() => {
-    const number = this.store.currentStep();
-    const total = this.steps.length;
-    if (number === 'enabled') {
-      return $localize`:@@onboarding.shell.all-complete:All ${total}:TOTAL: steps complete.`;
-    }
-    const label = this.steps[number - 1]?.label ?? '';
-    return $localize`:@@onboarding.shell.next-summary:Next required ${number}:NUMBER: of ${total}:TOTAL:: ${label}:LABEL:`;
-  });
+  protected readonly viewedSummary = computed(() =>
+    viewedSummary(this.steps, this.store.viewStep()),
+  );
+  protected readonly nextSummary = computed(() =>
+    nextSummary(this.steps, this.store.currentStep()),
+  );
   private stepNavigation: FocusKeyManager<FocusableOption> | undefined;
   protected readonly hasLockedSteps = computed(() =>
     this.steps.some((step) => !this.canSelect(step.number)),
   );
-  protected readonly stepIcons = {
-    complete: 'lucideCircleCheck',
-    required: 'lucideClock',
-    upcoming: 'lucideCircle',
-  } as const;
+  protected readonly stepIcons = ONBOARDING_STEP_ICONS;
   protected readonly stepBodyId = 'onboarding-step-body';
   protected readonly keyboardHelpId = 'onboarding-step-help';
   protected readonly requiredLabel = $localize`:@@onboarding.shell.required:Next required`;
@@ -197,30 +205,24 @@ export class OnboardingShellComponent {
   protected readonly gatedReason = $localize`:@@onboarding.shell.next-disabled:Complete this step before continuing.`;
   protected readonly finalReason = $localize`:@@onboarding.shell.final-step:There is no next setup step.`;
   protected readonly projectCreatedLabel = $localize`:@@onboarding.shell.project-created:Project created`;
-  protected readonly steps: readonly { number: StepNumber; label: string }[] = [
-    { number: 1, label: $localize`:@@onboarding.step.project:Create project` },
-    { number: 2, label: $localize`:@@onboarding.step.ci:Connect CI` },
-    { number: 3, label: $localize`:@@onboarding.step.sample:Sample run` },
-    { number: 4, label: $localize`:@@onboarding.step.compare:Compare reports` },
-    { number: 5, label: $localize`:@@onboarding.step.enable:Enable collection` },
-  ];
+  protected readonly steps = ONBOARDING_STEPS;
 
   constructor() {
+    this.currentUrl.set(this.router.url);
     this.wireCreatedStepNavigation();
     this.wireRouteScope();
+    handOffCompactNavigatorFocus({
+      document: inject(DOCUMENT),
+      destroyRef: inject(DestroyRef),
+      narrow: this.viewport.narrow,
+      stepsExpanded: this.stepsExpanded,
+      disclosureFocused: this.disclosureFocused,
+      toggle: () => this.stepToggle()?.nativeElement,
+      stepButtons: () => this.stepButtons().map(({ nativeElement }) => nativeElement),
+      viewedButton: () => this.viewedStepButton(),
+    });
     afterRenderEffect(() => this.focusMovedStep());
     afterRenderEffect(() => this.focusReloadFailure());
-    effect(() => {
-      if (!this.viewport.narrow() || this.stepsExpanded()) return;
-      // Return focus before the responsive binding hides the desktop list.
-      if (
-        this.stepButtons().some(
-          ({ nativeElement }) => nativeElement === nativeElement.ownerDocument.activeElement,
-        )
-      ) {
-        this.stepToggle()?.nativeElement.focus();
-      }
-    });
     effect((onCleanup) => {
       const manager = new FocusKeyManager<FocusableOption>(
         this.stepButtons().map(({ nativeElement }) => ({
@@ -262,6 +264,7 @@ export class OnboardingShellComponent {
           this.focusedToken = this.store.focusToken();
           return;
         }
+        this.currentUrl.set(this.router.url);
         if (!this.announceCreatedStep() || this.createdHandoff() !== 'none') return;
         this.queueCreatedHandoff();
       });
@@ -410,10 +413,14 @@ export class OnboardingShellComponent {
     heading.focus();
   }
 
-  protected focusResources(event: Event): void {
+  protected focusResources(event: MouseEvent): void {
+    // A modified click belongs to the browser: a new tab or window still gets the route-correct
+    // address, so only the plain primary click is the in-page move this handler owns.
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
+      return;
+    }
     const resources = this.resourcesLedger()?.nativeElement;
     if (resources === undefined) return;
-    // Fragment-only navigation resolves against the locale base, not this route.
     event.preventDefault();
     resources.focus();
     resources.scrollIntoView?.({ block: 'start' });
@@ -422,9 +429,11 @@ export class OnboardingShellComponent {
   protected selectStep(step: StepNumber): void {
     if (!this.canSelect(step)) return;
     this.stepsExpanded.set(false);
+    const reselecting = step === this.store.viewStep();
     this.store.selectStep(step);
-    // Reopening the viewed step does not bump the store's focus token.
-    this.heading()?.nativeElement.focus();
+    // Reopening the viewed step bumps no focus token, so no other pass will move focus there. A
+    // different step renders a new heading: the token's pass focuses it once the name is right.
+    if (reselecting) this.heading()?.nativeElement.focus();
   }
 
   protected navigateSteps(event: KeyboardEvent): void {
@@ -445,6 +454,12 @@ export class OnboardingShellComponent {
   protected canSelect(step: StepNumber): boolean {
     const current = this.store.currentStep();
     return current === 'enabled' || step <= current;
+  }
+
+  /** The navigator button of the step on screen; the wide layout's replacement for the toggle. */
+  private viewedStepButton(): HTMLElement | undefined {
+    const viewed = this.steps.findIndex((step) => step.number === this.store.viewStep());
+    return this.stepButtons()[viewed]?.nativeElement;
   }
 
   protected reload(): void {

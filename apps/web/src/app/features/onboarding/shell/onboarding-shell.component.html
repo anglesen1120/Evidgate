@@ -57,24 +57,26 @@
             {{ progressText() }}
           </p>
         </div>
-        <p class="m-0 text-sm min-[768px]:hidden" data-testid="onboarding-viewed-summary">
-          {{ viewedSummary() }}
-        </p>
-        <p class="m-0 min-w-0 text-sm wrap-anywhere" data-testid="onboarding-next-summary">
-          {{ nextSummary() }}
+        <div class="grid min-w-0 gap-(--eg-space-3)">
+          <p class="m-0 text-sm min-[768px]:hidden" data-testid="onboarding-viewed-summary">
+            {{ viewedSummary() }}
+          </p>
+          <p class="m-0 text-sm min-[768px]:hidden" data-testid="onboarding-next-summary">
+            {{ nextSummary() }}
+          </p>
           @if (store.project()) {
-            <span data-testid="onboarding-project-context">
+            <p class="m-0 min-w-0 text-sm wrap-anywhere" data-testid="onboarding-project-context">
               {{ confirmedProjectLabel }} <bdi>{{ confirmedProjectName() }}</bdi
               >.
               <a
-                class="inline-flex min-h-(--eg-control-touch) items-center text-primary underline underline-offset-4"
-                href="#onboarding-resources"
+                class="inline-flex min-h-(--eg-control-touch) items-center text-primary underline underline-offset-4 focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+                [attr.href]="resourcesHref()"
                 (click)="focusResources($event)"
                 >{{ resourcesLabel }}</a
               >
-            </span>
+            </p>
           }
-        </p>
+        </div>
         <button
           hlmBtn
           #stepToggle
@@ -84,6 +86,7 @@
           data-testid="onboarding-step-toggle"
           [attr.aria-expanded]="stepsExpanded()"
           [attr.aria-controls]="stepListId"
+          (focus)="disclosureFocused.set(true)"
           (click)="stepsExpanded.set(!stepsExpanded())"
           (keydown)="navigateSteps($event)"
         >

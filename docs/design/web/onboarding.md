@@ -17,7 +17,7 @@ The former four-step G1 authoring mockup, a duplicate vertical tablist/select an
 Help a returning project owner see what the service has confirmed, identify the next required action and revisit an available step without marking anything complete.
 
 1. Page title **Set up your project** and the explanation that viewing does not change progress.
-2. **Setup progress:** confirmed completion count/bar; on narrow screens the viewed and next-required step with n-of-5 context (or all-complete), then one **Show all steps / Xem tất cả các bước** disclosure. A confirmed project adds its name and a **Created resources** in-page link beside the next-action summary; absent projects render no project context.
+2. **Setup progress:** confirmed completion count/bar; on narrow screens the viewed and next-required step with n-of-5 context (or all-complete), then one **Show all steps / Xem tất cả các bước** disclosure. The next-required sentence belongs to that narrow summary; a confirmed project adds its own line — the name plus a **Created resources** in-page link — at every width, because the wide five-column navigator shows the required state but not which project was confirmed. Absent projects render no project context.
 3. Full-width body headed by the viewed step's actual name; no generic “Step details” heading or second list.
 4. Existing body actions, followed by **Back → Next** with the same prerequisite/terminal reasons.
 5. **Created resources:** secondary, server-confirmed facts; explicit empty, unavailable and stale states remain distinct.

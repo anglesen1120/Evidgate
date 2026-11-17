@@ -338,3 +338,102 @@ for (const theme of THEMES) {
     await expectNavigatorGeometry(page, 320);
   });
 }
+
+test.describe('compact navigator focus and the ledger link', () => {
+  test('widening hands the disclosure focus to the viewed step and leaves other focus alone', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 767, height: 1100 });
+    await page.goto(onboardingUrl('vi', 'onboarding-project'));
+    await expectCurrentStep(page, 2);
+    const toggle = page.getByTestId('onboarding-step-toggle');
+    const list = page.getByTestId('onboarding-stepper');
+    const viewed = page.getByTestId('onboarding-select-step-2');
+    await expect(list).toBeHidden();
+
+    // Collapsed: the disclosure holds the focus and the wide layout hides it.
+    await toggle.focus();
+    await page.setViewportSize({ width: 768, height: 1100 });
+    await expect(list).toBeVisible();
+    await expect(toggle).toBeHidden();
+    await expect(viewed).toBeFocused();
+
+    // Expanded: the same hand-off, and the stored disclosure state does not change.
+    await page.setViewportSize({ width: 767, height: 1100 });
+    await expect(toggle).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await page.setViewportSize({ width: 768, height: 1100 });
+    await expect(list).toBeVisible();
+    await expect(viewed).toBeFocused();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
+    // Focus somewhere else: widening must not take it.
+    await page.setViewportSize({ width: 767, height: 1100 });
+    await page.keyboard.press('Escape');
+    await expect(toggle).toBeFocused();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    const back = page.getByTestId('onboarding-back');
+    await back.focus();
+    await page.setViewportSize({ width: 768, height: 1100 });
+    await expect(list).toBeVisible();
+    await expect(back).toBeFocused();
+    await expectCurrentStep(page, 2);
+  });
+
+  test('the ledger link keeps the wizard address and lets modified clicks through', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 1100 });
+    await page.goto(onboardingUrl('vi', 'onboarding-project'));
+    await expectCurrentStep(page, 2);
+    const link = page.getByTestId('onboarding-project-context').getByRole('link');
+    const expected = new URL(page.url());
+    expected.hash = 'onboarding-resources';
+    expect(await link.evaluate((anchor: HTMLAnchorElement) => anchor.href)).toBe(
+      expected.toString(),
+    );
+
+    const before = page.url();
+    const canceled = await link.evaluate((anchor: HTMLAnchorElement) => {
+      // A modified activation is the browser's: this handler must not consume it.
+      const event = new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        ctrlKey: true,
+      });
+      return !anchor.dispatchEvent(event);
+    });
+    expect(canceled).toBe(false);
+    await expect(page.locator('#onboarding-resources')).not.toBeFocused();
+    await expect(page).toHaveURL(before);
+
+    await link.click();
+    await expect(page.locator('#onboarding-resources')).toBeFocused();
+    await expect(page).toHaveURL(before);
+  });
+
+  test('the next-required summary is narrow-only while the project context stays at every width', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 1100 });
+    await page.goto(onboardingUrl('vi', 'onboarding-project'));
+    await expectCurrentStep(page, 2);
+    const next = page.getByTestId('onboarding-next-summary');
+    const context = page.getByTestId('onboarding-project-context');
+    await expect(next).toBeVisible();
+    await expect(next).toHaveText(/\.$/);
+    await expect(context).toBeVisible();
+    await expect(context).toContainText('Dự án đã xác nhận:');
+    for (const width of [768, 1440]) {
+      await page.setViewportSize({ width, height: 1100 });
+      await expect(page.getByTestId('onboarding-stepper')).toBeVisible();
+      await expect(page.getByTestId('onboarding-step-toggle')).toBeHidden();
+      await expect(next).toBeHidden();
+      await expect(page.getByTestId('onboarding-viewed-summary')).toBeHidden();
+      await expect(context).toBeVisible();
+      await expect(page.getByTestId('onboarding-progress-count')).toBeVisible();
+    }
+  });
+});

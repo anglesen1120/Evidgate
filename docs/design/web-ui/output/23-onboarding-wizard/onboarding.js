@@ -26,8 +26,8 @@ function renderSummary() {
     `Viewing ${viewed} of 5: ${viewedLabel.dataset.en}`,
     `Đang xem bước ${viewed}/5: ${viewedLabel.dataset.vi}`);
   setCopy(document.getElementById('onb-next-summary'),
-    completed === 5 ? 'All 5 steps complete.' : `Next required ${required} of 5: ${nextLabel.dataset.en}`,
-    completed === 5 ? 'Đã hoàn thành tất cả 5 bước.' : `Bước cần làm ${required}/5: ${nextLabel.dataset.vi}`);
+    completed === 5 ? 'All 5 steps complete.' : `Next required ${required} of 5: ${nextLabel.dataset.en}.`,
+    completed === 5 ? 'Đã hoàn thành tất cả 5 bước.' : `Bước cần làm ${required}/5: ${nextLabel.dataset.vi}.`);
   document.getElementById('onb-project-context').hidden = completed === 0;
 }
 

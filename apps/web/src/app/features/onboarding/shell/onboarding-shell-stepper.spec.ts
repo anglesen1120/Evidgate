@@ -188,6 +188,55 @@ describe('the onboarding step navigator', () => {
     expect(store.viewStep()).toBe(1);
   });
 
+  it('focuses a chosen step only once its heading shows that step', async () => {
+    const viewport = new OnboardingViewport();
+    viewport.setWidth(390);
+    const { fixture, root } = await mountShell({ viewport });
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, NavigatorHarness);
+    const heading = root.querySelector<HTMLElement>('#onboarding-step-title');
+    if (!heading) throw new Error('Missing step heading');
+    const announced: string[] = [];
+    heading.addEventListener('focus', () => announced.push(heading.textContent?.trim() ?? ''));
+    await (await harness.toggle()).click();
+    await (await harness.step(2)).click();
+    await fixture.whenStable();
+    expect(announced).toEqual(['Connect CI']);
+    expect(await (await harness.heading()).isFocused()).toBe(true);
+  });
+
+  it('hands the disclosure focus to the viewed step when the wide navigator replaces it', async () => {
+    const viewport = new OnboardingViewport();
+    viewport.setWidth(767);
+    const { fixture, root, store } = await mountShell({ viewport });
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, NavigatorHarness);
+    const toggle = await harness.toggle();
+    await toggle.focus();
+    viewport.setWidth(768);
+    await fixture.whenStable();
+    expect(await (await harness.step(store.viewStep())).isFocused()).toBe(true);
+
+    viewport.setWidth(767);
+    await fixture.whenStable();
+    await toggle.click();
+    expect(await toggle.getAttribute('aria-expanded')).toBe('true');
+    viewport.setWidth(768);
+    await fixture.whenStable();
+    expect(await (await harness.step(store.viewStep())).isFocused()).toBe(true);
+    expect(await toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(store.viewStep()).toBe(1);
+
+    viewport.setWidth(767);
+    await fixture.whenStable();
+    const link = root.querySelector<HTMLAnchorElement>(
+      '[data-testid="onboarding-project-context"] a',
+    );
+    if (!link) throw new Error('Missing ledger link');
+    link.focus();
+    viewport.setWidth(768);
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(link);
+  });
+
   it('collapses on a step choice and focuses its heading, including the already viewed step', async () => {
     const { fixture, store } = await mountShell();
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, NavigatorHarness);
@@ -195,6 +244,7 @@ describe('the onboarding step navigator', () => {
     for (const step of [2, 2, 1] as const) {
       await toggle.click();
       await (await harness.step(step)).click();
+      await fixture.whenStable();
       expect(await toggle.getAttribute('aria-expanded')).toBe('false');
       expect(await (await harness.heading()).isFocused()).toBe(true);
       expect(store.viewStep()).toBe(step);
@@ -225,8 +275,8 @@ describe('the onboarding step navigator', () => {
   });
 
   it.each([
-    [1, 1, 'Viewing 1 of 5: Create project', 'Next required 1 of 5: Create project'],
-    [1, 3, 'Viewing 1 of 5: Create project', 'Next required 3 of 5: Sample run'],
+    [1, 1, 'Viewing 1 of 5: Create project', 'Next required 1 of 5: Create project.'],
+    [1, 3, 'Viewing 1 of 5: Create project', 'Next required 3 of 5: Sample run.'],
     [5, 'enabled', 'Viewing 5 of 5: Enable collection', 'All 5 steps complete.'],
   ] as const)(
     'summarizes viewed %s and required %s independently',
@@ -245,11 +295,30 @@ describe('the onboarding step navigator', () => {
     const { fixture, root, store } = await mountShell();
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, NavigatorHarness);
     expect(await (await harness.context())?.text()).toContain('Storefront web');
+    // The compact statements are separate blocks: the next-required sentence closes before the
+    // project context starts, and the ledger link carries this wizard's own address.
+    const next = await harness.next();
+    expect((await next.text()).trim().endsWith('.')).toBe(true);
+    const nextBlock = root.querySelector('[data-testid="onboarding-next-summary"]');
+    const contextBlock = root.querySelector('[data-testid="onboarding-project-context"]');
+    expect(nextBlock?.querySelector('[data-testid="onboarding-project-context"]')).toBeNull();
+    expect(contextBlock?.parentElement).toBe(nextBlock?.parentElement);
+    expect(contextBlock?.tagName).toBe('P');
     const link = root.querySelector<HTMLAnchorElement>(
       '[data-testid="onboarding-project-context"] a',
     );
-    expect(link?.getAttribute('href')).toBe('#onboarding-resources');
+    expect(link?.getAttribute('href')).toBe('/vi/orgs/org-1/onboarding#onboarding-resources');
     expect(root.querySelectorAll('#onboarding-resources')).toHaveLength(1);
+    // A modified click stays the browser's: nothing is prevented and focus does not move.
+    if (!link) throw new Error('Missing ledger link');
+    const modified = new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      ctrlKey: true,
+    });
+    expect(link.dispatchEvent(modified)).toBe(true);
+    expect(document.activeElement).not.toBe(root.querySelector('#onboarding-resources'));
     await (await harness.resources()).click();
     expect(await (await harness.ledger()).isFocused()).toBe(true);
     store.project.set({ id: 'p1', name: 'Project\u202Ename' });
