@@ -86,8 +86,10 @@ const orderedWindows = (group: AbstractControl): ValidationErrors | null => {
 })
 export class RetentionFormComponent {
   protected readonly store = inject(RetentionStore);
-  protected readonly copy = RETENTION_COPY;
+
   protected readonly mutationPolicy = inject(NarrowMutationPolicy);
+
+  protected readonly copy = RETENTION_COPY;
   protected readonly sectionSize = 'section' as const;
   protected readonly subsectionSize = 'subsection' as const;
   protected readonly loadingLayout = 'form' as const;

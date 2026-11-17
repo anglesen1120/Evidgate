@@ -46,8 +46,9 @@ interface ReferenceRow {
   host: { class: 'grid min-w-0 gap-(--eg-space-7)', '[attr.aria-busy]': 'phase() === "loading"' },
 })
 export class RevisionDetailComponent {
-  readonly revisionId = input<string | null>(null);
   private readonly store = inject(PolicyStore);
+
+  readonly revisionId = input<string | null>(null);
   protected readonly revision = signal<PolicyRevisionDto | null>(null);
   protected readonly phase = signal<'empty' | 'loading' | 'ready' | 'error'>('empty');
   protected readonly error = signal<ApiError | null>(null);

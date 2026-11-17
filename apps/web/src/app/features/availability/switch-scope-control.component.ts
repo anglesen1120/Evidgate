@@ -50,6 +50,10 @@ function isSettableMode(value: unknown): value is SettableMode {
   host: { class: 'block min-w-0' },
 })
 export class SwitchScopeControl {
+  private readonly narrowPolicy = inject(NarrowMutationPolicy);
+
+  private readonly session = inject(SessionStore);
+
   readonly scope = input.required<SwitchScope>();
   readonly row = input<HealingSwitchView | null>(null);
   readonly blockedBy = input<SwitchScope | null>(null);
@@ -66,8 +70,6 @@ export class SwitchScopeControl {
   protected readonly saveVariant = computed(() =>
     this.scope() === 'project' ? 'default' : 'outline',
   );
-  private readonly narrowPolicy = inject(NarrowMutationPolicy);
-  private readonly session = inject(SessionStore);
 
   protected readonly selectedMode = linkedSignal<HealingSwitchView | null, SettableMode>({
     source: this.row,

@@ -139,12 +139,15 @@ function revokeDeferred(url: string): void {
   `,
 })
 export class AuditExportComponent {
-  readonly orgId = input.required<string>();
-  readonly hasDraftChanges = input(false);
   protected readonly store = inject(AuditStore);
+
   private readonly lifetime = inject(DestroyRef);
+
   /** The active build/app locale: the banner's count is a number, so the locale groups it. */
   private readonly locale = inject(LOCALE_ID);
+
+  readonly orgId = input.required<string>();
+  readonly hasDraftChanges = input(false);
   protected readonly running = computed(() => this.store.exportState().phase === 'running');
   protected readonly appliedActor = computed(() => {
     const actor = this.store.filters().actorType;

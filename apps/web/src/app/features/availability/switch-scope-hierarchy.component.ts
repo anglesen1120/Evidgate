@@ -65,9 +65,10 @@ interface ScopeFact {
   `,
 })
 export class SwitchScopeHierarchy {
+  private readonly session = inject(SessionStore);
+
   readonly resolution = input.required<HealingSwitchResolutionView>();
   protected readonly copy = HEALING_SWITCH_COPY;
-  private readonly session = inject(SessionStore);
   private readonly scopeCell = viewChild<TemplateRef<DataTableCellContext<ScopeFact>>>('scopeCell');
   private readonly timeCell = viewChild<TemplateRef<DataTableCellContext<ScopeFact>>>('timeCell');
   private readonly versionCell =

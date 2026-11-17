@@ -98,10 +98,12 @@ const SPECIMEN_COLUMN_WIDTHS: Readonly<Record<string, DataTableColumnWidth>> = {
   host: { class: 'block min-w-0 bg-background text-foreground font-sans text-base' },
 })
 export class UiGalleryComponent {
+  protected readonly reveal = inject(RevealSlot);
+
+  private readonly injector = inject(Injector);
+
   protected readonly galleryTitle = $localize`:@@shared.gallery.title:Shared UI state gallery`;
   protected readonly galleryIntroduction = $localize`:@@shared.gallery.introduction:Render-only examples of evidence, decisions and their independent states.`;
-  protected readonly reveal = inject(RevealSlot);
-  private readonly injector = inject(Injector);
   private readonly revealOpener = viewChild<ElementRef<HTMLButtonElement>>('revealOpener');
   protected readonly revealHeading = $localize`:@@shared.gallery.reveal-heading:Save your ingest token`;
   protected readonly revealWarning = $localize`:@@shared.gallery.reveal-warning:Shown only once. Save this value before leaving this step. If copying fails, select and copy the value manually.`;

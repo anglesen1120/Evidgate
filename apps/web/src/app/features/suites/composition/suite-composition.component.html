@@ -126,7 +126,7 @@
                       <p>{{ copy.noParameters }}</p>
                     } @else {
                       <ul class="m-0 ps-3 font-normal">
-                        @for (parameter of member.params; track $index) {
+                        @for (parameter of member.params; track parameter) {
                           <li>
                             <bdi>{{ parameter }}</bdi>
                           </li>
@@ -195,7 +195,7 @@
                       <p>{{ copy.noParameters }}</p>
                     } @else {
                       <ul class="parameters">
-                        @for (parameter of column.params; track $index) {
+                        @for (parameter of column.params; track parameter) {
                           <li>
                             <bdi>{{ parameter }}</bdi>
                           </li>
@@ -260,7 +260,7 @@
                 <div>
                   <dt>{{ copy.variantParams }}</dt>
                   <dd>
-                    @for (parameter of member.params; track $index) {
+                    @for (parameter of member.params; track parameter) {
                       <bdi class="block">{{ parameter }}</bdi>
                     } @empty {
                       {{ copy.noParameters }}

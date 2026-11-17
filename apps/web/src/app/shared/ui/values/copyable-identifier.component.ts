@@ -217,6 +217,8 @@ import { escapeFormatChars } from './ref-name-display';
   `,
 })
 export class CopyableIdentifierComponent {
+  private readonly dialogs = inject(HlmDialogService);
+
   readonly value = input.required<string>();
   readonly label = input.required<string>();
   readonly truncate = input(true);
@@ -232,7 +234,6 @@ export class CopyableIdentifierComponent {
     ElementRef<HTMLElement>
   >('copyAction', { read: ElementRef });
   private readonly measuredClipped = signal(false);
-  private readonly dialogs = inject(HlmDialogService);
   private dialog: BrnDialogRef<unknown> | undefined;
   protected readonly showText = $localize`:@@shared.values.show-full:Show full`;
   protected readonly closeText = $localize`:@@shared.values.close:Close`;

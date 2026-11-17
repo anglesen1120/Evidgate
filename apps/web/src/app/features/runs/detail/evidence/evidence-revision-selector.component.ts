@@ -26,6 +26,8 @@ import { shortDateFormat } from '../../../../shared/time/short-date-format';
   templateUrl: './evidence-revision-selector.component.html',
 })
 export class EvidenceRevisionSelectorComponent {
+  private readonly locale = inject(LOCALE_ID);
+
   readonly revisions = input.required<readonly EvidenceRevision[]>();
   readonly selectedRevision = input<number | null>(null);
   /** More cursor pages exist: "Load older revisions" is offered, never automatic. */
@@ -33,8 +35,6 @@ export class EvidenceRevisionSelectorComponent {
   readonly loadingMore = input(false);
   readonly selectRevision = output<number>();
   readonly loadOlder = output<void>();
-
-  private readonly locale = inject(LOCALE_ID);
 
   protected readonly copy = {
     revisionLabel: $localize`:@@runs.evidence.revision-label:Evidence revision`,

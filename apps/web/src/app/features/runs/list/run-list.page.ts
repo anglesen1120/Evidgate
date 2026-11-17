@@ -54,16 +54,27 @@ import { EMPTY_RUN_LIST_FILTERS, RunListStore } from './run-list.store';
 })
 export class RunListPage {
   protected readonly store = inject(RunListStore);
+
   private readonly route = inject(ActivatedRoute);
+
   private readonly router = inject(Router);
+
   private readonly locale = inject(LOCALE_ID);
-  protected draft = { ...EMPTY_RUN_LIST_FILTERS };
+
   protected readonly desktopFilters = toSignal(
     inject(BreakpointObserver)
       .observe('(min-width: 768px)')
       .pipe(map(({ matches }) => matches)),
     { initialValue: false },
   );
+
+  private readonly document = inject(DOCUMENT);
+
+  private readonly injector = inject(Injector);
+
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  protected draft = { ...EMPTY_RUN_LIST_FILTERS };
   protected readonly activeFilterLabel = computed(() => {
     const count = formatNumber(
       Object.values(this.store.filters()).filter(Boolean).length,
@@ -77,9 +88,6 @@ export class RunListPage {
   });
   protected readonly retryReady = signal(true);
   private projectId: string | null = null;
-  private readonly document = inject(DOCUMENT);
-  private readonly injector = inject(Injector);
-  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly loadMoreButton = viewChild<ElementRef<HTMLButtonElement>>('loadMoreControl');
   private readonly pagingRetryButton =
     viewChild<ElementRef<HTMLButtonElement>>('pagingRetryControl');

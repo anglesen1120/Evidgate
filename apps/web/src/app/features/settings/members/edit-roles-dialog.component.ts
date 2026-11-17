@@ -172,8 +172,13 @@ type RoleOperation = Pick<RoleChange, 'kind' | 'roleId'>;
 })
 export class EditRolesDialogComponent {
   protected readonly store = inject(MembersStore);
+
   protected readonly session = inject(SessionStore);
+
   protected readonly viewport = inject(NarrowMutationPolicy);
+
+  private readonly injector = inject(Injector);
+
   protected readonly copy = MEMBERS_COPY;
   readonly completed = output<void>();
   protected readonly opened = signal(false);
@@ -212,7 +217,6 @@ export class EditRolesDialogComponent {
     read: ElementRef,
   });
   private readonly intents = new Map<string, Intent>();
-  private readonly injector = inject(Injector);
   /** The edit phase the focus-restore effect saw last, so only a submitting -> failed move acts. */
   private lastEditPhase: MutationState['phase'] = 'idle';
   private opener: HTMLElement | null = null;

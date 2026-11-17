@@ -64,6 +64,13 @@ import { StepPendingComponent } from './step-pending.component';
 })
 export class OnboardingShellComponent {
   protected readonly store = inject(OnboardingStore);
+
+  private readonly route = inject(ActivatedRoute);
+
+  private readonly router = inject(Router);
+
+  private readonly injector = inject(Injector);
+
   protected readonly outlineVariant = 'outline';
   protected readonly pageHeadingSize = 'page' as const;
   protected readonly sectionHeadingSize = 'section' as const;
@@ -79,9 +86,6 @@ export class OnboardingShellComponent {
     const total = this.steps.length;
     return $localize`:@@onboarding.shell.progress-count:${completed}:COMPLETED: of ${total}:TOTAL: steps complete`;
   });
-  private readonly route = inject(ActivatedRoute);
-  private readonly router = inject(Router);
-  private readonly injector = inject(Injector);
   private readonly heading = viewChild<ElementRef<HTMLHeadingElement>>('stepHeading');
   private readonly stepButtons = viewChildren<ElementRef<HTMLButtonElement>>('stepButton');
   private stepNavigation: FocusKeyManager<FocusableOption> | undefined;

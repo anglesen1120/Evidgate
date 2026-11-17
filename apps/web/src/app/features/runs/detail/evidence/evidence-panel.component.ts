@@ -53,6 +53,12 @@ import { resolveEvidenceAnchor } from './run-evidence-anchors';
   templateUrl: './evidence-panel.component.html',
 })
 export class EvidencePanelComponent {
+  private readonly document = inject(DOCUMENT);
+
+  private readonly router = inject(Router);
+
+  private readonly location = inject(Location);
+
   protected readonly sectionSize = 'section' as const;
   protected readonly subsectionSize = 'subsection' as const;
   /** `null` while the decision read has not answered: the panel shows its own revision state. */
@@ -80,9 +86,6 @@ export class EvidencePanelComponent {
   readonly viewLatest = output<void>();
   readonly retry = output<void>();
 
-  private readonly document = inject(DOCUMENT);
-  private readonly router = inject(Router);
-  private readonly location = inject(Location);
   /**
    * The current route URL, qualified with the app's base href. A reason link's `href` is built
    * from it, because a bare `#…` resolves against the base and would navigate to the site root;

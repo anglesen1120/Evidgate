@@ -87,10 +87,11 @@ export type WaiverState = 'active' | 'expired' | 'revoked';
   `,
 })
 export class WaiverBanner {
+  protected readonly dateTimeFormat = shortDateFormat(inject(LOCALE_ID), true, 'medium');
+
   readonly approver = input.required<string>();
   readonly expiresAt = input.required<string | Date>();
   readonly state = input<WaiverState>('active');
-  protected readonly dateTimeFormat = shortDateFormat(inject(LOCALE_ID), true, 'medium');
 
   protected readonly tone = computed(() => {
     switch (this.state()) {

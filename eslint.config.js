@@ -121,9 +121,13 @@ module.exports = tseslint.config(
       // The Angular rule set of docs/engineering/ui-rules.md §Angular rules for UI work, TS
       // half: injection (A8), host metadata over @HostBinding/@HostListener (A9), member
       // shape (A10) and a reactive context that reads nothing (A2). Each was measured over
-      // apps/web and reported zero violations before it was enabled; inject-at-top and
-      // no-uncalled-signals stay out while the tree still violates them.
+      // apps/web and reported zero violations before it was enabled.
       '@angular-eslint/prefer-inject': 'error',
+      // A8's other half: injected fields are declared before the rest of the class, so the
+      // dependency list is read in one place. A2's other half: a signal used in a value
+      // position is a function reference, not the value, and is almost always a bug.
+      '@angular-eslint/inject-at-top': 'error',
+      '@angular-eslint/no-uncalled-signals': 'error',
       '@angular-eslint/prefer-host-metadata-property': 'error',
       '@angular-eslint/prefer-output-emitter-ref': 'error',
       '@angular-eslint/prefer-output-readonly': 'error',
@@ -217,6 +221,10 @@ module.exports = tseslint.config(
       // after a refactor (W2). Both measured zero violations over apps/web before enabling.
       '@angular-eslint/template/prefer-class-binding': 'error',
       '@angular-eslint/template/prefer-style-binding': 'error',
+      // A11's other half: no `style` attribute or constant style binding in a template. A
+      // `[style.x]` binding whose value is computed (a measured width, a column size) is the
+      // escape hatch the rule offers, so only constant values are still reported.
+      '@angular-eslint/template/no-inline-styles': ['error', { allowBindToStyle: 'dynamic' }],
       '@angular-eslint/template/no-empty-control-flow': 'error',
       // 09.1.1-T6.1 (plans/features/09-web-ui §10 T6.1): every user-visible template string —
       // a text node, a text attribute, or a bound text holding literal letters — must carry an
@@ -377,6 +385,11 @@ module.exports = tseslint.config(
       '@angular-eslint/prefer-standalone': 'error',
       '@angular-eslint/prefer-on-push-component-change-detection': 'error',
       '@angular-eslint/no-empty-lifecycle-method': 'error',
+      // A spec declares TestBed host components and reads signals the same way the app does,
+      // so the injection-order and uncalled-signal rules hold here as well; without them the
+      // spec project was the one place a signal could be used without being called.
+      '@angular-eslint/inject-at-top': 'error',
+      '@angular-eslint/no-uncalled-signals': 'error',
       '@angular-eslint/component-selector': 'off',
       '@angular-eslint/directive-selector': 'off',
     },

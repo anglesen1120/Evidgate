@@ -73,10 +73,12 @@ const NEXT_STEP_IDS = ['runs', 'onboarding', 'authoring'];
   </section>`,
 })
 export class ProjectOverviewPage {
+  private readonly session = inject(SessionStore);
+
+  private readonly nav = inject(NavViewService);
+
   readonly pageHeadingSize = 'page' as const;
   readonly sectionHeadingSize = 'section' as const;
-  private readonly session = inject(SessionStore);
-  private readonly nav = inject(NavViewService);
   readonly nextSteps = computed(() =>
     this.nav
       .groups()

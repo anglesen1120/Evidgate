@@ -84,17 +84,23 @@ interface AppendedRevision {
   host: { class: 'block min-w-0' },
 })
 export class EnableCollectionPage {
+  private readonly data = inject(OnboardingDataService);
+
+  private readonly session = inject(SessionStore);
+
+  private readonly destroyRef = inject(DestroyRef);
+
+  protected readonly policy = inject(NarrowMutationPolicy);
+
+  protected readonly dateTimeFormat = shortDateFormat(inject(LOCALE_ID), true, 'medium');
+
+  /** The clock the confirm's and the read's `Retry-After` windows are measured against. */
+  private readonly now = inject(READ_CLOCK);
+
   readonly orgId = input.required<string>();
   readonly projectId = input.required<string>();
   readonly activationConfirmed = output<PolicyActivationStateDto>();
-  private readonly data = inject(OnboardingDataService);
-  private readonly session = inject(SessionStore);
-  private readonly destroyRef = inject(DestroyRef);
-  protected readonly policy = inject(NarrowMutationPolicy);
   protected readonly subsectionHeadingSize = 'subsection' as const;
-  protected readonly dateTimeFormat = shortDateFormat(inject(LOCALE_ID), true, 'medium');
-  /** The clock the confirm's and the read's `Retry-After` windows are measured against. */
-  private readonly now = inject(READ_CLOCK);
   /** The failed read's window; the runner owns the same rule for the confirm. */
   private readonly readWait = createReadWaitWindow(() => this.now());
   protected readonly readWaitText = this.readWait.text;

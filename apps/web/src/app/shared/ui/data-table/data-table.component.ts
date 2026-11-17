@@ -119,6 +119,14 @@ let nextTableId = 0;
   },
 })
 export class DataTableComponent<T> {
+  private readonly locale = inject(LOCALE_ID);
+
+  private readonly document = inject(DOCUMENT);
+
+  private readonly injector = inject(Injector);
+
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
   readonly columns = input.required<readonly DataTableColumn<T>[]>();
   readonly rows = input.required<readonly T[]>();
   readonly rowId = input.required<DataTableRowId<T>>();
@@ -188,12 +196,8 @@ export class DataTableComponent<T> {
     const loaded = formatNumber(total, this.locale);
     return $localize`:@@shared.data-table.loaded-range:Loaded records ${start}:start:–${end}:end: of ${loaded}:loaded:`;
   });
-  private readonly locale = inject(LOCALE_ID);
-  private readonly document = inject(DOCUMENT);
-  private readonly injector = inject(Injector);
   private readonly previousButton = viewChild<ElementRef<HTMLButtonElement>>('previousPage');
   private readonly nextButton = viewChild<ElementRef<HTMLButtonElement>>('nextPage');
-  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly scrollElement = viewChild.required<ElementRef<HTMLElement>>('scrollElement');
   private readonly tokenProbe = viewChild.required<ElementRef<HTMLElement>>('tokenProbe');
   private readonly range = signal<ListRange>({ start: 0, end: 0 });

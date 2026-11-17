@@ -106,12 +106,13 @@ import type {
   `,
 })
 export class ConnectionHealthComponent {
+  protected readonly dateTimeFormat = shortDateFormat(inject(LOCALE_ID), true, '24h');
+
   readonly health = input.required<ConnectionHealth>();
   readonly tokens = input.required<readonly IngestTokenView[]>();
   readonly bindingsTruncated = input(false);
   readonly tokensTruncated = input(false);
   protected readonly subsectionHeadingSize = 'subsection' as const;
-  protected readonly dateTimeFormat = shortDateFormat(inject(LOCALE_ID), true, '24h');
 
   protected readonly rows = computed(() => {
     const tokens = new Map(this.tokens().map((token) => [token.id, token]));

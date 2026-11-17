@@ -73,6 +73,8 @@ export type BadgeVariants = VariantProps<typeof badgeVariants>;
   `,
 })
 export class HlmBadge {
+  private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
+
   readonly variant = input<BadgeVariants['variant']>('default');
   /** Original non-secret identity when the projected preview is deliberately shortened. */
   readonly fullValue = input<string | null>(null);
@@ -80,7 +82,6 @@ export class HlmBadge {
   protected readonly abbreviated = signal(false);
   private readonly measuredClipped = signal(false);
   readonly clipped = computed(() => this.abbreviated() || this.measuredClipped());
-  private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly nativeAction = ['A', 'BUTTON'].includes(this.element.nativeElement.tagName);
   private readonly label = viewChild.required<ElementRef<HTMLElement>>('label');
   private readonly popover = viewChild<ElementRef<HTMLElement>>('popover');

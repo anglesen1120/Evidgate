@@ -67,6 +67,8 @@ import { escapeFormatChars } from '../values/ref-name-display';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DataTableValueComponent {
+  private readonly destroyRef = inject(DestroyRef);
+
   readonly value = input.required<string | number>();
   readonly truncate = input(false);
   readonly fixedRow = input(false);
@@ -81,7 +83,6 @@ export class DataTableValueComponent {
   readonly clipped = computed(() => this.singleLine() && this.measuredClipped());
   private readonly valueElement = viewChild.required<ElementRef<HTMLElement>>('valueElement');
   private readonly popover = viewChild<ElementRef<HTMLElement>>('popover');
-  private readonly destroyRef = inject(DestroyRef);
   private hideTimer: number | undefined;
   private opened = false;
   private readonly dismissOnEscape = (event: KeyboardEvent) => {

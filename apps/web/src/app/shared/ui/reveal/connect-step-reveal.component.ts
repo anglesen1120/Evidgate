@@ -91,6 +91,8 @@ let nextRevealId = 0;
   `,
 })
 export class ConnectStepRevealComponent {
+  private readonly destroyRef = inject(DestroyRef);
+
   readonly heading = input.required<string>();
   readonly value = input.required<string>();
   // Also the clipboard-failure announcement: the caller supplies manual-copy guidance here.
@@ -107,7 +109,6 @@ export class ConnectStepRevealComponent {
   protected readonly copyStatus = signal('');
   private readonly control = viewChild<ElementRef<HTMLInputElement>>('control');
   private readonly headingControl = viewChild<ElementRef<HTMLHeadingElement>>('headingControl');
-  private readonly destroyRef = inject(DestroyRef);
   private attempt = 0;
 
   constructor() {

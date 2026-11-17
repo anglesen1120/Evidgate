@@ -59,16 +59,24 @@ import { LocaleSwitcherComponent, localeBundlePath } from './locale-switcher.com
 })
 export class ShellComponent {
   readonly session = inject(SessionStore);
+
   readonly nav = inject(NavViewService);
+
   readonly theme = inject(ThemeService);
+
   private readonly router = inject(Router);
+
   private readonly document = inject(DOCUMENT);
+
   private readonly injector = inject(Injector);
+
   private readonly locale = inject(LOCALE_ID);
+
+  private readonly destroyRef = inject(DestroyRef);
+
   private readonly scrollLock = createBlockScrollStrategy(this.injector);
   readonly canSwitchLocale =
     localeBundlePath(this.document.baseURI, this.locale, this.router.url) !== null;
-  private readonly destroyRef = inject(DestroyRef);
   private readonly topbar = viewChild<ElementRef<HTMLElement>>('topbar');
   private readonly closeButton = viewChild<ElementRef<HTMLButtonElement>>('closeButton');
   private readonly toggleButton = viewChild<ElementRef<HTMLButtonElement>>('toggleButton');

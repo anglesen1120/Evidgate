@@ -32,8 +32,9 @@ export const ROTATION_CLOCK = new InjectionToken<() => Date>('Settings rotation 
   `,
 })
 export class RotationReminderChipComponent {
-  readonly reference = input.required<Pick<IngestTokenView, 'status' | 'expires_at'>>();
   private readonly clock = inject(ROTATION_CLOCK);
+
+  readonly reference = input.required<Pick<IngestTokenView, 'status' | 'expires_at'>>();
   readonly now = input<Date>();
   protected readonly reminder = computed(() =>
     rotationReminder(this.reference(), this.now() ?? this.clock()),

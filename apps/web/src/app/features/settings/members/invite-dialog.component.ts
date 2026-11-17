@@ -192,10 +192,14 @@ import { InviteRevealComponent } from './invite-reveal.component';
 })
 export class InviteDialogComponent {
   protected readonly store = inject(MembersStore);
+
   protected readonly session = inject(SessionStore);
+
   protected readonly viewport = inject(NarrowMutationPolicy);
-  protected readonly copy = MEMBERS_COPY;
+
   private readonly slot = inject(RevealSlot);
+
+  protected readonly copy = MEMBERS_COPY;
   protected readonly revealing = signal(false);
   readonly completed = output<void>();
   protected readonly opened = signal(false);

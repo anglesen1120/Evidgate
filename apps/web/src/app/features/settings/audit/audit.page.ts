@@ -51,14 +51,10 @@ const VISIBLE_ROW_LIMIT = 25;
   },
 })
 export class AuditPage {
-  protected readonly actorLabel = (value: unknown): string => {
-    if (typeof value !== 'string' || !value) return this.copy.anyActor;
-    return Object.hasOwn(AUDIT_ACTOR_TYPE_LABELS, value)
-      ? AUDIT_ACTOR_TYPE_LABELS[value as keyof typeof AUDIT_ACTOR_TYPE_LABELS]
-      : value;
-  };
   protected readonly store = inject(AuditStore);
+
   protected readonly session = inject(SessionStore);
+
   /**
    * The `audit` sidebar entry mounts this page directly under the app shell, so the page owns the
    * one `h1`; as a Settings tab the shell's `h1` ("Settings") is the page heading and this is an
@@ -66,6 +62,16 @@ export class AuditPage {
    */
   protected readonly ownsPageHeading =
     inject(ActivatedRoute).snapshot.data['pageHeadingLevel'] === 1;
+
+  /** The active build locale: the browse bound is a number, grouped the way that locale does. */
+  private readonly locale = inject(LOCALE_ID);
+
+  protected readonly actorLabel = (value: unknown): string => {
+    if (typeof value !== 'string' || !value) return this.copy.anyActor;
+    return Object.hasOwn(AUDIT_ACTOR_TYPE_LABELS, value)
+      ? AUDIT_ACTOR_TYPE_LABELS[value as keyof typeof AUDIT_ACTOR_TYPE_LABELS]
+      : value;
+  };
   protected readonly pageHeadingSize = 'page' as const;
   protected readonly sectionHeadingSize = 'section' as const;
   protected readonly subsectionHeadingSize = 'subsection' as const;
@@ -111,8 +117,6 @@ export class AuditPage {
   );
   private readonly heading = viewChild<ElementRef<HTMLHeadingElement>>('heading');
   private readonly table = viewChild(AuditTableComponent);
-  /** The active build locale: the browse bound is a number, grouped the way that locale does. */
-  private readonly locale = inject(LOCALE_ID);
   protected readonly copy = {
     title: $localize`:@@settings.audit.title:Audit log`,
     loading: $localize`:@@settings.audit.loading:Loading audit activity…`,

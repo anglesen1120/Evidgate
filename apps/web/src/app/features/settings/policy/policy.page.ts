@@ -63,11 +63,16 @@ import { RevisionDetailComponent } from './revision-detail.component';
 })
 export class PolicyPage {
   protected readonly store = inject(PolicyStore);
+
   private readonly session = inject(SessionStore);
+
   private readonly route = inject(ActivatedRoute);
+
   private readonly injector = inject(Injector);
-  protected readonly canWrite = computed(() => this.session.has('policy:write'));
+
   protected readonly mutationPolicy = inject(NarrowMutationPolicy);
+
+  protected readonly canWrite = computed(() => this.session.has('policy:write'));
   protected readonly sectionSize = 'section' as const;
   protected readonly valuesTab = 'values' as const;
   protected readonly compareTab = 'compare' as const;
