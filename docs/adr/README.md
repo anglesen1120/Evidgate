@@ -30,3 +30,4 @@
 | [0010-audit-chain-keyed-hash-and-external-checkpoints.md](0010-audit-chain-keyed-hash-and-external-checkpoints.md) | Audit chain: HMAC-keyed hash, key custody and rotation, signed external checkpoints | proposed | 2026-10-28 |
 | [0011-spartan-tailwind-foundation.md](0011-spartan-tailwind-foundation.md) | Spartan Brain, locally owned Helm and Tailwind v4 | accepted | 2026-11-05 |
 | [0012-observability-backend-and-retention.md](0012-observability-backend-and-retention.md) | Observability backend with per-signal retention and cost limits | accepted | 2026-11-05 |
+| [0013-picomatch-redos-exception.md](0013-picomatch-redos-exception.md) | Time-boxed exception for the picomatch ReDoS advisory (GHSA-fc5q-39xc-vjpf) | accepted | 2026-11-18 |
