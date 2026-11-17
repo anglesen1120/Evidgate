@@ -149,9 +149,16 @@ describe('RevisionDiffComponent', { timeout: 15_000 }, () => {
       }),
     );
 
-    const { root } = await render();
+    // Angular reports a duplicate track key as a console warning (NG0955), not as a throw, so the
+    // assertion has to look at the warning: a path- or value-derived key trips it for this fixture.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const { fixture, root } = await render();
+    await choose(fixture, root, '#policy-diff-target', 'Revision 1');
+    await choose(fixture, root, '#policy-diff-target', 'Revision 2');
     const rows = [...root.querySelectorAll('[data-diff-row]')];
 
+    expect(warn.mock.calls.flat().filter((entry) => String(entry).includes('955'))).toHaveLength(0);
     expect(rows.map((row) => row.getAttribute('data-diff-kind'))).toEqual([
       'removed',
       'added',
