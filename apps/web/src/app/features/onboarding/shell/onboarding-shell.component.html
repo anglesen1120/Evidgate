@@ -75,7 +75,7 @@
                   #stepButton
                   [variant]="outlineVariant"
                   type="button"
-                  class="grid h-auto min-h-(--eg-control-touch) w-full min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start justify-start gap-x-(--eg-space-3) gap-y-(--eg-space-2) whitespace-normal p-(--eg-space-4) text-start aria-[current=step]:border-primary aria-[current=step]:bg-(--eg-accent-soft) aria-[current=step]:text-foreground aria-[disabled=true]:cursor-not-allowed min-[768px]:h-full"
+                  class="grid h-auto min-h-(--eg-control-touch) w-full min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start justify-start gap-x-(--eg-space-3) gap-y-(--eg-space-2) whitespace-normal p-(--eg-space-3) text-start aria-[current=step]:border-primary aria-[current=step]:bg-(--eg-accent-soft) aria-[current=step]:text-foreground aria-[disabled=true]:cursor-not-allowed min-[768px]:h-full min-[768px]:content-start min-[768px]:p-(--eg-space-4)"
                   [attr.data-testid]="'onboarding-select-step-' + step.number"
                   [attr.aria-current]="store.viewStep() === step.number ? 'step' : null"
                   [attr.aria-disabled]="!canSelect(step.number)"

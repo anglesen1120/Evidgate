@@ -4,7 +4,12 @@
   [attr.aria-busy]="busy()"
 >
   <p>{{ intro }}</p>
-  <p data-testid="connect-reveal-status" role="status" [attr.aria-live]="'polite'">
+  <p
+    [class.sr-only]="!slot.current()"
+    data-testid="connect-reveal-status"
+    role="status"
+    [attr.aria-live]="'polite'"
+  >
     @if (slot.current()) {
       {{ revealShownLabel }}
     }
@@ -91,7 +96,8 @@
     </app-inline-feedback>
   }
   <p
-    class="min-h-(--eg-leading-sm) focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
+    class="focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
+    [class.sr-only]="!busy()"
     role="status"
     tabindex="-1"
     #busyStatus

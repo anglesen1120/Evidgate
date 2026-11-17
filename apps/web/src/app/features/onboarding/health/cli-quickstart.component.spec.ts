@@ -170,6 +170,8 @@ describe('CliQuickstartComponent', () => {
   });
 
   it('announces successful copying in a persistent polite live region', async () => {
+    const announcement = status();
+    expect(announcement.classList.contains('sr-only')).toBe(true);
     copy().click();
     await Promise.resolve();
     fixture.detectChanges();
@@ -177,6 +179,8 @@ describe('CliQuickstartComponent', () => {
     expect(status().getAttribute('aria-live')).toBe('polite');
     expect(status().getAttribute('aria-atomic')).toBe('true');
     expect(status().textContent).not.toContain(token.prefix);
+    expect(status()).toBe(announcement);
+    expect(announcement.classList.contains('sr-only')).toBe(false);
   });
 
   it('keeps the commands selectable and focuses them with manual-copy guidance after rejection', async () => {
@@ -262,6 +266,7 @@ describe('CliQuickstartComponent', () => {
     await Promise.resolve();
     fixture.detectChanges();
     expect(status().textContent?.trim()).toBe('');
+    expect(status().classList.contains('sr-only')).toBe(true);
     expect(snippet().textContent).toContain("EVIDGATE_PROJECT='replacement'");
     expect(copy().getAttribute('aria-disabled')).toBe('false');
   });

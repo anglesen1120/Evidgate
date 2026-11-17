@@ -7,6 +7,14 @@ import { LOCALES, seedStoredTheme, THEMES } from './support';
 const WIDTHS = [390, 768, 1024, 1280, 1440] as const;
 
 async function expectNavigatorGeometry(page: Page, width: number): Promise<void> {
+  // Viewport-dependent Angular content settles after the browser's resize event.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    )
+    .toBeLessThanOrEqual(1);
   const layout = await page.getByTestId('onboarding-stepper').evaluate((list) => {
     const card = list.closest('section');
     const body = document.getElementById('onboarding-step-body');
@@ -26,6 +34,7 @@ async function expectNavigatorGeometry(page: Page, width: number): Promise<void>
           y: bounds.y,
           width: bounds.width,
           height: bounds.height,
+          labelY: label.getBoundingClientRect().y,
           textFits: Array.from(range.getClientRects()).every(
             (line) =>
               line.left >= bounds.left - 1 &&
@@ -47,6 +56,7 @@ async function expectNavigatorGeometry(page: Page, width: number): Promise<void>
     expect(step.height).toBeGreaterThanOrEqual(44);
     expect(step.textFits).toBe(true);
     expect(Math.abs(width >= 768 ? step.y - first.y : step.x - first.x)).toBeLessThanOrEqual(1);
+    if (width >= 768) expect(Math.abs(step.labelY - first.labelY)).toBeLessThanOrEqual(1);
   }
 }
 
@@ -73,6 +83,30 @@ for (const locale of LOCALES) {
         const screenshot = testInfo.outputPath(`onboarding-${locale}-${theme}-${width}.png`);
         await page.screenshot({ path: screenshot, fullPage: true });
         await testInfo.attach('onboarding', { path: screenshot, contentType: 'image/png' });
+      });
+    }
+    for (const seed of ['onboarding-empty', 'onboarding-enabled'] as const) {
+      test(`navigator boundary resources — ${seed}, ${locale}, ${theme}`, async ({ page }) => {
+        await seedStoredTheme(page, theme);
+        await page.goto(onboardingUrl(locale, seed));
+        await expectCurrentStep(page, seed === 'onboarding-empty' ? 1 : 5);
+        await page.evaluate(async () => {
+          await document.fonts.ready;
+        });
+        const count = page.getByTestId('onboarding-progress-count');
+        const confirmed = await count.textContent();
+        for (const width of [320, 390, 767, 768, 1024, 1279, 1280, 1440]) {
+          await page.setViewportSize({ width, height: 1100 });
+          await expectNavigatorGeometry(page, width);
+          if (seed === 'onboarding-enabled') {
+            for (const step of [1, 5] as const) {
+              await page.getByTestId(`onboarding-select-step-${step}`).click();
+              await expectCurrentStep(page, step);
+              await expect(count).toHaveText(confirmed ?? '');
+              await expectNavigatorGeometry(page, width);
+            }
+          }
+        }
       });
     }
   }
