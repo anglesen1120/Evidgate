@@ -4,6 +4,9 @@
   [attr.aria-busy]="busy()"
 >
   <p>{{ intro }}</p>
+  @if (bindingPermitted() || tokenPermitted()) {
+    <app-desktop-required-notice />
+  }
   <p
     [class.sr-only]="!slot.current()"
     data-testid="connect-reveal-status"
@@ -120,9 +123,6 @@
     [token]="quickstartToken()"
     [binding]="quickstartBinding()"
   />
-  @if (bindingPermitted() || tokenPermitted()) {
-    <app-desktop-required-notice />
-  }
   <app-form-required-note *appDesktopMutation />
   <div class="grid min-w-0 gap-(--eg-space-5) min-[1280px]:grid-cols-2 min-[1280px]:items-start">
     <section

@@ -1040,6 +1040,12 @@
           <context context-type="linenumber">154</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="onboarding.shell.show-steps" datatype="html"><source>Show all steps</source></trans-unit>
+      <trans-unit id="onboarding.shell.hide-steps" datatype="html"><source>Hide steps</source></trans-unit>
+      <trans-unit id="onboarding.shell.confirmed-project" datatype="html"><source>Confirmed project:</source></trans-unit>
+      <trans-unit id="onboarding.shell.viewed-summary" datatype="html"><source>Viewing <x id="NUMBER" equiv-text="number"/> of <x id="TOTAL" equiv-text="total"/>: <x id="LABEL" equiv-text="label"/></source></trans-unit>
+      <trans-unit id="onboarding.shell.next-summary" datatype="html"><source>Next required <x id="NUMBER" equiv-text="number"/> of <x id="TOTAL" equiv-text="total"/>: <x id="LABEL" equiv-text="label"/>.</source></trans-unit>
+      <trans-unit id="onboarding.shell.all-complete" datatype="html"><source>All <x id="TOTAL" equiv-text="total"/> steps complete.</source></trans-unit>
       <trans-unit id="onboarding.shell.required" datatype="html">
         <source>Next required</source>
         <context-group purpose="location">

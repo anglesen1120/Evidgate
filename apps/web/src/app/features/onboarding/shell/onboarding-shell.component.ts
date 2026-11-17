@@ -1,7 +1,9 @@
 import { FocusKeyManager, type FocusableOption } from '@angular/cdk/a11y';
+import { DOCUMENT, LocationStrategy } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   Injector,
   afterNextRender,
   afterRenderEffect,
@@ -12,7 +14,6 @@ import {
   viewChild,
   viewChildren,
 } from '@angular/core';
-import type { ElementRef } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   ActivatedRoute,
@@ -27,6 +28,8 @@ import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmIcon } from '@evidgate/ui/icon';
 
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
+import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
 import {
   ErrorPatternComponent,
   ForbiddenPatternComponent,
@@ -39,6 +42,15 @@ import { CreateProjectPage } from '../steps/create-project.page';
 import { ConnectCiPage } from '../steps/connect-ci.page';
 import { EnableCollectionPage } from '../steps/enable-collection.page';
 import { EvidencePanelComponent } from './evidence-panel.component';
+import { handOffCompactNavigatorFocus } from './compact-navigator-focus';
+import {
+  ONBOARDING_STEP_ICONS,
+  ONBOARDING_STEPS,
+  completedStepCount,
+  completionSummary,
+  nextSummary,
+  viewedSummary,
+} from './onboarding-summaries';
 import { StepPendingComponent } from './step-pending.component';
 
 @Component({
@@ -71,32 +83,56 @@ export class OnboardingShellComponent {
 
   private readonly injector = inject(Injector);
 
+  protected readonly viewport = inject(NarrowMutationPolicy);
+
+  private readonly location = inject(LocationStrategy);
+
+  /** The wizard's own address, kept current so the ledger link keeps its route and query. */
+  private readonly currentUrl = signal('');
+
   protected readonly outlineVariant = 'outline';
   protected readonly pageHeadingSize = 'page' as const;
   protected readonly sectionHeadingSize = 'section' as const;
   protected readonly loadingLabel = $localize`:@@onboarding.shell.loading:Loading project setup`;
-  protected readonly completedCount = computed(() => {
-    const done = this.store.done();
-    let completed = 0;
-    for (const step of this.steps) if (done[step.number]) completed += 1;
-    return completed;
-  });
-  protected readonly progressText = computed(() => {
-    const completed = this.completedCount();
-    const total = this.steps.length;
-    return $localize`:@@onboarding.shell.progress-count:${completed}:COMPLETED: of ${total}:TOTAL: steps complete`;
-  });
+  protected readonly completedCount = computed(() =>
+    completedStepCount(this.store.done(), this.steps),
+  );
+  protected readonly progressText = computed(() =>
+    completionSummary(this.completedCount(), this.steps.length),
+  );
   private readonly heading = viewChild<ElementRef<HTMLHeadingElement>>('stepHeading');
   private readonly stepButtons = viewChildren<ElementRef<HTMLButtonElement>>('stepButton');
+  private readonly stepToggle = viewChild<ElementRef<HTMLButtonElement>>('stepToggle');
+  private readonly resourcesLedger = viewChild<unknown, ElementRef<HTMLElement>>(
+    'resourcesLedger',
+    { read: ElementRef },
+  );
+  protected readonly stepsExpanded = signal(false);
+  protected readonly stepListId = 'onboarding-step-list';
+  protected readonly showStepsLabel = $localize`:@@onboarding.shell.show-steps:Show all steps`;
+  protected readonly hideStepsLabel = $localize`:@@onboarding.shell.hide-steps:Hide steps`;
+  protected readonly confirmedProjectLabel = $localize`:@@onboarding.shell.confirmed-project:Confirmed project:`;
+  protected readonly resourcesLabel = $localize`:@@onboarding.evidence.title:Created resources`;
+  protected readonly resourcesHref = computed(() => {
+    // `router.url` is the in-app address; the location strategy puts the locale base in front of
+    // it, which is what makes the link resolve to this wizard rather than to the base route.
+    const [path = ''] = this.currentUrl().split('#');
+    return `${this.location.prepareExternalUrl(path)}#onboarding-resources`;
+  });
+  protected readonly confirmedProjectName = computed(() =>
+    escapeFormatChars(this.store.project()?.name ?? ''),
+  );
+  protected readonly viewedSummary = computed(() =>
+    viewedSummary(this.steps, this.store.viewStep()),
+  );
+  protected readonly nextSummary = computed(() =>
+    nextSummary(this.steps, this.store.currentStep()),
+  );
   private stepNavigation: FocusKeyManager<FocusableOption> | undefined;
   protected readonly hasLockedSteps = computed(() =>
     this.steps.some((step) => !this.canSelect(step.number)),
   );
-  protected readonly stepIcons = {
-    complete: 'lucideCircleCheck',
-    required: 'lucideClock',
-    upcoming: 'lucideCircle',
-  } as const;
+  protected readonly stepIcons = ONBOARDING_STEP_ICONS;
   protected readonly stepBodyId = 'onboarding-step-body';
   protected readonly keyboardHelpId = 'onboarding-step-help';
   protected readonly requiredLabel = $localize`:@@onboarding.shell.required:Next required`;
@@ -169,17 +205,20 @@ export class OnboardingShellComponent {
   protected readonly gatedReason = $localize`:@@onboarding.shell.next-disabled:Complete this step before continuing.`;
   protected readonly finalReason = $localize`:@@onboarding.shell.final-step:There is no next setup step.`;
   protected readonly projectCreatedLabel = $localize`:@@onboarding.shell.project-created:Project created`;
-  protected readonly steps: readonly { number: StepNumber; label: string }[] = [
-    { number: 1, label: $localize`:@@onboarding.step.project:Create project` },
-    { number: 2, label: $localize`:@@onboarding.step.ci:Connect CI` },
-    { number: 3, label: $localize`:@@onboarding.step.sample:Sample run` },
-    { number: 4, label: $localize`:@@onboarding.step.compare:Compare reports` },
-    { number: 5, label: $localize`:@@onboarding.step.enable:Enable collection` },
-  ];
+  protected readonly steps = ONBOARDING_STEPS;
 
   constructor() {
+    this.currentUrl.set(this.router.url);
     this.wireCreatedStepNavigation();
     this.wireRouteScope();
+    handOffCompactNavigatorFocus({
+      document: inject(DOCUMENT),
+      narrow: this.viewport.narrow,
+      stepsExpanded: this.stepsExpanded,
+      toggle: () => this.stepToggle()?.nativeElement,
+      stepButtons: () => this.stepButtons().map(({ nativeElement }) => nativeElement),
+      viewedButton: () => this.viewedStepButton(),
+    });
     afterRenderEffect(() => this.focusMovedStep());
     afterRenderEffect(() => this.focusReloadFailure());
     effect((onCleanup) => {
@@ -223,6 +262,7 @@ export class OnboardingShellComponent {
           this.focusedToken = this.store.focusToken();
           return;
         }
+        this.currentUrl.set(this.router.url);
         if (!this.announceCreatedStep() || this.createdHandoff() !== 'none') return;
         this.queueCreatedHandoff();
       });
@@ -371,11 +411,39 @@ export class OnboardingShellComponent {
     heading.focus();
   }
 
+  protected focusResources(event: MouseEvent): void {
+    // A modified click belongs to the browser: a new tab or window still gets the route-correct
+    // address, so only the plain primary click is the in-page move this handler owns.
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
+      return;
+    }
+    const resources = this.resourcesLedger()?.nativeElement;
+    if (resources === undefined) return;
+    event.preventDefault();
+    resources.focus();
+    resources.scrollIntoView?.({ block: 'start' });
+  }
+
   protected selectStep(step: StepNumber): void {
-    if (this.canSelect(step)) this.store.selectStep(step);
+    if (!this.canSelect(step)) return;
+    this.stepsExpanded.set(false);
+    const reselecting = step === this.store.viewStep();
+    this.store.selectStep(step);
+    // Reopening the viewed step bumps no focus token, so no other pass will move focus there. A
+    // different step renders a new heading: the token's pass focuses it once the name is right.
+    if (reselecting) this.heading()?.nativeElement.focus();
   }
 
   protected navigateSteps(event: KeyboardEvent): void {
+    // The breakpoint signal reaches this handler a task after the resize, so a key pressed on the
+    // frame the layout changes still reads the old layout from it; the observer answers for the
+    // viewport that is on screen now, like every other mutation guard.
+    if (event.key === 'Escape' && !this.viewport.allowsMutation() && this.stepsExpanded()) {
+      event.preventDefault();
+      this.stepsExpanded.set(false);
+      this.stepToggle()?.nativeElement.focus();
+      return;
+    }
     const index = this.stepButtons().findIndex(
       ({ nativeElement }) => nativeElement === event.target,
     );
@@ -387,6 +455,12 @@ export class OnboardingShellComponent {
   protected canSelect(step: StepNumber): boolean {
     const current = this.store.currentStep();
     return current === 'enabled' || step <= current;
+  }
+
+  /** The navigator button of the step on screen; the wide layout's replacement for the toggle. */
+  private viewedStepButton(): HTMLElement | undefined {
+    const viewed = this.steps.findIndex((step) => step.number === this.store.viewStep());
+    return this.stepButtons()[viewed]?.nativeElement;
   }
 
   protected reload(): void {

@@ -3456,6 +3456,12 @@
       <trans-unit id="onboarding.health.status-awaiting" datatype="html"><source>Awaiting CI</source><target>Chờ CI</target></trans-unit>
       <trans-unit id="onboarding.shell.loading" datatype="html"><source>Loading project setup</source><target>Đang tải thiết lập dự án</target></trans-unit>
       <trans-unit id="onboarding.shell.progress-count" datatype="html"><source><x id="COMPLETED" equiv-text="completed"/> of <x id="TOTAL" equiv-text="total"/> steps complete</source><target>Đã hoàn thành <x id="COMPLETED" equiv-text="completed"/>/<x id="TOTAL" equiv-text="total"/> bước</target></trans-unit>
+      <trans-unit id="onboarding.shell.show-steps" datatype="html"><source>Show all steps</source><target>Xem tất cả các bước</target></trans-unit>
+      <trans-unit id="onboarding.shell.hide-steps" datatype="html"><source>Hide steps</source><target>Thu gọn các bước</target></trans-unit>
+      <trans-unit id="onboarding.shell.confirmed-project" datatype="html"><source>Confirmed project:</source><target>Dự án đã xác nhận:</target></trans-unit>
+      <trans-unit id="onboarding.shell.viewed-summary" datatype="html"><source>Viewing <x id="NUMBER" equiv-text="number"/> of <x id="TOTAL" equiv-text="total"/>: <x id="LABEL" equiv-text="label"/></source><target>Đang xem bước <x id="NUMBER" equiv-text="number"/>/<x id="TOTAL" equiv-text="total"/>: <x id="LABEL" equiv-text="label"/></target></trans-unit>
+      <trans-unit id="onboarding.shell.next-summary" datatype="html"><source>Next required <x id="NUMBER" equiv-text="number"/> of <x id="TOTAL" equiv-text="total"/>: <x id="LABEL" equiv-text="label"/>.</source><target>Bước cần làm <x id="NUMBER" equiv-text="number"/>/<x id="TOTAL" equiv-text="total"/>: <x id="LABEL" equiv-text="label"/>.</target></trans-unit>
+      <trans-unit id="onboarding.shell.all-complete" datatype="html"><source>All <x id="TOTAL" equiv-text="total"/> steps complete.</source><target>Đã hoàn thành tất cả <x id="TOTAL" equiv-text="total"/> bước.</target></trans-unit>
       <trans-unit id="onboarding.shell.required" datatype="html"><source>Next required</source><target>Bước cần làm</target></trans-unit>
       <trans-unit id="onboarding.shell.upcoming" datatype="html"><source>Upcoming</source><target>Sắp tới</target></trans-unit>
       <trans-unit id="onboarding.shell.viewing" datatype="html"><source>Viewing</source><target>Đang xem</target></trans-unit>

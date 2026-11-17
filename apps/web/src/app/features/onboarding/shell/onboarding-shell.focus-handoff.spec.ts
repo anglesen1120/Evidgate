@@ -54,6 +54,7 @@ interface RouterStub {
   /** The navigation still activating, as `Router.currentNavigation` exposes it. */
   navigation: unknown;
   currentNavigation: () => unknown;
+  url: string;
 }
 
 function createRouterStub(): RouterStub {
@@ -61,6 +62,7 @@ function createRouterStub(): RouterStub {
     events: new Subject<unknown>(),
     navigation: null,
     currentNavigation: () => stub.navigation,
+    url: '/orgs/org-1/onboarding',
   };
   return stub;
 }

@@ -1,6 +1,7 @@
 // The store the onboarding shell reads, in the shape its template and its focus passes bind.
 // Shared by the shell's specs, so a case drives one concern — focus, routing, the scope a create
 // opened — without a progress read behind it.
+import { LocationStrategy } from '@angular/common';
 import {
   Component,
   Directive,
@@ -26,6 +27,7 @@ import { BehaviorSubject, Subject } from 'rxjs';
 
 import type { StepNumber } from '../data/step-derivation';
 import type { OnboardingProgress } from '../data/onboarding-progress.service';
+import { OnboardingViewport } from '../onboarding-viewport.testing';
 import { OnboardingStore } from '../onboarding.store';
 import { ConnectCiPage } from '../steps/connect-ci.page';
 import { CreateProjectPage } from '../steps/create-project.page';
@@ -163,8 +165,16 @@ export class EnableCollectionStub {
  * The router the shell reads for its navigation handoff. These cases arrive with the navigation
  * already finished, so no event is in flight and none waits for the created step's handoff.
  */
-export function finishedRouter(): { events: Subject<unknown>; currentNavigation: () => unknown } {
-  return { events: new Subject<unknown>(), currentNavigation: () => null };
+export function finishedRouter(): {
+  events: Subject<unknown>;
+  currentNavigation: () => unknown;
+  url: string;
+} {
+  return {
+    events: new Subject<unknown>(),
+    currentNavigation: () => null,
+    url: '/orgs/org-1/onboarding',
+  };
 }
 
 // Tests replace the selector at runtime to intercept RouterLink without changing production templates.
@@ -175,6 +185,7 @@ export class ShellRouterLinkStub {
 }
 
 export interface MountOptions {
+  readonly viewport?: OnboardingViewport;
   /** The scope the stub store reports as the one-shot create marker; nothing by default. */
   readonly created?: () => StubScope | null;
   /** The project address the route carries; the org root by default. */
@@ -214,8 +225,13 @@ export async function mountShell(options: MountOptions = {}): Promise<MountedShe
     imports: [OnboardingShellComponent],
     providers: [
       provideZonelessChangeDetection(),
+      (options.viewport ?? new OnboardingViewport()).provider,
       { provide: OnboardingStore, useValue: store },
       { provide: Router, useValue: finishedRouter() },
+      {
+        provide: LocationStrategy,
+        useValue: { prepareExternalUrl: (internal: string) => `/vi${internal}` },
+      },
       {
         provide: ActivatedRoute,
         useValue: { pathFromRoot: [{ paramMap: orgParams }, { paramMap: childParams }] },

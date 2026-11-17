@@ -34,6 +34,12 @@ test.describe('W4 — resume at step 3, Back into step 2, health panel and quick
 
     // All five steps are discoverable; the last two announce their unmet prerequisite.
     await enterMainByKeyboard(page);
+    await pressTab(page);
+    await expectKeyboardFocus(
+      page,
+      page.locator('[data-testid="onboarding-project-context"] a'),
+      'Created resources',
+    );
     await pressTab(page, 3);
     await expectKeyboardFocus(page, stepButton(page, 3), 'the current step');
     for (const step of [4, 5] as const) {

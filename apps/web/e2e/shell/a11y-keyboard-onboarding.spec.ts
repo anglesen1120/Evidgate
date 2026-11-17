@@ -221,6 +221,12 @@ test.describe('W2 — step 2, connect CI (OIDC then token)', () => {
     // The skip link enters one navigator; future steps remain focusable with a prerequisite.
     await enterMainByKeyboard(page);
     await pressTab(page);
+    await expectKeyboardFocus(
+      page,
+      page.locator('[data-testid="onboarding-project-context"] a'),
+      'Created resources',
+    );
+    await pressTab(page);
     await expectKeyboardFocus(page, stepButton(page, 1), 'stepper 1 is enabled at step 2');
     await pressTab(page);
     await expectKeyboardFocus(page, stepButton(page, 2), 'stepper 2 is the current step');

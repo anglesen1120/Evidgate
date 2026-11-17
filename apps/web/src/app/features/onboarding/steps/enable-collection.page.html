@@ -205,7 +205,7 @@
         <button
           hlmBtn
           [variant]="'outline'"
-          class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere"
+          class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
           data-testid="enable-collection-read-again"
           type="button"
           #readAgainControl
@@ -221,7 +221,7 @@
       <button
         *appDesktopMutation
         hlmBtn
-        class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere"
+        class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
         data-testid="enable-collection-confirm"
         type="submit"
         [disabled]="confirmDisabled()"
@@ -279,7 +279,7 @@
         <button
           hlmBtn
           [variant]="'outline'"
-          class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere"
+          class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
           data-testid="enable-collection-retry-read"
           type="button"
           [disabled]="retryDisabled()"
