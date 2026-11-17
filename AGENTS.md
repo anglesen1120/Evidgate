@@ -43,7 +43,7 @@ Evidgate collects automated test results (web, API, mobile, unit) from customer 
 
 ## Planned stack (DECISIONS §4)
 
-Server/worker: .NET 10 LTS · ASP.NET Core minimal APIs · CQRS (`Mediator` 3, EF Core 10 write model, Dapper read model) · PostgreSQL 18 (RLS, FORCE) · DbUp + plain SQL migrations · own transactional outbox + task queue (`SKIP LOCKED`), own lease tables for runner jobs · OpenTelemetry · xUnit v3, Shouldly, Testcontainers. Web: Angular 22 (standalone, zoneless, signals) + `@ngrx/signals` · Vitest, Playwright. Customer-side CLI/adapters/agent: Node.js 26 LTS · TypeScript 6.0 · npm workspaces. S3 API. Contract-first: OpenAPI 3.1 + JSON Schema in `contracts/`. Code rules: 00 §5.5 (CQRS), §5.6 (Angular), §5.7 (performance/security).
+Server/worker: .NET 10 LTS · ASP.NET Core minimal APIs · CQRS (`Mediator` 3, EF Core 10 write model, Dapper read model) · PostgreSQL 18 (RLS, FORCE) · DbUp + plain SQL migrations · own transactional outbox + task queue (`SKIP LOCKED`), own lease tables for runner jobs · OpenTelemetry · xUnit v3, Shouldly, Testcontainers. Web: Angular 22 (standalone, zoneless, signals) + `@ngrx/signals` · Vitest, Playwright. Customer-side CLI/adapters/agent: Node.js 26 LTS · TypeScript 6.0 · npm workspaces. S3 API. Contract-first: OpenAPI 3.1 + JSON Schema in `contracts/`. Code rules: 00 §5.5 (CQRS), [`docs/engineering/ui-rules.md`](docs/engineering/ui-rules.md) §Angular rules for UI work (the binding text of 00 §5.6), §5.7 (performance/security).
 
 ## Invariants code must keep
 
@@ -60,7 +60,7 @@ Full rules, evidence and gates: [`docs/engineering/agent-code-rules.md`](docs/en
 - **Comments say why, in about 3 lines.** No plan/task/review ids in source code; those go in the commit and PR. Update or delete the comments your change makes false.
 - **Search before you write.** Check the helper catalogue (rules §7) and `rg`. A second copy of security, protocol or format logic is a defect: extract it.
 - **Framework first.** No hand-rolled HTTP server, redactor, regex parser, gzip, dialog or store without an ADR.
-- **UI format.** Follow [`docs/engineering/ui-rules.md`](docs/engineering/ui-rules.md) (UI1–UI55): framework components only, consistent chips/tables, long-content recovery and frozen mockup conformance.
+- **UI format.** Follow [`docs/engineering/ui-rules.md`](docs/engineering/ui-rules.md) (UI1–UI61): framework components only, consistent chips/tables, long-content recovery and frozen mockup conformance.
 - **No scaffolding in production.** No `InMemory*`, `Mock*` or `Slice*` registered outside `IsDevelopment()`. Delete the skeleton when the real code lands.
 - **Fail closed.** No check may be skipped because of a return type or a missing attribute; every `[Permission]` handler returns `Result`.
 - **An invariant ships with the code that triggers it and a test that makes it fire.** A reason code nothing can set is not done.

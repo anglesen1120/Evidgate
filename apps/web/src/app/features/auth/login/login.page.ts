@@ -201,19 +201,26 @@ import { LOGIN_EXTENSION_LOADER } from './login-extension';
   `,
 })
 export class LoginPage {
+  protected readonly auth = inject(AuthFlow);
+
+  protected readonly theme = inject(ThemeService);
+
+  private readonly document = inject(DOCUMENT);
+
+  private readonly locale = inject(LOCALE_ID);
+
+  private readonly navigate = inject(LOCATION_NAVIGATE);
+
+  private readonly loadExtension = inject(LOGIN_EXTENSION_LOADER);
+
+  private readonly router = inject(Router);
+
   protected readonly pageHeadingSize = 'page' as const;
   protected readonly subsectionHeadingSize = 'subsection' as const;
-  protected readonly auth = inject(AuthFlow);
-  protected readonly theme = inject(ThemeService);
-  private readonly document = inject(DOCUMENT);
-  private readonly locale = inject(LOCALE_ID);
-  private readonly navigate = inject(LOCATION_NAVIGATE);
   private readonly localeBase = this.document.baseURI;
   readonly canSwitchLocale = localeBundlePath(this.localeBase, this.locale, '/login') !== null;
   readonly darkLabel = $localize`:@@shell.theme.dark-mode:Dark mode`;
-  private readonly loadExtension = inject(LOGIN_EXTENSION_LOADER);
   protected readonly extension = resource({ loader: () => this.loadExtension() });
-  private readonly router = inject(Router);
   /** The page's own focus target: `tabindex="-1"`, so it is reachable but never a Tab stop. */
   private readonly headingTarget = viewChild<ElementRef<HTMLElement>>('loginHeading');
 

@@ -127,10 +127,11 @@ import { activationInstantLabel } from '../steps/default-policy';
   `,
 })
 export class EvidencePanelComponent {
+  protected readonly dateTimeFormat = shortDateFormat(inject(LOCALE_ID), true, 'medium');
+
   readonly progress = input<OnboardingProgress | null>(null);
   readonly refreshFailed = input(false);
   protected readonly sectionHeadingSize = 'section' as const;
-  protected readonly dateTimeFormat = shortDateFormat(inject(LOCALE_ID), true, 'medium');
   protected readonly sourceLabel = $localize`:@@onboarding.evidence.source:Read from server-confirmed resources, not browser completion flags.`;
   protected readonly activatedAt = computed(() =>
     activationInstantLabel(this.activation()?.activated_at),

@@ -31,8 +31,9 @@ import { shortDateFormat } from './short-date-format';
   `,
 })
 export class AbsoluteTimeComponent {
-  readonly value = input.required<string | null | undefined>();
   private readonly locale = inject(LOCALE_ID);
+
+  readonly value = input.required<string | null | undefined>();
   private readonly dateTimeFormat = shortDateFormat(this.locale, true, 'medium');
   protected readonly utcLabel = $localize`:@@shared.values.utc:UTC`;
   protected readonly unavailable = $localize`:@@shared.values.time-unavailable:Time unavailable`;

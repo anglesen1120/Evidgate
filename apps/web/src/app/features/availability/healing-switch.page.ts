@@ -36,11 +36,14 @@ import { SwitchScopeHierarchy } from './switch-scope-hierarchy.component';
   host: { class: 'block min-w-0 text-sm text-foreground wrap-anywhere' },
 })
 export class HealingSwitchPage {
+  private readonly narrowPolicy = inject(NarrowMutationPolicy);
+
+  protected readonly store = inject(HealingSwitchStore);
+
+  protected readonly session = inject(SessionStore);
+
   protected readonly pageHeadingSize = 'page' as const;
   protected readonly sectionHeadingSize = 'section' as const;
-  private readonly narrowPolicy = inject(NarrowMutationPolicy);
-  protected readonly store = inject(HealingSwitchStore);
-  protected readonly session = inject(SessionStore);
   protected readonly copy = HEALING_SWITCH_COPY;
   protected readonly modeLabel = healingModeLabel;
 

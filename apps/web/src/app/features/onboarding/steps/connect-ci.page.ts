@@ -103,9 +103,6 @@ import {
   host: { class: 'block min-w-0' },
 })
 export class ConnectCiPage {
-  readonly orgId = input.required<string>();
-  readonly projectId = input.required<string>();
-  readonly active = input(true);
   protected readonly store = inject(OnboardingStore);
   protected readonly slot = inject(RevealSlot);
   private readonly data = inject(OnboardingDataService);
@@ -115,6 +112,9 @@ export class ConnectCiPage {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly policy = inject(NarrowMutationPolicy);
   protected readonly dateTimeFormat = shortDateFormat(inject(LOCALE_ID), true, 'medium');
+  readonly orgId = input.required<string>();
+  readonly projectId = input.required<string>();
+  readonly active = input(true);
   private scopeVersion = 0;
   private readonly healthClock = new HealthBoundaryClock(() => this.store.tokens());
   /** The place a re-read may take, held from the press until the pass that spends it. */

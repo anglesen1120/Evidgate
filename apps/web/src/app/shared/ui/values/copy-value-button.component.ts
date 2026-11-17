@@ -91,6 +91,8 @@ let nextCopyId = 0;
   `,
 })
 export class CopyValueButtonComponent {
+  private readonly destroyRef = inject(DestroyRef);
+
   readonly value = input.required<string>();
   readonly label = input.required<string>();
   readonly copyLabel = input<string>();
@@ -101,7 +103,6 @@ export class CopyValueButtonComponent {
   protected readonly status = signal('');
   protected readonly copying = signal(false);
   private readonly result = signal<'idle' | 'copied' | 'failed'>('idle');
-  private readonly destroyRef = inject(DestroyRef);
   private attempt = 0;
   protected readonly actionLabel = computed(
     () => this.copyLabel() ?? $localize`:@@shared.values.copy-label:Copy ${this.label()}:LABEL:`,

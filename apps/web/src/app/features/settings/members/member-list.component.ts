@@ -232,6 +232,8 @@ export const MEMBERS_COPY = {
   `,
 })
 export class MemberListComponent {
+  protected readonly viewport = inject(NarrowMutationPolicy);
+
   readonly members = input.required<readonly MembershipView[]>();
   readonly canWrite = input(false);
   readonly remove = output<{ member: MembershipView; opener: HTMLElement }>();
@@ -239,7 +241,6 @@ export class MemberListComponent {
   readonly resend = output<{ member: MembershipView; opener: HTMLElement }>();
   readonly cancelInvite = output<{ member: MembershipView; opener: HTMLElement }>();
   protected readonly copy = MEMBERS_COPY;
-  protected readonly viewport = inject(NarrowMutationPolicy);
   private readonly statusCell =
     viewChild<TemplateRef<DataTableCellContext<MembershipView>>>('statusCell');
   private readonly rolesCell =

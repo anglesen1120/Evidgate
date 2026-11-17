@@ -52,13 +52,17 @@ import { CancelInviteDialogComponent } from './cancel-invite-dialog.component';
 })
 export class MembersPage {
   protected readonly store = inject(MembersStore);
+
   protected readonly session = inject(SessionStore);
+
   private readonly viewport = inject(NarrowMutationPolicy);
+
+  protected readonly ownsPageHeading =
+    inject(ActivatedRoute, { optional: true })?.snapshot.data['pageHeadingLevel'] === 1;
+
   protected readonly copy = MEMBERS_COPY;
   protected readonly pageHeadingSize = 'page' as const;
   protected readonly sectionHeadingSize = 'section' as const;
-  protected readonly ownsPageHeading =
-    inject(ActivatedRoute, { optional: true })?.snapshot.data['pageHeadingLevel'] === 1;
   protected readonly canWrite = computed(() => this.session.has('membership:write'));
   protected readonly status = computed<'loading' | 'ready' | 'error'>(() => {
     const phase = this.store.phase();

@@ -58,6 +58,14 @@ import type { AttemptRow } from './attempt-summary';
   host: { class: 'block min-w-0 text-foreground wrap-anywhere [&_p]:m-0' },
 })
 export class AttemptsTableComponent {
+  private readonly locale = inject(LOCALE_ID);
+
+  private readonly document = inject(DOCUMENT);
+
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  private readonly injector = inject(Injector);
+
   readonly attempts = input.required<AttemptRow[] | null>();
   protected readonly sectionSize = 'section' as const;
   protected readonly columnRole = {
@@ -72,7 +80,6 @@ export class AttemptsTableComponent {
   protected readonly normalisedWidth = {
     min: 'calc(14ch + var(--eg-space-4) * 2)',
   } as const satisfies DataTableColumnWidth;
-  private readonly locale = inject(LOCALE_ID);
   /** The first page's request state; `ready` with `null` attempts is the unavailable state. */
   readonly status = input<'loading' | 'ready' | 'error'>('ready');
   /** The first page's failure (`status` = error) or the failed follow-up page (`ready`). */
@@ -136,9 +143,6 @@ export class AttemptsTableComponent {
     previous: $localize`:@@runs.detail.attempts.previous:Previous page`,
     next: $localize`:@@runs.detail.attempts.next:Next page`,
   };
-  private readonly document = inject(DOCUMENT);
-  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
-  private readonly injector = inject(Injector);
   private readonly previousButton = viewChild<ElementRef<HTMLButtonElement>>('previous');
   private readonly nextButton = viewChild<ElementRef<HTMLButtonElement>>('next');
   private readonly loadMoreButton = viewChild<ElementRef<HTMLButtonElement>>('loadMore');

@@ -1,5 +1,12 @@
 {
   "$comment": "01.7.1-T4.2 (AC6): vulnerability-scan allowlist consumed by scripts/audit-deps.sh. Keyed by advisory id (GHSA-xxxx-yyyy-zzzz or CVE-YYYY-NNNNN — the last path segment of the advisory URL from 'npm audit --json' or 'dotnet list package --vulnerable --format json'). Every entry must name the accepting ADR (adr), the affected package, and the reason; 'expires' (YYYY-MM-DD) is optional — an expired exception no longer exempts. An empty object means no exceptions: every vulnerability found by the scanners fails the gate.",
   "version": 1,
-  "exceptions": {}
+  "exceptions": {
+    "GHSA-fc5q-39xc-vjpf": {
+      "adr": "ADR-0013",
+      "package": "picomatch",
+      "reason": "No patched release exists (affected <=4.0.7, patched none; latest published 4.0.7). At the time of this decision the only --omit=dev chain is the web build/localization tooling via @angular/localize -> tinyglobby -> picomatch; nothing in the repository invokes the localization CLIs, and no browser, server or customer-side runtime path was found. Exploitation needs an attacker-controlled glob pattern, which only build configuration or a developer command could supply. The entry matches by advisory id for any production chain (the package field is informational), so it also exempts a future production dependent until removed; the coordinator re-checks per PR and on the expiry. Build-time risk accepted until 2026-12-18; ends early on a patched release or a new production chain that passes untrusted patterns.",
+      "expires": "2026-12-18"
+    }
+  }
 }

@@ -28,6 +28,8 @@ type Scope = 'org' | 'project';
 })
 export class ScopeSwitcherComponent {
   private static nextId = 0;
+  private readonly document = inject(DOCUMENT);
+
   readonly orgId = `scope-org-${ScopeSwitcherComponent.nextId++}`;
   readonly projectId = `${this.orgId}-project`;
   readonly compact = input(false);
@@ -51,7 +53,6 @@ export class ScopeSwitcherComponent {
   );
   readonly chooseProject = $localize`:@@shell.switcher.choose-project:Choose a project`;
   readonly noProjects = $localize`:@@shell.switcher.no-projects:No projects`;
-  private readonly document = inject(DOCUMENT);
   private readonly openPopups = new Set<Scope>();
   /**
    * Capture on the window, so it reads the popup state before any handler that dismisses it for the

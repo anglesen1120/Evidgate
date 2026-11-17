@@ -163,8 +163,13 @@ const MAX_CONFLICT_FIELDS = 100;
 })
 export class PublishDialogComponent {
   protected readonly store = inject(PolicyStore);
+
   protected readonly session = inject(SessionStore);
+
   protected readonly mutationPolicy = inject(NarrowMutationPolicy);
+
+  private readonly injector = inject(Injector);
+
   readonly completed = output<PublishedRevision>();
   readonly reloaded = output<void>();
   protected readonly opened = signal(false);
@@ -186,7 +191,6 @@ export class PublishDialogComponent {
   protected readonly reloadState = signal<'idle' | 'loading' | 'error'>('idle');
   protected readonly reloadError = signal<ApiError | null>(null);
   private readonly textarea = viewChild<ElementRef<HTMLTextAreaElement>>('textarea');
-  private readonly injector = inject(Injector);
   private opener: HTMLElement | null = null;
   private generation = 0;
   protected readonly copy = {

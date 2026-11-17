@@ -77,6 +77,20 @@ import { StepPendingComponent } from './step-pending.component';
 })
 export class OnboardingShellComponent {
   protected readonly store = inject(OnboardingStore);
+
+  private readonly route = inject(ActivatedRoute);
+
+  private readonly router = inject(Router);
+
+  private readonly injector = inject(Injector);
+
+  protected readonly viewport = inject(NarrowMutationPolicy);
+
+  private readonly location = inject(LocationStrategy);
+
+  /** The wizard's own address, kept current so the ledger link keeps its route and query. */
+  private readonly currentUrl = signal('');
+
   protected readonly outlineVariant = 'outline';
   protected readonly pageHeadingSize = 'page' as const;
   protected readonly sectionHeadingSize = 'section' as const;
@@ -87,12 +101,6 @@ export class OnboardingShellComponent {
   protected readonly progressText = computed(() =>
     completionSummary(this.completedCount(), this.steps.length),
   );
-  private readonly route = inject(ActivatedRoute);
-  private readonly router = inject(Router);
-  private readonly injector = inject(Injector);
-  private readonly location = inject(LocationStrategy);
-  /** The wizard's own address, kept current so the ledger link keeps its route and query. */
-  private readonly currentUrl = signal('');
   private readonly heading = viewChild<ElementRef<HTMLHeadingElement>>('stepHeading');
   private readonly stepButtons = viewChildren<ElementRef<HTMLButtonElement>>('stepButton');
   private readonly stepToggle = viewChild<ElementRef<HTMLButtonElement>>('stepToggle');
@@ -100,7 +108,6 @@ export class OnboardingShellComponent {
     'resourcesLedger',
     { read: ElementRef },
   );
-  protected readonly viewport = inject(NarrowMutationPolicy);
   protected readonly stepsExpanded = signal(false);
   /**
    * Whether the compact disclosure is where the visitor's focus last went. The wide layout hides

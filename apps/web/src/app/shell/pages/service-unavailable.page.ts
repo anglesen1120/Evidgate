@@ -32,9 +32,11 @@ import { SessionStore } from '../../core/session/session.store';
   </section>`,
 })
 export class ServiceUnavailablePage {
-  readonly pageHeadingSize = 'page' as const;
   private readonly session = inject(SessionStore);
+
   private readonly router = inject(Router);
+
+  readonly pageHeadingSize = 'page' as const;
   readonly retrying = signal(false);
   readonly failed = signal(false);
   readonly heading = $localize`:@@shell.page.unavailable.heading:Workspace unavailable`;

@@ -172,13 +172,14 @@ import { SECRETS_COPY, secretStatusLabel } from './secrets.copy';
   `,
 })
 export class SecretReferenceListComponent {
+  protected readonly viewport = inject(NarrowMutationPolicy);
+
   readonly rows = input.required<readonly IngestTokenView[]>();
   readonly canWrite = input(false);
   readonly busy = input(false);
   readonly blocked = input(false);
   readonly busyId = input<string | null>(null);
   readonly rotate = output<{ reference: IngestTokenView; opener: HTMLElement }>();
-  protected readonly viewport = inject(NarrowMutationPolicy);
   protected readonly copy = SECRETS_COPY;
   protected readonly statusLabel = secretStatusLabel;
   protected readonly states = ['active', 'rotated', 'revoked', 'expired'] as const;

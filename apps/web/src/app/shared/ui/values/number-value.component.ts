@@ -42,9 +42,10 @@ import { type ExactNumber, ExactNumberFormatter } from './exact-number';
   `,
 })
 export class NumberValueComponent {
+  private readonly formatter = new ExactNumberFormatter(inject(LOCALE_ID));
+
   readonly value = input.required<ExactNumber>();
   readonly unit = input('');
-  private readonly formatter = new ExactNumberFormatter(inject(LOCALE_ID));
   protected readonly unavailable = $localize`:@@shared.values.number-unavailable:Number unavailable`;
   protected readonly parts = computed(() => {
     const formatted = this.formatter.format(this.value());

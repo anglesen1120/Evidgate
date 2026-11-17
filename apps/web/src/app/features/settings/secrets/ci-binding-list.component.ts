@@ -240,6 +240,8 @@ export const CI_BINDINGS_COPY = {
   `,
 })
 export class CiBindingListComponent {
+  private readonly document = inject(DOCUMENT);
+
   readonly rows = input.required<readonly CiBindingView[]>();
   readonly phase = input.required<CiBindingsPhase>();
   readonly error = input<ApiError | null>(null);
@@ -257,7 +259,6 @@ export class CiBindingListComponent {
   );
   private readonly expanded = signal<ReadonlySet<string>>(new Set());
   private readonly heading = viewChild.required<ElementRef<HTMLElement>>('heading');
-  private readonly document = inject(DOCUMENT);
   /** The control whose click started the read; it may be removed before the read settles. */
   private focusAnchor: HTMLElement | null = null;
   private readonly restoreFocusPending = signal(false);

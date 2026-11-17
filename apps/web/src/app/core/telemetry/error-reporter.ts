@@ -91,8 +91,9 @@ function reportOfApiError(error: unknown): ErrorReport | null {
  */
 @Injectable()
 export class TelemetryErrorHandler implements ErrorHandler {
-  private readonly delegate = new ErrorHandler();
   private readonly service = inject(TelemetryService);
+
+  private readonly delegate = new ErrorHandler();
 
   /** @param error whatever Angular caught; a rejection or a thrown string included. */
   handleError(error: unknown): void {

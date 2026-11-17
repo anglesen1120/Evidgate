@@ -32,10 +32,13 @@ import { validateReturnUrl } from '../../../core/routing/return-url';
   `,
 })
 export class CallbackPage implements OnInit {
-  readonly pageHeadingSize = 'page' as const;
   private readonly route = inject(ActivatedRoute);
+
   private readonly router = inject(Router);
+
   private readonly session = inject(SessionStore);
+
+  readonly pageHeadingSize = 'page' as const;
 
   readonly heading = $localize`:@@auth.callback.heading:Finishing sign-in`;
   readonly explanation = $localize`:@@auth.callback.explanation:Checking your session, then taking you back.`;
