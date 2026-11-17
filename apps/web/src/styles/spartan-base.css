@@ -42,11 +42,22 @@
   }
 }
 
-/* Keep keyboard outlines above Helm's layered outline-none utilities. */
+/* Keep keyboard outlines above Helm's layered outline-none utilities. The ring is state rather than
+   decoration, so it appears at once: a component that animates its other properties would otherwise
+   fade the ring in through the browser's 3px default before the token width. */
 [data-slot]:focus-visible,
 .spartan-checkbox:focus-visible {
   outline: var(--eg-focus-width) solid var(--eg-focus);
   outline-offset: var(--eg-focus-offset);
+  transition-property: none;
+}
+
+/* The compact onboarding disclosure leaves the wide layout on the breakpoint signal itself, in the
+   same render that shows the wide list, so the focus handoff has a control to move to at once. A
+   `hidden` utility cannot do this: the button's own `inline-flex` comes later in the utilities
+   layer. */
+.eg-wide-only-hidden {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
