@@ -17,8 +17,11 @@ describe('RevealSlot', () => {
   it('starts empty and exposes a read-only signal', () => {
     const slot = new RevealSlot();
     expect(slot.current()).toBeNull();
-    expect('set' in slot.current).toBe(false);
-    expect('update' in slot.current).toBe(false);
+    // A writable signal carries `set`/`update`/`asReadonly`; the exposed one must carry none,
+    // or a caller could replace the credential behind the owning step's back.
+    expect(
+      ['set', 'update', 'asReadonly'].filter((member) => Reflect.has(slot.current, member)),
+    ).toEqual([]);
   });
 
   it.each<RevealSource>(['binding-challenge', 'ingest-token', 'ingest-token-rotation'])(
