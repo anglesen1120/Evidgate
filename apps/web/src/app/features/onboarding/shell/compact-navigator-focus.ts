@@ -68,8 +68,9 @@ export function handOffCompactNavigatorFocus(options: CompactNavigatorFocus): vo
     const button = viewedButton();
     if (button === undefined) return;
     disclosureFocused.set(false);
-    // The browser blurs the element it just hid on a later frame, which would drop this focus on
-    // `<body>`; keep re-asserting it while the body still holds it, and only then.
+    // With the list already expanded nothing in the template changes at the breakpoint, so the
+    // browser hides the disclosure and blurs it a frame later, after this pass ran. Re-assert the
+    // focus while `<body>` still holds it and stop the moment the visitor's own focus is elsewhere.
     let frames = 3;
     const settle = (): void => {
       const active = document.activeElement;
