@@ -43,13 +43,16 @@
 }
 
 /* Keep keyboard outlines above Helm's layered outline-none utilities. The ring is state rather than
-   decoration, so it appears at once: a component that animates its other properties would otherwise
-   fade the ring in through the browser's 3px default before the token width. */
+   decoration, so it appears at its token width at once: a component that animates its other
+   properties would otherwise fade the ring in through the browser's 3px default. Only the ring is
+   left out of the transition; colour, background, border, shadow and transform still animate. */
 [data-slot]:focus-visible,
 .spartan-checkbox:focus-visible {
   outline: var(--eg-focus-width) solid var(--eg-focus);
   outline-offset: var(--eg-focus-offset);
-  transition-property: none;
+  transition-property:
+    color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow,
+    transform, translate, scale, rotate, filter, backdrop-filter;
 }
 
 /* The compact onboarding disclosure leaves the wide layout on the breakpoint signal itself, in the

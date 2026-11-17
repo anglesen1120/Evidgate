@@ -34,7 +34,7 @@ export function handOffCompactNavigatorFocus(options: CompactNavigatorFocus): vo
   // layout is still the active element: nothing in CSS hides it ahead of this pass any more.
   effect(() => {
     const isNarrow = narrow();
-    stepsExpanded();
+    const expanded = stepsExpanded();
     if (previous === undefined) {
       previous = isNarrow;
       return;
@@ -43,7 +43,8 @@ export function handOffCompactNavigatorFocus(options: CompactNavigatorFocus): vo
     previous = isNarrow;
     const active = document.activeElement;
     handoff = isNarrow
-      ? active !== null && stepButtons().includes(active as HTMLElement)
+      ? // An expanded list keeps its buttons visible below 768px, so a step in it keeps the focus.
+        !expanded && active !== null && stepButtons().includes(active as HTMLElement)
         ? 'disclosure'
         : undefined
       : active === toggle()
