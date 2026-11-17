@@ -30,20 +30,22 @@ import { expect, test, type Page } from '@playwright/test';
 import { stepButton } from './onboarding-keyboard';
 import {
   connectCiPage,
-  expectCurrentStep,
   expectNoReveal,
-  expectNoStepInStorage,
   expectSecretAbsent,
   expectSecretOnlyInReveal,
   FIXTURE_BINDING_CHALLENGE,
   FIXTURE_ROTATED_TOKEN_SECRET,
   FIXTURE_TOKEN_SECRET,
+  revealSlot,
+  revealValue,
+} from './onboarding-connection-support';
+import {
+  expectCurrentStep,
+  expectNoStepInStorage,
   nextButton,
   NO_WRITE_GRANTS_TOGGLE,
   onboardingPath,
   onboardingUrl,
-  revealSlot,
-  revealValue,
   seedQueryWith,
   shell,
   writeVariantToggle,

@@ -14,13 +14,8 @@
 // run is the fixture that would expose a client-side badge (FR-09-1/AC6).
 import { expect, test } from '@playwright/test';
 
-import {
-  connectCiPage,
-  expectCurrentStep,
-  onboardingUrl,
-  revealValue,
-  shell,
-} from './onboarding-support';
+import { connectCiPage, revealValue } from './onboarding-connection-support';
+import { expectCurrentStep, onboardingUrl, shell } from './onboarding-support';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
 import { currentTheme, LOCALES, seedStoredTheme, THEMES } from './support';
 

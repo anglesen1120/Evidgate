@@ -20,7 +20,6 @@ import {
   onboardingPath,
   seedQueryWith,
   shell,
-  stepItem,
 } from './onboarding-support';
 import { withVariant } from './support';
 
@@ -44,7 +43,7 @@ test.describe('W3 — step 5, enable collection', () => {
     await enterMainByKeyboard(page);
     await pressTab(page, 5);
     await expectKeyboardFocus(page, stepButton(page, 5), 'stepper 5 is the last stepper stop');
-    await expect(stepItem(page, 5)).toHaveAttribute('aria-current', 'step');
+    await expect(stepButton(page, 5)).toHaveAttribute('aria-current', 'step');
 
     await pressTab(page);
     const confirm = page.locator('[data-testid="enable-collection-confirm"]');

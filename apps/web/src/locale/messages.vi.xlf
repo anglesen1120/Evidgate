@@ -1925,10 +1925,6 @@
         <source>Complete</source>
         <target>Đã hoàn thành</target>
       </trans-unit>
-<trans-unit id="onboarding.shell.incomplete" datatype="html">
-        <source>Not complete</source>
-        <target>Chưa hoàn thành</target>
-      </trans-unit>
 <trans-unit id="onboarding.shell.back" datatype="html">
         <source>Back</source>
         <target>Quay lại</target>
@@ -3460,8 +3456,11 @@
       <trans-unit id="onboarding.health.status-awaiting" datatype="html"><source>Awaiting CI</source><target>Chờ CI</target></trans-unit>
       <trans-unit id="onboarding.shell.loading" datatype="html"><source>Loading project setup</source><target>Đang tải thiết lập dự án</target></trans-unit>
       <trans-unit id="onboarding.shell.progress-count" datatype="html"><source><x id="COMPLETED" equiv-text="completed"/> of <x id="TOTAL" equiv-text="total"/> steps complete</source><target>Đã hoàn thành <x id="COMPLETED" equiv-text="completed"/>/<x id="TOTAL" equiv-text="total"/> bước</target></trans-unit>
-      <trans-unit id="onboarding.shell.step-details" datatype="html"><source>Step details</source><target>Chi tiết bước</target></trans-unit>
-      <trans-unit id="onboarding.shell.step-select" datatype="html"><source>Setup step</source><target>Bước thiết lập</target></trans-unit>
+      <trans-unit id="onboarding.shell.required" datatype="html"><source>Next required</source><target>Bước cần làm</target></trans-unit>
+      <trans-unit id="onboarding.shell.upcoming" datatype="html"><source>Upcoming</source><target>Sắp tới</target></trans-unit>
+      <trans-unit id="onboarding.shell.viewing" datatype="html"><source>Viewing</source><target>Đang xem</target></trans-unit>
+      <trans-unit id="onboarding.shell.locked-step" datatype="html"><source>Finish earlier steps to open later steps.</source><target>Hoàn tất các bước trước để mở bước tiếp theo.</target></trans-unit>
+      <trans-unit id="onboarding.shell.keyboard-help" datatype="html"><source>Use Tab or arrow keys to move between steps. Press Enter or Space to open a step.</source><target>Dùng phím Tab hoặc các phím mũi tên để di chuyển giữa các bước. Nhấn Enter hoặc dấu cách để mở một bước.</target></trans-unit>
       <trans-unit id="quota.panel.incomplete" datatype="html"><source>More project counters exist on the service. All counters returned in this response are available below; this is not the complete organization breakdown.</source><target>Dịch vụ còn các bộ đếm dự án khác. Tất cả bộ đếm được trả về trong phản hồi này đều có ở bên dưới; đây chưa phải toàn bộ chi tiết của tổ chức.</target></trans-unit>
       <trans-unit id="quota.panel.no-alert" datatype="html"><source>No alert recorded</source><target>Chưa ghi nhận cảnh báo</target></trans-unit>
       <trans-unit id="quota.panel.project" datatype="html"><source>Project</source><target>Dự án</target></trans-unit>

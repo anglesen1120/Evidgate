@@ -24,19 +24,21 @@ import {
   tabUntil,
 } from './onboarding-keyboard';
 import {
+  expectNoReveal,
+  FIXTURE_BINDING_CHALLENGE,
+  FIXTURE_TOKEN_SECRET,
+  revealSlot,
+  revealValue,
+} from './onboarding-connection-support';
+import {
   backButton,
   CREATED_PROJECT,
   CREATED_PROJECT_NAME,
   CREATED_PROJECT_SLUG,
   expectCurrentStep,
-  expectNoReveal,
-  FIXTURE_BINDING_CHALLENGE,
-  FIXTURE_TOKEN_SECRET,
   nextButton,
   onboardingPath,
   onboardingUrl,
-  revealSlot,
-  revealValue,
   seedQueryWith,
   shell,
   stepItem,
@@ -82,11 +84,18 @@ test.describe('W1 — step 1, create project (keyboard walkthrough plan)', () =>
     // Programmatically focusable, never a Tab stop of its own: the fragment target is the entry.
     await expect(main).toHaveAttribute('tabindex', '-1');
 
-    // 3. The wizard's first stop is the current step's stepper button; steps 2–5 are natively
-    //    disabled at step 1 and are therefore skipped by the tab order.
+    // Blocked steps remain reachable so keyboard visitors can discover their prerequisite.
     await pressTab(page);
     await expectKeyboardFocus(page, stepButton(page, 1), 'stepper 1 is the first wizard stop');
-    await expect(stepItem(page, 1)).toHaveAttribute('aria-current', 'step');
+    await expect(stepButton(page, 1)).toHaveAttribute('aria-current', 'step');
+    for (const step of [2, 3, 4, 5] as const) {
+      await pressTab(page);
+      await expectKeyboardFocus(page, stepButton(page, step), `blocked step ${step}`);
+      await expect(stepButton(page, step)).toHaveAttribute('aria-disabled', 'true');
+    }
+    await page.keyboard.press('Enter');
+    await expectCurrentStep(page, 1);
+    await expectKeyboardFocus(page, stepButton(page, 5), 'blocked activation retains focus');
 
     // 4.–5. Both fields, reached and filled with the keyboard only.
     await pressTab(page);
@@ -129,16 +138,22 @@ test.describe('W1 — step 1, create project (keyboard walkthrough plan)', () =>
     ).toBeVisible();
   });
 
-  test('step 1 exposes exactly the four Tab stops the walkthrough uses', async ({ page }) => {
+  test('step 1 exposes five discoverable steps and the three existing form Tab stops', async ({
+    page,
+  }) => {
     await page.goto(onboardingUrl('en', 'onboarding-empty'));
     await expect(shell(page)).toBeVisible();
     await expectCurrentStep(page, 1);
 
     expect(
       await enabledTabStops(page),
-      'step 1 Tab stops inside the main region (stepper 1, both fields, the submit)',
+      'step 1 Tab stops inside main (five explained steps, both fields, the submit)',
     ).toEqual([
       'onboarding-select-step-1',
+      'onboarding-select-step-2',
+      'onboarding-select-step-3',
+      'onboarding-select-step-4',
+      'onboarding-select-step-5',
       'onboarding-project-name',
       '#onboarding-project-slug',
       'onboarding-project-submit',
@@ -203,14 +218,18 @@ test.describe('W2 — step 2, connect CI (OIDC then token)', () => {
     await expect(shell(page)).toBeVisible();
     await expectCurrentStep(page, 2);
 
-    // 1. The stepper first: this seed enables steps 1–2 and leaves 3–5 natively disabled. The walk
-    //    into the region is the skip link and its Enter, not a programmatic focus move.
+    // The skip link enters one navigator; future steps remain focusable with a prerequisite.
     await enterMainByKeyboard(page);
     await pressTab(page);
     await expectKeyboardFocus(page, stepButton(page, 1), 'stepper 1 is enabled at step 2');
     await pressTab(page);
     await expectKeyboardFocus(page, stepButton(page, 2), 'stepper 2 is the current step');
-    await expect(stepItem(page, 2)).toHaveAttribute('aria-current', 'step');
+    await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step');
+    for (const step of [3, 4, 5] as const) {
+      await pressTab(page);
+      await expectKeyboardFocus(page, stepButton(page, step), `blocked step ${step}`);
+      await expect(stepButton(page, step)).toHaveAttribute('aria-disabled', 'true');
+    }
 
     await pressTab(page);
     const snippet = page.locator(QUICKSTART_SNIPPET);

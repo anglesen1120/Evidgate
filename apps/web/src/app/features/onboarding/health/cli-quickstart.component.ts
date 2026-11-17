@@ -107,7 +107,8 @@ let nextQuickstartId = 0;
         </button>
       </div>
       <p
-        class="m-0 min-h-(--eg-leading-sm) text-sm text-muted-foreground"
+        class="m-0 text-sm text-muted-foreground"
+        [class.sr-only]="!copyStatus()"
         data-testid="cli-quickstart-copy-status"
         role="status"
         [attr.aria-live]="'polite'"

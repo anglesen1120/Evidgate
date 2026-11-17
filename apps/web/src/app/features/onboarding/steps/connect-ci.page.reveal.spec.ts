@@ -215,6 +215,8 @@ describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
   it.each(['oidc', 'token'] as const)(
     'focuses the %s reveal heading, announces no value, and restores the panel heading on Dismiss',
     async (panel) => {
+      const idleAnnouncement = root.querySelector('[data-testid="connect-reveal-status"]');
+      expect(idleAnnouncement?.classList.contains('sr-only')).toBe(true);
       if (panel === 'oidc') await fillOidc();
       else await fill({ 'connect-token-name': 'Build upload' });
       await submit(panel);
@@ -226,10 +228,14 @@ describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
       expect(announcement.getAttribute('aria-live')).toBe('polite');
       expect(announcement.textContent?.trim()).not.toBe('');
       expect(announcement.textContent).not.toContain(value.value);
+      expect(announcement).toBe(idleAnnouncement);
+      expect(announcement.classList.contains('sr-only')).toBe(false);
       root.querySelector<HTMLButtonElement>('[data-testid="reveal-dismiss"]')!.click();
       await fixture.whenStable();
       expect(document.activeElement).toBe(root.querySelector(`#connect-${panel}-heading`));
       expect(announcement.textContent?.trim()).toBe('');
+      expect(root.querySelector('[data-testid="connect-reveal-status"]')).toBe(announcement);
+      expect(announcement.classList.contains('sr-only')).toBe(true);
     },
   );
 

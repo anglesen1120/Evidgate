@@ -133,6 +133,8 @@ describe('ConnectCiPage', () => {
   });
 
   it('holds focus on the waiting line during the command, then on the refusal heading', async () => {
+    const announcement = root.querySelector('[data-testid="connect-ci-busy"]');
+    expect(announcement?.classList.contains('sr-only')).toBe(true);
     let rejectPending: (error: unknown) => void = () => undefined;
     createCiBinding.mockImplementationOnce(
       () =>
@@ -143,6 +145,9 @@ describe('ConnectCiPage', () => {
     await fillOidc();
     await submit('oidc');
     expect(document.activeElement).toBe(root.querySelector('[data-testid="connect-ci-busy"]'));
+    expect(root.querySelector('[data-testid="connect-ci-busy"]')).toBe(announcement);
+    expect(announcement?.classList.contains('sr-only')).toBe(false);
+    expect(announcement?.textContent?.trim()).not.toBe('');
     rejectPending(failure('validation', 422));
     // The refusal renders after the command's own macrotask turn; the heading's effect runs then.
     await new Promise<void>((resolve) => {
@@ -150,6 +155,8 @@ describe('ConnectCiPage', () => {
     });
     await fixture.whenStable();
     expect(document.activeElement).toBe(root.querySelector('#connect-failure-heading'));
+    expect(root.querySelector('[data-testid="connect-ci-busy"]')).toBe(announcement);
+    expect(announcement?.classList.contains('sr-only')).toBe(true);
   });
 
   it('strips control and format characters from server paths and reasons before display', async () => {
