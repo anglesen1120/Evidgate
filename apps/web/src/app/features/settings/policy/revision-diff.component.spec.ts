@@ -134,6 +134,35 @@ describe('RevisionDiffComponent', { timeout: 15_000 }, () => {
     expect(root.querySelector('img')).toBeNull();
     expect(root.querySelector('[onerror]')).toBeNull();
   });
+  it('renders every row of a set change at one array pointer, including clipped twins', async () => {
+    // A primitive-set change reports one row per element and all of them at the ARRAY's pointer,
+    // and a long value is rendered clipped, so two elements can read as the same text. The rows
+    // still have to render one each, which is why the list is tracked by the row itself.
+    const shared = 'x'.repeat(210);
+    store.loadBody.mockImplementation((id) =>
+      Promise.resolve({
+        ...previous,
+        body:
+          id === 'a'
+            ? { required_cases: ['case-a', 'case-b'] }
+            : { required_cases: ['case-a', `${shared}-1`, `${shared}-2`] },
+      }),
+    );
+
+    const { root } = await render();
+    const rows = [...root.querySelectorAll('[data-diff-row]')];
+
+    expect(rows.map((row) => row.getAttribute('data-diff-kind'))).toEqual([
+      'removed',
+      'added',
+      'added',
+    ]);
+    expect(rows.map((row) => row.getAttribute('data-diff-path'))).toEqual([
+      '/required_cases',
+      '/required_cases',
+      '/required_cases',
+    ]);
+  });
   it('loads selected snapshots and reports target selection', async () => {
     const { fixture, root } = await render();
     const selected = vi.fn();

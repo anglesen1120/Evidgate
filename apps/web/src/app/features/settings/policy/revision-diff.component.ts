@@ -115,7 +115,7 @@ import { PolicyStore } from './policy.store';
               <p hlmAlert class="m-0 text-muted-foreground">{{ copy.same }}</p>
             }
             <ol class="m-0 grid list-none gap-3 p-0 empty:hidden">
-              @for (row of diff().rows; track row.path) {
+              @for (row of diff().rows; track row) {
                 <li
                   class="grid min-w-0 gap-3 rounded-md border border-solid border-border p-3"
                   data-diff-row
