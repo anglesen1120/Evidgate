@@ -21,7 +21,7 @@
   min-width: 0;
   min-height: var(--eg-control-touch);
   height: auto;
-  padding: var(--eg-space-4);
+  padding: var(--eg-space-3);
   border-radius: var(--eg-radius-sm);
   white-space: normal;
   text-align: start;
@@ -119,6 +119,8 @@
 
   .onb-step.eg-btn {
     height: 100%;
+    align-content: start;
+    padding: var(--eg-space-4);
   }
 
   .onb-number {
@@ -139,7 +141,7 @@
   }
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1280px) {
   .onb-methods {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

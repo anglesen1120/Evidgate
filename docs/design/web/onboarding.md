@@ -30,7 +30,7 @@ The app reuses Helm button/card/icon primitives on the existing tokens, installe
 | 2 | Connect CI | Kết nối CI | Existing usable connection/token condition |
 | 3 | Sample run | Lượt chạy mẫu | Confirmed sample-run condition |
 | 4 | Compare reports | So sánh báo cáo | Confirmed evidence-revision condition |
-| 5 | Enable collection | Bật thu thập | Confirmed activation read |
+| 5 | Enable collection | Bật thu thập dữ liệu | Confirmed activation read |
 
 The [shell source][shell-source] keeps the current order and delegates selection to the existing store. Resources, not clicks, determine `done`, the next required step, completion count, Back/Next gating and the resumable project address. Existing pending sample-run/comparison bodies remain honest pending surfaces; a completed resource flag does not claim a new workflow was implemented by this redesign.
 
@@ -59,7 +59,7 @@ The [shell source][shell-source] keeps the current order and delegates selection
 | 768 / 1024px | Five equal-width tiles in one horizontal row; labels/status text wrap naturally | Full-width body, no navigation rail beside it |
 | 1280 / 1440px | Same horizontal navigator; existing expanded app navigation is unchanged | Body uses the available content width; ledger remains separate below |
 
-Five Vietnamese labels cannot share a 390px horizontal row without narrow targets, truncation or horizontal scrolling. Stacking the **same** controls below the existing 768px breakpoint preserves their full names, order and minimum 44×44px targets. Desktop rows allow wrapping rather than imposing one-line labels. The app adds no animation or new motion duration.
+Five Vietnamese labels cannot share a 390px horizontal row without narrow targets, truncation or horizontal scrolling. Stacking the **same** controls below the existing 768px breakpoint preserves their full names, order and minimum 44×44px targets. Narrow tiles use 8px padding and gaps, 14/20 labels and 12/18 metadata; from 768px they use 12px padding and start-aligned grid content so label first lines align. Desktop rows allow wrapping rather than imposing one-line labels. The app adds no animation or new motion duration.
 
 ## Reference assets and specimens
 
@@ -88,7 +88,7 @@ A setup checklist was rejected because these are ordered, gated milestones rathe
 ## Runnable coverage and remaining proposals
 
 - [Unit navigator specs][unit-spec]: one ordered control set, independent viewed/completed signals, guarded focusable future steps, arrow/Home/End behavior, completed setup and loading/remount.
-- [Browser navigator specs][browser-spec]: en/vi × light/dark × 390/768/1024/1280/1440px, geometry/overflow/full labels, axe contrast, focus/activation independence and Vietnamese 320px text/spacing expansion.
+- [Browser navigator specs][browser-spec]: en/vi × light/dark × 390/768/1024/1280/1440px, geometry/overflow/full labels, axe contrast, focus/activation independence and Vietnamese 320px text/spacing expansion. Zero-complete and all-five-available fixtures also cover 320/767/1279px boundaries and first↔last revisits without changing confirmed progress.
 - Existing onboarding keyboard, refusal, resume, secret-boundary and core-flow suites keep their behavioral assertions while following the current action marker.
 - No shared gallery currently represents this step-navigation pattern; no unrelated gallery specimen is changed.
 - **Proposal:** expose a supported focus-target API on shared PageHeader before replacing the existing shell heading; this task keeps the established reload-failure focus target rather than querying/mutating a shared component's private DOM.
