@@ -33,11 +33,12 @@ import type { DataTableColumn } from './data-table-column';
   `,
 })
 export class DataTableRecordsComponent<T> {
+  private readonly viewport = inject(NarrowMutationPolicy);
+
   readonly columns = input.required<readonly DataTableColumn<T>[]>();
   readonly rows = input.required<readonly T[]>();
   readonly rowId = input.required<(row: T) => string | number>();
   readonly caption = input.required<string>();
-  private readonly viewport = inject(NarrowMutationPolicy);
   protected readonly inspectionColumns = computed(() => {
     const mutationLocked = this.viewport.narrow();
     const columns = resolveTableColumns(this.columns()).filter(

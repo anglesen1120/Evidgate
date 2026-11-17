@@ -53,10 +53,11 @@ import type { FormFeedback } from './form-feedback';
   `,
 })
 export class FormErrorSummaryComponent {
+  private readonly document = inject(DOCUMENT);
+
   readonly summaryId = input.required<string>();
   readonly feedback = input.required<FormFeedback>();
   protected readonly title = $localize`:@@shared.forms.error-summary.title:There is a problem`;
-  private readonly document = inject(DOCUMENT);
   private readonly summary = viewChild<ElementRef<HTMLElement>>('summary');
   private readonly focusRequested = signal(false);
   private seenAttempt = 0;

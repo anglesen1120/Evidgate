@@ -130,6 +130,8 @@ export interface RotateScope {
   `,
 })
 export class CiRotateConfirmComponent {
+  protected readonly policy = inject(NarrowMutationPolicy);
+
   readonly token = input.required<IngestTokenView>();
   readonly projectName = input.required<string>();
   readonly scope = input.required<RotateScope>();
@@ -140,7 +142,6 @@ export class CiRotateConfirmComponent {
   readonly active = input(true);
   readonly disabled = input(false);
   readonly confirmed = output<RotateScope>();
-  protected readonly policy = inject(NarrowMutationPolicy);
   protected readonly name = computed(() => sanitizeLabel(this.token().name));
   protected readonly project = computed(() => sanitizeLabel(this.projectName()));
   protected readonly prefix = computed(() => sanitizeLabel(this.token().prefix));

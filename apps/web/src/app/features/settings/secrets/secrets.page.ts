@@ -64,11 +64,18 @@ type RotationTarget = {
 })
 export class SecretsPage {
   protected readonly store = inject(SecretsStore);
+
   protected readonly session = inject(SessionStore);
+
   private readonly slot = inject(RevealSlot);
+
   private readonly destroyRef = inject(DestroyRef);
-  protected readonly copy = SECRETS_COPY;
+
   protected readonly viewport = inject(NarrowMutationPolicy);
+
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  protected readonly copy = SECRETS_COPY;
   protected readonly sectionSize = 'section' as const;
   protected readonly projectLabel = (value: unknown): string =>
     this.session.projects().find((project) => project.id === value)?.name ?? '';
@@ -106,7 +113,6 @@ export class SecretsPage {
   });
   private readonly dialog = viewChild(RotateRevealDialogComponent);
   private readonly heading = viewChild.required<ElementRef<HTMLHeadingElement>>('heading');
-  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private generation = 0;
   private lastProject: string | null = null;
   private retryTarget: { reference: IngestTokenView; opener: HTMLElement } | null = null;

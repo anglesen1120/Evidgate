@@ -63,6 +63,17 @@ import { RunTimelineComponent } from './timeline/run-timeline.component';
 })
 export class RunDetailPage {
   protected readonly store = inject(RunDetailStore);
+
+  private readonly route = inject(ActivatedRoute);
+
+  private readonly router = inject(Router);
+
+  private readonly document = inject(DOCUMENT);
+
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  private readonly injector = inject(Injector);
+
   protected readonly detailTab = signal('evidence');
   protected readonly producerSlots = computed(() => {
     const run = this.store.run();
@@ -85,11 +96,6 @@ export class RunDetailPage {
         name: binding.release_name ?? null,
       }));
   });
-  private readonly route = inject(ActivatedRoute);
-  private readonly router = inject(Router);
-  private readonly document = inject(DOCUMENT);
-  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
-  private readonly injector = inject(Injector);
   private runId: string | null = null;
   /** The fragment this view was opened (or navigated) with; the landing target lives there. */
   private readonly fragment = signal<string | null>(null);

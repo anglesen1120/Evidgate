@@ -85,6 +85,12 @@ import { patternForError } from './state-pattern';
   `,
 })
 export class RequestStateComponent {
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  private readonly document = inject(DOCUMENT);
+
+  private readonly injector = inject(Injector);
+
   readonly status = input<'loading' | 'ready' | 'error'>('loading');
   readonly loadingLabel = input<string | undefined>();
   readonly error = input<ApiError | null>(null);
@@ -107,9 +113,6 @@ export class RequestStateComponent {
       : null;
   });
 
-  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
-  private readonly document = inject(DOCUMENT);
-  private readonly injector = inject(Injector);
   /** The status the replacement effect saw last, so only a move out of `error` reacts. */
   private lastStatus: 'loading' | 'ready' | 'error' | null = null;
   /**

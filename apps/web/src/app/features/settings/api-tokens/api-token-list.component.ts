@@ -146,11 +146,12 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
   `,
 })
 export class ApiTokenListComponent {
+  protected readonly viewport = inject(NarrowMutationPolicy);
+
   readonly rows = input<readonly ApiTokenView[]>([]);
   readonly canWrite = input(false);
   readonly busy = input(false);
   readonly revoke = output<ApiTokenView>();
-  protected readonly viewport = inject(NarrowMutationPolicy);
   protected readonly copy = API_TOKENS_COPY;
   protected readonly writeCopy = API_TOKENS_WRITE_COPY;
   protected readonly stateLabel = apiTokenStateLabel;

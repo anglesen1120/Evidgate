@@ -109,10 +109,14 @@ import { MembersStore } from './members.store';
 })
 export class ResendInviteDialogComponent {
   protected readonly store = inject(MembersStore);
+
   protected readonly session = inject(SessionStore);
+
   protected readonly viewport = inject(NarrowMutationPolicy);
-  protected readonly copy = MEMBERS_COPY;
+
   private readonly slot = inject(RevealSlot);
+
+  protected readonly copy = MEMBERS_COPY;
   readonly completed = output<void>();
   protected readonly opened = signal(false);
   protected readonly revealing = signal(false);

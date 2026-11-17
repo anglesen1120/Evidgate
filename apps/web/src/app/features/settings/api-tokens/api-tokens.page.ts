@@ -166,11 +166,15 @@ import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-
 })
 export class ApiTokensPage {
   protected readonly store = inject(ApiTokensStore);
+
   private readonly viewport = inject(NarrowMutationPolicy);
+
+  private readonly router = inject(Router);
+
+  private readonly route = inject(ActivatedRoute);
+
   protected readonly projectLabel = (value: unknown): string =>
     this.store.session.projects().find((project) => project.id === value)?.name ?? '';
-  private readonly router = inject(Router);
-  private readonly route = inject(ActivatedRoute);
   /**
    * The organization the URL names above this page. The org id sits on an ancestor route of this
    * tab, so it is read from the whole chain instead of this leaf's own parameters.

@@ -82,17 +82,21 @@ import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-
   `,
 })
 export class ApiTokenRevokeDialogComponent {
+  protected readonly store = inject(ApiTokensStore);
+
+  protected readonly viewport = inject(NarrowMutationPolicy);
+
+  private readonly document = inject(DOCUMENT);
+
+  private readonly destroyRef = inject(DestroyRef);
+
   readonly row = input.required<ApiTokenView>();
   readonly dismissed = output<void>();
   readonly completed = output<void>();
-  protected readonly store = inject(ApiTokensStore);
-  protected readonly viewport = inject(NarrowMutationPolicy);
   protected readonly projectLabel = API_TOKENS_COPY.project;
   protected readonly projectName = (): string =>
     this.store.session.projects().find((project) => project.id === this.store.selectedProject())
       ?.name ?? '';
-  private readonly document = inject(DOCUMENT);
-  private readonly destroyRef = inject(DestroyRef);
   protected readonly copy = API_TOKENS_WRITE_COPY;
   protected readonly opened = signal(true);
   protected readonly retryReady = retryReadyFor(this.store.revokeError);

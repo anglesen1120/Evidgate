@@ -169,8 +169,9 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
   `,
 })
 export class AuditTableComponent {
-  readonly rows = input.required<readonly AuditEntryDto[]>();
   private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  readonly rows = input.required<readonly AuditEntryDto[]>();
   protected readonly supportOf = supportAccessOf;
   protected readonly copy = {
     caption: $localize`:@@settings.audit.caption:Audit activity`,

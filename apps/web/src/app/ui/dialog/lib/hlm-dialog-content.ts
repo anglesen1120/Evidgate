@@ -65,6 +65,9 @@ type HlmDialogContentContext = {
 })
 export class HlmDialogContent {
   private readonly _dialogRef = inject(BrnDialogRef);
+
+  public readonly templateInjector = inject(Injector);
+
   private readonly _dialogContext = injectBrnDialogContext<HlmDialogContentContext | null>({
     optional: true,
   });
@@ -84,7 +87,6 @@ export class HlmDialogContent {
   public readonly component = this._dialogContext?.$component;
   public readonly template = this._dialogContext?.$template;
   public readonly templateContext = { $implicit: this._dialogContext };
-  public readonly templateInjector = inject(Injector);
   private readonly _dynamicComponentClass = this._dialogContext?.$dynamicComponentClass;
 
   constructor() {

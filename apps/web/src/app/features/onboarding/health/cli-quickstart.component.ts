@@ -120,6 +120,8 @@ let nextQuickstartId = 0;
   `,
 })
 export class CliQuickstartComponent {
+  private readonly destroyRef = inject(DestroyRef);
+
   readonly projectRef = input<string | null>(null);
   readonly token = input<QuickstartInput['token']>(null);
   readonly binding = input<QuickstartInput['binding']>(null);
@@ -141,7 +143,6 @@ export class CliQuickstartComponent {
   protected readonly copying = signal(false);
   protected readonly copyStatus = signal('');
   private readonly snippetControl = viewChild<ElementRef<HTMLElement>>('snippetControl');
-  private readonly destroyRef = inject(DestroyRef);
   private attempt = 0;
 
   constructor() {

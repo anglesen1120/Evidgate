@@ -220,15 +220,21 @@ import {
   `,
 })
 export class CreateProjectPage {
+  private readonly data = inject(OnboardingDataService);
+
+  private readonly store = inject(OnboardingStore);
+
+  private readonly session = inject(SessionStore);
+
+  private readonly router = inject(Router);
+
+  private readonly destroyRef = inject(DestroyRef);
+
+  protected readonly policy = inject(NarrowMutationPolicy);
+
   readonly orgId = input.required<string>();
   protected readonly name = signal('');
   protected readonly slug = signal('');
-  private readonly data = inject(OnboardingDataService);
-  private readonly store = inject(OnboardingStore);
-  private readonly session = inject(SessionStore);
-  private readonly router = inject(Router);
-  private readonly destroyRef = inject(DestroyRef);
-  protected readonly policy = inject(NarrowMutationPolicy);
   /**
    * The body the current Idempotency intent was submitted with; `null` before the first submit.
    * The operation always sends this — not the live draft — so a retry replays the payload the key
