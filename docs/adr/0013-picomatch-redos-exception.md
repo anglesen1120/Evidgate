@@ -32,6 +32,8 @@ fail npm:picomatch@* high GHSA-fc5q-39xc-vjpf — not allowlisted
 
 ## Decision
 
+Amended 2026-11-18: decision 4 (advisory-id-wide matching) and the per-PR duty in decision 5 are superseded by the Amendment section below; the rest stands.
+
 1. `[DECISION]` **Allowlist the advisory for 30 days.** Add to `scripts/exceptions.json` one entry keyed `GHSA-fc5q-39xc-vjpf`, naming this ADR, the package `picomatch`, the reason in decision 2 and `"expires": "2026-12-18"`. No `overrides` entry, no dependency or lockfile change, no second exception in the same commit.
 2. `[DECISION]` **Residual risk accepted is build-time only.** The unfixed matcher is installed through the localization dependency but executed by nothing in this repository: no script, CI job or image build invokes the localization CLIs, and **no production, browser, server or customer-side runtime path was found** in the production closure established above (the emitted bundle was reasoned from package sources, not inspected — decision 6). The advisory requires an attacker-controlled glob pattern, which only build configuration or a developer command could supply; a committed malicious pattern is already a change under review, and that review-time exposure is the remaining risk.
 3. `[DECISION]` **The exception ends early and unconditionally** when either happens:
@@ -60,6 +62,18 @@ fail npm:picomatch@* high GHSA-fc5q-39xc-vjpf — not allowlisted
 - One documented, owner-delegated acceptance of a High-severity build-time ReDoS remains until upstream ships a patched picomatch. **Renewal on 2026-12-18 is the expected outcome unless a patch ships**: the advisory was published 2026-10-19 and reviewed 2026-11-17, the registry shows no release since 2026-08-24, and the referencing PR has been open since 2026-08-13, so a fix inside 30 days is not assumed. Renewal is still an explicit owner decision recorded here, not an automatic extension.
 - No application code, schema, contract, lockfile or manifest changes; no migration. The only files are this ADR, the index row and the exceptions entry.
 - The exemption is advisory-id-wide, not chain-scoped (decision 4): between now and 2026-12-18 a new production dependency that pulls picomatch would keep the gate green, so the coordinator's per-PR `npm ls` re-check in decision 5 is the detection mechanism that decision 3's second condition relies on. A chain-scope assertion in `scripts/audit-deps.sh` remains follow-up work for an owner decision and was not part of this change.
+
+## Amendment 2026-11-18 — the gate now enforces the chain scope
+
+`[DECISION]` (owner-approved 2026-11-18; recorded by the coordinator) The follow-up recorded in decision 4 is implemented. The `scripts/exceptions.json` entry `GHSA-fc5q-39xc-vjpf` now carries `"scope": { "npm": [{ "workspace": "@evidgate/web", "via": "@angular/localize" }] }`, and `scripts/audit-deps.sh` evaluates it on every run: for a scoped npm entry it runs `npm ls <package> --all --omit=dev --package-lock-only --workspaces --include-workspace-root --json` once per package and requires **every** production path in that tree to start with one of the declared (workspace, direct dependency) pairs, using the lock's workspace records to tell a workspace root from the root package's own dependencies. An out-of-scope path fails the row and names the path (`root > @evil/server > picomatch`); an `npm ls` failure, unreadable output, a non-npm finding, a package mismatch or an invalid scope is a scanner/data failure, never an exemption.
+
+This supersedes decision 4 (advisory-id-wide matching), the per-PR `npm ls` duty in decision 5 (the gate performs that check on every run; the 2026-12-18 expiry re-check and its `npm view`/`npm audit` checks stay the coordinator's), the third Consequences bullet and the per-PR clause of the Revisit trigger. The status, the decision owner and the rest of this ADR stand; the text above is left as written.
+
+What the scope does **not** prove: it constrains the first two hops of each production dependency path (the workspace and its direct dependency) and nothing deeper or behavioural — it does not show how the package is invoked, whether a glob pattern reaching picomatch is attacker-controlled, or that an intermediate package keeps that chain in a future release. That remains the Exposure analysis, which is why the expiry and the invocation checks still matter.
+
+- ✅ `scripts/audit-deps.sh --npm-only` (2026-11-18, this change): exit 0, `warn npm:picomatch@* high GHSA-fc5q-39xc-vjpf — exempted by ADR-0013 (scope: @evidgate/web > @angular/localize)`.
+- ✅ Negative proof on a throwaway copy of `package.json`/`package-lock.json` with one extra root production dependency: exit 1, `fail npm:picomatch@* high GHSA-fc5q-39xc-vjpf — exception scope does not cover production path root > @evil/server > picomatch`.
+- ✅ `scripts/audit-deps.sh --self-test`, evaluator fixtures run offline: an in-scope chain passes with its scope printed; a second workspace branch and a root-package branch fail with both paths named; a scope on a NuGet finding, a package mismatch, a malformed scope, an empty scope and unparseable `npm ls` JSON all fail (the last one exits 2). The lockfile half of the self-test needs `dotnet` and ran on the gate host, not on this machine.
 
 ## Evidence
 
