@@ -64,8 +64,12 @@ for (const locale of LOCALES) {
     await page.locator('[data-catalog-apply]').click();
     await expect(page).toHaveURL(/status=archived/);
     await expect(page.locator(ROWS)).toHaveCount(1);
-    await expect(page.locator('app-case-list-table')).toContainText('case-total-2');
-    await expect(page.locator('app-case-list-table')).not.toContainText('case-checkout-17');
+    await expect(page.locator('app-case-list-table')).toContainText(
+      '018f0000-0000-7000-8000-0000000c0002',
+    );
+    await expect(page.locator('app-case-list-table')).not.toContainText(
+      '018f0000-0000-7000-8000-0000000c0017',
+    );
   });
 
   for (const theme of THEMES)
@@ -118,6 +122,8 @@ for (const locale of LOCALES) {
     await page.goto(withVariants(base, ['?fixture.variant.listCases=forbidden']));
     await expect(page.locator('app-forbidden-pattern')).toBeVisible();
     await expect(page.locator('app-case-list-table')).toHaveCount(0);
-    await expect(page.locator('app-case-list-page')).not.toContainText('case-checkout-17');
+    await expect(page.locator('app-case-list-page')).not.toContainText(
+      '018f0000-0000-7000-8000-0000000c0017',
+    );
   });
 }

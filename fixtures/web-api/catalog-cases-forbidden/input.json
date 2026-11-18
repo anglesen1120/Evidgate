@@ -11,6 +11,7 @@
       "code": "forbidden",
       "message": "Catalog read is not granted.",
       "request_id": "018f0000-0000-7000-8000-00000000ca12",
+      "retryable": false,
       "details": []
     }
   }

@@ -21,7 +21,7 @@
         "version": 3,
         "requirement_ref": null,
         "id": "018f0000-0000-7000-8000-00000000ca03",
-        "annotation_id": "case-total-2",
+        "annotation_id": "018f0000-0000-7000-8000-0000000c0002",
         "name": "Order totals round correctly",
         "file_path": "tests/total.test.ts",
         "status": "archived",

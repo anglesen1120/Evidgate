@@ -12,6 +12,7 @@
       "code": "unavailable",
       "message": "Catalog is unavailable.",
       "request_id": "018f0000-0000-7000-8000-00000000ca13",
+      "retryable": true,
       "details": []
     }
   }

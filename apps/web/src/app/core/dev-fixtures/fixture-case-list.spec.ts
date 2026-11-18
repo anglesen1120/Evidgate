@@ -13,15 +13,17 @@ describe('catalog case list specimens', () => {
     ) as CaseListResponse;
     expect(page.items.map((row) => row.status)).toEqual(['active', 'missing']);
     expect(page.items.map((row) => row.annotation_id)).toEqual([
-      'case-checkout-17',
-      'case-address-8',
+      '018f0000-0000-7000-8000-0000000c0017',
+      '018f0000-0000-7000-8000-0000000c0008',
     ]);
     expect(page.next_cursor).toBe('catalog-more-opaque');
     const archived = caseListFixtureBody(
       entry,
       new HttpRequest('GET', '/v1/projects/p/cases?status=archived'),
     ) as CaseListResponse;
-    expect(archived.items.map((row) => row.annotation_id)).toEqual(['case-total-2']);
+    expect(archived.items.map((row) => row.annotation_id)).toEqual([
+      '018f0000-0000-7000-8000-0000000c0002',
+    ]);
     expect(archived.items.map((row) => row.status)).toEqual(['archived']);
     expect(archived.next_cursor).toBeNull();
     const noMatch = caseListFixtureBody(
@@ -37,7 +39,9 @@ describe('catalog case list specimens', () => {
       entry,
       new HttpRequest('GET', '/v1/projects/p/cases?status=missing&framework=playwright'),
     ) as CaseListResponse;
-    expect(page.items.map((row) => row.annotation_id)).toEqual(['case-address-8']);
+    expect(page.items.map((row) => row.annotation_id)).toEqual([
+      '018f0000-0000-7000-8000-0000000c0008',
+    ]);
     expect(page.next_cursor).toBe('catalog-more-opaque');
     const original = entry.document.body as CaseListResponse;
     expect(original.items).toHaveLength(2);

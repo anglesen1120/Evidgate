@@ -124,7 +124,7 @@ describe('CaseListPage', () => {
     const summary = await harness.summary();
     expect(await summary.getAttribute('role')).toBe('status');
     expect(await summary.text()).toBe('Matching identities in this page: 2');
-    expect(await summary.text()).not.toContain('case-checkout-17');
+    expect(await summary.text()).not.toContain('018f0000-0000-7000-8000-0000000c0017');
     query.next(convertToParamMap({ q: 'not-present' }));
     fixture.detectChanges();
     await fixture.whenStable();

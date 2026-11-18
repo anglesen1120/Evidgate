@@ -128,7 +128,9 @@ describe('CaseListStore', () => {
     const store = TestBed.inject(CaseListStore);
     store.init('project', { q: 'CHECKOUT' });
     await settle();
-    expect(store.visibleRows().map((row) => row.annotation_id)).toEqual(['case-checkout-17']);
+    expect(store.visibleRows().map((row) => row.annotation_id)).toEqual([
+      '018f0000-0000-7000-8000-0000000c0017',
+    ]);
     store.init('project', { q: 'not-present' });
     await settle();
     expect(store.isEmpty()).toBe(true);
