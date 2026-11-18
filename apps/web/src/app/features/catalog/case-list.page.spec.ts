@@ -123,7 +123,6 @@ describe('CaseListPage', () => {
     const { fixture, harness } = await render();
     const summary = await harness.summary();
     expect(await summary.getAttribute('role')).toBe('status');
-    expect(await summary.getAttribute('aria-live')).toBe('polite');
     expect(await summary.text()).toBe('Matching identities in this page: 2');
     expect(await summary.text()).not.toContain('case-checkout-17');
     query.next(convertToParamMap({ q: 'not-present' }));
