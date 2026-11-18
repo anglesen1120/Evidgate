@@ -9,6 +9,7 @@
 
 import { inject, Injectable } from '@angular/core';
 import {
+  cancelRun,
   createRun,
   getRun,
   getRunDecision,
@@ -86,10 +87,48 @@ export class RunsDataService {
    * Create a run (`POST /v1/projects/{p}/runs`). The operation requires an `Idempotency-Key`, so
    * the caller's intent supplies it: a retry of the same intent replays the original response
    * instead of creating a second run (00 §9.1).
+   *
+   * `signal` cancels the request when the user leaves the dialog; it is spread only when present
+   * because the SDK option refuses an explicit `undefined` under `exactOptionalPropertyTypes`.
    */
-  create(projectId: string, body: CreateRunRequest, intent: Intent): Promise<RunCreated> {
+  create(
+    projectId: string,
+    body: CreateRunRequest,
+    intent: Intent,
+    signal?: AbortSignal,
+  ): Promise<RunCreated> {
     return this.gateway.call((client) =>
-      createRun({ client, path: { p: projectId }, body, headers: intentHeaders(intent) }),
+      createRun({
+        client,
+        path: { p: projectId },
+        body,
+        headers: intentHeaders(intent),
+        ...(signal === undefined ? {} : { signal }),
+      }),
     );
+  }
+
+  /**
+   * Record a cancellation (`POST /v1/runs/{r}/cancel`, `202` with no body). The body is omitted
+   * when the caller gave no reason, which the contract reads as "no reason given"; a run that is
+   * already terminal answers the same 202, so there is nothing to reconcile here.
+   */
+  cancel(
+    runId: string,
+    reason: string | undefined,
+    intent: Intent,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.gateway
+      .call((client) =>
+        cancelRun({
+          client,
+          path: { r: runId },
+          headers: intentHeaders(intent),
+          ...(reason === undefined ? {} : { body: { reason } }),
+          ...(signal === undefined ? {} : { signal }),
+        }),
+      )
+      .then(() => undefined);
   }
 }

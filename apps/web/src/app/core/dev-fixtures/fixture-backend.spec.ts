@@ -21,7 +21,7 @@
 
 import { HttpClient, HttpResponse, type HttpEvent, type HttpRequest } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
-import { cancelRun, getRun, listPermissions, listRoles, listRuns } from '@evidgate/sdk';
+import { getRun, listPermissions, listRoles, listRuns, postRunEvents } from '@evidgate/sdk';
 import { firstValueFrom } from 'rxjs';
 
 import { isApiRequestError } from '../http/api-error';
@@ -127,16 +127,10 @@ describe('fixture backend (09.1.1-T12.1)', () => {
 
   it('answers 501 fixture_not_found for an operation no fixture covers', async () => {
     const cause = await rejectionOf(
-      gateway.call((client) =>
-        cancelRun({
-          client,
-          path: { r: 'r-1' },
-          headers: { 'Idempotency-Key': 'fixture-spec-uncovered' },
-        }),
-      ),
+      gateway.call((client) => postRunEvents({ client, path: { r: 'r-1' }, body: { events: [] } })),
     );
 
-    expect(handled.at(0)?.url).toBe(`${API_BASE_URL}/runs/r-1/cancel`);
+    expect(handled.at(0)?.url).toBe(`${API_BASE_URL}/runs/r-1/events`);
     expect(isApiRequestError(cause)).toBe(true);
     if (isApiRequestError(cause)) {
       expect(cause.error.kind).toBe('unexpected');

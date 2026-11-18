@@ -22,6 +22,7 @@
         [runCompleteness]="store.latestRevisionCompleteness()"
         (viewEvidence)="showEvidence()"
       />
+      <app-cancel-run-action />
       <app-attempts-table
         [attempts]="store.attempts()"
         [status]="attemptsStatus()"

@@ -216,7 +216,7 @@ Search here before writing UI. Paths are under `apps/web/src/app/`; test hosts a
 | Copyable ids and formatted numbers | `app-copyable-identifier`, `app-copy-value-button`, `app-number-value` | `shared/ui/values/` |
 | Loading, empty, error, forbidden, not-found and inline feedback | `app-request-state`, `app-loading-pattern`, `app-empty-pattern`, `app-error-pattern`, `app-forbidden-pattern`, `app-not-found-pattern`, `app-inline-feedback` | `shared/ui/states/` |
 | Edit conflict and `Retry-After` wait | `app-conflict-dialog`, `app-retry-after` | `shared/ui/conflict/` |
-| Page and section headers with action slots | `app-page-header`, `app-section-header`, `[appPageHeaderActions]`, `[appSectionHeaderActions]` | `shared/ui/page-header/` |
+| Page and section headers with action slots | `app-page-header` (`focusTitle()` focuses its h1), `app-section-header`, `[appPageHeaderActions]`, `[appSectionHeaderActions]` | `shared/ui/page-header/` |
 | Desktop-only mutation on a narrow viewport | `[appDesktopMutation]`, `app-desktop-required-notice` | `shared/ui/narrow/` |
 | One-time credential or value reveal with copy and dismiss | `app-connect-step-reveal` | `shared/ui/reveal/` |
 | Field feedback, form error summary, required-field note and marker | `app-field-feedback`, `app-form-error-summary`, `app-form-required-note`, `app-field-requirement` | `shared/forms/` |

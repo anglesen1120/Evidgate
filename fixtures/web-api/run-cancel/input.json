@@ -1,0 +1,9 @@
+{
+  "operation_id": "cancelRun",
+  "variant": "ok",
+  "status": 202,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000c0f4"
+  },
+  "latency_ms": 0
+}

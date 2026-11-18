@@ -11,6 +11,7 @@ import { RunsDataService } from '../../../core/data/runs-data.service';
 import { ApiRequestError } from '../../../core/http/api-error';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { RunDataService } from '../data/run-data.service';
+import { DENY_CANCEL_SESSION } from '../actions/cancel/cancel-run.test-support';
 import { RunDetailPage } from './run-detail.page';
 import { revision, revisionPage, deferred } from './run-detail-store.fixtures';
 import { routes } from '../runs.routes';
@@ -66,6 +67,7 @@ describe('RunDetailPage', () => {
     getDecision.mockReset().mockResolvedValue(pendingBody());
     TestBed.configureTestingModule({
       providers: [
+        DENY_CANCEL_SESSION,
         provideZonelessChangeDetection(),
         provideRouter([{ path: 'projects/:projectId/runs', children: routes }]),
         { provide: RunsDataService, useValue: { get, listAttempts, listEvidenceRevisions } },

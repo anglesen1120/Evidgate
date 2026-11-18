@@ -147,4 +147,112 @@ describe('RunsDataService (09.1.1-T3.1)', () => {
       expect(cause.error.code).toBe('not_found');
     }
   });
+
+  it('reuses the caller key for two retries and sends a new key for a new intent', async () => {
+    const intent = createIntent();
+    const nextIntent = createIntent();
+    const keys: string[] = [];
+    for (const attempt of [intent, intent, intent, nextIntent]) {
+      const pending = service.create('p-1', { manifest_id: 'mf-1' }, attempt);
+      const request = await takeRequest(httpMock, RUNS_URL);
+      keys.push(request.request.headers.get('Idempotency-Key') ?? '');
+      request.flush(JSON.stringify(RUN_CREATED), {
+        status: 201,
+        statusText: '',
+        headers: JSON_HEADERS,
+      });
+      await pending;
+    }
+    expect(keys).toEqual([
+      intent.idempotencyKey,
+      intent.idempotencyKey,
+      intent.idempotencyKey,
+      nextIntent.idempotencyKey,
+    ]);
+    expect(nextIntent.idempotencyKey).not.toBe(intent.idempotencyKey);
+  });
+
+  it.each([
+    { status: 409, code: 'idempotency_conflict', kind: 'idempotency_conflict', details: [] },
+    {
+      status: 422,
+      code: 'request_invalid',
+      kind: 'validation',
+      details: [{ path: '/ref/pr_number', reason: 'required' }],
+    },
+  ])('preserves a typed $status $code refusal and its details', async (refusal) => {
+    const pending = service.create('p-1', { manifest_id: 'mf-1' }, createIntent());
+    const failure = pending.catch((cause: unknown) => cause);
+    const envelope = {
+      error: {
+        code: refusal.code,
+        message: 'The run could not be created.',
+        request_id: '018f0000-0000-7000-8000-000000000001',
+        retryable: false,
+        details: refusal.details,
+      },
+    };
+    (await takeRequest(httpMock, RUNS_URL)).flush(JSON.stringify(envelope), {
+      status: refusal.status,
+      statusText: '',
+      headers: JSON_HEADERS,
+    });
+    const cause = await failure;
+    expect(isApiRequestError(cause)).toBe(true);
+    if (isApiRequestError(cause)) {
+      expect(cause.error).toMatchObject({
+        kind: refusal.kind,
+        code: refusal.code,
+        status: refusal.status,
+        details: refusal.details,
+        retryable: false,
+      });
+    }
+  });
+
+  it.each([undefined, 'The wrong manifest was selected.'])(
+    'cancel() sends the optional reason %s and resolves an empty 202',
+    async (reason) => {
+      const intent = createIntent();
+      const pending = service.cancel('r-1', reason, intent);
+      const request = await takeRequest(httpMock, `${API_BASE_URL}/runs/r-1/cancel`);
+      expect(request.request.method).toBe('POST');
+      expect(request.request.headers.get('Idempotency-Key')).toBe(intent.idempotencyKey);
+      expect(request.request.body).toBe(reason === undefined ? null : JSON.stringify({ reason }));
+      request.flush(null, { status: 202, statusText: '' });
+      await expect(pending).resolves.toBeUndefined();
+    },
+  );
+
+  it.each(['create', 'cancel'] as const)(
+    '%s respects an already-aborted signal without dispatching HTTP',
+    async (operation) => {
+      const controller = new AbortController();
+      controller.abort();
+      const url = operation === 'create' ? RUNS_URL : `${API_BASE_URL}/runs/r-1/cancel`;
+      const pending =
+        operation === 'create'
+          ? service.create('p-1', { manifest_id: 'mf-1' }, createIntent(), controller.signal)
+          : service.cancel('r-1', undefined, createIntent(), controller.signal);
+      await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+      httpMock.expectNone(url);
+    },
+  );
+
+  it.each(['create', 'cancel'] as const)(
+    '%s cancels an in-flight HTTP request when its signal aborts',
+    async (operation) => {
+      const controller = new AbortController();
+      const pending =
+        operation === 'create'
+          ? service.create('p-1', { manifest_id: 'mf-1' }, createIntent(), controller.signal)
+          : service.cancel('r-1', undefined, createIntent(), controller.signal);
+      const failure = pending.catch((cause: unknown) => cause);
+      const url = operation === 'create' ? RUNS_URL : `${API_BASE_URL}/runs/r-1/cancel`;
+      const request = await takeRequest(httpMock, url);
+      controller.abort();
+      await expect(failure).resolves.toMatchObject({ name: 'AbortError' });
+      expect(request.cancelled).toBe(true);
+    },
+  );
 });

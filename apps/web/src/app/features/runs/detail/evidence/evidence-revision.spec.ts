@@ -19,6 +19,7 @@ import {
 import { routes } from '../../runs.routes';
 import { RunDetailPage } from '../run-detail.page';
 import { stubScopeBrowserApis } from '../../../../shell/layout/scope.fixture';
+import { DENY_CANCEL_SESSION } from '../../actions/cancel/cancel-run.test-support';
 import { EvidenceRevisionSelectorHarness } from './evidence-revision-selector.test-support';
 
 const newest = revision({
@@ -56,6 +57,7 @@ describe('Run detail evidence revision', () => {
     getDecision.mockReset().mockResolvedValue(liveBody({ evidence_revision: 4 }));
     TestBed.configureTestingModule({
       providers: [
+        DENY_CANCEL_SESSION,
         provideZonelessChangeDetection(),
         provideRouter([{ path: 'projects/:projectId/runs', children: routes }]),
         { provide: RunsDataService, useValue: { get, listAttempts, listEvidenceRevisions } },

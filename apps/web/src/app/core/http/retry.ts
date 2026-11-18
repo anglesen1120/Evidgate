@@ -98,6 +98,41 @@ function usableRetryAfter(seconds: number | null): number | null {
   return seconds !== null && Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
 }
 
+/** One failure deadline shared by mutation owners; never issues an automatic retry. */
+export function createRetryAfterWait(now: () => number = Date.now) {
+  const deadline = signal<number | null>(null);
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  function clear(): void {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    deadline.set(null);
+  }
+
+  function start(seconds: number | null): void {
+    clear();
+    const interval = usableRetryAfter(seconds);
+    if (interval === null || interval <= 0) return;
+    const delayMs = clampTimerDelay(interval * 1000);
+    deadline.set(now() + delayMs);
+    timer = setTimeout(() => {
+      timer = null;
+      deadline.set(null);
+    }, delayMs);
+  }
+
+  return {
+    ready: computed(() => {
+      const value = deadline();
+      return value === null || value <= now();
+    }),
+    start,
+    clear,
+  };
+}
+
 /**
  * Create the runner for one operation. `operation` receives the intent so it can send
  * `intentHeaders(intent)`; it must reject with `ApiRequestError` for a server/transport failure
@@ -122,40 +157,10 @@ export function createIntentRunner<T>(
   const errorState = signal<ApiError | null>(null);
   const intentState = signal<Intent | null>(null);
   const retryAfterState = signal<number | null>(null);
-  /** Epoch ms at which a positive `Retry-After` wait ends; `null` when a retry may run now. */
-  const waitDeadlineState = signal<number | null>(null);
+  const retryWait = createRetryAfterWait(now);
 
   /** Attempt id: a settlement only writes signals while its attempt is still current. */
   let attemptEpoch = 0;
-  let retryTimer: ReturnType<typeof setTimeout> | null = null;
-
-  /** Cancel the pending wait, if any, and open the retry window. */
-  function clearRetryWait(): void {
-    if (retryTimer !== null) {
-      clearTimeout(retryTimer);
-      retryTimer = null;
-    }
-    waitDeadlineState.set(null);
-  }
-
-  /**
-   * One timer for this failure: the retry opens when it fires, nothing polls, and no attempt is
-   * started from here. An absent or non-positive interval is open immediately [DECISION 2].
-   */
-  function startRetryWait(seconds: number | null): void {
-    if (seconds === null || seconds <= 0) {
-      return;
-    }
-    // A delay above the timer maximum fires immediately in browsers and warns in Node, which
-    // would turn a hostile or malformed interval into no wait at all; clamp it instead.
-    const delayMs = clampTimerDelay(seconds * 1000);
-    // The interval runs from the failure instant; the timer only wakes the signal at its end.
-    waitDeadlineState.set(now() + delayMs);
-    retryTimer = setTimeout(() => {
-      retryTimer = null;
-      waitDeadlineState.set(null);
-    }, delayMs);
-  }
 
   /** False unless the last attempt failed retryably and its `Retry-After` wait is over. */
   const retryEligible = computed(() => {
@@ -166,8 +171,7 @@ export function createIntentRunner<T>(
     if (failure === null || !failure.retryable) {
       return false;
     }
-    const deadline = waitDeadlineState();
-    return deadline === null || deadline <= now();
+    return retryWait.ready();
   });
 
   /**
@@ -175,7 +179,7 @@ export function createIntentRunner<T>(
    * call cannot start a concurrent attempt or mint a second key.
    */
   async function attempt(active: Intent): Promise<void> {
-    clearRetryWait();
+    retryWait.clear();
     const epoch = ++attemptEpoch;
     // A failure and a result describe the previous attempt; neither is current while this one
     // runs, so nothing stale is rendered as the outcome of this action.
@@ -214,7 +218,7 @@ export function createIntentRunner<T>(
         statusState.set('failed');
         // The intent is kept: a failed action is only abandoned by reset(), or by run() after a
         // non-retryable failure.
-        startRetryWait(retryAfterSeconds);
+        retryWait.start(retryAfterSeconds);
         return;
       }
       if (epoch === attemptEpoch) {
@@ -263,7 +267,7 @@ export function createIntentRunner<T>(
     // Invalidate any in-flight attempt: it is not cancelled, but its settlement no longer
     // writes the state of the intent that was just abandoned.
     attemptEpoch += 1;
-    clearRetryWait();
+    retryWait.clear();
     statusState.set('idle');
     resultState.set(undefined);
     errorState.set(null);
