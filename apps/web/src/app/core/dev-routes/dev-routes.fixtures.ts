@@ -147,6 +147,25 @@ export function devRoutes(): Routes {
       ],
     },
     {
+      path: 'dev/catalog-list',
+      component: ShellComponent,
+      children: [
+        {
+          path: 'orgs/:orgId',
+          canMatch: [authGuard, orgScopeGuard],
+          children: [
+            {
+              path: 'projects/:projectId',
+              canMatch: [projectScopeGuard, permissionGuard('case:read')],
+              loadComponent: () =>
+                // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only replacement mounts the real G2 catalog under the product scope and permission guards.
+                import('../../features/catalog/case-list.page').then((m) => m.CaseListPage),
+            },
+          ],
+        },
+      ],
+    },
+    {
       path: 'dev/run-detail',
       component: ShellComponent,
       children: [

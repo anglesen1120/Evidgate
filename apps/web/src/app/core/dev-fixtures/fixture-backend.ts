@@ -73,6 +73,7 @@ import {
 import { findSettingsRetentionWriteFixture } from './fixture-settings-permissions';
 import { FixtureToggles } from './fixture-toggles';
 import { findUsageSummaryFixture } from './fixture-usage-summary';
+import { caseListFixtureBody } from './fixture-case-list';
 
 /** Response header naming the corpus directory that answered; also a production-leak marker. */
 export const FIXTURE_RESPONSE_HEADER = 'X-Evidgate-Fixture';
@@ -232,7 +233,9 @@ export class FixtureHttpBackend implements HttpBackend {
     return this.respond(
       request,
       entry.document.status,
-      listDecisionBody(entry, request),
+      entry.document.operation_id === 'listCases'
+        ? caseListFixtureBody(entry, request)
+        : listDecisionBody(entry, request),
       fixtureHeaders(entry),
       Math.max(0, latency),
     );
