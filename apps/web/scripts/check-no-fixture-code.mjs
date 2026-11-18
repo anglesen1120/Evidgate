@@ -223,6 +223,18 @@ const ENUM_MEMBERS = new Map([
   ['missing', MISSING_CODES],
   // A pending-evidence reason is one of the same codes.
   ['reasons', MISSING_CODES],
+  // The security view renders the closed SecurityEventItem.type vocabulary, so these protocol
+  // words occur in production too; an unlisted type remains fixture data.
+  [
+    'type',
+    new Set([
+      'auth_failure',
+      'cross_tenant_probe',
+      'secret_scanner_alert',
+      'kill_switch_used',
+      'support_access',
+    ]),
+  ],
 ]);
 
 /**

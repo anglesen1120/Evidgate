@@ -9687,6 +9687,54 @@
           <context context-type="linenumber">79</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="settings.security.type-auth" datatype="html"><source>Authentication failure</source></trans-unit>
+      <trans-unit id="settings.security.type-cross-tenant" datatype="html"><source>Cross-tenant access probe</source></trans-unit>
+      <trans-unit id="settings.security.type-scanner" datatype="html"><source>Secret scanner alert</source></trans-unit>
+      <trans-unit id="settings.security.type-kill-switch" datatype="html"><source>Kill switch used</source></trans-unit>
+      <trans-unit id="settings.security.type-support" datatype="html"><source>Flagged support access</source></trans-unit>
+      <trans-unit id="settings.security.severity-info" datatype="html"><source>Info</source></trans-unit>
+      <trans-unit id="settings.security.severity-warning" datatype="html"><source>Warning</source></trans-unit>
+      <trans-unit id="settings.security.severity-critical" datatype="html"><source>Critical</source></trans-unit>
+      <trans-unit id="settings.security.page-summary" datatype="html"><source>Page <x id="page" equiv-text="formatNumber(this.store.pageIndex() + 1, this.locale)"/> · <x id="rows" equiv-text="formatNumber(this.store.rows().length, this.locale)"/> visible events on this page.</source></trans-unit>
+      <trans-unit id="settings.security.title" datatype="html"><source>Security events</source></trans-unit>
+      <trans-unit id="settings.security.description" datatype="html"><source>Inspect authorized security metadata across the organization. Event records are read-only; times are shown in UTC.</source></trans-unit>
+      <trans-unit id="settings.security.boundary" datatype="html"><source>Metadata only. Severity is supplied by the server, not a security certification. Cross-tenant targets and attempted secrets are not disclosed.</source></trans-unit>
+      <trans-unit id="settings.security.filters" datatype="html"><source>Filter activity</source></trans-unit>
+      <trans-unit id="settings.security.project" datatype="html"><source>Project id</source></trans-unit>
+      <trans-unit id="settings.security.project-hint" datatype="html"><source>Optional exact project UUID. Leave blank for all projects.</source></trans-unit>
+      <trans-unit id="settings.security.type" datatype="html"><source>Event type</source></trans-unit>
+      <trans-unit id="settings.security.severity" datatype="html"><source>Severity</source></trans-unit>
+      <trans-unit id="settings.security.all-types" datatype="html"><source>All V1 event types</source></trans-unit>
+      <trans-unit id="settings.security.all-severities" datatype="html"><source>All severities</source></trans-unit>
+      <trans-unit id="settings.security.from" datatype="html"><source>From (inclusive)</source></trans-unit>
+      <trans-unit id="settings.security.to" datatype="html"><source>To (exclusive)</source></trans-unit>
+      <trans-unit id="settings.security.time-hint" datatype="html"><source>Enter local times; results use UTC. The upper bound is exclusive.</source></trans-unit>
+      <trans-unit id="settings.security.invalid" datatype="html"><source>Enter valid dates with From earlier than To.</source></trans-unit>
+      <trans-unit id="settings.security.apply" datatype="html"><source>Apply filters</source></trans-unit>
+      <trans-unit id="settings.security.clear" datatype="html"><source>Clear filters</source></trans-unit>
+      <trans-unit id="settings.security.loading" datatype="html"><source>Loading security events…</source></trans-unit>
+      <trans-unit id="settings.security.empty" datatype="html"><source>No security events recorded</source></trans-unit>
+      <trans-unit id="settings.security.empty-description" datatype="html"><source>Recorded V1 security events will appear here.</source></trans-unit>
+      <trans-unit id="settings.security.no-match" datatype="html"><source>No results match these filters</source></trans-unit>
+      <trans-unit id="settings.security.no-match-description" datatype="html"><source>Clear or change the filters to inspect another scope or time range.</source></trans-unit>
+      <trans-unit id="settings.security.previous" datatype="html"><source>Previous page</source></trans-unit>
+      <trans-unit id="settings.security.next" datatype="html"><source>Next page</source></trans-unit>
+      <trans-unit id="settings.security.page-size" datatype="html"><source>Rows per page</source></trans-unit>
+      <trans-unit id="settings.security.pagination" datatype="html"><source>Security activity pages</source></trans-unit>
+      <trans-unit id="settings.security.capped" datatype="html"><source>Browsing limit reached. Narrow the filters to review older activity.</source></trans-unit>
+      <trans-unit id="settings.security.hidden" datatype="html"><source>Injection-attempt events are not displayed in this V1 view. A page may contain no visible V1 events; continue to the next page when available.</source></trans-unit>
+      <trans-unit id="settings.security.unresolved" datatype="html"><source>The request did not complete. Try again.</source></trans-unit>
+      <trans-unit id="settings.security.caption" datatype="html"><source>Recent security activity · newest first</source></trans-unit>
+      <trans-unit id="settings.security.time" datatype="html"><source>Time (UTC)</source></trans-unit>
+      <trans-unit id="settings.security.actor" datatype="html"><source>Principal</source></trans-unit>
+      <trans-unit id="settings.security.details" datatype="html"><source>Inspect event</source></trans-unit>
+      <trans-unit id="settings.security.id" datatype="html"><source>Event id</source></trans-unit>
+      <trans-unit id="settings.security.request" datatype="html"><source>Request id</source></trans-unit>
+      <trans-unit id="settings.security.metadata" datatype="html"><source>Event metadata</source></trans-unit>
+      <trans-unit id="settings.security.no-project" datatype="html"><source>No project</source></trans-unit>
+      <trans-unit id="settings.security.unavailable" datatype="html"><source>Not available</source></trans-unit>
+      <trans-unit id="settings.security.support" datatype="html"><source>Support access</source></trans-unit>
+      <trans-unit id="settings.security.support-description" datatype="html"><source>Flagged platform staff access. Recorded grant metadata is listed below; expiry is not supplied by this endpoint.</source></trans-unit>
     </body>
   </file>
 </xliff>

@@ -123,6 +123,12 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   { operationId: 'createProject', method: 'POST', path: '/orgs/{o}/projects' },
   { operationId: 'listProjects', method: 'GET', path: '/orgs/{o}/projects' },
   { operationId: 'getProject', method: 'GET', path: '/projects/{p}' },
+  {
+    operationId: 'listSecurityEvents',
+    method: 'GET',
+    path: '/orgs/{o}/security-events',
+    cursorQueryParameter: 'cursor',
+  },
   { operationId: 'createCiBinding', method: 'POST', path: '/projects/{p}/ci-bindings' },
   {
     operationId: 'listCiBindings',

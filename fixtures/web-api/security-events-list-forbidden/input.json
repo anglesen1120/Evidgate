@@ -1,0 +1,17 @@
+{
+  "operation_id": "listSecurityEvents",
+  "variant": "forbidden",
+  "status": 403,
+  "body": {
+    "error": {
+      "code": "forbidden",
+      "message": "This event stream is not authorized.",
+      "request_id": "018f4350-0000-7000-8000-000000000601",
+      "retryable": false
+    }
+  },
+  "headers": {
+    "X-Request-Id": "018f4350-0000-7000-8000-000000000601"
+  },
+  "latency_ms": 0
+}

@@ -3556,6 +3556,54 @@
       <trans-unit id="settings.policy.tab.compare" datatype="html"><source>Compare</source><target>So sánh</target></trans-unit>
       <trans-unit id="settings.policy.tab.values" datatype="html"><source>Values</source><target>Giá trị</target></trans-unit>
       <trans-unit id="shell.nav.quota-short" datatype="html"><source>Usage &amp; credits</source><target>Sử dụng và tín dụng AI</target></trans-unit>
+      <trans-unit id="settings.security.type-auth" datatype="html"><source>Authentication failure</source><target>Lỗi xác thực</target></trans-unit>
+      <trans-unit id="settings.security.type-cross-tenant" datatype="html"><source>Cross-tenant access probe</source><target>Thử truy cập chéo tổ chức</target></trans-unit>
+      <trans-unit id="settings.security.type-scanner" datatype="html"><source>Secret scanner alert</source><target>Cảnh báo quét bí mật</target></trans-unit>
+      <trans-unit id="settings.security.type-kill-switch" datatype="html"><source>Kill switch used</source><target>Đã dùng công tắc ngắt</target></trans-unit>
+      <trans-unit id="settings.security.type-support" datatype="html"><source>Flagged support access</source><target>Truy cập hỗ trợ bị đánh dấu</target></trans-unit>
+      <trans-unit id="settings.security.severity-info" datatype="html"><source>Info</source><target>Thông tin</target></trans-unit>
+      <trans-unit id="settings.security.severity-warning" datatype="html"><source>Warning</source><target>Cảnh báo</target></trans-unit>
+      <trans-unit id="settings.security.severity-critical" datatype="html"><source>Critical</source><target>Nghiêm trọng</target></trans-unit>
+      <trans-unit id="settings.security.page-summary" datatype="html"><source>Page <x id="page" equiv-text="formatNumber(this.store.pageIndex() + 1, this.locale)"/> · <x id="rows" equiv-text="formatNumber(this.store.rows().length, this.locale)"/> visible events on this page.</source><target>Trang <x id="page"/> · <x id="rows"/> sự kiện hiển thị trên trang này.</target></trans-unit>
+      <trans-unit id="settings.security.title" datatype="html"><source>Security events</source><target>Sự kiện bảo mật</target></trans-unit>
+      <trans-unit id="settings.security.description" datatype="html"><source>Inspect authorized security metadata across the organization. Event records are read-only; times are shown in UTC.</source><target>Xem siêu dữ liệu bảo mật được cấp quyền trong tổ chức. Bản ghi chỉ đọc; thời gian hiển thị theo UTC.</target></trans-unit>
+      <trans-unit id="settings.security.boundary" datatype="html"><source>Metadata only. Severity is supplied by the server, not a security certification. Cross-tenant targets and attempted secrets are not disclosed.</source><target>Chỉ siêu dữ liệu. Mức độ do máy chủ cung cấp, không phải chứng nhận bảo mật. Không tiết lộ đối tượng chéo tổ chức và bí mật bị thử truy cập.</target></trans-unit>
+      <trans-unit id="settings.security.filters" datatype="html"><source>Filter activity</source><target>Lọc hoạt động</target></trans-unit>
+      <trans-unit id="settings.security.project" datatype="html"><source>Project id</source><target>Mã dự án</target></trans-unit>
+      <trans-unit id="settings.security.project-hint" datatype="html"><source>Optional exact project UUID. Leave blank for all projects.</source><target>UUID dự án chính xác, không bắt buộc. Để trống để xem mọi dự án.</target></trans-unit>
+      <trans-unit id="settings.security.type" datatype="html"><source>Event type</source><target>Loại sự kiện</target></trans-unit>
+      <trans-unit id="settings.security.severity" datatype="html"><source>Severity</source><target>Mức độ</target></trans-unit>
+      <trans-unit id="settings.security.all-types" datatype="html"><source>All V1 event types</source><target>Tất cả loại sự kiện V1</target></trans-unit>
+      <trans-unit id="settings.security.all-severities" datatype="html"><source>All severities</source><target>Mọi mức độ</target></trans-unit>
+      <trans-unit id="settings.security.from" datatype="html"><source>From (inclusive)</source><target>Từ (bao gồm)</target></trans-unit>
+      <trans-unit id="settings.security.to" datatype="html"><source>To (exclusive)</source><target>Đến (không bao gồm)</target></trans-unit>
+      <trans-unit id="settings.security.time-hint" datatype="html"><source>Enter local times; results use UTC. The upper bound is exclusive.</source><target>Nhập giờ địa phương; kết quả dùng UTC. Không bao gồm mốc kết thúc.</target></trans-unit>
+      <trans-unit id="settings.security.invalid" datatype="html"><source>Enter valid dates with From earlier than To.</source><target>Nhập ngày hợp lệ với mốc Từ trước mốc Đến.</target></trans-unit>
+      <trans-unit id="settings.security.apply" datatype="html"><source>Apply filters</source><target>Áp dụng bộ lọc</target></trans-unit>
+      <trans-unit id="settings.security.clear" datatype="html"><source>Clear filters</source><target>Xóa bộ lọc</target></trans-unit>
+      <trans-unit id="settings.security.loading" datatype="html"><source>Loading security events…</source><target>Đang tải sự kiện bảo mật…</target></trans-unit>
+      <trans-unit id="settings.security.empty" datatype="html"><source>No security events recorded</source><target>Chưa ghi nhận sự kiện bảo mật</target></trans-unit>
+      <trans-unit id="settings.security.empty-description" datatype="html"><source>Recorded V1 security events will appear here.</source><target>Sự kiện bảo mật V1 đã ghi nhận sẽ xuất hiện tại đây.</target></trans-unit>
+      <trans-unit id="settings.security.no-match" datatype="html"><source>No results match these filters</source><target>Không có kết quả khớp bộ lọc</target></trans-unit>
+      <trans-unit id="settings.security.no-match-description" datatype="html"><source>Clear or change the filters to inspect another scope or time range.</source><target>Xóa hoặc đổi bộ lọc để xem phạm vi hoặc khoảng thời gian khác.</target></trans-unit>
+      <trans-unit id="settings.security.previous" datatype="html"><source>Previous page</source><target>Trang trước</target></trans-unit>
+      <trans-unit id="settings.security.next" datatype="html"><source>Next page</source><target>Trang sau</target></trans-unit>
+      <trans-unit id="settings.security.page-size" datatype="html"><source>Rows per page</source><target>Số dòng mỗi trang</target></trans-unit>
+      <trans-unit id="settings.security.pagination" datatype="html"><source>Security activity pages</source><target>Các trang hoạt động bảo mật</target></trans-unit>
+      <trans-unit id="settings.security.capped" datatype="html"><source>Browsing limit reached. Narrow the filters to review older activity.</source><target>Đã đạt giới hạn xem. Thu hẹp bộ lọc để xem hoạt động cũ hơn.</target></trans-unit>
+      <trans-unit id="settings.security.hidden" datatype="html"><source>Injection-attempt events are not displayed in this V1 view. A page may contain no visible V1 events; continue to the next page when available.</source><target>Sự kiện thử chèn lệnh không hiển thị trong chế độ V1 này. Một trang có thể không có sự kiện V1 hiển thị; hãy sang trang tiếp theo nếu có.</target></trans-unit>
+      <trans-unit id="settings.security.unresolved" datatype="html"><source>The request did not complete. Try again.</source><target>Yêu cầu chưa hoàn tất. Hãy thử lại.</target></trans-unit>
+      <trans-unit id="settings.security.caption" datatype="html"><source>Recent security activity · newest first</source><target>Hoạt động bảo mật gần đây · mới nhất trước</target></trans-unit>
+      <trans-unit id="settings.security.time" datatype="html"><source>Time (UTC)</source><target>Thời gian (UTC)</target></trans-unit>
+      <trans-unit id="settings.security.actor" datatype="html"><source>Principal</source><target>Chủ thể</target></trans-unit>
+      <trans-unit id="settings.security.details" datatype="html"><source>Inspect event</source><target>Xem sự kiện</target></trans-unit>
+      <trans-unit id="settings.security.id" datatype="html"><source>Event id</source><target>Mã sự kiện</target></trans-unit>
+      <trans-unit id="settings.security.request" datatype="html"><source>Request id</source><target>Mã yêu cầu</target></trans-unit>
+      <trans-unit id="settings.security.metadata" datatype="html"><source>Event metadata</source><target>Siêu dữ liệu sự kiện</target></trans-unit>
+      <trans-unit id="settings.security.no-project" datatype="html"><source>No project</source><target>Không có dự án</target></trans-unit>
+      <trans-unit id="settings.security.unavailable" datatype="html"><source>Not available</source><target>Không khả dụng</target></trans-unit>
+      <trans-unit id="settings.security.support" datatype="html"><source>Support access</source><target>Truy cập hỗ trợ</target></trans-unit>
+      <trans-unit id="settings.security.support-description" datatype="html"><source>Flagged platform staff access. Recorded grant metadata is listed below; expiry is not supplied by this endpoint.</source><target>Truy cập của nhân viên nền tảng được đánh dấu. Siêu dữ liệu cấp quyền đã ghi nhận được liệt kê bên dưới; điểm cuối này không cung cấp thời hạn.</target></trans-unit>
     </body>
   </file>
 </xliff>
