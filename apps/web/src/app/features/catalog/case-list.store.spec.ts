@@ -255,7 +255,7 @@ describe('CaseListStore', () => {
       { owner_membership_id: membershipId },
       expect.any(AbortSignal),
       `"${row.version}"`,
-      expect.objectContaining({ idempotencyKey: expect.any(String) }),
+      { idempotencyKey: expect.any(String) as string },
     );
     const confirmed = { ...row, owner_membership_id: membershipId, version: row.version + 1 };
     response.next(confirmed);

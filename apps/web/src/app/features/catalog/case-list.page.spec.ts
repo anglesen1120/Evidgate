@@ -256,6 +256,7 @@ describe('CaseListPage', () => {
       { owner_membership_id: nextOwner.id },
       expect.any(AbortSignal),
       `"${firstCase.version}"`,
+      { idempotencyKey: expect.any(String) as string },
     );
   });
 
