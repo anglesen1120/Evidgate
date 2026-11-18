@@ -21,6 +21,8 @@ class CatalogPageHarness extends ComponentHarness {
   readonly error = this.locatorForOptional('app-error-pattern');
   readonly forbidden = this.locatorForOptional('app-forbidden-pattern');
   readonly more = this.locatorForOptional('[data-catalog-more]');
+  readonly summary = this.locatorFor('[data-catalog-summary]');
+  readonly status = this.locatorFor('#catalog-status');
   async text() {
     return (await this.host()).text();
   }
@@ -54,7 +56,7 @@ describe('CaseListPage', () => {
     const fixture = TestBed.createComponent(CaseListPage);
     fixture.detectChanges();
     await fixture.whenStable();
-    const harness = await TestbedHarnessEnvironment.loader(fixture).getHarness(CatalogPageHarness);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, CatalogPageHarness);
     return { fixture, harness };
   }
 
@@ -67,6 +69,7 @@ describe('CaseListPage', () => {
       'Owner membership',
     ]);
     const text = await harness.text();
+    expect(await (await harness.status()).text()).toContain('Active and missing');
     for (const row of CASE_LIST_FIXTURE.items) {
       expect(text).toContain(row.annotation_id);
       expect(text).toContain(row.name);
@@ -97,8 +100,10 @@ describe('CaseListPage', () => {
     fixture.detectChanges();
     TestBed.tick();
     await manualChangeDetection(async () => {
-      const loading =
-        await TestbedHarnessEnvironment.loader(fixture).getHarness(CatalogPageHarness);
+      const loading = await TestbedHarnessEnvironment.harnessForFixture(
+        fixture,
+        CatalogPageHarness,
+      );
       expect(await loading.loading()).not.toBeNull();
     });
     pending.next(CASE_LIST_FIXTURE);
@@ -115,8 +120,17 @@ describe('CaseListPage', () => {
   });
 
   it('renders a distinct no-match state and preserves the server continuation notice', async () => {
+    const { fixture, harness } = await render();
+    const summary = await harness.summary();
+    expect(await summary.getAttribute('role')).toBe('status');
+    expect(await summary.getAttribute('aria-live')).toBe('polite');
+    expect(await summary.text()).toBe('Matching identities in this page: 2');
+    expect(await summary.text()).not.toContain('case-checkout-17');
     query.next(convertToParamMap({ q: 'not-present' }));
-    const { harness } = await render();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await summary.text()).toBe('No matching identities in this page.');
+    expect(list).toHaveBeenCalledTimes(1);
     expect(await harness.text()).toContain('No matching identities in this page');
     expect(await harness.more()).not.toBeNull();
     expect(await harness.table()).toBeNull();
@@ -131,12 +145,35 @@ describe('CaseListPage', () => {
   });
 
   it('renders forbidden without revealing earlier case or owner data', async () => {
-    list.mockRejectedValue(
+    const { fixture, harness } = await render();
+    const previous = CASE_LIST_FIXTURE.items[0];
+    if (!previous?.owner_membership_id) throw new Error('No owned case fixture');
+    expect(await harness.text()).toContain(previous.annotation_id);
+    expect(await harness.text()).toContain(previous.owner_membership_id);
+    const pending = new Subject<CaseListResponse>();
+    list.mockReturnValueOnce(firstValueFrom(pending));
+    query.next(convertToParamMap({ framework: 'vitest' }));
+    fixture.detectChanges();
+    TestBed.tick();
+    await manualChangeDetection(async () => {
+      expect(list).toHaveBeenCalledTimes(2);
+      expect(list).toHaveBeenLastCalledWith(
+        'project',
+        { framework: 'vitest', limit: 50 },
+        expect.any(AbortSignal),
+      );
+      expect(await harness.loading()).not.toBeNull();
+      expect(await harness.text()).not.toContain(previous.annotation_id);
+      expect(await harness.text()).not.toContain(previous.owner_membership_id);
+      expect(await harness.table()).toBeNull();
+    });
+    pending.error(
       new ApiRequestError({ ...CATALOG_FAILURE, kind: 'forbidden', status: 403, retryable: false }),
     );
-    const { harness } = await render();
+    await fixture.whenStable();
     expect(await harness.forbidden()).not.toBeNull();
-    expect(await harness.text()).not.toContain('case-checkout-17');
+    expect(await harness.text()).not.toContain(previous.annotation_id);
+    expect(await harness.text()).not.toContain(previous.owner_membership_id);
     expect(await harness.table()).toBeNull();
   });
 });

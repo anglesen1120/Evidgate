@@ -141,14 +141,6 @@ export const CaseListStore = signalStore(
         ...(unchanged ? {} : { request: { projectId, query } }),
       });
     },
-    toQuery(): Record<string, string> {
-      const request = store.request()?.query;
-      return {
-        ...caseFiltersToQuery(store.filters()),
-        ...(request?.cursor ? { cursor: request.cursor } : {}),
-        ...(request?.limit && request.limit !== 50 ? { limit: String(request.limit) } : {}),
-      };
-    },
     reload(): void {
       store._read.reload();
     },

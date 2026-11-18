@@ -5,7 +5,7 @@ import { firstValueFrom, Subject } from 'rxjs';
 import { ApiRequestError } from '../../core/http/api-error';
 import { CaseListDataService } from '../../core/data/case-list-data.service';
 import { CASE_LIST_FIXTURE, CATALOG_FAILURE } from './case-list-store.fixtures';
-import { CaseListStore } from './case-list.store';
+import { caseFiltersToQuery, CaseListStore } from './case-list.store';
 
 describe('CaseListStore', () => {
   let list = vi.fn<CaseListDataService['list']>();
@@ -46,15 +46,41 @@ describe('CaseListStore', () => {
   it.each(['forbidden', 'unavailable'] as const)(
     'reports a typed %s without retaining private rows',
     async (kind) => {
-      list.mockRejectedValue(
-        new ApiRequestError({ ...CATALOG_FAILURE, kind, status: kind === 'forbidden' ? 403 : 503 }),
-      );
       const store = TestBed.inject(CaseListStore);
       store.init('project', {});
+      await settle();
+      const previous = CASE_LIST_FIXTURE.items[0];
+      if (!previous?.owner_membership_id) throw new Error('No owned case fixture');
+      expect(store.rows().map((row) => row.annotation_id)).toContain(previous.annotation_id);
+      expect(store.rows().map((row) => row.owner_membership_id)).toContain(
+        previous.owner_membership_id,
+      );
+      const pending = new Subject<CaseListResponse>();
+      list.mockReturnValueOnce(firstValueFrom(pending));
+      store.init('next-project', { status: 'missing' });
+      TestBed.tick();
+      expect(list).toHaveBeenCalledTimes(2);
+      expect(list).toHaveBeenLastCalledWith(
+        'next-project',
+        { status: 'missing', limit: 50 },
+        expect.any(AbortSignal),
+      );
+      expect(store.status()).toBe('loading');
+      expect(store.rows().map((row) => row.annotation_id)).not.toContain(previous.annotation_id);
+      expect(store.rows().map((row) => row.owner_membership_id)).not.toContain(
+        previous.owner_membership_id,
+      );
+      pending.error(
+        new ApiRequestError({ ...CATALOG_FAILURE, kind, status: kind === 'forbidden' ? 403 : 503 }),
+      );
       await settle();
       expect(store.loadError()?.kind).toBe(kind);
       expect(store.status()).toBe('error');
       expect(store.rows()).toEqual([]);
+      expect(store.rows().map((row) => row.annotation_id)).not.toContain(previous.annotation_id);
+      expect(store.rows().map((row) => row.owner_membership_id)).not.toContain(
+        previous.owner_membership_id,
+      );
     },
   );
 
@@ -78,15 +104,24 @@ describe('CaseListStore', () => {
     };
     store.init('project', query);
     await settle();
-    expect(store.toQuery()).toEqual(query);
+    expect(caseFiltersToQuery(store.filters())).toEqual({
+      status: 'missing',
+      framework: 'playwright',
+      q: 'checkout',
+    });
     expect(list).toHaveBeenLastCalledWith(
       'project',
       { status: 'missing', framework: 'playwright', cursor: 'opaque+/=', limit: 25 },
       expect.any(AbortSignal),
     );
-    store.init('project', store.toQuery());
+    store.init('project', { ...query, ...caseFiltersToQuery(store.filters()) });
     await settle();
-    expect(store.toQuery()).toEqual(query);
+    expect(store.filters()).toEqual({
+      status: 'missing',
+      framework: 'playwright',
+      search: 'checkout',
+    });
+    expect(list).toHaveBeenCalledTimes(1);
   });
 
   it('filters only loaded name and identity rows and identifies a no-match', async () => {
@@ -106,7 +141,7 @@ describe('CaseListStore', () => {
     const store = TestBed.inject(CaseListStore);
     store.init('project', { status: 'success', limit: '201' });
     await settle();
-    expect(store.toQuery()).toEqual({});
+    expect(caseFiltersToQuery(store.filters())).toEqual({});
     expect(list).toHaveBeenCalledWith('project', { limit: 50 }, expect.any(AbortSignal));
   });
 });

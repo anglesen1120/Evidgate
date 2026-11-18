@@ -4,6 +4,32 @@ import { caseListFixtureBody } from './fixture-case-list';
 import { FIXTURE_CATALOG_CASE_ROWS } from './fixture-catalog-case-rows';
 
 describe('catalog case list specimens', () => {
+  it('excludes archived cases by default and returns them only for an explicit archived filter', () => {
+    const entry = FIXTURE_CATALOG_CASE_ROWS.find((row) => row.document.variant === 'ok');
+    if (!entry) throw new Error('No catalog case fixture');
+    const page = caseListFixtureBody(
+      entry,
+      new HttpRequest('GET', '/v1/projects/p/cases'),
+    ) as CaseListResponse;
+    expect(page.items.map((row) => row.status)).toEqual(['active', 'missing']);
+    expect(page.items.map((row) => row.annotation_id)).toEqual([
+      'case-checkout-17',
+      'case-address-8',
+    ]);
+    expect(page.next_cursor).toBe('catalog-more-opaque');
+    const archived = caseListFixtureBody(
+      entry,
+      new HttpRequest('GET', '/v1/projects/p/cases?status=archived'),
+    ) as CaseListResponse;
+    expect(archived.items.map((row) => row.annotation_id)).toEqual(['case-total-2']);
+    expect(archived.items.map((row) => row.status)).toEqual(['archived']);
+    expect(archived.next_cursor).toBeNull();
+    const noMatch = caseListFixtureBody(
+      entry,
+      new HttpRequest('GET', '/v1/projects/p/cases?status=archived&framework=playwright'),
+    ) as CaseListResponse;
+    expect(noMatch.items).toEqual([]);
+  });
   it('filters by server status and exact framework while retaining the supplied continuation', () => {
     const entry = FIXTURE_CATALOG_CASE_ROWS[0];
     if (!entry) throw new Error('No catalog case fixture');
@@ -14,7 +40,7 @@ describe('catalog case list specimens', () => {
     expect(page.items.map((row) => row.annotation_id)).toEqual(['case-address-8']);
     expect(page.next_cursor).toBe('catalog-more-opaque');
     const original = entry.document.body as CaseListResponse;
-    expect(original.items).toHaveLength(3);
+    expect(original.items).toHaveLength(2);
     const noMatch = caseListFixtureBody(
       entry,
       new HttpRequest('GET', '/v1/projects/p/cases?framework=Playwright'),

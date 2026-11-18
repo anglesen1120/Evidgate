@@ -16,7 +16,7 @@
     (ngSubmit)="apply()"
     [attr.aria-describedby]="'catalog-filter-hint'"
   >
-    <div class="grid min-w-0 gap-(--eg-space-4) min-[768px]:grid-cols-3">
+    <div class="grid min-w-0 gap-(--eg-space-4) md:grid-cols-2 xl:grid-cols-3">
       <div class="grid min-w-0 content-start gap-(--eg-space-2)">
         <label hlmLabel for="catalog-status" class="whitespace-normal">{{ copy.status }}</label>
         <hlm-select
@@ -94,6 +94,17 @@
     </div>
   </form>
 </section>
+<p class="sr-only" role="status" data-catalog-summary>
+  @if (store.status() === 'ready') {
+    @if (store.isEmpty()) {
+      <span i18n="@@catalog.search-no-results">No matching identities in this page.</span>
+    } @else {
+      <span i18n="@@catalog.search-results"
+        >Matching identities in this page: {{ store.visibleRows().length | number }}</span
+      >
+    }
+  }
+</p>
 <app-request-state
   [status]="store.status()"
   [loadingLabel]="copy.loading"

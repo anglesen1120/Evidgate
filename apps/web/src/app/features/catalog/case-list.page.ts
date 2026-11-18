@@ -1,3 +1,4 @@
+import { DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, linkedSignal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -21,6 +22,7 @@ import {
 @Component({
   selector: 'app-case-list-page',
   imports: [
+    DecimalPipe,
     FormsModule,
     HlmButton,
     HlmInput,
@@ -71,7 +73,7 @@ export class CaseListPage {
     framework: $localize`:@@catalog.framework:Framework`,
     frameworkHint: $localize`:@@catalog.framework-hint:Exact framework name, for example playwright. Leave blank for all frameworks.`,
     search: $localize`:@@catalog.search:Search name or ID in this page`,
-    all: $localize`:@@catalog.all:All statuses`,
+    all: $localize`:@@catalog.all:Active and missing`,
     active: $localize`:@@catalog.active:Active`,
     missing: $localize`:@@catalog.missing:Missing`,
     archived: $localize`:@@catalog.archived:Archived`,
