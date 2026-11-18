@@ -1,4 +1,4 @@
-@if (pageHeadingLevel() === 1) {
+@if (ownsPageHeading) {
   <app-page-header [title]="copy.title" [description]="copy.description" />
 } @else {
   <app-section-header [title]="copy.title" [description]="copy.description" />
