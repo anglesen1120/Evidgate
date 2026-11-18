@@ -7,7 +7,7 @@ import { HlmButton } from '@evidgate/ui/button';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
-import { PageHeaderImports } from '../../shared/ui/page-header';
+import { PageHeaderImports, SectionHeaderImports } from '../../shared/ui/page-header';
 import { RequestStateComponent } from '../../shared/ui/states/request-state.component';
 import { CaseListTableComponent } from './case-list-table.component';
 import {
@@ -27,6 +27,7 @@ import {
     HlmLabel,
     HlmSelectImports,
     PageHeaderImports,
+    SectionHeaderImports,
     RequestStateComponent,
     CaseListTableComponent,
   ],
