@@ -77,7 +77,9 @@ describe('CaseListDataService', () => {
     expect(request.request.method).toBe('PATCH');
     expect(request.request.headers.get('If-Match')).toBe('"3"');
     expect(request.request.headers.get('Idempotency-Key')).toBeTruthy();
-    expect(request.request.body).toEqual({ owner_membership_id: OWNED_MEMBERSHIP });
+    expect(JSON.parse(String(request.request.body))).toEqual({
+      owner_membership_id: OWNED_MEMBERSHIP,
+    });
     request.flush(JSON.stringify(OWNER_CASE), {
       headers: { ...JSON_HEADERS, ETag: '"4"' },
     });
