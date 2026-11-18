@@ -218,10 +218,12 @@ Search here before writing UI. Paths are under `apps/web/src/app/`; test hosts a
 | Edit conflict and `Retry-After` wait | `app-conflict-dialog`, `app-retry-after` | `shared/ui/conflict/` |
 | Page and section headers with action slots | `app-page-header`, `app-section-header`, `[appPageHeaderActions]`, `[appSectionHeaderActions]` | `shared/ui/page-header/` |
 | Desktop-only mutation on a narrow viewport | `[appDesktopMutation]`, `app-desktop-required-notice` | `shared/ui/narrow/` |
-| Step disclosure used by the connect flow | `app-connect-step-reveal` | `shared/ui/reveal/` |
-| Live examples of every shared component | `app-ui-gallery` | `shared/ui/gallery/` |
+| One-time credential or value reveal with copy and dismiss | `app-connect-step-reveal` | `shared/ui/reveal/` |
+| Field feedback, form error summary, required-field note and marker | `app-field-feedback`, `app-form-error-summary`, `app-form-required-note`, `app-field-requirement` | `shared/forms/` |
+| Absolute (UTC) timestamp | `app-absolute-time` | `shared/time/` |
+| Live examples of every shared component (specimens only, not building blocks for features) | `app-ui-gallery` with `app-gallery-composition`, `app-gallery-states`, `app-gallery-tables` | `shared/ui/gallery/` |
 | Buttons, inputs, selects, dialogs, menus, tabs, cards, alerts, toasts, tooltips (UI1–UI13) | owned Helm families through `@evidgate/ui/<family>` | `ui/` |
-| Non-visual shared code (a11y, forms, time, keyset walk, spec helpers) | see [agent code rules §7](agent-code-rules.md) for the helper rows | `shared/a11y/`, `shared/forms/`, `shared/time/`, `shared/keyset-walk.ts`, `shared/testing/` |
+| Non-visual shared code (focus helpers, timer clamp, keyset walk, spec helpers) | see [agent code rules §7](agent-code-rules.md) for the helper rows | `shared/a11y/`, `shared/time/timer-delay.ts`, `shared/keyset-walk.ts`, `shared/testing/` |
 
 ## Before you yield a UI change
 - **Angular pass (mandatory).** Walk W1–W9 and A1–A15 for every file this change touches, run the lint and typecheck commands that enforce them, and record one pass / n-a line per rule in the handoff — a rule that does not apply says why.
