@@ -3604,6 +3604,36 @@
       <trans-unit id="settings.security.unavailable" datatype="html"><source>Not available</source><target>Không khả dụng</target></trans-unit>
       <trans-unit id="settings.security.support" datatype="html"><source>Support access</source><target>Truy cập hỗ trợ</target></trans-unit>
       <trans-unit id="settings.security.support-description" datatype="html"><source>Flagged platform staff access. Recorded grant metadata is listed below; expiry is not supplied by this endpoint.</source><target>Truy cập của nhân viên nền tảng được đánh dấu. Siêu dữ liệu cấp quyền đã ghi nhận được liệt kê bên dưới; điểm cuối này không cung cấp thời hạn.</target></trans-unit>
+      <trans-unit id="catalog.title" datatype="html"><source>Test catalog</source><target>Danh mục kiểm thử</target></trans-unit>
+      <trans-unit id="catalog.description" datatype="html"><source>Browse stable automated test identities in this project. A missing identity is not a failed test.</source><target>Duyệt định danh kiểm thử tự động ổn định trong dự án. Định danh bị thiếu không có nghĩa là kiểm thử thất bại.</target></trans-unit>
+      <trans-unit id="catalog.filters" datatype="html"><source>Filter test identities</source><target>Lọc định danh kiểm thử</target></trans-unit>
+      <trans-unit id="catalog.filter-hint" datatype="html"><source>Status and framework filter the server list. Search matches name or ID in this page only; it never loads additional pages.</source><target>Trạng thái và framework lọc danh sách trên máy chủ. Tìm kiếm chỉ khớp tên hoặc mã trong trang này và không tải thêm trang.</target></trans-unit>
+      <trans-unit id="catalog.status" datatype="html"><source>Status</source><target>Trạng thái</target></trans-unit>
+      <trans-unit id="catalog.framework" datatype="html"><source>Framework</source><target>Framework</target></trans-unit>
+      <trans-unit id="catalog.framework-hint" datatype="html"><source>Exact framework name, for example playwright. Leave blank for all frameworks.</source><target>Tên framework chính xác, ví dụ playwright. Để trống để xem mọi framework.</target></trans-unit>
+      <trans-unit id="catalog.search" datatype="html"><source>Search name or ID in this page</source><target>Tìm tên hoặc mã trong trang này</target></trans-unit>
+      <trans-unit id="catalog.all" datatype="html"><source>Active and missing</source><target>Đang hoạt động và bị thiếu</target></trans-unit>
+      <trans-unit id="catalog.active" datatype="html"><source>Active</source><target>Đang hoạt động</target></trans-unit>
+      <trans-unit id="catalog.missing" datatype="html"><source>Missing</source><target>Bị thiếu</target></trans-unit>
+      <trans-unit id="catalog.archived" datatype="html"><source>Archived</source><target>Đã lưu trữ</target></trans-unit>
+      <trans-unit id="catalog.apply" datatype="html"><source>Apply filters</source><target>Áp dụng bộ lọc</target></trans-unit>
+      <trans-unit id="catalog.clear" datatype="html"><source>Clear filters</source><target>Xoá bộ lọc</target></trans-unit>
+      <trans-unit id="catalog.loading" datatype="html"><source>Loading test identities…</source><target>Đang tải định danh kiểm thử…</target></trans-unit>
+      <trans-unit id="catalog.empty-title" datatype="html"><source>No test identities in this project</source><target>Dự án chưa có định danh kiểm thử</target></trans-unit>
+      <trans-unit id="catalog.empty-description" datatype="html"><source>Test identities appear here after catalog ingestion. No test outcome is inferred from an empty catalog.</source><target>Định danh kiểm thử xuất hiện sau khi nhập danh mục. Danh mục trống không xác định kết quả kiểm thử.</target></trans-unit>
+      <trans-unit id="catalog.no-match-title" datatype="html"><source>No matching identities in this page</source><target>Không có định danh khớp trong trang này</target></trans-unit>
+      <trans-unit id="catalog.no-match-description" datatype="html"><source>Clear the filters to return to the supplied page. A local search does not inspect unloaded results.</source><target>Xoá bộ lọc để trở về trang dữ liệu đã cung cấp. Tìm kiếm cục bộ không kiểm tra kết quả chưa tải.</target></trans-unit>
+      <trans-unit id="catalog.search-no-results" datatype="html"><source>No matching identities in this page.</source><target>Không có định danh khớp trong trang này.</target></trans-unit>
+      <trans-unit id="catalog.search-results" datatype="html"><source>Matching identities in this page: <x id="INTERPOLATION" equiv-text="{{ store.visibleRows().length | number }}"/></source><target>Số định danh khớp trong trang này: <x id="INTERPOLATION" equiv-text="{{ store.visibleRows().length | number }}"/></target></trans-unit>
+      <trans-unit id="catalog.more" datatype="html"><source>More results exist. Only this response page is shown.</source><target>Vẫn còn kết quả khác. Chỉ hiển thị trang phản hồi này.</target></trans-unit>
+      <trans-unit id="catalog.contract-note" datatype="html"><source>Owner is shown as a membership ID. This list does not supply revision, platform, level, purpose or rename history; these columns are not displayed.</source><target>Người phụ trách được hiển thị bằng mã thành viên. Danh sách không cung cấp phiên bản, nền tảng, cấp, mục đích hoặc lịch sử đổi tên nên không hiển thị các cột này.</target></trans-unit>
+      <trans-unit id="catalog.table-caption" datatype="html"><source>Test identities in this page</source><target>Định danh kiểm thử trong trang này</target></trans-unit>
+      <trans-unit id="catalog.column-identity" datatype="html"><source>Identity / name</source><target>Định danh / tên</target></trans-unit>
+      <trans-unit id="catalog.stable-id" datatype="html"><source>Stable identity</source><target>Định danh ổn định</target></trans-unit>
+      <trans-unit id="catalog.case-id" datatype="html"><source>Case ID</source><target>Mã ca kiểm thử</target></trans-unit>
+      <trans-unit id="catalog.owner" datatype="html"><source>Owner membership</source><target>Mã người phụ trách</target></trans-unit>
+      <trans-unit id="catalog.unassigned" datatype="html"><source>Unassigned</source><target>Chưa gán</target></trans-unit>
+      <trans-unit id="catalog.unresolved" datatype="html"><source>The catalog request did not complete. Try again.</source><target>Yêu cầu danh mục chưa hoàn tất. Hãy thử lại.</target></trans-unit>
     </body>
   </file>
 </xliff>

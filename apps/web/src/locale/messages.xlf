@@ -9735,6 +9735,36 @@
       <trans-unit id="settings.security.unavailable" datatype="html"><source>Not available</source></trans-unit>
       <trans-unit id="settings.security.support" datatype="html"><source>Support access</source></trans-unit>
       <trans-unit id="settings.security.support-description" datatype="html"><source>Flagged platform staff access. Recorded grant metadata is listed below; expiry is not supplied by this endpoint.</source></trans-unit>
+      <trans-unit id="catalog.title" datatype="html"><source>Test catalog</source></trans-unit>
+      <trans-unit id="catalog.description" datatype="html"><source>Browse stable automated test identities in this project. A missing identity is not a failed test.</source></trans-unit>
+      <trans-unit id="catalog.filters" datatype="html"><source>Filter test identities</source></trans-unit>
+      <trans-unit id="catalog.filter-hint" datatype="html"><source>Status and framework filter the server list. Search matches name or ID in this page only; it never loads additional pages.</source></trans-unit>
+      <trans-unit id="catalog.status" datatype="html"><source>Status</source></trans-unit>
+      <trans-unit id="catalog.framework" datatype="html"><source>Framework</source></trans-unit>
+      <trans-unit id="catalog.framework-hint" datatype="html"><source>Exact framework name, for example playwright. Leave blank for all frameworks.</source></trans-unit>
+      <trans-unit id="catalog.search" datatype="html"><source>Search name or ID in this page</source></trans-unit>
+      <trans-unit id="catalog.all" datatype="html"><source>Active and missing</source></trans-unit>
+      <trans-unit id="catalog.active" datatype="html"><source>Active</source></trans-unit>
+      <trans-unit id="catalog.missing" datatype="html"><source>Missing</source></trans-unit>
+      <trans-unit id="catalog.archived" datatype="html"><source>Archived</source></trans-unit>
+      <trans-unit id="catalog.apply" datatype="html"><source>Apply filters</source></trans-unit>
+      <trans-unit id="catalog.clear" datatype="html"><source>Clear filters</source></trans-unit>
+      <trans-unit id="catalog.loading" datatype="html"><source>Loading test identities…</source></trans-unit>
+      <trans-unit id="catalog.empty-title" datatype="html"><source>No test identities in this project</source></trans-unit>
+      <trans-unit id="catalog.empty-description" datatype="html"><source>Test identities appear here after catalog ingestion. No test outcome is inferred from an empty catalog.</source></trans-unit>
+      <trans-unit id="catalog.no-match-title" datatype="html"><source>No matching identities in this page</source></trans-unit>
+      <trans-unit id="catalog.no-match-description" datatype="html"><source>Clear the filters to return to the supplied page. A local search does not inspect unloaded results.</source></trans-unit>
+      <trans-unit id="catalog.search-no-results" datatype="html"><source>No matching identities in this page.</source></trans-unit>
+      <trans-unit id="catalog.search-results" datatype="html"><source>Matching identities in this page: <x id="INTERPOLATION" equiv-text="{{ store.visibleRows().length | number }}"/></source></trans-unit>
+      <trans-unit id="catalog.more" datatype="html"><source>More results exist. Only this response page is shown.</source></trans-unit>
+      <trans-unit id="catalog.contract-note" datatype="html"><source>Owner is shown as a membership ID. This list does not supply revision, platform, level, purpose or rename history; these columns are not displayed.</source></trans-unit>
+      <trans-unit id="catalog.table-caption" datatype="html"><source>Test identities in this page</source></trans-unit>
+      <trans-unit id="catalog.column-identity" datatype="html"><source>Identity / name</source></trans-unit>
+      <trans-unit id="catalog.stable-id" datatype="html"><source>Stable identity</source></trans-unit>
+      <trans-unit id="catalog.case-id" datatype="html"><source>Case ID</source></trans-unit>
+      <trans-unit id="catalog.owner" datatype="html"><source>Owner membership</source></trans-unit>
+      <trans-unit id="catalog.unassigned" datatype="html"><source>Unassigned</source></trans-unit>
+      <trans-unit id="catalog.unresolved" datatype="html"><source>The catalog request did not complete. Try again.</source></trans-unit>
     </body>
   </file>
 </xliff>

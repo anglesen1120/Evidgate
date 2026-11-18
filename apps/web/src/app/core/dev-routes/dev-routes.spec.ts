@@ -24,6 +24,8 @@ import { ApiTokensPage } from '../../features/settings/api-tokens/api-tokens.pag
 import { SuiteCompositionComponent } from '../../features/suites/composition/suite-composition.component';
 // eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the review-only route loads the real security view; production core never imports it.
 import { SecurityEventsPage } from '../../features/settings/security/security-events.page';
+// eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the real review-only catalog page.
+import { CaseListPage } from '../../features/catalog/case-list.page';
 import { ShellComponent } from '../../shell/layout/shell.component';
 import { authGuard, orgScopeGuard, projectScopeGuard } from '../guards';
 import { devRoutes } from './dev-routes.fixtures';
@@ -160,5 +162,18 @@ describe('dev routes (review only)', () => {
     )?.loadComponent;
     if (leaf === undefined) throw new Error('no lazy suite composition review route');
     expect(await leaf()).toBe(SuiteCompositionComponent);
+  });
+  it('mounts the catalog list under authenticated org, project and read gates', async () => {
+    const route = devRoutes().find((entry) => entry.path === 'dev/catalog-list');
+    expect(route?.component).toBe(ShellComponent);
+    const org = route?.children?.[0];
+    expect(org?.canMatch).toEqual([authGuard, orgScopeGuard]);
+    const project = org?.children?.[0];
+    expect(project?.path).toBe('projects/:projectId');
+    expect(project?.canMatch?.[0]).toBe(projectScopeGuard);
+    expect(project?.canMatch).toHaveLength(2);
+    const load = project?.loadComponent;
+    if (!load) throw new Error('No lazy catalog review route');
+    expect(await load()).toBe(CaseListPage);
   });
 });

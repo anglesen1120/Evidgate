@@ -1,0 +1,52 @@
+{
+  "operation_id": "listCases",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000ca10"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "org_id": "018f0000-0000-7000-8000-000000000001",
+        "project_id": "018f0000-0000-7000-8000-000000000011",
+        "framework": "playwright",
+        "language": "typescript",
+        "labels": [],
+        "first_seen_commit": "9af317c",
+        "last_seen_commit": "9af317c",
+        "created_at": "2026-10-20T08:00:00Z",
+        "updated_at": "2026-10-20T08:00:00Z",
+        "version": 3,
+        "requirement_ref": null,
+        "id": "018f0000-0000-7000-8000-00000000ca01",
+        "annotation_id": "018f0000-0000-7000-8000-0000000c0017",
+        "name": "Checkout confirms order",
+        "file_path": "tests/checkout.spec.ts",
+        "status": "active",
+        "owner_membership_id": "018f0000-0000-7000-8000-000000000031"
+      },
+      {
+        "org_id": "018f0000-0000-7000-8000-000000000001",
+        "project_id": "018f0000-0000-7000-8000-000000000011",
+        "framework": "playwright",
+        "language": "typescript",
+        "labels": [],
+        "first_seen_commit": "9af317c",
+        "last_seen_commit": "9af317c",
+        "created_at": "2026-10-20T08:00:00Z",
+        "updated_at": "2026-10-20T08:00:00Z",
+        "version": 3,
+        "requirement_ref": null,
+        "id": "018f0000-0000-7000-8000-00000000ca02",
+        "annotation_id": "018f0000-0000-7000-8000-0000000c0008",
+        "name": "Địa chỉ giao hàng đầy đủ · Address validation",
+        "file_path": "tests/address.spec.ts",
+        "status": "missing",
+        "owner_membership_id": null
+      }
+    ],
+    "next_cursor": "catalog-more-opaque"
+  }
+}

@@ -129,6 +129,7 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
     path: '/orgs/{o}/security-events',
     cursorQueryParameter: 'cursor',
   },
+  { operationId: 'listCases', method: 'GET', path: '/projects/{p}/cases' },
   { operationId: 'createCiBinding', method: 'POST', path: '/projects/{p}/ci-bindings' },
   {
     operationId: 'listCiBindings',
