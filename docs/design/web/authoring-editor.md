@@ -1,0 +1,168 @@
+Status: proposed, awaiting owner approval
+
+# Manual-case editor and Timeline
+
+Flow id: `authoring-editor`. CR-D-2 phase: **G1**.
+
+Feature tasks: `13.4.1-T1.1`, `13.4.1-T1.2`, `13.4.1-T3`; related `13.1.1-T2`, `13.1.1-T3`, `13.1.2-T1`, `13.3.1-T3`, `13.3.1-T4`.
+
+Legend: ✅ verified source with a link · ⚠️ unverified runtime/visual evidence · `[INFERENCE]` deduction · `[DECISION]` accepted policy · `[OPEN]` unresolved, with recommended default. This is a proposed interpretation of the supplied visual references, not implementation, a review record or owner approval. The design gate remains closed until independent design review and subsequent owner approval ([feature §2 AC1 and §10](../../../plans/features/13-product-phases/13.4.1-authoring-ui.md)).
+
+## v2 pages
+
+| Page | Role | Phase | Declared `?state=` values |
+| --- | --- | --- | --- |
+| [41 · Test-case editor](../web-ui/output/41-test-case-editor/evidgate-test-case-editor.html) | Primary Editor, Checklist review and Timeline surface for one case | G1 | `default`, `loading`, `empty`, `new-case`, `error`, `403`, `404`, `401`, `429`, `412`, `submitting`, `saved`, `validation-error`, `long` (HTML:88) |
+| [40 · Feature tree](authoring-tree.md) | Parent list, selection and create entry; its Regions and CR-D-2 deltas stay there | G1 | Not repeated here. |
+| [42 · Pending changes](../web-ui/prompts-crd2/B2-42-pending-changes.md) | Owns applying the queued checklist batch; this editor never applies it | G1 | Companion specification. |
+
+✅ Source: [editor brief](../web-ui/prompts-crd2/B2-41-test-case-editor.md), [authoring vocabulary](../web-ui/prompts-crd2/00-delta-brief.md#authoring-vocabulary-plan-13-epics-131134), [feature §5–6](../../../plans/features/13-product-phases/13.4.1-authoring-ui.md). `created` is a static success card (HTML:172–176), `long` is a declared content-stress review state (HTML:236–239), and the cards at HTML:459–504 are static specimens. None is an API lifecycle state. Product chrome must not ship the review state/phase switcher.
+
+Data trace inventory follows. Schema paths are relative to this file; commas name separate members of the same schema. `[OPEN]` is an unresolved contract gap, never permission to invent a value.
+
+| Data field | openapi schema path | state (traced / [OPEN]) |
+| --- | --- | --- |
+| Project slug, name, code prefix and organization display | `../../../contracts/openapi.yaml#/components/schemas/ProjectDto.slug`, `ProjectDto.name`, `ProjectDto.case_prefix`; `OrganizationDto.name` | traced; shell scope only, never derive a prefix or organization from the mockup |
+| Case id, immutable code, checklist/node parents, title, description, precondition, priority, lifecycle and version | `../../../contracts/openapi.yaml#/components/schemas/ManualCaseDetailDto.case_id`, `ManualCaseDetailDto.code`, `ManualCaseDetailDto.checklist_item_id`, `ManualCaseDetailDto.node_id`, `ManualCaseDetailDto.title`, `ManualCaseDetailDto.description`, `ManualCaseDetailDto.precondition`, `ManualCaseDetailDto.priority`, `ManualCaseDetailDto.state`, `ManualCaseDetailDto.version` | traced; `state` has only `draft`, `approved`, `retired` |
+| Ordered steps and their number/action/expected/test data | `../../../contracts/openapi.yaml#/components/schemas/ManualCaseDetailDto.steps`; `ManualCaseStepDto.no`, `ManualCaseStepDto.action`, `ManualCaseStepDto.expected`, `ManualCaseStepDto.data` | traced; 1–100 items, unknown members refused, `data` nullable |
+| Create/update timestamps | `../../../contracts/openapi.yaml#/components/schemas/ManualCaseDetailDto.created_at`, `ManualCaseDetailDto.updated_at` | traced; render UTC absolute |
+| Save precondition tag and returned revision | Read response `ETag: "<version>"` on `getManualCase`; `../../../contracts/openapi.yaml#/components/schemas/AuthoringChangeResponse.version`, `AuthoringChangeResponse.changed` | traced at route level (ETag is a response header, not a DTO member); PATCH only |
+| Field-write members | `../../../contracts/openapi.yaml#/components/schemas/UpdateManualCaseRequest.title`, `UpdateManualCaseRequest.description`, `UpdateManualCaseRequest.precondition`, `UpdateManualCaseRequest.steps`, `UpdateManualCaseRequest.priority` | traced; no `reason`, source, author, state or parent member |
+| New-case create members | `../../../contracts/openapi.yaml#/components/schemas/CreateManualCaseRequest.checklist_item_id`, `CreateManualCaseRequest.title`, `CreateManualCaseRequest.description`, `CreateManualCaseRequest.precondition`, `CreateManualCaseRequest.steps`, `CreateManualCaseRequest.priority`; `CreateManualCaseResponse.case_id`, `CreateManualCaseResponse.code`, `CreateManualCaseResponse.version` | traced |
+| Parent checklist title, human code, priority and path; case parent breadcrumb | Only `ManualCaseDetailDto.checklist_item_id` / `node_id`; checklist has no code member | [OPEN] parent projection/title, priority and path are absent from the detail read; recommend an authorized checklist/tree lookup or a read-model projection; never display the UUID as a human title or invent `SHOP-CL-0017` |
+| Related cases under the parent | `../../../contracts/openapi.yaml#/components/schemas/ManualCaseListResponse.items`; `ManualCaseListItemDto.code`, `ManualCaseListItemDto.title`, `ManualCaseListItemDto.state`; list query filters by `item_id` | traced; use an authorized filtered list and label the loaded count; the mockup's “the only case under SHOP-CL-0017” is a global claim and stays [OPEN] until a server total is projected |
+| Case source (`manual/ai/import`), author and AI provenance | No source/author/provenance members on `ManualCaseDetailDto` | [OPEN] recommend a scoped projection; until supplied, show unavailable, not “Manual” or an author, and never infer from updated time |
+| Version reason on create or save | No `reason` member on `CreateManualCaseRequest` or `UpdateManualCaseRequest`; version rows carry one | [OPEN] recommend optional `reason` (1–500 code points) in each write body, stored on the appended row; a required UI reason without transport must block save with an explained prerequisite |
+| Lifecycle action (approve/retire) | `SetManualCaseStateRequest.state`, `SetManualCaseStateRequest.reason` exist, but the editor call list names only PATCH and restore | [OPEN] treat status as display-only here; do not add unplanned lifecycle actions. Recommended default: show status and a read-only explanation |
+| Field length/requiredness shown by the form | `ManualCaseDetailDto.title` max 500; `description`/`precondition` max 4000; step text max 2000; `UpdateManualCaseRequest` omits absent members | [OPEN] mockup caps 120/600/240/400 and marks precondition required; recommended default: enforce contract maxima, require title/priority/at least one paired step, keep precondition optional as the contract allows unless the product records a stronger rule |
+| Optional description | `ManualCaseDetailDto.description` / `UpdateManualCaseRequest.description` | [OPEN] absent from the mockup form although readable/writable; recommend an optional plain-text field or an explicit decision to hide it, never silent loss |
+| Save error code/message/request id/retryability/details pointers | `../../../contracts/openapi.yaml#/components/schemas/ErrorEnvelope.error.code`, `error.message`, `error.request_id`, `error.retryable`, `error.details` (`index`, `path`, `reason`, `limit`, `actual`) | traced; details are pointers, not snapshots; current values require a fresh read |
+| Timeline row identity, entity, version number, batch, change kind, source, content hash, author, reason, AI run and UTC time | `../../../contracts/openapi.yaml#/components/schemas/AuthoringVersionListItemDto.version_id`, `entity_kind`, `entity_id`, `version_no`, `batch_id`, `change_kind`, `source`, `content_hash`, `author`, `reason`, `ai_run_id`, `created_at` | traced; `author` is a membership UUID or null, `reason` nullable |
+| Timeline next cursor | `../../../contracts/openapi.yaml#/components/schemas/AuthoringVersionListResponse.next_cursor` | traced; keyset newest-first, no total or page number |
+| Timeline author display name and AI run destination | `AuthoringVersionListItemDto.author` is only a UUID; `ai_run_id` is an id | [OPEN] recommend an authorized membership display-name projection and plain-text run id at G1; do not invent a person or a G2 run link |
+| Timeline row identity versus visible label | `../../../contracts/openapi.yaml#/components/schemas/AuthoringVersionListItemDto.version_id`, `AuthoringVersionListItemDto.version_no` | traced; key rows and restore targets by `version_id`, display `version_no`; exposing the full UUID as a copyable identifier remains [OPEN] against AC10's literal “version id” wording, and the two values are never substituted for each other |
+| Inspectable version content and hash | `../../../contracts/openapi.yaml#/components/schemas/AuthoringVersionDetailDto.content`, `content_hash`; response `ETag: "<content_hash>"` | traced; content is the stored snapshot, never a typed re-serialisation |
+| Restore target and result | Route target `AuthoringVersionId`; `../../../contracts/openapi.yaml#/components/schemas/AuthoringRestoreResponse.version` | traced; restore names a version id and answers the entity's new version |
+| Restored version's source, author and time | `AuthoringRestoreResponse` carries only `version`; the appended row is not described by the restore route | [OPEN] mockup says “source manual”; recommend re-reading the timeline row and displaying server source/author/time, never hardcoding `manual` |
+| Restore confirmation reason | Restore route declares no request body or reason parameter | [OPEN] AC10 requires confirmation plus reason, while the route carries neither; recommend optional/required `reason` body (1–500) stored on the appended restore row, or an owner decision that the UI reason is not persisted |
+| Queued change operation/target/author/source/reason/state | `../../../contracts/openapi.yaml#/components/schemas/AuthoringChangeListItem.change_type`, `target_id`, `author_membership_id`, `source`, `reason`, `state`, `base_version`, `created_at` | traced; queue is pending, never an applied version; display names/target codes remain projections above |
+| Pending queue badge/total | No server count on the case/detail read | [OPEN] OI-13-503 effect: a loaded queue page is not the total; show `—` with “Pending count unavailable”, never 0 or the loaded-row count |
+| Per-case AI action, estimate, credit, opt-in and provenance | No `GenerationEstimate`, `Generation`, `credit_cost_micro`, `credits_available_micro`, `role_profile_ref`, `prompt_version`, `output_schema_version` or `cost_micro` component is present in the current contract's searched text | [OPEN] these are 13.3.1's shapes, not this file's to invent; recommended default: reuse the owning plan's estimate/generation routes verbatim, render only returned fields, and keep AI actions blocked until the shapes and their refusals land |
+| Generation row version/ETag and accept refs | No matching schema member found in the current contract search | [OPEN] follow 13.3.1's detail/accept shapes when supplied; never fabricate a per-item cost, accept tag or version |
+
+## Regions
+
+Reading order follows page 41.
+
+| Order | Region | Presentation and action |
+| --- | --- | --- |
+| 1 | Shell, scope, breadcrumbs and page identity (HTML:70–87) | Case code and title; back to tree; status and current version only when supplied. |
+| 2 | Read-only notice, checklist context and header actions | Parent checklist context and pending-change link; one primary action appropriate to the active tab. Pending is linked, never applied here. |
+| 3 | Scoped request state | Loading/denied/not-found/conflict and new-case empty panel replace or scope content; retain successful data where possible. |
+| 4 | Tabs (HTML:253–264) | Editor, Checklist review, Timeline. Real tab semantics with one selected tab/panel; a labelled select is the narrow-view equivalent. |
+| 5 | Editor facts and AI banner (HTML:266–299) | Version, source, settings ref, author/time only when supplied; AI text is escaped plain text and marked unreviewed. Read-only narrow summary uses semantic labels and values. |
+| 6 | Editor form (HTML:301–360) | Title, optional description decision, precondition, priority, ordered paired steps with supplied test data, and version reason per contract gap. Add/remove/reorder steps are explicit edits, not drag-only. |
+| 7 | AI actions (HTML:362–387) | Rebuild and Translate open preflight; estimate/balance/opt-in/grant precede any result; no result overwrites the visible draft or creates approval. |
+| 8 | Checklist review panel (HTML:391–435) | Parent item/priority/related cases; Comment/Merge/Split/Delete queue into page 42; lineage preview is plain text; no apply action. |
+| 9 | Timeline panel (HTML:438–456) | Immutable versions newest-first, paging, restore confirmation and read-only diff; no rewrite of prior rows. |
+| 10 | Static review specimens (HTML:459–504) | Reference only; not extra query states or production UI. |
+
+A15 reuse: `app-page-header`, `app-section-header`, `app-request-state`/state patterns, `app-inline-feedback`, `app-retry-after`, `app-conflict-dialog`, `app-status-pill`, `app-revision-chip`, `app-copyable-identifier`, `app-number-value`, `app-absolute-time`, `app-form-error-summary`, `app-field-feedback`, `app-field-requirement`, `app-desktop-required-notice`, `[appDesktopMutation]`; owned Helm tabs, inputs, selects, textareas, buttons, dialogs, cards and tooltips. Source: [A15 catalogue](../../engineering/ui-rules.md#shared-component-catalogue-a15). Proposed NEW presentational names only: `shared/ui/authoring/case-editor-form`, `shared/ui/authoring/step-list`, `shared/ui/authoring/ai-preflight`, `shared/ui/authoring/version-timeline`, `shared/ui/authoring/version-diff`, `shared/ui/authoring/queued-changes`. No feature store, SDK client or data service inside them.
+
+## States
+
+Coverage: **9/9 semicolon-delimited Editor entries** in feature §6, expanded to 15 rows (save progress/success/failure, restore confirm/success and four AI refusals are separate behaviours), plus **6/6 Timeline entries**. Shared request state is `idle → loading → ready(empty allowed) | error`; 412 is a failed mutation precondition, not a GET lifecycle.
+
+| State | Region behaviour, recovery and announcement | Mockup `?state=` or [OPEN] |
+| --- | --- | --- |
+| New case | No id/code/version invented; code is server-allocated on create. Parent checklist is required by the contract even though the mockup fixes one in context; create is blocked without a valid parent. History says no versions until first save. | `new-case` and `empty` (same panel); [OPEN] parent selector/entry path and fixed `SHOP-CL-0017` identity are not supplied |
+| Missing required field | Inline persistent error tied by `aria-describedby`; a focused error summary links every invalid field after submit. Missing parent/write grant is a prerequisite, not a field error. | `validation-error` panel; `default` field specimen HTML:466–467 |
+| Unsaved draft | Warn on navigation/reload per product capability; keep values in memory only; no local persistence, auto-submit or autosave. Preserve when AI/Timeline opens. | `default` static unsaved card HTML:470–471; [OPEN] no isolated query |
+| Save in progress | Busy Save, visible textual progress, one polite status; keep editable values and prevent duplicate submit without clearing the draft. | `submitting` |
+| Save success | Only after success: report appended version or `changed: false` no-op, refresh base/ETag, retain other tabs. Never say “Saved” for a no-op or failed call. | `saved`; [OPEN] no distinct no-op visual |
+| Save failure | Keep all fields, show localized failure plus escaped server code/request id; no automatic retry. 422 maps field pointers; 409 retired/conflict meaning; 429/503 use `Retry-After`. | `error`; [OPEN] no distinct PATCH-failure specimen, and the mockup hides the form while its copy says fields stay visible; recommended default is a scoped inline error over the retained form |
+| 412, draft preserved | Open shared conflict dialog with current revision and changed-field pointers after a fresh authorized read; show retained draft; only explicit Reload adopts the current base. No auto-merge, auto-resubmit, “Saved”, or discarding the draft. | `412`; dialog HTML:571–585 |
+| Read-only history | Past versions are immutable and inspectable only; restore appends, never edits/deletes history. Write-denied readers still read history; read-denied shows 403. | `default` Timeline reads “historical · read-only” HTML:446–448; [OPEN] no route-wide toggle |
+| Restore confirmation | Named dialog names source version and consequence; confirmation requires a reason per AC10 and one idempotency intent; Cancel keeps history unchanged. Restore has no `If-Match` and cannot produce a stale 412. | `default` dialog HTML:546–556; [OPEN] reason transport absent from route. A 404/409/422 keeps the dialog open with its reason and appends nothing; 429/503 use `Retry-After` |
+| Restored, new version appended | Re-read list/detail; show the server's new version; prior rows unchanged. If the new row is not yet readable, show refresh-required, not a fabricated version. Idempotent replay creates no second version. | `default` static success card HTML:473–477; [OPEN] no query state |
+| Queued checklist edit | Show operation/target/author/source/reason/state and “pending, not applied” lineage; no apply here. Pending count unavailable until projected. | `default` Checklist panel HTML:404–435; `default` static card HTML:498–500 |
+| AI opt-in off | Rebuild/Translate unavailable with reason and consent destination; manual authoring continues; no fake result. | `default` static card HTML:478–481 |
+| AI credits exhausted / cap blocked | Show supplied estimate and balance/period; explain that the action is blocked; link to authorized usage; never show a negative/zero balance that was not supplied. | `default` static card HTML:482–486; [OPEN] exact refusal envelope/status class |
+| AI gateway unavailable | No draft overwrite, no version; actual failure and `Retry-After` when supplied; retry requires a fresh preflight. | `default` static card HTML:487–491 |
+| AI schema-invalid output | No version; show supplied outcome/refund only and escaped diagnostics; never present invalid output as a case. | `default` static card HTML:492–496 |
+| Timeline first page | Newest-first immutable rows with version number, source, author, reason, UTC time, change kind when supplied; loaded count only. | `default` Timeline HTML:438–449 |
+| Timeline paging | Load more with the returned opaque cursor; preserve rows and focus; repeated cursor is a visible failure; no total/page jump. | [OPEN] fixture has three rows and no alternate cursor |
+| Empty history for a new case | Unsaved draft has no entity id: explain history begins after first save instead of issuing a read. A successfully created case normally already has a version; render server truth. | `new-case`; [OPEN] no empty-history specimen |
+| Timeline restore confirmation | Same dialog as Editor restore; inspectable source content, reason requirement and append consequence. | `default` dialog HTML:546–556 |
+| Timeline restored (new version appended) | Re-read newest page; announce one appended version; old rows remain; no rewrite. | `default` static success card HTML:473–477; [OPEN] live paging |
+| Timeline read-only | No edit/delete of a version; only restore appends. Read failure retains no fabricated rows. | `default` Timeline `historical · read-only`; [OPEN] no dedicated query |
+
+Additional shared rows: `loading` keeps shell/tabs and produces one named busy status; `403` is read denial with no case content, while write denial keeps readable content and explains disabled edits; the mockup's 403 panel claims the case stays readable while the same state hides the body, so the panel must be split or its copy corrected and must not be used as proof of write-denial rendering; unknown/foreign/soft-deleted ids render the same `404`; `401` preserves safe return URL and never auto-submits; `429`/503 honor real `Retry-After`; unknown members 422 and stale/missing `If-Match` are server errors, never client 428/412 inventing.
+
+Focus and live regions: skip link → breadcrumbs/shell → tabs → active panel content → form fields in reading order → step groups → reason/save → AI actions → Timeline rows/actions. Tablist uses one tab stop with arrow/Home/End movement; the narrow select preserves the same order. Error summary receives focus after failed submit, then its links reach fields. Save/restore/AI busy status is a polite live region; one announcement per state transition, none per timer/poll. AI and generation progress, when shown, exponates only supplied stage—no percentage/ETA; stop at terminal state. Dialog traps Tab, Escape closes, and focus returns to opener. Disabled controls have adjacent reachable explanation. Timeline order is DOM order; each row is a list/article with semantic time; diff markers never carry meaning only by colour. Decorative skeletons/icons are hidden; no `innerHTML`.
+
+## Copy length (vi vs en)
+
+Longest-risk specimens are source strings, not measured rendered widths. Preserve full user text; 40% expansion must not reduce type or clip essential reasons. Use the shared status/severity vocabulary and keep full context outside compact chips.
+
+| Use | vi specimen | en specimen | Treatment |
+| --- | --- | --- | --- |
+| Case title (HTML:72) | Xác nhận đơn hàng hiển thị tổng tiền | Confirm order shows the total | Wrap h1; code stays non-wrapping |
+| Precondition (HTML:310) | Điều kiện tiên quyết · Đã mở trang thanh toán. | Preconditions · Checkout is open. | Body wrap; field label separate |
+| Step label (HTML:331) | Kết quả mong đợi · Hiển thị tổng tiền đơn hàng và phí giao hàng. | Expected result · The order total and delivery fee are shown. | Paired grid stacks when narrow; no clipped text |
+| Save action (HTML:356) | Lưu phiên bản mới · Lưu sẽ thêm v6 từ gốc v5 này; v4 và v5 không đổi. | Save new version · Saving appends v6 from this v5 base; v4 and v5 remain unchanged. | Button intrinsic; replace the mockup's predicted `v6` with “a new version” in product copy; show the server value after success |
+| Restore action (HTML:443) | Khôi phục v4 thành phiên bản mới · Khôi phục thêm phiên bản mới; không bao giờ ghi đè v4 hay v5. | Restore v4 as new version · Restore appends a new version; it never rewrites v4 or v5. | Full action/help; confirm in dialog |
+| AI refusal (HTML:480) | Không thể Tạo lại và Dịch. Soạn thủ công vẫn hoạt động. | Rebuild and Translate are unavailable. Manual authoring continues to work. | Persistent banner; reason and consent link |
+| Credit refusal (HTML:484) | Không còn tín dụng AI · Kỳ 2026-10 · ước tính 4 sẽ vượt số dư | No AI credit left · Period 2026-10 · estimate 4 would exceed the balance | Use supplied values only; null balance is unavailable |
+| Conflict (HTML:572) | Xem xét xung đột · Phiên bản hiện tại và bản nháp được giữ đều hiển thị. Tải lại là thao tác rõ ràng. | Review conflict · Current revision and retained draft are both shown. Reload is explicit. | Dialog title/body wrap; buttons preserved |
+| Draft retention (HTML:583) | Tải lại chỉ thay gốc bản nháp khi bạn chọn. Không tự động hợp nhất hay gửi lại. | Reload replaces the draft base only when you choose it. No automatic merge or resubmission occurs. | Essential; never clamp |
+| No history yet | Lịch sử bắt đầu sau lần lưu đầu tiên; chưa có phiên bản nào được tạo. | History starts after the first save; no version has been created yet. | Empty panel in unsaved new-case draft |
+| Pending count unavailable | Chưa có số lượng thay đổi danh mục đang chờ | Checklist change count unavailable | `—` plus accessible explanation |
+| Save reason missing | Cần có lý do phiên bản trước khi lưu | A version reason is required before saving | Only if the owner confirms the reason transport |
+
+## Responsive notes
+
+- **1280px:** expanded shell; editor uses a readable bounded form column, with paired step fields side by side where width allows and Timeline/diff split only when both sides remain legible. Header actions keep one primary; tabs stay a real tablist. No page-wide overflow; long user text wraps. Large version lists page by cursor; heavy diff may defer as shared policy permits.
+- **768–1279px:** shell rail; paired fields may stack, diff panes stack, tabs remain tabs. Same permissions and data; do not squeeze fields into fixed labelled widths.
+- **360px / below 768px:** drawer shell and persistent desktop-required notice. Editing and apply are read-only at this width per the plan; the mockup's narrow notice also names restore, and save/AI/queue creation append or mutate, so every write control is disabled or removed under the same viewport policy. Case facts, step text, Timeline, version metadata, diff inspection, conflict explanation and navigation remain available. Tabs become the labelled select. Use a semantic labeled summary of form values rather than hidden inputs as the only record. Restore/AI/save controls must not remain enabled in a form that cannot submit. Apply is not on this page at any width; if page 42 is reached, it is also read-only here. Focus that would land on a removed mutation control moves to the summary heading/notice after render. Touch targets 44px under project policy, never below 24×24 CSS pixels.
+- **200% text / reflow:** step pairs and Timeline metadata stack, buttons wrap intrinsically, dialog content scrolls inside the dialog and never the page; full reason/diff text stays recoverable. No `overflow-x:hidden` masking.
+
+Manual acceptance remains ⚠️ **not run**; apply every row to **editor and Timeline at 1280 and 360px, light/dark, vi/en**:
+
+| Criterion | Required inspection / expected outcome |
+| --- | --- |
+| 2.5.8 target size | Measure tab buttons, step add/remove, disclosure, dialog close and restore/save controls ≥24×24px; touch controls 44px. |
+| 2.4.11 focus not obscured | Tab through long form, sticky shell/table headers/diff headers and dialogs; focused control, error and first dialog button are never covered; scroll with offset. |
+| 2.5.7 dragging | Steps are added/removed/reordered via buttons/keyboard; no drag-only operation. |
+| 1.4.3 / 1.4.11 contrast | Measure text ≥4.5:1 (large ≥3:1), field/error/status boundaries and diff markers ≥3:1 in both themes; never colour-only diff/error. |
+| 2.1.1 / 2.4.7 / 4.1.2 | All save/restore/AI/tab/step/diff commands keyboard reachable with visible 2px/2px ring and correct names/state; tablist/panel and dialog relationships valid. |
+| 1.4.10 / 1.4.12 / 4.1.3 | Long vi and 40% expansion reflow without loss; one concise live announcement for save/restore/load/AI state changes, none per poll; busy regions named. |
+| 3.3.1 / 3.3.3 | Field errors identify the field and correction; save/conflict failures name what remains retained and the explicit next action. |
+
+## Invariants
+
+- ✅ [Feature §5.2](../../../plans/features/13-product-phases/13.4.1-authoring-ui.md): the generated SDK owns path construction and route-group choice; UI never concatenates `/v1/authoring` or resolves the open route-group question.
+- Save sends `If-Match` from the read case's `version`; absent/malformed is server 422, stale is 412. A 412 retains every unsaved field, fetches current server state, and offers only explicit Reload. No auto-merge, auto-resubmit, hidden overwrite or “Saved” after conflict. A no-op `changed:false` creates no version and is not announced as a save. Never render a predicted next number such as “v6” before the response; the appended version is server-returned.
+- Restore names a stored version id, requires one idempotency intent, and appends a restore version; it never edits/deletes v4/v5. The version route declares no `If-Match`, so restore does not claim stale 412 protection; a replay adds nothing. Every prior version stays byte-identical.
+- History is read-only and newest-first by keyset. No client timestamp substitutes for `created_at`; UTC is labeled. Author null means import/AI/no membership, not an invented name. A null reason is “No reason recorded”, not an empty success.
+- Diff is computed only from two supplied stored `content` snapshots of the same entity; absent content means diff unavailable. Never reconstruct history, re-serialize arbitrary content through a typed model, or infer a field rename.
+- Queued checklist changes are pending, not applied versions; this page has no apply or second apply path. Applying belongs to page 42 with its batch ETag and idempotency intent; a stale batch keeps the whole queue and applies nothing.
+- AI output is untrusted plain text, marked AI-generated/unreviewed. No `innerHTML`, automatic approval, draft overwrite or version creation on refusal. Estimate/balance/opt-in/grant/cap refusals precede the call; missing/null credit or cost is unavailable with reason, never `0`; no fabricated percentage, ETA, per-item cost or refund.
+- Permissions come from the server; phase hiding is not authorization. Read-denied shows 403 without content; write-denied keeps read/inspection with explained disabled controls. No authoring content is stored in local storage, telemetry, URLs or an offline cache. A 404 covers unknown, foreign, other-project and soft-deleted ids alike.
+- Readonly/saving state is not a case lifecycle: `draft`, `approved`, `retired` are the only case states. Review/queue activity is separate, and no “In review” enum is invented.
+
+## Open points
+
+| Open item | Effect and recommended default |
+| --- | --- |
+| Version reason and restore reason | Both are required by the visual/product intent but absent from create, PATCH and the restore route. Recommended default: add a 1–500-code-point `reason` member to each write shape, persist it on the appended row, and keep the UI blocked with a stated prerequisite until then. |
+| Parent/source/author/provenance projections | The detail read cannot supply the mockup's checklist title/code, source, author or AI provenance. Recommended default: authorize a checklist/tree lookup plus a scoped read projection; show unavailable until supplied; never derive them. |
+| Per-case AI actions and credit shapes | The editor brief and §6 require rebuild/translate and refusals, but the editor call list names no generation route and the searched contract has no estimate/generation/provenance components. Recommended default: reuse the owning generation plan's routes and fields verbatim, with explicit preflight; AI controls remain unavailable until those shapes land. |
+| Field limits/requiredness and description | Contract maxima differ from mockup caps, precondition is nullable yet marked required, and description is absent from the form. Recommended default: enforce contract maxima; require title/priority/at least one step; keep precondition/description optional with a recorded product decision. |
+| 412 current-value evidence | `details[]` carries pointers, not snapshots, so the conflict dialog cannot display current values from the error alone. Recommended default: after 412, perform one authorized case read, compare draft versus current, and show both; no merge. |
+| Lifecycle controls | Route 17 exists but is not in this page's call list; the mockup shows status without an editor transition. Recommended default: display-only in this design; any approve/retire control belongs to an explicitly assigned surface. |
+| AC10 version-id presentation | AC10 says the Timeline lists a “version id”, while the mockup shows version numbers and the contract separates `version_id` (UUID) from `version_no`. Recommended default: display `version_no` and expose `version_id` as a copyable identifier; the owner may instead confirm that the human version number satisfies the wording. |
+| Pending counts and target labels | OI-13-503 affects queued badge/header, and change rows return target UUIDs. Recommended default: server count projection; `—` when absent; resolve target/author display labels only through an authorized projection. |
+| Error and permission presentation | The mockup's save-failure and 403 panels hide the body while their copy promises the draft or case stays visible. Recommended default: 403 read denial replaces the page; write denial and save failure stay over the retained form with scoped inline messages and a reachable explanation. |
+| Empty/no-op/timeline specimens | Unsaved new-case history, empty queue, no-op save, alternate cursor and restore live-refresh have no dedicated fixture. Recommended default: implement explicit empty/no-op/refresh states and verify interactively, not by treating static cards as proof. |
+| Approval and evidence | Independent design review and owner approval are absent. Recommended default: keep proposed status and do not start implementation. No browser, screen-reader, visual, axe, build, test, lint or formatter pass is claimed. |
