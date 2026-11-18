@@ -65,6 +65,15 @@ def real_name(key, rec):
     return rec.get("name") or key.rsplit("node_modules/", 1)[-1]
 
 
+def under_node_modules(key):
+    """Whether a lock path sits inside a real `node_modules` segment.
+
+    A substring test would also swallow a directory that merely ends in
+    `_node_modules`, and a record dropped here is an origin never examined.
+    """
+    return "node_modules" in key.split("/")
+
+
 def lookup_dirs(key):
     """`node_modules` search directories for a dependent installed at `key`.
 
@@ -195,7 +204,7 @@ def origins(recs, patterns):
     """
     out = [("", ROOT_ORIGIN, False)]
     for key in sorted(recs):
-        if key and "node_modules/" not in key:
+        if key and not under_node_modules(key):
             out.append((key, real_name(key, recs[key]), declared_workspace(key, patterns)))
     return out
 
@@ -206,7 +215,7 @@ def via_problem(raw, rec, dep):
     A `link: true` record is a directory package whose source record carries no
     `resolved`, so identity is judged before the link is followed.
     """
-    if not raw or "node_modules/" not in raw:
+    if not raw or not under_node_modules(raw):
         return "resolved outside node_modules"
     if rec.get("link"):
         return "is a link to %s" % rec.get("resolved")
