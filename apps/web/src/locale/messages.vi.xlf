@@ -3665,6 +3665,12 @@
       <trans-unit id="catalog.owner-for" datatype="html"><source>Owner for <x id="name" equiv-text="name"/></source><target>Người phụ trách của <x id="name" equiv-text="name"/></target></trans-unit>
       <trans-unit id="catalog.owner-unknown" datatype="html"><source>Member details unavailable</source><target>Chưa có thông tin thành viên</target></trans-unit>
       <trans-unit id="catalog.owners-empty" datatype="html"><source>No active members are available to assign. Existing ownership is unchanged.</source><target>Không có thành viên đang hoạt động để gán. Người phụ trách hiện tại được giữ nguyên.</target></trans-unit>
+      <trans-unit id="catalog.members-unresolved" datatype="html"><source>The member names did not load. The owner is shown by id.</source><target>Không tải được tên thành viên. Người phụ trách được hiển thị theo mã.</target></trans-unit>
+      <trans-unit id="catalog.owner-forbidden" datatype="html"><source>Your role cannot change a case owner.</source><target>Vai trò của bạn không thể thay đổi người phụ trách ca kiểm thử.</target></trans-unit>
+      <trans-unit id="catalog.owner-required" datatype="html"><source>A case owner is required; the contract cannot clear it.</source><target>Ca kiểm thử bắt buộc phải có người phụ trách; hợp đồng API không cho phép bỏ gán.</target></trans-unit>
+      <trans-unit id="catalog.cursor-repeated" datatype="html"><source>The catalog handed back the page it was asked for. Reload the list.</source><target>Danh mục trả về lại đúng trang đã yêu cầu. Hãy tải lại danh sách.</target></trans-unit>
+      <trans-unit id="catalog.page-repeated" datatype="html"><source>The next catalog page held no new case. Reload the list.</source><target>Trang danh mục tiếp theo không có ca kiểm thử mới. Hãy tải lại danh sách.</target></trans-unit>
+      <trans-unit id="catalog.owner-reload-required" datatype="html"><source>Owner change was not confirmed. Reload the list to see the stored owner.</source><target>Chưa xác nhận được thay đổi người phụ trách. Hãy tải lại danh sách để xem người phụ trách đã lưu.</target></trans-unit>
     </body>
   </file>
 </xliff>

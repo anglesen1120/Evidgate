@@ -9796,6 +9796,12 @@
       <trans-unit id="catalog.owner-for" datatype="html"><source>Owner for <x id="name" equiv-text="name"/></source></trans-unit>
       <trans-unit id="catalog.owner-unknown" datatype="html"><source>Member details unavailable</source></trans-unit>
       <trans-unit id="catalog.owners-empty" datatype="html"><source>No active members are available to assign. Existing ownership is unchanged.</source></trans-unit>
+      <trans-unit id="catalog.members-unresolved" datatype="html"><source>The member names did not load. The owner is shown by id.</source></trans-unit>
+      <trans-unit id="catalog.owner-forbidden" datatype="html"><source>Your role cannot change a case owner.</source></trans-unit>
+      <trans-unit id="catalog.owner-required" datatype="html"><source>A case owner is required; the contract cannot clear it.</source></trans-unit>
+      <trans-unit id="catalog.cursor-repeated" datatype="html"><source>The catalog handed back the page it was asked for. Reload the list.</source></trans-unit>
+      <trans-unit id="catalog.page-repeated" datatype="html"><source>The next catalog page held no new case. Reload the list.</source></trans-unit>
+      <trans-unit id="catalog.owner-reload-required" datatype="html"><source>Owner change was not confirmed. Reload the list to see the stored owner.</source></trans-unit>
     </body>
   </file>
 </xliff>

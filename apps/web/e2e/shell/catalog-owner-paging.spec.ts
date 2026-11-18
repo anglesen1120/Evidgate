@@ -25,12 +25,15 @@ async function chooseOwnerWithKeyboard(page: Page, picker: Locator): Promise<str
   await page.keyboard.press('Enter');
   const email = 'qa@acme.test';
   const options = page.getByRole('option', { disabled: false });
+  await expect(options.first()).toBeVisible();
   const labels = await options.allTextContents();
   const index = labels.findIndex((label) => label.trim() === email);
   expect(index).toBeGreaterThanOrEqual(0);
   await page.keyboard.press('Home');
   for (let step = 0; step < index; step++) await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
+  // Brain animates the overlay out; scanning mid-fade reads the option's blended colour.
+  await expect(page.getByRole('listbox')).toHaveCount(0);
   return email;
 }
 
@@ -41,7 +44,7 @@ for (const locale of LOCALES) {
   );
   const base = withVariants(path, [
     '?fixture.variant.listCases=ok',
-    '?fixture.variant.listPermissions=ok',
+    '?fixture.variant.listPermissions=catalog-owner',
     '?fixture.variant.listMemberships=ok',
     '?fixture.variant.updateCase=ok',
   ]);
@@ -115,6 +118,7 @@ for (const locale of LOCALES) {
     await page.goto(base);
     await tabTo(page, page.locator('#catalog-page-size'));
     await page.keyboard.press('Enter');
+    await expect(page.getByRole('option', { name: '25', exact: true })).toBeVisible();
     await page.keyboard.press('Home');
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/limit=25/);

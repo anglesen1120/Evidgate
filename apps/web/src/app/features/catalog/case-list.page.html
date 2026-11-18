@@ -123,7 +123,7 @@
   <p id="catalog-owner-help" class="mb-(--eg-space-4) max-w-prose text-muted-foreground">
     {{ ownerHelp() }}
   </p>
-  @if (members.status() === 'error' && canAssign()) {
+  @if (canReadMembers() && members.status() === 'error' && canAssign()) {
     <app-inline-feedback
       class="mb-(--eg-space-4) block"
       [tone]="'warning'"
@@ -141,7 +141,7 @@
     [ownerPending]="store.ownerPending"
     [ownerFailure]="store.ownerFailure"
     (ownerChange)="assignOwner($event)"
-    (reloadOwners)="store.reload()"
+    (reloadOwners)="store.reloadOwner($event)"
   />
 </app-request-state>
 @if (store.status() === 'ready') {
@@ -188,7 +188,7 @@
         [variant]="'outline'"
         class="min-h-(--eg-control-touch) max-w-full whitespace-normal"
         [disabled]="store.loadingMore()"
-        (click)="loadMore()"
+        (click)="loadMore($event)"
         data-catalog-load-more
       >
         {{ store.loadingMore() ? copy.loadingMore : copy.loadMore }}

@@ -66,17 +66,19 @@ describe('CaseListDataService', () => {
     await rejected;
   });
 
-  it('sends the owner PATCH with the quoted ETag and an idempotency key', async () => {
+  it('sends the owner PATCH with the quoted ETag and the caller intent key', async () => {
+    const intent = { idempotencyKey: 'intent-key-1' };
     const pending = service.update(
       OWNER_CASE.id,
       { owner_membership_id: OWNED_MEMBERSHIP },
       new AbortController().signal,
       '"3"',
+      intent,
     );
     const request = await takeRequest(http, `${location.origin}/v1/cases/${OWNER_CASE.id}`);
     expect(request.request.method).toBe('PATCH');
     expect(request.request.headers.get('If-Match')).toBe('"3"');
-    expect(request.request.headers.get('Idempotency-Key')).toBeTruthy();
+    expect(request.request.headers.get('Idempotency-Key')).toBe('intent-key-1');
     expect(JSON.parse(String(request.request.body))).toEqual({
       owner_membership_id: OWNED_MEMBERSHIP,
     });
@@ -86,12 +88,23 @@ describe('CaseListDataService', () => {
     await expect(pending).resolves.toEqual(OWNER_CASE);
   });
 
+  it('reads one case together with the ETag its next If-Match must quote', async () => {
+    const pending = service.get(OWNER_CASE.id, new AbortController().signal);
+    const request = await takeRequest(http, `${location.origin}/v1/cases/${OWNER_CASE.id}`);
+    expect(request.request.method).toBe('GET');
+    request.flush(JSON.stringify({ case: OWNER_CASE, identity_sources: [], renames: [] }), {
+      headers: { ...JSON_HEADERS, ETag: '"4"' },
+    });
+    await expect(pending).resolves.toEqual({ row: OWNER_CASE, etag: '"4"' });
+  });
+
   it('surfaces a stale ETag as the typed precondition failure', async () => {
     const pending = service.update(
       OWNER_CASE.id,
       { owner_membership_id: OWNED_MEMBERSHIP },
       new AbortController().signal,
       '"2"',
+      { idempotencyKey: 'intent-key-2' },
     );
     const rejected = expect(pending).rejects.toMatchObject({
       error: { kind: 'precondition_failed', status: 412 },

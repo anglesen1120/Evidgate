@@ -57,27 +57,37 @@ type CaseCell = TemplateRef<DataTableCellContext<CaseDto>>;
       [flow]="'page'"
     />
     <ng-template #identity let-row let-stacked="stacked">
-      @if (virtualRows()) {
-        <app-data-table-value [value]="identitySummary(row)" [fixedRow]="true" />
-      } @else {
-        <div class="grid min-w-0 gap-(--eg-space-2)" data-catalog-identity>
-          <bdi class="min-w-0 font-(weight:--eg-weight-semibold)">
-            <app-data-table-value [value]="display(row.name)" [truncate]="!stacked" />
-          </bdi>
-          <app-copyable-identifier
-            [value]="row.annotation_id"
-            [label]="copy.stableId"
+      <div
+        class="min-w-0 gap-(--eg-space-2)"
+        [class.grid]="!virtualRows()"
+        [class.flex]="virtualRows()"
+        [class.items-center]="virtualRows()"
+        data-catalog-identity
+      >
+        <bdi class="min-w-0 flex-1 font-(weight:--eg-weight-semibold)">
+          <app-data-table-value
+            [value]="display(row.name)"
             [truncate]="!stacked"
-            [copySize]="'lg'"
+            [fixedRow]="virtualRows()"
           />
-          <app-copyable-identifier
-            [value]="row.id"
-            [label]="copy.id"
-            [truncate]="!stacked"
-            [copySize]="'lg'"
-          />
-        </div>
-      }
+        </bdi>
+        <app-copyable-identifier
+          class="min-w-0 flex-1"
+          [value]="row.annotation_id"
+          [label]="copy.stableId"
+          [truncate]="!stacked"
+          [compact]="virtualRows()"
+          [copySize]="'lg'"
+        />
+        <app-copyable-identifier
+          class="min-w-0 flex-1"
+          [value]="row.id"
+          [label]="copy.id"
+          [truncate]="!stacked"
+          [compact]="virtualRows()"
+          [copySize]="'lg'"
+        />
+      </div>
     </ng-template>
     <ng-template #framework let-row let-stacked="stacked">
       <bdi
@@ -143,7 +153,7 @@ type CaseCell = TemplateRef<DataTableCellContext<CaseDto>>;
             [compact]="virtualRows()"
             [copySize]="'lg'"
           />
-        } @else if (!canAssign() || !membersReady()) {
+        } @else if (!canAssign() || !membersReady() || !activeMembers().length) {
           <app-data-table-value
             class="min-w-0 flex-1"
             [value]="memberLabel(row.owner_membership_id)"
@@ -180,7 +190,8 @@ type CaseCell = TemplateRef<DataTableCellContext<CaseDto>>;
             class="min-h-(--eg-control-touch) max-w-full shrink-0"
             [class.whitespace-normal]="!virtualRows()"
             [class.whitespace-nowrap]="virtualRows()"
-            (click)="reloadOwners.emit()"
+            (click)="reloadOwners.emit(row.id)"
+            data-catalog-owner-reload
           >
             {{ copy.reload }}
           </button>
@@ -198,9 +209,10 @@ export class CaseListTableComponent {
   readonly ownerPending = input<(caseId: string) => boolean>(() => false);
   readonly ownerFailure = input<(caseId: string) => ApiError | null>(() => null);
   readonly ownerChange = output<{ caseId: string; membershipId: string }>();
-  readonly reloadOwners = output<void>();
+  readonly reloadOwners = output<string>();
   private readonly table = viewChild(DataTableComponent<CaseDto>);
   private readonly focusTarget = signal<string | null>(null);
+  private focusAllowed: () => boolean = () => true;
   protected readonly virtualRows = computed(() => this.table()?.virtual() ?? false);
   protected readonly activeMembers = computed(() =>
     [...this.members().values()].filter((member) => member.status === 'active'),
@@ -232,6 +244,7 @@ export class CaseListTableComponent {
     denied: $localize`:@@catalog.owner-denied:Owner permission was refused. The previous owner is restored. Check permission, then reload to retry.`,
     conflict: $localize`:@@catalog.owner-conflict:The case changed. The previous owner is restored. Reload the list, then choose the owner again.`,
     failed: $localize`:@@catalog.owner-failed:The owner could not be saved. The previous owner is restored. Reload to retry.`,
+    reloadRequired: $localize`:@@catalog.owner-reload-required:Owner change was not confirmed. Reload the list to see the stored owner.`,
     unknownOwner: $localize`:@@catalog.owner-unknown:Member details unavailable`,
   };
   protected readonly statusLabel = (status: CaseDto['status']) => this.copy[status];
@@ -244,6 +257,7 @@ export class CaseListTableComponent {
       kind: 'name',
       priority: 'primary',
       overflow: 'truncate',
+      virtualWidth: 'calc(48ch + var(--eg-space-4) * 2)',
       cellTemplate: this.identity(),
     },
     {
@@ -284,11 +298,16 @@ export class CaseListTableComponent {
       table?.windowStart();
       table?.viewport();
       if (!id || !table) return;
+      const index = this.rows().findIndex((row) => row.id === id);
+      if (index < 0 || !this.focusAllowed()) {
+        this.focusTarget.set(null);
+        return;
+      }
       const target = [
         ...this.host.nativeElement.querySelectorAll<HTMLElement>('[data-row-id]'),
       ].find((row) => row.dataset['rowId'] === id);
       if (!target) {
-        table.revealRow(this.rows().findIndex((row) => row.id === id));
+        table.revealRow(index);
         return;
       }
       target.tabIndex = -1;
@@ -298,9 +317,11 @@ export class CaseListTableComponent {
     });
   }
 
-  focusRow(caseId: string): void {
-    this.focusTarget.set(caseId);
-    this.table()?.revealRow(this.rows().findIndex((row) => row.id === caseId));
+  focusRow(caseId: string, allowed: () => boolean = () => true): void {
+    const index = this.rows().findIndex((row) => row.id === caseId);
+    this.focusAllowed = allowed;
+    this.focusTarget.set(index < 0 ? null : caseId);
+    if (index >= 0) this.table()?.revealRow(index);
   }
 
   protected ownerId(caseId: string): string {
@@ -310,10 +331,6 @@ export class CaseListTableComponent {
   protected ownerLabel(row: CaseDto): string {
     const name = this.display(row.name);
     return $localize`:@@catalog.owner-for:Owner for ${name}:name:`;
-  }
-
-  protected identitySummary(row: CaseDto): string {
-    return this.display(`${row.name} · ${row.annotation_id} · ${row.id}`);
   }
 
   protected activeOwner(membershipId: string): boolean {
@@ -335,9 +352,15 @@ export class CaseListTableComponent {
   }
 
   protected ownerFailureText(failure: ApiError): string {
-    if (failure.kind === 'forbidden') return this.copy.denied;
-    if (failure.kind === 'conflict' || failure.kind === 'precondition_failed')
+    if (failure.code === 'owner_outcome_unknown') return this.copy.reloadRequired;
+    if (failure.kind === 'forbidden' || failure.kind === 'csrf_failed') return this.copy.denied;
+    if (
+      failure.kind === 'conflict' ||
+      failure.kind === 'precondition_failed' ||
+      failure.kind === 'idempotency_conflict'
+    )
       return this.copy.conflict;
-    return this.copy.failed;
+    if (failure.kind === 'validation') return this.copy.failed;
+    return this.copy.reloadRequired;
   }
 }

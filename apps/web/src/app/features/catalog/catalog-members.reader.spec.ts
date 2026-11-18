@@ -90,4 +90,64 @@ describe('CatalogMembersReader', () => {
     expect(reader.status()).toBe('error');
     expect(listMemberships).toHaveBeenCalledTimes(2);
   });
+
+  /** A page read the test completes by hand, to hold the cursor loop mid-walk. */
+  function deferredPage(): {
+    promise: Promise<MembershipListResponse>;
+    resolve: (page: MembershipListResponse) => void;
+  } {
+    // The spec lib target predates `Promise.withResolvers`, so the executor form is required.
+    let release: (page: MembershipListResponse) => void = () => undefined;
+    const promise = new Promise<MembershipListResponse>((resolve) => {
+      release = resolve;
+    });
+    return { promise, resolve: release };
+  }
+
+  it('reads once while the same org is still loading', async () => {
+    const pending = deferredPage();
+    listMemberships.mockReturnValueOnce(pending.promise);
+    const reader = TestBed.inject(CatalogMembersReader);
+    reader.init('org-1');
+    reader.init('org-1');
+    await settle();
+    expect(listMemberships).toHaveBeenCalledTimes(1);
+    pending.resolve(MEMBERSHIPS);
+    await settle();
+    expect(reader.status()).toBe('ready');
+  });
+
+  it('drops the previous org labels as soon as the org changes', async () => {
+    const pending = deferredPage();
+    const reader = TestBed.inject(CatalogMembersReader);
+    reader.init('org-1');
+    await settle();
+    expect(reader.members().size).toBe(5);
+    listMemberships.mockReturnValueOnce(pending.promise);
+    reader.init('org-2');
+    await settle();
+    expect(reader.members().size).toBe(0);
+    pending.resolve(MEMBERSHIPS);
+    await settle();
+    expect(reader.members().size).toBe(5);
+  });
+
+  it('clear stops the page loop and drops the answer of a page already on its way', async () => {
+    const first = MEMBERSHIPS.items[0];
+    if (!first) throw new Error('No membership fixture');
+    const pending = deferredPage();
+    listMemberships
+      .mockResolvedValueOnce({ items: [first], next_cursor: 'members-page-2' })
+      .mockReturnValueOnce(pending.promise);
+    const reader = TestBed.inject(CatalogMembersReader);
+    reader.init('org-1');
+    await settle();
+    expect(listMemberships).toHaveBeenCalledTimes(2);
+    reader.clear();
+    pending.resolve({ items: [first], next_cursor: 'members-page-3' });
+    await settle();
+    expect(reader.status()).toBe('idle');
+    expect(reader.members().size).toBe(0);
+    expect(listMemberships).toHaveBeenCalledTimes(2);
+  });
 });

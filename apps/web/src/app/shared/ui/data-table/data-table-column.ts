@@ -25,13 +25,15 @@ export interface DataTableColumn<T> {
   readonly priority?: HlmTableColumnPriority;
   readonly overflow?: HlmTableColumnOverflow;
   readonly width?: DataTableColumnWidth;
+  /** Explicit fixed-size track for callers with several single-line controls. */
+  readonly virtualWidth?: string;
   readonly cellTemplate?: TemplateRef<DataTableCellContext<T>>;
   readonly align?: 'start' | 'end';
   readonly truncate?: boolean;
   readonly mutates?: boolean;
 }
 
-export interface ResolvedDataTableColumn<T> extends DataTableColumn<T> {
+export interface ResolvedDataTableColumn<T> extends Omit<DataTableColumn<T>, 'virtualWidth'> {
   readonly role: HlmTableColumnRole;
   readonly kind: HlmTableColumnKind;
   readonly priority: HlmTableColumnPriority;
@@ -84,9 +86,11 @@ export function resolveTableColumns<T>(
       priority,
       overflow,
       virtualWidth:
-        priority === 'primary' && (role === 'identity' || role === 'text')
-          ? null
-          : `calc(${width}ch + var(--eg-space-4) * 2)`,
+        rows.length > 0 && column.virtualWidth !== undefined
+          ? column.virtualWidth
+          : priority === 'primary' && (role === 'identity' || role === 'text')
+            ? null
+            : `calc(${width}ch + var(--eg-space-4) * 2)`,
     };
   });
 }

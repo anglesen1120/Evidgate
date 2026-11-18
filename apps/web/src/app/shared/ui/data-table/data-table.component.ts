@@ -60,7 +60,7 @@ export type DataTableRowId<T> = (row: T) => string | number;
 interface DataTableLayoutFocus {
   readonly source: HTMLElement;
   readonly rowId: string;
-  readonly columnId: string;
+  readonly columnId: string | null;
   readonly control: string;
   readonly index: number;
   readonly rowIndex: number;
@@ -335,11 +335,14 @@ export class DataTableComponent<T> {
       return undefined;
     }
     const cell = source.closest<HTMLElement>('app-data-table-cell[data-column-id]');
-    const rowId = cell?.closest<HTMLElement>('[data-row-id]')?.dataset['rowId'];
+    const row = source.closest<HTMLElement>('[data-row-id]');
+    const rowId = row?.dataset['rowId'];
     const columnId = cell?.dataset['columnId'];
-    if (!cell || rowId === undefined || columnId === undefined) return undefined;
+    if (rowId === undefined || (!cell && source !== row)) return undefined;
     const rowIndex = this.rows().findIndex((row) => String(this.rowId()(row)) === rowId);
     if (rowIndex < 0) return undefined;
+    if (source === row) return { source, rowId, columnId: null, control: '', index: 0, rowIndex };
+    if (!cell || columnId === undefined) return undefined;
     const control = this.controlKey(source);
     let index = 0;
     for (const candidate of cell.querySelectorAll<HTMLElement>(ROW_CONTROL_SELECTOR)) {
@@ -376,13 +379,19 @@ export class DataTableComponent<T> {
     }
     // Compare identifiers as data, never interpolate server values into selectors.
     for (const cell of this.scrollElement().nativeElement.querySelectorAll<HTMLElement>(
-      'app-data-table-cell[data-column-id]',
+      anchor.columnId === null ? '[data-row-id]' : 'app-data-table-cell[data-column-id]',
     )) {
       if (
-        cell.dataset['columnId'] !== anchor.columnId ||
+        (anchor.columnId !== null && cell.dataset['columnId'] !== anchor.columnId) ||
         cell.closest<HTMLElement>('[data-row-id]')?.dataset['rowId'] !== anchor.rowId
       )
         continue;
+      if (anchor.columnId === null) {
+        this.layoutFocus = undefined;
+        cell.tabIndex = -1;
+        cell.focus();
+        return;
+      }
       let index = anchor.index;
       for (const control of cell.querySelectorAll<HTMLElement>(ROW_CONTROL_SELECTOR)) {
         if (this.controlKey(control) !== anchor.control || index-- !== 0) continue;

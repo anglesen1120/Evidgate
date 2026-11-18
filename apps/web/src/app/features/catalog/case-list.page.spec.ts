@@ -1,4 +1,4 @@
-import { ComponentHarness, manualChangeDetection } from '@angular/cdk/testing';
+import { manualChangeDetection } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
@@ -14,59 +14,7 @@ import { CatalogMembersReader } from './catalog-members.reader';
 import { CASE_LIST_FIXTURE, CATALOG_FAILURE } from './case-list-store.fixtures';
 import { CATALOG_OMITTED_COLUMNS } from './case-list-columns';
 import { CaseListPage } from './case-list.page';
-
-class CatalogPageHarness extends ComponentHarness {
-  static hostSelector = 'app-case-list-page';
-  readonly headings = this.locatorForAll('[role="columnheader"]');
-  readonly table = this.locatorForOptional('app-data-table');
-  readonly loading = this.locatorForOptional('app-loading-pattern');
-  readonly empty = this.locatorForOptional('app-empty-pattern');
-  readonly error = this.locatorForOptional('app-error-pattern');
-  readonly forbidden = this.locatorForOptional('app-forbidden-pattern');
-  readonly more = this.locatorForOptional('[data-catalog-load-more]');
-  readonly loaded = this.locatorFor('[data-catalog-loaded]');
-  readonly rows = this.locatorForAll('app-case-list-table [data-row-id]');
-  readonly viewport = this.locatorForOptional('cdk-virtual-scroll-viewport');
-  readonly ownerFailure = this.locatorForOptional('[data-catalog-owner-error]');
-  readonly ownerPending = this.locatorForOptional('[data-catalog-owner-pending]');
-  readonly pageError = this.locatorForOptional('[data-catalog-page-error]');
-  readonly summary = this.locatorFor('[data-catalog-summary]');
-  readonly status = this.locatorFor('#catalog-status');
-  async text() {
-    return (await this.host()).text();
-  }
-  async columnLabels() {
-    return Promise.all((await this.headings()).map((heading) => heading.text()));
-  }
-  async chooseOwner(caseId: string, email: string) {
-    const trigger = await this.locatorFor(
-      `[data-catalog-owner="${caseId}"] hlm-select-trigger button`,
-    )();
-    await trigger.click();
-    const options = await this.documentRootLocatorFactory().locatorForAll('[role="option"]')();
-    for (const option of options) {
-      if ((await option.text()).includes(email)) {
-        await option.click();
-        return;
-      }
-    }
-    throw new Error(`Owner option ${email} is missing`);
-  }
-  ownerTrigger(caseId: string) {
-    return this.locatorFor(`[data-catalog-owner="${caseId}"] hlm-select-trigger button`)();
-  }
-  async choosePageSize(size: number) {
-    await (await this.locatorFor('#catalog-page-size')()).click();
-    const options = await this.documentRootLocatorFactory().locatorForAll('[role="option"]')();
-    for (const option of options) {
-      if ((await option.text()).trim() === String(size)) {
-        await option.click();
-        return;
-      }
-    }
-    throw new Error(`Page size ${size} is missing`);
-  }
-}
+import { CatalogPageHarness } from './case-list-page.testing';
 
 describe('CaseListPage', () => {
   provideLayoutTestStubs();
@@ -119,7 +67,10 @@ describe('CaseListPage', () => {
         provideZonelessChangeDetection(),
         provideRouter([]),
         { provide: CaseListDataService, useValue: { list, update } },
-        { provide: SessionStore, useValue: { has: () => canWrite() } },
+        {
+          provide: SessionStore,
+          useValue: { has: (permission: string) => permission !== 'case:write' || canWrite() },
+        },
         {
           provide: NarrowMutationPolicy,
           useValue: { canMutate: wide, allowsMutation: () => wide() },
@@ -140,6 +91,7 @@ describe('CaseListPage', () => {
               status: membersStatus,
               failure: membersFailure,
               init: vi.fn(),
+              clear: vi.fn(),
               reload: vi.fn(),
             },
           },
@@ -307,15 +259,29 @@ describe('CaseListPage', () => {
     );
   });
 
-  it.each([403, 409, 412])(
+  it.each([403, 409, 412, 422])(
     'rolls back an owner PATCH refused with %s and explains retry',
     async (status) => {
       update.mockRejectedValueOnce(
         new ApiRequestError({
           ...CATALOG_FAILURE,
           status,
-          kind: status === 403 ? 'forbidden' : status === 412 ? 'precondition_failed' : 'conflict',
-          code: status === 403 ? 'forbidden' : status === 412 ? 'precondition_failed' : 'conflict',
+          kind:
+            status === 403
+              ? 'forbidden'
+              : status === 412
+                ? 'precondition_failed'
+                : status === 422
+                  ? 'validation'
+                  : 'conflict',
+          code:
+            status === 403
+              ? 'forbidden'
+              : status === 412
+                ? 'precondition_failed'
+                : status === 422
+                  ? 'validation'
+                  : 'conflict',
           retryable: false,
         }),
       );

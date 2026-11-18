@@ -1,13 +1,16 @@
-import { DecimalPipe } from '@angular/common';
+import { DecimalPipe, DOCUMENT } from '@angular/common';
 import {
   afterNextRender,
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
+  effect,
   ElementRef,
   inject,
   Injector,
   linkedSignal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -18,6 +21,7 @@ import { HlmButton } from '@evidgate/ui/button';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
+import { SessionStore } from '../../core/session/session.store';
 import { PageHeaderImports, SectionHeaderImports } from '../../shared/ui/page-header';
 import { RequestStateComponent } from '../../shared/ui/states/request-state.component';
 import { InlineFeedbackComponent } from '../../shared/ui/states/inline-feedback.component';
@@ -62,6 +66,9 @@ export class CaseListPage {
   protected readonly members = inject(CatalogMembersReader);
   private readonly viewport = inject(NarrowMutationPolicy);
   private readonly injector = inject(Injector);
+  private readonly session = inject(SessionStore);
+  private readonly document = inject(DOCUMENT);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly routeState = toSignal(
     combineLatest([
       combineLatest(this.route.pathFromRoot.map((route) => route.paramMap)),
@@ -76,12 +83,11 @@ export class CaseListPage {
           .reverse()
           .map((param) => param.get('orgId'))
           .find(Boolean);
-        if (orgId) this.members.init(orgId);
         const raw = Object.fromEntries(
           ['status', 'framework', 'q', 'cursor', 'limit'].map((key) => [key, query.get(key)]),
         );
         if (projectId) this.store.init(projectId, raw);
-        return raw;
+        return { ...raw, orgId };
       }),
     ),
   );
@@ -133,10 +139,12 @@ export class CaseListPage {
   private readonly loadedSummary = viewChild<ElementRef<HTMLElement>>('loadedSummary');
   protected readonly pageSizes = [25, 50, 100, 200] as const;
   protected readonly pageSizeLabel = (value: unknown) => String(value);
+  protected readonly canReadMembers = computed(() => this.session.has('membership:read'));
   protected readonly canAssign = computed(
-    () => this.store.canAssign() && this.viewport.canMutate(),
+    () => this.store.canAssign() && this.canReadMembers() && this.viewport.canMutate(),
   );
   protected readonly ownerHelp = computed(() => {
+    if (!this.canReadMembers()) return this.copy.ownersEmpty;
     if (!this.store.canAssign()) return this.copy.permissionReason;
     if (!this.viewport.canMutate()) return this.copy.narrowReason;
     if (this.members.status() === 'loading') return this.copy.ownersLoading;
@@ -147,6 +155,18 @@ export class CaseListPage {
     return this.copy.ownersEmpty;
   });
 
+  constructor() {
+    effect(() => {
+      const orgId = this.routeState()?.orgId;
+      const permitted = this.canReadMembers();
+      untracked(() => {
+        if (orgId && permitted) this.members.init(orgId);
+        else this.members.clear();
+      });
+    });
+    this.destroyRef.onDestroy(() => this.members.clear());
+  }
+
   protected setPageSize(size: number): void {
     this.store.setPageSize(size);
     void this.router.navigate([], {
@@ -156,15 +176,24 @@ export class CaseListPage {
     });
   }
 
-  protected async loadMore(): Promise<void> {
+  protected async loadMore(event?: Event): Promise<void> {
+    const source = event?.currentTarget ?? this.document.activeElement;
+    const initiated =
+      source instanceof HTMLElement &&
+      source.matches('[data-catalog-load-more], [data-catalog-page-error] button');
+    const ownsFocus = () =>
+      initiated &&
+      (this.document.activeElement === source ||
+        this.document.activeElement === this.document.body);
     const previous = new Set(this.store.rows().map((row) => row.id));
     const scope = this.routeState();
-    await this.store.loadMore();
-    if (scope !== this.routeState() || this.store.loadMoreFailure()) return;
+    const appended = await this.store.loadMore();
+    if (!appended || scope !== this.routeState() || !ownsFocus()) return;
     const first = this.store.visibleRows().find((row) => !previous.has(row.id));
     afterNextRender(
       () => {
-        if (first) this.table()?.focusRow(first.id);
+        if (!ownsFocus() || scope !== this.routeState()) return;
+        if (first) this.table()?.focusRow(first.id, ownsFocus);
         else this.loadedSummary()?.nativeElement.focus();
       },
       { injector: this.injector },
@@ -172,7 +201,8 @@ export class CaseListPage {
   }
 
   protected async assignOwner(change: { caseId: string; membershipId: string }): Promise<void> {
-    if (!this.viewport.allowsMutation() || !this.store.canAssign()) return;
+    if (!this.canReadMembers() || !this.viewport.allowsMutation() || !this.store.canAssign())
+      return;
     await this.store.assignOwner(change.caseId, change.membershipId);
   }
 
