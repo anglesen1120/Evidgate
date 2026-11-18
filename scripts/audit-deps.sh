@@ -249,8 +249,8 @@ npm	no-expiry	1.0.0	low	GHSA-hhhh-hhhh-hhhh
 npm	scalar-scope	1.0.0	low	GHSA-iiii-iiii-iiii
 npm	list-item	1.0.0	low	GHSA-jjjj-jjjj-jjjj
 EOF
-  printf 'npm\ttarget2\t1.0.0\thigh\tGHSA-ssss-ssss-ssss\n' > "$fx/rows-t2"
-  printf 'npm\ttarget3\t1.0.0\thigh\tGHSA-tttt-tttt-tttt\n' > "$fx/rows-t3"
+  printf 'npm\ttarget2\t1.0.0\thigh\tGHSA-ssss-ssss-ssss\tnode_modules/target2\n' > "$fx/rows-t2"
+  printf 'npm\ttarget3\t1.0.0\thigh\tGHSA-tttt-tttt-tttt\tnode_modules/target3\n' > "$fx/rows-t3"
   cat > "$fx/exceptions.json" <<'EOF'
 {
   "version": 1,
@@ -277,7 +277,7 @@ EOF
   local reg="https://registry.npmjs.org"
   mkdir -p "$fx/scope" "$fx/scope-dev" "$fx/scope-alias" "$fx/scope-ghost" "$fx/scope-bad"
   cat > "$fx/scope/package-lock.json" <<EOF
-{"packages": {
+{"lockfileVersion": 3, "packages": {
   "": {"name": "fx", "workspaces": ["apps/*", "packages/*"], "dependencies": {"@evidgate/web": "file:apps/web", "root-tool": "1", "@evidgate/local": "file:tools/local"}},
   "apps/web": {"name": "@evidgate/web", "dependencies": {"@angular/localize": "1", "wrapper": "1"}},
   "packages/other": {"name": "@evidgate/other", "dependencies": {"mid": "1"}},
@@ -288,7 +288,7 @@ EOF
   "tools/local": {"name": "@evidgate/local", "dependencies": {"inner": "1"}},
   "node_modules/@evidgate/web": {"resolved": "apps/web", "link": true},
   "node_modules/@evidgate/local": {"resolved": "tools/local", "link": true},
-  "node_modules/@angular/localize": {"resolved": "$reg/@angular/localize/-/localize-1.0.0.tgz", "dependencies": {"target2": "1"}},
+  "node_modules/@angular/localize": {"resolved": "$reg/@angular/localize/-/localize-1.0.0.tgz", "integrity": "sha512-x", "dependencies": {"target2": "1"}},
   "node_modules/wrapper": {"resolved": "$reg/wrapper/-/wrapper-1.0.0.tgz", "dependencies": {"@angular/localize": "1"}},
   "node_modules/mid": {"resolved": "$reg/mid/-/mid-1.0.0.tgz", "dependencies": {"target2": "1"}},
   "node_modules/mid2": {"resolved": "$reg/mid2/-/mid2-1.0.0.tgz", "dependencies": {"target2": "2"}},
@@ -299,33 +299,67 @@ EOF
   "node_modules/target2": {"resolved": "$reg/target2/-/target2-1.0.0.tgz"}}}
 EOF
   cat > "$fx/scope-dev/package-lock.json" <<EOF
-{"packages": {"": {"name": "fx", "workspaces": ["apps/*", "packages/*"]},
+{"lockfileVersion": 3, "packages": {"": {"name": "fx", "workspaces": ["apps/*", "packages/*"]},
   "apps/web": {"name": "@evidgate/web", "dependencies": {"@angular/localize": "1"}},
   "packages/other": {"name": "@evidgate/other", "devDependencies": {"dev-mid": "1"}},
-  "node_modules/@angular/localize": {"resolved": "$reg/@angular/localize/-/localize-1.0.0.tgz", "dependencies": {"target2": "1"}},
+  "node_modules/@angular/localize": {"resolved": "$reg/@angular/localize/-/localize-1.0.0.tgz", "integrity": "sha512-x", "dependencies": {"target2": "1"}},
   "node_modules/dev-mid": {"resolved": "$reg/dev-mid/-/dev-mid-1.0.0.tgz", "dependencies": {"target2": "1"}},
   "node_modules/target2": {"resolved": "$reg/target2/-/target2-1.0.0.tgz"}}}
 EOF
   cat > "$fx/scope-alias/package-lock.json" <<EOF
-{"packages": {"": {"name": "fx", "workspaces": ["apps/*"]},
+{"lockfileVersion": 3, "packages": {"": {"name": "fx", "workspaces": ["apps/*"]},
   "apps/web": {"name": "@evidgate/web", "dependencies": {"@angular/localize": "npm:evil@1"}},
   "node_modules/@angular/localize": {"name": "evil", "resolved": "$reg/evil/-/evil-1.0.0.tgz", "dependencies": {"target3": "1"}},
   "node_modules/target3": {"resolved": "$reg/target3/-/target3-1.0.0.tgz"}}}
 EOF
   cat > "$fx/scope-ghost/package-lock.json" <<EOF
-{"packages": {"": {"name": "fx", "workspaces": ["apps/*"]},
+{"lockfileVersion": 3, "packages": {"": {"name": "fx", "workspaces": ["apps/*"]},
   "apps/web": {"name": "@evidgate/web", "dependencies": {"@angular/localize": "1", "ghost": "1"}},
-  "node_modules/@angular/localize": {"resolved": "$reg/@angular/localize/-/localize-1.0.0.tgz", "dependencies": {"target2": "1"}},
+  "node_modules/@angular/localize": {"resolved": "$reg/@angular/localize/-/localize-1.0.0.tgz", "integrity": "sha512-x", "dependencies": {"target2": "1"}},
   "node_modules/target2": {"resolved": "$reg/target2/-/target2-1.0.0.tgz"}}}
 EOF
   mkdir -p "$fx/scope-link"
   cat > "$fx/scope-link/package-lock.json" <<EOF
-{"packages": {"": {"name": "fx", "workspaces": ["apps/*"]},
+{"lockfileVersion": 3, "packages": {"": {"name": "fx", "workspaces": ["apps/*"]},
   "apps/web": {"name": "@evidgate/web", "dependencies": {"@angular/localize": "1"}},
   "node_modules/@angular/localize": {"link": true, "resolved": "packages/gone"},
   "node_modules/target2": {"resolved": "$reg/target2/-/target2-1.0.0.tgz"}}}
 EOF
   echo 'not json' > "$fx/scope-bad/package-lock.json"
+
+  # One lock per rule that decides whether an exemption is legal: an origin the
+  # root manifest does not declare as a workspace, a nested directory `*` must
+  # not match, a link used as the direct dependency, an audit node the walk never
+  # reaches, a lockfileVersion this gate does not read, and a dependency that
+  # resolves in an ancestor's node_modules.
+  mkdir -p "$fx/scope-origin" "$fx/scope-nested" "$fx/scope-globws" "$fx/scope-vialink" \
+    "$fx/scope-stray" "$fx/scope-ancestor" "$fx/lock-v2"
+  printf '%s\n' '{"lockfileVersion": 3, "packages": {"": {"name": "fx", "workspaces": ["apps/web"]}, "apps/web": {"name": "@evidgate/web"}, "tools/named": {"name": "@evidgate/tools", "dependencies": {"target2": "1"}}, "node_modules/target2": {"resolved": "https://registry.npmjs.org/target2/-/target2-1.0.0.tgz", "integrity": "sha512-x"}}}' \
+    > "$fx/scope-origin/package-lock.json"
+  printf '%s\n' '{"lockfileVersion": 3, "packages": {"": {"name": "fx", "workspaces": ["apps/*", "packages/*"]}, "apps/web": {"name": "@evidgate/web"}, "packages/nested/web": {"name": "@evidgate/nested", "dependencies": {"target2": "1"}}, "node_modules/target2": {"resolved": "https://registry.npmjs.org/target2/-/target2-1.0.0.tgz", "integrity": "sha512-x"}}}' \
+    > "$fx/scope-nested/package-lock.json"
+  printf '%s\n' '{"lockfileVersion": 3, "packages": {"": {"name": "fx", "workspaces": ["apps/*", "packages/*"]}, "apps/web": {"name": "@evidgate/web"}, "packages/cli": {"name": "@evidgate/cli", "dependencies": {"target2": "1"}}, "node_modules/target2": {"resolved": "https://registry.npmjs.org/target2/-/target2-1.0.0.tgz", "integrity": "sha512-x"}}}' \
+    > "$fx/scope-globws/package-lock.json"
+  printf '%s\n' '{"lockfileVersion": 3, "packages": {"": {"name": "fx", "workspaces": ["apps/web", "tools/*"]}, "apps/web": {"name": "@evidgate/web", "dependencies": {"@angular/localize": "file:tools/localize"}}, "tools/localize": {"name": "@angular/localize", "dependencies": {"target2": "1"}}, "node_modules/@angular/localize": {"link": true, "resolved": "tools/localize"}, "node_modules/target2": {"resolved": "https://registry.npmjs.org/target2/-/target2-1.0.0.tgz", "integrity": "sha512-x"}}}' \
+    > "$fx/scope-vialink/package-lock.json"
+  printf '%s\n' '{"lockfileVersion": 3, "packages": {"": {"name": "fx", "workspaces": ["apps/web"]}, "apps/web": {"name": "@evidgate/web", "dependencies": {"@angular/localize": "1"}}, "node_modules/@angular/localize": {"resolved": "https://registry.npmjs.org/@angular/localize/-/localize-1.0.0.tgz", "integrity": "sha512-x", "dependencies": {"target2": "1"}}, "node_modules/target2": {"resolved": "https://registry.npmjs.org/target2/-/target2-1.0.0.tgz", "integrity": "sha512-x"}, "node_modules/stray": {"name": "target2", "resolved": "https://registry.npmjs.org/target2/-/target2-1.0.0.tgz", "integrity": "sha512-x"}}}' \
+    > "$fx/scope-stray/package-lock.json"
+  printf '%s\n' '{"lockfileVersion": 3, "packages": {"": {"name": "fx", "workspaces": ["apps/*", "packages/*"]}, "apps/web": {"name": "@evidgate/web"}, "packages/server": {"name": "@evidgate/server", "dependencies": {"ancestor-wrap": "1"}}, "packages/node_modules/ancestor-wrap": {"resolved": "https://registry.npmjs.org/ancestor-wrap/-/ancestor-wrap-1.0.0.tgz", "integrity": "sha512-x", "dependencies": {"target2": "1"}}, "node_modules/target2": {"resolved": "https://registry.npmjs.org/target2/-/target2-1.0.0.tgz", "integrity": "sha512-x"}}}' \
+    > "$fx/scope-ancestor/package-lock.json"
+  sed 's/"lockfileVersion": 3/"lockfileVersion": 2/' "$fx/scope-globws/package-lock.json" \
+    > "$fx/lock-v2/package-lock.json"
+  printf 'npm\ttarget2\t1.0.0\thigh\tGHSA-ssss-ssss-ssss\tnode_modules/target2\n' > "$fx/rows-ws"
+  printf 'npm\ttarget2\t1.0.0\thigh\tGHSA-ssss-ssss-ssss\tnode_modules/target2,node_modules/stray\n' > "$fx/rows-stray"
+  printf 'npm\ttarget2\t1.0.0\thigh\tGHSA-ssss-ssss-ssss\n' > "$fx/rows-no-nodes"
+  for pair in "ws|@evidgate/tools|target2" "nested|@evidgate/nested|target2" \
+              "glob|@evidgate/cli|target2" "localize|@evidgate/web|@angular/localize" \
+              "server|@evidgate/web|@angular/localize"; do
+    IFS='|' read -r tag ws via <<< "$pair"
+    extra=""
+    if [[ "$tag" == "localize" ]]; then extra=', {"workspace": "@angular/localize", "via": "target2"}'; fi
+    printf '{"exceptions": {"GHSA-ssss-ssss-ssss": {"adr": "ADR-0001", "package": "target2", "reason": "self-test: %s scope", "expires": "2999-12-31", "scope": {"npm": [{"workspace": "%s", "via": "%s"}%s]}}}}\n' \
+      "$tag" "$ws" "$via" "$extra" > "$fx/exc-$tag.json"
+  done
   set +e
   evaluate "$fx/rows" "$fx/exceptions.json" "$fx/scope" > "$fx/out.log" 2>&1
   rc=$?
@@ -378,6 +412,53 @@ EOF
   set +e; evaluate "$fx/rows-t2" "$fx/exceptions.json" "$fx/scope-bad" > "$fx/bad.log" 2>&1; rc=$?; set -e
   if [[ "$rc" -ne 2 ]] || ! grep -q "package-lock.json is unusable" "$fx/bad.log"; then echo "self-test: FAIL — an unreadable package-lock.json must exit 2" >&2; expect=1; fi
 
+  # One case per rule that decides whether an exemption is legal, each with the
+  # exact diagnostic: a rule that stops being enforced shows up here instead of
+  # as a green gate.
+  expect_case() {
+    local name="$1" dir="$2" rows="$3" exc="$4" want="$5" needle="$6" got=0
+    set +e; evaluate "$fx/$rows" "$fx/$exc" "$fx/$dir" > "$fx/$name.log" 2>&1; got=$?; set -e
+    if [[ "$got" -ne "$want" ]] || ! grep -qF "$needle" "$fx/$name.log"; then
+      echo "self-test: FAIL — $name exited $got, expected $want with '$needle'" >&2
+      head -n 3 "$fx/$name.log" >&2
+      expect=1
+    fi
+  }
+  for t in \
+    "scope-origin|rows-ws|exc-ws.json|1|origin 'tools/named' is not a workspace declared by package-lock.json" \
+    "scope-nested|rows-ws|exc-nested.json|1|origin 'packages/nested/web' is not a workspace declared by package-lock.json" \
+    "scope-vialink|rows-ws|exc-localize.json|1|direct dependency '@angular/localize' is not the registry package of that name — is a link to tools/localize" \
+    "scope-stray|rows-stray|exc-localize.json|2|npm audit reports target2 at node_modules/stray, which no production path in package-lock.json reaches" \
+    "lock-v2|rows-ws|exc-glob.json|2|package-lock.json is lockfileVersion 2, not 3" \
+    "scope-ancestor|rows-ws|exc-server.json|1|@evidgate/server > ancestor-wrap > target2"; do
+    IFS='|' read -r name rows exc want needle <<< "$t"
+    expect_case "$name" "$name" "$rows" "$exc" "$want" "$needle"
+  done
+  # A declared workspace matched through the glob is still scoped normally, a
+  # scoped exemption with no install locations is unchecked and must fail, and
+  # the real lock must walk: picomatch leaving it means this needs a new package.
+  expect_case "scope-globws" "scope-globws" "rows-ws" "exc-glob.json" 0 \
+    "warn npm:target2@1.0.0 high GHSA-ssss-ssss-ssss — exempted by ADR-0001 (scope: @evidgate/cli > target2)"
+  expect_case "audit-nodes-empty" "scope-globws" "rows-no-nodes" "exc-glob.json" 2 \
+    "npm audit lists no install location for target2"
+  printf 'npm\tpicomatch\t*\thigh\tGHSA-fc5q-39xc-vjpf\tnode_modules/tinyglobby/node_modules/picomatch\n' > "$fx/rows-real"
+  printf '{"exceptions": {"GHSA-fc5q-39xc-vjpf": {"adr": "ADR-0013", "package": "picomatch", "reason": "self-test: real lock", "expires": "2999-12-31", "scope": {"npm": [{"workspace": "@evidgate/web", "via": "%s"}]}}}}\n' \
+    "@angular/localize" > "$fx/exc-real.json"
+  printf '{"exceptions": {"GHSA-fc5q-39xc-vjpf": {"adr": "ADR-0013", "package": "picomatch", "reason": "self-test: real lock", "expires": "2999-12-31", "scope": {"npm": [{"workspace": "@evidgate/web", "via": "@evidgate/sdk"}]}}}}\n' \
+    > "$fx/exc-real-other.json"
+  set +e; evaluate "$fx/rows-real" "$fx/exc-real.json" . > "$fx/real.log" 2>&1; rc=$?; set -e
+  if [[ "$rc" -ne 0 ]] || ! grep -qF "warn npm:picomatch@* high GHSA-fc5q-39xc-vjpf — exempted by ADR-0013 (scope: @evidgate/web > @angular/localize)" "$fx/real.log"; then
+    echo "self-test: FAIL — the real-lock fixture needs a new package: picomatch no longer exempts through (@evidgate/web, @angular/localize)" >&2
+    head -n 3 "$fx/real.log" >&2
+    expect=1
+  fi
+  set +e; evaluate "$fx/rows-real" "$fx/exc-real-other.json" . > "$fx/real-other.log" 2>&1; rc=$?; set -e
+  if [[ "$rc" -ne 1 ]] || ! grep -qF "@evidgate/web > @angular/localize > tinyglobby > picomatch (pair not in the exception scope)" "$fx/real-other.log"; then
+    echo "self-test: FAIL — the real-lock walk did not reject a pair outside the scope" >&2
+    head -n 3 "$fx/real-other.log" >&2
+    expect=1
+  fi
+
   # 11.6.1-T1.1 (AC1): the locked installs this gate reads must refuse a
   # drifted lock. A missing npm/dotnet is a hard prerequisite failure (exit 2).
   local lock_rc=0
@@ -389,7 +470,7 @@ EOF
   fi
 
   if [[ "$expect" -eq 0 ]]; then
-    echo "self-test: PASS — unlisted advisories fail, live scoped ADR exception passes, out-of-scope/alias/dev-only/edge case rules hold; stale npm + NuGet locks fail their locked installs"
+    echo "self-test: PASS — unlisted advisories fail, live scoped ADR exception passes, out-of-scope/alias/dev-only/edge and workspace-origin/link-via/audit-node/lock-version/ancestor rules hold, the real lock walks; stale npm + NuGet locks fail their locked installs"
   fi
   return "$expect"
 }
