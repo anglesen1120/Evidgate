@@ -69,95 +69,127 @@ export interface CaseOwnerActions {
   reset(): void;
 }
 
-export function createCaseOwner(host: CaseOwnerHost, data: CaseListDataService): CaseOwnerActions {
-  const snapshots = new Map<string, CaseDto>();
+/** The per-row records one owner action reads and writes. */
+interface OwnerScope {
+  readonly host: CaseOwnerHost;
+  readonly data: CaseListDataService;
+  readonly snapshots: Map<string, CaseDto>;
   /** The `ETag` a single-case read issued: the next `If-Match` must quote exactly that. */
-  const etags = new Map<string, string>();
+  readonly etags: Map<string, string>;
   /** One intent per row action: a retry of the same target replays its key. */
-  const intents = new Map<string, { membershipId: string; intent: Intent }>();
+  readonly intents: Map<string, { membershipId: string; intent: Intent }>;
+}
 
-  const op = (caseId: string, next: CaseOwnerOp): void => {
-    host.patchOwnerOps({ ...host.ownerOps(), [caseId]: next });
-  };
-  const intentFor = (caseId: string, membershipId: string): Intent => {
-    const current = intents.get(caseId);
-    if (current?.membershipId === membershipId) return current.intent;
-    const intent = createIntent();
-    intents.set(caseId, { membershipId, intent });
-    return intent;
-  };
-  const refuse = (caseId: string, failure: ApiError): void => {
-    snapshots.delete(caseId);
-    op(caseId, { pending: false, failure });
-  };
-  const confirmed = (caseId: string, row: CaseDto): void => {
-    snapshots.delete(caseId);
-    etags.delete(caseId);
-    intents.delete(caseId);
-    host.replaceRow(caseId, row);
-    op(caseId, { pending: false, failure: null });
-  };
-  const assign = async (caseId: string, membershipId: string | null): Promise<void> => {
-    if (!host.canWrite()) {
-      op(caseId, { pending: false, failure: WRITE_FORBIDDEN });
+function setOp(host: CaseOwnerHost, caseId: string, next: CaseOwnerOp): void {
+  host.patchOwnerOps({ ...host.ownerOps(), [caseId]: next });
+}
+
+function intentFor(scope: OwnerScope, caseId: string, membershipId: string): Intent {
+  const current = scope.intents.get(caseId);
+  if (current?.membershipId === membershipId) return current.intent;
+  const intent = createIntent();
+  scope.intents.set(caseId, { membershipId, intent });
+  return intent;
+}
+
+/** Ends an attempt with the server's typed answer: the rollback snapshot goes, the failure stays. */
+function refuse(scope: OwnerScope, caseId: string, failure: ApiError): void {
+  scope.snapshots.delete(caseId);
+  setOp(scope.host, caseId, { pending: false, failure });
+}
+
+function confirm(scope: OwnerScope, caseId: string, row: CaseDto): void {
+  scope.snapshots.delete(caseId);
+  scope.etags.delete(caseId);
+  scope.intents.delete(caseId);
+  scope.host.replaceRow(caseId, row);
+  setOp(scope.host, caseId, { pending: false, failure: null });
+}
+
+async function assignOwner(
+  scope: OwnerScope,
+  caseId: string,
+  membershipId: string | null,
+): Promise<void> {
+  const { host } = scope;
+  if (!host.canWrite()) {
+    setOp(host, caseId, { pending: false, failure: WRITE_FORBIDDEN });
+    return;
+  }
+  if (membershipId === null) {
+    setOp(host, caseId, { pending: false, failure: UNASSIGN_UNSUPPORTED });
+    return;
+  }
+  if (host.ownerOps()[caseId]?.pending) return;
+  const row = host.rows().find((candidate) => candidate.id === caseId);
+  if (row === undefined) return;
+  const epoch = host.epoch();
+  const intent = intentFor(scope, caseId, membershipId);
+  const etag = scope.etags.get(caseId) ?? `"${row.version}"`;
+  scope.snapshots.set(caseId, row);
+  setOp(host, caseId, { pending: true, failure: null });
+  host.replaceRow(caseId, { ...row, owner_membership_id: membershipId });
+  try {
+    const stored = await scope.data.update(
+      caseId,
+      { owner_membership_id: membershipId },
+      new AbortController().signal,
+      etag,
+      intent,
+    );
+    if (epoch !== host.epoch()) return;
+    confirm(scope, caseId, stored);
+  } catch (error) {
+    if (epoch !== host.epoch()) return;
+    const failure = typedFailure(error);
+    if (!OWNER_REFUSALS.has(failure.status)) {
+      refuse(scope, caseId, OWNER_RELOAD_REQUIRED);
       return;
     }
-    if (membershipId === null) {
-      op(caseId, { pending: false, failure: UNASSIGN_UNSUPPORTED });
-      return;
-    }
-    if (host.ownerOps()[caseId]?.pending) return;
-    const row = host.rows().find((candidate) => candidate.id === caseId);
-    if (row === undefined) return;
-    const epoch = host.epoch();
-    const intent = intentFor(caseId, membershipId);
-    const etag = etags.get(caseId) ?? `"${row.version}"`;
-    snapshots.set(caseId, row);
-    op(caseId, { pending: true, failure: null });
-    host.replaceRow(caseId, { ...row, owner_membership_id: membershipId });
-    try {
-      const stored = await data.update(
-        caseId,
-        { owner_membership_id: membershipId },
-        new AbortController().signal,
-        etag,
-        intent,
-      );
-      if (epoch !== host.epoch()) return;
-      confirmed(caseId, stored);
-    } catch (error) {
-      if (epoch !== host.epoch()) return;
-      const failure = typedFailure(error);
-      if (!OWNER_REFUSALS.has(failure.status)) {
-        refuse(caseId, OWNER_RELOAD_REQUIRED);
-        return;
-      }
-      host.replaceRow(caseId, snapshots.get(caseId) ?? row);
-      intents.delete(caseId);
-      refuse(caseId, failure);
-    }
+    host.replaceRow(caseId, scope.snapshots.get(caseId) ?? row);
+    scope.intents.delete(caseId);
+    refuse(scope, caseId, failure);
+  }
+}
+
+async function reloadOwner(scope: OwnerScope, caseId: string): Promise<void> {
+  const { host, data } = scope;
+  const epoch = host.epoch();
+  if (!host.rows().some((candidate) => candidate.id === caseId)) return;
+  const previous = host.ownerOps()[caseId]?.failure ?? null;
+  setOp(host, caseId, { pending: true, failure: null });
+  try {
+    const read = await data.get(caseId, new AbortController().signal);
+    if (epoch !== host.epoch()) return;
+    scope.etags.set(caseId, read.etag);
+    scope.intents.delete(caseId);
+    host.replaceRow(caseId, read.row);
+    setOp(host, caseId, { pending: false, failure: null });
+  } catch (error) {
+    if (epoch !== host.epoch()) return;
+    // An unconfirmed PATCH keeps its outcome: the row still shows the optimistic owner, so a
+    // rollback message would contradict what the user sees.
+    const failure = previous?.code === 'owner_outcome_unknown' ? previous : typedFailure(error);
+    setOp(host, caseId, { pending: false, failure });
+  }
+}
+
+export function createCaseOwner(host: CaseOwnerHost, data: CaseListDataService): CaseOwnerActions {
+  const scope: OwnerScope = {
+    host,
+    data,
+    snapshots: new Map<string, CaseDto>(),
+    etags: new Map<string, string>(),
+    intents: new Map<string, { membershipId: string; intent: Intent }>(),
   };
-  const reload = async (caseId: string): Promise<void> => {
-    const epoch = host.epoch();
-    if (!host.rows().some((candidate) => candidate.id === caseId)) return;
-    op(caseId, { pending: true, failure: null });
-    try {
-      const read = await data.get(caseId, new AbortController().signal);
-      if (epoch !== host.epoch()) return;
-      etags.set(caseId, read.etag);
-      intents.delete(caseId);
-      host.replaceRow(caseId, read.row);
-      op(caseId, { pending: false, failure: null });
-    } catch (error) {
-      if (epoch !== host.epoch()) return;
-      op(caseId, { pending: false, failure: typedFailure(error) });
-    }
+  return {
+    assign: (caseId, membershipId) => assignOwner(scope, caseId, membershipId),
+    reload: (caseId) => reloadOwner(scope, caseId),
+    reset: () => {
+      scope.snapshots.clear();
+      scope.etags.clear();
+      scope.intents.clear();
+      host.patchOwnerOps(NO_OWNER_OPS);
+    },
   };
-  const reset = (): void => {
-    snapshots.clear();
-    etags.clear();
-    intents.clear();
-    host.patchOwnerOps(NO_OWNER_OPS);
-  };
-  return { assign, reload, reset };
 }

@@ -11,16 +11,18 @@ import { caseFiltersToQuery, CaseListStore } from './case-list.store';
 describe('CaseListStore', () => {
   let list = vi.fn<CaseListDataService['list']>();
   let update = vi.fn<CaseListDataService['update']>();
+  let get = vi.fn<CaseListDataService['get']>();
   const canWrite = signal(true);
   beforeEach(() => {
     list = vi.fn<CaseListDataService['list']>().mockResolvedValue(CASE_LIST_FIXTURE);
     update = vi.fn<CaseListDataService['update']>();
+    get = vi.fn<CaseListDataService['get']>();
     canWrite.set(true);
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
         CaseListStore,
-        { provide: CaseListDataService, useValue: { list, update } },
+        { provide: CaseListDataService, useValue: { list, update, get } },
         { provide: SessionStore, useValue: { has: () => canWrite() } },
       ],
     });
@@ -262,6 +264,31 @@ describe('CaseListStore', () => {
     await pending;
     expect(store.rows()[0]).toEqual(confirmed);
     expect(store.ownerPending(row.id)).toBe(false);
+    expect(store.ownerFailure(row.id)).toBeNull();
+  });
+
+  it('keeps an unknown owner outcome when the single-case reload is forbidden', async () => {
+    const store = TestBed.inject(CaseListStore);
+    store.init('project', {});
+    await settle();
+    const row = store.rows()[0];
+    if (!row) throw new Error('Missing case fixture');
+    const membershipId = '018f0000-0000-7000-8000-000000000032';
+    update.mockRejectedValueOnce(new TypeError('connection lost'));
+    await store.assignOwner(row.id, membershipId);
+    const unknown = store.ownerFailure(row.id);
+    expect(unknown?.code).toBe('owner_outcome_unknown');
+    get.mockRejectedValueOnce(
+      new ApiRequestError({ ...CATALOG_FAILURE, kind: 'forbidden', status: 403 }),
+    );
+    await store.reloadOwner(row.id);
+    expect(store.rows()[0]?.owner_membership_id).toBe(membershipId);
+    expect(store.ownerFailure(row.id)).toEqual(unknown);
+    expect(store.ownerFailure(row.id)?.message).not.toMatch(/restored/i);
+    expect(store.ownerPending(row.id)).toBe(false);
+    get.mockResolvedValueOnce({ row, etag: `"${row.version}"` });
+    await store.reloadOwner(row.id);
+    expect(store.rows()[0]).toEqual(row);
     expect(store.ownerFailure(row.id)).toBeNull();
   });
 
