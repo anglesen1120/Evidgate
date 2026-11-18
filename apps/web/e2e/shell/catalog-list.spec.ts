@@ -112,10 +112,10 @@ for (const locale of LOCALES) {
   }) => {
     await page.goto(withVariants(base, ['?fixture.variant.listCases=empty']));
     await expect(page.locator('app-empty-pattern')).toBeVisible();
-    await expect(page.locator('[data-catalog-more]')).toHaveCount(0);
+    await expect(page.locator('[data-catalog-load-more]')).toHaveCount(0);
     await page.goto(withVariants(base, ['?q=no-such-identity']));
     await expect(page.locator('app-empty-pattern')).toBeVisible();
-    await expect(page.locator('[data-catalog-more]')).toBeVisible();
+    await expect(page.locator('[data-catalog-load-more]')).toBeVisible();
     await page.goto(withVariants(base, ['?fixture.variant.listCases=unavailable']));
     await expect(page.locator('app-retry-after')).toBeVisible();
     await expect(page.locator('app-case-list-table')).toHaveCount(0);

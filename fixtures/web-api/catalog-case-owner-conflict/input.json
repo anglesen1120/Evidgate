@@ -1,0 +1,18 @@
+{
+  "operation_id": "updateCase",
+  "variant": "conflict",
+  "status": 409,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000ca22"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "invalid_transition",
+      "message": "Archived cases cannot move back to active.",
+      "request_id": "018f0000-0000-7000-8000-00000000ca22",
+      "retryable": false,
+      "details": []
+    }
+  }
+}

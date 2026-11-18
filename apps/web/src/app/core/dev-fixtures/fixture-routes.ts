@@ -105,7 +105,9 @@ export interface FixtureRoute {
    * The value is compared against the `cursor` a catalog row declares for the page it holds, so a
    * cursor-paged list shows a second page only for the cursor the previous page actually named.
    * Absent on every route whose document does not depend on a query parameter — which is all of
-   * them but `listCiBindings` and `listRuns`; the module comment holds the rule.
+   * them but `listCiBindings`, `listRuns` and `listCases`; the module comment holds the rule. The
+   * catalog walk (`catalog-cases-list` → `catalog-cases-page-2`) is pinned in
+   * `fixture-case-list.spec.ts`, beside the filter rules that page also answers.
    */
   readonly cursorQueryParameter?: string;
 }
@@ -129,7 +131,13 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
     path: '/orgs/{o}/security-events',
     cursorQueryParameter: 'cursor',
   },
-  { operationId: 'listCases', method: 'GET', path: '/projects/{p}/cases' },
+  {
+    operationId: 'listCases',
+    method: 'GET',
+    path: '/projects/{p}/cases',
+    cursorQueryParameter: 'cursor',
+  },
+  { operationId: 'updateCase', method: 'PATCH', path: '/cases/{c}' },
   { operationId: 'createCiBinding', method: 'POST', path: '/projects/{p}/ci-bindings' },
   {
     operationId: 'listCiBindings',

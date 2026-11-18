@@ -25,7 +25,7 @@
         "name": "Checkout confirms order",
         "file_path": "tests/checkout.spec.ts",
         "status": "active",
-        "owner_membership_id": "018f0000-0000-7000-8000-000000000031"
+        "owner_membership_id": "018f0000-0000-7000-8000-0000000000c1"
       },
       {
         "org_id": "018f0000-0000-7000-8000-000000000001",
