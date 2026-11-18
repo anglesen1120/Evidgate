@@ -194,6 +194,7 @@ Legend: ✅ verified with a source link · ⚠️ unverified evidence · `[INFER
 | **A12** `track` identity | A `@for` block over a collection that can change tracks a stable unique identity (`id`, `uuid`) of the row — not `$index` and not the item reference; `$index` is allowed only for a list that never changes, and the item reference only when the model carries no identity at all, because both defeat DOM reuse ✅ [angular.dev: control flow](https://angular.dev/guide/templates/control-flow#why-is-track-in-for-blocks-important). | review; the compiler enforces only that a `track` expression exists |
 | **A13** Deferred dependencies | Everything rendered inside `@defer` is standalone and is not referenced outside `@defer` blocks in the same file (an outside reference or a `ViewChild` query makes it load eagerly, while reuse inside another `@defer` block is fine), so the block actually defers and shows up as a lazy chunk ✅ [angular.dev: deferred loading](https://angular.dev/guide/templates/defer#which-dependencies-are-deferred). | review plus the W7 lazy-chunk budget in `npm run build` |
 | **A14** Lifecycle | Implement the lifecycle interface a hook belongs to (`OnInit`, `OnDestroy`, …), keep hook bodies non-async, never call a hook explicitly, and delete a hook left empty ✅ [angular.dev: style guide](https://angular.dev/style-guide#use-lifecycle-hook-interfaces). | `@angular-eslint/use-lifecycle-interface`, `@angular-eslint/no-async-lifecycle-method`, `@angular-eslint/no-lifecycle-call`, `@angular-eslint/no-empty-lifecycle-method` (all enabled) |
+| **A15** Shared components | **Extract on the second use.** <br>• Before writing a component, pipe or directive, search the shared component catalogue below, `apps/web/src/app/shared/` and `apps/web/src/app/ui/`, and name what was found (or "none") in the handoff. <br>• A UI pattern, formatter or interaction needed by a second feature moves to `shared/ui/<group>/` (or `shared/<area>/` when it has no template) in the change that adds the second use; W1 forbids importing it from the first feature, and a feature-local copy is a defect (UI3). <br>• A shared component is presentational: data in through `input()`/`model()`, events out through `output()`, content through projection; it injects no feature store, no data service and no SDK client, and holds no feature-specific copy or permission check. <br>• Do not extract ahead of a second use, and do not add a mode flag per consumer: when two consumers need different behaviour, compose smaller shared parts instead. <br>• The change that adds or renames a shared component updates the catalogue row and the UI gallery. Added 2026-11-19. | review against the catalogue below (the duplicate named with both paths); `evidgate/no-feature-cross-import` blocks the cross-feature shortcut; no detector finds a feature-local duplicate ⚠️ |
 
 [DECISION] Owner decisions, 2026-11-18 — the open questions this section carried, now settled:
 - **Signal Forms: not adopted.** The API is stable in Angular 22, but existing forms stay on `FormsModule`/`ReactiveFormsModule`; revisit when a form-heavy area is next rebuilt, not form by form.
@@ -201,8 +202,31 @@ Legend: ✅ verified with a source link · ⚠️ unverified evidence · `[INFER
 - **CDK harnesses: required for new work.** W9/A6 apply to every new or substantially rewritten unit spec from now on. The existing DOM-selector specs are recorded debt — measured 2026-11-18: 17 of 347 spec files use a harness — and are converted when a spec is touched, never in a bulk rewrite.
 - **Lint: the three rules are enforced.** `@angular-eslint/inject-at-top` (A8), `@angular-eslint/no-uncalled-signals` (A2) and `@angular-eslint/template/no-inline-styles` (A11) are `error` in `eslint.config.js` for both the app and the spec project; the last one carries `allowBindToStyle: 'dynamic'`, so a computed `[style.x]` binding is the escape hatch while a constant one is still reported.
 
+### Shared component catalogue (A15)
+
+Search here before writing UI. Paths are under `apps/web/src/app/`; test hosts are left out. Add or correct a row in the change that adds, renames or removes a shared component.
+
+| Need | Use | Location |
+|---|---|---|
+| Run state and generic status | `app-run-state-pill`, `app-status-pill` | `shared/ui/chips/` |
+| Hash and revision identity | `app-hash-chip`, `app-revision-chip` | `shared/ui/chips/` |
+| Evidence, outcome and decision kept as separate fields | `app-evidence-badge`, `app-outcome-pill`, `app-decision-chip` | `shared/ui/verdict/` |
+| Labels, missing-evidence reasons, waiver notice | `app-label-chip`, `app-missing-reason-list`, `app-waiver-banner` | `shared/ui/annotations/` |
+| Tables, including the virtualised one above 200 loaded rows (UI10) | `app-data-table`, `app-data-table-cell`, `app-data-table-records`, `app-data-table-value` | `shared/ui/data-table/` |
+| Copyable ids and formatted numbers | `app-copyable-identifier`, `app-copy-value-button`, `app-number-value` | `shared/ui/values/` |
+| Loading, empty, error, forbidden, not-found and inline feedback | `app-request-state`, `app-loading-pattern`, `app-empty-pattern`, `app-error-pattern`, `app-forbidden-pattern`, `app-not-found-pattern`, `app-inline-feedback` | `shared/ui/states/` |
+| Edit conflict and `Retry-After` wait | `app-conflict-dialog`, `app-retry-after` | `shared/ui/conflict/` |
+| Page and section headers with action slots | `app-page-header`, `app-section-header`, `[appPageHeaderActions]`, `[appSectionHeaderActions]` | `shared/ui/page-header/` |
+| Desktop-only mutation on a narrow viewport | `[appDesktopMutation]`, `app-desktop-required-notice` | `shared/ui/narrow/` |
+| One-time credential or value reveal with copy and dismiss | `app-connect-step-reveal` | `shared/ui/reveal/` |
+| Field feedback, form error summary, required-field note and marker | `app-field-feedback`, `app-form-error-summary`, `app-form-required-note`, `app-field-requirement` | `shared/forms/` |
+| Absolute (UTC) timestamp | `app-absolute-time` | `shared/time/` |
+| Live examples of every shared component (specimens only, not building blocks for features) | `app-ui-gallery` with `app-gallery-composition`, `app-gallery-states`, `app-gallery-tables` | `shared/ui/gallery/` |
+| Buttons, inputs, selects, dialogs, menus, tabs, cards, alerts, toasts, tooltips (UI1–UI13) | owned Helm families through `@evidgate/ui/<family>` | `ui/` |
+| Non-visual shared code (focus helpers, timer clamp, keyset walk, spec helpers) | see [agent code rules §7](agent-code-rules.md) for the helper rows | `shared/a11y/`, `shared/time/timer-delay.ts`, `shared/keyset-walk.ts`, `shared/testing/` |
+
 ## Before you yield a UI change
-- **Angular pass (mandatory).** Walk W1–W9 and A1–A14 for every file this change touches, run the lint and typecheck commands that enforce them, and record one pass / n-a line per rule in the handoff — a rule that does not apply says why.
+- **Angular pass (mandatory).** Walk W1–W9 and A1–A15 for every file this change touches, run the lint and typecheck commands that enforce them, and record one pass / n-a line per rule in the handoff — a rule that does not apply says why.
 - Read the matching rule IDs, current feature contract, ADR-0011, shared primitive and exact screen reference before editing; cite those IDs and any plan-only finding in the handoff, not in source comments.
 - Read and **run** the installed ui-ux-pro-max `scripts/search.py` for the concern (for example `python3 "$UUPM/scripts/search.py" 'badge chip label wraps' --domain ux -n 3`, plus relevant `--stack angular` guidance), with `$UUPM` set to the installed skill directory; record the exact commands, applied/rejected result rows and reasons; never use `--persist` or substitute its palette/framework for the project.
 - Open the implemented screen at **390/768/1440px × dark/light × vi/en** with long names/emails/URLs/IDs/branches and 40% copy expansion; compare both the rules and its mockup, recording screenshots/selectors and observed failures rather than claiming unrun coverage.
