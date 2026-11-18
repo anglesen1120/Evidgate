@@ -20,6 +20,18 @@ async function tabTo(page: Page, target: Locator): Promise<void> {
   await expect(target).toBeFocused();
 }
 
+// Brain publishes the highlighted option through aria-activedescendant once the overlay is
+// keyboard-ready; a key sent earlier is dropped, so wait for that state instead of a delay.
+async function moveHome(page: Page, trigger: Locator): Promise<void> {
+  await expect(trigger).toHaveAttribute('aria-activedescendant', /.+/);
+  await page.keyboard.press('Home');
+  const first = page.getByRole('option').first();
+  await expect(trigger).toHaveAttribute(
+    'aria-activedescendant',
+    (await first.getAttribute('id')) ?? /.+/,
+  );
+}
+
 async function chooseOwnerWithKeyboard(page: Page, picker: Locator): Promise<string> {
   await tabTo(page, picker);
   await page.keyboard.press('Enter');
@@ -29,7 +41,7 @@ async function chooseOwnerWithKeyboard(page: Page, picker: Locator): Promise<str
   const labels = await options.allTextContents();
   const index = labels.findIndex((label) => label.trim() === email);
   expect(index).toBeGreaterThanOrEqual(0);
-  await page.keyboard.press('Home');
+  await moveHome(page, picker);
   for (let step = 0; step < index; step++) await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
   // Brain animates the overlay out; scanning mid-fade reads the option's blended colour.
@@ -119,7 +131,7 @@ for (const locale of LOCALES) {
     await tabTo(page, page.locator('#catalog-page-size'));
     await page.keyboard.press('Enter');
     await expect(page.getByRole('option', { name: '25', exact: true })).toBeVisible();
-    await page.keyboard.press('Home');
+    await moveHome(page, page.locator('#catalog-page-size'));
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/limit=25/);
     expect(new URL(page.url()).searchParams.has('cursor')).toBe(false);
