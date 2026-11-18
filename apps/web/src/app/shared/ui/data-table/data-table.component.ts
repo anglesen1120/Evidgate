@@ -66,7 +66,7 @@ interface DataTableLayoutFocus {
   readonly rowIndex: number;
 }
 
-const ROW_CONTROL_SELECTOR = 'a[href],button,input,select,textarea,[tabindex]';
+const ROW_CONTROL_SELECTOR = 'a[href],button,input,select,textarea,summary,[tabindex]';
 
 let nextTableId = 0;
 

@@ -1,0 +1,13 @@
+{
+  "operation_id": "listSecurityEvents",
+  "variant": "empty",
+  "status": 200,
+  "body": {
+    "items": [],
+    "next_cursor": null
+  },
+  "headers": {
+    "X-Request-Id": "018f4350-0000-7000-8000-000000000600"
+  },
+  "latency_ms": 0
+}

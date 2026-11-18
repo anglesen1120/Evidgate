@@ -126,6 +126,12 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   { operationId: 'listProjects', method: 'GET', path: '/orgs/{o}/projects' },
   { operationId: 'getProject', method: 'GET', path: '/projects/{p}' },
   {
+    operationId: 'listSecurityEvents',
+    method: 'GET',
+    path: '/orgs/{o}/security-events',
+    cursorQueryParameter: 'cursor',
+  },
+  {
     operationId: 'listCases',
     method: 'GET',
     path: '/projects/{p}/cases',
