@@ -171,6 +171,12 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
     path: '/projects/{p}/runs',
     cursorQueryParameter: 'cursor',
   },
+  // The create beside that list: one path, two verbs, so the method is what tells them apart. Its
+  // fixed documents answer whatever body arrives (response corpus), including the 201.
+  { operationId: 'createRun', method: 'POST', path: '/projects/{p}/runs' },
+  // The cancel acknowledgement (202, no body); the run it names is never validated against the
+  // path, so one document serves every cancel.
+  { operationId: 'cancelRun', method: 'POST', path: '/runs/{r}/cancel' },
   // 09.3.1-T2: detail states are selected explicitly by variant, not inferred from the run id.
   { operationId: 'getRun', method: 'GET', path: '/runs/{r}' },
   // The run-detail decision read: its state is selected by variant (`ok` is the pending body),

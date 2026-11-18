@@ -225,6 +225,10 @@ const ENUM_MEMBERS = new Map([
   ['missing', MISSING_CODES],
   // A pending-evidence reason is one of the same codes.
   ['reasons', MISSING_CODES],
+  // The create-run dialog's ref kind select and the `ref.trigger_event` it sends name the
+  // contract's closed vocabularies, so those words occur in production too (`pull_request`).
+  ['kind', new Set(['branch', 'tag', 'pull_request'])],
+  ['trigger_event', new Set(['push', 'pull_request', 'schedule', 'manual', 'dispatch'])],
   // The security view renders the closed SecurityEventItem.type vocabulary, so these protocol
   // words occur in production too; an unlisted type remains fixture data.
   [

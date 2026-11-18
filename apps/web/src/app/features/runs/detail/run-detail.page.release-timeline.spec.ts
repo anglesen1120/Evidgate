@@ -8,6 +8,7 @@ import { ReleasesDataService } from '../../../core/data/releases-data.service';
 import { RunsDataService } from '../../../core/data/runs-data.service';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { RunDataService } from '../data/run-data.service';
+import { DENY_CANCEL_SESSION } from '../actions/cancel/cancel-run.test-support';
 import { routes } from '../runs.routes';
 import { deferred, pendingBody, refused, run } from './run-detail-store.fixtures';
 import { RunDetailPage } from './run-detail.page';
@@ -30,6 +31,7 @@ describe('RunDetailPage release and timeline regions', () => {
     getRelease.mockReset();
     TestBed.configureTestingModule({
       providers: [
+        DENY_CANCEL_SESSION,
         provideZonelessChangeDetection(),
         provideRouter([{ path: 'projects/:projectId/runs', children: routes }]),
         { provide: RunsDataService, useValue: { get, listAttempts, listEvidenceRevisions } },

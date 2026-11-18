@@ -63,6 +63,7 @@ import {
 } from './fixture-catalog';
 import { FIXTURE_REQUEST_LOG, type FixtureCallRecord } from './fixture-request-log';
 import { findRetentionFixture } from './fixture-retention';
+import { RunCancelFixtureScenario } from './fixture-run-cancel';
 import {
   apiRelativePath,
   matchFixtureRoute,
@@ -217,6 +218,7 @@ function recordRequest(request: HttpRequest<unknown>): void {
 export class FixtureHttpBackend implements HttpBackend {
   private readonly toggles: FixtureToggles = inject(FixtureToggles);
   private readonly retentionPolicies = new Map<string, RetentionPolicy>();
+  private readonly runCancellation = new RunCancelFixtureScenario();
 
   handle(request: HttpRequest<unknown>): Observable<HttpEvent<unknown>> {
     recordRequest(request);
@@ -248,6 +250,13 @@ export class FixtureHttpBackend implements HttpBackend {
     request: HttpRequest<unknown>,
     relativePath: string,
   ): FixtureEntry | undefined {
+    const cancellation = this.runCancellation.entry(
+      request,
+      relativePath,
+      this.toggles.variantFor('getRun'),
+      this.toggles.variantFor('cancelRun'),
+    );
+    if (cancellation !== undefined) return cancellation;
     const retention = /^\/projects\/([^/]+)\/retention$/.exec(relativePath);
     if (retention?.[1] && (request.method === 'GET' || request.method === 'PUT')) {
       const operation = request.method === 'GET' ? 'getRetentionPolicy' : 'setRetentionPolicy';

@@ -1,0 +1,122 @@
+{
+  "operation_id": "listPermissions",
+  "variant": "run-actions",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-000000000a72"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "code": "artifact:read",
+        "resource": "artifact",
+        "action": "read",
+        "description": "Read artifact metadata and obtain a short-lived download URL (00 §9.3).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "authoring:read",
+        "resource": "authoring",
+        "action": "read",
+        "description": "Read the feature tree, its checklist items and its manual test cases (00 §2, 13.1.1).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "case:read",
+        "resource": "case",
+        "action": "read",
+        "description": "Read the case catalog and case revisions (00 §9.3, 03).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "decision:read",
+        "resource": "decision",
+        "action": "read",
+        "description": "Read a run's or release's exact evaluation revision and its reasons (00 §9.3, 07).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "organization:read",
+        "resource": "organization",
+        "action": "read",
+        "description": "Read the organizations the caller is a member of, and one organization's settings (02.1.1).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "policy:read",
+        "resource": "policy",
+        "action": "read",
+        "description": "Read policy revisions, waivers and quarantine entries — open to every member role, viewer included, so an exception is never hidden (T58, 07.1.1).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "project:read",
+        "resource": "project",
+        "action": "read",
+        "description": "Read project settings such as retention and capture options (T21: every member role).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "role:read",
+        "resource": "role",
+        "action": "read",
+        "description": "Read the permission catalogue and the built-in roles (any member; 02.2.1).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "run:cancel",
+        "resource": "run",
+        "action": "cancel",
+        "description": "Record a cancel request for a run; a cancelled run never becomes complete (00 §8.1, 05.4.1).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "run:create",
+        "resource": "run",
+        "action": "create",
+        "description": "Upload a manifest, create a run, rerun or reprocess, and bind a run to a release (00 §9.3).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "run:read",
+        "resource": "run",
+        "action": "read",
+        "description": "Read run state, the evidence revision, report comparisons and environment revisions (00 §9.3).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
+        "code": "suite:read",
+        "resource": "suite",
+        "action": "read",
+        "description": "Read suite revisions, their diffs and the fixtures they reference (00 §9.3, T56).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      }
+    ],
+    "next_cursor": null
+  }
+}

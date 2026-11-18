@@ -9765,6 +9765,84 @@
       <trans-unit id="catalog.owner" datatype="html"><source>Owner membership</source></trans-unit>
       <trans-unit id="catalog.unassigned" datatype="html"><source>Unassigned</source></trans-unit>
       <trans-unit id="catalog.unresolved" datatype="html"><source>The catalog request did not complete. Try again.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.action" datatype="html"><source>Cancel run</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.title" datatype="html"><source>Request run cancellation?</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.description" datatype="html"><source>This records a cancellation request. Collection can become canceled before execution stops. Existing attempts and evidence are kept.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.run" datatype="html"><source>Run</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.reason" datatype="html"><source>Reason (optional)</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.reason-hint" datatype="html"><source>Up to 1,000 characters. The reason is stored exactly as entered.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.reason-blank" datatype="html"><source>Enter a reason or leave the field empty. A reason cannot contain only spaces.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.reason-long" datatype="html"><source>Use at most 1,000 characters.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.frozen" datatype="html"><source>Retries keep the same reason and request key. Close this dialog to start a different request.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.keep" datatype="html"><source>Keep run</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.close" datatype="html"><source>Close</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.confirm" datatype="html"><source>Record cancel request</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.submitting" datatype="html"><source>Recording cancel request…</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.no-permission" datatype="html"><source>Canceling this run requires run:cancel permission in this project.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.terminal" datatype="html"><source>This run is already terminal. No cancellation is needed.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.desktop" datatype="html"><source>Use a desktop-sized window to cancel a run.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.recorded" datatype="html"><source>202 · Cancel request recorded. Waiting for collection state; this does not mean execution has stopped.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.canceled" datatype="html"><source>202 · Cancel request recorded. Collection state is canceled; execution may still be stopping.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.completed" datatype="html"><source>202 · Cancel request recorded. The run reached a terminal collection state other than canceled. No further automatic refresh is needed.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.waiting" datatype="html"><source>202 · Cancel request recorded. Automatic refresh paused after 15 checks. Refresh state to check again; this does not send another cancel request.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.poll-error" datatype="html"><source>202 · Cancel request recorded, but collection state could not be refreshed. The run is not confirmed canceled.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.check" datatype="html"><source>Refresh collection state</source></trans-unit>
+      <trans-unit id="runs.actions.create.title" datatype="html"><source>Create run</source></trans-unit>
+      <trans-unit id="runs.actions.create.description" datatype="html"><source>Create a queued run from an existing manifest. Execution stays on your CI or agent infrastructure.</source></trans-unit>
+      <trans-unit id="runs.actions.create.manifest" datatype="html"><source>Manifest ID</source></trans-unit>
+      <trans-unit id="runs.actions.create.manifest-hint" datatype="html"><source>Use the ID of a manifest uploaded to this project. Its suite and environment revisions are pinned when the run is created.</source></trans-unit>
+      <trans-unit id="runs.actions.create.release" datatype="html"><source>Release ID (optional)</source></trans-unit>
+      <trans-unit id="runs.actions.create.release-hint" datatype="html"><source>Bind by ID to an active release in this project. Release names are not supported.</source></trans-unit>
+      <trans-unit id="runs.actions.create.purpose" datatype="html"><source>Purpose</source></trans-unit>
+      <trans-unit id="runs.actions.create.regular" datatype="html"><source>Regular</source></trans-unit>
+      <trans-unit id="runs.actions.create.replay" datatype="html"><source>Replay</source></trans-unit>
+      <trans-unit id="runs.actions.create.replay-hint" datatype="html"><source>Replay currently returns replay_grant_invalid because replay grants are not available. A replay cannot bind to a release.</source></trans-unit>
+      <trans-unit id="runs.actions.create.grant" datatype="html"><source>Replay grant ID (optional)</source></trans-unit>
+      <trans-unit id="runs.actions.create.ref" datatype="html"><source>Ref identity (optional)</source></trans-unit>
+      <trans-unit id="runs.actions.create.ref-hint" datatype="html"><source>Body-supplied identity is recorded as unverified. Verified CI claims take precedence.</source></trans-unit>
+      <trans-unit id="runs.actions.create.kind" datatype="html"><source>Ref kind (optional)</source></trans-unit>
+      <trans-unit id="runs.actions.create.none" datatype="html"><source>Not supplied</source></trans-unit>
+      <trans-unit id="runs.actions.create.branch" datatype="html"><source>Branch</source></trans-unit>
+      <trans-unit id="runs.actions.create.tag" datatype="html"><source>Tag</source></trans-unit>
+      <trans-unit id="runs.actions.create.pull-request" datatype="html"><source>Pull request</source></trans-unit>
+      <trans-unit id="runs.actions.create.ref-name" datatype="html"><source>Ref name (optional)</source></trans-unit>
+      <trans-unit id="runs.actions.create.pr-number" datatype="html"><source>Pull request number</source></trans-unit>
+      <trans-unit id="runs.actions.create.head-sha" datatype="html"><source>Head commit SHA (optional)</source></trans-unit>
+      <trans-unit id="runs.actions.create.base-sha" datatype="html"><source>Base commit SHA (optional)</source></trans-unit>
+      <trans-unit id="runs.actions.create.trigger" datatype="html"><source>Trigger event (optional)</source></trans-unit>
+      <trans-unit id="runs.actions.create.push" datatype="html"><source>Push</source></trans-unit>
+      <trans-unit id="runs.actions.create.schedule" datatype="html"><source>Schedule</source></trans-unit>
+      <trans-unit id="runs.actions.create.manual" datatype="html"><source>Manual</source></trans-unit>
+      <trans-unit id="runs.actions.create.dispatch" datatype="html"><source>Dispatch</source></trans-unit>
+      <trans-unit id="runs.actions.create.fork" datatype="html"><source>Run originates from a fork</source></trans-unit>
+      <trans-unit id="runs.actions.create.components" datatype="html"><source>Build identifiers (optional JSON object)</source></trans-unit>
+      <trans-unit id="runs.actions.create.components-hint" datatype="html"><source>Supply component build identifiers as a JSON object, or leave empty.</source></trans-unit>
+      <trans-unit id="runs.actions.create.dismiss" datatype="html"><source>Cancel</source></trans-unit>
+      <trans-unit id="runs.actions.create.submitting" datatype="html"><source>Creating run…</source></trans-unit>
+      <trans-unit id="runs.actions.create.forbidden" datatype="html"><source>You need the run:create permission to create a run.</source></trans-unit>
+      <trans-unit id="runs.actions.create.narrow" datatype="html"><source>Use a wider screen to create a run.</source></trans-unit>
+      <trans-unit id="runs.actions.create.scope-changed" datatype="html"><source>The organization or project changed. Close this dialog and reopen it in the intended project.</source></trans-unit>
+      <trans-unit id="runs.actions.create.failed" datatype="html"><source>Run was not confirmed</source></trans-unit>
+      <trans-unit id="runs.actions.create.required" datatype="html"><source>Enter a manifest ID.</source></trans-unit>
+      <trans-unit id="runs.actions.create.uuid" datatype="html"><source>Enter a valid UUID.</source></trans-unit>
+      <trans-unit id="runs.actions.create.ref-length" datatype="html"><source>Use no more than 255 characters for the ref name.</source></trans-unit>
+      <trans-unit id="runs.actions.create.positive-integer" datatype="html"><source>Enter a whole pull request number of at least 1.</source></trans-unit>
+      <trans-unit id="runs.actions.create.sha" datatype="html"><source>Use 40 or 64 lowercase hexadecimal characters.</source></trans-unit>
+      <trans-unit id="runs.actions.create.json" datatype="html"><source>Enter a valid JSON object.</source></trans-unit>
+      <trans-unit id="runs.actions.create.grant-purpose" datatype="html"><source>A replay grant can only be supplied for a replay run.</source></trans-unit>
+      <trans-unit id="runs.actions.create.conflict" datatype="html"><source>This intent key belongs to a different request. Review and change the inputs, or close and reopen the dialog for a new intent.</source></trans-unit>
+      <trans-unit id="runs.actions.create.not-found" datatype="html"><source>The manifest or release was not found in this project. Check the IDs and your access.</source></trans-unit>
+      <trans-unit id="runs.actions.create.too-large" datatype="html"><source>The request exceeds the 64 KiB limit. Reduce the build identifiers and try again.</source></trans-unit>
+      <trans-unit id="runs.actions.create.manifest-invalid" datatype="html"><source>The manifest refers to an unavailable suite or environment revision. Choose another manifest.</source></trans-unit>
+      <trans-unit id="runs.actions.create.execution-conflict" datatype="html"><source>The manifest contains conflicting execution keys. Upload a corrected manifest.</source></trans-unit>
+      <trans-unit id="runs.actions.create.release-unresolvable" datatype="html"><source>A release name cannot be resolved. Use an active release ID instead.</source></trans-unit>
+      <trans-unit id="runs.actions.create.release-not-active" datatype="html"><source>The release is not active. Choose an active release or leave the release ID empty.</source></trans-unit>
+      <trans-unit id="runs.actions.create.fork-not-bindable" datatype="html"><source>A fork run cannot bind to a release. Remove the release ID.</source></trans-unit>
+      <trans-unit id="runs.actions.create.replay-grant-invalid" datatype="html"><source>The replay grant is unavailable or invalid. Replay grants are not available yet.</source></trans-unit>
+      <trans-unit id="runs.actions.create.replay-release" datatype="html"><source>A replay run cannot bind to a release. Remove the release ID.</source></trans-unit>
+      <trans-unit id="runs.actions.create.invalid" datatype="html"><source>Review the fields identified below and correct the request.</source></trans-unit>
+      <trans-unit id="runs.actions.create.cap" datatype="html"><source>The manifest exceeds an ingestion limit. Reduce its executions or variants and upload a corrected manifest.</source></trans-unit>
+      <trans-unit id="runs.actions.create.uncertain" datatype="html"><source>The response was not received. Retry without changing the inputs to reuse the same key and avoid a duplicate run.</source></trans-unit>
     </body>
   </file>
 </xliff>

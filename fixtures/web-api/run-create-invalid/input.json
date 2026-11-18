@@ -1,0 +1,23 @@
+{
+  "operation_id": "createRun",
+  "variant": "invalid",
+  "status": 422,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000c0f3"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "request_invalid",
+      "message": "the run body was refused; see the field details",
+      "request_id": "018f0000-0000-7000-8000-00000000c0f3",
+      "retryable": false,
+      "details": [
+        {
+          "path": "/ref/pr_number",
+          "reason": "required"
+        }
+      ]
+    }
+  }
+}

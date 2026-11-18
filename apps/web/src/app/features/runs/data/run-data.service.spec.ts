@@ -11,6 +11,7 @@ import type { RunPage } from '@evidgate/sdk';
 
 import { RunsDataService } from '../../../core/data/runs-data.service';
 import { ApiRequestError, type ApiError } from '../../../core/http/api-error';
+import type { CreatedRun } from './run-actions.types';
 import { RunDataService } from './run-data.service';
 
 /** One typed refusal, as `ApiGateway` builds it from a server envelope. */
@@ -55,6 +56,49 @@ class FakeRunsDataService {
   }
 
   readonly decisionCalls: string[] = [];
+
+  /** The create signature the feature service delegates to, faked so its arguments are visible. */
+  readonly createCalls: Array<{
+    readonly projectId: string;
+    readonly body: unknown;
+    readonly key: string;
+    readonly signal: AbortSignal | undefined;
+  }> = [];
+
+  /** The cancel signature, faked for the same reason. */
+  readonly cancelCalls: Array<{
+    readonly runId: string;
+    readonly reason: string | undefined;
+    readonly key: string;
+    readonly signal: AbortSignal | undefined;
+  }> = [];
+
+  /** The 201 body a create answers. */
+  created: CreatedRun = {
+    run_id: '018f0000-0000-7000-8000-000000000021',
+    state: 'queued',
+    unverified_ref: false,
+  };
+
+  create(
+    projectId: string,
+    body: unknown,
+    intent: { readonly idempotencyKey: string },
+    signal?: AbortSignal,
+  ): Promise<CreatedRun> {
+    this.createCalls.push({ projectId, body, key: intent.idempotencyKey, signal });
+    return this.failure !== null ? Promise.reject(this.failure) : Promise.resolve(this.created);
+  }
+
+  cancel(
+    runId: string,
+    reason: string | undefined,
+    intent: { readonly idempotencyKey: string },
+    signal?: AbortSignal,
+  ): Promise<void> {
+    this.cancelCalls.push({ runId, reason, key: intent.idempotencyKey, signal });
+    return this.failure !== null ? Promise.reject(this.failure) : Promise.resolve();
+  }
 }
 
 describe('RunDataService (09.3.1-T1)', () => {
@@ -192,5 +236,80 @@ describe('RunDataService (09.3.1-T1)', () => {
     runs.failure = failure;
 
     await expect(service.getDecision('r-1')).rejects.toBe(failure);
+  });
+
+  it('createRun hands the project, body and caller key over and answers the served run', async () => {
+    const body = { manifest_id: '018f0000-0000-7000-8000-000000000011' };
+
+    await expect(service.createRun('p-1', body, 'intent-1')).resolves.toBe(runs.created);
+    expect(runs.createCalls).toEqual([
+      { projectId: 'p-1', body, key: 'intent-1', signal: undefined },
+    ]);
+  });
+
+  it('keeps one key across two attempts of one intent and sends the next key for a new one', async () => {
+    const body = { manifest_id: '018f0000-0000-7000-8000-000000000011' };
+    const first = service.newIdempotencyKey();
+    const second = service.newIdempotencyKey();
+
+    await service.createRun('p-1', body, first);
+    await service.createRun('p-1', body, first);
+    await service.createRun('p-1', body, second);
+
+    expect(runs.createCalls.map((call) => call.key)).toEqual([first, first, second]);
+    expect(first).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(second).not.toBe(first);
+  });
+
+  it('forwards the abort signal of a create so a dismissed dialog cancels the call', async () => {
+    const controller = new AbortController();
+
+    await service.createRun(
+      'p-1',
+      { manifest_id: '018f0000-0000-7000-8000-000000000011' },
+      'intent-1',
+      controller.signal,
+    );
+
+    expect(runs.createCalls[0]?.signal).toBe(controller.signal);
+  });
+
+  it('propagates a create refusal verbatim, idempotency conflict included', async () => {
+    const failure = new ApiRequestError({
+      kind: 'idempotency_conflict',
+      status: 409,
+      code: 'idempotency_conflict',
+      message: 'The key was used for another body.',
+      requestId: 'req-create-1',
+      retryable: false,
+      details: [],
+      retryAfterSeconds: null,
+    });
+    runs.failure = failure;
+
+    await expect(
+      service.createRun('p-1', { manifest_id: '018f0000-0000-7000-8000-000000000011' }, 'intent-1'),
+    ).rejects.toBe(failure);
+  });
+
+  it.each([undefined, 'The wrong manifest was selected.'])(
+    'cancelRun sends the reason %s with its key and answers undefined',
+    async (reason) => {
+      const controller = new AbortController();
+
+      await expect(
+        service.cancelRun('r-1', reason, 'intent-1', controller.signal),
+      ).resolves.toBeUndefined();
+      expect(runs.cancelCalls).toEqual([
+        { runId: 'r-1', reason, key: 'intent-1', signal: controller.signal },
+      ]);
+    },
+  );
+
+  it('propagates a cancel refusal verbatim', async () => {
+    const failure = typedFailure();
+    runs.failure = failure;
+
+    await expect(service.cancelRun('r-1', undefined, 'intent-1')).rejects.toBe(failure);
   });
 });
