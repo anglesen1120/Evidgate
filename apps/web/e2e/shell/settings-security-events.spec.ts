@@ -46,7 +46,7 @@ for (const locale of LOCALES) {
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
         ).toBe(true);
-        await expectNoA11yViolations(page);
+        await expectNoA11yViolations(page, `security events ${locale} ${theme} ${width}px`);
         await page.screenshot({
           path: test.info().outputPath(`security-${locale}-${theme}-${width}.png`),
           fullPage: true,
@@ -90,7 +90,7 @@ for (const locale of LOCALES) {
       await page.goto(path(locale, [`?fixture.variant.listSecurityEvents=${variant}`]));
       await expect(page.locator(`${host} ${pattern}`)).toBeVisible();
       await expect(page.locator(rows)).toHaveCount(0);
-      await expectNoA11yViolations(page);
+      await expectNoA11yViolations(page, `security events ${variant} ${locale}`);
     });
   }
   test(`security loading state ${locale}`, async ({ page }) => {
@@ -107,5 +107,40 @@ for (const locale of LOCALES) {
     );
     await expect(page.locator('app-forbidden-pattern')).toBeVisible();
     await expect(page.locator(host)).toHaveCount(0);
+  });
+  test(`security reset and page-size controls preserve focus through loading ${locale}`, async ({
+    page,
+  }) => {
+    await page.goto(path(locale, ['?fixture.variant.listSecurityEvents=slow']));
+    await ready(page);
+    await page.locator('#security-project').fill('018f0000-0000-7000-8000-000000000098');
+    await page.locator('[data-security-apply]').click();
+    await expect(page.locator(`${host} app-empty-pattern`)).toBeVisible();
+    const reset = page.locator(`${host} app-empty-pattern button`);
+    await reset.focus();
+    await reset.click();
+    await expect(page.locator(`${host} app-loading-pattern`)).toBeVisible();
+    await expect(page.locator('#security-results')).toBeFocused();
+    await ready(page);
+    await page.locator('#security-page-size').click();
+    await page.getByRole('option').first().click();
+    await expect(page.locator(`${host} app-loading-pattern`)).toBeVisible();
+    await expect(page.locator('#security-page-size')).toBeFocused();
+    await ready(page);
+    await expect(page.locator('#security-page-size')).toBeFocused();
+  });
+  test(`security disclosure retains focus across responsive remounts ${locale}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1920, height: 900 });
+    await page.goto(path(locale));
+    await ready(page);
+    await expect(page.locator(`${host} [role="table"]`)).toHaveCount(1);
+    await page.locator(`${rows} summary`).last().focus();
+    for (const width of [360, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(page.locator(`${host} [role="table"]`)).toHaveCount(width === 1920 ? 1 : 0);
+      await expect(page.locator(`${rows} summary`).last()).toBeFocused();
+    }
   });
 }

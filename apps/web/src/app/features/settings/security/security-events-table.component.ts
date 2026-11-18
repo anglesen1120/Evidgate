@@ -7,7 +7,7 @@ import {
   viewChild,
   type TemplateRef,
 } from '@angular/core';
-import type { SecurityEventItem } from '@evidgate/sdk';
+import type { SecurityEventRow } from '../../../core/data/security-events-data.service';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import {
   StatusPillComponent,
@@ -142,9 +142,9 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
   `,
 })
 export class SecurityEventsTableComponent {
-  readonly rows = input.required<readonly SecurityEventItem[]>();
+  readonly rows = input.required<readonly SecurityEventRow[]>();
   protected readonly typeLabel = securityTypeLabel;
-  protected readonly rowId = (row: SecurityEventItem): string => row.id;
+  protected readonly rowId = (row: SecurityEventRow): string => row.id;
   protected readonly copy = {
     caption: $localize`:@@settings.security.caption:Recent security activity · newest first`,
     type: $localize`:@@settings.security.type:Event type`,
@@ -162,16 +162,16 @@ export class SecurityEventsTableComponent {
     supportDescription: $localize`:@@settings.security.support-description:Flagged platform staff access. Recorded grant metadata is listed below; expiry is not supplied by this endpoint.`,
   };
   private readonly eventCell =
-    viewChild<TemplateRef<DataTableCellContext<SecurityEventItem>>>('eventCell');
+    viewChild<TemplateRef<DataTableCellContext<SecurityEventRow>>>('eventCell');
   private readonly severityCell =
-    viewChild<TemplateRef<DataTableCellContext<SecurityEventItem>>>('severityCell');
+    viewChild<TemplateRef<DataTableCellContext<SecurityEventRow>>>('severityCell');
   private readonly timeCell =
-    viewChild<TemplateRef<DataTableCellContext<SecurityEventItem>>>('timeCell');
+    viewChild<TemplateRef<DataTableCellContext<SecurityEventRow>>>('timeCell');
   private readonly actorCell =
-    viewChild<TemplateRef<DataTableCellContext<SecurityEventItem>>>('actorCell');
+    viewChild<TemplateRef<DataTableCellContext<SecurityEventRow>>>('actorCell');
   private readonly detailsCell =
-    viewChild<TemplateRef<DataTableCellContext<SecurityEventItem>>>('detailsCell');
-  protected readonly columns = computed<readonly DataTableColumn<SecurityEventItem>[]>(() => {
+    viewChild<TemplateRef<DataTableCellContext<SecurityEventRow>>>('detailsCell');
+  protected readonly columns = computed<readonly DataTableColumn<SecurityEventRow>[]>(() => {
     const event = this.eventCell(),
       severity = this.severityCell(),
       time = this.timeCell(),

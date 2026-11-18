@@ -3,6 +3,7 @@ import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { SecurityEventItem } from '@evidgate/sdk';
+import type { SecurityEventRow } from '../../../core/data/security-events-data.service';
 import { SecurityEventsDataService } from '../../../core/data/security-events-data.service';
 import { ApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
@@ -28,6 +29,12 @@ class SecurityPageHarness extends ComponentHarness {
   readonly project = this.locatorFor('#security-project');
   readonly apply = this.locatorFor('[data-security-apply]');
   readonly clear = this.locatorFor('[data-security-clear]');
+  readonly emptyReset = this.locatorFor('app-empty-pattern button');
+  readonly results = this.locatorFor('#security-results');
+  readonly from = this.locatorFor('#security-from');
+  readonly to = this.locatorFor('#security-to');
+  readonly correctionSummary = this.locatorForOptional('#security-filter-errors');
+  readonly correctionLinks = this.locatorForAll('#security-filter-errors a');
   readonly forbidden = this.locatorForOptional('app-forbidden-pattern');
   readonly loading = this.locatorForOptional('app-loading-pattern');
 }
@@ -60,8 +67,8 @@ describe('SecurityEventsPage', () => {
     expect(await harness.images()).toHaveLength(0);
   });
   it('hides injection_attempt under V1 while preserving unknown future types verbatim', async () => {
-    const future = { ...event, id: 'future', type: 'future_alert' } as SecurityEventItem;
-    const injection = { ...event, id: 'injection', type: 'injection_attempt' } as SecurityEventItem;
+    const future: SecurityEventRow = { ...event, id: 'future', type: 'future_alert' };
+    const injection: SecurityEventRow = { ...event, id: 'injection', type: 'injection_attempt' };
     list.mockResolvedValue({ items: [event, future, injection], next_cursor: null });
     const { harness } = await render();
     expect(await harness.rows()).toHaveLength(2);
@@ -132,4 +139,65 @@ describe('SecurityEventsPage', () => {
     const harness = await TestbedHarnessEnvironment.loader(fixture).getHarness(SecurityPageHarness);
     expect(await harness.rows()).toHaveLength(1);
   });
+  it('hands focus from the no-match reset to stable results before loading removes the action', async () => {
+    const { fixture, harness } = await render();
+    list.mockResolvedValueOnce({ items: [], next_cursor: null });
+    await (await harness.project()).setInputValue('missing-project');
+    await (await harness.apply()).click();
+    let finish: (value: { items: SecurityEventItem[]; next_cursor: null }) => void = () =>
+      undefined;
+    list.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await (await harness.emptyReset()).focus();
+    await manualChangeDetection(async () => {
+      await (await harness.emptyReset()).click();
+      fixture.detectChanges();
+      TestBed.tick();
+      expect(await (await harness.results()).isFocused()).toBe(true);
+      expect(await harness.loading()).not.toBeNull();
+      finish({ items: [event], next_cursor: null });
+    });
+    await fixture.whenStable();
+    expect(await (await harness.results()).isFocused()).toBe(true);
+    expect(await harness.rows()).toHaveLength(1);
+  });
+  it.each([
+    ['equal', '2026-11-18T09:00', '2026-11-18T09:00'],
+    ['inverted', '2026-11-18T10:00', '2026-11-18T09:00'],
+  ] as const)(
+    'keeps the %s range correction linked and focused until the range is corrected',
+    async (_case, from, to) => {
+      const { harness } = await render();
+      await (await harness.from()).setInputValue(from);
+      await (await harness.to()).setInputValue(to);
+      await (await harness.apply()).click();
+      const summary = await harness.correctionSummary();
+      expect(summary).not.toBeNull();
+      expect(await summary?.isFocused()).toBe(true);
+      expect(list).toHaveBeenCalledTimes(1);
+      const links = await harness.correctionLinks();
+      expect(links).toHaveLength(2);
+      expect(await links[0]!.getAttribute('href')).toBe('#security-from');
+      expect(await links[1]!.getAttribute('href')).toBe('#security-to');
+      await links[0]!.click();
+      expect(await (await harness.from()).isFocused()).toBe(true);
+      expect(await (await harness.from()).getAttribute('aria-invalid')).toBe('true');
+      expect(await (await harness.to()).getAttribute('aria-describedby')).toContain(
+        'security-to-error',
+      );
+      await (await harness.project()).setInputValue('another-project');
+      expect(await harness.correctionSummary()).not.toBeNull();
+      expect(await (await harness.from()).getAttribute('aria-invalid')).toBe('true');
+      await (await harness.to()).setInputValue('2026-11-18T11:00');
+      expect(await harness.correctionSummary()).toBeNull();
+      expect(await (await harness.from()).getAttribute('aria-invalid')).toBeNull();
+      expect(list).toHaveBeenCalledTimes(1);
+      await (await harness.apply()).click();
+      expect(list).toHaveBeenCalledTimes(2);
+    },
+  );
 });

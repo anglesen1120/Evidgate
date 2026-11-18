@@ -64,12 +64,33 @@ describe('SecurityEventsStore', () => {
       { limit: 50, cursor: 'opaque+cursor' },
       expect.any(AbortSignal),
     );
-    store.previous();
-    await settle();
-    expect(list).toHaveBeenLastCalledWith('org1', { limit: 50 }, expect.any(AbortSignal));
+    expect(store.pageIndex()).toBe(1);
     store.apply({ ...EMPTY_SECURITY_FILTERS, severity: 'warning' });
     await settle();
     expect(store.pageIndex()).toBe(0);
+    expect(list).toHaveBeenLastCalledWith(
+      'org1',
+      { limit: 50, severity: 'warning' },
+      expect.any(AbortSignal),
+    );
+    list.mockResolvedValueOnce({ items: [], next_cursor: 'new-filter-cursor' });
+    store.reload();
+    await settle();
+    store.next();
+    await settle();
+    expect(list).toHaveBeenLastCalledWith(
+      'org1',
+      { limit: 50, severity: 'warning', cursor: 'new-filter-cursor' },
+      expect.any(AbortSignal),
+    );
+    store.previous();
+    await settle();
+    expect(store.pageIndex()).toBe(0);
+    expect(list).toHaveBeenLastCalledWith(
+      'org1',
+      { limit: 50, severity: 'warning' },
+      expect.any(AbortSignal),
+    );
   });
   it('never publishes a superseded organization response', async () => {
     let finish: (value: SecurityEventList) => void = () => undefined;
@@ -88,5 +109,28 @@ describe('SecurityEventsStore', () => {
     await settle();
     expect(store.nextCursor()).toBeNull();
     expect(store.orgId()).toBe('new');
+  });
+  it('aborts a superseded filter request and never publishes its late response', async () => {
+    let finish: (value: SecurityEventList) => void = () => undefined;
+    let oldSignal: AbortSignal | undefined;
+    list
+      .mockImplementationOnce((_org, _query, signal) => {
+        oldSignal = signal;
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      })
+      .mockResolvedValueOnce({ items: [], next_cursor: 'filtered-cursor' });
+    const store = TestBed.inject(SecurityEventsStore);
+    TestBed.tick();
+    store.apply({ ...EMPTY_SECURITY_FILTERS, type: 'support_access' });
+    await settle();
+    expect(oldSignal?.aborted).toBe(true);
+    expect(store.nextCursor()).toBe('filtered-cursor');
+    finish({ items: [], next_cursor: 'superseded-cursor' });
+    await settle();
+    expect(store.nextCursor()).toBe('filtered-cursor');
+    expect(store.filters().type).toBe('support_access');
+    expect(store.pageIndex()).toBe(0);
   });
 });

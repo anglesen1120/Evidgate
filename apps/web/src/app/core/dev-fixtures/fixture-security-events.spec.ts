@@ -42,7 +42,7 @@ describe('Security-event fixture decisions through the SDK', () => {
     const query = {
       limit: 50,
       project_id: target.project_id,
-      type: target.type,
+      type: 'support_access' as const,
       severity: target.severity,
       from: target.created_at,
       to: '2026-11-18T09:02:00Z',

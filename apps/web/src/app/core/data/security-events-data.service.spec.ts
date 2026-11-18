@@ -67,4 +67,16 @@ describe('SecurityEventsDataService', () => {
     expect(isApiRequestError(error)).toBe(true);
     if (isApiRequestError(error)) expect(error.error.kind).toBe('forbidden');
   });
+  it('cancels the in-flight HTTP read when its caller aborts', async () => {
+    const controller = new AbortController();
+    const pending = data
+      .list('org1', { limit: 50 }, controller.signal)
+      .catch((error: unknown) => error);
+    const request = await takeRequest(http, url);
+    controller.abort();
+    expect(request.cancelled).toBe(true);
+    const error = await pending;
+    expect(error).toBeInstanceOf(DOMException);
+    if (error instanceof DOMException) expect(error.name).toBe('AbortError');
+  });
 });

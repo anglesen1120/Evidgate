@@ -18,12 +18,16 @@ import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
 import { SessionStore } from '../../../core/session/session.store';
+import { createFormFeedback } from '../../../shared/forms/form-feedback';
+import { FieldFeedbackComponent } from '../../../shared/forms/field-feedback.component';
+import { FormErrorSummaryComponent } from '../../../shared/forms/form-error-summary.component';
 import { SectionHeaderComponent } from '../../../shared/ui/page-header/section-header.component';
 import { PageHeaderComponent } from '../../../shared/ui/page-header/page-header.component';
 import { clampTimerDelay } from '../../../shared/time/timer-delay';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
 import { SECURITY_SEVERITY_LABELS, SECURITY_TYPE_LABELS } from './security-events.config';
 import { SecurityEventsTableComponent } from './security-events-table.component';
+import { securityEventRange } from './security-events-range';
 import {
   EMPTY_SECURITY_FILTERS,
   SecurityEventsStore,
@@ -42,6 +46,8 @@ import {
     SectionHeaderComponent,
     RequestStateComponent,
     SecurityEventsTableComponent,
+    FieldFeedbackComponent,
+    FormErrorSummaryComponent,
   ],
   providers: [SecurityEventsStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -57,10 +63,7 @@ export class SecurityEventsPage {
     this.session.currentOrg();
     return { ...EMPTY_SECURITY_FILTERS };
   });
-  protected readonly validationError = linkedSignal(() => {
-    this.draft();
-    return false;
-  });
+  private readonly range = computed(() => securityEventRange(this.draft().from, this.draft().to));
   protected readonly retryReady = rxResource({
     params: () => this.store.loadError(),
     stream: ({ params }) =>
@@ -113,22 +116,30 @@ export class SecurityEventsPage {
     capped: $localize`:@@settings.security.capped:Browsing limit reached. Narrow the filters to review older activity.`,
     hidden: $localize`:@@settings.security.hidden:Injection-attempt events are not displayed in this V1 view. A page may contain no visible V1 events; continue to the next page when available.`,
   };
+  protected readonly feedback = computed(() => {
+    this.session.currentOrg();
+    return createFormFeedback([
+      {
+        id: 'security-from',
+        label: this.copy.from,
+        describedBy: 'security-time-hint',
+        error: () => (this.range().invalidFrom ? this.copy.invalid : null),
+      },
+      {
+        id: 'security-to',
+        label: this.copy.to,
+        describedBy: 'security-time-hint',
+        error: () => (this.range().invalidTo ? this.copy.invalid : null),
+      },
+    ]);
+  });
   protected updateDraft(change: Partial<SecurityFilters>): void {
     this.draft.update((value) => ({ ...value, ...change }));
   }
   protected apply(): void {
+    if (!this.feedback().submit()) return;
     const draft = this.draft();
-    const from = draft.from ? new Date(draft.from) : null;
-    const to = draft.to ? new Date(draft.to) : null;
-    if (
-      (from && Number.isNaN(from.getTime())) ||
-      (to && Number.isNaN(to.getTime())) ||
-      (from && to && from >= to)
-    ) {
-      this.validationError.set(true);
-      return;
-    }
-    this.validationError.set(false);
+    const { from, to } = this.range();
     this.store.apply({
       ...draft,
       projectId: draft.projectId.trim(),
@@ -137,6 +148,8 @@ export class SecurityEventsPage {
     });
   }
   protected clear(): void {
+    this.heading()?.nativeElement.focus();
+    this.feedback().reset();
     this.draft.set({ ...EMPTY_SECURITY_FILTERS });
     this.apply();
   }
