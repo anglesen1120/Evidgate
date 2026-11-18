@@ -2,6 +2,8 @@ Status: proposed, awaiting owner approval
 
 # Authoring pending changes
 
+Review record: [authoring-review.md](authoring-review.md)
+
 Flow id: `authoring-pending-changes` · CR-D-2 phase: **G1**; the manual-case proposal specimen is **G3 only**.
 
 Feature tasks: `13.4.1-T1.1`, `13.4.1-T1.2`, `13.4.1-T3`; contract owner `13.1.2-T1/T2`; later proposal handoff `13.8.1-T3`.
@@ -78,6 +80,8 @@ Shared request coverage: `idle → loading → ready(empty or rows) | error(code
 
 Focus order: skip → shell controls → Back → request recovery when present → queue row preview controls → selected preview tabs/content links → reason (desktop) → Apply → metadata disclosure → timeline. Native table semantics and caption remain; do not make whole rows generic clickable divs. Tabs have one roving tab stop, arrows/Home/End; Tab enters selected panel. Confirmation/alertdialog initially focuses Cancel, traps Tab, Escape cancels and returns to Apply. Conflict opens on the failed explicit mutation, retains draft, and returns to its opener; Reload is a deliberate read, never submit. A focused linked error summary follows invalid confirmation, not each keystroke. One polite live region announces applying/applied/conflict transition once; queue refreshes do not steal focus or announce every cell. Discard confirms the named change and does not claim to write an item/version.
 
+**Reference delta AR-04/07:** set the Apply confirmation's initial focus explicitly to localized Cancel, never the leading Close icon. Its vi/en Close/Cancel names follow the shared inventory in [authoring-states.md](authoring-states.md#reading-and-focus-order). A resize cancels unsubmitted consent and hands focus to the surviving inspection heading under that sheet's lifecycle; retaining a dialog with a hidden Apply button is not an acceptable narrow state.
+
 ## Copy length (vi vs en)
 
 Measured with a throwaway read-only Python `HTMLParser` pass over the primary mockup: decoded `data-vi`/`data-en` pairs in headings, buttons, table headers, badges, descriptions and static state panels, deduplicated, Unicode code points, not pixels. 155 unique pairs; the longest vi/en specimens are shown. Ratios below 1.0 mean the Vietnamese is shorter; this is text length, not rendered width.
@@ -92,11 +96,14 @@ Measured with a throwaway read-only Python `HTMLParser` pass over the primary mo
 
 Proposed strings the mockup does not yet contain (batch reason persistence, exact-scope statement, write-revoked explanation) must be added in both locales and re-measured; allow at least 40% expansion in labels, buttons and dialogs, with wrapping rather than shrinking. Code-by-code `outcome_code`/`failure_code` copy belongs to [authoring-states.md](authoring-states.md), not this table.
 
+**Product-copy delta:** the measured “one immutable authoring version” strings above are frozen-reference text, not the apply contract. Product loading/confirmation copy says vi “Áp dụng tất cả thay đổi trong một lô nguyên tử” / en “Apply all changes as one atomic batch”; the receipt lists only returned entity versions, including zero for a comment-only batch. Do not promise a global version or reuse the fixture's single-version success wording.
+
 ## Responsive notes
 
 - **1280px:** expanded 224px shell; 24px content rhythm; preserve table → preview → summary stacking, not an invented permanent preview rail. Operation/source/id/time are intrinsic, target/reason flexible. Long text has full-value disclosure; no unbounded page width. More than 200 loaded rows uses shared virtualization, but one apply is at most 200 exact ids.
 - **360px:** drawer shell and desktop-required notice; queue becomes labelled records, before/after panes stack, long ids use safe full-value disclosure. Reason remains selectable read-only text. No edit, Apply, discard or mutating confirmation; preview choice, navigation, metadata and copy remain available. Recheck viewport policy in handlers/submits after resize, not only CSS. If a hidden desktop control held focus, transfer it to the equivalent inspection heading/control after render.
 - Both sizes × light/dark × vi/en must meet WCAG 2.2 AA: 2.5.8 targets ≥24×24px (44×44 coarse-pointer); 2.4.11 no header/dialog/toast obscures focus; 2.5.7 no drag-only task; 1.4.3 text ≥4.5:1 and 1.4.11 necessary controls/focus ≥3:1 using [tokens](tokens.md); 2.4.7 visible unclipped 2px focus; 1.4.10 reflow without page scrolling and 200% text; 4.1.3 one contextual status announcement. See the per-screen manual run checklist in [authoring-states.md](authoring-states.md). ⚠️ These are acceptance requirements; no viewport, contrast, keyboard or screen-reader run was performed in this docs-only slice.
+- **Reference delta AR-01:** the implementation-metadata disclosure is a real full-row activation target, at least 24px high/wide on fine pointers and 44px high/wide on coarse pointers, using existing control/touch tokens. Keep its text and chevron within that target, allow wrapped text to grow it, and retain visible keyboard focus. A 20px `<summary>` line is not the activation-area requirement. Measure it in open/closed states, both viewport sizes and pointer modes; no target-size exception is proposed.
 
 ## Invariants
 
@@ -119,4 +126,4 @@ Proposed strings the mockup does not yet contain (batch reason persistence, exac
 | G3 manual-case proposal unsupported by current enum | Gate by phase and contract; no checklist-operation coercion, no script mutation |
 | Missing query fixtures for long comment, invalid previews and duplicate intent; submitting/conflict/revoked states hide readable content | Retain required state behavior described above; independent design review must check retained queue and disabled actions, not certify static cards as runnable states |
 | Unconditional single-version success, `source=authoring`, invalid merge/split/deletion examples conflict with schema | Use actual receipt/entity versions, closed source values and server validation reasons; keep examples labelled illustrative |
-| Review and owner approval not yet recorded | Keep this proposed status; require independent design review, visual/a11y evidence and then owner approval before implementation |
+| Review and owner approval | Independent observations and docs-only dispositions are recorded in [authoring-review.md](authoring-review.md). Corrected reference/runtime behaviour, remaining visual/AT evidence and owner approval are still open; keep proposed status and do not start implementation. |

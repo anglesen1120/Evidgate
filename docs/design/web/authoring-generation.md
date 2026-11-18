@@ -2,6 +2,8 @@ Status: proposed, awaiting owner approval
 
 # Authoring generation
 
+Review record: [authoring-review.md](authoring-review.md)
+
 Flow id: `authoring-generation` · CR-D-2 phase: **G1**.
 
 Feature tasks: `13.4.1-T1.1`, `13.4.1-T1.2`, `13.4.1-T4`; pipeline owner `13.3.1-T1–T4`; role-profile selector delta for `13.2.2-T6`; credit owner `08.5.5-T2`.
@@ -28,10 +30,12 @@ Sources: [authoring plan §5–6 and T4](../../../plans/features/13-product-phas
 | Run note (optional, single run) | `[OPEN]` — part of the generation request, absent from OpenAPI | Recommended: NFC, ≤500 code points, secret-shaped refusal; never reused by a later run |
 | Settings version shown in the page header | `contracts/openapi.yaml#/components/schemas/AiSettingsView.version_no` (with `.source`, `.settings_id`) | traced for the version number; the fixture label `ais-3` is not a schema field, so display a labelled version number, `[OPEN]` for any friendly alias |
 | Checklist item title, description, priority, state, version | `contracts/openapi.yaml#/components/schemas/ChecklistItemDto.title`, `.description`, `.priority`, `.state`, `.version` | traced via an authorized checklist read; generation detail itself returns only `output_refs` |
-| Generated case title, precondition, steps action/expected, priority, state, version | `contracts/openapi.yaml#/components/schemas/ManualCaseDetailDto.title`, `.precondition`, `.steps` → `ManualCaseStepDto.action`/`.expected`, `.priority`, `.state`, `.version` | traced via the authorized case read after accept; previews before accept are not case rows |
-| Case code `SHOP-TC-*` | `contracts/openapi.yaml#/components/schemas/ManualCaseDetailDto.code` | traced only after the entity exists; a draft reference has an id, not a guaranteed code |
+| Generated case title, precondition, steps action/expected, priority, state, version | `contracts/openapi.yaml#/paths/~1projects~1{p}~1authoring~1manual-cases~1{m}/get` (`getManualCase`, `authoring:read`) → `#/components/schemas/ManualCaseDetailDto.title`, `.precondition`, `.steps` → `ManualCaseStepDto.action`/`.expected`, `.priority`, `.state`, `.version` | traced for the authorized persisted-draft read **before acceptance**, including `state=draft`; [OPEN] the generation-detail `output_refs` linkage still needs its missing route-6 contract |
+| Case code `SHOP-TC-*` | `contracts/openapi.yaml#/components/schemas/ManualCaseDetailDto.code` | traced on the persisted draft's authorized detail read before accept; `output_refs` alone does not carry a code, so never invent one |
 | Partial/refunded per-item credit outcome | `[OPEN]` — no generation response field supplies per-item refunds | Recommended: show refund only when supplied; otherwise Not available and no retry of successful work |
 | `outcome_code` and extraction `failure_code` sentences | `[OPEN]` — closed vocabularies live in plans, not contract schemas | Recommended: render values as-is; copy in [authoring state and copy sheet](authoring-states.md) |
+
+**Pre-accept review read:** [13.3.1 AC12/AC15 and §5 routes 6/8](../../../plans/features/13-product-phases/13.3.1-generation-pipeline.md#5-api-shapes-commands-queries-endpoints) separate creation from publication: successful generation already persists manual cases in `draft` and exposes their identities/versions through `output_refs`; accept flips selected drafts to `approved`, it does not first create them. For each manual-case ref being reviewed, use the generated SDK's `getManualCase` with the current authorized project and `entity_id`, before offering acceptance. Read title, precondition, paired steps, priority, state and version from `ManualCaseDetailDto`; the shipped GET requires `authoring:read` and its state enum includes `draft`. A denied/unavailable read or a version that no longer matches the ref is not reviewable content: retain the reference and explanation, and block acceptance of that ref until an explicit authorized reload/review. Never accept just to unlock its content. `[OPEN]` Generation routes 6/8 and their reference linkage remain absent from OpenAPI; recommended default is to bind their refs to this existing authorized detail read, not invent a preview DTO or an approval prerequisite.
 
 ## v2 pages
 
@@ -83,7 +87,7 @@ Coverage: **15/15 §6 Generation states** plus the progress vocabulary. “Regio
 | 12 | Schema invalid | No version and no draft claim; refund only when the response supplies it; retain safe input; fresh preflight for any retry | [OPEN] static card line 409 and rejected panel 384–389 |
 | 13 | Partial test-case generation | Separate validated results, failed items and rejected output; retain successful work; never retry it automatically; per-item refund only when supplied | `default` local panel `partial` (331–391); not a query state |
 | 14 | Review pending | Checklist suggestions marked AI/unreviewed with provenance; operations queue to page 42; nothing applied/approved here | `default` stage 4 (287–318) |
-| 15 | Cases ready for review | Preconditions, paired action/expected, priority and provenance inspectable; each opens page 41; no script/run/release action | `default` stage 5 (320–352) |
+| 15 | Cases ready for review | Persisted `draft` cases are fetched through authorized `getManualCase` reads from `output_refs` **before accept**; preconditions, paired action/expected, priority and pinned provenance are inspectable, and each opens page 41. Read failures/version mismatches remain explicit and block the affected acceptance; no script/run/release action | `default` stage 5 (320–352); [OPEN] reference-to-read linkage awaits the generation contract |
 
 **Generation progress** (`authoring_generation.state`): `queued → running → succeeded | failed | blocked | canceled`; only `queued → canceled` and `running → canceled` are cancel edges, terminal rows answer `changed: false`. `blocked` is an in-job pre-send refusal; a request-time opt-in refusal is an HTTP preflight error with **no row**, never a state. `[INFERENCE]` The mockup's numbered 1–5 stage navigator is a workflow index, not a completion percentage; the runtime progress strip below is the honest progress surface.
 
@@ -94,7 +98,7 @@ Coverage: **15/15 §6 Generation states** plus the progress vocabulary. “Regio
 | `progress.eta_class` | `short`/`long` only where present; never converted into seconds, a percentage or a queue position |
 | Polling | `GET authoring/generations/{g}`; honour `Retry-After`; pause while the tab is hidden; stop on route leave; bounded ceiling (plan: 15 minutes) then stop with an explicit still-running message |
 | Announcements | One polite live region announces **state transitions** only (queued → running → terminal), not each poll or a ticking timer |
-| Terminal | Stop polling at `succeeded|failed|blocked|canceled`; `succeeded` reveals `output_refs[]` and enables accept; a `cache_hit` success shows `0` with the reuse reason |
+| Terminal | Stop polling at `succeeded`, `failed`, `blocked` or `canceled`; `succeeded` reveals persisted-draft `output_refs[]` and starts their authorized review reads before acceptance becomes available for those refs; a `cache_hit` success shows `0` with the reuse reason |
 | `outcome_code` | Render the closed vocabulary as-is; an unknown gateway status is shown verbatim, never translated or folded. Copy per code lives in [authoring-states.md](authoring-states.md) |
 | `error.code` | Opaque escaped display text, never branched on, never a client response code, never deduplicated against `outcome_code`; both lines may legitimately match |
 | Timestamps | `created_at`/`started_at`/`finished_at` are absolute UTC from the row; null before the transition; never estimated from elapsed time |
@@ -143,6 +147,7 @@ Proposed strings the mockup does not yet contain (cache hit, role-profile refusa
 | [OPEN] | Recommended default before implementation |
 | --- | --- |
 | Generation, intake and role-profile routes/schemas are absent from `contracts/openapi.yaml` | Land the `13.3.1 §5` routes 1–8 and `13.2.2 §5` profile reads in the contract before UI build; until then implement against the plan shapes only after contract review, never invent a second DTO |
+| Pre-accept persisted-draft read linkage | The existing `getManualCase` operation already reads `draft` content under `authoring:read`; generation `output_refs`/accept are still uncontracted. Bind each returned manual-case id/version to that read before accept, preserve typed read failures and never treat acceptance as creation or read authorization. |
 | No `?state=` fixture for any of the 15 §6 states except `empty`; attachment/extraction/AI failures and partial results are local cards | Keep the declared query states; independent design review must exercise each named failure through the real state mechanism, not accept static cards as coverage |
 | Cache hit has no mockup specimen at all | Add the pre-call `cache_hit` estimate, 202 echo, `outcome_code = cache_hit` terminal row and “drafts named before accept” states in both locales; re-measure copy |
 | Upload caps are explicitly unavailable in the mockup and plan | Render only server-supplied `caps`; unsupported/oversized/scanning/rejected states must show the supplied limit or say unavailable, never a guessed number |
@@ -151,4 +156,4 @@ Proposed strings the mockup does not yet contain (cache hit, role-profile refusa
 | `outcome_code`/`failure_code` copy and the as-is rule for unknown codes are owned by the sibling state sheet | Link [authoring-states.md](authoring-states.md); do not duplicate or locally translate the closed vocabularies; a missing sibling file blocks T1.2 completeness, not this screen's structure |
 | Mockup 404 says “Settings version not found” while the plan's foreign-id rule is about generation/settings reads | Use not-found for an unknown/foreign settings or generation id; never 403 or an empty workspace for another tenant's id |
 | Mockup 412 is a whole-page state and says “no test case was created”; accept conflicts are per-request | Use the shared conflict dialog scoped to the accept/preflight action, retain draft and input, and never replace the workspace with a page-level conflict |
-| Review and owner approval not yet recorded | Keep this proposed status; require independent design review, visual/a11y evidence, then owner approval before implementation |
+| Review and owner approval | Independent review observations and docs-only dispositions are linked in [authoring-review.md](authoring-review.md); remaining reference/runtime, visual/AT evidence and owner approval are open. Keep proposed status and do not start implementation. |

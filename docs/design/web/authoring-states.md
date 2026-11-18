@@ -2,6 +2,8 @@ Status: proposed, awaiting owner approval
 
 # Authoring state matrix and bilingual copy sheet
 
+Review record: [authoring-review.md](authoring-review.md)
+
 Flow id: `authoring-states`
 
 Feature tasks: `13.4.1-T1.2`; screen specifications `13.4.1-T1.1`; independent design review `13.4.1-T1.3`.
@@ -58,7 +60,18 @@ Read-only visual inputs: [generation brief](../web-ui/prompts-crd2/B2-43-generat
 
 ### Reading and focus order
 
-Shared start: skip link → scope/navigation controls → breadcrumb → one h1 → active page controls in the order below. A route transition focuses its h1; a background refresh does not. Modal order: named heading/consequences → Cancel (initial focus for destructive confirmation) → fields → explicit confirmation; Tab/Shift+Tab contained, Escape cancels without mutation, close returns to the opener or nearest surviving heading. Modal reading order and tab order need not make static prose focusable.
+Shared start: skip link → scope/navigation controls → breadcrumb → one h1 → active page controls in the order below. A route transition focuses its h1; a background refresh does not. Modal reading order: named heading/consequences → fields → footer Cancel then explicit confirmation. **Reference delta AR-04:** explicitly target Cancel for initial focus in restore (41), Apply (42), AI preflight (43), template replacement (44) and export confirmation (45), including non-destructive confirmations. Use the owned Helm/Brain initial-focus lifecycle, never a first-button query that selects Close. Tab/Shift+Tab stay contained; Escape cancels the unsubmitted intent without a request and close returns to the visible opener or nearest surviving heading. Static prose need not be a tab stop; simple inspection-only dialogs with no Cancel action may focus Close instead.
+
+**Reference delta AR-07:** visible and accessible names use the same active interface locale through `@angular/localize`, including `aria-label`, the text referenced by `aria-labelledby`/`aria-describedby`, icon Close names and checkbox interpolation. Document `lang` changes with that locale; names/IDs supplied by users or servers are not translated. No Vietnamese-only fallback is acceptable on an English control.
+
+| Accessible control | vi name | en name |
+| --- | --- | --- |
+| Dialog Close icon | Đóng | Close |
+| Confirmation Cancel | Hủy | Cancel |
+| Select visible rows | Chọn các dòng đang hiển thị | Select visible rows |
+| Select a case | Chọn ca {code} | Select case {code} |
+
+Keep `{code}` as the actual supplied identifier. Include expanded/collapsed disclosures, copy/full-value actions, mobile panel selects, dialog titles and error associations in the bilingual accessibility-tree/AT check, not just visible headings. The frozen references' untranslated names and initial-Close focus are recorded discrepancies, not alternate approved labels/focus behaviour.
 
 | Screen | Main reading order | Focus order after shared start |
 | --- | --- | --- |
@@ -146,7 +159,7 @@ These apply independently to each data region on all eight screens. `R` in later
 | Long comment | Mở nhận xét để đọc đầy đủ trước khi áp dụng. | Expand the comment to read it fully before applying. | Keyboard/touch expansion; reason never essential hover-only text. | [OPEN]; full-length comment specimen |
 | Invalid merge preview | Không thể gộp; hãy sửa lỗi được nêu trước khi áp dụng. | Cannot merge; resolve the stated problem before applying. | Apply blocked, reason linked to preview/error summary. | [OPEN]; merge-specific invalid preview |
 | Invalid split preview | Không thể tách; hãy sửa lỗi được nêu trước khi áp dụng. | Cannot split; resolve the stated problem before applying. | Apply blocked; retain readable preview and queue. | [OPEN]; split-specific invalid preview |
-| Applying | Đang áp dụng toàn bộ lô thành một phiên bản. | Applying the entire batch as one version. | Busy Apply region; no repeated confirmation/live spray. | `?state=submitting` |
+| Applying | Đang áp dụng tất cả thay đổi trong một lô nguyên tử. | Applying all changes as one atomic batch. | Busy Apply region; no repeated confirmation/live spray. No global version is promised; a comment-only batch creates zero entity versions. | `?state=submitting`; reference single-version copy is superseded |
 | Success | Đã áp dụng lô được xác nhận. | The confirmed batch was applied. | Polite status; clear only confirmed applied items. | `?state=saved` |
 | Error | Không áp dụng được lô; hàng đợi vẫn được giữ. | Could not apply the batch; the queue is retained. | Inline recovery; preserve reason; no partial-success claim. | `?state=error` |
 | Duplicate intent | Đang hiển thị kết quả của cùng yêu cầu áp dụng. | Showing the result of the same apply intent. | Reuse intent key; announce original result, not a second version. | [OPEN]; duplicate receipt specimen |
@@ -186,7 +199,9 @@ These apply independently to each data region on all eight screens. `R` in later
 
 ### AI settings — 22/22 expanded states
 
-Counters use normalized Unicode code points, not UTF-16 length; actual server limits win. Below/at/above refer to `limit−1`, `limit`, `limit+1`, not vague examples. Counter changes are associated descriptions, not per-keystroke live announcements.
+**Reference deltas AR-05/06:** counters measure the NFC-normalized, end-trimmed projection of the retained draft in Unicode code points, never UTF-16 `value.length` or grapheme count; actual server limits win. Do not apply native `maxlength` at a code-point cap or truncate typing, paste or IME input. Preserve the full draft, validate after composition commits and on blur/correction/submit, and show associated over-limit feedback with Save blocked. Below/at/above mean `limit−1`, `limit`, `limit+1`; include supplementary characters, decomposed Vietnamese accents, paste/IME and correction in each cap's evidence.
+
+Visual counters remain ordinary non-live descriptions associated by `aria-describedby`, outside live/status ancestors. One separate polite region announces entering at-limit/over-limit states, returning within the limit and meaningful submit outcomes only; updates within the same state, IME intermediate input and background refresh are silent. Do not duplicate a focused error-summary announcement. The frozen counter's native UTF-16 truncation and per-keystroke `aria-live` are reference defects, not boundary or speech evidence; actual AT output remains unverified.
 
 | State | Region behaviour and vi string | en string | A11y note | Mockup query |
 | --- | --- | --- | --- | --- |
@@ -223,7 +238,7 @@ Counters use normalized Unicode code points, not UTF-16 length; actual server li
 | Preview loading | Đang kiểm tra trước các dòng; chưa tạo phiên bản. | Previewing rows; no version has been created. | Busy preview only; no commit request. | `?state=loading` |
 | Row errors | Sửa lỗi tại các ô được đánh dấu trước khi nhập. | Fix errors in the identified cells before importing. | Keyboard summary links to cell/field; error text not colour alone. | `?state=validation` |
 | Duplicate ids | Có mã trùng; hãy xử lý trước khi nhập. | Duplicate ids were found; resolve them before importing. | Identify each supplied row; no guessed resolution/upsert. | `?state=duplicate` |
-| Mixed valid/invalid | Có dòng hợp lệ và không hợp lệ; chưa nhập dòng nào. | Valid and invalid rows are mixed; no rows have been imported. | Keep all rows inspectable; confirmation blocked, no partial import. | `?state=mixed` |
+| Mixed valid/invalid | Có lỗi được báo; các dòng không được báo chưa kiểm chứng. Chưa ghi dòng nào. | Errors were reported; unreported rows are unverified. No rows were written. | Keep every row inspectable; count reported problems (≤100 details), never infer valid/invalid totals from a 422. Confirmation blocked, no partial import; see [import/export](authoring-import-export.md#states). | `?state=mixed`; specimen split totals are illustrative only |
 | Import denied | Bạn không có quyền nhập; không tạo phiên bản mới. | You do not have permission to import; no new version was created. | Explanation alongside read-only preview if reading is authorized. | `?state=denied` |
 | Success | Đã nhập dữ liệu theo phạm vi được xác nhận. | Data was imported within the confirmed scope. | Polite status; use returned batch/counts, no fabricated actor/time. | `?state=success` |
 | No selection | Chưa chọn ca kiểm thử để xuất. | No test cases are selected for export. | Selection scope stated; no automatic whole-project fallback. | [OPEN]; selection-specific export specimen |
@@ -330,6 +345,10 @@ For an **unknown code** in either vocabulary retain its escaped raw token and sh
 
 Below 768 px authoring is **read-only for editing/apply**, not a blanket ban on navigation or inspection. Keep hierarchy disclosure, filters, reset, paging, locale/theme, history/diff inspection and permitted links. Do not allow case/settings Save, restore, queued writes/discard/apply, generation/cancel/accept or import commit; the authoring selection/export workflow must not bypass the desktop mutation policy. Export availability follows the sibling screen's explicitly authorized read-only scope, never an inferred selected scope. Show the shared desktop-required notice and a readable snapshot instead of vanished field content. Re-check viewport policy inside handlers and confirmation submit after resize, not only in CSS. When a focused mutation control disappears on desktop→mobile resize, hand focus after render to the corresponding read-only region heading/notice; never leave it on a removed node. An open confirmation cancels without a request and returns to that surviving target.
 
+**Reference delta AR-03:** drive control removal and focus handoff from the same viewport `NarrowMutationPolicy` state. On 768→767px transition, preserve draft/queue/reason/selection context and cancel every unsubmitted mutating confirmation through the owned dialog lifecycle, whether or not it contains a form; clear pending consent and release the focus trap/background inert state without a request. After the read-only projection renders, focus the corresponding visible summary heading/desktop-required notice (`tabindex="-1"`), including when an editor field or the dialog held focus. Never focus BODY, a removed opener or a hidden confirmation button. Do not steal focus from a surviving inspection control. Widening restores the retained draft but neither reopens nor submits consent. This does not claim to cancel a request already dispatched; handler/submit checks still forbid any new narrow mutation.
+
+**Reference delta AR-01/02:** target sizing is the real non-overlapping activation box, not the glyph: ≥24×24px fine pointer, ≥44×44px coarse pointer with existing control/touch tokens and 8px gaps where feasible. This includes tree disclosures, checkbox labels/hit areas and Pending/Import implementation-metadata disclosures; no minimum-size exception is proposed for them. Metadata summaries grow beyond the reference's 20px text line. Machine IDs keep their intrinsic column budget and shared non-wrapping copyable/full-value treatment, not forced word fragments; the named approved local table scroller remains. Measure rectangles, full-value recovery and focus-ring clearance rather than inferring a pass from no page overflow.
+
 ### Manual WCAG 2.2 AA review checklist
 
 ⚠️ **All runs below are required, not performed or passed in this docs-only assignment.** Every row explicitly lists its screens and its run matrix: **1280 px + 360 px, light + dark, vi + en**. Also perform the 320-CSS-px reflow equivalent where named; 360 px alone does not prove 1.4.10. Each run records state, focused selector, screenshot/AT observation and pass/fail in the independent review record. Abbreviations name screens, not optional subsets: **Tree = Tree + table; Pending = Pending changes; Settings = AI settings; Import = Import/export; Usage = Usage credits**.
@@ -415,6 +434,6 @@ No media playback, prerecorded/live audio/video, authored authentication challen
 | [OPEN] Dedicated state specimens marked `[OPEN]` in matrix | Add each named state to implementation fixtures/review coverage, preserving its specified copy, region and a11y behaviour; do not invent undeclared mockup query values or defer the behaviour until build. |
 | [OPEN] Static timeline and partial generation reference gaps | Keep immutable fetched snapshots and returned result refs as truth; add independent paging/restored/partial-result fixtures, no fictional timeline query or per-item creation. |
 | [OPEN] Usage opt-in notice without estimate context | Show only a previously authorized applicable estimate's `opt_in`; otherwise omit the notice as unavailable, never add a second consent route or require `authoring:generate` to read usage. |
-| [OPEN] Manual checklist and owner gate | Independent review must execute and record every applicable criterion/run, resolve findings and then obtain owner approval; this proposed file records neither a completed run nor approval. |
+| [OPEN] Manual checklist and owner gate | Independent observations and this docs-only correction disposition are in [authoring-review.md](authoring-review.md). The frozen references are unchanged; complete criterion/run evidence and owner approval remain open. Resolve those gates before implementation; this file does not record an accessibility pass or approval. |
 
 Source-discovery evidence: graph `get_file_outline`, `search_graph`, `get_code_snippet` and `check_index_coverage` used before source reads. The shared `RequestStateComponent.handoffTarget` precedent resolves route handoff to the main heading; this sheet requires that heading to be programmatically focusable. Index evidence is best-effort for the main checkout, not this worktree: `ui-rules.md` and this new file had missing freshness, so the live worktree rules and source ranges were read directly. All quoted states/codes come from those live files. Source relevance batch: `typesafe/jev-1.14.0`, 2/2 done, 0 failed, cost $0.000026586; it scored the explicit vocabulary source below threshold, overridden by the assignment's direct requirement and the exact §4/§8 vocabulary reads, not used to omit it.

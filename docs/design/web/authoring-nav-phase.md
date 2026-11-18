@@ -2,6 +2,8 @@ Status: proposed, awaiting owner approval
 
 # Authoring navigation by phase
 
+Review record: [authoring-review.md](authoring-review.md)
+
 Flow id: `authoring-nav-phase`. CR-D-2 phases: **G1–G4** entry filtering; the shell itself is **G1**.
 
 Feature tasks: `13.4.1-T1.1`, `13.4.1-T1.2`, `13.4.1-T7.1`; registry owner `09.1.1-T4`; contract follow-ups `OI-13-509` (AI-settings gate) and `OI-13-504` (credit read).
@@ -38,7 +40,7 @@ Only wire-backed fields are cited through `contracts/openapi.yaml`; a navigation
 | Organization and project scope labels | `contracts/openapi.yaml#/components/schemas/OrganizationDto.name`; `contracts/openapi.yaml#/components/schemas/ProjectDto.name`; `contracts/openapi.yaml#/components/schemas/ProjectDto.org_id` | traced |
 | Account/membership display identity | `contracts/openapi.yaml#/components/schemas/MembershipView` (membership list); session identity shape not read in this slice | [OPEN] trace the shell identity read before implementing the account menu; no invented display name |
 | Nav search results and hidden-entry matching | No contract field; registry filter | [OPEN] recommend search over visible, permitted entries only, with the same phase/permission predicate as the sidebar |
-| Authoring-home counts, coverage and queue summary (page 24) | `contracts/openapi.yaml#/components/schemas/AuthoringTreeResponse`; per-row coverage and pending counts not defined | [OPEN] coverage needs the 13.1.1 read; pending counts are `OI-13-503` (`pending_change_count`, absent renders “—” not `0`) |
+| Authoring-home counts, coverage and queue summary (page 24) | `contracts/openapi.yaml#/components/schemas/AuthoringTreeResponse`; per-case coverage: `ManualCaseListItemDto.linked_live_count`, `.linked_case_ids`; no `pending_change_count` projection | traced for per-case coverage via the authorized manual-case list; [OPEN] aggregate home counts need their owning scoped read and must not be summed from a partial page. `OI-13-503` concerns **pending-change counts only** (absent renders “—”, not `0`) |
 | Recent versions (page 24) | `contracts/openapi.yaml#/components/schemas/AuthoringVersionListItemDto.version_no`, `.source`, `.author`, `.reason`, `.created_at` | traced |
 | AI credit summary (page 24) | No schema; `OI-13-504` | [OPEN] recommend no numeric balance duplicated on the home; link to the org usage page |
 | Onboarding step identity/completion (page 23) | No contract field for a step count or completion flags; resources are read individually | [OPEN] see the UI62 conflict below; do not invent a step DTO |
@@ -116,7 +118,7 @@ The delta also removes CI as a G1 prerequisite, keeps entered content on failure
 
 Adopt: authoring counts and coverage, recent immutable versions, pending-changes summary, one primary “Create requirement” action, onboarding progress/resume, and an authoring-oriented no-projects state. CI health, latest-run and policy links are absent in G1–G3, with no empty placeholder.
 
-Two proposed restraints: (a) the visible credit card duplicates the single authoritative balance that AC14/T7.2 places on the org usage page, so the home should carry a clearly scoped link (or an unavailable/link state) rather than a second numeric balance; (b) counts must come from the reads that own them, and an absent count renders “—” (`OI-13-503`), never `0`. Both are recorded `[OPEN]` for owner confirmation.
+Two proposed restraints: (a) the visible credit card duplicates the single authoritative balance that AC14/T7.2 places on the org usage page, so the home should carry a clearly scoped link (or an unavailable/link state) rather than a second numeric balance; (b) counts must come from the reads that own them, and an absent count renders “—”, never `0`; `OI-13-503` covers only the missing pending-change projection, not the already-supplied per-case coverage fields. Both home restraints are recorded `[OPEN]` for owner confirmation.
 
 ### Delta 27 — settings shell
 
@@ -210,8 +212,8 @@ The group labels are immutable user-visible vocabulary: no re-translation, no di
 | [OPEN] B1-03 four G1 onboarding steps conflict with binding UI62 (all five steps) | Keep five shipped steps and map the G1 milestones onto them; owner-approved amendment required before renumbering. Owner + 13.4.1-T5. |
 | [OPEN] B1-02 duplicates a numeric credit balance on the home while AC14/T7.2 places it once behind `usage:read` | Home carries a scoped link/status, not a second balance; owner confirms. 13.4.1-T7.2 / 09.7.1. |
 | [OPEN] `OI-13-509`: registry `ai-settings` gate is `project:read` while its reads need `authoring:read`; Save needs `project:write` | Re-gate in 13.4.1-T5.1 plus registry spec; unauthorized Save explained-disabled. Owner 09.1.1 registry. |
-| [OPEN] `OI-13-503`: pending-change counts and coverage counts have no row/response field | Add `pending_change_count`; render “—” when absent, never `0`. 13.1.1-T2 with 13.1.2. |
+| [OPEN] `OI-13-503`: pending-change counts have no tree/manual-case row projection | Add `pending_change_count`; render “—” when absent, never `0`. 13.1.1-T2 with 13.1.2. Coverage is already supplied by `ManualCaseListItemDto.linked_live_count`/`linked_case_ids`; see [authoring-tree.md](authoring-tree.md#v2-pages). Do not include coverage in this open item or invent aggregate coverage totals. |
 | [OPEN] `OI-13-504`: no AI-credit schema; page 24/31 credit fields are mockup-only | Usage page owns the single balance once the contract lands; see the usage file. 08.5.5-T5.2. |
 | [OPEN] Nav search over hidden entries, and account-menu identity source | Recommend a shared phase+permission predicate for search, and trace the session identity read before implementing. 09.1.1-T4. |
 | [OPEN] Shell declares no `404`, `401`, `429` or stale specimen, and no explicit drawer/restricted-nav capture | Add to the later approved capture set; do not invent `?state=` names now. Design review owner. |
-| [OPEN] Review and approval | Independent visual/a11y review first, then owner approval. This proposed file authorizes no implementation start; no checks were run in this docs-only assignment. |
+| [OPEN] Review and approval | Independent observations and docs-only dispositions are recorded in [authoring-review.md](authoring-review.md). Remaining reference/runtime and visual/AT evidence precede owner approval; proposed status authorizes no implementation start. No new checks were run in this correction assignment. |

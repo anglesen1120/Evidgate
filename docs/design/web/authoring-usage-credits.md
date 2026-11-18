@@ -2,6 +2,8 @@ Status: proposed, awaiting owner approval
 
 # Authoring usage credits
 
+Review record: [authoring-review.md](authoring-review.md)
+
 Flow id: `authoring-usage-credits`. CR-D-2 phase: **G1** credit region; quota/retention remains **G2**.
 
 Feature tasks: `13.4.1-T1.1`, `13.4.1-T1.2`, `13.4.1-T7.2`; contract owner `08.5.5-T5.2` for `OI-13-504`.
@@ -135,4 +137,4 @@ The canonical `1 240 / 2 000`, October 2026 and action totals `312 / 284 / 41` a
 | [OPEN] Mockup source ids, recorded times, unit estimates and model placeholders have no credit schema | Omit these live fields unless the owning contract supplies them; no price-per-item or provenance invented from generation fixtures. |
 | [OPEN] Opt-in off, initial summary load, stale refresh and separate balance-missing query specimens absent | Add these to the later approved state capture set; keep proposed states explicit here without inventing `?state=` names. |
 | [OPEN] Independent summary/table failure versus one planned credit read | Preserve only actual successfully read data and mark stale on refresh failure; let the owner define partial-response semantics, not a second UI-created endpoint. |
-| [OPEN] Review and approval | Independent visual/a11y review, then owner approval; this proposed header authorizes no implementation start. No checks were run in this docs-only assignment. |
+| [OPEN] Review and approval | Independent observations and docs-only dispositions are recorded in [authoring-review.md](authoring-review.md). Complete reference/runtime and visual/AT evidence, then owner approval, remain open; proposed status authorizes no implementation start. No new checks were run in this correction assignment. |

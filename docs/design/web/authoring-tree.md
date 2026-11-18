@@ -2,6 +2,8 @@ Status: proposed, awaiting owner approval
 
 # Authoring tree and manual-case table
 
+Review record: [authoring-review.md](authoring-review.md)
+
 Flow id: `authoring-tree`. CR-D-2 phase: **G1**.
 
 Feature tasks: `13.4.1-T1.1`, `13.4.1-T1.2`, `13.4.1-T2`; related `13.1.1-T2`, `13.1.1-T4`, `13.1.1-T5`.
@@ -100,6 +102,8 @@ Keyboard model: ✅ [WAI-ARIA APG tree interaction](https://www.w3.org/WAI/ARIA/
 
 Focus order: skip link → shell/scope → breadcrumbs/header links → hierarchy controls → filters in displayed order → select-visible/row checkbox and case link → export/pager/pending link. Disabled controls have focus-reachable adjacent help. Result refresh keeps the initiating control focused; one polite region announces scope/result changes and selected visible count, not every row. Decorative skeletons/icons are hidden from AT. The select-visible checkbox uses native indeterminate/mixed state and its accessible name states visible rows only.
 
+**Reference delta AR-07:** selection names follow the active interface locale, including interpolated names: vi “Chọn các dòng đang hiển thị” / en “Select visible rows”; vi “Chọn ca {code}” / en “Select case {code}”. Keep the supplied code unchanged. Translate disclosure and full-value/copy names as well as visible labels; an English page must not retain a Vietnamese-only `aria-label`. Apply the shared accessible-name inventory in [authoring-states.md](authoring-states.md#reading-and-focus-order).
+
 ## Copy length (vi vs en)
 
 Longest-risk specimens below are source/proposed text, not measured rendered-width evidence. Preserve complete user titles; authored compact status chips use the current shared vocabulary and full context outside the chip. Allow 40% copy expansion without reducing type.
@@ -118,15 +122,16 @@ Longest-risk specimens below are source/proposed text, not measured rendered-wid
 ## Responsive notes
 
 - **1280px:** expanded 224px shell by default; left hierarchy and right dense table retain page 40's tree-rail split. Table overflow stays in a named local region with keyboard access; pager sits outside it. Use [layout.md](layout.md) and [UI column/long-content rules](../../engineering/ui-rules.md#data-tables), not a squeezed ten-column equal-width grid. Title flexes; identifiers/status/selection remain intrinsic. Above 200 loaded rows use the shared large-list behavior, subject to its documented UI22 owner decision.
+- **Reference delta AR-02:** give the case-code/ID column its intrinsic 12–28ch budget before allocating the remaining width to human titles; the 900px table minimum is not permission to squeeze an identifier into fragments. Use the existing `CopyableIdentifierComponent` with mono, non-wrapping useful middle elision when necessary, a complete accessible value and keyboard/tap full-value recovery. Budget the title/other narrative columns instead of breaking `SHOP-TC-0042` across lines. If the full column budgets exceed the available width, retain the named local comparison scroller; never force global `break-all` or page-overflow clipping. Full safe originals and copy refusal for format controls follow UI30/UI58.
 - **768–1279px:** shell rail and stacked panes; same scope/filter semantics. A narrow container on a wide desktop does not itself revoke mutation controls.
 - **360px / below 768px:** modal shell drawer; notice explains read-only editing/apply. Hierarchy, expansion, scope browsing, filters, reset, links and version inspection remain usable. Do not confuse selecting a browse scope with export-checkbox selection: export checkboxes/toolbar and mutation actions are removed by viewport policy. Show labeled stacked case records with semantic field/value associations, not CSS labels alone. Bound indentation (including ≥6 levels), stack the root-first breadcrumb, and keep full labels reachable without page-level horizontal scrolling or `overflow-x:hidden` masking.
-- If a resize removes a focused mutation control, hand focus to the corresponding summary heading or notice after render; preserve draft/selection context without submitting. Touch targets are 44px under project policy, minimum 24×24 CSS px in every layout. Disclosure controls and focus rings must not be clipped by indentation or table scrollers.
+- If a resize removes a focused mutation control, hand focus to the corresponding summary heading or notice after render; preserve draft/selection context without submitting. **Reference delta AR-01:** measure the actual activation rectangle, not the icon/checkmark: disclosure buttons and each checkbox's associated label/hit area are at least 24×24 CSS px on fine pointers and 44×44px on coarse pointers, using the existing control/touch tokens. Small glyphs may remain inside those boxes; do not enlarge through overlapping invisible targets or overlap the case link. Grow row height as needed, keep 8px gaps where feasible, and leave focus rings unclipped by indentation/scrollers. No minimum-size exception is proposed for these controls.
 
 Manual acceptance remains ⚠️ **not run**; apply each row to **tree/table at 1280 and 360px, light/dark, vi/en**:
 
 | Criterion | Required inspection / expected outcome |
 | --- | --- |
-| 2.5.8 target size | Measure disclosure, checkbox, reset, chip disclosures and icon actions ≥24×24px; coarse-pointer controls 44px. |
+| 2.5.8 target size | Measure disclosure buttons, checkbox plus associated activation area, reset, chip disclosures and icon actions in both dimensions: ≥24×24px fine pointer and ≥44×44px coarse pointer, with non-overlapping targets. Record the rectangle, pointer mode and gaps; a small glyph or absence of page overflow is not sizing evidence. |
 | 2.4.11 focus not obscured | Tab through shell, deep tree and pager; sticky chrome/local headers/toasts never cover focused control; use nearest-edge scroll and header offset. |
 | 2.5.7 dragging | Expand, browse, filter and select entirely by buttons/keyboard; no drag-only ordering. |
 | 1.4.3 / 1.4.11 contrast | Text ≥4.5:1 (large ≥3:1), meaningful boundaries/icons ≥3:1 in actual composite states using [tokens.md](tokens.md); token presence alone is not a measurement. |
@@ -154,4 +159,4 @@ Manual acceptance remains ⚠️ **not run**; apply each row to **tree/table at 
 | List metadata, aggregate totals and identifiers | Row source/owner/provenance, checklist codes, settings badge, aggregate counts, catalogue aliases and “In review” are not supplied as shown. Use the safe defaults in the trace table; no inferred owner, CL/TC code, enum or total. |
 | Empty-project parent prerequisite | Recommend generation/import or explicit checklist setup before case create; do not enable the fixture's parentless case invitation as a valid API call. |
 | Partial states and keyboard coverage | Independent load/error, stale, long/deep, native-list tree-style keys and no-match retained controls need dedicated interactive review; static cards are not proof. Retain native semantics; complete APG conversion requires its own review. |
-| Approval and evidence | Independent design review record and owner approval are absent; recommended default is keep proposed status and do not start implementation. No browser, screen-reader, visual, axe, build, test, lint or formatter pass is claimed. |
+| Approval and evidence | Independent observations and this docs-only correction disposition are recorded in [authoring-review.md](authoring-review.md). Frozen references are not corrected by these prose changes; remaining visual/AT/interaction evidence and owner approval stay open. Keep proposed status and do not start implementation. No new browser, axe, build, test, lint or formatter pass is claimed. |
