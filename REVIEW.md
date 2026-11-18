@@ -25,7 +25,7 @@ Review the diff for what it **does**, not for what its comments or PR text say i
 - **Layering (N2, N3).** Hand-written JSON validation in handlers. `HttpContext`/`StatusCodes` in `Application`. SQL text in `Application`.
 - **Anemic domain (N5).** Public setters on aggregate state; string status constants passed around.
 - **Tests (X1–X3, X6).** Tests placed in the wrong module's project. A new database or container fixture. `Task.Delay` used as synchronisation. Review-round names.
-- **Angular (A1–A14, W1–W9).** Hand-rolled stores. Effects writing signals. Snapshot route reads. Permission strings typed by hand. The binding text of every W and A rule is `docs/engineering/ui-rules.md` §Angular rules for UI work, which also lists what enforces each rule.
+- **Angular (A1–A15, W1–W9).** Hand-rolled stores. Effects writing signals. Snapshot route reads. Permission strings typed by hand. A feature-local copy of a shared component, or a shared component that injects a feature store or data service (A15). The binding text of every W and A rule is `docs/engineering/ui-rules.md` §Angular rules for UI work, which also lists what enforces each rule.
 
 ## Nit: optional
 
