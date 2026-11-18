@@ -1,0 +1,18 @@
+{
+  "operation_id": "listCases",
+  "variant": "forbidden",
+  "status": 403,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000ca12"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "forbidden",
+      "message": "Catalog read is not granted.",
+      "request_id": "018f0000-0000-7000-8000-00000000ca12",
+      "retryable": false,
+      "details": []
+    }
+  }
+}

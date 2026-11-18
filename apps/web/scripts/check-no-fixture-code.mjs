@@ -41,7 +41,7 @@
 //    every other member holding a property name, stays a needle. The names are read from the
 //    contract at scan time; a missing, unparsable or property-less contract fails the gate.
 //
-// The production invocation forbids all 18 markers. The review web image is the one caller that
+// The production invocation forbids all 19 markers. The review web image is the one caller that
 // may carry a dev-only surface: `npm run build:review -w apps/web` adds the `review` angular.json
 // configuration, which swaps `login-extension.ts` for its development replacement so the review
 // stack shows the dev sign-in form. Its six markers are listed in `DEV_SIGN_IN_MARKERS` and are
@@ -50,7 +50,7 @@
 // build that lost the form fails here instead of serving a login screen with no way in.
 //
 // `--require-run-views` (review build) requires the tag `review-run-views` of the seam that opens
-// the `runs` entry; without it the tag is forbidden. The 18-marker production line is unchanged.
+// the `runs` entry; without it the tag is forbidden. The production marker list is unchanged.
 //
 // The check fails closed: a missing/empty dist directory, or a corpus with no `input.json`, is a
 // failure, not a pass — otherwise a broken build or a moved corpus would make the gate vacuous.
@@ -144,11 +144,12 @@ const FIXTURE_MARKERS = [
   'dev/run-list',
   'dev/run-detail',
   'dev/suite-composition',
+  'dev/catalog-list',
 ];
 
 /**
  * Every marker, in its historical order (fixture first, sign-in last): the production invocation
- * forbids this whole list, so its count and its report line stay what they were.
+ * forbids this whole list and reports its current count.
  */
 const MARKERS = [...FIXTURE_MARKERS, ...DEV_SIGN_IN_MARKERS];
 
