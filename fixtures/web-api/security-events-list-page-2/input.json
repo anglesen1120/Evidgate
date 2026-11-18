@@ -1,0 +1,29 @@
+{
+  "operation_id": "listSecurityEvents",
+  "variant": "page-2",
+  "status": 200,
+  "body": {
+    "items": [
+      {
+        "id": "018f4350-0000-7000-8000-000000000099",
+        "project_id": "018f0000-0000-7000-8000-000000000011",
+        "type": "auth_failure",
+        "severity": "info",
+        "actor": {
+          "kind": "user",
+          "id": "018f4350-0000-7000-8000-000000000101"
+        },
+        "details": {
+          "count": 1
+        },
+        "request_id": "018f4350-0000-7000-8000-000000000201",
+        "created_at": "2026-11-17T08:00:00Z"
+      }
+    ],
+    "next_cursor": null
+  },
+  "headers": {
+    "X-Request-Id": "018f4350-0000-7000-8000-000000000600"
+  },
+  "latency_ms": 0
+}

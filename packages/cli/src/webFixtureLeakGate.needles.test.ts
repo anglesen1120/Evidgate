@@ -117,4 +117,42 @@ describe('no-fixture-code gate', () => {
     expect(renamed.status).toBe(1);
     expect(renamed.stderr).toContain(enumerated.status);
   });
+
+  it('skips_only_rendered_security_event_types_and_still_rejects_fixture_only_types', async () => {
+    const ws = await workspace();
+    const types = [
+      'auth_failure',
+      'cross_tenant_probe',
+      'secret_scanner_alert',
+      'kill_switch_used',
+      'support_access',
+    ];
+    const document = (type: string) => ({
+      operation_id: 'listSecurityEvents',
+      variant: 'ok',
+      status: 200,
+      headers: {},
+      latency_ms: 0,
+      body: { items: [{ type }] },
+    });
+    for (const type of types) {
+      await ws.fixture('security-events', document(type));
+      await ws.output('main-ABC123.js', `const type=${JSON.stringify(type)};`);
+      const clean = ws.run();
+      expect(clean.status).toBe(0);
+      expect(clean.stdout).toContain('0 fixture string(s)');
+    }
+    const fixtureOnly = 'fixture_only_security_event';
+    await ws.fixture('security-events', document(fixtureOnly));
+    await ws.output('main-ABC123.js', `const type=${JSON.stringify(fixtureOnly)};`);
+    const leaked = ws.run();
+    expect(leaked.status).toBe(1);
+    expect(leaked.stderr).toContain(fixtureOnly);
+    await ws.fixture('security-events', {
+      ...document('auth_failure'),
+      body: { items: [{ name: 'auth_failure' }] },
+    });
+    await ws.output('main-ABC123.js', 'const name=\"auth_failure\";');
+    expect(ws.run().status).toBe(1);
+  });
 });

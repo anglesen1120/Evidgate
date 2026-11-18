@@ -24,6 +24,7 @@ import { AuditPage } from './audit/audit.page';
 import { MembersPage } from './members/members.page';
 import { PolicyPage } from './policy/policy.page';
 import { SecretsPage } from './secrets/secrets.page';
+import { SecurityEventsPage } from './security/security-events.page';
 import { QuotaPanelComponent } from './quota-retention/quota-panel.component';
 import { SettingsNoTabsPage } from './settings-no-tabs.page';
 import { SettingsShellPage } from './settings-shell.page';
@@ -164,18 +165,29 @@ describe('Settings shell route table (09.7.1-T1.2)', () => {
     expect(tabs?.find((route) => route.path === 'audit')?.component).toBe(AuditPage);
     expect(tabs?.find((route) => route.path === 'secrets')?.component).toBe(SecretsPage);
     expect(tabs?.find((route) => route.path === 'policy')?.component).toBe(PolicyPage);
+    expect(tabs?.find((route) => route.path === 'security-events')?.component).toBe(
+      SecurityEventsPage,
+    );
     expect(tabs?.find((route) => route.path === 'quota-retention')?.component).toBe(
       QuotaPanelComponent,
     );
     expect(tabs?.find((route) => route.path === 'api-tokens')?.loadComponent).toEqual(
       expect.any(Function),
     );
-    // Delivered bodies are independent of phase visibility: Secrets is G2 and Policy is G4, so
-    // both are hidden in the G1 build even though their bodies exist.
+    // Delivered bodies are independent of phase visibility: Secrets and Security events are G2
+    // and Policy is G4, so all three stay hidden in the G1 build even though their bodies exist.
     const delivered = tabs?.filter((route) => route.component !== SettingsTabPlaceholderPage);
     expect(delivered?.map((route) => route.path)).toEqual(
       SETTINGS_TABS.filter((tab) =>
-        ['members', 'audit', 'secrets', 'api-tokens', 'policy', 'quota-retention'].includes(tab.id),
+        [
+          'members',
+          'audit',
+          'secrets',
+          'api-tokens',
+          'policy',
+          'quota-retention',
+          'security-events',
+        ].includes(tab.id),
       ).map((tab) => tab.segment),
     );
     const harness = await setUp(new Set(['membership:read']));

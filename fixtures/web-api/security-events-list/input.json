@@ -1,0 +1,89 @@
+{
+  "operation_id": "listSecurityEvents",
+  "variant": "ok",
+  "status": 200,
+  "body": {
+    "items": [
+      {
+        "id": "018f4350-0000-7000-8000-000000000001",
+        "project_id": "018f0000-0000-7000-8000-000000000011",
+        "type": "auth_failure",
+        "severity": "info",
+        "actor": {
+          "kind": "user",
+          "id": "018f4350-0000-7000-8000-000000000101"
+        },
+        "details": {
+          "count": 1
+        },
+        "request_id": "018f4350-0000-7000-8000-000000000201",
+        "created_at": "2026-11-18T09:05:00Z"
+      },
+      {
+        "id": "018f4350-0000-7000-8000-000000000002",
+        "project_id": "018f0000-0000-7000-8000-000000000011",
+        "type": "cross_tenant_probe",
+        "severity": "warning",
+        "actor": {
+          "kind": "user",
+          "id": "018f4350-0000-7000-8000-000000000102"
+        },
+        "details": {
+          "count": 2
+        },
+        "request_id": "018f4350-0000-7000-8000-000000000202",
+        "created_at": "2026-11-18T09:04:00Z"
+      },
+      {
+        "id": "018f4350-0000-7000-8000-000000000003",
+        "project_id": "018f0000-0000-7000-8000-000000000011",
+        "type": "secret_scanner_alert",
+        "severity": "critical",
+        "actor": {
+          "kind": "user",
+          "id": "018f4350-0000-7000-8000-000000000103"
+        },
+        "details": {
+          "count": 3
+        },
+        "request_id": "018f4350-0000-7000-8000-000000000203",
+        "created_at": "2026-11-18T09:03:00Z"
+      },
+      {
+        "id": "018f4350-0000-7000-8000-000000000004",
+        "project_id": null,
+        "type": "kill_switch_used",
+        "severity": "info",
+        "actor": {
+          "kind": "user",
+          "id": "018f4350-0000-7000-8000-000000000104"
+        },
+        "details": {
+          "count": 4
+        },
+        "request_id": "018f4350-0000-7000-8000-000000000204",
+        "created_at": "2026-11-18T09:02:00Z"
+      },
+      {
+        "id": "018f4350-0000-7000-8000-000000000005",
+        "project_id": "018f0000-0000-7000-8000-000000000011",
+        "type": "support_access",
+        "severity": "warning",
+        "actor": {
+          "kind": "user",
+          "id": "018f4350-0000-7000-8000-000000000105"
+        },
+        "details": {
+          "support_grant_id": "018f4350-0000-7000-8000-000000000500"
+        },
+        "request_id": "018f4350-0000-7000-8000-000000000205",
+        "created_at": "2026-11-18T09:01:00Z"
+      }
+    ],
+    "next_cursor": "security-events-next"
+  },
+  "headers": {
+    "X-Request-Id": "018f4350-0000-7000-8000-000000000600"
+  },
+  "latency_ms": 0
+}

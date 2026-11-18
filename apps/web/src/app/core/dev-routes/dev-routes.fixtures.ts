@@ -111,6 +111,27 @@ export function devRoutes(): Routes {
       ],
     },
     {
+      path: 'dev/settings-security-events',
+      component: ShellComponent,
+      children: [
+        {
+          path: 'orgs/:orgId',
+          canMatch: [
+            authGuard,
+            orgScopeGuard,
+            permissionGuard('organization:read'),
+            permissionGuard('security_event:read'),
+          ],
+          data: { pageHeadingLevel: 1 },
+          loadComponent: () =>
+            // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only replacement mounts the real G2 page without changing its product phase.
+            import('../../features/settings/security/security-events.page').then(
+              (module) => module.SecurityEventsPage,
+            ),
+        },
+      ],
+    },
+    {
       path: 'dev/run-list',
       component: ShellComponent,
       children: [
