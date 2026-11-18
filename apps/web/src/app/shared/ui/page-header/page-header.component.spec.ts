@@ -1,10 +1,10 @@
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import { Component, provideZonelessChangeDetection, signal, viewChild } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HlmButton } from '@evidgate/ui/button';
 
 import { HeaderHarness } from './header.harness';
-import { PageHeaderImports } from './index';
+import { PageHeaderComponent, PageHeaderImports } from './index';
 
 @Component({
   selector: 'app-page-header-test-host',
@@ -29,6 +29,7 @@ import { PageHeaderImports } from './index';
   `,
 })
 class PageHeaderTestHost {
+  readonly header = viewChild.required(PageHeaderComponent);
   readonly breadcrumbLabel = 'Breadcrumb';
   readonly breadcrumb = 'Organization / Project';
   readonly title = signal('Runs');
@@ -69,6 +70,12 @@ describe('PageHeaderComponent', () => {
     expect(await harness.getTitle()).toBe('Runs');
     expect(await harness.getTitleId()).toBe('runs-title');
     expect(await harness.getDescription()).toBe('Inspect recorded runs.');
+  });
+
+  it('offers the page heading as a programmatic focus destination outside the tab order', () => {
+    fixture.componentInstance.header().focusTitle();
+    expect(document.activeElement?.id).toBe('runs-title');
+    expect(document.activeElement?.getAttribute('tabindex')).toBe('-1');
   });
 
   it('keeps context, title, description and action in reading and focus order', async () => {

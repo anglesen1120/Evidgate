@@ -1,0 +1,33 @@
+{
+  "operation_id": "listCases",
+  "variant": "archived",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000ca14"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "org_id": "018f0000-0000-7000-8000-000000000001",
+        "project_id": "018f0000-0000-7000-8000-000000000011",
+        "framework": "vitest",
+        "language": "typescript",
+        "labels": [],
+        "first_seen_commit": "9af317c",
+        "last_seen_commit": "9af317c",
+        "created_at": "2026-10-20T08:00:00Z",
+        "updated_at": "2026-10-20T08:00:00Z",
+        "version": 3,
+        "requirement_ref": null,
+        "id": "018f0000-0000-7000-8000-00000000ca03",
+        "annotation_id": "018f0000-0000-7000-8000-0000000c0002",
+        "name": "Order totals round correctly",
+        "file_path": "tests/total.test.ts",
+        "status": "archived",
+        "owner_membership_id": null
+      }
+    ],
+    "next_cursor": null
+  }
+}

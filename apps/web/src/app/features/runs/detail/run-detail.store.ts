@@ -5,6 +5,7 @@ import { RunsDataService } from '../../../core/data/runs-data.service';
 import { ApiRequestError, isApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { takeKeysetPage, type KeysetRefusals } from '../../../shared/keyset-walk';
 import { RunDataService } from '../data/run-data.service';
+import { withRunRefresh } from '../actions/cancel/with-run-refresh.feature';
 import { toDecisionCandidate } from './decision/decision-mapper';
 import { refusesAccess } from './decision/decision-refusal';
 import type { DecisionViewModel } from './decision/decision-view-model';
@@ -160,6 +161,7 @@ export const RunDetailStore = signalStore(
     }),
   })),
   withRunDetailRelease(),
+  withRunRefresh(),
   withMethods((store) => {
     const data = inject(RunsDataService);
     // The decision read goes through the feature service, which validates the stale-typed body

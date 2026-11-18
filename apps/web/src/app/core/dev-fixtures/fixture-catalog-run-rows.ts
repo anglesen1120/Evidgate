@@ -14,10 +14,19 @@ import runDecisionEvaluatedFailMissingShard from '../../../../../../fixtures/web
 import runDecisionEvaluatedPass from '../../../../../../fixtures/web-api/run-decision-evaluated-pass/input.json';
 import runDecisionShadowRefused from '../../../../../../fixtures/web-api/run-decision-shadow-refused/input.json';
 import runDecisionUnavailable from '../../../../../../fixtures/web-api/run-decision-unavailable/input.json';
+import runCancel from '../../../../../../fixtures/web-api/run-cancel/input.json';
+import runCreate from '../../../../../../fixtures/web-api/run-create/input.json';
+import runCreateConflict from '../../../../../../fixtures/web-api/run-create-conflict/input.json';
+import runCreateInvalid from '../../../../../../fixtures/web-api/run-create-invalid/input.json';
+import runCreateForbidden from '../../../../../../fixtures/web-api/run-create-forbidden/input.json';
+import runCreateNotFound from '../../../../../../fixtures/web-api/run-create-not-found/input.json';
+import runCreateTooLarge from '../../../../../../fixtures/web-api/run-create-too-large/input.json';
+import runCreateSlow from '../../../../../../fixtures/web-api/run-create-slow/input.json';
 import runEvidenceRevisions from '../../../../../../fixtures/web-api/run-evidence-revisions/input.json';
 import runEvidenceRevisionsEmpty from '../../../../../../fixtures/web-api/run-evidence-revisions-empty/input.json';
 import runEvidenceRevisionsUnavailable from '../../../../../../fixtures/web-api/run-evidence-revisions-unavailable/input.json';
 import runDetail from '../../../../../../fixtures/web-api/run-detail/input.json';
+import runDetailCollecting from '../../../../../../fixtures/web-api/run-detail-collecting/input.json';
 import runDetailForbidden from '../../../../../../fixtures/web-api/run-detail-forbidden/input.json';
 import runDetailNotFound from '../../../../../../fixtures/web-api/run-detail-not-found/input.json';
 import runDetailNullEvidence from '../../../../../../fixtures/web-api/run-detail-null-evidence/input.json';
@@ -190,6 +199,14 @@ export const FIXTURE_CATALOG_RUN_ROWS: readonly FixtureCatalogRow[] = [
     cursor: 'attempts-cursor-after-checkout-2',
   },
   { name: 'run-attempts-unavailable', document: runAttemptsUnavailable },
+  { name: 'run-cancel', document: runCancel },
+  { name: 'run-create', document: runCreate },
+  { name: 'run-create-conflict', document: runCreateConflict },
+  { name: 'run-create-invalid', document: runCreateInvalid },
+  { name: 'run-create-forbidden', document: runCreateForbidden },
+  { name: 'run-create-not-found', document: runCreateNotFound },
+  { name: 'run-create-too-large', document: runCreateTooLarge },
+  { name: 'run-create-slow', document: runCreateSlow },
   { name: 'run-decision', document: runDecision },
   {
     name: 'run-decision-evaluated-fail-missing-shard',
@@ -200,6 +217,7 @@ export const FIXTURE_CATALOG_RUN_ROWS: readonly FixtureCatalogRow[] = [
   { name: 'run-decision-unavailable', document: runDecisionUnavailable },
   { name: 'run-detail', document: runDetail },
   { name: 'run-detail-canceled', document: runDetailCanceled, derived: true },
+  { name: 'run-detail-collecting', document: runDetailCollecting },
   { name: 'run-detail-forbidden', document: runDetailForbidden },
   { name: 'run-detail-many-producers', document: runDetailManyProducers, derived: true },
   { name: 'run-detail-no-producers', document: runDetailNoProducers, derived: true },

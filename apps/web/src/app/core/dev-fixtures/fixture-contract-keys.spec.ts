@@ -80,20 +80,16 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
   });
 
   it('pins the cursor-keyed CI-binding and run-list walks to their corpus pages (09.7.1-F15, 09.3.1-T1)', () => {
-    // 09.7.1-F15 note (4): `listCiBindings` answers the catalog row whose `cursor` equals the
-    // request's cursor, so the Secrets tab's Load more reaches its terminal page in a browser
-    // instead of every fixture ending at `next_cursor: null`. 09.3.1-T1 adds the same seam for the
-    // Runs list (`listRuns`, `run-list-page-2`). It is only sound when (a) every cursor-keyed row
-    // names the query parameter the contract's list read takes, (b) each cursor-declaring catalog
-    // row continues a page that names it — same project, disjoint ids, a cursor the server could
-    // have issued — and (c) it ends the walk, because a second cursor with no document behind it
-    // would leave the control on screen. The lists here are exhaustive on purpose: a third
-    // cursor-keyed row or catalog cursor needs its own pin in this test.
+    // A cursor-keyed route answers the catalog row whose `cursor` equals the request's cursor, so
+    // Load more reaches a terminal page in a browser. It is only sound when (a) every keyed row
+    // names the contract's cursor parameter, (b) each cursor-declaring row continues a page that
+    // names it (same project, disjoint ids, a cursor the server could issue) and (c) it ends the
+    // walk. The lists are exhaustive: a new cursor needs its own pin.
     const keyed = FIXTURE_ROUTE_ROWS.filter((route) => route.cursorQueryParameter !== undefined);
     expect(
       keyed.map((route) => route.operationId),
-      'listCiBindings, listRuns and listRunAttempts are cursor-keyed; a fourth row needs its own pin here',
-    ).toEqual(['listCiBindings', 'listRuns', 'listRunAttempts']);
+      'each cursor-keyed route needs its own page-continuation pin here',
+    ).toEqual(['listSecurityEvents', 'listCases', 'listCiBindings', 'listRuns', 'listRunAttempts']);
     for (const route of keyed) {
       expect(
         route.cursorQueryParameter,
@@ -105,7 +101,13 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     expect(
       paged.map((entry) => entry.name),
       'each cursor-keyed walk has exactly one catalog row declaring the request cursor it answers',
-    ).toEqual(['ci-bindings-list-settings-page-2', 'run-attempts-page-2', 'run-list-page-2']);
+    ).toEqual([
+      'ci-bindings-list-settings-page-2',
+      'run-attempts-page-2',
+      'run-list-page-2',
+      'security-events-list-page-2',
+      'catalog-cases-page-2',
+    ]);
     const secondPageRow = paged.find((entry) => entry.name === 'ci-bindings-list-settings-page-2');
     if (secondPageRow === undefined || secondPageRow.cursor === undefined) {
       throw new Error(

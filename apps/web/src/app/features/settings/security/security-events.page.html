@@ -1,0 +1,185 @@
+@if (ownsPageHeading) {
+  <app-page-header [title]="copy.title" [description]="copy.description" />
+} @else {
+  <app-section-header [title]="copy.title" [description]="copy.description" />
+}
+<p class="my-4 max-w-[65ch] text-sm text-muted-foreground">{{ copy.boundary }}</p>
+<form
+  class="mb-6 grid min-w-0 gap-4"
+  (ngSubmit)="apply()"
+  aria-labelledby="security-filters-heading"
+>
+  <h3 id="security-filters-heading" class="m-0 text-lg font-semibold">{{ copy.filters }}</h3>
+  <app-form-error-summary [summaryId]="'security-filter-errors'" [feedback]="feedback()" />
+  <div class="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div class="grid min-w-0 gap-2">
+      <label hlmLabel for="security-project">{{ copy.project }}</label>
+      <input
+        hlmInput
+        id="security-project"
+        name="projectId"
+        maxlength="36"
+        class="min-h-[var(--eg-control-touch)]"
+        [ngModel]="draft().projectId"
+        (ngModelChange)="updateDraft({ projectId: $event })"
+        [aria-describedby]="'security-project-hint'"
+      />
+      <p id="security-project-hint" class="m-0 text-xs text-muted-foreground">
+        {{ copy.projectHint }}
+      </p>
+    </div>
+    <div class="grid min-w-0 content-start gap-2">
+      <label hlmLabel for="security-type">{{ copy.type }}</label>
+      <hlm-select
+        name="type"
+        [ngModel]="draft().type"
+        (ngModelChange)="updateDraft({ type: $event })"
+      >
+        <hlm-select-trigger
+          [buttonId]="'security-type'"
+          class="w-full min-h-[var(--eg-control-touch)] whitespace-normal"
+          ><hlm-select-value [placeholder]="copy.allTypes"
+        /></hlm-select-trigger>
+        <hlm-select-content *hlmSelectPortal [aria-label]="copy.type">
+          <hlm-select-item [value]="''">{{ copy.allTypes }}</hlm-select-item>
+          @for (type of types; track type.value) {
+            <hlm-select-item [value]="type.value">{{ type.label }}</hlm-select-item>
+          }
+        </hlm-select-content>
+      </hlm-select>
+    </div>
+    <div class="grid min-w-0 content-start gap-2">
+      <label hlmLabel for="security-severity">{{ copy.severity }}</label>
+      <hlm-select
+        name="severity"
+        [ngModel]="draft().severity"
+        (ngModelChange)="updateDraft({ severity: $event })"
+      >
+        <hlm-select-trigger
+          [buttonId]="'security-severity'"
+          class="w-full min-h-[var(--eg-control-touch)] whitespace-normal"
+          ><hlm-select-value [placeholder]="copy.allSeverities"
+        /></hlm-select-trigger>
+        <hlm-select-content *hlmSelectPortal [aria-label]="copy.severity">
+          <hlm-select-item [value]="''">{{ copy.allSeverities }}</hlm-select-item>
+          @for (severity of severities; track severity.value) {
+            <hlm-select-item [value]="severity.value">{{ severity.label }}</hlm-select-item>
+          }
+        </hlm-select-content>
+      </hlm-select>
+    </div>
+    @for (field of feedback().fields; track field.id) {
+      <div class="grid min-w-0 gap-2">
+        <label hlmLabel [for]="field.id">{{ field.label }}</label>
+        <input
+          hlmInput
+          [id]="field.id"
+          [name]="field.id"
+          type="datetime-local"
+          step="1"
+          class="min-h-[var(--eg-control-touch)]"
+          [ngModel]="field.id === 'security-from' ? draft().from : draft().to"
+          (ngModelChange)="
+            updateDraft(field.id === 'security-from' ? { from: $event } : { to: $event })
+          "
+          (blur)="field.blur()"
+          [forceInvalid]="field.invalid()"
+          [attr.aria-invalid]="field.ariaInvalid()"
+          [aria-describedby]="field.describedBy()"
+        />
+        <app-field-feedback [field]="field" />
+      </div>
+    }
+  </div>
+  <p id="security-time-hint" class="m-0 text-xs text-muted-foreground">{{ copy.timeHint }}</p>
+  <div class="flex flex-wrap gap-3">
+    <button
+      hlmBtn
+      [variant]="'secondary'"
+      type="submit"
+      class="min-h-[var(--eg-control-touch)] whitespace-normal"
+      data-security-apply
+    >
+      {{ copy.apply }}
+    </button>
+    <button
+      hlmBtn
+      [variant]="'outline'"
+      type="button"
+      class="min-h-[var(--eg-control-touch)] whitespace-normal"
+      data-security-clear
+      (click)="clear()"
+    >
+      {{ copy.clear }}
+    </button>
+  </div>
+</form>
+<section
+  #results
+  id="security-results"
+  tabindex="-1"
+  class="grid min-w-0 gap-4 focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring"
+  [attr.aria-label]="copy.title"
+  [attr.aria-busy]="store.phase() === 'loading'"
+>
+  <app-request-state
+    [status]="store.phase()"
+    [loadingLabel]="copy.loading"
+    [error]="store.loadError()"
+    [empty]="store.rawCount() === 0"
+    [emptyTitle]="store.filtered() ? copy.noMatch : copy.empty"
+    [emptyDescription]="store.filtered() ? copy.noMatchDescription : copy.emptyDescription"
+    [emptyActionLabel]="store.filtered() ? copy.clear : undefined"
+    (emptyAction)="clear()"
+    [retryEligible]="(store.loadError()?.retryable ?? false) && (retryReady.value() ?? false)"
+    (retry)="store.reload()"
+  >
+    <app-security-events-table [rows]="store.rows()" />
+  </app-request-state>
+  @if (store.phase() === 'ready') {
+    <p class="m-0 text-xs text-muted-foreground">{{ copy.hidden }}</p>
+    <p role="status" class="m-0 text-sm">{{ pageSummary() }}</p>
+  }
+  <nav class="flex min-w-0 flex-wrap items-end gap-3" [attr.aria-label]="copy.pagination">
+    <div class="grid gap-2">
+      <label hlmLabel for="security-page-size">{{ copy.pageSize }}</label>
+      <hlm-select [value]="store.pageSize()" (valueChange)="store.setPageSize(+($event ?? 0))">
+        <hlm-select-trigger
+          [buttonId]="'security-page-size'"
+          class="min-h-[var(--eg-control-touch)]"
+          ><hlm-select-value
+        /></hlm-select-trigger>
+        <hlm-select-content *hlmSelectPortal [aria-label]="copy.pageSize">
+          @for (size of pageSizes; track size) {
+            <hlm-select-item [value]="size">{{ size }}</hlm-select-item>
+          }
+        </hlm-select-content>
+      </hlm-select>
+    </div>
+    <button
+      hlmBtn
+      [variant]="'outline'"
+      type="button"
+      class="min-h-[var(--eg-control-touch)] whitespace-normal"
+      [disabled]="store.phase() !== 'ready' || store.pageIndex() === 0"
+      (click)="move(false)"
+    >
+      {{ copy.previous }}
+    </button>
+    <button
+      hlmBtn
+      [variant]="'outline'"
+      type="button"
+      class="min-h-[var(--eg-control-touch)] whitespace-normal"
+      [disabled]="store.phase() !== 'ready' || !store.canNext()"
+      (click)="move(true)"
+    >
+      {{ copy.next }}
+    </button>
+  </nav>
+  @if (store.phase() === 'ready') {
+    @if (store.capped() && store.nextCursor()) {
+      <p role="status">{{ copy.capped }}</p>
+    }
+  }
+</section>

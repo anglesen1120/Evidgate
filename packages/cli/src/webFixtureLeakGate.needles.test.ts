@@ -1,6 +1,8 @@
 // Proofs of apps/web/scripts/check-no-fixture-code.mjs on which corpus strings are needles: a
 // permission row's `resource`/`action` words and the enumerated `provider`/`status` values are
 // exempt, and every other string of needle length stays a leak.
+import { readFile } from 'node:fs/promises';
+
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { cleanupWorkspaces, workspace } from './webFixtureLeakGate.testing.js';
@@ -116,5 +118,98 @@ describe('no-fixture-code gate', () => {
     const renamed = ws.run();
     expect(renamed.status).toBe(1);
     expect(renamed.stderr).toContain(enumerated.status);
+  });
+
+  it('skips_only_rendered_security_event_types_and_still_rejects_fixture_only_types', async () => {
+    const ws = await workspace();
+    const types = [
+      'auth_failure',
+      'cross_tenant_probe',
+      'secret_scanner_alert',
+      'kill_switch_used',
+      'support_access',
+    ];
+    const document = (type: string) => ({
+      operation_id: 'listSecurityEvents',
+      variant: 'ok',
+      status: 200,
+      headers: {},
+      latency_ms: 0,
+      body: { items: [{ type }] },
+    });
+    for (const type of types) {
+      await ws.fixture('security-events', document(type));
+      await ws.output('main-ABC123.js', `const type=${JSON.stringify(type)};`);
+      const clean = ws.run();
+      expect(clean.status).toBe(0);
+      expect(clean.stdout).toContain('0 fixture string(s)');
+    }
+    const fixtureOnly = 'fixture_only_security_event';
+    await ws.fixture('security-events', document(fixtureOnly));
+    await ws.output('main-ABC123.js', `const type=${JSON.stringify(fixtureOnly)};`);
+    const leaked = ws.run();
+    expect(leaked.status).toBe(1);
+    expect(leaked.stderr).toContain(fixtureOnly);
+    await ws.fixture('security-events', {
+      ...document('auth_failure'),
+      body: { items: [{ name: 'auth_failure' }] },
+    });
+    await ws.output('main-ABC123.js', 'const name=\"auth_failure\";');
+    expect(ws.run().status).toBe(1);
+  });
+  it.each(['kind', 'trigger_event'])(
+    'exempts_pull_request_only_as_a_contract_value_of_%s',
+    async (member) => {
+      const ws = await workspace();
+      const document = (value: string) => ({
+        operation_id: 'getRun',
+        variant: 'ok',
+        status: 200,
+        body: { ref: { [member]: value } },
+      });
+      await ws.fixture('run-detail', document('pull_request'));
+      await ws.output('main-ABC123.js', 'const ref="pull_request";');
+      const clean = ws.run();
+      expect(clean.status).toBe(0);
+      expect(clean.stdout).toContain('0 fixture string(s)');
+
+      const fixtureOnly = 'fixture_only_pull_request';
+      await ws.fixture('run-detail', document(fixtureOnly));
+      await ws.output('main-ABC123.js', `const ref=${JSON.stringify(fixtureOnly)};`);
+      const leaked = ws.run();
+      expect(leaked.status).toBe(1);
+      expect(leaked.stderr).toContain(fixtureOnly);
+    },
+  );
+
+  it('still_scans_pull_request_outside_its_contract_enum_members', async () => {
+    const ws = await workspace();
+    await ws.fixture('run-detail', { body: { name: 'pull_request' } });
+    await ws.output('main-ABC123.js', 'const name="pull_request";');
+    const leaked = ws.run();
+    expect(leaked.status).toBe(1);
+    expect(leaked.stderr).toContain('pull_request');
+  });
+
+  it('keeps_the_too_large_fixture_disjoint_from_production_error_codes', async () => {
+    const ws = await workspace();
+    const input = new URL(
+      '../../../fixtures/web-api/run-create-too-large/input.json',
+      import.meta.url,
+    );
+    await ws.fixture('run-create-too-large', JSON.parse(await readFile(input, 'utf8')));
+    await ws.output('main-ABC123.js', 'const code="payload_too_large";');
+    expect(ws.run().status).toBe(0);
+  });
+
+  it('still_scans_error_detail_reasons_instead_of_exempting_error_codes_globally', async () => {
+    const ws = await workspace();
+    await ws.fixture('run-create-too-large', {
+      body: { error: { code: 'payload_too_large', details: [{ reason: 'payload_too_large' }] } },
+    });
+    await ws.output('main-ABC123.js', 'const code="payload_too_large";');
+    const leaked = ws.run();
+    expect(leaked.status).toBe(1);
+    expect(leaked.stderr).toContain('payload_too_large');
   });
 });

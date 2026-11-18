@@ -63,6 +63,7 @@ import {
 } from './fixture-catalog';
 import { FIXTURE_REQUEST_LOG, type FixtureCallRecord } from './fixture-request-log';
 import { findRetentionFixture } from './fixture-retention';
+import { RunCancelFixtureScenario } from './fixture-run-cancel';
 import {
   apiRelativePath,
   matchFixtureRoute,
@@ -71,8 +72,12 @@ import {
   type FixtureRoute,
 } from './fixture-routes';
 import { findSettingsRetentionWriteFixture } from './fixture-settings-permissions';
+import { findCatalogOwnerPermissionsFixture } from './fixture-catalog-owner-permissions';
 import { FixtureToggles } from './fixture-toggles';
 import { findUsageSummaryFixture } from './fixture-usage-summary';
+import { securityEventsBody } from './fixture-security-events';
+import { caseListFixtureBody } from './fixture-case-list';
+import { findBulkCaseListFixture } from './fixture-case-list-bulk';
 
 /** Response header naming the corpus directory that answered; also a production-leak marker. */
 export const FIXTURE_RESPONSE_HEADER = 'X-Evidgate-Fixture';
@@ -144,6 +149,8 @@ function wireBody(body: unknown, responseType: string, contentType: string): unk
 
 // Filter the selected fixture page without consuming its continuation; filtered pages may be empty.
 function listDecisionBody(entry: FixtureEntry, request: HttpRequest<unknown>): unknown {
+  if (entry.document.operation_id === 'listSecurityEvents')
+    return securityEventsBody(entry, request);
   const decision = queryParameter(request.urlWithParams, 'decision');
   if (
     entry.document.operation_id !== 'listRuns' ||
@@ -213,6 +220,7 @@ function recordRequest(request: HttpRequest<unknown>): void {
 export class FixtureHttpBackend implements HttpBackend {
   private readonly toggles: FixtureToggles = inject(FixtureToggles);
   private readonly retentionPolicies = new Map<string, RetentionPolicy>();
+  private readonly runCancellation = new RunCancelFixtureScenario();
 
   handle(request: HttpRequest<unknown>): Observable<HttpEvent<unknown>> {
     recordRequest(request);
@@ -232,7 +240,9 @@ export class FixtureHttpBackend implements HttpBackend {
     return this.respond(
       request,
       entry.document.status,
-      listDecisionBody(entry, request),
+      entry.document.operation_id === 'listCases'
+        ? caseListFixtureBody(entry, request)
+        : listDecisionBody(entry, request),
       fixtureHeaders(entry),
       Math.max(0, latency),
     );
@@ -242,6 +252,13 @@ export class FixtureHttpBackend implements HttpBackend {
     request: HttpRequest<unknown>,
     relativePath: string,
   ): FixtureEntry | undefined {
+    const cancellation = this.runCancellation.entry(
+      request,
+      relativePath,
+      this.toggles.variantFor('getRun'),
+      this.toggles.variantFor('cancelRun'),
+    );
+    if (cancellation !== undefined) return cancellation;
     const retention = /^\/projects\/([^/]+)\/retention$/.exec(relativePath);
     if (retention?.[1] && (request.method === 'GET' || request.method === 'PUT')) {
       const operation = request.method === 'GET' ? 'getRetentionPolicy' : 'setRetentionPolicy';
@@ -268,6 +285,16 @@ export class FixtureHttpBackend implements HttpBackend {
         this.toggles.variantFor('listPermissions'),
       );
       if (supplemental !== undefined) return supplemental;
+      const catalogOwner = findCatalogOwnerPermissionsFixture(
+        this.toggles.variantFor('listPermissions'),
+      );
+      if (catalogOwner !== undefined) return catalogOwner;
+    }
+    // The catalogue's 200-row threshold is reviewed on a computed page, like usage summary: the
+    // variant names no corpus file, and every other toggle still answers its directory.
+    if (request.method === 'GET' && /^\/projects\/[^/]+\/cases$/.test(relativePath)) {
+      const bulk = findBulkCaseListFixture(this.toggles.variantFor('listCases'));
+      if (bulk !== undefined) return bulk;
     }
     const route = matchFixtureRoute(request.method, relativePath);
     return route === undefined ? undefined : this.selectEntry(route, relativePath, request);

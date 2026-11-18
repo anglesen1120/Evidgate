@@ -9687,6 +9687,199 @@
           <context context-type="linenumber">79</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="settings.security.type-auth" datatype="html"><source>Authentication failure</source></trans-unit>
+      <trans-unit id="settings.security.type-cross-tenant" datatype="html"><source>Cross-tenant access probe</source></trans-unit>
+      <trans-unit id="settings.security.type-scanner" datatype="html"><source>Secret scanner alert</source></trans-unit>
+      <trans-unit id="settings.security.type-kill-switch" datatype="html"><source>Kill switch used</source></trans-unit>
+      <trans-unit id="settings.security.type-support" datatype="html"><source>Flagged support access</source></trans-unit>
+      <trans-unit id="settings.security.severity-info" datatype="html"><source>Info</source></trans-unit>
+      <trans-unit id="settings.security.severity-warning" datatype="html"><source>Warning</source></trans-unit>
+      <trans-unit id="settings.security.severity-critical" datatype="html"><source>Critical</source></trans-unit>
+      <trans-unit id="settings.security.page-summary" datatype="html"><source>Page <x id="page" equiv-text="formatNumber(this.store.pageIndex() + 1, this.locale)"/> · <x id="rows" equiv-text="formatNumber(this.store.rows().length, this.locale)"/> visible events on this page.</source></trans-unit>
+      <trans-unit id="settings.security.title" datatype="html"><source>Security events</source></trans-unit>
+      <trans-unit id="settings.security.description" datatype="html"><source>Inspect authorized security metadata across the organization. Event records are read-only; times are shown in UTC.</source></trans-unit>
+      <trans-unit id="settings.security.boundary" datatype="html"><source>Metadata only. Severity is supplied by the server, not a security certification. Cross-tenant targets and attempted secrets are not disclosed.</source></trans-unit>
+      <trans-unit id="settings.security.filters" datatype="html"><source>Filter activity</source></trans-unit>
+      <trans-unit id="settings.security.project" datatype="html"><source>Project id</source></trans-unit>
+      <trans-unit id="settings.security.project-hint" datatype="html"><source>Optional exact project UUID. Leave blank for all projects.</source></trans-unit>
+      <trans-unit id="settings.security.type" datatype="html"><source>Event type</source></trans-unit>
+      <trans-unit id="settings.security.severity" datatype="html"><source>Severity</source></trans-unit>
+      <trans-unit id="settings.security.all-types" datatype="html"><source>All V1 event types</source></trans-unit>
+      <trans-unit id="settings.security.all-severities" datatype="html"><source>All severities</source></trans-unit>
+      <trans-unit id="settings.security.from" datatype="html"><source>From (inclusive)</source></trans-unit>
+      <trans-unit id="settings.security.to" datatype="html"><source>To (exclusive)</source></trans-unit>
+      <trans-unit id="settings.security.time-hint" datatype="html"><source>Enter local times; results use UTC. The upper bound is exclusive.</source></trans-unit>
+      <trans-unit id="settings.security.invalid" datatype="html"><source>Enter valid dates with From earlier than To.</source></trans-unit>
+      <trans-unit id="settings.security.apply" datatype="html"><source>Apply filters</source></trans-unit>
+      <trans-unit id="settings.security.clear" datatype="html"><source>Clear filters</source></trans-unit>
+      <trans-unit id="settings.security.loading" datatype="html"><source>Loading security events…</source></trans-unit>
+      <trans-unit id="settings.security.empty" datatype="html"><source>No security events recorded</source></trans-unit>
+      <trans-unit id="settings.security.empty-description" datatype="html"><source>Recorded V1 security events will appear here.</source></trans-unit>
+      <trans-unit id="settings.security.no-match" datatype="html"><source>No results match these filters</source></trans-unit>
+      <trans-unit id="settings.security.no-match-description" datatype="html"><source>Clear or change the filters to inspect another scope or time range.</source></trans-unit>
+      <trans-unit id="settings.security.previous" datatype="html"><source>Previous page</source></trans-unit>
+      <trans-unit id="settings.security.next" datatype="html"><source>Next page</source></trans-unit>
+      <trans-unit id="settings.security.page-size" datatype="html"><source>Rows per page</source></trans-unit>
+      <trans-unit id="settings.security.pagination" datatype="html"><source>Security activity pages</source></trans-unit>
+      <trans-unit id="settings.security.capped" datatype="html"><source>Browsing limit reached. Narrow the filters to review older activity.</source></trans-unit>
+      <trans-unit id="settings.security.hidden" datatype="html"><source>Injection-attempt events are not displayed in this V1 view. A page may contain no visible V1 events; continue to the next page when available.</source></trans-unit>
+      <trans-unit id="settings.security.unresolved" datatype="html"><source>The request did not complete. Try again.</source></trans-unit>
+      <trans-unit id="settings.security.caption" datatype="html"><source>Recent security activity · newest first</source></trans-unit>
+      <trans-unit id="settings.security.time" datatype="html"><source>Time (UTC)</source></trans-unit>
+      <trans-unit id="settings.security.actor" datatype="html"><source>Principal</source></trans-unit>
+      <trans-unit id="settings.security.details" datatype="html"><source>Inspect event</source></trans-unit>
+      <trans-unit id="settings.security.id" datatype="html"><source>Event id</source></trans-unit>
+      <trans-unit id="settings.security.request" datatype="html"><source>Request id</source></trans-unit>
+      <trans-unit id="settings.security.metadata" datatype="html"><source>Event metadata</source></trans-unit>
+      <trans-unit id="settings.security.no-project" datatype="html"><source>No project</source></trans-unit>
+      <trans-unit id="settings.security.unavailable" datatype="html"><source>Not available</source></trans-unit>
+      <trans-unit id="settings.security.support" datatype="html"><source>Support access</source></trans-unit>
+      <trans-unit id="settings.security.support-description" datatype="html"><source>Flagged platform staff access. Recorded grant metadata is listed below; expiry is not supplied by this endpoint.</source></trans-unit>
+      <trans-unit id="catalog.title" datatype="html"><source>Test catalog</source></trans-unit>
+      <trans-unit id="catalog.description" datatype="html"><source>Browse stable automated test identities in this project. A missing identity is not a failed test.</source></trans-unit>
+      <trans-unit id="catalog.filters" datatype="html"><source>Filter test identities</source></trans-unit>
+      <trans-unit id="catalog.filter-hint" datatype="html"><source>Status and framework filter the server list. Search matches name or ID in this page only; it never loads additional pages.</source></trans-unit>
+      <trans-unit id="catalog.status" datatype="html"><source>Status</source></trans-unit>
+      <trans-unit id="catalog.framework" datatype="html"><source>Framework</source></trans-unit>
+      <trans-unit id="catalog.framework-hint" datatype="html"><source>Exact framework name, for example playwright. Leave blank for all frameworks.</source></trans-unit>
+      <trans-unit id="catalog.search" datatype="html"><source>Search name or ID in this page</source></trans-unit>
+      <trans-unit id="catalog.all" datatype="html"><source>Active and missing</source></trans-unit>
+      <trans-unit id="catalog.active" datatype="html"><source>Active</source></trans-unit>
+      <trans-unit id="catalog.missing" datatype="html"><source>Missing</source></trans-unit>
+      <trans-unit id="catalog.archived" datatype="html"><source>Archived</source></trans-unit>
+      <trans-unit id="catalog.apply" datatype="html"><source>Apply filters</source></trans-unit>
+      <trans-unit id="catalog.clear" datatype="html"><source>Clear filters</source></trans-unit>
+      <trans-unit id="catalog.loading" datatype="html"><source>Loading test identities…</source></trans-unit>
+      <trans-unit id="catalog.empty-title" datatype="html"><source>No test identities in this project</source></trans-unit>
+      <trans-unit id="catalog.empty-description" datatype="html"><source>Test identities appear here after catalog ingestion. No test outcome is inferred from an empty catalog.</source></trans-unit>
+      <trans-unit id="catalog.no-match-title" datatype="html"><source>No matching identities in this page</source></trans-unit>
+      <trans-unit id="catalog.no-match-description" datatype="html"><source>Clear the filters to return to the supplied page. A local search does not inspect unloaded results.</source></trans-unit>
+      <trans-unit id="catalog.search-no-results" datatype="html"><source>No matching identities in this page.</source></trans-unit>
+      <trans-unit id="catalog.search-results" datatype="html"><source>Matching identities in this page: <x id="INTERPOLATION" equiv-text="{{ store.visibleRows().length | number }}"/></source></trans-unit>
+      <trans-unit id="catalog.more" datatype="html"><source>More results exist. Only this response page is shown.</source></trans-unit>
+      <trans-unit id="catalog.contract-note" datatype="html"><source>Owner is shown as a membership ID. This list does not supply revision, platform, level, purpose or rename history; these columns are not displayed.</source></trans-unit>
+      <trans-unit id="catalog.table-caption" datatype="html"><source>Test identities in this page</source></trans-unit>
+      <trans-unit id="catalog.column-identity" datatype="html"><source>Identity / name</source></trans-unit>
+      <trans-unit id="catalog.stable-id" datatype="html"><source>Stable identity</source></trans-unit>
+      <trans-unit id="catalog.case-id" datatype="html"><source>Case ID</source></trans-unit>
+      <trans-unit id="catalog.owner" datatype="html"><source>Owner membership</source></trans-unit>
+      <trans-unit id="catalog.unassigned" datatype="html"><source>Unassigned</source></trans-unit>
+      <trans-unit id="catalog.unresolved" datatype="html"><source>The catalog request did not complete. Try again.</source></trans-unit>
+      <trans-unit id="catalog.loaded-filter-hint" datatype="html"><source>Status and framework filter the server list. Search matches name or ID in loaded results only; it never loads more results.</source></trans-unit>
+      <trans-unit id="catalog.loaded-search" datatype="html"><source>Search name or ID in loaded results</source></trans-unit>
+      <trans-unit id="catalog.loaded-no-match-title" datatype="html"><source>No matching identities in loaded results</source></trans-unit>
+      <trans-unit id="catalog.loaded-no-match-description" datatype="html"><source>Clear the filters to return to loaded results, or load more identities below. Local search does not inspect unloaded results.</source></trans-unit>
+      <trans-unit id="catalog.available-fields-note" datatype="html"><source>This list does not supply revision, platform, level, purpose or rename history; these columns are not displayed.</source></trans-unit>
+      <trans-unit id="catalog.pagination" datatype="html"><source>Catalog pagination</source></trans-unit>
+      <trans-unit id="catalog.page-size" datatype="html"><source>Page size</source></trans-unit>
+      <trans-unit id="catalog.load-more" datatype="html"><source>Load more</source></trans-unit>
+      <trans-unit id="catalog.loading-more" datatype="html"><source>Loading more identities…</source></trans-unit>
+      <trans-unit id="catalog.load-more-failed" datatype="html"><source>More identities could not be loaded. Loaded results are unchanged.</source></trans-unit>
+      <trans-unit id="catalog.retry-more" datatype="html"><source>Retry loading more</source></trans-unit>
+      <trans-unit id="catalog.owners-loading" datatype="html"><source>Loading owner choices…</source></trans-unit>
+      <trans-unit id="catalog.owners-failed" datatype="html"><source>Owner choices could not be loaded. Existing ownership is unchanged.</source></trans-unit>
+      <trans-unit id="catalog.retry-owners" datatype="html"><source>Retry owner choices</source></trans-unit>
+      <trans-unit id="catalog.owner-permission-reason" datatype="html"><source>case:write is required to assign an owner.</source></trans-unit>
+      <trans-unit id="catalog.owner-narrow-reason" datatype="html"><source>Assign owners on a screen at least 768 pixels wide. Owner details remain readable here.</source></trans-unit>
+      <trans-unit id="catalog.owner-choices-hint" datatype="html"><source>Choose an active member by email. Clearing an owner is not supported.</source></trans-unit>
+      <trans-unit id="catalog.loaded-count" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> loaded</source></trans-unit>
+      <trans-unit id="catalog.loaded-count-live" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> loaded</source></trans-unit>
+      <trans-unit id="catalog.loaded-search-no-results" datatype="html"><source>No matching identities in loaded results.</source></trans-unit>
+      <trans-unit id="catalog.loaded-search-results" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ store.visibleRows().length | number }}"/> matching identities in loaded results.</source></trans-unit>
+      <trans-unit id="catalog.loaded-table-caption" datatype="html"><source>Loaded test identities</source></trans-unit>
+      <trans-unit id="catalog.owner-label" datatype="html"><source>Owner</source></trans-unit>
+      <trans-unit id="catalog.owner-saving" datatype="html"><source>Saving owner…</source></trans-unit>
+      <trans-unit id="catalog.owner-reload" datatype="html"><source>Reload to retry</source></trans-unit>
+      <trans-unit id="catalog.owner-denied" datatype="html"><source>Owner permission was refused. The previous owner is restored. Check permission, then reload to retry.</source></trans-unit>
+      <trans-unit id="catalog.owner-conflict" datatype="html"><source>The case changed. The previous owner is restored. Reload the list, then choose the owner again.</source></trans-unit>
+      <trans-unit id="catalog.owner-failed" datatype="html"><source>The owner could not be saved. The previous owner is restored. Reload to retry.</source></trans-unit>
+      <trans-unit id="catalog.owner-for" datatype="html"><source>Owner for <x id="name" equiv-text="name"/></source></trans-unit>
+      <trans-unit id="catalog.owner-unknown" datatype="html"><source>Member details unavailable</source></trans-unit>
+      <trans-unit id="catalog.owners-empty" datatype="html"><source>No active members are available to assign. Existing ownership is unchanged.</source></trans-unit>
+      <trans-unit id="catalog.members-unresolved" datatype="html"><source>The member names did not load. The owner is shown by id.</source></trans-unit>
+      <trans-unit id="catalog.owner-forbidden" datatype="html"><source>Your role cannot change a case owner.</source></trans-unit>
+      <trans-unit id="catalog.owner-required" datatype="html"><source>A case owner is required; the contract cannot clear it.</source></trans-unit>
+      <trans-unit id="catalog.cursor-repeated" datatype="html"><source>The catalog handed back the page it was asked for. Reload the list.</source></trans-unit>
+      <trans-unit id="catalog.page-repeated" datatype="html"><source>The next catalog page held no new case. Reload the list.</source></trans-unit>
+      <trans-unit id="catalog.owner-reload-required" datatype="html"><source>Owner change was not confirmed. Reload the list to see the stored owner.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.action" datatype="html"><source>Cancel run</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.title" datatype="html"><source>Request run cancellation?</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.description" datatype="html"><source>This records a cancellation request. Collection can become canceled before execution stops. Existing attempts and evidence are kept.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.run" datatype="html"><source>Run</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.reason" datatype="html"><source>Reason (optional)</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.reason-hint" datatype="html"><source>Up to 1,000 characters. The reason is stored exactly as entered.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.reason-blank" datatype="html"><source>Enter a reason or leave the field empty. A reason cannot contain only spaces.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.reason-long" datatype="html"><source>Use at most 1,000 characters.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.frozen" datatype="html"><source>Retries keep the same reason and request key. Close this dialog to start a different request.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.keep" datatype="html"><source>Keep run</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.close" datatype="html"><source>Close</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.confirm" datatype="html"><source>Record cancel request</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.submitting" datatype="html"><source>Recording cancel request…</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.no-permission" datatype="html"><source>Canceling this run requires run:cancel permission in this project.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.terminal" datatype="html"><source>This run is already terminal. No cancellation is needed.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.desktop" datatype="html"><source>Use a desktop-sized window to cancel a run.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.recorded" datatype="html"><source>202 · Cancel request recorded. Waiting for collection state; this does not mean execution has stopped.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.canceled" datatype="html"><source>202 · Cancel request recorded. Collection state is canceled; execution may still be stopping.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.completed" datatype="html"><source>202 · Cancel request recorded. The run reached a terminal collection state other than canceled. No further automatic refresh is needed.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.waiting" datatype="html"><source>202 · Cancel request recorded. Automatic refresh paused after 15 checks. Refresh state to check again; this does not send another cancel request.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.poll-error" datatype="html"><source>202 · Cancel request recorded, but collection state could not be refreshed. The run is not confirmed canceled.</source></trans-unit>
+      <trans-unit id="runs.actions.cancel.check" datatype="html"><source>Refresh collection state</source></trans-unit>
+      <trans-unit id="runs.actions.create.title" datatype="html"><source>Create run</source></trans-unit>
+      <trans-unit id="runs.actions.create.description" datatype="html"><source>Create a queued run from an existing manifest. Execution stays on your CI or agent infrastructure.</source></trans-unit>
+      <trans-unit id="runs.actions.create.manifest" datatype="html"><source>Manifest ID</source></trans-unit>
+      <trans-unit id="runs.actions.create.manifest-hint" datatype="html"><source>Use the ID of a manifest uploaded to this project. Its suite and environment revisions are pinned when the run is created.</source></trans-unit>
+      <trans-unit id="runs.actions.create.release" datatype="html"><source>Release ID (optional)</source></trans-unit>
+      <trans-unit id="runs.actions.create.release-hint" datatype="html"><source>Bind by ID to an active release in this project. Release names are not supported.</source></trans-unit>
+      <trans-unit id="runs.actions.create.purpose" datatype="html"><source>Purpose</source></trans-unit>
+      <trans-unit id="runs.actions.create.regular" datatype="html"><source>Regular</source></trans-unit>
+      <trans-unit id="runs.actions.create.replay" datatype="html"><source>Replay</source></trans-unit>
+      <trans-unit id="runs.actions.create.replay-hint" datatype="html"><source>Replay currently returns replay_grant_invalid because replay grants are not available. A replay cannot bind to a release.</source></trans-unit>
+      <trans-unit id="runs.actions.create.grant" datatype="html"><source>Replay grant ID (optional)</source></trans-unit>
+      <trans-unit id="runs.actions.create.ref" datatype="html"><source>Ref identity (optional)</source></trans-unit>
+      <trans-unit id="runs.actions.create.ref-hint" datatype="html"><source>Body-supplied identity is recorded as unverified. Verified CI claims take precedence.</source></trans-unit>
+      <trans-unit id="runs.actions.create.kind" datatype="html"><source>Ref kind (optional)</source></trans-unit>
+      <trans-unit id="runs.actions.create.none" datatype="html"><source>Not supplied</source></trans-unit>
+      <trans-unit id="runs.actions.create.branch" datatype="html"><source>Branch</source></trans-unit>
+      <trans-unit id="runs.actions.create.tag" datatype="html"><source>Tag</source></trans-unit>
+      <trans-unit id="runs.actions.create.pull-request" datatype="html"><source>Pull request</source></trans-unit>
+      <trans-unit id="runs.actions.create.ref-name" datatype="html"><source>Ref name (optional)</source></trans-unit>
+      <trans-unit id="runs.actions.create.pr-number" datatype="html"><source>Pull request number</source></trans-unit>
+      <trans-unit id="runs.actions.create.head-sha" datatype="html"><source>Head commit SHA (optional)</source></trans-unit>
+      <trans-unit id="runs.actions.create.base-sha" datatype="html"><source>Base commit SHA (optional)</source></trans-unit>
+      <trans-unit id="runs.actions.create.trigger" datatype="html"><source>Trigger event (optional)</source></trans-unit>
+      <trans-unit id="runs.actions.create.push" datatype="html"><source>Push</source></trans-unit>
+      <trans-unit id="runs.actions.create.schedule" datatype="html"><source>Schedule</source></trans-unit>
+      <trans-unit id="runs.actions.create.manual" datatype="html"><source>Manual</source></trans-unit>
+      <trans-unit id="runs.actions.create.dispatch" datatype="html"><source>Dispatch</source></trans-unit>
+      <trans-unit id="runs.actions.create.fork" datatype="html"><source>Run originates from a fork</source></trans-unit>
+      <trans-unit id="runs.actions.create.components" datatype="html"><source>Build identifiers (optional JSON object)</source></trans-unit>
+      <trans-unit id="runs.actions.create.components-hint" datatype="html"><source>Supply component build identifiers as a JSON object, or leave empty.</source></trans-unit>
+      <trans-unit id="runs.actions.create.dismiss" datatype="html"><source>Cancel</source></trans-unit>
+      <trans-unit id="runs.actions.create.submitting" datatype="html"><source>Creating run…</source></trans-unit>
+      <trans-unit id="runs.actions.create.forbidden" datatype="html"><source>You need the run:create permission to create a run.</source></trans-unit>
+      <trans-unit id="runs.actions.create.narrow" datatype="html"><source>Use a wider screen to create a run.</source></trans-unit>
+      <trans-unit id="runs.actions.create.scope-changed" datatype="html"><source>The organization or project changed. Close this dialog and reopen it in the intended project.</source></trans-unit>
+      <trans-unit id="runs.actions.create.failed" datatype="html"><source>Run was not confirmed</source></trans-unit>
+      <trans-unit id="runs.actions.create.required" datatype="html"><source>Enter a manifest ID.</source></trans-unit>
+      <trans-unit id="runs.actions.create.uuid" datatype="html"><source>Enter a valid UUID.</source></trans-unit>
+      <trans-unit id="runs.actions.create.ref-length" datatype="html"><source>Use no more than 255 characters for the ref name.</source></trans-unit>
+      <trans-unit id="runs.actions.create.positive-integer" datatype="html"><source>Enter a whole pull request number of at least 1.</source></trans-unit>
+      <trans-unit id="runs.actions.create.sha" datatype="html"><source>Use 40 or 64 lowercase hexadecimal characters.</source></trans-unit>
+      <trans-unit id="runs.actions.create.json" datatype="html"><source>Enter a valid JSON object.</source></trans-unit>
+      <trans-unit id="runs.actions.create.grant-purpose" datatype="html"><source>A replay grant can only be supplied for a replay run.</source></trans-unit>
+      <trans-unit id="runs.actions.create.conflict" datatype="html"><source>This intent key belongs to a different request. Review and change the inputs, or close and reopen the dialog for a new intent.</source></trans-unit>
+      <trans-unit id="runs.actions.create.not-found" datatype="html"><source>The manifest or release was not found in this project. Check the IDs and your access.</source></trans-unit>
+      <trans-unit id="runs.actions.create.too-large" datatype="html"><source>The request exceeds the 64 KiB limit. Reduce the build identifiers and try again.</source></trans-unit>
+      <trans-unit id="runs.actions.create.manifest-invalid" datatype="html"><source>The manifest refers to an unavailable suite or environment revision. Choose another manifest.</source></trans-unit>
+      <trans-unit id="runs.actions.create.execution-conflict" datatype="html"><source>The manifest contains conflicting execution keys. Upload a corrected manifest.</source></trans-unit>
+      <trans-unit id="runs.actions.create.release-unresolvable" datatype="html"><source>A release name cannot be resolved. Use an active release ID instead.</source></trans-unit>
+      <trans-unit id="runs.actions.create.release-not-active" datatype="html"><source>The release is not active. Choose an active release or leave the release ID empty.</source></trans-unit>
+      <trans-unit id="runs.actions.create.fork-not-bindable" datatype="html"><source>A fork run cannot bind to a release. Remove the release ID.</source></trans-unit>
+      <trans-unit id="runs.actions.create.replay-grant-invalid" datatype="html"><source>The replay grant is unavailable or invalid. Replay grants are not available yet.</source></trans-unit>
+      <trans-unit id="runs.actions.create.replay-release" datatype="html"><source>A replay run cannot bind to a release. Remove the release ID.</source></trans-unit>
+      <trans-unit id="runs.actions.create.invalid" datatype="html"><source>Review the fields identified below and correct the request.</source></trans-unit>
+      <trans-unit id="runs.actions.create.cap" datatype="html"><source>The manifest exceeds an ingestion limit. Reduce its executions or variants and upload a corrected manifest.</source></trans-unit>
+      <trans-unit id="runs.actions.create.uncertain" datatype="html"><source>The response was not received. Retry without changing the inputs to reuse the same key and avoid a duplicate run.</source></trans-unit>
     </body>
   </file>
 </xliff>

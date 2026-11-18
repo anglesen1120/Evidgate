@@ -22,6 +22,10 @@ import { SecretsPage } from '../../features/settings/secrets/secrets.page';
 import { ApiTokensPage } from '../../features/settings/api-tokens/api-tokens.page';
 // eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the review-only route loads the real composition screen.
 import { SuiteCompositionComponent } from '../../features/suites/composition/suite-composition.component';
+// eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the review-only route loads the real security view; production core never imports it.
+import { SecurityEventsPage } from '../../features/settings/security/security-events.page';
+// eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the real review-only catalog page.
+import { CaseListPage } from '../../features/catalog/case-list.page';
 import { ShellComponent } from '../../shell/layout/shell.component';
 import { authGuard, orgScopeGuard, projectScopeGuard } from '../guards';
 import { devRoutes } from './dev-routes.fixtures';
@@ -30,7 +34,7 @@ describe('dev routes (review only)', () => {
   it('mounts the shared UI gallery on one lazy route', () => {
     const table = devRoutes();
 
-    expect(table).toHaveLength(7);
+    expect(table).toHaveLength(9);
     expect(table[0]?.path).toBe('dev/ui-gallery');
     // A lazy boundary, so the production graph never reaches the gallery through this file.
     expect(table[0]?.component).toBeUndefined();
@@ -70,6 +74,19 @@ describe('dev routes (review only)', () => {
     const load = org?.loadComponent;
     if (!load) throw new Error('No API tokens review route');
     expect(await load()).toBe(ApiTokensPage);
+  });
+
+  it('mounts the real Security events page behind authenticated org and read gates, review-only', async () => {
+    const route = devRoutes().find((entry) => entry.path === 'dev/settings-security-events');
+    expect(route?.component).toBe(ShellComponent);
+    const org = route?.children?.[0];
+    expect(org?.path).toBe('orgs/:orgId');
+    expect(org?.canMatch?.slice(0, 2)).toEqual([authGuard, orgScopeGuard]);
+    expect(org?.canMatch).toHaveLength(4);
+    expect(org?.data?.['pageHeadingLevel']).toBe(1);
+    const load = org?.loadComponent;
+    if (!load) throw new Error('No Security events review route');
+    expect(await load()).toBe(SecurityEventsPage);
   });
 
   it('mounts the real Policy page under the normal authenticated org shell, review-only', async () => {
@@ -145,5 +162,18 @@ describe('dev routes (review only)', () => {
     )?.loadComponent;
     if (leaf === undefined) throw new Error('no lazy suite composition review route');
     expect(await leaf()).toBe(SuiteCompositionComponent);
+  });
+  it('mounts the catalog list under authenticated org, project and read gates', async () => {
+    const route = devRoutes().find((entry) => entry.path === 'dev/catalog-list');
+    expect(route?.component).toBe(ShellComponent);
+    const org = route?.children?.[0];
+    expect(org?.canMatch).toEqual([authGuard, orgScopeGuard]);
+    const project = org?.children?.[0];
+    expect(project?.path).toBe('projects/:projectId');
+    expect(project?.canMatch?.[0]).toBe(projectScopeGuard);
+    expect(project?.canMatch).toHaveLength(2);
+    const load = project?.loadComponent;
+    if (!load) throw new Error('No lazy catalog review route');
+    expect(await load()).toBe(CaseListPage);
   });
 });

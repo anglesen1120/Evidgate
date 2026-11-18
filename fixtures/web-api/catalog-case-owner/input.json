@@ -1,0 +1,29 @@
+{
+  "operation_id": "updateCase",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000ca20",
+    "ETag": "\"4\""
+  },
+  "latency_ms": 0,
+  "body": {
+    "id": "018f0000-0000-7000-8000-00000000ca01",
+    "org_id": "018f0000-0000-7000-8000-000000000001",
+    "project_id": "018f0000-0000-7000-8000-000000000011",
+    "annotation_id": "018f0000-0000-7000-8000-0000000c0017",
+    "name": "Checkout confirms order",
+    "framework": "playwright",
+    "language": "typescript",
+    "file_path": "tests/checkout.spec.ts",
+    "status": "active",
+    "owner_membership_id": "018f0000-0000-7000-8000-0000000000c2",
+    "labels": [],
+    "first_seen_commit": "9af317c",
+    "last_seen_commit": "9af317c",
+    "created_at": "2026-10-20T08:00:00Z",
+    "updated_at": "2026-10-21T09:15:00Z",
+    "version": 4,
+    "requirement_ref": null
+  }
+}

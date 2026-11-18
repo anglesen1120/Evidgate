@@ -105,7 +105,9 @@ export interface FixtureRoute {
    * The value is compared against the `cursor` a catalog row declares for the page it holds, so a
    * cursor-paged list shows a second page only for the cursor the previous page actually named.
    * Absent on every route whose document does not depend on a query parameter — which is all of
-   * them but `listCiBindings` and `listRuns`; the module comment holds the rule.
+   * them but `listCiBindings`, `listRuns` and `listCases`; the module comment holds the rule. The
+   * catalog walk (`catalog-cases-list` → `catalog-cases-page-2`) is pinned in
+   * `fixture-case-list.spec.ts`, beside the filter rules that page also answers.
    */
   readonly cursorQueryParameter?: string;
 }
@@ -123,6 +125,19 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   { operationId: 'createProject', method: 'POST', path: '/orgs/{o}/projects' },
   { operationId: 'listProjects', method: 'GET', path: '/orgs/{o}/projects' },
   { operationId: 'getProject', method: 'GET', path: '/projects/{p}' },
+  {
+    operationId: 'listSecurityEvents',
+    method: 'GET',
+    path: '/orgs/{o}/security-events',
+    cursorQueryParameter: 'cursor',
+  },
+  {
+    operationId: 'listCases',
+    method: 'GET',
+    path: '/projects/{p}/cases',
+    cursorQueryParameter: 'cursor',
+  },
+  { operationId: 'updateCase', method: 'PATCH', path: '/cases/{c}' },
   { operationId: 'createCiBinding', method: 'POST', path: '/projects/{p}/ci-bindings' },
   {
     operationId: 'listCiBindings',
@@ -164,6 +179,12 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
     path: '/projects/{p}/runs',
     cursorQueryParameter: 'cursor',
   },
+  // The create beside that list: one path, two verbs, so the method is what tells them apart. Its
+  // fixed documents answer whatever body arrives (response corpus), including the 201.
+  { operationId: 'createRun', method: 'POST', path: '/projects/{p}/runs' },
+  // The cancel acknowledgement (202, no body); the run it names is never validated against the
+  // path, so one document serves every cancel.
+  { operationId: 'cancelRun', method: 'POST', path: '/runs/{r}/cancel' },
   // 09.3.1-T2: detail states are selected explicitly by variant, not inferred from the run id.
   { operationId: 'getRun', method: 'GET', path: '/runs/{r}' },
   // The run-detail decision read: its state is selected by variant (`ok` is the pending body),

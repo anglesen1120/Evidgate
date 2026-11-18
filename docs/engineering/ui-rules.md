@@ -212,11 +212,11 @@ Search here before writing UI. Paths are under `apps/web/src/app/`; test hosts a
 | Hash and revision identity | `app-hash-chip`, `app-revision-chip` | `shared/ui/chips/` |
 | Evidence, outcome and decision kept as separate fields | `app-evidence-badge`, `app-outcome-pill`, `app-decision-chip` | `shared/ui/verdict/` |
 | Labels, missing-evidence reasons, waiver notice | `app-label-chip`, `app-missing-reason-list`, `app-waiver-banner` | `shared/ui/annotations/` |
-| Tables, including the virtualised one above 200 loaded rows (UI10) | `app-data-table`, `app-data-table-cell`, `app-data-table-records`, `app-data-table-value` | `shared/ui/data-table/` |
+| Tables, including the virtualised one above 200 loaded rows (UI10) | `app-data-table` (`fixedHeightCells` opts custom single-line cells into its existing virtual viewport; `revealRow(index)` reveals a loaded row), `app-data-table-cell`, `app-data-table-records`, `app-data-table-value` | `shared/ui/data-table/` |
 | Copyable ids and formatted numbers | `app-copyable-identifier`, `app-copy-value-button`, `app-number-value` | `shared/ui/values/` |
 | Loading, empty, error, forbidden, not-found and inline feedback | `app-request-state`, `app-loading-pattern`, `app-empty-pattern`, `app-error-pattern`, `app-forbidden-pattern`, `app-not-found-pattern`, `app-inline-feedback` | `shared/ui/states/` |
 | Edit conflict and `Retry-After` wait | `app-conflict-dialog`, `app-retry-after` | `shared/ui/conflict/` |
-| Page and section headers with action slots | `app-page-header`, `app-section-header`, `[appPageHeaderActions]`, `[appSectionHeaderActions]` | `shared/ui/page-header/` |
+| Page and section headers with action slots | `app-page-header` (`focusTitle()` focuses its h1), `app-section-header`, `[appPageHeaderActions]`, `[appSectionHeaderActions]` | `shared/ui/page-header/` |
 | Desktop-only mutation on a narrow viewport | `[appDesktopMutation]`, `app-desktop-required-notice` | `shared/ui/narrow/` |
 | One-time credential or value reveal with copy and dismiss | `app-connect-step-reveal` | `shared/ui/reveal/` |
 | Field feedback, form error summary, required-field note and marker | `app-field-feedback`, `app-form-error-summary`, `app-form-required-note`, `app-field-requirement` | `shared/forms/` |

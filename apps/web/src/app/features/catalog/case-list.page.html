@@ -1,0 +1,213 @@
+<app-page-header
+  class="mb-(--eg-space-7) block"
+  [title]="copy.title"
+  [description]="copy.description"
+/>
+<section
+  class="mb-(--eg-space-7) grid min-w-0 gap-(--eg-space-4)"
+  aria-labelledby="catalog-filters-heading"
+>
+  <app-section-header [titleId]="'catalog-filters-heading'" [title]="copy.filters" />
+  <p id="catalog-filter-hint" class="m-0 max-w-prose text-muted-foreground">
+    {{ copy.filterHint }}
+  </p>
+  <form
+    class="grid min-w-0 gap-(--eg-space-4)"
+    (ngSubmit)="apply()"
+    [attr.aria-describedby]="'catalog-filter-hint'"
+  >
+    <div class="grid min-w-0 gap-(--eg-space-4) md:grid-cols-2 xl:grid-cols-3">
+      <div class="grid min-w-0 content-start gap-(--eg-space-2)">
+        <label hlmLabel for="catalog-status" class="whitespace-normal">{{ copy.status }}</label>
+        <hlm-select
+          name="status"
+          [ngModel]="draft().status"
+          (ngModelChange)="updateDraft({ status: $event })"
+          [itemToString]="statusLabel"
+        >
+          <hlm-select-trigger
+            [buttonId]="'catalog-status'"
+            class="min-h-(--eg-control-touch) w-full whitespace-normal"
+          >
+            <hlm-select-value [placeholder]="copy.all" />
+          </hlm-select-trigger>
+          <hlm-select-content *hlmSelectPortal [aria-label]="copy.status">
+            @for (option of statusOptions; track option.value) {
+              <hlm-select-item
+                [value]="option.value"
+                class="min-h-(--eg-control-touch) whitespace-normal"
+                >{{ option.label }}</hlm-select-item
+              >
+            }
+          </hlm-select-content>
+        </hlm-select>
+      </div>
+      <div class="grid min-w-0 content-start gap-(--eg-space-2)">
+        <label hlmLabel for="catalog-framework" class="whitespace-normal">{{
+          copy.framework
+        }}</label>
+        <input
+          hlmInput
+          id="catalog-framework"
+          name="framework"
+          class="min-h-(--eg-control-touch) min-w-0 w-full"
+          [ngModel]="draft().framework"
+          (ngModelChange)="updateDraft({ framework: $event })"
+          [attr.aria-describedby]="'catalog-framework-hint'"
+        />
+        <p id="catalog-framework-hint" class="m-0 text-muted-foreground">
+          {{ copy.frameworkHint }}
+        </p>
+      </div>
+      <div class="grid min-w-0 content-start gap-(--eg-space-2)">
+        <label hlmLabel for="catalog-search" class="whitespace-normal">{{ copy.search }}</label>
+        <input
+          hlmInput
+          type="search"
+          id="catalog-search"
+          name="search"
+          class="min-h-(--eg-control-touch) min-w-0 w-full"
+          [ngModel]="draft().search"
+          (ngModelChange)="updateDraft({ search: $event })"
+        />
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-(--eg-space-3)">
+      <button
+        hlmBtn
+        type="submit"
+        class="min-h-(--eg-control-touch) whitespace-normal"
+        data-catalog-apply
+      >
+        {{ copy.apply }}
+      </button>
+      <button
+        hlmBtn
+        type="button"
+        [variant]="'outline'"
+        class="min-h-(--eg-control-touch) whitespace-normal"
+        (click)="clear()"
+        data-catalog-clear
+      >
+        {{ copy.clear }}
+      </button>
+    </div>
+  </form>
+</section>
+<p class="sr-only" role="status" data-catalog-summary>
+  @if (store.status() === 'ready') {
+    <span i18n="@@catalog.loaded-count-live">{{ store.rows().length | number }} loaded</span>
+    @if (store.isEmpty()) {
+      <span i18n="@@catalog.loaded-search-no-results"
+        >No matching identities in loaded results.</span
+      >
+    } @else {
+      <span i18n="@@catalog.loaded-search-results"
+        >{{ store.visibleRows().length | number }} matching identities in loaded results.</span
+      >
+    }
+  }
+</p>
+<app-request-state
+  [status]="store.status()"
+  [loadingLabel]="copy.loading"
+  [error]="store.loadError()"
+  [empty]="store.isEmpty()"
+  [emptyTitle]="store.isFiltered() ? copy.noMatchTitle : copy.emptyTitle"
+  [emptyDescription]="store.isFiltered() ? copy.noMatchDescription : copy.emptyDescription"
+  [emptyActionLabel]="store.isFiltered() ? copy.clear : undefined"
+  (emptyAction)="clear()"
+  [retryEligible]="store.loadError()?.retryable ?? false"
+  (retry)="store.reload()"
+>
+  <p id="catalog-owner-help" class="mb-(--eg-space-4) max-w-prose text-muted-foreground">
+    {{ ownerHelp() }}
+  </p>
+  @if (canReadMembers() && members.status() === 'error' && canAssign()) {
+    <app-inline-feedback
+      class="mb-(--eg-space-4) block"
+      [tone]="'warning'"
+      [title]="copy.ownersFailed"
+      [description]="members.failure()?.message"
+      [actionLabel]="copy.retryOwners"
+      (action)="members.reload()"
+    />
+  }
+  <app-case-list-table
+    [rows]="store.visibleRows()"
+    [members]="members.members()"
+    [membersReady]="members.status() === 'ready'"
+    [canAssign]="canAssign()"
+    [ownerPending]="store.ownerPending"
+    [ownerFailure]="store.ownerFailure"
+    (ownerChange)="assignOwner($event)"
+    (reloadOwners)="store.reloadOwner($event)"
+  />
+</app-request-state>
+@if (store.status() === 'ready') {
+  <nav
+    class="mt-(--eg-space-4) flex min-w-0 flex-wrap items-end gap-(--eg-space-4)"
+    [attr.aria-label]="copy.pagination"
+    [attr.aria-busy]="store.loadingMore()"
+    data-catalog-pagination
+  >
+    <div class="grid min-w-0 gap-(--eg-space-2)">
+      <label hlmLabel for="catalog-page-size">{{ copy.pageSize }}</label>
+      <hlm-select
+        [ngModel]="store.pageSize()"
+        (ngModelChange)="setPageSize($event)"
+        [itemToString]="pageSizeLabel"
+      >
+        <hlm-select-trigger
+          [buttonId]="'catalog-page-size'"
+          class="min-h-(--eg-control-touch) min-w-(--eg-control-touch)"
+        >
+          <hlm-select-value />
+        </hlm-select-trigger>
+        <hlm-select-content *hlmSelectPortal [aria-label]="copy.pageSize">
+          @for (size of pageSizes; track size) {
+            <hlm-select-item [value]="size" class="min-h-(--eg-control-touch)">{{
+              size | number
+            }}</hlm-select-item>
+          }
+        </hlm-select-content>
+      </hlm-select>
+    </div>
+    <p
+      #loadedSummary
+      tabindex="-1"
+      class="m-0 self-center tabular-nums text-muted-foreground focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-solid focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
+      data-catalog-loaded
+    >
+      <span i18n="@@catalog.loaded-count">{{ store.rows().length | number }} loaded</span>
+    </p>
+    @if (store.hasMore()) {
+      <button
+        hlmBtn
+        type="button"
+        [variant]="'outline'"
+        class="min-h-(--eg-control-touch) max-w-full whitespace-normal"
+        [disabled]="store.loadingMore()"
+        (click)="loadMore($event)"
+        data-catalog-load-more
+      >
+        {{ store.loadingMore() ? copy.loadingMore : copy.loadMore }}
+      </button>
+    }
+  </nav>
+  @if (store.loadMoreFailure(); as failure) {
+    <app-inline-feedback
+      class="mt-(--eg-space-4) block"
+      [tone]="'destructive'"
+      [title]="copy.loadMoreFailed"
+      [description]="failure.message"
+      [actionLabel]="failure.retryable ? copy.retryMore : undefined"
+      [actionDisabled]="store.loadingMore()"
+      (action)="loadMore()"
+      data-catalog-page-error
+    />
+  }
+  <p class="mt-(--eg-space-4) max-w-prose text-muted-foreground" data-catalog-contract-note>
+    {{ copy.contractNote }}
+  </p>
+}

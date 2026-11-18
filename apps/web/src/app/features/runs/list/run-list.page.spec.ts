@@ -1,5 +1,5 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
-import { computed, provideZonelessChangeDetection, signal } from '@angular/core';
+import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import {
   ActivatedRoute,
@@ -13,28 +13,14 @@ import { BehaviorSubject } from 'rxjs';
 import type { ApiError } from '../../../core/http/api-error';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { RunListPage } from './run-list.page';
-import { RunListStore, type RunListFilters } from './run-list.store';
+import { RunListStore } from './run-list.store';
+import {
+  emptyFilters,
+  pageStore,
+  run,
+  runCreatePageProviders,
+} from '../actions/create/create-run-list.test-support';
 
-const emptyFilters: RunListFilters = { state: '', decision: '', scope: '', refName: '' };
-const run: RunSummary = {
-  run_id: '018f0000-0000-7000-8000-000000000021',
-  state: 'complete',
-  created_at: '2026-10-27T00:00:00Z',
-  ref: {
-    kind: 'branch',
-    name: 'main',
-    pr_number: null,
-    head_sha: null,
-    base_sha: null,
-    trigger_event: 'push',
-    is_fork: false,
-  },
-  unverified_ref: false,
-  decision: null,
-  completeness: 'complete',
-  parent_run_id: null,
-  rerun_scope: null,
-};
 const failure: ApiError = {
   kind: 'unavailable',
   status: 503,
@@ -45,49 +31,6 @@ const failure: ApiError = {
   retryAfterSeconds: null,
   details: [],
 };
-
-function pageStore() {
-  const filters = signal<RunListFilters>({ ...emptyFilters });
-  const rows = signal<readonly RunSummary[]>([run]);
-  return {
-    filters,
-    rows,
-    visibleRows: rows,
-    status: signal<'idle' | 'loading' | 'ready' | 'error'>('ready'),
-    loadError: signal<ApiError | null>(null),
-    pagingError: signal<ApiError | null>(null),
-    loadingMore: signal(false),
-    hasMore: signal(false),
-    browseCapped: signal(false),
-    autoLoadCapped: signal(false),
-    refRejected: signal(false),
-    loadedCount: computed(() => rows().length),
-    isEmpty: computed(() => rows().length === 0),
-    isFiltered: computed(() => Object.values(filters()).some(Boolean)),
-    init: vi.fn((_project: string, query: Record<string, string | undefined>) => {
-      filters.set({
-        state: (query['state'] ?? '') as RunListFilters['state'],
-        decision: (query['decision'] ?? '') as RunListFilters['decision'],
-        scope: (query['scope'] ?? '') as RunListFilters['scope'],
-        refName: query['ref'] ?? '',
-      });
-    }),
-    setFilters: vi.fn((patch: Partial<RunListFilters>) =>
-      filters.update((current) => ({ ...current, ...patch })),
-    ),
-    toQuery: () =>
-      Object.fromEntries(
-        Object.entries({
-          state: filters().state,
-          decision: filters().decision,
-          scope: filters().scope,
-          ref: filters().refName,
-        }).filter(([, value]) => value !== ''),
-      ),
-    loadMore: vi.fn(),
-    reload: vi.fn(),
-  };
-}
 
 describe('RunListPage', () => {
   provideLayoutTestStubs();
@@ -115,6 +58,7 @@ describe('RunListPage', () => {
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([]),
+        ...runCreatePageProviders().providers,
         { provide: ActivatedRoute, useValue: route },
         { provide: BreakpointObserver, useValue: { observe: () => desktop.asObservable() } },
       ],
