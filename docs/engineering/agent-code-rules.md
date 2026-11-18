@@ -113,7 +113,7 @@ Legend: ✅ verified with a link · ⚠️ unverified · `[OPEN]` gate not built
 
 ## 5. Angular (`apps/web`), in addition to 00 §5.6 W1–W9
 
-The binding text of A1–A7 and W1–W9 now lives in one place: [`docs/engineering/ui-rules.md`](ui-rules.md) §Angular rules for UI work, which also holds A8–A14 and the mandatory Angular pass for every UI change. Nothing in this section is a second copy; cite the file and the rule id in a finding, and never restate a rule here.
+The binding text of A1–A7 and W1–W9 now lives in one place: [`docs/engineering/ui-rules.md`](ui-rules.md) §Angular rules for UI work, which also holds A8–A15, the shared component catalogue and the mandatory Angular pass for every UI change. Nothing in this section is a second copy; cite the file and the rule id in a finding, and never restate a rule here.
 
 ---
 
