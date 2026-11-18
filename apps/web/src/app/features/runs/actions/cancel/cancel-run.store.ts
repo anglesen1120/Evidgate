@@ -3,6 +3,7 @@ import {
   patchState,
   signalStore,
   withComputed,
+  withHooks,
   withMethods,
   withProps,
   withState,
@@ -20,6 +21,12 @@ export const CANCEL_POLL_ATTEMPTS = 15;
 type Phase =
   'idle' | 'submitting' | 'error' | 'polling' | 'canceled' | 'terminal' | 'waiting' | 'poll-error';
 type Scope = { runId: string; orgId: string; projectId: string };
+type CancelIntent = {
+  controller: AbortController | null;
+  timer: ReturnType<typeof setTimeout> | undefined;
+  key: string | null;
+  submittedReason: string | undefined;
+};
 const sameScope = (left: Scope | null, right: Scope | null): boolean =>
   left !== null &&
   right !== null &&
@@ -64,7 +71,20 @@ export const CancelRunStore = signalStore(
       const projectId = session.currentProject()?.id;
       return runId && orgId && projectId ? { runId, orgId, projectId } : null;
     });
-    return { detail, viewport, scope };
+    const intent: CancelIntent = {
+      controller: null,
+      timer: undefined,
+      key: null,
+      submittedReason: undefined,
+    };
+    return {
+      detail,
+      viewport,
+      scope,
+      _intent: intent,
+      _data: inject(RunDataService),
+      _destroyRef: inject(DestroyRef),
+    };
   }),
   withComputed((store) => ({
     phase: computed<Phase>(() =>
@@ -88,41 +108,40 @@ export const CancelRunStore = signalStore(
       );
     }),
   })),
-  withMethods((store) => {
-    const data = inject(RunDataService);
-    const destroyRef = inject(DestroyRef);
-    let controller: AbortController | null = null;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let key: string | null = null;
-    let submittedReason: string | undefined;
-    const stop = (): void => {
-      controller?.abort();
-      clearTimeout(timer);
-      timer = undefined;
-    };
-    const owned = (scope: Scope): boolean =>
-      !destroyRef.destroyed &&
-      !controller?.signal.aborted &&
-      sameScope(scope, store.scope()) &&
-      sameScope(scope, store.origin());
-    const waitToRetry = (error: ApiError): void => {
+  withMethods((store) => ({
+    _stop(): void {
+      store._intent.controller?.abort();
+      clearTimeout(store._intent.timer);
+      store._intent.timer = undefined;
+    },
+    _owned(scope: Scope): boolean {
+      return (
+        !store._destroyRef.destroyed &&
+        !store._intent.controller?.signal.aborted &&
+        sameScope(scope, store.scope()) &&
+        sameScope(scope, store.origin())
+      );
+    },
+    _waitToRetry(error: ApiError): void {
       const delay = Math.max(0, (error.retryAfterSeconds ?? 0) * 1000);
       patchState(store, { retryAllowed: error.retryable && delay === 0 });
       if (error.retryable && delay > 0) {
         const deadline = Date.now() + delay;
         const release = (): void => {
           const remaining = deadline - Date.now();
-          if (remaining > 0) timer = setTimeout(release, clampTimerDelay(remaining));
+          if (remaining > 0) store._intent.timer = setTimeout(release, clampTimerDelay(remaining));
           else patchState(store, { retryAllowed: true });
         };
-        timer = setTimeout(release, clampTimerDelay(delay));
+        store._intent.timer = setTimeout(release, clampTimerDelay(delay));
       }
-    };
+    },
+  })),
+  withMethods((store) => {
     const poll = async (scope: Scope, attempt: number): Promise<void> => {
-      if (!owned(scope)) return;
+      if (!store._owned(scope)) return;
       try {
         await store.detail.refreshRun(scope.runId);
-        if (!owned(scope)) return;
+        if (!store._owned(scope)) return;
         const state = store.detail.run()?.state;
         if (state && isTerminalRun(state)) {
           patchState(store, {
@@ -132,87 +151,102 @@ export const CancelRunStore = signalStore(
         } else if (attempt + 1 >= CANCEL_POLL_ATTEMPTS) {
           patchState(store, { actionPhase: 'waiting' });
         } else {
-          timer = setTimeout(() => {
+          store._intent.timer = setTimeout(() => {
             void poll(scope, attempt + 1);
           }, CANCEL_POLL_INTERVAL_MS);
         }
       } catch (failure: unknown) {
-        if (owned(scope)) {
+        if (store._owned(scope)) {
           const error = isApiRequestError(failure) ? failure.error : unknownFailure;
           patchState(store, { actionPhase: 'poll-error', actionError: error });
-          waitToRetry(error);
+          store._waitToRetry(error);
         }
       }
     };
-    destroyRef.onDestroy(stop);
-    effect(() => {
-      const scope = store.scope();
-      if (controller && !sameScope(store.origin(), scope)) stop();
-    });
-    return {
-      open(): void {
-        if (!store.canCancel() || !store.viewport.allowsMutation() || store.opened()) return;
-        stop();
-        controller = new AbortController();
-        key = data.newIdempotencyKey();
-        submittedReason = undefined;
-        patchState(store, {
-          origin: store.scope(),
-          dialogOpen: true,
-          actionPhase: 'idle',
-          actionError: null,
-          retryAllowed: false,
-          sent: false,
-        });
-      },
-      dismiss(): void {
-        if (store.phase() === 'submitting') return;
-        patchState(store, { dialogOpen: false });
-      },
-      async confirm(reason: string | undefined): Promise<void> {
-        const scope = store.origin();
-        if (
-          !scope ||
-          !key ||
-          !owned(scope) ||
-          !store.opened() ||
-          !store.canCancel() ||
-          !store.viewport.allowsMutation() ||
-          (store.error() && !store.retryReady())
-        )
-          return;
-        if (!store.sent()) submittedReason = reason;
-        patchState(store, {
-          actionPhase: 'submitting',
-          actionError: null,
-          sent: true,
-          retryAllowed: false,
-        });
-        try {
-          await data.cancelRun(scope.runId, submittedReason, key, controller?.signal);
-          if (!owned(scope)) return;
-          patchState(store, { actionPhase: 'polling', actionError: null });
-          await poll(scope, 0);
-        } catch (failure: unknown) {
-          if (!owned(scope)) return;
-          const error = isApiRequestError(failure) ? failure.error : unknownFailure;
-          patchState(store, { actionPhase: 'error', actionError: error });
-          waitToRetry(error);
-        }
-      },
-      async checkState(): Promise<void> {
-        const scope = store.origin();
-        if (
-          !scope ||
-          !owned(scope) ||
-          !['waiting', 'poll-error'].includes(store.phase()) ||
-          (store.error() && !store.retryReady())
-        )
-          return;
-        clearTimeout(timer);
-        patchState(store, { actionPhase: 'polling', actionError: null, retryAllowed: false });
-        await poll(scope, 0);
-      },
-    };
+    return { _poll: poll };
   }),
+  withMethods((store) => ({
+    open(): void {
+      if (!store.canCancel() || !store.viewport.allowsMutation() || store.opened()) return;
+      store._stop();
+      store._intent.controller = new AbortController();
+      store._intent.key = store._data.newIdempotencyKey();
+      store._intent.submittedReason = undefined;
+      patchState(store, {
+        origin: store.scope(),
+        dialogOpen: true,
+        actionPhase: 'idle',
+        actionError: null,
+        retryAllowed: false,
+        sent: false,
+      });
+    },
+    dismiss(): void {
+      if (store.phase() === 'submitting') return;
+      patchState(store, { dialogOpen: false });
+    },
+  })),
+  withMethods((store) => ({
+    async confirm(reason: string | undefined): Promise<void> {
+      const scope = store.origin();
+      const key = store._intent.key;
+      if (
+        !scope ||
+        !key ||
+        !store._owned(scope) ||
+        !store.opened() ||
+        !store.canCancel() ||
+        !store.viewport.allowsMutation() ||
+        (store.error() && !store.retryReady())
+      )
+        return;
+      if (!store.sent()) store._intent.submittedReason = reason;
+      patchState(store, {
+        actionPhase: 'submitting',
+        actionError: null,
+        sent: true,
+        retryAllowed: false,
+      });
+      try {
+        await store._data.cancelRun(
+          scope.runId,
+          store._intent.submittedReason,
+          key,
+          store._intent.controller?.signal,
+        );
+        if (!store._owned(scope)) return;
+        patchState(store, { actionPhase: 'polling', actionError: null });
+        await store._poll(scope, 0);
+      } catch (failure: unknown) {
+        if (!store._owned(scope)) return;
+        const error = isApiRequestError(failure) ? failure.error : unknownFailure;
+        patchState(store, { actionPhase: 'error', actionError: error });
+        store._waitToRetry(error);
+      }
+    },
+    async checkState(): Promise<void> {
+      const scope = store.origin();
+      if (
+        !scope ||
+        !store._owned(scope) ||
+        !['waiting', 'poll-error'].includes(store.phase()) ||
+        (store.error() && !store.retryReady())
+      )
+        return;
+      clearTimeout(store._intent.timer);
+      patchState(store, { actionPhase: 'polling', actionError: null, retryAllowed: false });
+      await store._poll(scope, 0);
+    },
+  })),
+  withHooks((store) => ({
+    onInit(): void {
+      effect(() => {
+        const scope = store.scope();
+        if (store._intent.controller && !sameScope(store.origin(), scope)) store._stop();
+      });
+    },
+    onDestroy(): void {
+      store._stop();
+    },
+  })),
 );

@@ -12,6 +12,7 @@ import {
   type FieldFeedback,
   type FormFeedback,
 } from '../../../../shared/forms/form-feedback';
+import { DesktopRequiredNoticeComponent } from '../../../../shared/ui/narrow/desktop-required-notice.component';
 import { InlineFeedbackComponent } from '../../../../shared/ui/states/inline-feedback.component';
 import { RequestStateComponent } from '../../../../shared/ui/states/request-state.component';
 import { CopyableIdentifierComponent } from '../../../../shared/ui/values/copyable-identifier.component';
@@ -29,6 +30,7 @@ import { CancelRunStore } from './cancel-run.store';
     HlmLabel,
     FieldFeedbackComponent,
     FormErrorSummaryComponent,
+    DesktopRequiredNoticeComponent,
     InlineFeedbackComponent,
     RequestStateComponent,
     CopyableIdentifierComponent,
@@ -56,6 +58,9 @@ import { CancelRunStore } from './cancel-run.store';
           <h2 hlmDialogTitle>{{ copy.title }}</h2>
           <p hlmDialogDescription>{{ copy.description }}</p>
         </header>
+        @if (!store.viewport.canMutate()) {
+          <app-desktop-required-notice id="run-cancel-desktop-required" />
+        }
         <app-copyable-identifier [value]="store.origin()?.runId ?? ''" [label]="copy.run" />
         <form
           class="grid min-w-0 gap-(--eg-space-5)"
@@ -112,6 +117,9 @@ import { CancelRunStore } from './cancel-run.store';
               data-run-cancel-confirm
               class="min-h-(--eg-control-touch)"
               [disabled]="!store.canCancel() || store.error() !== null"
+              [attr.aria-describedby]="
+                !store.viewport.canMutate() ? 'run-cancel-desktop-required' : null
+              "
             >
               {{ store.phase() === 'submitting' ? copy.submitting : copy.confirm }}
             </button>

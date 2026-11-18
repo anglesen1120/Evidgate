@@ -27,7 +27,7 @@ import { SessionStore } from '../../../core/session/session.store';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow';
 import { CreateRunDialogComponent } from '../actions/create/create-run-dialog.component';
 import { CREATE_RUN_COPY } from '../actions/create/create-run.copy';
-import { PageHeaderImports } from '../../../shared/ui/page-header';
+import { PageHeaderComponent, PageHeaderImports } from '../../../shared/ui/page-header';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
 import { RunListTableComponent } from './run-list-table.component';
 import { EMPTY_RUN_LIST_FILTERS, RunListStore } from './run-list.store';
@@ -102,6 +102,8 @@ export class RunListPage {
   private readonly pagingRetryButton =
     viewChild<ElementRef<HTMLButtonElement>>('pagingRetryControl');
   private readonly pagingSection = viewChild<ElementRef<HTMLElement>>('paging');
+  private readonly pageHeader = viewChild(PageHeaderComponent);
+  protected readonly focusCreateFallback = (): void => this.pageHeader()?.focusTitle();
   protected readonly copy = {
     title: $localize`:@@runs.list.title:Runs`,
     description: $localize`:@@runs.list.description:Review collection state and the latest stored decision. Open a run for evidence completeness.`,

@@ -21,6 +21,7 @@ import { CancelRunStore } from './cancel-run.store';
       data-run-cancel-trigger
       class="min-h-(--eg-control-touch)"
       [attr.aria-disabled]="!store.canCancel() ? 'true' : null"
+      [tabIndex]="store.canCancel() ? 0 : -1"
       [attr.aria-describedby]="
         disabledReason()
           ? 'run-cancel-disabled-reason'

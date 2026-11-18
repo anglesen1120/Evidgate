@@ -245,5 +245,9 @@
   </section>
 }
 @if (createTarget(); as projectId) {
-  <app-create-run-dialog [projectId]="projectId" (closed)="createTarget.set(null)" />
+  <app-create-run-dialog
+    [projectId]="projectId"
+    [focusFallback]="focusCreateFallback"
+    (closed)="createTarget.set(null)"
+  />
 }

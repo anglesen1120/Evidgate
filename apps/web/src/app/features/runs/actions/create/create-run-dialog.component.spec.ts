@@ -107,6 +107,28 @@ describe('CreateRunDialogComponent', () => {
     expect(state.navigate).not.toHaveBeenCalled();
   });
 
+  it.each(['rate_limited', 'unavailable'] as const)(
+    'shows the server wait and disables submission after a %s refusal',
+    async (kind) => {
+      state.createRun.mockRejectedValue(
+        refusal({
+          kind,
+          status: kind === 'rate_limited' ? 429 : 503,
+          retryable: true,
+          retryAfterSeconds: 60,
+        }),
+      );
+      const { dialog } = await renderCreateRun();
+      await dialog.set('manifestId', MANIFEST);
+      await dialog.submit();
+      expect(await dialog.text()).toContain('Retry after: 60 s');
+      expect(await dialog.text()).toContain('Retry available after the wait');
+      expect(await dialog.disabled()).toBe(true);
+      await dialog.submit();
+      expect(state.createRun).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it('submits the exact body, closes on 201 and navigates to the created detail route', async () => {
     const { dialog, fixture, loader } = await renderCreateRun();
     const closed = vi.fn();
@@ -141,6 +163,81 @@ describe('CreateRunDialogComponent', () => {
     expect(state.newIdempotencyKey).toHaveBeenCalledTimes(2);
     await second.dialog.escape();
     expect(document.activeElement).toBe(second.opener);
+  });
+
+  it('blocks Escape only while a retried refusal is still pending', async () => {
+    let rejectSecond: ((reason: unknown) => void) | undefined;
+    state.createRun.mockRejectedValueOnce(refusal()).mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectSecond = reject;
+        }),
+    );
+    const { dialog, fixture, loader, opener } = await renderCreateRun();
+    await dialog.set('manifestId', MANIFEST);
+    await dialog.submit();
+    await dialog.submit();
+    await dialog.escape();
+    expect(await loader.hasHarness(CreateRunDialogHarness)).toBe(true);
+    expect(await dialog.busy()).toBe('true');
+    if (!rejectSecond) throw new Error('Expected the second create request to be pending');
+    rejectSecond(refusal());
+    await fixture.whenStable();
+    expect(await dialog.busy()).toBe('false');
+    await dialog.escape();
+    expect(await loader.hasHarness(CreateRunDialogHarness)).toBe(false);
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it('closes on document Escape after repeated refusals leave focus outside the controls', async () => {
+    state.createRun.mockRejectedValue(refusal());
+    const { dialog, fixture, loader, opener } = await renderCreateRun();
+    await dialog.set('manifestId', MANIFEST);
+    await dialog.submit();
+    await dialog.submit();
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    document.body.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+    await fixture.whenStable();
+    expect(await loader.hasHarness(CreateRunDialogHarness)).toBe(false);
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it('does not handle Escape already consumed by a nested overlay', async () => {
+    const { fixture, loader } = await renderCreateRun();
+    const event = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      bubbles: true,
+      cancelable: true,
+    });
+    event.preventDefault();
+    document.body.dispatchEvent(event);
+    await fixture.whenStable();
+    expect(await loader.hasHarness(CreateRunDialogHarness)).toBe(true);
+  });
+
+  it('presents replay as disabled with its explanation and leaves regular creation available', async () => {
+    const { dialog } = await renderCreateRun();
+    expect(await dialog.text()).toContain('replay grants are not available');
+    expect(await dialog.replayDisabled()).toBe('true');
+    expect(await dialog.purpose()).toContain('Regular');
+    await dialog.set('manifestId', MANIFEST);
+    await dialog.submit();
+    expect(state.createRun.mock.calls[0]?.[1]).toEqual({ manifest_id: MANIFEST });
+  });
+
+  it('marks the PR number optional except when the ref kind is pull_request', async () => {
+    const { dialog } = await renderCreateRun();
+    await dialog.set('prNumber', '');
+    expect(await dialog.required('prNumber')).toBe(false);
+    expect(await dialog.requirement('prNumber')).toContain('(optional)');
+    await dialog.choose('kind', 'Pull request');
+    expect(await dialog.required('prNumber')).toBe(true);
+    expect(await dialog.requirement('prNumber')).not.toContain('(optional)');
+    await dialog.choose('kind', 'Branch');
+    expect(await dialog.required('prNumber')).toBe(false);
+    expect(await dialog.requirement('prNumber')).toContain('(optional)');
   });
 
   it('refuses invalid local fields without allocating a key or making a request', async () => {

@@ -87,6 +87,24 @@ describe('create-run form contract', () => {
     );
   });
 
+  it.each([255, 256])('counts %s supplementary characters as Unicode code points', (length) => {
+    const draft = { ...EMPTY_CREATE_RUN_DRAFT, refName: '𠮷'.repeat(length) };
+    const error = createRunFieldError('refName', draft, null);
+    if (length === 255) {
+      expect(error).toBeNull();
+      expect(createRunBody(draft).ref?.name).toBe(draft.refName);
+    } else {
+      expect(error).toMatch(/255/);
+    }
+  });
+
+  it('refuses replay locally while regular creation remains available', () => {
+    expect(createRunFieldError('purpose', EMPTY_CREATE_RUN_DRAFT, null)).toBeNull();
+    expect(
+      createRunFieldError('purpose', { ...EMPTY_CREATE_RUN_DRAFT, purpose: 'replay' }, null),
+    ).toMatch(/replay grants are not available/i);
+  });
+
   it.each(['{broken', 'null', '[]', '1'])('refuses non-object components %s', (components) => {
     expect(
       createRunFieldError('components', { ...EMPTY_CREATE_RUN_DRAFT, components }, null),

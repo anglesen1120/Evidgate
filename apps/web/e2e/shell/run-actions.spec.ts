@@ -1,5 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import collecting from '../../../../fixtures/web-api/run-detail-collecting/input.json';
+import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
   localePath,
   LOCALES,
@@ -19,6 +20,20 @@ function path(locale: ShellLocale, run = 'detail-cancel-poll', grants = 'run-act
     ),
     [`?fixture.variant.listPermissions=${grants}`, `?fixture.variant.getRun=${run}`],
   );
+}
+
+async function expectDialogFocusContainment(page: Page, dialog: Locator): Promise<void> {
+  const controls = dialog.locator('button:enabled:visible, textarea:enabled:visible');
+  await expect(controls).not.toHaveCount(0);
+  await controls.first().focus();
+  await page.keyboard.press('Shift+Tab');
+  await expect(controls.last()).toBeFocused();
+  for (const control of await controls.all()) {
+    await page.keyboard.press('Tab');
+    await expect(control).toBeFocused();
+  }
+  await page.keyboard.press('Tab');
+  await expect(controls.first()).toBeFocused();
 }
 
 test.use({ viewport: { width: 1280, height: 900 } });
@@ -71,6 +86,69 @@ for (const locale of LOCALES) {
       await expect(
         page.getByText(locale === 'vi' ? 'Đã dừng' : 'Stopped', { exact: true }),
       ).toHaveCount(0);
+    });
+
+    test(`cancel dialog is accessible and contains keyboard focus (${locale}, ${theme})`, async ({
+      page,
+    }) => {
+      await seedStoredTheme(page, theme);
+      await page.goto(path(locale, 'detail-collecting'));
+      const trigger = page.locator('[data-run-cancel-trigger]');
+      await expect(trigger).not.toHaveAttribute('aria-disabled', 'true');
+      await page.locator('app-page-header a[href]').focus();
+      const identityControls = page
+        .locator('app-run-header')
+        .first()
+        .locator('button, [tabindex="0"]');
+      await expect(identityControls).toHaveCount(2);
+      for (const control of await identityControls.all()) {
+        await page.keyboard.press('Tab');
+        await expect(control).toBeFocused();
+      }
+      await page.keyboard.press('Tab');
+      await expect(trigger).toBeFocused();
+      await page.keyboard.press('Enter');
+      const dialog = page.getByRole('alertdialog');
+      await expect(dialog).toBeVisible();
+      await expect(dialog.locator('[data-run-cancel-keep]')).toBeFocused();
+      await expectNoA11yViolations(page, `open cancel dialog (${locale}, ${theme})`);
+      await expectDialogFocusContainment(page, dialog);
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
+      await expect(trigger).toBeFocused();
+    });
+
+    test(`resized cancel dialog explains desktop-only confirmation and retains dismissal (${locale}, ${theme})`, async ({
+      page,
+    }) => {
+      await seedStoredTheme(page, theme);
+      await page.goto(path(locale, 'detail-collecting'));
+      const trigger = page.locator('[data-run-cancel-trigger]');
+      for (const dismiss of ['escape', 'close']) {
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await expect(trigger).not.toHaveAttribute('aria-disabled', 'true');
+        await trigger.focus();
+        await page.keyboard.press('Enter');
+        const dialog = page.getByRole('alertdialog');
+        await expect(dialog).toBeVisible();
+        const reason = dialog.getByRole('textbox');
+        await reason.fill('Deployment window changed');
+        await page.setViewportSize({ width: 360, height: 800 });
+        const notice = dialog.locator('app-desktop-required-notice');
+        await expect(notice.getByRole('heading')).toHaveText(
+          locale === 'vi' ? 'Cần dùng máy tính' : 'Desktop required',
+        );
+        await expect(notice).toContainText(
+          locale === 'vi' ? 'Bạn vẫn có thể xem thông tin' : 'You can still inspect information',
+        );
+        await expect(dialog.locator('[data-run-cancel-confirm]')).toBeDisabled();
+        await expect(reason).toHaveValue('Deployment window changed');
+        await expectDialogFocusContainment(page, dialog);
+        if (dismiss === 'escape') await page.keyboard.press('Escape');
+        else await dialog.locator('[data-run-cancel-keep]').click();
+        await expect(dialog).toBeHidden();
+        await expect(trigger).toBeFocused();
+      }
     });
   }
 

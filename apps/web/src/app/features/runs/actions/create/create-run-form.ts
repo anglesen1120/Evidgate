@@ -121,14 +121,24 @@ export function createRunFieldError(
     : null;
 }
 
+function refNameTooLong(value: string): boolean {
+  let length = 0;
+  for (let index = 0; index < value.length; index++) {
+    if (++length > 255) return true;
+    if ((value.codePointAt(index) ?? 0) > 0xffff) index++;
+  }
+  return false;
+}
+
 function localFieldError(field: CreateRunField, draft: Readonly<CreateRunDraft>): string | null {
   if (field === 'manifestId' && !draft.manifestId.trim()) return copy.required;
+  if (field === 'purpose' && draft.purpose === 'replay') return copy.replayHint;
   if (field === 'manifestId' || field === 'releaseId' || field === 'replayGrantId') {
     const value = draft[field].trim();
     if (value && !UUID.test(value)) return copy.uuid;
     if (field === 'replayGrantId' && value && draft.purpose !== 'replay') return copy.grantPurpose;
   }
-  if (field === 'refName' && draft.refName.length > 255) return copy.refLength;
+  if (field === 'refName' && refNameTooLong(draft.refName)) return copy.refLength;
   if (field === 'prNumber') {
     const value = draft.prNumber.trim();
     if (

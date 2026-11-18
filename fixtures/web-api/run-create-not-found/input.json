@@ -9,7 +9,7 @@
   "body": {
     "error": {
       "code": "not_found",
-      "message": "manifest or release was not found",
+      "message": "the manifest or release named in this run request was not found in the project",
       "request_id": "018f0000-0000-7000-8000-000000000132",
       "retryable": false
     }

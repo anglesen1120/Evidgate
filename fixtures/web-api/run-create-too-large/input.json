@@ -15,7 +15,7 @@
       "details": [
         {
           "path": "run_body_bytes",
-          "reason": "payload_too_large",
+          "reason": "run_body_exceeds_cap",
           "limit": 65536,
           "actual": 65537
         }

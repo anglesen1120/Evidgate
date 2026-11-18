@@ -1,4 +1,4 @@
-import { Directive, input, signal } from '@angular/core';
+import { afterRenderEffect, Directive, ElementRef, inject, input, signal } from '@angular/core';
 import { BrnButton } from '@spartan-ng/brain/button';
 import { classes } from '@evidgate/ui/utils';
 import { cva, type VariantProps } from 'class-variance-authority';
@@ -44,6 +44,8 @@ export type ButtonVariants = VariantProps<typeof buttonVariants>;
   host: { 'data-slot': 'button' },
 })
 export class HlmButton {
+  private readonly _button = inject(BrnButton);
+  private readonly _element = inject<ElementRef<HTMLButtonElement | HTMLAnchorElement>>(ElementRef);
   private readonly _config = injectBrnButtonConfig();
 
   private readonly _additionalClasses = signal<ClassValue>('');
@@ -52,11 +54,28 @@ export class HlmButton {
 
   public readonly size = input<ButtonVariants['size']>(this._config.size);
 
+  public readonly tabIndex = input<number | null>(null);
+
   constructor() {
     classes(() => [
       buttonVariants({ variant: this.variant(), size: this.size() }),
       this._additionalClasses(),
     ]);
+    // Brain also owns tabindex; an unchanged outer host binding can lose to its updates.
+    // Restore its value on cleanup, leaving buttons without an override untouched.
+    afterRenderEffect({
+      write: (onCleanup) => {
+        const index = this.tabIndex();
+        if (index === null) return;
+        const disabled = this._button.disabled();
+        const element = this._element.nativeElement;
+        element.tabIndex = disabled ? -1 : index;
+        onCleanup(() => {
+          if (this._button.disabled()) element.tabIndex = -1;
+          else element.removeAttribute('tabindex');
+        });
+      },
+    });
   }
 
   setClass(classes: string): void {

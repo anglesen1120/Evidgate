@@ -11,7 +11,6 @@
     data-run-create-dialog
     [showCloseButton]="false"
     class="max-h-[calc(100dvh-var(--eg-space-10))] min-w-0 overflow-y-auto wrap-anywhere"
-    (keydown.escape)="escape($event)"
   >
     <header hlmDialogHeader>
       <h2 hlmDialogTitle>{{ copy.title }}</h2>
@@ -74,32 +73,15 @@
           </hlm-select-trigger>
           <hlm-select-content *hlmSelectPortal [aria-label]="copy.purpose">
             @for (option of purposeOptions; track option.value) {
-              <hlm-select-item [value]="option.value">{{ option.label }}</hlm-select-item>
+              <hlm-select-item [value]="option.value" [disabled]="option.disabled">
+                {{ option.label }}
+              </hlm-select-item>
             }
           </hlm-select-content>
         </hlm-select>
         <app-field-feedback [field]="field('purpose')" />
       </div>
-      @if (draft().purpose === 'replay') {
-        <app-inline-feedback [tone]="'warning'" [title]="copy.replayHint" [announcement]="'off'" />
-        <div class="grid min-w-0 gap-(--eg-space-2)">
-          <label hlmLabel for="run-create-replayGrantId">{{ copy.grant }}</label>
-          <input
-            hlmInput
-            id="run-create-replayGrantId"
-            name="replayGrantId"
-            autocomplete="off"
-            [value]="draft().replayGrantId"
-            [disabled]="locked()"
-            [aria-describedby]="field('replayGrantId').describedBy()"
-            [attr.aria-invalid]="field('replayGrantId').ariaInvalid()"
-            [forceInvalid]="field('replayGrantId').invalid()"
-            (blur)="field('replayGrantId').blur()"
-            (input)="update('replayGrantId', $event)"
-          />
-          <app-field-feedback [field]="field('replayGrantId')" />
-        </div>
-      }
+      <app-inline-feedback [tone]="'warning'" [title]="copy.replayHint" [announcement]="'off'" />
       <details
         #refGroup
         data-run-create-ref
@@ -144,7 +126,12 @@
           @for (definition of refFields; track definition.key) {
             @let feedbackField = field(definition.key);
             <div class="grid min-w-0 gap-(--eg-space-2)">
-              <label hlmLabel [for]="feedbackField.id">{{ definition.label }}</label>
+              <label hlmLabel [for]="feedbackField.id">
+                {{ definition.label }}
+                @if (definition.key === 'prNumber') {
+                  <app-field-requirement [required]="draft().kind === 'pull_request'" />
+                }
+              </label>
               <input
                 hlmInput
                 [id]="feedbackField.id"
@@ -223,6 +210,18 @@
         <app-field-feedback [field]="field('components')" />
       </div>
       @if (store.error(); as error) {
+        @if (error.kind === 'rate_limited' || error.kind === 'unavailable') {
+          <app-retry-after
+            id="run-create-retry"
+            [kind]="error.kind"
+            [retryAfterSeconds]="error.retryAfterSeconds"
+            [retryEligible]="store.retryReady() && !locked()"
+            [busy]="store.submitting()"
+            [code]="error.code"
+            [requestId]="error.requestId"
+            (retry)="submit()"
+          />
+        }
         <app-inline-feedback
           data-run-create-error
           [attr.data-error-code]="error.code"
@@ -270,7 +269,8 @@
           type="submit"
           data-run-create-submit
           class="min-h-(--eg-control-touch)"
-          [disabled]="locked()"
+          [disabled]="locked() || !store.retryReady()"
+          [attr.aria-describedby]="!store.retryReady() ? 'run-create-retry' : null"
         >
           {{ store.submitting() ? copy.submitting : copy.title }}
         </button>

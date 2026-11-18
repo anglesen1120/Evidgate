@@ -222,6 +222,26 @@ describe('CancelRunStore', () => {
     expect(h.cancelRun).not.toHaveBeenCalled();
   });
 
+  it('keeps a pending submission open and continues accepted polling after dismissal', async () => {
+    const h = setup();
+    const pending = deferred<void>();
+    h.cancelRun.mockReturnValue(pending.promise);
+    h.refreshRun.mockResolvedValue(undefined);
+    h.store.open();
+    const request = h.store.confirm('Retain this intent');
+    h.store.dismiss();
+    expect(h.store.opened()).toBe(true);
+    expect(h.store.phase()).toBe('submitting');
+    pending.resolve();
+    await request;
+    h.store.dismiss();
+    expect(h.store.opened()).toBe(false);
+    await vi.advanceTimersByTimeAsync(CANCEL_POLL_INTERVAL_MS);
+    expect(h.store.phase()).toBe('polling');
+    expect(h.refreshRun).toHaveBeenCalledTimes(2);
+    expect(h.cancelRun).toHaveBeenCalledTimes(1);
+  });
+
   it('stops scheduled polling on destroy and aborts an in-flight submit', async () => {
     const h = setup();
     h.refreshRun.mockResolvedValue(undefined);

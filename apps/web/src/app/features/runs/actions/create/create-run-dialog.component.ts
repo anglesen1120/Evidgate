@@ -24,10 +24,12 @@ import {
   createFormFeedback,
   FieldFeedbackComponent,
   FormErrorSummaryComponent,
+  FieldRequirementComponent,
   FormRequiredNoteComponent,
   type FieldFeedback,
 } from '../../../../shared/forms';
 import { NarrowMutationPolicy } from '../../../../shared/ui/narrow';
+import { RetryAfterComponent } from '../../../../shared/ui/conflict/retry-after.component';
 import { InlineFeedbackComponent } from '../../../../shared/ui/states/inline-feedback.component';
 import { CREATE_RUN_COPY } from './create-run.copy';
 import {
@@ -52,13 +54,16 @@ import { CreateRunStore } from './create-run.store';
     HlmLabel,
     HlmSelectImports,
     FieldFeedbackComponent,
+    FieldRequirementComponent,
     FormErrorSummaryComponent,
     FormRequiredNoteComponent,
     InlineFeedbackComponent,
+    RetryAfterComponent,
   ],
   providers: [CreateRunStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './create-run-dialog.component.html',
+  host: { '(document:keydown.escape)': 'escape($event)' },
 })
 export class CreateRunDialogComponent {
   protected readonly store = inject(CreateRunStore);
@@ -69,6 +74,7 @@ export class CreateRunDialogComponent {
   private readonly document = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
   readonly projectId = input.required<string>();
+  readonly focusFallback = input<(() => void) | undefined>();
   readonly closed = output<void>();
   protected readonly copy = CREATE_RUN_COPY;
   protected readonly opened = signal(true);
@@ -121,8 +127,8 @@ export class CreateRunDialogComponent {
     ),
   );
   protected readonly purposeOptions = [
-    { value: 'regular', label: this.copy.regular },
-    { value: 'replay', label: this.copy.replay },
+    { value: 'regular', label: this.copy.regular, disabled: false },
+    { value: 'replay', label: this.copy.replay, disabled: true },
   ];
   protected readonly kindOptions = [
     { value: '', label: this.copy.none },
@@ -188,6 +194,7 @@ export class CreateRunDialogComponent {
           ? this.kindOptions
           : this.triggerOptions;
     if (!options.some((option) => option.value === value)) return;
+    if (key === 'purpose' && value === 'replay') return;
     this.draft.update((current) => ({
       ...current,
       [key]: value,
@@ -200,11 +207,12 @@ export class CreateRunDialogComponent {
     this.draft.update((current) => ({ ...current, isFork: value }));
     this.store.clearError();
   }
-  protected async submit(event: Event): Promise<void> {
-    event.preventDefault();
+  protected async submit(event?: Event): Promise<void> {
+    event?.preventDefault();
     if (
       !this.opened() ||
       this.store.submitting() ||
+      !this.store.retryReady() ||
       !this.scopeMatches() ||
       !this.canCreate() ||
       !this.viewport.allowsMutation()
@@ -233,6 +241,7 @@ export class CreateRunDialogComponent {
     if (!this.store.submitting()) this.opened.set(false);
   }
   protected escape(event: Event): void {
+    if (event.defaultPrevented || !this.opened() || this.finished) return;
     event.preventDefault();
     event.stopPropagation();
     this.dismiss();
@@ -241,7 +250,7 @@ export class CreateRunDialogComponent {
     if (this.finished) return;
     this.finished = true;
     if (this.opener?.isConnected && !this.opener.matches(':disabled')) this.opener.focus();
-    else this.document.querySelector<HTMLElement>('app-run-list-page app-page-header')?.focus();
+    else this.focusFallback()?.();
     const runId = this.createdRunId;
     if (runId && this.scopeMatches())
       void this.router.navigate([runId], { relativeTo: this.route, queryParams: {} });

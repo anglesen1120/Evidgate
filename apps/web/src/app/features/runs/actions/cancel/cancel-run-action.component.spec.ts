@@ -1,6 +1,6 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import { ComponentHarness, TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
-import { provideZonelessChangeDetection, signal } from '@angular/core';
+import { computed, provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { RunStateDto } from '@evidgate/sdk';
 import ready from '../../../../../../../../fixtures/web-api/run-detail/input.json';
@@ -25,6 +25,9 @@ class CancelActionHarness extends ComponentHarness {
   async disabled(): Promise<string | null> {
     return (await this.trigger()).getAttribute('aria-disabled');
   }
+  async tabIndex(): Promise<string | null> {
+    return (await this.trigger()).getAttribute('tabindex');
+  }
   async focused(): Promise<boolean> {
     return (await this.trigger()).isFocused();
   }
@@ -34,6 +37,16 @@ class CancelDialogHarness extends ComponentHarness {
   private readonly reason = this.locatorFor('#run-cancel-reason');
   private readonly confirm = this.locatorFor('[data-run-cancel-confirm]');
   private readonly keep = this.locatorFor('[data-run-cancel-keep]');
+  readonly desktopNotice = this.locatorForOptional('app-desktop-required-notice [role="note"]');
+  async confirmDisabled(): Promise<boolean> {
+    return (await this.confirm()).getProperty<boolean>('disabled');
+  }
+  async draft(): Promise<string> {
+    return (await this.reason()).getProperty<string>('value');
+  }
+  async escape(): Promise<void> {
+    await (await this.reason()).sendKeys(TestKey.ESCAPE);
+  }
   async fill(value: string): Promise<void> {
     const input = await this.reason();
     await input.setInputValue(value);
@@ -81,7 +94,11 @@ describe('CancelRunActionComponent', () => {
         },
         {
           provide: NarrowMutationPolicy,
-          useValue: { canMutate, allowsMutation: () => canMutate() },
+          useValue: {
+            canMutate,
+            narrow: computed(() => !canMutate()),
+            allowsMutation: () => canMutate(),
+          },
         },
       ],
     });
@@ -95,10 +112,12 @@ describe('CancelRunActionComponent', () => {
   it('exposes a disabled-with-reason permission state and opens only the authorized positive control', async () => {
     const h = await setup(false);
     expect(await h.action.disabled()).toBe('true');
+    expect(await h.action.tabIndex()).toBe('-1');
     await h.action.open();
     expect(await h.loader.hasHarness(CancelDialogHarness)).toBe(false);
     expect(h.cancelRun).not.toHaveBeenCalled();
     h.allowed.set(true);
+    expect(await h.action.tabIndex()).toBe('0');
     await h.action.open();
     expect(await h.loader.hasHarness(CancelDialogHarness)).toBe(true);
     expect(h.cancelRun).not.toHaveBeenCalled();
@@ -185,12 +204,34 @@ describe('CancelRunActionComponent', () => {
     expect(h.cancelRun).not.toHaveBeenCalled();
     await dialog.fill('Reason');
     h.canMutate.set(false);
+    expect(await dialog.confirmDisabled()).toBe(true);
+    expect(await (await dialog.desktopNotice())?.text()).toContain('Use a wider screen');
+    expect(await dialog.draft()).toBe('Reason');
     await dialog.submit();
     expect(h.cancelRun).not.toHaveBeenCalled();
     h.canMutate.set(true);
+    expect(await dialog.confirmDisabled()).toBe(false);
+    expect(await dialog.desktopNotice()).toBeNull();
     await dialog.submit();
     expect(h.cancelRun).toHaveBeenCalledTimes(1);
   });
+
+  it.each(['close', 'escape'] as const)(
+    'keeps %s dismissal and focus return available after narrowing an open dialog',
+    async (dismiss) => {
+      const h = await setup();
+      await h.action.open();
+      const dialog = await h.loader.getHarness(CancelDialogHarness);
+      await dialog.fill('Retain the draft while inspecting');
+      h.canMutate.set(false);
+      expect(await dialog.draft()).toBe('Retain the draft while inspecting');
+      expect(await dialog.desktopNotice()).not.toBeNull();
+      await dialog[dismiss]();
+      expect(await h.loader.hasHarness(CancelDialogHarness)).toBe(false);
+      expect(await h.action.focused()).toBe(true);
+      expect(h.cancelRun).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('cancel reason validation', () => {

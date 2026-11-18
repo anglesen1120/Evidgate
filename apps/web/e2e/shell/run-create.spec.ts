@@ -45,7 +45,7 @@ for (const locale of LOCALES) {
   test(`preserves focus and the draft through a typed key conflict (${locale})`, async ({
     page,
   }) => {
-    await page.goto(path(locale, 'conflict'));
+    await page.goto(withVariants(path(locale, 'conflict'), ['?fixture.latency=300']));
     const trigger = page.locator('[data-run-create-trigger]');
     await trigger.click();
     const dialog = page.locator('[data-run-create-dialog]');
@@ -54,6 +54,10 @@ for (const locale of LOCALES) {
     await expect(dialog.locator('[data-run-create-error]')).toContainText('idempotency_conflict');
     await expect(dialog.locator('#run-create-manifestId')).toHaveValue(MANIFEST);
     await dialog.locator('[data-run-create-submit]').click();
+    // The retained first refusal must disappear before the second response is asserted.
+    await expect(dialog.locator('form')).toHaveAttribute('aria-busy', 'true');
+    await expect(dialog.locator('[data-run-create-error]')).toHaveCount(0);
+    await expect(dialog.locator('form')).toHaveAttribute('aria-busy', 'false');
     await expect(dialog.locator('[data-run-create-error]')).toContainText('idempotency_conflict');
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
@@ -111,6 +115,48 @@ for (const locale of LOCALES) {
     await page.goto(path(locale, 'ok', 'settings-policy-readonly'));
     await expect(page.locator('[data-run-create-trigger]')).toBeDisabled();
     await expect(page.locator('#run-create-permission')).toContainText('run:create');
+  });
+
+  test(`returns focus to the heading when resizing removes the create opener (${locale})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(path(locale));
+    await page.locator('[data-run-create-trigger]').click();
+    const dialog = page.locator('[data-run-create-dialog]');
+    await expect(dialog).toBeVisible();
+    await page.setViewportSize({ width: 360, height: 800 });
+    await expect(page.locator('[data-run-create-trigger]')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(page.locator('app-run-list-page app-page-header h1')).toBeFocused();
+  });
+
+  test(`keeps replay unavailable and marks only a pull-request number required (${locale})`, async ({
+    page,
+  }) => {
+    await page.goto(path(locale));
+    await page.locator('[data-run-create-trigger]').click();
+    const dialog = page.locator('[data-run-create-dialog]');
+    await dialog.locator('#run-create-purpose').click();
+    await expect(
+      page.getByRole('option').and(page.locator('[data-value="replay"]')),
+    ).toBeDisabled();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeVisible();
+    await dialog.locator('[data-run-create-ref] summary').click();
+    const number = dialog.locator('#run-create-prNumber');
+    const marker = dialog.locator('label[for="run-create-prNumber"] app-field-requirement');
+    await expect(number).not.toHaveAttribute('required');
+    await expect(marker).not.toBeEmpty();
+    await dialog.locator('#run-create-kind').click();
+    await page.getByRole('option').and(page.locator('[data-value="pull_request"]')).click();
+    await expect(number).toHaveAttribute('required');
+    await expect(marker).toBeEmpty();
+    await dialog.locator('#run-create-kind').click();
+    await page.getByRole('option').and(page.locator('[data-value="branch"]')).click();
+    await expect(number).not.toHaveAttribute('required');
+    await expect(marker).not.toBeEmpty();
   });
 
   for (const theme of THEMES) {

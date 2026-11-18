@@ -8,9 +8,6 @@
     [queryParamsHandling]="'preserve'"
     >{{ copy.back }}</a
   >
-  @if (store.run()) {
-    <app-cancel-run-action appPageHeaderActions />
-  }
 </app-page-header>
 <app-request-state
   [status]="requestStatus()"
@@ -25,6 +22,7 @@
         [runCompleteness]="store.latestRevisionCompleteness()"
         (viewEvidence)="showEvidence()"
       />
+      <app-cancel-run-action />
       <app-attempts-table
         [attempts]="store.attempts()"
         [status]="attemptsStatus()"

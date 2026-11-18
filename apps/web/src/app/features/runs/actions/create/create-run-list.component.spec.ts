@@ -30,6 +30,9 @@ class RunListCreateHarness extends ComponentHarness {
   async triggerFocused(): Promise<boolean> {
     return (await this.trigger()).isFocused();
   }
+  async headingFocused(): Promise<boolean> {
+    return (await this.locatorFor('app-page-header h1')()).isFocused();
+  }
 }
 
 describe('RunListPage create action', () => {
@@ -100,4 +103,18 @@ describe('RunListPage create action', () => {
     expect(await page.hasTrigger()).toBe(false);
     expect(await overlays.hasHarness(CreateRunDialogHarness)).toBe(false);
   });
+
+  it.each(['resize', 'permission-loss'])(
+    'focuses the list heading after closing when %s makes the opener unavailable',
+    async (change) => {
+      const { page, overlays } = await render();
+      await page.open();
+      const dialog = await overlays.getHarness(CreateRunDialogHarness);
+      if (change === 'resize') state.canMutate.set(false);
+      else state.allowed.set(false);
+      await dialog.dismiss();
+      expect(await overlays.hasHarness(CreateRunDialogHarness)).toBe(false);
+      expect(await page.headingFocused()).toBe(true);
+    },
+  );
 });
