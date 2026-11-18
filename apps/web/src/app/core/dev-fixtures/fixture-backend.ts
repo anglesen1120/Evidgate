@@ -73,6 +73,7 @@ import {
 import { findSettingsRetentionWriteFixture } from './fixture-settings-permissions';
 import { FixtureToggles } from './fixture-toggles';
 import { findUsageSummaryFixture } from './fixture-usage-summary';
+import { securityEventsBody } from './fixture-security-events';
 import { caseListFixtureBody } from './fixture-case-list';
 
 /** Response header naming the corpus directory that answered; also a production-leak marker. */
@@ -145,6 +146,8 @@ function wireBody(body: unknown, responseType: string, contentType: string): unk
 
 // Filter the selected fixture page without consuming its continuation; filtered pages may be empty.
 function listDecisionBody(entry: FixtureEntry, request: HttpRequest<unknown>): unknown {
+  if (entry.document.operation_id === 'listSecurityEvents')
+    return securityEventsBody(entry, request);
   const decision = queryParameter(request.urlWithParams, 'decision');
   if (
     entry.document.operation_id !== 'listRuns' ||
