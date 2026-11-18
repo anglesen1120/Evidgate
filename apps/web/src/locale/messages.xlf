@@ -9717,6 +9717,37 @@
       <trans-unit id="catalog.owner" datatype="html"><source>Owner membership</source></trans-unit>
       <trans-unit id="catalog.unassigned" datatype="html"><source>Unassigned</source></trans-unit>
       <trans-unit id="catalog.unresolved" datatype="html"><source>The catalog request did not complete. Try again.</source></trans-unit>
+      <trans-unit id="catalog.loaded-filter-hint" datatype="html"><source>Status and framework filter the server list. Search matches name or ID in loaded results only; it never loads more results.</source></trans-unit>
+      <trans-unit id="catalog.loaded-search" datatype="html"><source>Search name or ID in loaded results</source></trans-unit>
+      <trans-unit id="catalog.loaded-no-match-title" datatype="html"><source>No matching identities in loaded results</source></trans-unit>
+      <trans-unit id="catalog.loaded-no-match-description" datatype="html"><source>Clear the filters to return to loaded results, or load more identities below. Local search does not inspect unloaded results.</source></trans-unit>
+      <trans-unit id="catalog.available-fields-note" datatype="html"><source>This list does not supply revision, platform, level, purpose or rename history; these columns are not displayed.</source></trans-unit>
+      <trans-unit id="catalog.pagination" datatype="html"><source>Catalog pagination</source></trans-unit>
+      <trans-unit id="catalog.page-size" datatype="html"><source>Page size</source></trans-unit>
+      <trans-unit id="catalog.load-more" datatype="html"><source>Load more</source></trans-unit>
+      <trans-unit id="catalog.loading-more" datatype="html"><source>Loading more identities…</source></trans-unit>
+      <trans-unit id="catalog.load-more-failed" datatype="html"><source>More identities could not be loaded. Loaded results are unchanged.</source></trans-unit>
+      <trans-unit id="catalog.retry-more" datatype="html"><source>Retry loading more</source></trans-unit>
+      <trans-unit id="catalog.owners-loading" datatype="html"><source>Loading owner choices…</source></trans-unit>
+      <trans-unit id="catalog.owners-failed" datatype="html"><source>Owner choices could not be loaded. Existing ownership is unchanged.</source></trans-unit>
+      <trans-unit id="catalog.retry-owners" datatype="html"><source>Retry owner choices</source></trans-unit>
+      <trans-unit id="catalog.owner-permission-reason" datatype="html"><source>case:write is required to assign an owner.</source></trans-unit>
+      <trans-unit id="catalog.owner-narrow-reason" datatype="html"><source>Assign owners on a screen at least 768 pixels wide. Owner details remain readable here.</source></trans-unit>
+      <trans-unit id="catalog.owner-choices-hint" datatype="html"><source>Choose an active member by email. Clearing an owner is not supported.</source></trans-unit>
+      <trans-unit id="catalog.loaded-count" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> loaded</source></trans-unit>
+      <trans-unit id="catalog.loaded-count-live" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> loaded</source></trans-unit>
+      <trans-unit id="catalog.loaded-search-no-results" datatype="html"><source>No matching identities in loaded results.</source></trans-unit>
+      <trans-unit id="catalog.loaded-search-results" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ store.visibleRows().length | number }}"/> matching identities in loaded results.</source></trans-unit>
+      <trans-unit id="catalog.loaded-table-caption" datatype="html"><source>Loaded test identities</source></trans-unit>
+      <trans-unit id="catalog.owner-label" datatype="html"><source>Owner</source></trans-unit>
+      <trans-unit id="catalog.owner-saving" datatype="html"><source>Saving owner…</source></trans-unit>
+      <trans-unit id="catalog.owner-reload" datatype="html"><source>Reload to retry</source></trans-unit>
+      <trans-unit id="catalog.owner-denied" datatype="html"><source>Owner permission was refused. The previous owner is restored. Check permission, then reload to retry.</source></trans-unit>
+      <trans-unit id="catalog.owner-conflict" datatype="html"><source>The case changed. The previous owner is restored. Reload the list, then choose the owner again.</source></trans-unit>
+      <trans-unit id="catalog.owner-failed" datatype="html"><source>The owner could not be saved. The previous owner is restored. Reload to retry.</source></trans-unit>
+      <trans-unit id="catalog.owner-for" datatype="html"><source>Owner for <x id="name" equiv-text="name"/></source></trans-unit>
+      <trans-unit id="catalog.owner-unknown" datatype="html"><source>Member details unavailable</source></trans-unit>
+      <trans-unit id="catalog.owners-empty" datatype="html"><source>No active members are available to assign. Existing ownership is unchanged.</source></trans-unit>
     </body>
   </file>
 </xliff>

@@ -74,9 +74,9 @@ let nextTableId = 0;
  * Render-only, signal-fed CDK table; never fetches, sorts, selects or mutates rows.
  * Caption, column labels and row values are already localized by the caller.
  *
- * Fixed-size rows always use recoverable one-line previews. Narrow records and
- * custom variable-height cells use bounded pages of already loaded rows instead;
- * callers retain their server cursor and never receive invented totals or cursors.
+ * Fixed-size rows always use recoverable one-line previews. Custom cells opt in
+ * only when their caller guarantees that stride; variable-height cells and
+ * narrow records retain bounded pages of already loaded rows.
  *
  * A header-only table sits outside the translated virtual window. Ordinary mode
  * uses one native table so utility columns size intrinsically. Both keep the
@@ -137,6 +137,8 @@ export class DataTableComponent<T> {
   readonly flow = input<DataTableFlow>('bounded');
   /** Opt ordinary tables into record reflow when readable columns cannot fit their container. */
   readonly fitToContainer = input(false);
+  /** Opt in only when every custom cell fits the fixed row stride. */
+  readonly fixedHeightCells = input(false);
 
   readonly captionId = `eg-data-table-${nextTableId++}-caption`;
   readonly narrow = signal(false);
@@ -144,7 +146,10 @@ export class DataTableComponent<T> {
     this.columns().some((column) => column.cellTemplate),
   );
   readonly virtual = computed(
-    () => !this.narrow() && !this.customCells() && this.rows().length > this.virtualThreshold(),
+    () =>
+      !this.narrow() &&
+      (!this.customCells() || this.fixedHeightCells()) &&
+      this.rows().length > this.virtualThreshold(),
   );
   readonly resolvedColumns = computed(() =>
     resolveTableColumns(this.columns(), this.virtual() ? this.rows() : []),
@@ -243,6 +248,12 @@ export class DataTableComponent<T> {
       this.measure();
     });
     afterRenderEffect(() => this.demoteVirtualSections());
+  }
+
+  revealRow(index: number): void {
+    if (index < 0 || index >= this.rows().length) return;
+    this.pageIndex.set(Math.floor(index / this.pageSize));
+    this.viewport()?.scrollToIndex(index);
   }
 
   protected movePage(delta: number): void {
@@ -443,7 +454,8 @@ export class DataTableComponent<T> {
     // A row-only change keeps records mounted: do not rebuild up to 200 rich rows
     // just to rediscover the same minimum. Column or font changes may re-probe.
     const fit =
-      this.fitToContainer() && (this.customCells() || rows.length <= this.virtualThreshold());
+      this.fitToContainer() &&
+      ((!this.fixedHeightCells() && this.customCells()) || rows.length <= this.virtualThreshold());
     if (
       fit &&
       !this.narrow() &&

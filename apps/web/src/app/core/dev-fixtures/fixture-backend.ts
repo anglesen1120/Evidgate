@@ -74,6 +74,7 @@ import { findSettingsRetentionWriteFixture } from './fixture-settings-permission
 import { FixtureToggles } from './fixture-toggles';
 import { findUsageSummaryFixture } from './fixture-usage-summary';
 import { caseListFixtureBody } from './fixture-case-list';
+import { findBulkCaseListFixture } from './fixture-case-list-bulk';
 
 /** Response header naming the corpus directory that answered; also a production-leak marker. */
 export const FIXTURE_RESPONSE_HEADER = 'X-Evidgate-Fixture';
@@ -271,6 +272,12 @@ export class FixtureHttpBackend implements HttpBackend {
         this.toggles.variantFor('listPermissions'),
       );
       if (supplemental !== undefined) return supplemental;
+    }
+    // The catalogue's 200-row threshold is reviewed on a computed page, like usage summary: the
+    // variant names no corpus file, and every other toggle still answers its directory.
+    if (request.method === 'GET' && /^\/projects\/[^/]+\/cases$/.test(relativePath)) {
+      const bulk = findBulkCaseListFixture(this.toggles.variantFor('listCases'));
+      if (bulk !== undefined) return bulk;
     }
     const route = matchFixtureRoute(request.method, relativePath);
     return route === undefined ? undefined : this.selectEntry(route, relativePath, request);

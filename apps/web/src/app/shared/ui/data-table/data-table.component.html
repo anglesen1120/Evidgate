@@ -179,6 +179,7 @@
         [style.height.px]="virtual() ? itemSize() : null"
         [attr.aria-rowindex]="windowStart() + index + 2"
         [attr.data-row-id]="rowId()(row)"
+        [attr.tabindex]="fixedHeightCells() ? -1 : null"
       ></tr>
     }
   </table>
