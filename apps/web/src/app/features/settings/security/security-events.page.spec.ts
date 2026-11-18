@@ -37,6 +37,11 @@ class SecurityPageHarness extends ComponentHarness {
   readonly correctionLinks = this.locatorForAll('#security-filter-errors a');
   readonly forbidden = this.locatorForOptional('app-forbidden-pattern');
   readonly loading = this.locatorForOptional('app-loading-pattern');
+  async fill(field: 'project' | 'from' | 'to', value: string): Promise<void> {
+    const input = await this[field]();
+    await input.setInputValue(value);
+    await input.dispatchEvent('input');
+  }
 }
 describe('SecurityEventsPage', () => {
   const list = vi.fn<SecurityEventsDataService['list']>();
@@ -54,7 +59,7 @@ describe('SecurityEventsPage', () => {
   afterEach(() => TestBed.resetTestingModule());
   async function render() {
     const fixture = TestBed.createComponent(SecurityEventsPage);
-    const harness = await TestbedHarnessEnvironment.loader(fixture).getHarness(SecurityPageHarness);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, SecurityPageHarness);
     return { fixture, harness };
   }
   it('renders support access with its grant and displays untrusted detail text without HTML', async () => {
@@ -85,7 +90,7 @@ describe('SecurityEventsPage', () => {
   it('applies a project filter and offers a distinct no-match state with reset', async () => {
     const { harness } = await render();
     list.mockResolvedValue({ items: [], next_cursor: null });
-    await (await harness.project()).setInputValue('018f0000-0000-7000-8000-000000000011');
+    await harness.fill('project', '018f0000-0000-7000-8000-000000000011');
     await (await harness.apply()).click();
     expect(await harness.content()).toContain('No results match these filters');
     expect(list).toHaveBeenLastCalledWith(
@@ -130,19 +135,21 @@ describe('SecurityEventsPage', () => {
     fixture.detectChanges();
     TestBed.tick();
     await manualChangeDetection(async () => {
-      const harness =
-        await TestbedHarnessEnvironment.loader(fixture).getHarness(SecurityPageHarness);
+      const harness = await TestbedHarnessEnvironment.harnessForFixture(
+        fixture,
+        SecurityPageHarness,
+      );
       expect(await harness.loading()).not.toBeNull();
       finish({ items: [event], next_cursor: null });
     });
     await fixture.whenStable();
-    const harness = await TestbedHarnessEnvironment.loader(fixture).getHarness(SecurityPageHarness);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, SecurityPageHarness);
     expect(await harness.rows()).toHaveLength(1);
   });
   it('hands focus from the no-match reset to stable results before loading removes the action', async () => {
     const { fixture, harness } = await render();
     list.mockResolvedValueOnce({ items: [], next_cursor: null });
-    await (await harness.project()).setInputValue('missing-project');
+    await harness.fill('project', 'missing-project');
     await (await harness.apply()).click();
     let finish: (value: { items: SecurityEventItem[]; next_cursor: null }) => void = () =>
       undefined;
@@ -172,8 +179,8 @@ describe('SecurityEventsPage', () => {
     'keeps the %s range correction linked and focused until the range is corrected',
     async (_case, from, to) => {
       const { harness } = await render();
-      await (await harness.from()).setInputValue(from);
-      await (await harness.to()).setInputValue(to);
+      await harness.fill('from', from);
+      await harness.fill('to', to);
       await (await harness.apply()).click();
       const summary = await harness.correctionSummary();
       expect(summary).not.toBeNull();
@@ -189,10 +196,10 @@ describe('SecurityEventsPage', () => {
       expect(await (await harness.to()).getAttribute('aria-describedby')).toContain(
         'security-to-error',
       );
-      await (await harness.project()).setInputValue('another-project');
+      await harness.fill('project', 'another-project');
       expect(await harness.correctionSummary()).not.toBeNull();
       expect(await (await harness.from()).getAttribute('aria-invalid')).toBe('true');
-      await (await harness.to()).setInputValue('2026-11-18T11:00');
+      await harness.fill('to', '2026-11-18T11:00');
       expect(await harness.correctionSummary()).toBeNull();
       expect(await (await harness.from()).getAttribute('aria-invalid')).toBeNull();
       expect(list).toHaveBeenCalledTimes(1);

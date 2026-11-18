@@ -55,7 +55,15 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       'release-detail-regular-run',
       'release-detail-forbidden',
       'release-detail-not-found',
+      'security-events-list-slow',
     ]);
+    const securityFixture = corpusByName.get('security-events-list');
+    if (securityFixture === undefined) throw new Error('no security-event page to derive from');
+    expect(derived.find((entry) => entry.name === 'security-events-list-slow')?.document).toEqual({
+      ...readDocument(securityFixture),
+      variant: 'slow',
+      latency_ms: 1000,
+    });
     const readyFixture = corpusByName.get('run-detail');
     if (readyFixture === undefined) {
       throw new Error('fixtures/web-api holds no run-detail document to derive from');
