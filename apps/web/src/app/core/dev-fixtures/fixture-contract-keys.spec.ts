@@ -87,8 +87,7 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     // names the query parameter the contract's list read takes, (b) each cursor-declaring catalog
     // row continues a page that names it — same project, disjoint ids, a cursor the server could
     // have issued — and (c) it ends the walk, because a second cursor with no document behind it
-    // would leave the control on screen. The lists here are exhaustive on purpose: a third
-    // cursor-keyed row or catalog cursor needs its own pin in this test.
+    // would leave the control on screen. The lists are exhaustive: a new cursor needs its own pin.
     const keyed = FIXTURE_ROUTE_ROWS.filter((route) => route.cursorQueryParameter !== undefined);
     expect(
       keyed.map((route) => route.operationId),
