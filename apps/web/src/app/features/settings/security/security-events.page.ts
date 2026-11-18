@@ -1,4 +1,5 @@
 import { formatNumber } from '@angular/common';
+import { ActivatedRoute } from '@angular/router';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -6,7 +7,6 @@ import {
   LOCALE_ID,
   computed,
   inject,
-  input,
   linkedSignal,
   viewChild,
 } from '@angular/core';
@@ -58,7 +58,9 @@ export class SecurityEventsPage {
   protected readonly session = inject(SessionStore);
   protected readonly store = inject(SecurityEventsStore);
   private readonly locale = inject(LOCALE_ID);
-  readonly pageHeadingLevel = input<1 | 2>(2);
+  // The route says whether this page owns the h1 or is a Settings tab under the shell's h1.
+  protected readonly ownsPageHeading =
+    inject(ActivatedRoute, { optional: true })?.snapshot.data['pageHeadingLevel'] === 1;
   protected readonly draft = linkedSignal(() => {
     this.session.currentOrg();
     return { ...EMPTY_SECURITY_FILTERS };
