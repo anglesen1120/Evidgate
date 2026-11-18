@@ -1,0 +1,25 @@
+{
+  "operation_id": "createRun",
+  "variant": "too-large",
+  "status": 413,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-000000000133"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "payload_too_large",
+      "message": "run request body exceeds the fixed byte limit",
+      "request_id": "018f0000-0000-7000-8000-000000000133",
+      "retryable": false,
+      "details": [
+        {
+          "path": "run_body_bytes",
+          "reason": "payload_too_large",
+          "limit": 65536,
+          "actual": 65537
+        }
+      ]
+    }
+  }
+}

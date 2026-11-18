@@ -8,6 +8,9 @@
     [queryParamsHandling]="'preserve'"
     >{{ copy.back }}</a
   >
+  @if (store.run()) {
+    <app-cancel-run-action appPageHeaderActions />
+  }
 </app-page-header>
 <app-request-state
   [status]="requestStatus()"

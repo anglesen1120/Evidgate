@@ -4,6 +4,7 @@
 
 import apiTokenCreate from '../../../../../../fixtures/web-api/api-token-create/input.json';
 import apiTokensList from '../../../../../../fixtures/web-api/api-tokens-list/input.json';
+import permissionsRunActions from '../../../../../../fixtures/web-api/permissions-list-run-actions/input.json';
 import ciBindingCreate from '../../../../../../fixtures/web-api/ci-binding-create/input.json';
 import ciBindingCreateConflict from '../../../../../../fixtures/web-api/ci-binding-create-conflict/input.json';
 import ciBindingCreateValidation from '../../../../../../fixtures/web-api/ci-binding-create-validation/input.json';
@@ -287,4 +288,5 @@ export const FIXTURE_CATALOG_SESSION_ROWS: readonly FixtureCatalogRow[] = [
     document: projectsListOnboardingProjectNotFound,
   },
   { name: 'roles-list', document: rolesList },
+  { name: 'permissions-list-run-actions', document: permissionsRunActions },
 ];

@@ -21,6 +21,7 @@ import { combineLatest } from 'rxjs';
 import type { ApiError } from '../../../core/http/api-error';
 import { PageHeaderImports } from '../../../shared/ui/page-header';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
+import { CancelRunActionComponent } from '../actions/cancel/cancel-run-action.component';
 import { AttemptsTableComponent } from './attempts/attempts-table.component';
 import { DecisionViewComponent } from './decision/decision-view.component';
 import { EvidencePanelComponent } from './evidence/evidence-panel.component';
@@ -41,6 +42,7 @@ import { RunTimelineComponent } from './timeline/run-timeline.component';
     RouterLink,
     RequestStateComponent,
     RunHeaderComponent,
+    CancelRunActionComponent,
     ManifestPanelComponent,
     ProducerStatusTableComponent,
     ReleasePanelComponent,

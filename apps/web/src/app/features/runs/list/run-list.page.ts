@@ -23,6 +23,10 @@ import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
+import { SessionStore } from '../../../core/session/session.store';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow';
+import { CreateRunDialogComponent } from '../actions/create/create-run-dialog.component';
+import { CREATE_RUN_COPY } from '../actions/create/create-run.copy';
 import { PageHeaderImports } from '../../../shared/ui/page-header';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
 import { RunListTableComponent } from './run-list-table.component';
@@ -42,6 +46,7 @@ import { EMPTY_RUN_LIST_FILTERS, RunListStore } from './run-list.store';
     PageHeaderImports,
     RequestStateComponent,
     RunListTableComponent,
+    CreateRunDialogComponent,
   ],
   providers: [RunListStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -60,6 +65,8 @@ export class RunListPage {
   private readonly router = inject(Router);
 
   private readonly locale = inject(LOCALE_ID);
+  private readonly session = inject(SessionStore);
+  protected readonly viewport = inject(NarrowMutationPolicy);
 
   protected readonly desktopFilters = toSignal(
     inject(BreakpointObserver)
@@ -87,6 +94,9 @@ export class RunListPage {
     return status === 'idle' ? 'loading' : status;
   });
   protected readonly retryReady = signal(true);
+  protected readonly createTarget = signal<string | null>(null);
+  protected readonly canCreate = computed(() => this.session.has('run:create'));
+  protected readonly createCopy = CREATE_RUN_COPY;
   private projectId: string | null = null;
   private readonly loadMoreButton = viewChild<ElementRef<HTMLButtonElement>>('loadMoreControl');
   private readonly pagingRetryButton =
@@ -156,6 +166,17 @@ export class RunListPage {
     this.decisionOptions.find((option) => option.value === value)?.label ?? this.copy.any;
   protected readonly scopeLabel = (value: unknown) =>
     this.scopeOptions.find((option) => option.value === value)?.label ?? this.copy.any;
+  protected openCreate(): void {
+    const projectId = this.projectId;
+    if (
+      !projectId ||
+      !this.canCreate() ||
+      !this.viewport.allowsMutation() ||
+      this.session.currentProject()?.id !== projectId
+    )
+      return;
+    this.createTarget.set(projectId);
+  }
 
   constructor() {
     // Observe ancestors too: projectId belongs to the shell's project route, not this lazy leaf.

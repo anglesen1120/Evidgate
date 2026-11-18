@@ -2,7 +2,30 @@
   class="mb-(--eg-space-7) block"
   [title]="copy.title"
   [description]="copy.description"
-/>
+>
+  <div appPageHeaderActions class="flex min-w-0 flex-wrap items-center gap-(--eg-space-3)">
+    @if (viewport.canMutate()) {
+      <button
+        hlmBtn
+        type="button"
+        data-run-create-trigger
+        class="min-h-(--eg-control-touch)"
+        [disabled]="!canCreate()"
+        [attr.aria-describedby]="!canCreate() ? 'run-create-permission' : null"
+        (click)="openCreate()"
+      >
+        {{ createCopy.title }}
+      </button>
+      @if (!canCreate()) {
+        <p id="run-create-permission" class="m-0 text-muted-foreground">
+          {{ createCopy.forbidden }}
+        </p>
+      }
+    } @else {
+      <p class="m-0 text-muted-foreground">{{ createCopy.narrow }}</p>
+    }
+  </div>
+</app-page-header>
 <details
   hlmCard
   class="mb-[var(--eg-space-5)] block min-w-0 p-[var(--eg-space-5)]"
@@ -220,4 +243,7 @@
       }
     </p>
   </section>
+}
+@if (createTarget(); as projectId) {
+  <app-create-run-dialog [projectId]="projectId" (closed)="createTarget.set(null)" />
 }

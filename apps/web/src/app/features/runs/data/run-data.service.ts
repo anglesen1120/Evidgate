@@ -5,7 +5,9 @@ import { inject, Injectable } from '@angular/core';
 import type { RunPage } from '@evidgate/sdk';
 
 import { RunsDataService } from '../../../core/data/runs-data.service';
+import { newUuid } from '../../../core/http/random-id';
 import { readDecisionBody, type ReceivedDecision } from './decision-reader';
+import type { CreatedRun, CreateRunInput } from './run-actions.types';
 
 /** One request of the run list, including its server-side filters. */
 export interface RunListQuery {
@@ -58,6 +60,42 @@ export class RunDataService {
    */
   async getDecision(runId: string): Promise<ReceivedDecision | null> {
     return readDecisionBody(await this.runs.getDecision(runId));
+  }
+
+  /**
+   * Create a run, with the intent key the caller minted before its first attempt.
+   *
+   * The key is the caller's, not this service's: a retry of the same intent must reuse it, or the
+   * server creates a second run; a new intent must mint a new one, or the server answers 409
+   * `idempotency_conflict`. `signal` cancels the request when the dialog closes.
+   */
+  createRun(
+    projectId: string,
+    input: CreateRunInput,
+    idempotencyKey: string,
+    signal?: AbortSignal,
+  ): Promise<CreatedRun> {
+    return this.runs.create(projectId, input, { idempotencyKey }, signal);
+  }
+
+  /**
+   * Record a cancel request for one run, with the optional business reason.
+   *
+   * The answer is the acknowledgement only: the run moves through its guarded transition on the
+   * server, so the detail screen refreshes the run rather than assuming a new state here.
+   */
+  async cancelRun(
+    runId: string,
+    reason: string | undefined,
+    idempotencyKey: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    await this.runs.cancel(runId, reason, { idempotencyKey }, signal);
+  }
+
+  /** A fresh key for a new user intent; the same intent keeps the key it was minted with. */
+  newIdempotencyKey(): string {
+    return newUuid();
   }
 }
 

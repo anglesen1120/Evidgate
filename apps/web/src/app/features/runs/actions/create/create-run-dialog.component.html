@@ -1,0 +1,280 @@
+<hlm-dialog
+  [state]="opened() ? 'open' : 'closed'"
+  [closeOnOutsidePointerEvents]="false"
+  [disableClose]="true"
+  [restoreFocus]="false"
+  [aria-label]="copy.title"
+  (closed)="finishClose()"
+>
+  <hlm-dialog-content
+    *hlmDialogPortal
+    data-run-create-dialog
+    [showCloseButton]="false"
+    class="max-h-[calc(100dvh-var(--eg-space-10))] min-w-0 overflow-y-auto wrap-anywhere"
+    (keydown.escape)="escape($event)"
+  >
+    <header hlmDialogHeader>
+      <h2 hlmDialogTitle>{{ copy.title }}</h2>
+      <p hlmDialogDescription>{{ copy.description }}</p>
+    </header>
+    <form
+      novalidate
+      class="grid min-w-0 gap-(--eg-space-5)"
+      (submit)="submit($event)"
+      [attr.aria-busy]="store.submitting()"
+    >
+      <app-form-required-note />
+      <app-form-error-summary [summaryId]="'run-create-summary'" [feedback]="feedback" />
+      @if (!canCreate()) {
+        <app-inline-feedback [tone]="'destructive'" [title]="copy.forbidden" />
+      }
+      @if (!viewport.canMutate()) {
+        <app-inline-feedback [title]="copy.narrow" />
+      }
+      @if (!scopeMatches()) {
+        <app-inline-feedback [tone]="'destructive'" [title]="copy.scopeChanged" />
+      }
+      @for (definition of basicFields; track definition.key) {
+        @let feedbackField = field(definition.key);
+        <div class="grid min-w-0 gap-(--eg-space-2)">
+          <label hlmLabel [for]="feedbackField.id">{{ definition.label }}</label>
+          <input
+            hlmInput
+            #manifestControl
+            [id]="feedbackField.id"
+            [name]="definition.key"
+            [required]="definition.required"
+            autocomplete="off"
+            spellcheck="false"
+            [value]="draft()[definition.key]"
+            [disabled]="locked()"
+            [aria-describedby]="feedbackField.describedBy()"
+            [attr.aria-invalid]="feedbackField.ariaInvalid()"
+            [forceInvalid]="feedbackField.invalid()"
+            (blur)="feedbackField.blur()"
+            (input)="update(definition.key, $event)"
+          />
+          <app-field-feedback [field]="feedbackField" />
+        </div>
+      }
+      <div class="grid min-w-0 gap-(--eg-space-2)">
+        <label hlmLabel for="run-create-purpose">{{ copy.purpose }}</label>
+        <hlm-select
+          [value]="draft().purpose"
+          (valueChange)="choose('purpose', $event)"
+          [disabled]="locked()"
+          [itemToString]="purposeLabel"
+        >
+          <hlm-select-trigger
+            [buttonId]="'run-create-purpose'"
+            [aria-describedby]="field('purpose').describedBy()"
+            class="w-full min-h-(--eg-control-touch)"
+          >
+            <hlm-select-value />
+          </hlm-select-trigger>
+          <hlm-select-content *hlmSelectPortal [aria-label]="copy.purpose">
+            @for (option of purposeOptions; track option.value) {
+              <hlm-select-item [value]="option.value">{{ option.label }}</hlm-select-item>
+            }
+          </hlm-select-content>
+        </hlm-select>
+        <app-field-feedback [field]="field('purpose')" />
+      </div>
+      @if (draft().purpose === 'replay') {
+        <app-inline-feedback [tone]="'warning'" [title]="copy.replayHint" [announcement]="'off'" />
+        <div class="grid min-w-0 gap-(--eg-space-2)">
+          <label hlmLabel for="run-create-replayGrantId">{{ copy.grant }}</label>
+          <input
+            hlmInput
+            id="run-create-replayGrantId"
+            name="replayGrantId"
+            autocomplete="off"
+            [value]="draft().replayGrantId"
+            [disabled]="locked()"
+            [aria-describedby]="field('replayGrantId').describedBy()"
+            [attr.aria-invalid]="field('replayGrantId').ariaInvalid()"
+            [forceInvalid]="field('replayGrantId').invalid()"
+            (blur)="field('replayGrantId').blur()"
+            (input)="update('replayGrantId', $event)"
+          />
+          <app-field-feedback [field]="field('replayGrantId')" />
+        </div>
+      }
+      <details
+        #refGroup
+        data-run-create-ref
+        [open]="refExpanded()"
+        (toggle)="refExpanded.set(refGroup.open)"
+        class="min-w-0"
+      >
+        <summary
+          class="min-h-(--eg-control-touch) cursor-pointer content-center rounded-(--eg-radius-sm) font-(weight:--eg-weight-medium) focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+        >
+          {{ copy.ref }}
+        </summary>
+        <fieldset
+          class="m-0 mt-(--eg-space-3) grid min-w-0 gap-(--eg-space-4) border-0 p-0"
+          [disabled]="locked()"
+        >
+          <legend class="sr-only">{{ copy.ref }}</legend>
+          <p class="m-0 text-muted-foreground">{{ copy.refHint }}</p>
+          <div class="grid min-w-0 gap-(--eg-space-2)">
+            <label hlmLabel for="run-create-kind">{{ copy.kind }}</label>
+            <hlm-select
+              [value]="draft().kind"
+              (valueChange)="choose('kind', $event)"
+              [disabled]="locked()"
+              [itemToString]="kindLabel"
+            >
+              <hlm-select-trigger
+                [buttonId]="'run-create-kind'"
+                [aria-describedby]="field('kind').describedBy()"
+                class="w-full min-h-(--eg-control-touch)"
+              >
+                <hlm-select-value />
+              </hlm-select-trigger>
+              <hlm-select-content *hlmSelectPortal [aria-label]="copy.kind">
+                @for (option of kindOptions; track option.value) {
+                  <hlm-select-item [value]="option.value">{{ option.label }}</hlm-select-item>
+                }
+              </hlm-select-content>
+            </hlm-select>
+            <app-field-feedback [field]="field('kind')" />
+          </div>
+          @for (definition of refFields; track definition.key) {
+            @let feedbackField = field(definition.key);
+            <div class="grid min-w-0 gap-(--eg-space-2)">
+              <label hlmLabel [for]="feedbackField.id">{{ definition.label }}</label>
+              <input
+                hlmInput
+                [id]="feedbackField.id"
+                [name]="definition.key"
+                autocomplete="off"
+                spellcheck="false"
+                [required]="definition.key === 'prNumber' && draft().kind === 'pull_request'"
+                [attr.inputmode]="definition.key === 'prNumber' ? 'numeric' : null"
+                [value]="draft()[definition.key]"
+                [disabled]="locked()"
+                [aria-describedby]="feedbackField.describedBy()"
+                [attr.aria-invalid]="feedbackField.ariaInvalid()"
+                [forceInvalid]="feedbackField.invalid()"
+                (blur)="feedbackField.blur()"
+                (input)="update(definition.key, $event)"
+              />
+              <app-field-feedback [field]="feedbackField" />
+            </div>
+          }
+          <div class="grid min-w-0 gap-(--eg-space-2)">
+            <label hlmLabel for="run-create-triggerEvent">{{ copy.trigger }}</label>
+            <hlm-select
+              [value]="draft().triggerEvent"
+              (valueChange)="choose('triggerEvent', $event)"
+              [disabled]="locked()"
+              [itemToString]="triggerLabel"
+            >
+              <hlm-select-trigger
+                [buttonId]="'run-create-triggerEvent'"
+                [aria-describedby]="field('triggerEvent').describedBy()"
+                class="w-full min-h-(--eg-control-touch)"
+              >
+                <hlm-select-value />
+              </hlm-select-trigger>
+              <hlm-select-content *hlmSelectPortal [aria-label]="copy.trigger">
+                @for (option of triggerOptions; track option.value) {
+                  <hlm-select-item [value]="option.value">{{ option.label }}</hlm-select-item>
+                }
+              </hlm-select-content>
+            </hlm-select>
+            <app-field-feedback [field]="field('triggerEvent')" />
+          </div>
+          <label
+            hlmLabel
+            for="run-create-isFork"
+            class="min-h-(--eg-control-touch) whitespace-normal"
+          >
+            <hlm-checkbox
+              [inputId]="'run-create-isFork'"
+              [checked]="draft().isFork"
+              [disabled]="locked()"
+              [aria-describedby]="field('isFork').describedBy()"
+              (checkedChange)="fork($event)"
+            />{{ copy.fork }}
+          </label>
+          <app-field-feedback [field]="field('isFork')" />
+        </fieldset>
+      </details>
+      <div class="grid min-w-0 gap-(--eg-space-2)">
+        <label hlmLabel for="run-create-components">{{ copy.components }}</label>
+        <textarea
+          hlmInput
+          id="run-create-components"
+          name="components"
+          rows="3"
+          autocomplete="off"
+          spellcheck="false"
+          [value]="draft().components"
+          [disabled]="locked()"
+          [aria-describedby]="field('components').describedBy()"
+          [attr.aria-invalid]="field('components').ariaInvalid()"
+          [forceInvalid]="field('components').invalid()"
+          (blur)="field('components').blur()"
+          (input)="update('components', $event)"
+        ></textarea>
+        <app-field-feedback [field]="field('components')" />
+      </div>
+      @if (store.error(); as error) {
+        <app-inline-feedback
+          data-run-create-error
+          [attr.data-error-code]="error.code"
+          [tone]="'destructive'"
+          [title]="copy.failed"
+          [description]="refusal()"
+        >
+          <p class="m-0 wrap-anywhere">
+            <bdi>{{ error.code }}</bdi
+            >: {{ error.message }}
+          </p>
+          @if (error.requestId) {
+            <p class="m-0 font-mono wrap-anywhere">
+              <bdi>{{ error.requestId }}</bdi>
+            </p>
+          }
+          @for (detail of error.details; track detail) {
+            <p class="m-0 wrap-anywhere">
+              <bdi>{{ detail.path }}</bdi
+              >: {{ detail.reason }}
+              @if (detail.limit !== undefined) {
+                ({{ detail.actual }} / {{ detail.limit }})
+              }
+            </p>
+          }
+        </app-inline-feedback>
+      }
+      @if (store.submitting()) {
+        <p role="status" class="m-0">{{ copy.submitting }}</p>
+      }
+      <footer hlmDialogFooter class="gap-(--eg-space-3)">
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          type="button"
+          data-run-create-dismiss
+          class="min-h-(--eg-control-touch)"
+          [disabled]="store.submitting()"
+          (click)="dismiss()"
+        >
+          {{ copy.dismiss }}
+        </button>
+        <button
+          hlmBtn
+          type="submit"
+          data-run-create-submit
+          class="min-h-(--eg-control-touch)"
+          [disabled]="locked()"
+        >
+          {{ store.submitting() ? copy.submitting : copy.title }}
+        </button>
+      </footer>
+    </form>
+  </hlm-dialog-content>
+</hlm-dialog>
