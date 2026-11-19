@@ -52,7 +52,7 @@ test.describe('skip link and focus handoff (AC6)', () => {
     await page.goto(AUTHORING);
     await expect(page.locator('app-shell-nav nav a').first()).toBeVisible();
 
-    const navigation = page.getByRole('navigation');
+    const navigation = page.locator('app-shell-nav').getByRole('navigation');
     await expect(navigation).toHaveCount(1);
     await expect(navigation).toHaveAccessibleName('Primary navigation');
 

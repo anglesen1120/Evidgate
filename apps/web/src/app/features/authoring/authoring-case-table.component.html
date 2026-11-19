@@ -1,0 +1,178 @@
+<p class="scope-help">{{ copy.scopeHelp }}</p>
+<form class="filters" (ngSubmit)="apply()" [attr.aria-label]="copy.filters">
+  <div class="filter-fields">
+    @for (field of filterFields; track field.key) {
+      <div class="field">
+        <label hlmLabel [for]="'authoring-case-' + field.key">{{ field.label }}</label>
+        <hlm-select
+          [name]="field.key"
+          [ngModel]="draft()[field.key]"
+          (ngModelChange)="choose(field.key, $event)"
+          [itemToString]="choiceLabel"
+        >
+          <hlm-select-trigger [buttonId]="'authoring-case-' + field.key">
+            <hlm-select-value [placeholder]="copy.all" />
+          </hlm-select-trigger>
+          <hlm-select-content *hlmSelectPortal [aria-label]="field.label">
+            @for (option of field.options; track option.value) {
+              <hlm-select-item [value]="option.value">{{ option.label }}</hlm-select-item>
+            }
+          </hlm-select-content>
+        </hlm-select>
+      </div>
+    }
+    @for (field of unavailableFilters; track field.id) {
+      <div class="field">
+        <label hlmLabel [for]="'authoring-case-' + field.id">{{ field.label }}</label>
+        <hlm-select [disabled]="true">
+          <hlm-select-trigger
+            [buttonId]="'authoring-case-' + field.id"
+            [aria-describedby]="'authoring-' + field.id + '-help'"
+          >
+            <hlm-select-value [placeholder]="copy.unavailable" />
+          </hlm-select-trigger>
+          <hlm-select-content *hlmSelectPortal [aria-label]="field.label">
+            <hlm-select-item [value]="'unavailable'">{{ copy.unavailable }}</hlm-select-item>
+          </hlm-select-content>
+        </hlm-select>
+        <p [id]="'authoring-' + field.id + '-help'" class="help" role="note">{{ field.help }}</p>
+      </div>
+    }
+    <div class="field">
+      <label hlmLabel for="authoring-case-item">{{ copy.item }}</label>
+      <input
+        hlmInput
+        id="authoring-case-item"
+        name="item_id"
+        [ngModel]="draft().itemId"
+        (ngModelChange)="update({ itemId: $event })"
+        [attr.aria-describedby]="
+          itemInvalid()
+            ? 'authoring-case-item-help authoring-case-item-error'
+            : 'authoring-case-item-help'
+        "
+        [attr.aria-invalid]="itemInvalid()"
+      />
+      <p id="authoring-case-item-help" class="help">{{ copy.itemHelp }}</p>
+      @if (itemInvalid()) {
+        <p id="authoring-case-item-error" class="error" role="alert">{{ copy.itemError }}</p>
+      }
+    </div>
+    <div class="field search-field">
+      <label hlmLabel for="authoring-case-search">{{ copy.search }}</label>
+      <input
+        hlmInput
+        type="search"
+        id="authoring-case-search"
+        name="q"
+        [ngModel]="draft().q"
+        (ngModelChange)="update({ q: $event })"
+        [attr.aria-describedby]="
+          searchTooLong()
+            ? 'authoring-case-search-help authoring-case-search-error'
+            : 'authoring-case-search-help'
+        "
+        [attr.aria-invalid]="searchTooLong()"
+      />
+      <p id="authoring-case-search-help" class="help">{{ copy.searchHelp }}</p>
+      @if (searchTooLong()) {
+        <p id="authoring-case-search-error" class="error" role="alert">{{ copy.searchError }}</p>
+      }
+    </div>
+  </div>
+  <div class="actions">
+    <button hlmBtn type="submit" [disabled]="searchTooLong() || itemInvalid()" data-case-apply>
+      {{ copy.apply }}
+    </button>
+    <button hlmBtn [variant]="'outline'" type="button" (click)="clear()" data-case-clear>
+      {{ copy.clear }}
+    </button>
+    <button
+      hlmBtn
+      [variant]="'ghost'"
+      type="button"
+      [disabled]="busy() || store.loadingMore() || !store.retryReady()"
+      (click)="store.reload()"
+      data-case-refresh
+    >
+      {{ copy.refresh }}
+    </button>
+  </div>
+</form>
+
+<div class="results" [attr.aria-busy]="busy()">
+  @if (store.stale()) {
+    <app-inline-feedback
+      [tone]="'warning'"
+      [title]="copy.stale"
+      [description]="copy.staleHelp"
+      [announcement]="'off'"
+      data-case-stale
+    />
+  }
+  @if (hasRows() && store.error()) {
+    <app-request-state
+      [status]="'error'"
+      [error]="store.error()"
+      [retryEligible]="(store.error()?.retryable ?? false) && store.retryReady()"
+      [retryBusy]="busy() || store.loadingMore()"
+      (retry)="store.reload()"
+    />
+  }
+  <app-request-state
+    [status]="busy() && !hasRows() ? 'loading' : store.status()"
+    [loadingLabel]="copy.loading"
+    [error]="store.error()"
+    [empty]="!hasRows()"
+    [emptyTitle]="emptyTitle()"
+    [emptyDescription]="store.filtered() ? copy.noMatchHelp : copy.emptyHelp"
+    [emptyActionLabel]="store.filtered() ? copy.clear : undefined"
+    [retryEligible]="(store.error()?.retryable ?? false) && store.retryReady()"
+    [retryBusy]="busy() || store.loadingMore()"
+    (retry)="store.reload()"
+    (emptyAction)="clear()"
+  >
+    <app-authoring-case-rows [rows]="store.rows()" />
+  </app-request-state>
+</div>
+@if (store.status() === 'ready') {
+  <div
+    role="group"
+    class="pagination"
+    [attr.aria-label]="copy.pagination"
+    [attr.aria-busy]="store.loadingMore()"
+  >
+    <p tabindex="-1" role="status" data-case-loaded i18n="@@authoring.case-table.loaded-count">
+      {{ store.rows().length | number }} cases loaded
+    </p>
+    <div class="field">
+      <label hlmLabel for="authoring-case-page-size">{{ copy.pageSize }}</label>
+      <hlm-select
+        [ngModel]="draft().limit"
+        (ngModelChange)="setPageSize($event)"
+        [itemToString]="pageLabel"
+      >
+        <hlm-select-trigger [buttonId]="'authoring-case-page-size'"
+          ><hlm-select-value
+        /></hlm-select-trigger>
+        <hlm-select-content *hlmSelectPortal [aria-label]="copy.pageSize">
+          @for (size of pageSizes(); track size) {
+            <hlm-select-item [value]="size">{{ size }}</hlm-select-item>
+          }
+        </hlm-select-content>
+      </hlm-select>
+    </div>
+    @if (store.nextCursor()) {
+      <button
+        hlmBtn
+        [variant]="'outline'"
+        type="button"
+        [disabled]="store.loadingMore() || busy() || !store.retryReady()"
+        (click)="loadMore($event)"
+        data-case-load-more
+      >
+        {{ store.loadingMore() ? copy.loadingMore : copy.more }}
+      </button>
+    }
+  </div>
+}

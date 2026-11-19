@@ -163,7 +163,8 @@ describe('authoring tree read coordination', () => {
     await store.loadMoreChildren(root.node_id);
     await store.init('project', root.node_id);
     expect(store.children()[root.node_id]?.items).toEqual([child, extra]);
-    expect(store.children()[root.node_id]?.nextCursor).toBeNull();
+    // The selection read answers its own walk cursor, so a later continuation restarts there.
+    expect(store.children()[root.node_id]?.nextCursor).toBe('more');
   });
 
   for (const failedRegion of ['roots', 'selection'] as const) {

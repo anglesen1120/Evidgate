@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
+import type {} from '../../src/app/core/dev-fixtures/fixture-request-log';
 import {
   localePath,
   LOCALES,
@@ -181,7 +182,7 @@ for (const locale of LOCALES) {
     page,
   }) => {
     await page.goto(withVariants(base, ['?fixture.variant.listAuthoringTree=loading']));
-    await expect(page.locator(`${PAGE} app-loading-pattern`)).toBeVisible();
+    await expect(page.locator(`${PAGE} app-loading-pattern`).first()).toBeVisible();
     await expect(page.locator('[data-authoring-cases]')).toBeVisible();
     await expect(page.locator(`${TREE} [data-node-id]`)).toHaveCount(2);
     for (const [variant, selector] of [
@@ -256,4 +257,166 @@ test.describe('authoring tree coarse pointer targets', () => {
       expect(box.height).toBeGreaterThanOrEqual(44);
     }
   });
+});
+
+const CASE_TABLE = 'app-authoring-case-table';
+const CASE_ROWS = 'app-authoring-case-rows';
+const CHECKLIST = '018f0000-0000-7000-8000-000000000201';
+
+async function lastCaseQuery(page: Page): Promise<Record<string, string>> {
+  return page.evaluate(() => {
+    const request = window.__evidgateFixtureRequests
+      ?.filter((entry) => entry.url.includes('/authoring/manual-cases'))
+      .at(-1);
+    return request ? Object.fromEntries(new URL(request.url, location.origin).searchParams) : {};
+  });
+}
+
+for (const locale of LOCALES) {
+  const base = withVariants(
+    localePath(locale, `/dev/authoring-tree/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}`),
+    ['?fixture.variant.listPermissions=settings-policy-readonly'],
+  );
+
+  test(`case table sends every supported filter and restores URL history (${locale})`, async ({
+    page,
+  }) => {
+    await page.goto(
+      withVariants(base, [
+        `?node_id=${ROOT}&item_id=${CHECKLIST}&state=draft&priority=high&covered=true&q=${encodeURIComponent('địa')}&limit=100`,
+      ]),
+    );
+    await expect(page.locator(`${CASE_ROWS} [data-row-id]`)).toHaveCount(1);
+    expect(await lastCaseQuery(page)).toEqual({
+      node_id: ROOT,
+      item_id: CHECKLIST,
+      state: 'draft',
+      priority: 'high',
+      covered: 'true',
+      q: 'địa',
+      limit: '100',
+    });
+    const search = page.locator('#authoring-case-search');
+    await search.fill('no matching case');
+    await page.locator('[data-case-apply]').click();
+    await expect(page.locator(`${CASE_TABLE} app-empty-pattern`)).toBeVisible();
+    expect(new URL(page.url()).searchParams.has('cursor')).toBe(false);
+    await page.goBack();
+    await expect(search).toHaveValue('địa');
+    await expect(page.locator(`${CASE_ROWS} [data-row-id]`)).toHaveCount(1);
+    await page.goForward();
+    await expect(search).toHaveValue('no matching case');
+    await expect(page.locator(`${CASE_TABLE} app-empty-pattern`)).toBeVisible();
+    await page.locator(`${CASE_TABLE} app-empty-pattern button`).click();
+    await expect(search).toHaveValue('');
+    expect(new URL(page.url()).searchParams.get('node_id')).toBe(ROOT);
+    await expect(page.locator(`${CASE_ROWS} [data-row-id]`)).toHaveCount(2);
+  });
+
+  test(`case table mixes visible selection, resets it for filters, and refuses unsupported scope (${locale})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(base);
+    const all = page.locator('[data-select-visible] [role="checkbox"]');
+    const rowBoxes = page.locator('[data-case-select] [role="checkbox"]');
+    await expect(rowBoxes).toHaveCount(2);
+    await tabTo(page, all);
+    await page.keyboard.press('Space');
+    await expect(all).toHaveAttribute('aria-checked', 'true');
+    await rowBoxes.first().click();
+    await expect(all).toHaveAttribute('aria-checked', 'mixed');
+    await expect(page.locator('[data-selection-summary]')).toContainText(/1.*2/);
+    await expect(page.locator('[data-export-selection]')).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.locator('#authoring-export-help')).toBeVisible();
+    await expect(page.locator('#authoring-case-source')).toBeDisabled();
+    await expect(page.locator('#authoring-case-owner')).toBeDisabled();
+    await expect(page.locator('#authoring-source-help')).toBeVisible();
+    await expect(page.locator('#authoring-owner-help')).toBeVisible();
+    await page.locator('#authoring-case-search').fill('Áp dụng');
+    await page.locator('[data-case-apply]').click();
+    await expect(rowBoxes).toHaveCount(1);
+    await expect(all).toHaveAttribute('aria-checked', 'false');
+    expect(await lastCaseQuery(page)).not.toHaveProperty('source');
+    expect(await lastCaseQuery(page)).not.toHaveProperty('owner');
+    await expectNoA11yViolations(page, PAGE);
+  });
+
+  test(`case table pages opaquely and resets cursor and selection on filtering (${locale})`, async ({
+    page,
+  }) => {
+    await page.goto(base);
+    await expect(page.locator(`${CASE_ROWS} [data-row-id]`)).toHaveCount(2);
+    await page.locator('[data-case-load-more]').click();
+    await expect(page.locator(`${CASE_ROWS} [data-row-id]`)).toHaveCount(3);
+    await expect(page).toHaveURL(/cursor=authoring-cases-2/);
+    expect((await lastCaseQuery(page))['cursor']).toBe('authoring-cases-2');
+    await page.locator('#authoring-case-search').fill('Địa chỉ');
+    await page.locator('[data-case-apply]').click();
+    await expect(page.locator(`${CASE_ROWS} [data-row-id]`)).toHaveCount(2);
+    expect(new URL(page.url()).searchParams.has('cursor')).toBe(false);
+    expect(await lastCaseQuery(page)).not.toHaveProperty('cursor');
+  });
+
+  test(`case table independently renders loading, empty, forbidden and Retry-After (${locale})`, async ({
+    page,
+  }) => {
+    for (const [variant, selector] of [
+      ['loading', 'app-loading-pattern'],
+      ['empty', 'app-empty-pattern'],
+      ['error', 'app-error-pattern'],
+      ['forbidden', 'app-forbidden-pattern'],
+      ['unavailable', 'app-retry-after'],
+    ]) {
+      await page.goto(withVariants(base, [`?fixture.variant.listManualCases=${variant}`]));
+      await expect(page.locator(`${CASE_TABLE} ${selector}`)).toBeVisible();
+      await expect(page.locator(`${TREE} [data-node-id]`)).toHaveCount(2);
+      if (variant === 'forbidden')
+        await expect(page.locator(CASE_TABLE)).not.toContainText('SHOP-601');
+      if (variant === 'unavailable')
+        await expect(page.locator(`${CASE_TABLE} app-retry-after button`)).toBeDisabled();
+    }
+  });
+
+  for (const theme of THEMES)
+    for (const width of [360, 1280]) {
+      test(`case table long titles reflow with keyboard inspection and axe (${locale}, ${theme}, ${width})`, async ({
+        page,
+      }) => {
+        await seedStoredTheme(page, theme);
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(base);
+        await expect(page.locator(CASE_ROWS)).toContainText('Tuỳ chọn giao hàng');
+        await expect(page.locator(CASE_ROWS)).toContainText('018f0000-0000-7000-8000-000000000777');
+        await expect(page.locator('#authoring-case-pending-help')).toBeVisible();
+        if (width < 768) {
+          await expect(page.locator('[data-case-select]')).toHaveCount(0);
+          await expect(page.locator('[data-selection-notice]')).toBeVisible();
+          await expect(page.locator(`${CASE_ROWS} dl`)).not.toHaveCount(0);
+        }
+        await page.locator('#authoring-case-search').focus();
+        await page.keyboard.press('Tab');
+        await expect(page.locator('[data-case-apply]')).toBeFocused();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+          true,
+        );
+        await expectNoA11yViolations(page, PAGE);
+      });
+    }
+}
+
+test('case table virtualizes more than 200 loaded cases at a roomy desktop width', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  const base = localePath(
+    'en',
+    `/dev/authoring-tree/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}`,
+  );
+  await page.goto(withVariants(base, ['?fixture.variant.listManualCases=bulk&limit=200']));
+  await expect(page.locator('[data-case-loaded]')).toContainText('200');
+  await page.locator('[data-case-load-more]').click();
+  await expect(page.locator('[data-case-loaded]')).toContainText('205');
+  await expect(page.locator(`${CASE_ROWS} cdk-virtual-scroll-viewport`)).toBeVisible();
+  expect(await page.locator(`${CASE_ROWS} [data-row-id]`).count()).toBeLessThan(205);
 });

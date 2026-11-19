@@ -1,0 +1,137 @@
+@if (desktop()) {
+  <div class="selection-bar" data-select-visible>
+    <label
+      class="checkbox-target"
+      for="authoring-select-visible"
+      id="authoring-select-visible-label"
+    >
+      <hlm-checkbox
+        [inputId]="'authoring-select-visible'"
+        [aria-labelledby]="'authoring-select-visible-label'"
+        [aria-describedby]="'authoring-selection-help'"
+        [checked]="allSelected()"
+        [indeterminate]="mixed()"
+        [disabled]="visibleRows().length === 0"
+        (checkedChange)="selectVisible()"
+      />
+      <span>{{ copy.select }}</span>
+    </label>
+    <p data-selection-summary role="status" i18n="@@authoring.case-table.selection-summary">
+      {{ selectedCount() | number }} of {{ rows().length | number }} loaded selected; applies to
+      visible rows only
+    </p>
+  </div>
+  <p id="authoring-selection-help" class="help">{{ copy.selectionHelp }}</p>
+} @else {
+  <p class="help" data-selection-notice tabindex="-1">{{ copy.narrowHelp }}</p>
+}
+<app-data-table
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowId]="rowId"
+  [caption]="copy.caption"
+  [virtualThreshold]="200"
+  [fitToContainer]="false"
+  [fixedHeightCells]="true"
+  [flow]="'page'"
+/>
+@if (desktop()) {
+  <div class="export-bar">
+    <a
+      hlmBtn
+      [variant]="'outline'"
+      [attr.aria-disabled]="'true'"
+      [attr.role]="'link'"
+      [attr.aria-describedby]="'authoring-export-help'"
+      data-export-selection
+      tabindex="0"
+      >{{ copy.export }}</a
+    >
+    <p id="authoring-export-help" class="help">{{ copy.exportHelp }}</p>
+  </div>
+}
+<p id="authoring-case-pending-help" class="help">{{ copy.pendingHelp }}</p>
+
+<ng-template #selectionCell let-row>
+  <label
+    class="checkbox-target row-checkbox"
+    [for]="'authoring-select-' + row.case_id"
+    [id]="'authoring-select-label-' + row.case_id"
+    data-case-select
+  >
+    <hlm-checkbox
+      [inputId]="'authoring-select-' + row.case_id"
+      [aria-labelledby]="'authoring-select-label-' + row.case_id"
+      [aria-describedby]="'authoring-selection-help'"
+      [checked]="selected().has(row.case_id)"
+      (checkedChange)="selectRow(row, $event)"
+    />
+    <span class="sr-only">{{ selectName(row) }}</span>
+  </label>
+</ng-template>
+<ng-template #identityCell let-row let-stacked="stacked">
+  <div class="identity" [class.virtual-cell]="virtual()">
+    <app-copyable-identifier
+      [value]="row.code"
+      [label]="copy.code"
+      [truncate]="!stacked"
+      [compact]="virtual()"
+      [copySize]="'lg'"
+    />
+    <app-copyable-identifier
+      [value]="row.case_id"
+      [label]="copy.id"
+      [truncate]="!stacked"
+      [compact]="virtual()"
+      [copySize]="'lg'"
+    />
+  </div>
+</ng-template>
+<ng-template #titleCell let-row let-stacked="stacked">
+  <bdi
+    ><app-data-table-value [value]="row.title" [truncate]="!stacked" [fixedRow]="virtual()"
+  /></bdi>
+</ng-template>
+<ng-template #parentCell let-row let-stacked="stacked">
+  <app-copyable-identifier
+    [value]="row.checklist_item_id"
+    [label]="copy.item"
+    [truncate]="!stacked"
+    [compact]="virtual()"
+    [copySize]="'lg'"
+  />
+</ng-template>
+<ng-template #priorityCell let-row>
+  <app-status-pill
+    [label]="priorityLabel(row)"
+    [tone]="row.priority === 'critical' || row.priority === 'high' ? 'warning' : 'neutral'"
+  />
+</ng-template>
+<ng-template #stateCell let-row>
+  <app-status-pill
+    [label]="stateLabel(row)"
+    [tone]="row.state === 'approved' ? 'info' : 'neutral'"
+  />
+</ng-template>
+<ng-template #coverageCell let-row let-stacked="stacked">
+  <div class="coverage" [class.virtual-cell]="virtual()">
+    <app-status-pill
+      [label]="row.linked_live_count > 0 ? copy.covered : copy.uncovered"
+      [tone]="row.linked_live_count > 0 ? 'info' : 'neutral'"
+    />
+    @if (row.linked_case_ids.length > 0) {
+      <span class="sr-only">{{ copy.links }}</span>
+      <app-data-table-value
+        [value]="row.linked_case_ids.join(', ')"
+        [truncate]="!stacked"
+        [fixedRow]="virtual()"
+      />
+    }
+  </div>
+</ng-template>
+<ng-template #versionCell let-row>
+  <app-revision-chip [revision]="row.version" [label]="copy.version" />
+</ng-template>
+<ng-template #pendingCell>
+  <span [attr.aria-describedby]="'authoring-case-pending-help'">—</span>
+</ng-template>
