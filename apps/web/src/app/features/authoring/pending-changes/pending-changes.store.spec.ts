@@ -130,6 +130,27 @@ describe('PendingChangesStore', () => {
     expect(store().empty()).toBe(false);
   });
 
+  it('keeps a target scope across reload and loadMore and refetches when the scope changes', async () => {
+    listPending.mockResolvedValue({ items: [change(COMMENT_ID, 'comment')], next_cursor: 'c2' });
+    await store().init(PROJECT, { targetId: TARGET_ID });
+    await store().loadMore();
+    await store().reload();
+    expect(listPending.mock.calls.map((call) => [call[2], call[3]])).toEqual([
+      [undefined, TARGET_ID],
+      ['c2', TARGET_ID],
+      [undefined, TARGET_ID],
+    ]);
+    await store().init(PROJECT, { targetId: OTHER_TARGET });
+    expect(listPending).toHaveBeenLastCalledWith(
+      PROJECT,
+      expect.any(AbortSignal),
+      undefined,
+      OTHER_TARGET,
+    );
+    await store().init(PROJECT);
+    expect(listPending).toHaveBeenLastCalledWith(PROJECT, expect.any(AbortSignal), undefined);
+  });
+
   it('distinguishes an empty queue from a not-found or forbidden read', async () => {
     listPending.mockResolvedValue({ items: [], next_cursor: null });
     await store().init(PROJECT);

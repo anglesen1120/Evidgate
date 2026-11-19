@@ -53,6 +53,7 @@ const NO_TITLES: Readonly<Record<string, string>> = {};
 export const PendingChangesStore = signalStore(
   withState({
     projectId: null as string | null,
+    targetId: null as string | null,
     rows: [] as readonly AuthoringChangeListItem[],
     nextCursor: null as string | null,
     queueStatus: 'idle',
@@ -165,7 +166,12 @@ export const PendingChangesStore = signalStore(
       });
       const signal = store._run.startRead();
       try {
-        const page = await store._data.listPending(project, signal, cursor ?? undefined);
+        // An unscoped read keeps the original three-argument call.
+        const scope = store.targetId();
+        const page =
+          scope === null
+            ? await store._data.listPending(project, signal, cursor ?? undefined)
+            : await store._data.listPending(project, signal, cursor ?? undefined, scope);
         if (store.loadToken() !== token || !store._run.ownsRead(signal)) return;
         if (replace) adoptPage(page.items, page.next_cursor);
         else {
@@ -305,12 +311,14 @@ export const PendingChangesStore = signalStore(
     }
 
     return {
-      async init(projectId: string): Promise<void> {
-        if (store.projectId() !== projectId) {
+      async init(projectId: string, scope: { readonly targetId?: string } = {}): Promise<void> {
+        const targetId = scope.targetId ?? null;
+        if (store.projectId() !== projectId || store.targetId() !== targetId) {
           store._keys.reset();
           store._run.stop();
           patchState(store, {
             projectId,
+            targetId,
             rows: [],
             nextCursor: null,
             queueStatus: 'idle',
