@@ -22,6 +22,7 @@ import { finalize, tap } from 'rxjs';
 import { isApiRequestUrl } from '../http/api-origin';
 import { isCappedBinaryCall } from '../http/binary-transport';
 import { exceedsBinaryCap } from '../http/http-client-fetch-binary';
+import { utf8ExceedsBytes } from '../http/utf8-size';
 import { apiPathTemplate } from './api-path-template';
 import { TelemetryService } from './telemetry.service';
 import type { ApiCallResult } from './telemetry-sdk';
@@ -87,14 +88,7 @@ function readRequestId(headers: HttpHeaders): string | null {
 
 /** Whether a string error body is within the bound, in UTF-8 bytes like the binary decode. */
 function stringFitsTracedBound(text: string): boolean {
-  if (text.length > MAX_TRACED_ERROR_BYTES) {
-    return false;
-  }
-  // UTF-16 units * 3 bounds the encoded size from above, so only a long-ish string is measured.
-  return (
-    text.length * 3 <= MAX_TRACED_ERROR_BYTES ||
-    new TextEncoder().encode(text).byteLength <= MAX_TRACED_ERROR_BYTES
-  );
+  return !utf8ExceedsBytes(text, MAX_TRACED_ERROR_BYTES);
 }
 
 /** The body as JSON, when the server sent it as a string instead of parsed JSON. */
