@@ -780,3 +780,13 @@ Closed by S475 (#977, 7f6577ec): the redundant scan after the capped text reply 
 | toBinaryResponse body type (S472) | `toBinaryResponse` still types `body` as `ArrayBuffer \| null` while `finalBodySize` accepts views, Blobs and strings, so `http-client-fetch-binary-final-body.spec.ts` passes hostile bodies with `as never`. Widen the parameter to `unknown` (production change) and drop the casts. | receiver: core/http owner |
 
 Closed by S475 (#977, 7f6577ec): `toBinaryResponse` takes `unknown`, keeps the fail-closed rule, and the final-body spec has no `as never` left.
+
+## Moved from status-carried.md by S477 (2026-11-20)
+
+|CR-13 slice B: cost-2 routes take two round trips (S461)|Routes that charge a cost of 2 call `AcquireAsync` twice, so two statements per request. A single call with a cost argument would halve the round trips; not measured, no latency evidence either way.|receiver: coordinator (next CR-13 lane)|
+
+Closed by S477 (#983, 48844c2d): `rate_limit_acquire` takes a cost (1..16) and `ExchangeRateLimiter.AcquireAsync` makes one call; `Acquire_ACostTwoGateCall_SendsOneStatement` pins one statement and went red when the second call was restored.
+
+|CR-13 slice B: no-op update on already-refused rows (S461)|Once a window is at limit+1 the upsert still writes the row (hit_count stays, tuple is rewritten), so a refused flood causes row churn and WAL. Skip the write when the row is already refused and the window is live; not measured.|receiver: perf lane|
+
+Closed by S477 (#983, 48844c2d): a live window at the limit is refused by a plain read that writes and locks nothing; row xmin/ctid stay unchanged across refusals (`Acquire_RefusalsOnALiveWindow_LeaveTheRowVersionUnchangedUntilTheRolloverRewritesIt`, red when the write was restored). WAL volume itself is not measured, see the new carried row.
