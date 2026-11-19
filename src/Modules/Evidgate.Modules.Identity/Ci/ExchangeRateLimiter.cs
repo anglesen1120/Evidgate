@@ -38,8 +38,10 @@ internal readonly record struct RateDecision(bool Allowed, int RetryAfterSeconds
 /// The window lives in PostgreSQL, so every replica counts into the same one and the limit does not multiply with the
 /// replica count; a full surface evicts its oldest keys on a sampled capacity check instead of refusing new
 /// clients, and each new key sweeps a bounded batch of that surface's expired windows.
+/// <see cref="AcquireAsync"/> is virtual only so a test can make the store fail with a chosen exception type;
+/// nothing in production derives from it.
 /// </summary>
-internal sealed class ExchangeRateLimiter(NpgsqlDataSource dataSource, IOptions<RateLimitOptions> options)
+internal class ExchangeRateLimiter(NpgsqlDataSource dataSource, IOptions<RateLimitOptions> options)
 {
     /// <summary>
     /// A budget decision must not hold a request open: the store answers in milliseconds or it answers late, and
@@ -52,7 +54,7 @@ internal sealed class ExchangeRateLimiter(NpgsqlDataSource dataSource, IOptions<
     /// <param name="key">The limiter key; the store receives only its unsalted SHA-256 digest, which is pseudonymous, not anonymous.</param>
     /// <param name="cancellationToken">The request's cancellation token.</param>
     /// <exception cref="NpgsqlException">The store could not answer; the caller fails closed.</exception>
-    public async ValueTask<RateDecision> AcquireAsync(
+    public virtual async ValueTask<RateDecision> AcquireAsync(
         RateSurface surface, string key, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(key);
