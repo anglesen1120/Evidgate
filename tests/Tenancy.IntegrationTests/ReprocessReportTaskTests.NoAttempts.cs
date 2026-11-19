@@ -1,6 +1,6 @@
 // The attempt half of the reprocess path: a reprocess adds events and a revision but writes no case_attempt row. An
 // attempt is stamped with its transaction's start, and that stamp can fall inside an older revision's frozen window
-// (FrozenEvidenceSql.LoadLatestAttemptStatuses), which would change what that revision recomputes. What a re-read row
+// (FrozenEvidenceSql.LoadFrozenInput), which would change what that revision recomputes. What a re-read row
 // contributes to a verdict is settled when a revision is frozen, never by a second writer of the attempt table.
 using System.Globalization;
 using System.Text.Json;
@@ -183,8 +183,9 @@ public sealed partial class ReprocessReportTaskTests
             .BeginAsync(world.Org, null, readOnlyTransaction: true, cancellationToken: Token);
 
         var frozen = services.ServiceProvider.GetRequiredService<IFrozenEvidence>();
-        var revision = await frozen.GetRevisionAsync(world.Org, world.RunId, revisionNo, Token);
-        var statuses = await frozen.GetLatestAttemptStatusesAsync(world.Org, world.RunId, revisionNo, Token);
+        var input = await frozen.GetFrozenInputAsync(world.Org, world.RunId, revisionNo, Token);
+        var revision = input?.Revision;
+        var statuses = input?.Attempts ?? [];
 
         return JsonSerializer.Serialize(new { revision, statuses });
     }
