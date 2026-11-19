@@ -1,4 +1,5 @@
 import { InteractivityChecker } from '@angular/cdk/a11y';
+import { manualChangeDetection } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { computed, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
@@ -132,7 +133,6 @@ describe('PendingChangesPage dialog accessibility', () => {
       expect(apply).not.toHaveBeenCalled();
       expect(discard).not.toHaveBeenCalled();
     },
-    30_000,
   );
   it('focuses and announces the empty queue after an atomic apply', async () => {
     const { fixture, ui } = await setup();
@@ -142,22 +142,26 @@ describe('PendingChangesPage dialog accessibility', () => {
     if (!confirm) throw new Error('Expected the consent commit control');
     confirm.click();
     await fixture.whenStable();
-    expect(apply).toHaveBeenCalledTimes(1);
-    expect(await ui.count('[data-pending-receipt]')).toBe(1);
-    // The contract applies the whole selection, so both queued rows appear in the receipt.
-    expect(await ui.count('[data-pending-applied-id]')).toBe(2);
-    expect(await ui.focused('[data-pending-preview-content]')).toBe(true);
-    const emptyRegion = document.querySelector<HTMLElement>('[data-pending-preview-content]');
-    expect(emptyRegion?.getAttribute('aria-label')).toBe('No pending changes');
-    expect(await ui.count('app-empty-pattern')).toBe(1);
-    expect(await ui.text()).not.toContain('Choose a queued change');
-    expect(await ui.text()).not.toContain('Selected change');
-    // An emptied queue either removes the Apply control or leaves it disabled; never focused.
-    if ((await ui.count('[data-pending-apply]')) > 0) {
-      expect(await ui.disabled('[data-pending-apply]')).toBe(true);
-      expect(await ui.focused('[data-pending-apply]')).toBe(false);
-    }
-  }, 30_000);
+    // The mutation has settled; read its rendered result without rechecking the whole fixture
+    // before every harness query.
+    await manualChangeDetection(async () => {
+      expect(apply).toHaveBeenCalledTimes(1);
+      expect(await ui.count('[data-pending-receipt]')).toBe(1);
+      // The contract applies the whole selection, so both queued rows appear in the receipt.
+      expect(await ui.count('[data-pending-applied-id]')).toBe(2);
+      expect(await ui.focused('[data-pending-preview-content]')).toBe(true);
+      const emptyRegion = document.querySelector<HTMLElement>('[data-pending-preview-content]');
+      expect(emptyRegion?.getAttribute('aria-label')).toBe('No pending changes');
+      expect(await ui.count('app-empty-pattern')).toBe(1);
+      expect(await ui.text()).not.toContain('Choose a queued change');
+      expect(await ui.text()).not.toContain('Selected change');
+      // An emptied queue either removes the Apply control or leaves it disabled; never focused.
+      if ((await ui.count('[data-pending-apply]')) > 0) {
+        expect(await ui.disabled('[data-pending-apply]')).toBe(true);
+        expect(await ui.focused('[data-pending-apply]')).toBe(false);
+      }
+    });
+  });
   it('moves focus to the preview region after discard removes its opener', async () => {
     const { fixture, ui } = await setup();
     await ui.click('[data-pending-preview]');
@@ -167,11 +171,13 @@ describe('PendingChangesPage dialog accessibility', () => {
     if (!confirm) throw new Error('Expected the consent commit control');
     confirm.click();
     await fixture.whenStable();
-    expect(discard).toHaveBeenCalledTimes(1);
-    expect(discard.mock.calls[0]).toContain(CHANGE);
-    expect(await ui.count('[data-pending-discard]')).toBe(0);
-    expect(await ui.focused('[data-pending-preview-content]')).toBe(true);
-  }, 30_000);
+    await manualChangeDetection(async () => {
+      expect(discard).toHaveBeenCalledTimes(1);
+      expect(discard.mock.calls[0]).toContain(CHANGE);
+      expect(await ui.count('[data-pending-discard]')).toBe(0);
+      expect(await ui.focused('[data-pending-preview-content]')).toBe(true);
+    });
+  });
   it('reloads away a blocked replay after a discard removes part of its selection', async () => {
     apply.mockRejectedValueOnce(new ApiRequestError(pendingError('network', 0)));
     const { fixture, ui } = await setup();
@@ -193,15 +199,19 @@ describe('PendingChangesPage dialog accessibility', () => {
     expect(store.rows().map((row) => row.change_id)).toEqual([ITEM]);
     expect(store.selectedIds()).toEqual([ITEM]);
     expect(store.applyRequest()?.ids).toEqual([CHANGE, ITEM]);
-    expect(await ui.disabled('[data-pending-apply]')).toBe(true);
-    expect(await ui.textAt('#pending-apply-explanation')).toContain('reload the queue');
-    expect(await ui.textAt('[data-pending-replay-reload]')).toContain('Reload the queue');
+    await manualChangeDetection(async () => {
+      expect(await ui.disabled('[data-pending-apply]')).toBe(true);
+      expect(await ui.textAt('#pending-apply-explanation')).toContain('reload the queue');
+      expect(await ui.textAt('[data-pending-replay-reload]')).toContain('Reload the queue');
+    });
     listPending.mockResolvedValueOnce({ items: [SECOND], next_cursor: null });
     await ui.click('[data-pending-replay-reload]');
     await fixture.whenStable();
-    expect(store.applyRequest()).toBeNull();
-    expect(store.selectedIds()).toEqual([ITEM]);
-    expect(await ui.count('[data-pending-replay-reload]')).toBe(0);
-    expect(await ui.disabled('[data-pending-apply]')).toBe(false);
-  }, 30_000);
+    await manualChangeDetection(async () => {
+      expect(store.applyRequest()).toBeNull();
+      expect(store.selectedIds()).toEqual([ITEM]);
+      expect(await ui.count('[data-pending-replay-reload]')).toBe(0);
+      expect(await ui.disabled('[data-pending-apply]')).toBe(false);
+    });
+  });
 });

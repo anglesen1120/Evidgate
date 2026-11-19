@@ -9,7 +9,6 @@ import {
   withState,
 } from '@ngrx/signals';
 import type {
-  ApplyAuthoringChangesResponse,
   AuthoringChangeListItem,
   AuthoringChangeV1,
   ChecklistItemDto,
@@ -21,63 +20,30 @@ import type { ApiError } from '../../../core/http/api-error';
 import { createRetryAfterWait } from '../../../core/http/retry';
 import { SessionStore } from '../../../core/session/session.store';
 import { AUTHORING_READ, AUTHORING_WRITE } from '../import-export/import-export.copy';
+import { createPendingApply } from './pending-changes.apply';
 import {
   MAX_APPLY_SELECTION,
   PENDING_COPY,
-  isStale,
   pendingPreview,
   rowBlockedReason,
-  selectionBlockedReason,
   type PendingPreview,
 } from './pending-changes.copy';
+import { applyBlockedReason as blockedApplyReason, discardRefused } from './pending-changes.guards';
 import {
   createPendingBookkeeping,
   isCancellation,
-  sameSelection,
+  pendingDocument,
+  pendingRequestFailure as fail,
   signatureOf,
   unexpectedFailure,
-  pendingDocument,
-  canReplayApply,
-  pendingRequestFailure as fail,
-  type PendingApplyReplay,
 } from './pending-changes.intent';
-import { applyBlockedReason as blockedApplyReason, discardRefused } from './pending-changes.guards';
+import { createPendingReads } from './pending-changes.reads';
+import { pendingInitialState } from './pending-changes.state';
 
-export interface PendingConflict {
-  readonly code: string;
-  readonly pointers: readonly { readonly path: string | null; readonly reason: string }[];
-}
-
-const NO_TITLES: Readonly<Record<string, string>> = {};
+export type { PendingConflict } from './pending-changes.state';
 
 export const PendingChangesStore = signalStore(
-  withState({
-    projectId: null as string | null,
-    rows: [] as readonly AuthoringChangeListItem[],
-    nextCursor: null as string | null,
-    queueStatus: 'idle',
-    queueError: null as ApiError | null,
-    queueStale: false,
-    queueLoading: false,
-    loadToken: 0,
-    selectedIds: [] as readonly string[],
-    selectionTouched: false,
-    /** The batch ETag the reviewed selection was read at; null until that read, and after it moves. */
-    batchEtag: null as string | null,
-    previewId: null as string | null,
-    localReason: '',
-    targetTitles: NO_TITLES,
-    applying: false,
-    applyError: null as ApiError | null,
-    applyRequest: null as PendingApplyReplay | null,
-    conflict: null as PendingConflict | null,
-    receipt: null as ApplyAuthoringChangesResponse | null,
-    discardingId: null as string | null,
-    discardError: null as ApiError | null,
-    queueing: false,
-    enqueueError: null as ApiError | null,
-    retryAfterSeconds: null as number | null,
-  }),
+  withState(pendingInitialState),
   withProps(() => ({
     _data: inject(AuthoringPendingDataService),
     _session: inject(SessionStore),
@@ -127,190 +93,25 @@ export const PendingChangesStore = signalStore(
       store._wait.start(error.retryAfterSeconds);
     }
 
-    function blockApply(reason: string): false {
-      patchState(store, { applyError: unexpectedFailure('selection_blocked', reason) });
-      return false;
-    }
-
     function rememberTitles(items: readonly ChecklistItemDto[]): void {
       const titles = { ...store.targetTitles() };
       for (const item of items) titles[item.item_id] = item.title;
       patchState(store, { targetTitles: titles });
     }
 
-    function adoptPage(items: readonly AuthoringChangeListItem[], cursor: string | null): void {
-      const present = new Set(items.map((row) => row.change_id));
-      const kept = store.selectedIds().filter((id) => present.has(id));
-      const selectedIds = store.selectionTouched()
-        ? kept
-        : items.slice(0, MAX_APPLY_SELECTION).map((row) => row.change_id);
-      const previewId = store.previewId();
-      patchState(store, {
-        rows: items,
-        nextCursor: cursor,
-        selectedIds,
-        batchEtag: null,
-        previewId: previewId !== null && present.has(previewId) ? previewId : null,
-        queueStale: false,
-      });
-    }
-
-    async function read(project: string, cursor: string | null, replace: boolean): Promise<void> {
-      const token = store.loadToken() + 1;
-      patchState(store, {
-        loadToken: token,
-        queueLoading: true,
-        queueStatus: store.queueStatus() === 'ready' ? 'ready' : 'loading',
-        queueError: null,
-      });
-      const signal = store._run.startRead();
-      try {
-        const page = await store._data.listPending(project, signal, cursor ?? undefined);
-        if (store.loadToken() !== token || !store._run.ownsRead(signal)) return;
-        if (replace) adoptPage(page.items, page.next_cursor);
-        else {
-          const seen = new Set(store.rows().map((row) => row.change_id));
-          patchState(store, {
-            rows: [...store.rows(), ...page.items.filter((row) => !seen.has(row.change_id))],
-            nextCursor: page.next_cursor,
-          });
-        }
-        patchState(store, {
-          queueStatus: 'ready',
-          applyError: store.applyError()?.kind === 'forbidden' ? null : store.applyError(),
-          discardError: store.discardError()?.kind === 'forbidden' ? null : store.discardError(),
-        });
-        if (replace && store.applyRequest() !== null) {
-          store._keys.dropApply();
-          patchState(store, { applyRequest: null, applyError: null });
-        }
-      } catch (error) {
-        if (store.loadToken() !== token || !store._run.ownsRead(signal)) return;
-        const failure = fail(error, PENDING_COPY.queueFailed);
-        const denied = failure.kind === 'forbidden' || failure.kind === 'not_found';
-        patchState(store, {
-          queueStatus: !denied && store.rows().length > 0 ? 'ready' : 'error',
-          queueError: failure,
-          queueStale: !denied && store.rows().length > 0,
-          ...(denied ? { rows: [], targetTitles: NO_TITLES, receipt: null, previewId: null } : {}),
-        });
-        noteWait(failure);
-      } finally {
-        if (store.loadToken() === token) patchState(store, { queueLoading: false });
-      }
-    }
-
-    async function reload(): Promise<void> {
-      const project = store.projectId();
-      if (project !== null && !store.applying()) await read(project, null, true);
-    }
-
-    /** Reads the exact selection again: the only source of the apply `If-Match`. */
-    async function refresh(
-      project: string,
-      ids: readonly string[],
-      signal: AbortSignal,
-    ): Promise<string | null> {
-      const { items, batchEtag } = await store._data.selection(project, ids, signal);
-      if (signal.aborted) return null;
-      const byId = new Map(items.map((row) => [row.change_id, row]));
-      patchState(store, {
-        rows: store.rows().map((row) => byId.get(row.change_id) ?? row),
-        batchEtag,
-      });
-      return batchEtag;
-    }
-
-    async function apply(): Promise<boolean> {
-      const project = store.projectId();
-      const ids = store.selectedIds();
-      if (project === null || store.applying() || store.queueLoading()) return false;
-      let request = store.applyRequest();
-      if (request !== null && !sameSelection(request.ids, ids))
-        return blockApply(PENDING_COPY.replaySelectionChanged);
-      const blocked = request === null ? selectionBlockedReason(store.rows(), ids) : null;
-      if (blocked !== null || !store.canWrite())
-        return blockApply(blocked ?? PENDING_COPY.readOnly);
-      patchState(store, { applying: true, applyError: null, conflict: null });
-      const signal = store._run.call();
-      try {
-        if (request === null) {
-          const etag = await refresh(project, ids, signal);
-          if (etag === null) return false;
-          if (store.selectedRows().some((row) => isStale(row))) {
-            patchState(store, {
-              applyError: unexpectedFailure('selection_stale', PENDING_COPY.blockedStale),
-            });
-            return false;
-          }
-          request = {
-            ids: [...ids],
-            rows: store.selectedRows(),
-            etag,
-            key: store._keys.apply(signatureOf('apply', '', etag, ids)),
-          };
-          patchState(store, { applyRequest: request });
-        }
-        const result = await store._data.apply(
-          project,
-          request.etag,
-          request.ids,
-          request.key,
-          signal,
-        );
-        const applied = new Set(result.applied_change_ids);
-        store._keys.dropApply();
-        const previewId = store.previewId();
-        patchState(store, {
-          rows: store.rows().filter((row) => !applied.has(row.change_id)),
-          selectedIds: store.selectedIds().filter((id) => !applied.has(id)),
-          batchEtag: null,
-          previewId: previewId !== null && applied.has(previewId) ? null : previewId,
-          receipt: result,
-          applyRequest: null,
-          applyError: null,
-          conflict: null,
-        });
-        return true;
-      } catch (error) {
-        if (isCancellation(error)) return false;
-        const failure = fail(error, PENDING_COPY.applyFailed);
-        if (failure.kind === 'precondition_failed') {
-          store._keys.dropApply();
-          patchState(store, {
-            conflict: {
-              code: failure.code,
-              pointers: failure.details.map((detail) => ({
-                path: detail.path ?? null,
-                reason: detail.reason,
-              })),
-            },
-            applyError: null,
-            applyRequest: null,
-          });
-        } else {
-          patchState(store, { applyError: failure });
-          if (!canReplayApply(failure)) {
-            store._keys.dropApply();
-            patchState(store, { applyRequest: null });
-          }
-          if (failure.kind === 'conflict') await read(project, null, true);
-          noteWait(failure);
-        }
-        return false;
-      } finally {
-        store._run.release(signal);
-        patchState(store, { applying: false });
-      }
-    }
+    const { read, reload } = createPendingReads(store, noteWait);
+    const apply = createPendingApply(store, read, noteWait);
 
     return {
-      async init(projectId: string): Promise<void> {
-        if (store.projectId() !== projectId) {
+      async init(projectId: string, scope: { readonly targetId?: string } = {}): Promise<void> {
+        // An empty id is no scope; keeping it would claim a scope the request drops.
+        const targetId = scope.targetId || null;
+        if (store.projectId() !== projectId || store.targetId() !== targetId) {
           store._keys.reset();
           store._run.stop();
           patchState(store, {
             projectId,
+            targetId,
             rows: [],
             nextCursor: null,
             queueStatus: 'idle',

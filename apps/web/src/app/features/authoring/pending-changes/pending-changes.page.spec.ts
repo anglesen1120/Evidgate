@@ -1,3 +1,4 @@
+import { manualChangeDetection } from '@angular/cdk/testing';
 import { computed, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
@@ -151,8 +152,11 @@ describe('PendingChangesPage', () => {
     await dialog.confirm();
     await fixture.whenStable();
     expect(apply).toHaveBeenCalledTimes(1);
-    expect(await ui.textAt('[data-pending-receipt]')).toContain(PENDING_COPY.receiptCommentOnly);
-  }, 30_000);
+    // The confirmed apply has rendered; one stabilization covers the single receipt read.
+    await manualChangeDetection(async () => {
+      expect(await ui.textAt('[data-pending-receipt]')).toContain(PENDING_COPY.receiptCommentOnly);
+    });
+  });
   it('keeps queue and local reason unchanged after 412 until explicit Reload', async () => {
     apply.mockRejectedValue(new ApiRequestError(pendingError('precondition_failed', 412)));
     const { ui, root, store, fixture } = await setup();
@@ -160,27 +164,33 @@ describe('PendingChangesPage', () => {
     await ui.click('[data-pending-apply]');
     await (await root.getHarness(PendingConsentHarness)).confirm();
     await fixture.whenStable();
-    expect(store.rows()).toHaveLength(1);
-    expect(store.localReason()).toBe('Keep this draft');
-    expect(listPending).toHaveBeenCalledTimes(1);
-    expect(await root.getAllHarnesses(PendingConsentHarness)).toHaveLength(0);
-    expect(store.conflict()).not.toBeNull();
-    expect(await ui.count('app-conflict-dialog')).toBe(1);
-  }, 30_000);
+    // No events occur in these assertions; the explicit stability wait above already rendered
+    // the refusal, including its replacement dialog.
+    await manualChangeDetection(async () => {
+      expect(store.rows()).toHaveLength(1);
+      expect(store.localReason()).toBe('Keep this draft');
+      expect(listPending).toHaveBeenCalledTimes(1);
+      expect(await root.getAllHarnesses(PendingConsentHarness)).toHaveLength(0);
+      expect(store.conflict()).not.toBeNull();
+      expect(await ui.count('app-conflict-dialog')).toBe(1);
+    });
+  });
   it('keeps the readable queue and disables writes after 403 write refusal', async () => {
     apply.mockRejectedValue(new ApiRequestError(pendingError('forbidden', 403)));
     const { ui, root, fixture } = await setup();
     await ui.click('[data-pending-apply]');
     await (await root.getHarness(PendingConsentHarness)).confirm();
     await fixture.whenStable();
-    expect(await ui.text()).toContain(PENDING_COPY.readOnly);
-    expect(await ui.text()).toContain('Review this change');
-    expect(await ui.disabled('[data-pending-apply]')).toBe(true);
+    await manualChangeDetection(async () => {
+      expect(await ui.text()).toContain(PENDING_COPY.readOnly);
+      expect(await ui.text()).toContain('Review this change');
+      expect(await ui.disabled('[data-pending-apply]')).toBe(true);
+    });
     listPending.mockResolvedValue({ items: [pendingRow()], next_cursor: null });
     await fixture.debugElement.injector.get(PendingChangesStore).reload();
     await fixture.whenStable();
     expect(await ui.disabled('[data-pending-apply]')).toBe(false);
-  }, 30_000);
+  });
   it.each(['merge', 'split'] as const)('blocks %s apply with an explanation', async (kind) => {
     listPending.mockResolvedValue({ items: [pendingRow(kind)], next_cursor: null });
     const { ui } = await setup();
@@ -193,11 +203,13 @@ describe('PendingChangesPage', () => {
     await ui.click('[data-pending-apply]');
     desktop.set(false);
     await fixture.whenStable();
-    expect(await root.getAllHarnesses(PendingConsentHarness)).toHaveLength(0);
-    expect(await ui.count('[data-pending-apply]')).toBe(0);
-    expect(await ui.text()).toContain('Review this change');
-    expect(apply).not.toHaveBeenCalled();
-  }, 30_000);
+    await manualChangeDetection(async () => {
+      expect(await root.getAllHarnesses(PendingConsentHarness)).toHaveLength(0);
+      expect(await ui.count('[data-pending-apply]')).toBe(0);
+      expect(await ui.text()).toContain('Review this change');
+      expect(apply).not.toHaveBeenCalled();
+    });
+  });
   it('uses the forbidden request pattern for read denial', async () => {
     listPending.mockRejectedValue(new ApiRequestError(pendingError('forbidden', 403)));
     const { ui } = await setup();
@@ -209,14 +221,15 @@ describe('PendingChangesPage', () => {
     const { ui, root } = await setup();
     await ui.click('[data-pending-apply]');
     const dialog = await root.getHarness(PendingConsentHarness);
-    expect(await dialog.text()).toContain(PENDING_COPY.deleteLabel);
-    expect(await dialog.text()).toContain(ITEM);
-    expect(await dialog.text()).toContain(PENDING_COPY.deleteConsequence);
+    const text = await dialog.text();
+    expect(text).toContain(PENDING_COPY.deleteLabel);
+    expect(text).toContain(ITEM);
+    expect(text).toContain(PENDING_COPY.deleteConsequence);
     expect(await dialog.destructive()).toBe(true);
     expect(await dialog.cancelFocused()).toBe(true);
     expect(apply).not.toHaveBeenCalled();
     await dialog.cancel();
-  }, 30_000);
+  });
   it.each(['loadMore', 'reload'] as const)(
     'hides cached rows, preview and receipt when %s is forbidden',
     async (method) => {
