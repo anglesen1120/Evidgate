@@ -764,3 +764,9 @@ Closed carried rows, verbatim (closed by #969, f65c92ae: `finalBodySize` is the 
 
 | Binary http path: unknown final body type (S460) | `advertisedSize` in `http-client-fetch-binary.ts` returns no size for a final body that is neither an `ArrayBuffer` nor a string (cross-realm buffer, Blob, view), so the early cap check and the span treat it as within the cap; `toBinaryResponse` bounds only `byteLength`, which covers buffers and views but not a Blob (it has `size`). Unreachable with the adapter's `arraybuffer` and `text` response types. Fix = return an infinite size for any other non-null body and re-check the jsdom cross-realm specs. | receiver: core/http owner |
 | Binary http path: repeated text size encode (S460) | `textExceedsCap` UTF-8 encodes a 2.8 to 8 MiB text reply in the trace interceptor, in `enforceBinarySizeCap` and in `assertTextWithinCap`: up to 24 MiB of temporary buffers for an accepted reply (3 encodes with telemetry), none measured. Fix = count UTF-8 bytes in a loop without allocation, or carry the first result to the later checks. | receiver: core/http owner |
+
+## Moved from status-carried.md by S474 (2026-11-20)
+
+| Options tests env sweep drops explicit overrides (S473) | `OptionsValidationTests.RunUntilExitAsync` removes every inherited `EVIDGATE__` key after applying the case environment, so a case that sets such a key (for example the Worker queue credential) loses it when the parent also exports it; only the forwarded-proxy and no-healing keys are exempt. Exempt keys the case sets itself. | receiver: coordinator (Hosts tests lane) |
+
+Closed by S474 (#974, 6ef7bc33): the helper now keeps every key a case states and still removes the other inherited EVIDGATE__ keys; the Forwarded-Headers case got the same fix and a regression test pins both.
