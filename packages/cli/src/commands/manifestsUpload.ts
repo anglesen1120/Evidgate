@@ -4,8 +4,6 @@
 // all — not even the token exchange. A 401 purges the cached CI token (contracts/cli.md
 // §7/§8); a 403 keeps it, because a scope refusal does not invalidate the token.
 import { createHash } from 'node:crypto';
-import { constants } from 'node:fs';
-import { open, type FileHandle } from 'node:fs/promises';
 
 import {
   type Client,
@@ -15,6 +13,7 @@ import {
 
 import { getToken } from '../auth/getToken.js';
 import { deleteCachedToken } from '../auth/tokenCache.js';
+import { readFileBounded, type BoundedFileFailure } from '../boundedFile.js';
 import { callApi } from '../callApi.js';
 import { createApiClient } from '../client.js';
 import { CliError } from '../errors.js';
@@ -37,10 +36,6 @@ const createManifestPath = '/projects/{p}/manifests';
  * the same pointer (contracts/cli.md §5 `usage` row); keep the two literals in sync.
  */
 const helpHint = "run 'evidgate --help' for usage";
-// `O_NONBLOCK` keeps `open` from blocking on a FIFO — without it the non-regular-file check
-// below never runs, because the open waits for a writer. Regular-file reads are unaffected.
-// win32 has no `O_NONBLOCK`, so the flags reduce to `O_RDONLY` (plain `'r'`).
-const openReadFlags = constants.O_RDONLY | (constants.O_NONBLOCK ?? 0);
 /** `manifest_id` is a UUID and `manifest_hash` is `sha256:<64 hex>` (openapi `ManifestAccepted`). */
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const manifestHashPattern = /^sha256:[0-9a-f]{64}$/;
@@ -125,61 +120,43 @@ function createManifestRawBytes(
 }
 
 /**
- * Reads the manifest file with a hard byte cap. The size is never trusted from `stat`
- * alone: at most `maxManifestBytes + 1` bytes are read, so a file that grows between
- * the `fstat` and the read is still refused. The read loops until EOF or a full buffer,
- * so a short read on a regular file cannot silently truncate the body. The content is
- * never echoed and the path is never named (contracts/cli.md §5).
+ * Reads the manifest file under the command's own cap, keeping `manifest_unreadable` and
+ * `manifest_too_large` as its only refusal codes. The content is never echoed and the
+ * path is never named (contracts/cli.md §5).
  */
 async function readManifestFile(path: string): Promise<Uint8Array> {
-  let handle: FileHandle;
-  try {
-    handle = await open(path, openReadFlags);
-  } catch (error) {
-    throw unreadable(error);
+  const result = await readFileBounded(path, maxManifestBytes);
+  if (result.ok) {
+    return result.bytes;
   }
-  try {
-    const stats = await handle.stat();
-    if (!stats.isFile()) {
-      throw new CliError('the manifest file could not be read (not a regular file)', {
-        code: 'manifest_unreadable',
-      });
-    }
-    const buffer = Buffer.allocUnsafe(maxManifestBytes + 1);
-    let bytesRead = 0;
-    while (bytesRead < buffer.length) {
-      const read = await handle.read(buffer, bytesRead, buffer.length - bytesRead, bytesRead);
-      if (read.bytesRead === 0) {
-        break;
-      }
-      bytesRead += read.bytesRead;
-    }
-    if (bytesRead > maxManifestBytes) {
-      throw new CliError(`the manifest file exceeds ${maxManifestBytes} bytes`, {
+  throw manifestRefusal(result.failure);
+}
+
+/** The command's own code and message for each failure the shared reader reports. */
+function manifestRefusal(failure: BoundedFileFailure): CliError {
+  switch (failure.kind) {
+    case 'too_large':
+      return new CliError(`the manifest file exceeds ${maxManifestBytes} bytes`, {
         code: 'manifest_too_large',
       });
-    }
-    if (bytesRead === 0) {
-      throw new CliError('the manifest file is empty', { code: 'manifest_unreadable' });
-    }
-    return buffer.subarray(0, bytesRead);
-  } catch (error) {
-    if (error instanceof CliError) {
-      throw error;
-    }
-    throw unreadable(error);
-  } finally {
-    await handle.close().catch(() => undefined);
+    case 'empty':
+      return new CliError('the manifest file is empty', { code: 'manifest_unreadable' });
+    case 'not_regular_file':
+      return new CliError('the manifest file could not be read (not a regular file)', {
+        code: 'manifest_unreadable',
+      });
+    case 'unreadable':
+      return unreadable(failure.errno);
+    case 'changed':
+      return unreadable('ESTALE');
   }
 }
 
 /** `manifest_unreadable` naming only the errno code; the path and the content stay out. */
-function unreadable(error: unknown): CliError {
-  const code = error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined;
-  return new CliError(
-    `the manifest file could not be read (${typeof code === 'string' && code.length > 0 ? code : 'unknown'})`,
-    { code: 'manifest_unreadable' },
-  );
+function unreadable(errno: string): CliError {
+  return new CliError(`the manifest file could not be read (${errno})`, {
+    code: 'manifest_unreadable',
+  });
 }
 
 /** Validates the 201 body; anything else is `request_failed` and the body is never echoed. */

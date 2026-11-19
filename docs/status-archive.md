@@ -734,3 +734,10 @@ Closed carried row, verbatim (closed by #957, aeeab06f: GetEvaluationRunHeaderAs
 | CR-13 slice B: rate-limit windows in PostgreSQL, evict instead of refuse, per-surface limiter options (S377) | `ExchangeRateLimiter` windows stay local to each process, so with N replicas the limits are N times looser, and at 50,000 keys it refuses every new key shared across login and CI. Slice A (#768) moved only the key ring and the login replay set. | receiver: coordinator (next CR-13 lane) |
 
 closed by S461 (#958, sha: ee2cd9b7): windows are in PostgreSQL (migration 0110, `evidgate_resolve.rate_limit_acquire`), eviction replaces refusal at the key bound, and login, link, invite and CI exchange have their own validated options (`Identity:RateLimits:*`); a store outage answers 503. Residuals are the carried rows added in the same commit.
+
+## Moved from status-carried.md by S471 (2026-11-20)
+
+Closed carried rows, verbatim (closed by #965, 120cc9ac: `readFileBounded` takes a `verify` callback that runs before the close and `playwrightList` checks lstat identity plus realpath equality there, the residual race is the carried row "Report read residual race (S471)"; the case-id validator is kept two by design, drift pinned by test, coordinator decision 471 B: `cli/src/caseId.ts` and `sidecarRules.ts` stay, and `cli/src/caseId.table.json` drives both tests):
+
+| Report identity check after close (S467) | `readFileBounded` compares dev/ino after the descriptor closes, so a replaced file can reuse the inode and pass; `O_NOFOLLOW` covers only the last path component. Move the check before the close and re-check the parent path. Fix commit 1e1bbde2 only keeps the old inode alive in the test | receiver: T3.1b CLI lane |
+| Case-id validator duplicate (S467) | `packages/cli/src/playwrightList.ts` carries a second canonical case-id regex because the CLI may not import the adapter; `adapter-playwright/src/sidecarRules.ts` owns the first. Move it into one shared CLI module the adapter imports (it already depends on the CLI) | receiver: T3.1b CLI lane |
