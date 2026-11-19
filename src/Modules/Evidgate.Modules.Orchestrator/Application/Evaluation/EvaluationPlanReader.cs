@@ -52,6 +52,18 @@ internal sealed class EvaluationPlanReader(ITenantDb db) : IOrchestratorEvaluati
             executions);
     }
 
+    /// <inheritdoc />
+    public async ValueTask<EvaluationRunHeader?> GetEvaluationRunHeaderAsync(
+        Guid orgId,
+        Guid runId,
+        CancellationToken cancellationToken) =>
+        await db.QuerySingleOrDefaultAsync<HeaderRow>(
+            EvaluationPlanSql.LoadHeader,
+            new { org_id = orgId, run_id = runId },
+            cancellationToken).ConfigureAwait(false) is { } row
+            ? new EvaluationRunHeader(row.ProjectId, row.PolicyRevisionId, row.Purpose, row.IsFork, row.SuiteRevisionId)
+            : null;
+
     /// <summary>
     /// One row as <see cref="EvaluationPlanSql.LoadPlan"/> returns it (snake_case → PascalCase, Dapper's underscore map).
     /// The execution columns are nullable because a run with no planned execution answers a header-only row.
@@ -75,5 +87,19 @@ internal sealed class EvaluationPlanReader(ITenantDb db) : IOrchestratorEvaluati
         public Guid? CaseRevisionId { get; set; }
 
         public bool? Required { get; set; }
+    }
+
+    /// <summary>One row as <see cref="EvaluationPlanSql.LoadHeader"/> returns it.</summary>
+    private sealed class HeaderRow
+    {
+        public Guid ProjectId { get; set; }
+
+        public Guid? PolicyRevisionId { get; set; }
+
+        public string Purpose { get; set; } = string.Empty;
+
+        public bool IsFork { get; set; }
+
+        public Guid SuiteRevisionId { get; set; }
     }
 }

@@ -19,7 +19,29 @@ public interface IOrchestratorEvaluationPlan
     /// <param name="runId">The run whose plan is read.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     ValueTask<EvaluationRunPlan?> GetEvaluationRunPlanAsync(Guid orgId, Guid runId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The run's own scope columns only, or null when this tenant has no such run. One bounded statement on
+    /// <c>run</c> that never touches the manifest or the planned executions, so its cost does not grow with the plan.
+    /// </summary>
+    /// <param name="orgId">The caller's trusted tenant id, so the read is tenant-exact beyond row level security.</param>
+    /// <param name="runId">The run whose scope is read.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    ValueTask<EvaluationRunHeader?> GetEvaluationRunHeaderAsync(Guid orgId, Guid runId, CancellationToken cancellationToken);
 }
+
+/// <summary>The run-scope columns of an evaluation plan, without the manifest count or any planned execution.</summary>
+/// <param name="ProjectId">The run's <c>project_id</c>; the caller compares it with its own scope.</param>
+/// <param name="PolicyRevisionId">The run's <c>policy_revision_id</c>, nullable like the column.</param>
+/// <param name="Purpose">The run's <c>purpose</c> (<c>regular</c> or <c>replay</c>).</param>
+/// <param name="IsFork">The run's <c>is_fork</c>.</param>
+/// <param name="SuiteRevisionId">The run's <c>suite_revision_id</c>.</param>
+public sealed record EvaluationRunHeader(
+    Guid ProjectId,
+    Guid? PolicyRevisionId,
+    string Purpose,
+    bool IsFork,
+    Guid SuiteRevisionId);
 
 /// <summary>
 /// The plan one evaluation judges: the run's pinned scope, the manifest it froze and every planned execution.
