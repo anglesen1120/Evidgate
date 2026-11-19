@@ -770,3 +770,13 @@ Closed carried rows, verbatim (closed by #969, f65c92ae: `finalBodySize` is the 
 | Options tests env sweep drops explicit overrides (S473) | `OptionsValidationTests.RunUntilExitAsync` removes every inherited `EVIDGATE__` key after applying the case environment, so a case that sets such a key (for example the Worker queue credential) loses it when the parent also exports it; only the forwarded-proxy and no-healing keys are exempt. Exempt keys the case sets itself. | receiver: coordinator (Hosts tests lane) |
 
 Closed by S474 (#974, 6ef7bc33): the helper now keeps every key a case states and still removes the other inherited EVIDGATE__ keys; the Forwarded-Headers case got the same fix and a regression test pins both.
+
+## Moved from status-carried.md by S475 (2026-11-20)
+
+| Binary http path: redundant third text scan (S472) | `assertTextWithinCap` at `http-client-fetch.ts:192` rescans a text reply that `enforceBinarySizeCap` and the trace interceptor already measured; the scan is allocation-free (about 13 ms on 8 MiB) but provably redundant for capped calls. Delete it or memoise the size per event, then re-check the text specs. | receiver: core/http owner |
+
+Closed by S475 (#977, 7f6577ec): the redundant scan after the capped text reply is removed and a spec counts one adapter-side scan (8388608 reads before, 4194304 after); the error-body scan stays.
+
+| toBinaryResponse body type (S472) | `toBinaryResponse` still types `body` as `ArrayBuffer \| null` while `finalBodySize` accepts views, Blobs and strings, so `http-client-fetch-binary-final-body.spec.ts` passes hostile bodies with `as never`. Widen the parameter to `unknown` (production change) and drop the casts. | receiver: core/http owner |
+
+Closed by S475 (#977, 7f6577ec): `toBinaryResponse` takes `unknown`, keeps the fail-closed rule, and the final-body spec has no `as never` left.
