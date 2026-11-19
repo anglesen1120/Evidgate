@@ -1,0 +1,361 @@
+<div class="grid min-w-0 gap-6">
+  @if (pageHeadingLevel === 1) {
+    <app-page-header [title]="title" [description]="description" />
+  } @else {
+    <h2 hlmCardTitle [size]="'section'">{{ title }}</h2>
+  }
+  <app-desktop-required-notice />
+  <app-request-state
+    [status]="status()"
+    [error]="store.error()"
+    [retryEligible]="!!store.scope()"
+    (retry)="store.head.reload()"
+  >
+    @if (store.base(); as base) {
+      @if (store.head.error() && status() === 'ready') {
+        <p i18n="@@authoring.ai-settings.stale">
+          Refresh failed. Previously loaded settings and your unsaved draft are retained.
+        </p>
+        <app-request-state
+          [status]="'error'"
+          [error]="store.error()"
+          [retryEligible]="true"
+          (retry)="store.head.reload()"
+        />
+      }
+      <aside class="grid gap-2 border-l-2 border-border pl-4 text-sm">
+        <h2 hlmCardTitle [size]="'section'" i18n="@@authoring.ai-settings.consent">
+          AI consent unavailable
+        </h2>
+        <p i18n="@@authoring.ai-settings.consent-reason">
+          These settings do not report tenant consent. Saving guidance does not opt in to AI; manual
+          authoring remains available.
+        </p>
+        <p i18n="@@authoring.ai-settings.version">Current version: {{ base.view.version_no }}</p>
+        @if (base.view.version_no === 0) {
+          <p i18n="@@authoring.ai-settings.default">
+            Using default guidance; no saved version exists yet.
+          </p>
+        }
+        @if (base.view.author; as author) {
+          <app-copyable-identifier [value]="author" [label]="authorLabel" />
+        }
+        @if (base.view.created_at; as instant) {
+          <app-absolute-time [value]="instant" />
+        }
+      </aside>
+      <hlm-tabs [tab]="'settings'" class="block min-w-0">
+        <div
+          hlmTabsList
+          [variant]="'line'"
+          aria-label="AI guidance panels"
+          i18n-aria-label="@@authoring.ai-settings.panels"
+        >
+          <button [hlmTabsTrigger]="'settings'" i18n="@@authoring.ai-settings.settings-tab">
+            Settings
+          </button>
+          <button
+            [hlmTabsTrigger]="'history'"
+            data-ai-history-tab
+            i18n="@@authoring.ai-settings.history-tab"
+          >
+            Version history
+          </button>
+        </div>
+        <div [hlmTabsContent]="'settings'" class="min-w-0 pt-6">
+          @if (viewport.canMutate()) {
+            <form
+              class="grid max-w-[65ch] gap-6"
+              (ngSubmit)="save()"
+              [attr.aria-busy]="store.saving()"
+            >
+              <app-form-error-summary [summaryId]="'ai-errors'" [feedback]="feedback" />
+              <section class="grid gap-3">
+                <h2 hlmCardTitle [size]="'section'" i18n="@@authoring.ai-settings.templates">
+                  Built-in templates
+                </h2>
+                <app-request-state
+                  [status]="
+                    store.templates.isLoading()
+                      ? 'loading'
+                      : store.templates.error()
+                        ? 'error'
+                        : 'ready'
+                  "
+                  [error]="templateError()"
+                  [retryEligible]="true"
+                  (retry)="store.templates.reload()"
+                >
+                  @for (
+                    template of store.templatePage()?.items ?? [];
+                    track template.code + ':' + template.version
+                  ) {
+                    <button
+                      hlmBtn
+                      [variant]="'outline'"
+                      type="button"
+                      class="min-h-[var(--eg-control-touch)] whitespace-normal"
+                      [disabled]="!store.canWrite() || store.saving()"
+                      (click)="previewTemplate(template, $event)"
+                    >
+                      {{ template.name }} ({{ template.locale }})
+                    </button>
+                  } @empty {
+                    <p i18n="@@authoring.ai-settings.no-templates">No templates are available.</p>
+                  }
+                </app-request-state>
+              </section>
+              @for (field of fields; track field.key; let index = $index) {
+                <div class="grid min-w-0 gap-2">
+                  <label hlmLabel [for]="'ai-' + field.key">{{ field.label }}</label>
+                  <textarea
+                    hlmInput
+                    rows="3"
+                    class="h-auto resize-y"
+                    [id]="'ai-' + field.key"
+                    [name]="field.key"
+                    [ngModel]="value(field.key)"
+                    (ngModelChange)="edit(field.key, $event)"
+                    [readOnly]="!store.canWrite() || store.saving()"
+                    [aria-describedby]="feedback.fields[index]?.describedBy() ?? null"
+                    [attr.aria-invalid]="feedback.fields[index]?.ariaInvalid()"
+                    (blur)="feedback.fields[index]?.blur()"
+                    (compositionstart)="compose(field.key, true)"
+                    (compositionend)="compose(field.key, false)"
+                  ></textarea>
+                  <p
+                    class="m-0 text-sm text-muted-foreground tabular-nums"
+                    [id]="'ai-' + field.key + '-counter'"
+                    i18n="@@authoring.ai-settings.counter"
+                  >
+                    {{ count(value(field.key)) }} / {{ field.limit }} characters
+                  </p>
+                  @if (feedback.fields[index]; as entry) {
+                    <app-field-feedback [field]="entry" />
+                  }
+                </div>
+                @if (field.key === 'environment_url') {
+                  <fieldset
+                    id="ai-languages"
+                    tabindex="-1"
+                    class="grid gap-3"
+                    [attr.aria-invalid]="feedback.fields[fields.length]?.ariaInvalid()"
+                    [attr.aria-describedby]="feedback.fields[fields.length]?.describedBy() ?? null"
+                  >
+                    <legend class="mb-2" i18n="@@authoring.ai-settings.languages">
+                      Output languages
+                    </legend>
+                    @for (locale of languages; track locale) {
+                      <label
+                        class="flex min-h-[var(--eg-control-touch)] items-center gap-3"
+                        [for]="'ai-language-' + locale"
+                      >
+                        <hlm-checkbox
+                          [inputId]="'ai-language-' + locale"
+                          [aria-labelledby]="'ai-language-label-' + locale"
+                          [checked]="store.draft()?.languages?.includes(locale) ?? false"
+                          [disabled]="!store.canWrite() || store.saving()"
+                          (checkedChange)="language(locale, $event === true)"
+                        />
+                        <span [id]="'ai-language-label-' + locale">
+                          @if (locale === 'en') {
+                            <span i18n="@@authoring.ai-settings.english">English</span>
+                          } @else {
+                            <span i18n="@@authoring.ai-settings.vietnamese">Vietnamese</span>
+                          }
+                        </span>
+                      </label>
+                    }
+                    @if (feedback.fields[fields.length]; as entry) {
+                      <app-field-feedback [field]="entry" />
+                    }
+                  </fieldset>
+                }
+              }
+              @if (!store.canWrite()) {
+                <p id="ai-write-reason" i18n="@@authoring.ai-settings.read-only">
+                  Saving requires project:write. You can read settings and history.
+                </p>
+              }
+              @if (!base.etag) {
+                <p i18n="@@authoring.ai-settings.missing-tag">
+                  The server did not supply an ETag. Reload before saving.
+                </p>
+                <button
+                  hlmBtn
+                  [variant]="'outline'"
+                  type="button"
+                  data-ai-reload
+                  [disabled]="store.head.isLoading()"
+                  (click)="store.head.reload()"
+                  i18n="@@authoring.ai-settings.reload"
+                >
+                  Reload settings
+                </button>
+              }
+              @if (store.dirty()) {
+                <p i18n="@@authoring.ai-settings.dirty">Settings have unsaved changes.</p>
+              }
+              @if (store.failure(); as failure) {
+                <p data-ai-save-error i18n="@@authoring.ai-settings.failed">
+                  Could not save; your settings draft is retained.
+                </p>
+                @if (failure.kind !== 'validation' && failure.kind !== 'precondition_failed') {
+                  <app-request-state
+                    [status]="'error'"
+                    [error]="failure"
+                    [retryEligible]="!blocked()"
+                    (retry)="save()"
+                  />
+                }
+              }
+              <div class="flex flex-wrap gap-3">
+                <button
+                  hlmBtn
+                  type="submit"
+                  class="min-h-[var(--eg-control-touch)] whitespace-normal"
+                  data-ai-save
+                  [disabled]="blocked()"
+                  [attr.aria-describedby]="!store.canWrite() ? 'ai-write-reason' : null"
+                  i18n="@@authoring.ai-settings.save"
+                >
+                  Save new version
+                </button>
+              </div>
+            </form>
+          } @else {
+            <section class="grid min-w-0 gap-4">
+              <h2
+                #readOnlyHeading
+                tabindex="-1"
+                hlmCardTitle
+                [size]="'section'"
+                i18n="@@authoring.ai-settings.read-only-draft"
+              >
+                Read-only settings draft
+              </h2>
+              <p i18n="@@authoring.ai-settings.draft-notice">
+                Unsaved desktop edits are retained, not saved. Widen the screen to edit.
+              </p>
+              <dl class="grid min-w-0 gap-4 wrap-anywhere">
+                @for (field of fields; track field.key) {
+                  <div>
+                    <dt class="font-semibold">{{ field.label }}</dt>
+                    <dd class="m-0 whitespace-pre-wrap">{{ value(field.key) }}</dd>
+                  </div>
+                }
+                <div>
+                  <dt i18n="@@authoring.ai-settings.languages">Output languages</dt>
+                  <dd>{{ store.draft()?.languages?.join(', ') }}</dd>
+                </div>
+              </dl>
+            </section>
+          }
+        </div>
+        <div [hlmTabsContent]="'history'" class="min-w-0 pt-6"><app-ai-settings-history /></div>
+      </hlm-tabs>
+    }
+  </app-request-state>
+  <p class="min-h-[var(--eg-leading-sm)] text-sm" role="status" [attr.aria-live]="'polite'">
+    {{ announcement() }}
+    @if (store.saving()) {
+      <span i18n="@@authoring.ai-settings.saving">Saving settings…</span>
+    }
+    @if (store.saved() === 'saved') {
+      <span data-ai-saved i18n="@@authoring.ai-settings.saved"
+        >A new settings version was saved.</span
+      >
+    }
+    @if (store.saved() === 'unchanged') {
+      <span data-ai-saved i18n="@@authoring.ai-settings.unchanged"
+        >No changes; the existing version is unchanged.</span
+      >
+    }
+  </p>
+</div>
+<app-conflict-dialog
+  [open]="store.conflictOpen()"
+  [fields]="conflictFields()"
+  [currentRevision]="store.currentConflict()?.etag ?? null"
+  [reloadState]="store.conflict.isLoading() ? 'loading' : store.conflict.error() ? 'error' : 'idle'"
+  [reloadError]="conflictError()"
+  (reload)="store.reloadConflict()"
+  (keepEditing)="store.closeConflict()"
+/>
+<hlm-dialog
+  [state]="preview() ? 'open' : 'closed'"
+  [autoFocus]="'[data-ai-template-cancel]'"
+  [restoreFocus]="false"
+  (closed)="templateClosed()"
+  (stateChanged)="$event === 'closed' && preview.set(null)"
+>
+  <hlm-dialog-content
+    *hlmDialogPortal
+    [showCloseButton]="false"
+    class="max-h-[calc(100dvh-var(--eg-space-8))] overflow-y-auto"
+  >
+    <header hlmDialogHeader>
+      <h2 hlmDialogTitle i18n="@@authoring.ai-settings.preview-title">
+        Preview template replacement
+      </h2>
+      <p hlmDialogDescription i18n="@@authoring.ai-settings.preview-description">
+        Replace every guidance field in the draft only. Nothing is saved until Save new version.
+      </p>
+    </header>
+    @if (preview(); as template) {
+      <p>{{ template.name }} · {{ template.locale }} · {{ template.version }}</p>
+      <dl class="grid min-w-0 gap-4 wrap-anywhere">
+        @for (field of fields; track field.key) {
+          @if (field.key !== 'reason') {
+            <div>
+              <dt class="font-semibold">{{ field.label }}</dt>
+              <dd class="m-0 grid min-w-0 gap-3 md:grid-cols-2 whitespace-pre-wrap">
+                <div>
+                  <span i18n="@@authoring.ai-settings.before">Before</span>
+                  <p>{{ value(field.key) }}</p>
+                </div>
+                <div>
+                  <span i18n="@@authoring.ai-settings.after">After</span>
+                  <p>{{ textOf(template.settings, field.key) }}</p>
+                </div>
+              </dd>
+            </div>
+          }
+        }
+        <div>
+          <dt i18n="@@authoring.ai-settings.languages">Output languages</dt>
+          <dd class="m-0 grid min-w-0 gap-3 md:grid-cols-2">
+            <div data-ai-languages-before>
+              <span i18n="@@authoring.ai-settings.before">Before</span>
+              <p>{{ store.draft()?.languages?.join(', ') }}</p>
+            </div>
+            <div data-ai-languages-after>
+              <span i18n="@@authoring.ai-settings.after">After</span>
+              <p>{{ template.settings.languages.join(', ') }}</p>
+            </div>
+          </dd>
+        </div>
+      </dl>
+    }
+    <footer hlmDialogFooter>
+      <button
+        hlmBtn
+        [variant]="'outline'"
+        type="button"
+        hlmDialogClose
+        data-ai-template-cancel
+        i18n="@@authoring.ai-settings.cancel"
+      >
+        Cancel
+      </button>
+      <button
+        hlmBtn
+        type="button"
+        (click)="replaceTemplate()"
+        i18n="@@authoring.ai-settings.replace"
+      >
+        Replace draft
+      </button>
+    </footer>
+  </hlm-dialog-content>
+</hlm-dialog>

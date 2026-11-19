@@ -31,8 +31,8 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     const idKeyed = FIXTURE_ROUTE_ROWS.filter((route) => route.idKeyParameter !== undefined);
     expect(
       idKeyed.map((route) => route.operationId),
-      'getPolicyRevision and getRelease are id-keyed; a third id-keyed row needs its own pin here',
-    ).toEqual(['getPolicyRevision', 'getRelease']);
+      'each id-keyed read needs its own corpus pin',
+    ).toEqual(['getProjectAiSettingsVersion', 'getPolicyRevision', 'getRelease']);
     const keyed = idKeyed.filter((route) => route.operationId === 'getPolicyRevision');
 
     const page = corpusDocument('policy-revisions-list-after-publish');
@@ -84,12 +84,13 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     // Load more reaches a terminal page in a browser. It is only sound when (a) every keyed row
     // names the contract's cursor parameter, (b) each cursor-declaring row continues a page that
     // names it (same project, disjoint ids, a cursor the server could issue) and (c) it ends the
-    // walk. The lists are exhaustive: a new cursor needs its own pin.
+    // walk. The lists are exhaustive: a new cursor needs its own pin; one line each holds the cap.
     const keyed = FIXTURE_ROUTE_ROWS.filter((route) => route.cursorQueryParameter !== undefined);
+    // prettier-ignore
     expect(
       keyed.map((route) => route.operationId),
       'each cursor-keyed route needs its own page-continuation pin here',
-    ).toEqual(['listSecurityEvents', 'listCases', 'listCiBindings', 'listRuns', 'listRunAttempts']);
+    ).toEqual(['listProjectAiSettingsVersions', 'listSecurityEvents', 'listCases', 'listCiBindings', 'listRuns', 'listRunAttempts']);
     for (const route of keyed) {
       expect(
         route.cursorQueryParameter,
@@ -107,6 +108,7 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       'run-list-page-2',
       'security-events-list-page-2',
       'catalog-cases-page-2',
+      'ai-settings-versions-page-2',
     ]);
     const secondPageRow = paged.find((entry) => entry.name === 'ci-bindings-list-settings-page-2');
     if (secondPageRow === undefined || secondPageRow.cursor === undefined) {

@@ -103,6 +103,8 @@ const ENTRY_ROUTES: Readonly<Record<string, () => Promise<Routes>>> = {
   settings: () => import('./features/settings/settings-shell.routes').then((m) => m.routes),
   members: () => import('./features/settings/members/members.routes').then((m) => m.routes),
   audit: () => import('./features/settings/audit/audit.routes').then((m) => m.routes),
+  'ai-settings': () =>
+    import('./features/authoring/ai-settings/ai-settings.routes').then((m) => m.routes),
 };
 
 /** The lazy loader of one area, or a load-time failure naming the missing folder. */
