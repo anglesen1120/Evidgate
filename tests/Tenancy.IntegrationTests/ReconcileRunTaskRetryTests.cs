@@ -3,10 +3,8 @@
 // points where an at-least-once consumer can lose track of an attempt.
 using System.Net;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
-using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Orchestrator.Application.Runs;
 using Evidgate.Modules.Orchestrator.Contracts;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Shouldly;
