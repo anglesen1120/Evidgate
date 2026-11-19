@@ -71,6 +71,246 @@
       "note": "the custom-role write flag of 02.2.1-T2.2 (RECOMMENDATIONS 02-Q3): off in V1, where built-in roles are the only roles, so POST/PATCH /v1/roles answer 403 `forbidden`; on, the flagged commands may add a role to the caller's org (422 `unknown_permission` / `permission_not_assignable` still apply, and a built-in role stays immutable, 409). Nothing about an existing tenant is read differently while it is off, so no environment sets it."
     },
     {
+      "key": "EVIDGATE__IDENTITY__RATELIMITS__LOGINLIMIT",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:Identity:RateLimits:LoginLimit` (CR-13): attempts one key may make on the login `start` and `callback` routes within `LoginWindowSeconds`; the counter lives in PostgreSQL, so every replica counts into the same window. Default 30; a value outside 1..1000000 fails the boot naming this key."
+    },
+    {
+      "key": "EVIDGATE__IDENTITY__RATELIMITS__LOGINWINDOWSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:Identity:RateLimits:LoginWindowSeconds` (CR-13): length of the login window, opened and closed by the database clock so replicas with skewed clocks neither shorten nor extend it. Default 60; a value outside 1..86400 fails the boot naming this key."
+    },
+    {
+      "key": "EVIDGATE__IDENTITY__RATELIMITS__LOGINMAXKEYS",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:Identity:RateLimits:LoginMaxKeys` (CR-13): approximate login key bound before the login surface evicts its oldest windows (expired first). A new key is never refused for lack of capacity; eviction can remove older keys' remaining budget, and other surfaces are never touched. Concurrent acquisitions can exceed the bound temporarily. Default 50000; a value outside 1..1000000 fails the boot naming this key."
+    },
+    {
+      "key": "EVIDGATE__IDENTITY__RATELIMITS__LINKLIMIT",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:Identity:RateLimits:LinkLimit` (CR-13): attempts one key may make on the explicit second-provider link routes within `LinkWindowSeconds`, counted in the shared PostgreSQL window. Default 30; a value outside 1..1000000 fails the boot naming this key."
+    },
+    {
+      "key": "EVIDGATE__IDENTITY__RATELIMITS__LINKWINDOWSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:Identity:RateLimits:LinkWindowSeconds` (CR-13): length of the link window in seconds, on the database clock. Default 60; a value outside 1..86400 fails the boot naming this key."
+    },
+    {
+      "key": "EVIDGATE__IDENTITY__RATELIMITS__LINKMAXKEYS",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:Identity:RateLimits:LinkMaxKeys` (CR-13): approximate link key bound before the link surface evicts its oldest windows; a new key is never refused for lack of capacity, and no other surface's rows are touched. Concurrent acquisitions can exceed the bound temporarily. Default 50000; a value outside 1..1000000 fails the boot naming this key."
+    },
+    {
+      "key": "EVIDGATE__IDENTITY__RATELIMITS__INVITELIMIT",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:Identity:RateLimits:InviteLimit` (CR-13): attempts one key may make on invite-token staging within `InviteWindowSeconds`, counted in the shared PostgreSQL window. Default 30; a value outside 1..1000000 fails the boot naming this key."
+    },
+    {
+      "key": "EVIDGATE__IDENTITY__RATELIMITS__INVITEWINDOWSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:Identity:RateLimits:InviteWindowSeconds` (CR-13): length of the invite window in seconds, on the database clock. Default 60; a value outside 1..86400 fails the boot naming this key."
+    },
+    {
+      "key": "EVIDGATE__IDENTITY__RATELIMITS__INVITEMAXKEYS",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:Identity:RateLimits:InviteMaxKeys` (CR-13): approximate invite key bound before the invite surface evicts its oldest windows; a new key is never refused for lack of capacity, and no other surface's rows are touched. Concurrent acquisitions can exceed the bound temporarily. Default 50000; a value outside 1..1000000 fails the boot naming this key."
+    },
+    {
+      "key": "EVIDGATE__IDENTITY__RATELIMITS__CIEXCHANGELIMIT",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:Identity:RateLimits:CiExchangeLimit` (CR-13, replacing EVIDGATE__CI__EXCHANGEBURSTLIMIT): exchange attempts allowed per key (client address, repository id, token prefix) within `CiExchangeWindowSeconds`, bearer and ingest-token paths alike (02.4.1 AC8), counted in the shared PostgreSQL window. Default 30; a value outside 1..1000000 fails the boot naming this key."
+    },
+    {
+      "key": "EVIDGATE__IDENTITY__RATELIMITS__CIEXCHANGEWINDOWSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:Identity:RateLimits:CiExchangeWindowSeconds` (CR-13, replacing EVIDGATE__CI__EXCHANGEWINDOWSECONDS): length of the exchange window in seconds, on the database clock so every replica shares it. Default 60; a value outside 1..86400 fails the boot naming this key."
+    },
+    {
+      "key": "EVIDGATE__IDENTITY__RATELIMITS__CIEXCHANGEMAXKEYS",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:Identity:RateLimits:CiExchangeMaxKeys` (CR-13): approximate exchange key bound before the exchange surface evicts its oldest windows; a new key is never refused for lack of capacity, and no other surface's rows are touched. Concurrent acquisitions can exceed the bound temporarily. Default 50000; a value outside 1..1000000 fails the boot naming this key."
+    },
+    {
       "key": "EVIDGATE__HEALING__APPLY",
       "scope": "runtime",
       "consumers": ["api", "worker"],
@@ -360,29 +600,6 @@
       "note": "clock skew tolerated on exp/nbf of a GitHub OIDC token (02.4.1-T4.2); default 60."
     },
     {
-      "key": "EVIDGATE__CI__EXCHANGEBURSTLIMIT",
-      "scope": "runtime",
-      "consumers": ["api", "migrator", "worker"],
-      "type": "integer",
-      "requiredAtBoot": false,
-      "constraints": {
-        "min": 1,
-        "max": 10000
-      },
-      "secret": false,
-      "required": {
-        "dev": false,
-        "staging": false,
-        "prod": false
-      },
-      "source": {
-        "dev": "default",
-        "staging": "default",
-        "prod": "default"
-      },
-      "note": "exchange attempts allowed per key (client address, repository id, token prefix) within the window (02.4.1 AC8); default 30."
-    },
-    {
       "key": "EVIDGATE__CI__ALLOWEDEVENTNAMES",
       "scope": "runtime",
       "consumers": ["api", "migrator", "worker"],
@@ -421,29 +638,6 @@
         "prod": "default"
       },
       "note": "retired: the deny list was replaced by EVIDGATE__CI__ALLOWEDEVENTNAMES and any value set here fails boot with a named message, because silently ignoring it would leave an operator believing the old list still applies. Leave unset."
-    },
-    {
-      "key": "EVIDGATE__CI__EXCHANGEWINDOWSECONDS",
-      "scope": "runtime",
-      "consumers": ["api", "migrator", "worker"],
-      "type": "integer",
-      "requiredAtBoot": false,
-      "constraints": {
-        "min": 1,
-        "max": 3600
-      },
-      "secret": false,
-      "required": {
-        "dev": false,
-        "staging": false,
-        "prod": false
-      },
-      "source": {
-        "dev": "default",
-        "staging": "default",
-        "prod": "default"
-      },
-      "note": "length of the exchange rate-limit window in seconds (02.4.1 AC8); default 60."
     },
     {
       "key": "EVIDGATE__LOGIN__PUBLICBASEURL",

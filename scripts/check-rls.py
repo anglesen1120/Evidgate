@@ -272,7 +272,7 @@ def lint_definers(schema, raws: dict[str, str]) -> list[Finding]:
                     if g not in ALLOWED_GRANTEES and g != "public":
                         findings.append(Finding(gfile, short, "definer_grantee", f"EXECUTE granted to unexpected role {g}"))
         ctes = {name.lower() for name in re.findall(r"\b([a-z_]\w*)\s+as\s+(?:not\s+)?(?:materialized\s*)?\(", body, re.I)}
-        for relation in RELATION.findall(body):
+        for relation in relations(body):
             if relation.lower() not in SQL_WORDS and relation.lower() not in ctes and not relation.lower().startswith(("batch", "removed", "v_")):
                 findings.append(Finding(fname, short, "definer_unqualified", f"relation `{relation}` is not schema-qualified"))
         executable = code_copy(body, "''")  # a quoted mention is not a call
@@ -286,6 +286,16 @@ def lint_definers(schema, raws: dict[str, str]) -> list[Finding]:
 
 RELATION = re.compile(r"\b(?:from|join|into|update)\s+(?!only\b)([a-z_][\w]*)(?=\s|;|\)|$)", re.I)
 SQL_WORDS = {"skip", "lateral", "unnest", "generate_series", "select", "values", "batch", "removed", "removed_rows"}
+# `on conflict ... do update set x = ...` names no relation: the word after `update` is the SET keyword.
+UPSERT_UPDATE = re.compile(r"\bdo\s+$", re.I)
+
+
+def relations(body: str):
+    """Relations a body writes or reads, skipping the `update` of an upsert, which is followed by `set`."""
+    for match in RELATION.finditer(body):
+        if match.group(1).lower() == "set" and UPSERT_UPDATE.search(body, 0, match.start()):
+            continue
+        yield match.group(1)
 
 
 def lint(migrations: Path, exceptions_path: Path) -> list[Finding]:

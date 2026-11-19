@@ -127,7 +127,7 @@ internal sealed class CiProducerJwtFactory : WebApplicationFactory<Program>
                 ["EVIDGATE:Ci:Pepper"] = _keys.Pepper,
                 ["EVIDGATE:Ci:PepperVersion"] = "2",
                 ["EVIDGATE:Ci:GithubOidcAudience"] = CiKeyMaterial.GithubAudience,
-                ["EVIDGATE:Ci:ExchangeBurstLimit"] = "1000",
+                ["EVIDGATE:Identity:RateLimits:CiExchangeLimit"] = "1000",
             }));
 
         builder.ConfigureTestServices(services =>

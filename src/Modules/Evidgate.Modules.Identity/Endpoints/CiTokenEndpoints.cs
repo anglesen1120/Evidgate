@@ -62,7 +62,8 @@ public static class CiTokenEndpoints
             return Result.Failure<CiTokenResponse>(CiErrors.NotConfigured);
         }
 
-        if (Throttle(context, limiter, "ip:" + ClientIp.LimiterKey(context)) is { } throttled)
+        if (await ThrottleAsync(context, limiter, "ip:" + ClientIp.LimiterKey(context), cancellationToken).ConfigureAwait(false)
+            is { } throttled)
         {
             return Result.Failure<CiTokenResponse>(throttled);
         }
@@ -112,7 +113,8 @@ public static class CiTokenEndpoints
                 : Invalid("the OIDC token is not valid"));
         }
 
-        if (Throttle(context, limiter, $"repo:{claims.Run.RepositoryId}") is { } throttled)
+        if (await ThrottleAsync(context, limiter, $"repo:{claims.Run.RepositoryId}", cancellationToken).ConfigureAwait(false)
+            is { } throttled)
         {
             return Result.Failure<CiTokenResponse>(throttled);
         }
@@ -159,7 +161,8 @@ public static class CiTokenEndpoints
         }
 
         // Keyed by caller address too: the prefix is not secret, so a bucket on it alone would let anyone lock the real job out.
-        if (Throttle(context, limiter, "tok:" + ClientIp.LimiterKey(context) + ":" + prefix) is { } throttled)
+        if (await ThrottleAsync(context, limiter, "tok:" + ClientIp.LimiterKey(context) + ":" + prefix, cancellationToken).ConfigureAwait(false)
+            is { } throttled)
         {
             return Result.Failure<CiTokenResponse>(throttled);
         }
@@ -182,17 +185,10 @@ public static class CiTokenEndpoints
             .ConfigureAwait(false);
     }
 
-    private static Error? Throttle(HttpContext context, ExchangeRateLimiter limiter, string key)
-    {
-        if (limiter.TryAcquire(key, out var retryAfter))
-        {
-            return null;
-        }
-
-        context.Response.Headers.RetryAfter = retryAfter.ToString(System.Globalization.CultureInfo.InvariantCulture);
-
-        return new Error(ApiErrorCode.RateLimited, "too many token exchanges; retry later", StatusCodes.Status429TooManyRequests, Retryable: true);
-    }
+    private static ValueTask<Error?> ThrottleAsync(
+        HttpContext context, ExchangeRateLimiter limiter, string key, CancellationToken cancellationToken) =>
+        RateLimitGate.AcquireAsync(
+            context, limiter, RateSurface.CiExchange, key, cost: 1, "too many token exchanges; retry later", cancellationToken);
 
     private static async Task<(CiTokenRequest? Body, Error? Error)> ReadBodyAsync(HttpContext context, CancellationToken cancellationToken)
     {

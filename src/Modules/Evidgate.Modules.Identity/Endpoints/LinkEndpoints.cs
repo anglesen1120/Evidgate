@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Globalization;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
@@ -147,7 +146,8 @@ internal static class LinkEndpoints
         context.Response.Headers.CacheControl = NoStore;
 
         // First: the per-client budget, then the origin, then anything that costs a database read.
-        if (Throttle(context, limiter, StartLimiterPrefix, StartCost) is { } throttled)
+        if (await ThrottleAsync(context, limiter, StartLimiterPrefix, StartCost, cancellationToken).ConfigureAwait(false)
+            is { } throttled)
         {
             return Result.Failure(throttled);
         }
@@ -210,7 +210,8 @@ internal static class LinkEndpoints
 
         context.Response.Headers.CacheControl = NoStore;
 
-        if (Throttle(context, limiter, PendingLimiterPrefix, PendingCost) is { } throttled)
+        if (await ThrottleAsync(context, limiter, PendingLimiterPrefix, PendingCost, cancellationToken).ConfigureAwait(false)
+            is { } throttled)
         {
             return Result.Failure(throttled);
         }
@@ -262,7 +263,8 @@ internal static class LinkEndpoints
 
         context.Response.Headers.CacheControl = NoStore;
 
-        if (Throttle(context, limiter, PendingLimiterPrefix, PendingCost) is { } throttled)
+        if (await ThrottleAsync(context, limiter, PendingLimiterPrefix, PendingCost, cancellationToken).ConfigureAwait(false)
+            is { } throttled)
         {
             return Result.Failure(throttled);
         }
@@ -319,7 +321,8 @@ internal static class LinkEndpoints
 
         context.Response.Headers.CacheControl = NoStore;
 
-        if (Throttle(context, limiter, ConfirmLimiterPrefix, ConfirmCost) is { } throttled)
+        if (await ThrottleAsync(context, limiter, ConfirmLimiterPrefix, ConfirmCost, cancellationToken).ConfigureAwait(false)
+            is { } throttled)
         {
             return Result.Failure(throttled);
         }
@@ -575,32 +578,24 @@ internal static class LinkEndpoints
     }
 
     /// <summary>
-    /// Spends up to <paramref name="cost"/> units of the client's window in the CI exchange limiter and
-    /// returns the 00 §9.2 429 <c>rate_limited</c> failure (with <c>Retry-After</c> set) when the budget is
-    /// gone, or null to continue. Same shape as the login routes' own throttle.
+    /// Spends up to <paramref name="cost"/> units of the client's window in the link budget and returns the
+    /// 00 §9.2 429 <c>rate_limited</c> failure (with <c>Retry-After</c> set) when the budget is gone, the 503 when
+    /// the shared store cannot answer, or null to continue. Same shape as the login routes' own throttle.
     /// </summary>
-    private static Error? Throttle(HttpContext context, ExchangeRateLimiter limiter, string prefix, int cost)
-    {
-        var key = prefix + ClientIp.LimiterKey(context);
-
-        if (!limiter.TryAcquire(key, out var retryAfter))
-        {
-            context.Response.Headers.RetryAfter = retryAfter.ToString(CultureInfo.InvariantCulture);
-
-            return new Error(
-                ApiErrorCode.RateLimited,
-                "too many provider-link attempts; retry later",
-                StatusCodes.Status429TooManyRequests,
-                Retryable: true);
-        }
-
-        for (var unit = 1; unit < cost; unit++)
-        {
-            _ = limiter.TryAcquire(key, out _);
-        }
-
-        return null;
-    }
+    private static ValueTask<Error?> ThrottleAsync(
+        HttpContext context,
+        ExchangeRateLimiter limiter,
+        string prefix,
+        int cost,
+        CancellationToken cancellationToken) =>
+        RateLimitGate.AcquireAsync(
+            context,
+            limiter,
+            RateSurface.Link,
+            prefix + ClientIp.LimiterKey(context),
+            cost,
+            "too many provider-link attempts; retry later",
+            cancellationToken);
 
     /// <summary>The provider registered under exactly <paramref name="provider"/> (lower case, ordinal), or null.</summary>
     private static ILoginProvider? Find(IEnumerable<ILoginProvider> providers, string? provider)

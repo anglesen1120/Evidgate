@@ -125,6 +125,46 @@ token budget past the default must raise the project budget with it. Both budget
 so the platform-wide burst a project may send is the project limit times the replica count; a deployment
 that needs one shared budget must move the counter to a shared store first.
 
+**Identity rate-limit windows.** Login start/callback, account-link start/pending/confirm/delete,
+invite-token staging and CI token exchange use separate surface budgets configured by these twelve
+non-secret integer keys. Missing keys use the defaults below; an out-of-range value fails startup
+naming the key.
+
+| Key | Default | Valid range |
+|---|---|---|
+| `EVIDGATE__IDENTITY__RATELIMITS__LOGINLIMIT` | 30 | 1..1000000 |
+| `EVIDGATE__IDENTITY__RATELIMITS__LOGINWINDOWSECONDS` | 60 | 1..86400 seconds |
+| `EVIDGATE__IDENTITY__RATELIMITS__LOGINMAXKEYS` | 50000 | 1..1000000 |
+| `EVIDGATE__IDENTITY__RATELIMITS__LINKLIMIT` | 30 | 1..1000000 |
+| `EVIDGATE__IDENTITY__RATELIMITS__LINKWINDOWSECONDS` | 60 | 1..86400 seconds |
+| `EVIDGATE__IDENTITY__RATELIMITS__LINKMAXKEYS` | 50000 | 1..1000000 |
+| `EVIDGATE__IDENTITY__RATELIMITS__INVITELIMIT` | 30 | 1..1000000 |
+| `EVIDGATE__IDENTITY__RATELIMITS__INVITEWINDOWSECONDS` | 60 | 1..86400 seconds |
+| `EVIDGATE__IDENTITY__RATELIMITS__INVITEMAXKEYS` | 50000 | 1..1000000 |
+| `EVIDGATE__IDENTITY__RATELIMITS__CIEXCHANGELIMIT` | 30 | 1..1000000 |
+| `EVIDGATE__IDENTITY__RATELIMITS__CIEXCHANGEWINDOWSECONDS` | 60 | 1..86400 seconds |
+| `EVIDGATE__IDENTITY__RATELIMITS__CIEXCHANGEMAXKEYS` | 50000 | 1..1000000 |
+
+`Limit` is the attempt budget per key within `WindowSeconds`; `MaxKeys` is the surface's approximate
+retained-key bound. Windows live in PostgreSQL and use its clock, so **all replicas share the same
+windows: set the same values on every replica**. The shared budget is not multiplied by replica count.
+At `MaxKeys`, a new key is never refused for lack of capacity: expired windows are cleared on every
+new key and the surface's oldest windows are evicted (up to 100 per call), without touching another
+surface. Because the capacity check is sampled and eviction is bounded, the bound is approximate and
+eviction can remove an older key's remaining budget.
+
+If the rate store is unavailable or times out, these routes **fail closed** with retryable
+503 `unavailable` and `Retry-After: 1`, rather than admitting an uncounted attempt. An exhausted budget
+continues to answer 429 `rate_limited` with `Retry-After`; this outage policy does not change 429.
+
+The old CI exchange keys are retired; **a retired key is silently ignored**, not rejected at startup
+and not used as a fallback. Replace existing deployment values using this mapping:
+
+| Retired key | Replacement |
+|---|---|
+| `EVIDGATE__CI__EXCHANGEBURSTLIMIT` | `EVIDGATE__IDENTITY__RATELIMITS__CIEXCHANGELIMIT` |
+| `EVIDGATE__CI__EXCHANGEWINDOWSECONDS` | `EVIDGATE__IDENTITY__RATELIMITS__CIEXCHANGEWINDOWSECONDS` |
+
 The quota gate switch (`EVIDGATE__USAGE__QUOTAGATE__ENABLED`, default `true`) is read by every host on its own,
 and the two metered paths run in different hosts: the event route gates in the Api, a raw report parse gates in
 the Worker. A host cannot see the other's value, so a mismatch silently gates one path and lets the other

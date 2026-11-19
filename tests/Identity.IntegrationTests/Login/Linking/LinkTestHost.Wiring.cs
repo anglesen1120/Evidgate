@@ -37,6 +37,12 @@ internal sealed partial class LinkTestHost
                 ["EVIDGATE:Login:RetryAfterSeconds"] =
                     RetryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 ["EVIDGATE:Database:ConnectionString"] = _connectionString,
+                // The linking cases are not about throttling and share the assembly's database: a wide budget
+                // keeps one case's attempts from answering another's request with a 429 in the same window
+                // (the shape IsolationApiFactory uses).
+                ["EVIDGATE:Identity:RateLimits:LoginLimit"] = "1000",
+                ["EVIDGATE:Identity:RateLimits:LinkLimit"] = "1000",
+                ["EVIDGATE:Identity:RateLimits:InviteLimit"] = "1000",
                 ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
                 ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
                 ["EVIDGATE:Isolation:SelfCheck"] = "Disabled",

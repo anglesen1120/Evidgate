@@ -68,23 +68,15 @@ public sealed partial class ResolverTests : HarnessTest
         ["evidgate_resolve.data_protection_key_list"] = ["friendly_name", "key_xml"],
         ["evidgate_resolve.data_protection_key_store"] = [],
         ["evidgate_resolve.login_state_replay_consume"] = [],
+        ["evidgate_resolve.rate_limit_acquire"] = ["allowed", "retry_after_seconds"],
     };
 
     /// <summary>
-    /// The resolvers that act on platform-scope rows (<c>user</c>, <c>user_identity</c>, <c>session</c>, 0041:
-    /// no <c>org_id</c> column, owner-only policies): a federated login (02.3.1-T1.4) resolves a person, not an
-    /// org, and the session lifecycle (02.3.2-T1.1) writes the credential of a person, so the tenant-tuple rule
-    /// of 00 §5.4.8 does not apply to their first column — a session status, a rotation result or a row count is
-    /// not a tenant tuple, and the two revocation writes run inside a caller's tenant transaction precisely
-    /// because they are NOT a lookup. The session routes (02.3.2-T2.1, migration 0048) are the same shape: the
-    /// actor comes from the presented cookie hash, so <c>session_list</c> projects the caller's own sign-in
-    /// history (its first column is the session id, never a tenant) and the three route writes answer a status —
-    /// the one cross-tenant act, an admin ending a member's session, is authorized INSIDE
-    /// <c>session_revoke_one</c> against <c>p_org_id</c> and still answers a status, not a tenant tuple. Their
-    /// documented tuple above is still pinned exactly, and every other resolver keeps the rule. The own-profile
-    /// pair (0061), the shared key ring and the login replay set (0100) share the shape: the caller is the
-    /// presented cookie, no table read has an <c>org_id</c>, and the answers carry no tenant — a status plus the
-    /// caller's own row, the framework's <c>key_xml</c> element per row, an insert-if-absent no-row, one boolean.
+    /// Platform-scope rows (<c>user</c>, <c>user_identity</c>, <c>session</c>, own profiles, the shared key
+    /// ring, login replay set and rate-limit windows) have no <c>org_id</c>: their first result column is not
+    /// a tenant tuple. The rate-limit resolver returns only admission and retry delay for its platform table.
+    /// Their documented tuples above remain pinned exactly; every other resolver keeps the tenant-tuple rule.
+    /// Admin session revocation is authorized inside <c>session_revoke_one</c> against <c>p_org_id</c>.
     /// </summary>
     private static readonly HashSet<string> PlatformScopeResolvers = new(StringComparer.Ordinal)
     {
@@ -98,6 +90,7 @@ public sealed partial class ResolverTests : HarnessTest
         "evidgate_resolve.user_profile_read", "evidgate_resolve.user_profile_update",
         "evidgate_resolve.data_protection_key_list", "evidgate_resolve.data_protection_key_store",
         "evidgate_resolve.login_state_replay_consume",
+        "evidgate_resolve.rate_limit_acquire",
     };
 
     /// <summary>
