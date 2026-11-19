@@ -4610,6 +4610,14 @@
       <trans-unit id="catalog.browse-capped-help" datatype="html"><source>Narrow the status or framework filters to reach cases beyond the 10,000 loaded here. Search only checks loaded results.</source><target>Thu hẹp bộ lọc trạng thái hoặc framework để xem các ca ngoài 10.000 ca đã tải ở đây. Tìm kiếm chỉ kiểm tra kết quả đã tải.</target></trans-unit>
       <trans-unit id="authoring.tree.browse-capped" datatype="html"><source>Hierarchy list is at its load limit</source><target>Danh sách phân cấp đã đạt giới hạn tải</target></trans-unit>
       <trans-unit id="authoring.tree.browse-capped-help" datatype="html"><source>Showing the first 10,000 nodes in this list. Open a known node link to inspect a scope outside these results.</source><target>Đang hiển thị 10.000 nút đầu tiên trong danh sách này. Mở liên kết nút đã biết để xem phạm vi ngoài các kết quả này.</target></trans-unit>
+      <trans-unit id="shared.gallery.live-status.title" datatype="html"><source>Polite live status</source><target>Thông báo trạng thái không ngắt lời</target></trans-unit>
+      <trans-unit id="shared.gallery.live-status.description" datatype="html"><source>A screen-reader-only message stays mounted while its text changes. The visible preview below is not a live region.</source><target>Vùng thông báo dành riêng cho trình đọc màn hình luôn tồn tại khi nội dung thay đổi. Bản xem trước bên dưới không phải vùng thông báo trực tiếp.</target></trans-unit>
+      <trans-unit id="shared.gallery.live-status.empty" datatype="html"><source>No announcement</source><target>Không có thông báo</target></trans-unit>
+      <trans-unit id="shared.gallery.live-status.announce" datatype="html"><source>Announce a message</source><target>Đọc một thông báo</target></trans-unit>
+      <trans-unit id="shared.gallery.live-status.change" datatype="html"><source>Change the message</source><target>Đổi nội dung thông báo</target></trans-unit>
+      <trans-unit id="shared.gallery.live-status.clear" datatype="html"><source>Clear the message</source><target>Xóa nội dung thông báo</target></trans-unit>
+      <trans-unit id="shared.gallery.live-status.first" datatype="html"><source>Showing the loaded cases. Refine the filters to find a specific case.</source><target>Đang hiển thị các ca đã tải. Thu hẹp bộ lọc để tìm một ca cụ thể.</target></trans-unit>
+      <trans-unit id="shared.gallery.live-status.changed" datatype="html"><source>The filters changed. Showing the matching loaded cases.</source><target>Bộ lọc đã thay đổi. Đang hiển thị các ca đã tải phù hợp.</target></trans-unit>
     </body>
   </file>
 </xliff>

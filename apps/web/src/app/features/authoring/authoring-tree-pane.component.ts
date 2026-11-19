@@ -60,7 +60,9 @@ export class AuthoringTreePaneComponent {
         if (ancestors.has(node.node_id)) continue;
         nodes.push(node);
         const page = this.children()[node.node_id];
+        // A childless row renders no children, so a retained page's rows are never focused.
         if (
+          node.child_count !== 0 &&
           this.expanded().has(node.node_id) &&
           page?.error?.kind !== 'forbidden' &&
           page?.error?.kind !== 'not_found'

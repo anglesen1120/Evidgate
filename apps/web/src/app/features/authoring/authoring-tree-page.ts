@@ -37,8 +37,9 @@ export const EMPTY_NODE_PAGE: AuthoringNodePage = {
 export function readyNodePage(
   items: readonly NodeDto[],
   nextCursor: string | null,
+  cap: number,
 ): AuthoringNodePage {
-  const retained = retainKeysetRows(items, nextCursor);
+  const retained = retainKeysetRows(items, nextCursor, cap);
   return retained.capped
     ? { items: retained.rows, nextCursor: null, status: 'capped', error: null }
     : { items: retained.rows, nextCursor: retained.nextCursor, status: 'ready', error: null };
@@ -64,18 +65,19 @@ export function selectionNodePage(
   previous: AuthoringNodePage | undefined,
   items: readonly NodeDto[],
   nextCursor: string | null,
+  cap: number,
 ): AuthoringNodePage {
   if (previous === undefined || previous.items.length === 0)
-    return readyNodePage(items, nextCursor);
+    return readyNodePage(items, nextCursor, cap);
   const merged = mergeNodes(previous.items, items);
   // A first-page refresh cannot make rows previously discarded by the cap complete again.
   if (previous.status === 'capped') {
-    return { ...readyNodePage(merged, null), status: 'capped', nextCursor: null };
+    return { ...readyNodePage(merged, null, cap), status: 'capped', nextCursor: null };
   }
   // A longer retained walk owns its cursor; only an exhausted walk adopts the fresh cursor.
   const cursor =
     previous.nextCursor !== null && previous.items.length > items.length
       ? previous.nextCursor
       : nextCursor;
-  return readyNodePage(merged, cursor);
+  return readyNodePage(merged, cursor, cap);
 }

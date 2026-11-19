@@ -51,6 +51,7 @@ export class AuthoringPageHarness extends ComponentHarness {
   readonly breadcrumbs = this.locatorForAll('[data-authoring-breadcrumb] li');
   readonly refresh = this.locatorFor('[data-authoring-refresh]');
   readonly selectedId = this.locatorForOptional('app-copyable-identifier');
+  readonly announcement = this.locatorFor('[data-authoring-announcement]');
   async text() {
     return (await this.host()).text();
   }

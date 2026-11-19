@@ -12,8 +12,8 @@ import {
 import { isApiRequestError, type ApiError } from '../../core/http/api-error';
 import type { ManualCaseQuery } from '../../core/data/authoring-reads.service';
 import { createRetryAfterWait } from '../../core/http/retry';
+import { RETAINED_ROWS_CAP, retainKeysetRows } from '../../shared/keyset-retention';
 import { takeKeysetPage } from '../../shared/keyset-walk';
-import { retainKeysetRows } from '../../shared/keyset-retention';
 import { AuthoringDataService } from './authoring-data.service';
 import {
   isCaseUuid,
@@ -126,6 +126,7 @@ export const AuthoringCaseTableStore = signalStore(
     }),
   })),
   withMethods((store, data = inject(AuthoringDataService)) => {
+    const cap = inject(RETAINED_ROWS_CAP);
     function abort(): void {
       store._run.controller?.abort();
       store._run.controller = null;
@@ -159,7 +160,7 @@ export const AuthoringCaseTableStore = signalStore(
         return null;
       }
       const combined = append ? [...store.rows(), ...step.fresh] : step.fresh;
-      const retained = retainKeysetRows(combined, step.nextCursor);
+      const retained = retainKeysetRows(combined, step.nextCursor, cap);
       patchState(store, {
         rows: retained.rows,
         nextCursor: retained.nextCursor,

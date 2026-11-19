@@ -87,6 +87,7 @@ describe('UiGalleryComponent axe acceptance', () => {
           'app-retry-after[data-demo="retry-after-waiting"]',
           'app-retry-after[data-demo="retry-after-eligible"]',
           'app-request-state',
+          '[data-demo="live-status"] app-live-status [role="status"]',
           'app-conflict-dialog',
         ]) {
           expect(root.querySelector(selector), selector).not.toBeNull();
