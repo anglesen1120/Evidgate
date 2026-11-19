@@ -88,12 +88,9 @@ describe('ChecklistReviewTabComponent', () => {
       root: TestbedHarnessEnvironment.documentRootLoader(fixture),
     };
   }
-  it('shows only this item’s loaded changes and the project queue link', async () => {
-    listPending.mockResolvedValue({
-      items: [pendingRow(), { ...pendingRow(), change_id: 'other', target_id: 'other' }],
-      next_cursor: null,
-    });
+  it('reads only this item’s queued changes and links the project queue', async () => {
     const { ui } = await setup();
+    expect(listPending).toHaveBeenCalledWith(PROJECT, expect.any(AbortSignal), undefined, ITEM);
     expect(await ui.count('[data-review-change]')).toBe(1);
     expect(await ui.text()).toContain(PENDING_UI.openQueue);
   });
@@ -137,7 +134,7 @@ describe('ChecklistReviewTabComponent', () => {
       expect.any(String),
       expect.any(AbortSignal),
     );
-  }, 30_000);
+  });
   it.each([
     ['conflict', 409],
     ['validation', 422],
@@ -283,7 +280,7 @@ describe('ChecklistReviewTabComponent', () => {
       expect.any(String),
       expect.any(AbortSignal),
     );
-  }, 30_000);
+  });
   it('hides queue controls below the desktop breakpoint', async () => {
     desktop.set(false);
     const { ui } = await setup();

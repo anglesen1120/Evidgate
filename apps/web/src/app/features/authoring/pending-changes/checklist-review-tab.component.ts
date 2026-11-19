@@ -24,13 +24,15 @@ import { ForbiddenPatternComponent } from '../../../shared/ui/states/forbidden-p
 import { InlineFeedbackComponent } from '../../../shared/ui/states/inline-feedback.component';
 import { RetryAfterComponent } from '../../../shared/ui/conflict/retry-after.component';
 import { DesktopMutationDirective } from '../../../shared/ui/narrow/desktop-mutation.directive';
-import { DesktopRequiredNoticeComponent } from '../../../shared/ui/narrow/desktop-required-notice.component';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
+import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
 import { NumberValueComponent } from '../../../shared/ui/values/number-value.component';
+import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { createFormFeedback } from '../../../shared/forms/form-feedback';
 import { FieldFeedbackComponent } from '../../../shared/forms/field-feedback.component';
 import { FormErrorSummaryComponent } from '../../../shared/forms/form-error-summary.component';
+import { codePoints } from '../editor/editor.model';
 import { PENDING_COPY } from './pending-changes.copy';
 import { PENDING_UI, operationLabel } from './pending-changes.ui-copy';
 import { PendingChangesStore } from './pending-changes.store';
@@ -52,9 +54,10 @@ import { PendingConfirmComponent } from './pending-confirm.component';
     InlineFeedbackComponent,
     RetryAfterComponent,
     DesktopMutationDirective,
-    DesktopRequiredNoticeComponent,
+    StatusPillComponent,
     CopyableIdentifierComponent,
     NumberValueComponent,
+    AbsoluteTimeComponent,
     PendingConfirmComponent,
     FieldFeedbackComponent,
     FormErrorSummaryComponent,
@@ -78,8 +81,8 @@ export class ChecklistReviewTabComponent {
   protected readonly reason = linkedSignal({ source: this.scope, computation: () => '' });
   protected readonly commentLimit = 2000;
   protected readonly reasonLimit = 500;
-  protected readonly commentLength = computed(() => Array.from(this.comment()).length);
-  protected readonly reasonLength = computed(() => Array.from(this.reason()).length);
+  protected readonly commentLength = computed(() => codePoints(this.comment(), this.commentLimit));
+  protected readonly reasonLength = computed(() => codePoints(this.reason(), this.reasonLimit));
   private readonly commentTooLong = $localize`:@@authoring.pending-changes.comment-too-long:Use no more than 2,000 characters for the comment.`;
   private readonly reasonTooLong = $localize`:@@authoring.pending-changes.reason-too-long:Use no more than 500 characters for the reason.`;
   protected readonly queued = linkedSignal({ source: this.scope, computation: () => false });
@@ -89,13 +92,11 @@ export class ChecklistReviewTabComponent {
   protected readonly load = resource({
     params: () => (this.store.canRead() ? this.scope() : undefined),
     loader: async ({ params }) => {
-      await this.store.init(params.project);
+      await this.store.init(params.project, { targetId: params.item });
       return params;
     },
   });
-  protected readonly rows = computed(() =>
-    this.store.rows().filter((row) => row.target_id === this.itemId()),
-  );
+  protected readonly rows = computed(() => this.store.rows());
   protected readonly queueLink = computed(() => [
     '/orgs',
     this.session.currentProject()?.org_id ?? '',

@@ -4610,6 +4610,18 @@
       <trans-unit id="catalog.browse-capped-help" datatype="html"><source>Narrow the status or framework filters to reach cases beyond the 10,000 loaded here. Search only checks loaded results.</source><target>Thu hẹp bộ lọc trạng thái hoặc framework để xem các ca ngoài 10.000 ca đã tải ở đây. Tìm kiếm chỉ kiểm tra kết quả đã tải.</target></trans-unit>
       <trans-unit id="authoring.tree.browse-capped" datatype="html"><source>Hierarchy list is at its load limit</source><target>Danh sách phân cấp đã đạt giới hạn tải</target></trans-unit>
       <trans-unit id="authoring.tree.browse-capped-help" datatype="html"><source>Showing the first 10,000 nodes in this list. Open a known node link to inspect a scope outside these results.</source><target>Đang hiển thị 10.000 nút đầu tiên trong danh sách này. Mở liên kết nút đã biết để xem phạm vi ngoài các kết quả này.</target></trans-unit>
+      <trans-unit id="authoring.review-context.parent-item" datatype="html"><source>Parent checklist item</source><target>Mục danh sách kiểm tra cha</target></trans-unit>
+      <trans-unit id="authoring.review-context.parent-item-label" datatype="html"><source>Parent checklist item</source><target>Mục danh sách kiểm tra cha</target></trans-unit>
+      <trans-unit id="authoring.review-context.priority" datatype="html"><source>Parent item priority</source><target>Độ ưu tiên của mục cha</target></trans-unit>
+      <trans-unit id="authoring.review-context.related-cases" datatype="html"><source>Related cases</source><target>Ca kiểm thử liên quan</target></trans-unit>
+      <trans-unit id="authoring.review-context.not-provided" datatype="html"><source>Not provided</source><target>Chưa được cung cấp</target></trans-unit>
+      <trans-unit id="authoring.review-context.author-id" datatype="html"><source>Author membership id</source><target>Mã thành viên tác giả</target></trans-unit>
+      <trans-unit id="authoring.review-context.author-name" datatype="html"><source>Author display name</source><target>Tên hiển thị của tác giả</target></trans-unit>
+      <trans-unit id="authoring.review-context.source" datatype="html"><source>Source</source><target>Nguồn</target></trans-unit>
+      <trans-unit id="authoring.review-context.state" datatype="html"><source>Change state</source><target>Trạng thái thay đổi</target></trans-unit>
+      <trans-unit id="authoring.review-context.applied" datatype="html"><source>Applied</source><target>Đã áp dụng</target></trans-unit>
+      <trans-unit id="authoring.review-context.discarded" datatype="html"><source>Discarded</source><target>Đã loại bỏ</target></trans-unit>
+      <trans-unit id="authoring.review-context.reason" datatype="html"><source>Change reason</source><target>Lý do thay đổi</target></trans-unit>
     </body>
   </file>
 </xliff>
