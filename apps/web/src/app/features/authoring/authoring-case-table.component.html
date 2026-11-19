@@ -106,8 +106,12 @@
   @if (store.invalidLink()) {
     <app-inline-feedback
       [tone]="'destructive'"
-      [title]="copy.invalidLink"
-      [description]="copy.invalidLinkHelp"
+      [title]="store.invalidLinkField() === 'node' ? copy.invalidNode : copy.invalidLink"
+      [description]="
+        store.invalidLinkField() === 'node' ? copy.invalidNodeHelp : copy.invalidLinkHelp
+      "
+      [actionLabel]="copy.clear"
+      (action)="clearInvalidLink()"
       [announcement]="'polite'"
       data-case-invalid-link
     />
@@ -162,7 +166,13 @@
     [attr.aria-label]="copy.pagination"
     [attr.aria-busy]="store.loadingMore()"
   >
-    <p tabindex="-1" role="status" data-case-loaded i18n="@@authoring.case-table.loaded-count">
+    <p
+      #loadedCount
+      tabindex="-1"
+      role="status"
+      data-case-loaded
+      i18n="@@authoring.case-table.loaded-count"
+    >
       {{ store.rows().length | number }} cases loaded
     </p>
     <div class="field">

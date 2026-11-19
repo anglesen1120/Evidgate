@@ -81,6 +81,15 @@ describe('AuthoringCaseRowsComponent', () => {
     expect(await (await harness.summary()).text()).toContain('0 of 1 loaded selected');
   });
 
+  it('keeps case-id selection when Load more appends rows', async () => {
+    const { fixture, harness } = await mount();
+    await (await harness.rowBoxes())[0]?.click();
+    fixture.componentRef.setInput('rows', [row(1), row(2), row(3)]);
+    fixture.detectChanges();
+    expect(await (await harness.rowBoxes())[0]?.getAttribute('aria-checked')).toBe('true');
+    expect(await (await harness.summary()).text()).toContain('1 of 3 loaded selected');
+  });
+
   it('never enables export or hides its visible reason, and shows canonical linked UUIDs', async () => {
     const { harness } = await mount();
     expect(await (await harness.exportAction()).getAttribute('aria-disabled')).toBe('true');

@@ -194,6 +194,59 @@ describe('AuthoringCaseTableStore', () => {
     expect(store.rows()).toHaveLength(1);
   });
 
+  it('accepts the exact-cap continuation cursor and retains the cap notice after failed Refresh', async () => {
+    list.mockResolvedValueOnce(
+      page(
+        Array.from({ length: 9_800 }, (_, i) => String(i)),
+        'last-retained',
+      ),
+    );
+    await store.init('project', {});
+    list.mockResolvedValueOnce(
+      page(
+        Array.from({ length: 200 }, (_, i) => String(9_800 + i)),
+        'beyond-cap',
+      ),
+    );
+    expect(await store.loadMore()).toBe('last-retained');
+    expect(store.rows()).toHaveLength(10_000);
+    expect(store.browseCapped()).toBe(true);
+    expect(store.nextCursor()).toBeNull();
+    await store.init('project', { cursor: 'last-retained' });
+    expect(list).toHaveBeenCalledTimes(2);
+    list.mockRejectedValueOnce(apiError('network', 0));
+    await store.reload();
+    expect(store.rows()).toHaveLength(10_000);
+    expect(store.browseCapped()).toBe(true);
+    expect(store.stale()).toBe(true);
+    list.mockResolvedValueOnce(page(['replacement']));
+    await store.retry();
+    expect(store.rows().map((item) => item.case_id)).toEqual(['replacement']);
+    expect(store.browseCapped()).toBe(false);
+  });
+
+  it.each(['item_id', 'node_id'])('accepts uppercase dashed UUIDs for %s', async (key) => {
+    const uuid = '018F0000-ABCD-7000-8000-000000000201';
+    await store.init('project', { [key]: uuid });
+    expect(store.invalidLink()).toBe(false);
+    expect(list.mock.lastCall?.[1]).toHaveProperty(key, uuid);
+  });
+
+  it.each([
+    ['item_id', '{018f0000-0000-7000-8000-000000000201}'],
+    ['item_id', '018f0000000070008000000000000201'],
+    ['node_id', '{018f0000-0000-7000-8000-000000000101}'],
+    ['node_id', '018f0000000070008000000000000101'],
+  ])('refuses malformed %s shape %s without widening the read', async (key, value) => {
+    await store.init('project', { [key]: value });
+    await store.reload();
+    await store.retry();
+    await store.loadMore();
+    expect(list).not.toHaveBeenCalled();
+    expect(store.invalidLink()).toBe(true);
+    expect(store.error()).toMatchObject({ code: `invalid_${key}`, retryable: false });
+  });
+
   it('does not claim a cap when the last complete page ends exactly at 10000 cases', async () => {
     const ids = (start: number) => Array.from({ length: 200 }, (_, i) => String(start + i));
     list.mockResolvedValueOnce(page(ids(0), 'p1'));
@@ -283,7 +336,9 @@ describe('AuthoringCaseTableStore', () => {
     expect(list).toHaveBeenCalledTimes(2);
     expect(list.mock.lastCall?.[1].node_id).toBe(NODE);
     await store.init('project', { node_id: 'bad-node' });
-    expect(list).toHaveBeenCalledTimes(3);
-    expect(list.mock.lastCall?.[1]).not.toHaveProperty('node_id');
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(store.rows()).toEqual([]);
+    expect(store.invalidLink()).toBe(true);
+    expect(store.error()?.code).toBe('invalid_node_id');
   });
 });

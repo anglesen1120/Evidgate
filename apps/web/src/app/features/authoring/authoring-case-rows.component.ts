@@ -80,13 +80,20 @@ export class AuthoringCaseRowsComponent {
     const end = table.virtual() ? (range?.end ?? 0) : start + 200;
     return rows.slice(start, end);
   });
-  protected readonly selected = linkedSignal(() => {
-    // A new result replaces the selection; a window, page or layout change does not, because the
-    // table and the stacked records are two presentations of one result and selection is keyed
-    // by case id. Narrow actions stay refused by `selectRow`/`selectVisible`.
-    this.rows();
-    return new Set<string>();
-  });
+  protected readonly selected = linkedSignal<readonly ManualCaseListItemDto[], ReadonlySet<string>>(
+    {
+      source: this.rows,
+      // A new result replaces the selection, but an appended page keeps it: the rows it selected
+      // are still in the list, and selection is keyed by case id. Ids that left the result are
+      // dropped, so a filter that removes a case never leaves an invisible pick behind.
+      computation: (rows, previous) => {
+        if (!previous) return new Set<string>();
+        const present = new Set(rows.map((row) => row.case_id));
+        const kept = [...previous.value].filter((id) => present.has(id));
+        return kept.length === previous.value.size ? previous.value : new Set(kept);
+      },
+    },
+  );
   protected readonly selectedCount = computed(
     () => this.visibleRows().filter((row) => this.selected().has(row.case_id)).length,
   );
