@@ -17,6 +17,11 @@ export const MAX_REPORT_BYTES = 16 * 1024 * 1024;
 /** Projects accepted in one report; a report beyond this is refused before any hashing. */
 export const MAX_PROJECTS = 1000;
 
+/** One enumerated test plus the project's raw variant params it was hashed from. */
+export interface ListedTest extends EnumeratedTest {
+  readonly variantParams: unknown;
+}
+
 /** The annotation the adapter reads; its description is the canonical case id. */
 const CASE_ID_ANNOTATION = 'evidgate.id';
 // A path with a C0/DEL control character cannot name a file a person wrote, and a NUL would
@@ -30,6 +35,8 @@ type HashVariant = (params: unknown) => string | undefined;
 interface ProjectEntry {
   readonly index: number;
   readonly hash: string;
+  /** The project's raw `metadata.evidgate.params`, kept so a caller can rebuild its variant. */
+  readonly params: unknown;
 }
 
 interface ProjectTable {
@@ -46,6 +53,23 @@ export function parsePlaywrightList(
   text: string,
   hashVariant: HashVariant,
 ): readonly EnumeratedTest[] {
+  return parsePlaywrightListWithParams(text, hashVariant).map((test) => ({
+    file: test.file,
+    titlePath: test.titlePath,
+    variantHash: test.variantHash,
+    ...(test.caseId === undefined ? {} : { caseId: test.caseId }),
+    ...(test.identityConflict === true ? { identityConflict: true } : {}),
+  }));
+}
+
+/**
+ * The same enumeration, keeping each test's raw variant params: a manifest generator needs the
+ * parameters themselves, not only the digest they hash to.
+ */
+export function parsePlaywrightListWithParams(
+  text: string,
+  hashVariant: HashVariant,
+): readonly ListedTest[] {
   assertTextUnderCap(text);
   const root = record(parseJson(text));
   if (root === undefined) {
@@ -54,7 +78,7 @@ export function parsePlaywrightList(
   refuseCollectionErrors(optionalArray(root, 'errors', 'the report'));
   const suites = optionalArray(root, 'suites', 'the report');
   const projects = projectTable(root, hashVariant);
-  const tests: EnumeratedTest[] = [];
+  const tests: ListedTest[] = [];
   for (const suite of suites) {
     collectSuite(suite, undefined, [], projects, tests, 1);
   }
@@ -134,7 +158,7 @@ function collectSuite(
   inherited: string | undefined,
   titles: readonly string[],
   projects: ProjectTable,
-  out: EnumeratedTest[],
+  out: ListedTest[],
   depth: number,
 ): void {
   const suite = record(raw);
@@ -163,7 +187,7 @@ function collectSpec(
   suiteFile: string | undefined,
   titles: readonly string[],
   projects: ProjectTable,
-  out: EnumeratedTest[],
+  out: ListedTest[],
 ): void {
   const spec = record(raw);
   if (spec === undefined) {
@@ -189,17 +213,18 @@ function enumerateTest(
   file: string,
   titlePath: readonly string[],
   projects: ProjectTable,
-): EnumeratedTest {
+): ListedTest {
   const test = record(raw);
   if (test === undefined) {
     throw invalid('the report has a malformed test');
   }
-  const hash = testProject(test, projects).hash;
+  const project = testProject(test, projects);
   const identity = readIdentity(test['annotations']);
   return {
     file,
     titlePath,
-    variantHash: hash,
+    variantHash: project.hash,
+    variantParams: project.params,
     ...(identity.caseId === undefined ? {} : { caseId: identity.caseId }),
     ...(identity.conflict ? { identityConflict: true } : {}),
   };
@@ -318,11 +343,12 @@ function projectTable(root: Record<string, unknown>, hashVariant: HashVariant): 
     if (project === undefined) {
       throw invalid('the report has a malformed project');
     }
-    const hash = hashVariant(variantParams(project['metadata']));
+    const params = variantParams(project['metadata']);
+    const hash = hashVariant(params);
     if (hash === undefined) {
       throw variantInvalid('a project declares variant params with no valid hash');
     }
-    const entry: ProjectEntry = { index, hash };
+    const entry: ProjectEntry = { index, hash, params };
     const id = string(project['id']);
     const name = string(project['name']);
     if (id !== undefined) {

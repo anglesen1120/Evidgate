@@ -19,7 +19,9 @@ export EVIDGATE_PROJECT='my-project'
 # only to the 0600 cache, never printed.
 npx --yes --package @evidgate/cli@0.0.0 -- evidgate auth login
 
-# Upload the manifest and keep its ids in shell variables for the run step.
+# Generate evidgate-manifest.json beforehand with 'evidgate manifests build' (token needs
+# suite:plan_read; see contracts/cli.md section 14). Then upload it and keep its ids in
+# shell variables for the run step.
 out=$(npx --yes --package @evidgate/cli@0.0.0 -- evidgate manifests upload --file evidgate-manifest.json --json)
 manifest_id=$(node -p 'JSON.parse(process.argv[1]).manifest_id' "$out")
 manifest_hash=$(node -p 'JSON.parse(process.argv[1]).manifest_hash' "$out")

@@ -1,6 +1,8 @@
 // Maps the tests a Playwright list reports to the members of one catalog suite revision.
 // The mapping is all-or-nothing: one unmapped or ambiguous test refuses the whole plan, so a
 // run can never claim a suite revision while some of its tests are silently absent.
+import type { SuiteRevisionExecutionPlanMember } from '@evidgate/sdk';
+
 import { CliError } from './errors.js';
 
 /** Tests accepted in one mapping. */
@@ -24,13 +26,11 @@ export interface EnumeratedTest {
   readonly identityConflict?: boolean;
 }
 
-// interim local type: replace by the SDK type when the execution-plan route lands
-/** One member of a suite revision as the execution plan lists it. */
-export interface PlanMember {
-  readonly case_id: string;
-  readonly variant_hash: string;
-  readonly case_revision_id: string;
-}
+/**
+ * One member of a suite revision as the execution plan lists it; the SDK's own type, so the
+ * route's shape is declared once. The catalogue names this a test revision per case.
+ */
+export type PlanMember = SuiteRevisionExecutionPlanMember;
 
 /** The execution plan of one suite revision. */
 export interface ExecutionPlan {
@@ -47,15 +47,15 @@ export interface ExecutionPlanPort {
   read(suiteRevisionId: string): Promise<ExecutionPlan>;
 }
 
-export interface MappingEntry {
-  readonly test: EnumeratedTest;
+export interface MappingEntry<T extends EnumeratedTest = EnumeratedTest> {
+  readonly test: T;
   readonly caseRevisionId: string;
 }
 
-export interface MappingResult {
+export interface MappingResult<T extends EnumeratedTest = EnumeratedTest> {
   readonly suiteRevisionId: string;
-  /** One entry per input test, in input order. */
-  readonly entries: readonly MappingEntry[];
+  /** One entry per input test, in input order, carrying the caller's own test type. */
+  readonly entries: readonly MappingEntry<T>[];
 }
 
 type ProblemKind = 'manifest_test_unmapped' | 'manifest_test_ambiguous';
@@ -68,10 +68,10 @@ type Lookup =
  * up to `MAX_DETAILS` offending tests. Nothing partial is ever returned: a caller that gets a
  * result can treat every entry as mapped.
  */
-export function mapTestsToMembers(
-  tests: readonly EnumeratedTest[],
+export function mapTestsToMembers<T extends EnumeratedTest>(
+  tests: readonly T[],
   plan: ExecutionPlan,
-): MappingResult {
+): MappingResult<T> {
   if (tests.length > MAX_TESTS) {
     throw inputTooLarge(`the report lists ${tests.length} tests, over the ${MAX_TESTS} accepted`);
   }
@@ -92,7 +92,7 @@ export function mapTestsToMembers(
     }
   }
 
-  const entries: MappingEntry[] = [];
+  const entries: MappingEntry<T>[] = [];
   const problems: Array<{ readonly kind: ProblemKind; readonly test: EnumeratedTest }> = [];
   for (const test of tests) {
     const lookup = lookupMember(test, byKey);
@@ -179,4 +179,72 @@ function clip(value: string): string {
 
 function inputTooLarge(message: string): CliError {
   return new CliError(message, { code: 'manifest_input_too_large' });
+}
+
+/**
+ * Refuses two tests that resolve to the same case and variant. A report may repeat a test
+ * through `repeatEach` or a duplicated spec, and either way one manifest execution would be
+ * claimed by two results, so the whole report is refused. Bounded like every other refusal.
+ */
+export function assertDistinctTests(tests: readonly EnumeratedTest[]): void {
+  const groups = new Map<string, EnumeratedTest[]>();
+  for (const test of tests) {
+    if (test.identityConflict === true || test.caseId === undefined) {
+      continue;
+    }
+    const key = memberKey(test.caseId, test.variantHash);
+    const group = groups.get(key);
+    if (group === undefined) {
+      groups.set(key, [test]);
+    } else {
+      group.push(test);
+    }
+  }
+  const repeated = [...groups.values()].filter((group) => group.length > 1).flat();
+  if (repeated.length === 0) {
+    return;
+  }
+  const details = boundedDetails(repeated.map(describe));
+  throw new CliError(`test ${details[0] ?? '(unnamed)'} repeats a case and variant in the report`, {
+    code: 'manifest_test_duplicate',
+    hint: 'keep one test per case and variant; do not repeat a case with repeatEach',
+    details,
+  });
+}
+
+/**
+ * Refuses a plan member no local test exercises. A manifest that omits a member would let a run
+ * claim the revision while part of it never runs, so the plan must be fully covered.
+ */
+export function assertMembersExercised(
+  plan: ExecutionPlan,
+  entries: readonly MappingEntry[],
+): void {
+  const covered = new Set(
+    entries.map((entry) => memberKey(entry.test.caseId ?? '', entry.test.variantHash)),
+  );
+  const missing = plan.members.filter(
+    (member) => !covered.has(memberKey(member.case_id, member.variant_hash)),
+  );
+  if (missing.length === 0) {
+    return;
+  }
+  const details = boundedDetails(
+    missing.map((member) => `case=${member.case_id} variant=${member.variant_hash}`),
+  );
+  throw new CliError(
+    `suite revision ${plan.suite_revision_id} lists ${missing.length} member(s) the report does not exercise`,
+    {
+      code: 'manifest_plan_member_unexercised',
+      hint: 'add the missing case and variant to the Playwright project, or build for another revision',
+      details,
+    },
+  );
+}
+
+/** At most `MAX_DETAILS` named items, then one line counting the rest. */
+function boundedDetails(all: readonly string[]): string[] {
+  const named = all.slice(0, MAX_DETAILS);
+  const remaining = all.length - named.length;
+  return remaining > 0 ? [...named, `(${remaining} more)`] : named;
 }
