@@ -9,20 +9,20 @@
 --   * cost is 1..16. The FIRST unit decides, exactly as two sequential calls did: the call is admitted when the window
 --     is live with fewer than `limit` hits (or expired / absent), and an admitted call then spends all `cost` units
 --     (clamped at limit+1, the stored ceiling of 0110). A refused call spends nothing more;
---   * a window that is live and already holds at least `limit` hits is refused with a plain index read: no row is
---     written or locked, so a refused flood costs no WAL. The refusal and retry-after are the ones the clamped upsert
---     gave (`limit` and `limit+1` both refuse); the stored count may now rest at `limit` instead of `limit+1`;
---   * the admit path is one upsert whose update is guarded by `expired or hit_count < limit`, so two replicas racing
---     on one key still cannot both be admitted past the limit; a racer the guard rejects is a refusal;
+--   * a call refused by the early index read writes and locks nothing; the refusal and retry-after are unchanged,
+--     and the stored count may now rest at `limit` instead of `limit+1`;
+--   * the upsert guard prevents admission past the limit. With C concurrent callers, at most C-1 whose early read
+--     predates the call that reached the limit still take the row lock and write a lock record, but no tuple version;
 --   * capacity sampling is `random() < 1/16` on the insert path of a new key, independent of the key.
 --
 -- lint: audit-deferred pre-tenant-budget evidgate_resolve.rate_limit_acquire
 --
 -- Deploy ORDER: migration first, then the application. The application calls the 6-argument function; until it is
 -- replaced the old build calls the 5-argument wrapper and gets the same decisions.
--- ROLLBACK: roll the APPLICATION back first (the 5-argument wrapper keeps serving it), then, if the database must
--- go back, drop the 6-argument function and recreate the 5-argument one from 0110 (create or replace in 0110 is not
--- re-run by the migrator, so paste its body). Live budgets survive: the table is not touched.
+-- ROLLBACK: roll the APPLICATION back first. In ONE transaction, CREATE OR REPLACE the 5-argument function with
+-- its body from 0110_identity_rate_limit_windows.sql, THEN drop the 6-argument function; the migrator does not re-run
+-- 0110. The wrapper late-binds to the 6-argument function: dropping it first breaks old builds (42883, 503).
+-- Live budgets survive: the table is not touched.
 
 set local lock_timeout = '5s';
 
@@ -81,7 +81,8 @@ begin
   returning w.window_start, (xmax = 0) into v_start, v_inserted;
 
   if not found then
-    -- A concurrent call filled the window between the read and the upsert: refuse, charging nothing.
+    -- The guard refused after a concurrent call filled the window. Only eviction between this and the next read
+    -- can leave no row; refuse with retry 1 in that case to fail closed rather than reopen the budget.
     select w.window_start into v_start
       from public.rate_limit_window w
      where w.surface = p_surface and w.key_hash = p_key_hash;

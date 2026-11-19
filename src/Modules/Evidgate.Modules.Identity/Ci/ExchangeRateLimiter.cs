@@ -49,19 +49,25 @@ internal class ExchangeRateLimiter(NpgsqlDataSource dataSource, IOptions<RateLim
     /// </summary>
     private const int CommandTimeoutSeconds = 2;
 
+    // Match the database bound so invalid caller costs fail before allocating a command or doing database work.
+    private const int MaxCost = 16;
+
     /// <summary>
     /// Counts an attempt worth <paramref name="cost"/> units for <paramref name="key"/> in one round trip and reports
     /// whether the surface's budget admits it; only the first unit decides, the rest are spent when admitted.
     /// </summary>
     /// <param name="surface">The budget to spend from.</param>
     /// <param name="key">The limiter key; the store receives only its unsalted SHA-256 digest, which is pseudonymous, not anonymous.</param>
-    /// <param name="cost">Units this attempt is worth, 1 to 16 (the store validates the bound).</param>
+    /// <param name="cost">Units this attempt is worth, 1 to 16 (validated here and by the store).</param>
     /// <param name="cancellationToken">The request's cancellation token.</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="cost"/> is outside 1 to 16.</exception>
     /// <exception cref="NpgsqlException">The store could not answer; the caller fails closed.</exception>
     public virtual async ValueTask<RateDecision> AcquireAsync(
         RateSurface surface, string key, int cost, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(key);
+        ArgumentOutOfRangeException.ThrowIfLessThan(cost, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(cost, MaxCost);
 
         var settings = options.Value.For(surface);
 

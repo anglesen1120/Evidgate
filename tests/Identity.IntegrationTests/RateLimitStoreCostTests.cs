@@ -191,16 +191,16 @@ public sealed class RateLimitStoreCostTests(DatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task Acquire_ACostOfZero_SurfacesTheStoreRefusal()
+    public async Task Acquire_ACostOfZero_ThrowsBeforeReachingTheStore()
     {
         var limiter = Limiter(limit: 3);
 
-        var error = await Should.ThrowAsync<PostgresException>(async () =>
+        await Should.ThrowAsync<ArgumentOutOfRangeException>(async () =>
         {
             await limiter.AcquireAsync(RateSurface.Login, "cost-zero", 0, Token);
         });
-        error.SqlState.ShouldBe(PostgresErrorCodes.InvalidParameterValue);
 
+        (await RowExistsAsync("cost-zero")).ShouldBeFalse("an out-of-range cost never reaches the store");
         (await limiter.AcquireAsync(RateSurface.Login, "cost-one", 1, Token)).Allowed
             .ShouldBeTrue("only the cost is wrong: the same store call with cost 1 is admitted");
     }
