@@ -102,6 +102,13 @@ const CONTRACTS_DIRECTORY = join(REPOSITORY_ROOT, 'contracts');
 const MAX_EXTERNAL_SCHEMA_HOPS = 8;
 
 /**
+ * How many nodes one standalone document may expand to; a runaway product stays refused. It is
+ * declared above `CONTRACT_DOCUMENT` because that eager build already inlines external documents
+ * and reads this budget through `readExternalSchema`.
+ */
+const MAX_LOCAL_REF_NODES = 20_000;
+
+/**
  * The parsed contract with its external schema references inlined; the validator resolves its own
  * local `#/components/...` refs. See `inlineExternalSchemaRefs` for why the inlining happens here
  * and for the references it deliberately leaves alone.
@@ -208,9 +215,6 @@ function readExternalSchema(reference: string, inlined: readonly string[]): unkn
     : localised;
   return inlineExternalSchemaRefs(withoutIdentity, [...inlined, path]);
 }
-
-/** How many nodes one standalone document may expand to; a runaway product stays refused. */
-const MAX_LOCAL_REF_NODES = 20_000;
 
 /**
  * One node of a standalone document with its own local `#/...` references expanded in place.
