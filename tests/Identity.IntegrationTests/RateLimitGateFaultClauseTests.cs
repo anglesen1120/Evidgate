@@ -44,16 +44,26 @@ public sealed class RateLimitGateFaultClauseTests
         await Should.ThrowAsync<InvalidOperationException>(() => AcquireAsync(new InvalidOperationException("bug")).AsTask());
 
     [Fact]
-    public async Task Acquire_ASecondUnitFailingWithTimeoutException_AnswersUnavailable()
+    public async Task Acquire_ATwoUnitStoreCallFailingWithTimeoutException_AnswersUnavailable()
     {
-        var limiter = new FaultingLimiter(new TimeoutException("second unit"), failAfterCalls: 1);
+        var limiter = new FaultingLimiter(new TimeoutException("weighted attempt"), failAfterCalls: 0);
         var context = new DefaultHttpContext();
 
         var refused = await RateLimitGate.AcquireAsync(
             context, limiter, RateSurface.Login, "k", 2, "refused", TestContext.Current.CancellationToken);
 
         refused.ShouldNotBeNull().Code.ShouldBe(ApiErrorCode.Unavailable);
-        limiter.Calls.ShouldBe(2);
+        limiter.Calls.ShouldBe(1);
+        limiter.LastCost.ShouldBe(2);
+
+        // Control: the same weighted attempt through a store that answers is one call, so the case above fails
+        // for the fault and not for a cost the gate cannot spend.
+        var answering = new FaultingLimiter(new TimeoutException("never thrown"), failAfterCalls: 1);
+        (await RateLimitGate.AcquireAsync(
+            new DefaultHttpContext(), answering, RateSurface.Login, "k", 2, "refused", TestContext.Current.CancellationToken))
+            .ShouldBeNull();
+        answering.Calls.ShouldBe(1);
+        answering.LastCost.ShouldBe(2);
     }
 
     private static async Task AssertUnavailableAsync(Exception fault)
@@ -82,11 +92,13 @@ public sealed class RateLimitGateFaultClauseTests
         : ExchangeRateLimiter(NpgsqlDataSource.Create("Host=127.0.0.1;Database=unused"), Options.Create(new RateLimitOptions()))
     {
         public int Calls { get; private set; }
+        public int LastCost { get; private set; }
 
         public override ValueTask<RateDecision> AcquireAsync(
-            RateSurface surface, string key, CancellationToken cancellationToken)
+            RateSurface surface, string key, int cost, CancellationToken cancellationToken)
         {
             Calls++;
+            LastCost = cost;
             if (Calls > failAfterCalls)
             {
                 throw fault;
