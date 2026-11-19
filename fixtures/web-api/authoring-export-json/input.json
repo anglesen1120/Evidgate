@@ -1,0 +1,23 @@
+{
+  "operation_id": "exportAuthoring",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000af01",
+    "Content-Disposition": "attachment; filename=authoring-export.json; filename*=UTF-8''authoring-export.json",
+    "Cache-Control": "no-store"
+  },
+  "latency_ms": 0,
+  "body": {
+    "format": "authoring-import",
+    "version": 1,
+    "rows": [
+      {
+        "kind": "node",
+        "key": "n1",
+        "node_kind": "module",
+        "title": "Checkout"
+      }
+    ]
+  }
+}

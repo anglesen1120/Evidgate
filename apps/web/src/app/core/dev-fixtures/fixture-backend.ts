@@ -322,6 +322,14 @@ export class FixtureHttpBackend implements HttpBackend {
       const bulk = findBulkCaseListFixture(this.toggles.variantFor('listCases'));
       if (bulk !== undefined) return bulk;
     }
+    if (
+      request.method === 'POST' &&
+      /^\/projects\/[^/]+\/authoring\/import$/.test(relativePath) &&
+      queryParameter(request.urlWithParams, 'dry_run') === 'false' &&
+      this.toggles.variantFor('importAuthoring') === 'ok'
+    ) {
+      return findFixtureEntry('importAuthoring', 'confirmed');
+    }
     const route = matchFixtureRoute(request.method, relativePath);
     return route === undefined ? undefined : this.selectEntry(route, relativePath, request);
   }
