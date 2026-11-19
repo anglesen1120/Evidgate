@@ -850,6 +850,7 @@ public static partial class IsolationRouteCases
         ObjectCase("GET", "/v1/suites/{s}", p => Indexed("suite", p.SuiteIds), id => new(HttpMethod.Get, $"/v1/suites/{id}"), ownControl: true),
         SuiteRevisionCreateCase(),
         ObjectCase("GET", "/v1/suite-revisions/{r}", p => Indexed("suite revision", p.SuiteRevisionIds), id => new(HttpMethod.Get, $"/v1/suite-revisions/{id}"), ownControl: true),
+        ObjectCase("GET", "/v1/suite-revisions/{r}/execution-plan", p => Indexed("suite revision", p.SuiteRevisionIds), id => new(HttpMethod.Get, $"/v1/suite-revisions/{id}/execution-plan"), ownControl: true),
         SuiteRevisionDiffCase(),
         ProjectCase("POST", "/v1/projects/{p}/fixtures", p => new(HttpMethod.Post, $"/v1/projects/{p}/fixtures",
             new JsonObject { ["fixture_key"] = "intruder", ["seed_version"] = "v1", ["body_ref"] = "seeds/intruder.json" })),

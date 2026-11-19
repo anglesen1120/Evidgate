@@ -160,6 +160,7 @@ internal sealed class PermissionEvaluator(ITenantDb db) : IPermissionEvaluator, 
         Permissions.Decision.Read,
         Permissions.Event.Write,
         Permissions.Run.Create,
+        Permissions.Suite.PlanRead,
         Permissions.Job.Claim,
         Permissions.Job.Execute,
     };

@@ -124,6 +124,7 @@ Roles are seeded as data from `contracts/permissions.json` (02 §3 D2); 00 §2 l
 |---|---|---|---|---|---|
 | `case:read` | yes | yes | yes | yes | yes |
 | `suite:read` | yes | yes | yes | yes | yes |
+| `suite:plan_read` | yes | yes | yes | yes | yes |
 | `case:write` | - | - | yes | - | yes |
 | `suite:write` | - | - | yes | - | yes |
 | `fixture:write` | - | - | yes | - | yes |

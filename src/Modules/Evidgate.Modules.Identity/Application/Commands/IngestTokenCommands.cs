@@ -20,13 +20,19 @@ using Microsoft.EntityFrameworkCore;
 namespace Evidgate.Modules.Identity.Application.Commands;
 
 /// <summary>
-/// The scopes an ingest token may carry; the default is all four (02.4.2 §4). They are the <c>ci_producer</c> set, so an
-/// exchange from an ingest token can read the decision of its own project's runs.
+/// The scopes an ingest token may carry; the default is all of them (02.4.2 §4). They are the <c>ci_producer</c> set, so
+/// an exchange from an ingest token can read the decision of its own project's runs and a suite revision's execution plan.
 /// </summary>
 internal static class IngestTokenScopes
 {
     public static readonly IReadOnlyList<string> All =
-        [Permissions.Artifact.Write, Permissions.Decision.Read, Permissions.Event.Write, Permissions.Run.Create];
+    [
+        Permissions.Artifact.Write,
+        Permissions.Decision.Read,
+        Permissions.Event.Write,
+        Permissions.Run.Create,
+        Permissions.Suite.PlanRead,
+    ];
 }
 
 /// <summary>
