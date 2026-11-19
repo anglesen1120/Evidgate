@@ -56,6 +56,8 @@ import type { RetentionPolicy, RunPage } from '@evidgate/sdk';
 import { mergeMap, type Observable, of, throwError, timer } from 'rxjs';
 
 import { newUuid } from '../http/random-id';
+import { AUTHORING_XLSX_MEDIA_TYPE } from '../data/authoring-import-export-gateway';
+import { AUTHORING_XLSX_BASE64 } from './fixture-catalog-authoring-impex-rows';
 import {
   findFixtureEntry,
   findFixtureEntryByCursor,
@@ -142,6 +144,12 @@ function wireBody(body: unknown, responseType: string, contentType: string): unk
   if (body === null || body === undefined) {
     return null;
   }
+  if (contentType === AUTHORING_XLSX_MEDIA_TYPE) {
+    const bytes = Uint8Array.from(atob(AUTHORING_XLSX_BASE64), (value) => value.charCodeAt(0));
+    if (responseType === 'blob') return new Blob([bytes], { type: contentType });
+    if (responseType === 'arraybuffer') return bytes.buffer;
+    throw new Error('XLSX fixture requires a binary response type');
+  }
   const text = JSON.stringify(body);
   switch (responseType) {
     case 'blob':
@@ -149,7 +157,8 @@ function wireBody(body: unknown, responseType: string, contentType: string): unk
     case 'text':
       return text;
     case 'arraybuffer':
-      return new TextEncoder().encode(text).buffer;
+      // Host-provided encoders may belong to another realm; HttpClient buffers belong to this one.
+      return Uint8Array.from(new TextEncoder().encode(text)).buffer;
     default:
       return structuredClone(body);
   }
@@ -194,9 +203,15 @@ function fixtureNotFoundBody(request: HttpRequest<unknown>, target: string): unk
   };
 }
 
-/** `Content-Type: application/json`, then the fixture's headers, then the answering-fixture header. */
+/** The corpus stores logical JSON; workbook fixtures choose their binary wire media type here. */
 function fixtureHeaders(entry: FixtureEntry): HttpHeaders {
-  let headers = new HttpHeaders({ 'Content-Type': JSON_CONTENT_TYPE });
+  const workbook =
+    entry.document.operation_id === 'exportAuthoring' &&
+    entry.document.variant === 'xlsx' &&
+    entry.document.status === 200;
+  let headers = new HttpHeaders({
+    'Content-Type': workbook ? AUTHORING_XLSX_MEDIA_TYPE : JSON_CONTENT_TYPE,
+  });
   for (const [name, value] of Object.entries(entry.document.headers)) {
     headers = headers.set(name, value);
   }
@@ -272,6 +287,20 @@ export class FixtureHttpBackend implements HttpBackend {
     return undefined;
   }
 
+  private xlsxEntry(request: HttpRequest<unknown>, relativePath: string): FixtureEntry | undefined {
+    if (queryParameter(request.urlWithParams, 'format') !== 'xlsx') return undefined;
+    const importing =
+      request.method === 'POST' && /^\/projects\/[^/]+\/authoring\/import$/.test(relativePath);
+    const exporting =
+      request.method === 'GET' && /^\/projects\/[^/]+\/authoring\/export$/.test(relativePath);
+    const operation = importing ? 'importAuthoring' : exporting ? 'exportAuthoring' : null;
+    if (!operation) return undefined;
+    const variant = this.toggles.variantFor(operation);
+    if (variant !== 'ok' && variant !== 'xlsx') return undefined;
+    const confirmed = importing && queryParameter(request.urlWithParams, 'dry_run') === 'false';
+    return findFixtureEntry(operation, confirmed ? 'xlsx-confirmed' : 'xlsx');
+  }
+
   private requestEntry(
     request: HttpRequest<unknown>,
     relativePath: string,
@@ -340,6 +369,8 @@ export class FixtureHttpBackend implements HttpBackend {
       const bulk = findBulkCaseListFixture(this.toggles.variantFor('listCases'));
       if (bulk !== undefined) return bulk;
     }
+    const workbook = this.xlsxEntry(request, relativePath);
+    if (workbook) return workbook;
     if (
       request.method === 'POST' &&
       /^\/projects\/[^/]+\/authoring\/import$/.test(relativePath) &&

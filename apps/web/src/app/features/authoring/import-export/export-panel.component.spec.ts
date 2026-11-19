@@ -16,19 +16,36 @@ class OptionListHarness extends ComponentHarness {
   readonly options = this.locatorForAll('[role="option"]');
 }
 
+class ExportDialogHarness extends ComponentHarness {
+  static hostSelector = '[role="dialog"]';
+  readonly confirm = this.locatorFor('[data-export-confirm]');
+}
+
 class PanelHarness extends ComponentHarness {
   static hostSelector = 'app-authoring-export-panel';
   readonly scope = this.locatorFor('[data-export-scope]');
   readonly notice = this.locatorForOptional('[data-export-narrow-notice]');
   readonly scopeTrigger = this.locatorFor('#authoring-export-scope');
   readonly formatTrigger = this.locatorFor('#authoring-export-format');
-  readonly xlsxReason = this.locatorFor('[data-export-xlsx-reason]');
   async scopeText(): Promise<string> {
     return (await this.scope()).text();
   }
   async focusScopeTrigger(): Promise<void> {
     await (await this.scopeTrigger()).focus();
   }
+}
+
+function stubDownloadUrls(url: string) {
+  const create = vi.fn(() => url);
+  const revoke = vi.fn();
+  vi.stubGlobal(
+    'URL',
+    class extends URL {
+      static override createObjectURL = create;
+      static override revokeObjectURL = revoke;
+    },
+  );
+  return { create, revoke };
 }
 
 describe('ExportPanelComponent', () => {
@@ -39,12 +56,16 @@ describe('ExportPanelComponent', () => {
   afterEach(() => {
     TestBed.resetTestingModule();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     queryParams = {};
     canMutate.set(true);
   });
 
   async function render() {
-    download.mockResolvedValue({ blob: new Blob(['x']), filename: 'authoring-export.csv' });
+    download.mockReset().mockResolvedValue({
+      blob: new Blob(['x']),
+      filename: 'authoring-export.csv',
+    });
     TestBed.configureTestingModule({
       imports: [ExportPanelComponent],
       providers: [
@@ -88,29 +109,22 @@ describe('ExportPanelComponent', () => {
     expect(error).not.toHaveBeenCalled();
   });
 
-  it('announces the XLSX choice as unavailable with its reason and never selects it', async () => {
+  it('offers XLSX through the existing selectable format picker without a request before confirmation', async () => {
     const { loader, panel, fixture } = await render();
-    expect(await (await panel.xlsxReason()).text()).toContain('XLSX export is unavailable');
     await (await panel.formatTrigger()).click();
     const list = await loader.getHarness(OptionListHarness);
     const options = await list.options();
-    const described = await Promise.all(
-      options.map(async (option) => ({
-        text: await option.text(),
-        disabled: (await option.getAttribute('aria-disabled')) === 'true',
-        describedBy: await option.getAttribute('aria-describedby'),
-      })),
-    );
-    expect(described).toEqual([
-      { text: 'CSV', disabled: false, describedBy: null },
-      { text: 'JSON', disabled: false, describedBy: null },
-      { text: 'XLSX — unavailable', disabled: true, describedBy: 'export-xlsx-reason' },
+    expect(await Promise.all(options.map((option) => option.text()))).toEqual([
+      'CSV',
+      'JSON',
+      'XLSX',
     ]);
     const xlsx = options[2];
-    if (!xlsx) throw new Error('Expected the unavailable XLSX option');
+    if (!xlsx) throw new Error('Expected the XLSX option');
+    expect(await xlsx.getAttribute('aria-disabled')).not.toBe('true');
     await xlsx.click();
     await fixture.whenStable();
-    expect(TestBed.inject(ExportStore).draft().format).toBe('csv');
+    expect(TestBed.inject(ExportStore).draft().format).toBe('xlsx');
     expect(download).not.toHaveBeenCalled();
   });
 
@@ -164,5 +178,69 @@ describe('ExportPanelComponent', () => {
       vi.stubGlobal('URL', original);
       vi.useRealTimers();
     }
+  });
+
+  it('releases a clicked XLSX object URL on abort and never inserts response markup', () => {
+    vi.useFakeTimers();
+    const { create, revoke } = stubDownloadUrls('blob:workbook');
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      expect(this.download).toBe('authoring-export.xlsx');
+      expect(this.getAttribute('href')).toBe('blob:workbook');
+    });
+    const controller = new AbortController();
+    const blob = new Blob(['<svg data-hostile-export onload="alert(1)"/>']);
+    try {
+      downloadExportFile(document, { blob, filename: 'authoring-export.xlsx' }, controller.signal);
+      expect(create).toHaveBeenCalledWith(blob);
+      expect(click).toHaveBeenCalledTimes(1);
+      expect(document.querySelector('[data-hostile-export]')).toBeNull();
+      expect(document.querySelector('a[download="authoring-export.xlsx"]')).toBeNull();
+      controller.abort();
+      expect(revoke).toHaveBeenCalledTimes(1);
+      expect(revoke).toHaveBeenCalledWith('blob:workbook');
+      vi.runAllTimers();
+      expect(revoke).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not create an object URL for an already aborted download', () => {
+    const { create, revoke } = stubDownloadUrls('blob:aborted');
+    const controller = new AbortController();
+    controller.abort();
+    expect(() =>
+      downloadExportFile(
+        document,
+        { blob: new Blob(['PK']), filename: 'authoring-export.xlsx' },
+        controller.signal,
+      ),
+    ).toThrow();
+    expect(create).not.toHaveBeenCalled();
+    expect(revoke).not.toHaveBeenCalled();
+  });
+
+  it('releases a downloaded workbook URL when its panel is destroyed', async () => {
+    const { fixture } = await render();
+    const { create, revoke } = stubDownloadUrls('blob:destroyed');
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    download.mockResolvedValueOnce({
+      blob: new Blob(['PK']),
+      filename: 'authoring-export.xlsx',
+    });
+    const store = TestBed.inject(ExportStore);
+    store.edit({ format: 'xlsx' });
+    store.openConfirmation();
+    await fixture.whenStable();
+    const loader = TestbedHarnessEnvironment.documentRootLoader(fixture);
+    const confirm = await loader.getHarness(ExportDialogHarness);
+    await (await confirm.confirm()).click();
+    await fixture.whenStable();
+    expect(create).toHaveBeenCalledTimes(1);
+    fixture.destroy();
+    expect(revoke).toHaveBeenCalledTimes(1);
+    expect(revoke).toHaveBeenCalledWith('blob:destroyed');
   });
 });

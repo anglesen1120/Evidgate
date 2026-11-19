@@ -9,7 +9,7 @@
           hlmInput
           id="authoring-import-file"
           type="file"
-          [accept]="'.csv,.json,text/csv,application/json'"
+          [accept]="'.csv,.json,.xlsx,text/csv,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'"
           class="min-h-(--eg-control-touch) max-w-full"
           [attr.aria-describedby]="
             store.work().error ? 'import-file-hint import-file-refusal' : 'import-file-hint'
@@ -30,26 +30,28 @@
           [ngModel]="store.work().format"
           [itemToString]="formatLabel"
           (ngModelChange)="store.setFormat($event)"
-          [disabled]="store.work().pending"
+          [disabled]="store.work().pending || store.formatLocked()"
         >
           <hlm-select-trigger
             [buttonId]="'authoring-import-format'"
+            [aria-describedby]="store.formatLocked() ? 'import-format-lock-reason' : null"
             class="min-h-(--eg-control-touch) w-full"
           >
             <hlm-select-value />
           </hlm-select-trigger>
           <hlm-select-content *hlmSelectPortal [aria-label]="copy.format">
             @for (format of formats; track format) {
-              <hlm-select-item
-                [value]="format"
-                [disabled]="format === 'xlsx'"
-                [attr.aria-describedby]="format === 'xlsx' ? 'import-xlsx-unavailable' : null"
-                >{{ format.toUpperCase()
-                }}{{ format === 'xlsx' ? ' — ' + copy.unavailable : '' }}</hlm-select-item
-              >
+              <hlm-select-item [value]="format">{{ format.toUpperCase() }}</hlm-select-item>
             }
           </hlm-select-content>
         </hlm-select>
+        @if (store.formatLocked()) {
+          <app-inline-feedback
+            id="import-format-lock-reason"
+            [title]="copy.xlsxFormatLocked"
+            [announcement]="'off'"
+          />
+        }
       </div>
       <div class="flex flex-wrap items-center gap-(--eg-space-3)">
         <button
@@ -58,12 +60,8 @@
           type="submit"
           class="min-h-(--eg-control-touch) whitespace-normal"
           data-import-preview
-          [attr.aria-describedby]="
-            store.work().format === 'xlsx' ? 'import-xlsx-unavailable' : null
-          "
           [disabled]="
             !store.work().file ||
-            store.work().format === 'xlsx' ||
             store.work().pending ||
             !store.retryReady() ||
             store.work().stage === 'confirm'
@@ -88,9 +86,6 @@
 } @else {
   <app-inline-feedback [title]="copy.denied" [tone]="'warning'" />
 }
-<p id="import-xlsx-unavailable" class="m-0 text-sm text-muted-foreground wrap-anywhere">
-  {{ copy.xlsx }}
-</p>
 @if (store.work().file; as file) {
   <section
     #snapshot

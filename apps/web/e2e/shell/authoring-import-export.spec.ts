@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
@@ -13,6 +14,13 @@ import {
   THEMES,
   withVariant,
 } from './support';
+import { AUTHORING_XLSX_BASE64 } from '../../src/app/core/dev-fixtures/fixture-catalog-authoring-impex-rows';
+
+declare global {
+  interface Window {
+    authoringDownloadUrls?: { created: string[]; revoked: string[] };
+  }
+}
 
 const COLUMNS =
   'kind,key,parent_key,item_key,node_kind,title,description,precondition,steps,priority,state,code,position';
@@ -206,20 +214,103 @@ for (const locale of LOCALES) {
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 
-  test(`XLSX export is announced unavailable and stays unselectable (${locale})`, async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto(localePath(locale, base));
-    await page.locator('[data-impex-export-tab]').click();
-    await expect(page.locator('[data-export-xlsx-reason]')).toBeVisible();
-    await page.locator('#authoring-export-format').click();
-    const xlsx = page.getByRole('option', { name: /XLSX/ });
-    await expect(xlsx).toHaveAttribute('aria-disabled', 'true');
-    await expect(xlsx).toHaveAttribute('aria-describedby', 'export-xlsx-reason');
-    await xlsx.click({ force: true });
-    await page.keyboard.press('Escape');
-    await expect(page.locator('#authoring-export-format')).toContainText('CSV');
-    expect(await calls(page, 'export')).toEqual([]);
-  });
+  for (const theme of THEMES) {
+    for (const width of [360, 1280]) {
+      test(`XLSX export downloads workbook bytes and revokes its object URL (${locale}, ${theme}, ${width})`, async ({
+        page,
+      }) => {
+        await page.setViewportSize({ width, height: 900 });
+        await seedStoredTheme(page, theme);
+        await page.addInitScript(() => {
+          const log = { created: [] as string[], revoked: [] as string[] };
+          window.authoringDownloadUrls = log;
+          const create = URL.createObjectURL.bind(URL);
+          const revoke = URL.revokeObjectURL.bind(URL);
+          URL.createObjectURL = (blob) => {
+            const url = create(blob);
+            log.created.push(url);
+            return url;
+          };
+          URL.revokeObjectURL = (url) => {
+            log.revoked.push(url);
+            revoke(url);
+          };
+        });
+        const violations: string[] = [];
+        page.on('console', (message) => {
+          if (/content security policy|violates.*policy/i.test(message.text()))
+            violations.push(message.text());
+        });
+        await page.goto(localePath(locale, base));
+        await page.clock.install();
+        await page.locator('[data-impex-export-tab]').click();
+        await page.locator('#authoring-export-format').click();
+        await page.getByRole('option', { name: 'XLSX', exact: true }).click();
+        await keyboardTo(page, page.locator('[data-export-download]'));
+        await page.keyboard.press('Enter');
+        await expect(page.locator('[data-export-cancel]')).toBeFocused();
+        const downloaded = page.waitForEvent('download', { timeout: 10_000 });
+        await page.locator('[data-export-confirm]').click();
+        const workbook = await downloaded.catch((cause: unknown) => {
+          throw new Error(`XLSX download failed. CSP console: ${violations.join('\\n')}`, {
+            cause,
+          });
+        });
+        expect(workbook.suggestedFilename()).toBe('authoring-export.xlsx');
+        const path = await workbook.path();
+        if (!path) throw new Error('Downloaded workbook has no saved path');
+        expect((await readFile(path)).subarray(0, 2)).toEqual(Buffer.from([0x50, 0x4b]));
+        expect(violations).toEqual([]);
+        await page.clock.fastForward(30_000);
+        const urls = await page.evaluate(() => window.authoringDownloadUrls);
+        expect(urls?.created).toHaveLength(1);
+        expect(urls?.revoked).toEqual(urls?.created);
+        const request = (await calls(page, 'export'))[0];
+        if (!request) throw new Error('Expected an XLSX export request');
+        expect(
+          Object.fromEntries(new URL(request.url, 'https://example.test').searchParams),
+        ).toEqual({
+          format: 'xlsx',
+          include: 'nodes,items,cases',
+        });
+        await expectNoA11yViolations(page, `XLSX export ${locale} ${theme} ${width}`);
+      });
+    }
+
+    test(`XLSX import previews the server report before explicit confirmation (${locale}, ${theme})`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await seedStoredTheme(page, theme);
+      await page.goto(localePath(locale, base));
+      await page.locator('[data-import-file]').setInputFiles({
+        name: 'authoring.xlsx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        buffer: Buffer.from(AUTHORING_XLSX_BASE64, 'base64'),
+      });
+      await expect(page.locator('#authoring-import-format')).toContainText('XLSX');
+      expect(await calls(page, 'import')).toEqual([]);
+      await keyboardTo(page, page.locator('[data-import-preview]'));
+      await page.keyboard.press('Enter');
+      await expect(page.locator('[data-import-confirm]')).toBeEnabled();
+      await expect(page.locator('app-import-preview')).toContainText('n1');
+      await expect(page.locator('app-import-preview')).not.toContainText('Checkout');
+      await page.locator('[data-import-confirm]').click();
+      await expect(page.locator('[data-import-success]')).toBeVisible();
+      const imported = await calls(page, 'import');
+      expect(imported).toHaveLength(2);
+      expect(
+        imported.map((request) =>
+          Object.fromEntries(new URL(request.url, 'https://example.test').searchParams),
+        ),
+      ).toEqual([
+        { format: 'xlsx', dry_run: 'true' },
+        { format: 'xlsx', dry_run: 'false' },
+      ]);
+      const [preview, confirmed] = imported;
+      if (!preview || !confirmed) throw new Error('Expected dry-run and confirmation requests');
+      expect(preview.headers['idempotency-key']).not.toEqual(confirmed.headers['idempotency-key']);
+      await expectNoA11yViolations(page, `XLSX import ${locale} ${theme}`);
+    });
+  }
 }

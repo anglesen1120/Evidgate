@@ -1,13 +1,17 @@
-// 00 §5.6 W5, ADR-0008 decision (a): `evidgate/no-http-outside-core` keeps every
-// `@evidgate/sdk` value import inside `core/{http,data}`, because an SDK call is the wire, not the
-// feature. The authoring export is the one operation of that screen the generated client cannot
-// express from `core/http/api-gateway` alone: it is a `parseAs: 'blob'` download whose filename
-// lives in `Content-Disposition`, so this seam owns the SDK call and the header contract, and the
-// feature keeps the feature-shaped part (scope, refusal copy, retry pacing).
+// Blob downloads need response headers as well as bytes; this core seam keeps the SDK call
+// and its fixed-filename contract out of the presentation layer.
 import { inject, Injectable } from '@angular/core';
 import { exportAuthoring } from '@evidgate/sdk';
 import type { ExportAuthoringData } from '@evidgate/sdk';
 import { ApiGateway } from '../http/api-gateway';
+import {
+  BINARY_RESPONSE,
+  BINARY_TRANSPORT_HEADER,
+  binaryTransport,
+} from '../http/binary-transport';
+
+export const AUTHORING_XLSX_MEDIA_TYPE =
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 /** One downloaded export: the bytes the server sent and the fixed name it chose for them. */
 export interface AuthoringExportFile {
@@ -56,6 +60,9 @@ export class AuthoringImportExportGateway {
         path: { p: project },
         query,
         parseAs: 'blob',
+        ...(query.format === 'xlsx'
+          ? { headers: { [BINARY_TRANSPORT_HEADER]: binaryTransport(BINARY_RESPONSE) } }
+          : {}),
         ...(signal ? { signal } : {}),
       }),
     );
@@ -63,8 +70,17 @@ export class AuthoringImportExportGateway {
     // actual value rather than asserting that wire bytes match that generated JSON DTO.
     const blob: unknown = result.data;
     const filename = serverFilename(result.headers.get('Content-Disposition'));
-    if (!(blob instanceof Blob) || !filename)
+    if (
+      !(blob instanceof Blob) ||
+      !filename ||
+      (query.format !== 'xlsx' && filename !== `authoring-export.${query.format}`)
+    )
       throw new Error('Export response is missing its file or fixed server filename');
+    if (
+      query.format === 'xlsx' &&
+      (blob.type !== AUTHORING_XLSX_MEDIA_TYPE || filename !== 'authoring-export.xlsx')
+    )
+      throw new Error('Export response has an invalid workbook media type or filename');
     return { blob, filename };
   }
 }
