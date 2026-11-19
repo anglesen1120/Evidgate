@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 namespace Evidgate.Modules.Identity.Options;
 
 /// <summary>
-/// The module's validated option groups, materialised by the Api's boot check.
+/// The module's validated option groups, materialised by the Api's and the Worker's boot checks.
 /// </summary>
 /// <remarks>
 /// A host materialises the limiter group before it starts, so an invalid budget exits through the catch that prints one
