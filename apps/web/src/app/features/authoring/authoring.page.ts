@@ -1,7 +1,15 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, inject, resource } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  linkedSignal,
+  resource,
+} from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
+import type { NodeDto } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { combineLatest, distinctUntilChanged, map } from 'rxjs';
@@ -95,9 +103,20 @@ export class AuthoringPage {
       ? [...path, node]
       : path;
   });
-  /** One polite line per settled read: the scope now shown, never one line per node. */
+  /**
+   * One polite line per settled read: the scope now shown, then every cap notice on screen. A
+   * cap is inserted with its message, so it is spoken here rather than by the notice itself.
+   */
   protected readonly announcement = computed(() => {
     if (this.denied() || this.busy()) return '';
+    return [this.scopeLine(), this.capLine()].filter((line) => line !== '').join(' ');
+  });
+  /** Which branches the pane has open, so only a cap whose notice renders is announced. */
+  protected readonly expanded = linkedSignal<string | null, ReadonlySet<string>>({
+    source: () => this.store.projectId(),
+    computation: () => new Set<string>(),
+  });
+  private readonly scopeLine = computed(() => {
     const failed = this.store.selectedNodeId();
     if (this.store.selectionStatus() === 'error' && failed !== null) {
       return $localize`:@@authoring.tree.announce-selection-failed:Could not load selected scope ${failed}:nodeId:`;
@@ -110,6 +129,28 @@ export class AuthoringPage {
       this.store.roots().items.length > 0
       ? $localize`:@@authoring.tree.announce-roots:Scope set to all project roots`
       : '';
+  });
+  private readonly capLine = computed(() =>
+    this.store.roots().status === 'capped' || this.cappedBranchOnScreen()
+      ? `${this.copy.browseCapped}. ${this.copy.browseCappedHelp}`
+      : '',
+  );
+  /** Mirrors the tree's render walk: only a branch under an unbroken chain of expanded rows shows. */
+  private readonly cappedBranchOnScreen = computed(() => {
+    const children = this.store.children();
+    const expanded = this.expanded();
+    const visit = (items: readonly NodeDto[], ancestors: ReadonlySet<string>): boolean => {
+      for (const node of items) {
+        if (ancestors.has(node.node_id) || !expanded.has(node.node_id)) continue;
+        const page = children[node.node_id];
+        if (page?.error?.kind === 'forbidden' || page?.error?.kind === 'not_found') continue;
+        if (page?.status === 'capped') return true;
+        const chain = new Set(ancestors).add(node.node_id);
+        if (visit(page?.items ?? [], chain)) return true;
+      }
+      return false;
+    };
+    return visit(this.store.roots().items, new Set<string>());
   });
 
   protected select(id: string | null): void {

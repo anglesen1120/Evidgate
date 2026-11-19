@@ -215,6 +215,7 @@ Search here before writing UI. Paths are under `apps/web/src/app/`; test hosts a
 | Tables, including the virtualised one above 200 loaded rows (UI10) | `app-data-table` (`fixedHeightCells` opts custom single-line cells into its existing virtual viewport; `revealRow(index)` reveals a loaded row), `app-data-table-cell`, `app-data-table-records`, `app-data-table-value` | `shared/ui/data-table/` |
 | Copyable ids and formatted numbers | `app-copyable-identifier`, `app-copy-value-button`, `app-number-value` | `shared/ui/values/` |
 | Loading, empty, error, forbidden, not-found and inline feedback | `app-request-state`, `app-loading-pattern`, `app-empty-pattern`, `app-error-pattern`, `app-forbidden-pattern`, `app-not-found-pattern`, `app-inline-feedback` | `shared/ui/states/` |
+| One polite status message that must survive the notice it describes (caps, filtered counts) | `app-live-status` | `shared/ui/states/` |
 | Edit conflict and `Retry-After` wait | `app-conflict-dialog`, `app-retry-after` | `shared/ui/conflict/` |
 | Page and section headers with action slots | `app-page-header` (`focusTitle()` focuses its h1), `app-section-header`, `[appPageHeaderActions]`, `[appSectionHeaderActions]` | `shared/ui/page-header/` |
 | Desktop-only mutation on a narrow viewport | `[appDesktopMutation]`, `app-desktop-required-notice` | `shared/ui/narrow/` |

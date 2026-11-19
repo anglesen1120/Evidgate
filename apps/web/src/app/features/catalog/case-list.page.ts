@@ -141,6 +141,10 @@ export class CaseListPage {
   private readonly loadedSummary = viewChild<ElementRef<HTMLElement>>('loadedSummary');
   protected readonly pageSizes = [25, 50, 100, 200] as const;
   protected readonly pageSizeLabel = (value: unknown) => String(value);
+  /** The cap notice is inserted with its message; the mounted summary region speaks it. */
+  protected readonly capAnnouncement = computed(() =>
+    this.store.browseCapped() ? `${this.copy.browseCapped}. ${this.copy.browseCappedHelp}` : '',
+  );
   protected readonly canReadMembers = computed(() => this.session.has('membership:read'));
   protected readonly canAssign = computed(
     () => this.store.canAssign() && this.canReadMembers() && this.viewport.canMutate(),

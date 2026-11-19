@@ -107,6 +107,9 @@
       >
     }
   }
+  @if (store.browseCapped()) {
+    <span>{{ capAnnouncement() }}</span>
+  }
 </p>
 <app-request-state
   [status]="store.status()"
@@ -150,6 +153,7 @@
     [tone]="'warning'"
     [title]="copy.browseCapped"
     [description]="copy.browseCappedHelp"
+    [announcement]="'off'"
     data-catalog-browse-capped
   />
 }

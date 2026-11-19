@@ -45,6 +45,10 @@ class TableHarness extends ComponentHarness {
   readonly moreOptional = this.locatorForOptional('[data-case-load-more]');
   readonly invalidLink = this.locatorForOptional('[data-case-invalid-link]');
   readonly capped = this.locatorForOptional('[data-case-browse-capped]');
+  readonly capAnnouncement = this.locatorFor('app-live-status [role="status"]');
+  readonly cappedLiveRegions = this.locatorForAll(
+    '[data-case-browse-capped] [role="status"], [data-case-browse-capped] [aria-live]',
+  );
   readonly loaded = this.locatorFor('[data-case-loaded]');
   readonly clearEmpty = this.locatorFor('app-empty-pattern button');
   readonly invalidClear = this.locatorFor('[data-case-invalid-link] button');
@@ -221,13 +225,18 @@ describe('AuthoringCaseTableComponent', () => {
     expect(await harness.retryOptional()).toBeNull();
   });
 
-  it('shows a filter hint instead of load-more when the retained case cap is reached', async () => {
+  it('announces the retained case cap through the mounted region, never the inserted notice', async () => {
     list.mockResolvedValueOnce({
       items: Array.from({ length: 10_001 }, (_, i) => caseRow(String(i))),
       next_cursor: 'more',
     });
     const harness = await mount();
     expect(await (await harness.capped())?.text()).toContain('Narrow the filters');
+    expect(await (await harness.capAnnouncement()).text()).toContain(
+      'Case list is at its load limit',
+    );
+    expect(await (await harness.capAnnouncement()).text()).toContain('Narrow the filters');
+    expect(await harness.cappedLiveRegions()).toHaveLength(0);
     expect(await harness.moreOptional()).toBeNull();
     expect(await harness.retryOptional()).toBeNull();
   }, 20_000);

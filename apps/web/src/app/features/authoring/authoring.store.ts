@@ -94,7 +94,13 @@ export const AuthoringStore = signalStore(
     init(projectId: string, selectedNodeId: string | null = null): Promise<void> {
       const started: Promise<unknown>[] = [];
       if (store.projectId() !== projectId) store._reads.reset(projectId);
-      if (store.roots().status === 'idle' || store.roots().status === 'error') {
+      const roots = store.roots();
+      // A capped page keeps its rows and its cap; only a retained failure there is still unread.
+      if (
+        roots.status === 'idle' ||
+        roots.status === 'error' ||
+        (roots.status === 'capped' && roots.error !== null)
+      ) {
         started.push(store._reads.loadRoots(projectId));
       }
       if (selectedNodeId === null) {

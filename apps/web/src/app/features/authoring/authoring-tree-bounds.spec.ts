@@ -104,38 +104,39 @@ describe('authoring tree retained-row bounds', () => {
     expect(listTree).toHaveBeenCalledTimes(reads);
   });
 
-  it('caps selected-node children and preserves the capped state when selection refresh merges rows', async () => {
-    listTree.mockImplementation((_project, query) =>
-      Promise.resolve(
-        query.nodeId ? { ...page(nodes(10_001)), node: root, path: [] } : page([root]),
-      ),
-    );
-    const store = TestBed.inject(AuthoringStore);
-    await store.init('project', root.node_id);
-    expect(store.children()[root.node_id]?.items).toHaveLength(10_000);
-    expect(store.children()[root.node_id]?.status).toBe('capped');
+  it.each([null, 'fresh-first-page'])(
+    'caps selected-node children and preserves the capped state when selection refresh has cursor %s',
+    async (cursor) => {
+      listTree.mockImplementation((_project, query) =>
+        Promise.resolve(
+          query.nodeId ? { ...page(nodes(10_001)), node: root, path: [] } : page([root]),
+        ),
+      );
+      const store = TestBed.inject(AuthoringStore);
+      await store.init('project', root.node_id);
+      expect(store.children()[root.node_id]?.items).toHaveLength(10_000);
+      expect(store.children()[root.node_id]?.status).toBe('capped');
 
-    const changed: NodeDto = {
-      ...root,
-      node_id: 'child-0',
-      parent_id: root.node_id,
-      child_count: 0,
-      title: 'Refreshed title',
-    };
-    listTree.mockImplementation((_project, query) =>
-      Promise.resolve(
-        query.nodeId
-          ? { ...page([changed], 'fresh-first-page'), node: root, path: [] }
-          : page([root]),
-      ),
-    );
-    await store.retryTree();
-    const branch = store.children()[root.node_id];
-    expect(branch?.items).toHaveLength(10_000);
-    expect(branch?.items[0]?.title).toBe('Refreshed title');
-    expect(branch?.status).toBe('capped');
-    expect(branch?.nextCursor).toBeNull();
-  });
+      const changed: NodeDto = {
+        ...root,
+        node_id: 'child-0',
+        parent_id: root.node_id,
+        child_count: 0,
+        title: 'Refreshed title',
+      };
+      listTree.mockImplementation((_project, query) =>
+        Promise.resolve(
+          query.nodeId ? { ...page([changed], cursor), node: root, path: [] } : page([root]),
+        ),
+      );
+      await store.retryTree();
+      const branch = store.children()[root.node_id];
+      expect(branch?.items).toHaveLength(10_000);
+      expect(branch?.items[0]?.title).toBe('Refreshed title');
+      expect(branch?.status).toBe('capped');
+      expect(branch?.nextCursor).toBeNull();
+    },
+  );
 
   it('keeps the capped roots notice when a failed refresh retains its truncated rows', async () => {
     listTree.mockResolvedValueOnce(page(nodes(10_001)));
@@ -150,6 +151,32 @@ describe('authoring tree retained-row bounds', () => {
     expect(store.treeStatus()).toBe('error');
     expect(store.rootsStale()).toBe(true);
   });
+
+  it.each([
+    ['forbidden', 403],
+    ['not_found', 404],
+  ] as const)(
+    'retries capped roots with a retained %s error on route init',
+    async (kind, status) => {
+      listTree.mockResolvedValueOnce(page(nodes(10_001)));
+      const store = TestBed.inject(AuthoringStore);
+      await store.init('project');
+      await store.init('project');
+      expect(listTree).toHaveBeenCalledTimes(1);
+      listTree.mockRejectedValueOnce(apiError(kind, status));
+      await store.retryTree();
+      expect(store.roots().status).toBe('capped');
+      expect(store.treeError()?.kind).toBe(kind);
+
+      await store.init('project');
+      expect(listTree).toHaveBeenCalledTimes(3);
+      expect(store.roots().status).toBe('ready');
+      expect(store.roots().items).toEqual([root]);
+      expect(store.treeError()).toBeNull();
+      expect(store.treeStatus()).toBe('ready');
+      expect(store.rootsStale()).toBe(false);
+    },
+  );
 
   it('clears a capped roots walk when a successful refresh replaces it', async () => {
     listTree.mockResolvedValueOnce(page(nodes(10_001)));

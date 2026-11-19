@@ -15,6 +15,10 @@ import { CaseListStore } from './case-list.store';
 class CatalogBoundsHarness extends ComponentHarness {
   static hostSelector = 'app-case-list-page';
   readonly notice = this.locatorForOptional('[data-catalog-browse-capped]');
+  readonly summary = this.locatorFor('[data-catalog-summary]');
+  readonly noticeLiveRegions = this.locatorForAll(
+    '[data-catalog-browse-capped] [role="status"], [data-catalog-browse-capped] [aria-live]',
+  );
   readonly more = this.locatorForOptional('[data-catalog-load-more]');
   readonly empty = this.locatorForOptional('app-empty-pattern');
 }
@@ -77,13 +81,18 @@ describe('catalog retained-row cap notice', () => {
     return { fixture, harness };
   }
 
-  it('shows a persistent catalog cap notice and removes forward paging at cap plus one', async () => {
+  it('announces the catalog cap through the mounted summary region, never the inserted notice', async () => {
     const { fixture, harness } = await render(10_001, 'beyond-cap');
     const notice = await harness.notice();
     expect(notice).not.toBeNull();
     expect(await notice?.text()).toContain('Case list is at its load limit');
     expect(await notice?.text()).toContain('status or framework filters');
     expect(await notice?.text()).toContain('10,000');
+    expect(await harness.noticeLiveRegions()).toHaveLength(0);
+    const summary = await harness.summary();
+    expect(await summary.getAttribute('role')).toBe('status');
+    expect(await summary.text()).toContain('Case list is at its load limit');
+    expect(await summary.text()).toContain('10,000');
     expect(await harness.more()).toBeNull();
 
     query.next(convertToParamMap({ q: 'no-loaded-case-has-this-name' }));
@@ -97,9 +106,12 @@ describe('catalog retained-row cap notice', () => {
     expect(await harness.notice()).toBeNull();
   });
 
-  it('does not show a cap notice for exactly 10000 complete catalog rows', async () => {
+  it('does not show or announce a cap for exactly 10000 complete catalog rows', async () => {
     const { harness } = await render(10_000, null);
     expect(await harness.notice()).toBeNull();
+    const summary = await (await harness.summary()).text();
+    expect(summary).toContain('10,000 loaded');
+    expect(summary).not.toContain('at its load limit');
     expect(await harness.more()).toBeNull();
   });
 });

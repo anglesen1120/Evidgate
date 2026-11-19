@@ -9,7 +9,7 @@ import {
   computed,
   inject,
   input,
-  linkedSignal,
+  model,
   output,
   signal,
 } from '@angular/core';
@@ -49,10 +49,8 @@ export class AuthoringTreePaneComponent {
   readonly expand = output<string>();
   readonly loadMore = output<string | null>();
   protected readonly copy = AUTHORING_TREE_COPY;
-  protected readonly expanded = linkedSignal({
-    source: this.projectId,
-    computation: () => new Set<string>(),
-  });
+  /** Owned by the surface that renders the tree, so the page can tell which cap notices show. */
+  readonly expanded = model<ReadonlySet<string>>(new Set<string>());
   /** The cycle guard's starting chain: the roots have no ancestor above them. */
   protected readonly noAncestors: ReadonlySet<string> = new Set<string>();
   protected readonly visible = computed(() => {
