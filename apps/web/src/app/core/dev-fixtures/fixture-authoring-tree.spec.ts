@@ -7,6 +7,7 @@ import { findFixtureEntry } from './fixture-catalog';
 
 const url = '/projects/018f0000-0000-7000-8000-000000000011/authoring/tree';
 const rootId = '018f0000-0000-7000-8000-000000000101';
+const deepId = '018f0000-0000-7000-8000-000000000102';
 const leafId = '018f0000-0000-7000-8000-000000000107';
 const request = (query = '') => new HttpRequest('GET', `${url}${query}`);
 
@@ -82,6 +83,20 @@ describe('authoring tree fixture routing', () => {
       503,
     );
     expect(scenario.entry(request(), 'unknown-variant')).toBeUndefined();
+  });
+
+  it('answers an empty child branch with the addressed node and path, children only empty', () => {
+    const scenario = new AuthoringTreeFixtureScenario();
+    const body = scenario.entry(request(`?parent_id=${deepId}`), 'child-empty')?.document
+      .body as AuthoringTreeResponse;
+    expect(body.node?.node_id).toBe(deepId);
+    expect(body.path?.length ?? 0).toBeGreaterThan(0);
+    expect(body.path?.some((ancestor) => ancestor.node_id === deepId)).toBe(false);
+    expect(body.items).toEqual([]);
+    expect(body.next_cursor).toBeNull();
+    expect(scenario.entry(request(), 'child-empty')?.document.body).toEqual(
+      scenario.entry(request(), 'ok')?.document.body,
+    );
   });
 
   it('makes stale reachable through a successful load followed by a refused refresh', () => {

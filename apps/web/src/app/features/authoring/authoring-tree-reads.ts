@@ -1,6 +1,7 @@
 import type { AuthoringNodePathEntry, NodeDto } from '@evidgate/sdk';
 
 import { ApiRequestError, isApiRequestError, type ApiError } from '../../core/http/api-error';
+import { takeKeysetPage, type KeysetRefusals } from '../../shared/keyset-walk';
 import type { AuthoringDataService } from './authoring-data.service';
 
 /** The read state of one page of the tree, or of the addressed node's own read. */
@@ -31,8 +32,10 @@ export interface AuthoringTreeState {
   readonly path: readonly AuthoringNodePathEntry[];
   readonly selectionStatus: AuthoringPageStatus;
   readonly selectionError: ApiError | null;
-  /** True while a failed refresh is still showing the rows an earlier read loaded. */
-  readonly stale: boolean;
+  /** True while a failed roots refresh is still showing the rows an earlier read loaded. */
+  readonly rootsStale: boolean;
+  /** True while a failed refresh is still showing the addressed node an earlier read loaded. */
+  readonly selectionStale: boolean;
 }
 
 /** A branch nobody has read yet: one shared object, so a missing entry allocates nothing. */
@@ -60,6 +63,33 @@ function typedFailure(error: unknown): ApiError {
 }
 
 /**
+ * A continuation page that cannot advance the walk — the cursor it was asked for, or no row the
+ * walk had not shown while promising another page — is refused typed instead of looping.
+ */
+const CURSOR_REFUSALS: KeysetRefusals = {
+  cursorRepeated: {
+    kind: 'unexpected',
+    status: 0,
+    code: 'cursor_repeated',
+    message: 'The authoring page returned the cursor it was asked for.',
+    requestId: null,
+    retryable: false,
+    details: [],
+    retryAfterSeconds: null,
+  },
+  pageWithoutNewRows: {
+    kind: 'unexpected',
+    status: 0,
+    code: 'page_without_new_rows',
+    message: 'The authoring page carried no node the tree had not shown yet.',
+    requestId: null,
+    retryable: false,
+    details: [],
+    retryAfterSeconds: null,
+  },
+};
+
+/**
  * A node read asked for the node and its path, so a page carrying neither cannot become a
  * successful selection: an empty path would claim the node sits at the root.
  */
@@ -74,14 +104,22 @@ const MISSING_PROJECTION: ApiError = {
   retryAfterSeconds: null,
 };
 
-/** Appends the rows a page has not shown yet, keeping page order and the first copy of a node. */
+/**
+ * Merges a page into rows already loaded: an id the page carries again takes the fresh DTO in the
+ * position it already held (title, counts and version move forward), while a row only a later
+ * continuation page loaded is kept, so a selection refresh never shrinks the branch.
+ */
 function mergeNodes(loaded: readonly NodeDto[], fresh: readonly NodeDto[]): NodeDto[] {
-  const seen = new Set(loaded.map((node) => node.node_id));
   const merged = [...loaded];
+  const positions = new Map(loaded.map((node, position) => [node.node_id, position]));
   for (const node of fresh) {
-    if (seen.has(node.node_id)) continue;
-    seen.add(node.node_id);
-    merged.push(node);
+    const known = positions.get(node.node_id);
+    if (known === undefined) {
+      positions.set(node.node_id, merged.length);
+      merged.push(node);
+      continue;
+    }
+    merged[known] = node;
   }
   return merged;
 }
@@ -145,6 +183,15 @@ function branchOf(run: ReadsRun, parentId: string): ReadStream {
   return created;
 }
 
+/** Drops any read of one branch: a newer selection read owns that branch's rows now. */
+function abortBranch(run: ReadsRun, parentId: string): void {
+  const stream = run.branches.get(parentId);
+  if (stream === undefined) return;
+  stream.controller?.abort();
+  stream.controller = null;
+  stream.sequence += 1;
+}
+
 async function loadRoots(
   run: ReadsRun,
   host: ReadsHost,
@@ -158,14 +205,14 @@ async function loadRoots(
     if (!live(run, token, run.roots)) return;
     host.patch({
       roots: { items: page.items, nextCursor: page.next_cursor, status: 'ready', error: null },
-      stale: false,
+      rootsStale: false,
     });
   } catch (error) {
     if (!live(run, token, run.roots)) return;
     const kept = host.roots();
     host.patch({
       roots: { ...kept, status: 'error', error: typedFailure(error) },
-      stale: kept.items.length > 0,
+      rootsStale: kept.items.length > 0,
     });
   }
 }
@@ -184,10 +231,22 @@ async function followRoots(
   try {
     const next = await data.listTree(projectId, { cursor }, token.signal);
     if (!live(run, token, run.roots)) return false;
+    const step = takeKeysetPage({
+      cursor,
+      items: next.items,
+      nextCursor: next.next_cursor,
+      seen: new Set(page.items.map((node) => node.node_id)),
+      keyOf: (node: NodeDto) => node.node_id,
+      refusals: CURSOR_REFUSALS,
+    });
+    if (step.outcome === 'refused') {
+      host.patch({ roots: { ...page, status: 'ready', error: step.error } });
+      return false;
+    }
     host.patch({
       roots: {
-        items: mergeNodes(host.roots().items, next.items),
-        nextCursor: next.next_cursor,
+        items: [...page.items, ...step.fresh],
+        nextCursor: step.nextCursor,
         status: 'ready',
         error: null,
       },
@@ -195,7 +254,7 @@ async function followRoots(
     return true;
   } catch (error) {
     if (!live(run, token, run.roots)) return false;
-    host.patch({ roots: { ...host.roots(), status: 'ready', error: typedFailure(error) } });
+    host.patch({ roots: { ...page, status: 'ready', error: typedFailure(error) } });
     return false;
   }
 }
@@ -209,6 +268,7 @@ async function loadSelection(
 ): Promise<void> {
   const token = begin(run, run.selection);
   const refreshing = host.selectedNodeId() === nodeId;
+  abortBranch(run, nodeId);
   host.patch({
     selectedNodeId: nodeId,
     ...(refreshing ? {} : { selectedNode: null, path: [] }),
@@ -221,17 +281,19 @@ async function loadSelection(
     const node = page.node ?? null;
     const path = page.path ?? null;
     if (node === null || path === null) throw new ApiRequestError(MISSING_PROJECTION);
+    const existing = host.children()[nodeId];
+    const kept = existing !== undefined && existing.items.length > 0 ? existing : null;
     host.patch({
       selectedNode: node,
       path,
       selectionStatus: 'ready',
       selectionError: null,
-      stale: false,
+      selectionStale: false,
       children: {
         ...host.children(),
         [nodeId]: {
-          items: page.items,
-          nextCursor: page.next_cursor,
+          items: kept === null ? page.items : mergeNodes(kept.items, page.items),
+          nextCursor: kept === null ? page.next_cursor : kept.nextCursor,
           status: 'ready',
           error: null,
         },
@@ -242,7 +304,7 @@ async function loadSelection(
     host.patch({
       selectionStatus: 'error',
       selectionError: typedFailure(error),
-      stale: refreshing && host.selectedNode() !== null,
+      selectionStale: refreshing && host.selectedNode() !== null,
     });
   }
 }
@@ -304,13 +366,29 @@ async function followChildren(
   try {
     const next = await data.listTree(projectId, { parentId, cursor }, token.signal);
     if (!live(run, token, stream)) return false;
-    const current = host.children()[parentId] ?? EMPTY_NODE_PAGE;
+    const step = takeKeysetPage({
+      cursor,
+      items: next.items,
+      nextCursor: next.next_cursor,
+      seen: new Set(page.items.map((node) => node.node_id)),
+      keyOf: (node: NodeDto) => node.node_id,
+      refusals: CURSOR_REFUSALS,
+    });
+    if (step.outcome === 'refused') {
+      host.patch({
+        children: {
+          ...host.children(),
+          [parentId]: { ...page, status: 'ready', error: step.error },
+        },
+      });
+      return false;
+    }
     host.patch({
       children: {
         ...host.children(),
         [parentId]: {
-          items: mergeNodes(current.items, next.items),
-          nextCursor: next.next_cursor,
+          items: [...page.items, ...step.fresh],
+          nextCursor: step.nextCursor,
           status: 'ready',
           error: null,
         },
@@ -339,6 +417,7 @@ function clearSelection(run: ReadsRun, host: ReadsHost): void {
     path: [],
     selectionStatus: 'idle',
     selectionError: null,
+    selectionStale: false,
   });
 }
 
@@ -362,7 +441,8 @@ function reset(run: ReadsRun, host: ReadsHost, projectId: string): void {
     path: [],
     selectionStatus: 'idle',
     selectionError: null,
-    stale: false,
+    rootsStale: false,
+    selectionStale: false,
   });
 }
 

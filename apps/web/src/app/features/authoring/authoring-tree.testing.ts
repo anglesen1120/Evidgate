@@ -7,15 +7,22 @@ export class AuthoringTreeHarness extends ComponentHarness {
   readonly loading = this.locatorForOptional('app-loading-pattern');
   readonly errorRetry = this.locatorFor('app-error-pattern button');
   readonly forbidden = this.locatorForOptional('app-forbidden-pattern');
-  readonly nodeRows = this.locatorForAll('[data-node-id]');
+  nodeRows = this.locatorForAll('[data-node-id]');
+  /** Matches the attribute value itself, so a node id carrying CSS syntax still finds its row. */
+  private async control(kind: 'data-disclosure' | 'data-scope' | 'data-more', id: string) {
+    for (const element of await this.locatorForAll(`[${kind}]`)()) {
+      if ((await element.getAttribute(kind)) === id) return element;
+    }
+    throw new Error(`No [${kind}] control carries the value ${id}`);
+  }
   disclosure(id: string) {
-    return this.locatorFor(`[data-disclosure="${id}"]`)();
+    return this.control('data-disclosure', id);
   }
   scope(id: string) {
-    return this.locatorFor(`[data-scope="${id}"]`)();
+    return this.control('data-scope', id);
   }
   more(id: string) {
-    return this.locatorFor(`[data-more="${id}"]`)();
+    return this.control('data-more', id);
   }
   async text() {
     return (await this.host()).text();

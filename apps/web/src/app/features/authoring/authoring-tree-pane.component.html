@@ -5,7 +5,12 @@
   [attr.aria-label]="copy.hierarchy"
   [attr.aria-describedby]="'authoring-tree-keyboard'"
 >
-  <ng-container *ngTemplateOutlet="branch; context: { $implicit: roots().items, depth: 0 }" />
+  <ng-container
+    *ngTemplateOutlet="
+      branch;
+      context: { $implicit: roots().items, depth: 0, ancestors: noAncestors }
+    "
+  />
 </ul>
 @if (roots().nextCursor) {
   <button
@@ -21,118 +26,124 @@
   </button>
 }
 
-<ng-template #branch let-items let-depth="depth">
+<ng-template #branch let-items let-depth="depth" let-ancestors="ancestors">
   @for (node of items; track node.node_id) {
-    <li>
-      <div
-        class="node-row"
-        [attr.data-node-id]="node.node_id"
-        [class.current]="selectedNodeId() === node.node_id"
-      >
-        <div class="node-controls">
-          @if (canExpand(node)) {
+    @if (!ancestors.has(node.node_id)) {
+      <li>
+        <div
+          class="node-row"
+          [attr.data-node-id]="node.node_id"
+          [class.current]="selectedNodeId() === node.node_id"
+        >
+          <div class="node-controls">
+            @if (canExpand(node)) {
+              <button
+                hlmBtn
+                [variant]="'ghost'"
+                [size]="'icon-sm'"
+                type="button"
+                class="disclosure"
+                [attr.data-disclosure]="node.node_id"
+                [attr.aria-label]="disclosureLabel(node)"
+                [attr.aria-expanded]="expanded().has(node.node_id)"
+                [attr.aria-controls]="'authoring-children-' + node.node_id"
+                (click)="toggle(node)"
+              >
+                <hlm-icon
+                  [name]="expanded().has(node.node_id) ? 'lucideChevronDown' : 'lucideChevronRight'"
+                />
+              </button>
+            } @else {
+              <span class="leaf-space" aria-hidden="true"></span>
+            }
             <button
               hlmBtn
               [variant]="'ghost'"
-              [size]="'icon-sm'"
               type="button"
-              class="disclosure"
-              [attr.data-disclosure]="node.node_id"
-              [attr.aria-label]="disclosureLabel(node)"
-              [attr.aria-expanded]="expanded().has(node.node_id)"
-              [attr.aria-controls]="'authoring-children-' + node.node_id"
-              (click)="toggle(node)"
+              class="scope"
+              [attr.data-scope]="node.node_id"
+              [attr.aria-label]="selectionLabel(node)"
+              [attr.aria-current]="selectedNodeId() === node.node_id ? 'location' : null"
+              (click)="selectNode.emit(node.node_id)"
             >
-              <hlm-icon
-                [name]="expanded().has(node.node_id) ? 'lucideChevronDown' : 'lucideChevronRight'"
-              />
+              <bdi>{{ node.title }}</bdi>
+              @if (selectedNodeId() === node.node_id) {
+                <span class="current-label">{{ copy.current }}</span>
+              }
             </button>
-          } @else {
-            <span class="leaf-space" aria-hidden="true"></span>
-          }
-          <button
-            hlmBtn
-            [variant]="'ghost'"
-            type="button"
-            class="scope"
-            [attr.data-scope]="node.node_id"
-            [attr.aria-label]="selectionLabel(node)"
-            [attr.aria-current]="selectedNodeId() === node.node_id ? 'location' : null"
-            (click)="selectNode.emit(node.node_id)"
-          >
-            <bdi>{{ node.title }}</bdi>
-            @if (selectedNodeId() === node.node_id) {
-              <span class="current-label">{{ copy.current }}</span>
-            }
-          </button>
+          </div>
+          <dl class="counts">
+            <div>
+              <dt>{{ copy.children }}</dt>
+              <dd><app-number-value [value]="node.child_count" /></dd>
+            </div>
+            <div>
+              <dt>{{ copy.items }}</dt>
+              <dd><app-number-value [value]="node.item_count" /></dd>
+            </div>
+            <div>
+              <dt>{{ copy.pending }}</dt>
+              <dd [attr.aria-describedby]="'authoring-pending-help'">—</dd>
+            </div>
+          </dl>
         </div>
-        <dl class="counts">
-          <div>
-            <dt>{{ copy.children }}</dt>
-            <dd><app-number-value [value]="node.child_count" /></dd>
-          </div>
-          <div>
-            <dt>{{ copy.items }}</dt>
-            <dd><app-number-value [value]="node.item_count" /></dd>
-          </div>
-          <div>
-            <dt>{{ copy.pending }}</dt>
-            <dd [attr.aria-describedby]="'authoring-pending-help'">—</dd>
-          </div>
-        </dl>
-      </div>
-      @if (canExpand(node)) {
-        <ul
-          [id]="'authoring-children-' + node.node_id"
-          [hidden]="!expanded().has(node.node_id)"
-          [class.indented]="depth < 3"
-        >
-          @if (expanded().has(node.node_id)) {
-            @let page = children()[node.node_id];
-            @if (!page || page.status !== 'ready' || page.error || page.items.length === 0) {
-              <li class="branch-state" [attr.aria-busy]="!page || page.status === 'loading'">
-                <app-request-state
-                  [status]="pageStatus(page)"
-                  [error]="page?.error ?? null"
-                  [empty]="
-                    page?.status === 'ready' &&
-                    page?.items.length === 0 &&
-                    page?.nextCursor === null
-                  "
-                  [loadingLabel]="copy.loadingChildren"
-                  [emptyTitle]="copy.emptyChildren"
-                  [retryEligible]="page?.error?.retryable ?? false"
-                  [retryBusy]="page?.status === 'loading'"
-                  (retry)="retryBranch(node.node_id, page)"
-                />
-              </li>
-            }
-            @if (page?.error?.kind !== 'forbidden' && page?.error?.kind !== 'not_found') {
-              <ng-container
-                *ngTemplateOutlet="
-                  branch;
-                  context: { $implicit: page?.items ?? [], depth: depth + 1 }
-                "
-              />
-              @if (page?.nextCursor) {
-                <li class="branch-state">
-                  <button
-                    hlmBtn
-                    [variant]="'outline'"
-                    type="button"
-                    class="more"
-                    [attr.data-more]="node.node_id"
-                    [disabled]="page?.status === 'loading'"
-                    (click)="requestMore(node.node_id, page, $event)"
-                  >
-                    {{ copy.moreChildren }}
-                  </button>
+        @if (canExpand(node)) {
+          <ul
+            [id]="'authoring-children-' + node.node_id"
+            [hidden]="!expanded().has(node.node_id)"
+            [class.indented]="depth < 3"
+          >
+            @if (expanded().has(node.node_id)) {
+              @let page = children()[node.node_id];
+              @if (!page || page.status !== 'ready' || page.error || page.items.length === 0) {
+                <li class="branch-state" [attr.aria-busy]="!page || page.status === 'loading'">
+                  <app-request-state
+                    [status]="pageStatus(page)"
+                    [error]="page?.error ?? null"
+                    [empty]="
+                      page?.status === 'ready' &&
+                      page?.items.length === 0 &&
+                      page?.nextCursor === null
+                    "
+                    [loadingLabel]="copy.loadingChildren"
+                    [emptyTitle]="copy.emptyChildren"
+                    [retryEligible]="page?.error?.retryable ?? false"
+                    [retryBusy]="page?.status === 'loading'"
+                    (retry)="retryBranch(node.node_id, page)"
+                  />
                 </li>
               }
+              @if (page?.error?.kind !== 'forbidden' && page?.error?.kind !== 'not_found') {
+                <ng-container
+                  *ngTemplateOutlet="
+                    branch;
+                    context: {
+                      $implicit: page?.items ?? [],
+                      depth: depth + 1,
+                      ancestors: chain(ancestors, node.node_id),
+                    }
+                  "
+                />
+                @if (page?.nextCursor) {
+                  <li class="branch-state">
+                    <button
+                      hlmBtn
+                      [variant]="'outline'"
+                      type="button"
+                      class="more"
+                      [attr.data-more]="node.node_id"
+                      [disabled]="page?.status === 'loading'"
+                      (click)="requestMore(node.node_id, page, $event)"
+                    >
+                      {{ copy.moreChildren }}
+                    </button>
+                  </li>
+                }
+              }
             }
-          }
-        </ul>
-      }
-    </li>
+          </ul>
+        }
+      </li>
+    }
   }
 </ng-template>

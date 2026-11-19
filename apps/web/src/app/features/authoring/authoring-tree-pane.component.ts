@@ -45,10 +45,13 @@ export class AuthoringTreePaneComponent {
     source: this.projectId,
     computation: () => new Set<string>(),
   });
+  /** The cycle guard's starting chain: the roots have no ancestor above them. */
+  protected readonly noAncestors: ReadonlySet<string> = new Set<string>();
   protected readonly visible = computed(() => {
     const nodes: NodeDto[] = [];
-    const visit = (items: readonly NodeDto[]) => {
+    const visit = (items: readonly NodeDto[], ancestors: ReadonlySet<string>) => {
       for (const node of items) {
+        if (ancestors.has(node.node_id)) continue;
         nodes.push(node);
         const page = this.children()[node.node_id];
         if (
@@ -56,10 +59,10 @@ export class AuthoringTreePaneComponent {
           page?.error?.kind !== 'forbidden' &&
           page?.error?.kind !== 'not_found'
         )
-          visit(page?.items ?? []);
+          visit(page?.items ?? [], this.chain(ancestors, node.node_id));
       }
     };
-    visit(this.roots().items);
+    visit(this.roots().items, this.noAncestors);
     return nodes;
   });
   private readonly keys = computed(() =>
@@ -92,12 +95,15 @@ export class AuthoringTreePaneComponent {
       const page = pending.parentId === null ? this.roots() : this.children()[pending.parentId];
       if (!page || page.status === 'loading') return;
       this.pendingMore.set(null);
-      const first = page.items[pending.loaded];
-      if (!first) return;
-      const active = document.activeElement;
-      if (active !== pending.control && !(active === document.body && !pending.control.isConnected))
+      const { activeElement, body } = this.host.nativeElement.ownerDocument;
+      if (activeElement !== pending.control && activeElement !== body) return;
+      const control = this.moreControl(pending.parentId);
+      if (page.nextCursor !== null && control !== null) {
+        control.focus();
         return;
-      this.focusNode(first.node_id);
+      }
+      const first = page.items[pending.loaded];
+      if (first) this.focusNode(first.node_id);
     });
   }
 
@@ -137,7 +143,7 @@ export class AuthoringTreePaneComponent {
     if (!this.canExpand(node)) return;
     const open = this.expanded().has(node.node_id);
     if (open) {
-      const branch = this.host.nativeElement.querySelector(`#authoring-children-${node.node_id}`);
+      const branch = this.rowFor(node.node_id)?.closest('li')?.querySelector('ul');
       if (branch?.contains(this.host.nativeElement.ownerDocument.activeElement)) {
         this.focusNode(node.node_id);
       }
@@ -214,8 +220,29 @@ export class AuthoringTreePaneComponent {
     }
   }
 
+  /** The ancestor ids a deeper branch adds: a node already in this chain is never rendered twice. */
+  protected chain(ancestors: ReadonlySet<string>, nodeId: string): ReadonlySet<string> {
+    const next = new Set(ancestors);
+    next.add(nodeId);
+    return next;
+  }
+
+  /** Matches the attribute value itself, so an id carrying CSS syntax still finds its row. */
+  private rowFor(id: string): HTMLElement | null {
+    const rows = this.host.nativeElement.querySelectorAll<HTMLElement>('[data-node-id]');
+    for (const row of rows) if (row.dataset['nodeId'] === id) return row;
+    return null;
+  }
+
+  private moreControl(parentId: string | null): HTMLElement | null {
+    const key = parentId ?? 'roots';
+    const controls = this.host.nativeElement.querySelectorAll<HTMLElement>('[data-more]');
+    for (const control of controls) if (control.dataset['more'] === key) return control;
+    return null;
+  }
+
   private focusNode(id: string): void {
-    const row = this.host.nativeElement.querySelector<HTMLElement>(`[data-node-id="${id}"]`);
+    const row = this.rowFor(id);
     const target = row?.querySelector<HTMLElement>('[data-disclosure], [data-scope]');
     target?.focus();
     target?.scrollIntoView({ block: 'nearest', inline: 'nearest' });

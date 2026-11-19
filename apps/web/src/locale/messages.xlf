@@ -9909,6 +9909,8 @@
       <trans-unit id="authoring.tree.expand" datatype="html"><source>Expand <x id="title" equiv-text="node.title"/></source></trans-unit>
       <trans-unit id="authoring.tree.collapse" datatype="html"><source>Collapse <x id="title" equiv-text="node.title"/></source></trans-unit>
       <trans-unit id="authoring.tree.select" datatype="html"><source>Select scope <x id="title" equiv-text="node.title"/></source></trans-unit>
+      <trans-unit id="authoring.tree.announce-selected" datatype="html"><source>Selected scope <x id="title" equiv-text="selected.title"/></source></trans-unit>
+      <trans-unit id="authoring.tree.announce-roots" datatype="html"><source>Scope set to all project roots</source></trans-unit>
     </body>
   </file>
 </xliff>

@@ -3778,6 +3778,8 @@
       <trans-unit id="authoring.tree.expand" datatype="html"><source>Expand <x id="title" equiv-text="node.title"/></source><target>Mở rộng <x id="title" equiv-text="node.title"/></target></trans-unit>
       <trans-unit id="authoring.tree.collapse" datatype="html"><source>Collapse <x id="title" equiv-text="node.title"/></source><target>Thu gọn <x id="title" equiv-text="node.title"/></target></trans-unit>
       <trans-unit id="authoring.tree.select" datatype="html"><source>Select scope <x id="title" equiv-text="node.title"/></source><target>Chọn phạm vi <x id="title" equiv-text="node.title"/></target></trans-unit>
+      <trans-unit id="authoring.tree.announce-selected" datatype="html"><source>Selected scope <x id="title" equiv-text="selected.title"/></source><target>Đã chọn phạm vi <x id="title" equiv-text="selected.title"/></target></trans-unit>
+      <trans-unit id="authoring.tree.announce-roots" datatype="html"><source>Scope set to all project roots</source><target>Phạm vi được đặt về tất cả các nút gốc của dự án</target></trans-unit>
     </body>
   </file>
 </xliff>

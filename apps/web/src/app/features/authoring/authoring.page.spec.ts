@@ -1,7 +1,7 @@
 import { manualChangeDetection } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import type { AuthoringNodePathEntry, NodeDto } from '@evidgate/sdk';
 import { BehaviorSubject } from 'rxjs';
@@ -56,6 +56,7 @@ describe('AuthoringPage', () => {
   const selectedId = signal<string | null>(selected.node_id);
   const path = signal<AuthoringNodePathEntry[]>([root]);
   const stale = signal(false);
+  const selectionStatus = signal<'idle' | 'loading' | 'ready' | 'error'>('ready');
   const init = vi.fn().mockResolvedValue(undefined);
   const retryTree = vi.fn().mockResolvedValue(undefined);
   const selectNode = vi.fn((id: string | null) => id);
@@ -66,6 +67,7 @@ describe('AuthoringPage', () => {
     selectedNode: node,
     selectedNodeId: selectedId,
     path,
+    selectionStatus,
     treeStatus: status,
     treeError: error,
     stale,
@@ -82,6 +84,7 @@ describe('AuthoringPage', () => {
     status.set('ready');
     error.set(null);
     stale.set(false);
+    selectionStatus.set('ready');
     roots.set({ items: [root], nextCursor: null, status: 'ready', error: null });
     node.set(selected);
     selectedId.set(selected.node_id);
@@ -118,6 +121,10 @@ describe('AuthoringPage', () => {
       AuthoringPageHarness,
     );
     return { fixture, harness };
+  }
+
+  function host(fixture: ComponentFixture<AuthoringPage>): HTMLElement {
+    return fixture.nativeElement as HTMLElement;
   }
 
   it('reads the heading level from route data and keeps the table a separate neutral region', async () => {
@@ -240,5 +247,36 @@ describe('AuthoringPage', () => {
     if (!tree) throw new Error('The root continuation must remain reachable.');
     await (await tree.more('roots')).click();
     expect(store.loadMoreChildren).toHaveBeenCalledWith(null);
+  });
+
+  it('announces one completed scope change politely outside the busy region', async () => {
+    const { fixture } = await render();
+    const regions = host(fixture).querySelectorAll('[data-authoring-announcement]');
+    expect(regions).toHaveLength(1);
+    expect(host(fixture).querySelectorAll('app-authoring-tree-pane [aria-live]')).toHaveLength(0);
+    const region = regions[0];
+    if (!(region instanceof HTMLElement)) throw new Error('No live region is rendered.');
+    expect(region.getAttribute('aria-live')).toBe('polite');
+    expect(region.getAttribute('role')).toBe('status');
+    expect(region.closest('[aria-busy]')).toBeNull();
+    expect(region.textContent).toContain(selected.title);
+    expect(host(fixture).querySelector('app-authoring-tree-pane [aria-live]')).toBeNull();
+
+    node.set({ ...selected, title: 'Renamed scope' });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(region.textContent).toContain('Renamed scope');
+    expect(region.textContent).not.toContain(selected.title);
+  });
+
+  it('announces the roots scope when the selection is cleared', async () => {
+    node.set(null);
+    selectedId.set(null);
+    path.set([]);
+    selectionStatus.set('idle');
+    const { fixture } = await render();
+    const region = host(fixture).querySelector('[data-authoring-announcement]');
+    if (!(region instanceof HTMLElement)) throw new Error('No live region is rendered.');
+    expect(region.textContent).toContain('Scope set to all project roots');
   });
 });

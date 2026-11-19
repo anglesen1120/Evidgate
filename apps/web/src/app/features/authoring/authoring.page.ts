@@ -93,6 +93,17 @@ export class AuthoringPage {
       ? [...path, node]
       : path;
   });
+  /** One polite line per settled read: the scope now shown, never one line per node. */
+  protected readonly announcement = computed(() => {
+    if (this.denied() || this.busy()) return '';
+    const selected = this.store.selectedNode();
+    if (selected !== null) {
+      return $localize`:@@authoring.tree.announce-selected:Selected scope ${selected.title}:title:`;
+    }
+    return this.store.roots().status === 'ready' && this.store.roots().items.length > 0
+      ? $localize`:@@authoring.tree.announce-roots:Scope set to all project roots`
+      : '';
+  });
 
   protected select(id: string | null): void {
     const nodeId = this.store.selectNode(id);

@@ -36,7 +36,8 @@ export const AuthoringStore = signalStore(
     path: [],
     selectionStatus: 'idle',
     selectionError: null,
-    stale: false,
+    rootsStale: false,
+    selectionStale: false,
   }),
   withProps((store, data = inject(AuthoringDataService)) => {
     const reads = createTreeReads(
@@ -66,7 +67,17 @@ export const AuthoringStore = signalStore(
       if (rootsStatus === 'error' || selectionStatus === 'error') return 'error';
       return rootsStatus === 'ready' ? 'ready' : 'idle';
     }),
-    treeError: computed<ApiError | null>(() => store.roots().error ?? store.selectionError()),
+    /** Either region keeps rows a failed refresh could not replace. */
+    stale: computed(() => store.rootsStale() || store.selectionStale()),
+    treeError: computed<ApiError | null>(() => {
+      const rootsError = store.roots().error;
+      const selectionError = store.selectionError();
+      const denial = [rootsError, selectionError].find(
+        (error): error is ApiError =>
+          error !== null && (error.kind === 'forbidden' || error.kind === 'not_found'),
+      );
+      return denial ?? rootsError ?? selectionError;
+    }),
   })),
   withMethods((store) => ({
     /**

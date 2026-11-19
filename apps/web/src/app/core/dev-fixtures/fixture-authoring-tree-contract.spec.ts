@@ -1,5 +1,9 @@
 import type { AuthoringTreeResponse } from '@evidgate/sdk';
-import { AUTHORING_TREE_CONTINUATIONS } from './fixture-authoring-tree';
+import { HttpRequest } from '@angular/common/http';
+import {
+  AuthoringTreeFixtureScenario,
+  AUTHORING_TREE_CONTINUATIONS,
+} from './fixture-authoring-tree';
 import { FIXTURE_CATALOG_AUTHORING_ROWS } from './fixture-catalog-authoring-rows';
 import { VALIDATOR, isRecord } from './fixture-contract.support';
 
@@ -31,6 +35,18 @@ describe('authoring tree fixture contract pins', () => {
       const seen = new Set(first?.items.map((node) => node.node_id));
       expect(terminal.items.some((node) => seen.has(node.node_id))).toBe(false);
     }
+  });
+
+  it('validates the addressed empty-child page the scenario derives', () => {
+    const scenario = new AuthoringTreeFixtureScenario();
+    const parent = AUTHORING_TREE_CONTINUATIONS[1]?.parentId;
+    if (!parent) throw new Error('A parent-scoped continuation is required.');
+    const url = `/projects/018f0000-0000-7000-8000-000000000011/authoring/tree?parent_id=${parent}`;
+    const entry = scenario.entry(new HttpRequest('GET', url), 'child-empty');
+    expect(entry?.document.status).toBe(200);
+    expect(
+      VALIDATOR.validateResponse('listAuthoringTree', 200, entry?.document.body).errors,
+    ).toEqual([]);
   });
 
   it('refuses invalid UUIDs and error envelopes missing the required retryable member', () => {

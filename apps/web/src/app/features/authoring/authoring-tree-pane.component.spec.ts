@@ -258,4 +258,72 @@ describe('AuthoringTreePaneComponent', () => {
     fixture.componentRef.setInput('children', { [root.node_id]: page([child, extra]) });
     expect(await (await harness.scope(extra.node_id)).isFocused()).toBe(true);
   });
+
+  it('restores focus to a load-more control that survives the append', async () => {
+    const { fixture, harness } = await render();
+    const extra = {
+      ...child,
+      node_id: '018f0000-0000-7000-8000-000000000105',
+      title: 'Further child',
+    };
+    fixture.componentRef.setInput('children', {
+      [root.node_id]: { ...page([child]), nextCursor: 'following' },
+    });
+    await (await harness.disclosure(root.node_id)).click();
+    fixture.componentInstance.loadMore.subscribe(() => {
+      fixture.componentRef.setInput('children', {
+        [root.node_id]: { ...page([child]), nextCursor: 'following', status: 'loading' },
+      });
+    });
+    const more = await harness.more(root.node_id);
+    await more.focus();
+    await more.click();
+    await more.blur();
+    fixture.componentRef.setInput('children', {
+      [root.node_id]: { ...page([child, extra]), nextCursor: 'following' },
+    });
+    expect(await (await harness.more(root.node_id)).isFocused()).toBe(true);
+    expect(await (await harness.scope(extra.node_id)).isFocused()).toBe(false);
+  });
+
+  it('skips a node whose id is already in its ancestor chain', async () => {
+    const { fixture, harness } = await render();
+    const branch = {
+      ...root,
+      node_id: '018f0000-0000-7000-8000-000000000106',
+      parent_id: root.node_id,
+      title: 'Cycle branch',
+      child_count: 1,
+    };
+    fixture.componentRef.setInput('children', {
+      [root.node_id]: page([branch]),
+      [branch.node_id]: page([root]),
+    });
+    await (await harness.disclosure(root.node_id)).click();
+    await (await harness.disclosure(branch.node_id)).click();
+    expect(await harness.visibleIds()).toEqual([root.node_id, branch.node_id, second.node_id]);
+  });
+
+  it('finds rows whose ids carry CSS syntax and keeps their keyboard focus', async () => {
+    const { fixture, harness } = await render();
+    const odd = {
+      ...root,
+      node_id: 'odd"id#1 .node',
+      title: 'Odd id',
+      child_count: 1,
+    };
+    const nested = { ...child, parent_id: odd.node_id };
+    fixture.componentRef.setInput('roots', page([odd, second]));
+    fixture.componentRef.setInput('children', { [odd.node_id]: page([nested]) });
+    const disclosure = await harness.disclosure(odd.node_id);
+    await disclosure.focus();
+    await disclosure.sendKeys(TestKey.RIGHT_ARROW);
+    expect(await disclosure.getAttribute('aria-expanded')).toBe('true');
+    await disclosure.sendKeys(TestKey.RIGHT_ARROW);
+    expect(await (await harness.scope(nested.node_id)).isFocused()).toBe(true);
+    await (await harness.scope(nested.node_id)).sendKeys(TestKey.LEFT_ARROW);
+    expect(await disclosure.isFocused()).toBe(true);
+    await disclosure.sendKeys(TestKey.LEFT_ARROW);
+    expect(await disclosure.getAttribute('aria-expanded')).toBe('false');
+  });
 });

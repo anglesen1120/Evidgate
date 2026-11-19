@@ -17,6 +17,18 @@ export const AUTHORING_TREE_CONTINUATIONS = [
   },
 ] as const;
 
+/** The page the corpus holds for one addressed node, ignoring continuation pages. */
+function addressedPage(id: string): FixtureEntry | undefined {
+  return rows.find((row) => {
+    if (
+      row.document.status !== 200 ||
+      AUTHORING_TREE_CONTINUATIONS.some((page) => page.name === row.name)
+    )
+      return false;
+    return (row.document.body as AuthoringTreeResponse).node?.node_id === id;
+  });
+}
+
 /** The browser reviews a failed refresh, not a fabricated GET conflict lifecycle. */
 export class AuthoringTreeFixtureScenario {
   private readRoots = false;
@@ -32,7 +44,7 @@ export class AuthoringTreeFixtureScenario {
       return result;
     }
     if (variant === 'child-error') return variantEntry(id ? 'error' : 'ok');
-    if (variant === 'child-empty') return variantEntry(id ? 'empty' : 'ok');
+    if (variant === 'child-empty') return this.emptyChildren(id);
     if (!['ok', 'stale', 'loading', 'slow-children'].includes(variant))
       return variantEntry(variant);
     if (cursor) {
@@ -42,17 +54,25 @@ export class AuthoringTreeFixtureScenario {
       return rows.find((row) => row.name === page?.name);
     }
     if (!id) return variantEntry(variant === 'loading' ? 'loading' : 'ok');
-    const addressed = rows.find((row) => {
-      if (
-        row.document.status !== 200 ||
-        AUTHORING_TREE_CONTINUATIONS.some((page) => page.name === row.name)
-      )
-        return false;
-      return (row.document.body as AuthoringTreeResponse).node?.node_id === id;
-    });
+    const addressed = addressedPage(id);
     if (!addressed) return variantEntry('not-found');
     return variant === 'slow-children'
       ? { ...addressed, document: { ...addressed.document, latency_ms: 3000 } }
       : addressed;
+  }
+
+  /** The addressed node and its path, with only the children page empty — never a roots page. */
+  private emptyChildren(id: string | null): FixtureEntry | undefined {
+    if (!id) return variantEntry('ok');
+    const addressed = addressedPage(id);
+    const body = addressed?.document.body as AuthoringTreeResponse | undefined;
+    if (!addressed || !body) return variantEntry('not-found');
+    return {
+      ...addressed,
+      document: {
+        ...addressed.document,
+        body: { ...body, items: [], next_cursor: null },
+      },
+    };
   }
 }
