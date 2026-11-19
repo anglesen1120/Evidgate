@@ -119,6 +119,9 @@ export interface FixtureRoute {
  * SDK side of the same drift).
  */
 export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
+  { operationId: 'importAuthoring', method: 'POST', path: '/projects/{p}/authoring/import' },
+  { operationId: 'exportAuthoring', method: 'GET', path: '/projects/{p}/authoring/export' },
+  { operationId: 'listAuthoringVersions', method: 'GET', path: '/projects/{p}/authoring/versions' },
   { operationId: 'getProjectAiSettings', method: 'GET', path: '/projects/{p}/ai-settings' },
   { operationId: 'saveProjectAiSettings', method: 'PUT', path: '/projects/{p}/ai-settings' },
   {

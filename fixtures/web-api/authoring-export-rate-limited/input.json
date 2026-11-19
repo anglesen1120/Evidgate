@@ -1,0 +1,19 @@
+{
+  "operation_id": "exportAuthoring",
+  "variant": "rate-limited",
+  "status": 429,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000af01",
+    "Retry-After": "1"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "rate_limited",
+      "message": "The complete request was refused.",
+      "request_id": "018f0000-0000-7000-8000-00000000af01",
+      "retryable": true,
+      "details": []
+    }
+  }
+}
