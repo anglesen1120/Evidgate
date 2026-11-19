@@ -236,8 +236,9 @@ export async function writeOutput(
     await handle.close();
   } catch (error) {
     const errno = errnoName(error);
-    await handle.close().catch(() => undefined);
+    // The descriptor stays open during the identity check so our inode cannot be recycled.
     await removeOwnEntry(path, created);
+    await handle.close().catch(() => undefined);
     throw new CliError(`the output file could not be written (${errno})`, {
       code: 'manifest_output_unwritable',
     });
@@ -274,7 +275,8 @@ function outputOpenError(error: unknown): CliError {
 /**
  * Removes the entry only while it still carries the inode this run created. An uninspectable or
  * replaced entry is left alone: cleanup never deletes someone else's file, and its own failure
- * never replaces the write error.
+ * never replaces the write error. Node has no unlink-by-identity call, so a swap between the
+ * check and the unlink remains a residual race.
  */
 async function removeOwnEntry(path: string, created: OutputIdentity | null): Promise<void> {
   if (created === null) return;

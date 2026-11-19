@@ -1678,8 +1678,10 @@ with a requested mode of 0600 (subject to the platform's permission model); an
 existing output is `manifest_output_exists`, including an existing symlink. The
 command never follows an output symlink or overwrites an existing manifest.
 Other output creation/write failures are `manifest_output_unwritable`. A
-partial `--out` created by this run is removed when the write fails; an entry
-that replaced it in the meantime is left untouched.
+partial `--out` created by this run is removed when the write fails (best
+effort: an entry that replaced it before the identity check is left untouched;
+a swap between the check and the unlink cannot be excluded, Node has no
+unlink-by-identity call).
 
 Success exits 0. Text mode prints one line:
 
