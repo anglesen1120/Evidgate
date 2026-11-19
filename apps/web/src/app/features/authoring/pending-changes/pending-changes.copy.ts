@@ -41,6 +41,7 @@ export const PENDING_COPY = {
   blockedStale: $localize`:@@authoring.pending-changes.blocked-stale:An affected item changed after this change was queued. Reload the queue before applying.`,
   blockedEmpty: $localize`:@@authoring.pending-changes.blocked-empty:Select at least one pending change.`,
   blockedTooMany: $localize`:@@authoring.pending-changes.blocked-too-many:One apply takes at most 200 exact changes.`,
+  replaySelectionChanged: $localize`:@@authoring.pending-changes.replay-selection-changed:The earlier apply never got an answer, so its exact selection must be retried. Restore the original selection to retry it, or reload the queue to start a new batch.`,
   emptyTitle: $localize`:@@authoring.pending-changes.empty-title:No pending changes`,
   emptyBody: $localize`:@@authoring.pending-changes.empty-body:This project has no queued authoring change.`,
   notFoundTitle: $localize`:@@authoring.pending-changes.not-found-title:Project not found`,

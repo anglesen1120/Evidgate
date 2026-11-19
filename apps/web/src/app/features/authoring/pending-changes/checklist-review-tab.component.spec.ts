@@ -212,7 +212,7 @@ describe('ChecklistReviewTabComponent', () => {
     async (name, limit) => {
       const { ui, fixture } = await setup();
       const selector = `#review-${name}`;
-      expect(await ui.attribute(selector, 'maxlength')).toBe(String(limit));
+      expect(await ui.attribute(selector, 'maxlength')).toBeNull();
       expect(await ui.attribute(selector, 'aria-describedby')).toContain(`review-${name}-count`);
       await ui.set('#review-comment', 'A valid comment');
       await ui.set(selector, 'x'.repeat(limit + 1));
@@ -241,6 +241,29 @@ describe('ChecklistReviewTabComponent', () => {
         expect.any(String),
         expect.any(AbortSignal),
       );
+    },
+  );
+  it.each([
+    ['comment', 2000],
+    ['reason', 500],
+  ] as const)(
+    'keeps over-limit %s text intact instead of letting a native UTF-16 cap truncate it',
+    async (name, limit) => {
+      const { ui } = await setup();
+      const selector = `#review-${name}`;
+      const over = '😀'.repeat(limit + 1);
+      expect(await ui.attribute(selector, 'maxlength')).toBeNull();
+      await ui.set(selector, over);
+      expect(await ui.value(selector)).toBe(over);
+      const formatted = new Intl.NumberFormat('en-US').format(limit + 1);
+      expect((await ui.textAt(`#review-${name}-count`)).replace(/\s+/g, ' ')).toContain(
+        `${formatted} of`,
+      );
+      await ui.focus(selector);
+      await ui.blur(selector);
+      expect(await ui.attribute(selector, 'aria-invalid')).toBe('true');
+      await ui.click('[data-review-comment]');
+      expect(queue).not.toHaveBeenCalled();
     },
   );
   it('refuses delete consent for an over-limit reason and accepts its corrected boundary', async () => {

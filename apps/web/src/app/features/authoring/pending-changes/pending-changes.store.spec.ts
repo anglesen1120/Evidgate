@@ -180,7 +180,7 @@ describe('PendingChangesStore', () => {
   });
 
   it.each(['unavailable', 'network', 'timeout', 'unexpected'] as const)(
-    'replays the original request after an unresolved %s before reading changed selection',
+    'replays the original request after an unresolved %s without reading the queue again',
     async (kind) => {
       const row = change(DELETE_ID, 'delete');
       listPending.mockResolvedValue({ items: [row], next_cursor: null });
@@ -191,7 +191,6 @@ describe('PendingChangesStore', () => {
       const error = failure(kind, status);
       apply.mockRejectedValueOnce(new ApiRequestError(error));
       await expect(store().apply()).resolves.toBe(false);
-      store().clearSelection();
       await expect(store().apply()).resolves.toBe(true);
       expect(selection).toHaveBeenCalledTimes(1);
       expect(apply).toHaveBeenCalledTimes(2);

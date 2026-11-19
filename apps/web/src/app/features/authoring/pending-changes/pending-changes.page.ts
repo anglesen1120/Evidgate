@@ -175,6 +175,8 @@ export class PendingChangesPage {
     viewChild.required<TemplateRef<DataTableCellContext<AuthoringChangeListItem>>>('stateCell');
   private readonly inspection = viewChild<ElementRef<HTMLElement>>('inspection');
   private focused: HTMLElement | null = null;
+  /** A mutation removed or disabled the control that opened its confirmation. */
+  private restoreFocus = false;
   protected readonly rowId = (row: AuthoringChangeListItem) => row.change_id;
   protected readonly operationLabel = operationLabel;
   protected readonly isStructural = isStructural;
@@ -236,17 +238,25 @@ export class PendingChangesPage {
   constructor() {
     afterRenderEffect(() => {
       this.store.queueLoading();
+      const empty = this.store.rows().length === 0;
+      const restore = this.restoreFocus;
+      this.restoreFocus = false;
       if (!this.policy.canMutate() && this.consent()) this.consent.set(null);
-      if (
-        this.focused &&
-        !this.focused.isConnected &&
-        this.document.activeElement === this.document.body
-      )
+      const remembered = this.focused;
+      if (remembered === null) return;
+      if (restore) {
+        if (!empty && remembered.isConnected) remembered.focus();
+        if (this.document.activeElement !== remembered) this.inspection()?.nativeElement.focus();
+        return;
+      }
+      if (!remembered.isConnected && this.document.activeElement === this.document.body)
         this.inspection()?.nativeElement.focus();
     });
   }
   protected rememberFocus(event: FocusEvent): void {
-    this.focused = event.target instanceof HTMLElement ? event.target : null;
+    const target = event.target;
+    if (target instanceof HTMLElement && !target.closest('[role="alertdialog"]'))
+      this.focused = target;
   }
   protected openApply(): void {
     if (!this.policy.allowsMutation() || this.blocked()) return;
@@ -267,7 +277,7 @@ export class PendingChangesPage {
   protected openDiscard(id: string): void {
     if (
       !this.policy.allowsMutation() ||
-      !this.store.canWrite() ||
+      this.store.discardBlocked() ||
       this.busy() ||
       this.deniedWrite() ||
       !this.store.retryReady()
@@ -298,12 +308,13 @@ export class PendingChangesPage {
     if (consent.kind === 'apply') {
       const ids = this.store.applyRequest()?.ids ?? this.store.selectedIds();
       if (this.blocked() || consent.ids.join(',') !== ids.join(',')) return;
-      await this.store.apply();
+      if (await this.store.apply()) this.restoreFocus = true;
     } else if (
       consent.ids[0] &&
+      !this.store.discardBlocked() &&
       this.store.rows().some((row) => row.change_id === consent.ids[0])
     ) {
-      await this.store.discard(consent.ids[0]);
+      if (await this.store.discard(consent.ids[0])) this.restoreFocus = true;
     }
   }
   protected async reloadConflict(): Promise<void> {

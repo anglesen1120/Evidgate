@@ -33,6 +33,7 @@ import {
 import {
   createPendingBookkeeping,
   isCancellation,
+  sameSelection,
   signatureOf,
   unexpectedFailure,
   pendingDocument,
@@ -40,6 +41,7 @@ import {
   pendingRequestFailure as fail,
   type PendingApplyReplay,
 } from './pending-changes.intent';
+import { applyBlockedReason as blockedApplyReason, discardRefused } from './pending-changes.guards';
 
 export interface PendingConflict {
   readonly code: string;
@@ -116,18 +118,18 @@ export const PendingChangesStore = signalStore(
       const row = store.previewRow();
       return row === null ? null : pendingPreview(row, store.targetTitles()[row.target_id] ?? null);
     }),
-    applyBlockedReason: computed<string | null>(() => {
-      if (!store.canWrite()) return PENDING_COPY.readOnly;
-      if (store.applying()) return PENDING_COPY.applying;
-      if (store.applyRequest()) return null;
-      return selectionBlockedReason(store.rows(), store.selectedIds());
-    }),
-    discardBlocked: computed(() => !store.canWrite() || store.discardingId() !== null),
+    applyBlockedReason: computed<string | null>(() => blockedApplyReason(store)),
+    discardBlocked: computed(() => discardRefused(store)),
   })),
   withMethods((store) => {
     function noteWait(error: ApiError): void {
       patchState(store, { retryAfterSeconds: error.retryAfterSeconds });
       store._wait.start(error.retryAfterSeconds);
+    }
+
+    function blockApply(reason: string): false {
+      patchState(store, { applyError: unexpectedFailure('selection_blocked', reason) });
+      return false;
     }
 
     function rememberTitles(items: readonly ChecklistItemDto[]): void {
@@ -178,6 +180,10 @@ export const PendingChangesStore = signalStore(
           applyError: store.applyError()?.kind === 'forbidden' ? null : store.applyError(),
           discardError: store.discardError()?.kind === 'forbidden' ? null : store.discardError(),
         });
+        if (replace && store.applyRequest() !== null) {
+          store._keys.dropApply();
+          patchState(store, { applyRequest: null, applyError: null });
+        }
       } catch (error) {
         if (store.loadToken() !== token || !store._run.ownsRead(signal)) return;
         const failure = fail(error, PENDING_COPY.queueFailed);
@@ -196,8 +202,7 @@ export const PendingChangesStore = signalStore(
 
     async function reload(): Promise<void> {
       const project = store.projectId();
-      if (project !== null && !store.applying() && !store.applyRequest())
-        await read(project, null, true);
+      if (project !== null && !store.applying()) await read(project, null, true);
     }
 
     /** Reads the exact selection again: the only source of the apply `If-Match`. */
@@ -220,17 +225,15 @@ export const PendingChangesStore = signalStore(
       const project = store.projectId();
       const ids = store.selectedIds();
       if (project === null || store.applying() || store.queueLoading()) return false;
-      const blocked = store.applyRequest() ? null : selectionBlockedReason(store.rows(), ids);
-      if (blocked !== null || !store.canWrite()) {
-        patchState(store, {
-          applyError: unexpectedFailure('selection_blocked', blocked ?? PENDING_COPY.readOnly),
-        });
-        return false;
-      }
+      let request = store.applyRequest();
+      if (request !== null && !sameSelection(request.ids, ids))
+        return blockApply(PENDING_COPY.replaySelectionChanged);
+      const blocked = request === null ? selectionBlockedReason(store.rows(), ids) : null;
+      if (blocked !== null || !store.canWrite())
+        return blockApply(blocked ?? PENDING_COPY.readOnly);
       patchState(store, { applying: true, applyError: null, conflict: null });
       const signal = store._run.call();
       try {
-        let request = store.applyRequest();
         if (request === null) {
           const etag = await refresh(project, ids, signal);
           if (etag === null) return false;
@@ -397,7 +400,8 @@ export const PendingChangesStore = signalStore(
       },
       async discard(id: string): Promise<boolean> {
         const project = store.projectId();
-        if (project === null || store.discardingId() !== null) return false;
+        const unsettled = store.queueLoading() || store.queueStale();
+        if (project === null || store.discardingId() !== null || unsettled) return false;
         if (!store.canWrite()) {
           patchState(store, {
             discardError: unexpectedFailure('write_forbidden', PENDING_COPY.readOnly),
