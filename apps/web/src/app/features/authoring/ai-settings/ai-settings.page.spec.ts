@@ -59,10 +59,12 @@ describe('AiSettingsPage', () => {
   const version = versionDocument.body as AiSettingsVersion;
   let writable: WritableSignal<boolean>;
   let readable: WritableSignal<boolean>;
+  let project: WritableSignal<{ id: string } | null>;
   let data: { read: Mock; save: Mock; versions: Mock; version: Mock; templates: Mock };
   beforeEach(() => {
     writable = signal(true);
     readable = signal(true);
+    project = signal<{ id: string } | null>({ id: 'p1' });
     data = {
       read: vi.fn().mockResolvedValue({ view: head, etag: '"2"' }),
       save: vi.fn().mockResolvedValue({ view: head, etag: '"2"', appended: false }),
@@ -80,7 +82,7 @@ describe('AiSettingsPage', () => {
           provide: SessionStore,
           useValue: {
             currentOrg: signal({ id: 'o1' }),
-            currentProject: signal({ id: 'p1' }),
+            currentProject: project,
             has: (code: string) => (code === AI_WRITE ? writable() : readable()),
           },
         },
@@ -274,12 +276,23 @@ describe('AiSettingsPage', () => {
       expect(data.save).toHaveBeenCalledTimes(1);
     });
   }
-  it('replaces a permission-lost loading state with an error and removes the form', async () => {
+  it('replaces a permission-lost loading state with the forbidden panel and removes the form', async () => {
     const { fixture, harness } = await mount();
     readable.set(false);
     await fixture.whenStable();
     expect(await harness.count('app-loading-pattern')).toBe(0);
-    expect(await harness.count('app-forbidden-pattern, app-error-pattern')).toBe(1);
+    expect(await harness.count('app-forbidden-pattern')).toBe(1);
+    expect(await harness.count('app-error-pattern')).toBe(0);
+    expect(await harness.count('#ai-writing_style')).toBe(0);
+  });
+  it('renders the forbidden panel when the project scope is lost, without another read', async () => {
+    const { fixture, harness } = await mount();
+    expect(await harness.count('app-forbidden-pattern')).toBe(0);
+    project.set(null);
+    await fixture.whenStable();
+    expect(await harness.count('app-forbidden-pattern')).toBe(1);
+    expect(await harness.count('app-error-pattern')).toBe(0);
+    expect(data.read).toHaveBeenCalledTimes(1);
     expect(await harness.count('#ai-writing_style')).toBe(0);
   });
   it('offers head reload after a successful save answers without an ETag', async () => {

@@ -1,0 +1,56 @@
+{
+  "operation_id": "listAuthoringVersions",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "a4430000-0000-4000-8000-000000000057"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "version_id": "a4430000-0000-4000-8000-000000000103",
+        "entity_kind": "manual_test_case",
+        "entity_id": "a4430000-0000-4000-8000-000000000001",
+        "version_no": 3,
+        "batch_id": "a4430000-0000-4000-8000-000000000203",
+        "change_kind": "update",
+        "source": "manual",
+        "content_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "author": "a4430000-0000-4000-8000-000000000021",
+        "reason": "Clarify the seeded credentials",
+        "ai_run_id": null,
+        "created_at": "2026-11-03T09:00:00Z"
+      },
+      {
+        "version_id": "a4430000-0000-4000-8000-000000000102",
+        "entity_kind": "manual_test_case",
+        "entity_id": "a4430000-0000-4000-8000-000000000001",
+        "version_no": 2,
+        "batch_id": "a4430000-0000-4000-8000-000000000202",
+        "change_kind": "update",
+        "source": "manual",
+        "content_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "author": "a4430000-0000-4000-8000-000000000021",
+        "reason": "Add the seeded precondition",
+        "ai_run_id": null,
+        "created_at": "2026-11-02T09:00:00Z"
+      },
+      {
+        "version_id": "a4430000-0000-4000-8000-000000000101",
+        "entity_kind": "manual_test_case",
+        "entity_id": "a4430000-0000-4000-8000-000000000001",
+        "version_no": 1,
+        "batch_id": "a4430000-0000-4000-8000-000000000201",
+        "change_kind": "create",
+        "source": "manual",
+        "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "author": "a4430000-0000-4000-8000-000000000021",
+        "reason": null,
+        "ai_run_id": null,
+        "created_at": "2026-11-01T09:00:00Z"
+      }
+    ],
+    "next_cursor": null
+  }
+}

@@ -1,0 +1,447 @@
+<div class="grid min-w-0 gap-6">
+  @if (pageHeadingLevel === 1) {
+    <app-page-header [title]="title()" [description]="intro" />
+  } @else {
+    <h2 hlmCardTitle [size]="'section'">{{ title() }}</h2>
+  }
+  <app-desktop-required-notice />
+  <app-request-state
+    [status]="status()"
+    [error]="errorOf(store.head.error())"
+    [retryEligible]="!!store.scope()"
+    (retry)="store.head.reload()"
+  >
+    @if (store.base(); as base) {
+      <div class="flex min-w-0 flex-wrap items-center gap-3 text-sm">
+        <app-copyable-identifier [value]="base.view.code" [label]="codeLabel" />
+        <p class="m-0" i18n="@@authoring.editor.current-version">
+          Current version: {{ base.view.version }}
+        </p>
+        <app-status-pill
+          [label]="lifecycle[base.view.state]"
+          [dimension]="lifecycleLabel"
+          [tone]="base.view.state === 'approved' ? 'success' : 'neutral'"
+        />
+        <app-absolute-time [value]="base.view.updated_at" />
+      </div>
+      <p
+        class="m-0 text-sm text-muted-foreground"
+        i18n="@@authoring.editor.live-provenance-unavailable"
+      >
+        Source and author are unavailable in the case detail. Timeline shows the metadata supplied
+        for each version.
+      </p>
+      @if (store.head.error()) {
+        <p i18n="@@authoring.editor.refresh-failed">
+          Refresh failed. The last loaded case and your unsaved draft are retained.
+        </p>
+      }
+      @if (!store.canWrite()) {
+        <p id="case-write-reason" class="border-l-2 border-border pl-4">{{ writeReason }}</p>
+      }
+      @if (base.view.state === 'retired') {
+        <p id="case-retired-reason" i18n="@@authoring.editor.retired">
+          This case is retired. Its content is read-only.
+        </p>
+      }
+      @if (store.dirty()) {
+        <p class="text-sm" i18n="@@authoring.editor.unsaved">
+          Unsaved changes are kept in this tab only.
+        </p>
+      }
+      @if (viewport.narrow()) {
+        <label hlmLabel for="case-panel-select" i18n="@@authoring.editor.choose-panel"
+          >Choose a section</label
+        >
+        <hlm-select [value]="tab()" (valueChange)="selectTab($event)">
+          <hlm-select-trigger
+            [buttonId]="'case-panel-select'"
+            class="min-h-(--eg-control-touch) w-full whitespace-normal"
+            ><hlm-select-value
+          /></hlm-select-trigger>
+          <hlm-select-content *hlmSelectPortal>
+            <hlm-option [value]="'editor'" i18n="@@authoring.editor.editor-tab">Editor</hlm-option>
+            <hlm-option [value]="'timeline'" i18n="@@authoring.editor.timeline-tab"
+              >Timeline</hlm-option
+            >
+          </hlm-select-content>
+        </hlm-select>
+      }
+      <hlm-tabs [tab]="tab()" (tabActivated)="selectTab($event)" class="block min-w-0">
+        <div
+          hlmTabsList
+          [variant]="'line'"
+          [style.display]="viewport.narrow() ? 'none' : null"
+          aria-label="Case sections"
+          i18n-aria-label="@@authoring.editor.panels"
+        >
+          <button [hlmTabsTrigger]="'editor'" i18n="@@authoring.editor.editor-tab">Editor</button>
+          <button
+            [hlmTabsTrigger]="'timeline'"
+            data-editor-timeline-tab
+            i18n="@@authoring.editor.timeline-tab"
+          >
+            Timeline
+          </button>
+        </div>
+        <div [hlmTabsContent]="'editor'" class="min-w-0 pt-6">
+          @if (store.draft(); as draft) {
+            @if (viewport.canMutate()) {
+              <form
+                class="grid min-w-0 max-w-[75ch] gap-6"
+                (ngSubmit)="save()"
+                [attr.aria-busy]="store.saving()"
+              >
+                <app-form-required-note />
+                <app-form-error-summary [summaryId]="'case-errors'" [feedback]="feedback()" />
+                @for (field of fields; track field.key; let index = $index) {
+                  <div class="grid min-w-0 gap-2">
+                    <label hlmLabel [for]="'case-' + field.key"
+                      >{{ field.label }}
+                      <app-field-requirement [required]="field.required" />
+                    </label>
+                    @if (field.key === 'title') {
+                      <input
+                        hlmInput
+                        id="case-title"
+                        name="title"
+                        [ngModel]="draft.title"
+                        (ngModelChange)="store.editText('title', $event)"
+                        required
+                        [readOnly]="
+                          !store.canWrite() || store.saving() || base.view.state === 'retired'
+                        "
+                        [aria-describedby]="feedback().fields[index]?.describedBy() ?? null"
+                        [attr.aria-invalid]="feedback().fields[index]?.ariaInvalid()"
+                        (blur)="feedback().fields[index]?.blur()"
+                      />
+                    } @else {
+                      <textarea
+                        hlmInput
+                        rows="3"
+                        class="h-auto resize-y"
+                        [id]="'case-' + field.key"
+                        [name]="field.key"
+                        [ngModel]="draft[field.key]"
+                        (ngModelChange)="store.editText(field.key, $event)"
+                        [readOnly]="
+                          !store.canWrite() || store.saving() || base.view.state === 'retired'
+                        "
+                        [aria-describedby]="feedback().fields[index]?.describedBy() ?? null"
+                        [attr.aria-invalid]="feedback().fields[index]?.ariaInvalid()"
+                        (blur)="feedback().fields[index]?.blur()"
+                      ></textarea>
+                    }
+                    <p
+                      class="m-0 text-sm text-muted-foreground tabular-nums"
+                      [id]="'case-' + field.key + '-hint'"
+                      i18n="@@authoring.editor.character-count"
+                    >
+                      {{ count(draft[field.key]) }} / {{ field.limit }} characters
+                    </p>
+                    @if (feedback().fields[index]; as entry) {
+                      <app-field-feedback [field]="entry" />
+                    }
+                  </div>
+                }
+                <div class="grid min-w-0 gap-2">
+                  <label hlmLabel for="case-priority" i18n="@@authoring.editor.priority"
+                    >Priority</label
+                  >
+                  <hlm-select
+                    [value]="draft.priority"
+                    (valueChange)="changePriority($event)"
+                    [disabled]="
+                      !store.canWrite() || store.saving() || base.view.state === 'retired'
+                    "
+                  >
+                    <hlm-select-trigger
+                      [buttonId]="'case-priority'"
+                      class="min-h-(--eg-control-touch) w-full whitespace-normal"
+                      [aria-describedby]="feedback().fields[fields.length]?.describedBy() ?? null"
+                      [aria-invalid]="feedback().fields[fields.length]?.invalid()"
+                      ><hlm-select-value
+                    /></hlm-select-trigger>
+                    <hlm-select-content *hlmSelectPortal>
+                      @for (priority of priorities; track priority.value) {
+                        <hlm-option [value]="priority.value">{{ priority.label }}</hlm-option>
+                      }
+                    </hlm-select-content>
+                  </hlm-select>
+                  @if (feedback().fields[fields.length]; as entry) {
+                    <app-field-feedback [field]="entry" />
+                  }
+                </div>
+                <section class="grid min-w-0 gap-4" aria-labelledby="case-steps-title">
+                  <h2
+                    hlmCardTitle
+                    [size]="'section'"
+                    id="case-steps-title"
+                    i18n="@@authoring.editor.steps-heading"
+                  >
+                    Steps · action and expected result
+                  </h2>
+                  @for (step of draft.steps; track step.id; let index = $index) {
+                    <fieldset class="m-0 grid min-w-0 gap-3 rounded-md border border-border p-4">
+                      <legend class="px-2 font-semibold" i18n="@@authoring.editor.step-number">
+                        Step {{ index + 1 }}
+                      </legend>
+                      <div class="grid min-w-0 gap-4 lg:grid-cols-2">
+                        @for (field of stepFields; track field.key; let fieldIndex = $index) {
+                          <div class="grid min-w-0 gap-2 lg:last:col-span-2">
+                            <label hlmLabel [for]="'case-step-' + index + '-' + field.key"
+                              >{{ field.label }}
+                              <app-field-requirement [required]="field.required" />
+                            </label>
+                            <textarea
+                              hlmInput
+                              rows="3"
+                              class="h-auto resize-y"
+                              data-step-field
+                              [id]="'case-step-' + index + '-' + field.key"
+                              [name]="'step-' + step.id + '-' + field.key"
+                              [ngModel]="step[field.key] ?? ''"
+                              (ngModelChange)="store.editStep(step.id, field.key, $event)"
+                              [required]="field.required"
+                              [readOnly]="
+                                !store.canWrite() || store.saving() || base.view.state === 'retired'
+                              "
+                              [aria-describedby]="
+                                stepFeedback(index, fieldIndex)?.describedBy() ?? null
+                              "
+                              [attr.aria-invalid]="stepFeedback(index, fieldIndex)?.ariaInvalid()"
+                              (blur)="stepFeedback(index, fieldIndex)?.blur()"
+                            ></textarea>
+                            <p
+                              class="m-0 text-sm text-muted-foreground tabular-nums"
+                              [id]="'case-step-' + index + '-' + field.key + '-hint'"
+                              i18n="@@authoring.editor.step-character-count"
+                            >
+                              {{ count(step[field.key] ?? '') }} / 2000 characters
+                            </p>
+                            @if (stepFeedback(index, fieldIndex); as entry) {
+                              <app-field-feedback [field]="entry" />
+                            }
+                          </div>
+                        }
+                      </div>
+                      <div class="flex flex-wrap gap-2">
+                        <button
+                          hlmBtn
+                          [variant]="'outline'"
+                          type="button"
+                          class="min-h-(--eg-control-touch) whitespace-normal"
+                          [attr.data-step-up]="index"
+                          [disabled]="blocked() || index === 0"
+                          (click)="moveStep(step.id, -1)"
+                          i18n="@@authoring.editor.move-up"
+                        >
+                          Move up
+                        </button>
+                        <button
+                          hlmBtn
+                          [variant]="'outline'"
+                          type="button"
+                          class="min-h-(--eg-control-touch) whitespace-normal"
+                          [disabled]="blocked() || index === draft.steps.length - 1"
+                          (click)="moveStep(step.id, 1)"
+                          i18n="@@authoring.editor.move-down"
+                        >
+                          Move down
+                        </button>
+                        <button
+                          hlmBtn
+                          [variant]="'ghost'"
+                          type="button"
+                          class="min-h-(--eg-control-touch) whitespace-normal"
+                          [attr.data-step-remove]="index"
+                          [disabled]="blocked() || draft.steps.length === 1"
+                          (click)="removeStep(step.id)"
+                          i18n="@@authoring.editor.remove-step"
+                        >
+                          Remove step
+                        </button>
+                      </div>
+                    </fieldset>
+                  }
+                  <button
+                    hlmBtn
+                    [variant]="'outline'"
+                    type="button"
+                    class="min-h-(--eg-control-touch) justify-self-start whitespace-normal"
+                    data-step-add
+                    [disabled]="blocked() || draft.steps.length >= 100"
+                    (click)="addStep()"
+                    i18n="@@authoring.editor.add-step"
+                  >
+                    Add step
+                  </button>
+                  <p
+                    class="m-0 text-sm text-muted-foreground"
+                    i18n="@@authoring.editor.step-limits"
+                  >
+                    Keep 1–100 steps. Use Move up and Move down to change execution order with the
+                    keyboard.
+                  </p>
+                </section>
+                <div class="grid min-w-0 gap-2">
+                  <label hlmLabel for="case-reason" i18n="@@authoring.editor.version-reason"
+                    >Reason for this version</label
+                  >
+                  <input
+                    hlmInput
+                    id="case-reason"
+                    disabled
+                    [aria-describedby]="'case-reason-unavailable'"
+                  />
+                  <p id="case-reason-unavailable" class="m-0 text-sm text-muted-foreground">
+                    {{ reasonUnavailable }}
+                  </p>
+                </div>
+                @if (store.failure(); as failure) {
+                  @if (failure.kind !== 'precondition_failed') {
+                    <p i18n="@@authoring.editor.save-failed">
+                      The save was not confirmed. Every draft field is retained.
+                    </p>
+                    <app-request-state
+                      [status]="'error'"
+                      [error]="failure"
+                      [retryEligible]="!blocked()"
+                      (retry)="save()"
+                    />
+                  }
+                }
+                <div class="flex flex-wrap gap-3">
+                  <button
+                    hlmBtn
+                    type="submit"
+                    class="min-h-(--eg-control-touch) whitespace-normal"
+                    data-editor-save
+                    [disabled]="blocked()"
+                    [attr.aria-describedby]="
+                      !store.canWrite()
+                        ? 'case-write-reason'
+                        : base.view.state === 'retired'
+                          ? 'case-retired-reason'
+                          : null
+                    "
+                    i18n="@@authoring.editor.save"
+                  >
+                    Save new version
+                  </button>
+                </div>
+              </form>
+            } @else {
+              <section class="grid min-w-0 gap-4">
+                <h2
+                  #readonlyHeading
+                  tabindex="-1"
+                  hlmCardTitle
+                  [size]="'section'"
+                  i18n="@@authoring.editor.readonly-heading"
+                >
+                  Read-only case draft
+                </h2>
+                <p i18n="@@authoring.editor.narrow-draft">
+                  Unsaved desktop edits are retained, not saved. Open a wider screen to edit.
+                </p>
+                <dl class="m-0 grid min-w-0 gap-4 wrap-anywhere">
+                  @for (field of fields; track field.key) {
+                    <div>
+                      <dt class="font-semibold">{{ field.label }}</dt>
+                      <dd class="m-0 whitespace-pre-wrap">{{ draft[field.key] || notSet }}</dd>
+                    </div>
+                  }
+                  <div>
+                    <dt class="font-semibold" i18n="@@authoring.editor.priority">Priority</dt>
+                    <dd class="m-0">{{ priorityLabel(draft.priority) }}</dd>
+                  </div>
+                </dl>
+                <ol class="m-0 grid min-w-0 gap-4 pl-6">
+                  @for (step of draft.steps; track step.id) {
+                    <li>
+                      <dl class="m-0 grid min-w-0 gap-3 wrap-anywhere">
+                        @for (field of stepFields; track field.key) {
+                          <div>
+                            <dt class="font-semibold">{{ field.label }}</dt>
+                            <dd class="m-0 whitespace-pre-wrap">{{ step[field.key] || notSet }}</dd>
+                          </div>
+                        }
+                      </dl>
+                    </li>
+                  }
+                </ol>
+                <p class="text-sm">{{ reasonUnavailable }}</p>
+              </section>
+            }
+          }
+        </div>
+        <div [hlmTabsContent]="'timeline'" class="min-w-0 pt-6">
+          @if (tab() === 'timeline') {
+            <app-editor-timeline />
+          }
+        </div>
+      </hlm-tabs>
+    }
+  </app-request-state>
+  <p class="m-0 min-h-(--eg-leading-sm) text-sm" role="status">
+    {{ stepAnnouncement() }}
+    @if (store.saving()) {
+      <span i18n="@@authoring.editor.saving">Saving case…</span>
+    }
+    @if (store.result() === 'saved') {
+      <span data-editor-saved i18n="@@authoring.editor.saved">A new case version was saved.</span>
+    }
+    @if (store.result() === 'unchanged') {
+      <span data-editor-saved i18n="@@authoring.editor.unchanged"
+        >No changes; the existing version is unchanged.</span
+      >
+    }
+  </p>
+</div>
+<app-conflict-dialog
+  [open]="store.conflictOpen()"
+  [fields]="conflictFields()"
+  [currentRevision]="store.currentConflict()?.etag ?? null"
+  [reloadState]="
+    store.conflictRead.isLoading() ? 'loading' : store.conflictRead.error() ? 'error' : 'idle'
+  "
+  [reloadError]="errorOf(store.conflictRead.error())"
+  (reload)="store.reloadConflict()"
+  (keepEditing)="store.closeConflict()"
+/>
+<hlm-dialog
+  [state]="leaving() ? 'open' : 'closed'"
+  [autoFocus]="'[data-leave-cancel]'"
+  (stateChanged)="$event === 'closed' && resolveLeave(false)"
+>
+  <hlm-dialog-content *hlmDialogPortal [showCloseButton]="false">
+    <header hlmDialogHeader>
+      <h2 hlmDialogTitle i18n="@@authoring.editor.leave-title">Discard unsaved changes?</h2>
+      <p hlmDialogDescription i18n="@@authoring.editor.leave-description">
+        Your draft is only in this tab. Leaving discards it without saving a version.
+      </p>
+    </header>
+    <footer hlmDialogFooter>
+      <button
+        hlmBtn
+        [variant]="'outline'"
+        type="button"
+        data-leave-cancel
+        (click)="resolveLeave(false)"
+        i18n="@@authoring.editor.keep-editing"
+      >
+        Keep editing
+      </button>
+      <button
+        hlmBtn
+        [variant]="'destructive'"
+        type="button"
+        (click)="resolveLeave(true)"
+        i18n="@@authoring.editor.discard"
+      >
+        Discard and leave
+      </button>
+    </footer>
+  </hlm-dialog-content>
+</hlm-dialog>
