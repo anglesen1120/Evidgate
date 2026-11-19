@@ -24,6 +24,7 @@ using Evidgate.Modules.Identity;
 using Evidgate.Modules.Identity.DevLogin;
 using Evidgate.Modules.Identity.Endpoints;
 using Evidgate.Modules.Identity.Login;
+using Evidgate.Modules.Identity.Options;
 using Evidgate.Modules.Ingestion;
 using Evidgate.Modules.Ingestion.Endpoints;
 using Evidgate.Modules.Orchestrator;
@@ -357,5 +358,8 @@ public static partial class ApiHost
         // The healing provider is a deployment selection: unset outside Development, a mock outside Development or an
         // incomplete HTTP selection must refuse the boot instead of degrading to no provider at the first call.
         app.Services.ValidateHealingOptions();
+
+        // The pre-tenant attempt budgets: a limit, window or key capacity the store cannot honour must refuse the boot.
+        app.Services.ValidateRateLimitOptions();
     }
 }
