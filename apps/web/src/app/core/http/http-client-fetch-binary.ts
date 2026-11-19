@@ -265,8 +265,8 @@ export function toBinaryResponse(
 // size.
 function advertisedSize<T>(event: HttpEvent<T>): number | null {
   if (event.type === HttpEventType.ResponseHeader) {
-    const declared = event.headers.get('Content-Length');
-    return declared === null ? null : declaredLength(declared);
+    const declared = event.headers.getAll('Content-Length');
+    return declared === null ? null : declaredLength(declared.join(','));
   }
   if (event.type === HttpEventType.DownloadProgress) {
     // A length that is not a finite number proves nothing about the size, and letting it through
@@ -294,7 +294,7 @@ function advertisedSize<T>(event: HttpEvent<T>): number | null {
 // length (`Number()` would accept `0x10` or `1e9`); a value that is not one valid length is
 // refused early, and the decoded bytes stay the authority for everything that passes.
 function declaredLength(value: string): number {
-  const members = value.split(',').map((member) => member.trim());
+  const members = value.split(',').map((member) => member.replace(/^[ \t]+|[ \t]+$/g, ''));
   const [first] = members;
   if (first === undefined || !/^\d+$/.test(first) || members.some((member) => member !== first)) {
     return Number.POSITIVE_INFINITY;

@@ -19,6 +19,7 @@ import {
   BINARY_REQUEST,
   BINARY_RESPONSE,
   BINARY_TRANSPORT_HEADER,
+  isCappedBinaryCall,
 } from './binary-transport';
 import { createHttpClientFetch, type HttpClientFetch } from './http-client-fetch';
 
@@ -217,13 +218,50 @@ describe('HttpClient fetch binary transport size caps', () => {
 
     // Under a Content-Encoding the progress and final sizes are decoded bytes and can exceed the
     // wire length: a decoded size under the cap is accepted, over the cap is refused.
-    it('accepts a decoded body larger than Content-Length while it stays under the cap', async () => {
+    it('lets the decoded size decide when it exceeds Content-Length', async () => {
       const accepted = adapter(call(BINARY_RESPONSE));
       const test = await nextRequest(httpMock);
       test.event(headerEvent('10'));
       test.event({ type: HttpEventType.DownloadProgress, loaded: 100 });
       test.flush(new ArrayBuffer(100));
       expect((await (await accepted).arrayBuffer()).byteLength).toBe(100);
+
+      const refused = rejection(adapter(call(BINARY_RESPONSE)));
+      const second = await nextRequest(httpMock);
+      second.event(headerEvent('10'));
+      second.event({ type: HttpEventType.DownloadProgress, loaded: OVER });
+      expectLimit(await refused);
+      expect(second.cancelled).toBe(true);
     });
+  });
+});
+
+describe('HttpClient fetch adapter capped-call marker', () => {
+  it('marks the capped calls and leaves a call that did not opt in unmarked', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: PlatformLocation, useClass: BrowserPlatformLocation },
+      ],
+    });
+    const adapter = createHttpClientFetch(TestBed.inject(HttpClient));
+    const httpMock = TestBed.inject(HttpTestingController);
+
+    for (const transport of [BINARY_REQUEST, BINARY_RESPONSE] as const) {
+      const pending = adapter(call(transport));
+      const test = await nextRequest(httpMock);
+      expect(isCappedBinaryCall(test.request)).toBe(true);
+      test.flush(transport === BINARY_RESPONSE ? new ArrayBuffer(1) : 'ok');
+      await pending;
+    }
+
+    const plain = adapter(new Request(URL, { method: 'GET' }));
+    const test = await nextRequest(httpMock);
+    expect(isCappedBinaryCall(test.request)).toBe(false);
+    test.flush('ok');
+    await plain;
+    httpMock.verify();
   });
 });
