@@ -142,7 +142,8 @@ public sealed partial class FrozenEvidenceTests : IClassFixture<TenancyHostPool>
         await using var caller = await ContractScope.BeginAsync(world.Api, world.Org);
         var evidence = caller.Resolve<IFrozenEvidence>();
 
-        // The mutation this pins: dropping `run_id` or `revision_no` makes the statement answer more than one row.
+        // The mutation this pins: dropping `run_id` answers an unknown run; dropping `revision_no` answers revision 1
+        // to the revision-2 request.
         var first = await evidence.GetFrozenInputAsync(world.Org, plan.RunId, 1, TestContext.Current.CancellationToken);
         first.ShouldNotBeNull();
         first.Revision.RevisionNo.ShouldBe(1);
@@ -157,6 +158,9 @@ public sealed partial class FrozenEvidenceTests : IClassFixture<TenancyHostPool>
         second.Revision.Completeness.ShouldBe("complete");
         second.Revision.Missing.ShouldBeEmpty();
         second.Attempts.ShouldBeEmpty();
+
+        (await evidence.GetFrozenInputAsync(
+            world.Org, Guid.NewGuid(), 1, TestContext.Current.CancellationToken)).ShouldBeNull();
     }
 
     [Fact]
