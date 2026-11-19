@@ -256,7 +256,6 @@ public sealed class RateLimitStoreCostRaceTests(DatabaseFixture fixture)
                 + "where r.depth < 8) "
                 + "select count(distinct a.pid)::integer from pg_stat_activity a "
                 + "where a.pid = any(@pids) "
-                + "and a.wait_event_type = 'Lock' "
                 + "and exists (select 1 from reach r where r.origin = a.pid and r.pid = @holder)",
                 ("pids", pids),
                 ("holder", holderPid));
