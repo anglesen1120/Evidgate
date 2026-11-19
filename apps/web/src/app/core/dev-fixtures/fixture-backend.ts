@@ -81,6 +81,7 @@ import { findUsageSummaryFixture } from './fixture-usage-summary';
 import { securityEventsBody } from './fixture-security-events';
 import { caseListFixtureBody } from './fixture-case-list';
 import { findBulkCaseListFixture } from './fixture-case-list-bulk';
+import { findBrowseCapFixture } from './fixture-browse-cap';
 import { AuthoringTreeFixtureScenario } from './fixture-authoring-tree';
 import { AuthoringCasesFixtureScenario } from './fixture-authoring-cases';
 import { AiSettingsFixtureScenario, aiSettingsPermissions } from './fixture-ai-settings';
@@ -314,6 +315,13 @@ export class FixtureHttpBackend implements HttpBackend {
     request: HttpRequest<unknown>,
     relativePath: string,
   ): FixtureEntry | undefined {
+    const capped = findBrowseCapFixture(
+      request.method,
+      relativePath,
+      request.urlWithParams,
+      (operation) => this.toggles.variantFor(operation),
+    );
+    if (capped !== undefined) return capped;
     const pending = this.authoringPending.entry(request, relativePath, (operation) =>
       this.toggles.variantFor(operation),
     );
