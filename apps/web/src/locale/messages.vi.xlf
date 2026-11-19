@@ -4622,6 +4622,14 @@
       <trans-unit id="authoring.review-context.applied" datatype="html"><source>Applied</source><target>Đã áp dụng</target></trans-unit>
       <trans-unit id="authoring.review-context.discarded" datatype="html"><source>Discarded</source><target>Đã loại bỏ</target></trans-unit>
       <trans-unit id="authoring.review-context.reason" datatype="html"><source>Change reason</source><target>Lý do thay đổi</target></trans-unit>
+      <trans-unit id="shared.gallery.live-status.title" datatype="html"><source>Polite live status</source><target>Thông báo trạng thái không ngắt lời</target></trans-unit>
+      <trans-unit id="shared.gallery.live-status.description" datatype="html"><source>A screen-reader-only message stays mounted while its text changes. The visible preview below is not a live region.</source><target>Vùng thông báo dành riêng cho trình đọc màn hình luôn tồn tại khi nội dung thay đổi. Bản xem trước bên dưới không phải vùng thông báo trực tiếp.</target></trans-unit>
+      <trans-unit id="shared.gallery.live-status.empty" datatype="html"><source>No announcement</source><target>Không có thông báo</target></trans-unit>
+      <trans-unit id="shared.gallery.live-status.announce" datatype="html"><source>Announce a message</source><target>Đọc một thông báo</target></trans-unit>
+      <trans-unit id="shared.gallery.live-status.change" datatype="html"><source>Change the message</source><target>Đổi nội dung thông báo</target></trans-unit>
+      <trans-unit id="shared.gallery.live-status.clear" datatype="html"><source>Clear the message</source><target>Xóa nội dung thông báo</target></trans-unit>
+      <trans-unit id="shared.gallery.live-status.first" datatype="html"><source>Showing the loaded cases. Refine the filters to find a specific case.</source><target>Đang hiển thị các ca đã tải. Thu hẹp bộ lọc để tìm một ca cụ thể.</target></trans-unit>
+      <trans-unit id="shared.gallery.live-status.changed" datatype="html"><source>The filters changed. Showing the matching loaded cases.</source><target>Bộ lọc đã thay đổi. Đang hiển thị các ca đã tải phù hợp.</target></trans-unit>
     </body>
   </file>
 </xliff>

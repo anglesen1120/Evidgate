@@ -1,6 +1,7 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { AuthoringTreeResponse, NodeDto } from '@evidgate/sdk';
+import { RETAINED_ROWS_CAP } from '../../shared/keyset-retention';
 import { apiError } from '../../shared/testing/http-data.testing';
 import { AuthoringDataService } from './authoring-data.service';
 import { AuthoringStore } from './authoring.store';
@@ -80,6 +81,26 @@ describe('authoring tree retained-row bounds', () => {
       expect(listTree).toHaveBeenCalledTimes(2);
     },
   );
+
+  it('bounds roots at the injected retained-row cap rather than one compiled in', async () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        AuthoringStore,
+        { provide: AuthoringDataService, useValue: { listTree } },
+        { provide: RETAINED_ROWS_CAP, useValue: 2 },
+      ],
+    });
+    listTree.mockReset().mockResolvedValueOnce(page(nodes(3), 'more'));
+
+    const store = TestBed.inject(AuthoringStore);
+    await store.init('project');
+
+    expect(store.roots().items.map((node) => node.node_id)).toEqual(['child-0', 'child-1']);
+    expect(store.roots().status).toBe('capped');
+    expect(store.roots().nextCursor).toBeNull();
+  });
 
   it.each([null, root.node_id])('caps the accumulated walk for parent %s', async (parentId) => {
     const store = TestBed.inject(AuthoringStore);

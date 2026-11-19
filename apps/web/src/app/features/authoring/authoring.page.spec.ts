@@ -310,6 +310,39 @@ describe('AuthoringPage', () => {
     expect(host(fixture).querySelectorAll('app-authoring-tree-pane [aria-live]')).toHaveLength(0);
   });
 
+  it('stops announcing a retained capped page when its expanded node becomes childless', async () => {
+    children.set({
+      [root.node_id]: { items: [selected], nextCursor: null, status: 'capped', error: null },
+    });
+    const { fixture, harness } = await render();
+    const tree = await harness.tree();
+    if (!tree) throw new Error('The tree must render for an expanded branch.');
+    await (await tree.disclosure(root.node_id)).click();
+    expect(await tree.capped()).toHaveLength(1);
+    expect(await (await harness.announcement()).text()).toContain(
+      'Hierarchy list is at its load limit',
+    );
+
+    roots.set({
+      items: [{ ...root, child_count: 0 }],
+      nextCursor: null,
+      status: 'ready',
+      error: null,
+    });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await tree.capped()).toHaveLength(0);
+    expect(await (await harness.announcement()).text()).toBe(`Selected scope ${selected.title}`);
+
+    roots.set({ items: [root], nextCursor: null, status: 'ready', error: null });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await tree.capped()).toHaveLength(1);
+    expect(await (await harness.announcement()).text()).toContain(
+      'Hierarchy list is at its load limit',
+    );
+  });
+
   it('stops announcing a nested cap once its ancestors are collapsed', async () => {
     const feature: NodeDto = {
       ...selected,

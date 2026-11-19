@@ -141,7 +141,10 @@ export class AuthoringPage {
     const expanded = this.expanded();
     const visit = (items: readonly NodeDto[], ancestors: ReadonlySet<string>): boolean => {
       for (const node of items) {
-        if (ancestors.has(node.node_id) || !expanded.has(node.node_id)) continue;
+        // A childless node renders no children at all, whatever a stale page holds, so its cap
+        // notice is off screen and must not be announced.
+        if (ancestors.has(node.node_id) || node.child_count === 0) continue;
+        if (!expanded.has(node.node_id)) continue;
         const page = children[node.node_id];
         if (page?.error?.kind === 'forbidden' || page?.error?.kind === 'not_found') continue;
         if (page?.status === 'capped') return true;

@@ -81,6 +81,18 @@ export function browseCapFixturePage(
   };
 }
 
+/**
+ * The retained-row cap a fixture build is seeded with: `?fixture.retainedRowsCap=25` keeps the
+ * cap-path specs fast, and any other value keeps the product default. Dev-only, like the fixture
+ * backend it belongs to.
+ */
+export function retainedRowsCapSeed(search: string): number | null {
+  const raw = new URLSearchParams(search).get('fixture.retainedRowsCap');
+  if (raw === null) return null;
+  const cap = Number(raw);
+  return Number.isInteger(cap) && cap > 0 ? cap : null;
+}
+
 export function findBrowseCapFixture(
   method: string,
   path: string,

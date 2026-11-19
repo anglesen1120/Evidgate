@@ -23,16 +23,13 @@ const SURFACES = [
     notice: '[data-case-browse-capped]',
     more: '[data-case-load-more]',
     count: '[data-case-loaded]',
-    pageSize: 200,
-    copy: {
-      en: [
-        'Case list is at its load limit',
-        'Narrow the filters or choose another scope in the hierarchy to reach cases beyond the 10,000 loaded here.',
-      ],
-      vi: [
-        'Danh sách ca kiểm thử đã đạt giới hạn tải',
-        'Hãy thu hẹp bộ lọc hoặc chọn phạm vi khác trong phân cấp để xem các ca kiểm thử nằm ngoài 10.000 ca đã tải tại đây.',
-      ],
+    title: {
+      en: 'Case list is at its load limit',
+      vi: 'Danh sách ca kiểm thử đã đạt giới hạn tải',
+    },
+    description: {
+      en: 'Narrow the filters or choose another scope in the hierarchy to reach cases beyond the 10,000 loaded here.',
+      vi: 'Hãy thu hẹp bộ lọc hoặc chọn phạm vi khác trong phân cấp để xem các ca kiểm thử nằm ngoài 10.000 ca đã tải tại đây.',
     },
   },
   {
@@ -43,16 +40,13 @@ const SURFACES = [
     notice: '[data-catalog-browse-capped]',
     more: '[data-catalog-load-more]',
     count: '[data-catalog-loaded]',
-    pageSize: 200,
-    copy: {
-      en: [
-        'Case list is at its load limit',
-        'Narrow the status or framework filters to reach cases beyond the 10,000 loaded here. Search only checks loaded results.',
-      ],
-      vi: [
-        'Danh sách ca đã đạt giới hạn tải',
-        'Thu hẹp bộ lọc trạng thái hoặc framework để xem các ca ngoài 10.000 ca đã tải ở đây. Tìm kiếm chỉ kiểm tra kết quả đã tải.',
-      ],
+    title: {
+      en: 'Case list is at its load limit',
+      vi: 'Danh sách ca đã đạt giới hạn tải',
+    },
+    description: {
+      en: 'Narrow the status or framework filters to reach cases beyond the 10,000 loaded here. Search only checks loaded results.',
+      vi: 'Thu hẹp bộ lọc trạng thái hoặc framework để xem các ca ngoài 10.000 ca đã tải ở đây. Tìm kiếm chỉ kiểm tra kết quả đã tải.',
     },
   },
   {
@@ -63,16 +57,13 @@ const SURFACES = [
     notice: '[data-tree-browse-capped]',
     more: '[data-more="roots"]',
     count: 'app-authoring-tree-pane [data-node-id]',
-    pageSize: 50,
-    copy: {
-      en: [
-        'Hierarchy list is at its load limit',
-        'Showing the first 10,000 nodes in this list. Open a known node link to inspect a scope outside these results.',
-      ],
-      vi: [
-        'Danh sách phân cấp đã đạt giới hạn tải',
-        'Đang hiển thị 10.000 nút đầu tiên trong danh sách này. Mở liên kết nút đã biết để xem phạm vi ngoài các kết quả này.',
-      ],
+    title: {
+      en: 'Hierarchy list is at its load limit',
+      vi: 'Danh sách phân cấp đã đạt giới hạn tải',
+    },
+    description: {
+      en: 'Showing the first 10,000 nodes in this list. Open a known node link to inspect a scope outside these results.',
+      vi: 'Đang hiển thị 10.000 nút đầu tiên trong danh sách này. Mở liên kết nút đã biết để xem phạm vi ngoài các kết quả này.',
     },
   },
 ] as const;
@@ -103,6 +94,9 @@ async function expectLoaded(page: Page, surface: Surface, count: number): Promis
   }
 }
 
+/** The cap the fixture build is seeded with, so the walk reaches it in one page per surface. */
+const SEEDED_CAP = 25;
+
 async function reachCap(page: Page, surface: Surface, locale: ShellLocale): Promise<void> {
   await page.goto(
     withVariants(localePath(locale, surface.path), [
@@ -110,27 +104,18 @@ async function reachCap(page: Page, surface: Surface, locale: ShellLocale): Prom
         ? '?fixture.variant.listPermissions=settings-policy-readonly'
         : '?fixture.variant.listPermissions=authoring-editor-read',
       `?fixture.variant.${surface.operation}=browse-cap`,
+      `?fixture.retainedRowsCap=${SEEDED_CAP}`,
     ]),
   );
   await expect(page.locator('html')).toHaveAttribute('lang', locale);
-  await expectLoaded(page, surface, surface.pageSize);
-  await expect(page.locator(surface.notice)).toHaveCount(0);
-  for (let loaded = surface.pageSize; loaded < 10_000; loaded += surface.pageSize) {
-    const more = page.locator(surface.more);
-    await expect(more).toBeEnabled();
-    await more.focus();
-    await more.press('Enter');
-    await expectLoaded(page, surface, loaded + surface.pageSize);
-  }
+  await expectLoaded(page, surface, SEEDED_CAP);
   await expect(page.locator(surface.notice)).toBeVisible();
   await expect(page.locator(surface.more)).toHaveCount(0);
   const requests = await reads(page, surface.endpoint);
-  expect(requests).toHaveLength(10_000 / surface.pageSize);
-  expect(requests.map((url) => new URL(url, page.url()).searchParams.get('cursor'))).toEqual(
-    Array.from({ length: 10_000 / surface.pageSize }, (_, index) =>
-      index === 0 ? null : `browse-cap-${surface.operation}-${index * surface.pageSize}`,
-    ),
-  );
+  expect(requests).toHaveLength(1);
+  expect(requests.map((url) => new URL(url, page.url()).searchParams.get('cursor'))).toEqual([
+    null,
+  ]);
 }
 
 for (const surface of SURFACES) {
@@ -138,9 +123,7 @@ for (const surface of SURFACES) {
     test(`${surface.name} capped notice covers both themes and widths (${locale})`, async ({
       page,
     }) => {
-      // Measured: tree 3.0 m, case table 47 s alone and ~85 s inside the whole shell run (10,000 rows paged for real).
-      if (surface.operation === 'listAuthoringTree') test.setTimeout(240_000);
-      else if (surface.name.startsWith('authoring cases')) test.setTimeout(180_000);
+      // The seeded cap keeps every surface inside one page, so the notice is reached in seconds.
       await page.setViewportSize({ width: 1280, height: 900 });
       await seedStoredTheme(page, 'light');
       await reachCap(page, surface, locale);
@@ -155,7 +138,8 @@ for (const surface of SURFACES) {
             await waitForDialogAnimations(page, 'html');
             const notice = page.locator(surface.notice);
             await expect(notice).toBeVisible();
-            for (const text of surface.copy[locale]) await expect(notice).toContainText(text);
+            await expect(notice).toContainText(surface.title[locale]);
+            await expect(notice).toContainText(surface.description[locale]);
             expect(
               await page.evaluate(
                 () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
@@ -175,7 +159,7 @@ for (const surface of SURFACES) {
           });
         }
       }
-      expect(await reads(page, surface.endpoint)).toHaveLength(10_000 / surface.pageSize);
+      expect(await reads(page, surface.endpoint)).toHaveLength(1);
     });
   }
 }

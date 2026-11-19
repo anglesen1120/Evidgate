@@ -11269,6 +11269,14 @@
       <trans-unit id="authoring.review-context.applied" datatype="html"><source>Applied</source></trans-unit>
       <trans-unit id="authoring.review-context.discarded" datatype="html"><source>Discarded</source></trans-unit>
       <trans-unit id="authoring.review-context.reason" datatype="html"><source>Change reason</source></trans-unit>
+      <trans-unit id="shared.gallery.live-status.title" datatype="html"><source>Polite live status</source></trans-unit>
+      <trans-unit id="shared.gallery.live-status.description" datatype="html"><source>A screen-reader-only message stays mounted while its text changes. The visible preview below is not a live region.</source></trans-unit>
+      <trans-unit id="shared.gallery.live-status.empty" datatype="html"><source>No announcement</source></trans-unit>
+      <trans-unit id="shared.gallery.live-status.announce" datatype="html"><source>Announce a message</source></trans-unit>
+      <trans-unit id="shared.gallery.live-status.change" datatype="html"><source>Change the message</source></trans-unit>
+      <trans-unit id="shared.gallery.live-status.clear" datatype="html"><source>Clear the message</source></trans-unit>
+      <trans-unit id="shared.gallery.live-status.first" datatype="html"><source>Showing the loaded cases. Refine the filters to find a specific case.</source></trans-unit>
+      <trans-unit id="shared.gallery.live-status.changed" datatype="html"><source>The filters changed. Showing the matching loaded cases.</source></trans-unit>
     </body>
   </file>
 </xliff>
