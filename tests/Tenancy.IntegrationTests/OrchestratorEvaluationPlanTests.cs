@@ -428,4 +428,62 @@ public sealed class OrchestratorEvaluationPlanTests
             .Where(row => row.Contains("from public.run r", StringComparison.Ordinal))
             .ShouldNotBeEmpty();
     }
+
+    [Fact]
+    public async Task GetEvaluationRunHeaderAsync_ReportsIsForkTrueForAForkRunAndFalseForANormalRun()
+    {
+        await using var world = await StartAsync();
+        var fork = await SeedPlanAsync(world, 1);
+        var normal = await SeedPlanAsync(world, 1);
+        await MarkForkAsync(world, fork.RunId);
+
+        await using var caller = await ContractScope.BeginAsync(world.Api, world.Org);
+        var reader = caller.Resolve<IOrchestratorEvaluationPlan>();
+
+        // The mutations this pins: projecting a constant instead of r.is_fork, which one of the two runs tells apart
+        // in either direction.
+        var forkHeader = await reader.GetEvaluationRunHeaderAsync(world.Org, fork.RunId, TestContext.Current.CancellationToken);
+        var normalHeader = await reader.GetEvaluationRunHeaderAsync(world.Org, normal.RunId, TestContext.Current.CancellationToken);
+
+        forkHeader.ShouldNotBeNull();
+        forkHeader.IsFork.ShouldBeTrue();
+        normalHeader.ShouldNotBeNull();
+        normalHeader.IsFork.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task GetEvaluationRunHeaderAsync_WithACancelledToken_ThrowsInsteadOfAnsweringTheHeader()
+    {
+        await using var world = await StartAsync();
+        var plan = await SeedPlanAsync(world, 1);
+
+        await using var caller = await ContractScope.BeginAsync(world.Api, world.Org);
+        var reader = caller.Resolve<IOrchestratorEvaluationPlan>();
+
+        // The mutation this pins: not passing the token to the query, which answers the header of a caller that has
+        // already given up. The control proves the same call answers with a live token.
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+        await Should.ThrowAsync<OperationCanceledException>(
+            () => reader.GetEvaluationRunHeaderAsync(world.Org, plan.RunId, cancelled.Token).AsTask());
+
+        (await reader.GetEvaluationRunHeaderAsync(world.Org, plan.RunId, TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+    }
+
+    /// <summary>
+    /// Makes the run a fork run as the owner. The identity columns are immutable for every role, so the guard is
+    /// disabled for the one transaction and restored before the commit.
+    /// </summary>
+    private async Task MarkForkAsync(World world, Guid runId)
+    {
+        await using var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database));
+        await owner.ExecuteAsync("alter table public.run disable trigger run_identity_immutable");
+        (await owner.ExecuteAsync(
+            "update public.run set is_fork = true where org_id = @org_id and id = @run_id",
+            ("org_id", world.Org),
+            ("run_id", runId))).ShouldBe(1);
+        await owner.ExecuteAsync("alter table public.run enable trigger run_identity_immutable");
+        await owner.CommitAsync();
+    }
 }
