@@ -94,3 +94,22 @@ test('the export format discriminator is exempt, another format value is a leak'
   assert.equal(other.status, 1);
   assert.match(other.stderr, /fixture-only-format/);
 });
+
+for (const kind of ['feature_node', 'checklist_item', 'manual_test_case']) {
+  test(`the entity_kind value ${kind} is exempt`, async () => {
+    const result = await gate({ body: { entity_kind: kind } }, kind);
+    assert.equal(result.status, 0, result.stderr);
+  });
+}
+
+test('another entity_kind word is still a leak', async () => {
+  const other = await gate({ body: { entity_kind: 'fixture_only_kind' } }, 'fixture_only_kind');
+  assert.equal(other.status, 1);
+  assert.match(other.stderr, /fixture_only_kind/);
+});
+
+test('an entity_kind word under another member is still a leak', async () => {
+  const other = await gate({ body: { note: 'feature_node' } }, 'feature_node');
+  assert.equal(other.status, 1);
+  assert.match(other.stderr, /feature_node/);
+});

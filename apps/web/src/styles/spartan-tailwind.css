@@ -10,6 +10,9 @@
 @source '../app/features/suites';
 @source '../app/features/project';
 @source '../app/features/runs';
+@source '../app/features/authoring';
+@source '../app/features/availability';
+@source '../app/features/catalog';
 @source not '../app/**/*.spec.ts';
 @source not '../app/**/*.fixture.ts';
 @source not '../app/**/*.testing.ts';

@@ -81,6 +81,10 @@ import { findBulkCaseListFixture } from './fixture-case-list-bulk';
 import { AuthoringTreeFixtureScenario } from './fixture-authoring-tree';
 import { AuthoringCasesFixtureScenario } from './fixture-authoring-cases';
 import { AiSettingsFixtureScenario, aiSettingsPermissions } from './fixture-ai-settings';
+import {
+  AuthoringEditorFixtureScenario,
+  authoringEditorPermissions,
+} from './fixture-authoring-editor';
 
 /** Response header naming the corpus directory that answered; also a production-leak marker. */
 export const FIXTURE_RESPONSE_HEADER = 'X-Evidgate-Fixture';
@@ -227,6 +231,7 @@ export class FixtureHttpBackend implements HttpBackend {
   private readonly authoring = new AuthoringTreeFixtureScenario();
   private readonly authoringCases = new AuthoringCasesFixtureScenario();
   private readonly aiSettings = new AiSettingsFixtureScenario();
+  private readonly authoringEditor = new AuthoringEditorFixtureScenario();
 
   handle(request: HttpRequest<unknown>): Observable<HttpEvent<unknown>> {
     recordRequest(request);
@@ -275,6 +280,10 @@ export class FixtureHttpBackend implements HttpBackend {
       this.toggles.variantFor(operation),
     );
     if (settings !== undefined) return settings;
+    const editor = this.authoringEditor.entry(request, relativePath, (operation) =>
+      this.toggles.variantFor(operation),
+    );
+    if (editor !== undefined) return editor;
     const cancellation = this.runCancellation.entry(
       request,
       relativePath,
@@ -306,6 +315,10 @@ export class FixtureHttpBackend implements HttpBackend {
     if (request.method === 'GET' && relativePath === '/permissions') {
       const aiPermissions = aiSettingsPermissions(this.toggles.variantFor('listPermissions'));
       if (aiPermissions !== undefined) return aiPermissions;
+      const editorPermissions = authoringEditorPermissions(
+        this.toggles.variantFor('listPermissions'),
+      );
+      if (editorPermissions !== undefined) return editorPermissions;
       const supplemental = findSettingsRetentionWriteFixture(
         this.toggles.variantFor('listPermissions'),
       );

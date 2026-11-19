@@ -1,0 +1,12 @@
+{
+  "operation_id": "restoreAuthoringVersion",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "a4430000-0000-4000-8000-000000000055"
+  },
+  "latency_ms": 0,
+  "body": {
+    "version": 4
+  }
+}

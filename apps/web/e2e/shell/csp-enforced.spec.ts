@@ -93,6 +93,7 @@ const READY: Readonly<Record<string, string>> = {
   AuthoringPage: 'app-authoring-page [data-authoring-breadcrumb]',
   ImportExportPage: 'app-authoring-import-export-page [data-impex-import-tab]',
   AiSettingsPage: 'app-ai-settings-page [data-ai-save]',
+  EditorPage: 'app-authoring-editor #case-title',
 };
 
 /** The fields of a catalogue document the walk reads; the corpus rows carry more than this. */
@@ -150,6 +151,7 @@ const IDS: Readonly<Record<string, string>> = {
   projectId: PROJECT_STOREFRONT,
   runId: runFixture.body.run_id,
   revisionId: suiteFixture.body.id,
+  caseId: 'a4430000-0000-4000-8000-000000000001',
 };
 
 /**

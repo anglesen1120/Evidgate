@@ -10141,6 +10141,330 @@
       <trans-unit id="authoring.case-table.unresolved" datatype="html"><source>The case list request did not complete. Retry explicitly.</source></trans-unit>
       <trans-unit id="authoring.case-table.cursor-repeated" datatype="html"><source>The server repeated the case cursor. Reload the list.</source></trans-unit>
       <trans-unit id="authoring.case-table.page-repeated" datatype="html"><source>The next page had no new cases. Reload the list.</source></trans-unit>
+      <trans-unit id="authoring.editor.action" datatype="html">
+        <source>Action</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.add-step" datatype="html">
+        <source>Add step</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.author-membership" datatype="html">
+        <source>Author membership</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.cancel" datatype="html">
+        <source>Cancel</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.case-code" datatype="html">
+        <source>Case code</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.change-create" datatype="html">
+        <source>Created</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.change-delete" datatype="html">
+        <source>Deleted</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.change-restore" datatype="html">
+        <source>Restored</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.change-update" datatype="html">
+        <source>Updated</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.character-count" datatype="html">
+        <source><x id="INTERPOLATION" equiv-text="{{ count(draft[field.key]) }}"/> / <x id="INTERPOLATION_1" equiv-text="{{ field.limit }}"/> characters</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.choose-panel" datatype="html">
+        <source>Choose a section</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.compare-version" datatype="html">
+        <source>Compare with <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.comparison-prerequisite" datatype="html">
+        <source>View one version before choosing a second version to compare.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.critical" datatype="html">
+        <source>Critical</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.current-version" datatype="html">
+        <source>Current version: <x id="INTERPOLATION" equiv-text="{{ base.view.version }}"/></source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.cursor-cycle" datatype="html">
+        <source>The server repeated a page cursor. Refresh the timeline before loading more.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.description" datatype="html">
+        <source>Description</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.detail-heading" datatype="html">
+        <source>Version <x id="INTERPOLATION" equiv-text="{{ detail.view.version_no }}"/> · read-only snapshot</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.diff-after" datatype="html">
+        <source>+ After</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.diff-before" datatype="html">
+        <source>− Before</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.diff-empty" datatype="html">
+        <source>Both stored snapshots are empty.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.diff-loading" datatype="html">
+        <source>Loading snapshot comparison…</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.diff-title" datatype="html">
+        <source>Stored snapshot comparison · read-only</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.diff-unchanged" datatype="html">
+        <source>Unchanged</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.diff-versions" datatype="html">
+        <source>Version <x id="INTERPOLATION" equiv-text="{{ before.view.version_no }}"/> → version <x id="INTERPOLATION_1" equiv-text="{{ after.view.version_no }}"/></source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.discard" datatype="html">
+        <source>Discard and leave</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.editor-tab" datatype="html">
+        <source>Editor</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.expected" datatype="html">
+        <source>Expected result</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.high" datatype="html">
+        <source>High</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.history-empty" datatype="html">
+        <source>No versions recorded</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.history-filter" datatype="html">
+        <source>Filter loaded versions by reason</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.history-no-match" datatype="html">
+        <source>No loaded versions match this filter</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.history-partial" datatype="html">
+        <source>Loading more versions failed. Previously loaded versions are retained.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.inspect-column" datatype="html">
+        <source>Inspection</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.inspect-version" datatype="html">
+        <source>View version <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.intro" datatype="html">
+        <source>Edit an existing manual case. Saving appends a version; past versions remain unchanged.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.keep-editing" datatype="html">
+        <source>Keep editing</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.leave-description" datatype="html">
+        <source>Your draft is only in this tab. Leaving discards it without saving a version.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.leave-title" datatype="html">
+        <source>Discard unsaved changes?</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.length-error" datatype="html">
+        <source>Shorten this field to the character limit shown below.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.load-more" datatype="html">
+        <source>Load more</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.loaded-count" datatype="html">
+        <source><x id="INTERPOLATION" equiv-text="{{ store.rows().length }}"/> versions loaded</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.loading-more" datatype="html">
+        <source>Loading older versions…</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.low" datatype="html">
+        <source>Low</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.medium" datatype="html">
+        <source>Medium</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.move-down" datatype="html">
+        <source>Move down</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.move-up" datatype="html">
+        <source>Move up</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.narrow-draft" datatype="html">
+        <source>Unsaved desktop edits are retained, not saved. Open a wider screen to edit.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.narrow-saved" datatype="html">
+        <source>These saved values are shown read-only on a narrow screen. Open a wider screen to edit them.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.no-author" datatype="html">
+        <source>Author membership unavailable</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.no-reason" datatype="html">
+        <source>No reason recorded</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.not-set" datatype="html">
+        <source>Not set</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.page-title" datatype="html">
+        <source>Case editor</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.panels" datatype="html">
+        <source>Case sections</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.preconditions" datatype="html">
+        <source>Preconditions</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.priority" datatype="html">
+        <source>Priority</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.readonly-heading" datatype="html">
+        <source>Read-only case draft</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.reason-unavailable" datatype="html">
+        <source>The current API cannot record a version reason for this operation. The reason field is unavailable; you can continue without a recorded reason.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.refresh-failed" datatype="html">
+        <source>Refresh failed. The last loaded case and your unsaved draft are retained.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.refresh-timeline" datatype="html">
+        <source>Refresh timeline</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.remove-step" datatype="html">
+        <source>Remove step</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.required-error" datatype="html">
+        <source>Enter a value for this required field.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restore-confirm" datatype="html">
+        <source>Restore as new version</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restore-description" datatype="html">
+        <source>This replaces the live case content with the selected stored snapshot and appends a version. Earlier versions remain unchanged.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restore-open" datatype="html">
+        <source>Restore version <x id="INTERPOLATION" equiv-text="{{ detail.view.version_no }}"/> as a new version</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restore-reason" datatype="html">
+        <source>Restore reason</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restore-refresh" datatype="html">
+        <source>Restore was confirmed, but the appended version is not yet visible. Refresh the timeline.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restore-source" datatype="html">
+        <source>Source version <x id="INTERPOLATION" equiv-text="{{ detail.view.version_no }}"/></source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restore-title" datatype="html">
+        <source>Restore as a new version?</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restored" datatype="html">
+        <source>Version <x id="INTERPOLATION" equiv-text="{{ store.appendedVersion() }}"/> was appended. Earlier versions are unchanged.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restoring" datatype="html">
+        <source>Restoring version…</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.retired" datatype="html">
+        <source>This case is retired. Its content is read-only.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.save" datatype="html">
+        <source>Save new version</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.save-failed" datatype="html">
+        <source>The save was not confirmed. Every draft field is retained.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.saved" datatype="html">
+        <source>A new case version was saved.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.saving" datatype="html">
+        <source>Saving case…</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.server-field-error" datatype="html">
+        <source>The server refused this field. Review its value before saving again.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.snapshot-content" datatype="html">
+        <source>Stored snapshot</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.snapshot-missing" datatype="html">
+        <source>Not present in this snapshot</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.source-ai" datatype="html">
+        <source>AI</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.source-import" datatype="html">
+        <source>Import</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.source-manual" datatype="html">
+        <source>Manual</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.step-character-count" datatype="html">
+        <source><x id="INTERPOLATION" equiv-text="{{ count(step[field.key] ?? &#x27;&#x27;) }}"/> / 2000 characters</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.step-field" datatype="html">
+        <source>Step <x id="step" equiv-text="index + 1"/> · <x id="field" equiv-text="field.label"/></source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.step-limits" datatype="html">
+        <source>Keep 1–100 steps. Use Move up and Move down to change execution order with the keyboard.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.step-moved" datatype="html">
+        <source>Step moved to position <x id="position" equiv-text="index + 1"/>.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.step-number" datatype="html">
+        <source>Step <x id="INTERPOLATION" equiv-text="{{ index + 1 }}"/></source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.step-removed" datatype="html">
+        <source>Step removed. The remaining steps have been renumbered.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.steps" datatype="html">
+        <source>Steps</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.steps-heading" datatype="html">
+        <source>Steps · action and expected result</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.test-data" datatype="html">
+        <source>Test data</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.timeline-draft" datatype="html">
+        <source>Your unsaved Editor draft is retained. Restoring does not merge it; saving that draft still checks its original ETag.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.timeline-heading" datatype="html">
+        <source>Timeline · immutable history</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.timeline-intro" datatype="html">
+        <source>Versions are newest first. Inspect stored snapshots or restore one as a new version. Restore never rewrites earlier versions.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.timeline-tab" datatype="html">
+        <source>Timeline</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.title-field" datatype="html">
+        <source>Title</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.unchanged" datatype="html">
+        <source>No changes; the existing version is unchanged.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.unsaved" datatype="html">
+        <source>Unsaved changes are kept in this tab only.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.version-etag" datatype="html">
+        <source>Snapshot ETag</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.version-id" datatype="html">
+        <source>Version id</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.version-number" datatype="html">
+        <source>Version <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.version-reason" datatype="html">
+        <source>Reason for this version</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.write-reason" datatype="html">
+        <source>Read-only: authoring:write permission is required to save or restore a case.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.lifecycle" datatype="html">
+        <source>Status</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.lifecycle-draft" datatype="html">
+        <source>Draft</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.lifecycle-approved" datatype="html">
+        <source>Approved</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.lifecycle-retired" datatype="html">
+        <source>Retired</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.live-provenance-unavailable" datatype="html">
+        <source>Source and author are unavailable in the case detail. Timeline shows the metadata supplied for each version.</source>
+      </trans-unit>
       <trans-unit id="authoring.import-export.would-create" datatype="html"><source>Would create</source></trans-unit>
       <trans-unit id="authoring.import-export.would-update" datatype="html"><source>Would update</source></trans-unit>
       <trans-unit id="authoring.import-export.would-restore" datatype="html"><source>Would restore</source></trans-unit>
