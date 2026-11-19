@@ -125,6 +125,58 @@ describe('authoring editor fixtures', () => {
     expect(page.items.length).toBe(seeded.length);
   });
 
+  it('keeps the seeded version unchanged when empty step data is omitted on save', () => {
+    const subject = scenario();
+    const path = '/projects/p/authoring/manual-cases/' + EDITOR_SAVED_CASE;
+    const head = structuredClone(open(subject, 'GET', path)?.document.body) as ManualCaseDetailDto;
+    const timelinePath = '/projects/p/authoring/versions?entity_id=' + EDITOR_SAVED_CASE;
+    const before = structuredClone(open(subject, 'GET', timelinePath)?.document.body);
+    const saved = open(
+      subject,
+      'PATCH',
+      path,
+      {
+        title: head.title,
+        description: head.description,
+        precondition: head.precondition,
+        priority: head.priority,
+        steps: head.steps.map(({ no, action, expected, data }) =>
+          data === null ? { no, action, expected } : { no, action, expected, data },
+        ),
+      },
+      { 'If-Match': '"3"' },
+    );
+    expect(saved?.document.status).toBe(200);
+    expect(saved?.document.body).toEqual({ version: 3, changed: false });
+    expect(open(subject, 'GET', timelinePath)?.document.body).toEqual(before);
+    expect(open(subject, 'GET', path)?.document.body).toEqual(head);
+    expect(head.steps[0]?.data).toBeNull();
+  });
+
+  it('versions populated step data and its removal but not an equivalent null save', () => {
+    const subject = scenario();
+    const path = '/projects/p/authoring/manual-cases/' + EDITOR_SAVED_CASE;
+    const head = open(subject, 'GET', path)?.document.body as ManualCaseDetailDto;
+    const populated = head.steps.map((step) => ({ ...step, data: 'new test data' }));
+    expect(
+      open(subject, 'PATCH', path, { steps: populated }, { 'If-Match': '"3"' })?.document.body,
+    ).toEqual({ version: 4, changed: true });
+    const omitted = head.steps.map(({ no, action, expected }) => ({ no, action, expected }));
+    expect(
+      open(subject, 'PATCH', path, { steps: omitted }, { 'If-Match': '"4"' })?.document.body,
+    ).toEqual({ version: 5, changed: true });
+    const cleared = omitted.map((step) => ({ ...step, data: null }));
+    expect(
+      open(subject, 'PATCH', path, { steps: cleared }, { 'If-Match': '"5"' })?.document.body,
+    ).toEqual({ version: 5, changed: false });
+    const page = open(
+      subject,
+      'GET',
+      '/projects/p/authoring/versions?entity_id=' + EDITOR_SAVED_CASE,
+    )?.document.body as AuthoringVersionListResponse;
+    expect(page.items.map((row) => row.version_no)).toEqual([5, 4, 3, 2, 1]);
+  });
+
   it("refuses a stale tag and leaves the other editor's head readable", () => {
     const subject = scenario();
     const path = '/projects/p/authoring/manual-cases/' + EDITOR_STALE_CASE;

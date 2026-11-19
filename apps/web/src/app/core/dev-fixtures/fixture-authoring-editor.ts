@@ -157,12 +157,22 @@ function edited(head: ManualCaseDetailDto, body: unknown): ManualCaseDetailDto {
   };
 }
 
+/**
+ * Steps compared member by member: `data` is optional on the wire, so an omitted member and an
+ * explicit `null` are the same content and a save that only drops it must not append a version.
+ */
+function stepsKey(steps: readonly ManualCaseStepDto[]): string {
+  return JSON.stringify(
+    steps.map((step) => [step.no, step.action, step.expected, step.data ?? null]),
+  );
+}
+
 function changed(before: ManualCaseDetailDto, after: ManualCaseDetailDto): boolean {
   return (
     before.title !== after.title ||
     before.description !== after.description ||
     before.precondition !== after.precondition ||
-    JSON.stringify(before.steps) !== JSON.stringify(after.steps) ||
+    stepsKey(before.steps) !== stepsKey(after.steps) ||
     before.priority !== after.priority
   );
 }
