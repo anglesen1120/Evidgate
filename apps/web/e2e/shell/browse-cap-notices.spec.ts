@@ -138,7 +138,9 @@ for (const surface of SURFACES) {
     test(`${surface.name} capped notice covers both themes and widths (${locale})`, async ({
       page,
     }) => {
+      // Measured: tree 3.0 m, case table 47 s alone and ~85 s inside the whole shell run (10,000 rows paged for real).
       if (surface.operation === 'listAuthoringTree') test.setTimeout(240_000);
+      else if (surface.name.startsWith('authoring cases')) test.setTimeout(180_000);
       await page.setViewportSize({ width: 1280, height: 900 });
       await seedStoredTheme(page, 'light');
       await reachCap(page, surface, locale);
