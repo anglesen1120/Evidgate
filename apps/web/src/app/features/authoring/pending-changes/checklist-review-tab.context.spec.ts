@@ -35,8 +35,12 @@ const ROW: AuthoringChangeListItem = {
   reason: 'Retain the server-supplied reason',
   payload: { body: 'A server-supplied comment' },
 };
+// A row whose provenance enums carry a value this build does not know.
+type UnlistedEnumRow = Omit<AuthoringChangeListItem, 'source' | 'state'> &
+  Record<'source' | 'state', string>;
 const VI = {
   'authoring.review-context.parent-item': 'Mục danh sách kiểm tra cha',
+  'authoring.review-context.parent-item-label': 'Mục danh sách kiểm tra cha',
   'authoring.review-context.priority': 'Độ ưu tiên của mục cha',
   'authoring.review-context.related-cases': 'Ca kiểm thử liên quan',
   'authoring.review-context.not-provided': 'Chưa được cung cấp',
@@ -124,8 +128,11 @@ describe.each(['en', 'vi'] as const)('Checklist review context in %s', (locale) 
     else document.documentElement.setAttribute('lang', previousLang);
   });
 
-  async function mount(row: AuthoringChangeListItem = ROW) {
-    listPending.mockResolvedValue({ items: [row], next_cursor: null });
+  async function mount(row: AuthoringChangeListItem | UnlistedEnumRow = ROW) {
+    listPending.mockResolvedValue({
+      items: [row as AuthoringChangeListItem],
+      next_cursor: null,
+    });
     const fixture = TestBed.createComponent(ChecklistReviewTabComponent);
     fixture.componentRef.setInput('projectId', PROJECT);
     fixture.componentRef.setInput('itemId', ITEM);
@@ -161,6 +168,7 @@ describe.each(['en', 'vi'] as const)('Checklist review context in %s', (locale) 
 
   it('renders the supplied operation as the row heading', async () => {
     const { ui } = await mount();
+    // Operation copy is evaluated before this spec loads each locale’s translations.
     expect(await ui.textAt('[data-review-change] h3')).toBe('Comment');
   });
 
@@ -213,6 +221,14 @@ describe.each(['en', 'vi'] as const)('Checklist review context in %s', (locale) 
       expect(await ui.count('[data-review-fact="state"] app-status-pill')).toBe(1);
     },
   );
+
+  it('renders unknown source and state values as raw provenance text', async () => {
+    // A newer server may send an enum value this build does not list yet.
+    const row: UnlistedEnumRow = { ...ROW, source: 'future_source', state: 'future_state' };
+    const { ui } = await mount(row);
+    expect(await ui.value('fact', 'source')).toBe('future_source');
+    expect(await ui.value('fact', 'state')).toBe('future_state');
+  });
 
   it('renders the supplied target base version with the shared number primitive', async () => {
     const { ui } = await mount();

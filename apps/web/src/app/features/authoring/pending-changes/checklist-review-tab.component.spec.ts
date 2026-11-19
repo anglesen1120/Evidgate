@@ -76,10 +76,10 @@ describe('ChecklistReviewTabComponent', () => {
       ],
     });
   });
-  async function setup() {
+  async function setup(itemId = ITEM) {
     const fixture = TestBed.createComponent(ChecklistReviewTabComponent);
     fixture.componentRef.setInput('projectId', PROJECT);
-    fixture.componentRef.setInput('itemId', ITEM);
+    fixture.componentRef.setInput('itemId', itemId);
     fixture.detectChanges();
     await fixture.whenStable();
     return {
@@ -93,6 +93,40 @@ describe('ChecklistReviewTabComponent', () => {
     expect(listPending).toHaveBeenCalledWith(PROJECT, expect.any(AbortSignal), undefined, ITEM);
     expect(await ui.count('[data-review-change]')).toBe(1);
     expect(await ui.text()).toContain(PENDING_UI.openQueue);
+  });
+  it('renders only this item’s rows when the server ignores the target filter', async () => {
+    listPending.mockResolvedValue({
+      items: [
+        { ...pendingRow(), payload: { body: 'This item’s queued comment' } },
+        {
+          ...pendingRow(),
+          change_id: '018f0000-0000-7000-8000-000000000004',
+          target_id: '018f0000-0000-7000-8000-000000000005',
+          payload: { body: 'Another item’s queued comment' },
+        },
+      ],
+      next_cursor: null,
+    });
+    const { ui } = await setup();
+    expect(await ui.count('[data-review-change]')).toBe(1);
+    expect(await ui.textAt('[data-review-change]')).toContain('This item’s queued comment');
+    expect(await ui.text()).not.toContain('Another item’s queued comment');
+  });
+  it('renders no rows for an empty item identifier', async () => {
+    listPending.mockResolvedValue({
+      items: [
+        pendingRow(),
+        {
+          ...pendingRow(),
+          change_id: '018f0000-0000-7000-8000-000000000004',
+          target_id: '',
+        },
+      ],
+      next_cursor: null,
+    });
+    const { ui } = await setup('');
+    expect(await ui.count('[data-review-change]')).toBe(0);
+    expect(await ui.text()).toContain(PENDING_UI.itemEmpty);
   });
   it('queues a comment through the store and retains the optional reason', async () => {
     const { ui, fixture } = await setup();

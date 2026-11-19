@@ -85,6 +85,10 @@
                       [detail]="row.source"
                     />
                   }
+                  @default {
+                    <!-- An unlisted value stays visible rather than leaving the fact blank. -->
+                    {{ row.source }}
+                  }
                 }
               </dd>
             </div>
@@ -115,6 +119,10 @@
                       i18n-label="@@authoring.review-context.discarded"
                       [detail]="row.state"
                     />
+                  }
+                  @default {
+                    <!-- An unlisted value stays visible rather than leaving the fact blank. -->
+                    {{ row.state }}
                   }
                 }
               </dd>

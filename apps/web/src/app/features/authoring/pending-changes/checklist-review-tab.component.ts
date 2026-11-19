@@ -96,7 +96,12 @@ export class ChecklistReviewTabComponent {
       return params;
     },
   });
-  protected readonly rows = computed(() => this.store.rows());
+  // The server scopes the read, but an ignored filter or an empty item id
+  // must never render another checklist item's queued changes.
+  protected readonly rows = computed(() => {
+    const item = this.itemId();
+    return item ? this.store.rows().filter((row) => row.target_id === item) : [];
+  });
   protected readonly queueLink = computed(() => [
     '/orgs',
     this.session.currentProject()?.org_id ?? '',
