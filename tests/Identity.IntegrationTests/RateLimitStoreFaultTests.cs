@@ -43,9 +43,12 @@ public sealed class RateLimitStoreFaultTests(DatabaseFixture fixture)
             await hold.ExecuteNonQueryAsync(Token);
         }
 
+        // A local deadline fails the test instead of hanging it if the command timeout ever stops bounding the wait.
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(Token);
+        deadline.CancelAfter(TimeSpan.FromSeconds(15));
         var clock = Stopwatch.StartNew();
         var refused = await RateLimitGate.AcquireAsync(
-            context, limiter, RateSurface.Login, "stalled-store", 1, "refused", Token);
+            context, limiter, RateSurface.Login, "stalled-store", 1, "refused", deadline.Token);
         clock.Stop();
 
         refused.ShouldNotBeNull("a count that could not be taken never admits");
