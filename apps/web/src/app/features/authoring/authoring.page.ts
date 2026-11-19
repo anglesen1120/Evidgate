@@ -5,6 +5,7 @@ import {
   computed,
   inject,
   linkedSignal,
+  LOCALE_ID,
   resource,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -13,6 +14,7 @@ import type { NodeDto } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { combineLatest, distinctUntilChanged, map } from 'rxjs';
+import { RETAINED_ROWS_CAP } from '../../shared/keyset-retention';
 import {
   HeaderActionsDirective,
   PageHeaderComponent,
@@ -23,7 +25,7 @@ import { InlineFeedbackComponent } from '../../shared/ui/states/inline-feedback.
 import { CopyableIdentifierComponent } from '../../shared/ui/values/copyable-identifier.component';
 import { AuthoringTreePaneComponent } from './authoring-tree-pane.component';
 import { AuthoringCaseTableComponent } from './authoring-case-table.component';
-import { AUTHORING_TREE_COPY } from './authoring-tree.copy';
+import { AUTHORING_TREE_COPY, treeBrowseCappedHelp } from './authoring-tree.copy';
 import { AuthoringStore } from './authoring.store';
 
 @Component({
@@ -51,9 +53,14 @@ export class AuthoringPage {
   protected readonly store = inject(AuthoringStore);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly locale = inject(LOCALE_ID);
+  private readonly cap = inject(RETAINED_ROWS_CAP);
 
   protected readonly ownsPageHeading = this.route.snapshot.data['pageHeadingLevel'] === 1;
-  protected readonly copy = AUTHORING_TREE_COPY;
+  protected readonly copy = {
+    ...AUTHORING_TREE_COPY,
+    browseCappedHelp: treeBrowseCappedHelp(this.cap, this.locale),
+  };
   private readonly scope = toSignal(
     combineLatest([
       combineLatest(this.route.pathFromRoot.map((route) => route.paramMap)),

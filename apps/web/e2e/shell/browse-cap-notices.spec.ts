@@ -28,8 +28,10 @@ const SURFACES = [
       vi: 'Danh sách ca kiểm thử đã đạt giới hạn tải',
     },
     description: {
-      en: 'Narrow the filters or choose another scope in the hierarchy to reach cases beyond the 10,000 loaded here.',
-      vi: 'Hãy thu hẹp bộ lọc hoặc chọn phạm vi khác trong phân cấp để xem các ca kiểm thử nằm ngoài 10.000 ca đã tải tại đây.',
+      en: (figure: string) =>
+        `Narrow the filters or choose another scope in the hierarchy to reach cases beyond the ${figure} loaded here.`,
+      vi: (figure: string) =>
+        `Hãy thu hẹp bộ lọc hoặc chọn phạm vi khác trong phân cấp để xem các ca kiểm thử nằm ngoài ${figure} ca đã tải tại đây.`,
     },
   },
   {
@@ -45,8 +47,10 @@ const SURFACES = [
       vi: 'Danh sách ca đã đạt giới hạn tải',
     },
     description: {
-      en: 'Narrow the status or framework filters to reach cases beyond the 10,000 loaded here. Search only checks loaded results.',
-      vi: 'Thu hẹp bộ lọc trạng thái hoặc framework để xem các ca ngoài 10.000 ca đã tải ở đây. Tìm kiếm chỉ kiểm tra kết quả đã tải.',
+      en: (figure: string) =>
+        `Narrow the status or framework filters to reach cases beyond the ${figure} loaded here. Search only checks loaded results.`,
+      vi: (figure: string) =>
+        `Thu hẹp bộ lọc trạng thái hoặc framework để xem các ca ngoài ${figure} ca đã tải ở đây. Tìm kiếm chỉ kiểm tra kết quả đã tải.`,
     },
   },
   {
@@ -62,8 +66,10 @@ const SURFACES = [
       vi: 'Danh sách phân cấp đã đạt giới hạn tải',
     },
     description: {
-      en: 'Showing the first 10,000 nodes in this list. Open a known node link to inspect a scope outside these results.',
-      vi: 'Đang hiển thị 10.000 nút đầu tiên trong danh sách này. Mở liên kết nút đã biết để xem phạm vi ngoài các kết quả này.',
+      en: (figure: string) =>
+        `Showing the first ${figure} nodes in this list. Open a known node link to inspect a scope outside these results.`,
+      vi: (figure: string) =>
+        `Đang hiển thị ${figure} nút đầu tiên trong danh sách này. Mở liên kết nút đã biết để xem phạm vi ngoài các kết quả này.`,
     },
   },
 ] as const;
@@ -139,7 +145,9 @@ for (const surface of SURFACES) {
             const notice = page.locator(surface.notice);
             await expect(notice).toBeVisible();
             await expect(notice).toContainText(surface.title[locale]);
-            await expect(notice).toContainText(surface.description[locale]);
+            await expect(notice).toContainText(
+              surface.description[locale](new Intl.NumberFormat(locale).format(SEEDED_CAP)),
+            );
             expect(
               await page.evaluate(
                 () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
