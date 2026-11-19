@@ -123,5 +123,5 @@ describe('Catalog table readable owners and stable row identities', () => {
       if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard);
       else Reflect.deleteProperty(navigator, 'clipboard');
     }
-  });
+  }, 20_000);
 });

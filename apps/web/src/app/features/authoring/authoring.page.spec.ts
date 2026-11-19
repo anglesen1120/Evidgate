@@ -7,6 +7,7 @@ import type { AuthoringNodePathEntry, NodeDto } from '@evidgate/sdk';
 import { BehaviorSubject } from 'rxjs';
 import type { ApiError } from '../../core/http/api-error';
 import { provideLayoutTestStubs } from '../../shared/testing/layout.testing';
+import { AuthoringDataService } from './authoring-data.service';
 import { AuthoringPage } from './authoring.page';
 import { AuthoringStore, type AuthoringNodePage } from './authoring.store';
 import { AuthoringPageHarness } from './authoring-tree.testing';
@@ -97,6 +98,12 @@ describe('AuthoringPage', () => {
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([]),
+        {
+          provide: AuthoringDataService,
+          useValue: {
+            listManualCases: () => Promise.resolve({ items: [], next_cursor: null }),
+          },
+        },
         {
           provide: ActivatedRoute,
           useValue: {

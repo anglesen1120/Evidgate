@@ -183,13 +183,23 @@ function branchOf(run: ReadsRun, parentId: string): ReadStream {
   return created;
 }
 
-/** Drops any read of one branch: a newer selection read owns that branch's rows now. */
-function abortBranch(run: ReadsRun, parentId: string): void {
+/**
+ * Drops any read of one branch: a newer selection read owns that branch's rows now. The aborted
+ * read never writes its own outcome, so its `loading` status is settled here or the spinner
+ * outlives the request and blocks both retry paths.
+ */
+function abortBranch(run: ReadsRun, host: ReadsHost, parentId: string): void {
   const stream = run.branches.get(parentId);
   if (stream === undefined) return;
   stream.controller?.abort();
   stream.controller = null;
   stream.sequence += 1;
+  const page = host.children()[parentId];
+  if (page === undefined || page.status !== 'loading') return;
+  const children = { ...host.children() };
+  if (page.items.length === 0) delete children[parentId];
+  else children[parentId] = { ...page, status: 'ready', error: null };
+  host.patch({ children });
 }
 
 async function loadRoots(
@@ -268,7 +278,7 @@ async function loadSelection(
 ): Promise<void> {
   const token = begin(run, run.selection);
   const refreshing = host.selectedNodeId() === nodeId;
-  abortBranch(run, nodeId);
+  abortBranch(run, host, nodeId);
   host.patch({
     selectedNodeId: nodeId,
     ...(refreshing ? {} : { selectedNode: null, path: [] }),
@@ -283,6 +293,13 @@ async function loadSelection(
     if (node === null || path === null) throw new ApiRequestError(MISSING_PROJECTION);
     const existing = host.children()[nodeId];
     const kept = existing !== undefined && existing.items.length > 0 ? existing : null;
+    // A retained walk already past this first page keeps its own cursor: adopting the fresh
+    // first-page cursor would replay rows the merge keeps. An exhausted walk still takes the
+    // fresh cursor, so children added since the last refresh stay reachable.
+    const nextCursor =
+      kept !== null && kept.nextCursor !== null && kept.items.length > page.items.length
+        ? kept.nextCursor
+        : page.next_cursor;
     host.patch({
       selectedNode: node,
       path,
@@ -293,7 +310,7 @@ async function loadSelection(
         ...host.children(),
         [nodeId]: {
           items: kept === null ? page.items : mergeNodes(kept.items, page.items),
-          nextCursor: kept === null ? page.next_cursor : kept.nextCursor,
+          nextCursor,
           status: 'ready',
           error: null,
         },
@@ -348,6 +365,15 @@ async function loadChildren(
   }
 }
 
+/**
+ * True when a newer write replaced the page a continuation read its cursor from: that
+ * continuation's rows, cursor and failure all describe a walk the branch no longer follows.
+ */
+function replaced(host: ReadsHost, parentId: string, base: AuthoringNodePage): boolean {
+  const current = host.children()[parentId] ?? EMPTY_NODE_PAGE;
+  return current.items !== base.items || current.nextCursor !== base.nextCursor;
+}
+
 async function followChildren(
   run: ReadsRun,
   host: ReadsHost,
@@ -366,6 +392,7 @@ async function followChildren(
   try {
     const next = await data.listTree(projectId, { parentId, cursor }, token.signal);
     if (!live(run, token, stream)) return false;
+    if (replaced(host, parentId, page)) return false;
     const step = takeKeysetPage({
       cursor,
       items: next.items,
@@ -397,6 +424,7 @@ async function followChildren(
     return true;
   } catch (error) {
     if (!live(run, token, stream)) return false;
+    if (replaced(host, parentId, page)) return false;
     host.patch({
       children: {
         ...host.children(),

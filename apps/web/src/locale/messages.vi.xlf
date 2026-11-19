@@ -3874,6 +3874,7 @@
       <trans-unit id="authoring.tree.select" datatype="html"><source>Select scope <x id="title" equiv-text="node.title"/></source><target>Chọn phạm vi <x id="title" equiv-text="node.title"/></target></trans-unit>
       <trans-unit id="authoring.tree.announce-selected" datatype="html"><source>Selected scope <x id="title" equiv-text="selected.title"/></source><target>Đã chọn phạm vi <x id="title" equiv-text="selected.title"/></target></trans-unit>
       <trans-unit id="authoring.tree.announce-roots" datatype="html"><source>Scope set to all project roots</source><target>Phạm vi được đặt về tất cả các nút gốc của dự án</target></trans-unit>
+      <trans-unit id="authoring.tree.announce-selection-failed" datatype="html"><source>Could not load selected scope <x id="nodeId" equiv-text="failed"/></source><target>Không thể tải phạm vi đã chọn <x id="nodeId" equiv-text="failed"/></target></trans-unit>
       <trans-unit id="authoring.ai-settings.description" datatype="html"><source>Description</source><target>Mô tả</target></trans-unit>
       <trans-unit id="authoring.ai-settings.environment" datatype="html"><source>Environment URL</source><target>URL môi trường</target></trans-unit>
       <trans-unit id="authoring.ai-settings.style" datatype="html"><source>Writing style</source><target>Phong cách viết</target></trans-unit>
@@ -3947,6 +3948,68 @@
       <trans-unit id="authoring.ai-settings.stale" datatype="html"><source>Refresh failed. Previously loaded settings and your unsaved draft are retained.</source><target>Không thể làm mới. Cài đặt đã tải và bản nháp chưa lưu của bạn được giữ lại.</target></trans-unit>
       <trans-unit id="authoring.ai-settings.cursor-cycle" datatype="html"><source>The server repeated a page cursor. Return to the first page to retry.</source><target>Máy chủ lặp lại con trỏ trang. Quay về trang đầu để thử lại.</target></trans-unit>
       <trans-unit id="authoring.ai-settings.compare-reason" datatype="html"><source>View a version before choosing a second version to compare.</source><target>Xem một phiên bản trước khi chọn phiên bản thứ hai để so sánh.</target></trans-unit>
+      <trans-unit id="authoring.case-table.selection-summary" datatype="html"><source> <x id="INTERPOLATION" equiv-text="{{ selectedCount() | number }}"/> of <x id="INTERPOLATION_1" equiv-text="{{ rows().length | number }}"/> loaded selected; applies to visible rows only </source><target>Đã chọn <x id="INTERPOLATION" equiv-text="{{ selectedCount() | number }}"/> trong <x id="INTERPOLATION_1" equiv-text="{{ rows().length | number }}"/> ca đã tải; chỉ áp dụng cho các hàng đang hiển thị</target></trans-unit>
+      <trans-unit id="authoring.case-table.select-case" datatype="html"><source>Select case <x id="code" equiv-text="row.code"/></source><target>Chọn ca kiểm thử <x id="code" equiv-text="row.code"/></target></trans-unit>
+      <trans-unit id="authoring.case-table.loaded-count" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> cases loaded</source><target>Đã tải <x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> ca kiểm thử</target></trans-unit>
+      <trans-unit id="authoring.case-table.scope-help" datatype="html"><source>Filters search the server list. Authoring coverage means a live automated identity is linked; it is not an execution result.</source><target>Bộ lọc tìm trong danh sách trên máy chủ. Độ bao phủ khi soạn thảo nghĩa là có liên kết đến định danh tự động hoá đang hoạt động; đây không phải kết quả thực thi.</target></trans-unit>
+      <trans-unit id="authoring.case-table.filters" datatype="html"><source>Filter manual cases</source><target>Lọc ca kiểm thử thủ công</target></trans-unit>
+      <trans-unit id="authoring.case-table.item" datatype="html"><source>Checklist item ID</source><target>ID mục checklist</target></trans-unit>
+      <trans-unit id="authoring.case-table.item-help" datatype="html"><source>Optional exact checklist UUID. Leave blank for every checklist in this scope.</source><target>UUID chính xác của mục checklist, không bắt buộc. Để trống để xem mọi checklist trong phạm vi này.</target></trans-unit>
+      <trans-unit id="authoring.case-table.item-error" datatype="html"><source>Enter a complete checklist UUID or leave this filter blank.</source><target>Nhập UUID đầy đủ của mục checklist hoặc để trống bộ lọc này.</target></trans-unit>
+      <trans-unit id="authoring.case-table.priority" datatype="html"><source>Priority</source><target>Mức ưu tiên</target></trans-unit>
+      <trans-unit id="authoring.case-table.state" datatype="html"><source>Lifecycle</source><target>Vòng đời</target></trans-unit>
+      <trans-unit id="authoring.case-table.coverage" datatype="html"><source>Authoring coverage</source><target>Độ bao phủ khi soạn thảo</target></trans-unit>
+      <trans-unit id="authoring.case-table.source" datatype="html"><source>Source</source><target>Nguồn</target></trans-unit>
+      <trans-unit id="authoring.case-table.owner" datatype="html"><source>Owner</source><target>Người phụ trách</target></trans-unit>
+      <trans-unit id="authoring.case-table.source-help" datatype="html"><source>Source filtering is unavailable: the server does not support this filter.</source><target>Chưa thể lọc theo nguồn: máy chủ không hỗ trợ bộ lọc này.</target></trans-unit>
+      <trans-unit id="authoring.case-table.owner-help" datatype="html"><source>Owner filtering is unavailable: the server does not support this filter.</source><target>Chưa thể lọc theo người phụ trách: máy chủ không hỗ trợ bộ lọc này.</target></trans-unit>
+      <trans-unit id="authoring.case-table.unavailable" datatype="html"><source>Unavailable</source><target>Chưa khả dụng</target></trans-unit>
+      <trans-unit id="authoring.case-table.search" datatype="html"><source>Search case titles</source><target>Tìm theo tiêu đề ca kiểm thử</target></trans-unit>
+      <trans-unit id="authoring.case-table.search-help" datatype="html"><source>Case-insensitive title search, up to 200 characters.</source><target>Tìm tiêu đề không phân biệt chữ hoa, chữ thường, tối đa 200 ký tự.</target></trans-unit>
+      <trans-unit id="authoring.case-table.search-error" datatype="html"><source>Enter at most 200 characters before applying filters.</source><target>Nhập tối đa 200 ký tự trước khi áp dụng bộ lọc.</target></trans-unit>
+      <trans-unit id="authoring.case-table.all" datatype="html"><source>All</source><target>Tất cả</target></trans-unit>
+      <trans-unit id="authoring.case-table.critical" datatype="html"><source>Critical</source><target>Khẩn cấp</target></trans-unit>
+      <trans-unit id="authoring.case-table.high" datatype="html"><source>High</source><target>Cao</target></trans-unit>
+      <trans-unit id="authoring.case-table.medium" datatype="html"><source>Medium</source><target>Trung bình</target></trans-unit>
+      <trans-unit id="authoring.case-table.low" datatype="html"><source>Low</source><target>Thấp</target></trans-unit>
+      <trans-unit id="authoring.case-table.draft" datatype="html"><source>Draft</source><target>Bản nháp</target></trans-unit>
+      <trans-unit id="authoring.case-table.approved" datatype="html"><source>Approved</source><target>Đã duyệt</target></trans-unit>
+      <trans-unit id="authoring.case-table.retired" datatype="html"><source>Retired</source><target>Đã ngừng sử dụng</target></trans-unit>
+      <trans-unit id="authoring.case-table.covered" datatype="html"><source>Linked</source><target>Có liên kết</target></trans-unit>
+      <trans-unit id="authoring.case-table.uncovered" datatype="html"><source>Not linked</source><target>Chưa liên kết</target></trans-unit>
+      <trans-unit id="authoring.case-table.apply" datatype="html"><source>Apply filters</source><target>Áp dụng bộ lọc</target></trans-unit>
+      <trans-unit id="authoring.case-table.clear" datatype="html"><source>Clear filters</source><target>Xoá bộ lọc</target></trans-unit>
+      <trans-unit id="authoring.case-table.refresh" datatype="html"><source>Refresh cases</source><target>Làm mới ca kiểm thử</target></trans-unit>
+      <trans-unit id="authoring.case-table.refresh-help" datatype="html"><source>Refresh reloads this list from the first page and drops the cursor; pages loaded after the first are not kept.</source><target>Làm mới sẽ tải lại danh sách này từ trang đầu và bỏ con trỏ trang; các trang đã tải sau trang đầu không được giữ lại.</target></trans-unit>
+      <trans-unit id="authoring.case-table.loading" datatype="html"><source>Loading manual cases; the hierarchy remains usable…</source><target>Đang tải ca kiểm thử thủ công; bạn vẫn có thể dùng cây phân cấp…</target></trans-unit>
+      <trans-unit id="authoring.case-table.empty-project" datatype="html"><source>This project has no manual cases yet</source><target>Dự án này chưa có ca kiểm thử thủ công</target></trans-unit>
+      <trans-unit id="authoring.case-table.empty-category" datatype="html"><source>This category has no test cases yet</source><target>Danh mục này chưa có ca kiểm thử</target></trans-unit>
+      <trans-unit id="authoring.case-table.empty-help" datatype="html"><source>A manual case needs an existing checklist item. Browsing never creates a case or its parent.</source><target>Ca kiểm thử thủ công cần một mục checklist đã có. Thao tác xem không tạo ca kiểm thử hay mục cha.</target></trans-unit>
+      <trans-unit id="authoring.case-table.no-match" datatype="html"><source>No test cases match these filters</source><target>Không có ca kiểm thử khớp bộ lọc</target></trans-unit>
+      <trans-unit id="authoring.case-table.no-match-help" datatype="html"><source>Clear the filters to inspect cases in the same hierarchy scope.</source><target>Xoá bộ lọc để xem các ca kiểm thử trong cùng phạm vi phân cấp.</target></trans-unit>
+      <trans-unit id="authoring.case-table.stale" datatype="html"><source>Case list may be stale</source><target>Danh sách ca kiểm thử có thể đã cũ</target></trans-unit>
+      <trans-unit id="authoring.case-table.stale-help" datatype="html"><source>Refresh failed; previously loaded cases are still shown. Retry explicitly to refresh this region only.</source><target>Không thể làm mới; các ca đã tải vẫn được hiển thị. Hãy chủ động thử lại để chỉ làm mới vùng này.</target></trans-unit>
+      <trans-unit id="authoring.case-table.pagination" datatype="html"><source>Manual case pagination</source><target>Phân trang ca kiểm thử thủ công</target></trans-unit>
+      <trans-unit id="authoring.case-table.page-size" datatype="html"><source>Page size</source><target>Số ca mỗi trang</target></trans-unit>
+      <trans-unit id="authoring.case-table.more" datatype="html"><source>Load more cases</source><target>Tải thêm ca kiểm thử</target></trans-unit>
+      <trans-unit id="authoring.case-table.loading-more" datatype="html"><source>Loading more cases…</source><target>Đang tải thêm ca kiểm thử…</target></trans-unit>
+      <trans-unit id="authoring.case-table.select" datatype="html"><source>Select visible rows</source><target>Chọn các hàng đang hiển thị</target></trans-unit>
+      <trans-unit id="authoring.case-table.selection" datatype="html"><source>Selection</source><target>Lựa chọn</target></trans-unit>
+      <trans-unit id="authoring.case-table.selection-help" datatype="html"><source>Selection applies to visible rows only, not unloaded cases or hidden record pages.</source><target>Lựa chọn chỉ áp dụng cho các hàng đang hiển thị, không bao gồm ca chưa tải hoặc các trang bản ghi đang ẩn.</target></trans-unit>
+      <trans-unit id="authoring.case-table.narrow-help" datatype="html"><source>Use a screen at least 768 pixels wide to select cases for export. Cases and filters remain readable here.</source><target>Dùng màn hình rộng tối thiểu 768 pixel để chọn ca kiểm thử cho việc xuất. Bạn vẫn có thể xem ca kiểm thử và dùng bộ lọc tại đây.</target></trans-unit>
+      <trans-unit id="authoring.case-table.export" datatype="html"><source>Export selected</source><target>Xuất các ca đã chọn</target></trans-unit>
+      <trans-unit id="authoring.case-table.export-help" datatype="html"><source>Selection export is unavailable: the server cannot export explicit case IDs. No broader scope will be exported.</source><target>Chưa thể xuất lựa chọn: máy chủ không hỗ trợ xuất theo danh sách ID ca kiểm thử cụ thể. Sẽ không xuất một phạm vi rộng hơn.</target></trans-unit>
+      <trans-unit id="authoring.case-table.caption" datatype="html"><source>Loaded manual cases</source><target>Các ca kiểm thử thủ công đã tải</target></trans-unit>
+      <trans-unit id="authoring.case-table.code" datatype="html"><source>Case code</source><target>Mã ca kiểm thử</target></trans-unit>
+      <trans-unit id="authoring.case-table.id" datatype="html"><source>Case ID</source><target>ID ca kiểm thử</target></trans-unit>
+      <trans-unit id="authoring.case-table.title" datatype="html"><source>Title</source><target>Tiêu đề</target></trans-unit>
+      <trans-unit id="authoring.case-table.links" datatype="html"><source>Linked automated case IDs</source><target>ID ca kiểm thử tự động hoá được liên kết</target></trans-unit>
+      <trans-unit id="authoring.case-table.version" datatype="html"><source>Case version</source><target>Phiên bản ca kiểm thử</target></trans-unit>
+      <trans-unit id="authoring.case-table.pending" datatype="html"><source>Pending changes</source><target>Thay đổi đang chờ</target></trans-unit>
+      <trans-unit id="authoring.case-table.pending-help" datatype="html"><source>Pending change count unavailable; this list does not supply it.</source><target>Chưa có số lượng thay đổi đang chờ; danh sách này không cung cấp thông tin đó.</target></trans-unit>
+      <trans-unit id="authoring.case-table.unresolved" datatype="html"><source>The case list request did not complete. Retry explicitly.</source><target>Yêu cầu tải danh sách ca kiểm thử chưa hoàn tất. Hãy chủ động thử lại.</target></trans-unit>
+      <trans-unit id="authoring.case-table.cursor-repeated" datatype="html"><source>The server repeated the case cursor. Reload the list.</source><target>Máy chủ lặp lại con trỏ danh sách ca kiểm thử. Hãy tải lại danh sách.</target></trans-unit>
+      <trans-unit id="authoring.case-table.page-repeated" datatype="html"><source>The next page had no new cases. Reload the list.</source><target>Trang tiếp theo không có ca kiểm thử mới. Hãy tải lại danh sách.</target></trans-unit>
       <trans-unit id="authoring.editor.action" datatype="html">
         <source>Action</source>
         <target state="translated">Thao tác</target>

@@ -24,5 +24,4 @@ export const AUTHORING_TREE_COPY = {
   moreRoots: $localize`:@@authoring.tree.more-roots:Load more root nodes`,
   moreChildren: $localize`:@@authoring.tree.more-children:Load more child nodes`,
   table: $localize`:@@authoring.tree.table:Case table`,
-  tablePlaceholder: $localize`:@@authoring.tree.table-placeholder:This separate region is reserved for the case table. Hierarchy loading and failures do not control it.`,
 };
