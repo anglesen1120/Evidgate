@@ -449,6 +449,22 @@ describe('readPlaywrightList and readFileBounded filesystem boundaries', () => {
     await expect(readPlaywrightList('report.json', root)).resolves.toBe(report());
   });
 
+  it('parent_symlink_that_keeps_the_file_identity_still_refuses_on_the_realpath', async () => {
+    const root = await tempDir();
+    const sub = join(root, 'sub');
+    await mkdir(sub);
+    await writeFile(join(sub, 'report.json'), report());
+    await expect(readPlaywrightList('sub/report.json', root)).resolves.toBe(report());
+    // The symlink leads back to the same inode, so only the realpath check can refuse it.
+    swapHook.once = async () => {
+      await rename(sub, `${sub}.old`);
+      await symlink(`${sub}.old`, sub);
+    };
+    await expect(readPlaywrightList('sub/report.json', root)).rejects.toThrow(
+      /changed while it was opened/,
+    );
+  });
+
   it('parent_directory_swapped_for_a_directory_or_a_symlink_refuses', async () => {
     const root = await tempDir();
     const sub = join(root, 'sub');

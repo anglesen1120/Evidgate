@@ -87,9 +87,11 @@ export async function readPlaywrightList(path: string, root: string): Promise<st
  * Runs while the descriptor is open, so the inode cannot be recycled for a replacement. The
  * path must still name the opened file (lstat identity) and still resolve to itself inside the
  * root, which also refuses a parent directory swapped for another directory or a symlink.
- * Residual: a swap that is undone before this check, or a parent swapped back after it, is not
- * seen; the bytes always come from the descriptor opened on the checked realpath, so the read
- * never mixes files, and the report is a local input the same user already controls.
+ * Residual: `open` follows a symlinked parent directory, so a parent swapped for a symlink at
+ * open time can make the descriptor name a file outside the root; a swap that is undone before
+ * the lstat, or kept through the realpath, is refused, but one that survives the lstat and is
+ * undone before the realpath is not seen. Closing that needs openat-style APIs Node lacks. The
+ * report is a local input the same user already controls.
  */
 async function stillTheSameFile(
   realFile: string,
