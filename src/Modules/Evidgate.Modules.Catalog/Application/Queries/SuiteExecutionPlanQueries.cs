@@ -20,16 +20,18 @@ namespace Evidgate.Modules.Catalog.Application.Queries;
 /// <param name="Cursor">Opaque cursor of the next page, or null for the first page.</param>
 /// <param name="Limit">Page size, 1–500.</param>
 internal sealed record GetSuiteExecutionPlanQuery(Guid RevisionId, string? Cursor, int Limit)
-    : IQuery<Result<SuiteExecutionPlanPage>>;
+    : IQuery<Result<SuiteRevisionExecutionPlan>>;
 
 /// <summary>
 /// Handler of <see cref="GetSuiteExecutionPlanQuery"/>: one statement answers whether the revision exists under the
 /// ambient tenant and the caller's project scope, whether a continuation cursor's anchor is a member of it, and the
 /// keyset page itself, one extra row deciding the next page.
 /// <para>
-/// The project gate is inside that statement, so a revision of another project or tenant answers the same
-/// <c>404 not_found</c> as an unknown id — never a per-member filter and never an existence oracle. The only 403 is the
-/// permission stage's, which runs before this handler and therefore depends on the token alone.
+/// Both project restrictions — the token's own scope and the request's project — travel as parameters of that
+/// statement, so a revision of another project or tenant answers the same <c>404 not_found</c> as an unknown id and
+/// none of its members is served or counted; <see cref="CatalogScope.Project"/> re-checks the loaded project as defence
+/// in depth. The only 403 is the permission stage's, which runs before this handler and therefore depends on the token
+/// alone.
 /// </para>
 /// <para>
 /// A cursor this endpoint issued for another revision or project, and one naming an anchor the revision does not hold,
@@ -44,10 +46,10 @@ internal sealed class GetSuiteExecutionPlanQueryHandler(
     ITenantScopeAccessor scopes,
     IRequestPrincipalAccessor principals,
     IRequestTenantContextAccessor tenant)
-    : IQueryHandler<GetSuiteExecutionPlanQuery, Result<SuiteExecutionPlanPage>>
+    : IQueryHandler<GetSuiteExecutionPlanQuery, Result<SuiteRevisionExecutionPlan>>
 {
     /// <inheritdoc />
-    public async ValueTask<Result<SuiteExecutionPlanPage>> Handle(
+    public async ValueTask<Result<SuiteRevisionExecutionPlan>> Handle(
         GetSuiteExecutionPlanQuery query,
         CancellationToken cancellationToken)
     {
@@ -55,16 +57,20 @@ internal sealed class GetSuiteExecutionPlanQueryHandler(
 
         if (ReadPosition(query, out var position) is { } cursorError)
         {
-            return Result.Failure<SuiteExecutionPlanPage>(cursorError);
+            return Result.Failure<SuiteRevisionExecutionPlan>(cursorError);
         }
 
         var orgId = scopes.Require().OrgId;
+        var tokenProject = principals.Current?.ProjectScope;
+        var requestProject = tenant.Current?.ProjectId;
         var rows = await db.QueryAsync<SuitePlanRow>(
                 SuitePlanReadSql.Page,
                 new
                 {
                     org_id = orgId,
                     revision_id = query.RevisionId,
+                    token_project_id = tokenProject,
+                    request_project_id = requestProject,
                     // The first page anchors before every member: no stored ordinal is negative.
                     cursor_ordinal = position?.Ordinal ?? -1,
                     cursor_id = position?.MemberId ?? Guid.Empty,
@@ -75,25 +81,25 @@ internal sealed class GetSuiteExecutionPlanQueryHandler(
 
         if (rows.Count == 0)
         {
-            return Result.Failure<SuiteExecutionPlanPage>(SuiteErrors.RevisionNotFound);
+            return Result.Failure<SuiteRevisionExecutionPlan>(SuiteErrors.RevisionNotFound);
         }
 
         var projectId = rows[0].ProjectId;
         if (CatalogScope.Project(projectId, principals, tenant) is not null)
         {
-            return Result.Failure<SuiteExecutionPlanPage>(SuiteErrors.RevisionNotFound);
+            return Result.Failure<SuiteRevisionExecutionPlan>(SuiteErrors.RevisionNotFound);
         }
 
         if (RefusedCursor(position, query.RevisionId, projectId, rows[0].AnchorPresent) is { } refusal)
         {
-            return Result.Failure<SuiteExecutionPlanPage>(refusal);
+            return Result.Failure<SuiteRevisionExecutionPlan>(refusal);
         }
 
         var members = Served(rows);
         var hasMore = members.Count > query.Limit;
         var page = hasMore ? members.GetRange(0, query.Limit) : members;
 
-        return Result.Success(new SuiteExecutionPlanPage(
+        return Result.Success(new SuiteRevisionExecutionPlan(
             query.RevisionId,
             [.. page.Select(served => served.Member)],
             hasMore ? SuitePlanCursor.Encode(query.RevisionId, projectId, page[^1].Ordinal, page[^1].Id) : null));
@@ -159,7 +165,7 @@ internal sealed class GetSuiteExecutionPlanQueryHandler(
                 && row.VariantHash is { } variantHash
                 && row.Ordinal is { } ordinal
                 && row.Id is { } id
-                    ? new ServedMember(new SuiteExecutionPlanMember(caseId, variantHash, caseRevisionId), ordinal, id)
+                    ? new ServedMember(new SuiteRevisionExecutionPlanMember(caseId, variantHash, caseRevisionId), ordinal, id)
                     : (ServedMember?)null)
             .OfType<ServedMember>(),
     ];
@@ -199,7 +205,7 @@ internal sealed class SuitePlanRow
 /// <param name="Member">The member as the response carries it.</param>
 /// <param name="Ordinal">The member's stored ordinal.</param>
 /// <param name="Id">The member row's id.</param>
-internal readonly record struct ServedMember(SuiteExecutionPlanMember Member, int Ordinal, Guid Id);
+internal readonly record struct ServedMember(SuiteRevisionExecutionPlanMember Member, int Ordinal, Guid Id);
 
 /// <summary>
 /// The opaque cursor of the execution plan page: <c>v1.&lt;revision&gt;.&lt;project&gt;.&lt;ordinal&gt;.&lt;member id&gt;</c>

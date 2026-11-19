@@ -242,15 +242,15 @@ public sealed partial class SuiteExecutionPlanTests
         var caller = Bearer((await MintAsync(world, world.Project)).Text("token")!);
         var actual = new List<string>();
         string? cursor = null;
-        for (var page = 0; page < 3; page++)
+        for (var page = 0; page < 2; page++)
         {
-            var query = "?limit=2" + (cursor is null ? "" : "&cursor=" + Uri.EscapeDataString(cursor));
+            var query = "?limit=3" + (cursor is null ? "" : "&cursor=" + Uri.EscapeDataString(cursor));
             var answer = await GetPlanAsync(world, revision, caller, query);
             answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
-            answer.Body.GetProperty("members").GetArrayLength().ShouldBe(2);
+            answer.Body.GetProperty("members").GetArrayLength().ShouldBe(3);
             actual.AddRange(answer.Body.GetProperty("members").EnumerateArray().Select(MemberKey));
             cursor = answer.Text("next_cursor");
-            if (page < 2)
+            if (page < 1)
             {
                 cursor.ShouldNotBeNullOrWhiteSpace();
             }

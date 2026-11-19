@@ -24,13 +24,13 @@ internal static class CatalogExecutionPlanEndpoints
     public static RouteGroupBuilder MapExecutionPlanEndpoints(this RouteGroupBuilder group)
     {
         group.MapGet("/suite-revisions/{r}/execution-plan", GetExecutionPlanAsync)
-            .Produces<SuiteExecutionPlanPage>(StatusCodes.Status200OK)
+            .Produces<SuiteRevisionExecutionPlan>(StatusCodes.Status200OK)
             .WithSummary("Cursor page of a suite revision's pinned members for manifest generation");
 
         return group;
     }
 
-    private static async Task<Result<SuiteExecutionPlanPage>> GetExecutionPlanAsync(
+    private static async Task<Result<SuiteRevisionExecutionPlan>> GetExecutionPlanAsync(
         Guid r,
         HttpContext context,
         IMediator mediator,
@@ -40,7 +40,7 @@ internal static class CatalogExecutionPlanEndpoints
         var limitPresent = query.TryGetValue("limit", out var rawLimit);
         if (CatalogRequestRules.RouteLimit(limitPresent, rawLimit.ToString(), DefaultLimit, MaxLimit, out var limit) is { } error)
         {
-            return Result.Failure<SuiteExecutionPlanPage>(error);
+            return Result.Failure<SuiteRevisionExecutionPlan>(error);
         }
 
         // An absent cursor is the first page; a present but empty one is undecodable input, refused by the handler.
