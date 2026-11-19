@@ -7,6 +7,11 @@ export class AuthoringTreeHarness extends ComponentHarness {
   readonly loading = this.locatorForOptional('app-loading-pattern');
   readonly errorRetry = this.locatorFor('app-error-pattern button');
   readonly forbidden = this.locatorForOptional('app-forbidden-pattern');
+  readonly capped = this.locatorForAll('[data-tree-browse-capped]');
+  readonly cappedLiveRegions = this.locatorForAll(
+    '[data-tree-browse-capped] [role="status"], [data-tree-browse-capped] [aria-live]',
+  );
+  readonly moreControls = this.locatorForAll('[data-more]');
   nodeRows = this.locatorForAll('[data-node-id]');
   /** Matches the attribute value itself, so a node id carrying CSS syntax still finds its row. */
   private async control(kind: 'data-disclosure' | 'data-scope' | 'data-more', id: string) {

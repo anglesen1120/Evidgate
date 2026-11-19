@@ -11253,6 +11253,10 @@
       <trans-unit id="authoring.editor.review-tab-label" datatype="html"><source>Checklist review</source></trans-unit>
       <trans-unit id="authoring.editor.review-select-option" datatype="html"><source>Checklist review</source></trans-unit>
       <trans-unit id="authoring.editor.review-tab-trigger" datatype="html"><source>Checklist review</source></trans-unit>
+      <trans-unit id="catalog.browse-capped" datatype="html"><source>Case list is at its load limit</source></trans-unit>
+      <trans-unit id="catalog.browse-capped-help" datatype="html"><source>Narrow the status or framework filters to reach cases beyond the 10,000 loaded here. Search only checks loaded results.</source></trans-unit>
+      <trans-unit id="authoring.tree.browse-capped" datatype="html"><source>Hierarchy list is at its load limit</source></trans-unit>
+      <trans-unit id="authoring.tree.browse-capped-help" datatype="html"><source>Showing the first 10,000 nodes in this list. Open a known node link to inspect a scope outside these results.</source></trans-unit>
     </body>
   </file>
 </xliff>

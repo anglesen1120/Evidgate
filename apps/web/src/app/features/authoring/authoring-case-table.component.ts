@@ -20,6 +20,7 @@ import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
 import { combineLatest, distinctUntilChanged, map } from 'rxjs';
 import { InlineFeedbackComponent } from '../../shared/ui/states/inline-feedback.component';
+import { LiveStatusComponent } from '../../shared/ui/states/live-status.component';
 import { RequestStateComponent } from '../../shared/ui/states/request-state.component';
 import { AuthoringCaseRowsComponent } from './authoring-case-rows.component';
 import {
@@ -45,6 +46,7 @@ import { AuthoringCaseTableStore } from './authoring-case-table.store';
     HlmLabel,
     HlmSelectImports,
     InlineFeedbackComponent,
+    LiveStatusComponent,
     RequestStateComponent,
     AuthoringCaseRowsComponent,
   ],
@@ -112,6 +114,10 @@ export class AuthoringCaseTableComponent {
     ),
   );
   protected readonly pageLabel = (value: unknown) => String(value);
+  /** The cap notice is inserted with its message, so it announces through this mounted region. */
+  protected readonly capAnnouncement = computed(() =>
+    this.store.browseCapped() ? `${this.copy.browseCapped}. ${this.copy.browseCappedHelp}` : '',
+  );
   protected readonly unavailableFilters = [
     { id: 'source', label: this.copy.source, help: this.copy.sourceHelp },
     { id: 'owner', label: this.copy.owner, help: this.copy.ownerHelp },

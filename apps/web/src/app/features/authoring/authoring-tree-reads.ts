@@ -1,50 +1,15 @@
-import type { AuthoringNodePathEntry, NodeDto } from '@evidgate/sdk';
+import type { NodeDto } from '@evidgate/sdk';
 
 import { ApiRequestError, isApiRequestError, type ApiError } from '../../core/http/api-error';
 import { takeKeysetPage, type KeysetRefusals } from '../../shared/keyset-walk';
 import type { AuthoringDataService } from './authoring-data.service';
-
-/** The read state of one page of the tree, or of the addressed node's own read. */
-export type AuthoringPageStatus = 'idle' | 'loading' | 'ready' | 'error';
-
-/**
- * One page of nodes keyed by the parent it was read for. `error` is the last read this page
- * failed with: under `status: 'error'` it is the page's own failure, and under `status:
- * 'ready'` it is a follow-up page that failed while the rows above it stay usable.
- */
-export interface AuthoringNodePage {
-  readonly items: readonly NodeDto[];
-  readonly nextCursor: string | null;
-  readonly status: AuthoringPageStatus;
-  readonly error: ApiError | null;
-}
-
-export interface AuthoringTreeState {
-  readonly projectId: string | null;
-  /** The roots page; the hierarchy every expanded branch hangs off. */
-  readonly roots: AuthoringNodePage;
-  /** Loaded branches by parent node id; a missing entry is a branch nobody expanded yet. */
-  readonly children: Readonly<Record<string, AuthoringNodePage>>;
-  readonly selectedNodeId: string | null;
-  /** The addressed node as the server returned it, with its counts. */
-  readonly selectedNode: NodeDto | null;
-  /** The addressed node's ancestors, root first, exactly as the server returned them. */
-  readonly path: readonly AuthoringNodePathEntry[];
-  readonly selectionStatus: AuthoringPageStatus;
-  readonly selectionError: ApiError | null;
-  /** True while a failed roots refresh is still showing the rows an earlier read loaded. */
-  readonly rootsStale: boolean;
-  /** True while a failed refresh is still showing the addressed node an earlier read loaded. */
-  readonly selectionStale: boolean;
-}
-
-/** A branch nobody has read yet: one shared object, so a missing entry allocates nothing. */
-export const EMPTY_NODE_PAGE: AuthoringNodePage = {
-  items: [],
-  nextCursor: null,
-  status: 'idle',
-  error: null,
-};
+import {
+  EMPTY_NODE_PAGE,
+  readyNodePage,
+  selectionNodePage,
+  type AuthoringNodePage,
+  type AuthoringTreeState,
+} from './authoring-tree-page';
 
 /** A rejection that is not a typed API failure is a bug; the UI still gets one safe state. */
 const UNRESOLVED_FAILURE: ApiError = {
@@ -103,26 +68,6 @@ const MISSING_PROJECTION: ApiError = {
   details: [],
   retryAfterSeconds: null,
 };
-
-/**
- * Merges a page into rows already loaded: an id the page carries again takes the fresh DTO in the
- * position it already held (title, counts and version move forward), while a row only a later
- * continuation page loaded is kept, so a selection refresh never shrinks the branch.
- */
-function mergeNodes(loaded: readonly NodeDto[], fresh: readonly NodeDto[]): NodeDto[] {
-  const merged = [...loaded];
-  const positions = new Map(loaded.map((node, position) => [node.node_id, position]));
-  for (const node of fresh) {
-    const known = positions.get(node.node_id);
-    if (known === undefined) {
-      positions.set(node.node_id, merged.length);
-      merged.push(node);
-      continue;
-    }
-    merged[known] = node;
-  }
-  return merged;
-}
 
 interface ReadStream {
   sequence: number;
@@ -209,19 +154,23 @@ async function loadRoots(
   projectId: string,
 ): Promise<void> {
   const token = begin(run, run.roots);
+  const previous = host.roots();
   host.patch({ roots: { ...host.roots(), status: 'loading', error: null } });
   try {
     const page = await data.listTree(projectId, {}, token.signal);
     if (!live(run, token, run.roots)) return;
     host.patch({
-      roots: { items: page.items, nextCursor: page.next_cursor, status: 'ready', error: null },
+      roots: readyNodePage(page.items, page.next_cursor),
       rootsStale: false,
     });
   } catch (error) {
     if (!live(run, token, run.roots)) return;
     const kept = host.roots();
     host.patch({
-      roots: { ...kept, status: 'error', error: typedFailure(error) },
+      roots:
+        previous.status === 'capped'
+          ? { ...previous, error: typedFailure(error) }
+          : { ...kept, status: 'error', error: typedFailure(error) },
       rootsStale: kept.items.length > 0,
     });
   }
@@ -254,12 +203,7 @@ async function followRoots(
       return false;
     }
     host.patch({
-      roots: {
-        items: [...page.items, ...step.fresh],
-        nextCursor: step.nextCursor,
-        status: 'ready',
-        error: null,
-      },
+      roots: readyNodePage([...page.items, ...step.fresh], step.nextCursor),
     });
     return true;
   } catch (error) {
@@ -291,15 +235,6 @@ async function loadSelection(
     const node = page.node ?? null;
     const path = page.path ?? null;
     if (node === null || path === null) throw new ApiRequestError(MISSING_PROJECTION);
-    const existing = host.children()[nodeId];
-    const kept = existing !== undefined && existing.items.length > 0 ? existing : null;
-    // A retained walk already past this first page keeps its own cursor: adopting the fresh
-    // first-page cursor would replay rows the merge keeps. An exhausted walk still takes the
-    // fresh cursor, so children added since the last refresh stay reachable.
-    const nextCursor =
-      kept !== null && kept.nextCursor !== null && kept.items.length > page.items.length
-        ? kept.nextCursor
-        : page.next_cursor;
     host.patch({
       selectedNode: node,
       path,
@@ -308,12 +243,7 @@ async function loadSelection(
       selectionStale: false,
       children: {
         ...host.children(),
-        [nodeId]: {
-          items: kept === null ? page.items : mergeNodes(kept.items, page.items),
-          nextCursor,
-          status: 'ready',
-          error: null,
-        },
+        [nodeId]: selectionNodePage(host.children()[nodeId], page.items, page.next_cursor),
       },
     });
   } catch (error) {
@@ -345,12 +275,7 @@ async function loadChildren(
     host.patch({
       children: {
         ...host.children(),
-        [parentId]: {
-          items: page.items,
-          nextCursor: page.next_cursor,
-          status: 'ready',
-          error: null,
-        },
+        [parentId]: readyNodePage(page.items, page.next_cursor),
       },
     });
   } catch (error) {
@@ -413,12 +338,7 @@ async function followChildren(
     host.patch({
       children: {
         ...host.children(),
-        [parentId]: {
-          items: [...page.items, ...step.fresh],
-          nextCursor: step.nextCursor,
-          status: 'ready',
-          error: null,
-        },
+        [parentId]: readyNodePage([...page.items, ...step.fresh], step.nextCursor),
       },
     });
     return true;

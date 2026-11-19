@@ -9,7 +9,7 @@ import {
   computed,
   inject,
   input,
-  linkedSignal,
+  model,
   output,
   signal,
 } from '@angular/core';
@@ -17,13 +17,21 @@ import type { NodeDto } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmIcon } from '@evidgate/ui/icon';
 import { RequestStateComponent } from '../../shared/ui/states/request-state.component';
+import { InlineFeedbackComponent } from '../../shared/ui/states/inline-feedback.component';
 import { NumberValueComponent } from '../../shared/ui/values/number-value.component';
 import { AUTHORING_TREE_COPY } from './authoring-tree.copy';
 import type { AuthoringNodePage } from './authoring.store';
 
 @Component({
   selector: 'app-authoring-tree-pane',
-  imports: [NgTemplateOutlet, HlmButton, HlmIcon, RequestStateComponent, NumberValueComponent],
+  imports: [
+    NgTemplateOutlet,
+    HlmButton,
+    HlmIcon,
+    RequestStateComponent,
+    InlineFeedbackComponent,
+    NumberValueComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './authoring-tree-pane.component.html',
   styleUrl: './authoring-tree-pane.component.css',
@@ -41,10 +49,8 @@ export class AuthoringTreePaneComponent {
   readonly expand = output<string>();
   readonly loadMore = output<string | null>();
   protected readonly copy = AUTHORING_TREE_COPY;
-  protected readonly expanded = linkedSignal({
-    source: this.projectId,
-    computation: () => new Set<string>(),
-  });
+  /** Owned by the surface that renders the tree, so the page can tell which cap notices show. */
+  readonly expanded = model<ReadonlySet<string>>(new Set<string>());
   /** The cycle guard's starting chain: the roots have no ancestor above them. */
   protected readonly noAncestors: ReadonlySet<string> = new Set<string>();
   protected readonly visible = computed(() => {
@@ -159,7 +165,7 @@ export class AuthoringTreePaneComponent {
   protected pageStatus(page: AuthoringNodePage | undefined): 'loading' | 'ready' | 'error' {
     if (!page || page.status === 'idle') return 'loading';
     if (page.error) return 'error';
-    return page.status;
+    return page.status === 'capped' ? 'ready' : page.status;
   }
 
   protected retryBranch(parentId: string, page: AuthoringNodePage | undefined): void {
