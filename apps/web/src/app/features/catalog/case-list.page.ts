@@ -113,6 +113,8 @@ export class CaseListPage {
     noMatchTitle: $localize`:@@catalog.loaded-no-match-title:No matching identities in loaded results`,
     noMatchDescription: $localize`:@@catalog.loaded-no-match-description:Clear the filters to return to loaded results, or load more identities below. Local search does not inspect unloaded results.`,
     contractNote: $localize`:@@catalog.available-fields-note:This list does not supply revision, platform, level, purpose or rename history; these columns are not displayed.`,
+    browseCapped: $localize`:@@catalog.browse-capped:Case list is at its load limit`,
+    browseCappedHelp: $localize`:@@catalog.browse-capped-help:Narrow the status or framework filters to reach cases beyond the 10,000 loaded here. Search only checks loaded results.`,
     pagination: $localize`:@@catalog.pagination:Catalog pagination`,
     pageSize: $localize`:@@catalog.page-size:Page size`,
     loadMore: $localize`:@@catalog.load-more:Load more`,

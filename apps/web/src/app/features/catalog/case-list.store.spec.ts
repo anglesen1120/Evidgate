@@ -180,6 +180,87 @@ describe('CaseListStore', () => {
     expect(store.hasMore()).toBe(false);
   });
 
+  it.each([
+    [10_000, null, false],
+    [10_000, 'beyond-cap', true],
+    [10_001, null, true],
+  ] as const)('bounds a catalog first page of %s cases with cursor %s', async (count, cursor, capped) => {
+    const first = CASE_LIST_FIXTURE.items[0];
+    if (!first) throw new Error('Missing case fixture');
+    list.mockResolvedValueOnce({
+      items: Array.from({ length: count }, (_, index) => ({ ...first, id: String(index) })),
+      next_cursor: cursor,
+    });
+    const store = TestBed.inject(CaseListStore);
+    store.init('project', {});
+    await settle();
+
+    expect(store.rows()).toHaveLength(10_000);
+    expect(store.rows().at(-1)?.id).toBe('9999');
+    expect(store.browseCapped()).toBe(capped);
+    expect(store.hasMore()).toBe(false);
+    expect(await store.loadMore()).toBe(false);
+    expect(list).toHaveBeenCalledTimes(1);
+  });
+
+  it('caps accumulated catalog rows at 10000 and never follows the discarded cursor', async () => {
+    const first = CASE_LIST_FIXTURE.items[0];
+    if (!first) throw new Error('Missing case fixture');
+    list.mockResolvedValueOnce({
+      items: Array.from({ length: 9_999 }, (_, index) => ({ ...first, id: String(index) })),
+      next_cursor: 'last-page',
+    });
+    const store = TestBed.inject(CaseListStore);
+    store.init('project', {});
+    await settle();
+    expect(store.browseCapped()).toBe(false);
+    expect(store.hasMore()).toBe(true);
+    list.mockResolvedValueOnce({
+      items: [{ ...first, id: '9999' }, { ...first, id: '10000' }],
+      next_cursor: 'discarded',
+    });
+
+    expect(await store.loadMore()).toBe(true);
+    expect(store.rows()).toHaveLength(10_000);
+    expect(store.rows().at(-1)?.id).toBe('9999');
+    expect(store.browseCapped()).toBe(true);
+    expect(store.hasMore()).toBe(false);
+    expect(await store.loadMore()).toBe(false);
+    expect(list).toHaveBeenCalledTimes(2);
+
+    list.mockResolvedValueOnce(CASE_LIST_FIXTURE);
+    store.init('project', { framework: 'playwright' });
+    await settle();
+    expect(store.browseCapped()).toBe(false);
+    expect(store.rows()).toEqual(CASE_LIST_FIXTURE.items);
+    expect(store.hasMore()).toBe(true);
+  });
+
+  it.each([
+    ['forbidden', 403],
+    ['not_found', 404],
+  ] as const)('clears catalog cap state before a %s replacement fails', async (kind, status) => {
+    const first = CASE_LIST_FIXTURE.items[0];
+    if (!first) throw new Error('Missing case fixture');
+    list.mockResolvedValueOnce({
+      items: Array.from({ length: 10_000 }, (_, index) => ({ ...first, id: String(index) })),
+      next_cursor: 'beyond-cap',
+    });
+    const store = TestBed.inject(CaseListStore);
+    store.init('project', {});
+    await settle();
+    expect(store.browseCapped()).toBe(true);
+
+    list.mockRejectedValueOnce(new ApiRequestError({ ...CATALOG_FAILURE, kind, status }));
+    store.reload();
+    await settle();
+
+    expect(store.rows()).toEqual([]);
+    expect(store.browseCapped()).toBe(false);
+    expect(store.loadError()?.kind).toBe(kind);
+    expect(store.hasMore()).toBe(false);
+  });
+
   it('retains loaded rows and retry cursor after a typed load-more refusal', async () => {
     const store = TestBed.inject(CaseListStore);
     store.init('project', {});

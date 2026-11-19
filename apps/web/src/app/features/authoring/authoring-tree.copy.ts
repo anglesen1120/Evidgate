@@ -23,5 +23,7 @@ export const AUTHORING_TREE_COPY = {
   staleDescription: $localize`:@@authoring.tree.stale-description:Refresh failed; previously loaded hierarchy data is still shown. Retry to refresh this region only.`,
   moreRoots: $localize`:@@authoring.tree.more-roots:Load more root nodes`,
   moreChildren: $localize`:@@authoring.tree.more-children:Load more child nodes`,
+  browseCapped: $localize`:@@authoring.tree.browse-capped:Hierarchy list is at its load limit`,
+  browseCappedHelp: $localize`:@@authoring.tree.browse-capped-help:Showing the first 10,000 nodes in this list. Open a known node link to inspect a scope outside these results.`,
   table: $localize`:@@authoring.tree.table:Case table`,
 };

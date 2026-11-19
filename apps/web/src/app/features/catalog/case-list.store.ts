@@ -37,6 +37,7 @@ interface CaseListState {
   readonly loadError: ApiError | null;
   readonly rows: readonly CaseDto[];
   readonly nextCursor: string | null;
+  readonly browseCapped: boolean;
   readonly paging: boolean;
   readonly pagingError: ApiError | null;
   readonly ownerOps: Readonly<Record<string, CaseOwnerOp>>;
@@ -76,6 +77,7 @@ export const CaseListStore = signalStore(
     loadError: null,
     rows: NO_CASES,
     nextCursor: null,
+    browseCapped: false,
     paging: false,
     pagingError: null,
     ownerOps: NO_OWNER_OPS,

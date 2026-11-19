@@ -13,6 +13,7 @@ import { isApiRequestError, type ApiError } from '../../core/http/api-error';
 import type { ManualCaseQuery } from '../../core/data/authoring-reads.service';
 import { createRetryAfterWait } from '../../core/http/retry';
 import { takeKeysetPage } from '../../shared/keyset-walk';
+import { retainKeysetRows } from '../../shared/keyset-retention';
 import { AuthoringDataService } from './authoring-data.service';
 import {
   isCaseUuid,
@@ -94,13 +95,6 @@ const QUERY_TOO_LONG = refusedLink(
   $localize`:@@authoring.case-table.query-too-long:This search is longer than the server accepts, so no case list was requested. Shorten the search and apply filters again.`,
 );
 
-/**
- * The most cases one list keeps in hand, high enough for a working scope; reaching it is an
- * ordinary bounded outcome the list announces, not a failure, because the only recovery is a
- * narrower filter or another scope.
- */
-export const CASE_ROWS_CAP = 10_000;
-
 export const AuthoringCaseTableStore = signalStore(
   withState<CaseTableState>({
     projectId: null,
@@ -165,13 +159,11 @@ export const AuthoringCaseTableStore = signalStore(
         return null;
       }
       const combined = append ? [...store.rows(), ...step.fresh] : step.fresh;
-      const rows = combined.length > CASE_ROWS_CAP ? combined.slice(0, CASE_ROWS_CAP) : combined;
-      const capped =
-        rows.length < combined.length || (step.nextCursor !== null && rows.length >= CASE_ROWS_CAP);
+      const retained = retainKeysetRows(combined, step.nextCursor);
       patchState(store, {
-        rows,
-        nextCursor: capped ? null : step.nextCursor,
-        browseCapped: capped,
+        rows: retained.rows,
+        nextCursor: retained.nextCursor,
+        browseCapped: retained.capped,
         routeCursor: cursor,
         status: 'ready',
         stale: false,
@@ -225,6 +217,7 @@ export const AuthoringCaseTableStore = signalStore(
           error: typed,
           rows: denied ? [] : store.rows(),
           nextCursor: denied ? null : store.nextCursor(),
+          browseCapped: denied ? false : store.browseCapped(),
           status: retained ? 'ready' : 'error',
           stale: retained,
           failedRead: denied ? null : { cursor, append },

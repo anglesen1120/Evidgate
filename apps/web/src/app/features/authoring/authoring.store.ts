@@ -11,14 +11,14 @@ import {
 
 import type { ApiError } from '../../core/http/api-error';
 import { AuthoringDataService } from './authoring-data.service';
+import { createTreeReads } from './authoring-tree-reads';
 import {
   EMPTY_NODE_PAGE,
-  createTreeReads,
   type AuthoringPageStatus,
   type AuthoringTreeState,
-} from './authoring-tree-reads';
+} from './authoring-tree-page';
 
-export type { AuthoringNodePage, AuthoringPageStatus } from './authoring-tree-reads';
+export type { AuthoringNodePage, AuthoringPageStatus } from './authoring-tree-page';
 
 /**
  * The authoring tree's page state. Provided by the surface that renders it, never at the root:
@@ -64,8 +64,11 @@ export const AuthoringStore = signalStore(
       const rootsStatus = store.roots().status;
       const selectionStatus = store.selectionStatus();
       if (rootsStatus === 'loading' || selectionStatus === 'loading') return 'loading';
-      if (rootsStatus === 'error' || selectionStatus === 'error') return 'error';
-      return rootsStatus === 'ready' ? 'ready' : 'idle';
+      if (
+        rootsStatus === 'error' || selectionStatus === 'error' ||
+        (rootsStatus === 'capped' && store.roots().error !== null)
+      ) return 'error';
+      return rootsStatus === 'ready' || rootsStatus === 'capped' ? 'ready' : 'idle';
     }),
     /** Either region keeps rows a failed refresh could not replace. */
     stale: computed(() => store.rootsStale() || store.selectionStale()),

@@ -12,6 +12,8 @@ export interface FixtureCallRecord {
   readonly method: string;
   readonly url: string;
   readonly headers: Readonly<Record<string, readonly string[]>>;
+  /** Only authoring queue JSON is retained; other bodies can contain credentials or uploads. */
+  readonly body?: unknown;
 }
 
 declare global {

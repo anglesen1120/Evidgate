@@ -222,7 +222,7 @@ function fixtureHeaders(entry: FixtureEntry): HttpHeaders {
  * Appends the request the backend is about to answer to the page-global log. A spec runs in Node
  * (`window` absent), and the log is a review seam, never app state, so a missing window is a no-op.
  */
-function recordRequest(request: HttpRequest<unknown>): void {
+function recordRequest(request: HttpRequest<unknown>, path: string | null): void {
   if (typeof window === 'undefined') {
     return;
   }
@@ -230,7 +230,16 @@ function recordRequest(request: HttpRequest<unknown>): void {
   for (const name of request.headers.keys()) {
     headers[name.toLowerCase()] = request.headers.getAll(name) ?? [];
   }
-  const recorded: FixtureCallRecord = { method: request.method, url: request.url, headers };
+  const captureBody =
+    request.method === 'POST' &&
+    path !== null &&
+    /^\/projects\/[^/]+\/authoring\/changes$/.test(path);
+  const recorded: FixtureCallRecord = {
+    method: request.method,
+    url: request.url,
+    headers,
+    ...(captureBody ? { body: request.body } : {}),
+  };
   const log = (window[FIXTURE_REQUEST_LOG] ??= []);
   log.push(recorded);
 }
@@ -251,8 +260,8 @@ export class FixtureHttpBackend implements HttpBackend {
   private readonly authoringEditor = new AuthoringEditorFixtureScenario();
 
   handle(request: HttpRequest<unknown>): Observable<HttpEvent<unknown>> {
-    recordRequest(request);
     const relativePath = apiRelativePath(request.url);
+    recordRequest(request, relativePath);
     const entry = relativePath === null ? undefined : this.requestEntry(request, relativePath);
     if (entry === undefined) {
       return this.respond(

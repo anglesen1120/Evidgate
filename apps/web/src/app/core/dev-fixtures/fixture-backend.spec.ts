@@ -19,14 +19,26 @@
 // request's `X-Request-Id` are not visible through the SDK's resolved value, and reaching for them
 // any other way would mean duplicating the chain this spec exists to prove.
 
-import { HttpClient, HttpResponse, type HttpEvent, type HttpRequest } from '@angular/common/http';
+import { HttpClient, HttpRequest, HttpResponse, type HttpEvent } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
-import { getRun, listPermissions, listRoles, listRuns, postRunEvents } from '@evidgate/sdk';
+import {
+  getRun,
+  listPermissions,
+  listRoles,
+  listRuns,
+  postRunEvents,
+  queueAuthoringChange,
+  type AuthoringChangeV1,
+} from '@evidgate/sdk';
 import { firstValueFrom } from 'rxjs';
 
 import { isApiRequestError } from '../http/api-error';
 import type { ApiGateway } from '../http/api-gateway';
-import { FIXTURE_NOT_FOUND_CODE, FIXTURE_RESPONSE_HEADER } from './fixture-backend';
+import {
+  FIXTURE_BACKEND,
+  FIXTURE_NOT_FOUND_CODE,
+  FIXTURE_RESPONSE_HEADER,
+} from './fixture-backend';
 import {
   API_BASE_URL,
   documentOf,
@@ -49,7 +61,45 @@ describe('fixture backend (09.1.1-T12.1)', () => {
   let events: HttpEvent<unknown>[];
 
   beforeEach(() => {
+    window.__evidgateFixtureRequests = [];
     ({ gateway, toggles, handled, events } = setupFixtureBackend());
+  });
+
+  afterEach(() => {
+    delete window.__evidgateFixtureRequests;
+  });
+
+  it('records authoring queue JSON for browser assertions through the real SDK path', async () => {
+    const project = '018f0000-0000-7000-8000-000000000011';
+    const body: AuthoringChangeV1 = {
+      target_kind: 'checklist_item',
+      target_id: 'a4430000-0000-4000-8000-000000000011',
+      change_type: 'comment',
+      payload: { body: 'Review the routed checklist item' },
+      reason: 'Browser wiring assertion',
+    };
+    await gateway.call((client) =>
+      queueAuthoringChange({ client, path: { p: project }, body }),
+    );
+    const recorded = window.__evidgateFixtureRequests?.at(-1);
+    expect(recorded).toMatchObject({
+      method: 'POST',
+      url: `${API_BASE_URL}/projects/${project}/authoring/changes`,
+      body: JSON.stringify(body),
+    });
+  });
+
+  it.each([
+    ['GET', '/projects/p/authoring/changes'],
+    ['POST', '/projects/p/authoring/changes:apply'],
+    ['POST', '/session/sign-in'],
+    ['PATCH', '/authoring/manual-cases/case'],
+  ])('does not retain a body outside the queue route (%s %s)', (method, path) => {
+    const backend = TestBed.inject(FIXTURE_BACKEND);
+    backend.handle(new HttpRequest(method, `${API_BASE_URL}${path}`, { excluded: true }, {}));
+    const recorded = window.__evidgateFixtureRequests?.at(-1);
+    expect(recorded).toMatchObject({ method, url: `${API_BASE_URL}${path}` });
+    expect(recorded).not.toHaveProperty('body');
   });
 
   it('answers listPermissions from its fixture and names the fixture in a header', async () => {
