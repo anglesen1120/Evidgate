@@ -1,6 +1,6 @@
 {
   "operation_id": "listAuthoringVersions",
-  "variant": "ok",
+  "variant": "manual-case",
   "status": 200,
   "headers": {
     "X-Request-Id": "a4430000-0000-4000-8000-000000000057"

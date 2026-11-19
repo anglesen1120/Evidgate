@@ -96,7 +96,7 @@ describe('authoring editor fixtures', () => {
     const timeline = open(
       subject,
       'GET',
-      '/projects/p/authoring/versions?entity_id=' + EDITOR_SAVED_CASE,
+      '/projects/p/authoring/versions?entity_kind=manual_test_case&entity_id=' + EDITOR_SAVED_CASE,
     );
     const page = timeline?.document.body as AuthoringVersionListResponse;
     expect(seeded.length).toBe(3);
@@ -119,7 +119,7 @@ describe('authoring editor fixtures', () => {
     const timeline = open(
       subject,
       'GET',
-      '/projects/p/authoring/versions?entity_id=' + EDITOR_SAVED_CASE,
+      '/projects/p/authoring/versions?entity_kind=manual_test_case&entity_id=' + EDITOR_SAVED_CASE,
     );
     const page = timeline?.document.body as AuthoringVersionListResponse;
     expect(page.items.length).toBe(seeded.length);
@@ -129,7 +129,8 @@ describe('authoring editor fixtures', () => {
     const subject = scenario();
     const path = '/projects/p/authoring/manual-cases/' + EDITOR_SAVED_CASE;
     const head = structuredClone(open(subject, 'GET', path)?.document.body) as ManualCaseDetailDto;
-    const timelinePath = '/projects/p/authoring/versions?entity_id=' + EDITOR_SAVED_CASE;
+    const timelinePath =
+      '/projects/p/authoring/versions?entity_kind=manual_test_case&entity_id=' + EDITOR_SAVED_CASE;
     const before = structuredClone(open(subject, 'GET', timelinePath)?.document.body);
     const saved = open(
       subject,
@@ -172,7 +173,7 @@ describe('authoring editor fixtures', () => {
     const page = open(
       subject,
       'GET',
-      '/projects/p/authoring/versions?entity_id=' + EDITOR_SAVED_CASE,
+      '/projects/p/authoring/versions?entity_kind=manual_test_case&entity_id=' + EDITOR_SAVED_CASE,
     )?.document.body as AuthoringVersionListResponse;
     expect(page.items.map((row) => row.version_no)).toEqual([5, 4, 3, 2, 1]);
   });
@@ -256,7 +257,9 @@ describe('authoring editor fixtures', () => {
     const first = open(
       subject,
       'GET',
-      '/projects/p/authoring/versions?entity_id=' + EDITOR_SAVED_CASE + '&limit=2',
+      '/projects/p/authoring/versions?entity_kind=manual_test_case&entity_id=' +
+        EDITOR_SAVED_CASE +
+        '&limit=2',
     );
     const firstPage = first?.document.body as AuthoringVersionListResponse;
     expect(firstPage.items.map((row) => row.change_kind)).toEqual(['restore', 'update']);
@@ -267,7 +270,7 @@ describe('authoring editor fixtures', () => {
     const second = open(
       subject,
       'GET',
-      '/projects/p/authoring/versions?entity_id=' +
+      '/projects/p/authoring/versions?entity_kind=manual_test_case&entity_id=' +
         EDITOR_SAVED_CASE +
         '&limit=2&cursor=' +
         encodeURIComponent(firstPage.next_cursor ?? ''),

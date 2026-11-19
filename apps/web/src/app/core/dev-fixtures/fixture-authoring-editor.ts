@@ -263,6 +263,9 @@ export class AuthoringEditorFixtureScenario {
     project: string,
     variantFor: (operation: string) => string,
   ): FixtureEntry | undefined {
+    // Other entity kinds (import history) are answered by their own fixtures.
+    if (queryParameter(request.urlWithParams, 'entity_kind') !== 'manual_test_case')
+      return undefined;
     const variant = variantFor('listAuthoringVersions');
     if (variant !== 'ok') return findFixtureEntry('listAuthoringVersions', variant);
     const caseId = queryParameter(request.urlWithParams, 'entity_id');

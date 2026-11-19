@@ -151,11 +151,6 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
     path: '/projects/{p}/authoring/manual-cases/{m}',
   },
   {
-    operationId: 'listAuthoringVersions',
-    method: 'GET',
-    path: '/projects/{p}/authoring/versions',
-  },
-  {
     operationId: 'getAuthoringVersion',
     method: 'GET',
     path: '/projects/{p}/authoring/versions/{v}',
