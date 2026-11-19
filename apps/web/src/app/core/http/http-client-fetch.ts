@@ -22,6 +22,7 @@ import { filter, type Observable } from 'rxjs';
 
 import { BINARY_TRANSPORT_HEADER } from './binary-transport';
 import {
+  assertTextWithinCap,
   decodeBinaryErrorBody,
   enforceBinarySizeCap,
   isFinalResponse,
@@ -137,43 +138,16 @@ async function sendCall(
     assertTextRequestBody(request.headers.get('Content-Type'), body);
   }
 
-  const binaryResponse = modes?.response === true;
   try {
-    if (binaryResponse) {
-      const response = await settleCall(
-        finalResponse(http, method, request, body),
-        request.signal,
-        deadline,
-      );
-      return toBinaryResponse(
-        response.status,
-        response.statusText,
-        response.headers,
-        response.body,
-        response,
-      );
-    }
-    const response = await settleCall(
-      textResponse(http, method, request, body),
-      request.signal,
-      deadline,
-    );
-    return toFetchResponse(
-      response.status,
-      response.statusText,
-      response.headers,
-      response.body,
-      response,
-      false,
-    );
+    return await receiveResponse(http, method, request, body, modes, deadline);
   } catch (error: unknown) {
     const failure = errorResponseOrThrow(error, request.signal);
     // `HttpErrorResponse.error` is `any`: `decodeBinaryErrorBody` narrows it itself, and the text
     // cast is what keeps the adapter's `string | null` contract honest without an `any` reaching
-    // `toFetchResponse`.
-    const errorBody: string | null = binaryResponse
-      ? decodeBinaryErrorBody(failure)
-      : (failure.error as string | null);
+    // `toFetchResponse`. Any call that opted into the binary transport gets its error body
+    // capped, even when only the request was binary.
+    const errorBody: string | null =
+      modes === null ? (failure.error as string | null) : decodeBinaryErrorBody(failure);
     return toFetchResponse(
       failure.status,
       failure.statusText,
@@ -183,6 +157,48 @@ async function sendCall(
       false,
     );
   }
+}
+
+async function receiveResponse(
+  http: HttpClient,
+  method: string,
+  request: Request,
+  body: string | ArrayBuffer | null,
+  modes: BinaryModes | null,
+  deadline: Deadline | null,
+): Promise<Response> {
+  if (modes?.response === true) {
+    const response = await settleCall(
+      finalResponse(http, method, request, body),
+      request.signal,
+      deadline,
+    );
+    return toBinaryResponse(
+      response.status,
+      response.statusText,
+      response.headers,
+      response.body,
+      response,
+    );
+  }
+  const response = await settleCall(
+    modes === null
+      ? textResponse(http, method, request, body)
+      : cappedTextResponse(http, method, request, body),
+    request.signal,
+    deadline,
+  );
+  if (modes !== null) {
+    assertTextWithinCap(response.body, response);
+  }
+  return toFetchResponse(
+    response.status,
+    response.statusText,
+    response.headers,
+    response.body,
+    response,
+    false,
+  );
 }
 
 // The text path: `responseType: 'text'` hands over the exact characters the server sent, which is
@@ -219,6 +235,28 @@ function finalResponse(
     withCredentials: request.credentials === 'include',
   });
   return events.pipe(enforceBinarySizeCap, filter(isFinalResponse));
+}
+
+// A call that opted into the binary transport for its request only still reads a text reply, but
+// the reply is bounded like a binary one: progress events abort an oversized body mid-transfer.
+function cappedTextResponse(
+  http: HttpClient,
+  method: string,
+  request: Request,
+  body: string | ArrayBuffer | null,
+): Observable<HttpResponse<string>> {
+  const events: Observable<HttpEvent<string>> = http.request(method, request.url, {
+    body,
+    headers: toRequestHeaders(request.headers),
+    observe: 'events',
+    reportProgress: true,
+    responseType: 'text',
+    withCredentials: request.credentials === 'include',
+  });
+  return events.pipe(
+    enforceBinarySizeCap,
+    filter((event): event is HttpResponse<string> => isFinalResponse(event)),
+  );
 }
 
 async function readTextRequestBody(

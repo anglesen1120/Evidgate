@@ -105,6 +105,13 @@ async function readAllBytes(
     if (done) {
       break;
     }
+    // A caller-owned stream is untyped at runtime: a chunk that is not a byte view would make the
+    // running total `NaN` (every comparison false, so the cap is bypassed) or be copied wrongly.
+    // The tag check is realm-proof, unlike `instanceof`.
+    if (!isByteChunk(value)) {
+      cancel();
+      throw new TypeError('The request body stream produced a chunk that is not bytes');
+    }
     total += value.byteLength;
     if (total > BINARY_BODY_LIMIT_BYTES) {
       cancel();
@@ -122,6 +129,10 @@ async function readAllBytes(
   return buffer;
 }
 
+function isByteChunk(value: unknown): value is Uint8Array {
+  return Object.prototype.toString.call(value) === '[object Uint8Array]';
+}
+
 /**
  * An error status on a binary call still carries the 00 §9.2 envelope, so its bytes are decoded
  * as text for the SDK — non-fatally (a malformed body becomes replacement characters, never a
@@ -133,6 +144,7 @@ export function decodeBinaryErrorBody(error: HttpErrorResponse): string | null {
     return null;
   }
   if (typeof raw === 'string') {
+    assertTextWithinCap(raw, error);
     return raw === '' ? null : raw;
   }
   if (!(raw instanceof ArrayBuffer)) {
@@ -156,10 +168,10 @@ export function decodeBinaryErrorBody(error: HttpErrorResponse): string | null {
  * adapter repeats the check on the decoded body: a server may omit `Content-Length` and report
  * no progress before the final chunk.
  */
-export function enforceBinarySizeCap(
-  events: Observable<HttpEvent<ArrayBuffer>>,
-): Observable<HttpEvent<ArrayBuffer>> {
-  return new Observable<HttpEvent<ArrayBuffer>>((subscriber) => {
+export function enforceBinarySizeCap<T>(
+  events: Observable<HttpEvent<T>>,
+): Observable<HttpEvent<T>> {
+  return new Observable<HttpEvent<T>>((subscriber) => {
     const subscription = events.subscribe({
       next: (event) => {
         const size = advertisedSize(event);
@@ -180,7 +192,7 @@ export function enforceBinarySizeCap(
 }
 
 /** Whether an event of a binary call is the final response the adapter reads its bytes from. */
-export function isFinalResponse(event: HttpEvent<ArrayBuffer>): event is HttpResponse<ArrayBuffer> {
+export function isFinalResponse<T>(event: HttpEvent<T>): event is HttpResponse<T> {
   return event instanceof HttpResponse;
 }
 
@@ -203,20 +215,38 @@ export function toBinaryResponse(
 }
 
 // A `Content-Length` the server declared, or the bytes downloaded so far. Anything else (the
-// `Sent` event, a textual response) says nothing about the size.
-function advertisedSize(event: HttpEvent<ArrayBuffer>): number | null {
+// `Sent` event, a textual response) says nothing about the size. Only a plain run of digits is a
+// declared length: `Number()` would also accept `0x10` or `1e9`, which are not valid headers and
+// must not decide the call either way.
+function advertisedSize<T>(event: HttpEvent<T>): number | null {
   if (event.type === HttpEventType.ResponseHeader) {
     const declared = event.headers.get('Content-Length');
     if (declared === null) {
       return null;
     }
-    const byteLength = Number(declared);
-    return Number.isFinite(byteLength) ? byteLength : null;
+    return /^\d{1,16}$/.test(declared.trim()) ? Number(declared) : null;
   }
   if (event.type === HttpEventType.DownloadProgress) {
     return event.loaded;
   }
   return null;
+}
+
+/**
+ * Repeats the cap on a text body of a call that opted into the binary transport in only one
+ * direction. `HttpClient` has already decoded it, so the UTF-8 size is recomputed here; a string
+ * can never be shorter in bytes than in UTF-16 units, which lets the common cases skip the encode.
+ */
+export function assertTextWithinCap(text: string | null, source: unknown): void {
+  if (text === null || text.length * 3 <= BINARY_BODY_LIMIT_BYTES) {
+    return;
+  }
+  if (
+    text.length > BINARY_BODY_LIMIT_BYTES ||
+    new TextEncoder().encode(text).byteLength > BINARY_BODY_LIMIT_BYTES
+  ) {
+    throw limitError('response', source);
+  }
 }
 
 // The single place the cap is worded, so both directions and every refusal site report the same

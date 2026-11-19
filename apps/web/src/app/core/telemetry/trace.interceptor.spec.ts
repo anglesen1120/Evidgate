@@ -328,6 +328,24 @@ describe('telemetryInterceptor', () => {
     expect(seen?.headers.has('traceparent')).toBe(false);
   });
 
+  it('reads the envelope code of an error delivered as bytes by a binary-response call', async () => {
+    const harness = await createHarness();
+    const text = new TextEncoder().encode(
+      JSON.stringify({ error: { code: 'invalid_workbook', retryable: false } }),
+    );
+    const bytes = new ArrayBuffer(text.byteLength);
+    new Uint8Array(bytes).set(text);
+    const error = new HttpErrorResponse({ status: 422, error: bytes });
+
+    await expect(
+      firstValueFrom(send(new HttpRequest('GET', API_URL), () => throwError(() => error))),
+    ).rejects.toBe(error);
+
+    const span = firstSpanNamed(harness.exporter, 'api.request');
+    expect(span.attributes['evidgate.api.error_code']).toBe('invalid_workbook');
+    expect(span.attributes['evidgate.api.retryable']).toBe(false);
+  });
+
   it('records the envelope code and the retryable flag of a refused call', async () => {
     const harness = await createHarness();
     const error = new HttpErrorResponse({

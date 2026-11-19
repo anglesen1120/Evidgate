@@ -20,6 +20,7 @@ import { inject } from '@angular/core';
 import { finalize, tap } from 'rxjs';
 
 import { isApiRequestUrl } from '../http/api-origin';
+import { BINARY_BODY_LIMIT_BYTES } from '../http/binary-transport';
 import { apiPathTemplate } from './api-path-template';
 import { TelemetryService } from './telemetry.service';
 import type { ApiCallResult } from './telemetry-sdk';
@@ -73,6 +74,14 @@ function readRequestId(headers: HttpHeaders): string | null {
 
 /** The body as JSON, when the server sent it as a string instead of parsed JSON. */
 function parseJsonBody(body: unknown): unknown {
+  // A binary-response call reads its error as bytes (the interceptor sits outside the adapter,
+  // so it sees the raw `HttpClient` error); decode them, bounded, so the span keeps its code.
+  if (body instanceof ArrayBuffer) {
+    if (body.byteLength > BINARY_BODY_LIMIT_BYTES) {
+      return null;
+    }
+    return parseJsonBody(new TextDecoder().decode(body));
+  }
   if (typeof body !== 'string') {
     return body;
   }
