@@ -77,7 +77,8 @@ function apiSpan(exporter: InMemorySpanExporter) {
   return span;
 }
 
-const bytesRequest = () => new HttpRequest('GET', API_URL, { responseType: 'arraybuffer' });
+const bytesRequest = () =>
+  new HttpRequest('GET', API_URL, { responseType: 'arraybuffer', reportProgress: true });
 
 describe('telemetryInterceptor: byte replies', () => {
   afterEach(() => TestBed.resetTestingModule());
@@ -106,7 +107,7 @@ describe('telemetryInterceptor: byte replies', () => {
     expect(apiSpan(exporter).attributes['evidgate.outcome']).toBe('error');
   });
 
-  it('keeps a byte reply at the cap and an over-size text reply as they were', async () => {
+  it('keeps a byte reply at the cap and an over-size text reply without reportProgress as they were', async () => {
     const exporter = await harness();
     await firstValueFrom(
       send(bytesRequest(), of(event(RESPONSE, { body: new ArrayBuffer(BINARY_BODY_LIMIT_BYTES) }))),
@@ -114,10 +115,26 @@ describe('telemetryInterceptor: byte replies', () => {
     expect(apiSpan(exporter).attributes['evidgate.outcome']).toBe('ok');
 
     exporter.reset();
-    const text = new HttpRequest('GET', API_URL);
+    const text = new HttpRequest('GET', API_URL, { responseType: 'text' });
     const big = new HttpHeaders({ 'Content-Length': String(BINARY_BODY_LIMIT_BYTES + 1) });
-    await firstValueFrom(send(text, of(event(RESPONSE, { headers: big, body: 'x' }))));
+    await firstValueFrom(
+      send(text, of(event(RESPONSE_HEADER, { headers: big }), event(RESPONSE, { body: 'x' }))),
+    );
     expect(apiSpan(exporter).attributes['evidgate.outcome']).toBe('ok');
+  });
+
+  it('records a reportProgress text call with over-cap Content-Length as a failed network call', async () => {
+    const exporter = await harness();
+    const text = new HttpRequest('GET', API_URL, { responseType: 'text', reportProgress: true });
+    const headers = new HttpHeaders({ 'Content-Length': String(BINARY_BODY_LIMIT_BYTES + 1) });
+
+    await firstValueFrom(
+      send(text, of(event(RESPONSE_HEADER, { headers }), event(RESPONSE, { body: 'x' }))),
+    );
+
+    const span = apiSpan(exporter);
+    expect(span.attributes['evidgate.outcome']).toBe('error');
+    expect(span.attributes['evidgate.api.error_kind']).toBe('network');
   });
 });
 

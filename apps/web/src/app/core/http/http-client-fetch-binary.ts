@@ -100,8 +100,9 @@ async function readAllBytes(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   cancel: () => void,
 ): Promise<ArrayBuffer> {
-  // Bytes are copied into one growing buffer as they arrive, so memory stays at most twice the
-  // running total and a stream of many tiny chunks never leaves a list of views behind.
+  // Bytes are copied into one growing buffer as they arrive, so a stream of many tiny chunks
+  // never leaves a list of views behind. Memory is the accumulator's own storage: about twice its
+  // capacity while it grows, starting at a 64 KiB floor.
   let bytes = new Uint8Array(Math.min(INITIAL_REQUEST_BUFFER_BYTES, BINARY_BODY_LIMIT_BYTES));
   let total = 0;
   for (;;) {
@@ -116,19 +117,23 @@ async function readAllBytes(
       cancel();
       throw new TypeError('The request body stream produced a chunk that is not bytes');
     }
-    if (total + value.byteLength > BINARY_BODY_LIMIT_BYTES) {
+    // The intrinsic length, not the chunk's own property: a genuine `Uint8Array` can shadow
+    // `byteLength` with a data property, and under-counting it would skip the cap while the copy
+    // below still moves every byte.
+    const chunkBytes = byteLengthOf.call(value);
+    if (total + chunkBytes > BINARY_BODY_LIMIT_BYTES) {
       cancel();
       throw limitError('request');
     }
-    if (total + value.byteLength > bytes.byteLength) {
+    if (total + chunkBytes > bytes.byteLength) {
       const grown = new Uint8Array(
-        Math.min(BINARY_BODY_LIMIT_BYTES, Math.max(total + value.byteLength, bytes.byteLength * 2)),
+        Math.min(BINARY_BODY_LIMIT_BYTES, Math.max(total + chunkBytes, bytes.byteLength * 2)),
       );
       grown.set(bytes.subarray(0, total));
       bytes = grown;
     }
     bytes.set(value, total);
-    total += value.byteLength;
+    total += chunkBytes;
   }
   return total === bytes.byteLength ? bytes.buffer : bytes.slice(0, total).buffer;
 }
@@ -147,6 +152,17 @@ const typedArrayTag = Reflect.get(
 function isByteChunk(value: unknown): value is Uint8Array {
   return typedArrayTag.call(value) === 'Uint8Array';
 }
+
+// The `%TypedArray%` `byteLength` getter reads the internal slot, so an own property on a genuine
+// chunk cannot shadow it. That matters for accounting only: `set` always copies the real bytes,
+// so an under-counted length would add nothing while the copy still moves everything.
+const byteLengthOf = Reflect.get(
+  Object.getOwnPropertyDescriptor(
+    Object.getPrototypeOf(Uint8Array.prototype) as object,
+    'byteLength',
+  ) ?? {},
+  'get',
+) as (this: unknown) => number;
 
 /**
  * An error status on a binary call still carries the 00 §9.2 envelope, so its bytes are decoded
@@ -257,7 +273,12 @@ function advertisedSize<T>(event: HttpEvent<T>): number | null {
     return /^\d+$/.test(declared.trim()) ? Number(declared) : null;
   }
   if (event.type === HttpEventType.DownloadProgress) {
-    return event.loaded;
+    // A length that is not a finite number proves nothing about the size, and letting it through
+    // would make every comparison false: a non-number or a `NaN` must be over the cap.
+    const loaded: unknown = event.loaded;
+    return typeof loaded === 'number' && Number.isFinite(loaded)
+      ? loaded
+      : Number.POSITIVE_INFINITY;
   }
   if (event.type === HttpEventType.Response && event.body instanceof ArrayBuffer) {
     return event.body.byteLength;

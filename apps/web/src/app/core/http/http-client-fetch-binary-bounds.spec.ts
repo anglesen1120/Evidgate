@@ -65,6 +65,39 @@ describe('binary request chunk accumulation', () => {
     expect(log.reads).toBeLessThanOrEqual(10);
   });
 
+  it('refuses shadowed-length 64 KiB chunks over the cap and cancels the producer', async () => {
+    const chunk = new Uint8Array(64 * 1024);
+    Object.defineProperty(chunk, 'byteLength', { value: 0 });
+    const chunks = Array.from({ length: BINARY_BODY_LIMIT_BYTES / (64 * 1024) + 2 }, () => chunk);
+    const log = { reads: 0, cancelled: false };
+
+    await expect(readBinaryRequestBody(streamOf(chunks, log), true, null)).rejects.toThrow(
+      'exceeds limit',
+    );
+
+    expect(log.cancelled).toBe(true);
+    expect(log.reads).toBeLessThanOrEqual(chunks.length);
+  });
+
+  it('preserves the true bytes of a shadowed-length chunk within the cap', async () => {
+    const chunk = new Uint8Array(64 * 1024).map((_, index) => index % 251);
+    Object.defineProperty(chunk, 'byteLength', { value: 0 });
+    const expected = new Uint8Array(64 * 1024 + 1);
+    expected.set(chunk);
+    expected[64 * 1024] = 255;
+    const log = { reads: 0, cancelled: false };
+
+    const buffer = await readBinaryRequestBody(
+      streamOf([chunk, new Uint8Array([255])], log),
+      true,
+      null,
+    );
+
+    expect(buffer?.byteLength).toBe(expected.length);
+    expect(new Uint8Array(buffer ?? new ArrayBuffer(0))).toEqual(expected);
+    expect(log.cancelled).toBe(false);
+  });
+
   it('accepts exactly the cap', async () => {
     const chunks = [new Uint8Array(BINARY_BODY_LIMIT_BYTES - 1), new Uint8Array(1)];
     const buffer = await readBinaryRequestBody(
@@ -95,6 +128,29 @@ describe('decoded-size accounting', () => {
     await expect(
       firstValueFrom(enforceBinarySizeCap(of(...events)).pipe(toArray())),
     ).rejects.toThrow('exceeds limit');
+  });
+
+  it.each([NaN, Infinity, -Infinity, '0', undefined, null])(
+    'refuses invalid decoded progress loaded=%s',
+    async (loaded) => {
+      const progress: HttpEvent<ArrayBuffer> = { type: HttpEventType.DownloadProgress, loaded: 0 };
+      Object.defineProperty(progress, 'loaded', { value: loaded });
+
+      expect(exceedsBinaryCap(progress)).toBe(true);
+      await expect(firstValueFrom(enforceBinarySizeCap(of(progress)))).rejects.toThrow(
+        'exceeds limit',
+      );
+    },
+  );
+
+  it('lets finite decoded progress at the cap through', async () => {
+    const progress: HttpEvent<ArrayBuffer> = {
+      type: HttpEventType.DownloadProgress,
+      loaded: BINARY_BODY_LIMIT_BYTES,
+    };
+
+    expect(exceedsBinaryCap(progress)).toBe(false);
+    await expect(firstValueFrom(enforceBinarySizeCap(of(progress)))).resolves.toBe(progress);
   });
 
   it('refuses a final over-cap body in the stream stage, with no progress event before it', async () => {

@@ -197,9 +197,10 @@ export const telemetryInterceptor: HttpInterceptorFn = (request, next) => {
   return next(outgoing).pipe(
     tap({
       next: (event: HttpEvent<unknown>) => {
-        // The adapter refuses an over-cap byte reply after this interceptor has seen it; the span
-        // records that refusal instead of an ok response. Only byte-reply calls are measured.
-        if (request.responseType === 'arraybuffer' && exceedsBinaryCap(event)) {
+        // The adapter refuses an over-cap capped reply after this interceptor has seen it; the
+        // span records that refusal instead of an ok response. Both capped directions set
+        // `reportProgress`, while a plain text call does not, so only the former is measured.
+        if (request.reportProgress && exceedsBinaryCap(event)) {
           call.end(refusedBinaryResult(event));
           return;
         }
