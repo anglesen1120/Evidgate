@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
@@ -18,7 +17,7 @@ namespace Identity.IntegrationTests;
 /// <summary>
 /// The limiter against a stalled store and against a crowd of new keys at the key bound: a held lock turns into the
 /// gate's bounded 503 instead of a hung request or an admission, and parallel new keys converge to the bound
-/// without an error or an eviction of the caller's own window.
+/// without an error and without refusing the caller.
 /// </summary>
 [Trait("Category", "Docker")]
 public sealed class RateLimitStoreFaultTests(DatabaseFixture fixture)
@@ -70,42 +69,33 @@ public sealed class RateLimitStoreFaultTests(DatabaseFixture fixture)
     }
 
     /// <summary>
-    /// 300 new keys from 16 parallel callers into a surface already at its bound of 50, one key in three carrying a
-    /// digest the capacity sample accepts. Tolerance, from the migration comment: during the burst the surface may
-    /// exceed the bound by the keys admitted between a sampled check's count and the end of the burst, a small
-    /// multiple of the parallelism, taken here as three times it. A caller's own window must survive for at least 99 %
-    /// of the callers (an overlapping sampled check may evict an old row). The drain to exactly the bound is its own case.
+    /// 300 new keys from 16 parallel callers into a surface already at its bound of 50. The capacity check is
+    /// chosen by the database's own <c>random()</c>, so the burst is left to chance rather than steered by key
+    /// digests: every caller is admitted, and a bounded drain afterwards converges the surface.
     /// </summary>
     /// <param name="surfaceName">The surface the burst drives; each has its own partition.</param>
     [Theory]
     [InlineData("Login")]
     [InlineData("CiExchange")]
-    public async Task Acquire_ParallelNewKeysAtTheBound_ConvergeToTheBoundWithoutEvictingTheCaller(string surfaceName)
+    public async Task Acquire_ParallelNewKeysAtTheBound_AdmitEveryCallerAndConvergeAfterTheBurst(string surfaceName)
     {
         var surface = Enum.Parse<RateSurface>(surfaceName);
         var limiter = Limiter(limit: 10, MaxKeys);
         var surfaceId = surface == RateSurface.Login ? "login" : "ci_exchange";
         for (var index = 0; index < MaxKeys; index++)
         {
-            (await limiter.AcquireAsync(surface, $"{surfaceId}-seed-{index}", Token)).Allowed.ShouldBeTrue();
+            (await limiter.AcquireAsync(surface, $"{surfaceId}-seed-{index}", 1, Token)).Allowed.ShouldBeTrue();
         }
 
-        var keys = BurstKeys(surfaceId, NewKeys);
-        keys.Count(key => Hash(key)[0] < 16).ShouldBeGreaterThanOrEqualTo(NewKeys / 3);
+        var keys = Enumerable.Range(0, NewKeys).Select(index => $"{surfaceId}-burst-{index}").ToArray();
         using var gate = new SemaphoreSlim(Callers);
 
-        var outcomes = await Task.WhenAll(keys.Select(async key =>
+        var decisions = await Task.WhenAll(keys.Select(async key =>
         {
             await gate.WaitAsync(Token);
             try
             {
-                var decision = await limiter.AcquireAsync(surface, key, Token);
-                var ownRowSurvives = await OwnerScalarAsync<bool>(
-                    "select exists (select 1 from public.rate_limit_window where surface = @surface and key_hash = @hash)",
-                    ("surface", surfaceId),
-                    ("hash", Hash(key)));
-
-                return (decision.Allowed, ownRowSurvives);
+                return await limiter.AcquireAsync(surface, key, 1, Token);
             }
             finally
             {
@@ -113,59 +103,12 @@ public sealed class RateLimitStoreFaultTests(DatabaseFixture fixture)
             }
         }));
 
-        outcomes.ShouldAllBe(outcome => outcome.Allowed, "a full surface never refuses a new key");
-        // Another caller's sampled check may legitimately evict a row that is already among the oldest, so a caller's
-        // own window is only required to survive for nearly every caller, not for each one.
-        outcomes.Count(outcome => outcome.ownRowSurvives).ShouldBeGreaterThanOrEqualTo(NewKeys * 99 / 100);
+        decisions.ShouldAllBe(decision => decision.Allowed, "a full surface never refuses a new key");
+        decisions.ShouldAllBe(decision => decision.RetryAfterSeconds == 0);
 
-        var afterBurst = await RowCountAsync(surfaceId);
-        afterBurst.ShouldBeLessThanOrEqualTo(MaxKeys + (3 * Callers),
-            "an unsampled insert defers eviction, so the surface sits above the bound by a bounded margin");
+        await RateLimitStoreTests.AssertCapacityConvergesAsync(
+            limiter, surface, MaxKeys, () => RowCountAsync(surfaceId), index => $"{surfaceId}-drain-{index}", Token);
     }
-
-    [Fact]
-    public async Task Acquire_OneSampledNewKeyOverTheBound_EvictsTheExcessAndLeavesExactlyTheBound()
-    {
-        var limiter = Limiter(limit: 10, MaxKeys);
-        var unsampled = Candidates("drain", sampledDigest: false).Take(2 * MaxKeys - 2).ToArray();
-        foreach (var key in unsampled)
-        {
-            (await limiter.AcquireAsync(RateSurface.Login, key, Token)).Allowed.ShouldBeTrue();
-        }
-
-        (await RowCountAsync("login")).ShouldBe(2L * MaxKeys - 2, "unsampled inserts defer eviction");
-        var sampledKey = Candidates("drain", sampledDigest: true).First();
-        (await limiter.AcquireAsync(RateSurface.Login, sampledKey, Token)).Allowed.ShouldBeTrue();
-
-        (await RowCountAsync("login")).ShouldBe((long)MaxKeys, "one sampled check removes up to 100 excess rows");
-        (await OwnerScalarAsync<bool>(
-            "select exists (select 1 from public.rate_limit_window where key_hash = @hash)",
-            ("hash", Hash(sampledKey)))).ShouldBeTrue();
-    }
-
-    /// <summary>
-    /// Burst keys in which every third one carries a digest the capacity sample accepts, so the checks are spread
-    /// through the burst instead of left to chance.
-    /// </summary>
-    private static string[] BurstKeys(string prefix, int count)
-    {
-        var sampled = Candidates(prefix, sampledDigest: true).Take(count / 3 + 1).GetEnumerator();
-        var unsampled = Candidates(prefix, sampledDigest: false).Take(count).GetEnumerator();
-        var keys = new List<string>(count);
-        for (var index = 0; index < count; index++)
-        {
-            var source = index % 3 == 0 ? sampled : unsampled;
-            source.MoveNext().ShouldBeTrue();
-            keys.Add(source.Current);
-        }
-
-        return [.. keys];
-    }
-
-    private static IEnumerable<string> Candidates(string prefix, bool sampledDigest) =>
-        Enumerable.Range(0, int.MaxValue)
-            .Select(index => string.Create(CultureInfo.InvariantCulture, $"{prefix}-burst-{index}"))
-            .Where(key => (Hash(key)[0] < 16) == sampledDigest);
 
     private ExchangeRateLimiter Limiter(int limit, int maxKeys) =>
         new(AppDataSource, Options.Create(new RateLimitOptions

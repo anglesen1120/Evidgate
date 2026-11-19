@@ -68,6 +68,7 @@ public sealed partial class ResolverTests : HarnessTest
         ["evidgate_resolve.data_protection_key_list"] = ["friendly_name", "key_xml"],
         ["evidgate_resolve.data_protection_key_store"] = [],
         ["evidgate_resolve.login_state_replay_consume"] = [],
+        // Both overloads after 0112 — the six-argument form and the five-argument cost-1 wrapper — return this tuple.
         ["evidgate_resolve.rate_limit_acquire"] = ["allowed", "retry_after_seconds"],
     };
 
