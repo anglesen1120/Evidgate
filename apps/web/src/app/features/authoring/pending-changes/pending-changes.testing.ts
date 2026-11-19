@@ -88,7 +88,7 @@ export class PendingConsentHarness extends ComponentHarness {
   async destructive() {
     return (
       (await (await this.locatorFor('[data-pending-confirm]')()).getAttribute('class'))?.includes(
-        'bg-destructive',
+        'spartan-button-variant-destructive',
       ) ?? false
     );
   }

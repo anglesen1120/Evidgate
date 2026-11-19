@@ -126,7 +126,6 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
     operationId: 'listAuthoringChanges',
     method: 'GET',
     path: '/projects/{p}/authoring/changes',
-    cursorQueryParameter: 'cursor',
   },
   { operationId: 'queueAuthoringChange', method: 'POST', path: '/projects/{p}/authoring/changes' },
   {

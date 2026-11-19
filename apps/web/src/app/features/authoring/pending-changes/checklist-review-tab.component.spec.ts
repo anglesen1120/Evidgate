@@ -186,9 +186,9 @@ describe('ChecklistReviewTabComponent', () => {
     expect(await ui.count('[data-review-comment]')).toBe(0);
     expect(await ui.count('[data-review-delete]')).toBe(0);
     expect(await ui.textAt('[data-review-comment-snapshot] dt')).toBe(PENDING_COPY.commentLabel);
-    expect(await ui.textAt('[data-review-comment-snapshot] dd')).toBe(comment);
+    expect(await ui.textAt('[data-review-comment-snapshot] dd')).toBe(comment.trim());
     expect(await ui.textAt('[data-review-reason-snapshot] dt')).toBe(PENDING_UI.queueReason);
-    expect(await ui.textAt('[data-review-reason-snapshot] dd')).toBe(reason);
+    expect(await ui.textAt('[data-review-reason-snapshot] dd')).toBe(reason.trim());
     expect(await ui.count('[data-review-comment-snapshot] script')).toBe(0);
     expect(await ui.inspectionFocused()).toBe(true);
     desktop.set(true);
