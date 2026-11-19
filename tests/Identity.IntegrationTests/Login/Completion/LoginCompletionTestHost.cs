@@ -52,7 +52,7 @@ internal sealed record LoginHostSettings
     /// <summary>Exactly the providers the case scripted (the host's real ones would shadow a fake name).</summary>
     internal ILoginProvider[] Providers { get; init; } = [];
 
-    /// <summary>Extra service registrations for a host with no database (the in-memory ring and replay set).</summary>
+    /// <summary>Extra service registrations for a host whose database is real (the in-memory ring and replay set).</summary>
     internal Action<IServiceCollection>? Seams { get; init; }
 }
 
@@ -112,10 +112,6 @@ internal sealed partial class LoginCompletionTestHost : WebApplicationFactory<Pr
     private const int RetryAfterSeconds = 30;
 
     private const int SessionPepperBytes = 32;
-
-    /// <summary>A database that cannot answer, for the outage case: nothing listens on port 1.</summary>
-    private const string UnreachableDatabase =
-        "Host=127.0.0.1;Port=1;Username=evidgate_app;Database=evidgate;Timeout=2";
 
     private readonly string _connectionString;
     private readonly LoginHostSettings _settings;
@@ -200,11 +196,24 @@ internal sealed partial class LoginCompletionTestHost : WebApplicationFactory<Pr
     }
 
     /// <summary>
-    /// A configured deployment whose database cannot answer: the same host, a connection string for a closed
-    /// port, so the completion's own database fault is produced by the real Npgsql path.
+    /// A deployment on the test's real database whose identity store is the one write that cannot answer: the
+    /// limiter, the replay set and the session store stay real, so the completion's own fault is the subject
+    /// instead of an earlier 503 from a broken rate limiter.
     /// </summary>
-    internal static LoginCompletionTestHost StartWithoutDatabase(params ILoginProvider[] providers) =>
-        new(UnreachableDatabase, new LoginHostSettings { Providers = providers, Seams = s => InMemoryLoginSeams.Apply(s, TimeProvider.System) });
+    internal static LoginCompletionTestHost StartWithIdentityStoreOutage(
+        DatabaseFixture fixture,
+        params ILoginProvider[] providers)
+    {
+        ArgumentNullException.ThrowIfNull(fixture);
+
+        return new(
+            fixture.AppConnectionString,
+            new LoginHostSettings
+            {
+                Providers = providers,
+                Seams = InMemoryLoginSeams.ApplyIdentityStoreOutage,
+            });
+    }
 
     /// <summary>A <c>google</c> provider that verifies <paramref name="subject"/>'s identity.</summary>
     internal static FakeLoginProvider GoogleProvider(string subject = GoogleSubject) =>
@@ -715,6 +724,12 @@ internal sealed partial class LoginCompletionTestHost : WebApplicationFactory<Pr
                 ["EVIDGATE:Login:RetryAfterSeconds"] =
                     RetryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 ["EVIDGATE:Database:ConnectionString"] = _connectionString,
+                // This suite's cases are about the completion, never about throttling, and they share the
+                // assembly's database: a wide budget keeps one case's attempts from answering another's
+                // request with a 429 in the same window (the shape IsolationApiFactory uses).
+                ["EVIDGATE:Identity:RateLimits:LoginLimit"] = "1000",
+                ["EVIDGATE:Identity:RateLimits:LinkLimit"] = "1000",
+                ["EVIDGATE:Identity:RateLimits:InviteLimit"] = "1000",
                 ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
                 ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
                 ["EVIDGATE:Isolation:SelfCheck"] = "Disabled",

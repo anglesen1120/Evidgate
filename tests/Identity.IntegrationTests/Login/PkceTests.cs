@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.Modules.Identity.Login;
+using Evidgate.Testing;
 using Shouldly;
 using Xunit;
 
@@ -13,16 +14,16 @@ namespace Identity.IntegrationTests.Login;
 /// S256 challenge of the verifier the cookie carries, the one-time <c>state</c>, and the 401
 /// <c>token_invalid</c> every mismatch, replay or tampered cookie gets (AC2's replay half, AC8's shape).
 /// </summary>
-// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+// The assembly Fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
 [Trait("Category", "Docker")]
-public sealed class PkceTests
+public sealed class PkceTests(DatabaseFixture fixture) : CatalogueTestBase(fixture, DatabaseIsolation.Dedicated)
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 25, 9, 0, 0, TimeSpan.Zero);
 
     [Fact]
     public async Task Start_Sends_State_Nonce_And_The_S256_Challenge_Of_The_Cookie_Verifier()
     {
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();
 
         using var response = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake", "/runs/42?x=1#a"));
@@ -56,7 +57,7 @@ public sealed class PkceTests
             Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity("fake")),
         };
         var completion = new FakeLoginCompletion { Target = "/runs/42?x=1#a" };
-        using var host = LoginTestHost.Start(new MutableClock(Now), completion, provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), completion, provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake", "/runs/42?x=1#a"));
@@ -89,7 +90,7 @@ public sealed class PkceTests
             Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity("fake")),
         };
         var completion = new FakeLoginCompletion();
-        using var host = LoginTestHost.Start(new MutableClock(Now), completion, provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), completion, provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -118,7 +119,7 @@ public sealed class PkceTests
         {
             Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity("fake")),
         };
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginCompletion(), provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginCompletion(), provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -140,7 +141,7 @@ public sealed class PkceTests
         {
             Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity("fake")),
         };
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginCompletion(), provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginCompletion(), provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -163,7 +164,7 @@ public sealed class PkceTests
         {
             Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity("fake")),
         };
-        using var host = LoginTestHost.Start(clock, new FakeLoginCompletion(), provider);
+        using var host = LoginTestHost.Start(Fixture, clock, new FakeLoginCompletion(), provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -192,7 +193,7 @@ public sealed class PkceTests
         {
             Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity("other")),
         };
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginCompletion(), started, other);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginCompletion(), started, other);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -211,7 +212,7 @@ public sealed class PkceTests
     public async Task Callback_Carrying_The_Providers_Error_Is_Token_Invalid_And_Never_Echoes_It()
     {
         var provider = new FakeLoginProvider("fake");
-        using var host = LoginTestHost.Start(new MutableClock(Now), provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -236,7 +237,7 @@ public sealed class PkceTests
     public async Task Callback_Without_A_Code_Or_With_An_Oversized_One_Is_Token_Invalid()
     {
         var provider = new FakeLoginProvider("fake");
-        using var host = LoginTestHost.Start(new MutableClock(Now), provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -260,7 +261,7 @@ public sealed class PkceTests
     [Fact]
     public async Task Callback_Without_Any_Cookie_Is_Token_Invalid()
     {
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();
 
         using var callback = await LoginTestHost.SendAsync(
@@ -274,7 +275,7 @@ public sealed class PkceTests
     [Fact]
     public async Task Start_Refuses_An_Off_App_ReturnUrl_And_Falls_Back_To_The_Root()
     {
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();
 
         using var response = await LoginTestHost.SendAsync(
@@ -289,7 +290,7 @@ public sealed class PkceTests
     [Fact]
     public async Task Start_For_An_Unknown_Provider_Is_404_Not_Found()
     {
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();
 
         using var response = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("saml"));

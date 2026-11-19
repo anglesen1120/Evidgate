@@ -66,13 +66,13 @@ internal static class ForwardedHeadersTestHost
         });
     }
 
-    /// <summary>The budget the limited routes spend, read from the booted host rather than assumed.</summary>
+    /// <summary>The login budget the limited routes spend, read from the booted host rather than assumed.</summary>
     /// <param name="host">The variant host.</param>
     internal static int Burst(WebApplicationFactory<Program> host)
     {
         ArgumentNullException.ThrowIfNull(host);
 
-        return host.Services.GetRequiredService<IOptions<RateLimitOptions>>().Value.CiExchangeLimit;
+        return host.Services.GetRequiredService<IOptions<RateLimitOptions>>().Value.LoginLimit;
     }
 
     /// <summary>Places the sender's socket address before any middleware of the Api pipeline runs.</summary>

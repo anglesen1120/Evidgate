@@ -692,6 +692,13 @@ internal sealed class SessionTestHost : WebApplicationFactory<Program>
             configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["EVIDGATE:Database:ConnectionString"] = _connectionString,
+                // Every case of these suites signs in through the login routes, and the suites share the
+                // assembly's database, whose rate-limit windows now live in PostgreSQL: a wide budget keeps
+                // one case's sign-ins from answering another's request with a 429 in the same window
+                // (the shape IsolationApiFactory uses).
+                ["EVIDGATE:Identity:RateLimits:LoginLimit"] = "1000",
+                ["EVIDGATE:Identity:RateLimits:LinkLimit"] = "1000",
+                ["EVIDGATE:Identity:RateLimits:InviteLimit"] = "1000",
                 ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
                 ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
                 // 02.6.1-T1.4: the boot self-check is a deployment guard, not a behaviour under test here.

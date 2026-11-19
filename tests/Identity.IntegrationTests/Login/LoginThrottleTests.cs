@@ -2,6 +2,7 @@ using System.Net;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.Modules.Identity.Login;
 using Evidgate.Modules.Identity.Options;
+using Evidgate.Testing;
 using Identity.IntegrationTests.Forwarding;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -18,16 +19,17 @@ namespace Identity.IntegrationTests.Login;
 /// that calls the provider, and the fact that another client address keeps its own window — plus the
 /// redirect sink guard of F4/CR5.
 /// </summary>
-// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+// The assembly Fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
 [Trait("Category", "Docker")]
-public sealed class LoginThrottleTests
+public sealed class LoginThrottleTests(DatabaseFixture fixture)
+    : CatalogueTestBase(fixture, DatabaseIsolation.Dedicated)
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 25, 9, 0, 0, TimeSpan.Zero);
 
     [Fact]
     public async Task Start_Answers_429_With_Retry_After_Once_The_Clients_Budget_Is_Spent()
     {
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();
         var burst = Burst(host);
 
@@ -52,7 +54,7 @@ public sealed class LoginThrottleTests
     [Fact]
     public async Task Callback_Spends_Two_Units_So_It_Is_Stricter_Than_Start()
     {
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();
         var callbackBudget = Burst(host) / 2;
 
@@ -80,7 +82,7 @@ public sealed class LoginThrottleTests
     [Fact]
     public async Task Exhausting_One_Route_Leaves_The_Other_Routes_Budget()
     {
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();
         var burst = Burst(host);
 
@@ -103,7 +105,7 @@ public sealed class LoginThrottleTests
     [Fact]
     public async Task Another_Client_Address_Keeps_Its_Own_Budget()
     {
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
 
         // The per-address window cannot be proven through LoginTestHost's client (TestServer leaves the
         // client address null, so every request of one host shares one key), so this variant of the same
@@ -135,7 +137,7 @@ public sealed class LoginThrottleTests
             Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity("fake")),
         };
         var completion = new FakeLoginCompletion { Target = "https://evil.example/steal?session=1" };
-        using var host = LoginTestHost.Start(new MutableClock(Now), completion, provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), completion, provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -158,7 +160,7 @@ public sealed class LoginThrottleTests
             Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity("fake")),
         };
         var completion = new FakeLoginCompletion { Target = "/runs/42?tab=x" };
-        using var host = LoginTestHost.Start(new MutableClock(Now), completion, provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), completion, provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -175,7 +177,7 @@ public sealed class LoginThrottleTests
     [Fact]
     public async Task A_Start_Whose_Authorization_Url_Cannot_Be_Built_Writes_No_Cookie()
     {
-        using var host = LoginTestHost.Start(new MutableClock(Now), new UnbuildableProvider());
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new UnbuildableProvider());
         using var client = host.CreateLoginClient();
 
         using var response = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -191,7 +193,7 @@ public sealed class LoginThrottleTests
     [Fact]
     public async Task A_One_Unit_Budget_Never_Refuses_The_First_Callback()
     {
-        using var configured = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var configured = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var host = HostWithBudget(configured, burst: 1);
         using var client = host.CreateClient(
             new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = false });
@@ -225,7 +227,7 @@ public sealed class LoginThrottleTests
     [Fact]
     public async Task A_Refused_Callback_Still_Deletes_The_Cookie_And_Sets_No_Store()
     {
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();
         var callbackBudget = Burst(host) / 2;
 

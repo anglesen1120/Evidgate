@@ -128,7 +128,7 @@
         "staging": "default",
         "prod": "default"
       },
-      "note": "`EVIDGATE:Identity:RateLimits:LoginMaxKeys` (CR-13): login keys kept before the login surface evicts its oldest windows (expired first). A new key is always admitted, so the bound costs the oldest keys their remaining budget instead of refusing new clients (an address spray cannot lock everyone out); other surfaces are never touched. Default 50000; a value below 1 fails the boot naming this key."
+      "note": "`EVIDGATE:Identity:RateLimits:LoginMaxKeys` (CR-13): approximate login key bound before the login surface evicts its oldest windows (expired first). A new key is never refused for lack of capacity; eviction can remove older keys' remaining budget, and other surfaces are never touched. Concurrent acquisitions can exceed the bound temporarily. Default 50000; a value outside 1..1000000 fails the boot naming this key."
     },
     {
       "key": "EVIDGATE__IDENTITY__RATELIMITS__LINKLIMIT",
@@ -188,7 +188,7 @@
         "staging": "default",
         "prod": "default"
       },
-      "note": "`EVIDGATE:Identity:RateLimits:LinkMaxKeys` (CR-13): link keys kept before the link surface evicts its oldest windows; a new key is always admitted, and no other surface's rows are touched. Default 50000; a value below 1 fails the boot naming this key."
+      "note": "`EVIDGATE:Identity:RateLimits:LinkMaxKeys` (CR-13): approximate link key bound before the link surface evicts its oldest windows; a new key is never refused for lack of capacity, and no other surface's rows are touched. Concurrent acquisitions can exceed the bound temporarily. Default 50000; a value outside 1..1000000 fails the boot naming this key."
     },
     {
       "key": "EVIDGATE__IDENTITY__RATELIMITS__INVITELIMIT",
@@ -248,7 +248,7 @@
         "staging": "default",
         "prod": "default"
       },
-      "note": "`EVIDGATE:Identity:RateLimits:InviteMaxKeys` (CR-13): invite keys kept before the invite surface evicts its oldest windows; a new key is always admitted, and no other surface's rows are touched. Default 50000; a value below 1 fails the boot naming this key."
+      "note": "`EVIDGATE:Identity:RateLimits:InviteMaxKeys` (CR-13): approximate invite key bound before the invite surface evicts its oldest windows; a new key is never refused for lack of capacity, and no other surface's rows are touched. Concurrent acquisitions can exceed the bound temporarily. Default 50000; a value outside 1..1000000 fails the boot naming this key."
     },
     {
       "key": "EVIDGATE__IDENTITY__RATELIMITS__CIEXCHANGELIMIT",
@@ -308,7 +308,7 @@
         "staging": "default",
         "prod": "default"
       },
-      "note": "`EVIDGATE:Identity:RateLimits:CiExchangeMaxKeys` (CR-13): exchange keys kept before the exchange surface evicts its oldest windows; a new key is always admitted, so filling the surface no longer refuses every fresh client, and no other surface's rows are touched. Default 50000; a value below 1 fails the boot naming this key."
+      "note": "`EVIDGATE:Identity:RateLimits:CiExchangeMaxKeys` (CR-13): approximate exchange key bound before the exchange surface evicts its oldest windows; a new key is never refused for lack of capacity, and no other surface's rows are touched. Concurrent acquisitions can exceed the bound temporarily. Default 50000; a value outside 1..1000000 fails the boot naming this key."
     },
     {
       "key": "EVIDGATE__HEALING__APPLY",

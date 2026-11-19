@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Evidgate.Modules.Identity.Login;
+using Evidgate.Testing;
 using Shouldly;
 using Xunit;
 
@@ -10,9 +11,10 @@ namespace Identity.IntegrationTests.Login;
 /// instrumentation copies the callback's query string into the span, so
 /// <see cref="LoginTraceRedaction"/> takes it off again on those two routes only.
 /// </summary>
-// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+// The assembly Fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
 [Trait("Category", "Docker")]
-public sealed class LoginTraceRedactionTests
+public sealed class LoginTraceRedactionTests(DatabaseFixture fixture)
+    : CatalogueTestBase(fixture, DatabaseIsolation.Dedicated)
 {
     private const string CallbackPath = "/v1/auth/oidc/google/callback";
 
@@ -105,6 +107,7 @@ public sealed class LoginTraceRedactionTests
         // names the instrumentation's own tags literally.
         using var spans = new SpanCollector();
         using var host = LoginTestHost.Start(
+            Fixture,
             new MutableClock(new DateTimeOffset(2026, 10, 25, 9, 0, 0, TimeSpan.Zero)),
             new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();

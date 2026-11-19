@@ -36,13 +36,20 @@ internal readonly record struct RateDecision(bool Allowed, int RetryAfterSeconds
 /// Fixed-window attempt budgets for the pre-tenant routes (02.4.1 AC8 and the login, link and invite routes), keyed by
 /// whatever identifies the caller before it is trusted (the client address, then the repository id or token prefix).
 /// The window lives in PostgreSQL, so every replica counts into the same one and the limit does not multiply with the
-/// replica count; a full surface evicts its oldest keys instead of refusing new clients.
+/// replica count; a full surface evicts its oldest keys on a sampled capacity check instead of refusing new
+/// clients, and each new key sweeps a bounded batch of that surface's expired windows.
 /// </summary>
 internal sealed class ExchangeRateLimiter(NpgsqlDataSource dataSource, IOptions<RateLimitOptions> options)
 {
+    /// <summary>
+    /// A budget decision must not hold a request open: the store answers in milliseconds or it answers late, and
+    /// the route's fail-closed path (503 with <c>Retry-After</c>) is the better outcome.
+    /// </summary>
+    private const int CommandTimeoutSeconds = 2;
+
     /// <summary>Counts one attempt for <paramref name="key"/> and reports whether the surface's budget admits it.</summary>
     /// <param name="surface">The budget to spend from.</param>
-    /// <param name="key">The limiter key; only its SHA-256 reaches the store, never the address or token itself.</param>
+    /// <param name="key">The limiter key; the store receives only its unsalted SHA-256 digest, which is pseudonymous, not anonymous.</param>
     /// <param name="cancellationToken">The request's cancellation token.</param>
     /// <exception cref="NpgsqlException">The store could not answer; the caller fails closed.</exception>
     public async ValueTask<RateDecision> AcquireAsync(
@@ -65,6 +72,7 @@ internal sealed class ExchangeRateLimiter(NpgsqlDataSource dataSource, IOptions<
         command.Parameters.AddWithValue("limit", settings.Limit);
         command.Parameters.AddWithValue("window_seconds", settings.WindowSeconds);
         command.Parameters.AddWithValue("max_keys", settings.MaxKeys);
+        command.CommandTimeout = CommandTimeoutSeconds;
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))

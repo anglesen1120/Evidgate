@@ -41,7 +41,7 @@ public.user_identity   platform   # D12: identity key (provider, subject); reach
 public.session         platform   # D12: the server-side credential row; scoped to a user, not to an org
 public.data_protection_key platform # Data Protection key ring shared by every Api replica (0100): no org_id; no evidgate_app grant, reached only through evidgate_resolve.data_protection_key_list/store
 public.login_state_replay platform # one-time login `state` set shared by every replica (0100): no org_id; no evidgate_app grant, written only by evidgate_resolve.login_state_replay_consume
-public.rate_limit_window platform # pre-tenant attempt budgets shared by every replica (0110): no org_id and only a SHA-256 key hash; no evidgate_app grant, written only by evidgate_resolve.rate_limit_acquire
+public.rate_limit_window platform # pre-tenant attempt budgets shared by every replica (0110): no org_id and only an unsalted SHA-256 key digest (pseudonymous, not anonymous); expired rows are swept; no evidgate_app grant, written only by evidgate_resolve.rate_limit_acquire
 public.permission      platform   # platform catalogue with no org_id column at all (02 §4.5)
 public.ai_settings_template platform # built-in bilingual template catalogue (13.2.1): no org_id, select-only for evidgate_app, written only by the migration and the owner role
 public.platform_sweep_audit platform # platform-scope sweep audit: no org_id and no evidgate_app policy or grant; written only by the `evidgate.record_sweep_audit` definer, which the sweep role alone may execute, and evidgate_operator holds the select grant with no policy (grant-gated, 0052's posture)

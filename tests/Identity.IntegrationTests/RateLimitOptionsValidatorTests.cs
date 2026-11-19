@@ -65,17 +65,21 @@ public sealed class RateLimitOptionsValidatorTests
     [InlineData("Link", -1)]
     [InlineData("Invite", 0)]
     [InlineData("CiExchange", -100)]
-    public void A_Key_Bound_Below_One_Is_Refused_With_Its_Key(string surface, int maxKeys)
+    [InlineData("Login", 1_000_001)]
+    [InlineData("Link", 1_000_001)]
+    [InlineData("Invite", 1_000_001)]
+    [InlineData("CiExchange", int.MaxValue)]
+    public void A_Key_Bound_Outside_The_Range_Is_Refused_With_Its_Key(string surface, int maxKeys)
     {
         var result = Validator.Validate(null, With(surface, maxKeys: maxKeys));
 
         result.Succeeded.ShouldBeFalse();
-        result.Failures!.ShouldContain($"{Section}:{surface}MaxKeys must be at least 1");
+        result.Failures!.ShouldContain($"{Section}:{surface}MaxKeys must be between 1 and 1000000");
     }
 
     [Theory]
     [InlineData(1, 1, 1)]
-    [InlineData(1_000_000, 86_400, 50_000)]
+    [InlineData(1_000_000, 86_400, 1_000_000)]
     public void The_Boundaries_Of_Every_Scalar_Pass(int limit, int windowSeconds, int maxKeys)
     {
         foreach (var surface in Surfaces)

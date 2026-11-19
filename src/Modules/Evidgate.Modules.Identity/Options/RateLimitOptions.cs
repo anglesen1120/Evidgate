@@ -19,6 +19,12 @@ internal sealed class RateLimitOptions
     /// </summary>
     public const int MaxLimit = 1_000_000;
 
+    /// <summary>
+    /// Highest accepted key capacity: a sampled capacity check counts up to <c>max_keys + 100</c> index entries and
+    /// evicts in batches of 100, so an unbounded value would make that one check scan an unbounded surface.
+    /// </summary>
+    public const int MaxKeys = 1_000_000;
+
     /// <summary>Login <c>start</c> and <c>callback</c> attempts admitted per key within the window.</summary>
     public int LoginLimit { get; init; } = 30;
 
@@ -124,9 +130,9 @@ internal sealed class RateLimitOptionsValidator : IValidateOptions<RateLimitOpti
 
     private static void CheckMaxKeys(List<string> failures, string key, int value)
     {
-        if (value < 1)
+        if (value is < 1 or > RateLimitOptions.MaxKeys)
         {
-            failures.Add($"{Key(key)} must be at least 1");
+            failures.Add($"{Key(key)} must be between 1 and {RateLimitOptions.MaxKeys}");
         }
     }
 
