@@ -103,4 +103,43 @@ internal static class CatalogRequestRules
 
         return null;
     }
+
+    /// <summary>
+    /// The <c>limit</c> of a route whose contract separates the two failures: a value that is not the canonical decimal
+    /// spelling of an integer is <c>400</c> (undecodable input), while a canonical integer outside the range is the
+    /// <c>422</c> the caller can fix. Unlike <see cref="Limit"/> an absent member and an empty one differ.
+    /// </summary>
+    /// <param name="present">Whether the query carried the member at all.</param>
+    /// <param name="raw">The raw query value.</param>
+    /// <param name="defaultLimit">The size when absent.</param>
+    /// <param name="maxLimit">The largest accepted size.</param>
+    /// <param name="limit">The parsed size.</param>
+    public static Error? RouteLimit(bool present, string raw, int defaultLimit, int maxLimit, out int limit)
+    {
+        limit = defaultLimit;
+
+        if (!present)
+        {
+            return null;
+        }
+
+        if (!int.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
+            || !string.Equals(parsed.ToString(CultureInfo.InvariantCulture), raw, StringComparison.Ordinal))
+        {
+            return Error.BadRequest(
+                "limit must be the canonical decimal spelling of an integer",
+                [new ErrorDetail("limit", "malformed")]);
+        }
+
+        if (parsed < 1 || parsed > maxLimit)
+        {
+            return Error.Invalid(
+                string.Create(CultureInfo.InvariantCulture, $"limit must be an integer between 1 and {maxLimit} (00 §9.1)"),
+                [new ErrorDetail("limit", "out_of_range")]);
+        }
+
+        limit = parsed;
+
+        return null;
+    }
 }
