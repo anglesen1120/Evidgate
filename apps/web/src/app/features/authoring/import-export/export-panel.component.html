@@ -1,0 +1,171 @@
+<app-section-header [title]="copy.exportScope" [description]="copy.countUnavailable" />
+<p class="m-0 wrap-anywhere" data-export-scope>{{ store.scopeLabel() }}</p>
+<p class="m-0 text-sm text-muted-foreground md:hidden">{{ copy.readOnlyExport }}</p>
+<div
+  *appDesktopMutation
+  class="grid min-w-0 gap-(--eg-space-4) rounded-lg border bg-card p-(--eg-space-5)"
+>
+  <div class="grid min-w-0 gap-(--eg-space-2)">
+    <label hlmLabel for="authoring-export-scope">{{ copy.exportScope }}</label>
+    <hlm-select
+      name="exportScope"
+      [ngModel]="store.draft().scope"
+      (ngModelChange)="store.edit({ scope: $event })"
+      [disabled]="store.pending()"
+    >
+      <hlm-select-trigger
+        [buttonId]="'authoring-export-scope'"
+        class="min-h-(--eg-control-touch) w-full"
+        ><hlm-select-value
+      /></hlm-select-trigger>
+      <hlm-select-content *hlmSelectPortal [aria-label]="copy.exportScope">
+        <hlm-select-item value="project">{{ copy.projectScope }}</hlm-select-item>
+        <hlm-select-item value="node">{{ copy.nodeScope }}</hlm-select-item>
+      </hlm-select-content>
+    </hlm-select>
+  </div>
+  @if (store.draft().scope === 'node') {
+    <div class="grid min-w-0 gap-(--eg-space-2)">
+      <label hlmLabel for="authoring-export-node">{{ copy.node }}</label>
+      <input
+        hlmInput
+        id="authoring-export-node"
+        class="min-h-(--eg-control-touch) w-full font-mono"
+        type="text"
+        autocomplete="off"
+        spellcheck="false"
+        [value]="store.draft().nodeId"
+        (input)="editNode($event)"
+        [disabled]="store.pending()"
+        [attr.aria-describedby]="store.unavailableReason() ? 'authoring-export-scope-help' : null"
+        [attr.aria-invalid]="store.unavailableReason() ? 'true' : null"
+        data-export-node
+      />
+    </div>
+  }
+</div>
+<div class="grid min-w-0 gap-(--eg-space-2) md:max-w-sm">
+  <label hlmLabel for="authoring-export-format">{{ copy.format }}</label>
+  <hlm-select
+    name="exportFormat"
+    [ngModel]="store.draft().format"
+    (ngModelChange)="store.edit({ format: $event })"
+    [disabled]="store.pending()"
+  >
+    <hlm-select-trigger
+      [buttonId]="'authoring-export-format'"
+      class="min-h-(--eg-control-touch) w-full"
+      ><hlm-select-value
+    /></hlm-select-trigger>
+    <hlm-select-content *hlmSelectPortal [aria-label]="copy.format">
+      @for (format of formats; track format) {
+        <hlm-select-item [value]="format">{{ format.toUpperCase() }}</hlm-select-item>
+      }
+    </hlm-select-content>
+  </hlm-select>
+</div>
+<fieldset class="grid min-w-0 gap-(--eg-space-2)">
+  <legend class="mb-(--eg-space-2) text-sm font-medium">{{ copy.include }}</legend>
+  @for (kind of kinds; track kind.value) {
+    <label
+      hlmLabel
+      class="flex min-h-(--eg-control-touch) items-center gap-(--eg-space-3)"
+      [for]="'export-kind-' + kind.value"
+    >
+      <hlm-checkbox
+        [inputId]="'export-kind-' + kind.value"
+        [checked]="store.draft().kinds.includes(kind.value)"
+        [disabled]="store.pending()"
+        (checkedChange)="toggleKind(kind.value, $event)"
+      />{{ kind.label }}
+    </label>
+  }
+</fieldset>
+<div class="grid min-w-0 gap-(--eg-space-3)">
+  <div class="flex flex-wrap gap-(--eg-space-3)">
+    <button
+      hlmBtn
+      [variant]="'outline'"
+      type="button"
+      class="min-h-(--eg-control-touch) whitespace-normal"
+      disabled
+      [attr.aria-describedby]="'export-selection-reason'"
+      data-export-selected
+    >
+      {{ copy.selected }}
+    </button>
+    <button
+      hlmBtn
+      [variant]="'outline'"
+      type="button"
+      class="min-h-(--eg-control-touch) whitespace-normal"
+      disabled
+      [attr.aria-describedby]="'export-selection-reason'"
+      data-export-filtered
+    >
+      {{ copy.filtered }}
+    </button>
+  </div>
+  <p id="export-selection-reason" class="m-0 text-sm text-muted-foreground">
+    {{ copy.selectionUnavailable }}
+  </p>
+</div>
+@if (store.unavailableReason(); as reason) {
+  <p id="authoring-export-scope-help" class="m-0 text-sm text-destructive" data-export-unavailable>
+    {{ reason }}
+  </p>
+}
+<section class="grid min-w-0 gap-(--eg-space-3)" aria-labelledby="export-fields-title">
+  <app-section-header
+    [titleId]="'export-fields-title'"
+    [title]="copy.fields"
+    [description]="copy.fieldsHint"
+  />
+  <ul class="m-0 flex min-w-0 flex-wrap gap-(--eg-space-2) p-0" [attr.aria-label]="copy.fields">
+    @for (column of columns; track column) {
+      <li
+        class="list-none rounded-md border bg-muted px-(--eg-space-2) py-(--eg-space-1) font-mono text-sm"
+      >
+        {{ column }}
+      </li>
+    }
+  </ul>
+</section>
+@if (store.feedbackVisible() && store.error(); as error) {
+  <app-request-state
+    [status]="'error'"
+    [error]="error"
+    [retryEligible]="error.retryable && store.retryReady()"
+    [retryBusy]="store.pending()"
+    (retry)="store.openConfirmation()"
+  />
+}
+@if (store.feedbackVisible() && store.pending()) {
+  <app-request-state [status]="'loading'" [loadingLabel]="copy.download" />
+}
+@if (store.feedbackVisible() && store.completedScope()) {
+  <app-inline-feedback
+    [title]="store.empty() ? copy.emptyExport : copy.downloaded"
+    [description]="store.completedScope()"
+    [tone]="store.empty() ? 'info' : 'success'"
+  />
+}
+<button
+  hlmBtn
+  type="button"
+  class="min-h-(--eg-control-touch) w-fit whitespace-normal"
+  data-export-download
+  [disabled]="!store.canRead() || !store.query() || store.pending() || !store.retryReady()"
+  (click)="store.openConfirmation()"
+>
+  {{ copy.download }}
+</button>
+@if (store.confirmation(); as confirmation) {
+  <app-authoring-export-confirm
+    [scope]="confirmation.label"
+    [format]="confirmation.query.format.toUpperCase()"
+    [included]="included()"
+    (confirmed)="download()"
+    (dismissed)="store.closeConfirmation()"
+  />
+}

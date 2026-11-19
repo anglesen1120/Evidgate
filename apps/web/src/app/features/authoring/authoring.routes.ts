@@ -11,4 +11,12 @@ import type { Routes } from '@angular/router';
 import { RouteStubPage } from '../../shell/stub/route-stub.page';
 
 /** Everything mounted under a `authoring` segment: the shell placeholder until its feature story. */
-export const routes: Routes = [{ path: '', pathMatch: 'full', component: RouteStubPage }];
+export const routes: Routes = [
+  { path: '', pathMatch: 'full', component: RouteStubPage },
+  {
+    path: 'import-export',
+    loadComponent: () =>
+      import('./import-export/import-export.page').then((m) => m.ImportExportPage),
+    data: { pageHeadingLevel: 1 },
+  },
+];

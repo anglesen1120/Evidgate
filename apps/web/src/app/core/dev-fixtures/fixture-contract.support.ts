@@ -131,8 +131,9 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
  * valid — when this spec cannot inline it faithfully:
  * - the file does not exist, or resolves outside `contracts/`;
  * - the reference chain revisits a file (a cycle);
- * - the inlined document makes a root-relative `#/...` reference, which would resolve against
- *   `contracts/openapi.yaml` instead of the file it was written for.
+ * - the inlined document makes a root-relative `#/...` reference that survives the document's own
+ *   local references being expanded in place (a cycle, or a document larger than the node budget),
+ *   which would resolve against `contracts/openapi.yaml` instead of the file it was written for.
  *
  * `$id` and `$schema` are dropped from an inlined document: a nested `$id` re-bases the references
  * inside the subtree it is spliced into, and `$schema` is only meaningful at a schema resource root.
@@ -188,16 +189,75 @@ function readExternalSchema(reference: string, inlined: readonly string[]): unkn
 
   const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
   const target = resolveContractPointerIn(parsed, pointer);
-  if (target === undefined || hasRootRelativeRef(target)) {
+  if (target === undefined) {
+    return undefined;
+  }
+  // A standalone document may use local `#/$defs/...` references of its own. Inlined as they
+  // stand they would resolve against `contracts/openapi.yaml` instead of the file that wrote
+  // them, so they are expanded in place first; anything a cycle or the node budget leaves
+  // unresolved stays a root-relative reference and is refused below, exactly as before.
+  const localised = expandLocalReferences(target, parsed, [pointer], { left: MAX_LOCAL_REF_NODES });
+  if (hasRootRelativeRef(localised)) {
     return undefined;
   }
 
-  const withoutIdentity: unknown = isRecord(target)
+  const withoutIdentity: unknown = isRecord(localised)
     ? Object.fromEntries(
-        Object.entries(target).filter(([key]) => key !== '$id' && key !== '$schema'),
+        Object.entries(localised).filter(([key]) => key !== '$id' && key !== '$schema'),
       )
-    : target;
+    : localised;
   return inlineExternalSchemaRefs(withoutIdentity, [...inlined, path]);
+}
+
+/** How many nodes one standalone document may expand to; a runaway product stays refused. */
+const MAX_LOCAL_REF_NODES = 20_000;
+
+/**
+ * One node of a standalone document with its own local `#/...` references expanded in place.
+ * `stack` holds the pointers already being expanded, so a recursive schema leaves its reference
+ * in place rather than looping; `budget` bounds the total work for a document that would
+ * otherwise multiply out.
+ */
+function expandLocalReferences(
+  node: unknown,
+  document: unknown,
+  stack: readonly string[],
+  budget: { left: number },
+): unknown {
+  if (budget.left <= 0) {
+    return node;
+  }
+  budget.left -= 1;
+  if (Array.isArray(node)) {
+    return node.map((entry) => expandLocalReferences(entry, document, stack, budget));
+  }
+  if (!isRecord(node)) {
+    return node;
+  }
+
+  const reference = node['$ref'];
+  if (typeof reference === 'string' && reference.startsWith('#/') && !stack.includes(reference)) {
+    const target = resolveContractPointerIn(document, reference);
+    if (target !== undefined) {
+      const inlined = expandLocalReferences(target, document, [...stack, reference], budget);
+      const siblings = Object.entries(node).filter(([key]) => key !== '$ref');
+      if (siblings.length === 0) {
+        return inlined;
+      }
+      // 2020-12 applies `$ref` siblings next to the reference, so they stay side by side.
+      const rest: Record<string, unknown> = {};
+      for (const [key, value] of siblings) {
+        rest[key] = expandLocalReferences(value, document, stack, budget);
+      }
+      return { allOf: [inlined, rest] };
+    }
+  }
+
+  const copy: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(node)) {
+    copy[key] = expandLocalReferences(value, document, stack, budget);
+  }
+  return copy;
 }
 
 /** Resolve one `#/json/pointer` (or a bare `#`) inside a standalone schema document. */

@@ -119,6 +119,8 @@ export interface FixtureRoute {
  * SDK side of the same drift).
  */
 export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
+  { operationId: 'importAuthoring', method: 'POST', path: '/projects/{p}/authoring/import' },
+  { operationId: 'exportAuthoring', method: 'GET', path: '/projects/{p}/authoring/export' },
   { operationId: 'listPermissions', method: 'GET', path: '/permissions' },
   { operationId: 'listRoles', method: 'GET', path: '/roles' },
   { operationId: 'listMyOrganizations', method: 'GET', path: '/orgs' },

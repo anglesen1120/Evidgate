@@ -1,0 +1,23 @@
+{
+  "operation_id": "importAuthoring",
+  "variant": "header",
+  "status": 422,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000af01"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "validation_error",
+      "message": "The complete request was refused.",
+      "request_id": "018f0000-0000-7000-8000-00000000af01",
+      "retryable": false,
+      "details": [
+        {
+          "path": "/header",
+          "reason": "unsupported_format"
+        }
+      ]
+    }
+  }
+}
