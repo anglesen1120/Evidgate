@@ -3,16 +3,14 @@ import type {
   ManualCaseStepDto,
   UpdateManualCaseRequest,
 } from '@evidgate/sdk';
-import catalogue from '../../../../../../../contracts/permissions.json';
 import { newUuid } from '../../../core/http/random-id';
 import { isApiRequestError } from '../../../core/http/api-error';
 
-export const EDITOR_READ =
-  catalogue.permissions.find((entry) => entry.resource === 'authoring' && entry.action === 'read')
-    ?.code ?? '';
-export const EDITOR_WRITE =
-  catalogue.permissions.find((entry) => entry.resource === 'authoring' && entry.action === 'write')
-    ?.code ?? '';
+// Only the two codes this route needs are shipped: importing `contracts/permissions.json` to look
+// them up put every role name and description in the lazy chunk, which the fixture-leak gate
+// rejects. The catalogue stays the source; `editor.model.spec.ts` pins both values.
+export const EDITOR_READ = 'authoring:read';
+export const EDITOR_WRITE = 'authoring:write';
 export type CasePriority = ManualCaseDetailDto['priority'];
 export type CaseTextField = 'title' | 'description' | 'precondition';
 export type StepTextField = 'action' | 'expected' | 'data';
