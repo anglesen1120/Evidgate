@@ -154,20 +154,21 @@ describe('manifests build failures', () => {
     expect(stub.calls).toHaveLength(20);
   });
 
-  it('more_than_ten_thousand_members_is_too_large', async () => {
-    const extra = Array.from({ length: 10_001 }, (_value, index) => member(index + 1));
+  it('a_page_over_500_members_stops_the_walk_before_mapping_or_another_page', async () => {
+    // The route's limit is 500; the 501st member is valid, so without the page cap the walk
+    // would map the page and fail later on the unexercised members instead.
+    const tooMany = Array.from({ length: 501 }, (_value, index) => member(index + 1));
     const fixture = await setup({ text: report([member(1)]) });
-    const stub = stubFetch((_call, index) =>
-      jsonResponse(
-        200,
-        page(index === 0 ? extra.slice(0, 5000) : extra.slice(5000), index === 0 ? 'next' : null),
-      ),
-    );
+    const stub = stubFetch((_call, index) => {
+      expect(index).toBe(0);
+      return jsonResponse(200, page(tooMany, 'next'));
+    });
 
     const outcome = await run(fixture, stub.fetchImpl);
 
     expect(outcome.code).toBe(3);
-    expect(outcome.stderr.join('')).toContain('evidgate: error manifest_input_too_large: ');
+    expect(outcome.stderr.join('')).toContain('evidgate: error manifest_plan_invalid: ');
+    expect(stub.calls).toHaveLength(1);
   });
 
   it('empty_plan_is_plan_invalid', async () => {

@@ -1556,9 +1556,10 @@ The command validates its flags and reads and parses the list report **before**
 calling `getToken`. A missing flag, unreadable report, invalid JSON, unsupported
 report shape, invalid local variant metadata or a repeated case-and-variant
 therefore causes no token exchange and no execution-plan request. The report is
-read as a bounded file whose containment root is its own directory, so a
-symlinked report cannot reach outside it, and a report over 10,000 tests is
-refused with `manifest_input_too_large` at this stage.
+read as a bounded file whose containment root is the report's own directory:
+the reader resolves the entry name under that root's realpath and refuses a
+symlinked report file, so the root never follows a link elsewhere. A report over
+10,000 tests is refused with `manifest_input_too_large` at this stage.
 
 The identity input is the existing Playwright list mapping, including the
 selected project's `metadata.evidgate.params` when present. It is not a
@@ -1582,15 +1583,17 @@ requests pass the preceding page's `next_cursor`. A null cursor ends the walk.
 
 The complete walk is bounded to 20 pages and 10,000 members. A continuation
 requiring a twenty-first page or a member count above 10,000 is refused with
-`manifest_input_too_large`, not silently truncated.
+`manifest_input_too_large`, not silently truncated. A page above the route's
+500-member limit is `manifest_plan_invalid` (see below) and is refused before
+any of its members is mapped.
 
 The command refuses the entire plan with `manifest_plan_invalid` when:
 
 - the plan has no members (a manifest that runs nothing must not claim a
   revision);
 - a continuation cursor repeats, or a non-null `next_cursor` is empty;
-- a page has no `members` list, or its `suite_revision_id` is missing or
-  differs from `--suite-revision`;
+- a page has no `members` list, lists more than 500 members, or its
+  `suite_revision_id` is missing or differs from `--suite-revision`;
 - the page's `next_cursor` is neither `null` nor a string;
 - a member is not an object, its `case_id` is not canonical lowercase,
   `variant_hash` is not `sha256:` followed by 64 lowercase hexadecimal
@@ -1618,9 +1621,10 @@ These failures exit 3 and do not print a stack trace, a request URL or a token.
 
 ### 14.3 Complete, one-to-one mapping
 
-The existing `mapTestsToMembers` mapping uses the execution plan through
-`ExecutionPlanPort`; there is no separate manifest-build matching algorithm.
-Both directions must be complete before output is created:
+The command builds the execution plan directly from the paged plan read and
+passes it to the existing `mapTestsToMembers` mapping; there is no separate
+manifest-build matching algorithm. Both directions must be complete before
+output is created:
 
 - A local test with no plan member is `manifest_test_unmapped`.
 - A local test matching multiple plan members is `manifest_test_ambiguous`.

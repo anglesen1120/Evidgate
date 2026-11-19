@@ -4,6 +4,7 @@
 import type { SuiteRevisionExecutionPlanMember } from '@evidgate/sdk';
 
 import { CliError } from './errors.js';
+import { redact } from './redact.js';
 
 /** Tests accepted in one mapping. */
 export const MAX_TESTS = 10_000;
@@ -36,15 +37,6 @@ export type PlanMember = SuiteRevisionExecutionPlanMember;
 export interface ExecutionPlan {
   readonly suite_revision_id: string;
   readonly members: readonly PlanMember[];
-}
-
-/**
- * The server-independent port the mapping reads a plan through. A paged execution-plan route
- * will need a 20-page cap; until then one read returns every member, so no page cap is
- * exported and none is applied.
- */
-export interface ExecutionPlanPort {
-  read(suiteRevisionId: string): Promise<ExecutionPlan>;
 }
 
 export interface MappingEntry<T extends EnumeratedTest = EnumeratedTest> {
@@ -115,7 +107,7 @@ export function mapTestsToMembers<T extends EnumeratedTest>(
 }
 
 /** The exact pair a member and a test must agree on; the NUL separator cannot occur in either. */
-function memberKey(caseId: string, variantHash: string): string {
+export function memberKey(caseId: string, variantHash: string): string {
   return `${caseId}\u0000${variantHash}`;
 }
 
@@ -145,7 +137,7 @@ function refusal(
   problems: ReadonlyArray<{ readonly test: EnumeratedTest }>,
   plan: ExecutionPlan,
 ): CliError {
-  const named = problems.slice(0, MAX_DETAILS).map((problem) => describe(problem.test));
+  const named = problems.slice(0, MAX_DETAILS).map((problem) => describeTest(problem.test));
   const subject =
     kind === 'manifest_test_unmapped'
       ? 'has no catalog member in'
@@ -164,13 +156,24 @@ function refusal(
 }
 
 /**
- * A refusal is bounded per test: a crafted report can carry megabyte titles, and an error
- * message must not. Each title segment is clipped on its own so the shape stays readable.
+ * A test's spec file and title path, bounded per segment so a crafted report with megabyte
+ * titles cannot grow an error. Each segment is redacted before it is clipped, and the assembled
+ * text is redacted once more: a secret assembled across the file/title separators is replaced
+ * while complete, so no prefix of it can survive a clip. The readable per-segment shape is kept
+ * whenever the joined text adds nothing (the common case), and the joined text is clipped whole
+ * only when such a cross-segment secret was found.
  */
-function describe(test: EnumeratedTest): string {
-  const title =
-    test.titlePath.length === 0 ? '(no title path)' : test.titlePath.map(clip).join(' > ');
-  return `${clip(test.file)}: ${title}`;
+export function describeTest(test: EnumeratedTest): string {
+  const titleParts = test.titlePath.length === 0 ? ['(no title path)'] : test.titlePath;
+  const redactedFile = redact(test.file);
+  const redactedTitles = titleParts.map(redact);
+  const assembled = `${redactedFile}: ${redactedTitles.join(' > ')}`;
+  const safe = redact(assembled);
+  if (safe !== assembled) {
+    return clip(safe);
+  }
+  const title = redactedTitles.map(clip).join(' > ');
+  return `${clip(redactedFile)}: ${title}`;
 }
 
 function clip(value: string): string {
@@ -204,7 +207,10 @@ export function assertDistinctTests(tests: readonly EnumeratedTest[]): void {
   if (repeated.length === 0) {
     return;
   }
-  const details = boundedDetails(repeated.map(describe));
+  // Describe only the named offenders: a crafted report can repeat a megabyte title thousands
+  // of times, so the redaction work is bounded before it starts, not after it is thrown away.
+  const described = repeated.slice(0, MAX_DETAILS).map(describeTest);
+  const details = boundedDetails(described, repeated.length);
   throw new CliError(`test ${details[0] ?? '(unnamed)'} repeats a case and variant in the report`, {
     code: 'manifest_test_duplicate',
     hint: 'keep one test per case and variant; do not repeat a case with repeatEach',
@@ -230,7 +236,10 @@ export function assertMembersExercised(
     return;
   }
   const details = boundedDetails(
-    missing.map((member) => `case=${member.case_id} variant=${member.variant_hash}`),
+    missing
+      .slice(0, MAX_DETAILS)
+      .map((member) => `case=${member.case_id} variant=${member.variant_hash}`),
+    missing.length,
   );
   throw new CliError(
     `suite revision ${plan.suite_revision_id} lists ${missing.length} member(s) the report does not exercise`,
@@ -242,9 +251,9 @@ export function assertMembersExercised(
   );
 }
 
-/** At most `MAX_DETAILS` named items, then one line counting the rest. */
-function boundedDetails(all: readonly string[]): string[] {
-  const named = all.slice(0, MAX_DETAILS);
-  const remaining = all.length - named.length;
-  return remaining > 0 ? [...named, `(${remaining} more)`] : named;
+/** At most `MAX_DETAILS` named items, then one line counting the rest (`total` if given). */
+function boundedDetails(named: readonly string[], total = named.length): string[] {
+  const shown = named.slice(0, MAX_DETAILS);
+  const remaining = total - shown.length;
+  return remaining > 0 ? [...shown, `(${remaining} more)`] : shown;
 }

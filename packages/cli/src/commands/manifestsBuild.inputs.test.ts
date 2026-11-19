@@ -9,7 +9,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { resetSecrets } from '../redact.js';
 
 import { jsonResponse } from './cliSpec.testing.js';
+import { writeOutput } from './manifestsBuild.js';
 import {
+  bearer,
   member,
   page,
   report,
@@ -137,6 +139,23 @@ describe('manifests build input refusals', () => {
     expect(outcome.stderr.join('')).toContain('tests/a.spec.ts');
   });
 
+  it('variant_refusal_redacts_a_bearer_before_clipping_the_title', async () => {
+    const params = { retries: 2 };
+    const text = report([member(1, params)], params).replace(
+      '"title":"case-0"',
+      `"title":${JSON.stringify('x'.repeat(188) + bearer)}`,
+    );
+    expect(text).toContain('x'.repeat(188) + bearer);
+    const fixture = await setup({ text });
+    const { outcome } = await refuse(
+      'manifest_variant_unrepresentable',
+      () => jsonResponse(200, page([member(1, params)])),
+      fixture,
+    );
+    expect(outcome.stderr.join('')).toContain('[REDACTED]');
+    expect(outcome.stderr.join('')).not.toContain(bearer.slice(0, 12));
+  });
+
   it('a_relative_report_path_in_a_subdirectory_is_read', async () => {
     // The report path reaches the reader already resolved; resolving it again against the
     // containment root would look for `reports/reports/list.json`.
@@ -240,6 +259,37 @@ describe('manifests build input refusals', () => {
 
     expect(outcome.code).toBe(3);
     expect(outcome.stderr.join('')).toContain('evidgate: error manifest_output_unwritable: ');
+  });
+
+  it('a_failed_write_after_the_create_removes_the_partial_file', async () => {
+    const fixture = await setup();
+    const path = join(fixture.root, 'partial.json');
+    const failing = async (target: string, text: string): Promise<void> => {
+      await writeFile(target, text, { flag: 'wx', mode: 0o600 });
+      throw Object.assign(new Error('no space left'), { code: 'ENOSPC' });
+    };
+
+    await expect(writeOutput(path, 'partial', failing)).rejects.toMatchObject({
+      code: 'manifest_output_unwritable',
+    });
+    await expect(stat(path)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('a_failed_write_removes_the_entry_name_without_following_a_symlink', async () => {
+    const fixture = await setup();
+    const target = join(fixture.root, 'kept.json');
+    const path = join(fixture.root, 'swapped.json');
+    await writeFile(target, 'keep me');
+    const swapped = async (): Promise<void> => {
+      await symlink(target, path);
+      throw Object.assign(new Error('no space left'), { code: 'ENOSPC' });
+    };
+
+    await expect(writeOutput(path, 'partial', swapped)).rejects.toMatchObject({
+      code: 'manifest_output_unwritable',
+    });
+    await expect(stat(path)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(readFile(target, 'utf8')).resolves.toBe('keep me');
   });
 
   it('the_output_is_owner_only', async () => {

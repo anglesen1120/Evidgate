@@ -31,10 +31,12 @@ export function buildManifest(
   executions: readonly PlannedExecution[],
 ): string {
   const caseRevisionIds: string[] = [];
+  const seenCaseRevisions = new Set<string>();
   const variants: VariantDocument[] = [];
   const seenVariants = new Set<string>();
   const planned = executions.map((execution) => {
-    if (!caseRevisionIds.includes(execution.caseRevisionId)) {
+    if (!seenCaseRevisions.has(execution.caseRevisionId)) {
+      seenCaseRevisions.add(execution.caseRevisionId);
       caseRevisionIds.push(execution.caseRevisionId);
     }
     const variant = { params: execution.params };

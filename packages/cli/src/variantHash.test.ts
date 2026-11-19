@@ -37,7 +37,7 @@ describe('variant normalisation parity', () => {
     }
   });
 
-  it('a_string_parameter_set_is_manifest_representable', () => {
+  it('mixed_scalar_params_normalize_but_are_not_manifest_representable', () => {
     const result = normalizeVariant({ browser: 'Chromium ', retries: 2, headless: true });
     expect(result.ok).toBe(true);
     if (!result.ok) {

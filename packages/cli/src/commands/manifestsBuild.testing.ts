@@ -19,6 +19,8 @@ import {
   stubFetch,
   type Captured,
   type StubCall,
+  type StubHandler,
+  type StubHarness,
 } from './cliSpec.testing.js';
 
 export { capture, jsonResponse, stubFetch };
@@ -90,6 +92,24 @@ export interface RunOutcome extends Captured {
   readonly code: number;
 }
 
+export interface BuildFixtureOptions {
+  readonly text?: string;
+  readonly cached?: boolean;
+  readonly apiUrl?: string;
+}
+
+type Setup = (options?: BuildFixtureOptions) => Promise<BuildFixture>;
+type Run = (
+  fixture: BuildFixture,
+  fetchImpl: typeof fetch,
+  args?: readonly string[],
+) => Promise<RunOutcome>;
+type Refusal = (
+  code: string,
+  handler: StubHandler,
+  fixture?: BuildFixture,
+) => Promise<{ fixture: BuildFixture; stub: StubHarness; outcome: RunOutcome }>;
+
 /**
  * Registers the temp roots, and hands back the fixture factory and the runner. `run` asserts on
  * every path that the bearer never leaves the process, then returns the captured streams.
@@ -99,15 +119,19 @@ export function useBuildSpec(prefix = 'evidgate-build-') {
   afterEach(async () => {
     await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   });
+  const setup = setupFixture(prefix, dirs);
+  const run = runBuild();
+  return {
+    setup,
+    run,
+    refusal: refuseBuild(setup, run),
+    tempDir: () => mkdtemp(join(tmpdir(), prefix)),
+  };
+}
 
-  /** A fixture with a written list report, a free `--out` path and a cached bearer by default. */
-  async function setup(
-    options: {
-      readonly text?: string;
-      readonly cached?: boolean;
-      readonly apiUrl?: string;
-    } = {},
-  ): Promise<BuildFixture> {
+/** A fixture with a written list report, a free `--out` path and a cached bearer by default. */
+function setupFixture(prefix: string, dirs: string[]): Setup {
+  return async (options = {}) => {
     const root = await mkdtemp(join(tmpdir(), prefix));
     dirs.push(root);
     const list = join(root, 'list.json');
@@ -141,13 +165,12 @@ export function useBuildSpec(prefix = 'evidgate-build-') {
         out,
       ],
     };
-  }
+  };
+}
 
-  async function run(
-    fixture: BuildFixture,
-    fetchImpl: typeof fetch,
-    args: readonly string[] = fixture.args,
-  ): Promise<RunOutcome> {
+/** Runs the command, and fails the test if the bearer reaches any stream or a thrown message. */
+function runBuild(): Run {
+  return async (fixture, fetchImpl, args = fixture.args) => {
     const captured = capture();
     let thrown = '';
     let code = -1;
@@ -164,17 +187,15 @@ export function useBuildSpec(prefix = 'evidgate-build-') {
       expect(streams).not.toContain(bearer);
     }
     return { ...captured, code };
-  }
+  };
+}
 
-  /**
-   * Runs a refusal: the answering page(s) come from `handler`, and the result must exit 3 with
-   * `code` and print nothing to stdout.
-   */
-  async function refusal(
-    code: string,
-    handler: (call: StubCall, index: number) => Response | Promise<Response>,
-    fixture?: BuildFixture,
-  ) {
+/**
+ * Runs a refusal: the answering page(s) come from `handler`, and the result must exit 3 with
+ * `code` and print nothing to stdout.
+ */
+function refuseBuild(setup: Setup, run: Run): Refusal {
+  return async (code, handler, fixture) => {
     const resolved = fixture ?? (await setup());
     const stub = stubFetch(handler);
     const outcome = await run(resolved, stub.fetchImpl);
@@ -182,7 +203,5 @@ export function useBuildSpec(prefix = 'evidgate-build-') {
     expect(outcome.stderr.join('')).toContain(`evidgate: error ${code}: `);
     expect(outcome.stdout).toEqual([]);
     return { fixture: resolved, stub, outcome };
-  }
-
-  return { setup, run, refusal, tempDir: () => mkdtemp(join(tmpdir(), prefix)) };
+  };
 }

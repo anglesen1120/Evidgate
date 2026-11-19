@@ -10,6 +10,7 @@ import { errnoName, readFileBounded, type BoundedFileFailure } from './boundedFi
 import { isCanonicalCaseId } from './caseId.js';
 import { CliError } from './errors.js';
 import { MAX_TESTS, type EnumeratedTest } from './manifestMapping.js';
+import { projectRelativePathMemo } from './specFilePath.js';
 import { contains } from './uploadPaths.js';
 
 /** Hard cap on the list report: the reader enforces it on the bytes, the parser on the text. */
@@ -24,9 +25,6 @@ export interface ListedTest extends EnumeratedTest {
 
 /** The annotation the adapter reads; its description is the canonical case id. */
 const CASE_ID_ANNOTATION = 'evidgate.id';
-// A path with a C0/DEL control character cannot name a file a person wrote, and a NUL would
-// truncate the path at the syscall boundary, so it is a malformed report, not an escape.
-const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
 // Playwright's suite tree nests once per describe block; a deeper tree is a crafted report.
 const MAX_SUITE_DEPTH = 32;
 
@@ -78,9 +76,10 @@ export function parsePlaywrightListWithParams(
   refuseCollectionErrors(optionalArray(root, 'errors', 'the report'));
   const suites = optionalArray(root, 'suites', 'the report');
   const projects = projectTable(root, hashVariant);
+  const pathFor = projectRelativePathMemo();
   const tests: ListedTest[] = [];
   for (const suite of suites) {
-    collectSuite(suite, undefined, [], projects, tests, 1);
+    collectSuite(suite, undefined, [], projects, tests, 1, pathFor);
   }
   if (tests.length === 0) {
     throw invalid('the report lists no tests, so there is nothing to map');
@@ -160,6 +159,7 @@ function collectSuite(
   projects: ProjectTable,
   out: ListedTest[],
   depth: number,
+  pathFor: (raw: string) => string,
 ): void {
   const suite = record(raw);
   if (suite === undefined || depth > MAX_SUITE_DEPTH) {
@@ -175,10 +175,10 @@ function collectSuite(
   const title = string(suite['title']);
   const ownTitles = title === undefined || depth === 1 ? titles : [...titles, title];
   for (const spec of specs) {
-    collectSpec(spec, file, ownTitles, projects, out);
+    collectSpec(spec, file, ownTitles, projects, out, pathFor);
   }
   for (const child of nested) {
-    collectSuite(child, file, ownTitles, projects, out, depth + 1);
+    collectSuite(child, file, ownTitles, projects, out, depth + 1, pathFor);
   }
 }
 
@@ -188,6 +188,7 @@ function collectSpec(
   titles: readonly string[],
   projects: ProjectTable,
   out: ListedTest[],
+  pathFor: (raw: string) => string,
 ): void {
   const spec = record(raw);
   if (spec === undefined) {
@@ -199,7 +200,7 @@ function collectSpec(
   }
   const specTitle = string(spec['title']) ?? '';
   const titlePath = specTitle.length === 0 ? titles : [...titles, specTitle];
-  const enumeratedFile = projectRelativePath(file);
+  const enumeratedFile = pathFor(file);
   for (const rawTest of optionalArray(spec, 'tests', 'the spec')) {
     out.push(enumerateTest(rawTest, enumeratedFile, titlePath, projects));
     if (out.length > MAX_TESTS) {
@@ -280,43 +281,6 @@ function readIdentity(annotations: unknown): { caseId?: string; conflict: boolea
   }
   const [id] = ids;
   return id === undefined ? { conflict: false } : { caseId: id, conflict: false };
-}
-
-/**
- * The report's file is relative to the Playwright root dir. Backslashes are normalised so a
- * Windows-shaped path is judged by the same rule, and any `..` that would climb above the
- * root, a drive-qualified absolute path or a leading slash refuses: only a path under the
- * root is accepted.
- */
-function projectRelativePath(raw: string): string {
-  if (CONTROL_CHARACTERS.test(raw)) {
-    throw invalid('a spec file path contains a control character');
-  }
-  if (/^[A-Za-z]:[\\/]/.test(raw)) {
-    throw outsideRoot('a spec file is named by an absolute path');
-  }
-  const file = raw.replaceAll('\\', '/');
-  if (file.startsWith('/')) {
-    throw outsideRoot('a spec file is named by an absolute path');
-  }
-  const segments: string[] = [];
-  for (const segment of file.split('/')) {
-    if (segment === '' || segment === '.') {
-      continue;
-    }
-    if (segment === '..') {
-      if (segments.length === 0) {
-        throw outsideRoot('a spec file resolves outside the project root');
-      }
-      segments.pop();
-      continue;
-    }
-    segments.push(segment);
-  }
-  if (segments.length === 0) {
-    throw outsideRoot('a spec file resolves to the project root itself');
-  }
-  return segments.join('/');
 }
 
 /**

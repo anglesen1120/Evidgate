@@ -26,6 +26,41 @@ describe('manifests build', () => {
     resetSecrets();
   });
 
+  it('uppercase_revision_uses_the_canonical_server_identity', async () => {
+    const canonical = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const fixture = await setup();
+    const args = [...fixture.args];
+    args[3] = canonical.toUpperCase();
+    const stub = stubFetch((call) => {
+      expect(new URL(call.url).pathname).toContain(`/suite-revisions/${canonical}/`);
+      return Response.json({ ...page(), suite_revision_id: canonical });
+    });
+
+    const outcome = await run(fixture, stub.fetchImpl, args);
+
+    expect(outcome.code).toBe(0);
+    expect(JSON.parse(await readFile(fixture.out, 'utf8'))).toMatchObject({
+      suite_revision_id: canonical,
+    });
+    expect(outcome.stdout.join('')).toContain(`suite_revision_id=${canonical}\n`);
+  });
+
+  it('a_newline_in_the_output_path_cannot_forge_a_summary_line', async () => {
+    const fixture = await setup();
+    const out = `${fixture.out}\nforged=success`;
+    const args = [...fixture.args];
+    args[args.indexOf('--out') + 1] = out;
+    const stub = stubFetch(() => Response.json(page()));
+
+    const outcome = await run(fixture, stub.fetchImpl, args);
+
+    expect(outcome.code).toBe(0);
+    expect(outcome.stdout.join('')).toBe(
+      `manifest=${fixture.out}\\u000aforged=success executions=1 suite_revision_id=${revision}\n`,
+    );
+    expect(await readFile(out, 'utf8')).toContain('"schema_version":1');
+  });
+
   it('walks_every_page_and_writes_the_manifest', async () => {
     const members = [member(1, params), member(2, params), member(3, params), member(4, params)];
     const fixture = await setup({ text: report(members, params) });

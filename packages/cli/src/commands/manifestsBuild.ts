@@ -1,7 +1,8 @@
 // `evidgate manifests build` — maps a Playwright list report onto one suite revision's execution
-// plan and writes the manifest `manifests upload` accepts. Every local input is validated before
-// `getToken()`, so a bad flag or an unmappable report makes no request at all.
-import { writeFile } from 'node:fs/promises';
+// plan and writes the manifest `manifests upload` accepts. The flags and the report are validated
+// before `getToken()`, so a bad flag or a malformed report makes no request; mapping the report
+// onto the plan happens after it is read, so an unmappable report is refused after the fetch.
+import { writeFile, unlink } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
 
 import { getSuiteRevisionExecutionPlan, type Client } from '@evidgate/sdk';
@@ -13,28 +14,27 @@ import { errnoName } from '../boundedFile.js';
 import { callApi } from '../callApi.js';
 import { createApiClient } from '../client.js';
 import type { ResolvedConfig } from '../config.js';
-import { CliError } from '../errors.js';
+import { CliError, escapeControlCharacters } from '../errors.js';
 import { planPageLimit, readExecutionPlan } from '../executionPlanRead.js';
 import { ExitCode } from '../exitCodes.js';
 import { buildManifest, type PlannedExecution } from '../manifestEmit.js';
 import {
   assertDistinctTests,
   assertMembersExercised,
+  describeTest,
   mapTestsToMembers,
+  memberKey,
   type ExecutionPlan,
 } from '../manifestMapping.js';
 import { loadPackagedContractSchemas } from '../packagedSchemas.js';
 import { parsePlaywrightListWithParams, readPlaywrightList } from '../playwrightList.js';
 import { serverErrorFromResponse, transportError } from '../serverError.js';
-import { manifestParams, normalizeVariant } from '../variantHash.js';
+import { manifestParams, normalizeVariant, type VariantResult } from '../variantHash.js';
 
 import { requiredFlag, uuidPattern } from './eventsSendArgs.js';
 
 import type { ListedTest } from '../playwrightList.js';
 import type { CommandDefinition } from './index.js';
-
-/** Enough of a test to name it in a refusal; the spec file and titles are never secrets. */
-const maxDescribedChars = 200;
 
 export const manifestsBuildCommand: CommandDefinition = {
   name: 'manifests build',
@@ -46,16 +46,19 @@ export const manifestsBuildCommand: CommandDefinition = {
     out: { type: 'string' },
   },
   run: async ({ config, io, values, deps }) => {
-    const revision = requiredFlag(values, 'suite-revision');
-    if (!uuidPattern.test(revision)) {
+    const requested = requiredFlag(values, 'suite-revision');
+    if (!uuidPattern.test(requested)) {
       throw new CliError('--suite-revision must be a UUID', { code: 'usage' });
     }
+    // The route and the report both name a revision in canonical lowercase; one normalisation
+    // here keeps the request, the plan comparison and the written manifest on the same value.
+    const revision = requested.toLowerCase();
     const listPath = requiredFlag(values, 'playwright-list');
     const out = requiredFlag(values, 'out');
-    // Report first, token second: an unreadable or unmappable report must not reach the network.
+    // Report first, token second: an unreadable or malformed report must not reach the network.
     // The report's own directory is the containment root, and only the entry name is handed to
-    // the reader: it resolves that name under the root's realpath, so a symlinked report cannot
-    // escape it and a missing one is unreadable rather than outside the root.
+    // the reader: it resolves that name under the root's realpath and refuses a symlinked
+    // report file, so the root is the report's directory and never follows a link out of it.
     const resolvedList = resolve(listPath);
     const tests = parsePlaywrightListWithParams(
       await readPlaywrightList(basename(resolvedList), dirname(resolvedList)),
@@ -79,7 +82,7 @@ export const manifestsBuildCommand: CommandDefinition = {
     for (const entry of mapping.entries) {
       const caseId = entry.test.caseId;
       if (caseId !== undefined) {
-        byIdentity.set(identityKey(caseId, entry.test.variantHash), entry.test);
+        byIdentity.set(memberKey(caseId, entry.test.variantHash), entry.test);
       }
     }
     const executions = planExecutions(members, byIdentity);
@@ -91,7 +94,9 @@ export const manifestsBuildCommand: CommandDefinition = {
     if (config.json) {
       io.stdout(`${JSON.stringify(summary)}\n`);
     } else {
-      io.stdout(`manifest=${out} executions=${executions.length} suite_revision_id=${revision}\n`);
+      io.stdout(
+        `manifest=${escapeControlCharacters(out)} executions=${executions.length} suite_revision_id=${revision}\n`,
+      );
     }
     return ExitCode.Ok;
   },
@@ -152,26 +157,30 @@ function pageRefusal(error: unknown, response: Response): CliError {
 /**
  * One execution per plan member, in plan order. The mapping already proved every member has
  * exactly one test; the variant is normalised again because the manifest carries the parameters
- * the server will hash, not the digest it was served.
+ * the server will hash, not the digest it was served. Members that share a variant hash share
+ * its parameters (the hash is over them), so each distinct variant is normalised once.
  */
 function planExecutions(
   members: readonly { case_id: string; variant_hash: string; case_revision_id: string }[],
   byIdentity: ReadonlyMap<string, ListedTest>,
 ): PlannedExecution[] {
   const executions: PlannedExecution[] = [];
+  const variants = new Map<string, VariantResult>();
   for (const member of members) {
-    const test = byIdentity.get(identityKey(member.case_id, member.variant_hash));
+    const test = byIdentity.get(memberKey(member.case_id, member.variant_hash));
     if (test === undefined) {
       throw new CliError('the execution plan changed while it was read', {
         code: 'manifest_plan_invalid',
       });
     }
-    const variant = normalizeVariant(test.variantParams);
+    const known = variants.get(member.variant_hash);
+    const variant = known ?? normalizeVariant(test.variantParams);
     if (!variant.ok || variant.hash !== member.variant_hash) {
       throw new CliError(`the variant of ${describeTest(test)} is not the one the plan lists`, {
         code: 'manifest_plan_invalid',
       });
     }
+    variants.set(member.variant_hash, variant);
     const params = manifestParams(variant.params);
     if (params === undefined) {
       throw new CliError(
@@ -202,11 +211,17 @@ function assertSchemaValid(text: string): void {
 
 /**
  * Creates the file exclusively: an existing path (a regular file or a symlink, since an exclusive
- * create never follows one) is refused rather than replaced. The mode is owner-only.
+ * create never follows one) is refused rather than replaced. The mode is owner-only. If the write
+ * fails after the create, the partial file is removed: the entry name only, so a symlink swapped
+ * in its place is unlinked, never its target. `write` is the seam a spec uses to fail mid-write.
  */
-async function writeOutput(path: string, text: string): Promise<void> {
+export async function writeOutput(
+  path: string,
+  text: string,
+  write: (path: string, text: string) => Promise<void> = createOutput,
+): Promise<void> {
   try {
-    await writeFile(path, text, { flag: 'wx', mode: 0o600 });
+    await write(path, text);
   } catch (error) {
     const errno = errnoName(error);
     if (errno === 'EEXIST') {
@@ -215,23 +230,14 @@ async function writeOutput(path: string, text: string): Promise<void> {
         hint: 'choose another --out path; an existing manifest is never overwritten',
       });
     }
+    await unlink(path).catch(() => undefined);
     throw new CliError(`the output file could not be written (${errno})`, {
       code: 'manifest_output_unwritable',
     });
   }
 }
 
-function identityKey(caseId: string, variantHash: string): string {
-  return `${caseId}\u0000${variantHash}`;
-}
-
-/** A test's spec file and title path, clipped; the variant params never reach an error. */
-function describeTest(test: ListedTest): string {
-  const title =
-    test.titlePath.length === 0 ? '(no title path)' : test.titlePath.map(clip).join(' > ');
-  return `${clip(test.file)}: ${title}`;
-}
-
-function clip(value: string): string {
-  return value.length <= maxDescribedChars ? value : `${value.slice(0, maxDescribedChars)}…`;
+/** The exclusive create itself; the mode keeps the manifest owner-only. */
+function createOutput(path: string, text: string): Promise<void> {
+  return writeFile(path, text, { flag: 'wx', mode: 0o600 });
 }

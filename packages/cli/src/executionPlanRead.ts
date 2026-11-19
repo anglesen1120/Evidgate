@@ -40,6 +40,12 @@ export async function readExecutionPlan(
       throw tooLarge(`the execution plan is over ${maxPlanPages} pages`);
     }
     const parsed = readPage(await fetchPage(cursor), suiteRevisionId);
+    // Checked before the page is kept: the walk stops here rather than mapping the members of
+    // a plan that is already over the cap. With the page and page-count caps this guard is a
+    // backstop, but it must never let an over-cap plan reach the mapping.
+    if (members.length + parsed.members.length > MAX_MEMBERS) {
+      throw tooLarge(`the execution plan lists over ${MAX_MEMBERS} members`);
+    }
     for (const member of parsed.members) {
       const key = `${member.case_revision_id}\u0000${member.variant_hash}`;
       if (memberKeys.has(key)) {
@@ -47,9 +53,6 @@ export async function readExecutionPlan(
       }
       memberKeys.add(key);
       members.push(member);
-    }
-    if (members.length > MAX_MEMBERS) {
-      throw tooLarge(`the execution plan lists over ${MAX_MEMBERS} members`);
     }
     const next = parsed.next;
     if (next === null) {
@@ -82,6 +85,11 @@ function readPage(data: unknown, suiteRevisionId: string): PlanPage {
   const rawMembers = page['members'];
   if (!Array.isArray(rawMembers)) {
     throw planInvalid('the execution plan page has no members list');
+  }
+  // The route's own limit is 500; refuse a larger page before any member is mapped, so a
+  // crafted answer cannot spend the walk's budget on one oversized array.
+  if (rawMembers.length > planPageLimit) {
+    throw planInvalid(`the execution plan page lists over ${planPageLimit} members`);
   }
   const next = page['next_cursor'];
   if (next !== null && typeof next !== 'string') {
