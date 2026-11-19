@@ -30,6 +30,7 @@ public sealed class SharedRateLimitOutageTests(PostgresFixture postgres)
         await using var healthy = new EvidgateApiFactory(database, configureServices: ConfigureCi);
         using var healthyClient = healthy.CreateClient();
         using var control = await healthyClient.SendAsync(Request(route), TestContext.Current.CancellationToken);
+        ((int)control.StatusCode).ShouldBeInRange(400, 499, surface + ": the route's own refusal of an empty request");
         control.StatusCode.ShouldNotBe(HttpStatusCode.TooManyRequests, surface);
         (await control.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))
             .ShouldNotContain(Unavailable, Case.Sensitive, "a reachable store is never reported as an outage");
@@ -58,7 +59,7 @@ public sealed class SharedRateLimitOutageTests(PostgresFixture postgres)
     private static void ConfigureCi(IServiceCollection services) =>
         services.PostConfigure<CiAuthOptions>(options =>
         {
-            var key = Convert.ToBase64String(new byte[32].Select(_ => (byte)7).ToArray());
+            var key = Convert.ToBase64String(Enumerable.Repeat((byte)7, 32).ToArray());
             options.SigningKey = key;
             options.Pepper = key;
         });
