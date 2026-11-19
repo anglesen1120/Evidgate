@@ -4045,6 +4045,10 @@
         <source>Unsaved desktop edits are retained, not saved. Open a wider screen to edit.</source>
         <target state="translated">Các chỉnh sửa chưa lưu trên màn hình rộng vẫn được giữ lại, chưa được lưu. Hãy mở trên màn hình rộng hơn để chỉnh sửa.</target>
       </trans-unit>
+      <trans-unit id="authoring.editor.narrow-saved" datatype="html">
+        <source>These saved values are shown read-only on a narrow screen. Open a wider screen to edit them.</source>
+        <target state="translated">Các giá trị đã lưu được hiển thị chỉ đọc trên màn hình hẹp. Hãy mở trên màn hình rộng hơn để chỉnh sửa.</target>
+      </trans-unit>
       <trans-unit id="authoring.editor.no-author" datatype="html">
         <source>Author membership unavailable</source>
         <target state="translated">Không có thông tin tư cách thành viên của tác giả</target>

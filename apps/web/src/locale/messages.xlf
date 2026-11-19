@@ -10128,6 +10128,9 @@
       <trans-unit id="authoring.editor.narrow-draft" datatype="html">
         <source>Unsaved desktop edits are retained, not saved. Open a wider screen to edit.</source>
       </trans-unit>
+      <trans-unit id="authoring.editor.narrow-saved" datatype="html">
+        <source>These saved values are shown read-only on a narrow screen. Open a wider screen to edit them.</source>
+      </trans-unit>
       <trans-unit id="authoring.editor.no-author" datatype="html">
         <source>Author membership unavailable</source>
       </trans-unit>

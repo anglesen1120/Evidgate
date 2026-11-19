@@ -66,6 +66,9 @@ class TimelineHarness extends ComponentHarness {
     await input.setInputValue(value);
     await input.dispatchEvent('input');
   }
+  async count(selector: string) {
+    return (await this.locatorForAll(selector)()).length;
+  }
 }
 class RestoreHarness extends ComponentHarness {
   static hostSelector = '[role="dialog"], [role="alertdialog"]';
@@ -77,6 +80,12 @@ class RestoreHarness extends ComponentHarness {
   }
   async reasonDisabled() {
     return (await this.locatorFor('#case-restore-reason')()).getProperty<boolean>('disabled');
+  }
+  async busy() {
+    return (await this.locatorFor('[aria-busy]')()).getAttribute('aria-busy');
+  }
+  async text() {
+    return (await this.host()).text();
   }
 }
 
@@ -222,14 +231,28 @@ describe('TimelineComponent', () => {
     expect((await harness.rowText()).slice(1)).toEqual(oldRows);
     expect(await harness.text()).toContain('Version 4');
   });
-  it('Cancel never restores a version', async () => {
+  it('moves focus to the appended version heading after a successful restore', async () => {
+    const { fixture, harness } = await mount();
+    await harness.click('[data-inspect-version="version-2"]');
+    await fixture.whenStable();
+    await harness.click('[data-restore-open]');
+    await (
+      await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(RestoreHarness)
+    ).confirm();
+    await fixture.whenStable();
+    const active = document.activeElement;
+    expect(active?.getAttribute('data-version-heading')).toBe('4');
+  });
+  it('Cancel never restores a version and returns focus to the opener', async () => {
     const { fixture, harness } = await mount();
     await harness.click('[data-inspect-version="version-2"]');
     await harness.click('[data-restore-open]');
     await (
       await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(RestoreHarness)
     ).cancel();
+    await fixture.whenStable();
     expect(data.restoreVersion).not.toHaveBeenCalled();
+    expect(document.activeElement?.getAttribute('data-restore-open')).not.toBeNull();
   });
   it('write denial keeps history inspectable and explains disabled restore', async () => {
     writable.set(false);
@@ -320,5 +343,53 @@ describe('TimelineComponent', () => {
     const { harness } = await mount();
     expect(await harness.ids()).toEqual([]);
     expect(await harness.text()).not.toContain('No versions recorded');
+  });
+  it('virtualizes the shared table at 201 loaded versions and keeps rich rows at 200', async () => {
+    const row = (no: number) => ({ ...version(no), version_id: 'version-' + no });
+    const first = Array.from({ length: 200 }, (_, index) => row(201 - index));
+    data.versions.mockImplementation(
+      (_project: string, _caseId: string, query: AuthoringVersionsQuery) =>
+        Promise.resolve(
+          query.cursor
+            ? { items: [row(1)], next_cursor: null }
+            : { items: first, next_cursor: 'older' },
+        ),
+    );
+    const { fixture, harness } = await mount();
+    expect(await harness.count('[data-version-row]')).toBe(200);
+    expect(await harness.count('cdk-virtual-scroll-viewport')).toBe(0);
+    await harness.click('[data-versions-more]');
+    await fixture.whenStable();
+    expect(await harness.count('cdk-virtual-scroll-viewport')).toBe(1);
+    const rendered = await harness.count('[data-row-id]');
+    expect(rendered).toBeGreaterThan(0);
+    expect(rendered).toBeLessThan(201);
+    expect(await harness.text()).toContain('201 versions loaded');
+  });
+  it('announces restore progress inside the busy dialog and keeps focus off the body', async () => {
+    // The deferred resolver by hand: `Promise.withResolvers` is ES2024 and this project's lib is ES2022.
+    let release: (value: { version: number }) => void = () => {};
+    const pending = new Promise<{ version: number }>((resolve) => {
+      release = resolve;
+    });
+    data.restoreVersion.mockReturnValue(pending);
+    const { fixture, harness } = await mount();
+    await harness.click('[data-inspect-version="version-2"]');
+    await fixture.whenStable();
+    await harness.click('[data-restore-open]');
+    const dialog =
+      await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(RestoreHarness);
+    await dialog.confirm();
+    await fixture.whenStable();
+    expect(await dialog.busy()).toBe('true');
+    expect(await dialog.text()).toContain('Restoring version…');
+    expect(await harness.text()).not.toContain('Restoring version…');
+    const active = document.activeElement;
+    expect(active?.tagName).not.toBe('BODY');
+    expect(active?.closest('[role="dialog"]')).not.toBeNull();
+    release({ version: 4 });
+    appended = true;
+    await fixture.whenStable();
+    expect(await harness.text()).toContain('Version 4 was appended');
   });
 });

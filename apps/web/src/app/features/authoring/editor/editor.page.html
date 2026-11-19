@@ -92,7 +92,7 @@
               <form
                 class="grid min-w-0 max-w-[75ch] gap-6"
                 (ngSubmit)="save()"
-                [attr.aria-busy]="store.saving()"
+                [attr.aria-busy]="store.locked()"
               >
                 <app-form-required-note />
                 <app-form-error-summary [summaryId]="'case-errors'" [feedback]="feedback()" />
@@ -111,7 +111,7 @@
                         (ngModelChange)="store.editText('title', $event)"
                         required
                         [readOnly]="
-                          !store.canWrite() || store.saving() || base.view.state === 'retired'
+                          !store.canWrite() || store.locked() || base.view.state === 'retired'
                         "
                         [aria-describedby]="feedback().fields[index]?.describedBy() ?? null"
                         [attr.aria-invalid]="feedback().fields[index]?.ariaInvalid()"
@@ -127,7 +127,7 @@
                         [ngModel]="draft[field.key]"
                         (ngModelChange)="store.editText(field.key, $event)"
                         [readOnly]="
-                          !store.canWrite() || store.saving() || base.view.state === 'retired'
+                          !store.canWrite() || store.locked() || base.view.state === 'retired'
                         "
                         [aria-describedby]="feedback().fields[index]?.describedBy() ?? null"
                         [attr.aria-invalid]="feedback().fields[index]?.ariaInvalid()"
@@ -155,7 +155,7 @@
                     (valueChange)="changePriority($event)"
                     [itemToString]="priorityLabel"
                     [disabled]="
-                      !store.canWrite() || store.saving() || base.view.state === 'retired'
+                      !store.canWrite() || store.locked() || base.view.state === 'retired'
                     "
                   >
                     <hlm-select-trigger
@@ -209,7 +209,7 @@
                               (ngModelChange)="store.editStep(step.id, field.key, $event)"
                               [required]="field.required"
                               [readOnly]="
-                                !store.canWrite() || store.saving() || base.view.state === 'retired'
+                                !store.canWrite() || store.locked() || base.view.state === 'retired'
                               "
                               [aria-describedby]="
                                 stepFeedback(index, fieldIndex)?.describedBy() ?? null
@@ -347,9 +347,16 @@
                 >
                   Read-only case draft
                 </h2>
-                <p i18n="@@authoring.editor.narrow-draft">
-                  Unsaved desktop edits are retained, not saved. Open a wider screen to edit.
-                </p>
+                @if (store.dirty()) {
+                  <p i18n="@@authoring.editor.narrow-draft">
+                    Unsaved desktop edits are retained, not saved. Open a wider screen to edit.
+                  </p>
+                } @else {
+                  <p i18n="@@authoring.editor.narrow-saved">
+                    These saved values are shown read-only on a narrow screen. Open a wider screen
+                    to edit them.
+                  </p>
+                }
                 <dl class="m-0 grid min-w-0 gap-4 wrap-anywhere">
                   @for (field of fields; track field.key) {
                     <div>

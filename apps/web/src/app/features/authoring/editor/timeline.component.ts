@@ -1,11 +1,13 @@
 import { NgTemplateOutlet } from '@angular/common';
 import {
+  afterNextRender,
   afterRenderEffect,
   ChangeDetectionStrategy,
   Component,
   computed,
   ElementRef,
   inject,
+  Injector,
   linkedSignal,
   signal,
   viewChild,
@@ -25,6 +27,7 @@ import {
   type DataTableColumn,
   type DataTableCellContext,
 } from '../../../shared/ui/data-table';
+import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow';
 import { errorOf, REASON_UNAVAILABLE, WRITE_REASON } from './editor.model';
 import { EditorStore } from './editor.store';
@@ -44,6 +47,7 @@ import { VersionDiffComponent } from './version-diff.component';
     CopyableIdentifierComponent,
     AbsoluteTimeComponent,
     DataTableComponent,
+    DataTableValueComponent,
     NgTemplateOutlet,
     VersionDiffComponent,
   ],
@@ -55,6 +59,8 @@ export class TimelineComponent {
   protected readonly store = inject(TimelineStore);
   protected readonly editor = inject(EditorStore);
   protected readonly viewport = inject(NarrowMutationPolicy);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
   protected readonly filter = signal('');
   protected readonly confirmation = linkedSignal<
     { narrow: boolean; selected: string | undefined },
@@ -106,14 +112,19 @@ export class TimelineComponent {
       !this.viewport.canMutate() ||
       this.store.restoring() ||
       !this.store.retryWait.ready() ||
-      this.editor.saving(),
+      this.editor.locked(),
   );
   private readonly heading = viewChild<ElementRef<HTMLElement>>('timelineHeading');
+  private readonly restoreStatus = viewChild<ElementRef<HTMLElement>>('restoreStatus');
+  private readonly table = viewChild(DataTableComponent<AuthoringVersionListItemDto>);
   private readonly metadata =
     viewChild<TemplateRef<DataTableCellContext<AuthoringVersionListItemDto>>>('metadata');
   private readonly actions =
     viewChild<TemplateRef<DataTableCellContext<AuthoringVersionListItemDto>>>('actions');
   private opener: HTMLElement | null = null;
+  private restoredJustNow = false;
+  private readonly restoredFocus = signal<number | null>(null);
+  protected readonly virtualRows = computed(() => this.table()?.virtual() ?? false);
   protected readonly rowId = (row: AuthoringVersionListItemDto) => row.version_id;
   protected readonly columns = computed<readonly DataTableColumn<AuthoringVersionListItemDto>[]>(
     () => {
@@ -142,10 +153,35 @@ export class TimelineComponent {
   private dialogWasOpen = false;
   constructor() {
     afterRenderEffect(() => {
+      const version = this.restoredFocus();
+      const loading = this.store.history.isLoading();
+      const rows = this.store.rows();
+      if (version !== null && !loading) this.focusAppended(version, rows);
       const open = !!this.confirmation();
       if (this.viewport.narrow() && this.dialogWasOpen) this.heading()?.nativeElement.focus();
       this.dialogWasOpen = open;
     });
+  }
+  private focusAppended(version: number, rows: readonly AuthoringVersionListItemDto[]): void {
+    const host = this.host.nativeElement;
+    const row = rows.find((entry) => entry.version_no === version);
+    if (!row) {
+      // The appended row never arrived, so the visible refresh status is the reachable outcome.
+      if (!this.store.refreshRequired()) return;
+      this.restoreStatus()?.nativeElement.focus();
+      this.restoredFocus.set(null);
+      return;
+    }
+    this.table()?.revealRow(rows.findIndex((entry) => entry.version_id === row.version_id));
+    const headings = [...host.querySelectorAll<HTMLElement>('[data-version-heading]')];
+    const target =
+      headings.find((element) => element.dataset['versionHeading'] === String(version)) ??
+      [...host.querySelectorAll<HTMLElement>('[data-row-id]')].find(
+        (element) => element.dataset['rowId'] === row.version_id,
+      );
+    if (!target) return;
+    target.focus();
+    this.restoredFocus.set(null);
   }
   protected source(source: string): string {
     switch (source) {
@@ -188,12 +224,34 @@ export class TimelineComponent {
     return this.confirmation() !== null;
   }
   protected closed(): void {
+    // A successful restore moves focus to the appended row; only Cancel and Escape return here.
+    if (this.restoredJustNow) {
+      this.restoredJustNow = false;
+      return;
+    }
     if (this.viewport.narrow()) this.heading()?.nativeElement.focus();
     else if (this.opener?.isConnected) this.opener.focus();
+  }
+  private holdFocusDuringRestore(): void {
+    if (!this.store.restoring()) return;
+    // Confirmation disables itself while the request runs; keep focus on the dialog progress
+    // status so the control the visitor activated never drops focus to the document body.
+    afterNextRender(
+      () => {
+        if (this.store.restoring()) this.restoreStatus()?.nativeElement.focus();
+      },
+      { injector: this.injector },
+    );
   }
   protected async restore(): Promise<void> {
     const id = this.confirmation();
     if (!id || this.blocked() || !this.viewport.allowsMutation()) return;
-    if (await this.store.restore(id)) this.confirmation.set(null);
+    const attempt = this.store.restore(id);
+    this.holdFocusDuringRestore();
+    if (await attempt) {
+      this.restoredJustNow = true;
+      this.restoredFocus.set(this.store.appendedVersion());
+      this.confirmation.set(null);
+    }
   }
 }

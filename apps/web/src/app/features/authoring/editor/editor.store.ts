@@ -45,6 +45,7 @@ interface HeadSource {
 export const EditorStore = signalStore(
   withState({
     saving: false,
+    restoring: false,
     saveError: null as ApiError | null,
     mutationScope: undefined as EditorScope | undefined,
     conflictRequested: false,
@@ -60,7 +61,7 @@ export const EditorStore = signalStore(
   })),
   withProps((store) => {
     const caseId = toSignal(store.route.paramMap.pipe(map((params) => params.get('caseId'))));
-    const scope = computed<EditorScope | undefined>(
+    const publishedScope = computed<EditorScope | undefined>(
       () => {
         const org = store.session.currentOrg()?.id;
         const project = store.session.currentProject()?.id;
@@ -73,6 +74,16 @@ export const EditorStore = signalStore(
         equal: (a, b) => a?.org === b?.org && a?.project === b?.project && a?.caseId === b?.caseId,
       },
     );
+    // Destination scope guards publish the next org/project before this route's canDeactivate
+    // runs. Keeping the loaded case until the URL names another case keeps the draft, and its
+    // dirty state, intact while the visitor decides whether to leave.
+    const scope = linkedSignal<EditorScope | undefined, EditorScope | undefined>({
+      source: () => publishedScope(),
+      computation: (source, previous) =>
+        source && previous?.value && previous.value.caseId === source.caseId
+          ? previous.value
+          : source,
+    });
     const head = resource({
       params: scope,
       loader: ({ params, abortSignal }) =>
@@ -122,13 +133,16 @@ export const EditorStore = signalStore(
       const base = store.baseDraft();
       return !!draft && !!base && JSON.stringify(bodyOf(draft)) !== JSON.stringify(bodyOf(base));
     }),
+    // A case write or a head refresh must finish before the draft accepts input, because the
+    // arriving head replaces baseDraft and would otherwise discard edits made during the read.
+    locked: computed(() => store.saving() || store.restoring() || store.head.isLoading()),
   })),
   withMethods((store) => {
     function edit(next: CaseDraft): void {
       if (
         !store.canWrite() ||
         !store.viewport.allowsMutation() ||
-        store.saving() ||
+        store.locked() ||
         store.base()?.view.state === 'retired'
       )
         return;
@@ -201,8 +215,19 @@ export const EditorStore = signalStore(
           saved: null,
         });
       },
+      // Timeline keeps a restore alive across tab switches; ownership lives here so Save cannot
+      // write the same case while that restore is still in flight.
+      beginRestore(): boolean {
+        if (store.saving() || store.restoring() || store.head.isLoading()) return false;
+        patchState(store, { restoring: true });
+        return true;
+      },
+      endRestore(): void {
+        if (store.restoring()) patchState(store, { restoring: false });
+      },
       refreshAfterRestore(): void {
-        if (!store.dirty()) store.head.reload();
+        if (store.dirty() || store.saving()) return;
+        store.head.reload();
       },
       async save(): Promise<boolean> {
         const scope = store.scope();
@@ -214,7 +239,7 @@ export const EditorStore = signalStore(
           !draft ||
           !store.canWrite() ||
           !store.viewport.allowsMutation() ||
-          store.saving() ||
+          store.locked() ||
           !store.retryWait.ready() ||
           store.conflictOpen() ||
           base.view.state === 'retired'

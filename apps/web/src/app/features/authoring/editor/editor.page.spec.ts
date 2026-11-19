@@ -13,6 +13,7 @@ import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow';
 import { EditorPage } from './editor.page';
 import { EDITOR_WRITE } from './editor.model';
+import { EditorStore } from './editor.store';
 
 provideLayoutTestStubs();
 
@@ -52,6 +53,15 @@ class EditorHarness extends ComponentHarness {
     const fields = await this.locatorForAll('[data-step-field]')();
     return Promise.all(fields.map((field) => field.getProperty<string>('value')));
   }
+  async tab(label: string) {
+    for (const button of await this.locatorForAll('[hlmTabsList] button')()) {
+      if ((await button.text()).trim() === label) {
+        await button.click();
+        return;
+      }
+    }
+    throw new Error('Tab not found: ' + label);
+  }
 }
 
 const CASE: ManualCaseDetailDto = {
@@ -83,6 +93,8 @@ function refused(kind: ApiErrorKind, status: number, path?: string) {
 }
 
 describe('EditorPage', () => {
+  const org = signal({ id: 'o1' });
+  const project = signal({ id: 'p1' });
   const writable = signal(true);
   const narrow = signal(false);
   let data: {
@@ -93,6 +105,8 @@ describe('EditorPage', () => {
     restoreVersion: Mock;
   };
   beforeEach(() => {
+    org.set({ id: 'o1' });
+    project.set({ id: 'p1' });
     writable.set(true);
     narrow.set(false);
     data = {
@@ -121,8 +135,8 @@ describe('EditorPage', () => {
         {
           provide: SessionStore,
           useValue: {
-            currentOrg: signal({ id: 'o1' }),
-            currentProject: signal({ id: 'p1' }),
+            currentOrg: org,
+            currentProject: project,
             has: (code: string) => (code === EDITOR_WRITE ? writable() : true),
           },
         },
@@ -259,6 +273,134 @@ describe('EditorPage', () => {
     expect(await decision).toBe(false);
     expect(await harness.value('case-title')).toBe('Unsaved title');
   });
+  it('retains dirty state while destination guards publish a different scope before leave consent', async () => {
+    const { fixture, harness } = await mount();
+    await harness.fill('case-title', 'Unsaved source title');
+    org.set({ id: 'o2' });
+    project.set({ id: 'p2' });
+    await fixture.whenStable();
+    const decision = fixture.componentInstance.confirmLeave();
+    await fixture.whenStable();
+    const dialog =
+      await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(LeaveHarness);
+    await dialog.cancel();
+    expect(await decision).toBe(false);
+    expect(await harness.value('case-title')).toBe('Unsaved source title');
+    expect(data.readCase).toHaveBeenCalledTimes(1);
+    expect(fixture.debugElement.injector.get(EditorStore).dirty()).toBe(true);
+  });
+  it('keeps fields read-only until the post-restore head refresh settles', async () => {
+    const { fixture, harness } = await mount();
+    const store = fixture.debugElement.injector.get(EditorStore);
+    // The deferred resolver by hand: `Promise.withResolvers` is ES2024 and this project's lib is ES2022.
+    let release: (value: { view: ManualCaseDetailDto; etag: string }) => void = () => {};
+    const refreshed = new Promise<{ view: ManualCaseDetailDto; etag: string }>((resolve) => {
+      release = resolve;
+    });
+    data.readCase.mockReturnValueOnce(refreshed);
+    store.refreshAfterRestore();
+    fixture.detectChanges();
+    expect(store.locked()).toBe(true);
+    // CDK locators stabilize the fixture, so the pending refresh is read from the DOM directly.
+    const save = (fixture.nativeElement as HTMLElement).querySelector('[data-editor-save]');
+    expect((save as HTMLButtonElement | null)?.disabled).toBe(true);
+    store.editText('title', 'Must not be accepted during refresh');
+    expect(store.draft()?.title).toBe(CASE.title);
+    release({ view: { ...CASE, title: 'Restored title', version: 3 }, etag: '"3"' });
+    await fixture.whenStable();
+    expect(store.locked()).toBe(false);
+    expect(await harness.value('case-title')).toBe('Restored title');
+    expect(await harness.disabled('[data-editor-save]')).toBe(false);
+    await harness.fill('case-title', 'New edit after refresh');
+    expect(store.draft()?.title).toBe('New edit after refresh');
+  });
+  it('retains restore ownership across timeline destruction and refuses Save until it completes', async () => {
+    let release: (value: { version: number }) => void = () => {};
+    const restoring = new Promise<{ version: number }>((resolve) => {
+      release = resolve;
+    });
+    data.versions.mockResolvedValue({
+      items: [
+        {
+          version_id: 'v2',
+          version_no: 2,
+          source: 'manual',
+          change_kind: 'update',
+          created_at: '2026-11-03T00:00:00Z',
+          author: null,
+          reason: 'Reason 2',
+        },
+      ],
+      next_cursor: null,
+    });
+    data.version.mockResolvedValue({
+      view: {
+        version_id: 'v2',
+        version_no: 2,
+        entity_kind: 'manual_test_case',
+        entity_id: CASE.case_id,
+        content: { title: 'Stored title' },
+      },
+      etag: '"snapshot"',
+    });
+    data.restoreVersion.mockReturnValue(restoring);
+    const { fixture, harness } = await mount();
+    await harness.fill('case-title', 'Unsaved draft');
+    await harness.tab('Timeline');
+    await harness.click('[data-inspect-version="v2"]');
+    await fixture.whenStable();
+    await harness.click('[data-restore-open]');
+    const root = TestbedHarnessEnvironment.documentRootLoader(fixture);
+    const restore = await root.getHarness(RestorePageHarness);
+    await restore.confirm();
+    await restore.cancel();
+    await harness.tab('Editor');
+    const store = fixture.debugElement.injector.get(EditorStore);
+    expect(store.restoring()).toBe(true);
+    expect(await harness.disabled('[data-editor-save]')).toBe(true);
+    expect(await store.save()).toBe(false);
+    expect(data.updateCase).not.toHaveBeenCalled();
+    release({ version: 3 });
+    await fixture.whenStable();
+    expect(store.restoring()).toBe(false);
+    expect(await harness.disabled('[data-editor-save]')).toBe(false);
+    await harness.click('[data-editor-save]');
+    expect(data.updateCase).toHaveBeenCalledTimes(1);
+  });
+  it('compares steps without inventing a difference for an omitted optional data value', async () => {
+    data.updateCase.mockRejectedValue(refused('precondition_failed', 412));
+    data.readCase
+      .mockResolvedValueOnce({
+        view: {
+          ...CASE,
+          steps: [{ no: 1, action: 'Confirm order', expected: 'Total is shown', data: null }],
+        },
+        etag: '"2"',
+      })
+      .mockResolvedValue({
+        view: {
+          ...CASE,
+          steps: [{ no: 1, action: 'Confirm order', expected: 'Total is shown' }],
+        },
+        etag: '"2"',
+      });
+    const { fixture, harness } = await mount();
+    await harness.fill('case-title', 'Changed title');
+    await harness.click('[data-editor-save]');
+    await fixture.whenStable();
+    const dialog =
+      await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(ConflictHarness);
+    const steps = await dialog.fieldWith('Confirm order');
+    expect(steps).toContain('Same');
+    expect(steps).not.toContain('Changed');
+  });
+  it('explains a saved read-only projection without claiming unsaved edits', async () => {
+    narrow.set(true);
+    const { harness } = await mount();
+    const text = await harness.text();
+    expect(text).toContain('These saved values are shown read-only');
+    expect(text).not.toContain('Unsaved desktop edits are retained');
+  });
 });
 class LeaveHarness extends ComponentHarness {
   static hostSelector = '[role="dialog"], [role="alertdialog"]';
@@ -270,5 +412,21 @@ class ConflictHarness extends ComponentHarness {
   static hostSelector = '[role="dialog"]';
   async keepEditing() {
     await (await this.locatorFor('button[hlmDialogClose]:not(.close)')()).click();
+  }
+  async fieldWith(value: string) {
+    for (const section of await this.locatorForAll('.field')()) {
+      const text = await section.text();
+      if (text.includes(value)) return text;
+    }
+    throw new Error('Conflict field not found for: ' + value);
+  }
+}
+class RestorePageHarness extends ComponentHarness {
+  static hostSelector = '[role="dialog"]';
+  async confirm() {
+    await (await this.locatorFor('[data-restore-confirm]')()).click();
+  }
+  async cancel() {
+    await (await this.locatorFor('[data-restore-cancel]')()).click();
   }
 }

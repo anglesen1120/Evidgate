@@ -55,6 +55,22 @@ const PANEL_LABELS: Readonly<Record<string, string>> = {
   timeline: $localize`:@@authoring.editor.timeline-tab:Timeline`,
 };
 
+/** Conflict comparison must show stored values, so an omitted optional field equals an explicit null. */
+function stepsSnapshot(
+  steps: readonly {
+    readonly no: number;
+    readonly action: string;
+    readonly expected: string;
+    readonly data?: string | null;
+  }[],
+): string {
+  return JSON.stringify(
+    steps.map(({ no, action, expected, data }) => ({ no, action, expected, data: data ?? null })),
+    null,
+    2,
+  );
+}
+
 @Component({
   selector: 'app-authoring-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -139,7 +155,7 @@ export class EditorPage {
     () =>
       !this.store.canWrite() ||
       !this.viewport.canMutate() ||
-      this.store.saving() ||
+      this.store.locked() ||
       !this.store.retryWait.ready() ||
       !this.store.base()?.etag ||
       this.store.conflictOpen() ||
@@ -199,14 +215,8 @@ export class EditorPage {
       {
         id: 'steps',
         label: $localize`:@@authoring.editor.steps:Steps`,
-        local: draft
-          ? JSON.stringify(
-              draft.steps.map(({ no, action, expected, data }) => ({ no, action, expected, data })),
-              null,
-              2,
-            )
-          : null,
-        server: server ? JSON.stringify(server.steps, null, 2) : null,
+        local: draft ? stepsSnapshot(draft.steps) : null,
+        server: server ? stepsSnapshot(server.steps) : null,
       },
     ];
   });

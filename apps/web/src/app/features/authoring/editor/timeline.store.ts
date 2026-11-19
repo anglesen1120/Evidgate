@@ -185,7 +185,8 @@ export const TimelineStore = signalStore(
         !store.editor.canWrite() ||
         !store.viewport.allowsMutation() ||
         store.restoring() ||
-        !store.retryWait.ready()
+        !store.retryWait.ready() ||
+        !store.editor.beginRestore()
       )
         return false;
       const intent = JSON.stringify({ scope, id });
@@ -207,6 +208,7 @@ export const TimelineStore = signalStore(
         store.cursorPath.set([]);
         if (store.cursor()) store.cursor.set(undefined);
         else store.history.reload();
+        store.editor.endRestore();
         store.editor.refreshAfterRestore();
         return true;
       } catch (error) {
@@ -218,6 +220,7 @@ export const TimelineStore = signalStore(
         }
         return false;
       } finally {
+        store.editor.endRestore();
         patchState(store, { restoring: false });
       }
     },
