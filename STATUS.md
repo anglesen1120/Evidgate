@@ -56,7 +56,7 @@ Counted by expanding task ranges in merged PR bodies, close-out rows and plan No
 | 04.6.1-T1 | T1.4 | #523, #525 |
 | 05.2.1-T3 | none open (T3.1 remainder landed #846, 12e9a9db; the parent is credited at the next roll-up recount) | #846 |
 | 05.3.2-T3 | T3.1, T3.2 | none |
-| 05.3.2-T4 | T4.2 | none |
+| 05.3.2-T4 | T4.2 | #953 (crash/retry proof landed; mutation evidence open, carried row '05.3.2-T4.2 mutation evidence') |
 | 06.2.2-T1 | T1.2 | #503 |
 | 06.3.6-T1 | T1.4 | #243, #250, #262 |
 | 07.2.2-T2 | T2.2 | #385 |
