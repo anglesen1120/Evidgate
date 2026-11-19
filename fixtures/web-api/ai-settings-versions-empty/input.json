@@ -2,7 +2,9 @@
   "operation_id": "listProjectAiSettingsVersions",
   "variant": "empty",
   "status": 200,
-  "headers": {},
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000b441"
+  },
   "latency_ms": 0,
   "body": {
     "items": [],

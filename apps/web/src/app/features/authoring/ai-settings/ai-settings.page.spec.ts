@@ -7,12 +7,15 @@ import type { Mock } from 'vitest';
 import type { AiSettingsView, AiSettingsVersion } from '@evidgate/sdk';
 import { AiSettingsDataService } from '../../../core/data/ai-settings-data.service';
 import { SessionStore } from '../../../core/session/session.store';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow';
 import { ApiRequestError } from '../../../core/http/api-error';
 import { AiSettingsPage } from './ai-settings.page';
 import { FIELDS, AI_WRITE } from './ai-settings.model';
 import headDocument from '../../../../../../../fixtures/web-api/ai-settings-head/input.json';
 import versionDocument from '../../../../../../../fixtures/web-api/ai-settings-version-1/input.json';
+
+provideLayoutTestStubs();
 
 class SettingsHarness extends ComponentHarness {
   static hostSelector = 'app-ai-settings-page';
@@ -77,7 +80,7 @@ describe('AiSettingsPage', () => {
   async function mount() {
     const fixture = TestBed.createComponent(AiSettingsPage);
     await fixture.whenStable();
-    const harness = await TestbedHarnessEnvironment.loader(fixture).getHarness(SettingsHarness);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, SettingsHarness);
     return { fixture, harness };
   }
   for (const field of FIELDS) {
