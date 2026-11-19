@@ -139,14 +139,19 @@ describe('ExportStore exact confirmed scope', () => {
     }
   });
 
-  it('never requests the unavailable XLSX format', async () => {
-    store.edit({ format: 'xlsx' });
-    expect(store.unavailableReason()).toContain('XLSX export is unavailable');
-    expect(store.query()).toBeNull();
+  it('requests XLSX with only the chosen node and included kinds, without reading workbook text', async () => {
+    const blob = new Blob([new Uint8Array([0x50, 0x4b, 3, 4])]);
+    const text = vi.spyOn(blob, 'text');
+    download.mockResolvedValueOnce({ blob, filename: 'authoring-export.xlsx' });
+    store.edit({ format: 'xlsx', scope: 'node', nodeId: NODE, kinds: ['cases'] });
+    expect(store.unavailableReason()).toBeNull();
     store.openConfirmation();
-    expect(store.confirmation()).toBeNull();
-    expect(await store.confirmDownload()).toBeNull();
-    expect(download).not.toHaveBeenCalled();
+    expect(await store.confirmDownload()).toEqual({ blob, filename: 'authoring-export.xlsx' });
+    expect(download.mock.calls[0]?.slice(0, 2)).toEqual([
+      'project',
+      { format: 'xlsx', node_id: NODE, include: 'cases' },
+    ]);
+    expect(text).not.toHaveBeenCalled();
   });
 
   it('names a selection or filtered scope as no scope instead of the whole project', () => {

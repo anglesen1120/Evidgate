@@ -79,7 +79,7 @@ export class ImportPanelComponent {
     if (this.store.local.error()) return this.copy.localUnreadable;
     switch (this.local()?.issue) {
       case 'xlsx':
-        return this.copy.xlsx;
+        return this.copy.xlsxPreview;
       case 'display-cap':
         return this.copy.displayCap;
       case 'header':
@@ -128,8 +128,7 @@ export class ImportPanelComponent {
       target instanceof HTMLElement && target.closest('[data-import-mutation]') ? target : null;
   }
 
-  protected readonly formatLabel = (format: string): string =>
-    format === 'xlsx' ? `${format.toUpperCase()} — ${this.copy.unavailable}` : format.toUpperCase();
+  protected readonly formatLabel = (format: string): string => format.toUpperCase();
 
   protected pick(event: Event): void {
     const input = event.target;

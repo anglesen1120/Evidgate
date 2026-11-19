@@ -15,7 +15,13 @@ import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { createRetryAfterWait } from '../../../core/http/retry';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { ImportExportDataService } from './import-export-data.service';
-import { AUTHORING_READ, AUTHORING_WRITE, IMPEX_COPY, importFailure } from './import-export.copy';
+import {
+  AUTHORING_READ,
+  AUTHORING_WRITE,
+  IMPEX_COPY,
+  importFailure,
+  importSizeError,
+} from './import-export.copy';
 import { IMPORT_BYTE_CAP, parseLocalPreview, type AuthoringFormat } from './local-file-preview';
 
 interface ImportWork {
@@ -43,22 +49,6 @@ const EMPTY: ImportWork = {
   error: null,
 };
 
-function tooLarge(file: File): ApiError {
-  const error: ApiError = {
-    kind: 'payload_too_large',
-    status: 413,
-    code: 'payload_too_large',
-    message: '',
-    requestId: null,
-    retryable: false,
-    retryAfterSeconds: null,
-    details: [
-      { path: '/file', reason: 'body_too_large', limit: IMPORT_BYTE_CAP, actual: file.size },
-    ],
-  };
-  return { ...error, message: importFailure(error) };
-}
-
 export const ImportStore = signalStore(
   withState({ current: EMPTY, historyCursor: null as string | null }),
   withProps(() => ({
@@ -74,6 +64,9 @@ export const ImportStore = signalStore(
     ),
     canWrite: computed(() => store._session.has(AUTHORING_WRITE)),
     canReadHistory: computed(() => store._session.has(AUTHORING_READ)),
+  })),
+  withComputed((store) => ({
+    formatLocked: computed(() => store.work().file?.name.toLowerCase().endsWith('.xlsx') ?? false),
   })),
   withProps((store) => ({
     // The preview is a local read of the picked file, so its resource must reload only when the
@@ -167,7 +160,6 @@ export const ImportStore = signalStore(
       const work = store.work();
       return (
         store.canWrite() &&
-        work.format !== 'xlsx' &&
         !work.pending &&
         work.report !== null &&
         work.committed === null &&
@@ -207,7 +199,6 @@ export const ImportStore = signalStore(
         !work.file ||
         !work.project ||
         !work.key ||
-        work.format === 'xlsx' ||
         work.pending ||
         !store._policy.allowsMutation() ||
         !store._session.has(AUTHORING_WRITE) ||
@@ -215,7 +206,7 @@ export const ImportStore = signalStore(
       )
         return;
       if (work.file.size > IMPORT_BYTE_CAP) {
-        update({ error: tooLarge(work.file), report: null });
+        update({ error: importSizeError(work.file, work.format), report: null });
         return;
       }
       if (!dryRun && !store.canConfirm() && !(work.stage === 'confirm' && work.error?.retryable))
@@ -271,15 +262,14 @@ export const ImportStore = signalStore(
           format,
           key: file ? createIntent().idempotencyKey : null,
         });
-        if (file && file.size > IMPORT_BYTE_CAP) update({ error: tooLarge(file) });
+        if (file && file.size > IMPORT_BYTE_CAP) update({ error: importSizeError(file, format) });
       },
       setFormat(format: AuthoringFormat): void {
         if (
           !store._policy.allowsMutation() ||
           !store.canWrite() ||
           store.work().pending ||
-          format === 'xlsx' ||
-          store.work().file?.name.toLowerCase().endsWith('.xlsx') ||
+          store.formatLocked() ||
           format === store.work().format
         )
           return;

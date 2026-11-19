@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  DestroyRef,
   afterRenderEffect,
   computed,
   inject,
@@ -30,10 +31,22 @@ import { IMPORT_COLUMNS } from './local-file-preview';
 /** Keep the object URL alive long enough for Safari and Firefox to start the download. */
 const REVOKE_AFTER_MS = 30_000;
 
-/** Saves one server file under the name the server chose, then releases its URL much later. */
-export function downloadExportFile(document: Document, file: AuthoringDownload): void {
+/** The URL outlives the click for slow browser downloads, but not its owning view. */
+export function downloadExportFile(
+  document: Document,
+  file: AuthoringDownload,
+  signal?: AbortSignal,
+): void {
+  signal?.throwIfAborted();
   const url = URL.createObjectURL(file.blob);
   const link = document.createElement('a');
+  const revoke = (): void => {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', revoke);
+    URL.revokeObjectURL(url);
+  };
+  const timer = setTimeout(revoke, REVOKE_AFTER_MS);
+  signal?.addEventListener('abort', revoke, { once: true });
   link.href = url;
   link.download = file.filename;
   link.hidden = true;
@@ -42,7 +55,6 @@ export function downloadExportFile(document: Document, file: AuthoringDownload):
     link.click();
   } finally {
     link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), REVOKE_AFTER_MS);
   }
 }
 
@@ -68,10 +80,12 @@ export function downloadExportFile(document: Document, file: AuthoringDownload):
 })
 export class ExportPanelComponent {
   private readonly document = inject(DOCUMENT);
+  private readonly destroyRef = inject(DestroyRef);
   protected readonly policy = inject(NarrowMutationPolicy);
   protected readonly store = inject(ExportStore);
   protected readonly copy = IMPEX_COPY;
   protected readonly exportCopy = EXPORT_COPY;
+  private readonly downloadLifetime = new AbortController();
   private readonly notice = viewChild<ElementRef<HTMLElement>>('exportNarrowNotice');
   protected readonly formats = ['csv', 'json', 'xlsx'] as const;
   protected readonly columns = IMPORT_COLUMNS;
@@ -88,6 +102,7 @@ export class ExportPanelComponent {
   );
 
   constructor() {
+    this.destroyRef.onDestroy(() => this.downloadLifetime.abort());
     // The scope card unmounts with the viewport policy, so a focused control would hand focus to
     // the body; move it to the notice that states the scope is now read-only.
     let allowed = this.policy.canMutate();
@@ -101,8 +116,7 @@ export class ExportPanelComponent {
     });
   }
 
-  protected readonly formatLabel = (format: string): string =>
-    format === 'xlsx' ? this.exportCopy.xlsxOption : format.toUpperCase();
+  protected readonly formatLabel = (format: string): string => format.toUpperCase();
 
   private focusWasLost(): boolean {
     const active = this.document.activeElement;
@@ -124,6 +138,7 @@ export class ExportPanelComponent {
 
   protected async download(): Promise<void> {
     const file = await this.store.confirmDownload();
-    if (file) downloadExportFile(this.document, file);
+    if (file && !this.downloadLifetime.signal.aborted)
+      downloadExportFile(this.document, file, this.downloadLifetime.signal);
   }
 }

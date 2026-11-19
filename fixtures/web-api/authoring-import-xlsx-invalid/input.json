@@ -1,0 +1,23 @@
+{
+  "operation_id": "importAuthoring",
+  "variant": "xlsx-invalid",
+  "status": 422,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000af01"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "request_invalid",
+      "message": "The complete request was refused.",
+      "request_id": "018f0000-0000-7000-8000-00000000af01",
+      "retryable": false,
+      "details": [
+        {
+          "path": "/file",
+          "reason": "unsupported_format"
+        }
+      ]
+    }
+  }
+}

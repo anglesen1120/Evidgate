@@ -9890,13 +9890,16 @@
       <trans-unit id="authoring.import-export.export-tab" datatype="html"><source>Export</source></trans-unit>
       <trans-unit id="authoring.import-export.intake" datatype="html"><source>File and target</source></trans-unit>
       <trans-unit id="authoring.import-export.file" datatype="html"><source>Source file</source></trans-unit>
-      <trans-unit id="authoring.import-export.limits" datatype="html"><source>CSV or JSON. The server accepts at most 5 MiB and 5,000 data rows. File selection is not validation.</source></trans-unit>
+      <trans-unit id="authoring.import-export.file-limits" datatype="html"><source>CSV, JSON or XLSX. The server accepts at most 5 MiB and 5,000 data rows. File selection is not validation.</source></trans-unit>
       <trans-unit id="authoring.import-export.format" datatype="html"><source>Format</source></trans-unit>
       <trans-unit id="authoring.import-export.preview" datatype="html"><source>Preview without importing</source></trans-unit>
       <trans-unit id="authoring.import-export.preview-title" datatype="html"><source>Preview rows</source></trans-unit>
       <trans-unit id="authoring.import-export.from-file" datatype="html"><source>From your file, not validated. Row identity, status and totals come only from the server.</source></trans-unit>
       <trans-unit id="authoring.import-export.no-file" datatype="html"><source>No file has been selected for import.</source></trans-unit>
-      <trans-unit id="authoring.import-export.xlsx" datatype="html"><source>XLSX is unavailable because this client cannot transfer spreadsheet files. Use CSV or JSON; no XLSX request is sent.</source></trans-unit>
+      <trans-unit id="authoring.import-export.xlsx-preview" datatype="html"><source>Workbook cells are not read in this browser. Preview sends the original XLSX file for a server dry run; only the server report is shown.</source></trans-unit>
+      <trans-unit id="authoring.import-export.xlsx-format-locked" datatype="html"><source>Files ending in .xlsx must use XLSX. Choose a CSV or JSON file to change the format.</source></trans-unit>
+      <trans-unit id="authoring.import-export.xlsx-too-large" datatype="html"><source>The XLSX file exceeds 5 MiB. Choose a smaller workbook and preview it again. No import request was sent.</source></trans-unit>
+      <trans-unit id="authoring.import-export.format-mismatch" datatype="html"><source>An .xlsx file must use the XLSX format. Choose XLSX and preview it again. No import request was sent.</source></trans-unit>
       <trans-unit id="authoring.import-export.local-unreadable" datatype="html"><source>Local preview could not read this file. The original file can still be sent for server validation.</source></trans-unit>
       <trans-unit id="authoring.import-export.invalid-utf8" datatype="html"><source>CSV files must use valid UTF-8 encoding. Save this file as UTF-8 and preview it again. No import request was sent.</source></trans-unit>
       <trans-unit id="authoring.import-export.display-cap" datatype="html"><source>Local display stops at the server's 5,000-row cap. No rows are removed from the upload; the server validates the original file.</source></trans-unit>
@@ -9952,8 +9955,6 @@
       <trans-unit id="authoring.import-export.scope-mismatch" datatype="html"><source>This credential is scoped to another project. Use a credential permitted for this exact project; no rows were imported and no file was exported.</source></trans-unit>
       <trans-unit id="authoring.import-export.empty-export" datatype="html"><source>This export scope is empty. No file was downloaded; choose another scope explicitly.</source></trans-unit>
       <trans-unit id="authoring.import-export.no-scope" datatype="html"><source>No scope</source></trans-unit>
-      <trans-unit id="authoring.import-export.xlsx-option" datatype="html"><source>XLSX — unavailable</source></trans-unit>
-      <trans-unit id="authoring.import-export.xlsx-unavailable" datatype="html"><source>XLSX export is unavailable: the current transport carries text only, so no workbook is requested. Choose CSV or JSON.</source></trans-unit>
       <trans-unit id="authoring.import-export.narrow-notice" datatype="html"><source>Desktop required to change the export scope. Downloading the scope shown is still available.</source></trans-unit>
       <trans-unit id="authoring.import-export.reason.unknown-parent" datatype="html"><source>The parent must name an earlier node of the required kind.</source></trans-unit>
       <trans-unit id="authoring.import-export.reason.orphan-row" datatype="html"><source>The row has no valid owning item or node.</source></trans-unit>
@@ -10481,7 +10482,6 @@
       <trans-unit id="authoring.import-export.preview-complete" datatype="html"><source>Preview complete — not applied. Review the validated scope before confirming.</source></trans-unit>
       <trans-unit id="authoring.import-export.inspected" datatype="html"><source>Inspected rows</source></trans-unit>
       <trans-unit id="authoring.import-export.snapshot" datatype="html"><source>Selected file and format</source></trans-unit>
-      <trans-unit id="authoring.import-export.unavailable" datatype="html"><source>Unavailable</source></trans-unit>
       <trans-unit id="authoring.import-export.header-guide" datatype="html"><source>Correct the CSV header to these thirteen contract columns, in this order:</source></trans-unit>
       <trans-unit id="authoring.import-export.limit" datatype="html"><source>Server limit</source></trans-unit>
       <trans-unit id="authoring.import-export.actual" datatype="html"><source>Measured value</source></trans-unit>
