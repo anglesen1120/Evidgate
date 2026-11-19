@@ -13,6 +13,9 @@ Design foundation for `apps/web`: flow specifications, design tokens, themes, la
 | T11.2 | [`tokens.md`](tokens.md), [`../../../apps/web/src/styles/tokens.css`](../../../apps/web/src/styles/tokens.css) | Token inventory, themes, contrast table; [`contrast.py`](contrast.py) recomputes the table |
 | T11.3 | [`layout.md`](layout.md) | Grid, breakpoints (≥ 1280 / 768–1279 / < 768), dense-table density rules |
 | T11.4 | [`state-sheet.md`](state-sheet.md) | T7/T8 component states, token recipes, accessibility, v2 reference captures and future component-spec anchors |
+| 13.4.1-T1.1 | [`authoring-tree.md`](authoring-tree.md), [`authoring-editor.md`](authoring-editor.md), [`authoring-pending-changes.md`](authoring-pending-changes.md), [`authoring-generation.md`](authoring-generation.md), [`authoring-ai-settings.md`](authoring-ai-settings.md), [`authoring-import-export.md`](authoring-import-export.md), [`authoring-usage-credits.md`](authoring-usage-credits.md), [`authoring-nav-phase.md`](authoring-nav-phase.md) | Authoring design set (G1): screens, states, copy, responsive notes; state matrix in [`authoring-states.md`](authoring-states.md) |
+| 13.4.1-T1.3 | [`authoring-review.md`](authoring-review.md) | Read-only design review record of the authoring set |
+| 13.4.1-T1.4 | [`authoring-handover.md`](authoring-handover.md) | Design-to-code handover map for 13.4.1-T2..T7 |
 
 ## Screenshots
 
