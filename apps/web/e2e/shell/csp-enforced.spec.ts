@@ -89,6 +89,11 @@ const READY: Readonly<Record<string, string>> = {
   RunDetailPage: 'app-run-detail-page[data-run-detail-status="ready"]',
   SuiteCompositionComponent: 'app-suite-composition[data-suite-composition-status="ready"]',
   OnboardingShellComponent: WIZARD,
+  SecurityEventsPage: 'app-security-events-page [data-security-apply]',
+  CaseListPage: 'app-case-list-page [data-catalog-apply]',
+  AuthoringPage: 'app-authoring-page [data-authoring-breadcrumb]',
+  ImportExportPage: 'app-authoring-import-export-page [data-impex-import-tab]',
+  AiSettingsPage: 'app-ai-settings-page [data-ai-save]',
   EditorPage: 'app-authoring-editor #case-title',
 };
 

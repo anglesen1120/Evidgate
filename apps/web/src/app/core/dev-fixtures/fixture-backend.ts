@@ -80,6 +80,7 @@ import { securityEventsBody } from './fixture-security-events';
 import { caseListFixtureBody } from './fixture-case-list';
 import { findBulkCaseListFixture } from './fixture-case-list-bulk';
 import { AuthoringTreeFixtureScenario } from './fixture-authoring-tree';
+import { AuthoringCasesFixtureScenario } from './fixture-authoring-cases';
 import { AiSettingsFixtureScenario, aiSettingsPermissions } from './fixture-ai-settings';
 import {
   AuthoringEditorFixtureScenario,
@@ -229,6 +230,7 @@ export class FixtureHttpBackend implements HttpBackend {
   private readonly retentionPolicies = new Map<string, RetentionPolicy>();
   private readonly runCancellation = new RunCancelFixtureScenario();
   private readonly authoring = new AuthoringTreeFixtureScenario();
+  private readonly authoringCases = new AuthoringCasesFixtureScenario();
   private readonly aiSettings = new AiSettingsFixtureScenario();
   private readonly authoringPending = new AuthoringPendingFixtureScenario();
   private readonly authoringEditor = new AuthoringEditorFixtureScenario();
@@ -259,6 +261,17 @@ export class FixtureHttpBackend implements HttpBackend {
     );
   }
 
+  private authoringEntry(request: HttpRequest<unknown>, path: string): FixtureEntry | undefined {
+    if (request.method !== 'GET') return undefined;
+    if (/^\/projects\/[^/]+\/authoring\/tree$/.test(path)) {
+      return this.authoring.entry(request, this.toggles.variantFor('listAuthoringTree'));
+    }
+    if (/^\/projects\/[^/]+\/authoring\/manual-cases$/.test(path)) {
+      return this.authoringCases.entry(request, this.toggles.variantFor('listManualCases'));
+    }
+    return undefined;
+  }
+
   private requestEntry(
     request: HttpRequest<unknown>,
     relativePath: string,
@@ -267,9 +280,8 @@ export class FixtureHttpBackend implements HttpBackend {
       this.toggles.variantFor(operation),
     );
     if (pending !== undefined) return pending;
-    if (request.method === 'GET' && /^\/projects\/[^/]+\/authoring\/tree$/.test(relativePath)) {
-      return this.authoring.entry(request, this.toggles.variantFor('listAuthoringTree'));
-    }
+    const authoring = this.authoringEntry(request, relativePath);
+    if (authoring !== undefined) return authoring;
     const settings = this.aiSettings.entry(request, relativePath, (operation) =>
       this.toggles.variantFor(operation),
     );

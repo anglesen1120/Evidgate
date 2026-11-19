@@ -1,0 +1,70 @@
+:host {
+  display: grid;
+  gap: var(--eg-space-4);
+  min-inline-size: 0;
+}
+.selection-bar,
+.export-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--eg-space-3) var(--eg-space-5);
+  min-inline-size: 0;
+}
+.selection-bar p,
+.help {
+  margin: 0;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--eg-text-sm);
+  line-height: var(--eg-leading-sm);
+}
+.help {
+  color: var(--eg-text-muted);
+  max-inline-size: 65ch;
+}
+.checkbox-target {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--eg-space-3);
+  min-block-size: var(--eg-control-touch);
+  min-inline-size: var(--eg-control-touch);
+  max-inline-size: 100%;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.row-checkbox {
+  min-block-size: var(--eg-space-7);
+  min-inline-size: var(--eg-space-7);
+  vertical-align: middle;
+}
+.coverage {
+  display: grid;
+  gap: var(--eg-space-2);
+  min-inline-size: 0;
+}
+.virtual-cell {
+  display: flex;
+  align-items: center;
+}
+.virtual-cell > * {
+  flex: 1;
+  min-inline-size: 0;
+}
+a[aria-disabled] {
+  color: var(--eg-text-muted);
+  cursor: not-allowed;
+  min-block-size: var(--eg-control-touch);
+  max-inline-size: 100%;
+  white-space: normal;
+}
+[data-selection-notice]:focus-visible {
+  outline: var(--eg-focus-width) solid var(--eg-focus);
+  outline-offset: var(--eg-focus-offset);
+}
+@media (pointer: coarse) {
+  .row-checkbox {
+    min-block-size: var(--eg-control-touch);
+    min-inline-size: var(--eg-control-touch);
+  }
+}

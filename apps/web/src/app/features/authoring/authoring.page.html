@@ -139,7 +139,9 @@
       />
     </div>
     <div hlmCardContent>
-      <p class="scope-help">{{ copy.tablePlaceholder }}</p>
+      @if (!denied()) {
+        <app-authoring-case-table />
+      }
     </div>
   </section>
 </div>

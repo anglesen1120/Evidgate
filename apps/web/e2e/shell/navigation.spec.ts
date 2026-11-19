@@ -83,7 +83,7 @@ test.describe('sidebar visibility (AC4)', () => {
       'no later-phase row is ever rendered',
     ).toEqual([]);
     // The sidebar is a landmark with its own name, and each row is a link to its own route.
-    await expect(page.getByRole('navigation')).toHaveCount(1);
+    await expect(page.locator('app-shell-nav').getByRole('navigation')).toHaveCount(1);
     await expect(
       page.locator(`app-shell-nav nav a[href$="/projects/${PROJECT_STOREFRONT}/authoring"]`),
     ).toHaveCount(1);

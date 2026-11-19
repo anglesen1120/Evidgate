@@ -14,6 +14,7 @@ import { RequestStateComponent } from '../../shared/ui/states/request-state.comp
 import { InlineFeedbackComponent } from '../../shared/ui/states/inline-feedback.component';
 import { CopyableIdentifierComponent } from '../../shared/ui/values/copyable-identifier.component';
 import { AuthoringTreePaneComponent } from './authoring-tree-pane.component';
+import { AuthoringCaseTableComponent } from './authoring-case-table.component';
 import { AUTHORING_TREE_COPY } from './authoring-tree.copy';
 import { AuthoringStore } from './authoring.store';
 
@@ -30,6 +31,7 @@ import { AuthoringStore } from './authoring.store';
     InlineFeedbackComponent,
     CopyableIdentifierComponent,
     AuthoringTreePaneComponent,
+    AuthoringCaseTableComponent,
   ],
   providers: [AuthoringStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -96,6 +98,10 @@ export class AuthoringPage {
   /** One polite line per settled read: the scope now shown, never one line per node. */
   protected readonly announcement = computed(() => {
     if (this.denied() || this.busy()) return '';
+    const failed = this.store.selectedNodeId();
+    if (this.store.selectionStatus() === 'error' && failed !== null) {
+      return $localize`:@@authoring.tree.announce-selection-failed:Could not load selected scope ${failed}:nodeId:`;
+    }
     const selected = this.store.selectedNode();
     if (selected !== null) {
       return $localize`:@@authoring.tree.announce-selected:Selected scope ${selected.title}:title:`;
