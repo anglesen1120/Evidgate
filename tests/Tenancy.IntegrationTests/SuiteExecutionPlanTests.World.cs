@@ -103,6 +103,28 @@ public sealed partial class SuiteExecutionPlanTests : IAsyncLifetime
         return created.Id("suite_revision_id");
     }
 
+    /// <summary>
+    /// A revision of six members whose ordinals repeat in pairs, planted as the owner in one transaction: a revision's
+    /// members may only be written in the transaction that creates it, and the API numbers them without ties.
+    /// </summary>
+    private async Task<Guid> SeedTiedOrdinalRevisionAsync(World world)
+    {
+        var revision = Guid.CreateVersion7();
+        await _fixture.ExecuteAsync(
+            world.Database,
+            $"""
+            insert into public.suite_revision (id, org_id, suite_id, revision_no, revision_hash, shard_strategy, retry_policy)
+            values ('{revision}', '{world.Org}', '{world.Suite}', 99, 'sha256:{new string('c', 64)}', jsonb_build_object(), jsonb_build_object());
+            insert into public.suite_member (id, org_id, suite_revision_id, case_revision_id, variant_id, ordinal)
+            select gen_random_uuid(), m.org_id, '{revision}', m.case_revision_id, m.variant_id,
+                   (row_number() over (order by m.ordinal, m.id) - 1) / 2
+              from public.suite_member m
+             where m.org_id = '{world.Org}' and m.suite_revision_id = '{world.Revision}';
+            """);
+
+        return revision;
+    }
+
     /// <summary>Registers <paramref name="count"/> cases through the identity service and returns their revisions.</summary>
     private async Task<Guid[]> SeedCasesAsync(TenancyApiFactory api, Guid org, Guid project, int count)
     {
@@ -171,13 +193,13 @@ public sealed partial class SuiteExecutionPlanTests : IAsyncLifetime
     private static Action<HttpRequestHeaders> Bearer(string token) => headers =>
         headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-    /// <summary>The stored members in <c>(ordinal, id)</c> order, as <c>ordinal|case_id|variant_hash|case_revision_id</c>.</summary>
+    /// <summary>The stored members in <c>(ordinal, id)</c> order, as <c>case_id|variant_hash|case_revision_id</c>.</summary>
     private async Task<List<string>> ExpectedAsync(World world, Guid revision) =>
     [
         .. (await _fixture.ColumnAsync<string>(
             world.Database,
             $"""
-            select m.ordinal || '|' || tr.case_id || '|' || v.variant_hash || '|' || m.case_revision_id
+            select tr.case_id || '|' || v.variant_hash || '|' || m.case_revision_id
               from public.suite_member m
               join public.test_revision tr on tr.org_id = m.org_id and tr.id = m.case_revision_id
               join public.variant v on v.org_id = m.org_id and v.id = m.variant_id

@@ -25,7 +25,7 @@ internal static class CatalogExecutionPlanEndpoints
     {
         group.MapGet("/suite-revisions/{r}/execution-plan", GetExecutionPlanAsync)
             .Produces<SuiteExecutionPlanPage>(StatusCodes.Status200OK)
-            .WithSummary("Cursor page of a suite revision's pinned members for manifest generation (04)");
+            .WithSummary("Cursor page of a suite revision's pinned members for manifest generation");
 
         return group;
     }

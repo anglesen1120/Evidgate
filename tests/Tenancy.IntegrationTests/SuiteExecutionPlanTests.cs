@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Evidgate.Modules.Catalog.Application.Queries;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -83,16 +84,23 @@ public sealed partial class SuiteExecutionPlanTests
 
     /// <summary>
     /// The permission, not the revision: a token without <c>suite:plan_read</c> is refused <c>403 forbidden</c> before the
-    /// revision is read, so an unknown id and an existing one answer the same body.
+    /// revision is read, so an unknown id and an existing one answer the same body. The four scopes a producer token
+    /// held before this permission existed are not enough either, and neither is one scope.
     /// </summary>
-    [Fact]
-    public async Task Plan_TokenWithoutThePermission_IsForbiddenBeforeTheRevisionIsRead()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Plan_TokenWithoutThePermission_IsForbiddenBeforeTheRevisionIsRead(bool legacyScopes)
     {
         await using var world = await StartAsync();
         (await GetPlanAsync(world, world.Revision, Bearer((await MintAsync(world, world.Project)).Text("token")!)))
             .Status.ShouldBe(HttpStatusCode.OK);
 
-        var narrow = Bearer((await MintAsync(world, world.Project, ["event:write"])).Text("token")!);
+        string[] scopes = legacyScopes ? ["event:write", "artifact:write", "run:create", "decision:read"] : ["event:write"];
+        var minted = await MintAsync(world, world.Project, scopes);
+        minted.Body.GetProperty("permission_set").EnumerateArray().Select(code => code.GetString()).Order(StringComparer.Ordinal)
+            .ShouldBe(scopes.Order(StringComparer.Ordinal));
+        var narrow = Bearer(minted.Text("token")!);
         var existing = await GetPlanAsync(world, world.Revision, narrow);
         var unknown = await GetPlanAsync(world, Guid.CreateVersion7(), narrow);
 
@@ -140,10 +148,15 @@ public sealed partial class SuiteExecutionPlanTests
     [InlineData("?limit=500", 200, null)]
     [InlineData("?limit=0", 422, "limit")]
     [InlineData("?limit=501", 422, "limit")]
+    [InlineData("?limit=-1", 422, "limit")]
+    [InlineData("?limit=2147483648", 422, "limit")]
     [InlineData("?limit=01", 400, "limit")]
     [InlineData("?limit=%2B2", 400, "limit")]
     [InlineData("?limit=1.5", 400, "limit")]
     [InlineData("?limit=", 400, "limit")]
+    [InlineData("?limit=%202", 400, "limit")]
+    [InlineData("?limit=abc", 400, "limit")]
+    [InlineData("?limit=2&limit=2", 400, "limit")]
     [InlineData("?cursor=%25", 400, "cursor")]
     [InlineData("?cursor=", 400, "cursor")]
     public async Task Plan_InvalidQuery_IsTheContractsStatus(string query, int status, string? detailPath)
@@ -187,6 +200,65 @@ public sealed partial class SuiteExecutionPlanTests
         var otherProject = await GetPlanAsync(world, sibling.Revision, siblingCaller, "?cursor=" + Uri.EscapeDataString(cursor));
         otherProject.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         otherProject.ErrorCode.ShouldBe("request_invalid");
+    }
+
+    /// <summary>
+    /// A continuation cursor is refused <c>422 request_invalid</c> when the anchor it names is not a member of the
+    /// revision: the codec can spell a position in this revision and project that no row ever held, so the page
+    /// statement reports the anchor's absence and the handler refuses instead of clamping to the nearest row. An
+    /// unknown revision still answers <c>404</c> before the anchor verdict is judged.
+    /// </summary>
+    [Fact]
+    public async Task Plan_CursorWithNonexistentAnchor_Is422()
+    {
+        await using var world = await StartAsync();
+        var caller = Bearer((await MintAsync(world, world.Project)).Text("token")!);
+        var first = await GetPlanAsync(world, world.Revision, caller, "?limit=2");
+        first.Status.ShouldBe(HttpStatusCode.OK);
+        var cursor = first.Text("next_cursor")!;
+        (await GetPlanAsync(world, world.Revision, caller, "?cursor=" + Uri.EscapeDataString(cursor)))
+            .Status.ShouldBe(HttpStatusCode.OK);
+
+        var fabricated = SuitePlanCursor.Encode(world.Revision, world.Project, 1, Guid.CreateVersion7());
+        var query = "?cursor=" + Uri.EscapeDataString(fabricated);
+        var answer = await GetPlanAsync(world, world.Revision, caller, query);
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        answer.ErrorCode.ShouldBe("request_invalid");
+        answer.Body.GetProperty("error").GetProperty("details")[0].GetProperty("path").GetString().ShouldBe("cursor");
+        (await GetPlanAsync(world, Guid.CreateVersion7(), caller, query)).Status.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    /// <summary>
+    /// Members whose ordinals repeat still page exactly once each: the keyset's tie-breaker is the member id, so the
+    /// cursor of a page that ends inside a run of equal ordinals resumes at the next id and never repeats or skips one.
+    /// </summary>
+    [Fact]
+    public async Task Plan_EqualOrdinalsAtPageBoundary_EachMemberAppearsOnce()
+    {
+        await using var world = await StartAsync();
+        var revision = await SeedTiedOrdinalRevisionAsync(world);
+        var expected = await ExpectedAsync(world, revision);
+        expected.Count.ShouldBe(6);
+        var caller = Bearer((await MintAsync(world, world.Project)).Text("token")!);
+        var actual = new List<string>();
+        string? cursor = null;
+        for (var page = 0; page < 3; page++)
+        {
+            var query = "?limit=2" + (cursor is null ? "" : "&cursor=" + Uri.EscapeDataString(cursor));
+            var answer = await GetPlanAsync(world, revision, caller, query);
+            answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
+            answer.Body.GetProperty("members").GetArrayLength().ShouldBe(2);
+            actual.AddRange(answer.Body.GetProperty("members").EnumerateArray().Select(MemberKey));
+            cursor = answer.Text("next_cursor");
+            if (page < 2)
+            {
+                cursor.ShouldNotBeNullOrWhiteSpace();
+            }
+        }
+
+        cursor.ShouldBeNull();
+        actual.ShouldBe(expected);
+        actual.Distinct(StringComparer.Ordinal).Count().ShouldBe(6);
     }
 
     /// <summary>A revision with no members is an empty page with no cursor, not a 404.</summary>

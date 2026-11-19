@@ -23,17 +23,19 @@ internal sealed record GetSuiteExecutionPlanQuery(Guid RevisionId, string? Curso
     : IQuery<Result<SuiteExecutionPlanPage>>;
 
 /// <summary>
-/// Handler of <see cref="GetSuiteExecutionPlanQuery"/>: the revision's project under the ambient tenant scope, then one
-/// keyset statement plus one extra row to decide the next page (00 §5.5 C1/C3/C5, P3).
+/// Handler of <see cref="GetSuiteExecutionPlanQuery"/>: one statement answers whether the revision exists under the
+/// ambient tenant and the caller's project scope, whether a continuation cursor's anchor is a member of it, and the
+/// keyset page itself, one extra row deciding the next page.
 /// <para>
-/// The project gate is the revision lookup, so a revision of another project or tenant answers the same
+/// The project gate is inside that statement, so a revision of another project or tenant answers the same
 /// <c>404 not_found</c> as an unknown id — never a per-member filter and never an existence oracle. The only 403 is the
 /// permission stage's, which runs before this handler and therefore depends on the token alone.
 /// </para>
 /// <para>
-/// A cursor this endpoint issued for another revision or project is <c>422 request_invalid</c>: a page position outside
-/// the revision the caller asked for is refused, never clamped. A value that is not this codec's canonical spelling is
-/// <c>400</c> — undecodable input, not a valid page position.
+/// A cursor this endpoint issued for another revision or project, and one naming an anchor the revision does not hold,
+/// are <c>422 request_invalid</c>: a page position outside the revision the caller asked for is refused, never clamped.
+/// A value that is not this codec's canonical spelling is <c>400</c> before the statement runs — undecodable input can
+/// never be used to probe whether a revision exists, and the answer is the same for every revision.
 /// </para>
 /// </summary>
 [Permission(Permissions.Suite.PlanRead)]
@@ -51,72 +53,153 @@ internal sealed class GetSuiteExecutionPlanQueryHandler(
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Catalog, nameof(GetSuiteExecutionPlanQuery));
 
+        if (ReadPosition(query, out var position) is { } cursorError)
+        {
+            return Result.Failure<SuiteExecutionPlanPage>(cursorError);
+        }
+
         var orgId = scopes.Require().OrgId;
-        var projectId = await db.ScalarAsync<Guid?>(
-                SuitePlanReadSql.RevisionProject,
-                new { org_id = orgId, revision_id = query.RevisionId },
+        var rows = await db.QueryAsync<SuitePlanRow>(
+                SuitePlanReadSql.Page,
+                new
+                {
+                    org_id = orgId,
+                    revision_id = query.RevisionId,
+                    // The first page anchors before every member: no stored ordinal is negative.
+                    cursor_ordinal = position?.Ordinal ?? -1,
+                    cursor_id = position?.MemberId ?? Guid.Empty,
+                    limit = query.Limit + 1,
+                },
                 cancellationToken)
             .ConfigureAwait(false);
-        if (projectId is null || CatalogScope.Project(projectId.Value, principals, tenant) is not null)
+
+        if (rows.Count == 0)
         {
             return Result.Failure<SuiteExecutionPlanPage>(SuiteErrors.RevisionNotFound);
         }
 
-        var firstPage = query.Cursor is null;
-        var cursorOrdinal = 0;
-        var cursorMemberId = Guid.Empty;
-        if (!firstPage)
+        var projectId = rows[0].ProjectId;
+        if (CatalogScope.Project(projectId, principals, tenant) is not null)
         {
-            if (!SuitePlanCursor.TryRead(query.Cursor, out var position))
-            {
-                return Result.Failure<SuiteExecutionPlanPage>(Error.BadRequest(
-                    "the cursor is not a page cursor this endpoint issued",
-                    [new ErrorDetail("cursor", "malformed")]));
-            }
-
-            if (position.RevisionId != query.RevisionId || position.ProjectId != projectId.Value)
-            {
-                return Result.Failure<SuiteExecutionPlanPage>(Error.Invalid(
-                    "the cursor was not issued for this suite revision",
-                    [new ErrorDetail("cursor", "foreign")]));
-            }
-
-            cursorOrdinal = position.Ordinal;
-            cursorMemberId = position.MemberId;
+            return Result.Failure<SuiteExecutionPlanPage>(SuiteErrors.RevisionNotFound);
         }
 
-        var rows = await db.QueryAsync<SuitePlanRow>(
-                firstPage ? SuitePlanReadSql.FirstPage : SuitePlanReadSql.NextPage,
-                firstPage
-                    ? new { org_id = orgId, revision_id = query.RevisionId, limit = query.Limit + 1 }
-                    : new
-                    {
-                        org_id = orgId,
-                        revision_id = query.RevisionId,
-                        cursor_ordinal = cursorOrdinal,
-                        cursor_id = cursorMemberId,
-                        limit = query.Limit + 1,
-                    },
-                cancellationToken)
-            .ConfigureAwait(false);
+        if (RefusedCursor(position, query.RevisionId, projectId, rows[0].AnchorPresent) is { } refusal)
+        {
+            return Result.Failure<SuiteExecutionPlanPage>(refusal);
+        }
 
-        var hasMore = rows.Count > query.Limit;
-        IReadOnlyList<SuitePlanRow> page = hasMore ? [.. rows.Take(query.Limit)] : rows;
+        var members = Served(rows);
+        var hasMore = members.Count > query.Limit;
+        var page = hasMore ? members.GetRange(0, query.Limit) : members;
 
         return Result.Success(new SuiteExecutionPlanPage(
             query.RevisionId,
-            [.. page.Select(row => new SuiteExecutionPlanMember(row.CaseId, row.VariantHash, row.CaseRevisionId))],
-            hasMore ? SuitePlanCursor.Encode(query.RevisionId, projectId.Value, page[^1].Ordinal, page[^1].Id) : null));
+            [.. page.Select(served => served.Member)],
+            hasMore ? SuitePlanCursor.Encode(query.RevisionId, projectId, page[^1].Ordinal, page[^1].Id) : null));
     }
+
+    /// <summary>The cursor's decoded position, or the 400 of a value this codec did not write; absent for the first page.</summary>
+    private static Error? ReadPosition(GetSuiteExecutionPlanQuery query, out SuitePlanCursor.Position? position)
+    {
+        position = null;
+
+        if (query.Cursor is null)
+        {
+            return null;
+        }
+
+        if (!SuitePlanCursor.TryRead(query.Cursor, out var decoded))
+        {
+            return Error.BadRequest(
+                "the cursor is not a page cursor this endpoint issued",
+                [new ErrorDetail("cursor", "malformed")]);
+        }
+
+        position = decoded;
+
+        return null;
+    }
+
+    /// <summary>
+    /// The 422 of a continuation cursor the revision cannot hold: a foreign one names another revision or project, and
+    /// one whose anchor is not a member would otherwise silently serve a page from a position that never existed.
+    /// </summary>
+    private static Error? RefusedCursor(
+        SuitePlanCursor.Position? position,
+        Guid revisionId,
+        Guid projectId,
+        bool anchorPresent)
+    {
+        if (position is not { } anchor)
+        {
+            return null;
+        }
+
+        if (anchor.RevisionId != revisionId || anchor.ProjectId != projectId)
+        {
+            return Error.Invalid(
+                "the cursor was not issued for this suite revision",
+                [new ErrorDetail("cursor", "foreign")]);
+        }
+
+        return anchorPresent
+            ? null
+            : Error.Invalid(
+                "the cursor's member is not part of this suite revision",
+                [new ErrorDetail("cursor", "unknown")]);
+    }
+
+    /// <summary>The page's member rows in served order, skipping the null row an empty revision answers with.</summary>
+    private static List<ServedMember> Served(IReadOnlyList<SuitePlanRow> rows) =>
+    [
+        .. rows
+            .Select(row => row.CaseId is { } caseId
+                && row.CaseRevisionId is { } caseRevisionId
+                && row.VariantHash is { } variantHash
+                && row.Ordinal is { } ordinal
+                && row.Id is { } id
+                    ? new ServedMember(new SuiteExecutionPlanMember(caseId, variantHash, caseRevisionId), ordinal, id)
+                    : (ServedMember?)null)
+            .OfType<ServedMember>(),
+    ];
 }
 
-/// <summary>One member row of the plan page, joined to its case and variant.</summary>
-/// <param name="CaseRevisionId">The pinned case revision.</param>
-/// <param name="CaseId">The case that revision belongs to.</param>
-/// <param name="VariantHash">The pinned variant's hash.</param>
-/// <param name="Ordinal">The member's position in the revision.</param>
-/// <param name="Id">The member row's id, the keyset's tie-breaker.</param>
-internal sealed record SuitePlanRow(Guid CaseRevisionId, Guid CaseId, string VariantHash, int Ordinal, Guid Id);
+/// <summary>
+/// One row of the plan statement. It is a mutable class, not a record: the statement projects the revision's project
+/// and the anchor verdict beside the member columns, and Dapper binds a class by column name through
+/// <c>DefaultTypeMap.MatchNamesWithUnderscores</c>. The member columns are null exactly when the revision holds no
+/// member on this page, which is how an empty revision still answers 200.
+/// </summary>
+internal sealed class SuitePlanRow
+{
+    /// <summary>The revision's project, the project gate's input.</summary>
+    public Guid ProjectId { get; set; }
+
+    /// <summary>Whether a continuation cursor's <c>(ordinal, id)</c> names a member of the revision.</summary>
+    public bool AnchorPresent { get; set; }
+
+    /// <summary>The pinned case revision.</summary>
+    public Guid? CaseRevisionId { get; set; }
+
+    /// <summary>The case that revision belongs to.</summary>
+    public Guid? CaseId { get; set; }
+
+    /// <summary>The pinned variant's hash.</summary>
+    public string? VariantHash { get; set; }
+
+    /// <summary>The member's position in the revision.</summary>
+    public int? Ordinal { get; set; }
+
+    /// <summary>The member row's id, the keyset's tie-breaker.</summary>
+    public Guid? Id { get; set; }
+}
+
+/// <summary>A served member with the position the next page's cursor is minted from.</summary>
+/// <param name="Member">The member as the response carries it.</param>
+/// <param name="Ordinal">The member's stored ordinal.</param>
+/// <param name="Id">The member row's id.</param>
+internal readonly record struct ServedMember(SuiteExecutionPlanMember Member, int Ordinal, Guid Id);
 
 /// <summary>
 /// The opaque cursor of the execution plan page: <c>v1.&lt;revision&gt;.&lt;project&gt;.&lt;ordinal&gt;.&lt;member id&gt;</c>

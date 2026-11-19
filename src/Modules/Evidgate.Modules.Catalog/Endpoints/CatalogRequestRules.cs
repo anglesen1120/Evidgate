@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Numerics;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
@@ -106,8 +107,9 @@ internal static class CatalogRequestRules
 
     /// <summary>
     /// The <c>limit</c> of a route whose contract separates the two failures: a value that is not the canonical decimal
-    /// spelling of an integer is <c>400</c> (undecodable input), while a canonical integer outside the range is the
-    /// <c>422</c> the caller can fix. Unlike <see cref="Limit"/> an absent member and an empty one differ.
+    /// spelling of a signed integer is <c>400</c> (undecodable input), while a canonical integer outside the range — a
+    /// negative one, and a magnitude past <see cref="int"/> too — is the <c>422</c> the caller can fix. Unlike
+    /// <see cref="Limit"/> an absent member and an empty one differ.
     /// </summary>
     /// <param name="present">Whether the query carried the member at all.</param>
     /// <param name="raw">The raw query value.</param>
@@ -123,7 +125,9 @@ internal static class CatalogRequestRules
             return null;
         }
 
-        if (!int.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
+        // Read unbounded so a canonical integer of any magnitude is the range answer, not the malformed one; the
+        // canonical spelling check then refuses `+5`, `01` and a padded value, whose value alone would pass.
+        if (!BigInteger.TryParse(raw, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var parsed)
             || !string.Equals(parsed.ToString(CultureInfo.InvariantCulture), raw, StringComparison.Ordinal))
         {
             return Error.BadRequest(
@@ -138,7 +142,7 @@ internal static class CatalogRequestRules
                 [new ErrorDetail("limit", "out_of_range")]);
         }
 
-        limit = parsed;
+        limit = (int)parsed;
 
         return null;
     }
