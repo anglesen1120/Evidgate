@@ -27,6 +27,7 @@ public sealed partial class OptionsValidationTests
                 ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = DeadConnectionString,
                 ["EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY"] = "00:00:30",
                 ["EVIDGATE__RUNS__CANCEL__KILLDELAY"] = "00:02:00",
+                ["EVIDGATE__HEALING__LLM__PROVIDER"] = "none",
                 [variable] = value,
                 [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
             });
