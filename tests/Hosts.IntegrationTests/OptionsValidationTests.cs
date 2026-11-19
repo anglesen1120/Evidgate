@@ -192,11 +192,12 @@ public sealed partial class OptionsValidationTests
             scopedEnv[NoHealingProvider.Variable] = "none";
         }
 
+        // Every key the case states (including the two baselines above) must reach the child; only inherited
+        // keys it does not state are removed, so the parent environment cannot leak into a case.
         var allEvidgateKeys = Environment.GetEnvironmentVariables().Keys
             .Cast<string>()
             .Where(key => key.StartsWith("EVIDGATE__", StringComparison.Ordinal))
-            .Where(key => !string.Equals(key, NoForwardedProxy.Variable, StringComparison.Ordinal))
-            .Where(key => !(statingNoHealingProvider && string.Equals(key, NoHealingProvider.Variable, StringComparison.Ordinal)))
+            .Where(key => !scopedEnv.ContainsKey(key))
             .ToArray();
 
         using var process = ProcessRunner.Start(fileName, scopedEnv, allEvidgateKeys);

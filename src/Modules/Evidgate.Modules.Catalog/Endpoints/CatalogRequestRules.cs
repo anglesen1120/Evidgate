@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Numerics;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
@@ -100,6 +101,48 @@ internal static class CatalogRequestRules
         }
 
         limit = parsed;
+
+        return null;
+    }
+
+    /// <summary>
+    /// The <c>limit</c> of a route whose contract separates the two failures: a value that is not the canonical decimal
+    /// spelling of a signed integer is <c>400</c> (undecodable input), while a canonical integer outside the range — a
+    /// negative one, and a magnitude past <see cref="int"/> too — is the <c>422</c> the caller can fix. Unlike
+    /// <see cref="Limit"/> an absent member and an empty one differ.
+    /// </summary>
+    /// <param name="present">Whether the query carried the member at all.</param>
+    /// <param name="raw">The raw query value.</param>
+    /// <param name="defaultLimit">The size when absent.</param>
+    /// <param name="maxLimit">The largest accepted size.</param>
+    /// <param name="limit">The parsed size.</param>
+    public static Error? RouteLimit(bool present, string raw, int defaultLimit, int maxLimit, out int limit)
+    {
+        limit = defaultLimit;
+
+        if (!present)
+        {
+            return null;
+        }
+
+        // Read unbounded so a canonical integer of any magnitude is the range answer, not the malformed one; the
+        // canonical spelling check then refuses `+5`, `01` and a padded value, whose value alone would pass.
+        if (!BigInteger.TryParse(raw, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var parsed)
+            || !string.Equals(parsed.ToString(CultureInfo.InvariantCulture), raw, StringComparison.Ordinal))
+        {
+            return Error.BadRequest(
+                "limit must be the canonical decimal spelling of an integer",
+                [new ErrorDetail("limit", "malformed")]);
+        }
+
+        if (parsed < 1 || parsed > maxLimit)
+        {
+            return Error.Invalid(
+                string.Create(CultureInfo.InvariantCulture, $"limit must be an integer between 1 and {maxLimit} (00 §9.1)"),
+                [new ErrorDetail("limit", "out_of_range")]);
+        }
+
+        limit = (int)parsed;
 
         return null;
     }

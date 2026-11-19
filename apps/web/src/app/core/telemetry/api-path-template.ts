@@ -59,6 +59,7 @@ export const KNOWN_API_SEGMENTS: ReadonlySet<string> = new Set<string>([
   'environments',
   'events',
   'evidence-revisions',
+  'execution-plan',
   'export',
   'finalize',
   'fixtures',
