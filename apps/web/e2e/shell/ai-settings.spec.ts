@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
+import type {} from '../../src/app/core/dev-fixtures/fixture-request-log';
 import {
   LOCALES,
   THEMES,
@@ -34,15 +35,20 @@ for (const locale of LOCALES) {
       await page
         .locator('#ai-writing_style')
         .fill('Concise updated review-only checkout guidance.');
-      const saving = page.waitForRequest(
-        (request) => request.method() === 'PUT' && request.url().endsWith('/ai-settings'),
-      );
       await page.locator('[data-ai-save]').focus();
       await page.keyboard.press('Enter');
-      const request = await saving;
-      expect(request.headers()['if-match']).toBe('"2"');
-      expect(request.headers()['idempotency-key']).toBeTruthy();
       await expect(page.locator('[data-ai-saved]')).toBeVisible();
+      const puts = await page.evaluate((projectId) => {
+        return (window.__evidgateFixtureRequests ?? []).filter(
+          (request) =>
+            request.method === 'PUT' &&
+            new URL(request.url, 'http://127.0.0.1').pathname ===
+              '/v1/projects/' + projectId + '/ai-settings',
+        );
+      }, PROJECT_STOREFRONT);
+      expect(puts).toHaveLength(1);
+      expect(puts[0]?.headers['if-match']).toEqual(['"2"']);
+      expect(puts[0]?.headers['idempotency-key']?.[0]).toBeTruthy();
       await page.locator('[data-ai-history-tab]').click();
       await page.locator('[data-ai-inspect]').first().click();
       await expect(page.locator('[data-ai-version-detail]')).toContainText(
