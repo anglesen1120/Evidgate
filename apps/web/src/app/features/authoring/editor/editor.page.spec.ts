@@ -4,7 +4,7 @@ import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { of } from 'rxjs';
-import type { ManualCaseDetailDto } from '@evidgate/sdk';
+import type { ManualCaseDetailDto, UpdateManualCaseRequest } from '@evidgate/sdk';
 import type { Mock } from 'vitest';
 import { AuthoringEditorDataService } from '../../../core/data/authoring-editor-data.service';
 import { ApiRequestError, type ApiErrorKind } from '../../../core/http/api-error';
@@ -97,10 +97,11 @@ describe('EditorPage', () => {
     narrow.set(false);
     data = {
       readCase: vi.fn().mockResolvedValue({ view: CASE, etag: '"2"' }),
-      updateCase: vi.fn().mockImplementation(async (_project, _id, body) => ({
-        view: { ...CASE, ...body, version: 3 },
-        etag: '"3"',
-      })),
+      updateCase: vi
+        .fn()
+        .mockImplementation((_project: string, _id: string, body: UpdateManualCaseRequest) =>
+          Promise.resolve({ view: { ...CASE, ...body, version: 3 }, etag: '"3"' }),
+        ),
       versions: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
       version: vi.fn(),
       restoreVersion: vi.fn(),

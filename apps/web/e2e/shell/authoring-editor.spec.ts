@@ -182,6 +182,7 @@ for (const locale of LOCALES) {
     }) => {
       await page.goto(path(locale));
       await page.locator('[data-editor-timeline-tab]').click();
+      await expect(page.locator('[data-version-row]').first()).toBeVisible();
       const before = await timelineRows(page);
       expect(before.length).toBeGreaterThan(1);
       await page.locator('[data-inspect-version="' + FIRST_VERSION + '"]').click();
@@ -233,6 +234,7 @@ for (const locale of LOCALES) {
               exact: true,
             })
             .click();
+          await expect(page.locator('hlm-select-content')).toBeHidden();
           await expect(page.locator('[data-version-row]').first()).toBeVisible();
           await page.locator('[data-inspect-version]').first().click();
           await expect(page.locator('[data-restore-open]')).toBeDisabled();

@@ -49,6 +49,12 @@ import {
   type StepTextField,
 } from './editor.model';
 
+/** Tab labels the narrow panel select shows; the tab list carries the same translations. */
+const PANEL_LABELS: Readonly<Record<string, string>> = {
+  editor: $localize`:@@authoring.editor.editor-tab:Editor`,
+  timeline: $localize`:@@authoring.editor.timeline-tab:Timeline`,
+};
+
 @Component({
   selector: 'app-authoring-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -256,6 +262,10 @@ export class EditorPage {
   protected priorityLabel(value: string): string {
     return PRIORITIES.find((priority) => priority.value === value)?.label ?? value;
   }
+  /** The narrow panel select shows the tab's label, not the raw wire value it closes over. */
+  protected readonly panelLabel = (value: string): string => PANEL_LABELS[value] ?? value;
+  protected readonly panelSelectLabel = $localize`:@@authoring.editor.choose-panel:Choose a section`;
+  protected readonly prioritySelectLabel = $localize`:@@authoring.editor.priority:Priority`;
   protected changePriority(value: unknown): void {
     const priority = PRIORITIES.find((entry) => entry.value === value);
     if (priority) this.store.editPriority(priority.value);
@@ -307,9 +317,9 @@ export class EditorPage {
       return Promise.resolve(false);
     if (this.leaveDecision) return Promise.resolve(false);
     this.leaving.set(true);
-    const { promise, resolve } = Promise.withResolvers<boolean>();
-    this.leaveDecision = resolve;
-    return promise;
+    return new Promise<boolean>((resolve) => {
+      this.leaveDecision = resolve;
+    });
   }
   protected resolveLeave(answer: boolean): void {
     this.leaving.set(false);

@@ -1,7 +1,7 @@
 // The manual-case editor's review states: the corpus rows are each validated against the
 // operations they answer, and the scenario is pinned for the transitions a static document cannot
 // carry — a save, a stale tag, an invalid body, a restore and the keyset walk.
-import { HttpRequest } from '@angular/common/http';
+import { HttpHeaders, HttpRequest } from '@angular/common/http';
 import type {
   AuthoringRestoreResponse,
   AuthoringVersionListResponse,
@@ -37,9 +37,13 @@ function openAs(
   body?: unknown,
   headers: Record<string, string> = {},
 ) {
+  const route = path.split('?')[0] ?? path;
   return subject.entry(
-    new HttpRequest(method, path, body, { headers, responseType: 'text' }),
-    path,
+    new HttpRequest(method, path, body, {
+      headers: new HttpHeaders(headers),
+      responseType: 'text',
+    }),
+    route,
     (operation) => variants[operation] ?? 'ok',
   );
 }
@@ -75,7 +79,7 @@ describe('authoring editor fixtures', () => {
       subject,
       'PATCH',
       path,
-      { title: 'Sign in with a password' },
+      { title: 'Sign in with a password or a passkey' },
       {
         'If-Match': '"3"',
       },

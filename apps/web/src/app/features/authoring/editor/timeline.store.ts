@@ -104,7 +104,7 @@ export const TimelineStore = signalStore(
         cursor: cursor(),
       }),
       computation: (source, previous) => {
-        const existing = source.scope === previous?.source.scope ? previous.value : [];
+        const existing = source.scope === previous?.source.scope ? (previous?.value ?? []) : [];
         return source.page ? mergeRows(existing, source.page.items, !source.cursor) : existing;
       },
     });

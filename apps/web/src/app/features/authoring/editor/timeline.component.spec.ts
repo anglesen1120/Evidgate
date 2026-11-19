@@ -6,7 +6,10 @@ import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import type { AuthoringVersionDetailDto, ManualCaseDetailDto } from '@evidgate/sdk';
 import type { Mock } from 'vitest';
 import { of } from 'rxjs';
-import { AuthoringEditorDataService } from '../../../core/data/authoring-editor-data.service';
+import {
+  AuthoringEditorDataService,
+  type AuthoringVersionsQuery,
+} from '../../../core/data/authoring-editor-data.service';
 import { SessionStore } from '../../../core/session/session.store';
 import { ApiRequestError } from '../../../core/http/api-error';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
@@ -94,42 +97,44 @@ describe('TimelineComponent', () => {
     narrow.set(false);
     appended = false;
     data = {
-      readCase: vi
-        .fn()
-        .mockResolvedValue({
-          view: {
-            case_id: CASE_ID,
-            version: 3,
-            title: 'Case',
-            description: null,
-            precondition: null,
-            priority: 'high',
-            steps: [{ no: 1, action: 'A', expected: 'B' }],
-            state: 'draft',
-            code: 'AUTH-001',
-            checklist_item_id: 'item',
-            node_id: 'node',
-            created_at: versions[0]?.created_at,
-            updated_at: versions[0]?.created_at,
-          } as ManualCaseDetailDto,
-          etag: '"3"',
-        }),
-      updateCase: vi.fn(),
-      versions: vi.fn().mockImplementation(async (_project, _caseId, query) => ({
-        items: query.cursor
-          ? [versions[2]]
-          : appended
-            ? [version(4), ...versions.slice(0, 2)]
-            : versions.slice(0, 2),
-        next_cursor: query.cursor ? null : 'opaque-older',
-      })),
-      version: vi.fn().mockImplementation(async (_project, id) => {
-        const view = versions.find((entry) => entry.version_id === id) ?? version(4);
-        return { view, etag: '"' + view.content_hash + '"' };
+      readCase: vi.fn().mockResolvedValue({
+        view: {
+          case_id: CASE_ID,
+          version: 3,
+          title: 'Case',
+          description: null,
+          precondition: null,
+          priority: 'high',
+          steps: [{ no: 1, action: 'A', expected: 'B' }],
+          state: 'draft',
+          code: 'AUTH-001',
+          checklist_item_id: 'item',
+          node_id: 'node',
+          created_at: versions[0]?.created_at,
+          updated_at: versions[0]?.created_at,
+        } as ManualCaseDetailDto,
+        etag: '"3"',
       }),
-      restoreVersion: vi.fn().mockImplementation(async () => {
+      updateCase: vi.fn(),
+      versions: vi
+        .fn()
+        .mockImplementation((_project: string, _caseId: string, query: AuthoringVersionsQuery) =>
+          Promise.resolve({
+            items: query.cursor
+              ? [versions[2]]
+              : appended
+                ? [version(4), ...versions.slice(0, 2)]
+                : versions.slice(0, 2),
+            next_cursor: query.cursor ? null : 'opaque-older',
+          }),
+        ),
+      version: vi.fn().mockImplementation((_project: string, id: string) => {
+        const view = versions.find((entry) => entry.version_id === id) ?? version(4);
+        return Promise.resolve({ view, etag: '"' + view.content_hash + '"' });
+      }),
+      restoreVersion: vi.fn().mockImplementation(() => {
         appended = true;
-        return { version: 4 };
+        return Promise.resolve({ version: 4 });
       }),
     };
     TestBed.configureTestingModule({

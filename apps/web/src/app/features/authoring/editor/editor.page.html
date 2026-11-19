@@ -53,16 +53,18 @@
         <label hlmLabel for="case-panel-select" i18n="@@authoring.editor.choose-panel"
           >Choose a section</label
         >
-        <hlm-select [value]="tab()" (valueChange)="selectTab($event)">
+        <hlm-select [value]="tab()" (valueChange)="selectTab($event)" [itemToString]="panelLabel">
           <hlm-select-trigger
             [buttonId]="'case-panel-select'"
             class="min-h-(--eg-control-touch) w-full whitespace-normal"
             ><hlm-select-value
           /></hlm-select-trigger>
-          <hlm-select-content *hlmSelectPortal>
-            <hlm-option [value]="'editor'" i18n="@@authoring.editor.editor-tab">Editor</hlm-option>
-            <hlm-option [value]="'timeline'" i18n="@@authoring.editor.timeline-tab"
-              >Timeline</hlm-option
+          <hlm-select-content *hlmSelectPortal [aria-label]="panelSelectLabel">
+            <hlm-select-item [value]="'editor'" i18n="@@authoring.editor.editor-tab"
+              >Editor</hlm-select-item
+            >
+            <hlm-select-item [value]="'timeline'" i18n="@@authoring.editor.timeline-tab"
+              >Timeline</hlm-select-item
             >
           </hlm-select-content>
         </hlm-select>
@@ -151,6 +153,7 @@
                   <hlm-select
                     [value]="draft.priority"
                     (valueChange)="changePriority($event)"
+                    [itemToString]="priorityLabel"
                     [disabled]="
                       !store.canWrite() || store.saving() || base.view.state === 'retired'
                     "
@@ -162,9 +165,11 @@
                       [aria-invalid]="feedback().fields[fields.length]?.invalid()"
                       ><hlm-select-value
                     /></hlm-select-trigger>
-                    <hlm-select-content *hlmSelectPortal>
+                    <hlm-select-content *hlmSelectPortal [aria-label]="prioritySelectLabel">
                       @for (priority of priorities; track priority.value) {
-                        <hlm-option [value]="priority.value">{{ priority.label }}</hlm-option>
+                        <hlm-select-item [value]="priority.value">{{
+                          priority.label
+                        }}</hlm-select-item>
                       }
                     </hlm-select-content>
                   </hlm-select>

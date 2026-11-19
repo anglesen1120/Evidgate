@@ -49,7 +49,7 @@ export const EditorStore = signalStore(
     mutationScope: undefined as EditorScope | undefined,
     conflictRequested: false,
     conflictSnapshot: null as AuthoringCaseHead | null,
-    saved: '' as '' | 'saved' | 'unchanged',
+    saved: null as null | 'saved' | 'unchanged',
   }),
   withProps(() => ({
     data: inject(AuthoringEditorDataService),
@@ -116,7 +116,7 @@ export const EditorStore = signalStore(
   withComputed((store) => ({
     canWrite: computed(() => store.session.has(EDITOR_WRITE)),
     failure: computed(() => (store.mutationScope() === store.scope() ? store.saveError() : null)),
-    result: computed(() => (store.mutationScope() === store.scope() ? store.saved() : '')),
+    result: computed(() => (store.mutationScope() === store.scope() ? store.saved() : null)),
     dirty: computed(() => {
       const draft = store.draft();
       const base = store.baseDraft();
@@ -134,7 +134,7 @@ export const EditorStore = signalStore(
         return;
       store.draft.set(next);
       patchState(store, {
-        saved: '',
+        saved: null,
         saveError: store.retryWait.ready() ? null : store.saveError(),
       });
     }
@@ -198,7 +198,7 @@ export const EditorStore = signalStore(
           conflictRequested: false,
           conflictSnapshot: null,
           saveError: null,
-          saved: '',
+          saved: null,
         });
       },
       refreshAfterRestore(): void {
@@ -230,7 +230,7 @@ export const EditorStore = signalStore(
           saving: true,
           mutationScope: scope,
           saveError: null,
-          saved: '',
+          saved: null,
           conflictSnapshot: null,
         });
         try {

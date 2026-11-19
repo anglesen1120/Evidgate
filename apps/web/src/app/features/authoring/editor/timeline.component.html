@@ -266,7 +266,7 @@
     </header>
     @if (store.versionDetail(); as detail) {
       <p i18n="@@authoring.editor.restore-source">Source version {{ detail.view.version_no }}</p>
-      <app-copyable-identifier [value]="confirmation()" [label]="versionLabel" />
+      <app-copyable-identifier [value]="detail.view.version_id" [label]="versionLabel" />
       <pre
         class="max-h-[30vh] overflow-y-auto whitespace-pre-wrap text-sm wrap-anywhere"
         tabindex="0"
