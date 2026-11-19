@@ -675,3 +675,9 @@ closed by S446 (#919): no regression. 25 new utility selectors (authoring 17, ca
 | Fixture validator $defs cap declared after first use (S447) | `apps/web/src/app/core/dev-fixtures/fixture-contract.support.ts:213` `MAX_LOCAL_REF_NODES` is declared after CONTRACT_DOCUMENT (line 109) is built eagerly and used at :199, so the 20,000-node cap is undefined at that time. Fix = move the constant above line 109 and add a test that a ref chain over the cap is refused. | receiver: web foundation |
 
 closed by S449 (#926, sha: 7c2eaf52): non-advancing page ends paging without Retry, malformed item_id/node_id refuses with an invalid-link state, selection survives layout switch and Load more, retained rows capped at 10,000 with a notice, and `MAX_LOCAL_REF_NODES` moved above its first use with a refusing spec. D4 and the new P2 are recorded as new rows.
+
+## Moved from status-carried.md by S450 (2026-11-19)
+
+| Authoring XLSX import/export needs a binary-capable http adapter (S442, #915) | The import/export screens render XLSX as unavailable with a reason and never send an XLSX request: the `core/http` adapter is text-only (it decodes the response with `text()` and sends string bodies), so a binary export would be corrupted. A binary-capable adapter in `core/http` is its own T3-reviewed lane; until then the screens stay CSV and JSON only (`import.store.ts`, `export.store.ts`). | receiver: a `core/http` binary-transport task (owner decides the lane); recorded owner: Tech Lead |
+
+closed by S450 (#925, sha: 0c6701dc): `core/http` has an opt-in binary path (`X-Evidgate-Transport` marker, 8 MiB cap while reading and downloading, JSON error envelope kept) and the authoring import/export screens offer XLSX through it; the 'unavailable' rendering and its strings are removed. Remaining parts are carried as rows S450 #925.
