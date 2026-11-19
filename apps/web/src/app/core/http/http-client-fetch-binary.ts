@@ -91,6 +91,8 @@ export async function readBinaryRequestBody(
   }
 }
 
+const INITIAL_REQUEST_BUFFER_BYTES = 64 * 1024;
+
 // Reads one stream to its end, refusing as soon as the cumulative size passes the cap. The
 // refusal cancels the stream first: the caller that produced the bytes must stop, and the bytes
 // already read are dropped rather than uploaded.
@@ -98,7 +100,9 @@ async function readAllBytes(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   cancel: () => void,
 ): Promise<ArrayBuffer> {
-  const chunks: Uint8Array[] = [];
+  // Bytes are copied into one growing buffer as they arrive, so memory stays at most twice the
+  // running total and a stream of many tiny chunks never leaves a list of views behind.
+  let bytes = new Uint8Array(Math.min(INITIAL_REQUEST_BUFFER_BYTES, BINARY_BODY_LIMIT_BYTES));
   let total = 0;
   for (;;) {
     const { done, value } = await reader.read();
@@ -112,21 +116,21 @@ async function readAllBytes(
       cancel();
       throw new TypeError('The request body stream produced a chunk that is not bytes');
     }
-    total += value.byteLength;
-    if (total > BINARY_BODY_LIMIT_BYTES) {
+    if (total + value.byteLength > BINARY_BODY_LIMIT_BYTES) {
       cancel();
       throw limitError('request');
     }
-    chunks.push(value);
+    if (total + value.byteLength > bytes.byteLength) {
+      const grown = new Uint8Array(
+        Math.min(BINARY_BODY_LIMIT_BYTES, Math.max(total + value.byteLength, bytes.byteLength * 2)),
+      );
+      grown.set(bytes.subarray(0, total));
+      bytes = grown;
+    }
+    bytes.set(value, total);
+    total += value.byteLength;
   }
-  const buffer = new ArrayBuffer(total);
-  const bytes = new Uint8Array(buffer);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return buffer;
+  return total === bytes.byteLength ? bytes.buffer : bytes.slice(0, total).buffer;
 }
 
 // The `%TypedArray%` tag getter reads the internal slot, so unlike `Object.prototype.toString` a
@@ -185,8 +189,7 @@ export function enforceBinarySizeCap<T>(
   return new Observable<HttpEvent<T>>((subscriber) => {
     const subscription = events.subscribe({
       next: (event) => {
-        const size = advertisedSize(event);
-        if (size !== null && size > BINARY_BODY_LIMIT_BYTES) {
+        if (exceedsBinaryCap(event)) {
           subscriber.error(limitError('response'));
           return;
         }
@@ -200,6 +203,22 @@ export function enforceBinarySizeCap<T>(
     // aborts the in-flight XHR.
     return () => subscription.unsubscribe();
   });
+}
+
+/**
+ * Whether one event of a binary call proves the reply is over the cap. This is the single
+ * decision both the adapter and the telemetry interceptor (which sees the same events first)
+ * use, so a refused reply is never recorded as a successful call.
+ *
+ * What each size means (Fetch Standard "handle content codings" decodes the transmitted bytes
+ * before the body reaches the page; XMLHttpRequest `loaded` counts those received, decoded bytes):
+ * a `DownloadProgress` `loaded` and the final `ArrayBuffer` length are decoded bytes, while
+ * `Content-Length` is the wire size. Under a `Content-Encoding` the wire size is only an early
+ * refusal; the decoded bytes decide.
+ */
+export function exceedsBinaryCap<T>(event: HttpEvent<T>): boolean {
+  const size = advertisedSize(event);
+  return size !== null && size > BINARY_BODY_LIMIT_BYTES;
 }
 
 /** Whether an event of a binary call is the final response the adapter reads its bytes from. */
@@ -225,7 +244,7 @@ export function toBinaryResponse(
   return toFetchResponse(status, statusText, headers, body, source, true);
 }
 
-// A `Content-Length` the server declared, or the bytes downloaded so far. Anything else (the
+// A `Content-Length` the server declared, the bytes downloaded so far, or the final byte length. Anything else (the
 // `Sent` event, a textual response) says nothing about the size. Only a plain run of digits is a
 // declared length: `Number()` would also accept `0x10` or `1e9`, which are not valid headers and
 // must not decide the call either way.
@@ -239,6 +258,9 @@ function advertisedSize<T>(event: HttpEvent<T>): number | null {
   }
   if (event.type === HttpEventType.DownloadProgress) {
     return event.loaded;
+  }
+  if (event.type === HttpEventType.Response && event.body instanceof ArrayBuffer) {
+    return event.body.byteLength;
   }
   return null;
 }
