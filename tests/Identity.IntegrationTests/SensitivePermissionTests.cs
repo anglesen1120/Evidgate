@@ -387,6 +387,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ("/v1/suites/{s}", seeded.SuiteId),
             ("/v1/suite-revisions/{r}", seeded.SuiteRevisionId),
             ("/v1/suite-revisions/{r}/diff", seeded.OtherSuiteRevisionId),
+            ("/v1/suite-revisions/{r}/execution-plan", seeded.SuiteRevisionId),
             ("/v1/fixtures/{f}", seeded.FixtureId),
             ("/v1/environment-revisions/{id}", seeded.EnvironmentRevisionId),
             ("/v1/policies/{id}", seeded.PolicyRevisionId),
@@ -528,6 +529,9 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ["/v1/suite-revisions/{r}"] = $"/v1/suite-revisions/{seeded.SuiteRevisionId}",
             ["/v1/suite-revisions/{r}/diff"] =
                 $"/v1/suite-revisions/{seeded.SuiteRevisionId}/diff?against={seeded.OtherSuiteRevisionId}",
+            // The execution plan: the seeded revision's members (case id, variant hash, case revision id), a page of
+            // ids and hashes with no secret among them.
+            ["/v1/suite-revisions/{r}/execution-plan"] = $"/v1/suite-revisions/{seeded.SuiteRevisionId}/execution-plan",
             // The fixture list and detail: one fixture was created with its first revision, so the list carries a
             // row and the detail answers its head revision — ids, keys, a hash and a `body_ref` pointer, no secret.
             ["/v1/projects/{p}/fixtures"] = $"/v1/projects/{project}/fixtures",

@@ -91,6 +91,8 @@ public static class CatalogEndpoints
             .Produces<SuiteRevisionDiff>(StatusCodes.Status200OK)
             .WithSummary("What changed from another revision of the same suite (03)");
 
+        group.MapExecutionPlanEndpoints();
+
         group.MapFixtureEndpoints();
 
         group.MapGitRepoBindingEndpoints();

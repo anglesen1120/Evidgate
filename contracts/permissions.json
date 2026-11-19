@@ -17,6 +17,7 @@
         "project:read",
         "role:read",
         "run:read",
+        "suite:plan_read",
         "suite:read"
       ]
     },
@@ -47,6 +48,7 @@
         "run:cancel",
         "run:create",
         "run:read",
+        "suite:plan_read",
         "suite:read"
       ]
     },
@@ -84,6 +86,7 @@
         "run:create",
         "run:read",
         "script:generate",
+        "suite:plan_read",
         "suite:read",
         "suite:write"
       ]
@@ -105,6 +108,7 @@
         "project:read",
         "role:read",
         "run:read",
+        "suite:plan_read",
         "suite:read"
       ]
     },
@@ -156,6 +160,7 @@
         "service_identity:write",
         "sso:read",
         "sso:write",
+        "suite:plan_read",
         "suite:read",
         "suite:write",
         "support:approve",
@@ -169,8 +174,14 @@
       "code": "ci_producer",
       "name": "CI producer",
       "kind": "service",
-      "description": "Service identity minted per CI job for exactly one project: {run:create, event:write, artifact:write, decision:read} (FR-02-7, AC4). It reads the decision of its own project's runs, so a CI gate can wait for one, and cannot approve, read another project or change policy.",
-      "permissions": ["artifact:write", "decision:read", "event:write", "run:create"]
+      "description": "Service identity minted per CI job for exactly one project: {run:create, event:write, artifact:write, decision:read, suite:plan_read} (FR-02-7, AC4). It reads the decision of its own project's runs, so a CI gate can wait for one, and the execution plan of a suite revision of its project, so a manifest can be generated; it cannot approve, read another project or change policy, and it never holds suite:read.",
+      "permissions": [
+        "artifact:write",
+        "decision:read",
+        "event:write",
+        "run:create",
+        "suite:plan_read"
+      ]
     },
     {
       "code": "agent",
@@ -734,6 +745,16 @@
       "reserved": true,
       "tenant_assignable": true,
       "admin": true
+    },
+    {
+      "code": "suite:plan_read",
+      "resource": "suite",
+      "action": "plan_read",
+      "description": "Read a suite revision's execution plan — each member's case id, variant hash and pinned case revision — for manifest generation (00 §9.3, 04.2.2-T3). It never substitutes for `suite:read`.",
+      "sensitive": false,
+      "reserved": false,
+      "tenant_assignable": true,
+      "admin": false
     },
     {
       "code": "suite:read",

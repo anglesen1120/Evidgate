@@ -32,9 +32,9 @@ describe('MembersStore (09.7.1-T2)', () => {
         'artifact:write',
       ]);
       expect(artifact?.permissions.map((entry) => entry.sensitive)).toEqual([false, true, false]);
-      // qa_engineer grants 22 codes; the served page holds nine of them, so thirteen are counted
+      // qa_engineer grants 23 codes; the served page holds nine of them, so fourteen are counted
       // as omitted rather than rendered without a description.
-      expect(preview.omitted).toBe(13);
+      expect(preview.omitted).toBe(14);
     });
 
     it('answers unknown-role for an id the store does not hold', async () => {
