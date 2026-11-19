@@ -136,6 +136,46 @@ describe('telemetryInterceptor: byte replies', () => {
     expect(span.attributes['evidgate.outcome']).toBe('error');
     expect(span.attributes['evidgate.api.error_kind']).toBe('network');
   });
+
+  it('records a request-only call whose final text reply is over the cap as failed, not ok', async () => {
+    const exporter = await harness();
+    const text = new HttpRequest('POST', API_URL, 'x', {
+      responseType: 'text',
+      reportProgress: true,
+    });
+    const body = 'x'.repeat(BINARY_BODY_LIMIT_BYTES + 1);
+
+    await firstValueFrom(send(text, of(event(RESPONSE, { body }))));
+
+    const span = apiSpan(exporter);
+    expect(span.attributes['evidgate.outcome']).toBe('error');
+    expect(span.attributes['evidgate.api.error_kind']).toBe('network');
+  });
+
+  it('keeps a final text reply at the cap, and an over-cap one without reportProgress, as ok', async () => {
+    const exporter = await harness();
+    const text = new HttpRequest('POST', API_URL, 'x', {
+      responseType: 'text',
+      reportProgress: true,
+    });
+    await firstValueFrom(
+      send(text, of(event(RESPONSE, { body: 'x'.repeat(BINARY_BODY_LIMIT_BYTES) }))),
+    );
+    expect(apiSpan(exporter).attributes['evidgate.outcome']).toBe('ok');
+
+    exporter.reset();
+    const plain = new HttpRequest('POST', API_URL, 'x', { responseType: 'text' });
+    const body = 'x'.repeat(BINARY_BODY_LIMIT_BYTES + 1);
+    await firstValueFrom(send(plain, of(event(RESPONSE, { body }))));
+    expect(apiSpan(exporter).attributes['evidgate.outcome']).toBe('ok');
+  });
+
+  it('records an invalid Content-Length on a byte call as failed', async () => {
+    const exporter = await harness();
+    const headers = new HttpHeaders({ 'Content-Length': '10, 11' });
+    await firstValueFrom(send(bytesRequest(), of(event(RESPONSE_HEADER, { headers }))));
+    expect(apiSpan(exporter).attributes['evidgate.outcome']).toBe('error');
+  });
 });
 
 describe('telemetryInterceptor: string error body bound', () => {

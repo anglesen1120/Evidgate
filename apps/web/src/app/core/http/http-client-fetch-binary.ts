@@ -260,17 +260,13 @@ export function toBinaryResponse(
   return toFetchResponse(status, statusText, headers, body, source, true);
 }
 
-// A `Content-Length` the server declared, the bytes downloaded so far, or the final byte length. Anything else (the
-// `Sent` event, a textual response) says nothing about the size. Only a plain run of digits is a
-// declared length: `Number()` would also accept `0x10` or `1e9`, which are not valid headers and
-// must not decide the call either way.
+// A `Content-Length` the server declared, the bytes downloaded so far, the final byte length or
+// the UTF-8 size of a final text reply. Anything else (the `Sent` event) says nothing about the
+// size.
 function advertisedSize<T>(event: HttpEvent<T>): number | null {
   if (event.type === HttpEventType.ResponseHeader) {
     const declared = event.headers.get('Content-Length');
-    if (declared === null) {
-      return null;
-    }
-    return /^\d+$/.test(declared.trim()) ? Number(declared) : null;
+    return declared === null ? null : declaredLength(declared);
   }
   if (event.type === HttpEventType.DownloadProgress) {
     // A length that is not a finite number proves nothing about the size, and letting it through
@@ -280,10 +276,30 @@ function advertisedSize<T>(event: HttpEvent<T>): number | null {
       ? loaded
       : Number.POSITIVE_INFINITY;
   }
-  if (event.type === HttpEventType.Response && event.body instanceof ArrayBuffer) {
-    return event.body.byteLength;
+  if (event.type === HttpEventType.Response) {
+    if (event.body instanceof ArrayBuffer) {
+      return event.body.byteLength;
+    }
+    // A request-only call gets its reply as text with no progress event; the cap is the same.
+    if (typeof event.body === 'string' && textExceedsCap(event.body)) {
+      return Number.POSITIVE_INFINITY;
+    }
   }
   return null;
+}
+
+// Repeated `Content-Length` fields reach the page comma-joined (the Fetch header list combines
+// them, as does `getResponseHeader`). RFC 9110 section 8.6 allows a list only when every member is
+// the same length, and says any other value is invalid framing. Only a plain run of digits is a
+// length (`Number()` would accept `0x10` or `1e9`); a value that is not one valid length is
+// refused early, and the decoded bytes stay the authority for everything that passes.
+function declaredLength(value: string): number {
+  const members = value.split(',').map((member) => member.trim());
+  const [first] = members;
+  if (first === undefined || !/^\d+$/.test(first) || members.some((member) => member !== first)) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return Number(first);
 }
 
 /**
@@ -292,15 +308,17 @@ function advertisedSize<T>(event: HttpEvent<T>): number | null {
  * can never be shorter in bytes than in UTF-16 units, which lets the common cases skip the encode.
  */
 export function assertTextWithinCap(text: string | null, source: unknown): void {
-  if (text === null || text.length * 3 <= BINARY_BODY_LIMIT_BYTES) {
-    return;
-  }
-  if (
-    text.length > BINARY_BODY_LIMIT_BYTES ||
-    new TextEncoder().encode(text).byteLength > BINARY_BODY_LIMIT_BYTES
-  ) {
+  if (text !== null && textExceedsCap(text)) {
     throw limitError('response', source);
   }
+}
+
+function textExceedsCap(text: string): boolean {
+  return (
+    text.length * 3 > BINARY_BODY_LIMIT_BYTES &&
+    (text.length > BINARY_BODY_LIMIT_BYTES ||
+      new TextEncoder().encode(text).byteLength > BINARY_BODY_LIMIT_BYTES)
+  );
 }
 
 // The single place the cap is worded, so both directions and every refusal site report the same
