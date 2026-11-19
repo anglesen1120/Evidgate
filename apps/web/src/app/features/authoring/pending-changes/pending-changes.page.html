@@ -10,6 +10,15 @@
 @if (!store.canRead() || store.forbidden()) {
   <app-forbidden-pattern />
 } @else {
+  @if (store.empty()) {
+    <section
+      #inspection
+      class="region inspection"
+      tabindex="-1"
+      [attr.aria-label]="copy.emptyTitle"
+      data-pending-preview-content
+    ></section>
+  }
   <app-request-state
     [status]="status()"
     [error]="store.queueError()"
@@ -223,6 +232,18 @@
       </p>
       @if (store.applyBlockedReason(); as reason) {
         <p id="pending-apply-explanation" class="full-text">{{ reason }}</p>
+        @if (store.applyRequest() && !store.queueStale()) {
+          <button
+            hlmBtn
+            [variant]="'outline'"
+            type="button"
+            data-pending-replay-reload
+            [disabled]="!store.retryReady() || busy() || readBusy()"
+            (click)="store.reload()"
+          >
+            {{ copy.conflictReload }}
+          </button>
+        }
       }
       @if (!store.canWrite() || deniedWrite()) {
         <p id="pending-write-explanation" class="full-text">{{ copy.readOnly }}</p>
