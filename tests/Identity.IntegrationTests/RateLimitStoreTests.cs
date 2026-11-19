@@ -31,15 +31,15 @@ public sealed class RateLimitStoreTests : SessionTestBase
         var limiter = Limiter(limit: 2, windowSeconds: 60);
         var key = "192.0.2.10";
 
-        var first = await limiter.AcquireAsync(RateSurface.Login, key, Token);
-        var second = await limiter.AcquireAsync(RateSurface.Login, key, Token);
-        var third = await limiter.AcquireAsync(RateSurface.Login, key, Token);
+        var first = await limiter.AcquireAsync(RateSurface.Login, key, 1, Token);
+        var second = await limiter.AcquireAsync(RateSurface.Login, key, 1, Token);
+        var third = await limiter.AcquireAsync(RateSurface.Login, key, 1, Token);
 
         first.ShouldBe(new RateDecision(true, 0));
         second.ShouldBe(new RateDecision(true, 0));
         third.Allowed.ShouldBeFalse();
         third.RetryAfterSeconds.ShouldBeInRange(1, 60);
-        (await HitCountAsync(key)).ShouldBe(3, "the stored count is capped at the limit plus one");
+        (await HitCountAsync(key)).ShouldBe(2, "a refused live window is not charged again");
     }
 
     [Fact]
@@ -51,12 +51,12 @@ public sealed class RateLimitStoreTests : SessionTestBase
 
         var decisions = await Task.WhenAll(
             Enumerable.Range(0, 32)
-                .Select(_ => Task.Run(() => limiter.AcquireAsync(RateSurface.CiExchange, key, Token).AsTask(), Token)));
+                .Select(_ => Task.Run(() => limiter.AcquireAsync(RateSurface.CiExchange, key, 1, Token).AsTask(), Token)));
 
         decisions.Count(decision => decision.Allowed).ShouldBe(limit);
         decisions.Count(decision => !decision.Allowed).ShouldBe(32 - limit);
         decisions.Where(decision => !decision.Allowed).ShouldAllBe(decision => decision.RetryAfterSeconds >= 1);
-        (await HitCountAsync(key)).ShouldBe(limit + 1, "the cap holds under concurrency too");
+        (await HitCountAsync(key)).ShouldBe(limit, "concurrent refusals do not charge the exhausted window");
     }
 
     [Fact]
@@ -65,40 +65,38 @@ public sealed class RateLimitStoreTests : SessionTestBase
         var limiter = Limiter(limit: 2, windowSeconds: 3600);
         var key = "203.0.113.9";
 
-        (await limiter.AcquireAsync(RateSurface.Login, key, Token)).Allowed.ShouldBeTrue();
-        (await limiter.AcquireAsync(RateSurface.Login, key, Token)).Allowed.ShouldBeTrue();
-        (await limiter.AcquireAsync(RateSurface.Login, key, Token)).Allowed.ShouldBeFalse();
+        (await limiter.AcquireAsync(RateSurface.Login, key, 1, Token)).Allowed.ShouldBeTrue();
+        (await limiter.AcquireAsync(RateSurface.Login, key, 1, Token)).Allowed.ShouldBeTrue();
+        (await limiter.AcquireAsync(RateSurface.Login, key, 1, Token)).Allowed.ShouldBeFalse();
 
         await ExpireWindowAsync(key);
 
-        (await limiter.AcquireAsync(RateSurface.Login, key, Token)).ShouldBe(new RateDecision(true, 0));
-        (await limiter.AcquireAsync(RateSurface.Login, key, Token)).Allowed.ShouldBeTrue();
-        (await limiter.AcquireAsync(RateSurface.Login, key, Token)).Allowed.ShouldBeFalse("the reset window holds its own limit");
+        (await limiter.AcquireAsync(RateSurface.Login, key, 1, Token)).ShouldBe(new RateDecision(true, 0));
+        (await limiter.AcquireAsync(RateSurface.Login, key, 1, Token)).Allowed.ShouldBeTrue();
+        (await limiter.AcquireAsync(RateSurface.Login, key, 1, Token)).Allowed.ShouldBeFalse("the reset window holds its own limit");
     }
 
     [Fact]
-    public async Task A_Sampled_New_Key_At_The_Bound_Is_Admitted_And_Evicts_The_Oldest_Window_Of_Its_Surface()
+    public async Task New_Keys_At_The_Bound_Trim_The_Oldest_Window_Of_Only_Their_Surface()
     {
         var limiter = Limiter(limit: 10, windowSeconds: 3600, maxKeys: 2);
-
-        (await limiter.AcquireAsync(RateSurface.Login, "key-a", Token)).Allowed.ShouldBeTrue();
-        (await limiter.AcquireAsync(RateSurface.Login, "key-b", Token)).Allowed.ShouldBeTrue();
-        (await limiter.AcquireAsync(RateSurface.Link, "key-link", Token)).Allowed.ShouldBeTrue();
+        (await limiter.AcquireAsync(RateSurface.Login, "key-a", 1, Token)).Allowed.ShouldBeTrue();
+        (await limiter.AcquireAsync(RateSurface.Link, "key-link", 1, Token)).Allowed.ShouldBeTrue();
+        await OwnerExecuteAsync(
+            "update public.rate_limit_window set window_start = clock_timestamp() - interval '1 minute' "
+            + "where key_hash = @hash", ("hash", Hash("key-a")));
         var linkWindow = await WindowStartAsync("key-link");
 
-        // This digest's first byte is below 16, so this insert deterministically runs the capacity check.
-        const string sampledKey = "sampled-key-11";
-        (Hash(sampledKey)[0] < 16).ShouldBeTrue("the case needs a digest the capacity sample accepts");
-        (await limiter.AcquireAsync(RateSurface.Login, sampledKey, Token)).Allowed
-            .ShouldBeTrue("a full surface never refuses a new key");
+        for (var index = 0; index < 300; index++)
+        {
+            (await limiter.AcquireAsync(RateSurface.Login, $"capacity-{index}", 1, Token)).Allowed.ShouldBeTrue();
+        }
 
-        var loginSurface = await SurfaceOfAsync("key-b");
-        (await RowCountAsync(loginSurface)).ShouldBe(2L, "the surface stays at its key bound");
-        (await RowExistsAsync("key-a")).ShouldBeFalse("the least recent window of that surface is evicted");
-        (await RowExistsAsync("key-b")).ShouldBeTrue();
-        (await RowExistsAsync(sampledKey)).ShouldBeTrue();
-
-        (await RowCountAsync(await SurfaceOfAsync("key-link"))).ShouldBe(1L, "another surface loses no row");
+        await AssertCapacityConvergesAsync(limiter, RateSurface.Login, 2,
+            () => RowCountAsync("login"), index => $"capacity-drain-{index}", Token);
+        // An oldest row survives only if all 300 independent samples miss: (15/16)^300 < 4e-9.
+        (await RowExistsAsync("key-a")).ShouldBeFalse();
+        (await RowCountAsync("link")).ShouldBe(1L, "another surface loses no row");
         (await WindowStartAsync("key-link")).ShouldBe(linkWindow, "another surface is not rewritten");
     }
 
@@ -109,16 +107,19 @@ public sealed class RateLimitStoreTests : SessionTestBase
             AppDataSource,
             OptionsFor(limit: 10, windowSeconds: 3600, maxKeys: 1, inviteMaxKeys: 10));
 
-        (await limiter.AcquireAsync(RateSurface.Login, "evict-1", Token)).Allowed.ShouldBeTrue();
-        (await limiter.AcquireAsync(RateSurface.Invite, "invite-key", Token)).Allowed.ShouldBeTrue();
+        (await limiter.AcquireAsync(RateSurface.Login, "evict-1", 1, Token)).Allowed.ShouldBeTrue();
+        (await limiter.AcquireAsync(RateSurface.Invite, "invite-key", 1, Token)).Allowed.ShouldBeTrue();
         var inviteWindow = await WindowStartAsync("invite-key");
         var inviteSurface = await SurfaceOfAsync("invite-key");
 
-        // A sampled digest forces login eviction; the invite surface keeps its own bound and rows.
-        const string sampledKey = "sampled-key-34";
-        (Hash(sampledKey)[0] < 16).ShouldBeTrue("the case needs a digest the capacity sample accepts");
-        (await limiter.AcquireAsync(RateSurface.Login, sampledKey, Token)).Allowed.ShouldBeTrue();
-        (await limiter.AcquireAsync(RateSurface.Invite, "invite-key-2", Token)).Allowed.ShouldBeTrue();
+        for (var index = 0; index < 300; index++)
+        {
+            (await limiter.AcquireAsync(RateSurface.Login, $"login-capacity-{index}", 1, Token)).Allowed.ShouldBeTrue();
+        }
+
+        await AssertCapacityConvergesAsync(limiter, RateSurface.Login, 1,
+            () => RowCountAsync("login"), index => $"login-drain-{index}", Token);
+        (await limiter.AcquireAsync(RateSurface.Invite, "invite-key-2", 1, Token)).Allowed.ShouldBeTrue();
 
         (await RowExistsAsync("evict-1")).ShouldBeFalse();
         (await RowExistsAsync("invite-key")).ShouldBeTrue("the invite window is not the login surface's to evict");
@@ -128,49 +129,36 @@ public sealed class RateLimitStoreTests : SessionTestBase
     }
 
     [Fact]
-    public async Task Unsampled_New_Keys_Defer_Capacity_Eviction_And_Sampled_Checks_Converge_In_Batches()
+    public async Task New_Keys_Over_The_Bound_Converge_Without_Evicting_The_Sequential_Caller()
     {
         var limiter = Limiter(limit: 10, windowSeconds: 3600, maxKeys: 2);
-        var keys = Enumerable.Range(0, 200)
-            .Select(index => $"unsampled-key-{index}")
-            .Where(key => Hash(key)[0] >= 16)
-            .Take(120)
-            .ToArray();
-        keys.Length.ShouldBe(120);
-
-        foreach (var key in keys)
+        for (var index = 0; index < 300; index++)
         {
-            (await limiter.AcquireAsync(RateSurface.Login, key, Token)).Allowed.ShouldBeTrue();
+            var key = $"capacity-caller-{index}";
+            (await limiter.AcquireAsync(RateSurface.Login, key, 1, Token)).Allowed.ShouldBeTrue();
+            (await RowExistsAsync(key)).ShouldBeTrue("an insert never evicts its own window");
         }
 
-        var surface = await SurfaceOfAsync(keys[0]);
-        (await RowCountAsync(surface)).ShouldBe(120L, "unsampled inserts do not run capacity eviction");
-        (await limiter.AcquireAsync(RateSurface.Login, "sampled-key-43", Token)).Allowed.ShouldBeTrue();
-        (await RowCountAsync(surface)).ShouldBe(21L, "one sampled check evicts at most 100 windows");
-        (await RowExistsAsync("sampled-key-43")).ShouldBeTrue("eviction never removes its caller");
-        (await limiter.AcquireAsync(RateSurface.Login, "sampled-key-72", Token)).Allowed.ShouldBeTrue();
-        (await RowCountAsync(surface)).ShouldBe(2L, "the next sampled check removes the remaining excess");
-        (await RowExistsAsync("sampled-key-72")).ShouldBeTrue();
+        await AssertCapacityConvergesAsync(limiter, RateSurface.Login, 2,
+            () => RowCountAsync("login"), index => $"caller-drain-{index}", Token);
     }
 
     [Fact]
-    public async Task An_Unsampled_New_Key_Sweeps_Only_100_Expired_Windows_Of_Its_Surface()
+    public async Task A_New_Key_Sweeps_Only_100_Expired_Windows_Of_Its_Surface()
     {
         var limiter = Limiter(limit: 10, windowSeconds: 3600, maxKeys: 1000);
         for (var index = 0; index < 101; index++)
         {
-            (await limiter.AcquireAsync(RateSurface.Login, $"expired-key-{index}", Token)).Allowed.ShouldBeTrue();
+            (await limiter.AcquireAsync(RateSurface.Login, $"expired-key-{index}", 1, Token)).Allowed.ShouldBeTrue();
         }
 
-        (await limiter.AcquireAsync(RateSurface.Link, "expired-link-key", Token)).Allowed.ShouldBeTrue();
+        (await limiter.AcquireAsync(RateSurface.Link, "expired-link-key", 1, Token)).Allowed.ShouldBeTrue();
         await OwnerExecuteAsync(
             "update public.rate_limit_window set window_start = clock_timestamp() - interval '2 hours'");
         var linkWindow = await WindowStartAsync("expired-link-key");
-        var newKey = Enumerable.Range(0, 100)
-            .Select(index => $"sweep-key-{index}")
-            .First(key => Hash(key)[0] >= 16);
+        const string newKey = "sweep-key";
 
-        (await limiter.AcquireAsync(RateSurface.Login, newKey, Token)).Allowed.ShouldBeTrue();
+        (await limiter.AcquireAsync(RateSurface.Login, newKey, 1, Token)).Allowed.ShouldBeTrue();
 
         (await RowCountAsync(await SurfaceOfAsync(newKey))).ShouldBe(2L, "100 expired windows are swept");
         (await RowExistsAsync(newKey)).ShouldBeTrue("the caller's fresh window survives");
@@ -215,8 +203,35 @@ public sealed class RateLimitStoreTests : SessionTestBase
 
         await Should.ThrowAsync<Exception>(async () =>
         {
-            await limiter.AcquireAsync(RateSurface.Login, "192.0.2.1", Token);
+            await limiter.AcquireAsync(RateSurface.Login, "192.0.2.1", 1, Token);
         });
+    }
+
+    /// <summary>
+    /// Drives a surface that sits above its key bound with further new keys until it is at or below
+    /// <c>maxKeys + 100</c>, the bound one capacity check can restore. Each insert adds a row and each sampled insert
+    /// removes up to 100, so remaining above the bound after 600 inserts means at most 7 sampled checks:
+    /// <c>200 + 600 - 100*7 &gt; 0</c>, while 8 checks reach the bound from 200 excess rows. The probability of that
+    /// run is <c>P[Binomial(600, 1/16) &lt;= 7] = 5.8e-10</c>.
+    /// </summary>
+    internal static async Task AssertCapacityConvergesAsync(
+        ExchangeRateLimiter limiter,
+        RateSurface surface,
+        int maxKeys,
+        Func<Task<long>> rowCount,
+        Func<int, string> newKey,
+        CancellationToken cancellationToken)
+    {
+        var count = await rowCount();
+        count.ShouldBeLessThanOrEqualTo(maxKeys + 300L, "the bounded drain starts with at most 300 excess rows");
+
+        for (var index = 0; index < 600 && count > maxKeys + 100L; index++)
+        {
+            (await limiter.AcquireAsync(surface, newKey(index), 1, cancellationToken)).Allowed.ShouldBeTrue();
+            count = await rowCount();
+        }
+
+        count.ShouldBeLessThanOrEqualTo(maxKeys + 100L, "random capacity checks converge to the bounded margin");
     }
 
     private ExchangeRateLimiter Limiter(int limit, int windowSeconds, int maxKeys = 50000) =>

@@ -33,7 +33,7 @@ public sealed class RateLimitGateTests(DatabaseFixture fixture)
         {
             var allowed = await RateLimitGate.AcquireAsync(
                 new DefaultHttpContext(), limiter, surface, "weighted", 2, "refused", Token);
-            allowed.ShouldBeNull("an unavailable extra unit must not refuse an admitted first unit");
+            allowed.ShouldBeNull("the first unit decides an admitted weighted attempt; a later unit never refuses it");
         }
 
         var context = new DefaultHttpContext();

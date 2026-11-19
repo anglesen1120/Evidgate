@@ -49,13 +49,17 @@ internal class ExchangeRateLimiter(NpgsqlDataSource dataSource, IOptions<RateLim
     /// </summary>
     private const int CommandTimeoutSeconds = 2;
 
-    /// <summary>Counts one attempt for <paramref name="key"/> and reports whether the surface's budget admits it.</summary>
+    /// <summary>
+    /// Counts an attempt worth <paramref name="cost"/> units for <paramref name="key"/> in one round trip and reports
+    /// whether the surface's budget admits it; only the first unit decides, the rest are spent when admitted.
+    /// </summary>
     /// <param name="surface">The budget to spend from.</param>
     /// <param name="key">The limiter key; the store receives only its unsalted SHA-256 digest, which is pseudonymous, not anonymous.</param>
+    /// <param name="cost">Units this attempt is worth, 1 to 16 (the store validates the bound).</param>
     /// <param name="cancellationToken">The request's cancellation token.</param>
     /// <exception cref="NpgsqlException">The store could not answer; the caller fails closed.</exception>
     public virtual async ValueTask<RateDecision> AcquireAsync(
-        RateSurface surface, string key, CancellationToken cancellationToken)
+        RateSurface surface, string key, int cost, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(key);
 
@@ -65,7 +69,7 @@ internal class ExchangeRateLimiter(NpgsqlDataSource dataSource, IOptions<RateLim
         // shorten nor extend another replica's window, and the check-and-increment is one statement.
         await using var command = dataSource.CreateCommand(
             "select allowed, retry_after_seconds from evidgate_resolve.rate_limit_acquire(" +
-            "@surface, @key_hash, @limit, @window_seconds, @max_keys)");
+            "@surface, @key_hash, @limit, @window_seconds, @max_keys, @cost)");
         command.Parameters.AddWithValue("surface", SurfaceName(surface));
         command.Parameters.Add(new NpgsqlParameter("key_hash", NpgsqlDbType.Bytea)
         {
@@ -74,6 +78,7 @@ internal class ExchangeRateLimiter(NpgsqlDataSource dataSource, IOptions<RateLim
         command.Parameters.AddWithValue("limit", settings.Limit);
         command.Parameters.AddWithValue("window_seconds", settings.WindowSeconds);
         command.Parameters.AddWithValue("max_keys", settings.MaxKeys);
+        command.Parameters.AddWithValue("cost", cost);
         command.CommandTimeout = CommandTimeoutSeconds;
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -130,12 +135,12 @@ internal class ExchangeRateLimiter(NpgsqlDataSource dataSource, IOptions<RateLim
 /// </summary>
 internal static class RateLimitGate
 {
-    /// <summary>Spends up to <paramref name="cost"/> units of the caller's window; null means continue.</summary>
+    /// <summary>Spends <paramref name="cost"/> units of the caller's window in one store call; null means continue.</summary>
     /// <param name="context">The request whose response carries the refusal headers.</param>
     /// <param name="limiter">The shared window store.</param>
     /// <param name="surface">The budget this route spends from.</param>
     /// <param name="key">The limiter key, already prefixed by the route.</param>
-    /// <param name="cost">Units this attempt is worth; only the first one can refuse.</param>
+    /// <param name="cost">Units this attempt is worth; only the first one can refuse, so a legal limit of 1 stays usable.</param>
     /// <param name="refusalMessage">The route's 429 message.</param>
     /// <param name="cancellationToken">The request's cancellation token.</param>
     public static async ValueTask<Error?> AcquireAsync(
@@ -150,7 +155,7 @@ internal static class RateLimitGate
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(limiter);
 
-        if (await TryAcquireAsync(limiter, surface, key, cancellationToken).ConfigureAwait(false) is not { } decision)
+        if (await TryAcquireAsync(limiter, surface, key, cost, cancellationToken).ConfigureAwait(false) is not { } decision)
         {
             return Unavailable(context);
         }
@@ -162,25 +167,15 @@ internal static class RateLimitGate
             return new Error(ApiErrorCode.RateLimited, refusalMessage, StatusCodes.Status429TooManyRequests, Retryable: true);
         }
 
-        // Only the first unit decides: a route that must be stricter spends its extra units when they are available and
-        // never refuses by itself, so a legal limit of 1 (or an odd one) cannot make the route unusable.
-        for (var unit = 1; unit < cost; unit++)
-        {
-            if (await TryAcquireAsync(limiter, surface, key, cancellationToken).ConfigureAwait(false) is null)
-            {
-                return Unavailable(context);
-            }
-        }
-
         return null;
     }
 
     private static async ValueTask<RateDecision?> TryAcquireAsync(
-        ExchangeRateLimiter limiter, RateSurface surface, string key, CancellationToken cancellationToken)
+        ExchangeRateLimiter limiter, RateSurface surface, string key, int cost, CancellationToken cancellationToken)
     {
         try
         {
-            return await limiter.AcquireAsync(surface, key, cancellationToken).ConfigureAwait(false);
+            return await limiter.AcquireAsync(surface, key, cost, cancellationToken).ConfigureAwait(false);
         }
         catch (NpgsqlException)
         {
