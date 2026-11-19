@@ -216,7 +216,10 @@ public sealed partial class ReconcileRunTests
         ledger.FreezeRowsOfLatest.ShouldBe(1, "and it names that revision");
         (await StateAsync(world, world.RunId)).ShouldBe("complete");
 
-        return (await RevisionSummaryAsync(world, world.RunId)).Id;
+        var revision = await RevisionSummaryAsync(world, world.RunId);
+        revision.EventWatermark.ShouldBe(3, "the watermark counts each stored event once, however often the attempt ran");
+
+        return revision.Id;
     }
 
     private static Task<string> TaskStateAsync(IngestTestWorld world, Guid taskId) =>
