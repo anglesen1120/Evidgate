@@ -1,3 +1,4 @@
+import catalogue from '../../../../../../../contracts/permissions.json';
 import {
   bodyOf,
   codePoints,
@@ -11,6 +12,9 @@ describe('manual case editor model', () => {
   it('uses canonical authoring permission codes', () => {
     expect(EDITOR_READ).toBe('authoring:read');
     expect(EDITOR_WRITE).toBe('authoring:write');
+    const codes = JSON.stringify(catalogue);
+    expect(codes).toContain('"authoring:read"');
+    expect(codes).toContain('"authoring:write"');
   });
   it('counts Unicode code points rather than UTF-16 units', () => {
     expect(codePoints('')).toBe(0);

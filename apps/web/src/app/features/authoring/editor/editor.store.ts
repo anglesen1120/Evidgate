@@ -258,7 +258,13 @@ export const EditorStore = signalStore(
       // Timeline keeps a restore alive across tab switches; ownership lives here so Save cannot
       // write the same case while that restore is still in flight.
       beginRestore(): boolean {
-        if (store.saving() || store.restoring() || store.head.isLoading()) return false;
+        if (
+          store.saving() ||
+          store.restoring() ||
+          store.head.isLoading() ||
+          !store.scopeAvailable()
+        )
+          return false;
         patchState(store, { restoring: true });
         return true;
       },

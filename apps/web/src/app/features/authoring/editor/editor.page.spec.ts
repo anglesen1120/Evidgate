@@ -288,6 +288,7 @@ describe('EditorPage', () => {
     expect(store.dirty()).toBe(true);
     expect(await harness.value('case-title')).toBe('Unsaved source title');
     expect(await store.save()).toBe(false);
+    expect(store.beginRestore()).toBe(false);
     org.set({ id: 'o2' });
     project.set({ id: 'p2' });
     readable.set(true);

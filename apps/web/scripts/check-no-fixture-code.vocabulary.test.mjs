@@ -107,3 +107,9 @@ test('another entity_kind word is still a leak', async () => {
   assert.equal(other.status, 1);
   assert.match(other.stderr, /fixture_only_kind/);
 });
+
+test('an entity_kind word under another member is still a leak', async () => {
+  const other = await gate({ body: { note: 'feature_node' } }, 'feature_node');
+  assert.equal(other.status, 1);
+  assert.match(other.stderr, /feature_node/);
+});
