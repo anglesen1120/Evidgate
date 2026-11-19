@@ -2,9 +2,18 @@
 // directory (meta.json, input.json = generator parameters, expected.json = pinned checksums),
 // never the report itself. These specs load that directory through the shared loader, run
 // the generator from its parameters through the command line and compare the bytes.
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { appendFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import {
+  appendFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -81,9 +90,20 @@ describe('gen-large-report', () => {
   });
 
   it('writes a different report for a different seed', () => {
-    const other = generate(tempDir(), checksums.small.tests, checksums.seed + 1);
+    const firstDir = tempDir();
+    const secondDir = tempDir();
+    const first = generate(firstDir, 1_000, 1);
+    const second = generate(secondDir, 1_000, 2);
+    const testcaseLines = [firstDir, secondDir].map((dir) =>
+      readFileSync(join(dir, 'input.xml'), 'utf8')
+        .split('\n')
+        .filter((line) => line.includes('<testcase ')),
+    );
 
-    expect(other.sha256).not.toBe(checksums.small.sha256);
+    expect(second.sha256).not.toBe(first.sha256);
+    expect(testcaseLines[0]).toHaveLength(1_000);
+    expect(testcaseLines[1]).toHaveLength(1_000);
+    expect(testcaseLines[1]).not.toEqual(testcaseLines[0]);
   });
 
   it('generates the 100 000-test report equal to the committed checksum', () => {
@@ -124,6 +144,44 @@ describe('gen-large-report', () => {
 
     expect(readdirSync(join(outDir, 'nested'))).toEqual(['input.xml']);
     expect(readdirSync(outDir)).toEqual(['nested']);
+  });
+
+  it('refuses a symlinked input.xml without changing the outside sentinel', () => {
+    const root = tempDir();
+    const outDir = join(root, 'out');
+    const sentinel = join(root, 'sentinel.xml');
+    const original = Buffer.from('outside report sentinel\n');
+    mkdirSync(outDir);
+    writeFileSync(sentinel, original);
+    symlinkSync(sentinel, join(outDir, 'input.xml'));
+
+    const result = spawnSync(process.execPath, [GENERATOR, '--out-dir', outDir, '--tests=10'], {
+      encoding: 'utf8',
+    });
+
+    expect(result.status).toBe(2);
+    expect(result.stderr).toMatch(/input\.xml.*symlink/i);
+    expect(readFileSync(sentinel)).toEqual(original);
+    expect(readdirSync(outDir)).toEqual(['input.xml']);
+  });
+
+  it('refuses a symlinked out-dir without changing its target directory', () => {
+    const root = tempDir();
+    const target = join(root, 'target');
+    const outDir = join(root, 'out');
+    const original = Buffer.from('target directory sentinel\n');
+    mkdirSync(target);
+    writeFileSync(join(target, 'input.xml'), original);
+    symlinkSync(target, outDir, 'dir');
+
+    const result = spawnSync(process.execPath, [GENERATOR, '--out-dir', outDir, '--tests=10'], {
+      encoding: 'utf8',
+    });
+
+    expect(result.status).toBe(2);
+    expect(result.stderr).toMatch(/out-dir.*symlink/i);
+    expect(readdirSync(target)).toEqual(['input.xml']);
+    expect(readFileSync(join(target, 'input.xml'))).toEqual(original);
   });
 });
 

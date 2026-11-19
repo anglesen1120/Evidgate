@@ -14,7 +14,7 @@ namespace Foundation.IntegrationTests;
 /// its parameters, and pin the bytes to the committed digest — the same pins <c>largeFixture.test.ts</c> asserts on the TypeScript side. Like
 /// <see cref="FixtureLoaderTests"/> it needs neither the container nor the database.
 /// </summary>
-public sealed class LargeFixtureLoaderTests
+public sealed class LargeFixtureLoaderTests(ITestOutputHelper output)
 {
     private static readonly string Generator = Path.Combine(
         FixtureLoader.RepoRoot, "scripts", "dev", "gen-large-report", "gen-large-report.mjs");
@@ -40,11 +40,15 @@ public sealed class LargeFixtureLoaderTests
     public void LargeFixture_Generator_IsDeterministic_AcrossTwoRuns()
     {
         using var temp = new TempDirectory();
-        var first = Generate(Path.Combine(temp.Path, "a"), SmallTests);
-        var second = Generate(Path.Combine(temp.Path, "b"), SmallTests);
+        var firstDirectory = Path.Combine(temp.Path, "a");
+        var secondDirectory = Path.Combine(temp.Path, "b");
+        var first = Generate(firstDirectory, SmallTests);
+        var second = Generate(secondDirectory, SmallTests);
 
         second.ShouldBe(first);
-        first.ShouldBe(Checksums.GetProperty("small").GetProperty("sha256").GetString());
+        first.ShouldBe(PinnedSha256("small"));
+        AssertChecksum(Path.Combine(firstDirectory, "input.xml"), PinnedSha256("small"));
+        AssertChecksum(Path.Combine(secondDirectory, "input.xml"), PinnedSha256("small"));
     }
 
     [Fact]
@@ -55,25 +59,44 @@ public sealed class LargeFixtureLoaderTests
         var report = Path.Combine(temp.Path, "input.xml");
         File.AppendAllText(report, " ");
 
-        Sha256Of(report).ShouldNotBe(Checksums.GetProperty("small").GetProperty("sha256").GetString());
+        Should.Throw<InvalidOperationException>(
+            () => AssertChecksum(report, PinnedSha256("small")));
     }
 
     [Fact]
     public void LargeFixture_FullReport_MatchesCommittedChecksum()
     {
         using var temp = new TempDirectory();
+        var report = Path.Combine(temp.Path, "input.xml");
         var stopwatch = Stopwatch.StartNew();
         var digest = Generate(temp.Path, Parameters.GetProperty("tests").GetInt32());
         stopwatch.Stop();
-        var bytes = new FileInfo(Path.Combine(temp.Path, "input.xml")).Length;
+        var bytes = new FileInfo(report).Length;
 
-        // The measured generation time and size, printed once; no budget is asserted here.
-        Console.WriteLine($"large-report 100k: {stopwatch.ElapsedMilliseconds} ms, {bytes} bytes, {digest}");
-        digest.ShouldBe(Checksums.GetProperty("full").GetProperty("sha256").GetString());
+        // The measured generation time and size, reported once; no budget is asserted here.
+        output.WriteLine($"large-report 100k: {stopwatch.ElapsedMilliseconds} ms, {bytes} bytes, {digest}");
+        digest.ShouldBe(PinnedSha256("full"));
         bytes.ShouldBe(Checksums.GetProperty("full").GetProperty("bytes").GetInt64());
+        AssertChecksum(report, PinnedSha256("full"));
     }
 
     private static int SmallTests => Parameters.GetProperty("small_tests").GetInt32();
+
+    private static string PinnedSha256(string size) =>
+        Checksums.GetProperty(size).GetProperty("sha256").GetString().ShouldNotBeNull();
+
+    /// <summary>
+    /// Rejects a report whose on-disk bytes are not the pinned ones: the loaders have no checksum
+    /// rule, so the fixture pins them here instead of in <c>expected.json</c> alone.
+    /// </summary>
+    private static void AssertChecksum(string path, string expected)
+    {
+        var actual = Sha256Of(path);
+        if (actual != expected)
+        {
+            throw new InvalidOperationException($"{path}: checksum {actual} != pinned {expected}");
+        }
+    }
 
     private static string Generate(string outDirectory, int tests)
     {

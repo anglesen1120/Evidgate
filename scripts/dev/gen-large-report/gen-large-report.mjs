@@ -7,7 +7,15 @@
 // written as input.xml into --out-dir (a fixed file name, so no caller input ever names a
 // path) and a one-line JSON summary {tests, seed, bytes, sha256} goes to stdout.
 import { createHash } from 'node:crypto';
-import { closeSync, mkdirSync, openSync, writeSync } from 'node:fs';
+import {
+  closeSync,
+  constants,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  realpathSync,
+  writeSync,
+} from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -113,8 +121,7 @@ export function generateLargeReport({ outDir, tests = DEFAULT_TESTS, seed = DEFA
     throw new RangeError('--seed must be an integer in 0..4294967295');
   }
   const { cases, totals } = planCases(tests, seed);
-  mkdirSync(outDir, { recursive: true });
-  const fd = openSync(join(outDir, REPORT_FILE), 'w');
+  const fd = openReportFile(outDir);
   const hash = createHash('sha256');
   let bytes = 0;
   const emit = (text) => {
@@ -141,6 +148,28 @@ export function generateLargeReport({ outDir, tests = DEFAULT_TESTS, seed = DEFA
     closeSync(fd);
   }
   return { tests, seed, bytes, sha256: `sha256:${hash.digest('hex')}` };
+}
+
+/**
+ * Opens `REPORT_FILE` in `outDir` without following a symlink. A linked out-dir or a pre-existing
+ * linked report file would otherwise redirect the write outside the target, so both are refused
+ * before any file is truncated.
+ */
+function openReportFile(outDir) {
+  const target = resolve(outDir);
+  mkdirSync(target, { recursive: true });
+  if (lstatSync(target).isSymbolicLink()) {
+    throw new Error(`--out-dir ${outDir} is a symlink; refusing to write through it`);
+  }
+  const file = join(realpathSync(target), REPORT_FILE);
+  if (lstatSync(file, { throwIfNoEntry: false })?.isSymbolicLink()) {
+    throw new Error(`${file} is a symlink; refusing to follow it`);
+  }
+  const noFollow = constants.O_NOFOLLOW;
+  if (noFollow === undefined) {
+    throw new Error('this platform has no O_NOFOLLOW; refusing to write the report without it');
+  }
+  return openSync(file, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | noFollow);
 }
 
 function main() {
