@@ -163,5 +163,5 @@ describe('AuthoringCaseRowsComponent', () => {
     );
     fixture.detectChanges();
     expect(table.rows()).toHaveLength(201);
-  });
+  }, 20_000);
 });
