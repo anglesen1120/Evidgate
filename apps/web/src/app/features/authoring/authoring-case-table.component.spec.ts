@@ -1,7 +1,9 @@
 import { ComponentHarness, manualChangeDetection } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
+import { CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import { signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import {
   ActivatedRoute,
   convertToParamMap,
@@ -17,6 +19,7 @@ import { apiError } from '../../shared/testing/http-data.testing';
 import { provideLayoutTestStubs } from '../../shared/testing/layout.testing';
 import { NarrowMutationPolicy } from '../../shared/ui/narrow/narrow-mutation-policy';
 import { AuthoringDataService } from './authoring-data.service';
+import { AuthoringCaseRowsComponent } from './authoring-case-rows.component';
 import { AuthoringCaseTableComponent } from './authoring-case-table.component';
 
 class TableHarness extends ComponentHarness {
@@ -36,7 +39,15 @@ class TableHarness extends ComponentHarness {
   readonly error = this.locatorForOptional('app-error-pattern');
   readonly wait = this.locatorForOptional('app-retry-after');
   readonly retry = this.locatorFor('app-retry-after button');
+  readonly retryOptional = this.locatorForOptional(
+    'app-error-pattern button, app-retry-after button',
+  );
+  readonly moreOptional = this.locatorForOptional('[data-case-load-more]');
+  readonly invalidLink = this.locatorForOptional('[data-case-invalid-link]');
+  readonly capped = this.locatorForOptional('[data-case-browse-capped]');
+  readonly loaded = this.locatorFor('[data-case-loaded]');
   readonly clearEmpty = this.locatorFor('app-empty-pattern button');
+  readonly invalidClear = this.locatorFor('[data-case-invalid-link] button');
 }
 
 const caseRow = (id: string): ManualCaseListItemDto => ({
@@ -137,9 +148,12 @@ describe('AuthoringCaseTableComponent', () => {
     const harness = await mount();
     expect(await harness.forbidden()).not.toBeNull();
     expect(await harness.empty()).toBeNull();
-    list.mockRejectedValueOnce(apiError('network', 0));
+    list.mockRejectedValueOnce(
+      new ApiRequestError({ ...apiError('network', 0).error, retryable: true }),
+    );
     query.next(convertToParamMap({ q: 'different' }));
     expect(await harness.error()).not.toBeNull();
+    expect(await harness.retryOptional()).not.toBeNull();
   });
 
   it('renders the supplied 503 Retry-After and disables retries until the deadline', async () => {
@@ -170,6 +184,118 @@ describe('AuthoringCaseTableComponent', () => {
     expect(await (await harness.item()).getAttribute('aria-invalid')).toBe('true');
     expect(await (await harness.itemError()).text()).toContain('complete checklist UUID');
     expect(await (await harness.apply()).getAttribute('disabled')).not.toBeNull();
+  });
+
+  it('renders an invalid checklist link without silently requesting the unfiltered scope', async () => {
+    query.next(convertToParamMap({ item_id: 'not-a-uuid' }));
+    const harness = await mount();
+    expect(await (await harness.invalidLink())?.text()).toContain('Invalid checklist link');
+    expect(await harness.empty()).toBeNull();
+    expect(await harness.retryOptional()).toBeNull();
+    expect(await (await harness.invalidLink())?.text()).toContain('Invalid checklist link');
+    expect(await (await harness.invalidClear()).text()).toContain('Clear filters');
+    await (await harness.invalidClear()).click();
+    expect(navigate).toHaveBeenCalledWith(
+      [],
+      expect.objectContaining({ queryParams: { item_id: null, cursor: null } }),
+    );
+    expect(list).not.toHaveBeenCalled();
+  });
+
+  it('retains cases but removes Retry and load-more after a non-advancing page', async () => {
+    list
+      .mockResolvedValueOnce({ items: [caseRow('1')], next_cursor: 'same' })
+      .mockResolvedValueOnce({ items: [caseRow('2')], next_cursor: 'same' });
+    const harness = await mount();
+    await (await harness.loadMore()).focus();
+    await (await harness.loadMore()).click();
+    expect(await harness.moreOptional()).toBeNull();
+    expect(await harness.retryOptional()).toBeNull();
+    expect(await (await harness.host()).text()).toContain('SHOP-1');
+    expect(await (await harness.host()).text()).toContain('server repeated the case cursor');
+    expect(await (await harness.loaded()).isFocused()).toBe(true);
+    const text = await (await harness.host()).text();
+    expect(text).not.toContain('Retry explicitly');
+    expect(text).not.toContain('Case list may be stale');
+    expect(text).toContain('Refresh to reload this list');
+    expect(await harness.retryOptional()).toBeNull();
+  });
+
+  it('shows a filter hint instead of load-more when the retained case cap is reached', async () => {
+    list.mockResolvedValueOnce({
+      items: Array.from({ length: 10_001 }, (_, i) => caseRow(String(i))),
+      next_cursor: 'more',
+    });
+    const harness = await mount();
+    expect(await (await harness.capped())?.text()).toContain('Narrow the filters');
+    expect(await harness.moreOptional()).toBeNull();
+    expect(await harness.retryOptional()).toBeNull();
+  }, 20_000);
+
+  it('keeps the cap notice after a failed Refresh retains capped cases', async () => {
+    list.mockResolvedValueOnce({
+      items: Array.from({ length: 10_000 }, (_, i) => caseRow(String(i))),
+      next_cursor: 'more',
+    });
+    const harness = await mount();
+    list.mockRejectedValueOnce(apiError('network', 0));
+    await (await harness.refresh()).click();
+    expect(await (await harness.capped())?.text()).toContain('Narrow the filters');
+    expect(await (await harness.host()).text()).toContain('10,000 cases loaded');
+  }, 20_000);
+
+  it('syncs the accepted cap cursor and hands pager focus to the first newly retained row', async () => {
+    list
+      .mockResolvedValueOnce({
+        items: Array.from({ length: 9_800 }, (_, i) => caseRow(String(i))),
+        next_cursor: 'last-retained',
+      })
+      .mockResolvedValueOnce({
+        items: Array.from({ length: 200 }, (_, i) => caseRow(String(9_800 + i))),
+        next_cursor: 'beyond-cap',
+      });
+    const harness = await mount();
+    const rows = fixture.debugElement
+      .query(By.directive(AuthoringCaseRowsComponent))
+      .injector.get(AuthoringCaseRowsComponent);
+    // jsdom has no element.scrollTo: the reveal is browser behaviour, the focus request is ours.
+    vi.spyOn(CdkVirtualScrollViewport.prototype, 'scrollToIndex').mockImplementation(() => {});
+    const focusRow = vi.spyOn(rows, 'focusRow');
+    await (await harness.loadMore()).focus();
+    await (await harness.loadMore()).click();
+    await vi.waitFor(() => expect(focusRow).toHaveBeenCalledWith('9800'));
+    expect(await harness.moreOptional()).toBeNull();
+    expect(navigate.mock.lastCall?.[1]).toMatchObject({
+      queryParams: { cursor: 'last-retained' },
+      replaceUrl: true,
+    });
+  }, 20_000);
+
+  it('moves pager focus to the loaded count when the last page adds no rows', async () => {
+    list
+      .mockResolvedValueOnce({ items: [caseRow('1')], next_cursor: 'tail' })
+      .mockResolvedValueOnce({ items: [caseRow('1')], next_cursor: null });
+    const harness = await mount();
+    await (await harness.loadMore()).focus();
+    await (await harness.loadMore()).click();
+    expect(await harness.moreOptional()).toBeNull();
+    expect(await (await harness.host()).text()).toContain('1 cases loaded');
+    expect(await (await harness.loaded()).isFocused()).toBe(true);
+  });
+
+  it('does not steal focus when the user leaves a pending terminal pager', async () => {
+    const pending = new Subject<ManualCaseListResponse>();
+    list
+      .mockResolvedValueOnce({ items: [caseRow('1')], next_cursor: 'same' })
+      .mockReturnValueOnce(firstValueFrom(pending));
+    const harness = await mount();
+    await (await harness.loadMore()).focus();
+    await manualChangeDetection(async () => {
+      await (await harness.loadMore()).click();
+      await (await harness.search()).focus();
+      pending.next({ items: [caseRow('2')], next_cursor: 'same' });
+    });
+    expect(await (await harness.search()).isFocused()).toBe(true);
   });
 
   it('accepts 200 Unicode characters but announces and refuses a 201-character query', async () => {
