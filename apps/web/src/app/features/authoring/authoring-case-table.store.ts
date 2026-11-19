@@ -53,12 +53,16 @@ const UNRESOLVED = failure(
   'request_unresolved',
   $localize`:@@authoring.case-table.unresolved:The case list request did not complete. Retry explicitly.`,
 );
+const refusal = (code: string, message: string): ApiError => ({
+  ...failure(code, message),
+  retryable: false,
+});
 const REFUSALS = {
-  cursorRepeated: failure(
+  cursorRepeated: refusal(
     'cursor_repeated',
     $localize`:@@authoring.case-table.cursor-repeated:The server repeated the case cursor. Reload the list.`,
   ),
-  pageWithoutNewRows: failure(
+  pageWithoutNewRows: refusal(
     'page_without_new_rows',
     $localize`:@@authoring.case-table.page-repeated:The next page had no new cases. Reload the list.`,
   ),
