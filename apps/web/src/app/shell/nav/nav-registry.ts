@@ -14,7 +14,8 @@
 //
 //   | entry | code | endpoint family that decides it |
 //   |---|---|---|
-//   | authoring / overview / ai-settings | `authoring:read`, `project:read` | `/projects/{p}/authoring/*`, `GET /projects/{p}` |
+//   | authoring / ai-settings | `authoring:read` | `/projects/{p}/authoring/*` (the AI settings reads are authoring reads) |
+//   | overview | `project:read` | `GET /projects/{p}` |
 //   | generation | `authoring:generate` | generation endpoints (13.3.1) |
 //   | pending-changes | `authoring:write` | authoring write endpoints (batched review) |
 //   | onboarding | `project:create` | `POST /orgs/{o}/projects` |
@@ -315,7 +316,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     icon: 'sparkle',
     scope: 'project',
     segment: 'ai-settings',
-    permission: 'project:read',
+    permission: 'authoring:read',
     area: 'settings',
     label: $localize`:@@shell.nav.ai-settings:AI settings`,
   },
