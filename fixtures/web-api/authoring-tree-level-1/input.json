@@ -1,0 +1,35 @@
+{
+  "operation_id": "listAuthoringTree",
+  "variant": "level-1",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000f212"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "node_id": "018f0000-0000-7000-8000-000000000102",
+        "parent_id": "018f0000-0000-7000-8000-000000000101",
+        "kind": "feature",
+        "title": "Kiểm tra đơn hàng",
+        "position": 0,
+        "version": 1,
+        "child_count": 1,
+        "item_count": 0
+      }
+    ],
+    "next_cursor": "authoring-child-more",
+    "node": {
+      "node_id": "018f0000-0000-7000-8000-000000000101",
+      "parent_id": null,
+      "kind": "module",
+      "title": "Thanh toán",
+      "position": 0,
+      "version": 1,
+      "child_count": 2,
+      "item_count": 2
+    },
+    "path": []
+  }
+}

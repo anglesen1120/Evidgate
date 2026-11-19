@@ -146,6 +146,11 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   { operationId: 'listProjects', method: 'GET', path: '/orgs/{o}/projects' },
   { operationId: 'getProject', method: 'GET', path: '/projects/{p}' },
   {
+    operationId: 'listAuthoringTree',
+    method: 'GET',
+    path: '/projects/{p}/authoring/tree',
+  },
+  {
     operationId: 'listSecurityEvents',
     method: 'GET',
     path: '/orgs/{o}/security-events',

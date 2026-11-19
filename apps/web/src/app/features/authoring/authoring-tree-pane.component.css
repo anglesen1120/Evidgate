@@ -1,0 +1,117 @@
+:host {
+  display: block;
+  min-inline-size: 0;
+}
+ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  min-inline-size: 0;
+}
+ul.indented {
+  margin-inline-start: var(--eg-space-3);
+  border-inline-start: var(--eg-border-width) solid var(--eg-border);
+  padding-inline-start: var(--eg-space-2);
+}
+.tree-help {
+  margin: 0 0 var(--eg-space-3);
+  color: var(--eg-text-muted);
+  font-size: var(--eg-text-xs);
+  line-height: var(--eg-leading-xs);
+  overflow-wrap: anywhere;
+}
+.node-row {
+  padding-block: var(--eg-space-2);
+  min-inline-size: 0;
+  border-block-end: var(--eg-border-width) solid var(--eg-border);
+}
+.node-row.current {
+  background: var(--eg-accent-soft);
+  color: var(--eg-text);
+}
+.node-controls {
+  display: flex;
+  gap: var(--eg-space-3);
+  align-items: flex-start;
+  min-inline-size: 0;
+}
+.disclosure,
+.leaf-space {
+  flex: none;
+  inline-size: var(--eg-control-sm);
+  min-block-size: var(--eg-control-sm);
+}
+.scope {
+  justify-content: flex-start;
+  align-items: flex-start;
+  flex: 1 1 0;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  block-size: auto;
+  min-block-size: var(--eg-control-sm);
+  white-space: normal;
+  text-align: start;
+  flex-wrap: wrap;
+  gap: var(--eg-space-2);
+}
+.scope bdi {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.current-label {
+  font-size: var(--eg-text-xs);
+  line-height: var(--eg-leading-xs);
+  font-weight: var(--eg-weight-semibold);
+  color: var(--eg-accent-fg);
+}
+.counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eg-space-2) var(--eg-space-3);
+  margin: var(--eg-space-1) 0 var(--eg-space-2);
+  padding-inline-start: var(--eg-space-2);
+  font-size: var(--eg-text-xs);
+  line-height: var(--eg-leading-xs);
+  color: var(--eg-text-muted);
+}
+.counts div {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--eg-space-2);
+  min-inline-size: 0;
+}
+dt {
+  overflow-wrap: anywhere;
+}
+dd {
+  margin: 0;
+  color: var(--eg-text);
+  font-variant-numeric: tabular-nums;
+}
+.branch-state {
+  min-inline-size: 0;
+  padding-block: var(--eg-space-3);
+}
+.more {
+  block-size: auto;
+  min-block-size: var(--eg-control-sm);
+  white-space: normal;
+  max-inline-size: 100%;
+  margin-block-start: var(--eg-space-3);
+}
+button {
+  scroll-margin-block-start: calc(var(--eg-space-12) + var(--eg-space-7));
+}
+@media (pointer: coarse) {
+  .disclosure,
+  .leaf-space {
+    inline-size: var(--eg-control-touch);
+    min-block-size: var(--eg-control-touch);
+  }
+  .scope,
+  .more {
+    min-inline-size: var(--eg-control-touch);
+    min-block-size: var(--eg-control-touch);
+  }
+}
