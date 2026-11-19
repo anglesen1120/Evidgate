@@ -241,7 +241,7 @@
       }
     </app-request-state>
   }
-  <p class="m-0 min-h-(--eg-leading-sm) text-sm" role="status">
+  <p #timelineStatus class="m-0 min-h-(--eg-leading-sm) text-sm" role="status" tabindex="-1">
     @if (store.appendedVersion() > 0) {
       @if (store.refreshRequired()) {
         <span i18n="@@authoring.editor.restore-refresh"

@@ -254,6 +254,28 @@ describe('TimelineComponent', () => {
     expect(data.restoreVersion).not.toHaveBeenCalled();
     expect(document.activeElement?.getAttribute('data-restore-open')).not.toBeNull();
   });
+  it('moves focus to the refresh status when the appended row never arrives', async () => {
+    let release: (value: { version: number }) => void = () => {};
+    // `Promise.withResolvers` is ES2024 and this project's lib is ES2022.
+    const pending = new Promise<{ version: number }>((resolve) => {
+      release = resolve;
+    });
+    data.restoreVersion.mockReturnValue(pending);
+    const { fixture, harness } = await mount();
+    await harness.click('[data-inspect-version="version-2"]');
+    await fixture.whenStable();
+    await harness.click('[data-restore-open]');
+    const dialog =
+      await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(RestoreHarness);
+    await dialog.confirm();
+    release({ version: 4 });
+    await fixture.whenStable();
+    expect(await harness.text()).toContain('Refresh the timeline');
+    const active = document.activeElement as HTMLElement | null;
+    expect(active?.getAttribute('role')).toBe('status');
+    expect(active?.closest('[role="dialog"]')).toBeNull();
+    expect(active?.textContent).toContain('the appended version is not yet visible');
+  });
   it('write denial keeps history inspectable and explains disabled restore', async () => {
     writable.set(false);
     const { harness } = await mount();

@@ -116,6 +116,7 @@ export class TimelineComponent {
   );
   private readonly heading = viewChild<ElementRef<HTMLElement>>('timelineHeading');
   private readonly restoreStatus = viewChild<ElementRef<HTMLElement>>('restoreStatus');
+  private readonly timelineStatus = viewChild<ElementRef<HTMLElement>>('timelineStatus');
   private readonly table = viewChild(DataTableComponent<AuthoringVersionListItemDto>);
   private readonly metadata =
     viewChild<TemplateRef<DataTableCellContext<AuthoringVersionListItemDto>>>('metadata');
@@ -166,9 +167,10 @@ export class TimelineComponent {
     const host = this.host.nativeElement;
     const row = rows.find((entry) => entry.version_no === version);
     if (!row) {
-      // The appended row never arrived, so the visible refresh status is the reachable outcome.
+      // The appended row never arrived, so the refresh status outside the closed dialog is the
+      // reachable outcome; the dialog copy is gone by now.
       if (!this.store.refreshRequired()) return;
-      this.restoreStatus()?.nativeElement.focus();
+      this.timelineStatus()?.nativeElement.focus();
       this.restoredFocus.set(null);
       return;
     }
