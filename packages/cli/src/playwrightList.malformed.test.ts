@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import * as fsModule from 'node:fs/promises';
-import { link, mkdtemp, mkdir, rm, symlink, truncate, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rename, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -11,16 +11,26 @@ import { CliError } from './errors.js';
 import { mapTestsToMembers } from './manifestMapping.js';
 import { parsePlaywrightList, readPlaywrightList } from './playwrightList.js';
 
-// One-shot seam for the path-swap race: the guard reads the identity after the open, so a
-// test replaces the file at exactly that point instead of racing a real writer.
+// One-shot seam for the path-swap race: the guard reads the identity while the descriptor is
+// open, so a test replaces the file at exactly that point instead of racing a real writer.
 const swapHook = vi.hoisted(() => ({
   once: undefined as undefined | (() => Promise<void>),
+  closes: 0,
 }));
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof fsModule>();
   return {
     ...actual,
+    open: async (...args: Parameters<typeof actual.open>) => {
+      const handle = await actual.open(...args);
+      const close = handle.close.bind(handle);
+      handle.close = () => {
+        swapHook.closes += 1;
+        return close();
+      };
+      return handle;
+    },
     lstat: (...args: Parameters<typeof actual.lstat>) => {
       const swap = swapHook.once;
       swapHook.once = undefined;
@@ -405,20 +415,80 @@ describe('readPlaywrightList and readFileBounded filesystem boundaries', () => {
     });
   });
 
-  it('report_replaced_between_open_and_identity_check_refuses', async () => {
+  it('verify_runs_while_the_descriptor_is_still_open_and_a_false_result_is_changed', async () => {
+    const root = await tempDir();
+    const file = join(root, 'report.json');
+    await writeFile(file, report());
+    swapHook.closes = 0;
+    let closedDuringVerify = -1;
+    const result = await readFileBounded(file, 1024, {
+      verify: () => {
+        closedDuringVerify = swapHook.closes;
+        return Promise.resolve(false);
+      },
+    });
+    expect(closedDuringVerify).toBe(0);
+    expect(result).toEqual({ ok: false, failure: { kind: 'changed' } });
+    expect(swapHook.closes).toBe(1);
+  });
+
+  it('report_replaced_while_the_descriptor_is_open_refuses_without_keeping_the_old_inode', async () => {
     const root = await tempDir();
     const file = join(root, 'report.json');
     await writeFile(file, report());
     await expect(readPlaywrightList('report.json', root)).resolves.toBe(report());
+    // The check runs while the descriptor holds the old inode, so no hard link is needed to
+    // stop the replacement from reusing its number.
     swapHook.once = async () => {
-      // Keep the old inode alive: a freed inode number may be reused by the replacement.
-      await link(file, `${file}.old`);
       await rm(file);
       await writeFile(file, report());
     };
-    await expect(readPlaywrightList('report.json', root)).rejects.toMatchObject({
-      code: 'manifest_report_unreadable',
-    });
+    await expect(readPlaywrightList('report.json', root)).rejects.toThrow(
+      /changed while it was opened/,
+    );
     await expect(readPlaywrightList('report.json', root)).resolves.toBe(report());
+  });
+
+  it('parent_symlink_that_keeps_the_file_identity_still_refuses_on_the_realpath', async () => {
+    const root = await tempDir();
+    const sub = join(root, 'sub');
+    await mkdir(sub);
+    await writeFile(join(sub, 'report.json'), report());
+    await expect(readPlaywrightList('sub/report.json', root)).resolves.toBe(report());
+    // The symlink leads back to the same inode, so only the realpath check can refuse it.
+    swapHook.once = async () => {
+      await rename(sub, `${sub}.old`);
+      await symlink(`${sub}.old`, sub);
+    };
+    await expect(readPlaywrightList('sub/report.json', root)).rejects.toThrow(
+      /changed while it was opened/,
+    );
+  });
+
+  it('parent_directory_swapped_for_a_directory_or_a_symlink_refuses', async () => {
+    const root = await tempDir();
+    const sub = join(root, 'sub');
+    await mkdir(sub);
+    await writeFile(join(sub, 'report.json'), report());
+    const other = join(root, 'other');
+    await mkdir(other);
+    await writeFile(join(other, 'report.json'), report());
+    swapHook.once = async () => {
+      await rename(sub, `${sub}.old`);
+      await mkdir(sub);
+      await writeFile(join(sub, 'report.json'), report());
+    };
+    await expect(readPlaywrightList('sub/report.json', root)).rejects.toThrow(
+      /changed while it was opened/,
+    );
+    await rm(sub, { recursive: true });
+    await rename(`${sub}.old`, sub);
+    swapHook.once = async () => {
+      await rename(sub, `${sub}.old`);
+      await symlink(other, sub);
+    };
+    await expect(readPlaywrightList('sub/report.json', root)).rejects.toThrow(
+      /changed while it was opened/,
+    );
   });
 });

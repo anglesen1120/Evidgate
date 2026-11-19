@@ -24,6 +24,9 @@ export const MAX_PATH_CHARS = 1024;
 /** Control, format and lone-surrogate code points, refused in paths and names (`TextRules.IsClean`). */
 export const UNCLEAN = /[\p{Cc}\p{Cf}\p{Cs}]/u;
 
+// A second copy of this rule lives in `cli/src/caseId.ts` by design: the reporter loads the CLI
+// lazily (a broken CLI install must not stop the run), so it cannot import it at runtime.
+// `cli/src/caseId.table.json` drives both validators' tests so the copies cannot drift.
 /** The 36-character hyphenated UUID form, any case (`AnnotationParser.IsCanonicalUuid`). */
 const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** The nil UUID: a spelling the schema accepts and the server refuses (`Guid.Empty`). */
