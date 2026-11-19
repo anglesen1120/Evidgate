@@ -662,3 +662,9 @@ closed by #917 (f00ae760: `ai-settings.page.ts` renders the forbidden pattern wh
 | Authoring tree store: four open P2 races (S440) | authoring-tree-reads.ts: F1 :390 a continuation append overwrites rows a selection refresh updated (select, Load more, selection finishes first); F2 :187-192 select aborts the child read without settling loading, a failed select leaves the spinner and store.ts:129-130 refuses a retry; F3 :295-296 refresh of an exhausted branch keeps the null cursor; authoring.page.ts:98-104 F4 a failed select announces all roots. Receiver 13.4.1-T2.3/T2.4 before the wave reaches develop. | web foundation |
 
 closed by #914 (3a3cde1b: `authoring-tree-races.spec.ts` pins F1-F4; fixes in `authoring-tree-reads.ts` and `authoring.page.ts`)
+
+## Moved from status-carried.md by S446 (2026-11-19)
+
+| Tailwind @source now covers authoring, availability, catalog (S443, #917) | Unreported global CSS change: `spartan-tailwind.css` (`source(none)` + hand-kept `@source` list) lacked `features/authoring`, `availability`, `catalog`, so their utilities were never generated: 34 authoring, 9 availability, 12 catalog class tokens missing from the built CSS (ce63d84e message). Computed styles measured on authoring only (design review DR-01, uncommitted notes): 75ch form `max-width:none`, `lg:last:col-span-2` `grid-column:auto`, 60vh cap `max-height:none`. Catalog and availability may change visibly; no before/after screenshots were taken for them (none). | receiver: web foundation (visual check of catalog and availability) |
+
+closed by S446 (#919): no regression. 25 new utility selectors (authoring 17, catalog 5, availability 3); 56 shots, 7 routes x 360/1280 px x light/dark x two builds, no overflow; catalog identical but 2 px shorter, authoring spacing intended. Availability is unreachable (phase G3), see its new carried row.
