@@ -241,11 +241,8 @@ export class AuthoringCaseRowsComponent {
   }
   protected rememberFocus(event: FocusEvent): void {
     const target = event.target;
-    // The export control disappears with the same viewport policy as row selection, so it hands
-    // focus to the inspection notice too.
     this.focusedSelection =
-      target instanceof HTMLElement &&
-      target.closest('[data-case-select], [data-select-visible], [data-export-selection]')
+      target instanceof HTMLElement && target.closest('[data-case-select], [data-select-visible]')
         ? target
         : null;
   }

@@ -118,14 +118,6 @@ describe('AuthoringCaseRowsComponent', () => {
     expect(await (await harness.summary()).text()).toContain('2 of 2 loaded selected');
   });
 
-  it('hands focus to the inspection notice when the export control disappears', async () => {
-    const { fixture, harness } = await mount();
-    await (await harness.exportAction()).focus();
-    desktop.set(false);
-    fixture.detectChanges();
-    expect(await (await harness.selectionNotice()).isFocused()).toBe(true);
-  });
-
   it('gives the case code its own column and keeps the UUID in a separate cell', async () => {
     const { fixture } = await mount(1);
     const table = fixture.debugElement
@@ -146,8 +138,7 @@ describe('AuthoringCaseRowsComponent', () => {
 
   it('drops a reveal request for a row missing from the result', async () => {
     const { fixture } = await mount();
-    const host = fixture.debugElement.query(By.directive(AuthoringCaseRowsComponent));
-    const rows = host.componentInstance as AuthoringCaseRowsComponent;
+    const rows = fixture.componentInstance;
     const missing = '018f0000-0000-7000-8000-000000000999';
     rows.focusRow(missing);
     fixture.detectChanges();
