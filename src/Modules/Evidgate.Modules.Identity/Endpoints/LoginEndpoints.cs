@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Evidgate.BuildingBlocks.Observability;
@@ -36,9 +35,8 @@ namespace Evidgate.Modules.Identity.Endpoints;
 /// No provider text, code, token, nonce, verifier, email or subject is ever logged or echoed.
 /// </para>
 /// <para>
-/// Both routes are throttled per client address before any other work, with the limiter
-/// <c>POST /v1/ci/token</c> already uses (<see cref="ExchangeRateLimiter"/>, the same
-/// <c>EVIDGATE__CI__EXCHANGEBURSTLIMIT</c>/<c>…EXCHANGEWINDOWSECONDS</c> budget) and its 429
+/// Both routes are throttled per client address before any other work, from the login budget the shared
+/// limiter keeps (<see cref="ExchangeRateLimiter"/>, <c>EVIDGATE__IDENTITY__RATELIMITS__LOGIN__*</c>) with its 429
 /// <c>rate_limited</c> + <c>Retry-After</c> envelope: an anonymous flood is what fills the one-time
 /// <c>state</c> set and drives outbound provider calls, so a single client cannot spend the platform's
 /// login capacity for everyone else.
@@ -92,7 +90,7 @@ public static partial class LoginEndpoints
     private const string UnknownProviderTag = "unknown";
 
     /// <summary>
-    /// The client-address limiter key of <c>start</c>: the CI exchange limiter's key
+    /// The client-address limiter key of <c>start</c>: the shared limiter's address key
     /// (<see cref="ExchangeRateLimiter.ClientKey"/>) under a route prefix, so a flood of one route cannot
     /// spend the other's budget.
     /// </summary>
@@ -106,8 +104,8 @@ public static partial class LoginEndpoints
 
     /// <summary>
     /// Limiter units one <c>callback</c> spends from its client's window. It is the route that calls the
-    /// provider, so it spends twice a <c>start</c> and is therefore twice as strict inside the one shared
-    /// <c>EVIDGATE__CI__EXCHANGEBURSTLIMIT</c> budget the limiter applies to every key.
+    /// provider, so it spends twice a <c>start</c> and is therefore twice as strict inside the one
+    /// <c>login</c> budget the limiter applies to every key.
     /// </summary>
     private const int CallbackCost = 2;
 
@@ -157,16 +155,17 @@ public static partial class LoginEndpoints
     /// <summary>
     /// <c>start</c>: a 429 once the client's window is spent, a 404 for an unknown provider, a 503 when the
     /// provider or the deployment's public base URL is missing, otherwise the pending-login cookie plus a
-    /// 302 to the provider's authorization URL. Synchronous by design: it makes no outbound call.
+    /// 302 to the provider's authorization URL. No outbound call: the only I/O is the shared attempt budget.
     /// </summary>
-    private static Result Start(
+    private static async Task<Result> Start(
         HttpContext context,
         string provider,
         IEnumerable<ILoginProvider> providers,
         LoginStateCookie cookie,
         ExchangeRateLimiter limiter,
         IOptions<LoginOptions> options,
-        TimeProvider clock)
+        TimeProvider clock,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(cookie);
@@ -178,7 +177,8 @@ public static partial class LoginEndpoints
 
         // First, before any other work: the per-client budget is what keeps one anonymous caller from
         // spending the platform's login capacity (see the class remarks).
-        if (Throttle(context, limiter, StartLimiterPrefix + ClientIp.LimiterKey(context), StartCost) is { } throttled)
+        if (await ThrottleAsync(context, limiter, StartLimiterPrefix + ClientIp.LimiterKey(context), StartCost, cancellationToken)
+                .ConfigureAwait(false) is { } throttled)
         {
             return Result.Failure(throttled);
         }
@@ -291,33 +291,23 @@ public static partial class LoginEndpoints
             linkUserId);
 
     /// <summary>
-    /// Spends up to <paramref name="cost"/> units of the client's window in the CI exchange limiter and
-    /// returns the 00 §9.2 429 <c>rate_limited</c> failure (with <c>Retry-After</c> set on the response) when
-    /// the budget is gone, or null to continue. Same envelope and same <see cref="Error"/> shape as
-    /// <c>CiTokenEndpoints.Throttle</c>. Only the first unit decides: the extra units of a route that must be
-    /// stricter are spent from the same window when they are available and never refuse by themselves, so a
-    /// legal <c>ExchangeBurstLimit</c> of 1 (or an odd one) cannot make the route unusable.
+    /// Spends up to <paramref name="cost"/> units of the client's window in the login budget and returns the
+    /// 00 §9.2 429 <c>rate_limited</c> failure (with <c>Retry-After</c> set on the response) when the budget is
+    /// gone, the 503 when the shared store cannot answer, or null to continue.
     /// </summary>
-    internal static Error? Throttle(HttpContext context, ExchangeRateLimiter limiter, string key, int cost)
-    {
-        if (!limiter.TryAcquire(key, out var retryAfter))
-        {
-            context.Response.Headers.RetryAfter = retryAfter.ToString(CultureInfo.InvariantCulture);
-
-            return new Error(
-                ApiErrorCode.RateLimited,
-                "too many sign-in attempts; retry later",
-                StatusCodes.Status429TooManyRequests,
-                Retryable: true);
-        }
-
-        for (var unit = 1; unit < cost; unit++)
-        {
-            _ = limiter.TryAcquire(key, out _);
-        }
-
-        return null;
-    }
+    /// <param name="context">The request whose response carries the refusal headers.</param>
+    /// <param name="limiter">The shared attempt-budget store.</param>
+    /// <param name="key">The limiter key, already prefixed by the route.</param>
+    /// <param name="cost">Limiter units this attempt is worth.</param>
+    /// <param name="cancellationToken">The request's cancellation token.</param>
+    internal static ValueTask<Error?> ThrottleAsync(
+        HttpContext context,
+        ExchangeRateLimiter limiter,
+        string key,
+        int cost,
+        CancellationToken cancellationToken) =>
+        RateLimitGate.AcquireAsync(
+            context, limiter, RateSurface.Login, key, cost, "too many sign-in attempts; retry later", cancellationToken);
 
     /// <summary>The provider registered under exactly <paramref name="provider"/> (lower case, ordinal), or null.</summary>
     private static ILoginProvider? Find(IEnumerable<ILoginProvider> providers, string? provider)

@@ -141,6 +141,13 @@ internal sealed class IdentityApiFactory : WebApplicationFactory<Program>
             configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["EVIDGATE:Database:ConnectionString"] = ConnectionString,
+                // The identity suites share the assembly's database, whose rate-limit windows now live in
+                // PostgreSQL: every host that can reach a pre-tenant route binds the same wide budget, so one
+                // suite's attempts never answer another's request with a 429 (the shape IsolationApiFactory uses).
+                ["EVIDGATE:Identity:RateLimits:LoginLimit"] = "1000",
+                ["EVIDGATE:Identity:RateLimits:LinkLimit"] = "1000",
+                ["EVIDGATE:Identity:RateLimits:InviteLimit"] = "1000",
+                ["EVIDGATE:Identity:RateLimits:CiExchangeLimit"] = "1000",
                 ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
                 ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
                 // The module's flag, bound through AddIdentityModule exactly as the

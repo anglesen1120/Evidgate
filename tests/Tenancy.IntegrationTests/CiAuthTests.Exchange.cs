@@ -322,10 +322,10 @@ public sealed partial class CiAuthTests
     public async Task Exchange_IsRateLimited_WithRetryAfter()
     {
         var database = _dedicated!.Name;
-        // The burst counter lives in memory per host, so the count must start at zero: a fresh private Ci host.
+        // The window lives in the database now, so the count starts at zero only on a fresh private Ci host.
         await using var api = TenancyApiFactory.Ci(
             _fixture.AppConnectionString(database),
-            new Dictionary<string, string?> { ["EVIDGATE:Ci:ExchangeBurstLimit"] = "3" });
+            new Dictionary<string, string?> { ["EVIDGATE:Identity:RateLimits:CiExchangeLimit"] = "3" });
         using var client = api.CreateClient();
 
         var answers = new List<ApiAnswer>();

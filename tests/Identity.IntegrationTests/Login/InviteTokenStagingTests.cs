@@ -5,6 +5,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.Modules.Identity.Invites;
 using Evidgate.Modules.Identity.Login;
 using Evidgate.Modules.Identity.Options;
+using Evidgate.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Shouldly;
@@ -20,16 +21,17 @@ namespace Identity.IntegrationTests.Login;
 /// spends the client's exchange window like the login routes do (429 <c>rate_limited</c> + <c>Retry-After</c>).
 /// The staged value is unreadable: the token never appears in the <c>Set-Cookie</c> it writes.
 /// </summary>
-// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+// The assembly Fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
 [Trait("Category", "Docker")]
-public sealed class InviteTokenStagingTests
+public sealed class InviteTokenStagingTests(DatabaseFixture fixture)
+    : CatalogueTestBase(fixture, DatabaseIsolation.Dedicated)
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 25, 9, 0, 0, TimeSpan.Zero);
 
     [Fact]
     public async Task Staging_Answers_204_With_The_Q1_Host_Cookie()
     {
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();
         var generated = InviteTokenFormat.Generate();
 
@@ -75,7 +77,7 @@ public sealed class InviteTokenStagingTests
     [InlineData("evgi_ABCDEFGHIJKL_short")]
     public async Task A_Malformed_Token_Is_422_And_Stages_Nothing(string token)
     {
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();
 
         using var response = await LoginTestHost.SendAsync(client, Stage(token));
@@ -107,7 +109,7 @@ public sealed class InviteTokenStagingTests
     [InlineData("", "body")]
     public async Task A_Body_Without_A_Usable_Token_Is_422_And_Names_The_Field_Or_The_Body(string body, string path)
     {
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();
 
         using var response = await LoginTestHost.SendAsync(client, StageRaw(body));
@@ -121,7 +123,7 @@ public sealed class InviteTokenStagingTests
     [Fact]
     public async Task A_Form_Encoded_Body_Is_Refused_So_A_Cross_Site_Form_Cannot_Stage_A_Token()
     {
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();
         var staged = InviteTokenFormat.Generate().Full;
 
@@ -145,7 +147,7 @@ public sealed class InviteTokenStagingTests
     [Fact]
     public async Task An_Oversized_Body_Is_413_And_Stages_Nothing()
     {
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();
         var oversized = new string('a', 5000);
 
@@ -159,9 +161,9 @@ public sealed class InviteTokenStagingTests
     [Fact]
     public async Task Staging_Answers_429_With_Retry_After_Once_The_Clients_Budget_Is_Spent()
     {
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();
-        var burst = host.Services.GetRequiredService<IOptions<CiAuthOptions>>().Value.ExchangeBurstLimit;
+        var burst = host.Services.GetRequiredService<IOptions<RateLimitOptions>>().Value.InviteLimit;
 
         for (var attempt = 1; attempt <= burst; attempt++)
         {
@@ -183,7 +185,7 @@ public sealed class InviteTokenStagingTests
     [Fact]
     public async Task Each_Staging_Replaces_The_Token_The_Browser_Carries()
     {
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();
 
         using var first = await LoginTestHost.SendAsync(client, Stage(InviteTokenFormat.Generate().Full));

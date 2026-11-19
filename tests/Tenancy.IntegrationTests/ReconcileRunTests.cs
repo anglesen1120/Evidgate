@@ -100,7 +100,11 @@ public sealed partial class ReconcileRunTests : IClassFixture<TenancyHostPool>
     /// wrapped in <see cref="CountingRunReconciler"/> so a case can prove the handler body ran, not only that the task
     /// row ended <c>done</c>.
     /// </summary>
-    private async Task<IngestTestWorld> StartWithQueueAsync(int attemptsSkip = 0, int slots = 1, string? database = null)
+    private async Task<IngestTestWorld> StartWithQueueAsync(
+        int attemptsSkip = 0,
+        int slots = 1,
+        string? database = null,
+        Action<IServiceCollection>? configure = null)
     {
         var world = await IngestTestWorld.StartAsync(
             _fixture,
@@ -117,6 +121,7 @@ public sealed partial class ReconcileRunTests : IClassFixture<TenancyHostPool>
                         provider.GetRequiredService<ITenantDb>(),
                         provider.GetRequiredService<ITenantScopeAccessor>()),
                     provider.GetRequiredService<ReconcileCallCounter>()));
+                configure?.Invoke(services);
             });
         await AnswerPlanOrDisposeAsync(world, attemptsSkip);
 

@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
@@ -31,8 +30,9 @@ namespace Evidgate.Modules.Identity.Endpoints;
 /// 422 <c>request_invalid</c> with <c>details[].path</c> = <c>invite_token</c> and no cookie written, so a
 /// client learns nothing about whether a well-formed token exists; <c>path</c> is <c>body</c> only when the
 /// body itself is wrong (not JSON, not a JSON object, or not <c>application/json</c>). The route is throttled
-/// per client address from the CI exchange limiter's budget under its own key prefix, aimed at the same cost
-/// as a <c>start</c>: one client cannot fill the cookie jar (or the staging path) for everyone else.
+/// per client address from the invite budget (<c>EVIDGATE__IDENTITY__RATELIMITS__INVITE__*</c>) under its own key
+/// prefix, aimed at the same cost as a <c>start</c>: one client cannot fill the cookie jar (or the staging path)
+/// for everyone else.
 /// </para>
 /// <para>
 /// The body is bounded before it is parsed: a declared or streamed length over <see cref="MaxBodyBytes"/> is
@@ -49,7 +49,7 @@ internal static class InviteTokenEndpoints
     internal const int MaxBodyBytes = 4096;
 
     /// <summary>
-    /// The client-address limiter key prefix of this route: the CI exchange limiter's key
+    /// The client-address limiter key prefix of this route: the shared limiter's address key
     /// (<see cref="ExchangeRateLimiter.ClientKey"/>) under a route-specific prefix, so a flood here cannot spend
     /// <c>start</c>'s or <c>callback</c>'s window.
     /// </summary>
@@ -108,7 +108,7 @@ internal static class InviteTokenEndpoints
 
         // First, before the body is touched: an anonymous caller must not spend another client's capacity by
         // posting tokens, and the cookie is a credential carrier worth throttling.
-        if (Throttle(context, limiter) is { } throttled)
+        if (await ThrottleAsync(context, limiter, cancellationToken).ConfigureAwait(false) is { } throttled)
         {
             return Result.Failure(throttled);
         }
@@ -151,24 +151,18 @@ internal static class InviteTokenEndpoints
 
     /// <summary>Spends one unit of the client's window, the same cost as a <c>start</c>; the 429 carries <c>Retry-After</c>.</summary>
     /// <param name="context">The request whose response carries the header.</param>
-    /// <param name="limiter">The shared CI exchange limiter.</param>
-    private static Error? Throttle(HttpContext context, ExchangeRateLimiter limiter)
-    {
-        var key = LimiterPrefix + ClientIp.LimiterKey(context);
-
-        if (limiter.TryAcquire(key, out var retryAfter))
-        {
-            return null;
-        }
-
-        context.Response.Headers.RetryAfter = retryAfter.ToString(CultureInfo.InvariantCulture);
-
-        return new Error(
-            ApiErrorCode.RateLimited,
+    /// <param name="limiter">The shared attempt-budget store.</param>
+    /// <param name="cancellationToken">The request's cancellation token.</param>
+    private static ValueTask<Error?> ThrottleAsync(
+        HttpContext context, ExchangeRateLimiter limiter, CancellationToken cancellationToken) =>
+        RateLimitGate.AcquireAsync(
+            context,
+            limiter,
+            RateSurface.Invite,
+            LimiterPrefix + ClientIp.LimiterKey(context),
+            cost: 1,
             "too many invite attempts; retry later",
-            StatusCodes.Status429TooManyRequests,
-            Retryable: true);
-    }
+            cancellationToken);
 
     /// <summary>
     /// <c>invite_token</c> out of a JSON object body, or the refusal a value of the wrong type earns.

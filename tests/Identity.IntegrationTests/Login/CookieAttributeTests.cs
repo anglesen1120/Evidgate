@@ -1,5 +1,6 @@
 using System.Net;
 using Evidgate.Modules.Identity.Login;
+using Evidgate.Testing;
 using Shouldly;
 using Xunit;
 
@@ -11,16 +12,17 @@ namespace Identity.IntegrationTests.Login;
 /// <c>SameSite=Lax</c> and a bounded <c>Max-Age</c>, its value is unreadable, both routes are
 /// <c>no-store</c>, and every callback outcome deletes it.
 /// </summary>
-// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+// The assembly Fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
 [Trait("Category", "Docker")]
-public sealed class CookieAttributeTests
+public sealed class CookieAttributeTests(DatabaseFixture fixture)
+    : CatalogueTestBase(fixture, DatabaseIsolation.Dedicated)
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 25, 9, 0, 0, TimeSpan.Zero);
 
     [Fact]
     public async Task Start_Writes_Exactly_One_Host_Cookie_With_The_T38_Attributes()
     {
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();
 
         using var response = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -42,7 +44,7 @@ public sealed class CookieAttributeTests
     [Fact]
     public async Task The_Cookie_Value_Carries_No_Field_In_The_Clear()
     {
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();
 
         using var response = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake", "/runs/42"));
@@ -60,7 +62,7 @@ public sealed class CookieAttributeTests
     [Fact]
     public async Task Both_Routes_Answer_No_Store()
     {
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -82,7 +84,7 @@ public sealed class CookieAttributeTests
         {
             Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity("fake")),
         };
-        using var host = LoginTestHost.Start(new MutableClock(Now), provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));

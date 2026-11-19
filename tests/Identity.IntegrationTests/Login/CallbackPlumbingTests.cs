@@ -7,6 +7,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Identity.Invites;
 using Evidgate.Modules.Identity.Login;
+using Evidgate.Testing;
 using Microsoft.Extensions.Logging;
 using Shouldly;
 using Xunit;
@@ -20,9 +21,10 @@ namespace Identity.IntegrationTests.Login;
 /// completes the attempt — a link attempt reaches only <see cref="ILinkCompletion"/>, a sign-in never does, and
 /// a state cookie of the previous shape or of an unknown purpose is refused as 401 <c>token_invalid</c>.
 /// </summary>
-// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+// The assembly Fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
 [Trait("Category", "Docker")]
-public sealed class CallbackPlumbingTests
+public sealed class CallbackPlumbingTests(DatabaseFixture fixture)
+    : CatalogueTestBase(fixture, DatabaseIsolation.Dedicated)
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 25, 9, 0, 0, TimeSpan.Zero);
 
@@ -42,7 +44,7 @@ public sealed class CallbackPlumbingTests
     {
         var clock = new MutableClock(Now);
         var completion = new FakeLoginCompletion();
-        using var host = LoginTestHost.Start(clock, completion, SignedIn());
+        using var host = LoginTestHost.Start(Fixture, clock, completion, SignedIn());
         using var client = host.CreateLoginClient();
         var token = InviteTokenFormat.Generate().Full;
 
@@ -76,7 +78,7 @@ public sealed class CallbackPlumbingTests
         var clock = new MutableClock(Now);
         var completion = new FakeLoginCompletion();
         var provider = new FakeLoginProvider(Provider) { Result = LoginProviderResult.Fail(LoginFailure.TokenInvalid) };
-        using var host = LoginTestHost.Start(clock, completion, provider);
+        using var host = LoginTestHost.Start(Fixture, clock, completion, provider);
         using var client = host.CreateLoginClient();
         var token = InviteTokenFormat.Generate().Full;
 
@@ -107,7 +109,7 @@ public sealed class CallbackPlumbingTests
         {
             OnComplete = _ => Task.FromException<LoginProviderResult>(new TimeoutException("the provider timed out")),
         };
-        using var host = LoginTestHost.Start(clock, completion, provider);
+        using var host = LoginTestHost.Start(Fixture, clock, completion, provider);
         using var client = host.CreateLoginClient();
         var token = InviteTokenFormat.Generate().Full;
 
@@ -136,7 +138,7 @@ public sealed class CallbackPlumbingTests
         var clock = new MutableClock(Now);
         var completion = new FakeLoginCompletion();
         var provider = SignedIn();
-        using var host = LoginTestHost.Start(clock, completion, provider);
+        using var host = LoginTestHost.Start(Fixture, clock, completion, provider);
         using var client = host.CreateLoginClient();
         var token = InviteTokenFormat.Generate().Full;
 
@@ -166,7 +168,7 @@ public sealed class CallbackPlumbingTests
         using var spans = new SpanCollector();
         var clock = new MutableClock(Now);
         var completion = new FakeLoginCompletion();
-        using var host = LoginTestHost.StartWithLogs(clock, logs, completion, SignedIn());
+        using var host = LoginTestHost.StartWithLogs(Fixture, clock, logs, completion, SignedIn());
         using var client = host.CreateLoginClient();
 
         var token = InviteTokenFormat.Generate().Full;
@@ -230,7 +232,7 @@ public sealed class CallbackPlumbingTests
         var clock = new MutableClock(Now);
         var completion = new FakeLoginCompletion();
         var link = new FakeLinkCompletion();
-        using var host = LoginTestHost.Start(clock, completion, link, SignedIn());
+        using var host = LoginTestHost.Start(Fixture, clock, completion, link, SignedIn());
         using var client = host.CreateLoginClient();
         var linkUserId = Guid.NewGuid();
 
@@ -255,7 +257,7 @@ public sealed class CallbackPlumbingTests
         var clock = new MutableClock(Now);
         var completion = new FakeLoginCompletion();
         var link = new FakeLinkCompletion();
-        using var host = LoginTestHost.Start(clock, completion, link, SignedIn());
+        using var host = LoginTestHost.Start(Fixture, clock, completion, link, SignedIn());
         using var client = host.CreateLoginClient();
 
         var (payload, cookieValue) = await BeginAsync(host, client);
@@ -275,7 +277,7 @@ public sealed class CallbackPlumbingTests
     {
         var clock = new MutableClock(Now);
         var completion = new FakeLoginCompletion();
-        using var host = LoginTestHost.Start(clock, completion, SignedIn());
+        using var host = LoginTestHost.Start(Fixture, clock, completion, SignedIn());
         using var client = host.CreateLoginClient();
 
         var (payload, _) = await BeginAsync(host, client);
@@ -297,7 +299,7 @@ public sealed class CallbackPlumbingTests
         var clock = new MutableClock(Now);
         var completion = new FakeLoginCompletion();
         var provider = SignedIn();
-        using var host = LoginTestHost.Start(clock, completion, provider);
+        using var host = LoginTestHost.Start(Fixture, clock, completion, provider);
         using var client = host.CreateLoginClient();
 
         var (payload, _) = await BeginAsync(host, client);
@@ -327,7 +329,7 @@ public sealed class CallbackPlumbingTests
         var clock = new MutableClock(Now);
         var completion = new FakeLoginCompletion();
         var provider = SignedIn();
-        using var host = LoginTestHost.Start(clock, completion, provider);
+        using var host = LoginTestHost.Start(Fixture, clock, completion, provider);
         using var client = host.CreateLoginClient();
 
         var (payload, _) = await BeginAsync(host, client);
@@ -350,7 +352,7 @@ public sealed class CallbackPlumbingTests
         var completion = new FakeLoginCompletion();
         var link = new FakeLinkCompletion();
         var provider = SignedIn();
-        using var host = LoginTestHost.Start(clock, completion, link, provider);
+        using var host = LoginTestHost.Start(Fixture, clock, completion, link, provider);
         using var client = host.CreateLoginClient();
 
         var (payload, _) = await BeginAsync(host, client);
@@ -409,7 +411,7 @@ public sealed class CallbackPlumbingTests
         {
             Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity(MetricProvider)),
         };
-        using var host = LoginTestHost.Start(clock, completion, link, provider);
+        using var host = LoginTestHost.Start(Fixture, clock, completion, link, provider);
         using var client = host.CreateLoginClient();
 
         // (1) Non-vacuity: a sign-in callback IS one counted login attempt — so "nothing was counted" in the
@@ -517,7 +519,7 @@ public sealed class CallbackPlumbingTests
 
 /// <summary>
 /// An <see cref="ILoggerProvider"/> that keeps what the host's own filters let through, so a case asserts on what
-/// the deployment would log (the <c>RequestLogRedactionTests</c> mechanism, without a database host).
+/// the deployment would log (the <c>RequestLogRedactionTests</c> mechanism, on the protocol host).
 /// </summary>
 internal sealed class RecordingLoggerProvider : ILoggerProvider
 {

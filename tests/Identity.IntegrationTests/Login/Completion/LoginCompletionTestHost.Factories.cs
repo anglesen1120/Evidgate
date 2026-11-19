@@ -5,17 +5,24 @@ namespace Identity.IntegrationTests.Login.Completion;
 internal sealed partial class LoginCompletionTestHost
 {
     /// <summary>
-    /// A deployment whose cookie ring is usable but whose replay store is not: the real store over the closed
-    /// port, so the callback's own outage answer is the subject and the completion is never reached.
+    /// A deployment on the test's real database whose replay store is the one thing that cannot answer: the
+    /// limiter and the rest of the host keep their real stores, so the case's subject stays the callback's own
+    /// outage answer and is not answered earlier by a broken rate limiter.
     /// </summary>
-    internal static LoginCompletionTestHost StartWithReplayStoreOutage(params ILoginProvider[] providers) =>
-        new(
-            UnreachableDatabase,
+    internal static LoginCompletionTestHost StartWithReplayStoreOutage(
+        Evidgate.Testing.DatabaseFixture fixture,
+        params ILoginProvider[] providers)
+    {
+        ArgumentNullException.ThrowIfNull(fixture);
+
+        return new(
+            fixture.AppConnectionString,
             new LoginHostSettings
             {
                 Providers = providers,
-                Seams = services => InMemoryLoginSeams.Apply(services, TimeProvider.System, includeReplay: false),
+                Seams = InMemoryLoginSeams.ApplyReplayStoreOutage,
             });
+    }
 
     /// <summary>
     /// A <c>github</c> provider that verifies <paramref name="subject"/>'s identity, exactly as

@@ -1,62 +1,86 @@
-using System.Collections.Concurrent;
+using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Text;
+using Evidgate.BuildingBlocks.SharedKernel.Api;
+using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Identity.Options;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using Npgsql;
+using NpgsqlTypes;
 
 namespace Evidgate.Modules.Identity.Ci;
 
-/// <summary>
-/// A fixed-window limiter for <c>POST /v1/ci/token</c> (02.4.1 AC8), keyed by whatever identifies
-/// the caller before it is trusted (the client address, then the repository id / token prefix once
-/// known). It runs before any signature, resolver or minting work, so a flood costs one dictionary
-/// probe. State is per process; the limit is a brake on bursts, not a quota.
-/// </summary>
-internal sealed class ExchangeRateLimiter(IOptions<CiAuthOptions> options, TimeProvider clock)
+/// <summary>The surface an attempt budget belongs to; each one keeps its own limit, window and key capacity.</summary>
+internal enum RateSurface
 {
-    private const int MaxKeys = 50_000;
+    /// <summary>Federated login <c>start</c> and <c>callback</c>.</summary>
+    Login,
 
-    private readonly ConcurrentDictionary<string, Window> _windows = new(StringComparer.Ordinal);
-    private long _sweptAtTicks;
+    /// <summary>Explicit second-provider link routes.</summary>
+    Link,
 
-    /// <summary>Counts one attempt for <paramref name="key"/>; false when the window's budget is spent.</summary>
-    /// <param name="key">The limiter key.</param>
-    /// <param name="retryAfterSeconds">Seconds until the window resets when refused.</param>
-    public bool TryAcquire(string key, out int retryAfterSeconds)
+    /// <summary>Invite-token staging.</summary>
+    Invite,
+
+    /// <summary>CI token exchange, bearer and ingest-token paths alike.</summary>
+    CiExchange,
+}
+
+/// <summary>One throttle decision; <see cref="RetryAfterSeconds"/> is 0 when admitted and at least 1 when refused.</summary>
+internal readonly record struct RateDecision(bool Allowed, int RetryAfterSeconds);
+
+/// <summary>
+/// Fixed-window attempt budgets for the pre-tenant routes (02.4.1 AC8 and the login, link and invite routes), keyed by
+/// whatever identifies the caller before it is trusted (the client address, then the repository id or token prefix).
+/// The window lives in PostgreSQL, so every replica counts into the same one and the limit does not multiply with the
+/// replica count; a full surface evicts its oldest keys on a sampled capacity check instead of refusing new
+/// clients, and each new key sweeps a bounded batch of that surface's expired windows.
+/// </summary>
+internal sealed class ExchangeRateLimiter(NpgsqlDataSource dataSource, IOptions<RateLimitOptions> options)
+{
+    /// <summary>
+    /// A budget decision must not hold a request open: the store answers in milliseconds or it answers late, and
+    /// the route's fail-closed path (503 with <c>Retry-After</c>) is the better outcome.
+    /// </summary>
+    private const int CommandTimeoutSeconds = 2;
+
+    /// <summary>Counts one attempt for <paramref name="key"/> and reports whether the surface's budget admits it.</summary>
+    /// <param name="surface">The budget to spend from.</param>
+    /// <param name="key">The limiter key; the store receives only its unsalted SHA-256 digest, which is pseudonymous, not anonymous.</param>
+    /// <param name="cancellationToken">The request's cancellation token.</param>
+    /// <exception cref="NpgsqlException">The store could not answer; the caller fails closed.</exception>
+    public async ValueTask<RateDecision> AcquireAsync(
+        RateSurface surface, string key, CancellationToken cancellationToken)
     {
-        var settings = options.Value;
-        var length = TimeSpan.FromSeconds(settings.ExchangeWindowSeconds);
-        var now = clock.GetUtcNow();
+        ArgumentException.ThrowIfNullOrEmpty(key);
 
-        var hasRoom = Sweep(now, length);
+        var settings = options.Value.For(surface);
 
-        // Full of live windows (a spraying client): fail closed for new keys; the keys already tracked keep their budgets.
-        if (!hasRoom && !_windows.ContainsKey(key))
+        // The database decides the window with its own clock and row, so a replica whose clock is off can neither
+        // shorten nor extend another replica's window, and the check-and-increment is one statement.
+        await using var command = dataSource.CreateCommand(
+            "select allowed, retry_after_seconds from evidgate_resolve.rate_limit_acquire(" +
+            "@surface, @key_hash, @limit, @window_seconds, @max_keys)");
+        command.Parameters.AddWithValue("surface", SurfaceName(surface));
+        command.Parameters.Add(new NpgsqlParameter("key_hash", NpgsqlDbType.Bytea)
         {
-            retryAfterSeconds = (int)length.TotalSeconds;
+            Value = SHA256.HashData(Encoding.UTF8.GetBytes(key)),
+        });
+        command.Parameters.AddWithValue("limit", settings.Limit);
+        command.Parameters.AddWithValue("window_seconds", settings.WindowSeconds);
+        command.Parameters.AddWithValue("max_keys", settings.MaxKeys);
+        command.CommandTimeout = CommandTimeoutSeconds;
 
-            return false;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            throw new InvalidOperationException("evidgate_resolve.rate_limit_acquire answered no row");
         }
 
-        var window = _windows.GetOrAdd(key, _ => new Window(now));
-        lock (window)
-        {
-            if (now - window.Start >= length)
-            {
-                window.Start = now;
-                window.Count = 0;
-            }
-
-            if (window.Count >= settings.ExchangeBurstLimit)
-            {
-                retryAfterSeconds = Math.Max(1, (int)Math.Ceiling((window.Start + length - now).TotalSeconds));
-
-                return false;
-            }
-
-            window.Count++;
-            retryAfterSeconds = 0;
-
-            return true;
-        }
+        return new RateDecision(reader.GetBoolean(0), reader.GetInt32(1));
     }
 
     /// <summary>
@@ -64,7 +88,7 @@ internal sealed class ExchangeRateLimiter(IOptions<CiAuthOptions> options, TimeP
     /// routinely holds a whole /64 and could otherwise rotate keys for free.
     /// </summary>
     /// <param name="address">The socket address (behind a proxy, configure forwarded headers with known proxies first).</param>
-    public static string ClientKey(System.Net.IPAddress? address)
+    public static string ClientKey(IPAddress? address)
     {
         if (address is null)
         {
@@ -76,7 +100,7 @@ internal sealed class ExchangeRateLimiter(IOptions<CiAuthOptions> options, TimeP
             address = address.MapToIPv4();
         }
 
-        if (address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetworkV6)
+        if (address.AddressFamily != AddressFamily.InterNetworkV6)
         {
             return address.ToString();
         }
@@ -85,34 +109,108 @@ internal sealed class ExchangeRateLimiter(IOptions<CiAuthOptions> options, TimeP
         address.TryWriteBytes(bytes, out _);
         bytes[8..].Clear();
 
-        return new System.Net.IPAddress(bytes).ToString() + "/64";
+        return new IPAddress(bytes).ToString() + "/64";
     }
 
-    /// <summary>
-    /// Drops expired windows at most once per window length (a compare-and-swap, so concurrent callers do not each scan),
-    /// and reports whether there is room for another key.
-    /// </summary>
-    private bool Sweep(DateTimeOffset now, TimeSpan length)
+    private static string SurfaceName(RateSurface surface) => surface switch
     {
-        var last = Interlocked.Read(ref _sweptAtTicks);
-        if (now.UtcTicks - last >= length.Ticks && Interlocked.CompareExchange(ref _sweptAtTicks, now.UtcTicks, last) == last)
+        RateSurface.Login => "login",
+        RateSurface.Link => "link",
+        RateSurface.Invite => "invite",
+        RateSurface.CiExchange => "ci_exchange",
+        _ => throw new ArgumentOutOfRangeException(nameof(surface)),
+    };
+}
+
+/// <summary>
+/// The one place a throttled route turns a budget into an answer: the 429 <c>rate_limited</c> envelope with
+/// <c>Retry-After</c>, or the shared 503 when the store cannot answer (fail closed: an unknown count never admits).
+/// </summary>
+internal static class RateLimitGate
+{
+    /// <summary>Spends up to <paramref name="cost"/> units of the caller's window; null means continue.</summary>
+    /// <param name="context">The request whose response carries the refusal headers.</param>
+    /// <param name="limiter">The shared window store.</param>
+    /// <param name="surface">The budget this route spends from.</param>
+    /// <param name="key">The limiter key, already prefixed by the route.</param>
+    /// <param name="cost">Units this attempt is worth; only the first one can refuse.</param>
+    /// <param name="refusalMessage">The route's 429 message.</param>
+    /// <param name="cancellationToken">The request's cancellation token.</param>
+    public static async ValueTask<Error?> AcquireAsync(
+        HttpContext context,
+        ExchangeRateLimiter limiter,
+        RateSurface surface,
+        string key,
+        int cost,
+        string refusalMessage,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(limiter);
+
+        if (await TryAcquireAsync(limiter, surface, key, cancellationToken).ConfigureAwait(false) is not { } decision)
         {
-            foreach (var (key, window) in _windows)
+            return Unavailable(context);
+        }
+
+        if (!decision.Allowed)
+        {
+            context.Response.Headers.RetryAfter = decision.RetryAfterSeconds.ToString(CultureInfo.InvariantCulture);
+
+            return new Error(ApiErrorCode.RateLimited, refusalMessage, StatusCodes.Status429TooManyRequests, Retryable: true);
+        }
+
+        // Only the first unit decides: a route that must be stricter spends its extra units when they are available and
+        // never refuses by itself, so a legal limit of 1 (or an odd one) cannot make the route unusable.
+        for (var unit = 1; unit < cost; unit++)
+        {
+            if (await TryAcquireAsync(limiter, surface, key, cancellationToken).ConfigureAwait(false) is null)
             {
-                if (now - window.Start >= length)
-                {
-                    _windows.TryRemove(key, out _);
-                }
+                return Unavailable(context);
             }
         }
 
-        return _windows.Count < MaxKeys;
+        return null;
     }
 
-    private sealed class Window(DateTimeOffset start)
+    private static async ValueTask<RateDecision?> TryAcquireAsync(
+        ExchangeRateLimiter limiter, RateSurface surface, string key, CancellationToken cancellationToken)
     {
-        public DateTimeOffset Start { get; set; } = start;
-
-        public int Count { get; set; }
+        try
+        {
+            return await limiter.AcquireAsync(surface, key, cancellationToken).ConfigureAwait(false);
+        }
+        catch (NpgsqlException)
+        {
+            return null;
+        }
+        catch (TimeoutException)
+        {
+            return null;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // A cancellation the request did not ask for is a database command timeout, not a client that left.
+            return null;
+        }
     }
+
+    private static Error Unavailable(HttpContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        context.Response.Headers.RetryAfter = "1";
+
+        return StoreUnavailable;
+    }
+
+    /// <summary>
+    /// One outage answer for all four surfaces: 503 <c>unavailable</c>, retryable. The body names no store, host or
+    /// SQL, because the reason a window could not be counted is an operator's concern, never a client's.
+    /// </summary>
+    private static readonly Error StoreUnavailable = new(
+        ApiErrorCode.Unavailable,
+        "the service cannot answer right now; retry shortly",
+        StatusCodes.Status503ServiceUnavailable,
+        Retryable: true);
 }

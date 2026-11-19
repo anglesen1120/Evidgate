@@ -86,7 +86,8 @@ paths:
         401 `token_invalid` / `token_replayed` / `token_unknown` / `token_revoked` /
         `token_expired`; 403 `binding_mismatch` / `binding_pending` / `binding_disabled`;
         409 `binding_conflict`; 429 `rate_limited` (with `Retry-After`); 503 `unavailable`
-        when the deployment has no signing key or the issuer's keys cannot be fetched.
+        when the deployment has no signing key or the issuer's keys cannot be fetched. A rate-store
+        outage also returns retryable 503 `unavailable`, with `Retry-After: 1`.
         Idempotency-Key exempt: `jti` single-use is the arbiter (README).
       x-permission: none
       x-auth: github_oidc_jwt_or_ingest_token
@@ -148,7 +149,8 @@ paths:
         deployment's configuration (02.3.1 AC8); the credential keys are
         `EVIDGATE__OIDC__GOOGLE__CLIENTID` + `…CLIENTSECRET` and `EVIDGATE__OAUTH__GITHUB__CLIENTID` +
         `…CLIENTSECRET`. No password field exists anywhere in this flow (AC7):
-        the only login credential the platform accepts is the provider's.
+        the only login credential the platform accepts is the provider's. A rate-store outage fails
+        closed with retryable 503 `unavailable` and `Retry-After: 1`.
       x-permission: none
       x-auth: anonymous
       x-version: v1
@@ -321,8 +323,11 @@ paths:
             `EVIDGATE__LOGIN__PUBLICBASEURL`, and for a provider timeout, transport failure or 5xx
             (02.3.1 AC8); plus the completion's own infrastructure faults: a database outage, an audit chain
             that could not be appended (fail-closed, 02.3.1-T2.2), and — on a state of purpose `link` — a
-            deployment that composes no link seam, a missing session pepper or a session lookup fault. The
-            callback it answers is already spent (both cookies deleted, `state` consumed), so the header
+            deployment that composes no link seam, a missing session pepper or a session lookup fault. A
+            rate-store outage instead fails closed with retryable 503 `unavailable` and `Retry-After: 1`
+            before the `state` is consumed in the replay store; the pending-login cookies are still
+            deleted on the way out, so the browser starts the login again. For the completion faults
+            above, the callback is already spent (both cookies deleted, `state` consumed), so the header
             says when the browser may sign in or start the link again.
           headers:
             X-Request-Id:
@@ -363,11 +368,12 @@ paths:
         boundary, because a cross-site `enctype=text/plain` form post is the one encoding that can reach a
         response's `Set-Cookie` without a CORS preflight and a browser cannot label a form post
         `application/json`. Every response carries `Cache-Control: no-store`, and the route is
-        throttled per client address from the CI exchange limiter's budget
-        (`EVIDGATE__CI__EXCHANGEBURSTLIMIT`) under its own key prefix at one unit — the cost of a
-        `start` — so one client cannot fill every browser's cookie jar. No `Idempotency-Key` (see
+        throttled per client address from the invite surface's budget
+        (`EVIDGATE__IDENTITY__RATELIMITS__INVITELIMIT`) under its own key prefix at one unit — the
+        cost of a `start` — so one client cannot fill every browser's cookie jar. No `Idempotency-Key` (see
         `contracts/README.md`): nothing is created, and repeating the request stages the same token
-        again.
+        again. A rate-store outage fails closed with retryable 503 `unavailable` and `Retry-After: 1`;
+        no invite cookie is written.
       x-permission: none
       x-auth: anonymous
       x-version: v1
@@ -406,6 +412,8 @@ paths:
           $ref: '#/components/responses/Unprocessable'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /dev/session:
     post:
       operationId: createDevSession
@@ -438,8 +446,9 @@ paths:
         `__Host-evidgate_session` cookie and the antiforgery pair; a body over 4096 bytes is 413
         `payload_too_large`, a body that is not `application/json`, is empty, is not JSON or is not a
         JSON object is 422 `request_invalid`, and every response carries `Cache-Control: no-store`.
-        Throttled per client address from the CI exchange limiter's budget under its own key prefix
-        at one unit, so a wrong guess is never free. No `Idempotency-Key`: nothing is created that a
+        Throttled per client address from the login surface's budget under its own key prefix at one
+        unit, so a wrong guess is never free; a rate-store outage answers retryable 503 `unavailable`
+        with `Retry-After: 1`. No `Idempotency-Key`: nothing is created that a
         retry would duplicate, and a repeated sign-in replaces the browser's previous session row.
       x-permission: none
       x-auth: anonymous
@@ -501,7 +510,8 @@ paths:
         '503':
           description: >-
             503 `unavailable` — the audit chain or the session write failed, so the sign-in did not
-            happen (no session exists for a sign-in nothing recorded), or the request did not arrive
+            happen (no session exists for a sign-in nothing recorded), a rate-store outage
+            (retryable, with `Retry-After: 1`), or the request did not arrive
             over HTTPS: the cookie pair this route must issue is Secure-only, so a plaintext sign-in
             can never complete. The plaintext refusal is answered before the secret is judged, so the
             status code says nothing about whether the presented secret was right, and it writes
@@ -511,8 +521,9 @@ paths:
               $ref: '#/components/headers/XRequestId'
             Retry-After:
               description: >-
-                Seconds to wait, from `EVIDGATE__LOGIN__RETRYAFTERSECONDS` (30 by default) — the same
-                value the login completion sets on its own outage answer.
+                Seconds to wait: `1` for a rate-store outage, otherwise
+                `EVIDGATE__LOGIN__RETRYAFTERSECONDS` (30 by default) — the same value the login
+                completion sets on its own outage answer.
               schema:
                 type: integer
           content:
@@ -542,8 +553,8 @@ paths:
         the sign-in route's `returnUrl` (a refused value lands on `/` and is not an error); a body
         over 4096 bytes is 413 and a body whose media type is not `application/json`, or one that is
         not JSON, is 422. Every response carries `Cache-Control: no-store`, spends its own prefix of
-        the CI exchange limiter's per-client budget (`EVIDGATE__CI__EXCHANGEBURSTLIMIT`, one unit) so
-        a flood here cannot spend another route's window, and refuses a present `Origin` header that
+        the link surface's per-client budget (`EVIDGATE__IDENTITY__RATELIMITS__LINKLIMIT`, one unit)
+        so a flood here cannot spend another route's window, and refuses a present `Origin` header that
         is not this deployment's public origin (`EVIDGATE__LOGIN__PUBLICBASEURL`) with 403
         `forbidden` — defence in depth on top of `SameSite=Lax`, because a same-site browser form post
         still carries the session cookie. No token, code, subject, email or cookie value is echoed,
@@ -606,13 +617,15 @@ paths:
             database outage. The route sets `Retry-After` through `EVIDGATE__LOGIN__RETRYAFTERSECONDS`
             when it reports the outage itself; a refusal raised by the session lookup (the
             missing-pepper case) leaves the header to the envelope filter's default `60` (00 §9.2).
+            A rate-store outage instead fails closed with retryable 503 `unavailable` and
+            `Retry-After: 1`.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
             Retry-After:
               description: >-
-                Seconds to wait, when the route reports the outage itself; absent on the
-                missing-pepper refusal.
+                Seconds to wait: 1 for a rate-store outage, or the configured login retry interval
+                when the route reports another outage itself; absent on the missing-pepper refusal.
               schema:
                 type: integer
             Cache-Control:
@@ -636,7 +649,7 @@ paths:
         unreadable or belongs to another user is not a leak and not an error the caller can repair
         by retrying: it is deleted on the way out and the answer is 404 `not_found`, exactly as for a
         browser that never staged anything. Every response carries `Cache-Control: no-store` (the
-        body is personal data), spends the pending key prefix of the CI exchange limiter's per-client
+        body is personal data), spends the pending key prefix of the link surface's per-client
         budget, and refuses a foreign `Origin` with 403 `forbidden`. Nothing from the cookie's
         plaintext — no subject, no token — is echoed or logged.
       x-permission: none
@@ -673,10 +686,10 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           description: >-
-            503 `unavailable` — no session pepper (`EVIDGATE__SESSION__PEPPER`) or a database
-            outage in the session lookup. The answer is the 00 §9.2 envelope and never a 200 with an
-            empty body; the route sets no `Retry-After`, so the envelope filter's default `60`
-            applies.
+            503 `unavailable` — a rate-store outage, no session pepper (`EVIDGATE__SESSION__PEPPER`)
+            or a database outage in the session lookup. The answer is the 00 §9.2 envelope and never
+            a 200 with an empty body. A rate-store outage is retryable and the route sets
+            `Retry-After: 1`; session-lookup failures use the envelope filter's default `60`.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -698,7 +711,7 @@ paths:
         staging. Deletes `__Host-evidgate_link` and answers 204 — with or without a staged link, so
         the call is idempotent (`Idempotency-Key` is not required; see `contracts/README.md`) and a
         client needs no read first. Every response carries `Cache-Control: no-store`, spends the
-        pending key prefix of the CI exchange limiter's per-client budget, and refuses a foreign
+        pending key prefix of the link surface's per-client budget, and refuses a foreign
         `Origin` with 403 `forbidden`.
       x-permission: none
       x-auth: user_session
@@ -729,9 +742,10 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           description: >-
-            503 `unavailable` — no session pepper (`EVIDGATE__SESSION__PEPPER`) or a database
-            outage in the session lookup; the route sets no `Retry-After`, so the envelope filter's
-            default `60` applies (00 §9.2).
+            503 `unavailable` — a rate-store outage, no session pepper (`EVIDGATE__SESSION__PEPPER`)
+            or a database outage in the session lookup. A rate-store outage is retryable and the
+            route sets `Retry-After: 1`; session-lookup failures use the envelope filter's default
+            `60` (00 §9.2).
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -768,7 +782,7 @@ paths:
         place, so the retry converges on `already_linked` and writes the audit rows again (at least
         once per organisation, `auth.link_move` included; a move re-issues `__Host-evidgate_link`
         carrying the moved-from account with its original deadline). Every response carries
-        `Cache-Control: no-store`, costs two units of the confirm key prefix in the CI exchange
+        `Cache-Control: no-store`, costs two units of the confirm key prefix in the link surface's
         limiter (it writes a row and a chain), and refuses a foreign `Origin` with 403 `forbidden`.
       x-permission: none
       x-auth: user_session
@@ -837,7 +851,8 @@ paths:
             (`EVIDGATE__SESSION__PEPPER`) or a stored contract this build does not know. The route
             sets `Retry-After` (`EVIDGATE__LOGIN__RETRYAFTERSECONDS`) on the answers it raises itself
             (the unknown stored contract, the audit failure); the session lookup and the store
-            command leave the header to the envelope filter's default `60` (00 §9.2).
+            command leave the header to the envelope filter's default `60` (00 §9.2). A rate-store
+            outage instead fails closed with retryable 503 `unavailable` and `Retry-After: 1`.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
