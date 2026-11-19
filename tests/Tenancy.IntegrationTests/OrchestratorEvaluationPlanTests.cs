@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Orchestrator.Contracts;
+using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -8,7 +10,7 @@ namespace Tenancy.IntegrationTests;
 
 /// <summary>
 /// <see cref="IOrchestratorEvaluationPlan"/> over a real PostgreSQL and the real host, on a caller-owned tenant
-/// transaction: the run's pinned scope, its manifest's planned count and every planned execution. Every test names the
+/// transaction: the run's header, its manifest's planned count and every planned execution. Every test names the
 /// predicate whose removal or narrowing makes it fail.
 /// </summary>
 [Trait("Category", "Docker")]
@@ -286,5 +288,144 @@ public sealed class OrchestratorEvaluationPlanTests
         answer.Executions.ShouldBeEmpty();
         answer.PlannedCount.ShouldBe(0);
         answer.SuiteRevisionId.ShouldBe(plan.SuiteRevisionId);
+    }
+
+    [Fact]
+    public async Task GetEvaluationRunHeaderAsync_ReturnsThePinnedRunHeaderAndUnpinnedDefaults()
+    {
+        await using var world = await StartAsync();
+        var pinned = await SeedPlanAsync(world, 3);
+        var unpinned = await SeedPlanAsync(world, 1);
+        var policy = await PinPolicyAsync(world, pinned.RunId);
+        await MarkReplayAsync(world, pinned.RunId);
+
+        await using var caller = await ContractScope.BeginAsync(world.Api, world.Org);
+        var reader = caller.Resolve<IOrchestratorEvaluationPlan>();
+
+        // The mutations this pins: projecting a constant instead of r.policy_revision_id, r.purpose or
+        // r.suite_revision_id, which the pinned and unpinned runs below tell apart.
+        var header = await reader.GetEvaluationRunHeaderAsync(world.Org, pinned.RunId, TestContext.Current.CancellationToken);
+
+        header.ShouldNotBeNull();
+        header.ProjectId.ShouldBe(world.Project);
+        header.PolicyRevisionId.ShouldBe(policy);
+        header.Purpose.ShouldBe("replay");
+        header.IsFork.ShouldBeFalse();
+        header.SuiteRevisionId.ShouldBe(pinned.SuiteRevisionId);
+
+        var plain = await reader.GetEvaluationRunHeaderAsync(world.Org, unpinned.RunId, TestContext.Current.CancellationToken);
+
+        plain.ShouldNotBeNull();
+        plain.ProjectId.ShouldBe(world.Project);
+        plain.PolicyRevisionId.ShouldBeNull();
+        plain.Purpose.ShouldBe("regular");
+        plain.IsFork.ShouldBeFalse();
+        plain.SuiteRevisionId.ShouldBe(unpinned.SuiteRevisionId);
+    }
+
+    [Fact]
+    public async Task GetEvaluationRunHeaderAsync_ReturnsNothingForAnUnknownRun()
+    {
+        await using var world = await StartAsync();
+        var plan = await SeedPlanAsync(world, 1);
+
+        await using var caller = await ContractScope.BeginAsync(world.Api, world.Org);
+        var reader = caller.Resolve<IOrchestratorEvaluationPlan>();
+
+        // The mutation this pins: dropping `r.id = @run_id`, which answers the tenant's only run for any id.
+        (await reader.GetEvaluationRunHeaderAsync(world.Org, plan.RunId, TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        (await reader.GetEvaluationRunHeaderAsync(world.Org, Guid.CreateVersion7(), TestContext.Current.CancellationToken))
+            .ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task GetEvaluationRunHeaderAsync_ReturnsNothingForAnotherTenantsRun()
+    {
+        await using var world = await StartAsync();
+        var otherOrg = await CreateOtherTenantAsync(world, "rival");
+        var mine = await SeedPlanAsync(world, 1);
+        var theirs = await SeedPlanAsync(world, 1, otherOrg);
+
+        await using var caller = await ContractScope.BeginAsync(world.Api, world.Org);
+        var reader = caller.Resolve<IOrchestratorEvaluationPlan>();
+
+        // The mutations this pins: naming the other tenant's org asks for exactly that tenant's rows, so only row level
+        // security can hide them; naming the scope's own org with the foreign run id is excluded by the predicate.
+        (await reader.GetEvaluationRunHeaderAsync(world.Org, mine.RunId, TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        (await reader.GetEvaluationRunHeaderAsync(otherOrg, theirs.RunId, TestContext.Current.CancellationToken))
+            .ShouldBeNull();
+        (await reader.GetEvaluationRunHeaderAsync(world.Org, theirs.RunId, TestContext.Current.CancellationToken))
+            .ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task GetEvaluationRunHeaderAsync_ReturnsNothingWhenTheRequestedOrgIsNotTheScopesOrg()
+    {
+        await using var world = await StartAsync();
+        var otherOrg = await CreateOtherTenantAsync(world, "rival");
+        var plan = await SeedPlanAsync(world, 1);
+
+        await using var caller = await ContractScope.BeginAsync(world.Api, world.Org);
+        var reader = caller.Resolve<IOrchestratorEvaluationPlan>();
+
+        // The mutation this pins: without `r.org_id = @org_id` the scope's own header is answered for a foreign org,
+        // because row level security alone still admits the scope's own row.
+        (await reader.GetEvaluationRunHeaderAsync(otherOrg, plan.RunId, TestContext.Current.CancellationToken))
+            .ShouldBeNull();
+        (await reader.GetEvaluationRunHeaderAsync(world.Org, plan.RunId, TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task GetEvaluationRunHeaderAsync_ReturnsTheHeaderForARunWithNoPlannedExecutions()
+    {
+        await using var world = await StartAsync();
+        var plan = await SeedPlanAsync(world, 2);
+        var policy = await PinPolicyAsync(world, plan.RunId);
+        await MarkReplayAsync(world, plan.RunId);
+        await DropPlanAsync(world, plan.RunId);
+
+        await using var caller = await ContractScope.BeginAsync(world.Api, world.Org);
+        var reader = caller.Resolve<IOrchestratorEvaluationPlan>();
+
+        // The mutation this pins: an inner join to the planned executions, which answers null for a run whose plan is
+        // empty instead of its header.
+        var header = await reader.GetEvaluationRunHeaderAsync(world.Org, plan.RunId, TestContext.Current.CancellationToken);
+
+        header.ShouldNotBeNull();
+        header.ProjectId.ShouldBe(world.Project);
+        header.PolicyRevisionId.ShouldBe(policy);
+        header.Purpose.ShouldBe("replay");
+        header.IsFork.ShouldBeFalse();
+        header.SuiteRevisionId.ShouldBe(plan.SuiteRevisionId);
+    }
+
+    [Fact]
+    public async Task GetEvaluationRunHeaderAsync_WithoutTenantScope_RefusesBeforeAnySql()
+    {
+        await using var world = await StartAsync();
+        var plan = await SeedPlanAsync(world, 1);
+        await using var services = world.Api.Services.CreateAsyncScope();
+        var unscoped = services.ServiceProvider.GetRequiredService<IOrchestratorEvaluationPlan>();
+
+        // The mutation this pins: reading through the connection without demanding the scope, which runs the statement
+        // with no evidgate.org_id and answers null (zero rows under RLS) instead of refusing the caller.
+        world.Api.Statements.Clear();
+        await Should.ThrowAsync<TenantScopeMissingException>(
+            () => unscoped.GetEvaluationRunHeaderAsync(world.Org, plan.RunId, TestContext.Current.CancellationToken).AsTask());
+        world.Api.Statements.Snapshot().ShouldBeEmpty();
+
+        // The control: the same resolved reader answers once a tenant transaction is published.
+        await using var caller = await ContractScope.BeginAsync(world.Api, world.Org);
+        var header = await caller.Resolve<IOrchestratorEvaluationPlan>()
+            .GetEvaluationRunHeaderAsync(world.Org, plan.RunId, TestContext.Current.CancellationToken);
+
+        header.ShouldNotBeNull();
+        header.ProjectId.ShouldBe(world.Project);
+        world.Api.Statements.Snapshot()
+            .Where(row => row.Contains("from public.run r", StringComparison.Ordinal))
+            .ShouldNotBeEmpty();
     }
 }
