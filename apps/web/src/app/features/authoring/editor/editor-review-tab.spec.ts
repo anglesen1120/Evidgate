@@ -35,14 +35,18 @@ class EditorReviewHarness extends ComponentHarness {
     return (await this.locatorFor(selector)()).text();
   }
 
-  async fillTitle(value: string) {
-    const title = await this.locatorFor('#case-title')();
-    await title.setInputValue(value);
-    await title.dispatchEvent('input');
+  async fill(id: string, value: string) {
+    const field = await this.locatorFor('#' + id)();
+    await field.setInputValue(value);
+    await field.dispatchEvent('input');
   }
 
   async title() {
     return (await this.locatorFor('#case-title')()).getProperty<string>('value');
+  }
+
+  async value(id: string) {
+    return (await this.locatorFor('#' + id)()).getProperty<string>('value');
   }
 
   async selectedTab() {
@@ -148,17 +152,18 @@ describe('EditorPage checklist review mount', () => {
     const routed = await RouterTestingHarness.create('/cases/' + CASE.case_id);
     await routed.fixture.whenStable();
     return {
+      routed,
       fixture: routed.fixture,
       ui: await TestbedHarnessEnvironment.loader(routed.fixture).getHarness(EditorReviewHarness),
     };
   }
 
-  it('mounts only on review activation using the loaded parent item and preserves the editor draft', async () => {
+  it('mounts review lazily for the parent item and retains editor and review drafts across tabs', async () => {
     const { ui, fixture } = await mount();
     expect(await ui.tabs()).toEqual(['Editor', REVIEW, 'Timeline']);
     expect(await ui.count('app-checklist-review-tab')).toBe(0);
     expect(listPending).not.toHaveBeenCalled();
-    await ui.fillTitle('Unsaved editor draft');
+    await ui.fill('case-title', 'Unsaved editor draft');
     await ui.click('[data-editor-review-tab]');
     await fixture.whenStable();
     expect(await ui.selectedTab()).toBe(REVIEW);
@@ -170,9 +175,37 @@ describe('EditorPage checklist review mount', () => {
     expect(listPending).toHaveBeenCalledWith(PROJECT, expect.any(AbortSignal), undefined);
     expect(versions).not.toHaveBeenCalled();
     expect(queue).not.toHaveBeenCalled();
+    await ui.fill('review-comment', 'Unsent review comment');
+    await ui.fill('review-reason', 'Unsent change reason');
     await ui.click('[role="tab"]:first-child');
-    expect(await ui.count('app-checklist-review-tab')).toBe(0);
+    expect(await ui.count('app-checklist-review-tab')).toBe(1);
+    expect(await ui.selectedTab()).toBe('Editor');
     expect(await ui.title()).toBe('Unsaved editor draft');
+    await ui.click('[data-editor-review-tab]');
+    expect(await ui.value('review-comment')).toBe('Unsent review comment');
+    expect(await ui.value('review-reason')).toBe('Unsent change reason');
+    expect(listPending).toHaveBeenCalledTimes(1);
+    expect(queue).not.toHaveBeenCalled();
+  });
+
+  it('clears review drafts on a routed case change even when both cases share a checklist item', async () => {
+    const { ui, fixture, routed } = await mount();
+    await ui.click('[data-editor-review-tab]');
+    await fixture.whenStable();
+    await ui.fill('review-comment', 'First case comment');
+    await ui.fill('review-reason', 'First case reason');
+    const otherCase = { ...CASE, case_id: 'a4430000-0000-4000-8000-000000000002' };
+    readCase.mockResolvedValue({ view: otherCase, etag: '"2"' });
+    await routed.navigateByUrl('/cases/' + otherCase.case_id, EditorPage);
+    await fixture.whenStable();
+    expect(await ui.selectedTab()).toBe('Editor');
+    expect(await ui.count('app-checklist-review-tab')).toBe(0);
+    await ui.click('[data-editor-review-tab]');
+    await fixture.whenStable();
+    expect(await ui.value('review-comment')).toBe('');
+    expect(await ui.value('review-reason')).toBe('');
+    expect(listPending).toHaveBeenCalledTimes(2);
+    expect(queue).not.toHaveBeenCalled();
   });
 
   it('reaches checklist review between Editor and Timeline with ArrowRight and Enter', async () => {

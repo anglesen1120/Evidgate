@@ -7,6 +7,7 @@ import {
   DestroyRef,
   ElementRef,
   inject,
+  linkedSignal,
   signal,
   viewChild,
 } from '@angular/core';
@@ -132,7 +133,11 @@ export class EditorPage {
   protected readonly count = codePoints;
   protected readonly notSet = $localize`:@@authoring.editor.not-set:Not set`;
   protected readonly errorOf = errorOf;
-  protected readonly tab = signal('editor');
+  protected readonly tab = linkedSignal({ source: this.store.scope, computation: () => 'editor' });
+  protected readonly reviewVisited = linkedSignal({
+    source: this.store.scope,
+    computation: () => false,
+  });
   protected readonly leaving = signal(false);
   protected readonly stepAnnouncement = signal('');
   private readonly focusStep = signal<number | null>(null);
@@ -284,7 +289,10 @@ export class EditorPage {
     if (priority) this.store.editPriority(priority.value);
   }
   protected selectTab(value: unknown): void {
-    if (value === 'editor' || value === 'review' || value === 'timeline') this.tab.set(value);
+    if (value === 'editor' || value === 'review' || value === 'timeline') {
+      if (value === 'review') this.reviewVisited.set(true);
+      this.tab.set(value);
+    }
   }
   protected moveStep(id: string, offset: -1 | 1): void {
     if (this.blocked() || !this.viewport.allowsMutation()) return;

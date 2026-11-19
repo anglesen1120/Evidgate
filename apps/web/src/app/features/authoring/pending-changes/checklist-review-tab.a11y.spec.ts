@@ -110,6 +110,18 @@ describe('ChecklistReviewTabComponent accessibility', () => {
     expect(Object.hasOwn(globalThis, 'pwned')).toBe(false);
   });
   it('keeps hostile queued text inert after a successful comment queue', async () => {
+    listPending
+      .mockResolvedValueOnce({ items: [pendingRow()], next_cursor: null })
+      .mockResolvedValue({
+        items: [
+          {
+            ...pendingRow('comment'),
+            payload: { body: HOSTILE },
+            reason: HOSTILE,
+          },
+        ],
+        next_cursor: null,
+      });
     const { ui, fixture } = await setup();
     await ui.set('#review-comment', HOSTILE);
     expect(await ui.value('#review-comment')).toBe(HOSTILE);
@@ -119,8 +131,14 @@ describe('ChecklistReviewTabComponent accessibility', () => {
     expect(queue.mock.calls[0]?.[1]).toMatchObject({ payload: { body: HOSTILE } });
     expect(await ui.value('#review-comment')).toBe('');
     expect(await ui.count('[data-review-success]')).toBe(1);
-    expect(await ui.count('script')).toBe(0);
-    expect(document.querySelector('img[onerror]')).toBeNull();
+    expect(await ui.count('[data-review-change]')).toBe(1);
+    const rendered = await ui.textAt('[data-review-change]');
+    expect(rendered).toContain('<img src=x onerror="globalThis.pwned=1">');
+    expect(rendered).toContain('<script>globalThis.pwned=1</script>');
+    expect(rendered).toContain('A'.repeat(140));
+    expect(await ui.count('[data-review-change] img')).toBe(0);
+    expect(await ui.count('[data-review-change] script')).toBe(0);
+    expect(document.querySelector('[data-review-change] [onerror]')).toBeNull();
     expect(Object.hasOwn(globalThis, 'pwned')).toBe(false);
   });
   it('delete consent is a modal trap and Escape restores its opener', async () => {

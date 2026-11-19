@@ -49,6 +49,14 @@ class EditorHarness extends ComponentHarness {
   async focused(selector: string) {
     return (await this.locatorFor(selector)()).isFocused();
   }
+  async saveState() {
+    const save = await this.locatorFor('[data-editor-save]')();
+    return {
+      nativeDisabled: await save.getProperty<boolean>('disabled'),
+      ariaDisabled: await save.getAttribute('aria-disabled'),
+      dataDisabled: await save.getAttribute('data-disabled'),
+    };
+  }
   async click(selector: string) {
     await (await this.locatorFor(selector)()).click();
   }
@@ -157,14 +165,19 @@ describe('EditorPage conflict dialog accessibility', () => {
     expect(Object.hasOwn(globalThis, 'pwned')).toBe(false);
     expect(await harness.value('case-title')).toBe('Retained title');
   }, 30_000);
-  it('mounts one CDK focus trap and Escape restores the Save opener with the draft kept', async () => {
+  it('keeps the Save opener focusable with one trap and retains the draft on Escape', async () => {
     const { fixture, harness } = await openConflict();
     const dialog = conflictDialog();
     expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(await harness.saveState()).toEqual({
+      nativeDisabled: false,
+      ariaDisabled: 'true',
+      dataDisabled: '',
+    });
     const anchors = document.querySelectorAll<HTMLElement>('.cdk-focus-trap-anchor');
     expect(anchors).toHaveLength(2);
-    // The shared dialog keeps a single trap around the modal. jsdom does not replay Tab into the
-    // trap anchors, so the wrap itself is proven by the conflict-dialog suite and the routed e2e.
+    // jsdom cannot model disabled-opener focus loss or Tab wrapping. The routed browser spec
+    // proves those behaviors; this unit also requires a natively focusable, aria-disabled opener.
     for (const anchor of anchors) expect(anchor.parentElement).toBe(dialog.parentElement);
     const first = dialog.querySelector<HTMLElement>('button.close');
     if (!first) throw new Error('Expected the conflict Close control');

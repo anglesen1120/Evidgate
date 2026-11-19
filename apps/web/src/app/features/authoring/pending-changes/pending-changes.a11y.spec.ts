@@ -5,11 +5,20 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 import { AuthoringPendingDataService } from '../../../core/data/authoring-pending-data.service';
+import { ApiRequestError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { PendingChangesPage } from './pending-changes.page';
-import { CHANGE, ITEM, PROJECT, PendingUiHarness, pendingRow } from './pending-changes.testing';
+import { PendingChangesStore } from './pending-changes.store';
+import {
+  CHANGE,
+  ITEM,
+  PROJECT,
+  PendingUiHarness,
+  pendingError,
+  pendingRow,
+} from './pending-changes.testing';
 
 const SECOND = { ...pendingRow(), change_id: ITEM, target_id: CHANGE };
 
@@ -35,8 +44,10 @@ describe('PendingChangesPage dialog accessibility', () => {
   const desktop = signal(true);
   const apply = vi.fn<AuthoringPendingDataService['apply']>();
   const discard = vi.fn<AuthoringPendingDataService['discard']>();
+  const listPending = vi.fn<AuthoringPendingDataService['listPending']>();
   beforeEach(() => {
     desktop.set(true);
+    listPending.mockReset().mockResolvedValue({ items: [pendingRow(), SECOND], next_cursor: null });
     apply.mockReset().mockResolvedValue({
       batch_id: ITEM,
       applied_change_ids: [CHANGE, ITEM],
@@ -68,9 +79,7 @@ describe('PendingChangesPage dialog accessibility', () => {
         {
           provide: AuthoringPendingDataService,
           useValue: {
-            listPending: vi
-              .fn()
-              .mockResolvedValue({ items: [pendingRow(), SECOND], next_cursor: null }),
+            listPending,
             selection: vi
               .fn()
               .mockResolvedValue({ items: [pendingRow(), SECOND], batchEtag: '"batch"' }),
@@ -125,7 +134,7 @@ describe('PendingChangesPage dialog accessibility', () => {
     },
     30_000,
   );
-  it('falls back to the preview region when an atomic apply empties the queue', async () => {
+  it('focuses and announces the empty queue after an atomic apply', async () => {
     const { fixture, ui } = await setup();
     await ui.focusControl('[data-pending-apply]');
     await ui.click('[data-pending-apply]');
@@ -138,6 +147,11 @@ describe('PendingChangesPage dialog accessibility', () => {
     // The contract applies the whole selection, so both queued rows appear in the receipt.
     expect(await ui.count('[data-pending-applied-id]')).toBe(2);
     expect(await ui.focused('[data-pending-preview-content]')).toBe(true);
+    const emptyRegion = document.querySelector<HTMLElement>('[data-pending-preview-content]');
+    expect(emptyRegion?.getAttribute('aria-label')).toBe('No pending changes');
+    expect(await ui.count('app-empty-pattern')).toBe(1);
+    expect(await ui.text()).not.toContain('Choose a queued change');
+    expect(await ui.text()).not.toContain('Selected change');
     // An emptied queue either removes the Apply control or leaves it disabled; never focused.
     if ((await ui.count('[data-pending-apply]')) > 0) {
       expect(await ui.disabled('[data-pending-apply]')).toBe(true);
@@ -157,5 +171,37 @@ describe('PendingChangesPage dialog accessibility', () => {
     expect(discard.mock.calls[0]).toContain(CHANGE);
     expect(await ui.count('[data-pending-discard]')).toBe(0);
     expect(await ui.focused('[data-pending-preview-content]')).toBe(true);
+  }, 30_000);
+  it('reloads away a blocked replay after a discard removes part of its selection', async () => {
+    apply.mockRejectedValueOnce(new ApiRequestError(pendingError('network', 0)));
+    const { fixture, ui } = await setup();
+    const store = fixture.debugElement.injector.get(PendingChangesStore);
+    const confirm = async () => {
+      const commit = consentDialog().querySelector<HTMLElement>('[data-pending-confirm]');
+      if (!commit) throw new Error('Expected the consent commit control');
+      commit.click();
+      await fixture.whenStable();
+    };
+    await ui.click('[data-pending-apply]');
+    await confirm();
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(store.applyRequest()?.ids).toEqual([CHANGE, ITEM]);
+    await ui.click('[data-pending-preview]');
+    await ui.click('[data-pending-discard]');
+    await confirm();
+    expect(discard).toHaveBeenCalledTimes(1);
+    expect(store.rows().map((row) => row.change_id)).toEqual([ITEM]);
+    expect(store.selectedIds()).toEqual([ITEM]);
+    expect(store.applyRequest()?.ids).toEqual([CHANGE, ITEM]);
+    expect(await ui.disabled('[data-pending-apply]')).toBe(true);
+    expect(await ui.textAt('#pending-apply-explanation')).toContain('reload the queue');
+    expect(await ui.textAt('[data-pending-replay-reload]')).toContain('Reload the queue');
+    listPending.mockResolvedValueOnce({ items: [SECOND], next_cursor: null });
+    await ui.click('[data-pending-replay-reload]');
+    await fixture.whenStable();
+    expect(store.applyRequest()).toBeNull();
+    expect(store.selectedIds()).toEqual([ITEM]);
+    expect(await ui.count('[data-pending-replay-reload]')).toBe(0);
+    expect(await ui.disabled('[data-pending-apply]')).toBe(false);
   }, 30_000);
 });

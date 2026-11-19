@@ -10,12 +10,13 @@ import {
 } from './support';
 
 const CASE = 'a4430000-0000-4000-8000-000000000001';
+const CONFLICT_CASE = 'a4430000-0000-4000-8000-000000000002';
 
-function editorPath(locale: ShellLocale) {
+function editorPath(locale: ShellLocale, caseId = CASE) {
   return withVariants(
     localePath(
       locale,
-      '/orgs/' + ORG_ACME + '/projects/' + PROJECT_STOREFRONT + '/authoring/cases/' + CASE,
+      '/orgs/' + ORG_ACME + '/projects/' + PROJECT_STOREFRONT + '/authoring/cases/' + caseId,
     ),
     [
       '?fixture.variant.listPermissions=authoring-editor-write',
@@ -65,9 +66,17 @@ test('the editor review tab mounts lazily through the keyboard and the narrow se
     await expect(editor.locator('[data-review-change]')).toHaveCount(0);
     await expect(editor.locator('a[href$="/authoring/pending-changes"]')).toBeVisible();
 
+    await editor.locator('#review-comment').fill('Unsent review comment');
+    await editor.locator('#review-reason').fill('Unsent review reason');
     await firstTab.click();
-    await expect(editor.locator('app-checklist-review-tab')).toHaveCount(0);
+    await expect(editor.locator('app-checklist-review-tab')).toHaveCount(1);
+    await expect(editor.locator('app-checklist-review-tab')).toBeHidden();
     await expect(editor.locator('#case-title')).toBeVisible();
+    await reviewTab.click();
+    await expect(editor.locator('#review-comment')).toHaveValue('Unsent review comment');
+    await expect(editor.locator('#review-reason')).toHaveValue('Unsent review reason');
+    expect(await pendingReads(page)).toBe(1);
+    await firstTab.click();
     await page.setViewportSize({ width: 390, height: 900 });
     const select = editor.locator('#case-panel-select');
     await expect(select).toBeVisible();
@@ -80,4 +89,45 @@ test('the editor review tab mounts lazily through the keyboard and the narrow se
     await expect(editor.locator('#review-comment')).toHaveCount(0);
     await expect(editor.locator('[data-review-comment-snapshot]')).toBeVisible();
   }
+});
+
+test('Escape restores the Save opener after a routed editor save conflicts', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(editorPath('en', CONFLICT_CASE));
+  const editor = page.locator('app-authoring-editor');
+  const title = editor.locator('#case-title');
+  await expect(title).toBeVisible();
+  await title.fill('Unsaved keyboard conflict draft');
+  const save = editor.locator('[data-editor-save]');
+  await save.focus();
+  await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await expect(save).not.toHaveAttribute('disabled');
+  await expect(save).toHaveAttribute('aria-disabled', 'true');
+  for (const key of ['Tab', 'Shift+Tab']) {
+    for (let step = 0; step < 8; step++) {
+      await page.keyboard.press(key);
+      expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(
+        true,
+      );
+    }
+  }
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(save).toBeFocused();
+  await expect(save).toBeEnabled();
+  await expect(title).toHaveValue('Unsaved keyboard conflict draft');
+  const writes = await page.evaluate(
+    (caseId) =>
+      (window.__evidgateFixtureRequests ?? []).filter(
+        (request) =>
+          request.method === 'PATCH' &&
+          new URL(request.url, location.origin).pathname.endsWith(
+            '/authoring/manual-cases/' + caseId,
+          ),
+      ),
+    CONFLICT_CASE,
+  );
+  expect(writes).toHaveLength(1);
 });
