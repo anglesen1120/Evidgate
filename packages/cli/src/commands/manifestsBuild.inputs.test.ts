@@ -1,10 +1,20 @@
 // The local-input refusals of `evidgate manifests build`: the mapping problems both ways, the
 // duplicate local test, a variant the manifest format cannot express, flags that parse to
-// nothing, and an output path that already exists or is a symlink.
-import { mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises';
+// nothing, and an output path that already exists or is a symlink. A failed create leaves
+// another entry alone, and a failed write removes only the file this run created.
+import {
+  lstat,
+  mkdir,
+  readFile,
+  rename,
+  stat,
+  symlink,
+  writeFile,
+  type FileHandle,
+} from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resetSecrets } from '../redact.js';
 
@@ -264,8 +274,8 @@ describe('manifests build input refusals', () => {
   it('a_failed_write_after_the_create_removes_the_partial_file', async () => {
     const fixture = await setup();
     const path = join(fixture.root, 'partial.json');
-    const failing = async (target: string, text: string): Promise<void> => {
-      await writeFile(target, text, { flag: 'wx', mode: 0o600 });
+    const failing = async (handle: FileHandle, text: string): Promise<void> => {
+      await handle.writeFile(text);
       throw Object.assign(new Error('no space left'), { code: 'ENOSPC' });
     };
 
@@ -275,21 +285,54 @@ describe('manifests build input refusals', () => {
     await expect(stat(path)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
-  it('a_failed_write_removes_the_entry_name_without_following_a_symlink', async () => {
+  it.each(['symlink', 'file'])('a_failed_write_keeps_a_swapped_in_%s', async (kind) => {
     const fixture = await setup();
     const target = join(fixture.root, 'kept.json');
     const path = join(fixture.root, 'swapped.json');
     await writeFile(target, 'keep me');
-    const swapped = async (): Promise<void> => {
-      await symlink(target, path);
+    const swapped = async (handle: FileHandle): Promise<void> => {
+      await handle.writeFile('partial');
+      await rename(path, join(fixture.root, 'displaced.json'));
+      if (kind === 'symlink') await symlink(target, path);
+      else await writeFile(path, 'keep me');
       throw Object.assign(new Error('no space left'), { code: 'ENOSPC' });
     };
 
     await expect(writeOutput(path, 'partial', swapped)).rejects.toMatchObject({
       code: 'manifest_output_unwritable',
     });
-    await expect(stat(path)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect((await lstat(path)).isSymbolicLink()).toBe(kind === 'symlink');
+    await expect(readFile(path, 'utf8')).resolves.toBe('keep me');
     await expect(readFile(target, 'utf8')).resolves.toBe('keep me');
+  });
+
+  it('an_open_failure_before_create_keeps_a_preexisting_file', async () => {
+    const fixture = await setup();
+    await writeFile(fixture.out, 'keep me');
+    const failOpen = (): Promise<FileHandle> =>
+      Promise.reject(Object.assign(new Error('too many open files'), { code: 'EMFILE' }));
+
+    await expect(
+      writeOutput(fixture.out, 'replacement', undefined, failOpen),
+    ).rejects.toMatchObject({
+      code: 'manifest_output_unwritable',
+    });
+    await expect(readFile(fixture.out, 'utf8')).resolves.toBe('keep me');
+  });
+
+  it('a_close_failure_removes_our_created_file', async () => {
+    const fixture = await setup();
+    const failClose = async (handle: FileHandle, text: string): Promise<void> => {
+      await handle.writeFile(text);
+      vi.spyOn(handle, 'close').mockRejectedValueOnce(
+        Object.assign(new Error('close failed'), { code: 'EIO' }),
+      );
+    };
+
+    await expect(writeOutput(fixture.out, 'partial', failClose)).rejects.toMatchObject({
+      code: 'manifest_output_unwritable',
+    });
+    await expect(stat(fixture.out)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('the_output_is_owner_only', async () => {

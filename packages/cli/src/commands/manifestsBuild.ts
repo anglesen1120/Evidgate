@@ -2,7 +2,7 @@
 // plan and writes the manifest `manifests upload` accepts. The flags and the report are validated
 // before `getToken()`, so a bad flag or a malformed report makes no request; mapping the report
 // onto the plan happens after it is read, so an unmappable report is refused after the fetch.
-import { writeFile, unlink } from 'node:fs/promises';
+import { lstat, open, unlink, type FileHandle } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
 
 import { getSuiteRevisionExecutionPlan, type Client } from '@evidgate/sdk';
@@ -57,8 +57,8 @@ export const manifestsBuildCommand: CommandDefinition = {
     const out = requiredFlag(values, 'out');
     // Report first, token second: an unreadable or malformed report must not reach the network.
     // The report's own directory is the containment root, and only the entry name is handed to
-    // the reader: it resolves that name under the root's realpath and refuses a symlinked
-    // report file, so the root is the report's directory and never follows a link out of it.
+    // the reader: it resolves that name under the root's realpath and refuses a report that
+    // resolves outside it, so a symlink whose target stays inside the directory is followed.
     const resolvedList = resolve(listPath);
     const tests = parsePlaywrightListWithParams(
       await readPlaywrightList(basename(resolvedList), dirname(resolvedList)),
@@ -211,33 +211,74 @@ function assertSchemaValid(text: string): void {
 
 /**
  * Creates the file exclusively: an existing path (a regular file or a symlink, since an exclusive
- * create never follows one) is refused rather than replaced. The mode is owner-only. If the write
- * fails after the create, the partial file is removed: the entry name only, so a symlink swapped
- * in its place is unlinked, never its target. `write` is the seam a spec uses to fail mid-write.
+ * create never follows one) is refused rather than replaced. The mode is owner-only. A failure
+ * before the create removes nothing. A write or close failure removes only the entry this run
+ * created, identified by the device and inode recorded at creation: an entry swapped in its place
+ * is kept, and a symlink's target is never touched. `write` and `open` are the seams a spec uses
+ * to fail mid-write or before the create.
  */
 export async function writeOutput(
   path: string,
   text: string,
-  write: (path: string, text: string) => Promise<void> = createOutput,
+  write: OutputWrite = writeThroughHandle,
+  open: OutputOpen = openOutput,
 ): Promise<void> {
+  let handle: FileHandle;
   try {
-    await write(path, text);
+    handle = await open(path);
+  } catch (error) {
+    throw outputOpenError(error);
+  }
+  let created: OutputIdentity | null = null;
+  try {
+    created = identityOf(await handle.stat());
+    await write(handle, text);
+    await handle.close();
   } catch (error) {
     const errno = errnoName(error);
-    if (errno === 'EEXIST') {
-      throw new CliError('the output file already exists', {
-        code: 'manifest_output_exists',
-        hint: 'choose another --out path; an existing manifest is never overwritten',
-      });
-    }
-    await unlink(path).catch(() => undefined);
+    await handle.close().catch(() => undefined);
+    await removeOwnEntry(path, created);
     throw new CliError(`the output file could not be written (${errno})`, {
       code: 'manifest_output_unwritable',
     });
   }
 }
 
+type OutputWrite = (handle: FileHandle, text: string) => Promise<void>;
+type OutputOpen = (path: string) => Promise<FileHandle>;
+type OutputIdentity = { dev: number; ino: number };
+
 /** The exclusive create itself; the mode keeps the manifest owner-only. */
-function createOutput(path: string, text: string): Promise<void> {
-  return writeFile(path, text, { flag: 'wx', mode: 0o600 });
+const openOutput: OutputOpen = (path) => open(path, 'wx', 0o600);
+
+const writeThroughHandle: OutputWrite = (handle, text) => handle.writeFile(text);
+
+function identityOf(stats: { dev: number; ino: number }): OutputIdentity {
+  return { dev: stats.dev, ino: stats.ino };
+}
+
+/** A create that fails never had a file of ours: `EEXIST` names the other entry, nothing is removed. */
+function outputOpenError(error: unknown): CliError {
+  const errno = errnoName(error);
+  if (errno === 'EEXIST') {
+    return new CliError('the output file already exists', {
+      code: 'manifest_output_exists',
+      hint: 'choose another --out path; an existing manifest is never overwritten',
+    });
+  }
+  return new CliError(`the output file could not be written (${errno})`, {
+    code: 'manifest_output_unwritable',
+  });
+}
+
+/**
+ * Removes the entry only while it still carries the inode this run created. An uninspectable or
+ * replaced entry is left alone: cleanup never deletes someone else's file, and its own failure
+ * never replaces the write error.
+ */
+async function removeOwnEntry(path: string, created: OutputIdentity | null): Promise<void> {
+  if (created === null) return;
+  const stats = await lstat(path).catch(() => null);
+  if (stats === null || stats.dev !== created.dev || stats.ino !== created.ino) return;
+  await unlink(path).catch(() => undefined);
 }

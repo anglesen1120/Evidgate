@@ -1558,7 +1558,8 @@ report shape, invalid local variant metadata or a repeated case-and-variant
 therefore causes no token exchange and no execution-plan request. The report is
 read as a bounded file whose containment root is the report's own directory:
 the reader resolves the entry name under that root's realpath and refuses a
-symlinked report file, so the root never follows a link elsewhere. A report over
+report that resolves outside it, so a symlink whose target stays inside the
+directory is followed. A report over
 10,000 tests is refused with `manifest_input_too_large` at this stage.
 
 The identity input is the existing Playwright list mapping, including the
@@ -1676,7 +1677,9 @@ No timestamp, random id, token or credential is added. Creation is exclusive,
 with a requested mode of 0600 (subject to the platform's permission model); an
 existing output is `manifest_output_exists`, including an existing symlink. The
 command never follows an output symlink or overwrites an existing manifest.
-Other output creation/write failures are `manifest_output_unwritable`.
+Other output creation/write failures are `manifest_output_unwritable`. A
+partial `--out` created by this run is removed when the write fails; an entry
+that replaced it in the meantime is left untouched.
 
 Success exits 0. Text mode prints one line:
 
