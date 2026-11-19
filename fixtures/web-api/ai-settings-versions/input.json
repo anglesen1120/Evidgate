@@ -1,0 +1,25 @@
+{
+  "operation_id": "listProjectAiSettingsVersions",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000b441"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "version_no": 2,
+        "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "template": {
+          "code": "general-en",
+          "version": 1
+        },
+        "reason": "Fixture guidance update",
+        "created_at": "2026-11-01T12:00:00Z",
+        "author_membership_id": "018f0000-0000-7000-8000-00000000b441"
+      }
+    ],
+    "next_cursor": "ai-settings-page-2"
+  }
+}
