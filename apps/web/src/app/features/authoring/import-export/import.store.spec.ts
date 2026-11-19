@@ -190,4 +190,39 @@ describe('ImportStore confirmation and refusal boundary', () => {
     expect(store.work().committed).toEqual(unchanged);
     expect(store.canConfirm()).toBe(false);
   });
+
+  it('withholds cached version history after a refused read and keeps it only for transient failures', async () => {
+    const cached: AuthoringVersionListResponse = {
+      items: [
+        {
+          version_id: '018f0000-0000-7000-8000-00000000af11',
+          entity_kind: 'feature_node',
+          entity_id: '018f0000-0000-7000-8000-00000000af12',
+          version_no: 3,
+          batch_id: '018f0000-0000-7000-8000-00000000af13',
+          change_kind: 'import',
+          source: 'import',
+          content_hash: 'sha256:' + 'a'.repeat(64),
+          author: null,
+          reason: null,
+          ai_run_id: null,
+          created_at: '2026-11-19T10:00:00Z',
+        },
+      ],
+      next_cursor: null,
+    };
+    versions.mockResolvedValueOnce(cached);
+    store.selectFile(new File(['{}'], 'file.json'));
+    await vi.waitFor(() => expect(store.history.value()?.page).toEqual(cached));
+    versions.mockRejectedValueOnce(refusal('unavailable'));
+    store.refreshHistory();
+    await vi.waitFor(() => expect(store.history.value()?.error?.kind).toBe('unavailable'));
+    expect(store.history.value()?.page).toEqual(cached);
+    expect(store.history.value()?.error?.message).toContain('stale');
+    versions.mockRejectedValueOnce(refusal('forbidden'));
+    store.refreshHistory();
+    await vi.waitFor(() => expect(store.history.value()?.error?.kind).toBe('forbidden'));
+    expect(store.history.value()?.page).toBeNull();
+    expect(store.history.value()?.error?.message).toContain('could not be loaded');
+  });
 });

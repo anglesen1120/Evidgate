@@ -56,6 +56,14 @@ describe('ImportExportDataService', () => {
     await call;
   });
 
+  it('refuses CSV bytes that are not valid UTF-8 before sending anything', async () => {
+    const file = new File([new Uint8Array([0x6b, 0xe9, 0x79])], 'latin1.csv');
+    await expect(service.importFile('project', file, 'csv', true, 'key')).rejects.toMatchObject({
+      error: { kind: 'validation', code: 'invalid_utf8', status: 422 },
+    });
+    http.expectNone((request) => request.url.includes('/authoring/import'));
+  });
+
   it('forwards the distinct caller-provided preview and commit keys with their dry_run intent', async () => {
     const file = new File(['{}'], 'source.json');
     for (const dryRun of [true, false]) {

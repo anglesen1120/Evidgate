@@ -141,8 +141,15 @@ export const ImportStore = signalStore(
             return { page, error: null };
           } catch (cause) {
             if (!isApiRequestError(cause)) throw cause;
-            if (!abortSignal.aborted) store._historyWait.start(cause.error.retryAfterSeconds);
-            const page = snapshot?.project === params.project ? snapshot.page : null;
+            const transient =
+              cause.error.kind === 'rate_limited' ||
+              cause.error.kind === 'unavailable' ||
+              cause.error.kind === 'network';
+            if (!abortSignal.aborted) {
+              store._historyWait.start(cause.error.retryAfterSeconds);
+              if (!transient) snapshot = null;
+            }
+            const page = transient && snapshot?.project === params.project ? snapshot.page : null;
             const error = {
               ...cause.error,
               message: page ? IMPEX_COPY.historyStale : IMPEX_COPY.historyFailed,

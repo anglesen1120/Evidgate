@@ -101,9 +101,8 @@ export class ExportPanelComponent {
     });
   }
 
-  protected formatLabel(format: (typeof this.formats)[number]): string {
-    return format === 'xlsx' ? this.exportCopy.xlsxOption : format.toUpperCase();
-  }
+  protected readonly formatLabel = (format: string): string =>
+    format === 'xlsx' ? this.exportCopy.xlsxOption : format.toUpperCase();
 
   private focusWasLost(): boolean {
     const active = this.document.activeElement;

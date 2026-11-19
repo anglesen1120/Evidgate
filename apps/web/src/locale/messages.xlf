@@ -9898,6 +9898,7 @@
       <trans-unit id="authoring.import-export.no-file" datatype="html"><source>No file has been selected for import.</source></trans-unit>
       <trans-unit id="authoring.import-export.xlsx" datatype="html"><source>XLSX is unavailable because this client cannot transfer spreadsheet files. Use CSV or JSON; no XLSX request is sent.</source></trans-unit>
       <trans-unit id="authoring.import-export.local-unreadable" datatype="html"><source>Local preview could not read this file. The original file can still be sent for server validation.</source></trans-unit>
+      <trans-unit id="authoring.import-export.invalid-utf8" datatype="html"><source>CSV files must use valid UTF-8 encoding. Save this file as UTF-8 and preview it again. No import request was sent.</source></trans-unit>
       <trans-unit id="authoring.import-export.display-cap" datatype="html"><source>Local display stops at the server's 5,000-row cap. No rows are removed from the upload; the server validates the original file.</source></trans-unit>
       <trans-unit id="authoring.import-export.busy" datatype="html"><source>Previewing rows; no version has been created.</source></trans-unit>
       <trans-unit id="authoring.import-export.cancel-preview" datatype="html"><source>Cancel preview</source></trans-unit>

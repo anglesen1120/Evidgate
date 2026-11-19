@@ -1,4 +1,4 @@
-<app-desktop-required-notice />
+<app-desktop-required-notice #desktopNotice [attr.tabindex]="-1" />
 <app-section-header [title]="copy.intake" [description]="copy.limits" />
 @if (store.canWrite()) {
   <form hlmCard [size]="'sm'" *appDesktopMutation (submit)="submit($event)" data-import-mutation>
@@ -28,6 +28,7 @@
         <hlm-select
           name="importFormat"
           [ngModel]="store.work().format"
+          [itemToString]="formatLabel"
           (ngModelChange)="store.setFormat($event)"
           [disabled]="store.work().pending"
         >

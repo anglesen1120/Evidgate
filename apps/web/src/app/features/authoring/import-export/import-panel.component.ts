@@ -91,6 +91,7 @@ export class ImportPanelComponent {
   });
   private readonly previewRows = viewChild(ImportPreviewComponent);
   private readonly snapshot = viewChild<ElementRef<HTMLElement>>('snapshot');
+  private readonly desktopNotice = viewChild(DesktopRequiredNoticeComponent, { read: ElementRef });
   private focused: HTMLElement | null = null;
   protected readonly columns = IMPORT_COLUMNS;
   protected readonly capDetails = computed(() =>
@@ -113,7 +114,10 @@ export class ImportPanelComponent {
       if (!this.policy.narrow()) return;
       const target = this.focused;
       if (target && !target.isConnected && this.document.activeElement === this.document.body) {
-        this.snapshot()?.nativeElement.focus();
+        const notice: unknown = this.desktopNotice()?.nativeElement;
+        const next =
+          this.snapshot()?.nativeElement ?? (notice instanceof HTMLElement ? notice : null);
+        next?.focus();
       }
     });
   }
@@ -123,6 +127,9 @@ export class ImportPanelComponent {
     this.focused =
       target instanceof HTMLElement && target.closest('[data-import-mutation]') ? target : null;
   }
+
+  protected readonly formatLabel = (format: string): string =>
+    format === 'xlsx' ? `${format.toUpperCase()} — ${this.copy.unavailable}` : format.toUpperCase();
 
   protected pick(event: Event): void {
     const input = event.target;

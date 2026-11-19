@@ -60,7 +60,7 @@ for (const locale of LOCALES) {
           await expect(page.locator('[data-import-file]')).toHaveCount(0);
           await expect(page.locator('[data-import-confirm]')).toHaveCount(0);
         } else {
-          await expect(page.locator('[data-import-confirm]')).toBeDisabled();
+          await expect(page.locator('[data-import-confirm]')).toHaveCount(0);
           await pick(page);
           await expect(page.locator('app-import-preview')).toContainText('Checkout');
           expect(await calls(page, 'import')).toEqual([]);

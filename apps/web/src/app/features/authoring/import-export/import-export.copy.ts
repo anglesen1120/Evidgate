@@ -22,6 +22,7 @@ export const IMPEX_COPY = {
   noFile: $localize`:@@authoring.import-export.no-file:No file has been selected for import.`,
   xlsx: $localize`:@@authoring.import-export.xlsx:XLSX is unavailable because this client cannot transfer spreadsheet files. Use CSV or JSON; no XLSX request is sent.`,
   localUnreadable: $localize`:@@authoring.import-export.local-unreadable:Local preview could not read this file. The original file can still be sent for server validation.`,
+  invalidUtf8: $localize`:@@authoring.import-export.invalid-utf8:CSV files must use valid UTF-8 encoding. Save this file as UTF-8 and preview it again. No import request was sent.`,
   displayCap: $localize`:@@authoring.import-export.display-cap:Local display stops at the server's 5,000-row cap. No rows are removed from the upload; the server validates the original file.`,
   busy: $localize`:@@authoring.import-export.busy:Previewing rows; no version has been created.`,
   cancelPreview: $localize`:@@authoring.import-export.cancel-preview:Cancel preview`,
@@ -106,6 +107,7 @@ export const IMPEX_COPY = {
 };
 
 export const IMPORT_REASONS: Readonly<Record<string, string>> = {
+  invalid_utf8: IMPEX_COPY.invalidUtf8,
   unknown_parent: $localize`:@@authoring.import-export.reason.unknown-parent:The parent must name an earlier node of the required kind.`,
   orphan_row: $localize`:@@authoring.import-export.reason.orphan-row:The row has no valid owning item or node.`,
   duplicate_key: $localize`:@@authoring.import-export.reason.duplicate-key:This file-local key is duplicated. All rows are retained; nothing was imported.`,
@@ -122,6 +124,7 @@ export function importReason(reason: string | undefined): string {
     : UNKNOWN_IMPORT_REASON;
 }
 export function importFailure(error: ApiError, exporting = false): string {
+  if (error.code === 'invalid_utf8') return IMPEX_COPY.invalidUtf8;
   switch (error.kind) {
     case 'payload_too_large':
       return exporting

@@ -354,6 +354,24 @@ describe('ImportExportPage presentation and route heading contract', () => {
     expect(await harness.focused('[data-import-snapshot]')).toBe(true);
   });
 
+  it('hands removed mutation focus to the desktop-required notice when no file is selected', async () => {
+    const { fixture, harness } = await setup();
+    await harness.focus('[data-import-file]');
+    desktop.set(false);
+    await settle(fixture);
+    expect(await harness.has('[data-import-file]')).toBe(false);
+    expect(await harness.has('[data-import-snapshot]')).toBe(false);
+    expect(await harness.focused('app-desktop-required-notice')).toBe(true);
+  });
+
+  it('keeps the XLSX-selected import format readable and unselectable', async () => {
+    const source = new File(['PK'], 'workbook.xlsx');
+    const { store, harness } = await setup(source);
+    expect(store.work().format).toBe('xlsx');
+    expect(await harness.textAt('#authoring-import-format')).toContain('XLSX — Unavailable');
+    expect(upload).not.toHaveBeenCalled();
+  });
+
   it('keeps 360px stacked field errors expanded above the virtual-row threshold and describes unavailable XLSX', async () => {
     const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(360);
     try {

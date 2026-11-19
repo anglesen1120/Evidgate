@@ -32,7 +32,7 @@ export class ImportExportDataService {
     return this.versions.list(project, signal, cursor);
   }
 
-  importFile(
+  async importFile(
     project: string,
     file: File,
     format: AuthoringFormat,
@@ -41,18 +41,35 @@ export class ImportExportDataService {
     signal?: AbortSignal,
   ) {
     if (format === 'xlsx' || file.name.toLowerCase().endsWith('.xlsx'))
-      return Promise.reject(
-        new ApiRequestError({
+      throw new ApiRequestError({
+        kind: 'validation',
+        status: 422,
+        code: 'format_unavailable',
+        message: IMPEX_COPY.xlsx,
+        requestId: null,
+        retryable: false,
+        retryAfterSeconds: null,
+        details: [{ path: '/format', reason: 'unsupported_format' }],
+      });
+    signal?.throwIfAborted();
+    if (format === 'csv') {
+      const bytes = await file.arrayBuffer();
+      try {
+        new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      } catch {
+        throw new ApiRequestError({
           kind: 'validation',
           status: 422,
-          code: 'format_unavailable',
-          message: IMPEX_COPY.xlsx,
+          code: 'invalid_utf8',
+          message: IMPEX_COPY.invalidUtf8,
           requestId: null,
           retryable: false,
           retryAfterSeconds: null,
-          details: [{ path: '/format', reason: 'unsupported_format' }],
-        }),
-      );
+          details: [{ path: '/file', reason: 'invalid_utf8' }],
+        });
+      }
+      signal?.throwIfAborted();
+    }
     // The generated multi-media operation types only its JSON body. CSV/JSON use the existing
     // text SDK transport; XLSX is refused above without sending a request.
     const url: ImportAuthoringData['url'] = '/projects/{p}/authoring/import';

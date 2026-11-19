@@ -60,6 +60,7 @@
   <hlm-select
     name="exportFormat"
     [ngModel]="store.draft().format"
+    [itemToString]="formatLabel"
     (ngModelChange)="store.edit({ format: $event })"
     [disabled]="store.pending()"
   >
