@@ -71,9 +71,9 @@ describe('final body size', () => {
     const headers = new HttpHeaders();
     const source = final(null);
     const within = new Uint8Array(BINARY_BODY_LIMIT_BYTES);
-    expect(toBinaryResponse(200, 'OK', headers, within as never, source)).toBeInstanceOf(Response);
+    expect(toBinaryResponse(200, 'OK', headers, within, source)).toBeInstanceOf(Response);
     const blob = new Blob([within]);
-    expect(toBinaryResponse(200, 'OK', headers, blob as never, source)).toBeInstanceOf(Response);
+    expect(toBinaryResponse(200, 'OK', headers, blob, source)).toBeInstanceOf(Response);
     expect(
       toBinaryResponse(200, 'OK', headers, new ArrayBuffer(BINARY_BODY_LIMIT_BYTES), source),
     ).toBeInstanceOf(Response);
@@ -83,18 +83,12 @@ describe('final body size', () => {
     const headers = new HttpHeaders();
     const source = final(null);
     const tooBig = new Uint8Array(OVER);
-    expect(() => toBinaryResponse(200, 'OK', headers, tooBig as never, source)).toThrow(
-      /exceeds limit/,
-    );
+    expect(() => toBinaryResponse(200, 'OK', headers, tooBig, source)).toThrow(/exceeds limit/);
     const blob = new Blob([tooBig]);
-    expect(() => toBinaryResponse(200, 'OK', headers, blob as never, source)).toThrow(
-      /exceeds limit/,
-    );
+    expect(() => toBinaryResponse(200, 'OK', headers, blob, source)).toThrow(/exceeds limit/);
     expect(() => toBinaryResponse(200, 'OK', headers, new ArrayBuffer(OVER), source)).toThrow(
       /exceeds limit/,
     );
-    expect(() => toBinaryResponse(200, 'OK', headers, {} as never, source)).toThrow(
-      /exceeds limit/,
-    );
+    expect(() => toBinaryResponse(200, 'OK', headers, {}, source)).toThrow(/exceeds limit/);
   });
 });

@@ -22,7 +22,6 @@ import { filter, type Observable } from 'rxjs';
 
 import { BINARY_TRANSPORT_HEADER, cappedBinaryContext } from './binary-transport';
 import {
-  assertTextWithinCap,
   decodeBinaryErrorBody,
   enforceBinarySizeCap,
   isFinalResponse,
@@ -188,9 +187,6 @@ async function receiveResponse(
     request.signal,
     deadline,
   );
-  if (modes !== null) {
-    assertTextWithinCap(response.body, response);
-  }
   return toFetchResponse(
     response.status,
     response.statusText,
