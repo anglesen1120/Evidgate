@@ -187,6 +187,26 @@ export function devRoutes(): Routes {
       ],
     },
     {
+      path: 'dev/authoring-tree',
+      component: ShellComponent,
+      children: [
+        {
+          path: 'orgs/:orgId',
+          canMatch: [authGuard, orgScopeGuard],
+          children: [
+            {
+              path: 'projects/:projectId',
+              canMatch: [projectScopeGuard, permissionGuard('authoring:read')],
+              data: { pageHeadingLevel: 1 },
+              loadComponent: () =>
+                // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only replacement mounts the product page under its scope and permission guards.
+                import('../../features/authoring/authoring.page').then((m) => m.AuthoringPage),
+            },
+          ],
+        },
+      ],
+    },
+    {
       path: 'dev/run-detail',
       component: ShellComponent,
       children: [

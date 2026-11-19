@@ -146,6 +146,7 @@ const FIXTURE_MARKERS = [
   'dev/suite-composition',
   'dev/catalog-list',
   'dev/settings-security-events',
+  'dev/authoring-tree',
 ];
 
 /**

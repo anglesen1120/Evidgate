@@ -1,0 +1,18 @@
+{
+  "operation_id": "listAuthoringTree",
+  "variant": "not-found",
+  "status": 404,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000f102"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "not_found",
+      "message": "Authoring hierarchy fixture refusal not-found.",
+      "request_id": "018f0000-0000-7000-8000-00000000f102",
+      "retryable": false,
+      "details": []
+    }
+  }
+}

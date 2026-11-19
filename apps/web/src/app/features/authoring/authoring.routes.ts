@@ -1,14 +1,9 @@
-// 09.1.1-T4.1 (plan 09.1.1 §10 T4, 00 §5.6 W1): the lazy route table of the `authoring` area.
-// `app.routes.ts` mounts it at the segment of every `NAV_ENTRIES` row whose `area` is
-// `authoring` — one lazy chunk per area — and the entry id reaches the page through that route's
-// `data`, so this module repeats no segment, permission or label.
-//
-// W1 holds here: nothing outside `features/authoring` imports this file; the entry-level guards
-// (`phaseGuard`, `permissionGuard`) live on the route that loads it.
+// Entry guards and navigation metadata stay on the shell route.
 
 import type { Routes } from '@angular/router';
 
-import { RouteStubPage } from '../../shell/stub/route-stub.page';
+import { AuthoringPage } from './authoring.page';
 
-/** Everything mounted under a `authoring` segment: the shell placeholder until its feature story. */
-export const routes: Routes = [{ path: '', pathMatch: 'full', component: RouteStubPage }];
+export const routes: Routes = [
+  { path: '', pathMatch: 'full', component: AuthoringPage, data: { pageHeadingLevel: 1 } },
+];
