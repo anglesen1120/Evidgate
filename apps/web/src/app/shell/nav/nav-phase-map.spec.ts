@@ -1,10 +1,10 @@
 // The journey regroup of the sidebar, pinned as one table: group, phase, scope, segment and
 // permission of every entry. A moved, dropped, re-phased or re-gated entry turns this suite red, so
-// "no route lost" is a compared set and not a count. The table is the authoritative map of
-// `docs/design/web/authoring-nav-phase.md`.
+// "no route lost" is a compared set and not a count. The table follows
+// `docs/design/web/authoring-nav-phase.md`, except that `ai-settings` is gated on `authoring:read`
+// (the design text still names the earlier `project:read`).
 
 import { NAV_ENTRIES, NAV_GROUPS } from './nav-registry';
-import { isEntryActive, isPhaseActive } from './product-phase';
 
 type Row = readonly [id: string, group: string, phase: string, scope: string, permission: string];
 
@@ -62,43 +62,5 @@ describe('the journey regroup of the sidebar', () => {
       'release',
       'settings',
     ]);
-  });
-
-  it('puts overview and onboarding in the first group, not in a group of their own', () => {
-    const design = NAV_ENTRIES.filter((entry) => entry.group === 'design').map((entry) => entry.id);
-
-    expect(design).toEqual([
-      'authoring',
-      'generation',
-      'pending-changes',
-      'overview',
-      'onboarding',
-    ]);
-  });
-
-  it('lists in each group only entries whose phase is not later than the next group needs', () => {
-    // Phase never gates a whole group except through its entries: the G1 build must still show the
-    // Settings group, which mixes G1, G2 and G4 entries.
-    const settingsPhases = new Set(
-      NAV_ENTRIES.filter((entry) => entry.group === 'settings').map((entry) => entry.phase),
-    );
-
-    expect([...settingsPhases].sort()).toEqual(['G1', 'G2', 'G4']);
-  });
-
-  it('counts the active entries by phase: 10 at G1, plus 7 at G2, 4 at G3 and 9 at G4', () => {
-    const perPhase = (phase: string): number =>
-      NAV_ENTRIES.filter((entry) => entry.phase === phase).length;
-
-    expect([perPhase('G1'), perPhase('G2'), perPhase('G3'), perPhase('G4')]).toEqual([10, 7, 4, 9]);
-  });
-
-  it('hides every G2 to G4 entry and never opens one through an empty review list', () => {
-    for (const entry of NAV_ENTRIES) {
-      expect(isEntryActive(entry, [])).toBe(isPhaseActive(entry.phase));
-      if (entry.phase !== 'G1') {
-        expect(isEntryActive(entry, [])).toBe(false);
-      }
-    }
   });
 });

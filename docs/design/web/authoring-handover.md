@@ -1,4 +1,4 @@
-Status: approved 2026-11-19 by the coordinator on the owner's delegation (owner may override); [OPEN] defaults accepted as recorded in docs/status-carried.md
+Status: Approved 2026-11-19 by the coordinator on the owner's delegation (owner may override); [OPEN] defaults accepted as recorded in docs/status-carried.md
 
 # Authoring design-to-code handover
 
