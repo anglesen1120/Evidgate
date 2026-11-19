@@ -11,13 +11,14 @@ export type BoundedFileFailure =
   | { readonly kind: 'unreadable'; readonly errno: string }
   | { readonly kind: 'not_regular_file' }
   | { readonly kind: 'empty' }
-  | { readonly kind: 'too_large' };
+  | { readonly kind: 'too_large' }
+  | { readonly kind: 'changed' };
 
 export type BoundedFileResult =
   | {
       readonly ok: true;
       readonly bytes: Uint8Array;
-      /** Identity of the descriptor that was read, for a caller's path-swap check. */
+      /** Identity of the descriptor that was read. */
       readonly dev: number;
       readonly ino: number;
     }
@@ -29,6 +30,13 @@ export interface BoundedReadOptions {
    * a caller that confines the realpath itself decides whether a symlink is acceptable.
    */
   readonly noFollow?: boolean;
+  /**
+   * Runs with the descriptor's identity after the bytes are read and BEFORE the descriptor
+   * closes. Returning false refuses the read as `changed`. It must run while the descriptor is
+   * open: a closed descriptor frees its inode number for reuse, so a replacement file could
+   * match a later dev/ino comparison.
+   */
+  readonly verify?: (opened: { readonly dev: number; readonly ino: number }) => Promise<boolean>;
 }
 
 // `O_NONBLOCK` keeps `open` from blocking on a FIFO — without it the non-regular-file check
@@ -67,6 +75,9 @@ export async function readFileBounded(
     }
     if (bytes.length === 0) {
       return { ok: false, failure: { kind: 'empty' } };
+    }
+    if (options.verify !== undefined && !(await options.verify(stats))) {
+      return { ok: false, failure: { kind: 'changed' } };
     }
     return { ok: true, bytes, dev: stats.dev, ino: stats.ino };
   } catch (error) {

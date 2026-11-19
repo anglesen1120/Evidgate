@@ -2,11 +2,12 @@
 // --reporter=json`) with the identity rules the adapter applies during a run: the canonical
 // `evidgate.id` annotation, the per-project variant params hash, and project-relative POSIX
 // paths. The CLI cannot import the adapter (the dependency arrow is one way), so the rules
-// are ported here and kept in step with it.
+// are ported here and kept in step with it; the case-id rule lives in `caseId.ts`.
 import { lstat, realpath } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
 
 import { errnoName, readFileBounded, type BoundedFileFailure } from './boundedFile.js';
+import { isCanonicalCaseId } from './caseId.js';
 import { CliError } from './errors.js';
 import { MAX_TESTS, type EnumeratedTest } from './manifestMapping.js';
 import { contains } from './uploadPaths.js';
@@ -18,11 +19,6 @@ export const MAX_PROJECTS = 1000;
 
 /** The annotation the adapter reads; its description is the canonical case id. */
 const CASE_ID_ANNOTATION = 'evidgate.id';
-// Mirrors the canonical case-id rule the adapter and server share: the hyphenated
-// 36-character form in any case, never the nil UUID. It is duplicated because the CLI must
-// not import the adapter; `sidecarRules.ts` is the other copy.
-const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 // A path with a C0/DEL control character cannot name a file a person wrote, and a NUL would
 // truncate the path at the syscall boundary, so it is a malformed report, not an escape.
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
@@ -77,25 +73,37 @@ export async function readPlaywrightList(path: string, root: string): Promise<st
   const realRoot = await realpathOrRefuse(root, 'the project root');
   const candidate = isAbsolute(path) ? resolve(path) : resolve(realRoot, path);
   const realFile = await reportFileInside(candidate, realRoot);
-  const result = await readFileBounded(realFile, MAX_REPORT_BYTES, { noFollow: true });
+  const result = await readFileBounded(realFile, MAX_REPORT_BYTES, {
+    noFollow: true,
+    verify: (opened) => stillTheSameFile(realFile, realRoot, opened),
+  });
   if (!result.ok) {
     throw readRefusal(result.failure);
   }
-  await assertSameFile(realFile, result);
   return decode(result.bytes);
 }
 
-/** A file replaced after its realpath check is the change the descriptor identity exposes. */
-async function assertSameFile(
+/**
+ * Runs while the descriptor is open, so the inode cannot be recycled for a replacement. The
+ * path must still name the opened file (lstat identity) and still resolve to itself inside the
+ * root, which also refuses a parent directory swapped for another directory or a symlink.
+ * Residual: `open` follows a symlinked parent directory, so a parent swapped for a symlink at
+ * open time can make the descriptor name a file outside the root; a swap that is undone before
+ * the lstat, or kept through the realpath, is refused, but one that survives the lstat and is
+ * undone before the realpath is not seen. Closing that needs openat-style APIs Node lacks. The
+ * report is a local input the same user already controls.
+ */
+async function stillTheSameFile(
   realFile: string,
+  realRoot: string,
   opened: { readonly dev: number; readonly ino: number },
-): Promise<void> {
+): Promise<boolean> {
   const named = await lstat(realFile).catch(() => undefined);
   if (named === undefined || named.dev !== opened.dev || named.ino !== opened.ino) {
-    throw new CliError('the list report changed while it was opened', {
-      code: 'manifest_report_unreadable',
-    });
+    return false;
   }
+  const resolved = await realpath(realFile).catch(() => undefined);
+  return resolved === realFile && contains(realRoot, resolved);
 }
 
 /**
@@ -249,10 +257,6 @@ function readIdentity(annotations: unknown): { caseId?: string; conflict: boolea
   return id === undefined ? { conflict: false } : { caseId: id, conflict: false };
 }
 
-function isCanonicalCaseId(value: string): boolean {
-  return CANONICAL_UUID.test(value) && value.toLowerCase() !== NIL_UUID;
-}
-
 /**
  * The report's file is relative to the Playwright root dir. Backslashes are normalised so a
  * Windows-shaped path is judged by the same rule, and any `..` that would climb above the
@@ -398,6 +402,10 @@ function readRefusal(failure: BoundedFileFailure): CliError {
       });
     case 'unreadable':
       return new CliError(`the list report could not be read (${failure.errno})`, {
+        code: 'manifest_report_unreadable',
+      });
+    case 'changed':
+      return new CliError('the list report changed while it was opened', {
         code: 'manifest_report_unreadable',
       });
   }

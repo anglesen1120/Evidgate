@@ -147,6 +147,8 @@ function manifestRefusal(failure: BoundedFileFailure): CliError {
       });
     case 'unreadable':
       return unreadable(failure.errno);
+    case 'changed':
+      return unreadable('ESTALE');
   }
 }
 
