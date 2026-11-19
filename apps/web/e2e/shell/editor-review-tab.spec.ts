@@ -64,7 +64,9 @@ test('the editor review tab mounts lazily through the keyboard and the narrow se
     expect(await pendingReads(page)).toBe(1);
     // The existing pending fixtures target other checklist items, not this case's loaded parent.
     await expect(editor.locator('[data-review-change]')).toHaveCount(0);
-    await expect(editor.locator('a[href$="/authoring/pending-changes"]')).toBeVisible();
+    const queueLink = editor.locator('a[href$="/pending-changes"]');
+    await expect(queueLink).toBeVisible();
+    await expect(queueLink).not.toHaveAttribute('href', /\/authoring\/pending-changes$/);
 
     await editor.locator('#review-comment').fill('Unsent review comment');
     await editor.locator('#review-reason').fill('Unsent review reason');

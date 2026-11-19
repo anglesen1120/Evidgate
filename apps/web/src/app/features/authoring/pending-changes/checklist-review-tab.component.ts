@@ -101,7 +101,6 @@ export class ChecklistReviewTabComponent {
     this.session.currentProject()?.org_id ?? '',
     'projects',
     this.projectId(),
-    'authoring',
     'pending-changes',
   ]);
   protected readonly status = computed<'loading' | 'ready' | 'error'>(() =>
