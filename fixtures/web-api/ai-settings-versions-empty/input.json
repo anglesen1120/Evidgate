@@ -1,0 +1,11 @@
+{
+  "operation_id": "listProjectAiSettingsVersions",
+  "variant": "empty",
+  "status": 200,
+  "headers": {},
+  "latency_ms": 0,
+  "body": {
+    "items": [],
+    "next_cursor": null
+  }
+}

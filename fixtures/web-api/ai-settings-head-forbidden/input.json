@@ -1,0 +1,16 @@
+{
+  "operation_id": "getProjectAiSettings",
+  "variant": "forbidden",
+  "status": 403,
+  "headers": {},
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "forbidden",
+      "message": "The review fixture request was refused.",
+      "request_id": "018f0000-0000-7000-8000-00000000b441",
+      "retryable": false,
+      "details": []
+    }
+  }
+}

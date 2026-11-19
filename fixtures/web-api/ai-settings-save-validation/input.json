@@ -1,0 +1,23 @@
+{
+  "operation_id": "saveProjectAiSettings",
+  "variant": "validation",
+  "status": 422,
+  "headers": {},
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "validation_failed",
+      "message": "The review fixture request was refused.",
+      "request_id": "018f0000-0000-7000-8000-00000000b441",
+      "retryable": false,
+      "details": [
+        {
+          "path": "/settings/writing_style",
+          "reason": "max_length",
+          "limit": 250,
+          "actual": 251
+        }
+      ]
+    }
+  }
+}

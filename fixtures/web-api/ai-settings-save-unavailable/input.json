@@ -1,0 +1,18 @@
+{
+  "operation_id": "saveProjectAiSettings",
+  "variant": "unavailable",
+  "status": 503,
+  "headers": {
+    "Retry-After": "1"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "unavailable",
+      "message": "The review fixture request was refused.",
+      "request_id": "018f0000-0000-7000-8000-00000000b441",
+      "retryable": true,
+      "details": []
+    }
+  }
+}
