@@ -9897,6 +9897,7 @@
       <trans-unit id="authoring.import-export.from-file" datatype="html"><source>From your file, not validated. Row identity, status and totals come only from the server.</source></trans-unit>
       <trans-unit id="authoring.import-export.no-file" datatype="html"><source>No file has been selected for import.</source></trans-unit>
       <trans-unit id="authoring.import-export.xlsx-preview" datatype="html"><source>Workbook cells are not read in this browser. Preview sends the original XLSX file for a server dry run; only the server report is shown.</source></trans-unit>
+      <trans-unit id="authoring.import-export.xlsx-format-locked" datatype="html"><source>Files ending in .xlsx must use XLSX. Choose a CSV or JSON file to change the format.</source></trans-unit>
       <trans-unit id="authoring.import-export.xlsx-too-large" datatype="html"><source>The XLSX file exceeds 5 MiB. Choose a smaller workbook and preview it again. No import request was sent.</source></trans-unit>
       <trans-unit id="authoring.import-export.format-mismatch" datatype="html"><source>An .xlsx file must use the XLSX format. Choose XLSX and preview it again. No import request was sent.</source></trans-unit>
       <trans-unit id="authoring.import-export.local-unreadable" datatype="html"><source>Local preview could not read this file. The original file can still be sent for server validation.</source></trans-unit>

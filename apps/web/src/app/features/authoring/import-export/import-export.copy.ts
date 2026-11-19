@@ -23,6 +23,7 @@ export const IMPEX_COPY = {
   xlsxPreview: $localize`:@@authoring.import-export.xlsx-preview:Workbook cells are not read in this browser. Preview sends the original XLSX file for a server dry run; only the server report is shown.`,
   xlsxTooLarge: $localize`:@@authoring.import-export.xlsx-too-large:The XLSX file exceeds 5 MiB. Choose a smaller workbook and preview it again. No import request was sent.`,
   formatMismatch: $localize`:@@authoring.import-export.format-mismatch:An .xlsx file must use the XLSX format. Choose XLSX and preview it again. No import request was sent.`,
+  xlsxFormatLocked: $localize`:@@authoring.import-export.xlsx-format-locked:Files ending in .xlsx must use XLSX. Choose a CSV or JSON file to change the format.`,
   localUnreadable: $localize`:@@authoring.import-export.local-unreadable:Local preview could not read this file. The original file can still be sent for server validation.`,
   invalidUtf8: $localize`:@@authoring.import-export.invalid-utf8:CSV files must use valid UTF-8 encoding. Save this file as UTF-8 and preview it again. No import request was sent.`,
   displayCap: $localize`:@@authoring.import-export.display-cap:Local display stops at the server's 5,000-row cap. No rows are removed from the upload; the server validates the original file.`,

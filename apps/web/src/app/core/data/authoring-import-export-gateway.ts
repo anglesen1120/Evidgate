@@ -70,13 +70,17 @@ export class AuthoringImportExportGateway {
     // actual value rather than asserting that wire bytes match that generated JSON DTO.
     const blob: unknown = result.data;
     const filename = serverFilename(result.headers.get('Content-Disposition'));
-    if (!(blob instanceof Blob) || !filename)
+    if (
+      !(blob instanceof Blob) ||
+      !filename ||
+      (query.format !== 'xlsx' && filename !== `authoring-export.${query.format}`)
+    )
       throw new Error('Export response is missing its file or fixed server filename');
     if (
       query.format === 'xlsx' &&
       (blob.type !== AUTHORING_XLSX_MEDIA_TYPE || filename !== 'authoring-export.xlsx')
     )
       throw new Error('Export response has an invalid workbook media type or filename');
-    return { blob, filename: query.format === 'xlsx' ? 'authoring-export.xlsx' : filename };
+    return { blob, filename };
   }
 }

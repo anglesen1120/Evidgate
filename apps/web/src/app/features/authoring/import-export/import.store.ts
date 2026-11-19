@@ -65,6 +65,9 @@ export const ImportStore = signalStore(
     canWrite: computed(() => store._session.has(AUTHORING_WRITE)),
     canReadHistory: computed(() => store._session.has(AUTHORING_READ)),
   })),
+  withComputed((store) => ({
+    formatLocked: computed(() => store.work().file?.name.toLowerCase().endsWith('.xlsx') ?? false),
+  })),
   withProps((store) => ({
     // The preview is a local read of the picked file, so its resource must reload only when the
     // file or the chosen format changes. Comparing by identity keeps a refusal or a server report
@@ -266,7 +269,7 @@ export const ImportStore = signalStore(
           !store._policy.allowsMutation() ||
           !store.canWrite() ||
           store.work().pending ||
-          store.work().file?.name.toLowerCase().endsWith('.xlsx') ||
+          store.formatLocked() ||
           format === store.work().format
         )
           return;

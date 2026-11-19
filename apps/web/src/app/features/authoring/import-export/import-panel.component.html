@@ -30,10 +30,11 @@
           [ngModel]="store.work().format"
           [itemToString]="formatLabel"
           (ngModelChange)="store.setFormat($event)"
-          [disabled]="store.work().pending"
+          [disabled]="store.work().pending || store.formatLocked()"
         >
           <hlm-select-trigger
             [buttonId]="'authoring-import-format'"
+            [aria-describedby]="store.formatLocked() ? 'import-format-lock-reason' : null"
             class="min-h-(--eg-control-touch) w-full"
           >
             <hlm-select-value />
@@ -44,6 +45,13 @@
             }
           </hlm-select-content>
         </hlm-select>
+        @if (store.formatLocked()) {
+          <app-inline-feedback
+            id="import-format-lock-reason"
+            [title]="copy.xlsxFormatLocked"
+            [announcement]="'off'"
+          />
+        }
       </div>
       <div class="flex flex-wrap items-center gap-(--eg-space-3)">
         <button

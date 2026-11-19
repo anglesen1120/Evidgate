@@ -24,19 +24,28 @@ describe('AuthoringImportExportGateway server filename', () => {
   }
 
   it.each([
-    ['attachment; filename="authoring-export.csv"', 'authoring-export.csv'],
-    ['attachment; filename=authoring-export.json', 'authoring-export.json'],
+    ['attachment; filename="authoring-export.csv"', 'authoring-export.csv', 'csv'],
+    ['attachment; filename=authoring-export.json', 'authoring-export.json', 'json'],
     [
       "attachment; filename=authoring-export.csv; filename*=UTF-8''authoring-export.csv",
       'authoring-export.csv',
+      'csv',
     ],
-    [
-      'attachment; filename*=UTF-8\'\'authoring-export.xlsx; filename="authoring-export.xlsx"',
-      'authoring-export.xlsx',
-    ],
-  ])('accepts the fixed filename from %s', async (header, filename) => {
+  ] as const)('accepts the fixed filename from %s', async (header, filename, format) => {
     const blob = response(header);
-    expect(await gateway.exportFile('project', { format: 'csv' })).toEqual({ blob, filename });
+    expect(await gateway.exportFile('project', { format })).toEqual({ blob, filename });
+  });
+
+  it.each([
+    ['csv', 'json'],
+    ['csv', 'xlsx'],
+    ['json', 'csv'],
+    ['json', 'xlsx'],
+  ] as const)('refuses a %s export returned with a .%s filename', async (format, extension) => {
+    response(`attachment; filename="authoring-export.${extension}"`);
+    await expect(gateway.exportFile('project', { format })).rejects.toThrow(
+      'fixed server filename',
+    );
   });
 
   it.each([

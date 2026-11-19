@@ -100,6 +100,9 @@ class ImportOptionHarness extends ComponentHarness {
   async attr(name: string) {
     return (await this.host()).getAttribute(name);
   }
+  async click() {
+    await (await this.host()).click();
+  }
 }
 
 describe('ImportExportPage presentation and route heading contract', () => {
@@ -377,6 +380,32 @@ describe('ImportExportPage presentation and route heading contract', () => {
     expect(await harness.textAt('app-import-preview')).toContain('Would create');
     expect(await harness.attr('[data-import-confirm]', 'disabled')).toBeNull();
     expect(text).not.toHaveBeenCalled();
+  });
+
+  it('explains the disabled XLSX format and unlocks it when a text file replaces the workbook', async () => {
+    const { fixture, store, harness } = await setup(new File(['PK'], 'workbook.XLSX'));
+    expect(await harness.textAt('#authoring-import-format')).toBe('XLSX');
+    expect(await harness.attr('#authoring-import-format', 'disabled')).not.toBeNull();
+    expect(await harness.attr('#authoring-import-format', 'aria-describedby')).toBe(
+      'import-format-lock-reason',
+    );
+    expect(await harness.textAt('app-inline-feedback#import-format-lock-reason')).toBe(
+      'Files ending in .xlsx must use XLSX. Choose a CSV or JSON file to change the format.',
+    );
+    store.setFormat('csv');
+    expect(store.work().format).toBe('xlsx');
+    store.selectFile(file());
+    await settle(fixture);
+    expect(await harness.attr('#authoring-import-format', 'disabled')).toBeNull();
+    expect(await harness.attr('#authoring-import-format', 'aria-describedby')).toBeNull();
+    expect(await harness.has('#import-format-lock-reason')).toBe(false);
+    await harness.click('#authoring-import-format');
+    const root = TestbedHarnessEnvironment.documentRootLoader(fixture);
+    for (const option of await root.getAllHarnesses(ImportOptionHarness)) {
+      if ((await option.text()) === 'JSON') await option.click();
+    }
+    expect(store.work().format).toBe('json');
+    expect(upload).not.toHaveBeenCalled();
   });
 
   it('keeps 360px stacked field errors expanded above the virtual-row threshold and offers XLSX', async () => {

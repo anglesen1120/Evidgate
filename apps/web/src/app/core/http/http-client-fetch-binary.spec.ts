@@ -47,6 +47,20 @@ function binaryRequest(init: RequestInit = {}): Request {
   return new Request(URL, { ...init, headers });
 }
 
+function streamRequest(
+  stream: ReadableStream<Uint8Array<ArrayBuffer>>,
+  signal?: AbortSignal,
+): Request {
+  const request = binaryRequest({
+    method: 'POST',
+    body: BYTES,
+    signal: signal ?? null,
+    headers: { [BINARY_TRANSPORT_HEADER]: BINARY_REQUEST },
+  });
+  vi.spyOn(request, 'body', 'get').mockReturnValue(stream);
+  return request;
+}
+
 function rejection(pending: Promise<Response>): Promise<unknown> {
   return pending.catch((error: unknown) => error);
 }
@@ -215,6 +229,39 @@ describe('HttpClient fetch binary transport', () => {
     expect((await pending).status).toBe(204);
   });
 
+  it('refuses and cancels an open request stream as soon as cumulative bytes cross the cap', async () => {
+    const cancel = vi.fn(() => new Promise<void>(() => undefined));
+    const stream = new ReadableStream<Uint8Array<ArrayBuffer>>({
+      start(source) {
+        source.enqueue(new Uint8Array(BINARY_BODY_LIMIT_BYTES));
+        source.enqueue(new Uint8Array(1));
+      },
+      cancel,
+    });
+    expectLimit(await rejection(adapter(streamRequest(stream))));
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(stream.locked).toBe(false);
+    httpMock.expectNone(URL);
+  });
+
+  it('accepts a request stream whose cumulative size is exactly the cap', async () => {
+    const stream = new ReadableStream<Uint8Array<ArrayBuffer>>({
+      start(source) {
+        source.enqueue(new Uint8Array(BINARY_BODY_LIMIT_BYTES - 1));
+        source.enqueue(new Uint8Array([255]));
+        source.close();
+      },
+    });
+    const pending = adapter(streamRequest(stream));
+    const test = await nextRequest(httpMock);
+    const bytes = new Uint8Array(test.request.body as ArrayBuffer);
+    expect(bytes.byteLength).toBe(BINARY_BODY_LIMIT_BYTES);
+    expect(bytes.at(-1)).toBe(255);
+    expect(stream.locked).toBe(false);
+    test.flush(null, { status: 204, statusText: 'No Content' });
+    expect((await pending).status).toBe(204);
+  });
+
   it('allows response bytes, progress and Content-Length exactly at the cap', async () => {
     const pending = adapter(binaryRequest());
     const test = await nextRequest(httpMock);
@@ -333,20 +380,17 @@ describe('HttpClient fetch binary transport', () => {
   });
 
   it.each([0, 1000])(
-    'aborts while the binary request read stalls with timeout %i',
+    'aborts and cancels a stalled binary request source with timeout %i',
     async (timeoutMs) => {
       adapter = createHttpClientFetch(TestBed.inject(HttpClient), { timeoutMs });
       const controller = new AbortController();
-      const request = binaryRequest({
-        method: 'POST',
-        body: BYTES,
-        signal: controller.signal,
-        headers: { [BINARY_TRANSPORT_HEADER]: BINARY_REQUEST },
-      });
-      vi.spyOn(request, 'arrayBuffer').mockReturnValue(new Promise<ArrayBuffer>(() => undefined));
+      const cancel = vi.fn(() => new Promise<void>(() => undefined));
+      const stream = new ReadableStream<Uint8Array<ArrayBuffer>>({ cancel });
+      const request = streamRequest(stream, controller.signal);
       const settled = rejection(adapter(request));
       controller.abort();
       expectNamedError(await settled, 'AbortError');
+      expect(cancel).toHaveBeenCalledOnce();
       httpMock.expectNone(URL);
     },
   );
@@ -362,18 +406,16 @@ describe('HttpClient fetch binary transport', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('times out while the binary request read stalls', async () => {
+  it('times out and cancels a stalled binary request source', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     adapter = createHttpClientFetch(TestBed.inject(HttpClient), { timeoutMs: 1000 });
-    const request = binaryRequest({
-      method: 'POST',
-      body: BYTES,
-      headers: { [BINARY_TRANSPORT_HEADER]: BINARY_REQUEST },
-    });
-    vi.spyOn(request, 'arrayBuffer').mockReturnValue(new Promise<ArrayBuffer>(() => undefined));
+    const cancel = vi.fn(() => new Promise<void>(() => undefined));
+    const stream = new ReadableStream<Uint8Array<ArrayBuffer>>({ cancel });
+    const request = streamRequest(stream);
     const settled = rejection(adapter(request));
     await vi.advanceTimersByTimeAsync(1000);
     expectNamedError(await settled, 'TimeoutError');
+    expect(cancel).toHaveBeenCalledOnce();
     httpMock.expectNone(URL);
   });
 
@@ -383,8 +425,9 @@ describe('HttpClient fetch binary transport', () => {
     const controller = new AbortController();
     const settled = rejection(adapter(binaryRequest({ signal: controller.signal })));
     const test = await nextRequest(httpMock);
+    vi.advanceTimersByTime(1000);
+    expect(vi.getTimerCount()).toBe(0);
     controller.abort();
-    await vi.advanceTimersByTimeAsync(1000);
     expectNamedError(await settled, 'AbortError');
     expect(test.cancelled).toBe(true);
   });

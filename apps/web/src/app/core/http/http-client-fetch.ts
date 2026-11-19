@@ -128,9 +128,13 @@ async function sendCall(
       : await readTextRequestBody(request, sendsBody, deadline);
   // The read races the signal, so a cancellation during it arrives as an `AbortError`. This
   // re-check covers the other order: the read settled in the same turn the signal was aborted, so
-  // nothing is sent for a call the caller cancelled.
+  // nothing is sent for a call the caller cancelled. It comes before the text body-type refusal,
+  // which would otherwise report a cancelled call as a body the caller never asked to send.
   if (request.signal.aborted) {
     throw abortError();
+  }
+  if (typeof body === 'string') {
+    assertTextRequestBody(request.headers.get('Content-Type'), body);
   }
 
   const binaryResponse = modes?.response === true;
@@ -223,17 +227,15 @@ async function readTextRequestBody(
   deadline: Deadline | null,
 ): Promise<string | null> {
   const text = sendsBody ? await readUnderCall(() => request.text(), request.signal, deadline) : '';
-  // The body is forwarded as text, so a non-text `Content-Type` means `request.text()` produced a
-  // lossy decode of what the caller meant to send. Refuse it loudly instead of sending corrupted
-  // bytes; the binary path is the explicit opt-out.
-  assertTextRequestBody(request.headers.get('Content-Type'), text);
   // An absent body and an empty one are the same call: `HttpClient` must see `null`, so the
   // request carries no body at all and interceptors see a bodyless request.
   return text.length === 0 ? null : text;
 }
 
-// An absent `Content-Type` is allowed: the SDK removes it for a bodyless request and `Request`
-// defaults a string body to `text/plain`.
+// The body is forwarded as text, so a non-text `Content-Type` means `request.text()` produced a
+// lossy decode of what the caller meant to send. Refuse it loudly instead of sending corrupted
+// bytes; the binary path is the explicit opt-out. An absent `Content-Type` is allowed: the SDK
+// removes it for a bodyless request and `Request` defaults a string body to `text/plain`.
 function assertTextRequestBody(contentType: string | null, text: string): void {
   if (text.length === 0 || isTextualContentType(contentType)) {
     return;

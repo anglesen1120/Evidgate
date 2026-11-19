@@ -56,6 +56,11 @@ export function parseBinaryModes(value: string | null): BinaryModes | null {
  * Reads a request body as bytes under the call's deadline and the caller's signal. An empty body
  * is sent as no body, and a body over the cap is refused before the request leaves the app, so an
  * oversized upload is a local failure instead of a 413 after the bytes travelled.
+ *
+ * The bytes are read incrementally rather than through `arrayBuffer()`, so the cap is enforced
+ * while the body arrives: a caller-owned stream that never ends would otherwise be buffered in
+ * full before the size could be checked. Losing the race (abort or deadline) cancels the reader,
+ * so the producer stops instead of feeding a call nobody awaits.
  */
 export async function readBinaryRequestBody(
   request: Request,
@@ -65,11 +70,56 @@ export async function readBinaryRequestBody(
   if (!sendsBody) {
     return null;
   }
-  const bytes = await readUnderCall(() => request.arrayBuffer(), request.signal, deadline);
-  if (bytes.byteLength > BINARY_BODY_LIMIT_BYTES) {
-    throw limitError('request');
+  const body = request.body;
+  if (body === null) {
+    return null;
   }
-  return bytes.byteLength === 0 ? null : bytes;
+  const reader = body.getReader();
+  const cancel = () => {
+    void reader.cancel().catch(() => undefined);
+  };
+  try {
+    const bytes = await readUnderCall(
+      () => readAllBytes(reader, cancel),
+      request.signal,
+      deadline,
+      cancel,
+    );
+    return bytes.byteLength === 0 ? null : bytes;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+// Reads one stream to its end, refusing as soon as the cumulative size passes the cap. The
+// refusal cancels the stream first: the caller that produced the bytes must stop, and the bytes
+// already read are dropped rather than uploaded.
+async function readAllBytes(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  cancel: () => void,
+): Promise<ArrayBuffer> {
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    total += value.byteLength;
+    if (total > BINARY_BODY_LIMIT_BYTES) {
+      cancel();
+      throw limitError('request');
+    }
+    chunks.push(value);
+  }
+  const buffer = new ArrayBuffer(total);
+  const bytes = new Uint8Array(buffer);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return buffer;
 }
 
 /**

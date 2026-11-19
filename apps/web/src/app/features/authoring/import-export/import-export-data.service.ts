@@ -77,8 +77,7 @@ export class ImportExportDataService {
         retryAfterSeconds: null,
         details: [{ path: '/format', reason: 'unsupported_format' }],
       });
-    if (format === 'xlsx' && file.size > IMPORT_BYTE_CAP)
-      throw new ApiRequestError(importSizeError(file, format));
+    if (file.size > IMPORT_BYTE_CAP) throw new ApiRequestError(importSizeError(file, format));
     signal?.throwIfAborted();
     if (format === 'csv') await assertCsvEncoding(file, signal);
     // The generator types only the JSON media body; the serializer preserves the original

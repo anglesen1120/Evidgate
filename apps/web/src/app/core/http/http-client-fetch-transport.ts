@@ -73,11 +73,15 @@ function isTimeoutError(value: unknown): boolean {
  * three outcomes race: the body, the deadline's `TimeoutError` and the caller's abort. An abort
  * wins over a deadline that fires in the same turn, and it is the only ending left when the
  * deadline is disabled. The listener never outlives the read.
+ *
+ * Losing the race leaves `read` running, so `cancel` releases whatever it is holding (a stream
+ * reader, a socket) — otherwise a cancelled call keeps consuming the producer.
  */
 export async function readUnderCall<T>(
   read: () => Promise<T>,
   signal: AbortSignal,
   deadline: Deadline | null,
+  cancel?: () => void,
 ): Promise<T> {
   // A listener added to a signal that has already fired never runs, so an abort from before the
   // read is reported here; without it a stalled body would wait for the deadline or forever.
@@ -100,6 +104,9 @@ export async function readUnderCall<T>(
     // A read that ends because of a cancellation can reject with the stream's own error, so the
     // signal is the authority on whether this was one - and an abort also wins over a deadline
     // that fired at the same moment.
+    if (signal.aborted || isTimeoutError(error)) {
+      cancel?.();
+    }
     if (signal.aborted) {
       throw abortError();
     }

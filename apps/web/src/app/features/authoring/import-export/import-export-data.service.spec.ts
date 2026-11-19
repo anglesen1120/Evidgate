@@ -1,3 +1,4 @@
+import { BrowserPlatformLocation, PlatformLocation } from '@angular/common';
 import { HttpHeaders } from '@angular/common/http';
 import {
   HttpTestingController,
@@ -9,6 +10,7 @@ import { API_BASE_PATH } from '../../../core/http/api-origin';
 import { provideApi } from '../../../core/http/api-client';
 import { ImportExportDataService } from './import-export-data.service';
 import { BINARY_TRANSPORT_HEADER } from '../../../core/http/binary-transport';
+import { TenantStore } from '../../../core/session/tenant.store';
 import { IMPORT_BYTE_CAP } from './local-file-preview';
 
 const report = {
@@ -25,7 +27,12 @@ describe('ImportExportDataService', () => {
   let service: ImportExportDataService;
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [ImportExportDataService, provideApi(BASE_URL), provideHttpClientTesting()],
+      providers: [
+        ImportExportDataService,
+        provideApi(BASE_URL),
+        provideHttpClientTesting(),
+        { provide: PlatformLocation, useClass: BrowserPlatformLocation },
+      ],
     });
     http = TestBed.inject(HttpTestingController);
     service = TestBed.inject(ImportExportDataService);
@@ -34,6 +41,7 @@ describe('ImportExportDataService', () => {
     try {
       http.verify();
     } finally {
+      document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
       TestBed.resetTestingModule();
     }
   });
@@ -91,6 +99,9 @@ describe('ImportExportDataService', () => {
   });
 
   it('sends original XLSX bytes for dry run and confirmation without a text decode', async () => {
+    document.cookie = 'XSRF-TOKEN=xlsx-csrf-token; path=/';
+    const org = '018f0000-0000-7000-8000-000000000001';
+    TestBed.inject(TenantStore).setOrg(org);
     const file = new File([new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0xff])], 'source.xlsx');
     const text = vi.spyOn(file, 'text');
     for (const dryRun of [true, false]) {
@@ -106,6 +117,11 @@ describe('ImportExportDataService', () => {
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
       expect(pending.request.headers.get('Idempotency-Key')).toBe(key);
+      expect(pending.request.headers.get('X-XSRF-TOKEN')).toBe('xlsx-csrf-token');
+      expect(pending.request.headers.get('X-Request-Id')).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+      );
+      expect(pending.request.headers.get('X-Evidgate-Org')).toBe(org);
       expect(Object.fromEntries(new URL(pending.request.urlWithParams).searchParams)).toEqual({
         format: 'xlsx',
         dry_run: String(dryRun),
@@ -137,6 +153,47 @@ describe('ImportExportDataService', () => {
     pending.flush(JSON.stringify(report), { headers: JSON_HEADERS });
     await call;
   });
+
+  it.each(['csv', 'json'] as const)(
+    'refuses oversized %s before reading the file or sending an import request',
+    async (format) => {
+      const file = new File([new Uint8Array(IMPORT_BYTE_CAP + 1)], `large.${format}`);
+      const bytes = vi.spyOn(file, 'arrayBuffer');
+      const text = vi.spyOn(file, 'text');
+      await expect(service.importFile('project', file, format, true, 'key')).rejects.toMatchObject({
+        error: {
+          kind: 'payload_too_large',
+          status: 413,
+          code: 'payload_too_large',
+          details: [
+            {
+              path: '/file',
+              reason: 'body_too_large',
+              limit: IMPORT_BYTE_CAP,
+              actual: IMPORT_BYTE_CAP + 1,
+            },
+          ],
+        },
+      });
+      expect(bytes).not.toHaveBeenCalled();
+      expect(text).not.toHaveBeenCalled();
+      http.expectNone((request) => request.url.includes('/authoring/import'));
+    },
+  );
+
+  it.each(['csv', 'json'] as const)(
+    'sends %s exactly at the byte cap on the text transport',
+    async (format) => {
+      const content = (format === 'csv' ? 'kind,key\nnode,n1' : '{}').padEnd(IMPORT_BYTE_CAP, ' ');
+      const file = new File([content], `limit.${format}`);
+      const call = service.importFile('project', file, format, true, 'key');
+      const pending = await takeRequest('/authoring/import');
+      expect(pending.request.body).toBe(content);
+      expect(pending.request.responseType).toBe('text');
+      pending.flush(JSON.stringify(report), { headers: JSON_HEADERS });
+      expect(await call).toEqual(report);
+    },
+  );
 
   it.each([
     [413, 'payload_too_large', '/file', 'body_too_large', 'payload_too_large'],
