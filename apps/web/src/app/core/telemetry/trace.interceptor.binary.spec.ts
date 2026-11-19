@@ -7,7 +7,7 @@ import { NavigationEnd, NavigationStart, Router, type Event as RouterEvent } fro
 import { InMemorySpanExporter } from '@opentelemetry/sdk-trace';
 import { Subject, firstValueFrom, of, throwError, type Observable } from 'rxjs';
 
-import { BINARY_BODY_LIMIT_BYTES } from '../http/binary-transport';
+import { BINARY_BODY_LIMIT_BYTES, cappedBinaryContext } from '../http/binary-transport';
 import { startTelemetrySdk } from './telemetry-sdk';
 import type { TelemetrySdkOptions } from './telemetry-sdk';
 import type { TelemetryConfig } from './telemetry-config';
@@ -78,7 +78,11 @@ function apiSpan(exporter: InMemorySpanExporter) {
 }
 
 const bytesRequest = () =>
-  new HttpRequest('GET', API_URL, { responseType: 'arraybuffer', reportProgress: true });
+  new HttpRequest('GET', API_URL, {
+    responseType: 'arraybuffer',
+    reportProgress: true,
+    context: cappedBinaryContext(),
+  });
 
 describe('telemetryInterceptor: byte replies', () => {
   afterEach(() => TestBed.resetTestingModule());
@@ -125,7 +129,11 @@ describe('telemetryInterceptor: byte replies', () => {
 
   it('records a reportProgress text call with over-cap Content-Length as a failed network call', async () => {
     const exporter = await harness();
-    const text = new HttpRequest('GET', API_URL, { responseType: 'text', reportProgress: true });
+    const text = new HttpRequest('GET', API_URL, {
+      responseType: 'text',
+      reportProgress: true,
+      context: cappedBinaryContext(),
+    });
     const headers = new HttpHeaders({ 'Content-Length': String(BINARY_BODY_LIMIT_BYTES + 1) });
 
     await firstValueFrom(
@@ -135,6 +143,57 @@ describe('telemetryInterceptor: byte replies', () => {
     const span = apiSpan(exporter);
     expect(span.attributes['evidgate.outcome']).toBe('error');
     expect(span.attributes['evidgate.api.error_kind']).toBe('network');
+  });
+
+  it('records a request-only call whose final text reply is over the cap as failed, not ok', async () => {
+    const exporter = await harness();
+    const text = new HttpRequest('POST', API_URL, 'x', {
+      responseType: 'text',
+      reportProgress: true,
+      context: cappedBinaryContext(),
+    });
+    const body = 'x'.repeat(BINARY_BODY_LIMIT_BYTES + 1);
+
+    await firstValueFrom(send(text, of(event(RESPONSE, { body }))));
+
+    const span = apiSpan(exporter);
+    expect(span.attributes['evidgate.outcome']).toBe('error');
+    expect(span.attributes['evidgate.api.error_kind']).toBe('network');
+  });
+
+  it('keeps a final text reply at the cap, and an over-cap one without reportProgress, as ok', async () => {
+    const exporter = await harness();
+    const text = new HttpRequest('POST', API_URL, 'x', {
+      responseType: 'text',
+      reportProgress: true,
+      context: cappedBinaryContext(),
+    });
+    await firstValueFrom(
+      send(text, of(event(RESPONSE, { body: 'x'.repeat(BINARY_BODY_LIMIT_BYTES) }))),
+    );
+    expect(apiSpan(exporter).attributes['evidgate.outcome']).toBe('ok');
+
+    exporter.reset();
+    const plain = new HttpRequest('POST', API_URL, 'x', { responseType: 'text' });
+    const body = 'x'.repeat(BINARY_BODY_LIMIT_BYTES + 1);
+    await firstValueFrom(send(plain, of(event(RESPONSE, { body }))));
+    expect(apiSpan(exporter).attributes['evidgate.outcome']).toBe('ok');
+
+    // `reportProgress` alone is not the adapter's cap marker: a caller's own call stays ok.
+    exporter.reset();
+    const own = new HttpRequest('POST', API_URL, 'x', {
+      responseType: 'text',
+      reportProgress: true,
+    });
+    await firstValueFrom(send(own, of(event(RESPONSE, { body }))));
+    expect(apiSpan(exporter).attributes['evidgate.outcome']).toBe('ok');
+  });
+
+  it('records an invalid Content-Length on a byte call as failed', async () => {
+    const exporter = await harness();
+    const headers = new HttpHeaders({ 'Content-Length': '10, 11' });
+    await firstValueFrom(send(bytesRequest(), of(event(RESPONSE_HEADER, { headers }))));
+    expect(apiSpan(exporter).attributes['evidgate.outcome']).toBe('error');
   });
 });
 
