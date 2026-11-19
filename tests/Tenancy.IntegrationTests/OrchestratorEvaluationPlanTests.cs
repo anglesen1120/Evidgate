@@ -390,8 +390,8 @@ public sealed class OrchestratorEvaluationPlanTests
         await using var caller = await ContractScope.BeginAsync(world.Api, world.Org);
         var reader = caller.Resolve<IOrchestratorEvaluationPlan>();
 
-        // The mutation this pins: joining the manifest or the planned executions, which answers null for a run whose
-        // plan is empty instead of its header.
+        // The mutation this pins: an inner join to the planned executions, which answers null for a run whose plan is
+        // empty instead of its header.
         var header = await reader.GetEvaluationRunHeaderAsync(world.Org, plan.RunId, TestContext.Current.CancellationToken);
 
         header.ShouldNotBeNull();
