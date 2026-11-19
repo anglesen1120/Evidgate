@@ -1,0 +1,37 @@
+{
+  "operation_id": "getProjectAiSettings",
+  "variant": "empty",
+  "status": 200,
+  "headers": {
+    "ETag": "\"0\""
+  },
+  "latency_ms": 0,
+  "body": {
+    "version_no": 0,
+    "source": "default_template",
+    "settings_id": null,
+    "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "settings": {
+      "description": "Review-only guidance for the sample checkout.",
+      "environment_url": "https://checkout.fixture.test",
+      "languages": ["en"],
+      "writing_style": "Use concise observable steps for the fixture checkout.",
+      "coverage_strategy": "Cover the successful checkout and refused authorization paths.",
+      "priority_criteria": {
+        "critical": "Checkout data is lost.",
+        "high": "Checkout cannot complete.",
+        "medium": "Secondary validation fails.",
+        "low": "Non-blocking wording issue."
+      },
+      "exclusion_rules": "Do not submit real payments in this fixture.",
+      "step_detail": "One observable action and result per step."
+    },
+    "template": {
+      "code": "general-en",
+      "version": 1
+    },
+    "author": null,
+    "reason": null,
+    "created_at": null
+  }
+}

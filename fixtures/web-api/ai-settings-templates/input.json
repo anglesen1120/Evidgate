@@ -1,0 +1,60 @@
+{
+  "operation_id": "listProjectAiSettingsTemplates",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000b441"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "code": "general-en",
+        "version": 1,
+        "locale": "en",
+        "name": "General fixture guidance (English)",
+        "is_default": true,
+        "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "settings": {
+          "description": "Review-only guidance for the sample checkout.",
+          "environment_url": "https://checkout.fixture.test",
+          "languages": ["en"],
+          "writing_style": "Use concise observable steps for the fixture checkout.",
+          "coverage_strategy": "Cover the successful checkout and refused authorization paths.",
+          "priority_criteria": {
+            "critical": "Checkout data is lost.",
+            "high": "Checkout cannot complete.",
+            "medium": "Secondary validation fails.",
+            "low": "Non-blocking wording issue."
+          },
+          "exclusion_rules": "Do not submit real payments in this fixture.",
+          "step_detail": "One observable action and result per step."
+        }
+      },
+      {
+        "code": "general-vi",
+        "version": 1,
+        "locale": "vi",
+        "name": "Hướng dẫn mẫu kiểm thử",
+        "is_default": true,
+        "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "settings": {
+          "description": "Review-only guidance for the sample checkout.",
+          "environment_url": "https://checkout.fixture.test",
+          "languages": ["vi"],
+          "writing_style": "Viết bước kiểm thử ngắn gọn cho dữ liệu mẫu.",
+          "coverage_strategy": "Cover the successful checkout and refused authorization paths.",
+          "priority_criteria": {
+            "critical": "Checkout data is lost.",
+            "high": "Checkout cannot complete.",
+            "medium": "Secondary validation fails.",
+            "low": "Non-blocking wording issue."
+          },
+          "exclusion_rules": "Do not submit real payments in this fixture.",
+          "step_detail": "One observable action and result per step."
+        }
+      }
+    ],
+    "next_cursor": null
+  }
+}

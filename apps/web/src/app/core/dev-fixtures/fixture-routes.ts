@@ -121,6 +121,26 @@ export interface FixtureRoute {
 export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   { operationId: 'importAuthoring', method: 'POST', path: '/projects/{p}/authoring/import' },
   { operationId: 'exportAuthoring', method: 'GET', path: '/projects/{p}/authoring/export' },
+  { operationId: 'getProjectAiSettings', method: 'GET', path: '/projects/{p}/ai-settings' },
+  { operationId: 'saveProjectAiSettings', method: 'PUT', path: '/projects/{p}/ai-settings' },
+  {
+    operationId: 'listProjectAiSettingsVersions',
+    method: 'GET',
+    path: '/projects/{p}/ai-settings/versions',
+    cursorQueryParameter: 'cursor',
+  },
+  {
+    operationId: 'getProjectAiSettingsVersion',
+    method: 'GET',
+    path: '/projects/{p}/ai-settings/versions/{version_no}',
+    idKeyParameter: 'version_no',
+    idKeyField: 'version_no',
+  },
+  {
+    operationId: 'listProjectAiSettingsTemplates',
+    method: 'GET',
+    path: '/projects/{p}/ai-settings/templates',
+  },
   { operationId: 'listPermissions', method: 'GET', path: '/permissions' },
   { operationId: 'listRoles', method: 'GET', path: '/roles' },
   { operationId: 'listMyOrganizations', method: 'GET', path: '/orgs' },

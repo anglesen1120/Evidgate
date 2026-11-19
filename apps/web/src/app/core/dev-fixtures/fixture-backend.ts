@@ -78,6 +78,7 @@ import { findUsageSummaryFixture } from './fixture-usage-summary';
 import { securityEventsBody } from './fixture-security-events';
 import { caseListFixtureBody } from './fixture-case-list';
 import { findBulkCaseListFixture } from './fixture-case-list-bulk';
+import { AiSettingsFixtureScenario, aiSettingsPermissions } from './fixture-ai-settings';
 
 /** Response header naming the corpus directory that answered; also a production-leak marker. */
 export const FIXTURE_RESPONSE_HEADER = 'X-Evidgate-Fixture';
@@ -221,6 +222,7 @@ export class FixtureHttpBackend implements HttpBackend {
   private readonly toggles: FixtureToggles = inject(FixtureToggles);
   private readonly retentionPolicies = new Map<string, RetentionPolicy>();
   private readonly runCancellation = new RunCancelFixtureScenario();
+  private readonly aiSettings = new AiSettingsFixtureScenario();
 
   handle(request: HttpRequest<unknown>): Observable<HttpEvent<unknown>> {
     recordRequest(request);
@@ -252,6 +254,10 @@ export class FixtureHttpBackend implements HttpBackend {
     request: HttpRequest<unknown>,
     relativePath: string,
   ): FixtureEntry | undefined {
+    const settings = this.aiSettings.entry(request, relativePath, (operation) =>
+      this.toggles.variantFor(operation),
+    );
+    if (settings !== undefined) return settings;
     const cancellation = this.runCancellation.entry(
       request,
       relativePath,
@@ -281,6 +287,8 @@ export class FixtureHttpBackend implements HttpBackend {
     // The retention writer session needs one grant no corpus row holds; a toggle that names no
     // specimen falls through, so every corpus variant answers exactly as before.
     if (request.method === 'GET' && relativePath === '/permissions') {
+      const aiPermissions = aiSettingsPermissions(this.toggles.variantFor('listPermissions'));
+      if (aiPermissions !== undefined) return aiPermissions;
       const supplemental = findSettingsRetentionWriteFixture(
         this.toggles.variantFor('listPermissions'),
       );
