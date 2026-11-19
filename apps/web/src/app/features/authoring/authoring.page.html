@@ -1,0 +1,155 @@
+@if (ownsPageHeading) {
+  <app-page-header
+    [title]="copy.title"
+    [description]="copy.description"
+    [titleId]="'authoring-page-title'"
+  >
+    <div appPageHeaderActions class="flex min-w-0 flex-wrap items-center gap-(--eg-space-3)">
+      <ng-container *ngTemplateOutlet="refresh" />
+    </div>
+  </app-page-header>
+} @else {
+  <app-section-header
+    [title]="copy.title"
+    [description]="copy.description"
+    [titleId]="'authoring-page-title'"
+  >
+    <div appSectionHeaderActions class="flex min-w-0 flex-wrap items-center gap-(--eg-space-3)">
+      <ng-container *ngTemplateOutlet="refresh" />
+    </div>
+  </app-section-header>
+}
+<ng-template #refresh>
+  <button
+    hlmBtn
+    [variant]="'outline'"
+    type="button"
+    data-authoring-refresh
+    [disabled]="busy()"
+    (click)="retry()"
+  >
+    {{ copy.refresh }}
+  </button>
+</ng-template>
+
+@if (!denied()) {
+  <nav class="breadcrumb" data-authoring-breadcrumb [attr.aria-label]="copy.path">
+    <ol>
+      <li>
+        <button hlmBtn [variant]="'link'" type="button" (click)="select(null)">
+          {{ copy.all }}
+        </button>
+      </li>
+      @for (entry of selectedPath(); track entry.node_id) {
+        <li>
+          <span class="separator" aria-hidden="true">/</span>
+          @if (entry.node_id === store.selectedNodeId()) {
+            <bdi [attr.aria-current]="'location'">{{ entry.title }}</bdi>
+          } @else {
+            <button hlmBtn [variant]="'link'" type="button" (click)="select(entry.node_id)">
+              <bdi>{{ entry.title }}</bdi>
+            </button>
+          }
+        </li>
+      }
+    </ol>
+  </nav>
+  @if (store.selectedNode(); as selected) {
+    <dl class="selected-id">
+      <dt>{{ copy.selectedId }}</dt>
+      <dd>
+        <app-copyable-identifier
+          [value]="selected.node_id"
+          [label]="copy.selectedId"
+          [copySize]="'lg'"
+        />
+      </dd>
+    </dl>
+  } @else {
+    <p class="scope-help">{{ copy.choose }}</p>
+  }
+}
+
+<div class="panes">
+  <section
+    hlmCard
+    class="tree-pane"
+    aria-labelledby="authoring-hierarchy-title"
+    [attr.aria-busy]="busy()"
+  >
+    <div hlmCardHeader>
+      <app-section-header
+        [title]="copy.hierarchy"
+        [description]="copy.hierarchyDescription"
+        [titleId]="'authoring-hierarchy-title'"
+        [headingLevel]="ownsPageHeading ? 2 : 3"
+        [size]="'subsection'"
+      />
+    </div>
+    <div hlmCardContent>
+      @if (store.stale() && !denied()) {
+        <app-inline-feedback
+          data-authoring-stale
+          [tone]="'warning'"
+          [title]="copy.stale"
+          [description]="copy.staleDescription"
+          [announcement]="'off'"
+        />
+      }
+      @if (hasContent() && store.treeError()) {
+        <app-request-state
+          [status]="'error'"
+          [error]="store.treeError()"
+          [retryEligible]="store.treeError()?.retryable ?? false"
+          [retryBusy]="busy()"
+          (retry)="retry()"
+        />
+      }
+      <app-request-state
+        [status]="viewStatus()"
+        [error]="store.treeError()"
+        [empty]="!hasContent()"
+        [loadingLabel]="copy.loading"
+        [emptyTitle]="copy.empty"
+        [emptyDescription]="copy.emptyDescription"
+        [retryEligible]="store.treeError()?.retryable ?? false"
+        [retryBusy]="busy()"
+        (retry)="retry()"
+      >
+        <app-authoring-tree-pane
+          [projectId]="store.projectId() ?? ''"
+          [roots]="store.roots()"
+          [children]="store.children()"
+          [selectedNodeId]="store.selectedNodeId()"
+          (selectNode)="select($event)"
+          (expand)="expand($event)"
+          (loadMore)="loadMore($event)"
+        />
+      </app-request-state>
+    </div>
+  </section>
+
+  <section hlmCard class="case-pane" data-authoring-cases aria-labelledby="authoring-cases-title">
+    <div hlmCardHeader>
+      <app-section-header
+        [title]="copy.table"
+        [titleId]="'authoring-cases-title'"
+        [headingLevel]="ownsPageHeading ? 2 : 3"
+        [size]="'subsection'"
+      />
+    </div>
+    <div hlmCardContent>
+      <p class="scope-help">{{ copy.tablePlaceholder }}</p>
+    </div>
+  </section>
+</div>
+
+<!-- One polite region for settled reads, outside every busy subtree: a hidden or busy live
+     region is never spoken. It carries the scope, not one line per node. -->
+<p
+  class="sr-only"
+  role="status"
+  [attr.aria-live]="'polite'"
+  data-authoring-announcement
+  [textContent]="announcement()"
+></p>

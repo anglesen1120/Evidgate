@@ -1,0 +1,19 @@
+{
+  "operation_id": "listAuthoringTree",
+  "variant": "rate-limited",
+  "status": 429,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000f103",
+    "Retry-After": "1"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "rate_limited",
+      "message": "Authoring hierarchy fixture refusal rate-limited.",
+      "request_id": "018f0000-0000-7000-8000-00000000f103",
+      "retryable": true,
+      "details": []
+    }
+  }
+}

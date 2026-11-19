@@ -37,6 +37,7 @@ export const FIXTURE_MARKERS = [
   'dev/suite-composition',
   'dev/catalog-list',
   'dev/settings-security-events',
+  'dev/authoring-tree',
 ] as const;
 
 /** The six Development-only sign-in markers, exempt under `--allow-dev-sign-in` only. */
