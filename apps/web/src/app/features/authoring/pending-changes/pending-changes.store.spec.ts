@@ -160,6 +160,25 @@ describe('PendingChangesStore', () => {
     expect(store().receipt()).toEqual(RECEIPT);
   });
 
+  it('exposes the reviewed batch ETag and clears it when the review moves', async () => {
+    await store().init(PROJECT);
+    expect(store().batchEtag()).toBeNull();
+
+    apply.mockRejectedValueOnce(new ApiRequestError(failure('validation', 422)));
+    await store().apply();
+    expect(store().batchEtag()).toBe('"batch-1"');
+
+    store().toggle(COMMENT_ID);
+    expect(store().batchEtag()).toBeNull();
+    store().selectAll();
+    expect(store().batchEtag()).toBeNull();
+
+    await store().apply();
+    expect(store().batchEtag()).toBeNull();
+    await store().init('project-2');
+    expect(store().batchEtag()).toBeNull();
+  });
+
   it('reuses the same key when the same ids and batch ETag are retried after a 503', async () => {
     await store().init(PROJECT);
     apply.mockRejectedValueOnce(new ApiRequestError(failure('unavailable', 503)));

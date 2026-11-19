@@ -1,0 +1,82 @@
+:host {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--eg-space-7);
+  color: var(--eg-text);
+}
+app-request-state {
+  display: grid;
+  gap: var(--eg-space-7);
+}
+.region {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--eg-space-4);
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--eg-space-3);
+}
+.actions button {
+  block-size: auto;
+  min-block-size: var(--eg-control-touch);
+  white-space: normal;
+}
+.field {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--eg-space-2);
+  max-inline-size: 65ch;
+}
+.full-text {
+  margin: 0;
+  min-inline-size: 0;
+  max-inline-size: 75ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.facts {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--eg-space-4);
+  margin: 0;
+}
+.facts > div {
+  display: grid;
+  min-inline-size: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: var(--eg-space-3);
+}
+.facts dt {
+  color: var(--eg-text-muted);
+}
+.facts dd {
+  margin: 0;
+  min-inline-size: 0;
+}
+.inspection {
+  border-block: var(--eg-border-width, 1px) solid var(--eg-border);
+  padding-block: var(--eg-space-7);
+}
+.blocked-item {
+  display: grid;
+  gap: var(--eg-space-2);
+}
+summary {
+  min-block-size: var(--eg-control-touch);
+  padding-block: var(--eg-space-3);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+summary:focus-visible,
+.inspection:focus-visible {
+  outline: var(--eg-focus-width) solid var(--eg-focus);
+  outline-offset: var(--eg-focus-offset);
+}
+@media (max-width: 767px) {
+  .facts > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

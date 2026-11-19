@@ -1,0 +1,36 @@
+:host {
+  display: block;
+  min-inline-size: 0;
+}
+.region {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--eg-space-4);
+}
+.field {
+  display: grid;
+  min-inline-size: 0;
+  max-inline-size: 65ch;
+  gap: var(--eg-space-2);
+}
+.full-text {
+  margin: 0;
+  min-inline-size: 0;
+  max-inline-size: 75ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eg-space-3);
+}
+.actions button {
+  block-size: auto;
+  min-block-size: var(--eg-control-touch);
+  white-space: normal;
+}
+section:focus-visible {
+  outline: var(--eg-focus-width) solid var(--eg-focus);
+  outline-offset: var(--eg-focus-offset);
+}

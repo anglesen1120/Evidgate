@@ -63,6 +63,8 @@ export const PendingChangesStore = signalStore(
     loadToken: 0,
     selectedIds: [] as readonly string[],
     selectionTouched: false,
+    /** The batch ETag the reviewed selection was read at; null until that read, and after it moves. */
+    batchEtag: null as string | null,
     previewId: null as string | null,
     localReason: '',
     targetTitles: NO_TITLES,
@@ -161,6 +163,7 @@ export const PendingChangesStore = signalStore(
         rows: items,
         nextCursor: cursor,
         selectedIds,
+        batchEtag: null,
         previewId: previewId !== null && present.has(previewId) ? previewId : null,
         queueStale: false,
       });
@@ -207,6 +210,7 @@ export const PendingChangesStore = signalStore(
       const byId = new Map(items.map((row) => [row.change_id, row]));
       patchState(store, {
         rows: store.rows().map((row) => byId.get(row.change_id) ?? row),
+        batchEtag,
       });
       return batchEtag;
     }
@@ -241,6 +245,7 @@ export const PendingChangesStore = signalStore(
         patchState(store, {
           rows: store.rows().filter((row) => !applied.has(row.change_id)),
           selectedIds: store.selectedIds().filter((id) => !applied.has(id)),
+          batchEtag: null,
           previewId: previewId !== null && applied.has(previewId) ? null : previewId,
           receipt: result,
           applyError: null,
@@ -289,6 +294,7 @@ export const PendingChangesStore = signalStore(
             queueStale: false,
             selectedIds: [],
             selectionTouched: false,
+            batchEtag: null,
             previewId: null,
             localReason: '',
             targetTitles: {},
@@ -316,7 +322,11 @@ export const PendingChangesStore = signalStore(
         const selected = new Set(store.selectedIds());
         if (selected.has(id)) selected.delete(id);
         else selected.add(id);
-        patchState(store, { selectedIds: [...selected], selectionTouched: true });
+        patchState(store, {
+          selectedIds: [...selected],
+          selectionTouched: true,
+          batchEtag: null,
+        });
       },
       selectAll(): void {
         patchState(store, {
@@ -325,10 +335,11 @@ export const PendingChangesStore = signalStore(
             .slice(0, MAX_APPLY_SELECTION)
             .map((row) => row.change_id),
           selectionTouched: true,
+          batchEtag: null,
         });
       },
       clearSelection(): void {
-        patchState(store, { selectedIds: [], selectionTouched: true });
+        patchState(store, { selectedIds: [], selectionTouched: true, batchEtag: null });
       },
       setPreview(id: string | null): void {
         patchState(store, { previewId: id });
@@ -380,6 +391,7 @@ export const PendingChangesStore = signalStore(
           patchState(store, {
             rows: store.rows().filter((row) => row.change_id !== id),
             selectedIds: store.selectedIds().filter((candidate) => candidate !== id),
+            batchEtag: null,
             previewId: store.previewId() === id ? null : store.previewId(),
           });
           return true;

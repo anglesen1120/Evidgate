@@ -3989,6 +3989,109 @@
       <trans-unit id="authoring.import-export.field-code" datatype="html"><source>Case code</source><target>Mã ca kiểm thử</target></trans-unit>
       <trans-unit id="authoring.import-export.field-position" datatype="html"><source>Position</source><target>Vị trí</target></trans-unit>
       <trans-unit id="authoring.import-export.row-field-label" datatype="html"><source>Row <x id="INDEX" equiv-text="detail.index"/> — <x id="FIELD" equiv-text="importFieldLabel(detail.path)"/></source><target>Dòng <x id="INDEX" equiv-text="detail.index"/> — <x id="FIELD" equiv-text="importFieldLabel(detail.path)"/></target></trans-unit>
+      <trans-unit id="authoring.pending-changes.title" datatype="html"><source>Pending changes</source><target>Thay đổi đang chờ</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.description" datatype="html"><source>Review the queued changes and apply the confirmed set as one batch. There is no per-row apply and no partial success.</source><target>Xem lại các thay đổi đang chờ và áp dụng nhóm đã xác nhận thành một lô. Không có áp dụng từng dòng và không có thành công một phần.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.back" datatype="html"><source>Back to feature tree</source><target>Quay lại cây tính năng</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.queue-title" datatype="html"><source>Queued changes</source><target>Thay đổi trong hàng chờ</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.queue-scope" datatype="html"><source>Loaded pending changes</source><target>Các thay đổi đang chờ đã tải</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.preview-title" datatype="html"><source>Selected change</source><target>Thay đổi đã chọn</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.preview-none" datatype="html"><source>Choose a queued change to read its preview.</source><target>Chọn một thay đổi trong hàng chờ để xem bản xem trước.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.select-all" datatype="html"><source>Select every loaded change</source><target>Chọn tất cả thay đổi đã tải</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.clear-selection" datatype="html"><source>Clear the selection</source><target>Bỏ chọn tất cả</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.selection-summary" datatype="html"><source>Selected changes</source><target>Thay đổi đã chọn</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.reason-label" datatype="html"><source>Batch reason</source><target>Lý do của lô</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.reason-hint" datatype="html"><source>Kept in this page only. The apply request carries the selected ids, so this note is not stored.</source><target>Chỉ lưu trên trang này. Yêu cầu áp dụng chỉ gửi các id đã chọn nên ghi chú này không được lưu.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.reason-unset" datatype="html"><source>Not set</source><target>Chưa đặt</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.apply-action" datatype="html"><source>Apply all changes as one atomic batch</source><target>Áp dụng tất cả thay đổi thành một lô nguyên tử</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.apply-confirm-title" datatype="html"><source>Apply the selected changes?</source><target>Áp dụng các thay đổi đã chọn?</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.apply-confirm-body" datatype="html"><source>Every selected pending change is applied in one transaction. Nothing is applied if the batch is stale.</source><target>Mọi thay đổi đang chờ được chọn sẽ được áp dụng trong một giao dịch. Không có gì được áp dụng nếu lô đã cũ.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.apply-confirm" datatype="html"><source>Apply changes</source><target>Áp dụng thay đổi</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.applying" datatype="html"><source>Applying the batch…</source><target>Đang áp dụng lô…</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.cancel" datatype="html"><source>Cancel</source><target>Huỷ</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.discard-action" datatype="html"><source>Discard this change</source><target>Loại bỏ thay đổi này</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.discard-confirm-title" datatype="html"><source>Discard this pending change?</source><target>Loại bỏ thay đổi đang chờ này?</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.discard-confirm-body" datatype="html"><source>Only this queued change is discarded. Every other queued change is kept.</source><target>Chỉ thay đổi này bị loại bỏ. Mọi thay đổi khác trong hàng chờ vẫn được giữ.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.discard-confirm" datatype="html"><source>Discard change</source><target>Loại bỏ thay đổi</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.receipt-title" datatype="html"><source>Applied batch</source><target>Lô đã áp dụng</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.receipt-batch" datatype="html"><source>Batch</source><target>Lô</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.receipt-committed" datatype="html"><source>Committed</source><target>Đã ghi nhận</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.receipt-versions" datatype="html"><source>Written versions</source><target>Phiên bản đã ghi</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.receipt-comment-only" datatype="html"><source>This batch wrote no entity version because every change was a comment.</source><target>Lô này không ghi phiên bản thực thể nào vì mọi thay đổi đều là bình luận.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.receipt-lineage" datatype="html"><source>Lineage</source><target>Phả hệ</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.conflict-title" datatype="html"><source>The batch changed before it was applied</source><target>Lô đã thay đổi trước khi được áp dụng</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.conflict-body" datatype="html"><source>Nothing was applied. Every queued change and the local reason are kept. Reload is an explicit read; there is no automatic retry or merge.</source><target>Không có gì được áp dụng. Mọi thay đổi trong hàng chờ và lý do cục bộ vẫn được giữ. Tải lại là một lần đọc rõ ràng; không tự động thử lại hay gộp.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.conflict-reload" datatype="html"><source>Reload the queue</source><target>Tải lại hàng chờ</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.conflict-close" datatype="html"><source>Close</source><target>Đóng</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.read-only" datatype="html"><source>You can read this queue but not change it. Applying and discarding need the authoring write permission.</source><target>Bạn chỉ có thể đọc hàng chờ này, không thể thay đổi. Áp dụng và loại bỏ cần quyền ghi authoring.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.blocked-structural" datatype="html"><source>This selection contains a merge or split. Structural changes cannot be applied yet.</source><target>Lựa chọn này có thay đổi gộp hoặc tách. Chưa thể áp dụng thay đổi cấu trúc.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.blocked-stale" datatype="html"><source>An affected item changed after this change was queued. Reload the queue before applying.</source><target>Một mục liên quan đã thay đổi sau khi thay đổi này được xếp hàng. Hãy tải lại hàng chờ trước khi áp dụng.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.blocked-empty" datatype="html"><source>Select at least one pending change.</source><target>Hãy chọn ít nhất một thay đổi đang chờ.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.blocked-too-many" datatype="html"><source>One apply takes at most 200 exact changes.</source><target>Một lần áp dụng tối đa 200 thay đổi cụ thể.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.empty-title" datatype="html"><source>No pending changes</source><target>Không có thay đổi đang chờ</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.empty-body" datatype="html"><source>This project has no queued authoring change.</source><target>Dự án này không có thay đổi authoring nào trong hàng chờ.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.not-found-title" datatype="html"><source>Project not found</source><target>Không tìm thấy dự án</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.not-found-body" datatype="html"><source>This project is unknown or not available to this account.</source><target>Dự án này không tồn tại hoặc không khả dụng với tài khoản này.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.forbidden-title" datatype="html"><source>Authoring changes are not available</source><target>Không thể truy cập thay đổi authoring</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.forbidden-body" datatype="html"><source>This account cannot read this project&apos;s authoring changes.</source><target>Tài khoản này không thể đọc thay đổi authoring của dự án.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.retry-after" datatype="html"><source>The server asked to wait before trying again.</source><target>Máy chủ yêu cầu chờ trước khi thử lại.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.apply-failed" datatype="html"><source>The batch was not applied.</source><target>Lô chưa được áp dụng.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.discard-failed" datatype="html"><source>The change was not discarded.</source><target>Thay đổi chưa bị loại bỏ.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.queue-failed" datatype="html"><source>The change was not queued.</source><target>Thay đổi chưa được xếp hàng.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.duplicate-pending" datatype="html"><source>An affected item already has a pending structural change.</source><target>Một mục liên quan đã có thay đổi cấu trúc đang chờ.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.comment-action" datatype="html"><source>Queue a comment</source><target>Xếp hàng một bình luận</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.delete-action" datatype="html"><source>Queue a delete</source><target>Xếp hàng một thao tác xoá</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.comment-label" datatype="html"><source>Comment</source><target>Bình luận</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.delete-label" datatype="html"><source>Delete</source><target>Xoá</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.merge-label" datatype="html"><source>Merge</source><target>Gộp</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.split-label" datatype="html"><source>Split</source><target>Tách</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.target-label" datatype="html"><source>Target item</source><target>Mục đích</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.source-label" datatype="html"><source>Merge sources</source><target>Nguồn gộp</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.survivor-label" datatype="html"><source>Surviving item</source><target>Mục được giữ</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.new-item-label" datatype="html"><source>New item</source><target>Mục mới</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.lineage-label" datatype="html"><source>Lineage</source><target>Phả hệ</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.author-label" datatype="html"><source>Author</source><target>Tác giả</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.queued-source" datatype="html"><source>Queued source</source><target>Nguồn xếp hàng</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.impact-unavailable" datatype="html"><source>The affected cases and the full before/after impact are not supplied by this response.</source><target>Phản hồi này không cung cấp các ca bị ảnh hưởng và tác động đầy đủ trước/sau.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.loaded-scope" datatype="html"><source>Loaded count, not the project total</source><target>Số lượng đã tải, không phải tổng của dự án</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.atomic-scope" datatype="html"><source>One atomic batch, exact reviewed selection</source><target>Một lô nguyên tử, đúng các thay đổi đã xem xét</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.atomic-body" datatype="html"><source>Only the selected change ids are submitted. Unselected and unloaded changes stay queued. Applying does not publish or approve drafts.</source><target>Chỉ gửi các mã thay đổi đã chọn. Thay đổi chưa chọn hoặc chưa tải vẫn nằm trong hàng chờ. Áp dụng không xuất bản hay phê duyệt bản nháp.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.operation" datatype="html"><source>Operation</source><target>Thao tác</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.state" datatype="html"><source>State</source><target>Trạng thái</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.pending-state" datatype="html"><source>Queued</source><target>Đang chờ</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.stale-state" datatype="html"><source>Stale</source><target>Đã cũ</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.unavailable-state" datatype="html"><source>Unavailable</source><target>Chưa khả dụng</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.structural-unavailable" datatype="html"><source>Unavailable until structural apply lands. Merge and split changes stay queued and block Apply when selected.</source><target>Chưa khả dụng cho đến khi hỗ trợ áp dụng thay đổi cấu trúc. Thay đổi gộp và tách vẫn trong hàng chờ và chặn Áp dụng khi được chọn.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.stale-queue" datatype="html"><source>Refresh failed. These are previously loaded changes, not a confirmed current queue.</source><target>Không thể làm mới. Đây là các thay đổi đã tải trước đó, chưa xác nhận là hàng chờ hiện tại.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.select-change" datatype="html"><source>Select change</source><target>Chọn thay đổi</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.preview-action" datatype="html"><source>Preview</source><target>Xem trước</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.change-id" datatype="html"><source>Change id</source><target>Mã thay đổi</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.load-more" datatype="html"><source>Load more changes</source><target>Tải thêm thay đổi</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.batch-summary" datatype="html"><source>Batch summary</source><target>Tóm tắt lô</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.exact-ids" datatype="html"><source>Exact reviewed change ids</source><target>Đúng các mã thay đổi đã xem xét</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.metadata" datatype="html"><source>Implementation metadata · read-only</source><target>Siêu dữ liệu triển khai · chỉ đọc</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.batch-etag" datatype="html"><source>Batch ETag</source><target>ETag của lô</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.etag-not-read" datatype="html"><source>The exact-selection ETag is read immediately before applying. No batch token has been read for this selection yet.</source><target>ETag của đúng nhóm đã chọn được đọc ngay trước khi áp dụng. Chưa đọc mã lô cho nhóm này.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.idempotency-note" datatype="html"><source>The same apply intent reuses one idempotency key. The batch ETag comes from the exact-selection read, never from an individual item version.</source><target>Cùng ý định áp dụng dùng lại một khoá idempotency. ETag của lô lấy từ lần đọc đúng nhóm đã chọn, không lấy từ phiên bản của một mục riêng lẻ.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.manual-source" datatype="html"><source>Manual</source><target>Thủ công</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.ai-source" datatype="html"><source>AI</source><target>AI</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.import-source" datatype="html"><source>Import</source><target>Nhập</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.base-version" datatype="html"><source>Target base version</source><target>Phiên bản gốc của mục đích</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.queued-at" datatype="html"><source>Queued at (UTC)</source><target>Xếp hàng lúc (UTC)</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.applied-ids" datatype="html"><source>Applied change ids</source><target>Mã thay đổi đã áp dụng</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.entity" datatype="html"><source>Entity</source><target>Thực thể</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.comment-hint" datatype="html"><source>Queue a plain-text comment for review. This does not apply it.</source><target>Xếp hàng một bình luận văn bản thuần để xem xét. Thao tác này chưa áp dụng thay đổi.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.queue-reason" datatype="html"><source>Change reason (optional)</source><target>Lý do thay đổi (không bắt buộc)</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.comment-required" datatype="html"><source>Enter a comment before queueing it.</source><target>Nhập bình luận trước khi xếp hàng.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.review-tab-title" datatype="html"><source>Pending changes for this item</source><target>Thay đổi đang chờ của mục này</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.item-empty" datatype="html"><source>No loaded pending change targets this item.</source><target>Không có thay đổi đang chờ nào đã tải nhắm đến mục này.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.item-scope" datatype="html"><source>This list includes loaded changes for this item. Load more to inspect older pending changes.</source><target>Danh sách này gồm các thay đổi đã tải của mục này. Tải thêm để xem các thay đổi đang chờ cũ hơn.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.open-queue" datatype="html"><source>Review the project pending queue</source><target>Xem xét hàng chờ của dự án</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.queue-delete-title" datatype="html"><source>Queue a delete for this item?</source><target>Xếp hàng thao tác xoá mục này?</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.queue-delete-body" datatype="html"><source>This only queues a delete for review. The item is not deleted until an authorized reviewer applies the batch.</source><target>Thao tác này chỉ xếp hàng yêu cầu xoá để xem xét. Mục chỉ bị xoá khi người có quyền áp dụng lô.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.queued-success" datatype="html"><source>The change was queued for review.</source><target>Đã xếp hàng thay đổi để xem xét.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.reason-rejected" datatype="html"><source>The server refused the change reason. Review it before trying again.</source><target>Máy chủ từ chối lý do thay đổi. Xem lại trước khi thử lại.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.quota-reached" datatype="html"><source>The pending-change limit has been reached. Review or discard existing changes before queueing another.</source><target>Đã đạt giới hạn thay đổi đang chờ. Xem xét hoặc loại bỏ thay đổi hiện có trước khi xếp hàng thay đổi khác.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.write-denied" datatype="html"><source>Write access was refused. The queue stays readable; reload after your permissions have been restored.</source><target>Quyền ghi bị từ chối. Vẫn có thể đọc hàng chờ; tải lại sau khi quyền được khôi phục.</target></trans-unit>
     </body>
   </file>
 </xliff>

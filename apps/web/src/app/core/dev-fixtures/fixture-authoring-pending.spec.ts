@@ -1,3 +1,5 @@
+import { HttpHeaders, HttpRequest } from '@angular/common/http';
+import { AuthoringPendingFixtureScenario } from './fixture-authoring-pending';
 import { FIXTURE_CATALOG_AUTHORING_PENDING_ROWS } from './fixture-catalog-authoring-pending-rows';
 import { declaredResponseHeaderNames, VALIDATOR } from './fixture-contract.support';
 
@@ -92,5 +94,60 @@ describe('authoring pending fixture contract pins', () => {
         next_cursor: null,
       }).errors.length,
     ).toBeGreaterThan(0);
+  });
+});
+
+describe('AuthoringPendingFixtureScenario', () => {
+  const project = '018f0000-0000-7000-8000-000000000001';
+  const path = `/projects/${project}/authoring/changes`;
+  const ids = ['018f0000-0000-7000-8000-00000000cd01', '018f0000-0000-7000-8000-00000000cd02'];
+  const variant = () => 'ok';
+  it('reads the exact selected rows with an ETag and applies one delete version only once', () => {
+    const scenario = new AuthoringPendingFixtureScenario();
+    const selection = scenario.entry(
+      new HttpRequest('GET', path + '?ids=' + ids.join(',')),
+      path,
+      variant,
+    );
+    expect(selection?.document.headers['ETag']).toBe('"batch-7"');
+    const page = selection?.document.body as { items: readonly { change_id: string }[] };
+    expect(page.items.map((row) => row.change_id)).toEqual(ids);
+    const request = new HttpRequest(
+      'POST',
+      path + ':apply',
+      { change_ids: ids },
+      {
+        headers: new HttpHeaders({ 'If-Match': '"batch-7"', 'Idempotency-Key': 'one-intent' }),
+      },
+    );
+    const first = scenario.entry(request, path + ':apply', variant);
+    expect(
+      VALIDATOR.validateResponse('applyAuthoringChanges', 200, first?.document.body).errors,
+    ).toEqual([]);
+    const receipt = first?.document.body as {
+      versions: readonly unknown[];
+      applied_change_ids: readonly string[];
+    };
+    expect(receipt.versions).toHaveLength(1);
+    expect(receipt.applied_change_ids).toEqual(ids);
+    expect(scenario.entry(request, path + ':apply', variant)?.document.body).toEqual(
+      first?.document.body,
+    );
+    const remaining = scenario.entry(new HttpRequest('GET', path), path, variant)?.document
+      .body as { items: readonly { change_id: string }[] };
+    expect(remaining.items.map((row) => row.change_id)).not.toEqual(expect.arrayContaining(ids));
+  });
+  it('returns a 412 without changing any queued row', () => {
+    const scenario = new AuthoringPendingFixtureScenario();
+    const before = scenario.entry(new HttpRequest('GET', path), path, variant)?.document.body;
+    const refusal = scenario.entry(
+      new HttpRequest('POST', path + ':apply', { change_ids: ids }),
+      path + ':apply',
+      (operation) => (operation === 'applyAuthoringChanges' ? 'conflict' : 'ok'),
+    );
+    expect(refusal?.document.status).toBe(412);
+    expect(scenario.entry(new HttpRequest('GET', path), path, variant)?.document.body).toEqual(
+      before,
+    );
   });
 });

@@ -70,6 +70,7 @@ const READY: Readonly<Record<string, string>> = {
   CallbackPage: 'app-login-page',
   ProjectOverviewPage: 'app-project-overview',
   RouteStubPage: 'app-route-stub',
+  PendingChangesPage: 'app-pending-changes-page[data-pending-phase="ready"]',
   ForbiddenPage: 'app-forbidden-page',
   NoOrganizationPage: 'app-no-organization-page',
   ServiceUnavailablePage: 'app-service-unavailable-page',
