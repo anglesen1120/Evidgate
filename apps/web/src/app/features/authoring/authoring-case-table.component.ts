@@ -8,6 +8,7 @@ import {
   inject,
   Injector,
   linkedSignal,
+  LOCALE_ID,
   resource,
   viewChild,
 } from '@angular/core';
@@ -19,6 +20,7 @@ import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
 import { combineLatest, distinctUntilChanged, map } from 'rxjs';
+import { RETAINED_ROWS_CAP } from '../../shared/keyset-retention';
 import { InlineFeedbackComponent } from '../../shared/ui/states/inline-feedback.component';
 import { LiveStatusComponent } from '../../shared/ui/states/live-status.component';
 import { RequestStateComponent } from '../../shared/ui/states/request-state.component';
@@ -33,7 +35,7 @@ import {
   queryTooLong,
   type AuthoringCaseFilters,
 } from './authoring-case-filters';
-import { CASE_TABLE_COPY } from './authoring-case-table.copy';
+import { CASE_TABLE_COPY, caseTableBrowseCappedHelp } from './authoring-case-table.copy';
 import { AuthoringCaseTableStore } from './authoring-case-table.store';
 
 @Component({
@@ -62,7 +64,12 @@ export class AuthoringCaseTableComponent {
   private readonly router = inject(Router);
   private readonly document = inject(DOCUMENT);
   private readonly injector = inject(Injector);
-  protected readonly copy = CASE_TABLE_COPY;
+  private readonly locale = inject(LOCALE_ID);
+  private readonly cap = inject(RETAINED_ROWS_CAP);
+  protected readonly copy = {
+    ...CASE_TABLE_COPY,
+    browseCappedHelp: caseTableBrowseCappedHelp(this.cap, this.locale),
+  };
   private readonly routeState = toSignal(
     combineLatest([
       combineLatest(this.route.pathFromRoot.map((route) => route.paramMap)),

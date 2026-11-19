@@ -57,10 +57,19 @@ export const PENDING_COPY = {
   deleteAction: $localize`:@@authoring.pending-changes.delete-action:Queue a delete`,
   deleteConsequence: $localize`:@@authoring.pending-changes.delete-consequence:Applying this delete removes the named target item.`,
   quotaExceeded: $localize`:@@authoring.pending-changes.quota-reached:The pending-change limit has been reached. Review or discard existing changes before queueing another.`,
-  commentLabel: $localize`:@@authoring.pending-changes.comment-label:Comment`,
-  deleteLabel: $localize`:@@authoring.pending-changes.delete-label:Delete`,
-  mergeLabel: $localize`:@@authoring.pending-changes.merge-label:Merge`,
-  splitLabel: $localize`:@@authoring.pending-changes.split-label:Split`,
+  // Resolved per render: a module value would freeze the locale loaded at import.
+  get commentLabel(): string {
+    return $localize`:@@authoring.pending-changes.comment-label:Comment`;
+  },
+  get deleteLabel(): string {
+    return $localize`:@@authoring.pending-changes.delete-label:Delete`;
+  },
+  get mergeLabel(): string {
+    return $localize`:@@authoring.pending-changes.merge-label:Merge`;
+  },
+  get splitLabel(): string {
+    return $localize`:@@authoring.pending-changes.split-label:Split`;
+  },
   targetLabel: $localize`:@@authoring.pending-changes.target-label:Target item`,
   sourceLabel: $localize`:@@authoring.pending-changes.source-label:Merge sources`,
   survivorLabel: $localize`:@@authoring.pending-changes.survivor-label:Surviving item`,

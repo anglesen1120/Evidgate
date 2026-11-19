@@ -1,3 +1,5 @@
+import { formatNumber } from '@angular/common';
+
 export const AUTHORING_TREE_COPY = {
   title: $localize`:@@authoring.tree.title:Feature tree`,
   description: $localize`:@@authoring.tree.description:Browse the project hierarchy and select a scope. Child-node counts and checklist-item counts are direct counts, not manual-case totals.`,
@@ -24,6 +26,10 @@ export const AUTHORING_TREE_COPY = {
   moreRoots: $localize`:@@authoring.tree.more-roots:Load more root nodes`,
   moreChildren: $localize`:@@authoring.tree.more-children:Load more child nodes`,
   browseCapped: $localize`:@@authoring.tree.browse-capped:Hierarchy list is at its load limit`,
-  browseCappedHelp: $localize`:@@authoring.tree.browse-capped-help:Showing the first 10,000 nodes in this list. Open a known node link to inspect a scope outside these results.`,
   table: $localize`:@@authoring.tree.table:Case table`,
 };
+
+/** The injected cap, grouped for the active locale; the tree renders this notice per capped page. */
+export function treeBrowseCappedHelp(cap: number, locale: string): string {
+  return $localize`:@@authoring.tree.browse-capped-help:Showing the first ${formatNumber(cap, locale)}:cap: nodes in this list. Open a known node link to inspect a scope outside these results.`;
+}
