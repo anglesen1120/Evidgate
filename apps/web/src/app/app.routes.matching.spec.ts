@@ -110,18 +110,23 @@ describe('App routes (09.1.1-T4.1)', () => {
   });
 
   it('renders the entry stub for a deep link to an allowed entry', async () => {
+    // The grants add `authoring:read`, which the placeholder entries of the authoring group need
+    // on top of the base grants.
+    const allowed = new Set([...BASE_PERMISSIONS, 'authoring:read']);
     const entry = NAV_ENTRIES.find(
       (candidate) =>
         candidate.phase === ACTIVE_PHASE &&
         candidate.id !== 'overview' &&
         // `settings` owns a route table of its own (`ENTRY_ROUTES`), covered by the cases below.
         candidate.id !== 'settings' &&
-        BASE_PERMISSIONS.has(candidate.permission),
+        allowed.has(candidate.permission) &&
+        // Entries that own a real screen or table are asserted by their own specs.
+        !['members', 'audit'].includes(candidate.id),
     );
     if (entry === undefined) {
       throw new Error('NAV_ENTRIES has no allowed, active-phase entry without a real screen');
     }
-    const { harness } = await setUp();
+    const { harness } = await setUp(new FakeIdentityData(), allowed);
 
     await harness.navigateByUrl(urlOf(entry));
 

@@ -32,8 +32,14 @@ import {
 /** `/orgs/:orgId/projects/:projectId/authoring` — reachable under BOTH corpus grant sets. */
 const PROJECT_AUTHORING_PATH = `/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}/authoring`;
 
-/** The default corpus session: the design group's three rows, then the audit log. */
-const DEFAULT_SESSION_SEGMENTS = ['audit', 'authoring', 'generation', 'pending-changes'];
+/** The default corpus session: the design group's three rows, AI settings and the audit log. */
+const DEFAULT_SESSION_SEGMENTS = [
+  'ai-settings',
+  'audit',
+  'authoring',
+  'generation',
+  'pending-changes',
+];
 
 /** The trimmed corpus session: `authoring` survives, `overview`/`ai-settings`/`members` arrive. */
 const LIMITED_SESSION_SEGMENTS = ['ai-settings', 'audit', 'authoring', 'members', 'overview'];
