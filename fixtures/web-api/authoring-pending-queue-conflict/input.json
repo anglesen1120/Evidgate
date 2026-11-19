@@ -1,0 +1,18 @@
+{
+  "operation_id": "queueAuthoringChange",
+  "variant": "duplicate",
+  "status": 409,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000af08"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "invalid_transition",
+      "message": "A structural operation is already queued for one of these items.",
+      "request_id": "018f0000-0000-7000-8000-00000000af08",
+      "retryable": false,
+      "details": [{ "path": "/change_type", "reason": "change_already_pending" }]
+    }
+  }
+}

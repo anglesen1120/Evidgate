@@ -122,6 +122,22 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   { operationId: 'importAuthoring', method: 'POST', path: '/projects/{p}/authoring/import' },
   { operationId: 'exportAuthoring', method: 'GET', path: '/projects/{p}/authoring/export' },
   { operationId: 'listAuthoringVersions', method: 'GET', path: '/projects/{p}/authoring/versions' },
+  {
+    operationId: 'listAuthoringChanges',
+    method: 'GET',
+    path: '/projects/{p}/authoring/changes',
+  },
+  { operationId: 'queueAuthoringChange', method: 'POST', path: '/projects/{p}/authoring/changes' },
+  {
+    operationId: 'discardAuthoringChange',
+    method: 'POST',
+    path: '/projects/{p}/authoring/changes/{c}/discard',
+  },
+  {
+    operationId: 'applyAuthoringChanges',
+    method: 'POST',
+    path: '/projects/{p}/authoring/changes:apply',
+  },
   { operationId: 'getProjectAiSettings', method: 'GET', path: '/projects/{p}/ai-settings' },
   { operationId: 'saveProjectAiSettings', method: 'PUT', path: '/projects/{p}/ai-settings' },
   {

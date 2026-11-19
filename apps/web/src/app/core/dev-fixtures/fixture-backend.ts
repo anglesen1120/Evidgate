@@ -36,6 +36,7 @@
 // therefore contains none of it, and `scripts/check-no-fixture-code.mjs` greps the bundle for the
 // three marker strings below (plus the corpus's own long string values) to prove it.
 
+import { AuthoringPendingFixtureScenario } from './fixture-authoring-pending';
 import {
   HttpBackend,
   HttpErrorResponse,
@@ -231,6 +232,7 @@ export class FixtureHttpBackend implements HttpBackend {
   private readonly authoring = new AuthoringTreeFixtureScenario();
   private readonly authoringCases = new AuthoringCasesFixtureScenario();
   private readonly aiSettings = new AiSettingsFixtureScenario();
+  private readonly authoringPending = new AuthoringPendingFixtureScenario();
   private readonly authoringEditor = new AuthoringEditorFixtureScenario();
 
   handle(request: HttpRequest<unknown>): Observable<HttpEvent<unknown>> {
@@ -274,6 +276,10 @@ export class FixtureHttpBackend implements HttpBackend {
     request: HttpRequest<unknown>,
     relativePath: string,
   ): FixtureEntry | undefined {
+    const pending = this.authoringPending.entry(request, relativePath, (operation) =>
+      this.toggles.variantFor(operation),
+    );
+    if (pending !== undefined) return pending;
     const authoring = this.authoringEntry(request, relativePath);
     if (authoring !== undefined) return authoring;
     const settings = this.aiSettings.entry(request, relativePath, (operation) =>

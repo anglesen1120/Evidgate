@@ -1,0 +1,19 @@
+{
+  "operation_id": "applyAuthoringChanges",
+  "variant": "rate_limited",
+  "status": 429,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000af06",
+    "Retry-After": "7"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "rate_limited",
+      "message": "Too many batch applies.",
+      "request_id": "018f0000-0000-7000-8000-00000000af06",
+      "retryable": true,
+      "details": []
+    }
+  }
+}

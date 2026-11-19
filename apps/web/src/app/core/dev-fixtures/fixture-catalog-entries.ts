@@ -10,6 +10,7 @@ import { FIXTURE_CATALOG_CASE_ROWS } from './fixture-catalog-case-rows';
 import { FIXTURE_CATALOG_AUTHORING_ROWS } from './fixture-catalog-authoring-rows';
 import { FIXTURE_CATALOG_AUTHORING_IMPEX_ROWS } from './fixture-catalog-authoring-impex-rows';
 import { FIXTURE_CATALOG_AI_SETTINGS_ROWS } from './fixture-catalog-ai-settings-rows';
+import { FIXTURE_CATALOG_AUTHORING_PENDING_ROWS } from './fixture-catalog-authoring-pending-rows';
 import { FIXTURE_CATALOG_AUTHORING_EDITOR_ROWS } from './fixture-catalog-authoring-editor-rows';
 import type { FixtureCatalogRow } from './fixture-document';
 
@@ -489,6 +490,7 @@ export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
   ...FIXTURE_CATALOG_AUTHORING_ROWS,
   ...FIXTURE_CATALOG_AUTHORING_IMPEX_ROWS,
   ...FIXTURE_CATALOG_AI_SETTINGS_ROWS,
+  ...FIXTURE_CATALOG_AUTHORING_PENDING_ROWS,
   ...FIXTURE_CATALOG_AUTHORING_EDITOR_ROWS,
 ];
 

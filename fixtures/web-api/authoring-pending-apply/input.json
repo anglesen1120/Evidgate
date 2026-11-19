@@ -1,0 +1,25 @@
+{
+  "operation_id": "applyAuthoringChanges",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000af03"
+  },
+  "latency_ms": 0,
+  "body": {
+    "batch_id": "018f0000-0000-7000-8000-00000000ce01",
+    "applied_change_ids": [
+      "018f0000-0000-7000-8000-00000000cd01",
+      "018f0000-0000-7000-8000-00000000cd02"
+    ],
+    "versions": [
+      {
+        "entity_kind": "checklist_item",
+        "entity_id": "018f0000-0000-7000-8000-00000000ab02",
+        "version_no": 3
+      }
+    ],
+    "lineage": [],
+    "committed_at": "2026-11-19T09:00:00Z"
+  }
+}

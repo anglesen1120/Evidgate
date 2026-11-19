@@ -4,6 +4,7 @@ import { RouteStubPage } from '../../shell/stub/route-stub.page';
 import { AuthoringPage } from './authoring.page';
 import { routes as areaRoutes } from './authoring.routes';
 import { ImportExportPage } from './import-export/import-export.page';
+import { PendingChangesPage } from './pending-changes/pending-changes.page';
 
 const TREE_ROUTE: Route = {
   path: '',
@@ -39,10 +40,18 @@ describe('authoring route tables', () => {
     expect(await importExport.loadComponent()).toBe(ImportExportPage);
   });
 
-  it('keeps the tree and the two sibling entries on their own tables', async () => {
-    for (const segment of ['generation', 'pending-changes']) {
-      await expect(loadTable(entryRoute(segment))).resolves.toEqual(areaRoutes);
-      await expect(loadTable(entryRoute(segment))).resolves.toEqual(STUB_ROUTE);
-    }
+  it('keeps the generation entry on the area placeholder', async () => {
+    await expect(loadTable(entryRoute('generation'))).resolves.toEqual(areaRoutes);
+    await expect(loadTable(entryRoute('generation'))).resolves.toEqual(STUB_ROUTE);
+  });
+
+  it('mounts the pending-changes screen on its own entry route', async () => {
+    const table = await loadTable(entryRoute('pending-changes'));
+    expect(table.map((route) => route.path)).toEqual(['']);
+    const screen = table[0];
+    if (screen === undefined || typeof screen.loadComponent !== 'function')
+      throw new Error('pending-changes has no component loader');
+    expect(screen.data).toEqual({ pageHeadingLevel: 1 });
+    expect((await screen.loadComponent()) as unknown).toBe(PendingChangesPage);
   });
 });

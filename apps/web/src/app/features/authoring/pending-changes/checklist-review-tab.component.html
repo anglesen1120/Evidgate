@@ -1,0 +1,185 @@
+<section #inspection tabindex="-1" class="region" [attr.aria-label]="ui.reviewTab">
+  <app-section-header [title]="ui.reviewTab" [description]="ui.itemScope" />
+  <app-desktop-required-notice />
+  @if (!store.canRead()) {
+    <app-forbidden-pattern />
+  } @else {
+    <app-request-state
+      [status]="status()"
+      [error]="store.queueError()"
+      [retryEligible]="store.retryReady()"
+      [retryBusy]="status() === 'loading'"
+      (retry)="store.reload()"
+    >
+      @if (rows().length === 0) {
+        <p class="full-text">{{ ui.itemEmpty }}</p>
+      }
+      @for (row of rows(); track row.change_id) {
+        <section data-review-change class="region">
+          <h3 class="m-0 text-lg font-semibold">{{ operationLabel(row.change_type) }}</h3>
+          <app-copyable-identifier [value]="row.change_id" [label]="ui.changeId" />
+          <p class="full-text">{{ row.reason ?? copy.reasonUnset }}</p>
+          @if (row.change_type === 'comment') {
+            <p class="full-text">{{ row.payload['body'] }}</p>
+          }
+        </section>
+      }
+      @if (store.nextCursor()) {
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          type="button"
+          [disabled]="store.queueing() || !store.retryReady()"
+          (click)="store.loadMore()"
+        >
+          {{ ui.loadMore }}
+        </button>
+      }
+      @if (!store.canWrite() || deniedWrite()) {
+        <app-inline-feedback [tone]="'warning'" [title]="copy.readOnly" [announcement]="'off'" />
+      }
+      @if (store.enqueueError(); as error) {
+        <app-inline-feedback
+          data-review-enqueue-error
+          [tone]="'destructive'"
+          [title]="quota() ? ui.quota : error.message"
+        />
+        @for (detail of error.details; track $index) {
+          <p class="full-text">{{ detail.path }} {{ detail.reason }}</p>
+        }
+      }
+      @if (retryFailure(); as error) {
+        <app-retry-after
+          [kind]="error.kind === 'unavailable' ? 'unavailable' : 'rate_limited'"
+          [retryAfterSeconds]="error.retryAfterSeconds"
+          [retryEligible]="store.retryReady()"
+          [busy]="store.queueing()"
+          [code]="error.code"
+          [requestId]="error.requestId"
+          (retry)="retryKind() === 'delete' ? openDelete() : queueComment()"
+        />
+      }
+      @if (queued()) {
+        <app-inline-feedback data-review-success [tone]="'success'" [title]="ui.queued" />
+      }
+      <form
+        *appDesktopMutation
+        class="region"
+        [attr.aria-busy]="store.queueing()"
+        (ngSubmit)="queueComment()"
+      >
+        <app-form-error-summary [summaryId]="'review-errors'" [feedback]="feedback()" />
+        @if (feedback().fields[0]; as field) {
+          <div class="field">
+            <label hlmLabel for="review-comment">{{ copy.commentLabel }}</label>
+            <textarea
+              hlmInput
+              id="review-comment"
+              name="comment"
+              rows="4"
+              [attr.maxlength]="commentLimit"
+              [ngModel]="comment()"
+              (ngModelChange)="comment.set($event)"
+              [readOnly]="blocked()"
+              (blur)="field.blur()"
+              [forceInvalid]="field.invalid()"
+              [attr.aria-invalid]="field.ariaInvalid()"
+              [aria-describedby]="field.describedBy()"
+            ></textarea>
+            <app-field-feedback [field]="field" />
+            <p
+              id="review-comment-count"
+              class="full-text text-sm text-muted-foreground"
+              i18n="@@authoring.pending-changes.character-count"
+            >
+              <app-number-value [value]="commentLength()" /> of
+              <app-number-value [value]="commentLimit" /> characters
+            </p>
+          </div>
+        }
+        @if (feedback().fields[1]; as field) {
+          <div class="field">
+            <label hlmLabel for="review-reason">{{ ui.queueReason }}</label>
+            <textarea
+              hlmInput
+              id="review-reason"
+              name="reason"
+              rows="2"
+              [attr.maxlength]="reasonLimit"
+              [ngModel]="reason()"
+              (ngModelChange)="reason.set($event)"
+              [readOnly]="blocked()"
+              (blur)="field.blur()"
+              [forceInvalid]="field.invalid()"
+              [attr.aria-invalid]="field.ariaInvalid()"
+              [aria-describedby]="field.describedBy()"
+            ></textarea>
+            <app-field-feedback [field]="field" />
+            <p
+              id="review-reason-count"
+              class="full-text text-sm text-muted-foreground"
+              i18n="@@authoring.pending-changes.reason-character-count"
+            >
+              <app-number-value [value]="reasonLength()" /> of
+              <app-number-value [value]="reasonLimit" /> characters
+            </p>
+          </div>
+        }
+        <div class="actions">
+          <button
+            hlmBtn
+            [variant]="'outline'"
+            type="submit"
+            data-review-comment
+            [disabled]="blocked()"
+          >
+            {{ copy.commentAction }}
+          </button>
+          <button
+            hlmBtn
+            [variant]="'outline'"
+            type="button"
+            data-review-delete
+            [disabled]="blocked()"
+            (click)="openDelete()"
+          >
+            {{ copy.deleteAction }}
+          </button>
+        </div>
+      </form>
+      @if (!policy.canMutate()) {
+        <dl class="facts">
+          <div data-review-comment-snapshot>
+            <dt>{{ copy.commentLabel }}</dt>
+            <dd class="full-text">{{ comment() || copy.reasonUnset }}</dd>
+          </div>
+          <div data-review-reason-snapshot>
+            <dt>{{ ui.queueReason }}</dt>
+            <dd class="full-text">{{ reason() || copy.reasonUnset }}</dd>
+          </div>
+        </dl>
+      }
+    </app-request-state>
+    <a hlmBtn [variant]="'link'" [routerLink]="queueLink()" class="w-fit whitespace-normal">{{
+      ui.openQueue
+    }}</a>
+    @if (consent(); as confirmation) {
+      @if (policy.canMutate()) {
+        <app-pending-confirm
+          [title]="ui.queueDeleteTitle"
+          [description]="ui.queueDeleteBody"
+          [action]="copy.deleteAction"
+          [ids]="[confirmation.item]"
+          [note]="confirmation.reason"
+          [destructive]="true"
+          [noteLabel]="ui.queueReason"
+          [noteHint]="''"
+          [idsLabel]="copy.targetLabel"
+          [valueLabel]="copy.targetLabel"
+          (confirmed)="confirmDelete()"
+          (dismissed)="consent.set(null)"
+        />
+      }
+    }
+  }
+</section>

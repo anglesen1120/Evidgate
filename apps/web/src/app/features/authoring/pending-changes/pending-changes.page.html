@@ -1,0 +1,419 @@
+@if (ownsPageHeading()) {
+  <app-page-header [title]="copy.title" [description]="copy.description" />
+} @else {
+  <app-section-header [title]="copy.title" [description]="copy.description" />
+}
+<a hlmBtn [variant]="'link'" [routerLink]="['../']" class="w-fit whitespace-normal">{{
+  copy.back
+}}</a>
+<app-desktop-required-notice />
+@if (!store.canRead() || store.forbidden()) {
+  <app-forbidden-pattern />
+} @else {
+  <app-request-state
+    [status]="status()"
+    [error]="store.queueError()"
+    [empty]="store.empty()"
+    [emptyTitle]="copy.emptyTitle"
+    [emptyDescription]="copy.emptyBody"
+    [retryEligible]="store.retryReady()"
+    [retryBusy]="readBusy()"
+    (retry)="store.reload()"
+  >
+    @if (readBusy()) {
+      <p class="m-0" role="status">{{ copy.refreshing }}</p>
+    }
+    <app-inline-feedback
+      [tone]="'info'"
+      [title]="ui.atomic"
+      [description]="ui.atomicBody"
+      [announcement]="'off'"
+    />
+    @if (!store.canWrite() || deniedWrite()) {
+      <app-inline-feedback
+        [tone]="'warning'"
+        [title]="copy.readOnly"
+        [description]="deniedWrite() ? ui.writeDenied : ''"
+        [announcement]="'off'"
+      />
+    }
+    @if (store.queueStale()) {
+      <app-inline-feedback [tone]="'warning'" [title]="ui.staleQueue" />
+      <button
+        hlmBtn
+        [variant]="'outline'"
+        type="button"
+        [disabled]="!store.retryReady() || busy()"
+        (click)="store.reload()"
+      >
+        {{ copy.conflictReload }}
+      </button>
+    }
+    @if (writeError(); as error) {
+      <app-inline-feedback [tone]="'destructive'" [title]="error.message" />
+      @for (detail of error.details; track $index) {
+        <p class="full-text">{{ detail.path }} {{ detail.reason }}</p>
+      }
+    }
+    @if (retryFailure(); as error) {
+      <app-retry-after
+        [kind]="error.kind === 'unavailable' ? 'unavailable' : 'rate_limited'"
+        [retryAfterSeconds]="error.retryAfterSeconds"
+        [retryEligible]="store.retryReady()"
+        [busy]="busy()"
+        [code]="error.code"
+        [requestId]="error.requestId"
+        (retry)="retry()"
+      />
+    }
+    @if (store.conflict()) {
+      <app-inline-feedback
+        [tone]="'warning'"
+        [title]="copy.conflictTitle"
+        [description]="copy.conflictBody"
+      />
+      <button
+        hlmBtn
+        [variant]="'outline'"
+        type="button"
+        [disabled]="!store.retryReady() || busy()"
+        (click)="reloadConflict()"
+      >
+        {{ copy.conflictReload }}
+      </button>
+    }
+    <section
+      class="region"
+      [attr.aria-label]="copy.queueTitle"
+      [attr.aria-busy]="store.applying() || readBusy()"
+    >
+      <app-section-header [title]="copy.queueTitle" [description]="copy.loadedScope" />
+      <p class="m-0">{{ copy.queueScope }}: <app-number-value [value]="store.rows().length" /></p>
+      <div class="actions">
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          type="button"
+          [disabled]="busy()"
+          (click)="store.selectAll()"
+        >
+          {{ copy.selectAll }}
+        </button>
+        <button
+          hlmBtn
+          [variant]="'ghost'"
+          type="button"
+          [disabled]="busy()"
+          (click)="store.clearSelection()"
+        >
+          {{ copy.clearSelection }}
+        </button>
+      </div>
+      <app-data-table
+        [rows]="store.rows()"
+        [columns]="columns()"
+        [rowId]="rowId"
+        [caption]="copy.queueScope"
+        [fixedHeightCells]="true"
+        [fitToContainer]="true"
+      />
+      @if (store.nextCursor()) {
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          type="button"
+          class="w-fit"
+          [disabled]="busy() || !store.retryReady()"
+          [attr.aria-disabled]="readBusy()"
+          (click)="store.loadMore()"
+        >
+          {{ ui.loadMore }}
+        </button>
+      }
+    </section>
+    <section
+      #inspection
+      class="region inspection"
+      tabindex="-1"
+      [attr.aria-label]="copy.previewTitle"
+      data-pending-preview-content
+    >
+      <app-section-header [title]="copy.previewTitle" />
+      @if (store.preview(); as preview) {
+        <h3 class="m-0 text-lg font-semibold">{{ preview.kindLabel }}</h3>
+        <app-copyable-identifier [value]="preview.targetId" [label]="copy.targetLabel" />
+        @if (store.targetTitles()[preview.targetId]; as title) {
+          <p class="full-text">{{ title }}</p>
+        }
+        @for (line of preview.lines; track line) {
+          <p class="full-text">{{ line }}</p>
+        }
+        @for (line of preview.lineage; track line) {
+          <p class="full-text">{{ line }}</p>
+        }
+        @if (store.previewRow(); as row) {
+          @if (row.change_type === 'split') {
+            <p class="full-text">{{ copy.lineageLabel }}: {{ row.target_id }}</p>
+          }
+          <dl class="facts">
+            <div>
+              <dt>{{ ui.changeId }}</dt>
+              <dd><app-copyable-identifier [value]="row.change_id" [label]="ui.changeId" /></dd>
+            </div>
+            <div>
+              <dt>{{ copy.authorLabel }}</dt>
+              <dd>
+                <app-copyable-identifier
+                  [value]="row.author_membership_id"
+                  [label]="copy.authorLabel"
+                />
+              </dd>
+            </div>
+            <div>
+              <dt>{{ copy.sourceLabelQueued }}</dt>
+              <dd>{{ sourceLabel(row.source) }}</dd>
+            </div>
+            <div>
+              <dt>{{ ui.baseVersion }}</dt>
+              <dd><app-revision-chip [revision]="row.base_version" /></dd>
+            </div>
+            <div>
+              <dt>{{ ui.queuedAt }}</dt>
+              <dd><app-absolute-time [value]="row.created_at" /></dd>
+            </div>
+            <div>
+              <dt>{{ copy.reasonLabel }}</dt>
+              <dd class="full-text">{{ row.reason ?? copy.reasonUnset }}</dd>
+            </div>
+          </dl>
+          @if (isStructural(row)) {
+            <app-inline-feedback
+              [tone]="'warning'"
+              [title]="ui.structural"
+              [description]="copy.blockedStructural"
+              [announcement]="'off'"
+            />
+          } @else if (preview.unavailable) {
+            <p class="full-text text-muted-foreground">{{ preview.unavailable }}</p>
+          }
+          <div *appDesktopMutation class="actions" data-pending-mutation>
+            <button
+              hlmBtn
+              [variant]="'outline'"
+              type="button"
+              data-pending-discard
+              [disabled]="store.discardBlocked() || busy() || deniedWrite() || !store.retryReady()"
+              [attr.aria-describedby]="
+                !store.canWrite() || deniedWrite() ? 'pending-write-explanation' : null
+              "
+              (click)="openDiscard(row.change_id)"
+            >
+              {{ copy.discardAction }}
+            </button>
+          </div>
+        }
+      } @else {
+        <p class="m-0">{{ copy.previewNone }}</p>
+      }
+    </section>
+    <section class="region" [attr.aria-busy]="store.applying()" [attr.aria-label]="ui.batchSummary">
+      <app-section-header [title]="ui.batchSummary" />
+      <p class="m-0">
+        {{ copy.selectionSummary }}: <app-number-value [value]="store.selectedCount()" />
+      </p>
+      @if (store.applyBlockedReason(); as reason) {
+        <p id="pending-apply-explanation" class="full-text">{{ reason }}</p>
+      }
+      @if (!store.canWrite() || deniedWrite()) {
+        <p id="pending-write-explanation" class="full-text">{{ copy.readOnly }}</p>
+      }
+      @for (entry of store.rowsWithBlocks(); track entry.row.change_id) {
+        @if (entry.blockedReason && store.selectedIdSet().has(entry.row.change_id)) {
+          <div class="blocked-item">
+            <app-copyable-identifier [value]="entry.row.change_id" [label]="ui.changeId" />
+            <p class="full-text">{{ entry.blockedReason }}</p>
+          </div>
+        }
+      }
+      <div *appDesktopMutation class="field" data-pending-mutation>
+        <label hlmLabel for="pending-local-reason">{{ copy.reasonLabel }}</label>
+        <textarea
+          hlmInput
+          id="pending-local-reason"
+          rows="3"
+          [ngModel]="store.localReason()"
+          (ngModelChange)="store.setReason($event)"
+          [readOnly]="busy() || !store.canWrite() || deniedWrite()"
+          [aria-describedby]="'pending-reason-hint'"
+          class="resize-y"
+        ></textarea>
+      </div>
+      @if (!policy.canMutate()) {
+        <dl class="facts">
+          <div>
+            <dt>{{ copy.reasonLabel }}</dt>
+            <dd class="full-text">{{ store.localReason() || copy.reasonUnset }}</dd>
+          </div>
+        </dl>
+      }
+      <p id="pending-reason-hint" class="full-text text-sm text-muted-foreground">
+        {{ copy.reasonHint }}
+      </p>
+      <div *appDesktopMutation class="actions" data-pending-mutation>
+        <button
+          hlmBtn
+          type="button"
+          data-pending-apply
+          [disabled]="blocked()"
+          [attr.aria-describedby]="store.applyBlockedReason() ? 'pending-apply-explanation' : null"
+          (click)="openApply()"
+        >
+          {{ store.applying() ? copy.applying : copy.applyAction }}
+        </button>
+      </div>
+      <p class="m-0 min-h-(--eg-leading-sm)" role="status">
+        {{ store.applying() ? copy.applying : '' }}
+      </p>
+      <details>
+        <summary>{{ ui.metadata }}</summary>
+        <dl class="facts">
+          <div>
+            <dt>{{ ui.batchEtag }}</dt>
+            <dd>
+              @if (store.batchEtag(); as etag) {
+                <app-copyable-identifier [value]="etag" [label]="ui.batchEtag" />
+              } @else {
+                <p class="full-text">{{ ui.etagNotRead }}</p>
+              }
+            </dd>
+          </div>
+        </dl>
+        <p class="full-text">{{ ui.idempotency }}</p>
+      </details>
+    </section>
+  </app-request-state>
+  @if (store.receipt(); as receipt) {
+    <section class="region" data-pending-receipt [attr.aria-label]="copy.receiptTitle">
+      <app-section-header [title]="copy.receiptTitle" />
+      <p class="sr-only" role="status">{{ copy.receiptTitle }}</p>
+      <dl class="facts">
+        <div>
+          <dt>{{ copy.receiptBatch }}</dt>
+          <dd>
+            <app-copyable-identifier [value]="receipt.batch_id" [label]="copy.receiptBatch" />
+          </dd>
+        </div>
+        <div>
+          <dt>{{ copy.receiptCommitted }}</dt>
+          <dd><app-absolute-time [value]="receipt.committed_at" /></dd>
+        </div>
+        <div>
+          <dt>{{ copy.receiptVersions }}</dt>
+          <dd><app-number-value [value]="receipt.versions.length" /></dd>
+        </div>
+      </dl>
+      <h3 class="m-0 text-lg font-semibold">{{ ui.appliedIds }}</h3>
+      @for (id of receipt.applied_change_ids; track id) {
+        <app-copyable-identifier
+          [value]="id"
+          [label]="ui.changeId"
+          [attr.data-pending-applied-id]="id"
+        />
+      }
+      @if (receipt.versions.length === 0) {
+        <p class="full-text">{{ copy.receiptCommentOnly }}</p>
+      }
+      @for (version of receipt.versions; track version.entity_kind + version.entity_id) {
+        <div
+          class="actions"
+          data-pending-version
+          [attr.data-pending-version-entity]="version.entity_id"
+          [attr.data-pending-version-number]="version.version_no"
+        >
+          <app-copyable-identifier
+            [value]="version.entity_id"
+            [label]="ui.entity"
+          /><app-revision-chip [revision]="version.version_no" />
+        </div>
+      }
+      @for (lineage of receipt.lineage; track lineage.from_item_id + lineage.to_item_id) {
+        <dl class="facts">
+          <div>
+            <dt>{{ copy.receiptLineage }}</dt>
+            <dd>
+              <app-copyable-identifier [value]="lineage.from_item_id" [label]="copy.sourceLabel" />
+              <app-copyable-identifier [value]="lineage.to_item_id" [label]="copy.targetLabel" />
+              <span>{{
+                lineage.relation === 'merged_into' ? copy.mergeLabel : copy.splitLabel
+              }}</span>
+            </dd>
+          </div>
+        </dl>
+      }
+    </section>
+  }
+  <app-conflict-dialog
+    [open]="conflictOpen()"
+    [fields]="conflictFields()"
+    [currentRevision]="null"
+    [reloadState]="readBusy() ? 'loading' : store.queueError() ? 'error' : 'idle'"
+    [reloadError]="store.queueError()"
+    (reload)="reloadConflict()"
+    (keepEditing)="dismissedConflict.set(true)"
+  />
+  @if (consent(); as confirmation) {
+    @if (policy.canMutate()) {
+      <app-pending-confirm
+        [title]="confirmation.kind === 'apply' ? copy.applyConfirmTitle : copy.discardConfirmTitle"
+        [description]="
+          confirmation.kind === 'apply' ? copy.applyConfirmBody : copy.discardConfirmBody
+        "
+        [action]="confirmation.kind === 'apply' ? copy.applyConfirm : copy.discardConfirm"
+        [destructive]="confirmation.destructive"
+        [ids]="confirmation.ids"
+        [changes]="confirmation.changes"
+        [targetTitles]="store.targetTitles()"
+        [note]="confirmation.note"
+        (confirmed)="confirm()"
+        (dismissed)="consent.set(null)"
+      />
+    }
+  }
+}
+<ng-template #selectionCell let-row>
+  <hlm-checkbox
+    [inputId]="'pending-select-' + row.change_id"
+    [aria-labelledby]="'pending-select-label-' + row.change_id"
+    [checked]="store.selectedIdSet().has(row.change_id)"
+    [disabled]="busy()"
+    (checkedChange)="store.toggle(row.change_id)"
+  />
+  <span [id]="'pending-select-label-' + row.change_id" class="sr-only"
+    >{{ ui.select }} {{ row.change_id }}</span
+  >
+</ng-template>
+<ng-template #operationCell let-row>
+  <button
+    hlmBtn
+    [variant]="'link'"
+    type="button"
+    data-pending-preview
+    [attr.data-pending-change-id]="row.change_id"
+    [attr.aria-label]="ui.preview + ': ' + operationLabel(row.change_type) + ' ' + row.change_id"
+    [attr.aria-pressed]="store.previewId() === row.change_id"
+    (click)="store.setPreview(row.change_id)"
+    class="min-h-(--eg-control-touch) max-w-full truncate"
+  >
+    {{ operationLabel(row.change_type) }}
+  </button>
+</ng-template>
+<ng-template #targetCell let-row>
+  <app-copyable-identifier [value]="row.target_id" [label]="copy.targetLabel" [compact]="true" />
+</ng-template>
+<ng-template #stateCell let-row>
+  <app-status-pill
+    [tone]="isStale(row) || isStructural(row) ? 'warning' : 'neutral'"
+    [label]="isStale(row) ? ui.stale : isStructural(row) ? ui.unavailable : ui.pending"
+    [fullValue]="isStructural(row) ? ui.structural : rowBlockedReason(row)"
+  />
+</ng-template>
