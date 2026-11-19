@@ -64,6 +64,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { contractPropertyNames, isContractPath } from './contract-property-names.mjs';
+import { ENUM_MEMBERS, ERROR_DETAIL_REASONS } from './check-no-fixture-code.vocabulary.mjs';
 
 // `@angular/build:application` writes the deployable assets into `<outputPath>/browser`
 // (angular.json: outputPath "dist"), exactly as `check-bundle-budget.mjs` reads them.
@@ -195,54 +196,8 @@ const MIN_FIXTURE_STRING_LENGTH = 12;
  */
 const PROTOCOL_MEMBERS = new Set(['headers', 'operation_id', 'variant', 'code']);
 
-/**
- * The closed enums of `contracts/openapi.yaml` that a corpus document carries under an ordinary
- * data member, as `member -> the words the contract enumerates for it`. With 09.2.1-T2 the
- * step-2 page names the CI provider (`github_actions`) in its create request and renders the
- * binding/token status words, so those strings live in production code as well; skipping the
- * members outright would also exempt every *other* word a fixture ever puts there, so the
- * exemption is per value: `ENUM_MEMBERS.get(member).has(value)` (09.2.1-T7).
- */
-const MISSING_CODES = new Set([
-  'missing_shard',
-  'count_mismatch',
-  'artifact_missing',
-  'build_mismatch',
-  'unknown_status',
-  'setup_error',
-  'stale_epoch',
-  'missing_result',
-]);
-
-const ENUM_MEMBERS = new Map([
-  ['provider', new Set(['github_actions'])],
-  [
-    'status',
-    new Set(['pending_verification', 'active', 'disabled', 'rotated', 'expired', 'revoked']),
-  ],
-  // The decision body's closed vocabularies: the run decision view names them (outcome labels and
-  // the eight missing-evidence codes), so production code carries the same words.
-  ['outcome', new Set(['all_passed', 'has_failures', 'no_results'])],
-  ['missing', MISSING_CODES],
-  // A pending-evidence reason is one of the same codes.
-  ['reasons', MISSING_CODES],
-  // The create-run dialog's ref kind select and the `ref.trigger_event` it sends name the
-  // contract's closed vocabularies, so those words occur in production too (`pull_request`).
-  ['kind', new Set(['branch', 'tag', 'pull_request'])],
-  ['trigger_event', new Set(['push', 'pull_request', 'schedule', 'manual', 'dispatch'])],
-  // The security view renders the closed SecurityEventItem.type vocabulary, so these protocol
-  // words occur in production too; an unlisted type remains fixture data.
-  [
-    'type',
-    new Set([
-      'auth_failure',
-      'cross_tenant_probe',
-      'secret_scanner_alert',
-      'kill_switch_used',
-      'support_access',
-    ]),
-  ],
-]);
+// ENUM_MEMBERS (member -> the words the contract enumerates for it, per value) lives in the
+// vocabulary module next to this script.
 
 /**
  * `resource`/`action` are the halves of a permission `code` (`contracts/permissions.json`): a
@@ -270,17 +225,19 @@ function fail(message) {
 const ARRAY_ITEM = Symbol('array item');
 const ERROR_DETAIL_TRAIL = ['body', 'error', 'details', ARRAY_ITEM];
 
-/** `body.error.details[].path` and nowhere else: the one member whose contract names are exempt. */
+/** `body.error.details[].path` (contract names) and `.reason` (listed words), nowhere else. */
 const PROPERTY_NAMES = contractPropertyNames(CONTRACT_FILE, fail, shown);
 
-function isErrorDetailPath(key, child, trail) {
-  return (
-    key === 'path' &&
-    typeof child === 'string' &&
-    trail.length === ERROR_DETAIL_TRAIL.length &&
-    trail.every((step, index) => step === ERROR_DETAIL_TRAIL[index]) &&
-    isContractPath(child, PROPERTY_NAMES)
-  );
+function isErrorDetailMember(key, child, trail) {
+  if (
+    typeof child !== 'string' ||
+    trail.length !== ERROR_DETAIL_TRAIL.length ||
+    !trail.every((step, index) => step === ERROR_DETAIL_TRAIL[index])
+  ) {
+    return false;
+  }
+  if (key === 'reason') return ERROR_DETAIL_REASONS.has(child);
+  return key === 'path' && isContractPath(child, PROPERTY_NAMES);
 }
 
 /** `path` relative to the caller's cwd when it is below it, absolute otherwise. */
@@ -368,7 +325,7 @@ function collectFixtureStrings(value, name, strings, trail = []) {
       if (
         isProtocolValue(key, child) ||
         (permissionRow && PERMISSION_HALVES.includes(key)) ||
-        isErrorDetailPath(key, child, trail)
+        isErrorDetailMember(key, child, trail)
       ) {
         continue;
       }
