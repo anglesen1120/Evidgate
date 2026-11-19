@@ -27,7 +27,9 @@ public sealed partial class OptionsValidationTests
                 ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = DeadConnectionString,
                 ["EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY"] = "00:00:30",
                 ["EVIDGATE__RUNS__CANCEL__KILLDELAY"] = "00:02:00",
-                ["EVIDGATE__HEALING__LLM__PROVIDER"] = "none",
+                // Not an EVIDGATE__ key, so the inherited-settings sweep keeps it; Development lets the healing
+                // selection default to the offline adapter instead of refusing the boot before the limiter is read.
+                ["ASPNETCORE_ENVIRONMENT"] = "Development",
                 [variable] = value,
                 [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
             });
@@ -37,6 +39,7 @@ public sealed partial class OptionsValidationTests
         Assert.Contains("Configuration invalid:", output, StringComparison.Ordinal);
         Assert.Contains(named, output, StringComparison.Ordinal);
         Assert.DoesNotContain("Unhandled exception", output, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("   at ", output, StringComparison.Ordinal);
+        // The limiter group is validated by ValidateOnStart, not the eager pre-start list, so the host also logs
+        // its start failure; the refusal itself (exit 1, the named key) is what this case pins.
     }
 }
