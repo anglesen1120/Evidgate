@@ -3749,6 +3749,741 @@
       <trans-unit id="runs.actions.create.invalid" datatype="html"><source>Review the fields identified below and correct the request.</source><target>Kiểm tra các trường được chỉ ra bên dưới và sửa yêu cầu.</target></trans-unit>
       <trans-unit id="runs.actions.create.cap" datatype="html"><source>The manifest exceeds an ingestion limit. Reduce its executions or variants and upload a corrected manifest.</source><target>Manifest vượt giới hạn tiếp nhận. Giảm số lượt thực thi hoặc biến thể rồi tải lên manifest đã sửa.</target></trans-unit>
       <trans-unit id="runs.actions.create.uncertain" datatype="html"><source>The response was not received. Retry without changing the inputs to reuse the same key and avoid a duplicate run.</source><target>Chưa nhận được phản hồi. Thử lại mà không đổi dữ liệu để dùng lại cùng khoá và tránh tạo lượt chạy trùng.</target></trans-unit>
+      <trans-unit id="authoring.import-export.title" datatype="html"><source>Import and export</source><target>Nhập và xuất dữ liệu</target></trans-unit>
+      <trans-unit id="authoring.import-export.description" datatype="html"><source>Preview your file before confirming an import. Export only the exact scope shown.</source><target>Xem trước tệp trước khi xác nhận nhập. Chỉ xuất đúng phạm vi được hiển thị.</target></trans-unit>
+      <trans-unit id="authoring.import-export.back" datatype="html"><source>Back to authoring</source><target>Quay lại biên soạn</target></trans-unit>
+      <trans-unit id="authoring.import-export.context" datatype="html"><source>Project context</source><target>Ngữ cảnh dự án</target></trans-unit>
+      <trans-unit id="authoring.import-export.project" datatype="html"><source>Project</source><target>Dự án</target></trans-unit>
+      <trans-unit id="authoring.import-export.prefix" datatype="html"><source>Project code prefix</source><target>Tiền tố mã dự án</target></trans-unit>
+      <trans-unit id="authoring.import-export.import-tab" datatype="html"><source>Import</source><target>Nhập dữ liệu</target></trans-unit>
+      <trans-unit id="authoring.import-export.export-tab" datatype="html"><source>Export</source><target>Xuất dữ liệu</target></trans-unit>
+      <trans-unit id="authoring.import-export.intake" datatype="html"><source>File and target</source><target>Tệp và đích nhập</target></trans-unit>
+      <trans-unit id="authoring.import-export.file" datatype="html"><source>Source file</source><target>Tệp nguồn</target></trans-unit>
+      <trans-unit id="authoring.import-export.limits" datatype="html"><source>CSV or JSON. The server accepts at most 5 MiB and 5,000 data rows. File selection is not validation.</source><target>CSV hoặc JSON. Máy chủ nhận tối đa 5 MiB và 5.000 dòng dữ liệu. Chọn tệp chưa có nghĩa là tệp đã được kiểm tra.</target></trans-unit>
+      <trans-unit id="authoring.import-export.format" datatype="html"><source>Format</source><target>Định dạng</target></trans-unit>
+      <trans-unit id="authoring.import-export.preview" datatype="html"><source>Preview without importing</source><target>Xem trước mà không nhập</target></trans-unit>
+      <trans-unit id="authoring.import-export.preview-title" datatype="html"><source>Preview rows</source><target>Các dòng xem trước</target></trans-unit>
+      <trans-unit id="authoring.import-export.from-file" datatype="html"><source>From your file, not validated. Row identity, status and totals come only from the server.</source><target>Từ tệp của bạn, chưa được kiểm tra. Định danh, trạng thái và số lượng từng dòng chỉ lấy từ báo cáo máy chủ.</target></trans-unit>
+      <trans-unit id="authoring.import-export.no-file" datatype="html"><source>No file has been selected for import.</source><target>Chưa chọn tệp để nhập.</target></trans-unit>
+      <trans-unit id="authoring.import-export.xlsx" datatype="html"><source>XLSX is unavailable because this client cannot transfer spreadsheet files. Use CSV or JSON; no XLSX request is sent.</source><target>XLSX không khả dụng vì ứng dụng này chưa truyền được tệp bảng tính. Hãy dùng CSV hoặc JSON; không có yêu cầu XLSX nào được gửi.</target></trans-unit>
+      <trans-unit id="authoring.import-export.local-unreadable" datatype="html"><source>Local preview could not read this file. The original file can still be sent for server validation.</source><target>Không thể đọc tệp để xem trước cục bộ. Vẫn có thể gửi tệp gốc để máy chủ kiểm tra.</target></trans-unit>
+      <trans-unit id="authoring.import-export.invalid-utf8" datatype="html"><source>CSV files must use valid UTF-8 encoding. Save this file as UTF-8 and preview it again. No import request was sent.</source><target>Tệp CSV phải dùng mã hoá UTF-8 hợp lệ. Hãy lưu tệp này dưới dạng UTF-8 và xem trước lại. Không có yêu cầu nhập nào được gửi.</target></trans-unit>
+      <trans-unit id="authoring.import-export.display-cap" datatype="html"><source>Local display stops at the server's 5,000-row cap. No rows are removed from the upload; the server validates the original file.</source><target>Phần hiển thị cục bộ dừng ở giới hạn 5.000 dòng của máy chủ. Không xoá dòng nào khỏi tệp tải lên; máy chủ kiểm tra tệp gốc.</target></trans-unit>
+      <trans-unit id="authoring.import-export.busy" datatype="html"><source>Previewing rows; no version has been created.</source><target>Đang xem trước các dòng; chưa tạo phiên bản nào.</target></trans-unit>
+      <trans-unit id="authoring.import-export.cancel-preview" datatype="html"><source>Cancel preview</source><target>Huỷ xem trước</target></trans-unit>
+      <trans-unit id="authoring.import-export.row" datatype="html"><source>Source row</source><target>Dòng nguồn</target></trans-unit>
+      <trans-unit id="authoring.import-export.kind" datatype="html"><source>Kind</source><target>Loại</target></trans-unit>
+      <trans-unit id="authoring.import-export.identity" datatype="html"><source>Server identity</source><target>Định danh từ máy chủ</target></trans-unit>
+      <trans-unit id="authoring.import-export.content" datatype="html"><source>File content</source><target>Nội dung tệp</target></trans-unit>
+      <trans-unit id="authoring.import-export.status" datatype="html"><source>Server outcome or reported problem</source><target>Kết quả hoặc vấn đề do máy chủ báo</target></trans-unit>
+      <trans-unit id="authoring.import-export.unverified" datatype="html"><source>Unverified</source><target>Chưa được kiểm tra</target></trans-unit>
+      <trans-unit id="authoring.import-export.withheld" datatype="html"><source>Refused cell text is not displayed.</source><target>Không hiển thị nội dung ô bị từ chối.</target></trans-unit>
+      <trans-unit id="authoring.import-export.errors" datatype="html"><source>Reported problems</source><target>Các vấn đề được báo</target></trans-unit>
+      <trans-unit id="authoring.import-export.invalid" datatype="html"><source>The file was refused. No rows were written. Remaining rows are unverified; at most 100 problems are reported. Fix the original file and preview it again.</source><target>Tệp bị từ chối. Không ghi dòng nào. Các dòng còn lại chưa được kiểm tra; chỉ báo tối đa 100 vấn đề. Sửa tệp gốc rồi xem trước lại.</target></trans-unit>
+      <trans-unit id="authoring.import-export.confirm-title" datatype="html"><source>Confirm the validated import</source><target>Xác nhận nhập tệp đã được kiểm tra</target></trans-unit>
+      <trans-unit id="authoring.import-export.confirm" datatype="html"><source>Confirm import</source><target>Xác nhận nhập</target></trans-unit>
+      <trans-unit id="authoring.import-export.confirm-hint" datatype="html"><source>Existing live codes update cases; deleted codes restore them; empty codes allocate a new number. No partial import is possible.</source><target>Mã đang tồn tại sẽ cập nhật ca kiểm thử; mã đã xoá sẽ khôi phục ca; mã để trống sẽ được cấp số mới. Không nhập một phần.</target></trans-unit>
+      <trans-unit id="authoring.import-export.blocked" datatype="html"><source>Preview a valid file before confirming. Nothing is written before explicit confirmation.</source><target>Xem trước tệp hợp lệ trước khi xác nhận. Không ghi dữ liệu trước khi bạn xác nhận rõ ràng.</target></trans-unit>
+      <trans-unit id="authoring.import-export.denied" datatype="html"><source>You do not have permission to import into this project. The file stays readable; no new version was created.</source><target>Bạn không có quyền nhập vào dự án này. Vẫn có thể đọc tệp; chưa tạo phiên bản mới.</target></trans-unit>
+      <trans-unit id="authoring.import-export.success" datatype="html"><source>Import confirmed. The server returned this batch and these outcome totals.</source><target>Đã xác nhận nhập. Máy chủ trả về lô nhập và các tổng kết quả sau.</target></trans-unit>
+      <trans-unit id="authoring.import-export.no-op" datatype="html"><source>Nothing to import. No changes; no new version was created.</source><target>Không có gì để nhập. Không có thay đổi; không tạo phiên bản mới.</target></trans-unit>
+      <trans-unit id="authoring.import-export.batch" datatype="html"><source>Import batch</source><target>Lô nhập</target></trans-unit>
+      <trans-unit id="authoring.import-export.created" datatype="html"><source>Created</source><target>Đã tạo</target></trans-unit>
+      <trans-unit id="authoring.import-export.updated" datatype="html"><source>Updated</source><target>Đã cập nhật</target></trans-unit>
+      <trans-unit id="authoring.import-export.restored" datatype="html"><source>Restored</source><target>Đã khôi phục</target></trans-unit>
+      <trans-unit id="authoring.import-export.unchanged" datatype="html"><source>Unchanged</source><target>Không đổi</target></trans-unit>
+      <trans-unit id="authoring.import-export.retry" datatype="html"><source>Retry the same intent</source><target>Thử lại cùng ý định</target></trans-unit>
+      <trans-unit id="authoring.import-export.pending" datatype="html"><source>Import is awaiting a server response.</source><target>Đang chờ máy chủ phản hồi yêu cầu nhập.</target></trans-unit>
+      <trans-unit id="authoring.import-export.export-scope" datatype="html"><source>Export scope</source><target>Phạm vi xuất</target></trans-unit>
+      <trans-unit id="authoring.import-export.project-scope" datatype="html"><source>Whole project</source><target>Toàn bộ dự án</target></trans-unit>
+      <trans-unit id="authoring.import-export.node-scope" datatype="html"><source>Selected node subtree</source><target>Cây con của nút đã chọn</target></trans-unit>
+      <trans-unit id="authoring.import-export.selected" datatype="html"><source>Export selected — unavailable</source><target>Xuất mục đã chọn — không khả dụng</target></trans-unit>
+      <trans-unit id="authoring.import-export.filtered" datatype="html"><source>Current filtered set — unavailable</source><target>Tập đang lọc — không khả dụng</target></trans-unit>
+      <trans-unit id="authoring.import-export.selection-unavailable" datatype="html"><source>Selection and filtered-set export are unavailable: this contract has no ids or filter parameter. Choose a node or the project explicitly; selection is never expanded automatically.</source><target>Không thể xuất các mục đã chọn hoặc tập đang lọc: hợp đồng không có tham số ids hay bộ lọc. Hãy chọn rõ một nút hoặc toàn bộ dự án; không tự mở rộng phạm vi lựa chọn.</target></trans-unit>
+      <trans-unit id="authoring.import-export.node" datatype="html"><source>Selected node UUID</source><target>UUID của nút đã chọn</target></trans-unit>
+      <trans-unit id="authoring.import-export.no-node" datatype="html"><source>No node is selected. An empty scope is never expanded to the whole project.</source><target>Chưa chọn nút. Không tự mở rộng phạm vi rỗng thành toàn bộ dự án.</target></trans-unit>
+      <trans-unit id="authoring.import-export.node-invalid" datatype="html"><source>Enter the exact node UUID, or choose the whole project explicitly.</source><target>Nhập đúng UUID của nút hoặc chủ động chọn toàn bộ dự án.</target></trans-unit>
+      <trans-unit id="authoring.import-export.include" datatype="html"><source>Included kinds</source><target>Các loại được xuất</target></trans-unit>
+      <trans-unit id="authoring.import-export.nodes" datatype="html"><source>Nodes</source><target>Nút</target></trans-unit>
+      <trans-unit id="authoring.import-export.items" datatype="html"><source>Checklist items</source><target>Mục danh sách kiểm tra</target></trans-unit>
+      <trans-unit id="authoring.import-export.cases" datatype="html"><source>Test cases</source><target>Ca kiểm thử</target></trans-unit>
+      <trans-unit id="authoring.import-export.no-kinds" datatype="html"><source>Choose at least one kind. An empty list would mean all kinds to the server.</source><target>Chọn ít nhất một loại. Danh sách rỗng có nghĩa là tất cả các loại đối với máy chủ.</target></trans-unit>
+      <trans-unit id="authoring.import-export.count-unavailable" datatype="html"><source>Exact count unavailable: the export response supplies a file, not a count.</source><target>Chưa có số lượng chính xác: phản hồi xuất chỉ cung cấp tệp, không cung cấp số lượng.</target></trans-unit>
+      <trans-unit id="authoring.import-export.fields" datatype="html"><source>Export field preview</source><target>Xem trước trường xuất</target></trans-unit>
+      <trans-unit id="authoring.import-export.fields-hint" datatype="html"><source>Contract columns for the round trip, not an example schema. No source version is claimed.</source><target>Các cột theo hợp đồng để nhập lại, không phải lược đồ ví dụ. Không khẳng định phiên bản nguồn.</target></trans-unit>
+      <trans-unit id="authoring.import-export.download" datatype="html"><source>Download export</source><target>Tải tệp xuất</target></trans-unit>
+      <trans-unit id="authoring.import-export.confirm-download" datatype="html"><source>Download this exact scope?</source><target>Tải đúng phạm vi này?</target></trans-unit>
+      <trans-unit id="authoring.import-export.cancel" datatype="html"><source>Cancel</source><target>Huỷ</target></trans-unit>
+      <trans-unit id="authoring.import-export.downloaded" datatype="html"><source>The server file was downloaded for the confirmed scope.</source><target>Đã tải tệp từ máy chủ cho đúng phạm vi đã xác nhận.</target></trans-unit>
+      <trans-unit id="authoring.import-export.read-only-export" datatype="html"><source>Read-only export remains available at this width. Changing scope requires a desktop view.</source><target>Vẫn có thể xuất dữ liệu chỉ đọc ở độ rộng này. Cần màn hình máy tính để thay đổi phạm vi.</target></trans-unit>
+      <trans-unit id="authoring.import-export.export-cap" datatype="html"><source>This scope exceeds the export file cap. Choose a smaller node scope. No truncated file was created.</source><target>Phạm vi này vượt giới hạn tệp xuất. Chọn phạm vi nút nhỏ hơn. Không tạo tệp bị cắt bớt.</target></trans-unit>
+      <trans-unit id="authoring.import-export.export-denied" datatype="html"><source>You do not have permission to export from this project. No file was created.</source><target>Bạn không có quyền xuất từ dự án này. Không tạo tệp nào.</target></trans-unit>
+      <trans-unit id="authoring.import-export.scope-mismatch" datatype="html"><source>This credential is scoped to another project. Use a credential permitted for this exact project; no rows were imported and no file was exported.</source><target>Thông tin xác thực này chỉ có phạm vi ở dự án khác. Dùng thông tin xác thực được phép cho đúng dự án này; không nhập dòng nào và không xuất tệp nào.</target></trans-unit>
+      <trans-unit id="authoring.import-export.empty-export" datatype="html"><source>This export scope is empty. No file was downloaded; choose another scope explicitly.</source><target>Phạm vi xuất này rỗng. Không tải tệp nào; hãy chủ động chọn phạm vi khác.</target></trans-unit>
+      <trans-unit id="authoring.import-export.no-scope" datatype="html"><source>No scope</source><target>Không có phạm vi</target></trans-unit>
+      <trans-unit id="authoring.import-export.xlsx-option" datatype="html"><source>XLSX — unavailable</source><target>XLSX — không khả dụng</target></trans-unit>
+      <trans-unit id="authoring.import-export.xlsx-unavailable" datatype="html"><source>XLSX export is unavailable: the current transport carries text only, so no workbook is requested. Choose CSV or JSON.</source><target>Không thể xuất XLSX: kênh truyền hiện tại chỉ mang văn bản nên không có bảng tính nào được yêu cầu. Hãy chọn CSV hoặc JSON.</target></trans-unit>
+      <trans-unit id="authoring.import-export.narrow-notice" datatype="html"><source>Desktop required to change the export scope. Downloading the scope shown is still available.</source><target>Cần màn hình máy tính để đổi phạm vi xuất. Vẫn có thể tải phạm vi đang hiển thị.</target></trans-unit>
+      <trans-unit id="authoring.import-export.reason.unknown-parent" datatype="html"><source>The parent must name an earlier node of the required kind.</source><target>Nút cha phải tham chiếu đến một nút đứng trước có đúng loại.</target></trans-unit>
+      <trans-unit id="authoring.import-export.reason.orphan-row" datatype="html"><source>The row has no valid owning item or node.</source><target>Dòng không có mục hoặc nút sở hữu hợp lệ.</target></trans-unit>
+      <trans-unit id="authoring.import-export.reason.duplicate-key" datatype="html"><source>This file-local key is duplicated. All rows are retained; nothing was imported.</source><target>Khoá cục bộ trong tệp bị trùng. Giữ nguyên mọi dòng; chưa nhập dữ liệu nào.</target></trans-unit>
+      <trans-unit id="authoring.import-export.reason.code-conflict" datatype="html"><source>The case code conflicts with the project's prefix or allowed number. Nothing was written.</source><target>Mã ca kiểm thử xung đột với tiền tố dự án hoặc số được phép. Không ghi dữ liệu nào.</target></trans-unit>
+      <trans-unit id="authoring.import-export.reason.value-invalid" datatype="html"><source>This field does not meet the import contract.</source><target>Trường này không đáp ứng hợp đồng nhập.</target></trans-unit>
+      <trans-unit id="authoring.import-export.reason.steps-invalid" datatype="html"><source>The paired action and expected-result steps do not meet the steps contract.</source><target>Các cặp bước hành động và kết quả mong đợi không đáp ứng hợp đồng bước kiểm thử.</target></trans-unit>
+      <trans-unit id="authoring.import-export.reason.invalid-text" datatype="html"><source>This text does not meet the server's text requirements.</source><target>Văn bản này không đáp ứng yêu cầu văn bản của máy chủ.</target></trans-unit>
+      <trans-unit id="authoring.import-export.reason.unsupported-format" datatype="html"><source>The file structure, CSV header or chosen format is not supported.</source><target>Cấu trúc tệp, tiêu đề CSV hoặc định dạng đã chọn không được hỗ trợ.</target></trans-unit>
+      <trans-unit id="authoring.import-export.reason.unknown" datatype="html"><source>This file could not be processed.</source><target>Không thể xử lý tệp này.</target></trans-unit>
+      <trans-unit id="authoring.import-export.failure.size" datatype="html"><source>The file exceeds the allowed limit of 5 MiB or 5,000 data rows. Nothing was imported.</source><target>Tệp vượt giới hạn cho phép là 5 MiB hoặc 5.000 dòng dữ liệu. Chưa nhập dữ liệu nào.</target></trans-unit>
+      <trans-unit id="authoring.import-export.failure.conflict" datatype="html"><source>This intent key belongs to a different request. Select the original file and format or start a new import intent. Nothing was retried automatically.</source><target>Khóa ý định này thuộc về yêu cầu khác. Chọn đúng tệp và định dạng ban đầu hoặc bắt đầu ý định nhập mới. Không có yêu cầu nào được tự động thử lại.</target></trans-unit>
+      <trans-unit id="authoring.import-export.failure.wait" datatype="html"><source>The server is busy. Wait as directed by Retry-After, then retry explicitly. Your file is retained.</source><target>Máy chủ đang bận. Chờ theo Retry-After rồi chủ động thử lại. Tệp của bạn được giữ lại.</target></trans-unit>
+      <trans-unit id="authoring.import-export.failure.sign-in" datatype="html"><source>Sign in again before retrying. No request is sent automatically after sign-in.</source><target>Đăng nhập lại trước khi thử lại. Không tự động gửi yêu cầu sau khi đăng nhập.</target></trans-unit>
+      <trans-unit id="authoring.import-export.failure.not-found" datatype="html"><source>This project or node was not found. No file is available.</source><target>Không tìm thấy dự án hoặc nút này. Không có tệp để tải.</target></trans-unit>
+      <trans-unit id="authoring.import-export.failure.unknown" datatype="html"><source>The request could not be completed. Its outcome is unconfirmed; retry only the same intent.</source><target>Không thể hoàn tất yêu cầu. Chưa xác nhận được kết quả; chỉ thử lại cùng một ý định.</target></trans-unit>
+      <trans-unit id="authoring.import-export.row-label" datatype="html"><source>Row <x id="INDEX" equiv-text="detail.index"/></source><target>Dòng <x id="INDEX" equiv-text="detail.index"/></target></trans-unit>
+      <trans-unit id="authoring.import-export.failure.export-filters" datatype="html"><source>Export filters were refused. Check the format, node UUID and included kinds. No file was downloaded.</source><target>Bộ lọc xuất bị từ chối. Kiểm tra định dạng, UUID của nút và các loại được xuất. Chưa tải tệp nào.</target></trans-unit>
+      <trans-unit id="authoring.import-export.failure.export-wait" datatype="html"><source>The server is busy. Wait as directed by Retry-After, then retry this exact scope explicitly. Nothing is downloaded automatically.</source><target>Máy chủ đang bận. Chờ theo Retry-After rồi chủ động thử lại đúng phạm vi này. Không tự động tải tệp nào.</target></trans-unit>
+      <trans-unit id="authoring.import-export.failure.export-unknown" datatype="html"><source>The export could not be completed or its server file was unavailable. No file was downloaded. Retry the exact scope explicitly.</source><target>Không thể hoàn tất xuất hoặc không nhận được tệp từ máy chủ. Chưa tải tệp nào. Hãy chủ động thử lại đúng phạm vi đó.</target></trans-unit>
+      <trans-unit id="authoring.tree.title" datatype="html"><source>Feature tree</source><target>Cây chức năng</target></trans-unit>
+      <trans-unit id="authoring.tree.description" datatype="html"><source>Browse the project hierarchy and select a scope. Child-node counts and checklist-item counts are direct counts, not manual-case totals.</source><target>Duyệt phân cấp dự án và chọn phạm vi. Số nút con và số mục danh sách kiểm tra là số trực tiếp, không phải tổng số ca kiểm thử thủ công.</target></trans-unit>
+      <trans-unit id="authoring.tree.hierarchy" datatype="html"><source>Project hierarchy</source><target>Phân cấp dự án</target></trans-unit>
+      <trans-unit id="authoring.tree.hierarchy-description" datatype="html"><source>Expand a branch explicitly to load its children. Selecting a scope does not expand it.</source><target>Chủ động mở rộng nhánh để tải các nút con. Chọn phạm vi không làm mở rộng nhánh.</target></trans-unit>
+      <trans-unit id="authoring.tree.keyboard" datatype="html"><source>Tab reaches each visible control. Arrow keys, Home, End and typing move focus without selecting. Enter or Space activates a button.</source><target>Tab đi qua từng điều khiển đang hiển thị. Phím mũi tên, Home, End và nhập chữ chỉ chuyển tiêu điểm, không chọn phạm vi. Enter hoặc Space kích hoạt nút.</target></trans-unit>
+      <trans-unit id="authoring.tree.children" datatype="html"><source>Child nodes</source><target>Nút con</target></trans-unit>
+      <trans-unit id="authoring.tree.items" datatype="html"><source>Checklist items</source><target>Mục danh sách kiểm tra</target></trans-unit>
+      <trans-unit id="authoring.tree.pending" datatype="html"><source>Pending</source><target>Đang chờ</target></trans-unit>
+      <trans-unit id="authoring.tree.pending-reason" datatype="html"><source>Pending change count unavailable; this read does not supply it.</source><target>Chưa có số thay đổi đang chờ; dữ liệu đọc này không cung cấp trường đó.</target></trans-unit>
+      <trans-unit id="authoring.tree.current" datatype="html"><source>Current scope</source><target>Phạm vi hiện tại</target></trans-unit>
+      <trans-unit id="authoring.tree.path" datatype="html"><source>Selected node path</source><target>Đường dẫn nút đã chọn</target></trans-unit>
+      <trans-unit id="authoring.tree.all" datatype="html"><source>Project roots</source><target>Các nút gốc của dự án</target></trans-unit>
+      <trans-unit id="authoring.tree.choose" datatype="html"><source>Select a node to inspect its path.</source><target>Chọn một nút để xem đường dẫn.</target></trans-unit>
+      <trans-unit id="authoring.tree.selected-id" datatype="html"><source>Selected node ID</source><target>Mã nút đã chọn</target></trans-unit>
+      <trans-unit id="authoring.tree.loading" datatype="html"><source>Loading project hierarchy…</source><target>Đang tải phân cấp dự án…</target></trans-unit>
+      <trans-unit id="authoring.tree.loading-children" datatype="html"><source>Loading child nodes…</source><target>Đang tải các nút con…</target></trans-unit>
+      <trans-unit id="authoring.tree.empty" datatype="html"><source>This project has no authoring content yet</source><target>Dự án này chưa có nội dung biên soạn</target></trans-unit>
+      <trans-unit id="authoring.tree.empty-description" datatype="html"><source>A test case needs an existing checklist item. No hierarchy or parent is created by browsing.</source><target>Ca kiểm thử cần một mục danh sách kiểm tra đã có. Duyệt cây không tạo phân cấp hoặc nút cha.</target></trans-unit>
+      <trans-unit id="authoring.tree.empty-children" datatype="html"><source>No child nodes in this scope</source><target>Phạm vi này không có nút con</target></trans-unit>
+      <trans-unit id="authoring.tree.refresh" datatype="html"><source>Refresh hierarchy</source><target>Làm mới phân cấp</target></trans-unit>
+      <trans-unit id="authoring.tree.stale" datatype="html"><source>Hierarchy may be stale</source><target>Phân cấp có thể đã cũ</target></trans-unit>
+      <trans-unit id="authoring.tree.stale-description" datatype="html"><source>Refresh failed; previously loaded hierarchy data is still shown. Retry to refresh this region only.</source><target>Làm mới không thành công; phân cấp đã tải vẫn hiển thị. Thử lại chỉ làm mới vùng này.</target></trans-unit>
+      <trans-unit id="authoring.tree.more-roots" datatype="html"><source>Load more root nodes</source><target>Tải thêm nút gốc</target></trans-unit>
+      <trans-unit id="authoring.tree.more-children" datatype="html"><source>Load more child nodes</source><target>Tải thêm nút con</target></trans-unit>
+      <trans-unit id="authoring.tree.table" datatype="html"><source>Case table</source><target>Bảng ca kiểm thử</target></trans-unit>
+      <trans-unit id="authoring.tree.table-placeholder" datatype="html"><source>This separate region is reserved for the case table. Hierarchy loading and failures do not control it.</source><target>Vùng độc lập này dành cho bảng ca kiểm thử. Việc tải hoặc lỗi của phân cấp không điều khiển vùng này.</target></trans-unit>
+      <trans-unit id="authoring.tree.expand" datatype="html"><source>Expand <x id="title" equiv-text="node.title"/></source><target>Mở rộng <x id="title" equiv-text="node.title"/></target></trans-unit>
+      <trans-unit id="authoring.tree.collapse" datatype="html"><source>Collapse <x id="title" equiv-text="node.title"/></source><target>Thu gọn <x id="title" equiv-text="node.title"/></target></trans-unit>
+      <trans-unit id="authoring.tree.select" datatype="html"><source>Select scope <x id="title" equiv-text="node.title"/></source><target>Chọn phạm vi <x id="title" equiv-text="node.title"/></target></trans-unit>
+      <trans-unit id="authoring.tree.announce-selected" datatype="html"><source>Selected scope <x id="title" equiv-text="selected.title"/></source><target>Đã chọn phạm vi <x id="title" equiv-text="selected.title"/></target></trans-unit>
+      <trans-unit id="authoring.tree.announce-roots" datatype="html"><source>Scope set to all project roots</source><target>Phạm vi được đặt về tất cả các nút gốc của dự án</target></trans-unit>
+      <trans-unit id="authoring.tree.announce-selection-failed" datatype="html"><source>Could not load selected scope <x id="nodeId" equiv-text="failed"/></source><target>Không thể tải phạm vi đã chọn <x id="nodeId" equiv-text="failed"/></target></trans-unit>
+      <trans-unit id="authoring.ai-settings.description" datatype="html"><source>Description</source><target>Mô tả</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.environment" datatype="html"><source>Environment URL</source><target>URL môi trường</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.style" datatype="html"><source>Writing style</source><target>Phong cách viết</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.coverage" datatype="html"><source>Coverage strategy</source><target>Chiến lược bao phủ</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.critical" datatype="html"><source>Critical priority criteria</source><target>Tiêu chí ưu tiên nghiêm trọng</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.high" datatype="html"><source>High priority criteria</source><target>Tiêu chí ưu tiên cao</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.medium" datatype="html"><source>Medium priority criteria</source><target>Tiêu chí ưu tiên trung bình</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.low" datatype="html"><source>Low priority criteria</source><target>Tiêu chí ưu tiên thấp</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.exclusions" datatype="html"><source>Exclusion rules</source><target>Quy tắc loại trừ</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.detail" datatype="html"><source>Step detail</source><target>Mức chi tiết của bước</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.reason" datatype="html"><source>Save reason (optional)</source><target>Lý do lưu (không bắt buộc)</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.author" datatype="html"><source>Author membership</source><target>Thành viên tạo phiên bản</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.settings-id" datatype="html"><source>Settings identity</source><target>Mã cài đặt</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.hash" datatype="html"><source>Content hash</source><target>Mã băm nội dung</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.history-tab" datatype="html"><source>Version history</source><target>Lịch sử phiên bản</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.pages" datatype="html"><source>Version history pages</source><target>Các trang lịch sử phiên bản</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.no-match" datatype="html"><source>No loaded versions match this filter</source><target>Không có phiên bản đã tải khớp bộ lọc</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.empty-history" datatype="html"><source>No saved settings versions</source><target>Chưa có phiên bản cài đặt được lưu</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.version-column" datatype="html"><source>Version</source><target>Phiên bản</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.reason-column" datatype="html"><source>Reason</source><target>Lý do</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.not-set" datatype="html"><source>Not set</source><target>Chưa đặt</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.time" datatype="html"><source>Saved at (UTC)</source><target>Đã lưu lúc (UTC)</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.actions" datatype="html"><source>Inspection</source><target>Xem chi tiết</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.title" datatype="html"><source>AI settings</source><target>Cài đặt AI</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.intro" datatype="html"><source>Project guidance for authored cases. Saving creates an immutable settings version.</source><target>Hướng dẫn dự án cho ca kiểm thử. Mỗi lần lưu tạo một phiên bản cài đặt bất biến.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.languages" datatype="html"><source>Output languages</source><target>Ngôn ngữ đầu ra</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.over-limit" datatype="html"><source>Shorten this field before saving.</source><target>Rút ngắn trường này trước khi lưu.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.server-field" datatype="html"><source>The server refused this field. Review its value before saving.</source><target>Máy chủ từ chối trường này. Kiểm tra giá trị trước khi lưu.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.over-announcement" datatype="html"><source>Character limit exceeded. Shorten the field before saving.</source><target>Đã vượt giới hạn ký tự. Rút ngắn trường trước khi lưu.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.at-announcement" datatype="html"><source>Character limit reached.</source><target>Đã đạt giới hạn ký tự.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.within-announcement" datatype="html"><source>Within the character limit.</source><target>Trong giới hạn ký tự.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.consent" datatype="html"><source>AI consent unavailable</source><target>Chưa có thông tin chấp thuận AI</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.consent-reason" datatype="html"><source>These settings do not report tenant consent. Saving guidance does not opt in to AI; manual authoring remains available.</source><target>Cài đặt này không cung cấp trạng thái chấp thuận của tổ chức. Lưu hướng dẫn không bật AI; vẫn có thể soạn thủ công.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.version" datatype="html"><source>Current version: <x id="INTERPOLATION" equiv-text="{{ base.view.version_no }}"/></source><target>Phiên bản hiện tại: <x id="INTERPOLATION" equiv-text="{{ base.view.version_no }}"/></target></trans-unit>
+      <trans-unit id="authoring.ai-settings.default" datatype="html"><source>Using default guidance; no saved version exists yet.</source><target>Đang dùng hướng dẫn mặc định; chưa có phiên bản được lưu.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.settings-tab" datatype="html"><source>Settings</source><target>Cài đặt</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.templates" datatype="html"><source>Built-in templates</source><target>Mẫu có sẵn</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.no-templates" datatype="html"><source>No templates are available.</source><target>Không có mẫu khả dụng.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.counter" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ count(value(field.key)) }}"/> / <x id="INTERPOLATION_1" equiv-text="{{ field.limit }}"/> characters</source><target><x id="INTERPOLATION" equiv-text="{{ count(value(field.key)) }}"/> / <x id="INTERPOLATION_1" equiv-text="{{ field.limit }}"/> ký tự</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.english" datatype="html"><source>English</source><target>Tiếng Anh</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.vietnamese" datatype="html"><source>Vietnamese</source><target>Tiếng Việt</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.language-required" datatype="html"><source>Select at least one output language.</source><target>Chọn ít nhất một ngôn ngữ đầu ra.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.read-only" datatype="html"><source>Saving requires project:write. You can read settings and history.</source><target>Cần quyền project:write để lưu. Bạn có thể đọc cài đặt và lịch sử.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.missing-tag" datatype="html"><source>The server did not supply an ETag. Reload before saving.</source><target>Máy chủ không cung cấp ETag. Tải lại trước khi lưu.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.reload" datatype="html"><source>Reload settings</source><target>Tải lại cài đặt</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.dirty" datatype="html"><source>Settings have unsaved changes.</source><target>Cài đặt có thay đổi chưa lưu.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.failed" datatype="html"><source>Could not save; your settings draft is retained.</source><target>Không lưu được; bản nháp cài đặt được giữ lại.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.save" datatype="html"><source>Save new version</source><target>Lưu phiên bản mới</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.read-only-draft" datatype="html"><source>Read-only settings draft</source><target>Bản nháp cài đặt chỉ đọc</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.draft-notice" datatype="html"><source>Unsaved desktop edits are retained, not saved. Widen the screen to edit.</source><target>Thay đổi chưa lưu trên máy tính được giữ lại, chưa được lưu. Mở rộng màn hình để sửa.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.saving" datatype="html"><source>Saving settings…</source><target>Đang lưu cài đặt…</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.saved" datatype="html"><source>A new settings version was saved.</source><target>Đã lưu phiên bản cài đặt mới.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.unchanged" datatype="html"><source>No changes; the existing version is unchanged.</source><target>Không có thay đổi; phiên bản hiện tại được giữ nguyên.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.preview-title" datatype="html"><source>Preview template replacement</source><target>Xem trước thay thế bằng mẫu</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.preview-description" datatype="html"><source>Replace every guidance field in the draft only. Nothing is saved until Save new version.</source><target>Chỉ thay tất cả trường hướng dẫn trong bản nháp. Chưa lưu cho đến khi chọn Lưu phiên bản mới.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.cancel" datatype="html"><source>Cancel</source><target>Hủy</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.replace" datatype="html"><source>Replace draft</source><target>Thay bản nháp</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.filter" datatype="html"><source>Filter loaded versions by reason</source><target>Lọc phiên bản đã tải theo lý do</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.inspect" datatype="html"><source>View version <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></source><target>Xem phiên bản <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></target></trans-unit>
+      <trans-unit id="authoring.ai-settings.compare" datatype="html"><source>Compare with <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></source><target>So sánh với <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></target></trans-unit>
+      <trans-unit id="authoring.ai-settings.first" datatype="html"><source>First page</source><target>Trang đầu</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.next" datatype="html"><source>Next page</source><target>Trang tiếp</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.immutable" datatype="html"><source>Version <x id="INTERPOLATION" equiv-text="{{ version.version_no }}"/> — read-only</source><target>Phiên bản <x id="INTERPOLATION" equiv-text="{{ version.version_no }}"/> — chỉ đọc</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.restore-unavailable" datatype="html"><source>Restore is unavailable: this screen provides read-only history.</source><target>Không thể khôi phục: màn hình này chỉ cho phép đọc lịch sử.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.diff-title" datatype="html"><source>Compare version <x id="INTERPOLATION" equiv-text="{{ before.version_no }}"/> with <x id="INTERPOLATION_1" equiv-text="{{ after.version_no }}"/></source><target>So sánh phiên bản <x id="INTERPOLATION" equiv-text="{{ before.version_no }}"/> với <x id="INTERPOLATION_1" equiv-text="{{ after.version_no }}"/></target></trans-unit>
+      <trans-unit id="authoring.ai-settings.before" datatype="html"><source>Before</source><target>Trước</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.after" datatype="html"><source>After</source><target>Sau</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.language-diff" datatype="html"><source>Output languages (before → after)</source><target>Ngôn ngữ đầu ra (trước → sau)</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.panels" datatype="html"><source>AI guidance panels</source><target>Các bảng hướng dẫn AI</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.url-error" datatype="html"><source>Enter an absolute HTTP or HTTPS URL without credentials.</source><target>Nhập URL HTTP hoặc HTTPS tuyệt đối không chứa thông tin đăng nhập.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.stale" datatype="html"><source>Refresh failed. Previously loaded settings and your unsaved draft are retained.</source><target>Không thể làm mới. Cài đặt đã tải và bản nháp chưa lưu của bạn được giữ lại.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.cursor-cycle" datatype="html"><source>The server repeated a page cursor. Return to the first page to retry.</source><target>Máy chủ lặp lại con trỏ trang. Quay về trang đầu để thử lại.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.compare-reason" datatype="html"><source>View a version before choosing a second version to compare.</source><target>Xem một phiên bản trước khi chọn phiên bản thứ hai để so sánh.</target></trans-unit>
+      <trans-unit id="authoring.case-table.selection-summary" datatype="html"><source> <x id="INTERPOLATION" equiv-text="{{ selectedCount() | number }}"/> of <x id="INTERPOLATION_1" equiv-text="{{ rows().length | number }}"/> loaded selected; applies to visible rows only </source><target>Đã chọn <x id="INTERPOLATION" equiv-text="{{ selectedCount() | number }}"/> trong <x id="INTERPOLATION_1" equiv-text="{{ rows().length | number }}"/> ca đã tải; chỉ áp dụng cho các hàng đang hiển thị</target></trans-unit>
+      <trans-unit id="authoring.case-table.select-case" datatype="html"><source>Select case <x id="code" equiv-text="row.code"/></source><target>Chọn ca kiểm thử <x id="code" equiv-text="row.code"/></target></trans-unit>
+      <trans-unit id="authoring.case-table.loaded-count" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> cases loaded</source><target>Đã tải <x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> ca kiểm thử</target></trans-unit>
+      <trans-unit id="authoring.case-table.scope-help" datatype="html"><source>Filters search the server list. Authoring coverage means a live automated identity is linked; it is not an execution result.</source><target>Bộ lọc tìm trong danh sách trên máy chủ. Độ bao phủ khi soạn thảo nghĩa là có liên kết đến định danh tự động hoá đang hoạt động; đây không phải kết quả thực thi.</target></trans-unit>
+      <trans-unit id="authoring.case-table.filters" datatype="html"><source>Filter manual cases</source><target>Lọc ca kiểm thử thủ công</target></trans-unit>
+      <trans-unit id="authoring.case-table.item" datatype="html"><source>Checklist item ID</source><target>ID mục checklist</target></trans-unit>
+      <trans-unit id="authoring.case-table.item-help" datatype="html"><source>Optional exact checklist UUID. Leave blank for every checklist in this scope.</source><target>UUID chính xác của mục checklist, không bắt buộc. Để trống để xem mọi checklist trong phạm vi này.</target></trans-unit>
+      <trans-unit id="authoring.case-table.item-error" datatype="html"><source>Enter a complete checklist UUID or leave this filter blank.</source><target>Nhập UUID đầy đủ của mục checklist hoặc để trống bộ lọc này.</target></trans-unit>
+      <trans-unit id="authoring.case-table.priority" datatype="html"><source>Priority</source><target>Mức ưu tiên</target></trans-unit>
+      <trans-unit id="authoring.case-table.state" datatype="html"><source>Lifecycle</source><target>Vòng đời</target></trans-unit>
+      <trans-unit id="authoring.case-table.coverage" datatype="html"><source>Authoring coverage</source><target>Độ bao phủ khi soạn thảo</target></trans-unit>
+      <trans-unit id="authoring.case-table.source" datatype="html"><source>Source</source><target>Nguồn</target></trans-unit>
+      <trans-unit id="authoring.case-table.owner" datatype="html"><source>Owner</source><target>Người phụ trách</target></trans-unit>
+      <trans-unit id="authoring.case-table.source-help" datatype="html"><source>Source filtering is unavailable: the server does not support this filter.</source><target>Chưa thể lọc theo nguồn: máy chủ không hỗ trợ bộ lọc này.</target></trans-unit>
+      <trans-unit id="authoring.case-table.owner-help" datatype="html"><source>Owner filtering is unavailable: the server does not support this filter.</source><target>Chưa thể lọc theo người phụ trách: máy chủ không hỗ trợ bộ lọc này.</target></trans-unit>
+      <trans-unit id="authoring.case-table.unavailable" datatype="html"><source>Unavailable</source><target>Chưa khả dụng</target></trans-unit>
+      <trans-unit id="authoring.case-table.search" datatype="html"><source>Search case titles</source><target>Tìm theo tiêu đề ca kiểm thử</target></trans-unit>
+      <trans-unit id="authoring.case-table.search-help" datatype="html"><source>Case-insensitive title search, up to 200 characters.</source><target>Tìm tiêu đề không phân biệt chữ hoa, chữ thường, tối đa 200 ký tự.</target></trans-unit>
+      <trans-unit id="authoring.case-table.search-error" datatype="html"><source>Enter at most 200 characters before applying filters.</source><target>Nhập tối đa 200 ký tự trước khi áp dụng bộ lọc.</target></trans-unit>
+      <trans-unit id="authoring.case-table.all" datatype="html"><source>All</source><target>Tất cả</target></trans-unit>
+      <trans-unit id="authoring.case-table.critical" datatype="html"><source>Critical</source><target>Khẩn cấp</target></trans-unit>
+      <trans-unit id="authoring.case-table.high" datatype="html"><source>High</source><target>Cao</target></trans-unit>
+      <trans-unit id="authoring.case-table.medium" datatype="html"><source>Medium</source><target>Trung bình</target></trans-unit>
+      <trans-unit id="authoring.case-table.low" datatype="html"><source>Low</source><target>Thấp</target></trans-unit>
+      <trans-unit id="authoring.case-table.draft" datatype="html"><source>Draft</source><target>Bản nháp</target></trans-unit>
+      <trans-unit id="authoring.case-table.approved" datatype="html"><source>Approved</source><target>Đã duyệt</target></trans-unit>
+      <trans-unit id="authoring.case-table.retired" datatype="html"><source>Retired</source><target>Đã ngừng sử dụng</target></trans-unit>
+      <trans-unit id="authoring.case-table.covered" datatype="html"><source>Linked</source><target>Có liên kết</target></trans-unit>
+      <trans-unit id="authoring.case-table.uncovered" datatype="html"><source>Not linked</source><target>Chưa liên kết</target></trans-unit>
+      <trans-unit id="authoring.case-table.apply" datatype="html"><source>Apply filters</source><target>Áp dụng bộ lọc</target></trans-unit>
+      <trans-unit id="authoring.case-table.clear" datatype="html"><source>Clear filters</source><target>Xoá bộ lọc</target></trans-unit>
+      <trans-unit id="authoring.case-table.refresh" datatype="html"><source>Refresh cases</source><target>Làm mới ca kiểm thử</target></trans-unit>
+      <trans-unit id="authoring.case-table.refresh-help" datatype="html"><source>Refresh reloads this list from the first page and drops the cursor; pages loaded after the first are not kept.</source><target>Làm mới sẽ tải lại danh sách này từ trang đầu và bỏ con trỏ trang; các trang đã tải sau trang đầu không được giữ lại.</target></trans-unit>
+      <trans-unit id="authoring.case-table.loading" datatype="html"><source>Loading manual cases; the hierarchy remains usable…</source><target>Đang tải ca kiểm thử thủ công; bạn vẫn có thể dùng cây phân cấp…</target></trans-unit>
+      <trans-unit id="authoring.case-table.empty-project" datatype="html"><source>This project has no manual cases yet</source><target>Dự án này chưa có ca kiểm thử thủ công</target></trans-unit>
+      <trans-unit id="authoring.case-table.empty-category" datatype="html"><source>This category has no test cases yet</source><target>Danh mục này chưa có ca kiểm thử</target></trans-unit>
+      <trans-unit id="authoring.case-table.empty-help" datatype="html"><source>A manual case needs an existing checklist item. Browsing never creates a case or its parent.</source><target>Ca kiểm thử thủ công cần một mục checklist đã có. Thao tác xem không tạo ca kiểm thử hay mục cha.</target></trans-unit>
+      <trans-unit id="authoring.case-table.no-match" datatype="html"><source>No test cases match these filters</source><target>Không có ca kiểm thử khớp bộ lọc</target></trans-unit>
+      <trans-unit id="authoring.case-table.no-match-help" datatype="html"><source>Clear the filters to inspect cases in the same hierarchy scope.</source><target>Xoá bộ lọc để xem các ca kiểm thử trong cùng phạm vi phân cấp.</target></trans-unit>
+      <trans-unit id="authoring.case-table.stale" datatype="html"><source>Case list may be stale</source><target>Danh sách ca kiểm thử có thể đã cũ</target></trans-unit>
+      <trans-unit id="authoring.case-table.stale-help" datatype="html"><source>Refresh failed; previously loaded cases are still shown. Retry explicitly to refresh this region only.</source><target>Không thể làm mới; các ca đã tải vẫn được hiển thị. Hãy chủ động thử lại để chỉ làm mới vùng này.</target></trans-unit>
+      <trans-unit id="authoring.case-table.pagination" datatype="html"><source>Manual case pagination</source><target>Phân trang ca kiểm thử thủ công</target></trans-unit>
+      <trans-unit id="authoring.case-table.page-size" datatype="html"><source>Page size</source><target>Số ca mỗi trang</target></trans-unit>
+      <trans-unit id="authoring.case-table.more" datatype="html"><source>Load more cases</source><target>Tải thêm ca kiểm thử</target></trans-unit>
+      <trans-unit id="authoring.case-table.loading-more" datatype="html"><source>Loading more cases…</source><target>Đang tải thêm ca kiểm thử…</target></trans-unit>
+      <trans-unit id="authoring.case-table.select" datatype="html"><source>Select visible rows</source><target>Chọn các hàng đang hiển thị</target></trans-unit>
+      <trans-unit id="authoring.case-table.selection" datatype="html"><source>Selection</source><target>Lựa chọn</target></trans-unit>
+      <trans-unit id="authoring.case-table.selection-help" datatype="html"><source>Selection applies to visible rows only, not unloaded cases or hidden record pages.</source><target>Lựa chọn chỉ áp dụng cho các hàng đang hiển thị, không bao gồm ca chưa tải hoặc các trang bản ghi đang ẩn.</target></trans-unit>
+      <trans-unit id="authoring.case-table.narrow-help" datatype="html"><source>Use a screen at least 768 pixels wide to select cases for export. Cases and filters remain readable here.</source><target>Dùng màn hình rộng tối thiểu 768 pixel để chọn ca kiểm thử cho việc xuất. Bạn vẫn có thể xem ca kiểm thử và dùng bộ lọc tại đây.</target></trans-unit>
+      <trans-unit id="authoring.case-table.export" datatype="html"><source>Export selected</source><target>Xuất các ca đã chọn</target></trans-unit>
+      <trans-unit id="authoring.case-table.export-help" datatype="html"><source>Selection export is unavailable: the server cannot export explicit case IDs. No broader scope will be exported.</source><target>Chưa thể xuất lựa chọn: máy chủ không hỗ trợ xuất theo danh sách ID ca kiểm thử cụ thể. Sẽ không xuất một phạm vi rộng hơn.</target></trans-unit>
+      <trans-unit id="authoring.case-table.caption" datatype="html"><source>Loaded manual cases</source><target>Các ca kiểm thử thủ công đã tải</target></trans-unit>
+      <trans-unit id="authoring.case-table.code" datatype="html"><source>Case code</source><target>Mã ca kiểm thử</target></trans-unit>
+      <trans-unit id="authoring.case-table.id" datatype="html"><source>Case ID</source><target>ID ca kiểm thử</target></trans-unit>
+      <trans-unit id="authoring.case-table.title" datatype="html"><source>Title</source><target>Tiêu đề</target></trans-unit>
+      <trans-unit id="authoring.case-table.links" datatype="html"><source>Linked automated case IDs</source><target>ID ca kiểm thử tự động hoá được liên kết</target></trans-unit>
+      <trans-unit id="authoring.case-table.version" datatype="html"><source>Case version</source><target>Phiên bản ca kiểm thử</target></trans-unit>
+      <trans-unit id="authoring.case-table.pending" datatype="html"><source>Pending changes</source><target>Thay đổi đang chờ</target></trans-unit>
+      <trans-unit id="authoring.case-table.pending-help" datatype="html"><source>Pending change count unavailable; this list does not supply it.</source><target>Chưa có số lượng thay đổi đang chờ; danh sách này không cung cấp thông tin đó.</target></trans-unit>
+      <trans-unit id="authoring.case-table.unresolved" datatype="html"><source>The case list request did not complete. Retry explicitly.</source><target>Yêu cầu tải danh sách ca kiểm thử chưa hoàn tất. Hãy chủ động thử lại.</target></trans-unit>
+      <trans-unit id="authoring.case-table.cursor-repeated" datatype="html"><source>The server repeated the case cursor. Reload the list.</source><target>Máy chủ lặp lại con trỏ danh sách ca kiểm thử. Hãy tải lại danh sách.</target></trans-unit>
+      <trans-unit id="authoring.case-table.page-repeated" datatype="html"><source>The next page had no new cases. Reload the list.</source><target>Trang tiếp theo không có ca kiểm thử mới. Hãy tải lại danh sách.</target></trans-unit>
+      <trans-unit id="authoring.editor.action" datatype="html">
+        <source>Action</source>
+        <target state="translated">Thao tác</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.add-step" datatype="html">
+        <source>Add step</source>
+        <target state="translated">Thêm bước</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.author-membership" datatype="html">
+        <source>Author membership</source>
+        <target state="translated">Tư cách thành viên của tác giả</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.cancel" datatype="html">
+        <source>Cancel</source>
+        <target state="translated">Hủy</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.case-code" datatype="html">
+        <source>Case code</source>
+        <target state="translated">Mã ca kiểm thử</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.change-create" datatype="html">
+        <source>Created</source>
+        <target state="translated">Đã tạo</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.change-delete" datatype="html">
+        <source>Deleted</source>
+        <target state="translated">Đã xóa</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.change-restore" datatype="html">
+        <source>Restored</source>
+        <target state="translated">Đã khôi phục</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.change-update" datatype="html">
+        <source>Updated</source>
+        <target state="translated">Đã cập nhật</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.character-count" datatype="html">
+        <source><x id="INTERPOLATION" equiv-text="{{ count(draft[field.key]) }}"/> / <x id="INTERPOLATION_1" equiv-text="{{ field.limit }}"/> characters</source>
+        <target state="translated"><x id="INTERPOLATION" equiv-text="{{ count(draft[field.key]) }}"/> / <x id="INTERPOLATION_1" equiv-text="{{ field.limit }}"/> ký tự</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.choose-panel" datatype="html">
+        <source>Choose a section</source>
+        <target state="translated">Chọn phần</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.compare-version" datatype="html">
+        <source>Compare with <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></source>
+        <target state="translated">So sánh với phiên bản <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.comparison-prerequisite" datatype="html">
+        <source>View one version before choosing a second version to compare.</source>
+        <target state="translated">Xem một phiên bản trước khi chọn phiên bản thứ hai để so sánh.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.critical" datatype="html">
+        <source>Critical</source>
+        <target state="translated">Nghiêm trọng</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.current-version" datatype="html">
+        <source>Current version: <x id="INTERPOLATION" equiv-text="{{ base.view.version }}"/></source>
+        <target state="translated">Phiên bản hiện tại: <x id="INTERPOLATION" equiv-text="{{ base.view.version }}"/></target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.cursor-cycle" datatype="html">
+        <source>The server repeated a page cursor. Refresh the timeline before loading more.</source>
+        <target state="translated">Máy chủ đã lặp lại con trỏ trang. Hãy làm mới dòng thời gian trước khi tải thêm.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.description" datatype="html">
+        <source>Description</source>
+        <target state="translated">Mô tả</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.detail-heading" datatype="html">
+        <source>Version <x id="INTERPOLATION" equiv-text="{{ detail.view.version_no }}"/> · read-only snapshot</source>
+        <target state="translated">Phiên bản <x id="INTERPOLATION" equiv-text="{{ detail.view.version_no }}"/> · bản chụp chỉ đọc</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.diff-after" datatype="html">
+        <source>+ After</source>
+        <target state="translated">+ Sau</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.diff-before" datatype="html">
+        <source>− Before</source>
+        <target state="translated">− Trước</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.diff-empty" datatype="html">
+        <source>Both stored snapshots are empty.</source>
+        <target state="translated">Cả hai bản chụp đã lưu đều trống.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.diff-loading" datatype="html">
+        <source>Loading snapshot comparison…</source>
+        <target state="translated">Đang tải nội dung so sánh bản chụp…</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.diff-title" datatype="html">
+        <source>Stored snapshot comparison · read-only</source>
+        <target state="translated">So sánh bản chụp đã lưu · chỉ đọc</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.diff-unchanged" datatype="html">
+        <source>Unchanged</source>
+        <target state="translated">Không thay đổi</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.diff-versions" datatype="html">
+        <source>Version <x id="INTERPOLATION" equiv-text="{{ before.view.version_no }}"/> → version <x id="INTERPOLATION_1" equiv-text="{{ after.view.version_no }}"/></source>
+        <target state="translated">Phiên bản <x id="INTERPOLATION" equiv-text="{{ before.view.version_no }}"/> → phiên bản <x id="INTERPOLATION_1" equiv-text="{{ after.view.version_no }}"/></target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.discard" datatype="html">
+        <source>Discard and leave</source>
+        <target state="translated">Bỏ thay đổi và rời đi</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.editor-tab" datatype="html">
+        <source>Editor</source>
+        <target state="translated">Trình chỉnh sửa</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.expected" datatype="html">
+        <source>Expected result</source>
+        <target state="translated">Kết quả mong đợi</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.high" datatype="html">
+        <source>High</source>
+        <target state="translated">Cao</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.history-empty" datatype="html">
+        <source>No versions recorded</source>
+        <target state="translated">Chưa có phiên bản nào</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.history-filter" datatype="html">
+        <source>Filter loaded versions by reason</source>
+        <target state="translated">Lọc các phiên bản đã tải theo lý do</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.history-no-match" datatype="html">
+        <source>No loaded versions match this filter</source>
+        <target state="translated">Không có phiên bản đã tải nào khớp với bộ lọc này</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.history-partial" datatype="html">
+        <source>Loading more versions failed. Previously loaded versions are retained.</source>
+        <target state="translated">Không tải được các phiên bản tiếp theo. Những phiên bản đã tải vẫn được giữ nguyên.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.inspect-column" datatype="html">
+        <source>Inspection</source>
+        <target state="translated">Xem chi tiết</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.inspect-version" datatype="html">
+        <source>View version <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></source>
+        <target state="translated">Xem phiên bản <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.intro" datatype="html">
+        <source>Edit an existing manual case. Saving appends a version; past versions remain unchanged.</source>
+        <target state="translated">Chỉnh sửa ca kiểm thử thủ công hiện có. Khi lưu, một phiên bản được thêm vào; các phiên bản trước không thay đổi.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.keep-editing" datatype="html">
+        <source>Keep editing</source>
+        <target state="translated">Tiếp tục chỉnh sửa</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.leave-description" datatype="html">
+        <source>Your draft is only in this tab. Leaving discards it without saving a version.</source>
+        <target state="translated">Bản nháp chỉ nằm trong thẻ này. Nếu rời đi, bản nháp sẽ bị bỏ mà không lưu thành phiên bản.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.leave-title" datatype="html">
+        <source>Discard unsaved changes?</source>
+        <target state="translated">Bỏ các thay đổi chưa lưu?</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.length-error" datatype="html">
+        <source>Shorten this field to the character limit shown below.</source>
+        <target state="translated">Rút ngắn nội dung để không vượt giới hạn ký tự bên dưới.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.load-more" datatype="html">
+        <source>Load more</source>
+        <target state="translated">Tải thêm</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.loaded-count" datatype="html">
+        <source><x id="INTERPOLATION" equiv-text="{{ store.rows().length }}"/> versions loaded</source>
+        <target state="translated">Đã tải <x id="INTERPOLATION" equiv-text="{{ store.rows().length }}"/> phiên bản</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.loading-more" datatype="html">
+        <source>Loading older versions…</source>
+        <target state="translated">Đang tải các phiên bản cũ hơn…</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.low" datatype="html">
+        <source>Low</source>
+        <target state="translated">Thấp</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.medium" datatype="html">
+        <source>Medium</source>
+        <target state="translated">Trung bình</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.move-down" datatype="html">
+        <source>Move down</source>
+        <target state="translated">Chuyển xuống</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.move-up" datatype="html">
+        <source>Move up</source>
+        <target state="translated">Chuyển lên</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.narrow-draft" datatype="html">
+        <source>Unsaved desktop edits are retained, not saved. Open a wider screen to edit.</source>
+        <target state="translated">Các chỉnh sửa chưa lưu trên màn hình rộng vẫn được giữ lại, chưa được lưu. Hãy mở trên màn hình rộng hơn để chỉnh sửa.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.narrow-saved" datatype="html">
+        <source>These saved values are shown read-only on a narrow screen. Open a wider screen to edit them.</source>
+        <target state="translated">Các giá trị đã lưu được hiển thị chỉ đọc trên màn hình hẹp. Hãy mở trên màn hình rộng hơn để chỉnh sửa.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.no-author" datatype="html">
+        <source>Author membership unavailable</source>
+        <target state="translated">Không có thông tin tư cách thành viên của tác giả</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.no-reason" datatype="html">
+        <source>No reason recorded</source>
+        <target state="translated">Chưa ghi nhận lý do</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.not-set" datatype="html">
+        <source>Not set</source>
+        <target state="translated">Chưa có</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.page-title" datatype="html">
+        <source>Case editor</source>
+        <target state="translated">Trình chỉnh sửa ca kiểm thử</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.panels" datatype="html">
+        <source>Case sections</source>
+        <target state="translated">Các phần của ca kiểm thử</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.preconditions" datatype="html">
+        <source>Preconditions</source>
+        <target state="translated">Điều kiện tiên quyết</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.priority" datatype="html">
+        <source>Priority</source>
+        <target state="translated">Mức ưu tiên</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.readonly-heading" datatype="html">
+        <source>Read-only case draft</source>
+        <target state="translated">Bản nháp ca kiểm thử chỉ đọc</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.reason-unavailable" datatype="html">
+        <source>The current API cannot record a version reason for this operation. The reason field is unavailable; you can continue without a recorded reason.</source>
+        <target state="translated">API hiện tại không thể ghi nhận lý do cho phiên bản trong thao tác này. Trường lý do chưa khả dụng; bạn vẫn có thể tiếp tục mà không ghi nhận lý do.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.refresh-failed" datatype="html">
+        <source>Refresh failed. The last loaded case and your unsaved draft are retained.</source>
+        <target state="translated">Làm mới không thành công. Ca kiểm thử đã tải gần nhất và bản nháp chưa lưu của bạn vẫn được giữ lại.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.refresh-timeline" datatype="html">
+        <source>Refresh timeline</source>
+        <target state="translated">Làm mới dòng thời gian</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.remove-step" datatype="html">
+        <source>Remove step</source>
+        <target state="translated">Xóa bước</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.required-error" datatype="html">
+        <source>Enter a value for this required field.</source>
+        <target state="translated">Nhập giá trị cho trường bắt buộc này.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restore-confirm" datatype="html">
+        <source>Restore as new version</source>
+        <target state="translated">Khôi phục thành phiên bản mới</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restore-description" datatype="html">
+        <source>This replaces the live case content with the selected stored snapshot and appends a version. Earlier versions remain unchanged.</source>
+        <target state="translated">Thao tác này thay nội dung ca kiểm thử hiện tại bằng bản chụp đã chọn và thêm một phiên bản. Các phiên bản trước không thay đổi.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restore-open" datatype="html">
+        <source>Restore version <x id="INTERPOLATION" equiv-text="{{ detail.view.version_no }}"/> as a new version</source>
+        <target state="translated">Khôi phục phiên bản <x id="INTERPOLATION" equiv-text="{{ detail.view.version_no }}"/> thành phiên bản mới</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restore-reason" datatype="html">
+        <source>Restore reason</source>
+        <target state="translated">Lý do khôi phục</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restore-refresh" datatype="html">
+        <source>Restore was confirmed, but the appended version is not yet visible. Refresh the timeline.</source>
+        <target state="translated">Đã xác nhận khôi phục nhưng phiên bản mới chưa hiển thị. Hãy làm mới dòng thời gian.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restore-source" datatype="html">
+        <source>Source version <x id="INTERPOLATION" equiv-text="{{ detail.view.version_no }}"/></source>
+        <target state="translated">Phiên bản nguồn <x id="INTERPOLATION" equiv-text="{{ detail.view.version_no }}"/></target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restore-title" datatype="html">
+        <source>Restore as a new version?</source>
+        <target state="translated">Khôi phục thành phiên bản mới?</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restored" datatype="html">
+        <source>Version <x id="INTERPOLATION" equiv-text="{{ store.appendedVersion() }}"/> was appended. Earlier versions are unchanged.</source>
+        <target state="translated">Đã thêm phiên bản <x id="INTERPOLATION" equiv-text="{{ store.appendedVersion() }}"/>. Các phiên bản trước không thay đổi.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restoring" datatype="html">
+        <source>Restoring version…</source>
+        <target state="translated">Đang khôi phục phiên bản…</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.retired" datatype="html">
+        <source>This case is retired. Its content is read-only.</source>
+        <target state="translated">Ca kiểm thử này đã ngừng sử dụng. Nội dung ở chế độ chỉ đọc.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.save" datatype="html">
+        <source>Save new version</source>
+        <target state="translated">Lưu phiên bản mới</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.save-failed" datatype="html">
+        <source>The save was not confirmed. Every draft field is retained.</source>
+        <target state="translated">Chưa xác nhận lưu thành công. Mọi trường trong bản nháp vẫn được giữ nguyên.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.saved" datatype="html">
+        <source>A new case version was saved.</source>
+        <target state="translated">Đã lưu một phiên bản ca kiểm thử mới.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.saving" datatype="html">
+        <source>Saving case…</source>
+        <target state="translated">Đang lưu ca kiểm thử…</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.server-field-error" datatype="html">
+        <source>The server refused this field. Review its value before saving again.</source>
+        <target state="translated">Máy chủ từ chối trường này. Hãy kiểm tra giá trị trước khi lưu lại.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.snapshot-content" datatype="html">
+        <source>Stored snapshot</source>
+        <target state="translated">Bản chụp đã lưu</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.snapshot-missing" datatype="html">
+        <source>Not present in this snapshot</source>
+        <target state="translated">Không có trong bản chụp này</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.source-ai" datatype="html">
+        <source>AI</source>
+        <target state="translated">AI</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.source-import" datatype="html">
+        <source>Import</source>
+        <target state="translated">Nhập dữ liệu</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.source-manual" datatype="html">
+        <source>Manual</source>
+        <target state="translated">Thủ công</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.step-character-count" datatype="html">
+        <source><x id="INTERPOLATION" equiv-text="{{ count(step[field.key] ?? &#x27;&#x27;) }}"/> / 2000 characters</source>
+        <target state="translated"><x id="INTERPOLATION" equiv-text="{{ count(step[field.key] ?? &#x27;&#x27;) }}"/> / 2000 ký tự</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.step-field" datatype="html">
+        <source>Step <x id="step" equiv-text="index + 1"/> · <x id="field" equiv-text="field.label"/></source>
+        <target state="translated">Bước <x id="step" equiv-text="index + 1"/> · <x id="field" equiv-text="field.label"/></target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.step-limits" datatype="html">
+        <source>Keep 1–100 steps. Use Move up and Move down to change execution order with the keyboard.</source>
+        <target state="translated">Giữ từ 1–100 bước. Dùng Chuyển lên và Chuyển xuống để đổi thứ tự thực hiện bằng bàn phím.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.step-moved" datatype="html">
+        <source>Step moved to position <x id="position" equiv-text="index + 1"/>.</source>
+        <target state="translated">Đã chuyển bước đến vị trí <x id="position" equiv-text="index + 1"/>.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.step-number" datatype="html">
+        <source>Step <x id="INTERPOLATION" equiv-text="{{ index + 1 }}"/></source>
+        <target state="translated">Bước <x id="INTERPOLATION" equiv-text="{{ index + 1 }}"/></target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.step-removed" datatype="html">
+        <source>Step removed. The remaining steps have been renumbered.</source>
+        <target state="translated">Đã xóa bước. Các bước còn lại đã được đánh số lại.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.steps" datatype="html">
+        <source>Steps</source>
+        <target state="translated">Các bước</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.steps-heading" datatype="html">
+        <source>Steps · action and expected result</source>
+        <target state="translated">Các bước · thao tác và kết quả mong đợi</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.test-data" datatype="html">
+        <source>Test data</source>
+        <target state="translated">Dữ liệu kiểm thử</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.timeline-draft" datatype="html">
+        <source>Your unsaved Editor draft is retained. Restoring does not merge it; saving that draft still checks its original ETag.</source>
+        <target state="translated">Bản nháp chưa lưu trong Trình chỉnh sửa vẫn được giữ lại. Khôi phục không hợp nhất nội dung; khi lưu bản nháp này, ETag gốc vẫn được kiểm tra.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.timeline-heading" datatype="html">
+        <source>Timeline · immutable history</source>
+        <target state="translated">Dòng thời gian · lịch sử bất biến</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.timeline-intro" datatype="html">
+        <source>Versions are newest first. Inspect stored snapshots or restore one as a new version. Restore never rewrites earlier versions.</source>
+        <target state="translated">Các phiên bản mới nhất được hiển thị trước. Xem bản chụp đã lưu hoặc khôi phục thành phiên bản mới. Khôi phục không ghi đè các phiên bản trước.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.timeline-tab" datatype="html">
+        <source>Timeline</source>
+        <target state="translated">Dòng thời gian</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.title-field" datatype="html">
+        <source>Title</source>
+        <target state="translated">Tiêu đề</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.unchanged" datatype="html">
+        <source>No changes; the existing version is unchanged.</source>
+        <target state="translated">Không có thay đổi; phiên bản hiện tại được giữ nguyên.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.unsaved" datatype="html">
+        <source>Unsaved changes are kept in this tab only.</source>
+        <target state="translated">Các thay đổi chưa lưu chỉ được giữ trong thẻ này.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.version-etag" datatype="html">
+        <source>Snapshot ETag</source>
+        <target state="translated">ETag của bản chụp</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.version-id" datatype="html">
+        <source>Version id</source>
+        <target state="translated">ID phiên bản</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.version-number" datatype="html">
+        <source>Version <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></source>
+        <target state="translated">Phiên bản <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.version-reason" datatype="html">
+        <source>Reason for this version</source>
+        <target state="translated">Lý do cho phiên bản này</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.write-reason" datatype="html">
+        <source>Read-only: authoring:write permission is required to save or restore a case.</source>
+        <target state="translated">Chỉ đọc: cần quyền authoring:write để lưu hoặc khôi phục ca kiểm thử.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.lifecycle" datatype="html">
+        <source>Status</source>
+        <target state="translated">Trạng thái</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.lifecycle-draft" datatype="html">
+        <source>Draft</source>
+        <target state="translated">Bản nháp</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.lifecycle-approved" datatype="html">
+        <source>Approved</source>
+        <target state="translated">Đã phê duyệt</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.lifecycle-retired" datatype="html">
+        <source>Retired</source>
+        <target state="translated">Đã ngừng sử dụng</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.live-provenance-unavailable" datatype="html">
+        <source>Source and author are unavailable in the case detail. Timeline shows the metadata supplied for each version.</source>
+        <target state="translated">Chi tiết ca kiểm thử chưa có thông tin nguồn và tác giả. Dòng thời gian hiển thị siêu dữ liệu được cung cấp cho từng phiên bản.</target>
+      </trans-unit>
+      <trans-unit id="authoring.import-export.would-create" datatype="html"><source>Would create</source><target>Sẽ tạo mới</target></trans-unit>
+      <trans-unit id="authoring.import-export.would-update" datatype="html"><source>Would update</source><target>Sẽ cập nhật</target></trans-unit>
+      <trans-unit id="authoring.import-export.would-restore" datatype="html"><source>Would restore</source><target>Sẽ khôi phục</target></trans-unit>
+      <trans-unit id="authoring.import-export.would-unchanged" datatype="html"><source>Would remain unchanged</source><target>Sẽ giữ nguyên</target></trans-unit>
+      <trans-unit id="authoring.import-export.preview-complete" datatype="html"><source>Preview complete — not applied. Review the validated scope before confirming.</source><target>Đã xem trước — chưa áp dụng. Kiểm tra phạm vi đã xác thực trước khi xác nhận.</target></trans-unit>
+      <trans-unit id="authoring.import-export.inspected" datatype="html"><source>Inspected rows</source><target>Số dòng đã xem xét</target></trans-unit>
+      <trans-unit id="authoring.import-export.snapshot" datatype="html"><source>Selected file and format</source><target>Tệp và định dạng đã chọn</target></trans-unit>
+      <trans-unit id="authoring.import-export.unavailable" datatype="html"><source>Unavailable</source><target>Không khả dụng</target></trans-unit>
+      <trans-unit id="authoring.import-export.header-guide" datatype="html"><source>Correct the CSV header to these thirteen contract columns, in this order:</source><target>Sửa tiêu đề CSV theo đúng mười ba cột của hợp đồng, theo thứ tự sau:</target></trans-unit>
+      <trans-unit id="authoring.import-export.limit" datatype="html"><source>Server limit</source><target>Giới hạn của máy chủ</target></trans-unit>
+      <trans-unit id="authoring.import-export.actual" datatype="html"><source>Measured value</source><target>Giá trị đo được</target></trans-unit>
+      <trans-unit id="authoring.import-export.bytes" datatype="html"><source>bytes</source><target>byte</target></trans-unit>
+      <trans-unit id="authoring.import-export.data-rows" datatype="html"><source>data rows</source><target>dòng dữ liệu</target></trans-unit>
+      <trans-unit id="authoring.import-export.history" datatype="html"><source>Authoring versions</source><target>Các phiên bản biên soạn</target></trans-unit>
+      <trans-unit id="authoring.import-export.history-hint" datatype="html"><source>Latest import versions in this project, up to 50 per page. Version numbers belong to each entity. Only this authorized history read confirms a version.</source><target>Các phiên bản nhập mới nhất của dự án, tối đa 50 phiên bản mỗi trang. Số phiên bản thuộc từng thực thể. Chỉ dữ liệu lịch sử được cấp quyền này xác nhận một phiên bản.</target></trans-unit>
+      <trans-unit id="authoring.import-export.history-failed" datatype="html"><source>Version history could not be loaded. The file and preview remain available.</source><target>Không tải được lịch sử phiên bản. Tệp và nội dung xem trước vẫn được giữ lại.</target></trans-unit>
+      <trans-unit id="authoring.import-export.history-stale" datatype="html"><source>Version history is stale because its refresh failed. The file and preview remain available.</source><target>Lịch sử phiên bản đã cũ vì không thể làm mới. Tệp và nội dung xem trước vẫn được giữ lại.</target></trans-unit>
+      <trans-unit id="authoring.import-export.history-empty" datatype="html"><source>No import versions were returned for this project.</source><target>Không có phiên bản nhập nào được trả về cho dự án này.</target></trans-unit>
+      <trans-unit id="authoring.import-export.history-refresh" datatype="html"><source>Refresh version history</source><target>Làm mới lịch sử phiên bản</target></trans-unit>
+      <trans-unit id="authoring.import-export.history-older" datatype="html"><source>Older import versions</source><target>Các phiên bản nhập cũ hơn</target></trans-unit>
+      <trans-unit id="authoring.import-export.history-latest" datatype="html"><source>Latest import versions</source><target>Các phiên bản nhập mới nhất</target></trans-unit>
+      <trans-unit id="authoring.import-export.version" datatype="html"><source>Entity version</source><target>Phiên bản thực thể</target></trans-unit>
+      <trans-unit id="authoring.import-export.entity" datatype="html"><source>Entity</source><target>Thực thể</target></trans-unit>
+      <trans-unit id="authoring.import-export.source" datatype="html"><source>Source</source><target>Nguồn</target></trans-unit>
+      <trans-unit id="authoring.import-export.author" datatype="html"><source>Author</source><target>Tác giả</target></trans-unit>
+      <trans-unit id="authoring.import-export.reason" datatype="html"><source>Reason</source><target>Lý do</target></trans-unit>
+      <trans-unit id="authoring.import-export.not-supplied" datatype="html"><source>Not supplied</source><target>Không được cung cấp</target></trans-unit>
+      <trans-unit id="authoring.import-export.changed-at" datatype="html"><source>Created at</source><target>Thời điểm tạo</target></trans-unit>
+      <trans-unit id="authoring.import-export.change" datatype="html"><source>Change</source><target>Thay đổi</target></trans-unit>
+      <trans-unit id="authoring.import-export.field-key" datatype="html"><source>File-local key</source><target>Khóa cục bộ trong tệp</target></trans-unit>
+      <trans-unit id="authoring.import-export.field-parent-key" datatype="html"><source>Parent key</source><target>Khóa cha</target></trans-unit>
+      <trans-unit id="authoring.import-export.field-item-key" datatype="html"><source>Owning item key</source><target>Khóa mục sở hữu</target></trans-unit>
+      <trans-unit id="authoring.import-export.field-node-kind" datatype="html"><source>Node kind</source><target>Loại nút</target></trans-unit>
+      <trans-unit id="authoring.import-export.field-title" datatype="html"><source>Title</source><target>Tiêu đề</target></trans-unit>
+      <trans-unit id="authoring.import-export.field-description" datatype="html"><source>Description</source><target>Mô tả</target></trans-unit>
+      <trans-unit id="authoring.import-export.field-precondition" datatype="html"><source>Precondition</source><target>Điều kiện tiên quyết</target></trans-unit>
+      <trans-unit id="authoring.import-export.field-steps" datatype="html"><source>Action and expected-result steps</source><target>Các bước thao tác và kết quả mong đợi</target></trans-unit>
+      <trans-unit id="authoring.import-export.field-priority" datatype="html"><source>Priority</source><target>Độ ưu tiên</target></trans-unit>
+      <trans-unit id="authoring.import-export.field-state" datatype="html"><source>State</source><target>Trạng thái</target></trans-unit>
+      <trans-unit id="authoring.import-export.field-code" datatype="html"><source>Case code</source><target>Mã ca kiểm thử</target></trans-unit>
+      <trans-unit id="authoring.import-export.field-position" datatype="html"><source>Position</source><target>Vị trí</target></trans-unit>
+      <trans-unit id="authoring.import-export.row-field-label" datatype="html"><source>Row <x id="INDEX" equiv-text="detail.index"/> — <x id="FIELD" equiv-text="importFieldLabel(detail.path)"/></source><target>Dòng <x id="INDEX" equiv-text="detail.index"/> — <x id="FIELD" equiv-text="importFieldLabel(detail.path)"/></target></trans-unit>
     </body>
   </file>
 </xliff>

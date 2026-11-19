@@ -1,0 +1,23 @@
+{
+  "operation_id": "saveProjectAiSettings",
+  "variant": "conflict",
+  "status": 412,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000b441"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "precondition_failed",
+      "message": "The review fixture request was refused.",
+      "request_id": "018f0000-0000-7000-8000-00000000b441",
+      "retryable": false,
+      "details": [
+        {
+          "path": "/version_no",
+          "reason": "3"
+        }
+      ]
+    }
+  }
+}

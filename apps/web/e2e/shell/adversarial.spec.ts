@@ -30,7 +30,7 @@ const G1_ENTRIES = [
   { segment: 'generation', scope: 'project', permission: 'authoring:generate' },
   { segment: 'pending-changes', scope: 'project', permission: 'authoring:write' },
   { segment: 'overview', scope: 'project', permission: 'project:read' },
-  { segment: 'ai-settings', scope: 'project', permission: 'project:read' },
+  { segment: 'ai-settings', scope: 'project', permission: 'authoring:read' },
   { segment: 'onboarding', scope: 'org', permission: 'project:create' },
   { segment: 'settings', scope: 'org', permission: 'organization:read' },
   { segment: 'members', scope: 'org', permission: 'membership:read' },

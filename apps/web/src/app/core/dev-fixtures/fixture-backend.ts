@@ -78,6 +78,13 @@ import { findUsageSummaryFixture } from './fixture-usage-summary';
 import { securityEventsBody } from './fixture-security-events';
 import { caseListFixtureBody } from './fixture-case-list';
 import { findBulkCaseListFixture } from './fixture-case-list-bulk';
+import { AuthoringTreeFixtureScenario } from './fixture-authoring-tree';
+import { AuthoringCasesFixtureScenario } from './fixture-authoring-cases';
+import { AiSettingsFixtureScenario, aiSettingsPermissions } from './fixture-ai-settings';
+import {
+  AuthoringEditorFixtureScenario,
+  authoringEditorPermissions,
+} from './fixture-authoring-editor';
 
 /** Response header naming the corpus directory that answered; also a production-leak marker. */
 export const FIXTURE_RESPONSE_HEADER = 'X-Evidgate-Fixture';
@@ -221,6 +228,10 @@ export class FixtureHttpBackend implements HttpBackend {
   private readonly toggles: FixtureToggles = inject(FixtureToggles);
   private readonly retentionPolicies = new Map<string, RetentionPolicy>();
   private readonly runCancellation = new RunCancelFixtureScenario();
+  private readonly authoring = new AuthoringTreeFixtureScenario();
+  private readonly authoringCases = new AuthoringCasesFixtureScenario();
+  private readonly aiSettings = new AiSettingsFixtureScenario();
+  private readonly authoringEditor = new AuthoringEditorFixtureScenario();
 
   handle(request: HttpRequest<unknown>): Observable<HttpEvent<unknown>> {
     recordRequest(request);
@@ -248,10 +259,31 @@ export class FixtureHttpBackend implements HttpBackend {
     );
   }
 
+  private authoringEntry(request: HttpRequest<unknown>, path: string): FixtureEntry | undefined {
+    if (request.method !== 'GET') return undefined;
+    if (/^\/projects\/[^/]+\/authoring\/tree$/.test(path)) {
+      return this.authoring.entry(request, this.toggles.variantFor('listAuthoringTree'));
+    }
+    if (/^\/projects\/[^/]+\/authoring\/manual-cases$/.test(path)) {
+      return this.authoringCases.entry(request, this.toggles.variantFor('listManualCases'));
+    }
+    return undefined;
+  }
+
   private requestEntry(
     request: HttpRequest<unknown>,
     relativePath: string,
   ): FixtureEntry | undefined {
+    const authoring = this.authoringEntry(request, relativePath);
+    if (authoring !== undefined) return authoring;
+    const settings = this.aiSettings.entry(request, relativePath, (operation) =>
+      this.toggles.variantFor(operation),
+    );
+    if (settings !== undefined) return settings;
+    const editor = this.authoringEditor.entry(request, relativePath, (operation) =>
+      this.toggles.variantFor(operation),
+    );
+    if (editor !== undefined) return editor;
     const cancellation = this.runCancellation.entry(
       request,
       relativePath,
@@ -281,6 +313,12 @@ export class FixtureHttpBackend implements HttpBackend {
     // The retention writer session needs one grant no corpus row holds; a toggle that names no
     // specimen falls through, so every corpus variant answers exactly as before.
     if (request.method === 'GET' && relativePath === '/permissions') {
+      const aiPermissions = aiSettingsPermissions(this.toggles.variantFor('listPermissions'));
+      if (aiPermissions !== undefined) return aiPermissions;
+      const editorPermissions = authoringEditorPermissions(
+        this.toggles.variantFor('listPermissions'),
+      );
+      if (editorPermissions !== undefined) return editorPermissions;
       const supplemental = findSettingsRetentionWriteFixture(
         this.toggles.variantFor('listPermissions'),
       );
@@ -295,6 +333,14 @@ export class FixtureHttpBackend implements HttpBackend {
     if (request.method === 'GET' && /^\/projects\/[^/]+\/cases$/.test(relativePath)) {
       const bulk = findBulkCaseListFixture(this.toggles.variantFor('listCases'));
       if (bulk !== undefined) return bulk;
+    }
+    if (
+      request.method === 'POST' &&
+      /^\/projects\/[^/]+\/authoring\/import$/.test(relativePath) &&
+      queryParameter(request.urlWithParams, 'dry_run') === 'false' &&
+      this.toggles.variantFor('importAuthoring') === 'ok'
+    ) {
+      return findFixtureEntry('importAuthoring', 'confirmed');
     }
     const route = matchFixtureRoute(request.method, relativePath);
     return route === undefined ? undefined : this.selectEntry(route, relativePath, request);

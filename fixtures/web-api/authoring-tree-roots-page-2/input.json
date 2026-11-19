@@ -1,0 +1,24 @@
+{
+  "operation_id": "listAuthoringTree",
+  "variant": "roots-page-2",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000f21b"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "node_id": "018f0000-0000-7000-8000-000000000109",
+        "parent_id": null,
+        "kind": "module",
+        "title": "Hỗ trợ",
+        "position": 2,
+        "version": 1,
+        "child_count": 0,
+        "item_count": 0
+      }
+    ],
+    "next_cursor": null
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "operation_id": "updateManualCase",
+  "variant": "conflict",
+  "status": 412,
+  "headers": {
+    "X-Request-Id": "a4430000-0000-4000-8000-000000000051"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "precondition_failed",
+      "message": "The review fixture request was refused.",
+      "request_id": "a4430000-0000-4000-8000-000000000900",
+      "retryable": false,
+      "details": [
+        {
+          "path": "/version",
+          "reason": "3"
+        }
+      ]
+    }
+  }
+}

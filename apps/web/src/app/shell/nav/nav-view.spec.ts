@@ -175,13 +175,26 @@ describe('NavViewService (09.1.1-T4.1)', () => {
   });
 
   it('drops a whole group when none of its entries survive', async () => {
-    // One design-only code: `overview` shares `project:read` with `ai-settings`, so granting a
-    // whole group's permissions would keep the settings header alive through that shared code.
-    source.granted = new Set(['authoring:read']);
+    // One design-only code that gates no settings entry.
+    source.granted = new Set(['authoring:generate']);
     await authenticatedWithProject();
 
     expect(view.groups().map((group) => group.id)).toEqual(['design']);
-    expect(idsOf(view.groups(), 'design')).toEqual(['authoring']);
+    expect(idsOf(view.groups(), 'design')).toEqual(['generation']);
+  });
+
+  it('gates the AI settings entry on authoring:read, not project:read', async () => {
+    source.granted = new Set(['project:read']);
+    await authenticatedWithProject();
+    expect(linkOf(view, 'ai-settings')).toBeUndefined();
+    expect(linkOf(view, 'overview')).toBeDefined();
+  });
+
+  it('shows the AI settings entry to a holder of authoring:read', async () => {
+    source.granted = new Set(['authoring:read']);
+    await authenticatedWithProject();
+
+    expect(linkOf(view, 'ai-settings')).toBeDefined();
   });
 
   it('needs a project for a project-scope entry and only an org for an org-scope one', async () => {

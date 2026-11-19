@@ -1,0 +1,85 @@
+:host {
+  display: grid;
+  gap: var(--eg-space-5);
+  min-inline-size: 0;
+  color: var(--eg-text);
+}
+.scope-help,
+.help,
+.error,
+.pagination p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--eg-text-sm);
+  line-height: var(--eg-leading-sm);
+}
+.scope-help,
+.help {
+  color: var(--eg-text-muted);
+  max-inline-size: 65ch;
+}
+.error {
+  color: var(--eg-danger-fg);
+}
+.filters,
+.results {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--eg-space-4);
+}
+.filter-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: var(--eg-space-4);
+  min-inline-size: 0;
+}
+.field {
+  display: grid;
+  gap: var(--eg-space-2);
+  align-content: start;
+  min-inline-size: 0;
+}
+label,
+hlm-select-trigger,
+hlm-select-item {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+hlm-select-trigger,
+input,
+button {
+  min-block-size: var(--eg-control-touch);
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+}
+.actions,
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--eg-space-3);
+  min-inline-size: 0;
+}
+.actions button,
+.pagination button {
+  inline-size: auto;
+  white-space: normal;
+  block-size: auto;
+  padding-block: var(--eg-space-3);
+}
+.pagination .field {
+  min-inline-size: 8ch;
+}
+.pagination p {
+  flex: 1 1 100%;
+  font-variant-numeric: tabular-nums;
+}
+@media (min-width: 768px) {
+  .search-field {
+    grid-column: 1 / -1;
+  }
+  .pagination p {
+    flex: 1 1 auto;
+  }
+}

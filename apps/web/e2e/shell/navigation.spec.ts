@@ -32,8 +32,14 @@ import {
 /** `/orgs/:orgId/projects/:projectId/authoring` — reachable under BOTH corpus grant sets. */
 const PROJECT_AUTHORING_PATH = `/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}/authoring`;
 
-/** The default corpus session: the design group's three rows, then the audit log. */
-const DEFAULT_SESSION_SEGMENTS = ['audit', 'authoring', 'generation', 'pending-changes'];
+/** The default corpus session: the design group's three rows, AI settings and the audit log. */
+const DEFAULT_SESSION_SEGMENTS = [
+  'ai-settings',
+  'audit',
+  'authoring',
+  'generation',
+  'pending-changes',
+];
 
 /** The trimmed corpus session: `authoring` survives, `overview`/`ai-settings`/`members` arrive. */
 const LIMITED_SESSION_SEGMENTS = ['ai-settings', 'audit', 'authoring', 'members', 'overview'];
@@ -77,7 +83,7 @@ test.describe('sidebar visibility (AC4)', () => {
       'no later-phase row is ever rendered',
     ).toEqual([]);
     // The sidebar is a landmark with its own name, and each row is a link to its own route.
-    await expect(page.getByRole('navigation')).toHaveCount(1);
+    await expect(page.locator('app-shell-nav').getByRole('navigation')).toHaveCount(1);
     await expect(
       page.locator(`app-shell-nav nav a[href$="/projects/${PROJECT_STOREFRONT}/authoring"]`),
     ).toHaveCount(1);

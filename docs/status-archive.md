@@ -650,3 +650,21 @@ closed by #835 (33cd2497)
 | Run identity fork rules (05.2.2-T1 hand-over, S45) | `fork_run_not_bindable`, `advisory_only`, the `runs_created_total` counter and the no-opt-out test stay with T3 (the `run_project_ref_idx` index landed with 05.2.2-T2.2, migration `0038`, PR #106). Plan 05.2.2 Notes (line 163) | receiver: 05.2.2-T3; hand-over Notes: `plans/features/05-runs-orchestration/05.2.2-branch-pr-and-commit-identity-of-a-run.md:137` |
 
 closed by #837 (f865f6bf)
+
+## Moved from status-carried.md by S443 (2026-11-19)
+
+| AI settings forbidden state on scope loss (S441, #910) | The delta review found ai-settings.page.ts:89 answers a generic error when scope() is lost (authoring:read revoked or project switched) instead of the forbidden state design UI42/UI44 require; ai-settings.page.spec.ts:282 accepts the generic state. Fix: map an undefined scope to a forbidden failure in the store and tighten the spec; receiver a 13.4.1-T5.1 follow-up (same feature folder). | web foundation |
+
+closed by #917 (f00ae760: `ai-settings.page.ts` renders the forbidden pattern when `scope()` is lost, pinned by `ai-settings.page.spec.ts`)
+
+## Moved from status-carried.md by S444 (2026-11-19)
+
+| Authoring tree store: four open P2 races (S440) | authoring-tree-reads.ts: F1 :390 a continuation append overwrites rows a selection refresh updated (select, Load more, selection finishes first); F2 :187-192 select aborts the child read without settling loading, a failed select leaves the spinner and store.ts:129-130 refuses a retry; F3 :295-296 refresh of an exhausted branch keeps the null cursor; authoring.page.ts:98-104 F4 a failed select announces all roots. Receiver 13.4.1-T2.3/T2.4 before the wave reaches develop. | web foundation |
+
+closed by #914 (3a3cde1b: `authoring-tree-races.spec.ts` pins F1-F4; fixes in `authoring-tree-reads.ts` and `authoring.page.ts`)
+
+## Moved from status-carried.md by S446 (2026-11-19)
+
+| Tailwind @source now covers authoring, availability, catalog (S443, #917) | Unreported global CSS change: `spartan-tailwind.css` (`source(none)` + hand-kept `@source` list) lacked `features/authoring`, `availability`, `catalog`, so their utilities were never generated: 34 authoring, 9 availability, 12 catalog class tokens missing from the built CSS (ce63d84e message). Computed styles measured on authoring only (design review DR-01, uncommitted notes): 75ch form `max-width:none`, `lg:last:col-span-2` `grid-column:auto`, 60vh cap `max-height:none`. Catalog and availability may change visibly; no before/after screenshots were taken for them (none). | receiver: web foundation (visual check of catalog and availability) |
+
+closed by S446 (#919): no regression. 25 new utility selectors (authoring 17, catalog 5, availability 3); 56 shots, 7 routes x 360/1280 px x light/dark x two builds, no overflow; catalog identical but 2 px shorter, authoring spacing intended. Availability is unreachable (phase G3), see its new carried row.

@@ -1,0 +1,25 @@
+{
+  "operation_id": "exportAuthoring",
+  "variant": "too-large",
+  "status": 413,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000af01"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "payload_too_large",
+      "message": "The complete request was refused.",
+      "request_id": "018f0000-0000-7000-8000-00000000af01",
+      "retryable": false,
+      "details": [
+        {
+          "path": "/node_id",
+          "reason": "body_too_large",
+          "limit": 5242880,
+          "actual": 5242881
+        }
+      ]
+    }
+  }
+}

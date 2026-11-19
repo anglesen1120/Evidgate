@@ -119,12 +119,58 @@ export interface FixtureRoute {
  * SDK side of the same drift).
  */
 export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
+  { operationId: 'importAuthoring', method: 'POST', path: '/projects/{p}/authoring/import' },
+  { operationId: 'exportAuthoring', method: 'GET', path: '/projects/{p}/authoring/export' },
+  { operationId: 'listAuthoringVersions', method: 'GET', path: '/projects/{p}/authoring/versions' },
+  { operationId: 'getProjectAiSettings', method: 'GET', path: '/projects/{p}/ai-settings' },
+  { operationId: 'saveProjectAiSettings', method: 'PUT', path: '/projects/{p}/ai-settings' },
+  {
+    operationId: 'listProjectAiSettingsVersions',
+    method: 'GET',
+    path: '/projects/{p}/ai-settings/versions',
+    cursorQueryParameter: 'cursor',
+  },
+  {
+    operationId: 'getProjectAiSettingsVersion',
+    method: 'GET',
+    path: '/projects/{p}/ai-settings/versions/{version_no}',
+    idKeyParameter: 'version_no',
+    idKeyField: 'version_no',
+  },
+  {
+    operationId: 'listProjectAiSettingsTemplates',
+    method: 'GET',
+    path: '/projects/{p}/ai-settings/templates',
+  },
+  // The manual-case editor. One path serves the read and the save, so the method separates them;
+  // the timeline's cursor is the value the editor scenario itself issues, never a corpus one.
+  { operationId: 'getManualCase', method: 'GET', path: '/projects/{p}/authoring/manual-cases/{m}' },
+  {
+    operationId: 'updateManualCase',
+    method: 'PATCH',
+    path: '/projects/{p}/authoring/manual-cases/{m}',
+  },
+  {
+    operationId: 'getAuthoringVersion',
+    method: 'GET',
+    path: '/projects/{p}/authoring/versions/{v}',
+  },
+  {
+    operationId: 'restoreAuthoringVersion',
+    method: 'POST',
+    path: '/projects/{p}/authoring/versions/{v}/restore',
+  },
   { operationId: 'listPermissions', method: 'GET', path: '/permissions' },
   { operationId: 'listRoles', method: 'GET', path: '/roles' },
   { operationId: 'listMyOrganizations', method: 'GET', path: '/orgs' },
   { operationId: 'createProject', method: 'POST', path: '/orgs/{o}/projects' },
   { operationId: 'listProjects', method: 'GET', path: '/orgs/{o}/projects' },
   { operationId: 'getProject', method: 'GET', path: '/projects/{p}' },
+  {
+    operationId: 'listAuthoringTree',
+    method: 'GET',
+    path: '/projects/{p}/authoring/tree',
+  },
   {
     operationId: 'listSecurityEvents',
     method: 'GET',
