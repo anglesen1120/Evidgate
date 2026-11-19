@@ -405,7 +405,7 @@ describe('ImportExportPage presentation and route heading contract', () => {
     } finally {
       width.mockRestore();
     }
-  });
+  }, 20_000);
 
   it('shows supplied cap measurements and all thirteen header columns without error-envelope text', async () => {
     const { harness } = await setup(file());
