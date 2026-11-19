@@ -84,8 +84,7 @@ async function reads(page: Page, endpoint: string): Promise<string[]> {
       (window.__evidgateFixtureRequests ?? [])
         .filter(
           (request) =>
-            request.method === 'GET' &&
-            new URL(request.url, location.origin).pathname === path,
+            request.method === 'GET' && new URL(request.url, location.origin).pathname === path,
         )
         .map((request) => request.url),
     endpoint,
@@ -97,7 +96,9 @@ async function expectLoaded(page: Page, surface: Surface, count: number): Promis
     await expect(page.locator(surface.count)).toHaveCount(count);
   } else {
     await expect(page.locator(surface.count)).toContainText(
-      new Intl.NumberFormat((await page.locator('html').getAttribute('lang')) ?? 'en').format(count),
+      new Intl.NumberFormat((await page.locator('html').getAttribute('lang')) ?? 'en').format(
+        count,
+      ),
     );
   }
 }

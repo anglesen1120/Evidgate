@@ -14,7 +14,8 @@ for (const operation of ['listCases', 'listManualCases', 'listAuthoringTree'] as
       const entry = browseCapFixturePage(operation, offset, 200);
       const body = entry.document.body;
       expect(VALIDATOR.validateResponse(operation, 200, body).errors).toEqual([]);
-      if (!isRecord(body) || !Array.isArray(body['items'])) throw new Error('Missing fixture page.');
+      if (!isRecord(body) || !Array.isArray(body['items']))
+        throw new Error('Missing fixture page.');
       expect(body['items']).toHaveLength(offset === 10_000 ? 1 : 200);
       for (const row of body['items']) {
         if (!isRecord(row)) throw new Error('Missing fixture row.');

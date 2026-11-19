@@ -104,7 +104,13 @@
           >
             @if (expanded().has(node.node_id)) {
               @let page = children()[node.node_id];
-              @if (!page || page.status === 'idle' || page.status === 'loading' || page.error || page.items.length === 0) {
+              @if (
+                !page ||
+                page.status === 'idle' ||
+                page.status === 'loading' ||
+                page.error ||
+                page.items.length === 0
+              ) {
                 <li class="branch-state" [attr.aria-busy]="!page || page.status === 'loading'">
                   <app-request-state
                     [status]="pageStatus(page)"

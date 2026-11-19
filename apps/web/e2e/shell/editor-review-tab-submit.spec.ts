@@ -57,8 +57,7 @@ async function reviewWrites(page: Page) {
     (window.__evidgateFixtureRequests ?? []).flatMap((request) => {
       const path = new URL(request.url, location.origin).pathname;
       const queue = request.method === 'POST' && path.endsWith('/authoring/changes');
-      const directEdit =
-        request.method === 'PATCH' && path.includes('/authoring/manual-cases/');
+      const directEdit = request.method === 'PATCH' && path.includes('/authoring/manual-cases/');
       if (!queue && !directEdit) return [];
       const body: unknown =
         typeof request.body === 'string' ? JSON.parse(request.body) : request.body;

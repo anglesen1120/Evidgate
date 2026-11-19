@@ -65,15 +65,17 @@ export function selectionNodePage(
   items: readonly NodeDto[],
   nextCursor: string | null,
 ): AuthoringNodePage {
-  if (previous === undefined || previous.items.length === 0) return readyNodePage(items, nextCursor);
+  if (previous === undefined || previous.items.length === 0)
+    return readyNodePage(items, nextCursor);
   const merged = mergeNodes(previous.items, items);
   // A first-page refresh cannot make rows previously discarded by the cap complete again.
   if (previous.status === 'capped') {
     return { ...readyNodePage(merged, null), status: 'capped', nextCursor: null };
   }
   // A longer retained walk owns its cursor; only an exhausted walk adopts the fresh cursor.
-  const cursor = previous.nextCursor !== null && previous.items.length > items.length
-    ? previous.nextCursor
-    : nextCursor;
+  const cursor =
+    previous.nextCursor !== null && previous.items.length > items.length
+      ? previous.nextCursor
+      : nextCursor;
   return readyNodePage(merged, cursor);
 }

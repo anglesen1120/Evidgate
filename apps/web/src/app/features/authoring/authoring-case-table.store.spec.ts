@@ -263,27 +263,33 @@ describe('AuthoringCaseTableStore', () => {
   it.each([
     ['forbidden', 403],
     ['not_found', 404],
-  ] as const)('clears the cap notice after a %s refresh discards capped rows', async (kind, status) => {
-    list.mockResolvedValueOnce(
-      page(Array.from({ length: 10_000 }, (_, index) => String(index)), 'beyond-cap'),
-    );
-    await store.init('project', {});
-    expect(store.rows()).toHaveLength(10_000);
-    expect(store.browseCapped()).toBe(true);
+  ] as const)(
+    'clears the cap notice after a %s refresh discards capped rows',
+    async (kind, status) => {
+      list.mockResolvedValueOnce(
+        page(
+          Array.from({ length: 10_000 }, (_, index) => String(index)),
+          'beyond-cap',
+        ),
+      );
+      await store.init('project', {});
+      expect(store.rows()).toHaveLength(10_000);
+      expect(store.browseCapped()).toBe(true);
 
-    list.mockRejectedValueOnce(apiError(kind, status));
-    await store.reload();
+      list.mockRejectedValueOnce(apiError(kind, status));
+      await store.reload();
 
-    expect(store.error()?.kind).toBe(kind);
-    expect(store.rows()).toEqual([]);
-    expect(store.nextCursor()).toBeNull();
-    expect(store.browseCapped()).toBe(false);
-    expect(store.stale()).toBe(false);
-    expect(store.status()).toBe('error');
-    await store.retry();
-    await store.loadMore();
-    expect(list).toHaveBeenCalledTimes(2);
-  });
+      expect(store.error()?.kind).toBe(kind);
+      expect(store.rows()).toEqual([]);
+      expect(store.nextCursor()).toBeNull();
+      expect(store.browseCapped()).toBe(false);
+      expect(store.stale()).toBe(false);
+      expect(store.status()).toBe('error');
+      await store.retry();
+      await store.loadMore();
+      expect(list).toHaveBeenCalledTimes(2);
+    },
+  );
 
   it('retains stale rows on refresh failure but clears them on a 403', async () => {
     await store.init('project', {});

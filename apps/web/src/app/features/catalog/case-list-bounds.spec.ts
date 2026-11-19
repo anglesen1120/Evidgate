@@ -42,17 +42,19 @@ describe('catalog retained-row cap notice', () => {
     });
     TestBed.overrideComponent(CaseListPage, {
       add: {
-        providers: [{
-          provide: CatalogMembersReader,
-          useValue: {
-            members: signal(new Map()),
-            status: signal('ready'),
-            failure: signal(null),
-            init: vi.fn(),
-            clear: vi.fn(),
-            reload: vi.fn(),
+        providers: [
+          {
+            provide: CatalogMembersReader,
+            useValue: {
+              members: signal(new Map()),
+              status: signal('ready'),
+              failure: signal(null),
+              init: vi.fn(),
+              clear: vi.fn(),
+              reload: vi.fn(),
+            },
           },
-        }],
+        ],
       },
     });
   });
@@ -68,7 +70,10 @@ describe('catalog retained-row cap notice', () => {
     const fixture = TestBed.createComponent(CaseListPage);
     fixture.detectChanges();
     await fixture.whenStable();
-    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, CatalogBoundsHarness);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      CatalogBoundsHarness,
+    );
     return { fixture, harness };
   }
 

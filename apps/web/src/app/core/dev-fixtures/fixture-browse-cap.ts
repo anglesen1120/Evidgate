@@ -88,7 +88,9 @@ export function findBrowseCapFixture(
   variantFor: (operation: string) => string,
 ): FixtureEntry | undefined {
   if (method !== 'GET') return undefined;
-  const suffix = /^\/projects\/[^/]+\/(cases|authoring\/manual-cases|authoring\/tree)$/.exec(path)?.[1];
+  const suffix = /^\/projects\/[^/]+\/(cases|authoring\/manual-cases|authoring\/tree)$/.exec(
+    path,
+  )?.[1];
   const operation = Object.entries(OPERATIONS).find(([key]) => key === suffix)?.[1];
   if (!operation || variantFor(operation) !== BROWSE_CAP_VARIANT) return undefined;
   const query = new URL(url, 'http://fixture.invalid').searchParams;

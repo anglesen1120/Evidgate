@@ -65,9 +65,11 @@ export const AuthoringStore = signalStore(
       const selectionStatus = store.selectionStatus();
       if (rootsStatus === 'loading' || selectionStatus === 'loading') return 'loading';
       if (
-        rootsStatus === 'error' || selectionStatus === 'error' ||
+        rootsStatus === 'error' ||
+        selectionStatus === 'error' ||
         (rootsStatus === 'capped' && store.roots().error !== null)
-      ) return 'error';
+      )
+        return 'error';
       return rootsStatus === 'ready' || rootsStatus === 'capped' ? 'ready' : 'idle';
     }),
     /** Either region keeps rows a failed refresh could not replace. */

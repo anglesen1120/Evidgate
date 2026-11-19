@@ -167,9 +167,10 @@ async function loadRoots(
     if (!live(run, token, run.roots)) return;
     const kept = host.roots();
     host.patch({
-      roots: previous.status === 'capped'
-        ? { ...previous, error: typedFailure(error) }
-        : { ...kept, status: 'error', error: typedFailure(error) },
+      roots:
+        previous.status === 'capped'
+          ? { ...previous, error: typedFailure(error) }
+          : { ...kept, status: 'error', error: typedFailure(error) },
       rootsStale: kept.items.length > 0,
     });
   }

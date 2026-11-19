@@ -106,7 +106,8 @@ export class AuthoringPage {
     if (selected !== null) {
       return $localize`:@@authoring.tree.announce-selected:Selected scope ${selected.title}:title:`;
     }
-    return ['ready', 'capped'].includes(this.store.roots().status) && this.store.roots().items.length > 0
+    return ['ready', 'capped'].includes(this.store.roots().status) &&
+      this.store.roots().items.length > 0
       ? $localize`:@@authoring.tree.announce-roots:Scope set to all project roots`
       : '';
   });

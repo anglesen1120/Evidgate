@@ -78,9 +78,7 @@ describe('fixture backend (09.1.1-T12.1)', () => {
       payload: { body: 'Review the routed checklist item' },
       reason: 'Browser wiring assertion',
     };
-    await gateway.call((client) =>
-      queueAuthoringChange({ client, path: { p: project }, body }),
-    );
+    await gateway.call((client) => queueAuthoringChange({ client, path: { p: project }, body }));
     const recorded = window.__evidgateFixtureRequests?.at(-1);
     expect(recorded).toMatchObject({
       method: 'POST',

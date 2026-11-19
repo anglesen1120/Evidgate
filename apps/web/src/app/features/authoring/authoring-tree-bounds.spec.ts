@@ -64,19 +64,22 @@ describe('authoring tree retained-row bounds', () => {
     [10_000, null, 'ready'],
     [10_000, 'beyond-cap', 'capped'],
     [10_001, null, 'capped'],
-  ] as const)('bounds an expanded branch at %s nodes with cursor %s', async (count, cursor, status) => {
-    const store = TestBed.inject(AuthoringStore);
-    await store.init('project');
-    listTree.mockResolvedValueOnce(page(nodes(count), cursor));
-    await store.expand(root.node_id);
+  ] as const)(
+    'bounds an expanded branch at %s nodes with cursor %s',
+    async (count, cursor, status) => {
+      const store = TestBed.inject(AuthoringStore);
+      await store.init('project');
+      listTree.mockResolvedValueOnce(page(nodes(count), cursor));
+      await store.expand(root.node_id);
 
-    const branch = store.children()[root.node_id];
-    expect(branch?.items).toHaveLength(10_000);
-    expect(branch?.status).toBe(status);
-    expect(branch?.nextCursor).toBeNull();
-    expect(await store.loadMoreChildren(root.node_id)).toBe(false);
-    expect(listTree).toHaveBeenCalledTimes(2);
-  });
+      const branch = store.children()[root.node_id];
+      expect(branch?.items).toHaveLength(10_000);
+      expect(branch?.status).toBe(status);
+      expect(branch?.nextCursor).toBeNull();
+      expect(await store.loadMoreChildren(root.node_id)).toBe(false);
+      expect(listTree).toHaveBeenCalledTimes(2);
+    },
+  );
 
   it.each([null, root.node_id])('caps the accumulated walk for parent %s', async (parentId) => {
     const store = TestBed.inject(AuthoringStore);
@@ -103,9 +106,9 @@ describe('authoring tree retained-row bounds', () => {
 
   it('caps selected-node children and preserves the capped state when selection refresh merges rows', async () => {
     listTree.mockImplementation((_project, query) =>
-      Promise.resolve(query.nodeId
-        ? { ...page(nodes(10_001)), node: root, path: [] }
-        : page([root])),
+      Promise.resolve(
+        query.nodeId ? { ...page(nodes(10_001)), node: root, path: [] } : page([root]),
+      ),
     );
     const store = TestBed.inject(AuthoringStore);
     await store.init('project', root.node_id);
@@ -120,9 +123,11 @@ describe('authoring tree retained-row bounds', () => {
       title: 'Refreshed title',
     };
     listTree.mockImplementation((_project, query) =>
-      Promise.resolve(query.nodeId
-        ? { ...page([changed], 'fresh-first-page'), node: root, path: [] }
-        : page([root])),
+      Promise.resolve(
+        query.nodeId
+          ? { ...page([changed], 'fresh-first-page'), node: root, path: [] }
+          : page([root]),
+      ),
     );
     await store.retryTree();
     const branch = store.children()[root.node_id];
