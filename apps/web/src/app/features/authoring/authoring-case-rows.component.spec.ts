@@ -106,6 +106,59 @@ describe('AuthoringCaseRowsComponent', () => {
     expect(await harness.rowBoxes()).toHaveLength(0);
   });
 
+  it('retains the selection when only the viewport narrows and widens again', async () => {
+    const { fixture, harness } = await mount();
+    await (await harness.selectAll()).click();
+    expect(await (await harness.summary()).text()).toContain('2 of 2 loaded selected');
+    desktop.set(false);
+    fixture.detectChanges();
+    expect(await harness.rowBoxes()).toHaveLength(0);
+    desktop.set(true);
+    fixture.detectChanges();
+    expect(await (await harness.summary()).text()).toContain('2 of 2 loaded selected');
+  });
+
+  it('hands focus to the inspection notice when the export control disappears', async () => {
+    const { fixture, harness } = await mount();
+    await (await harness.exportAction()).focus();
+    desktop.set(false);
+    fixture.detectChanges();
+    expect(await (await harness.selectionNotice()).isFocused()).toBe(true);
+  });
+
+  it('gives the case code its own column and keeps the UUID in a separate cell', async () => {
+    const { fixture } = await mount(1);
+    const table = fixture.debugElement
+      .query(By.directive(DataTableComponent))
+      .injector.get(DataTableComponent<ManualCaseListItemDto>);
+    const columns = table.columns();
+    const code = columns.find((column) => column.id === 'code');
+    expect(code).toMatchObject({ role: 'identity', priority: 'primary' });
+    expect(columns.find((column) => column.id === 'id')?.cell(row(1))).toBe(row(1).case_id);
+    const codeCell = (fixture.nativeElement as HTMLElement).querySelector(
+      'td [data-column-id="code"]',
+    );
+    const idCell = (fixture.nativeElement as HTMLElement).querySelector('td [data-column-id="id"]');
+    expect((codeCell as HTMLElement).textContent).toContain('SHOP-1');
+    expect((codeCell as HTMLElement).textContent).not.toContain(row(1).case_id);
+    expect((idCell as HTMLElement).textContent).toContain(row(1).case_id);
+  });
+
+  it('drops a reveal request for a row missing from the result', async () => {
+    const { fixture } = await mount();
+    const host = fixture.debugElement.query(By.directive(AuthoringCaseRowsComponent));
+    const rows = host.componentInstance as AuthoringCaseRowsComponent;
+    const missing = '018f0000-0000-7000-8000-000000000999';
+    rows.focusRow(missing);
+    fixture.detectChanges();
+    fixture.componentRef.setInput('rows', [row(1), { ...row(2), case_id: missing }]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const active = (fixture.nativeElement as HTMLElement).ownerDocument
+      .activeElement as HTMLElement | null;
+    expect(active?.closest('[data-row-id]')?.getAttribute('data-row-id')).not.toBe(missing);
+  });
+
   it('uses the shared 200-row threshold and opts fixed-height cells into virtualization', async () => {
     const { fixture } = await mount(200);
     const table = fixture.debugElement

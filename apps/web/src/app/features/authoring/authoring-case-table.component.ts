@@ -27,13 +27,12 @@ import {
   EMPTY_CASE_FILTERS,
   caseFiltersFromQuery,
   caseFiltersToQuery,
+  isCaseUuid,
   queryTooLong,
   type AuthoringCaseFilters,
 } from './authoring-case-filters';
 import { CASE_TABLE_COPY } from './authoring-case-table.copy';
 import { AuthoringCaseTableStore } from './authoring-case-table.store';
-
-const CHECKLIST_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @Component({
   selector: 'app-authoring-case-table',
@@ -83,10 +82,17 @@ export class AuthoringCaseTableComponent {
       if (params.projectId) await this.store.init(params.projectId, params.raw);
     },
   });
-  protected readonly draft = linkedSignal(() => caseFiltersFromQuery(this.routeState()?.raw ?? {}));
+  // Cursor-only URL changes must not wipe an unapplied draft, so the source compares filter
+  // values, not the whole query string. Both sides come from `caseFiltersFromQuery`, whose key
+  // order is fixed, so serialising them is an exact comparison.
+  private readonly routeFilters = computed(
+    () => caseFiltersFromQuery(this.routeState()?.raw ?? {}),
+    { equal: (left, right) => JSON.stringify(left) === JSON.stringify(right) },
+  );
+  protected readonly draft = linkedSignal(() => this.routeFilters());
   protected readonly searchTooLong = computed(() => queryTooLong(this.draft().q));
   protected readonly itemInvalid = computed(
-    () => this.draft().itemId !== '' && !CHECKLIST_UUID.test(this.draft().itemId),
+    () => this.draft().itemId !== '' && !isCaseUuid(this.draft().itemId),
   );
   protected readonly busy = computed(
     () => this.store.status() === 'loading' || this.request.isLoading(),
@@ -181,7 +187,9 @@ export class AuthoringCaseTableComponent {
     const scopeKey = this.store.scopeKey();
     const cursor = await this.store.loadMore();
     if (!cursor || scope !== this.routeState()) return;
-    this.navigate({ cursor });
+    // A page step is a position in the same result, not a new history entry: Back must return to
+    // the filters that produced the walk instead of stepping through every page.
+    this.navigate({ cursor }, true);
     const first = this.store.rows().find((row) => !before.has(row.case_id));
     if (!first || !owned) return;
     afterNextRender(
@@ -196,11 +204,17 @@ export class AuthoringCaseTableComponent {
       { injector: this.injector },
     );
   }
-  private navigate(queryParams: Record<string, string | number | null>): void {
+  protected refresh(): void {
+    // The store restarts at the first page, so the URL cursor must not outlive the refresh.
+    if (this.routeState()?.raw['cursor']) this.navigate({ cursor: null }, true);
+    void this.store.reload();
+  }
+  private navigate(queryParams: Record<string, string | number | null>, replaceUrl = false): void {
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParamsHandling: 'merge',
       queryParams,
+      replaceUrl,
     });
   }
 }

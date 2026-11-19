@@ -1,9 +1,15 @@
 import { ComponentHarness, manualChangeDetection } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { signal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
-import type { ManualCaseListResponse } from '@evidgate/sdk';
+import { TestBed, type ComponentFixture } from '@angular/core/testing';
+import {
+  ActivatedRoute,
+  convertToParamMap,
+  provideRouter,
+  Router,
+  type NavigationExtras,
+} from '@angular/router';
+import type { ManualCaseListItemDto, ManualCaseListResponse } from '@evidgate/sdk';
 import { BehaviorSubject, firstValueFrom, Subject } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiRequestError } from '../../core/http/api-error';
@@ -22,6 +28,8 @@ class TableHarness extends ComponentHarness {
   readonly apply = this.locatorFor('[data-case-apply]');
   readonly source = this.locatorFor('#authoring-case-source');
   readonly owner = this.locatorFor('#authoring-case-owner');
+  readonly loadMore = this.locatorFor('[data-case-load-more]');
+  readonly refresh = this.locatorFor('[data-case-refresh]');
   readonly empty = this.locatorForOptional('app-empty-pattern');
   readonly loading = this.locatorForOptional('app-loading-pattern');
   readonly forbidden = this.locatorForOptional('app-forbidden-pattern');
@@ -31,17 +39,35 @@ class TableHarness extends ComponentHarness {
   readonly clearEmpty = this.locatorFor('app-empty-pattern button');
 }
 
+const caseRow = (id: string): ManualCaseListItemDto => ({
+  case_id: id,
+  code: `SHOP-${id}`,
+  node_id: '018f0000-0000-7000-8000-000000000101',
+  checklist_item_id: '018f0000-0000-7000-8000-000000000201',
+  title: 'Địa chỉ giao hàng',
+  priority: 'high',
+  state: 'draft',
+  version: 1,
+  linked_live_count: 0,
+  linked_case_ids: [],
+});
+
 describe('AuthoringCaseTableComponent', () => {
   provideLayoutTestStubs();
   const query = new BehaviorSubject(convertToParamMap({}));
   const list = vi.fn<AuthoringDataService['listManualCases']>();
+  const navigate =
+    vi.fn<(commands: readonly unknown[], extras?: NavigationExtras) => Promise<boolean>>();
+  let fixture: ComponentFixture<AuthoringCaseTableComponent>;
   beforeEach(() => {
     query.next(convertToParamMap({}));
+    navigate.mockClear();
     list.mockReset().mockResolvedValue({ items: [], next_cursor: null });
     TestBed.configureTestingModule({
       imports: [AuthoringCaseTableComponent],
       providers: [
         provideRouter([]),
+        { provide: Router, useValue: { navigate } },
         { provide: AuthoringDataService, useValue: { listManualCases: list } },
         {
           provide: NarrowMutationPolicy,
@@ -60,7 +86,7 @@ describe('AuthoringCaseTableComponent', () => {
     });
   });
   async function mount() {
-    const fixture = TestBed.createComponent(AuthoringCaseTableComponent);
+    fixture = TestBed.createComponent(AuthoringCaseTableComponent);
     fixture.detectChanges();
     await fixture.whenStable();
     return TestbedHarnessEnvironment.harnessForFixture(fixture, TableHarness);
@@ -155,5 +181,43 @@ describe('AuthoringCaseTableComponent', () => {
     expect(await (await harness.searchError()).text()).toContain('at most 200');
     expect(await (await harness.apply()).getAttribute('disabled')).not.toBeNull();
     expect(list).not.toHaveBeenCalled();
+  });
+
+  it('replaces history on a cursor step and keeps the unapplied search draft', async () => {
+    list
+      .mockReset()
+      .mockResolvedValueOnce({ items: [caseRow('1')], next_cursor: 'second' })
+      .mockResolvedValueOnce({ items: [caseRow('2')], next_cursor: null });
+    const harness = await mount();
+    await (await harness.search()).sendKeys('unapplied');
+    await (await harness.loadMore()).click();
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalled());
+    const [commands, extras] = navigate.mock.calls[0] ?? [];
+    expect(commands).toEqual([]);
+    expect(extras?.queryParams).toEqual({ cursor: 'second' });
+    expect(extras?.queryParamsHandling).toBe('merge');
+    expect(extras?.replaceUrl).toBe(true);
+    query.next(convertToParamMap({ cursor: 'second' }));
+    expect(await (await harness.search()).getProperty('value')).toBe('unapplied');
+  });
+
+  it('refreshes from the first page, announces it and drops the page cursor', async () => {
+    query.next(convertToParamMap({ cursor: 'second' }));
+    list
+      .mockReset()
+      .mockResolvedValueOnce({ items: [caseRow('2')], next_cursor: null })
+      .mockResolvedValueOnce({ items: [caseRow('1')], next_cursor: 'second' });
+    const harness = await mount();
+    expect(list.mock.calls[0]?.[1]).toMatchObject({ cursor: 'second' });
+    expect(await (await harness.host()).text()).toContain(
+      'Refresh reloads this list from the first page',
+    );
+    await (await harness.refresh()).click();
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalled());
+    const [, extras] = navigate.mock.calls[0] ?? [];
+    expect(extras?.queryParams).toEqual({ cursor: null });
+    expect(extras?.replaceUrl).toBe(true);
+    await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+    expect(list.mock.lastCall?.[1]).not.toHaveProperty('cursor');
   });
 });

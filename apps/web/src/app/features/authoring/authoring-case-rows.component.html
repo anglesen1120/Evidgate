@@ -69,23 +69,23 @@
     <span class="sr-only">{{ selectName(row) }}</span>
   </label>
 </ng-template>
-<ng-template #identityCell let-row let-stacked="stacked">
-  <div class="identity" [class.virtual-cell]="virtual()">
-    <app-copyable-identifier
-      [value]="row.code"
-      [label]="copy.code"
-      [truncate]="!stacked"
-      [compact]="virtual()"
-      [copySize]="'lg'"
-    />
-    <app-copyable-identifier
-      [value]="row.case_id"
-      [label]="copy.id"
-      [truncate]="!stacked"
-      [compact]="virtual()"
-      [copySize]="'lg'"
-    />
-  </div>
+<ng-template #codeCell let-row let-stacked="stacked">
+  <app-copyable-identifier
+    [value]="row.code"
+    [label]="copy.code"
+    [truncate]="!stacked"
+    [compact]="virtual()"
+    [copySize]="'lg'"
+  />
+</ng-template>
+<ng-template #idCell let-row let-stacked="stacked">
+  <app-copyable-identifier
+    [value]="row.case_id"
+    [label]="copy.id"
+    [truncate]="!stacked"
+    [compact]="virtual()"
+    [copySize]="'lg'"
+  />
 </ng-template>
 <ng-template #titleCell let-row let-stacked="stacked">
   <bdi

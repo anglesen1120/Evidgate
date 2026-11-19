@@ -28,6 +28,7 @@ export const CASE_TABLE_COPY = {
   apply: $localize`:@@authoring.case-table.apply:Apply filters`,
   clear: $localize`:@@authoring.case-table.clear:Clear filters`,
   refresh: $localize`:@@authoring.case-table.refresh:Refresh cases`,
+  refreshHelp: $localize`:@@authoring.case-table.refresh-help:Refresh reloads this list from the first page and drops the cursor; pages loaded after the first are not kept.`,
   loading: $localize`:@@authoring.case-table.loading:Loading manual cases; the hierarchy remains usable…`,
   emptyProject: $localize`:@@authoring.case-table.empty-project:This project has no manual cases yet`,
   emptyCategory: $localize`:@@authoring.case-table.empty-category:This category has no test cases yet`,

@@ -91,6 +91,32 @@ describe('AuthoringCaseTableStore', () => {
     expect(list).toHaveBeenCalledTimes(3);
   });
 
+  it('retries the failed continuation without replacing either accepted prefix page', async () => {
+    await store.init('project', {});
+    list.mockResolvedValueOnce(page(['2'], 'third-page'));
+    await store.loadMore();
+    list.mockRejectedValueOnce(apiError('network', 0));
+    await store.loadMore();
+    expect(store.rows().map((item) => item.case_id)).toEqual(['1', '2']);
+    list.mockResolvedValueOnce(page(['3']));
+    expect(await store.retry()).toBe('third-page');
+    expect(list.mock.lastCall?.[1].cursor).toBe('third-page');
+    expect(store.rows().map((item) => item.case_id)).toEqual(['1', '2', '3']);
+    expect(store.error()).toBeNull();
+  });
+
+  it('explicitly refreshes from the first page after loading a continuation', async () => {
+    await store.init('project', {});
+    list.mockResolvedValueOnce(page(['2'], 'third-page'));
+    await store.loadMore();
+    list.mockResolvedValueOnce(page(['fresh-first'], 'fresh-next'));
+    await store.reload();
+    expect(list.mock.lastCall?.[1]).not.toHaveProperty('cursor');
+    expect(store.routeCursor()).toBeNull();
+    expect(store.rows().map((item) => item.case_id)).toEqual(['fresh-first']);
+    expect(store.nextCursor()).toBe('fresh-next');
+  });
+
   it('resets rows and cursor when filters change and cancels a pending next page', async () => {
     await store.init('project', {});
     const old = new Subject<ManualCaseListResponse>();
@@ -149,5 +175,23 @@ describe('AuthoringCaseTableStore', () => {
     expect(store.error()?.kind).toBe('validation');
     await store.init('project', { q: 'x'.repeat(200) });
     expect(list).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses an invalid URL search again on explicit Refresh and Retry', async () => {
+    await store.init('project', { q: 'x'.repeat(201) });
+    await store.reload();
+    await store.retry();
+    expect(list).not.toHaveBeenCalled();
+    expect(store.error()?.code).toBe('query_too_long');
+  });
+
+  it('omits malformed URL UUIDs on both the initial read and Refresh', async () => {
+    await store.init('project', { node_id: 'invalid-node', item_id: 'invalid-item' });
+    await store.reload();
+    expect(list).toHaveBeenCalledTimes(2);
+    for (const [, query] of list.mock.calls) {
+      expect(query).not.toHaveProperty('node_id');
+      expect(query).not.toHaveProperty('item_id');
+    }
   });
 });

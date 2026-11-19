@@ -58,7 +58,8 @@ export class AuthoringCaseRowsComponent {
   private focusedSelection: HTMLElement | null = null;
   protected readonly virtual = computed(() => this.table()?.virtual() ?? false);
   private readonly selectionCell = viewChild.required<CaseCell>('selectionCell');
-  private readonly identityCell = viewChild.required<CaseCell>('identityCell');
+  private readonly codeCell = viewChild.required<CaseCell>('codeCell');
+  private readonly idCell = viewChild.required<CaseCell>('idCell');
   private readonly titleCell = viewChild.required<CaseCell>('titleCell');
   private readonly parentCell = viewChild.required<CaseCell>('parentCell');
   private readonly priorityCell = viewChild.required<CaseCell>('priorityCell');
@@ -80,8 +81,9 @@ export class AuthoringCaseRowsComponent {
     return rows.slice(start, end);
   });
   protected readonly selected = linkedSignal(() => {
+    // New result rows and a new visible window reset the selection; a viewport-only narrow or
+    // widen transition must not, and narrow actions stay refused by `selectRow`/`selectVisible`.
     this.rows();
-    this.desktop();
     this.visibleRows();
     return new Set<string>();
   });
@@ -118,8 +120,20 @@ export class AuthoringCaseRowsComponent {
       cell: (row) => row.code,
       role: 'identity',
       priority: 'primary',
+      // Own column, so the shared primary-identity budget (flexing subject) sizes the code
+      // instead of sharing one cell with a 36-character UUID.
+      virtualWidth: 'calc(16ch + var(--eg-space-4) * 2)',
+      cellTemplate: this.codeCell(),
+    },
+    {
+      id: 'id',
+      header: this.copy.id,
+      cell: (row) => row.case_id,
+      role: 'identity',
+      kind: 'identifier',
+      priority: 'secondary',
       virtualWidth: 'calc(28ch + var(--eg-space-4) * 2)',
-      cellTemplate: this.identityCell(),
+      cellTemplate: this.idCell(),
     },
     {
       id: 'title',
@@ -198,7 +212,16 @@ export class AuthoringCaseRowsComponent {
         target.tabIndex = -1;
         target.focus();
         this.focusId.set(null);
-      } else table.revealRow(this.rows().findIndex((row) => row.case_id === id));
+        return;
+      }
+      const index = this.rows().findIndex((row) => row.case_id === id);
+      // A row that no longer exists must not hold the request: a later result carrying that id
+      // would otherwise pull focus away from wherever the visitor had moved it.
+      if (index < 0) {
+        this.focusId.set(null);
+        return;
+      }
+      table.revealRow(index);
     });
     afterRenderEffect(() => {
       if (this.desktop() || !this.focusedSelection) return;
@@ -218,8 +241,11 @@ export class AuthoringCaseRowsComponent {
   }
   protected rememberFocus(event: FocusEvent): void {
     const target = event.target;
+    // The export control disappears with the same viewport policy as row selection, so it hands
+    // focus to the inspection notice too.
     this.focusedSelection =
-      target instanceof HTMLElement && target.closest('[data-case-select], [data-select-visible]')
+      target instanceof HTMLElement &&
+      target.closest('[data-case-select], [data-select-visible], [data-export-selection]')
         ? target
         : null;
   }

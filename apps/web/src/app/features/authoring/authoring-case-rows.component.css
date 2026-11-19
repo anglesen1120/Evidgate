@@ -38,7 +38,6 @@
   min-inline-size: var(--eg-space-7);
   vertical-align: middle;
 }
-.identity,
 .coverage {
   display: grid;
   gap: var(--eg-space-2);

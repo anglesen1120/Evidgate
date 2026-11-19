@@ -92,12 +92,14 @@
       [variant]="'ghost'"
       type="button"
       [disabled]="busy() || store.loadingMore() || !store.retryReady()"
-      (click)="store.reload()"
+      [attr.aria-describedby]="'authoring-case-refresh-help'"
+      (click)="refresh()"
       data-case-refresh
     >
       {{ copy.refresh }}
     </button>
   </div>
+  <p id="authoring-case-refresh-help" class="help">{{ copy.refreshHelp }}</p>
 </form>
 
 <div class="results" [attr.aria-busy]="busy()">
@@ -116,7 +118,7 @@
       [error]="store.error()"
       [retryEligible]="(store.error()?.retryable ?? false) && store.retryReady()"
       [retryBusy]="busy() || store.loadingMore()"
-      (retry)="store.reload()"
+      (retry)="store.retry()"
     />
   }
   <app-request-state
@@ -129,7 +131,7 @@
     [emptyActionLabel]="store.filtered() ? copy.clear : undefined"
     [retryEligible]="(store.error()?.retryable ?? false) && store.retryReady()"
     [retryBusy]="busy() || store.loadingMore()"
-    (retry)="store.reload()"
+    (retry)="store.retry()"
     (emptyAction)="clear()"
   >
     <app-authoring-case-rows [rows]="store.rows()" />

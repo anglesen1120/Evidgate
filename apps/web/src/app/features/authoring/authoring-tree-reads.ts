@@ -293,6 +293,13 @@ async function loadSelection(
     if (node === null || path === null) throw new ApiRequestError(MISSING_PROJECTION);
     const existing = host.children()[nodeId];
     const kept = existing !== undefined && existing.items.length > 0 ? existing : null;
+    // A retained walk already past this first page keeps its own cursor: adopting the fresh
+    // first-page cursor would replay rows the merge keeps. An exhausted walk still takes the
+    // fresh cursor, so children added since the last refresh stay reachable.
+    const nextCursor =
+      kept !== null && kept.nextCursor !== null && kept.items.length > page.items.length
+        ? kept.nextCursor
+        : page.next_cursor;
     host.patch({
       selectedNode: node,
       path,
@@ -303,7 +310,7 @@ async function loadSelection(
         ...host.children(),
         [nodeId]: {
           items: kept === null ? page.items : mergeNodes(kept.items, page.items),
-          nextCursor: page.next_cursor,
+          nextCursor,
           status: 'ready',
           error: null,
         },

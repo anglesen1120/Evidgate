@@ -10017,6 +10017,7 @@
       <trans-unit id="authoring.case-table.apply" datatype="html"><source>Apply filters</source></trans-unit>
       <trans-unit id="authoring.case-table.clear" datatype="html"><source>Clear filters</source></trans-unit>
       <trans-unit id="authoring.case-table.refresh" datatype="html"><source>Refresh cases</source></trans-unit>
+      <trans-unit id="authoring.case-table.refresh-help" datatype="html"><source>Refresh reloads this list from the first page and drops the cursor; pages loaded after the first are not kept.</source></trans-unit>
       <trans-unit id="authoring.case-table.loading" datatype="html"><source>Loading manual cases; the hierarchy remains usable…</source></trans-unit>
       <trans-unit id="authoring.case-table.empty-project" datatype="html"><source>This project has no manual cases yet</source></trans-unit>
       <trans-unit id="authoring.case-table.empty-category" datatype="html"><source>This category has no test cases yet</source></trans-unit>

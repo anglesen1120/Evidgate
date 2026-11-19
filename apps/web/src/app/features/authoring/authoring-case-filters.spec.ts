@@ -54,6 +54,26 @@ describe('authoring case filters', () => {
     expect(queryTooLong('😀'.repeat(201))).toBe(true);
   });
 
+  it('counts search points after NFC composition, including decomposed boundary values', () => {
+    expect(queryTooLong('e\u0301'.repeat(101))).toBe(false);
+    expect(queryTooLong('e\u0301'.repeat(200))).toBe(false);
+    expect(queryTooLong('e\u0301'.repeat(201))).toBe(true);
+    expect(queryTooLong('😀'.repeat(199) + 'e\u0301')).toBe(false);
+    expect(queryTooLong('😀'.repeat(200) + 'e\u0301')).toBe(true);
+    expect(queryTooLong('x'.repeat(1_000_000))).toBe(true);
+  });
+
+  it('sends UUID filters only when their complete shape is valid', () => {
+    expect(manualCaseQuery({ node_id: 'node', item_id: ITEM })).toEqual({
+      item_id: ITEM,
+      limit: 50,
+    });
+    expect(manualCaseQuery({ node_id: NODE, item_id: 'item' })).toEqual({
+      node_id: NODE,
+      limit: 50,
+    });
+  });
+
   it.each([1, 37, 200])('preserves the contract page-size boundary %i', (limit) => {
     expect(manualCaseQuery({ limit: String(limit) }).limit).toBe(limit);
   });

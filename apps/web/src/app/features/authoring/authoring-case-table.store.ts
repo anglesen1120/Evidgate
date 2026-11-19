@@ -14,12 +14,7 @@ import type { ManualCaseQuery } from '../../core/data/authoring-reads.service';
 import { createRetryAfterWait } from '../../core/http/retry';
 import { takeKeysetPage } from '../../shared/keyset-walk';
 import { AuthoringDataService } from './authoring-data.service';
-import {
-  caseFiltersFromQuery,
-  manualCaseQuery,
-  queryTooLong,
-  type CaseQueryParams,
-} from './authoring-case-filters';
+import { manualCaseQuery, queryTooLong, type CaseQueryParams } from './authoring-case-filters';
 
 interface CaseTableState {
   projectId: string | null;
@@ -32,6 +27,8 @@ interface CaseTableState {
   error: ApiError | null;
   loadingMore: boolean;
   stale: boolean;
+  /** The read that failed, so Retry replays it instead of restarting the walk. */
+  failedRead: { readonly cursor: string | null; readonly append: boolean } | null;
 }
 const failure = (code: string, message: string): ApiError => ({
   kind: 'unexpected',
@@ -70,6 +67,7 @@ export const AuthoringCaseTableStore = signalStore(
     error: null,
     loadingMore: false,
     stale: false,
+    failedRead: null,
   }),
   withProps(() => ({
     _wait: createRetryAfterWait(),
@@ -108,6 +106,7 @@ export const AuthoringCaseTableStore = signalStore(
           error: step.error,
           status: retained ? 'ready' : 'error',
           stale: retained,
+          failedRead: null,
         });
         return null;
       }
@@ -118,15 +117,27 @@ export const AuthoringCaseTableStore = signalStore(
         status: 'ready',
         stale: false,
         error: null,
+        failedRead: null,
       });
       store._wait.clear();
       return cursor;
     }
-    async function read(append: boolean): Promise<string | null> {
+    async function read(append: boolean, cursorOverride?: string): Promise<string | null> {
       const projectId = store.projectId();
       if (!projectId || !store._wait.ready() || store.loadingMore()) return null;
-      const cursor = append ? store.nextCursor() : store.routeCursor();
+      const cursor = cursorOverride ?? (append ? store.nextCursor() : store.routeCursor());
       if (append && !cursor) return null;
+      // Every read restates the search guard: a URL-supplied or stale value never reaches the wire.
+      if (queryTooLong(store.query().q ?? '')) {
+        const retained = store.rows().length > 0;
+        patchState(store, {
+          error: { ...UNRESOLVED, kind: 'validation', code: 'query_too_long', retryable: false },
+          status: retained ? 'ready' : 'error',
+          stale: retained,
+          failedRead: null,
+        });
+        return null;
+      }
       abort();
       const controller = new AbortController();
       store._run.controller = controller;
@@ -151,6 +162,7 @@ export const AuthoringCaseTableStore = signalStore(
           nextCursor: denied ? null : store.nextCursor(),
           status: retained ? 'ready' : 'error',
           stale: retained,
+          failedRead: denied ? null : { cursor, append },
         });
         store._wait.start(typed.retryAfterSeconds);
         return null;
@@ -179,18 +191,19 @@ export const AuthoringCaseTableStore = signalStore(
           loadingMore: false,
           stale: false,
           error: null,
+          failedRead: null,
         });
-        if (queryTooLong(caseFiltersFromQuery(raw).q)) {
-          patchState(store, {
-            status: 'error',
-            error: { ...UNRESOLVED, kind: 'validation', code: 'query_too_long', retryable: false },
-          });
-          return;
-        }
         await read(false);
       },
       async reload(): Promise<void> {
+        // Explicit refresh restarts the walk; keeping a page cursor would drop the pages before it.
+        patchState(store, { routeCursor: null });
         await read(false);
+      },
+      retry: (): Promise<string | null> => {
+        const failed = store.failedRead();
+        if (failed === null) return Promise.resolve(null);
+        return failed.append && failed.cursor !== null ? read(true, failed.cursor) : read(false);
       },
       loadMore: () => read(true),
       cancel: abort,

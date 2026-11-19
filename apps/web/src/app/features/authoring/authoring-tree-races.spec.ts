@@ -142,6 +142,22 @@ describe('authoring tree interrupted reads', () => {
     expect(store.children()[root.node_id]?.items).toEqual([child, extra]);
   });
 
+  it('keeps a longer retained walk cursor on selection refresh', async () => {
+    const store = await seeded();
+    listTree.mockResolvedValueOnce(page([extra], 'third-page'));
+    expect(await store.loadMoreChildren(root.node_id)).toBe(true);
+    listTree.mockImplementation((_projectId, read) =>
+      read.nodeId ? Promise.resolve(addressed([child], 'more')) : Promise.resolve(page([root])),
+    );
+    await store.retryTree();
+    expect(store.children()[root.node_id]?.nextCursor).toBe('third-page');
+    const newest = { ...child, node_id: 'newest' };
+    listTree.mockResolvedValueOnce(page([newest]));
+    expect(await store.loadMoreChildren(root.node_id)).toBe(true);
+    expect(listTree.mock.lastCall?.[1].cursor).toBe('third-page');
+    expect(store.children()[root.node_id]?.items).toEqual([child, extra, newest]);
+  });
+
   it('uses the fresh selection cursor to load new children after an exhausted branch refreshes', async () => {
     const store = await seeded();
     listTree.mockResolvedValue(page([extra]));
