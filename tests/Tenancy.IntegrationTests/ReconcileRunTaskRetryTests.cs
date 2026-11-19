@@ -1,7 +1,6 @@
-// Crash-and-retry half of the reconcile suite. A partial file of ReconcileRunTests for the same reason the frozen-event
-// file is: every case drives the worlds, seeding and count helpers the rest of the suite declares. Unlike those cases,
-// these go through the real queue (claim, handler, commit, acknowledge) and break it at the two points where an
-// at-least-once consumer can lose track of an attempt.
+// Crash-and-retry half of the reconcile suite, a partial file of ReconcileRunTests so it reuses that suite's worlds and
+// count helpers. These cases go through the real queue (claim, handler, commit, acknowledge) and break it at the two
+// points where an at-least-once consumer can lose track of an attempt.
 using System.Net;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
@@ -32,7 +31,7 @@ public sealed partial class ReconcileRunTests
 
         (await consumer.PollOnceAsync(ReconcileQueue, Token)).ShouldBe(1, "the claim ran the handler once");
 
-        faults.FinishCalls.ShouldBe(1, "the revision was really written inside the attempt before it died");
+        faults.FinishCalls.ShouldBe(1, "the finisher ran to its end inside the attempt before the crash");
         var ledger = await LedgerAsync(world);
         ledger.Revisions.ShouldBe(0, "the rolled-back attempt leaves no revision");
         ledger.FreezeRows.ShouldBe(0, "and no frozen event");
@@ -67,6 +66,7 @@ public sealed partial class ReconcileRunTests
 
         var committed = await AssertSingleRevisionAsync(world);
         var row = await RevisionRowAsync(world, world.RunId, 1);
+        row.ShouldNotBeNullOrEmpty("the snapshot must exist or the later equality proves nothing");
         (await TaskStateAsync(world, taskId)).ShouldBe("active", "the acknowledgement failed, so the lease is still held");
 
         await ExpireTaskLeaseAsync(world, taskId);
@@ -76,6 +76,7 @@ public sealed partial class ReconcileRunTests
         (await RevisionRowAsync(world, world.RunId, 1)).ShouldBe(row, "the committed revision is untouched");
         (await TaskStateAsync(world, taskId)).ShouldBe("done", "the redelivery is acknowledged");
         (await TaskAttemptsAsync(world, taskId)).ShouldBe(2);
+        faults.FinishCalls.ShouldBe(1, "the redelivery stopped at the reconciler and never reached the finisher");
         world.Host.Services.GetRequiredService<ReconcileCallCounter>().Calls
             .ShouldBe(2, "the handler really ran again, it did not just skip");
     }
@@ -135,6 +136,7 @@ public sealed partial class ReconcileRunTests
         ledger.Revisions.ShouldBe(2);
         ledger.FreezeRows.ShouldBe(2);
         ledger.PointerIsLatest.ShouldBeTrue();
+        ledger.FreezeRowsOfLatest.ShouldBe(1, "each revision announces itself once, so the count can tell two revisions from one");
     }
 
     // ------------------------------------------------------------------ helpers: the faulted queue world
@@ -196,7 +198,10 @@ public sealed partial class ReconcileRunTests
         return taskId.ShouldNotBeNull("the trigger is one new task row");
     }
 
-    /// <summary>What a run owns after the attempts: its revisions, the pointer, and the frozen events that name it.</summary>
+    /// <summary>
+    /// What a run owns after the attempts: its revisions, the pointer, and the frozen events that name it.
+    /// PointerIsLatest is true with no revision only when the run has no pointer either.
+    /// </summary>
     private sealed record RevisionLedger(long Revisions, bool PointerIsLatest, long FreezeRows, long FreezeRowsOfLatest);
 
     private static async Task<RevisionLedger> LedgerAsync(IngestTestWorld world)
