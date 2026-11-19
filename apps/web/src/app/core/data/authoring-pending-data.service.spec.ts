@@ -45,6 +45,15 @@ describe('AuthoringPendingDataService', () => {
     await expect(pending).resolves.toEqual(PAGE);
   });
 
+  it('scopes the pending read to one target with the contract target_id parameter', async () => {
+    const pending = service.listPending('project-1', undefined, undefined, CHANGE_ID);
+    const request = await takeRequest(http, `${BASE}/changes`);
+    expect(request.request.urlWithParams).toContain('state=pending');
+    expect(request.request.urlWithParams).toContain(`target_id=${CHANGE_ID}`);
+    request.flush(JSON.stringify(PAGE), { headers: JSON_HEADERS });
+    await expect(pending).resolves.toEqual(PAGE);
+  });
+
   it('sends the selection as one comma-separated ids value and answers its exact batch ETag', async () => {
     const pending = service.selection('project-1', [CHANGE_ID, 'change-2']);
     const request = await takeRequest(http, `${BASE}/changes`);

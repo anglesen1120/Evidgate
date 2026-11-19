@@ -10,6 +10,7 @@ import {
 } from '@ngrx/signals';
 
 import type { ApiError } from '../../core/http/api-error';
+import { RETAINED_ROWS_CAP } from '../../shared/keyset-retention';
 import { AuthoringDataService } from './authoring-data.service';
 import { createTreeReads } from './authoring-tree-reads';
 import {
@@ -40,6 +41,7 @@ export const AuthoringStore = signalStore(
     selectionStale: false,
   }),
   withProps((store, data = inject(AuthoringDataService)) => {
+    const cap = inject(RETAINED_ROWS_CAP);
     const reads = createTreeReads(
       {
         projectId: () => store.projectId(),
@@ -50,6 +52,7 @@ export const AuthoringStore = signalStore(
         patch: (patch) => patchState(store, patch),
       },
       data,
+      cap,
     );
     return { _reads: reads };
   }),

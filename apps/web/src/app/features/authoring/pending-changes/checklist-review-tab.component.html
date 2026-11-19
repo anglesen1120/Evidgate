@@ -1,9 +1,28 @@
 <section #inspection tabindex="-1" class="region" [attr.aria-label]="ui.reviewTab">
   <app-section-header [title]="ui.reviewTab" [description]="ui.itemScope" />
-  <app-desktop-required-notice />
   @if (!store.canRead()) {
     <app-forbidden-pattern />
   } @else {
+    <dl class="facts">
+      <div [attr.data-review-context]="'parent-item'">
+        <dt i18n="@@authoring.review-context.parent-item">Parent checklist item</dt>
+        <dd>
+          <app-copyable-identifier
+            [value]="itemId()"
+            label="Parent checklist item"
+            i18n-label="@@authoring.review-context.parent-item-label"
+          />
+        </dd>
+      </div>
+      <div [attr.data-review-context]="'priority'">
+        <dt i18n="@@authoring.review-context.priority">Parent item priority</dt>
+        <dd i18n="@@authoring.review-context.not-provided">Not provided</dd>
+      </div>
+      <div [attr.data-review-context]="'related-cases'">
+        <dt i18n="@@authoring.review-context.related-cases">Related cases</dt>
+        <dd i18n="@@authoring.review-context.not-provided">Not provided</dd>
+      </div>
+    </dl>
     <app-request-state
       [status]="status()"
       [error]="store.queueError()"
@@ -17,10 +36,118 @@
       @for (row of rows(); track row.change_id) {
         <section data-review-change class="region">
           <h3 class="m-0 text-lg font-semibold">{{ operationLabel(row.change_type) }}</h3>
-          <app-copyable-identifier [value]="row.change_id" [label]="ui.changeId" />
-          <p class="full-text">{{ row.reason ?? copy.reasonUnset }}</p>
+          <dl class="facts">
+            <div [attr.data-review-fact]="'change-id'">
+              <dt i18n="@@authoring.pending-changes.change-id">Change id</dt>
+              <dd>
+                <app-copyable-identifier [value]="row.change_id" [label]="ui.changeId" />
+              </dd>
+            </div>
+            <div [attr.data-review-fact]="'author-id'">
+              <dt i18n="@@authoring.review-context.author-id">Author membership id</dt>
+              <dd>
+                <app-copyable-identifier
+                  [value]="row.author_membership_id"
+                  label="Author membership id"
+                  i18n-label="@@authoring.review-context.author-id"
+                />
+              </dd>
+            </div>
+            <div [attr.data-review-fact]="'author-name'">
+              <dt i18n="@@authoring.review-context.author-name">Author display name</dt>
+              <dd i18n="@@authoring.review-context.not-provided">Not provided</dd>
+            </div>
+            <div [attr.data-review-fact]="'source'">
+              <dt i18n="@@authoring.review-context.source">Source</dt>
+              <dd>
+                @switch (row.source) {
+                  @case ('manual') {
+                    <app-status-pill
+                      [tone]="'neutral'"
+                      label="Manual"
+                      i18n-label="@@authoring.pending-changes.manual-source"
+                      [detail]="row.source"
+                    />
+                  }
+                  @case ('ai') {
+                    <app-status-pill
+                      [tone]="'neutral'"
+                      label="AI"
+                      i18n-label="@@authoring.pending-changes.ai-source"
+                      [detail]="row.source"
+                    />
+                  }
+                  @case ('import') {
+                    <app-status-pill
+                      [tone]="'neutral'"
+                      label="Import"
+                      i18n-label="@@authoring.pending-changes.import-source"
+                      [detail]="row.source"
+                    />
+                  }
+                  @default {
+                    <!-- An unlisted value stays visible rather than leaving the fact blank. -->
+                    {{ row.source }}
+                  }
+                }
+              </dd>
+            </div>
+            <div [attr.data-review-fact]="'state'">
+              <dt i18n="@@authoring.review-context.state">Change state</dt>
+              <dd>
+                @switch (row.state) {
+                  @case ('pending') {
+                    <app-status-pill
+                      [tone]="'neutral'"
+                      label="Queued"
+                      i18n-label="@@authoring.pending-changes.pending-state"
+                      [detail]="row.state"
+                    />
+                  }
+                  @case ('applied') {
+                    <app-status-pill
+                      [tone]="'neutral'"
+                      label="Applied"
+                      i18n-label="@@authoring.review-context.applied"
+                      [detail]="row.state"
+                    />
+                  }
+                  @case ('discarded') {
+                    <app-status-pill
+                      [tone]="'neutral'"
+                      label="Discarded"
+                      i18n-label="@@authoring.review-context.discarded"
+                      [detail]="row.state"
+                    />
+                  }
+                  @default {
+                    <!-- An unlisted value stays visible rather than leaving the fact blank. -->
+                    {{ row.state }}
+                  }
+                }
+              </dd>
+            </div>
+            <div [attr.data-review-fact]="'base-version'">
+              <dt i18n="@@authoring.pending-changes.base-version">Target base version</dt>
+              <dd><app-number-value [value]="row.base_version" /></dd>
+            </div>
+            <div [attr.data-review-fact]="'created-at'">
+              <dt i18n="@@authoring.pending-changes.queued-at">Queued at (UTC)</dt>
+              <dd><app-absolute-time [value]="row.created_at" /></dd>
+            </div>
+            <div [attr.data-review-fact]="'reason'">
+              <dt i18n="@@authoring.review-context.reason">Change reason</dt>
+              <dd class="full-text">
+                @if (row.reason !== null && row.reason !== undefined) {
+                  {{ row.reason }}
+                } @else {
+                  <span i18n="@@authoring.pending-changes.reason-unset">Not set</span>
+                }
+              </dd>
+            </div>
+          </dl>
           @if (row.change_type === 'comment') {
-            <p class="full-text">{{ row.payload['body'] }}</p>
+            <p data-review-comment-body class="full-text">{{ row.payload['body'] }}</p>
           }
         </section>
       }

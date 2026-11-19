@@ -11257,6 +11257,26 @@
       <trans-unit id="catalog.browse-capped-help" datatype="html"><source>Narrow the status or framework filters to reach cases beyond the 10,000 loaded here. Search only checks loaded results.</source></trans-unit>
       <trans-unit id="authoring.tree.browse-capped" datatype="html"><source>Hierarchy list is at its load limit</source></trans-unit>
       <trans-unit id="authoring.tree.browse-capped-help" datatype="html"><source>Showing the first 10,000 nodes in this list. Open a known node link to inspect a scope outside these results.</source></trans-unit>
+      <trans-unit id="authoring.review-context.parent-item" datatype="html"><source>Parent checklist item</source></trans-unit>
+      <trans-unit id="authoring.review-context.parent-item-label" datatype="html"><source>Parent checklist item</source></trans-unit>
+      <trans-unit id="authoring.review-context.priority" datatype="html"><source>Parent item priority</source></trans-unit>
+      <trans-unit id="authoring.review-context.related-cases" datatype="html"><source>Related cases</source></trans-unit>
+      <trans-unit id="authoring.review-context.not-provided" datatype="html"><source>Not provided</source></trans-unit>
+      <trans-unit id="authoring.review-context.author-id" datatype="html"><source>Author membership id</source></trans-unit>
+      <trans-unit id="authoring.review-context.author-name" datatype="html"><source>Author display name</source></trans-unit>
+      <trans-unit id="authoring.review-context.source" datatype="html"><source>Source</source></trans-unit>
+      <trans-unit id="authoring.review-context.state" datatype="html"><source>Change state</source></trans-unit>
+      <trans-unit id="authoring.review-context.applied" datatype="html"><source>Applied</source></trans-unit>
+      <trans-unit id="authoring.review-context.discarded" datatype="html"><source>Discarded</source></trans-unit>
+      <trans-unit id="authoring.review-context.reason" datatype="html"><source>Change reason</source></trans-unit>
+      <trans-unit id="shared.gallery.live-status.title" datatype="html"><source>Polite live status</source></trans-unit>
+      <trans-unit id="shared.gallery.live-status.description" datatype="html"><source>A screen-reader-only message stays mounted while its text changes. The visible preview below is not a live region.</source></trans-unit>
+      <trans-unit id="shared.gallery.live-status.empty" datatype="html"><source>No announcement</source></trans-unit>
+      <trans-unit id="shared.gallery.live-status.announce" datatype="html"><source>Announce a message</source></trans-unit>
+      <trans-unit id="shared.gallery.live-status.change" datatype="html"><source>Change the message</source></trans-unit>
+      <trans-unit id="shared.gallery.live-status.clear" datatype="html"><source>Clear the message</source></trans-unit>
+      <trans-unit id="shared.gallery.live-status.first" datatype="html"><source>Showing the loaded cases. Refine the filters to find a specific case.</source></trans-unit>
+      <trans-unit id="shared.gallery.live-status.changed" datatype="html"><source>The filters changed. Showing the matching loaded cases.</source></trans-unit>
     </body>
   </file>
 </xliff>

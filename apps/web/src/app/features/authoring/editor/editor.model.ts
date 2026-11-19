@@ -66,9 +66,10 @@ export const PRIORITIES: readonly { value: CasePriority; label: string }[] = [
 ];
 export const REASON_UNAVAILABLE = $localize`:@@authoring.editor.reason-unavailable:The current API cannot record a version reason for this operation. The reason field is unavailable; you can continue without a recorded reason.`;
 export const WRITE_REASON = $localize`:@@authoring.editor.write-reason:Read-only: authoring:write permission is required to save or restore a case.`;
-export function codePoints(value: string): number {
+// Stops one code point past `limit` so a pasted megabyte costs the limit, not the paste.
+export function codePoints(value: string, limit = Number.POSITIVE_INFINITY): number {
   let count = 0;
-  for (let index = 0; index < value.length; index++, count++) {
+  for (let index = 0; index < value.length && count <= limit; index++, count++) {
     if ((value.codePointAt(index) ?? 0) > 0xffff) index++;
   }
   return count;
@@ -100,7 +101,7 @@ export function bodyOf(draft: CaseDraft): UpdateManualCaseRequest {
 export function textError(value: string, limit: number, required = false): string | null {
   if (required && !value.trim())
     return $localize`:@@authoring.editor.required-error:Enter a value for this required field.`;
-  if (codePoints(value) > limit)
+  if (codePoints(value, limit) > limit)
     return $localize`:@@authoring.editor.length-error:Shorten this field to the character limit shown below.`;
   return null;
 }

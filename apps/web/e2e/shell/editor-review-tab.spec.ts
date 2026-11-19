@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import caseFixture from '../../../../fixtures/web-api/authoring-editor-case/input.json';
 import type {} from '../../src/app/core/dev-fixtures/fixture-request-log';
 import {
   LOCALES,
@@ -11,6 +12,7 @@ import {
 
 const CASE = 'a4430000-0000-4000-8000-000000000001';
 const CONFLICT_CASE = 'a4430000-0000-4000-8000-000000000002';
+const ITEM = caseFixture.body.checklist_item_id;
 
 function editorPath(locale: ShellLocale, caseId = CASE) {
   return withVariants(
@@ -34,6 +36,23 @@ async function pendingReads(page: Page) {
           new URL(request.url, 'http://127.0.0.1').pathname ===
             '/v1/projects/' + project + '/authoring/changes',
       ).length,
+    PROJECT_STOREFRONT,
+  );
+}
+
+async function pendingTargets(page: Page) {
+  return page.evaluate(
+    (project) =>
+      (window.__evidgateFixtureRequests ?? [])
+        .filter(
+          (request) =>
+            request.method === 'GET' &&
+            new URL(request.url, 'http://127.0.0.1').pathname ===
+              '/v1/projects/' + project + '/authoring/changes',
+        )
+        .map(
+          (request) => new URL(request.url, 'http://127.0.0.1').searchParams.get('target_id') ?? '',
+        ),
     PROJECT_STOREFRONT,
   );
 }
@@ -62,6 +81,7 @@ test('the editor review tab mounts lazily through the keyboard and the narrow se
     await expect(editor.getByRole('tabpanel')).toHaveAccessibleName(label);
     await expect(editor.locator('#review-comment')).toBeVisible();
     expect(await pendingReads(page)).toBe(1);
+    expect(await pendingTargets(page)).toEqual([ITEM]);
     // The existing pending fixtures target other checklist items, not this case's loaded parent.
     await expect(editor.locator('[data-review-change]')).toHaveCount(0);
     const queueLink = editor.locator('a[href$="/pending-changes"]');

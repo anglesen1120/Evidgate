@@ -1,4 +1,4 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import { ComponentHarness, parallel } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
@@ -51,11 +51,13 @@ class EditorHarness extends ComponentHarness {
   }
   async saveState() {
     const save = await this.locatorFor('[data-editor-save]')();
-    return {
-      nativeDisabled: await save.getProperty<boolean>('disabled'),
-      ariaDisabled: await save.getAttribute('aria-disabled'),
-      dataDisabled: await save.getAttribute('data-disabled'),
-    };
+    // These properties describe one settled control, so share a change-detection pass.
+    const [nativeDisabled, ariaDisabled, dataDisabled] = await parallel(() => [
+      save.getProperty<boolean>('disabled'),
+      save.getAttribute('aria-disabled'),
+      save.getAttribute('data-disabled'),
+    ]);
+    return { nativeDisabled, ariaDisabled, dataDisabled };
   }
   async click(selector: string) {
     await (await this.locatorFor(selector)()).click();
@@ -164,7 +166,7 @@ describe('EditorPage conflict dialog accessibility', () => {
     expect(document.querySelector('[onerror]')).toBeNull();
     expect(Object.hasOwn(globalThis, 'pwned')).toBe(false);
     expect(await harness.value('case-title')).toBe('Retained title');
-  }, 30_000);
+  });
   it('keeps the Save opener focusable with one trap and retains the draft on Escape', async () => {
     const { fixture, harness } = await openConflict();
     const dialog = conflictDialog();
@@ -195,5 +197,5 @@ describe('EditorPage conflict dialog accessibility', () => {
     expect(await harness.focused('[data-editor-save]')).toBe(true);
     expect(await harness.value('case-title')).toBe('Retained title');
     expect(data.updateCase).toHaveBeenCalledTimes(1);
-  }, 30_000);
+  });
 });

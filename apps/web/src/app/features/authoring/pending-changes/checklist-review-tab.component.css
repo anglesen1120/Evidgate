@@ -1,6 +1,7 @@
 :host {
   display: block;
   min-inline-size: 0;
+  color: var(--eg-text);
 }
 .region {
   display: grid;
@@ -28,10 +29,23 @@
 }
 .facts {
   margin: 0;
+  max-inline-size: 75ch;
   gap: var(--eg-space-4);
+}
+.facts > div {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: var(--eg-space-3);
+}
+.facts dt {
+  min-inline-size: 0;
+  color: var(--eg-text-muted);
+  font-weight: var(--eg-weight-semibold);
+  overflow-wrap: anywhere;
 }
 .facts dd {
   margin: 0;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
   user-select: text;
 }
 .actions {
@@ -47,4 +61,10 @@
 section:focus-visible {
   outline: var(--eg-focus-width) solid var(--eg-focus);
   outline-offset: var(--eg-focus-offset);
+}
+@media (max-width: 767px) {
+  .facts > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--eg-space-2);
+  }
 }

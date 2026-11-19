@@ -21,6 +21,7 @@ import {
   InlineFeedbackComponent,
   LoadingPatternComponent,
 } from '../states';
+import { LiveStatusComponent } from '../states/live-status.component';
 
 /** Render-only specimens for feedback tones, bare states, skeletons and form feedback. */
 @Component({
@@ -36,6 +37,7 @@ import {
     ErrorPatternComponent,
     InlineFeedbackComponent,
     LoadingPatternComponent,
+    LiveStatusComponent,
     FormRequiredNoteComponent,
     FieldRequirementComponent,
     FieldFeedbackComponent,
@@ -89,6 +91,48 @@ import {
       <output i18n="@@shared.gallery.feedback.retries"
         >Local example retries: {{ retryCount() }}</output
       >
+    </section>
+
+    <section
+      class="grid min-w-0 gap-3 border-0 border-t border-solid border-border py-4"
+      aria-labelledby="gallery-live-status"
+      data-demo="live-status"
+    >
+      <h2 id="gallery-live-status" class="eg-type-section-title m-0">{{ liveStatusTitle }}</h2>
+      <p class="eg-type-body m-0 wrap-anywhere">{{ liveStatusDescription }}</p>
+      <app-live-status [text]="liveStatusText()" />
+      <p class="eg-type-body m-0 wrap-anywhere" data-demo="live-status-preview">
+        {{ liveStatusText() || emptyStatusText }}
+      </p>
+      <div class="flex min-w-0 flex-wrap items-center gap-2">
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          type="button"
+          data-demo="live-status-announce"
+          (click)="liveStatusText.set(firstStatusText)"
+        >
+          {{ announceStatusLabel }}
+        </button>
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          type="button"
+          data-demo="live-status-change"
+          (click)="liveStatusText.set(changedStatusText)"
+        >
+          {{ changeStatusLabel }}
+        </button>
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          type="button"
+          data-demo="live-status-clear"
+          (click)="liveStatusText.set('')"
+        >
+          {{ clearStatusLabel }}
+        </button>
+      </div>
     </section>
 
     <section
@@ -183,6 +227,15 @@ export class GalleryStatesComponent {
   protected readonly readableFact = $localize`:@@shared.gallery.fields.readable:A recorded run keeps its original evidence identifier.`;
   protected readonly editLabel = $localize`:@@shared.gallery.fields.edit:Edit project connection`;
   protected readonly submitLabel = $localize`:@@shared.gallery.fields.submit:Save project key`;
+  protected readonly liveStatusTitle = $localize`:@@shared.gallery.live-status.title:Polite live status`;
+  protected readonly liveStatusDescription = $localize`:@@shared.gallery.live-status.description:A screen-reader-only message stays mounted while its text changes. The visible preview below is not a live region.`;
+  protected readonly emptyStatusText = $localize`:@@shared.gallery.live-status.empty:No announcement`;
+  protected readonly announceStatusLabel = $localize`:@@shared.gallery.live-status.announce:Announce a message`;
+  protected readonly changeStatusLabel = $localize`:@@shared.gallery.live-status.change:Change the message`;
+  protected readonly clearStatusLabel = $localize`:@@shared.gallery.live-status.clear:Clear the message`;
+  protected readonly firstStatusText = $localize`:@@shared.gallery.live-status.first:Showing the loaded cases. Refine the filters to find a specific case.`;
+  protected readonly changedStatusText = $localize`:@@shared.gallery.live-status.changed:The filters changed. Showing the matching loaded cases.`;
+  protected readonly liveStatusText = signal('');
   protected readonly retryCount = signal(0);
   protected readonly networkError: ApiError = {
     kind: 'network',

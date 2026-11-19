@@ -23,6 +23,14 @@ describe('manual case editor model', () => {
     expect(textError('😀'.repeat(500), 500, true)).toBeNull();
     expect(textError('😀'.repeat(501), 500, true)).not.toBeNull();
   });
+  it('stops counting one code point past the limit', () => {
+    expect(codePoints('x'.repeat(2000), 2000)).toBe(2000);
+    expect(codePoints('x'.repeat(2001), 2000)).toBe(2001);
+    expect(codePoints('😀'.repeat(500), 500)).toBe(500);
+    expect(codePoints('😀'.repeat(501), 500)).toBe(501);
+    expect(codePoints('x'.repeat(5_000_000), 2000)).toBe(2001);
+    expect(codePoints('😀'.repeat(5_000_000), 500)).toBe(501);
+  });
   it('enforces required text and each inclusive server length boundary', () => {
     expect(textError(' \n ', 500, true)).not.toBeNull();
     expect(textError('', 4000, false)).toBeNull();

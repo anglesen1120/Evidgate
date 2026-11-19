@@ -5,6 +5,7 @@ import { firstValueFrom, Subject } from 'rxjs';
 import { ApiRequestError } from '../../core/http/api-error';
 import { CaseListDataService } from '../../core/data/case-list-data.service';
 import { SessionStore } from '../../core/session/session.store';
+import { RETAINED_ROWS_CAP } from '../../shared/keyset-retention';
 import { CASE_LIST_FIXTURE, CATALOG_FAILURE } from './case-list-store.fixtures';
 import { caseFiltersToQuery, CaseListStore } from './case-list.store';
 
@@ -205,6 +206,33 @@ describe('CaseListStore', () => {
       expect(list).toHaveBeenCalledTimes(1);
     },
   );
+
+  it('bounds a first page at the injected retained-row cap rather than one compiled in', async () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        CaseListStore,
+        { provide: CaseListDataService, useValue: { list, update, get } },
+        { provide: SessionStore, useValue: { has: () => canWrite() } },
+        { provide: RETAINED_ROWS_CAP, useValue: 2 },
+      ],
+    });
+    const first = CASE_LIST_FIXTURE.items[0];
+    if (!first) throw new Error('Missing case fixture');
+    list.mockResolvedValueOnce({
+      items: Array.from({ length: 3 }, (_, index) => ({ ...first, id: String(index) })),
+      next_cursor: 'more',
+    });
+
+    const store = TestBed.inject(CaseListStore);
+    store.init('project', {});
+    await settle();
+
+    expect(store.rows().map((row) => row.id)).toEqual(['0', '1']);
+    expect(store.browseCapped()).toBe(true);
+    expect(store.hasMore()).toBe(false);
+  });
 
   it('caps accumulated catalog rows at 10000 and never follows the discarded cursor', async () => {
     const first = CASE_LIST_FIXTURE.items[0];

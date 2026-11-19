@@ -170,5 +170,5 @@ describe('ChecklistReviewTabComponent accessibility', () => {
     expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     expect(await ui.focused('[data-review-delete]')).toBe(true);
     expect(queue).not.toHaveBeenCalled();
-  }, 30_000);
+  });
 });
