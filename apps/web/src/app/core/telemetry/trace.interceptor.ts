@@ -20,6 +20,7 @@ import { inject } from '@angular/core';
 import { finalize, tap } from 'rxjs';
 
 import { isApiRequestUrl } from '../http/api-origin';
+import { exceedsBinaryCap } from '../http/http-client-fetch-binary';
 import { apiPathTemplate } from './api-path-template';
 import { TelemetryService } from './telemetry.service';
 import type { ApiCallResult } from './telemetry-sdk';
@@ -68,10 +69,31 @@ function resultOfResponse(event: HttpEvent<unknown>): ApiCallResult | null {
   return result;
 }
 
+/** An over-cap byte reply: a failed call of the `network` kind, the shape the gateway reports. */
+function refusedBinaryResult(event: HttpEvent<unknown>): ApiCallResult {
+  const result: ApiCallResult = { outcome: 'error', errorKind: 'network' };
+  if ('status' in event) {
+    result.status = event.status;
+  }
+  return result;
+}
+
 /** The `X-Request-Id` UUID of a response, lowercased, or `null` when absent or not a UUID. */
 function readRequestId(headers: HttpHeaders): string | null {
   const value = headers.get(REQUEST_ID_HEADER);
   return value !== null && UUID_SHAPE.test(value) ? value.toLowerCase() : null;
+}
+
+/** Whether a string error body is within the bound, in UTF-8 bytes like the binary decode. */
+function stringFitsTracedBound(text: string): boolean {
+  if (text.length > MAX_TRACED_ERROR_BYTES) {
+    return false;
+  }
+  // UTF-16 units * 3 bounds the encoded size from above, so only a long-ish string is measured.
+  return (
+    text.length * 3 <= MAX_TRACED_ERROR_BYTES ||
+    new TextEncoder().encode(text).byteLength <= MAX_TRACED_ERROR_BYTES
+  );
 }
 
 /** The body as JSON, when the server sent it as a string instead of parsed JSON. */
@@ -86,6 +108,9 @@ function parseJsonBody(body: unknown): unknown {
   }
   if (typeof body !== 'string') {
     return body;
+  }
+  if (!stringFitsTracedBound(body)) {
+    return null;
   }
   try {
     return JSON.parse(body) as unknown;
@@ -172,6 +197,13 @@ export const telemetryInterceptor: HttpInterceptorFn = (request, next) => {
   return next(outgoing).pipe(
     tap({
       next: (event: HttpEvent<unknown>) => {
+        // The adapter refuses an over-cap capped reply after this interceptor has seen it; the
+        // span records that refusal instead of an ok response. Both capped directions set
+        // `reportProgress`, while a plain text call does not, so only the former is measured.
+        if (request.reportProgress && exceedsBinaryCap(event)) {
+          call.end(refusedBinaryResult(event));
+          return;
+        }
         const result = resultOfResponse(event);
         if (result !== null) {
           call.end(result);

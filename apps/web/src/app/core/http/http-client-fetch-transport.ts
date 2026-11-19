@@ -149,6 +149,11 @@ export function errorResponseOrThrow(error: unknown, signal: AbortSignal): HttpE
   if (isTimeoutError(error)) {
     throw error;
   }
+  if (error instanceof EmptyError) {
+    // The event stream completed without a response and nobody aborted: nothing reached the
+    // caller, which is the transport-failure shape the gateway maps to `network`.
+    throw new TypeError('The HTTP client completed without a response', { cause: error });
+  }
   if (!(error instanceof HttpErrorResponse)) {
     throw error;
   }
