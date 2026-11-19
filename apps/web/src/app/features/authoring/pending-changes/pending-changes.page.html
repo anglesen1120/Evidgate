@@ -10,6 +10,17 @@
 @if (!store.canRead() || store.forbidden()) {
   <app-forbidden-pattern />
 } @else {
+  @if (store.empty()) {
+    <section
+      #inspection
+      class="region inspection"
+      tabindex="-1"
+      [attr.aria-label]="copy.previewTitle"
+      data-pending-preview-content
+    >
+      <p class="m-0">{{ copy.previewNone }}</p>
+    </section>
+  }
   <app-request-state
     [status]="status()"
     [error]="store.queueError()"

@@ -10,6 +10,7 @@ import fixture8 from '../../../../../../fixtures/web-api/authoring-pending-queue
 import fixture9 from '../../../../../../fixtures/web-api/authoring-pending-queue-quota/input.json';
 import fixture10 from '../../../../../../fixtures/web-api/authoring-pending-forbidden/input.json';
 import fixture11 from '../../../../../../fixtures/web-api/authoring-pending-not-found/input.json';
+import fixture12 from '../../../../../../fixtures/web-api/authoring-pending-hostile/input.json';
 import type { FixtureCatalogRow } from './fixture-document';
 
 export const FIXTURE_CATALOG_AUTHORING_PENDING_ROWS: readonly FixtureCatalogRow[] = [
@@ -25,4 +26,5 @@ export const FIXTURE_CATALOG_AUTHORING_PENDING_ROWS: readonly FixtureCatalogRow[
   { name: 'authoring-pending-queue-quota', document: fixture9 },
   { name: 'authoring-pending-forbidden', document: fixture10 },
   { name: 'authoring-pending-not-found', document: fixture11 },
+  { name: 'authoring-pending-hostile', document: fixture12 },
 ];
