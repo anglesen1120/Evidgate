@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import * as fsModule from 'node:fs/promises';
-import { mkdtemp, mkdir, rm, symlink, truncate, writeFile } from 'node:fs/promises';
+import { link, mkdtemp, mkdir, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -411,6 +411,8 @@ describe('readPlaywrightList and readFileBounded filesystem boundaries', () => {
     await writeFile(file, report());
     await expect(readPlaywrightList('report.json', root)).resolves.toBe(report());
     swapHook.once = async () => {
+      // Keep the old inode alive: a freed inode number may be reused by the replacement.
+      await link(file, `${file}.old`);
       await rm(file);
       await writeFile(file, report());
     };
