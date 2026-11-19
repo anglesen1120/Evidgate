@@ -33,7 +33,20 @@ describe('utf8ExceedsBytes', () => {
     expect(utf8ExceedsBytes(text, size)).toBe(false);
   });
 
-  it('measures a near-cap string without allocating (printed)', () => {
+  it('does not call TextEncoder.encode while scanning a near-cap string', () => {
+    const cap = 8 * 1024 * 1024;
+    const text = 'é'.repeat(cap / 2);
+    const encode = vi.spyOn(globalThis.TextEncoder.prototype, 'encode');
+    try {
+      expect(utf8ExceedsBytes(text, cap)).toBe(false);
+      expect(utf8ExceedsBytes(text, cap - 1)).toBe(true);
+      expect(encode).not.toHaveBeenCalled();
+    } finally {
+      encode.mockRestore();
+    }
+  });
+
+  it('prints scan ms vs TextEncoder ms for a near-cap string', () => {
     const cap = 8 * 1024 * 1024;
     const text = 'é'.repeat(cap / 2); // exactly the cap in UTF-8
     const t0 = performance.now();
@@ -43,8 +56,8 @@ describe('utf8ExceedsBytes', () => {
     const encoded = new TextEncoder().encode(text).byteLength;
     const encode = performance.now() - t1;
     console.log(
-      `utf8 size of ${String(encoded)} bytes: scan ${scan.toFixed(1)} ms, 0 B allocated; ` +
-        `TextEncoder ${encode.toFixed(1)} ms, ${String(encoded)} B allocated per call`,
+      `utf8 size of ${String(encoded)} bytes: scan ${scan.toFixed(1)} ms vs ` +
+        `TextEncoder ${encode.toFixed(1)} ms`,
     );
     expect(over).toBe(false);
     expect(encoded).toBe(cap);
