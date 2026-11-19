@@ -3,7 +3,7 @@
 // initialized at that point. These tests read a synthetic contract and schema through a mocked
 // `node:fs`, which is the only way to reach that build with a graph the repository does not hold.
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /** The synthetic standalone document, swapped per test; also the reference the contract makes. */
 const fixture = vi.hoisted(() => ({
@@ -71,6 +71,12 @@ function unexpandedReference(): unknown {
 }
 
 describe('Fixture contract local reference expansion', () => {
+  afterAll(() => {
+    // A runner that shares its module registry across files must not keep the synthetic contract.
+    vi.doUnmock('node:fs');
+    vi.resetModules();
+  });
+
   beforeEach(() => {
     fixture.schemaText = '';
     // Each test rebuilds the module so its eager contract build reads its own schema document.
