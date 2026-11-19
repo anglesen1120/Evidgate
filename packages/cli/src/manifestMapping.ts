@@ -9,6 +9,8 @@ export const MAX_TESTS = 10_000;
 export const MAX_MEMBERS = 10_000;
 /** Offending tests named in a refusal; the rest are counted, not printed. */
 const MAX_DETAILS = 20;
+/** File and each title segment are clipped to this many characters in a refusal. */
+const MAX_DESCRIBED_CHARS = 200;
 
 /** One test as the list report describes it, with its resolved identity. */
 export interface EnumeratedTest {
@@ -161,9 +163,18 @@ function refusal(
   });
 }
 
+/**
+ * A refusal is bounded per test: a crafted report can carry megabyte titles, and an error
+ * message must not. Each title segment is clipped on its own so the shape stays readable.
+ */
 function describe(test: EnumeratedTest): string {
-  const title = test.titlePath.length === 0 ? '(no title path)' : test.titlePath.join(' > ');
-  return `${test.file}: ${title}`;
+  const title =
+    test.titlePath.length === 0 ? '(no title path)' : test.titlePath.map(clip).join(' > ');
+  return `${clip(test.file)}: ${title}`;
+}
+
+function clip(value: string): string {
+  return value.length <= MAX_DESCRIBED_CHARS ? value : `${value.slice(0, MAX_DESCRIBED_CHARS)}…`;
 }
 
 function inputTooLarge(message: string): CliError {

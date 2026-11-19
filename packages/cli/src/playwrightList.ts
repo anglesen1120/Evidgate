@@ -3,7 +3,7 @@
 // `evidgate.id` annotation, the per-project variant params hash, and project-relative POSIX
 // paths. The CLI cannot import the adapter (the dependency arrow is one way), so the rules
 // are ported here and kept in step with it.
-import { realpath } from 'node:fs/promises';
+import { lstat, realpath } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
 
 import { errnoName, readFileBounded, type BoundedFileFailure } from './boundedFile.js';
@@ -11,8 +11,10 @@ import { CliError } from './errors.js';
 import { MAX_TESTS, type EnumeratedTest } from './manifestMapping.js';
 import { contains } from './uploadPaths.js';
 
-/** Hard cap on the list report, checked both before the read and on the decoded text. */
+/** Hard cap on the list report: the reader enforces it on the bytes, the parser on the text. */
 export const MAX_REPORT_BYTES = 16 * 1024 * 1024;
+/** Projects accepted in one report; a report beyond this is refused before any hashing. */
+export const MAX_PROJECTS = 1000;
 
 /** The annotation the adapter reads; its description is the canonical case id. */
 const CASE_ID_ANNOTATION = 'evidgate.id';
@@ -21,37 +23,47 @@ const CASE_ID_ANNOTATION = 'evidgate.id';
 // not import the adapter; `sidecarRules.ts` is the other copy.
 const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+// A path with a C0/DEL control character cannot name a file a person wrote, and a NUL would
+// truncate the path at the syscall boundary, so it is a malformed report, not an escape.
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
 // Playwright's suite tree nests once per describe block; a deeper tree is a crafted report.
 const MAX_SUITE_DEPTH = 32;
 
 type HashVariant = (params: unknown) => string | undefined;
 
-interface ProjectHashes {
-  readonly byId: ReadonlyMap<string, string>;
-  readonly byName: ReadonlyMap<string, string>;
+interface ProjectEntry {
+  readonly index: number;
+  readonly hash: string;
+}
+
+interface ProjectTable {
+  readonly byId: ReadonlyMap<string, ProjectEntry>;
+  readonly byName: ReadonlyMap<string, ProjectEntry>;
 }
 
 /**
  * Enumerates the tests of one report. Suite, spec and test order is the report's own order,
- * so equal input always yields equal output. A project whose variant params have no hash and
- * a spec file that leaves the project root each refuse the whole report.
+ * so equal input always yields equal output. A report that lost tests to a collection error,
+ * enumerates none, or names a project or path the rules cannot resolve is refused whole.
  */
 export function parsePlaywrightList(
   text: string,
   hashVariant: HashVariant,
 ): readonly EnumeratedTest[] {
-  if (Buffer.byteLength(text, 'utf8') > MAX_REPORT_BYTES) {
-    throw inputTooLarge();
-  }
+  assertTextUnderCap(text);
   const root = record(parseJson(text));
-  const suites = root === undefined ? undefined : array(root['suites']);
-  if (root === undefined || suites === undefined) {
-    throw invalid('the report has no suites list');
+  if (root === undefined) {
+    throw invalid('the report is not a JSON object');
   }
-  const projects = projectHashes(root, hashVariant);
+  refuseCollectionErrors(optionalArray(root, 'errors', 'the report'));
+  const suites = optionalArray(root, 'suites', 'the report');
+  const projects = projectTable(root, hashVariant);
   const tests: EnumeratedTest[] = [];
   for (const suite of suites) {
     collectSuite(suite, undefined, [], projects, tests, 1);
+  }
+  if (tests.length === 0) {
+    throw invalid('the report lists no tests, so there is nothing to map');
   }
   return tests;
 }
@@ -59,17 +71,31 @@ export function parsePlaywrightList(
 /**
  * Reads the report file. The path is resolved and realpath'd first, so a `..` escape, an
  * absolute path outside the root and a symlink pointing outside are all refused the same
- * way; the read then refuses anything over the byte cap.
+ * way; the read refuses a symlink at the resolved path, a swap after it, and an over-cap size.
  */
 export async function readPlaywrightList(path: string, root: string): Promise<string> {
   const realRoot = await realpathOrRefuse(root, 'the project root');
   const candidate = isAbsolute(path) ? resolve(path) : resolve(realRoot, path);
   const realFile = await reportFileInside(candidate, realRoot);
-  const result = await readFileBounded(realFile, MAX_REPORT_BYTES);
-  if (result.ok) {
-    return decode(result.bytes);
+  const result = await readFileBounded(realFile, MAX_REPORT_BYTES, { noFollow: true });
+  if (!result.ok) {
+    throw readRefusal(result.failure);
   }
-  throw readRefusal(result.failure);
+  await assertSameFile(realFile, result);
+  return decode(result.bytes);
+}
+
+/** A file replaced after its realpath check is the change the descriptor identity exposes. */
+async function assertSameFile(
+  realFile: string,
+  opened: { readonly dev: number; readonly ino: number },
+): Promise<void> {
+  const named = await lstat(realFile).catch(() => undefined);
+  if (named === undefined || named.dev !== opened.dev || named.ino !== opened.ino) {
+    throw new CliError('the list report changed while it was opened', {
+      code: 'manifest_report_unreadable',
+    });
+  }
 }
 
 /**
@@ -99,7 +125,7 @@ function collectSuite(
   raw: unknown,
   inherited: string | undefined,
   titles: readonly string[],
-  projects: ProjectHashes,
+  projects: ProjectTable,
   out: EnumeratedTest[],
   depth: number,
 ): void {
@@ -108,8 +134,8 @@ function collectSuite(
     throw invalid('the report has a malformed suite');
   }
   const file = string(suite['file']) ?? inherited;
-  const nested = array(suite['suites']) ?? [];
-  const specs = array(suite['specs']) ?? [];
+  const nested = optionalArray(suite, 'suites', 'the suite');
+  const specs = optionalArray(suite, 'specs', 'the suite');
   if (specs.length > 0 && file === undefined) {
     throw invalid('a suite with tests names no file');
   }
@@ -128,7 +154,7 @@ function collectSpec(
   raw: unknown,
   suiteFile: string | undefined,
   titles: readonly string[],
-  projects: ProjectHashes,
+  projects: ProjectTable,
   out: EnumeratedTest[],
 ): void {
   const spec = record(raw);
@@ -142,7 +168,7 @@ function collectSpec(
   const specTitle = string(spec['title']) ?? '';
   const titlePath = specTitle.length === 0 ? titles : [...titles, specTitle];
   const enumeratedFile = projectRelativePath(file);
-  for (const rawTest of array(spec['tests']) ?? []) {
+  for (const rawTest of optionalArray(spec, 'tests', 'the spec')) {
     out.push(enumerateTest(rawTest, enumeratedFile, titlePath, projects));
     if (out.length > MAX_TESTS) {
       throw inputTooLarge();
@@ -154,20 +180,13 @@ function enumerateTest(
   raw: unknown,
   file: string,
   titlePath: readonly string[],
-  projects: ProjectHashes,
+  projects: ProjectTable,
 ): EnumeratedTest {
   const test = record(raw);
   if (test === undefined) {
     throw invalid('the report has a malformed test');
   }
-  const projectId = string(test['projectId']);
-  const projectName = string(test['projectName']);
-  const hash =
-    (projectId === undefined ? undefined : projects.byId.get(projectId)) ??
-    (projectName === undefined ? undefined : projects.byName.get(projectName));
-  if (hash === undefined) {
-    throw variantInvalid('a test belongs to a project with no variant params hash');
-  }
+  const hash = testProject(test, projects).hash;
   const identity = readIdentity(test['annotations']);
   return {
     file,
@@ -176,6 +195,34 @@ function enumerateTest(
     ...(identity.caseId === undefined ? {} : { caseId: identity.caseId }),
     ...(identity.conflict ? { identityConflict: true } : {}),
   };
+}
+
+/**
+ * Resolves the project a test ran in. An explicit `projectId` must name a declared project —
+ * the name is only a fallback when the id is absent — and an id and name that disagree name
+ * a report whose two fields describe different projects.
+ */
+function testProject(test: Record<string, unknown>, projects: ProjectTable): ProjectEntry {
+  const rawId = test['projectId'];
+  const rawName = test['projectName'];
+  const id = rawId === undefined ? undefined : string(rawId);
+  const name = rawName === undefined ? undefined : string(rawName);
+  if ((rawId !== undefined && id === undefined) || (rawName !== undefined && name === undefined)) {
+    throw invalid('a test names its project with a value that is not a string');
+  }
+  const byId = id === undefined ? undefined : projects.byId.get(id);
+  if (id !== undefined && byId === undefined) {
+    throw variantInvalid('a test names a project id the report does not declare');
+  }
+  const byName = name === undefined ? undefined : projects.byName.get(name);
+  if (byName !== undefined && byId !== undefined && byName.index !== byId.index) {
+    throw invalid('a test names a project id and a project name that are different projects');
+  }
+  const entry = byId ?? byName;
+  if (entry === undefined) {
+    throw variantInvalid('a test belongs to a project with no variant params hash');
+  }
+  return entry;
 }
 
 /**
@@ -209,11 +256,18 @@ function isCanonicalCaseId(value: string): boolean {
 /**
  * The report's file is relative to the Playwright root dir. Backslashes are normalised so a
  * Windows-shaped path is judged by the same rule, and any `..` that would climb above the
- * root, a drive letter or a leading slash refuses: only a path under the root is accepted.
+ * root, a drive-qualified absolute path or a leading slash refuses: only a path under the
+ * root is accepted.
  */
 function projectRelativePath(raw: string): string {
+  if (CONTROL_CHARACTERS.test(raw)) {
+    throw invalid('a spec file path contains a control character');
+  }
+  if (/^[A-Za-z]:[\\/]/.test(raw)) {
+    throw outsideRoot('a spec file is named by an absolute path');
+  }
   const file = raw.replaceAll('\\', '/');
-  if (file.startsWith('/') || /^[A-Za-z]:/.test(file)) {
+  if (file.startsWith('/')) {
     throw outsideRoot('a spec file is named by an absolute path');
   }
   const segments: string[] = [];
@@ -236,15 +290,26 @@ function projectRelativePath(raw: string): string {
   return segments.join('/');
 }
 
-function projectHashes(root: Record<string, unknown>, hashVariant: HashVariant): ProjectHashes {
+/**
+ * The project table: one entry per declared project, hashed from its variant params. A
+ * repeated id, or a repeated name with different params, would make a test's variant depend
+ * on declaration order, so both refuse.
+ */
+function projectTable(root: Record<string, unknown>, hashVariant: HashVariant): ProjectTable {
   const config = record(root['config']);
-  const projects = config === undefined ? undefined : array(config['projects']);
+  if (config === undefined) {
+    throw invalid('the report has no config object');
+  }
+  const projects = config['projects'] === undefined ? undefined : array(config['projects']);
   if (projects === undefined) {
     throw invalid('the report has no config.projects list');
   }
-  const byId = new Map<string, string>();
-  const byName = new Map<string, string>();
-  for (const raw of projects) {
+  if (projects.length > MAX_PROJECTS) {
+    throw inputTooLarge();
+  }
+  const byId = new Map<string, ProjectEntry>();
+  const byName = new Map<string, ProjectEntry>();
+  projects.forEach((raw, index) => {
     const project = record(raw);
     if (project === undefined) {
       throw invalid('the report has a malformed project');
@@ -253,15 +318,25 @@ function projectHashes(root: Record<string, unknown>, hashVariant: HashVariant):
     if (hash === undefined) {
       throw variantInvalid('a project declares variant params with no valid hash');
     }
+    const entry: ProjectEntry = { index, hash };
     const id = string(project['id']);
     const name = string(project['name']);
     if (id !== undefined) {
-      byId.set(id, hash);
+      if (byId.has(id)) {
+        throw invalid('the report declares one project id twice');
+      }
+      byId.set(id, entry);
     }
     if (name !== undefined) {
-      byName.set(name, hash);
+      const seen = byName.get(name);
+      if (seen !== undefined && seen.hash !== hash) {
+        throw invalid('the report declares one project name twice with different params');
+      }
+      if (seen === undefined) {
+        byName.set(name, entry);
+      }
     }
-  }
+  });
   return { byId, byName };
 }
 
@@ -271,6 +346,34 @@ function variantParams(metadata: unknown): unknown {
   const evidgate = meta === undefined ? undefined : record(meta['evidgate']);
   const params = evidgate === undefined ? undefined : evidgate['params'];
   return params === undefined || params === null ? {} : params;
+}
+
+/**
+ * A collection error means the reporter lost files, so the enumeration would silently miss
+ * tests. Only the count is reported: the entries repeat reporter paths and messages.
+ */
+function refuseCollectionErrors(errors: readonly unknown[]): void {
+  if (errors.length === 0) {
+    return;
+  }
+  throw invalid(`the report lists ${errors.length} collection errors, so its tests are incomplete`);
+}
+
+/** An absent key is an empty list; a present value of another shape is a malformed report. */
+function optionalArray(
+  owner: Record<string, unknown>,
+  key: string,
+  subject: string,
+): readonly unknown[] {
+  const value = owner[key];
+  if (value === undefined) {
+    return [];
+  }
+  const items = array(value);
+  if (items === undefined) {
+    throw invalid(`${subject} has a ${key} value that is not a list`);
+  }
+  return items;
 }
 
 async function realpathOrRefuse(path: string, subject: string): Promise<string> {
@@ -300,6 +403,13 @@ function readRefusal(failure: BoundedFileFailure): CliError {
   }
 }
 
+/** UTF-8 takes at most three bytes per UTF-16 unit, so only a large string is re-encoded. */
+function assertTextUnderCap(text: string): void {
+  if (text.length * 3 > MAX_REPORT_BYTES && Buffer.byteLength(text, 'utf8') > MAX_REPORT_BYTES) {
+    throw inputTooLarge();
+  }
+}
+
 /** Strict UTF-8: a repaired U+FFFD could turn an unreadable report into a different one. */
 function decode(bytes: Uint8Array): string {
   try {
@@ -318,9 +428,10 @@ function parseJson(text: string): unknown {
 }
 
 function inputTooLarge(): CliError {
-  return new CliError(`the list report is over ${MAX_REPORT_BYTES} bytes or ${MAX_TESTS} tests`, {
-    code: 'manifest_input_too_large',
-  });
+  return new CliError(
+    `the list report is over ${MAX_REPORT_BYTES} bytes, ${MAX_TESTS} tests or ${MAX_PROJECTS} projects`,
+    { code: 'manifest_input_too_large' },
+  );
 }
 
 function outsideRoot(message: string): CliError {

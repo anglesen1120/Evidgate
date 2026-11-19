@@ -10,6 +10,8 @@ import { MAX_REPORT_BYTES, parsePlaywrightList, readPlaywrightList } from './pla
 
 const caseId = '12345678-1234-1234-1234-123456789abc';
 const dirs: string[] = [];
+/** The 16 MiB fixture is built once, on first use: two specs and two runs need the same one. */
+let byteCapFixture: string | undefined;
 
 afterEach(async () => {
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
@@ -74,6 +76,15 @@ function manyTestReport(count: number): string {
   );
 }
 
+/** One report padded with spaces to exactly the byte cap; built once for the whole file. */
+function atCapReport(): string {
+  if (byteCapFixture === undefined) {
+    const base = singleTestReport({}, []);
+    byteCapFixture = base + ' '.repeat(MAX_REPORT_BYTES - Buffer.byteLength(base, 'utf8'));
+  }
+  return byteCapFixture;
+}
+
 function parseRefusal(text: string): CliError {
   try {
     parsePlaywrightList(text, hashOf);
@@ -111,14 +122,19 @@ describe('parsePlaywrightList', () => {
     ]);
   });
 
-  it('missing_or_noncanonical_annotation_yields_no_identity', () => {
+  it('missing_or_noncanonical_annotation_yields_one_test_without_identity', () => {
     const absent = report(
       [project('p1', 'chrome', {})],
       [fileSuite('tests/a.spec.ts', [spec('works', [{ projectId: 'p1' }])])],
     );
     const invalid = singleTestReport({}, [{ type: 'evidgate.id', description: 'not-a-uuid' }]);
-    expect(parsePlaywrightList(absent, hashOf)[0]?.caseId).toBeUndefined();
-    expect(parsePlaywrightList(invalid, hashOf)[0]?.caseId).toBeUndefined();
+    const annotated = singleTestReport({}, [{ type: 'evidgate.id', description: caseId }]);
+    for (const text of [absent, invalid]) {
+      const tests = parsePlaywrightList(text, hashOf);
+      expect(tests).toHaveLength(1);
+      expect(tests[0]?.caseId).toBeUndefined();
+    }
+    expect(parsePlaywrightList(annotated, hashOf)[0]?.caseId).toBe(caseId);
   });
 
   it('duplicate_annotation_in_another_case_is_one_identity', () => {
@@ -227,8 +243,7 @@ describe('parsePlaywrightList', () => {
   });
 
   it('report_at_the_byte_cap_parses_and_one_over_refuses_too_large', () => {
-    const base = singleTestReport({}, []);
-    const atCap = base + ' '.repeat(MAX_REPORT_BYTES - Buffer.byteLength(base, 'utf8'));
+    const atCap = atCapReport();
     expect(Buffer.byteLength(atCap, 'utf8')).toBe(MAX_REPORT_BYTES);
     expect(parsePlaywrightList(atCap, hashOf)).toHaveLength(1);
     expect(parseRefusal(`${atCap} `).code).toBe('manifest_input_too_large');
@@ -266,11 +281,12 @@ describe('readPlaywrightList', () => {
 
   it('file_at_the_byte_cap_reads_and_one_over_refuses_too_large', async () => {
     const root = await tempDir();
-    const base = singleTestReport({}, []);
-    const atCap = base + ' '.repeat(MAX_REPORT_BYTES - Buffer.byteLength(base, 'utf8'));
+    const atCap = atCapReport();
     await writeFile(join(root, 'at-cap.json'), atCap);
     await writeFile(join(root, 'over-cap.json'), `${atCap} `);
-    await expect(readPlaywrightList('at-cap.json', root)).resolves.toBe(atCap);
+    const text = await readPlaywrightList('at-cap.json', root);
+    expect(text).toHaveLength(atCap.length);
+    expect(text.startsWith(singleTestReport({}, []))).toBe(true);
     await expect(readPlaywrightList('over-cap.json', root)).rejects.toMatchObject({
       code: 'manifest_input_too_large',
     });

@@ -138,4 +138,26 @@ describe('mapTestsToMembers', () => {
     const error = refusal([{ ...test, variantHash: secret }]);
     expect(`${error.message}\n${(error.details ?? []).join('\n')}`).not.toContain(secret);
   });
+
+  it('short_file_and_title_are_described_whole', () => {
+    expect(refusal([withoutCaseId(test)]).details).toEqual([
+      'tests/checkout.spec.ts: checkout > pays',
+    ]);
+  });
+
+  it('long_file_and_each_long_title_segment_are_clipped_in_details', () => {
+    const long = 'x'.repeat(5_000);
+    const clipped = `${'x'.repeat(200)}…`;
+    const error = refusal([
+      {
+        ...withoutCaseId(test),
+        file: `${long}.spec.ts`,
+        titlePath: ['outer', long, 'pays'],
+      },
+    ]);
+    const detail = error.details?.[0] ?? '';
+    expect(detail).toBe(`${clipped}: outer > ${clipped} > pays`);
+    expect(error.message).toBe(`test ${detail} has no catalog member in suite revision suite-1`);
+    expect(error.message).not.toContain(long);
+  });
 });
