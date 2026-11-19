@@ -142,23 +142,12 @@ public sealed partial class ReconcileRunTests
     // ------------------------------------------------------------------ helpers: the faulted queue world
 
     /// <summary>The queue world of <see cref="StartWithQueueAsync"/> with the finisher and the acknowledgement breakable.</summary>
-    private async Task<IngestTestWorld> StartRetryWorldAsync(RetryFaults faults, string database, int attemptsSkip = 0)
-    {
-        var world = await IngestTestWorld.StartAsync(
-            _fixture,
-            IngestTestWorld.Writer(),
-            slots: 1,
+    private Task<IngestTestWorld> StartRetryWorldAsync(RetryFaults faults, string database, int attemptsSkip = 0) =>
+        StartWithQueueAsync(
+            attemptsSkip,
             database: database,
-            services: services =>
+            configure: services =>
             {
-                services.AddEvidgateTasks(new ConfigurationBuilder().Build());
-                services.AddSingleton<ReconcileCallCounter>();
-                services.RemoveAll<IRunReconciler>();
-                services.AddScoped<IRunReconciler>(provider => new CountingRunReconciler(
-                    new RunReconciler(
-                        provider.GetRequiredService<ITenantDb>(),
-                        provider.GetRequiredService<ITenantScopeAccessor>()),
-                    provider.GetRequiredService<ReconcileCallCounter>()));
                 services.AddScoped<ReconcileFinisher>();
                 services.RemoveAll<IReconcileFinisher>();
                 services.AddScoped<IReconcileFinisher>(provider =>
@@ -167,9 +156,6 @@ public sealed partial class ReconcileRunTests
                 services.AddSingleton<ITaskLeaseWriter>(provider =>
                     new LostAckLeaseWriter(ActivatorUtilities.CreateInstance<TaskLeaseWriter>(provider), faults));
             });
-
-        return await AnswerPlanOrDisposeAsync(world, attemptsSkip);
-    }
 
     /// <summary>A normal run whose collection is whole (one shard, three matching events) and its one queued trigger.</summary>
     private async Task<Guid> SeedCollectedRunTaskAsync(IngestTestWorld world)
