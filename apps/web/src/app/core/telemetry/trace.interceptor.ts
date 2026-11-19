@@ -20,6 +20,7 @@ import { inject } from '@angular/core';
 import { finalize, tap } from 'rxjs';
 
 import { isApiRequestUrl } from '../http/api-origin';
+import { isCappedBinaryCall } from '../http/binary-transport';
 import { exceedsBinaryCap } from '../http/http-client-fetch-binary';
 import { apiPathTemplate } from './api-path-template';
 import { TelemetryService } from './telemetry.service';
@@ -198,9 +199,9 @@ export const telemetryInterceptor: HttpInterceptorFn = (request, next) => {
     tap({
       next: (event: HttpEvent<unknown>) => {
         // The adapter refuses an over-cap capped reply after this interceptor has seen it; the
-        // span records that refusal instead of an ok response. Both capped directions set
-        // `reportProgress`, while a plain text call does not, so only the former is measured.
-        if (request.reportProgress && exceedsBinaryCap(event)) {
+        // span records that refusal instead of an ok response. Only calls the adapter capped
+        // carry the context marker; a caller's own `reportProgress` request is not measured.
+        if (isCappedBinaryCall(request) && exceedsBinaryCap(event)) {
           call.end(refusedBinaryResult(event));
           return;
         }
