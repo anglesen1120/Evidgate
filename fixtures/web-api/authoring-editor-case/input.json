@@ -1,0 +1,37 @@
+{
+  "operation_id": "getManualCase",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "ETag": "\"3\""
+  },
+  "latency_ms": 0,
+  "body": {
+    "case_id": "a4430000-0000-4000-8000-000000000001",
+    "code": "AUTH-001",
+    "checklist_item_id": "a4430000-0000-4000-8000-000000000011",
+    "node_id": "a4430000-0000-4000-8000-000000000012",
+    "title": "Sign in with a password",
+    "description": "Covers the password sign-in path of the fixture project.",
+    "precondition": "An active membership is seeded.",
+    "steps": [
+      {
+        "no": 1,
+        "action": "Open the sign-in page",
+        "expected": "The sign-in form renders",
+        "data": null
+      },
+      {
+        "no": 2,
+        "action": "Submit the seeded credentials",
+        "expected": "The project overview opens",
+        "data": "seeded@acme.test"
+      }
+    ],
+    "priority": "high",
+    "state": "draft",
+    "version": 3,
+    "created_at": "2026-11-01T09:00:00Z",
+    "updated_at": "2026-11-03T09:00:00Z"
+  }
+}

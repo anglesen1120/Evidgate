@@ -186,6 +186,11 @@ export const routes: Routes = [
             canMatch: [projectScopeGuard],
             children: [
               { path: '', pathMatch: 'full', redirectTo: 'overview' },
+              {
+                path: 'authoring/cases/:caseId',
+                loadChildren: () =>
+                  import('./features/authoring/editor/editor.routes').then((m) => m.routes),
+              },
               ...PROJECT_SCOPE_ENTRY_ROUTES,
             ],
           },

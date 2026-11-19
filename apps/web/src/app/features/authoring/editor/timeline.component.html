@@ -1,0 +1,356 @@
+<section class="grid min-w-0 gap-6">
+  <h2
+    #timelineHeading
+    tabindex="-1"
+    hlmCardTitle
+    [size]="'section'"
+    i18n="@@authoring.editor.timeline-heading"
+  >
+    Timeline · immutable history
+  </h2>
+  <p class="m-0 max-w-[75ch]" i18n="@@authoring.editor.timeline-intro">
+    Versions are newest first. Inspect stored snapshots or restore one as a new version. Restore
+    never rewrites earlier versions.
+  </p>
+  @if (!editor.canWrite()) {
+    <p id="case-restore-write-reason">{{ writeReason }}</p>
+  }
+  @if (editor.dirty()) {
+    <p class="m-0 text-sm" i18n="@@authoring.editor.timeline-draft">
+      Your unsaved Editor draft is retained. Restoring does not merge it; saving that draft still
+      checks its original ETag.
+    </p>
+  }
+  <div class="grid min-w-0 max-w-[75ch] gap-2">
+    <label hlmLabel for="case-history-filter" i18n="@@authoring.editor.history-filter"
+      >Filter loaded versions by reason</label
+    >
+    <input
+      hlmInput
+      id="case-history-filter"
+      [value]="filter()"
+      (input)="filter.set($event.target.value)"
+    />
+  </div>
+  @if (!store.selected()) {
+    <p
+      class="m-0 text-sm"
+      id="case-comparison-reason"
+      i18n="@@authoring.editor.comparison-prerequisite"
+    >
+      View one version before choosing a second version to compare.
+    </p>
+  }
+  <ng-template #metadata let-row let-stacked="stacked">
+    @if (virtualRows()) {
+      <div class="flex min-w-0 items-center gap-(--eg-space-2)">
+        <span class="shrink-0 whitespace-nowrap"
+          >{{ source(row.source) }} · {{ changeKind(row.change_kind) }}</span
+        >
+        <app-data-table-value
+          class="min-w-0 flex-1"
+          [value]="row.reason || noReason"
+          [truncate]="!stacked"
+          [fixedRow]="true"
+        />
+      </div>
+    } @else {
+      <div class="grid min-w-0 gap-2 text-sm wrap-anywhere">
+        <p class="m-0">{{ source(row.source) }} · {{ changeKind(row.change_kind) }}</p>
+        <app-absolute-time [value]="row.created_at" />
+        <app-copyable-identifier [value]="row.version_id" [label]="versionLabel" />
+        @if (row.author) {
+          <app-copyable-identifier [value]="row.author" [label]="authorLabel" />
+        } @else {
+          <p class="m-0 text-muted-foreground">{{ noAuthor }}</p>
+        }
+        <p class="m-0 whitespace-pre-wrap">{{ row.reason || noReason }}</p>
+      </div>
+    }
+  </ng-template>
+  <ng-template #actions let-row>
+    <div class="flex gap-2" [class.flex-wrap]="!virtualRows()" [class.flex-nowrap]="virtualRows()">
+      <button
+        hlmBtn
+        [variant]="'outline'"
+        type="button"
+        class="min-h-(--eg-control-touch)"
+        [class.whitespace-normal]="!virtualRows()"
+        [class.whitespace-nowrap]="virtualRows()"
+        [attr.data-inspect-version]="row.version_id"
+        (click)="store.selectVersion(row.version_id)"
+        i18n="@@authoring.editor.inspect-version"
+      >
+        View version {{ row.version_no }}
+      </button>
+      <button
+        hlmBtn
+        [variant]="'ghost'"
+        type="button"
+        class="min-h-(--eg-control-touch)"
+        [class.whitespace-normal]="!virtualRows()"
+        [class.whitespace-nowrap]="virtualRows()"
+        [attr.data-compare-version]="row.version_id"
+        [disabled]="!store.selected() || store.selected() === row.version_id"
+        [attr.aria-describedby]="!store.selected() ? 'case-comparison-reason' : null"
+        (click)="store.compareVersion(row.version_id)"
+        i18n="@@authoring.editor.compare-version"
+      >
+        Compare with {{ row.version_no }}
+      </button>
+    </div>
+  </ng-template>
+  @if (store.history.error() && historyStatus() === 'ready') {
+    <p i18n="@@authoring.editor.history-partial">
+      Loading more versions failed. Previously loaded versions are retained.
+    </p>
+    <app-request-state
+      [status]="'error'"
+      [error]="errorOf(store.history.error())"
+      [retryEligible]="true"
+      (retry)="store.history.reload()"
+    />
+  }
+  <app-request-state
+    [status]="historyStatus()"
+    [error]="errorOf(store.history.error())"
+    [empty]="rows().length === 0"
+    [emptyTitle]="filter() ? noMatch : empty"
+    [retryEligible]="true"
+    (retry)="store.history.reload()"
+  >
+    @if (rows().length > 200) {
+      <app-data-table
+        [rows]="rows()"
+        [columns]="columns()"
+        [rowId]="rowId"
+        [caption]="historyTitle"
+        [fixedHeightCells]="true"
+      />
+    } @else {
+      <ol class="m-0 grid min-w-0 list-none gap-6 border-l border-border pl-4">
+        @for (row of rows(); track row.version_id) {
+          <li class="grid min-w-0 gap-3" [attr.data-version-row]="row.version_id">
+            <h3
+              hlmCardTitle
+              [size]="'subsection'"
+              tabindex="-1"
+              [attr.data-version-heading]="row.version_no"
+              i18n="@@authoring.editor.version-number"
+            >
+              Version {{ row.version_no }}
+            </h3>
+            <ng-container
+              [ngTemplateOutlet]="metadata"
+              [ngTemplateOutletContext]="{ $implicit: row }"
+            />
+            <ng-container
+              [ngTemplateOutlet]="actions"
+              [ngTemplateOutletContext]="{ $implicit: row }"
+            />
+          </li>
+        }
+      </ol>
+    }
+  </app-request-state>
+  @if (historyStatus() === 'ready') {
+    <div class="grid gap-3">
+      <p class="m-0 text-sm tabular-nums" i18n="@@authoring.editor.loaded-count">
+        {{ store.rows().length }} versions loaded
+      </p>
+      <button
+        hlmBtn
+        [variant]="'outline'"
+        type="button"
+        class="min-h-(--eg-control-touch) justify-self-start whitespace-normal"
+        data-versions-more
+        [disabled]="!store.nextCursor() || store.history.isLoading() || store.cursorCycle()"
+        (click)="store.loadMore()"
+        i18n="@@authoring.editor.load-more"
+      >
+        Load more
+      </button>
+      @if (store.history.isLoading()) {
+        <p role="status" i18n="@@authoring.editor.loading-more">Loading older versions…</p>
+      }
+      @if (store.cursorCycle()) {
+        <p role="alert" i18n="@@authoring.editor.cursor-cycle">
+          The server repeated a page cursor. Refresh the timeline before loading more.
+        </p>
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          type="button"
+          (click)="store.refresh()"
+          i18n="@@authoring.editor.refresh-timeline"
+        >
+          Refresh timeline
+        </button>
+      }
+    </div>
+  }
+  @if (store.selected()) {
+    <app-request-state
+      [status]="store.detail.isLoading() ? 'loading' : store.detail.error() ? 'error' : 'ready'"
+      [error]="errorOf(store.detail.error())"
+      [retryEligible]="true"
+      (retry)="store.detail.reload()"
+    >
+      @if (store.versionDetail(); as detail) {
+        <section class="grid min-w-0 gap-4 border-t border-border pt-6" data-editor-version-detail>
+          <h3 hlmCardTitle [size]="'subsection'" i18n="@@authoring.editor.detail-heading">
+            Version {{ detail.view.version_no }} · read-only snapshot
+          </h3>
+          <app-copyable-identifier [value]="detail.view.version_id" [label]="versionLabel" />
+          <app-copyable-identifier [value]="detail.etag" [label]="etagLabel" />
+          <app-absolute-time [value]="detail.view.created_at" />
+          @if (detail.view.author) {
+            <app-copyable-identifier [value]="detail.view.author" [label]="authorLabel" />
+          } @else {
+            <p class="m-0 text-muted-foreground">{{ noAuthor }}</p>
+          }
+          <pre
+            class="m-0 max-h-[60vh] overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-muted p-4 text-sm wrap-anywhere"
+            tabindex="0"
+            [attr.aria-label]="contentLabel"
+            >{{ snapshot(detail.view.content) }}</pre>
+          <button
+            hlmBtn
+            [variant]="'outline'"
+            type="button"
+            class="min-h-(--eg-control-touch) justify-self-start whitespace-normal"
+            data-restore-open
+            [disabled]="blocked()"
+            [attr.aria-describedby]="!editor.canWrite() ? 'case-restore-write-reason' : null"
+            (click)="openRestore($event)"
+            i18n="@@authoring.editor.restore-open"
+          >
+            Restore version {{ detail.view.version_no }} as a new version
+          </button>
+        </section>
+      }
+    </app-request-state>
+  }
+  @if (store.compared()) {
+    <app-request-state
+      [status]="
+        store.comparison.isLoading() ? 'loading' : store.comparison.error() ? 'error' : 'ready'
+      "
+      [error]="errorOf(store.comparison.error())"
+      [retryEligible]="true"
+      (retry)="store.comparison.reload()"
+    >
+      @defer (when store.versionDetail() && store.comparedDetail()) {
+        <app-editor-version-diff [left]="store.comparedDetail()" [right]="store.versionDetail()" />
+      } @placeholder {
+        <p i18n="@@authoring.editor.diff-loading">Loading snapshot comparison…</p>
+      }
+    </app-request-state>
+  }
+  <p #timelineStatus class="m-0 min-h-(--eg-leading-sm) text-sm" role="status" tabindex="-1">
+    @if (store.appendedVersion() > 0) {
+      @if (store.refreshRequired()) {
+        <span i18n="@@authoring.editor.restore-refresh"
+          >Restore was confirmed, but the appended version is not yet visible. Refresh the
+          timeline.</span
+        >
+      } @else {
+        <span data-editor-restored i18n="@@authoring.editor.restored"
+          >Version {{ store.appendedVersion() }} was appended. Earlier versions are unchanged.</span
+        >
+      }
+    }
+  </p>
+  @if (store.refreshRequired()) {
+    <button
+      hlmBtn
+      [variant]="'outline'"
+      type="button"
+      (click)="store.refresh()"
+      i18n="@@authoring.editor.refresh-timeline"
+    >
+      Refresh timeline
+    </button>
+  }
+</section>
+<hlm-dialog
+  [state]="confirmation() ? 'open' : 'closed'"
+  [autoFocus]="'[data-restore-cancel]'"
+  [restoreFocus]="false"
+  (closed)="closed()"
+  (stateChanged)="$event === 'closed' && confirmation.set(null)"
+>
+  <hlm-dialog-content
+    *hlmDialogPortal
+    [showCloseButton]="false"
+    class="max-h-[calc(100dvh-var(--eg-space-8))] overflow-y-auto"
+  >
+    <div class="grid min-w-0 gap-4" [attr.aria-busy]="store.restoring()">
+      <header hlmDialogHeader>
+        <h2 hlmDialogTitle i18n="@@authoring.editor.restore-title">Restore as a new version?</h2>
+        <p hlmDialogDescription i18n="@@authoring.editor.restore-description">
+          This replaces the live case content with the selected stored snapshot and appends a
+          version. Earlier versions remain unchanged.
+        </p>
+      </header>
+      <p #restoreStatus class="m-0 min-h-(--eg-leading-sm) text-sm" role="status" tabindex="-1">
+        @if (store.restoring()) {
+          <span i18n="@@authoring.editor.restoring">Restoring version…</span>
+        }
+      </p>
+      @if (store.versionDetail(); as detail) {
+        <p i18n="@@authoring.editor.restore-source">Source version {{ detail.view.version_no }}</p>
+        <app-copyable-identifier [value]="detail.view.version_id" [label]="versionLabel" />
+        <pre
+          class="max-h-[30vh] overflow-y-auto whitespace-pre-wrap text-sm wrap-anywhere"
+          tabindex="0"
+          [attr.aria-label]="contentLabel"
+          >{{ snapshot(detail.view.content) }}</pre>
+      }
+      <div class="grid min-w-0 gap-2">
+        <label hlmLabel for="case-restore-reason" i18n="@@authoring.editor.restore-reason"
+          >Restore reason</label
+        >
+        <input
+          hlmInput
+          id="case-restore-reason"
+          disabled
+          [aria-describedby]="'case-restore-reason-unavailable'"
+        />
+        <p id="case-restore-reason-unavailable" class="m-0 text-sm text-muted-foreground">
+          {{ reasonUnavailable }}
+        </p>
+      </div>
+      @if (store.failure(); as failure) {
+        <app-request-state
+          [status]="'error'"
+          [error]="failure"
+          [retryEligible]="!blocked()"
+          (retry)="restore()"
+        />
+      }
+      <footer hlmDialogFooter>
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          type="button"
+          data-restore-cancel
+          (click)="confirmation.set(null)"
+          i18n="@@authoring.editor.cancel"
+        >
+          Cancel
+        </button>
+        <button
+          hlmBtn
+          type="button"
+          data-restore-confirm
+          [disabled]="blocked()"
+          (click)="restore()"
+          i18n="@@authoring.editor.restore-confirm"
+        >
+          Restore as new version
+        </button>
+      </footer>
+    </div>
+  </hlm-dialog-content>
+</hlm-dialog>

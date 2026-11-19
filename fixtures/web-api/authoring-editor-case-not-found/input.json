@@ -1,0 +1,17 @@
+{
+  "operation_id": "getManualCase",
+  "variant": "not-found",
+  "status": 404,
+  "headers": {
+    "X-Request-Id": "a4430000-0000-4000-8000-000000000052"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "not_found",
+      "message": "The review fixture request was refused.",
+      "request_id": "a4430000-0000-4000-8000-000000000900",
+      "retryable": false
+    }
+  }
+}

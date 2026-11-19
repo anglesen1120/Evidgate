@@ -25,6 +25,7 @@ import { FormErrorSummaryComponent } from '../../../shared/forms/form-error-summ
 import { PageHeaderComponent } from '../../../shared/ui/page-header/page-header.component';
 import { DesktopRequiredNoticeComponent, NarrowMutationPolicy } from '../../../shared/ui/narrow';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
+import { ForbiddenPatternComponent } from '../../../shared/ui/states/forbidden-pattern.component';
 import { ConflictDialogComponent } from '../../../shared/ui/conflict/conflict-dialog.component';
 import { isApiRequestError } from '../../../core/http/api-error';
 import { AiSettingsHistoryComponent } from './ai-settings-history.component';
@@ -55,6 +56,7 @@ function headingLevel(data: Record<string, unknown>): number {
     PageHeaderComponent,
     DesktopRequiredNoticeComponent,
     RequestStateComponent,
+    ForbiddenPatternComponent,
     ConflictDialogComponent,
     AiSettingsHistoryComponent,
     AbsoluteTimeComponent,
@@ -86,7 +88,6 @@ export class AiSettingsPage {
   private readonly readOnlyHeading = viewChild<ElementRef<HTMLElement>>('readOnlyHeading');
   private lastFocused: Element | null = null;
   protected readonly status = computed(() => {
-    if (!this.store.scope()) return 'error';
     const error = this.store.error();
     if (
       error?.kind === 'forbidden' ||

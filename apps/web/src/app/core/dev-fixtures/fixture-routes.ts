@@ -159,6 +159,24 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
     method: 'GET',
     path: '/projects/{p}/ai-settings/templates',
   },
+  // The manual-case editor. One path serves the read and the save, so the method separates them;
+  // the timeline's cursor is the value the editor scenario itself issues, never a corpus one.
+  { operationId: 'getManualCase', method: 'GET', path: '/projects/{p}/authoring/manual-cases/{m}' },
+  {
+    operationId: 'updateManualCase',
+    method: 'PATCH',
+    path: '/projects/{p}/authoring/manual-cases/{m}',
+  },
+  {
+    operationId: 'getAuthoringVersion',
+    method: 'GET',
+    path: '/projects/{p}/authoring/versions/{v}',
+  },
+  {
+    operationId: 'restoreAuthoringVersion',
+    method: 'POST',
+    path: '/projects/{p}/authoring/versions/{v}/restore',
+  },
   { operationId: 'listPermissions', method: 'GET', path: '/permissions' },
   { operationId: 'listRoles', method: 'GET', path: '/roles' },
   { operationId: 'listMyOrganizations', method: 'GET', path: '/orgs' },
