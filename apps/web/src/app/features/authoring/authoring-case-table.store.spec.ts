@@ -3,6 +3,7 @@ import type { ManualCaseListItemDto, ManualCaseListResponse } from '@evidgate/sd
 import { firstValueFrom, Subject } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiRequestError } from '../../core/http/api-error';
+import { RETAINED_ROWS_CAP } from '../../shared/keyset-retention';
 import { apiError } from '../../shared/testing/http-data.testing';
 import { AuthoringDataService } from './authoring-data.service';
 import { AuthoringCaseTableStore } from './authoring-case-table.store';
@@ -192,6 +193,25 @@ describe('AuthoringCaseTableStore', () => {
     await store.init('project', { q: 'narrower' });
     expect(store.browseCapped()).toBe(false);
     expect(store.rows()).toHaveLength(1);
+  });
+
+  it('caps at the injected retained-row bound rather than one compiled in', async () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        AuthoringCaseTableStore,
+        { provide: AuthoringDataService, useValue: { listManualCases: list } },
+        { provide: RETAINED_ROWS_CAP, useValue: 3 },
+      ],
+    });
+    list.mockReset().mockResolvedValueOnce(page(['1', '2', '3', '4'], 'more'));
+    const capped = TestBed.inject(AuthoringCaseTableStore);
+
+    await capped.init('project', {});
+
+    expect(capped.rows().map((item) => item.case_id)).toEqual(['1', '2', '3']);
+    expect(capped.browseCapped()).toBe(true);
+    expect(capped.nextCursor()).toBeNull();
   });
 
   it('accepts the exact-cap continuation cursor and retains the cap notice after failed Refresh', async () => {

@@ -10,11 +10,25 @@
 // Dev-only: production code must never import this file. `scripts/check-no-fixture-code.mjs` fails
 // the production build on any fixture marker string surviving in `dist/`.
 
-import type { EnvironmentProviders } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import { inject, makeEnvironmentProviders, type EnvironmentProviders } from '@angular/core';
 
+import { DEFAULT_RETAINED_ROWS_CAP, RETAINED_ROWS_CAP } from '../../shared/keyset-retention';
+import { retainedRowsCapSeed } from './fixture-browse-cap';
 import { provideFixtureBackend } from './fixture-backend';
 
-/** The `fixtures` configuration: answer every API request from the fixture corpus. */
+/**
+ * The `fixtures` configuration: answer every API request from the fixture corpus, and let a spec
+ * shrink the retained-row cap with `?fixture.retainedRowsCap=` so a cap-path run pages a handful
+ * of rows. This module is the only place that overrides the cap, and the build swaps it away.
+ */
 export function provideDevBackend(): EnvironmentProviders {
-  return provideFixtureBackend();
+  return makeEnvironmentProviders([
+    provideFixtureBackend(),
+    {
+      provide: RETAINED_ROWS_CAP,
+      useFactory: (document = inject(DOCUMENT)): number =>
+        retainedRowsCapSeed(document.location.search) ?? DEFAULT_RETAINED_ROWS_CAP,
+    },
+  ]);
 }

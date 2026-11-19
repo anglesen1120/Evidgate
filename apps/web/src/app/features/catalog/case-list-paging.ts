@@ -92,6 +92,8 @@ export interface CasePaging {
 
 /** The read state one paging action advances. */
 interface PagingRun {
+  /** The retained-row cap every page of this list keeps; injected once when paging starts. */
+  readonly cap: number;
   /** Bumped by every reset: a read of an older generation never writes state. */
   generation: number;
   firstPage: AbortController | null;
@@ -134,7 +136,7 @@ function readFirstPage(
   void data.list(projectId, query, controller.signal).then(
     (page) => {
       if (sequence !== run.generation) return;
-      const retained = retainKeysetRows(page.items, page.next_cursor);
+      const retained = retainKeysetRows(page.items, page.next_cursor, run.cap);
       run.seen = new Set(retained.rows.map((row) => row.id));
       host.patch({
         phase: 'ready',
@@ -175,7 +177,7 @@ function appendPage(
     host.patch({ paging: false, pagingError: step.error });
     return false;
   }
-  const retained = retainKeysetRows([...host.rows(), ...step.fresh], step.nextCursor);
+  const retained = retainKeysetRows([...host.rows(), ...step.fresh], step.nextCursor, run.cap);
   run.seen = retained.capped ? new Set(retained.rows.map((row) => row.id)) : step.seen;
   host.patch({
     paging: false,
@@ -213,8 +215,13 @@ async function readNextPage(
   return appendPage(run, host, cursor, page);
 }
 
-export function createCasePaging(host: CasePagingHost, data: CaseListDataService): CasePaging {
+export function createCasePaging(
+  host: CasePagingHost,
+  data: CaseListDataService,
+  cap: number,
+): CasePaging {
   const run: PagingRun = {
+    cap,
     generation: 0,
     firstPage: null,
     nextPage: null,

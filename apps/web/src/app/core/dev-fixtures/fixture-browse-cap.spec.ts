@@ -2,6 +2,7 @@ import { expect, test } from 'vitest';
 import {
   browseCapFixturePage,
   findBrowseCapFixture,
+  retainedRowsCapSeed,
   type BrowseCapOperation,
 } from './fixture-browse-cap';
 import { isRecord, VALIDATOR } from './fixture-contract.support';
@@ -36,6 +37,23 @@ for (const operation of ['listCases', 'listManualCases', 'listAuthoringTree'] as
     ).toBeGreaterThan(0);
   });
 }
+
+test('the cap seed accepts only a positive whole number and leaves the default otherwise', () => {
+  expect(retainedRowsCapSeed('?fixture.retainedRowsCap=25')).toBe(25);
+  expect(
+    retainedRowsCapSeed('?fixture.variant.listCases=browse-cap&fixture.retainedRowsCap=25'),
+  ).toBe(25);
+  for (const search of [
+    '',
+    '?fixture.retainedRowsCap=',
+    '?fixture.retainedRowsCap=0',
+    '?fixture.retainedRowsCap=-3',
+    '?fixture.retainedRowsCap=2.5',
+    '?fixture.retainedRowsCap=many',
+  ]) {
+    expect(retainedRowsCapSeed(search)).toBeNull();
+  }
+});
 
 test('the cap seam requires its variant and refuses malformed cursors, limits and addressed reads', () => {
   const paths: readonly [string, BrowseCapOperation][] = [

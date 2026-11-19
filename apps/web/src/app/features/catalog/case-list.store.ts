@@ -12,6 +12,7 @@ import type { CaseDto } from '@evidgate/sdk';
 import type { ApiError } from '../../core/http/api-error';
 import { CaseListDataService, type CaseListQuery } from '../../core/data/case-list-data.service';
 import { SessionStore } from '../../core/session/session.store';
+import { RETAINED_ROWS_CAP } from '../../shared/keyset-retention';
 import { createCaseOwner, type CaseOwnerOp } from './case-list-owner';
 import { createCasePaging, pageSizeFrom, sameServerState } from './case-list-paging';
 
@@ -94,6 +95,7 @@ export const CaseListStore = signalStore(
         patch: (patch) => patchState(store, patch),
       },
       data,
+      inject(RETAINED_ROWS_CAP),
     );
     const owner = createCaseOwner(
       {

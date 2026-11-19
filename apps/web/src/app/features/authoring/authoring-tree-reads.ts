@@ -81,6 +81,8 @@ interface ReadToken {
 }
 
 interface ReadsRun {
+  /** The retained-row cap every page of this tree keeps; injected once when the reads start. */
+  readonly cap: number;
   generation: number;
   readonly roots: ReadStream;
   readonly selection: ReadStream;
@@ -160,7 +162,7 @@ async function loadRoots(
     const page = await data.listTree(projectId, {}, token.signal);
     if (!live(run, token, run.roots)) return;
     host.patch({
-      roots: readyNodePage(page.items, page.next_cursor),
+      roots: readyNodePage(page.items, page.next_cursor, run.cap),
       rootsStale: false,
     });
   } catch (error) {
@@ -203,7 +205,7 @@ async function followRoots(
       return false;
     }
     host.patch({
-      roots: readyNodePage([...page.items, ...step.fresh], step.nextCursor),
+      roots: readyNodePage([...page.items, ...step.fresh], step.nextCursor, run.cap),
     });
     return true;
   } catch (error) {
@@ -243,7 +245,7 @@ async function loadSelection(
       selectionStale: false,
       children: {
         ...host.children(),
-        [nodeId]: selectionNodePage(host.children()[nodeId], page.items, page.next_cursor),
+        [nodeId]: selectionNodePage(host.children()[nodeId], page.items, page.next_cursor, run.cap),
       },
     });
   } catch (error) {
@@ -275,7 +277,7 @@ async function loadChildren(
     host.patch({
       children: {
         ...host.children(),
-        [parentId]: readyNodePage(page.items, page.next_cursor),
+        [parentId]: readyNodePage(page.items, page.next_cursor, run.cap),
       },
     });
   } catch (error) {
@@ -338,7 +340,7 @@ async function followChildren(
     host.patch({
       children: {
         ...host.children(),
-        [parentId]: readyNodePage([...page.items, ...step.fresh], step.nextCursor),
+        [parentId]: readyNodePage([...page.items, ...step.fresh], step.nextCursor, run.cap),
       },
     });
     return true;
@@ -399,8 +401,13 @@ function reset(run: ReadsRun, host: ReadsHost, projectId: string): void {
  * expanded branch). A stream aborts its previous controller and keeps a sequence, so a response
  * that outlives a newer request — or a project switch — never writes state.
  */
-export function createTreeReads(host: ReadsHost, data: AuthoringDataService): TreeReads {
+export function createTreeReads(
+  host: ReadsHost,
+  data: AuthoringDataService,
+  cap: number,
+): TreeReads {
   const run: ReadsRun = {
+    cap,
     generation: 0,
     roots: { sequence: 0, controller: null },
     selection: { sequence: 0, controller: null },
