@@ -36,6 +36,10 @@ class TableHarness extends ComponentHarness {
   readonly error = this.locatorForOptional('app-error-pattern');
   readonly wait = this.locatorForOptional('app-retry-after');
   readonly retry = this.locatorFor('app-retry-after button');
+  readonly retryOptional = this.locatorForOptional('app-retry-after button');
+  readonly moreOptional = this.locatorForOptional('[data-case-load-more]');
+  readonly invalidLink = this.locatorForOptional('[data-case-invalid-link]');
+  readonly capped = this.locatorForOptional('[data-case-browse-capped]');
   readonly clearEmpty = this.locatorFor('app-empty-pattern button');
 }
 
@@ -171,6 +175,38 @@ describe('AuthoringCaseTableComponent', () => {
     expect(await (await harness.itemError()).text()).toContain('complete checklist UUID');
     expect(await (await harness.apply()).getAttribute('disabled')).not.toBeNull();
   });
+
+  it('renders an invalid checklist link without silently requesting the unfiltered scope', async () => {
+    query.next(convertToParamMap({ item_id: 'not-a-uuid' }));
+    const harness = await mount();
+    expect(await (await harness.invalidLink())?.text()).toContain('Invalid checklist link');
+    expect(await harness.empty()).toBeNull();
+    expect(await harness.retryOptional()).toBeNull();
+    expect(list).not.toHaveBeenCalled();
+  });
+
+  it('retains cases but removes Retry and load-more after a non-advancing page', async () => {
+    list
+      .mockResolvedValueOnce({ items: [caseRow('1')], next_cursor: 'same' })
+      .mockResolvedValueOnce({ items: [caseRow('2')], next_cursor: 'same' });
+    const harness = await mount();
+    await (await harness.loadMore()).click();
+    expect(await harness.moreOptional()).toBeNull();
+    expect(await harness.retryOptional()).toBeNull();
+    expect(await (await harness.host()).text()).toContain('SHOP-1');
+    expect(await (await harness.host()).text()).toContain('server repeated the case cursor');
+  });
+
+  it('shows a filter hint instead of load-more when the retained case cap is reached', async () => {
+    list.mockResolvedValueOnce({
+      items: Array.from({ length: 10_001 }, (_, i) => caseRow(String(i))),
+      next_cursor: 'more',
+    });
+    const harness = await mount();
+    expect(await (await harness.capped())?.text()).toContain('Narrow the filters');
+    expect(await harness.moreOptional()).toBeNull();
+    expect(await harness.retryOptional()).toBeNull();
+  }, 20_000);
 
   it('accepts 200 Unicode characters but announces and refuses a 201-character query', async () => {
     query.next(convertToParamMap({ q: '😀'.repeat(200) }));

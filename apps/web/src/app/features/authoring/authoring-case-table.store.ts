@@ -14,7 +14,12 @@ import type { ManualCaseQuery } from '../../core/data/authoring-reads.service';
 import { createRetryAfterWait } from '../../core/http/retry';
 import { takeKeysetPage } from '../../shared/keyset-walk';
 import { AuthoringDataService } from './authoring-data.service';
-import { manualCaseQuery, queryTooLong, type CaseQueryParams } from './authoring-case-filters';
+import {
+  isCaseUuid,
+  manualCaseQuery,
+  queryTooLong,
+  type CaseQueryParams,
+} from './authoring-case-filters';
 
 interface CaseTableState {
   projectId: string | null;
@@ -27,6 +32,10 @@ interface CaseTableState {
   error: ApiError | null;
   loadingMore: boolean;
   stale: boolean;
+  /** True while the loaded list is at its retained-row bound and the server had more. */
+  browseCapped: boolean;
+  /** True when the route names a checklist id that cannot be a UUID: no read was made. */
+  invalidLink: boolean;
   /** The read that failed, so Retry replays it instead of restarting the walk. */
   failedRead: { readonly cursor: string | null; readonly append: boolean } | null;
 }
@@ -55,6 +64,23 @@ const REFUSALS = {
   ),
 };
 
+/** A route naming a checklist id that cannot be a UUID: the request is refused, never widened. */
+const INVALID_ITEM: ApiError = {
+  ...failure(
+    'invalid_item_id',
+    $localize`:@@authoring.case-table.invalid-item-link:This link's checklist ID is not a UUID, so no case list was requested. Open the checklist from the feature tree.`,
+  ),
+  kind: 'validation',
+  retryable: false,
+};
+
+/**
+ * The most cases one list keeps in hand. W7 promises cursor paging past 200 rows, so the bound
+ * is high enough for a working scope; reaching it is an ordinary bounded outcome the list
+ * announces, not a failure, because the only recovery is a narrower filter or another scope.
+ */
+export const CASE_ROWS_CAP = 10_000;
+
 export const AuthoringCaseTableStore = signalStore(
   withState<CaseTableState>({
     projectId: null,
@@ -67,6 +93,8 @@ export const AuthoringCaseTableStore = signalStore(
     error: null,
     loadingMore: false,
     stale: false,
+    browseCapped: false,
+    invalidLink: false,
     failedRead: null,
   }),
   withProps(() => ({
@@ -106,13 +134,21 @@ export const AuthoringCaseTableStore = signalStore(
           error: step.error,
           status: retained ? 'ready' : 'error',
           stale: retained,
+          // A page that cannot advance the walk leaves no cursor to follow: the control that
+          // could only repeat the same request is gone, and Retry has no failed read to replay.
+          nextCursor: null,
           failedRead: null,
         });
         return null;
       }
+      const combined = append ? [...store.rows(), ...step.fresh] : step.fresh;
+      const rows = combined.length > CASE_ROWS_CAP ? combined.slice(0, CASE_ROWS_CAP) : combined;
+      const capped =
+        rows.length < combined.length || (step.nextCursor !== null && rows.length >= CASE_ROWS_CAP);
       patchState(store, {
-        rows: append ? [...store.rows(), ...step.fresh] : step.fresh,
-        nextCursor: step.nextCursor,
+        rows,
+        nextCursor: capped ? null : step.nextCursor,
+        browseCapped: capped,
         routeCursor: cursor,
         status: 'ready',
         stale: false,
@@ -120,11 +156,12 @@ export const AuthoringCaseTableStore = signalStore(
         failedRead: null,
       });
       store._wait.clear();
-      return cursor;
+      return capped ? null : cursor;
     }
     async function read(append: boolean, cursorOverride?: string): Promise<string | null> {
       const projectId = store.projectId();
       if (!projectId || !store._wait.ready() || store.loadingMore()) return null;
+      if (store.invalidLink() || store.browseCapped()) return null;
       const cursor = cursorOverride ?? (append ? store.nextCursor() : store.routeCursor());
       if (append && !cursor) return null;
       // Every read restates the search guard: a URL-supplied or stale value never reaches the wire.
@@ -177,7 +214,11 @@ export const AuthoringCaseTableStore = signalStore(
       async init(projectId: string, raw: CaseQueryParams): Promise<void> {
         const query = manualCaseQuery(raw);
         const { cursor, ...scope } = query;
-        const scopeKey = JSON.stringify([projectId, scope]);
+        const namedItem = raw['item_id'] ?? '';
+        const invalidLink = namedItem !== '' && !isCaseUuid(namedItem);
+        // A refused link is a scope of its own: the unfiltered list an earlier visit loaded must
+        // not stand in for a filter the route asked for.
+        const scopeKey = JSON.stringify([projectId, scope, invalidLink ? namedItem : null]);
         if (scopeKey === store.scopeKey() && (cursor ?? null) === store.routeCursor()) return;
         abort();
         store._wait.clear();
@@ -190,14 +231,17 @@ export const AuthoringCaseTableStore = signalStore(
           nextCursor: null,
           loadingMore: false,
           stale: false,
-          error: null,
+          browseCapped: false,
+          invalidLink,
+          error: invalidLink ? INVALID_ITEM : null,
+          status: invalidLink ? 'error' : 'loading',
           failedRead: null,
         });
         await read(false);
       },
       async reload(): Promise<void> {
         // Explicit refresh restarts the walk; keeping a page cursor would drop the pages before it.
-        patchState(store, { routeCursor: null });
+        patchState(store, { routeCursor: null, browseCapped: false });
         await read(false);
       },
       retry: (): Promise<string | null> => {

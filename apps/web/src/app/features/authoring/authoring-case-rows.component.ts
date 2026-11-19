@@ -81,10 +81,10 @@ export class AuthoringCaseRowsComponent {
     return rows.slice(start, end);
   });
   protected readonly selected = linkedSignal(() => {
-    // New result rows and a new visible window reset the selection; a viewport-only narrow or
-    // widen transition must not, and narrow actions stay refused by `selectRow`/`selectVisible`.
+    // A new result replaces the selection; a window, page or layout change does not, because the
+    // table and the stacked records are two presentations of one result and selection is keyed
+    // by case id. Narrow actions stay refused by `selectRow`/`selectVisible`.
     this.rows();
-    this.visibleRows();
     return new Set<string>();
   });
   protected readonly selectedCount = computed(

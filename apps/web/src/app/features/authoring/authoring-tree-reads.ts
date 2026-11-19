@@ -250,7 +250,7 @@ async function followRoots(
       refusals: CURSOR_REFUSALS,
     });
     if (step.outcome === 'refused') {
-      host.patch({ roots: { ...page, status: 'ready', error: step.error } });
+      host.patch({ roots: { ...page, status: 'ready', error: step.error, nextCursor: null } });
       return false;
     }
     host.patch({
@@ -405,7 +405,7 @@ async function followChildren(
       host.patch({
         children: {
           ...host.children(),
-          [parentId]: { ...page, status: 'ready', error: step.error },
+          [parentId]: { ...page, status: 'ready', error: step.error, nextCursor: null },
         },
       });
       return false;

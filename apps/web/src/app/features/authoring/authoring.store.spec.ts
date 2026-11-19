@@ -346,6 +346,42 @@ describe('AuthoringStore', () => {
     expect(store.children()[ROOT.node_id]?.nextCursor).toBeNull();
   });
 
+  it('ends a roots walk at the repeated cursor instead of offering the same page again', async () => {
+    listTree.mockImplementation((_projectId, read) =>
+      Promise.resolve(read.cursor === 'next' ? page([ROOT, CHILD], 'next') : page([ROOT], 'next')),
+    );
+    const store = TestBed.inject(AuthoringStore);
+    await store.init('project');
+    await settle();
+
+    await expect(store.loadMoreChildren(null)).resolves.toBe(false);
+    expect(store.roots().error?.code).toBe('cursor_repeated');
+    expect(store.roots().nextCursor).toBeNull();
+    expect(store.roots().items).toEqual([ROOT]);
+    await expect(store.loadMoreChildren(null)).resolves.toBe(false);
+    expect(listTree).toHaveBeenCalledTimes(2);
+  });
+
+  it('ends a children walk at the repeated cursor instead of offering the same page again', async () => {
+    listTree.mockImplementation((_projectId, read) => {
+      if (read.parentId === undefined) return Promise.resolve(page([ROOT]));
+      if (read.cursor === 'more') return Promise.resolve(page([CHILD, SIBLING], 'more'));
+      return Promise.resolve(page([CHILD], 'more'));
+    });
+    const store = TestBed.inject(AuthoringStore);
+    await store.init('project');
+    await settle();
+    await store.expand(ROOT.node_id);
+    await settle();
+
+    await expect(store.loadMoreChildren(ROOT.node_id)).resolves.toBe(false);
+    expect(store.children()[ROOT.node_id]?.error?.code).toBe('cursor_repeated');
+    expect(store.children()[ROOT.node_id]?.nextCursor).toBeNull();
+    expect(store.children()[ROOT.node_id]?.items).toEqual([CHILD]);
+    await expect(store.loadMoreChildren(ROOT.node_id)).resolves.toBe(false);
+    expect(listTree).toHaveBeenCalledTimes(3);
+  });
+
   it('exposes the server counts unchanged and invents no pending-change count', async () => {
     listTree.mockResolvedValue(page([ROOT]));
     const store = TestBed.inject(AuthoringStore);

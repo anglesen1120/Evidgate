@@ -118,6 +118,25 @@ describe('AuthoringCaseRowsComponent', () => {
     expect(await (await harness.summary()).text()).toContain('2 of 2 loaded selected');
   });
 
+  it('keeps case-id selection across table and stacked-record switches above 200 rows', async () => {
+    const { fixture, harness } = await mount(201);
+    const table = fixture.debugElement
+      .query(By.directive(DataTableComponent))
+      .injector.get(DataTableComponent<ManualCaseListItemDto>);
+    table.narrow.set(true);
+    fixture.detectChanges();
+    const records = await harness.rowBoxes();
+    expect(records.length).toBeGreaterThan(0);
+    await records[0]?.click();
+    expect(await records[0]?.getAttribute('aria-checked')).toBe('true');
+    table.narrow.set(false);
+    fixture.detectChanges();
+    table.narrow.set(true);
+    fixture.detectChanges();
+    expect(await (await harness.rowBoxes())[0]?.getAttribute('aria-checked')).toBe('true');
+    expect(await (await harness.summary()).text()).toContain('1 of 201 loaded selected');
+  }, 20_000);
+
   it('gives the case code its own column and keeps the UUID in a separate cell', async () => {
     const { fixture } = await mount(1);
     const table = fixture.debugElement

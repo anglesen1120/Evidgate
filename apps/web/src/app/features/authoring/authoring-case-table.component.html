@@ -103,39 +103,57 @@
 </form>
 
 <div class="results" [attr.aria-busy]="busy()">
-  @if (store.stale()) {
+  @if (store.invalidLink()) {
     <app-inline-feedback
-      [tone]="'warning'"
-      [title]="copy.stale"
-      [description]="copy.staleHelp"
-      [announcement]="'off'"
-      data-case-stale
+      [tone]="'destructive'"
+      [title]="copy.invalidLink"
+      [description]="copy.invalidLinkHelp"
+      [announcement]="'polite'"
+      data-case-invalid-link
     />
-  }
-  @if (hasRows() && store.error()) {
+  } @else {
+    @if (store.stale()) {
+      <app-inline-feedback
+        [tone]="'warning'"
+        [title]="copy.stale"
+        [description]="copy.staleHelp"
+        [announcement]="'off'"
+        data-case-stale
+      />
+    }
+    @if (hasRows() && store.error()) {
+      <app-request-state
+        [status]="'error'"
+        [error]="store.error()"
+        [retryEligible]="(store.error()?.retryable ?? false) && store.retryReady()"
+        [retryBusy]="busy() || store.loadingMore()"
+        (retry)="store.retry()"
+      />
+    }
     <app-request-state
-      [status]="'error'"
+      [status]="busy() && !hasRows() ? 'loading' : store.status()"
+      [loadingLabel]="copy.loading"
       [error]="store.error()"
+      [empty]="!hasRows()"
+      [emptyTitle]="emptyTitle()"
+      [emptyDescription]="store.filtered() ? copy.noMatchHelp : copy.emptyHelp"
+      [emptyActionLabel]="store.filtered() ? copy.clear : undefined"
       [retryEligible]="(store.error()?.retryable ?? false) && store.retryReady()"
       [retryBusy]="busy() || store.loadingMore()"
       (retry)="store.retry()"
-    />
+      (emptyAction)="clear()"
+    >
+      <app-authoring-case-rows [rows]="store.rows()" />
+    </app-request-state>
+    @if (store.browseCapped()) {
+      <app-inline-feedback
+        [tone]="'warning'"
+        [title]="copy.browseCapped"
+        [description]="copy.browseCappedHelp"
+        data-case-browse-capped
+      />
+    }
   }
-  <app-request-state
-    [status]="busy() && !hasRows() ? 'loading' : store.status()"
-    [loadingLabel]="copy.loading"
-    [error]="store.error()"
-    [empty]="!hasRows()"
-    [emptyTitle]="emptyTitle()"
-    [emptyDescription]="store.filtered() ? copy.noMatchHelp : copy.emptyHelp"
-    [emptyActionLabel]="store.filtered() ? copy.clear : undefined"
-    [retryEligible]="(store.error()?.retryable ?? false) && store.retryReady()"
-    [retryBusy]="busy() || store.loadingMore()"
-    (retry)="store.retry()"
-    (emptyAction)="clear()"
-  >
-    <app-authoring-case-rows [rows]="store.rows()" />
-  </app-request-state>
 </div>
 @if (store.status() === 'ready') {
   <div
