@@ -1,5 +1,11 @@
 // Chunk accumulation, decoded-size accounting and the response-less stream of the binary path.
-import { HttpEventType, HttpHeaders, HttpResponse, type HttpEvent } from '@angular/common/http';
+import {
+  HttpEventType,
+  HttpHeaderResponse,
+  HttpHeaders,
+  HttpResponse,
+  type HttpEvent,
+} from '@angular/common/http';
 import { EmptyError, firstValueFrom, of, toArray } from 'rxjs';
 
 import { BINARY_BODY_LIMIT_BYTES } from './binary-transport';
@@ -114,14 +120,9 @@ describe('decoded-size accounting', () => {
   // decoded bytes. `Content-Length` is the wire size.
   it('refuses on decoded progress although the wire Content-Length is small', async () => {
     const events: HttpEvent<ArrayBuffer>[] = [
-      {
-        type: HttpEventType.ResponseHeader,
+      new HttpHeaderResponse({
         headers: new HttpHeaders({ 'Content-Length': '1000', 'Content-Encoding': 'gzip' }),
-        status: 200,
-        statusText: 'OK',
-        url: null,
-        ok: true,
-      } as unknown as HttpEvent<ArrayBuffer>,
+      }),
       { type: HttpEventType.DownloadProgress, loaded: OVER },
     ];
 
