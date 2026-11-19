@@ -129,8 +129,19 @@ async function readAllBytes(
   return buffer;
 }
 
+// The `%TypedArray%` tag getter reads the internal slot, so unlike `Object.prototype.toString` a
+// plain object cannot forge it by defining `Symbol.toStringTag`; it is also realm-proof, and a
+// `DataView` or a wider typed array reports another tag.
+const typedArrayTag = Reflect.get(
+  Object.getOwnPropertyDescriptor(
+    Object.getPrototypeOf(Uint8Array.prototype) as object,
+    Symbol.toStringTag,
+  ) ?? {},
+  'get',
+) as (this: unknown) => string | undefined;
+
 function isByteChunk(value: unknown): value is Uint8Array {
-  return Object.prototype.toString.call(value) === '[object Uint8Array]';
+  return typedArrayTag.call(value) === 'Uint8Array';
 }
 
 /**
@@ -224,7 +235,7 @@ function advertisedSize<T>(event: HttpEvent<T>): number | null {
     if (declared === null) {
       return null;
     }
-    return /^\d{1,16}$/.test(declared.trim()) ? Number(declared) : null;
+    return /^\d+$/.test(declared.trim()) ? Number(declared) : null;
   }
   if (event.type === HttpEventType.DownloadProgress) {
     return event.loaded;

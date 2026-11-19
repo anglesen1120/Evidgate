@@ -20,7 +20,6 @@ import { inject } from '@angular/core';
 import { finalize, tap } from 'rxjs';
 
 import { isApiRequestUrl } from '../http/api-origin';
-import { BINARY_BODY_LIMIT_BYTES } from '../http/binary-transport';
 import { apiPathTemplate } from './api-path-template';
 import { TelemetryService } from './telemetry.service';
 import type { ApiCallResult } from './telemetry-sdk';
@@ -30,6 +29,9 @@ const REQUEST_ID_HEADER = 'X-Request-Id';
 
 /** The `error.code` shape the server emits; anything else is not a code and is not sent. */
 const API_ERROR_CODE = /^[a-z][a-z0-9_]{0,63}$/;
+
+/** An error envelope is a few hundred bytes; a larger binary error body is not parsed for the span. */
+const MAX_TRACED_ERROR_BYTES = 64 * 1024;
 
 const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -77,7 +79,7 @@ function parseJsonBody(body: unknown): unknown {
   // A binary-response call reads its error as bytes (the interceptor sits outside the adapter,
   // so it sees the raw `HttpClient` error); decode them, bounded, so the span keeps its code.
   if (body instanceof ArrayBuffer) {
-    if (body.byteLength > BINARY_BODY_LIMIT_BYTES) {
+    if (body.byteLength > MAX_TRACED_ERROR_BYTES) {
       return null;
     }
     return parseJsonBody(new TextDecoder().decode(body));

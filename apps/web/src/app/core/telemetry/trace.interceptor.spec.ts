@@ -346,6 +346,23 @@ describe('telemetryInterceptor', () => {
     expect(span.attributes['evidgate.api.retryable']).toBe(false);
   });
 
+  it('does not parse a binary error body larger than an envelope can be', async () => {
+    const harness = await createHarness();
+    const huge = new TextEncoder().encode(
+      JSON.stringify({ error: { code: 'invalid_workbook', pad: 'x'.repeat(70_000) } }),
+    );
+    const bytes = new ArrayBuffer(huge.byteLength);
+    new Uint8Array(bytes).set(huge);
+    const error = new HttpErrorResponse({ status: 422, error: bytes });
+
+    await expect(
+      firstValueFrom(send(new HttpRequest('GET', API_URL), () => throwError(() => error))),
+    ).rejects.toBe(error);
+
+    const span = firstSpanNamed(harness.exporter, 'api.request');
+    expect(span.attributes['evidgate.api.error_code']).toBeUndefined();
+  });
+
   it('records the envelope code and the retryable flag of a refused call', async () => {
     const harness = await createHarness();
     const error = new HttpErrorResponse({

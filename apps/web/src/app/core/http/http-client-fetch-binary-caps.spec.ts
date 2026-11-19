@@ -86,6 +86,10 @@ describe('HttpClient fetch binary transport size caps', () => {
       ['a number', 7],
       ['a plain object', { byteLength: 4 }],
       ['a typed array of another width', new Uint16Array(2)],
+      [
+        'an object forging the Uint8Array tag',
+        { [Symbol.toStringTag]: 'Uint8Array', byteLength: 3, length: 3, 0: 1, 1: 2, 2: 3 },
+      ],
     ])('refuses %s chunk, cancels the reader and sends nothing', async (_name, chunk) => {
       const cancel = vi.fn(() => new Promise<void>(() => undefined));
       const stream = new ReadableStream<unknown>({
@@ -170,6 +174,14 @@ describe('HttpClient fetch binary transport size caps', () => {
       const test = await nextRequest(httpMock);
       test.event(headerEvent('10'));
       test.event({ type: HttpEventType.DownloadProgress, loaded: OVER });
+      expectLimit(await settled);
+      expect(test.cancelled).toBe(true);
+    });
+
+    it('cancels on a padded decimal Content-Length over the cap', async () => {
+      const settled = rejection(adapter(call(BINARY_RESPONSE)));
+      const test = await nextRequest(httpMock);
+      test.event(headerEvent(String(OVER).padStart(20, '0')));
       expectLimit(await settled);
       expect(test.cancelled).toBe(true);
     });
