@@ -1,0 +1,54 @@
+{
+  "operation_id": "importAuthoring",
+  "variant": "mixed",
+  "status": 422,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000af01"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "validation_error",
+      "message": "The complete request was refused.",
+      "request_id": "018f0000-0000-7000-8000-00000000af01",
+      "retryable": false,
+      "details": [
+        {
+          "index": 1,
+          "path": "/parent_key",
+          "reason": "unknown_parent"
+        },
+        {
+          "index": 2,
+          "path": "/item_key",
+          "reason": "orphan_row"
+        },
+        {
+          "index": 3,
+          "path": "/key",
+          "reason": "duplicate_key"
+        },
+        {
+          "index": 4,
+          "path": "/code",
+          "reason": "code_conflict"
+        },
+        {
+          "index": 5,
+          "path": "/priority",
+          "reason": "value_invalid"
+        },
+        {
+          "index": 6,
+          "path": "/steps",
+          "reason": "steps_invalid"
+        },
+        {
+          "index": 7,
+          "path": "/title",
+          "reason": "invalid_text"
+        }
+      ]
+    }
+  }
+}

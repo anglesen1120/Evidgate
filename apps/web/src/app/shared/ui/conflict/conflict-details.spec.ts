@@ -114,4 +114,91 @@ describe('conflictFromError', () => {
     );
     expect(result.currentRevision).toBe('7');
   });
+
+  it.each([
+    { path: '/version', id: 'version', label: 'Version', reason: '7' },
+    { path: '/order', id: 'order', label: 'Sibling order', reason: 'server-order-hash' },
+    { path: '/revision_id', id: 'revision_id', label: 'Revision', reason: 'revision-18' },
+    { path: 'version', id: 'version', label: 'Version', reason: '7' },
+    { path: 'order', id: 'order', label: 'Sibling order', reason: 'server-order-hash' },
+    { path: 'revision_id', id: 'revision_id', label: 'Revision', reason: 'revision-18' },
+  ])('maps $path to its labelled draft field and server value', ({ path, id, label, reason }) => {
+    const draft = Object.freeze({ [id]: 'retained draft', title: 'Uncompared title' });
+    const result = conflictFromError({ ...error, details: [{ path, reason }] }, draft, {
+      [id]: label,
+      title: 'Title',
+    });
+
+    expect(result).toEqual({
+      currentRevision: reason,
+      fields: [
+        { id, label, local: 'retained draft', server: reason },
+        { id: 'title', label: 'Title', local: 'Uncompared title', server: null },
+      ],
+    });
+    expect(draft[id]).toBe('retained draft');
+  });
+
+  it('associates each metadata field with its own detail rather than the first revision', () => {
+    const result = conflictFromError(
+      {
+        ...error,
+        details: [
+          { path: '/version', reason: '7' },
+          { path: 'order', reason: 'server-order-hash' },
+          { path: '/revision_id', reason: 'revision-18' },
+        ],
+      },
+      { version: '6', order: 'draft-order-hash', revision_id: 'revision-17' },
+      { version: 'Version', order: 'Sibling order', revision_id: 'Revision' },
+    );
+
+    expect(result).toEqual({
+      currentRevision: '7',
+      fields: [
+        { id: 'version', label: 'Version', local: '6', server: '7' },
+        {
+          id: 'order',
+          label: 'Sibling order',
+          local: 'draft-order-hash',
+          server: 'server-order-hash',
+        },
+        { id: 'revision_id', label: 'Revision', local: 'revision-17', server: 'revision-18' },
+      ],
+    });
+  });
+
+  it.each(['/unknown', '/items/0/version', '/items/0/order', '/items/0/revision_id'])(
+    'keeps generic uncompared fields for the unrecognised pointer %s',
+    (path) => {
+      const result = conflictFromError(
+        { ...error, details: [{ path, reason: 'not a server value' }] },
+        { version: '6', order: 'draft-order', revision_id: 'revision-17', unknown: 'draft' },
+        { version: 'Version', order: 'Sibling order', revision_id: 'Revision', unknown: 'Other' },
+      );
+
+      expect(result).toEqual({
+        currentRevision: null,
+        fields: [
+          { id: 'version', label: 'Version', local: '6', server: null },
+          { id: 'order', label: 'Sibling order', local: 'draft-order', server: null },
+          { id: 'revision_id', label: 'Revision', local: 'revision-17', server: null },
+          { id: 'unknown', label: 'Other', local: 'draft', server: null },
+        ],
+      });
+    },
+  );
+
+  it.each(['', ' '])('does not treat a blank metadata reason %j as a server value', (reason) => {
+    const result = conflictFromError(
+      { ...error, details: [{ path: '/version', reason }] },
+      { version: '6' },
+      { version: 'Version' },
+    );
+
+    expect(result).toEqual({
+      currentRevision: null,
+      fields: [{ id: 'version', label: 'Version', local: '6', server: null }],
+    });
+  });
 });

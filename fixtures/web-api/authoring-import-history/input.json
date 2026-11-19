@@ -1,0 +1,28 @@
+{
+  "operation_id": "listAuthoringVersions",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000af01"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "version_id": "018f0000-0000-7000-8000-00000000af11",
+        "entity_kind": "feature_node",
+        "entity_id": "018f0000-0000-7000-8000-00000000af12",
+        "version_no": 3,
+        "batch_id": "018f0000-0000-7000-8000-00000000af13",
+        "change_kind": "import",
+        "source": "import",
+        "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "author": null,
+        "reason": null,
+        "ai_run_id": null,
+        "created_at": "2026-11-19T10:00:00Z"
+      }
+    ],
+    "next_cursor": null
+  }
+}
