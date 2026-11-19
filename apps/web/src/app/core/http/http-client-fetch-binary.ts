@@ -19,6 +19,7 @@ import {
   BINARY_RESPONSE,
   BINARY_TRANSPORT_HEADER,
 } from './binary-transport';
+import { utf8ExceedsBytes } from './utf8-size';
 import { type Deadline, readUnderCall, toFetchResponse } from './http-client-fetch-transport';
 
 /** Which directions of one call the caller opted into the byte path. */
@@ -254,7 +255,7 @@ export function toBinaryResponse(
   body: ArrayBuffer | null,
   source: HttpResponseBase,
 ): Response {
-  if (body !== null && body.byteLength > BINARY_BODY_LIMIT_BYTES) {
+  if (body !== null && finalBodySize(body) > BINARY_BODY_LIMIT_BYTES) {
     throw limitError('response', source);
   }
   return toFetchResponse(status, statusText, headers, body, source, true);
@@ -277,15 +278,42 @@ function advertisedSize<T>(event: HttpEvent<T>): number | null {
       : Number.POSITIVE_INFINITY;
   }
   if (event.type === HttpEventType.Response) {
-    if (event.body instanceof ArrayBuffer) {
-      return event.body.byteLength;
-    }
-    // A request-only call gets its reply as text with no progress event; the cap is the same.
-    if (typeof event.body === 'string' && textExceedsCap(event.body)) {
-      return Number.POSITIVE_INFINITY;
-    }
+    return event.body === null ? null : finalBodySize(event.body);
   }
   return null;
+}
+
+// Slot getters read the internal slot, so they are realm-proof and cannot be shadowed by an own
+// property; they throw on anything that is not the genuine type.
+function slotGetter(proto: object, key: string): (this: unknown) => number {
+  return Reflect.get(Object.getOwnPropertyDescriptor(proto, key) ?? {}, 'get') as (
+    this: unknown,
+  ) => number;
+}
+const bufferByteLength = slotGetter(ArrayBuffer.prototype, 'byteLength');
+const blobSize = slotGetter(Blob.prototype, 'size');
+const viewSize = slotGetter(DataView.prototype, 'byteLength');
+
+/**
+ * The size of a non-null final body, the one rule for the streaming check and the adapter. A
+ * buffer, view or Blob of any realm is measured exactly, a string by its UTF-8 size (a request-only
+ * call gets its reply as text); anything else cannot be measured and so counts as over the cap.
+ */
+export function finalBodySize(body: unknown): number {
+  if (typeof body === 'string') {
+    return utf8ExceedsBytes(body, BINARY_BODY_LIMIT_BYTES) ? Number.POSITIVE_INFINITY : 0;
+  }
+  for (const measure of [byteLengthOf, bufferByteLength, viewSize, blobSize]) {
+    try {
+      const size = measure.call(body);
+      if (typeof size === 'number' && Number.isFinite(size)) {
+        return size;
+      }
+    } catch {
+      // Not this kind of body: try the next getter.
+    }
+  }
+  return Number.POSITIVE_INFINITY;
 }
 
 // Repeated `Content-Length` fields reach the page comma-joined (the Fetch header list combines
@@ -314,11 +342,7 @@ export function assertTextWithinCap(text: string | null, source: unknown): void 
 }
 
 function textExceedsCap(text: string): boolean {
-  return (
-    text.length * 3 > BINARY_BODY_LIMIT_BYTES &&
-    (text.length > BINARY_BODY_LIMIT_BYTES ||
-      new TextEncoder().encode(text).byteLength > BINARY_BODY_LIMIT_BYTES)
-  );
+  return utf8ExceedsBytes(text, BINARY_BODY_LIMIT_BYTES);
 }
 
 // The single place the cap is worded, so both directions and every refusal site report the same
