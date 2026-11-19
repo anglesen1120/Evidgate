@@ -1,4 +1,5 @@
-// The 64 KiB bound on a string error body is exact UTF-8 bytes (it bounds exported span data):
+// The 64 KiB bound on a string error body is exact UTF-8 bytes (it bounds the input parsed for
+// span enrichment):
 // at the bound the envelope code is read, one byte over it is skipped, and the call's result
 // (the rethrown error) is the same either way because tracing fails open.
 import { HttpErrorResponse, HttpHeaders, HttpRequest } from '@angular/common/http';
@@ -64,7 +65,7 @@ async function codeOf(body: string): Promise<unknown> {
 }
 
 // An envelope whose padding is `fill` repeated until the whole text is exactly `bytes` UTF-8 bytes;
-// `fill` is one character of `width` bytes, `tail` pads the remainder with ASCII.
+// `fill` is one character of `width` bytes, ASCII pads the remainder.
 function envelopeOfBytes(bytes: number, fill: string): string {
   const width = encoder.encode(fill).length;
   const head = '{"error":{"code":"invalid_workbook","pad":"';
@@ -81,8 +82,6 @@ describe.each([
   ['3-byte CJK', '日'],
   ['surrogate pair', '😀'],
 ])('traced error bound, %s text', (_name, fill) => {
-  afterEach(() => TestBed.resetTestingModule());
-
   it('enriches the span at exactly the bound', async () => {
     await expect(codeOf(envelopeOfBytes(BOUND, fill))).resolves.toBe('invalid_workbook');
   });
