@@ -656,3 +656,9 @@ closed by #837 (f865f6bf)
 | AI settings forbidden state on scope loss (S441, #910) | The delta review found ai-settings.page.ts:89 answers a generic error when scope() is lost (authoring:read revoked or project switched) instead of the forbidden state design UI42/UI44 require; ai-settings.page.spec.ts:282 accepts the generic state. Fix: map an undefined scope to a forbidden failure in the store and tighten the spec; receiver a 13.4.1-T5.1 follow-up (same feature folder). | web foundation |
 
 closed by #917 (f00ae760: `ai-settings.page.ts` renders the forbidden pattern when `scope()` is lost, pinned by `ai-settings.page.spec.ts`)
+
+## Moved from status-carried.md by S444 (2026-11-19)
+
+| Authoring tree store: four open P2 races (S440) | authoring-tree-reads.ts: F1 :390 a continuation append overwrites rows a selection refresh updated (select, Load more, selection finishes first); F2 :187-192 select aborts the child read without settling loading, a failed select leaves the spinner and store.ts:129-130 refuses a retry; F3 :295-296 refresh of an exhausted branch keeps the null cursor; authoring.page.ts:98-104 F4 a failed select announces all roots. Receiver 13.4.1-T2.3/T2.4 before the wave reaches develop. | web foundation |
+
+closed by #914 (3a3cde1b: `authoring-tree-races.spec.ts` pins F1-F4; fixes in `authoring-tree-reads.ts` and `authoring.page.ts`)
