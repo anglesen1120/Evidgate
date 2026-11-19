@@ -121,7 +121,7 @@ describe('App routes (09.1.1-T4.1)', () => {
         candidate.id !== 'settings' &&
         allowed.has(candidate.permission) &&
         // Entries that own a real screen or table are asserted by their own specs.
-        !['members', 'audit', 'authoring', 'ai-settings'].includes(candidate.id),
+        !['members', 'audit', 'authoring', 'ai-settings', 'pending-changes'].includes(candidate.id),
     );
     if (entry === undefined) {
       throw new Error('NAV_ENTRIES has no allowed, active-phase entry without a real screen');

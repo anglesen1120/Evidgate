@@ -1,0 +1,14 @@
+{
+  "operation_id": "discardAuthoringChange",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000af07"
+  },
+  "latency_ms": 0,
+  "body": {
+    "change_id": "018f0000-0000-7000-8000-00000000cd02",
+    "state": "discarded",
+    "discarded_at": "2026-11-19T09:10:00Z"
+  }
+}

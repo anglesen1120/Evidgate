@@ -105,6 +105,8 @@ const ENTRY_ROUTES: Readonly<Record<string, () => Promise<Routes>>> = {
   audit: () => import('./features/settings/audit/audit.routes').then((m) => m.routes),
   'ai-settings': () =>
     import('./features/authoring/ai-settings/ai-settings.routes').then((m) => m.routes),
+  'pending-changes': () =>
+    import('./features/authoring/pending-changes/pending-changes.routes').then((m) => m.routes),
 };
 
 /** The lazy loader of one area, or a load-time failure naming the missing folder. */
