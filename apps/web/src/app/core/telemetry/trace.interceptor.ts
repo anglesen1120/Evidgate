@@ -86,7 +86,10 @@ function readRequestId(headers: HttpHeaders): string | null {
   return value !== null && UUID_SHAPE.test(value) ? value.toLowerCase() : null;
 }
 
-/** Whether a string error body is within the bound, in UTF-8 bytes like the binary decode. */
+/**
+ * Whether a string error body is within the bound. The unit is exact UTF-8 bytes, not UTF-16 units:
+ * the bound caps the span data that is exported, and a skipped body only costs the enrichment.
+ */
 function stringFitsTracedBound(text: string): boolean {
   return !utf8ExceedsBytes(text, MAX_TRACED_ERROR_BYTES);
 }
