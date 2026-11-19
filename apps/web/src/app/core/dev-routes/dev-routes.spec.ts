@@ -26,6 +26,8 @@ import { SuiteCompositionComponent } from '../../features/suites/composition/sui
 import { SecurityEventsPage } from '../../features/settings/security/security-events.page';
 // eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the real review-only catalog page.
 import { CaseListPage } from '../../features/catalog/case-list.page';
+// eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the real review-only authoring page.
+import { AuthoringPage } from '../../features/authoring/authoring.page';
 import { ShellComponent } from '../../shell/layout/shell.component';
 import { authGuard, orgScopeGuard, projectScopeGuard } from '../guards';
 import { devRoutes } from './dev-routes.fixtures';
@@ -34,7 +36,7 @@ describe('dev routes (review only)', () => {
   it('mounts the shared UI gallery on one lazy route', () => {
     const table = devRoutes();
 
-    expect(table).toHaveLength(9);
+    expect(table).toHaveLength(10);
     expect(table[0]?.path).toBe('dev/ui-gallery');
     // A lazy boundary, so the production graph never reaches the gallery through this file.
     expect(table[0]?.component).toBeUndefined();
@@ -175,5 +177,21 @@ describe('dev routes (review only)', () => {
     const load = project?.loadComponent;
     if (!load) throw new Error('No lazy catalog review route');
     expect(await load()).toBe(CaseListPage);
+  });
+  it('mounts the authoring tree under authenticated org, project and read gates', async () => {
+    const route = devRoutes().find((entry) => entry.path === 'dev/authoring-tree');
+    expect(route?.component).toBe(ShellComponent);
+    const org = route?.children?.[0];
+    expect(org?.canMatch).toEqual([authGuard, orgScopeGuard]);
+    const project = org?.children?.[0];
+    expect(project?.path).toBe('projects/:projectId');
+    expect(project?.canMatch?.[0]).toBe(projectScopeGuard);
+    // The second gate is the entry's own `authoring:read`; a guard closure has no identity, so the
+    // count is what a pin can assert.
+    expect(project?.canMatch).toHaveLength(2);
+    expect(project?.data?.['pageHeadingLevel']).toBe(1);
+    const load = project?.loadComponent;
+    if (!load) throw new Error('No lazy authoring review route');
+    expect(await load()).toBe(AuthoringPage);
   });
 });

@@ -8,6 +8,8 @@ import { FIXTURE_CATALOG_RELEASE_ROWS } from './fixture-catalog-release-rows';
 import { FIXTURE_CATALOG_SECURITY_ROWS } from './fixture-catalog-security-rows';
 import { FIXTURE_CATALOG_CASE_ROWS } from './fixture-catalog-case-rows';
 import { FIXTURE_CATALOG_AUTHORING_IMPEX_ROWS } from './fixture-catalog-authoring-impex-rows';
+import { FIXTURE_CATALOG_AUTHORING_ROWS } from './fixture-catalog-authoring-rows';
+import { FIXTURE_CATALOG_AUTHORING_IMPEX_ROWS } from './fixture-catalog-authoring-impex-rows';
 import { FIXTURE_CATALOG_AI_SETTINGS_ROWS } from './fixture-catalog-ai-settings-rows';
 import type { FixtureCatalogRow } from './fixture-document';
 
@@ -484,6 +486,8 @@ export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
   ...FIXTURE_CATALOG_RELEASE_ROWS,
   ...FIXTURE_CATALOG_SECURITY_ROWS,
   ...FIXTURE_CATALOG_CASE_ROWS,
+  ...FIXTURE_CATALOG_AUTHORING_IMPEX_ROWS,
+  ...FIXTURE_CATALOG_AUTHORING_ROWS,
   ...FIXTURE_CATALOG_AUTHORING_IMPEX_ROWS,
   ...FIXTURE_CATALOG_AI_SETTINGS_ROWS,
 ];

@@ -9973,6 +9973,37 @@
       <trans-unit id="authoring.import-export.failure.export-filters" datatype="html"><source>Export filters were refused. Check the format, node UUID and included kinds. No file was downloaded.</source></trans-unit>
       <trans-unit id="authoring.import-export.failure.export-wait" datatype="html"><source>The server is busy. Wait as directed by Retry-After, then retry this exact scope explicitly. Nothing is downloaded automatically.</source></trans-unit>
       <trans-unit id="authoring.import-export.failure.export-unknown" datatype="html"><source>The export could not be completed or its server file was unavailable. No file was downloaded. Retry the exact scope explicitly.</source></trans-unit>
+      <trans-unit id="authoring.tree.title" datatype="html"><source>Feature tree</source></trans-unit>
+      <trans-unit id="authoring.tree.description" datatype="html"><source>Browse the project hierarchy and select a scope. Child-node counts and checklist-item counts are direct counts, not manual-case totals.</source></trans-unit>
+      <trans-unit id="authoring.tree.hierarchy" datatype="html"><source>Project hierarchy</source></trans-unit>
+      <trans-unit id="authoring.tree.hierarchy-description" datatype="html"><source>Expand a branch explicitly to load its children. Selecting a scope does not expand it.</source></trans-unit>
+      <trans-unit id="authoring.tree.keyboard" datatype="html"><source>Tab reaches each visible control. Arrow keys, Home, End and typing move focus without selecting. Enter or Space activates a button.</source></trans-unit>
+      <trans-unit id="authoring.tree.children" datatype="html"><source>Child nodes</source></trans-unit>
+      <trans-unit id="authoring.tree.items" datatype="html"><source>Checklist items</source></trans-unit>
+      <trans-unit id="authoring.tree.pending" datatype="html"><source>Pending</source></trans-unit>
+      <trans-unit id="authoring.tree.pending-reason" datatype="html"><source>Pending change count unavailable; this read does not supply it.</source></trans-unit>
+      <trans-unit id="authoring.tree.current" datatype="html"><source>Current scope</source></trans-unit>
+      <trans-unit id="authoring.tree.path" datatype="html"><source>Selected node path</source></trans-unit>
+      <trans-unit id="authoring.tree.all" datatype="html"><source>Project roots</source></trans-unit>
+      <trans-unit id="authoring.tree.choose" datatype="html"><source>Select a node to inspect its path.</source></trans-unit>
+      <trans-unit id="authoring.tree.selected-id" datatype="html"><source>Selected node ID</source></trans-unit>
+      <trans-unit id="authoring.tree.loading" datatype="html"><source>Loading project hierarchy…</source></trans-unit>
+      <trans-unit id="authoring.tree.loading-children" datatype="html"><source>Loading child nodes…</source></trans-unit>
+      <trans-unit id="authoring.tree.empty" datatype="html"><source>This project has no authoring content yet</source></trans-unit>
+      <trans-unit id="authoring.tree.empty-description" datatype="html"><source>A test case needs an existing checklist item. No hierarchy or parent is created by browsing.</source></trans-unit>
+      <trans-unit id="authoring.tree.empty-children" datatype="html"><source>No child nodes in this scope</source></trans-unit>
+      <trans-unit id="authoring.tree.refresh" datatype="html"><source>Refresh hierarchy</source></trans-unit>
+      <trans-unit id="authoring.tree.stale" datatype="html"><source>Hierarchy may be stale</source></trans-unit>
+      <trans-unit id="authoring.tree.stale-description" datatype="html"><source>Refresh failed; previously loaded hierarchy data is still shown. Retry to refresh this region only.</source></trans-unit>
+      <trans-unit id="authoring.tree.more-roots" datatype="html"><source>Load more root nodes</source></trans-unit>
+      <trans-unit id="authoring.tree.more-children" datatype="html"><source>Load more child nodes</source></trans-unit>
+      <trans-unit id="authoring.tree.table" datatype="html"><source>Case table</source></trans-unit>
+      <trans-unit id="authoring.tree.table-placeholder" datatype="html"><source>This separate region is reserved for the case table. Hierarchy loading and failures do not control it.</source></trans-unit>
+      <trans-unit id="authoring.tree.expand" datatype="html"><source>Expand <x id="title" equiv-text="node.title"/></source></trans-unit>
+      <trans-unit id="authoring.tree.collapse" datatype="html"><source>Collapse <x id="title" equiv-text="node.title"/></source></trans-unit>
+      <trans-unit id="authoring.tree.select" datatype="html"><source>Select scope <x id="title" equiv-text="node.title"/></source></trans-unit>
+      <trans-unit id="authoring.tree.announce-selected" datatype="html"><source>Selected scope <x id="title" equiv-text="selected.title"/></source></trans-unit>
+      <trans-unit id="authoring.tree.announce-roots" datatype="html"><source>Scope set to all project roots</source></trans-unit>
       <trans-unit id="authoring.ai-settings.description" datatype="html"><source>Description</source></trans-unit>
       <trans-unit id="authoring.ai-settings.environment" datatype="html"><source>Environment URL</source></trans-unit>
       <trans-unit id="authoring.ai-settings.style" datatype="html"><source>Writing style</source></trans-unit>

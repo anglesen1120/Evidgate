@@ -78,6 +78,7 @@ import { findUsageSummaryFixture } from './fixture-usage-summary';
 import { securityEventsBody } from './fixture-security-events';
 import { caseListFixtureBody } from './fixture-case-list';
 import { findBulkCaseListFixture } from './fixture-case-list-bulk';
+import { AuthoringTreeFixtureScenario } from './fixture-authoring-tree';
 import { AiSettingsFixtureScenario, aiSettingsPermissions } from './fixture-ai-settings';
 
 /** Response header naming the corpus directory that answered; also a production-leak marker. */
@@ -222,6 +223,7 @@ export class FixtureHttpBackend implements HttpBackend {
   private readonly toggles: FixtureToggles = inject(FixtureToggles);
   private readonly retentionPolicies = new Map<string, RetentionPolicy>();
   private readonly runCancellation = new RunCancelFixtureScenario();
+  private readonly authoring = new AuthoringTreeFixtureScenario();
   private readonly aiSettings = new AiSettingsFixtureScenario();
 
   handle(request: HttpRequest<unknown>): Observable<HttpEvent<unknown>> {
@@ -254,6 +256,9 @@ export class FixtureHttpBackend implements HttpBackend {
     request: HttpRequest<unknown>,
     relativePath: string,
   ): FixtureEntry | undefined {
+    if (request.method === 'GET' && /^\/projects\/[^/]+\/authoring\/tree$/.test(relativePath)) {
+      return this.authoring.entry(request, this.toggles.variantFor('listAuthoringTree'));
+    }
     const settings = this.aiSettings.entry(request, relativePath, (operation) =>
       this.toggles.variantFor(operation),
     );

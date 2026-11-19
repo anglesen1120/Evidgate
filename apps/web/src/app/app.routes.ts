@@ -99,6 +99,7 @@ const ENTRY_PAGES: Readonly<Record<string, () => Promise<Type<unknown>>>> = {
  * override can never spread to an entry that did not ask for it.
  */
 const ENTRY_ROUTES: Readonly<Record<string, () => Promise<Routes>>> = {
+  authoring: () => import('./features/authoring/authoring-tree.routes').then((m) => m.routes),
   settings: () => import('./features/settings/settings-shell.routes').then((m) => m.routes),
   members: () => import('./features/settings/members/members.routes').then((m) => m.routes),
   audit: () => import('./features/settings/audit/audit.routes').then((m) => m.routes),

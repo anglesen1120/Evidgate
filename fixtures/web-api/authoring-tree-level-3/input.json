@@ -1,0 +1,46 @@
+{
+  "operation_id": "listAuthoringTree",
+  "variant": "level-3",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000f214"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "node_id": "018f0000-0000-7000-8000-000000000104",
+        "parent_id": "018f0000-0000-7000-8000-000000000103",
+        "kind": "sub_category",
+        "title": "Tuỳ chọn giao hàng và kiểm tra địa chỉ tại các thị trường bị hạn chế dành cho khách hàng doanh nghiệp với nhiều người nhận khác nhau",
+        "position": 0,
+        "version": 1,
+        "child_count": 1,
+        "item_count": 0
+      }
+    ],
+    "next_cursor": null,
+    "node": {
+      "node_id": "018f0000-0000-7000-8000-000000000103",
+      "parent_id": "018f0000-0000-7000-8000-000000000102",
+      "kind": "category",
+      "title": "Địa chỉ giao hàng",
+      "position": 0,
+      "version": 1,
+      "child_count": 1,
+      "item_count": 0
+    },
+    "path": [
+      {
+        "node_id": "018f0000-0000-7000-8000-000000000101",
+        "kind": "module",
+        "title": "Thanh toán"
+      },
+      {
+        "node_id": "018f0000-0000-7000-8000-000000000102",
+        "kind": "feature",
+        "title": "Kiểm tra đơn hàng"
+      }
+    ]
+  }
+}
