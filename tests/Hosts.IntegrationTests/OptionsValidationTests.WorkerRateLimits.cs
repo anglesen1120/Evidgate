@@ -1,4 +1,3 @@
-using System.Globalization;
 using Evidgate.Testing;
 using Xunit;
 
@@ -26,16 +25,7 @@ public sealed partial class OptionsValidationTests
     {
         var result = await RunUntilExitAsync(
             HostLocator.AppHost("Evidgate.Worker"),
-            new Dictionary<string, string>
-            {
-                ["DOTNET_ENVIRONMENT"] = environment,
-                ["EVIDGATE__WORKER__HEALTHPORT"] = HostLocator.FreePort().ToString(CultureInfo.InvariantCulture),
-                ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = DeadConnectionString,
-                ["EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY"] = "00:00:30",
-                ["EVIDGATE__RUNS__CANCEL__KILLDELAY"] = "00:02:00",
-                [variable] = value,
-                [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
-            },
+            WorkerEnvironment(environment, variable, value),
             statingNoHealingProvider: true);
 
         var output = result.Stdout + result.Stderr;
@@ -44,5 +34,19 @@ public sealed partial class OptionsValidationTests
         Assert.Contains(named, output, StringComparison.Ordinal);
         Assert.DoesNotContain("Unhandled exception", output, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("   at ", output, StringComparison.Ordinal);
+    }
+
+    private static Dictionary<string, string> WorkerEnvironment(string environment, string variable, string value)
+    {
+        // The queue credential is resolved before the limiter group, so the baseline carries a well-formed one.
+        var env = WorkerChildEnvironment.Build(
+            DeadConnectionString,
+            WorkerChildEnvironment.Unreachable,
+            HostLocator.FreePort(),
+            isolationSelfCheckDisabled: true);
+        env["DOTNET_ENVIRONMENT"] = environment;
+        env[variable] = value;
+
+        return env;
     }
 }

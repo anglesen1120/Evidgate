@@ -37,8 +37,9 @@ internal readonly record struct RateDecision(bool Allowed, int RetryAfterSeconds
 /// whatever identifies the caller before it is trusted (the client address, then the repository id or token prefix).
 /// The window lives in PostgreSQL, so every replica counts into the same one and the limit does not multiply with the
 /// replica count; a full surface evicts its oldest keys on a sampled capacity check instead of refusing new
-/// clients, and each new key sweeps a bounded batch of that surface's expired windows. The count is virtual only so a
-/// test can make the store fail with a chosen exception type; nothing in production derives from it.
+/// clients, and each new key sweeps a bounded batch of that surface's expired windows.
+/// <see cref="AcquireAsync"/> is virtual only so a test can make the store fail with a chosen exception type;
+/// nothing in production derives from it.
 /// </summary>
 internal class ExchangeRateLimiter(NpgsqlDataSource dataSource, IOptions<RateLimitOptions> options)
 {

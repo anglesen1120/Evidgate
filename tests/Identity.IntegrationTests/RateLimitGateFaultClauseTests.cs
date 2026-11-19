@@ -11,7 +11,7 @@ using Xunit;
 namespace Identity.IntegrationTests;
 
 /// <summary>
-/// Each fail-closed clause of the gate on its own: a store that throws the named exception type is answered with the
+/// Each fail-closed clause of the gate on its own (store, timeout and unrequested cancellation): a store that throws the named exception type is answered with the
 /// shared 503, and removing the clause lets that exact type escape the gate, so the case fails.
 /// </summary>
 public sealed class RateLimitGateFaultClauseTests
@@ -23,6 +23,21 @@ public sealed class RateLimitGateFaultClauseTests
     [Fact]
     public async Task Acquire_AStoreThrowingTimeoutException_AnswersUnavailable() =>
         await AssertUnavailableAsync(new TimeoutException("store did not answer"));
+
+    [Fact]
+    public async Task Acquire_ACommandTimeoutCancellationTheRequestDidNotAskFor_AnswersUnavailable() =>
+        await AssertUnavailableAsync(new TaskCanceledException("command timed out"));
+
+    [Fact]
+    public async Task Acquire_ACancellationTheRequestAskedFor_Propagates()
+    {
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+        var limiter = new FaultingLimiter(new OperationCanceledException(cancelled.Token), failAfterCalls: 0);
+
+        await Should.ThrowAsync<OperationCanceledException>(() => RateLimitGate.AcquireAsync(
+            new DefaultHttpContext(), limiter, RateSurface.Login, "k", 1, "refused", cancelled.Token).AsTask());
+    }
 
     [Fact]
     public async Task Acquire_AStoreThrowingAnotherException_IsNotSwallowed() =>
