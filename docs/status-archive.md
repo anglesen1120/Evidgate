@@ -650,3 +650,9 @@ closed by #835 (33cd2497)
 | Run identity fork rules (05.2.2-T1 hand-over, S45) | `fork_run_not_bindable`, `advisory_only`, the `runs_created_total` counter and the no-opt-out test stay with T3 (the `run_project_ref_idx` index landed with 05.2.2-T2.2, migration `0038`, PR #106). Plan 05.2.2 Notes (line 163) | receiver: 05.2.2-T3; hand-over Notes: `plans/features/05-runs-orchestration/05.2.2-branch-pr-and-commit-identity-of-a-run.md:137` |
 
 closed by #837 (f865f6bf)
+
+## Moved from status-carried.md by S443 (2026-11-19)
+
+| AI settings forbidden state on scope loss (S441, #910) | The delta review found ai-settings.page.ts:89 answers a generic error when scope() is lost (authoring:read revoked or project switched) instead of the forbidden state design UI42/UI44 require; ai-settings.page.spec.ts:282 accepts the generic state. Fix: map an undefined scope to a forbidden failure in the store and tighten the spec; receiver a 13.4.1-T5.1 follow-up (same feature folder). | web foundation |
+
+closed by #917 (f00ae760: `ai-settings.page.ts` renders the forbidden pattern when `scope()` is lost, pinned by `ai-settings.page.spec.ts`)
