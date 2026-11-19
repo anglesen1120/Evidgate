@@ -1,4 +1,5 @@
 import { HttpHeaders, HttpRequest } from '@angular/common/http';
+import type { AuthoringChangePageResponse } from '@evidgate/sdk';
 import { AuthoringPendingFixtureScenario } from './fixture-authoring-pending';
 import { FIXTURE_CATALOG_AUTHORING_PENDING_ROWS } from './fixture-catalog-authoring-pending-rows';
 import { declaredResponseHeaderNames, VALIDATOR } from './fixture-contract.support';
@@ -158,6 +159,28 @@ describe('AuthoringPendingFixtureScenario', () => {
     const remaining = scenario.entry(new HttpRequest('GET', path), path, variant)?.document
       .body as { items: readonly { change_id: string }[] };
     expect(remaining.items.map((row) => row.change_id)).not.toEqual(expect.arrayContaining(ids));
+  });
+  it('narrows the queue to the exact target id and the pending state', () => {
+    const scenario = new AuthoringPendingFixtureScenario();
+    const items = (query: string) => {
+      const body = scenario.entry(new HttpRequest('GET', path + query), path, variant)?.document
+        .body;
+      if (!body) throw new Error(`Expected a queue page for "${query}"`);
+      return (body as AuthoringChangePageResponse).items;
+    };
+    const firstTarget = items('?state=pending&target_id=018f0000-0000-7000-8000-00000000ab01');
+    expect(firstTarget.map((row) => row.change_id)).toEqual([
+      '018f0000-0000-7000-8000-00000000cd01',
+      '018f0000-0000-7000-8000-00000000cd03',
+    ]);
+    expect(firstTarget.map((row) => row.target_id)).toEqual([
+      '018f0000-0000-7000-8000-00000000ab01',
+      '018f0000-0000-7000-8000-00000000ab01',
+    ]);
+    expect(items('?state=pending&target_id=018f0000-0000-7000-8000-00000000ab0')).toEqual([]);
+    expect(items('?state=applied&target_id=018f0000-0000-7000-8000-00000000ab01')).toEqual([]);
+    expect(items('?state=pending')).toHaveLength(4);
+    expect(items('')).toHaveLength(4);
   });
   it('returns a 412 without changing any queued row', () => {
     const scenario = new AuthoringPendingFixtureScenario();

@@ -111,18 +111,21 @@ describe('EditorPage checklist review mount', () => {
     readCase.mockReset().mockResolvedValue({ view: CASE, etag: '"2"' });
     versions.mockReset().mockResolvedValue({ items: [], next_cursor: null });
     queue.mockReset();
-    listPending.mockReset().mockResolvedValue({
-      items: [
-        { ...pendingRow(), payload: { body: 'Parent checklist comment' } },
-        {
-          ...pendingRow(),
-          change_id: '018f0000-0000-7000-8000-000000000004',
-          target_id: CASE.case_id,
-          payload: { body: 'An unrelated case-id target' },
-        },
-      ],
-      next_cursor: null,
-    });
+    const rows = [
+      { ...pendingRow(), payload: { body: 'Parent checklist comment' } },
+      {
+        ...pendingRow(),
+        change_id: '018f0000-0000-7000-8000-000000000004',
+        target_id: CASE.case_id,
+        payload: { body: 'An unrelated case-id target' },
+      },
+    ];
+    listPending.mockReset().mockImplementation((_project, _signal, _cursor, targetId) =>
+      Promise.resolve({
+        items: rows.filter((row) => targetId === undefined || row.target_id === targetId),
+        next_cursor: null,
+      }),
+    );
     TestBed.configureTestingModule({
       imports: [EditorPage],
       providers: [
@@ -172,7 +175,7 @@ describe('EditorPage checklist review mount', () => {
     expect(await ui.textAt('app-checklist-review-tab')).not.toContain(
       'An unrelated case-id target',
     );
-    expect(listPending).toHaveBeenCalledWith(PROJECT, expect.any(AbortSignal), undefined);
+    expect(listPending).toHaveBeenCalledWith(PROJECT, expect.any(AbortSignal), undefined, ITEM);
     expect(versions).not.toHaveBeenCalled();
     expect(queue).not.toHaveBeenCalled();
     await ui.fill('review-comment', 'Unsent review comment');

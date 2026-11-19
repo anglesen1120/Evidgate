@@ -24,21 +24,29 @@ export class AuthoringPendingFixtureScenario {
     const project = match[1];
     const rows = this.queues.get(project) ?? (initial.body as AuthoringChangePageResponse).items;
     if (request.method === 'GET' && !match[2] && variantFor('listAuthoringChanges') === 'ok') {
-      const ids = new URL(request.urlWithParams, 'https://fixture.invalid').searchParams
-        .getAll('ids')
-        .flatMap((value) => value.split(','));
-      return this.answer(
-        'listAuthoringChanges',
-        {
-          items: ids.length
-            ? rows
-                .filter((row) => ids.includes(row.change_id))
-                .map((row) => ({ ...row, stale: false }))
-            : rows,
-          next_cursor: null,
-        },
-        ids.length ? ETAG : undefined,
-      );
+      const params = new URL(request.urlWithParams, 'https://fixture.invalid').searchParams;
+      const ids = params.getAll('ids').flatMap((value) => value.split(','));
+      if (ids.length)
+        return this.answer(
+          'listAuthoringChanges',
+          {
+            items: rows
+              .filter((row) => ids.includes(row.change_id))
+              .map((row) => ({ ...row, stale: false })),
+            next_cursor: null,
+          },
+          ETAG,
+        );
+      // The contract narrows the page by the exact `target_id` and by `state`; both are exact,
+      // never a prefix or substring match.
+      const target = params.get('target_id');
+      const state = params.get('state');
+      return this.answer('listAuthoringChanges', {
+        items: rows.filter(
+          (row) => (!target || row.target_id === target) && (!state || row.state === state),
+        ),
+        next_cursor: null,
+      });
     }
     if (request.method !== 'POST' || !match[2]) return undefined;
     const variant = variantFor('applyAuthoringChanges');

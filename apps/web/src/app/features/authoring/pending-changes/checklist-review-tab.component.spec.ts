@@ -76,10 +76,10 @@ describe('ChecklistReviewTabComponent', () => {
       ],
     });
   });
-  async function setup() {
+  async function setup(itemId = ITEM) {
     const fixture = TestBed.createComponent(ChecklistReviewTabComponent);
     fixture.componentRef.setInput('projectId', PROJECT);
-    fixture.componentRef.setInput('itemId', ITEM);
+    fixture.componentRef.setInput('itemId', itemId);
     fixture.detectChanges();
     await fixture.whenStable();
     return {
@@ -88,14 +88,46 @@ describe('ChecklistReviewTabComponent', () => {
       root: TestbedHarnessEnvironment.documentRootLoader(fixture),
     };
   }
-  it('shows only this item’s loaded changes and the project queue link', async () => {
+  it('reads only this item’s queued changes and links the project queue', async () => {
+    const { ui } = await setup();
+    expect(listPending).toHaveBeenCalledWith(PROJECT, expect.any(AbortSignal), undefined, ITEM);
+    expect(await ui.count('[data-review-change]')).toBe(1);
+    expect(await ui.text()).toContain(PENDING_UI.openQueue);
+  });
+  it('renders only this item’s rows when the server ignores the target filter', async () => {
     listPending.mockResolvedValue({
-      items: [pendingRow(), { ...pendingRow(), change_id: 'other', target_id: 'other' }],
+      items: [
+        { ...pendingRow(), payload: { body: 'This item’s queued comment' } },
+        {
+          ...pendingRow(),
+          change_id: '018f0000-0000-7000-8000-000000000004',
+          target_id: '018f0000-0000-7000-8000-000000000005',
+          payload: { body: 'Another item’s queued comment' },
+        },
+      ],
       next_cursor: null,
     });
     const { ui } = await setup();
     expect(await ui.count('[data-review-change]')).toBe(1);
-    expect(await ui.text()).toContain(PENDING_UI.openQueue);
+    expect(await ui.textAt('[data-review-change]')).toContain('This item’s queued comment');
+    expect(await ui.text()).not.toContain('Another item’s queued comment');
+  });
+  it('renders no rows for an empty item identifier', async () => {
+    listPending.mockResolvedValue({
+      items: [
+        pendingRow(),
+        {
+          ...pendingRow(),
+          change_id: '018f0000-0000-7000-8000-000000000004',
+          target_id: '',
+        },
+      ],
+      next_cursor: null,
+    });
+    const { ui } = await setup('');
+    expect(await ui.count('[data-review-change]')).toBe(0);
+    expect(await ui.text()).toContain(PENDING_UI.itemEmpty);
+    expect(listPending).not.toHaveBeenCalled();
   });
   it('queues a comment through the store and retains the optional reason', async () => {
     const { ui, fixture } = await setup();
@@ -137,7 +169,7 @@ describe('ChecklistReviewTabComponent', () => {
       expect.any(String),
       expect.any(AbortSignal),
     );
-  }, 30_000);
+  });
   it.each([
     ['conflict', 409],
     ['validation', 422],
@@ -283,7 +315,7 @@ describe('ChecklistReviewTabComponent', () => {
       expect.any(String),
       expect.any(AbortSignal),
     );
-  }, 30_000);
+  });
   it('hides queue controls below the desktop breakpoint', async () => {
     desktop.set(false);
     const { ui } = await setup();
