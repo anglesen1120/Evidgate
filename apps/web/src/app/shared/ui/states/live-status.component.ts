@@ -8,7 +8,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 @Component({
   selector: 'app-live-status',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `<p class="sr-only" role="status" aria-live="polite" aria-atomic="true">
+  template: `<p class="sr-only" role="status" [attr.aria-live]="'polite'" aria-atomic="true">
     {{ text() }}
   </p>`,
 })
