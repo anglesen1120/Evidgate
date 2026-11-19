@@ -1,4 +1,5 @@
 export * from './canonical.js';
+export * from './caseId.js';
 export * from './validate.js';
 export * from './openapiResponse.js';
 // The CLI skeleton surface the command modules build on.
