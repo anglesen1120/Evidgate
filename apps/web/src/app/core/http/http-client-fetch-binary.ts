@@ -20,7 +20,12 @@ import {
   BINARY_TRANSPORT_HEADER,
 } from './binary-transport';
 import { utf8ExceedsBytes } from './utf8-size';
-import { type Deadline, readUnderCall, toFetchResponse } from './http-client-fetch-transport';
+import {
+  type Deadline,
+  type FetchBody,
+  readUnderCall,
+  toFetchResponse,
+} from './http-client-fetch-transport';
 
 /** Which directions of one call the caller opted into the byte path. */
 export interface BinaryModes {
@@ -252,13 +257,15 @@ export function toBinaryResponse(
   status: number,
   statusText: string,
   headers: HttpHeaders,
-  body: ArrayBuffer | null,
+  body: unknown,
   source: HttpResponseBase,
 ): Response {
+  // An unmeasurable body is infinite, so it is refused here like an over-cap one.
   if (body !== null && finalBodySize(body) > BINARY_BODY_LIMIT_BYTES) {
     throw limitError('response', source);
   }
-  return toFetchResponse(status, statusText, headers, body, source, true);
+  // Only a buffer, view, Blob or string has a finite size, and that is what `Response` accepts.
+  return toFetchResponse(status, statusText, headers, body as FetchBody | null, source, true);
 }
 
 // A `Content-Length` the server declared, the bytes downloaded so far, the final byte length or
