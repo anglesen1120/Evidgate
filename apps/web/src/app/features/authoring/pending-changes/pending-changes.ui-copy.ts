@@ -39,7 +39,7 @@ export const PENDING_UI = {
   queueDeleteBody: $localize`:@@authoring.pending-changes.queue-delete-body:This only queues a delete for review. The item is not deleted until an authorized reviewer applies the batch.`,
   queued: $localize`:@@authoring.pending-changes.queued-success:The change was queued for review.`,
   reasonRejected: $localize`:@@authoring.pending-changes.reason-rejected:The server refused the change reason. Review it before trying again.`,
-  quota: $localize`:@@authoring.pending-changes.quota-reached:The pending-change limit has been reached. Review or discard existing changes before queueing another.`,
+  quota: PENDING_COPY.quotaExceeded,
   writeDenied: $localize`:@@authoring.pending-changes.write-denied:Write access was refused. The queue stays readable; reload after your permissions have been restored.`,
 };
 export function operationLabel(kind: AuthoringChangeListItem['change_type']): string {

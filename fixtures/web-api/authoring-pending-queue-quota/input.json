@@ -12,10 +12,7 @@
       "code": "quota_exceeded",
       "message": "The project holds 500 pending authoring changes.",
       "request_id": "018f0000-0000-7000-8000-00000000af09",
-      "retryable": true,
-      "details": [
-        { "path": "/pending_changes", "reason": "quota_exceeded", "limit": 500, "actual": 500 }
-      ]
+      "retryable": true
     }
   }
 }

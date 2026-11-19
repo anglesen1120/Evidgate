@@ -65,7 +65,7 @@
       {
         "change_id": "018f0000-0000-7000-8000-00000000cd04",
         "target_kind": "checklist_item",
-        "target_id": "018f0000-0000-7000-8000-00000000ab03",
+        "target_id": "018f0000-0000-7000-8000-00000000ab04",
         "change_type": "split",
         "payload": {
           "new_items": [

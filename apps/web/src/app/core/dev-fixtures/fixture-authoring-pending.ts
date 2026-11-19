@@ -44,7 +44,7 @@ export class AuthoringPendingFixtureScenario {
     const variant = variantFor('applyAuthoringChanges');
     if (variant !== 'ok') return findFixtureEntry('applyAuthoringChanges', variant);
     if (request.headers.get('If-Match') !== ETAG)
-      return findFixtureEntry('applyAuthoringChanges', 'conflict');
+      return findFixtureEntry('applyAuthoringChanges', 'stale');
     const body = (
       typeof request.body === 'string' ? JSON.parse(request.body) : request.body
     ) as ApplyAuthoringChangesRequest;
@@ -57,7 +57,7 @@ export class AuthoringPendingFixtureScenario {
       selected.length !== body.change_ids.length ||
       selected.some((row) => row.change_type === 'merge' || row.change_type === 'split')
     )
-      return findFixtureEntry('applyAuthoringChanges', 'conflict');
+      return findFixtureEntry('applyAuthoringChanges', 'stale');
     const receipt: ApplyAuthoringChangesResponse = {
       ...applied.body,
       applied_change_ids: selected.map((row) => row.change_id),

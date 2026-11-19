@@ -2,6 +2,7 @@ import { HttpHeaders, HttpRequest } from '@angular/common/http';
 import { AuthoringPendingFixtureScenario } from './fixture-authoring-pending';
 import { FIXTURE_CATALOG_AUTHORING_PENDING_ROWS } from './fixture-catalog-authoring-pending-rows';
 import { declaredResponseHeaderNames, VALIDATOR } from './fixture-contract.support';
+import listFixture from '../../../../../../fixtures/web-api/authoring-pending-list/input.json';
 
 describe('authoring pending fixture contract pins', () => {
   for (const row of FIXTURE_CATALOG_AUTHORING_PENDING_ROWS) {
@@ -49,6 +50,20 @@ describe('authoring pending fixture contract pins', () => {
       { items?: readonly Record<string, unknown>[] } | undefined;
     expect(listBody?.items?.every((item) => item['stale'] === undefined)).toBe(true);
   });
+  it('keeps affected targets disjoint across the executable structural specimens', () => {
+    const affected = new Set<string>();
+    const structural = listFixture.body.items.filter((row) => row.change_type !== 'comment');
+    expect(structural).toHaveLength(3);
+    for (const row of structural) {
+      const ids =
+        row.change_type === 'merge' ? (row.payload.source_item_ids ?? []) : [row.target_id];
+      expect(ids.length).toBeGreaterThan(0);
+      for (const id of ids) {
+        expect(affected.has(id)).toBe(false);
+        affected.add(id);
+      }
+    }
+  });
 
   it('keeps a comment-only receipt with an empty versions array', () => {
     const receipt = FIXTURE_CATALOG_AUTHORING_PENDING_ROWS.find(
@@ -94,6 +109,13 @@ describe('authoring pending fixture contract pins', () => {
         next_cursor: null,
       }).errors.length,
     ).toBeGreaterThan(0);
+  });
+  it('carries quota_exceeded only in the quota error code, without a details reason', () => {
+    const quota = FIXTURE_CATALOG_AUTHORING_PENDING_ROWS.find(
+      (row) => row.name === 'authoring-pending-queue-quota',
+    )?.document.body as { error: { code: string; details?: readonly unknown[] } };
+    expect(quota.error.code).toBe('quota_exceeded');
+    expect(quota.error.details).toBeUndefined();
   });
 });
 
@@ -143,7 +165,7 @@ describe('AuthoringPendingFixtureScenario', () => {
     const refusal = scenario.entry(
       new HttpRequest('POST', path + ':apply', { change_ids: ids }),
       path + ':apply',
-      (operation) => (operation === 'applyAuthoringChanges' ? 'conflict' : 'ok'),
+      (operation) => (operation === 'applyAuthoringChanges' ? 'stale' : 'ok'),
     );
     expect(refusal?.document.status).toBe(412);
     expect(scenario.entry(new HttpRequest('GET', path), path, variant)?.document.body).toEqual(

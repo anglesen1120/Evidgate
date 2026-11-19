@@ -1,9 +1,10 @@
 import { ChangeDetectionStrategy, Component, input, output, signal } from '@angular/core';
+import type { AuthoringChangeListItem } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
 import { PENDING_COPY } from './pending-changes.copy';
-import { PENDING_UI } from './pending-changes.ui-copy';
+import { operationLabel, PENDING_UI } from './pending-changes.ui-copy';
 
 @Component({
   selector: 'app-pending-confirm',
@@ -31,8 +32,26 @@ import { PENDING_UI } from './pending-changes.ui-copy';
         </header>
         <section class="grid min-w-0 gap-(--eg-space-3)">
           <h3 class="m-0 text-lg font-semibold">{{ idsLabel() }}</h3>
-          @for (id of ids(); track id) {
-            <app-copyable-identifier [value]="id" [label]="valueLabel()" />
+          @if (changes().length === 0) {
+            @for (id of ids(); track id) {
+              <app-copyable-identifier [value]="id" [label]="valueLabel()" />
+            }
+          }
+          @for (change of changes(); track change.change_id) {
+            <div class="grid min-w-0 gap-(--eg-space-2)" data-pending-consent-operation>
+              <h3 class="m-0 text-lg font-semibold">{{ operationLabel(change.change_type) }}</h3>
+              <app-copyable-identifier [value]="change.change_id" [label]="ui.changeId" />
+              <app-copyable-identifier [value]="change.target_id" [label]="copy.targetLabel" />
+              @if (targetTitles()[change.target_id]; as title) {
+                <p class="m-0 whitespace-pre-wrap wrap-anywhere">
+                  <bdi>{{ title }}</bdi>
+                </p>
+              }
+              @if (change.change_type === 'delete') {
+                <p class="m-0 whitespace-pre-wrap wrap-anywhere">{{ copy.deleteConsequence }}</p>
+                <p class="m-0 whitespace-pre-wrap wrap-anywhere">{{ copy.impactUnavailable }}</p>
+              }
+            </div>
           }
         </section>
         @if (note()) {
@@ -75,6 +94,8 @@ export class PendingConfirmComponent {
   readonly description = input.required<string>();
   readonly action = input.required<string>();
   readonly ids = input.required<readonly string[]>();
+  readonly changes = input<readonly AuthoringChangeListItem[]>([]);
+  readonly targetTitles = input<Readonly<Record<string, string>>>({});
   readonly note = input('');
   readonly noteLabel = input<string>(PENDING_COPY.reasonLabel);
   readonly noteHint = input<string>(PENDING_COPY.reasonHint);
@@ -85,6 +106,7 @@ export class PendingConfirmComponent {
   readonly dismissed = output<void>();
   protected readonly copy = PENDING_COPY;
   protected readonly ui = PENDING_UI;
+  protected readonly operationLabel = operationLabel;
   protected readonly opened = signal(true);
   private accepted = false;
   private finished = false;

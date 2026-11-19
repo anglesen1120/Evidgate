@@ -20,6 +20,7 @@ export const PENDING_COPY = {
   applyConfirmBody: $localize`:@@authoring.pending-changes.apply-confirm-body:Every selected pending change is applied in one transaction. Nothing is applied if the batch is stale.`,
   applyConfirm: $localize`:@@authoring.pending-changes.apply-confirm:Apply changes`,
   applying: $localize`:@@authoring.pending-changes.applying:Applying the batch…`,
+  refreshing: $localize`:@@authoring.pending-changes.refreshing:Refreshing the queue… Previously loaded changes remain available.`,
   cancel: $localize`:@@authoring.pending-changes.cancel:Cancel`,
   discardAction: $localize`:@@authoring.pending-changes.discard-action:Discard this change`,
   discardConfirmTitle: $localize`:@@authoring.pending-changes.discard-confirm-title:Discard this pending change?`,
@@ -53,6 +54,8 @@ export const PENDING_COPY = {
   duplicatePending: $localize`:@@authoring.pending-changes.duplicate-pending:An affected item already has a pending structural change.`,
   commentAction: $localize`:@@authoring.pending-changes.comment-action:Queue a comment`,
   deleteAction: $localize`:@@authoring.pending-changes.delete-action:Queue a delete`,
+  deleteConsequence: $localize`:@@authoring.pending-changes.delete-consequence:Applying this delete removes the named target item.`,
+  quotaExceeded: $localize`:@@authoring.pending-changes.quota-reached:The pending-change limit has been reached. Review or discard existing changes before queueing another.`,
   commentLabel: $localize`:@@authoring.pending-changes.comment-label:Comment`,
   deleteLabel: $localize`:@@authoring.pending-changes.delete-label:Delete`,
   mergeLabel: $localize`:@@authoring.pending-changes.merge-label:Merge`,
@@ -180,6 +183,7 @@ export function selectionBlockedReason(
 
 /** The server text for a failed mutation, or a static sentence when the server sent none. */
 export function pendingFailure(error: ApiError, fallback: string): string {
+  if (error.code === 'quota_exceeded') return PENDING_COPY.quotaExceeded;
   return error.message.trim().length > 0 ? error.message : fallback;
 }
 

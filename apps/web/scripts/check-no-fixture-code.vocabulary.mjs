@@ -26,6 +26,9 @@ export const ENUM_MEMBERS = new Map([
   // `entity_kind` enum of contracts/openapi.yaml (authoring versions); the version timeline sends
   // it on the wire, so production code carries each value.
   ['entity_kind', new Set(['feature_node', 'checklist_item', 'manual_test_case'])],
+  // `target_kind` enum of AuthoringChangeListItem (openapi.yaml ~13671, ~13718); the pending
+  // changes screen sends and matches it.
+  ['target_kind', new Set(['checklist_item'])],
   ['provider', new Set(['github_actions'])],
   [
     'status',
@@ -70,4 +73,5 @@ export const ERROR_DETAIL_REASONS = new Set([
   'unsupported_format', // ~8299, ~8309, ~9516
   'unknown_parent', // importAuthoring prose, ~8303
   'body_too_large', // exportAuthoring prose, ~8400
+  'change_already_pending', // queueAuthoringChange prose, ~7357
 ]);

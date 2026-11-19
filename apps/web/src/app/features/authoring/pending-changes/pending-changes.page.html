@@ -7,7 +7,7 @@
   copy.back
 }}</a>
 <app-desktop-required-notice />
-@if (!store.canRead()) {
+@if (!store.canRead() || store.forbidden()) {
   <app-forbidden-pattern />
 } @else {
   <app-request-state
@@ -17,9 +17,12 @@
     [emptyTitle]="copy.emptyTitle"
     [emptyDescription]="copy.emptyBody"
     [retryEligible]="store.retryReady()"
-    [retryBusy]="status() === 'loading'"
+    [retryBusy]="readBusy()"
     (retry)="store.reload()"
   >
+    @if (readBusy()) {
+      <p class="m-0" role="status">{{ copy.refreshing }}</p>
+    }
     <app-inline-feedback
       [tone]="'info'"
       [title]="ui.atomic"
@@ -79,7 +82,11 @@
         {{ copy.conflictReload }}
       </button>
     }
-    <section class="region" [attr.aria-label]="copy.queueTitle" [attr.aria-busy]="store.applying()">
+    <section
+      class="region"
+      [attr.aria-label]="copy.queueTitle"
+      [attr.aria-busy]="store.applying() || readBusy()"
+    >
       <app-section-header [title]="copy.queueTitle" [description]="copy.loadedScope" />
       <p class="m-0">{{ copy.queueScope }}: <app-number-value [value]="store.rows().length" /></p>
       <div class="actions">
@@ -117,6 +124,7 @@
           type="button"
           class="w-fit"
           [disabled]="busy() || !store.retryReady()"
+          [attr.aria-disabled]="readBusy()"
           (click)="store.loadMore()"
         >
           {{ ui.loadMore }}
@@ -220,7 +228,7 @@
         <p id="pending-write-explanation" class="full-text">{{ copy.readOnly }}</p>
       }
       @for (entry of store.rowsWithBlocks(); track entry.row.change_id) {
-        @if (entry.blockedReason && store.selectedIds().includes(entry.row.change_id)) {
+        @if (entry.blockedReason && store.selectedIdSet().has(entry.row.change_id)) {
           <div class="blocked-item">
             <app-copyable-identifier [value]="entry.row.change_id" [label]="ui.changeId" />
             <p class="full-text">{{ entry.blockedReason }}</p>
@@ -306,13 +314,22 @@
       </dl>
       <h3 class="m-0 text-lg font-semibold">{{ ui.appliedIds }}</h3>
       @for (id of receipt.applied_change_ids; track id) {
-        <app-copyable-identifier [value]="id" [label]="ui.changeId" />
+        <app-copyable-identifier
+          [value]="id"
+          [label]="ui.changeId"
+          [attr.data-pending-applied-id]="id"
+        />
       }
       @if (receipt.versions.length === 0) {
         <p class="full-text">{{ copy.receiptCommentOnly }}</p>
       }
       @for (version of receipt.versions; track version.entity_kind + version.entity_id) {
-        <div class="actions" data-pending-version>
+        <div
+          class="actions"
+          data-pending-version
+          [attr.data-pending-version-entity]="version.entity_id"
+          [attr.data-pending-version-number]="version.version_no"
+        >
           <app-copyable-identifier
             [value]="version.entity_id"
             [label]="ui.entity"
@@ -339,7 +356,7 @@
     [open]="conflictOpen()"
     [fields]="conflictFields()"
     [currentRevision]="null"
-    [reloadState]="status() === 'loading' ? 'loading' : store.queueError() ? 'error' : 'idle'"
+    [reloadState]="readBusy() ? 'loading' : store.queueError() ? 'error' : 'idle'"
     [reloadError]="store.queueError()"
     (reload)="reloadConflict()"
     (keepEditing)="dismissedConflict.set(true)"
@@ -352,8 +369,10 @@
           confirmation.kind === 'apply' ? copy.applyConfirmBody : copy.discardConfirmBody
         "
         [action]="confirmation.kind === 'apply' ? copy.applyConfirm : copy.discardConfirm"
-        [destructive]="confirmation.kind === 'discard'"
+        [destructive]="confirmation.destructive"
         [ids]="confirmation.ids"
+        [changes]="confirmation.changes"
+        [targetTitles]="store.targetTitles()"
         [note]="confirmation.note"
         (confirmed)="confirm()"
         (dismissed)="consent.set(null)"
@@ -365,7 +384,7 @@
   <hlm-checkbox
     [inputId]="'pending-select-' + row.change_id"
     [aria-labelledby]="'pending-select-label-' + row.change_id"
-    [checked]="store.selectedIds().includes(row.change_id)"
+    [checked]="store.selectedIdSet().has(row.change_id)"
     [disabled]="busy()"
     (checkedChange)="store.toggle(row.change_id)"
   />
@@ -379,6 +398,7 @@
     [variant]="'link'"
     type="button"
     data-pending-preview
+    [attr.data-pending-change-id]="row.change_id"
     [attr.aria-label]="ui.preview + ': ' + operationLabel(row.change_type) + ' ' + row.change_id"
     [attr.aria-pressed]="store.previewId() === row.change_id"
     (click)="store.setPreview(row.change_id)"

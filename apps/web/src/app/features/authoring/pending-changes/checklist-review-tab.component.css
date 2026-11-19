@@ -20,6 +20,20 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.facts,
+.facts > div {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--eg-space-2);
+}
+.facts {
+  margin: 0;
+  gap: var(--eg-space-4);
+}
+.facts dd {
+  margin: 0;
+  user-select: text;
+}
 .actions {
   display: flex;
   flex-wrap: wrap;

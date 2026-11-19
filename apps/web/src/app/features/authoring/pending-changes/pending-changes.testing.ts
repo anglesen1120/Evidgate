@@ -61,6 +61,12 @@ export class PendingUiHarness extends ComponentHarness {
   async disabled(selector: string) {
     return (await this.locatorFor(selector)()).getProperty<boolean>('disabled');
   }
+  async focusControl(selector: string) {
+    await (await this.locatorFor(selector)()).focus();
+  }
+  async focused(selector: string) {
+    return (await this.locatorFor(selector)()).isFocused();
+  }
 }
 export class PendingConsentHarness extends ComponentHarness {
   static hostSelector = '[role="alertdialog"]';
@@ -78,5 +84,12 @@ export class PendingConsentHarness extends ComponentHarness {
   }
   async text() {
     return (await this.host()).text();
+  }
+  async destructive() {
+    return (
+      (await (await this.locatorFor('[data-pending-confirm]')()).getAttribute('class'))?.includes(
+        'bg-destructive',
+      ) ?? false
+    );
   }
 }

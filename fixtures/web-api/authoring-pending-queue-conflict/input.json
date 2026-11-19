@@ -9,7 +9,7 @@
   "body": {
     "error": {
       "code": "invalid_transition",
-      "message": "An affected item already has a pending structural change.",
+      "message": "A structural operation is already queued for one of these items.",
       "request_id": "018f0000-0000-7000-8000-00000000af08",
       "retryable": false,
       "details": [{ "path": "/change_type", "reason": "change_already_pending" }]

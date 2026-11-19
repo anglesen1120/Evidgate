@@ -27,6 +27,7 @@ import { DesktopMutationDirective } from '../../../shared/ui/narrow/desktop-muta
 import { DesktopRequiredNoticeComponent } from '../../../shared/ui/narrow/desktop-required-notice.component';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
+import { NumberValueComponent } from '../../../shared/ui/values/number-value.component';
 import { createFormFeedback } from '../../../shared/forms/form-feedback';
 import { FieldFeedbackComponent } from '../../../shared/forms/field-feedback.component';
 import { FormErrorSummaryComponent } from '../../../shared/forms/form-error-summary.component';
@@ -53,6 +54,7 @@ import { PendingConfirmComponent } from './pending-confirm.component';
     DesktopMutationDirective,
     DesktopRequiredNoticeComponent,
     CopyableIdentifierComponent,
+    NumberValueComponent,
     PendingConfirmComponent,
     FieldFeedbackComponent,
     FormErrorSummaryComponent,
@@ -74,6 +76,12 @@ export class ChecklistReviewTabComponent {
   private readonly scope = computed(() => ({ project: this.projectId(), item: this.itemId() }));
   protected readonly comment = linkedSignal({ source: this.scope, computation: () => '' });
   protected readonly reason = linkedSignal({ source: this.scope, computation: () => '' });
+  protected readonly commentLimit = 2000;
+  protected readonly reasonLimit = 500;
+  protected readonly commentLength = computed(() => Array.from(this.comment()).length);
+  protected readonly reasonLength = computed(() => Array.from(this.reason()).length);
+  private readonly commentTooLong = $localize`:@@authoring.pending-changes.comment-too-long:Use no more than 2,000 characters for the comment.`;
+  private readonly reasonTooLong = $localize`:@@authoring.pending-changes.reason-too-long:Use no more than 500 characters for the reason.`;
   protected readonly queued = linkedSignal({ source: this.scope, computation: () => false });
   protected readonly consent = signal<{ project: string; item: string; reason: string } | null>(
     null,
@@ -121,13 +129,26 @@ export class ChecklistReviewTabComponent {
           id: 'review-comment',
           label: this.copy.commentLabel,
           hint: this.ui.commentHint,
+          describedBy: 'review-comment-count',
           error: () =>
-            this.retryKind() === 'delete' || this.comment().trim() ? null : this.ui.commentRequired,
+            this.retryKind() === 'delete'
+              ? null
+              : this.commentLength() > this.commentLimit
+                ? this.commentTooLong
+                : this.comment().trim()
+                  ? null
+                  : this.ui.commentRequired,
         },
         {
           id: 'review-reason',
           label: this.ui.queueReason,
-          error: () => (this.reasonRefused() ? this.ui.reasonRejected : null),
+          describedBy: 'review-reason-count',
+          error: () =>
+            this.reasonLength() > this.reasonLimit
+              ? this.reasonTooLong
+              : this.reasonRefused()
+                ? this.ui.reasonRejected
+                : null,
         },
       ]),
   });
@@ -186,6 +207,8 @@ export class ChecklistReviewTabComponent {
   }
   protected openDelete(): void {
     if (!this.policy.allowsMutation() || this.blocked()) return;
+    this.retryKind.set('delete');
+    if (!this.feedback().submit()) return;
     this.consent.set({ ...this.scope(), reason: this.reason() });
   }
   protected async confirmDelete(): Promise<void> {

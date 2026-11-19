@@ -51,6 +51,8 @@ interface Consent {
   readonly project: string | null;
   readonly ids: readonly string[];
   readonly note: string;
+  readonly changes: readonly AuthoringChangeListItem[];
+  readonly destructive: boolean;
 }
 
 @Component({
@@ -118,10 +120,12 @@ export class PendingChangesPage {
   protected readonly busy = computed(
     () => this.store.applying() || this.store.discardingId() !== null,
   );
+  protected readonly readBusy = computed(() => this.store.queueLoading());
   protected readonly blocked = computed(
     () =>
       this.store.applyBlockedReason() !== null ||
       this.busy() ||
+      this.readBusy() ||
       !this.store.retryReady() ||
       this.store.queueStale() ||
       this.deniedWrite(),
@@ -231,15 +235,14 @@ export class PendingChangesPage {
 
   constructor() {
     afterRenderEffect(() => {
-      if (!this.policy.canMutate()) {
-        if (this.consent()) this.consent.set(null);
-        if (
-          this.focused &&
-          !this.focused.isConnected &&
-          this.document.activeElement === this.document.body
-        )
-          this.inspection()?.nativeElement.focus();
-      }
+      this.store.queueLoading();
+      if (!this.policy.canMutate() && this.consent()) this.consent.set(null);
+      if (
+        this.focused &&
+        !this.focused.isConnected &&
+        this.document.activeElement === this.document.body
+      )
+        this.inspection()?.nativeElement.focus();
     });
   }
   protected rememberFocus(event: FocusEvent): void {
@@ -247,11 +250,18 @@ export class PendingChangesPage {
   }
   protected openApply(): void {
     if (!this.policy.allowsMutation() || this.blocked()) return;
+    const ids = this.store.applyRequest()?.ids ?? this.store.selectedIds();
+    const selected = new Set(ids);
+    const changes =
+      this.store.applyRequest()?.rows ??
+      this.store.rows().filter((row) => selected.has(row.change_id));
     this.consent.set({
       kind: 'apply',
       project: this.store.projectId(),
-      ids: [...this.store.selectedIds()],
+      ids: [...ids],
       note: this.store.localReason(),
+      changes,
+      destructive: changes.some((row) => row.change_type === 'delete'),
     });
   }
   protected openDiscard(id: string): void {
@@ -263,7 +273,14 @@ export class PendingChangesPage {
       !this.store.retryReady()
     )
       return;
-    this.consent.set({ kind: 'discard', project: this.store.projectId(), ids: [id], note: '' });
+    this.consent.set({
+      kind: 'discard',
+      project: this.store.projectId(),
+      ids: [id],
+      note: '',
+      changes: [],
+      destructive: true,
+    });
   }
   protected async confirm(): Promise<void> {
     const consent = this.consent();
@@ -279,7 +296,8 @@ export class PendingChangesPage {
     )
       return;
     if (consent.kind === 'apply') {
-      if (this.blocked() || consent.ids.join(',') !== this.store.selectedIds().join(',')) return;
+      const ids = this.store.applyRequest()?.ids ?? this.store.selectedIds();
+      if (this.blocked() || consent.ids.join(',') !== ids.join(',')) return;
       await this.store.apply();
     } else if (
       consent.ids[0] &&

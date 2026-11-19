@@ -40,9 +40,10 @@ async function gate(document, word) {
 
 const detail = (reason) => ({ body: { error: { details: [{ path: '/steps', reason }] } } });
 
-test('the vocabulary holds exactly the eight documented reason words', () => {
+test('the vocabulary holds exactly the nine documented reason words', () => {
   assert.deepEqual([...ERROR_DETAIL_REASONS].sort(), [
     'body_too_large',
+    'change_already_pending',
     'code_conflict',
     'duplicate_key',
     'invalid_text',
@@ -112,4 +113,21 @@ test('an entity_kind word under another member is still a leak', async () => {
   const other = await gate({ body: { note: 'feature_node' } }, 'feature_node');
   assert.equal(other.status, 1);
   assert.match(other.stderr, /feature_node/);
+});
+
+test('checklist_item under target_kind is exempt', async () => {
+  const result = await gate(
+    { body: { items: [{ target_kind: 'checklist_item' }] } },
+    'checklist_item',
+  );
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test('another target_kind value is still a leak', async () => {
+  const result = await gate(
+    { body: { items: [{ target_kind: 'some_other_kind' }] } },
+    'some_other_kind',
+  );
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /some_other_kind/);
 });

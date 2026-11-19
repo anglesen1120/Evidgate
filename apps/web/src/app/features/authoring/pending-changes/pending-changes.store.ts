@@ -17,7 +17,7 @@ import type {
 } from '@evidgate/sdk';
 
 import { AuthoringPendingDataService } from '../../../core/data/authoring-pending-data.service';
-import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
+import type { ApiError } from '../../../core/http/api-error';
 import { createRetryAfterWait } from '../../../core/http/retry';
 import { SessionStore } from '../../../core/session/session.store';
 import { AUTHORING_READ, AUTHORING_WRITE } from '../import-export/import-export.copy';
@@ -25,7 +25,6 @@ import {
   MAX_APPLY_SELECTION,
   PENDING_COPY,
   isStale,
-  pendingFailure,
   pendingPreview,
   rowBlockedReason,
   selectionBlockedReason,
@@ -36,18 +35,15 @@ import {
   isCancellation,
   signatureOf,
   unexpectedFailure,
+  pendingDocument,
+  canReplayApply,
+  pendingRequestFailure as fail,
+  type PendingApplyReplay,
 } from './pending-changes.intent';
-
-export type PendingQueueStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 export interface PendingConflict {
   readonly code: string;
   readonly pointers: readonly { readonly path: string | null; readonly reason: string }[];
-}
-
-export interface PendingRow {
-  readonly row: AuthoringChangeListItem;
-  readonly blockedReason: string | null;
 }
 
 const NO_TITLES: Readonly<Record<string, string>> = {};
@@ -60,6 +56,7 @@ export const PendingChangesStore = signalStore(
     queueStatus: 'idle',
     queueError: null as ApiError | null,
     queueStale: false,
+    queueLoading: false,
     loadToken: 0,
     selectedIds: [] as readonly string[],
     selectionTouched: false,
@@ -70,6 +67,7 @@ export const PendingChangesStore = signalStore(
     targetTitles: NO_TITLES,
     applying: false,
     applyError: null as ApiError | null,
+    applyRequest: null as PendingApplyReplay | null,
     conflict: null as PendingConflict | null,
     receipt: null as ApplyAuthoringChangesResponse | null,
     discardingId: null as string | null,
@@ -88,6 +86,9 @@ export const PendingChangesStore = signalStore(
     return { _keys: book.keys, _run: book.run };
   }),
   withComputed((store) => ({
+    selectedIdSet: computed(() => new Set(store.selectedIds())),
+  })),
+  withComputed((store) => ({
     canRead: computed(() => store._session.has(AUTHORING_READ)),
     canWrite: computed(() => store._session.has(AUTHORING_WRITE)),
     empty: computed(() => store.queueStatus() === 'ready' && store.rows().length === 0),
@@ -97,32 +98,20 @@ export const PendingChangesStore = signalStore(
     forbidden: computed(
       () => store.queueStatus() === 'error' && store.queueError()?.kind === 'forbidden',
     ),
-    selectedRows: computed(() => {
-      const selected = new Set(store.selectedIds());
-      return store.rows().filter((row) => selected.has(row.change_id));
-    }),
+    selectedRows: computed(() =>
+      store.rows().filter((row) => store.selectedIdSet().has(row.change_id)),
+    ),
     selectedCount: computed(() => store.selectedIds().length),
-    allSelected: computed(() => {
-      const loaded = store.rows().slice(0, MAX_APPLY_SELECTION);
-      const selected = new Set(store.selectedIds());
-      return loaded.length > 0 && loaded.every((row) => selected.has(row.change_id));
-    }),
     previewRow: computed<AuthoringChangeListItem | null>(() => {
       const id = store.previewId();
       return id === null ? null : (store.rows().find((row) => row.change_id === id) ?? null);
     }),
-    rowsWithBlocks: computed<readonly PendingRow[]>(() =>
+    rowsWithBlocks: computed(() =>
       store.rows().map((row) => ({ row, blockedReason: rowBlockedReason(row) })),
     ),
     retryReady: computed(() => store._wait.ready()),
   })),
   withComputed((store) => ({
-    staleSelectionIds: computed(() =>
-      store
-        .selectedRows()
-        .filter((row) => isStale(row))
-        .map((row) => row.change_id),
-    ),
     preview: computed<PendingPreview | null>(() => {
       const row = store.previewRow();
       return row === null ? null : pendingPreview(row, store.targetTitles()[row.target_id] ?? null);
@@ -130,17 +119,12 @@ export const PendingChangesStore = signalStore(
     applyBlockedReason: computed<string | null>(() => {
       if (!store.canWrite()) return PENDING_COPY.readOnly;
       if (store.applying()) return PENDING_COPY.applying;
+      if (store.applyRequest()) return null;
       return selectionBlockedReason(store.rows(), store.selectedIds());
     }),
     discardBlocked: computed(() => !store.canWrite() || store.discardingId() !== null),
   })),
   withMethods((store) => {
-    function fail(error: unknown, fallback: string): ApiError {
-      return isApiRequestError(error)
-        ? { ...error.error, message: pendingFailure(error.error, fallback) }
-        : unexpectedFailure('pending_unexpected', fallback);
-    }
-
     function noteWait(error: ApiError): void {
       patchState(store, { retryAfterSeconds: error.retryAfterSeconds });
       store._wait.start(error.retryAfterSeconds);
@@ -171,7 +155,12 @@ export const PendingChangesStore = signalStore(
 
     async function read(project: string, cursor: string | null, replace: boolean): Promise<void> {
       const token = store.loadToken() + 1;
-      patchState(store, { loadToken: token, queueStatus: 'loading', queueError: null });
+      patchState(store, {
+        loadToken: token,
+        queueLoading: true,
+        queueStatus: store.queueStatus() === 'ready' ? 'ready' : 'loading',
+        queueError: null,
+      });
       const signal = store._run.startRead();
       try {
         const page = await store._data.listPending(project, signal, cursor ?? undefined);
@@ -184,29 +173,41 @@ export const PendingChangesStore = signalStore(
             nextCursor: page.next_cursor,
           });
         }
-        patchState(store, { queueStatus: 'ready' });
+        patchState(store, {
+          queueStatus: 'ready',
+          applyError: store.applyError()?.kind === 'forbidden' ? null : store.applyError(),
+          discardError: store.discardError()?.kind === 'forbidden' ? null : store.discardError(),
+        });
       } catch (error) {
         if (store.loadToken() !== token || !store._run.ownsRead(signal)) return;
         const failure = fail(error, PENDING_COPY.queueFailed);
+        const denied = failure.kind === 'forbidden' || failure.kind === 'not_found';
         patchState(store, {
-          queueStatus: store.rows().length > 0 ? 'ready' : 'error',
+          queueStatus: !denied && store.rows().length > 0 ? 'ready' : 'error',
           queueError: failure,
-          queueStale: store.rows().length > 0,
+          queueStale: !denied && store.rows().length > 0,
+          ...(denied ? { rows: [], targetTitles: NO_TITLES, receipt: null, previewId: null } : {}),
         });
         noteWait(failure);
+      } finally {
+        if (store.loadToken() === token) patchState(store, { queueLoading: false });
       }
     }
 
     async function reload(): Promise<void> {
       const project = store.projectId();
-      if (project !== null) await read(project, null, true);
+      if (project !== null && !store.applying() && !store.applyRequest())
+        await read(project, null, true);
     }
 
     /** Reads the exact selection again: the only source of the apply `If-Match`. */
-    async function refresh(project: string, ids: readonly string[]): Promise<string | null> {
-      const signal = store._run.startRead();
+    async function refresh(
+      project: string,
+      ids: readonly string[],
+      signal: AbortSignal,
+    ): Promise<string | null> {
       const { items, batchEtag } = await store._data.selection(project, ids, signal);
-      if (!store._run.ownsRead(signal)) return null;
+      if (signal.aborted) return null;
       const byId = new Map(items.map((row) => [row.change_id, row]));
       patchState(store, {
         rows: store.rows().map((row) => byId.get(row.change_id) ?? row),
@@ -218,8 +219,8 @@ export const PendingChangesStore = signalStore(
     async function apply(): Promise<boolean> {
       const project = store.projectId();
       const ids = store.selectedIds();
-      if (project === null || store.applying()) return false;
-      const blocked = selectionBlockedReason(store.rows(), ids);
+      if (project === null || store.applying() || store.queueLoading()) return false;
+      const blocked = store.applyRequest() ? null : selectionBlockedReason(store.rows(), ids);
       if (blocked !== null || !store.canWrite()) {
         patchState(store, {
           applyError: unexpectedFailure('selection_blocked', blocked ?? PENDING_COPY.readOnly),
@@ -229,16 +230,31 @@ export const PendingChangesStore = signalStore(
       patchState(store, { applying: true, applyError: null, conflict: null });
       const signal = store._run.call();
       try {
-        const etag = await refresh(project, ids);
-        if (etag === null) return false;
-        if (store.selectedRows().some((row) => isStale(row))) {
-          patchState(store, {
-            applyError: unexpectedFailure('selection_stale', PENDING_COPY.blockedStale),
-          });
-          return false;
+        let request = store.applyRequest();
+        if (request === null) {
+          const etag = await refresh(project, ids, signal);
+          if (etag === null) return false;
+          if (store.selectedRows().some((row) => isStale(row))) {
+            patchState(store, {
+              applyError: unexpectedFailure('selection_stale', PENDING_COPY.blockedStale),
+            });
+            return false;
+          }
+          request = {
+            ids: [...ids],
+            rows: store.selectedRows(),
+            etag,
+            key: store._keys.apply(signatureOf('apply', '', etag, ids)),
+          };
+          patchState(store, { applyRequest: request });
         }
-        const key = store._keys.apply(signatureOf('apply', '', etag, ids));
-        const result = await store._data.apply(project, etag, ids, key, signal);
+        const result = await store._data.apply(
+          project,
+          request.etag,
+          request.ids,
+          request.key,
+          signal,
+        );
         const applied = new Set(result.applied_change_ids);
         store._keys.dropApply();
         const previewId = store.previewId();
@@ -248,6 +264,7 @@ export const PendingChangesStore = signalStore(
           batchEtag: null,
           previewId: previewId !== null && applied.has(previewId) ? null : previewId,
           receipt: result,
+          applyRequest: null,
           applyError: null,
           conflict: null,
         });
@@ -266,11 +283,15 @@ export const PendingChangesStore = signalStore(
               })),
             },
             applyError: null,
+            applyRequest: null,
           });
         } else {
           patchState(store, { applyError: failure });
-          if (!failure.retryable) store._keys.dropApply();
-          if (failure.kind === 'conflict') void reload();
+          if (!canReplayApply(failure)) {
+            store._keys.dropApply();
+            patchState(store, { applyRequest: null });
+          }
+          if (failure.kind === 'conflict') await read(project, null, true);
           noteWait(failure);
         }
         return false;
@@ -301,6 +322,7 @@ export const PendingChangesStore = signalStore(
             receipt: null,
             conflict: null,
             applyError: null,
+            applyRequest: null,
             discardError: null,
             enqueueError: null,
           });
@@ -315,7 +337,7 @@ export const PendingChangesStore = signalStore(
       async loadMore(): Promise<void> {
         const project = store.projectId();
         const cursor = store.nextCursor();
-        if (project === null || cursor === null || store.queueStatus() === 'loading') return;
+        if (project === null || cursor === null || store.queueLoading() || store.applying()) return;
         await read(project, cursor, false);
       },
       toggle(id: string): void {
@@ -411,24 +433,10 @@ export const PendingChangesStore = signalStore(
         }
       },
       async queueComment(targetId: string, body: string, reason?: string): Promise<boolean> {
-        const document: AuthoringChangeV1 = {
-          target_kind: 'checklist_item',
-          target_id: targetId,
-          change_type: 'comment',
-          payload: { body },
-          ...(reason === undefined ? {} : { reason }),
-        };
-        return queue(document);
+        return queue(pendingDocument(targetId, 'comment', { body }, reason));
       },
       async queueDelete(targetId: string, reason?: string): Promise<boolean> {
-        const document: AuthoringChangeV1 = {
-          target_kind: 'checklist_item',
-          target_id: targetId,
-          change_type: 'delete',
-          payload: {},
-          ...(reason === undefined ? {} : { reason }),
-        };
-        return queue(document);
+        return queue(pendingDocument(targetId, 'delete', {}, reason));
       },
     };
 

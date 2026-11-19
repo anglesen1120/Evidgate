@@ -39,7 +39,11 @@
         <app-inline-feedback [tone]="'warning'" [title]="copy.readOnly" [announcement]="'off'" />
       }
       @if (store.enqueueError(); as error) {
-        <app-inline-feedback [tone]="'destructive'" [title]="quota() ? ui.quota : error.message" />
+        <app-inline-feedback
+          data-review-enqueue-error
+          [tone]="'destructive'"
+          [title]="quota() ? ui.quota : error.message"
+        />
         @for (detail of error.details; track $index) {
           <p class="full-text">{{ detail.path }} {{ detail.reason }}</p>
         }
@@ -73,6 +77,7 @@
               id="review-comment"
               name="comment"
               rows="4"
+              [attr.maxlength]="commentLimit"
               [ngModel]="comment()"
               (ngModelChange)="comment.set($event)"
               [readOnly]="blocked()"
@@ -82,6 +87,14 @@
               [aria-describedby]="field.describedBy()"
             ></textarea>
             <app-field-feedback [field]="field" />
+            <p
+              id="review-comment-count"
+              class="full-text text-sm text-muted-foreground"
+              i18n="@@authoring.pending-changes.character-count"
+            >
+              <app-number-value [value]="commentLength()" /> of
+              <app-number-value [value]="commentLimit" /> characters
+            </p>
           </div>
         }
         @if (feedback().fields[1]; as field) {
@@ -92,6 +105,7 @@
               id="review-reason"
               name="reason"
               rows="2"
+              [attr.maxlength]="reasonLimit"
               [ngModel]="reason()"
               (ngModelChange)="reason.set($event)"
               [readOnly]="blocked()"
@@ -101,6 +115,14 @@
               [aria-describedby]="field.describedBy()"
             ></textarea>
             <app-field-feedback [field]="field" />
+            <p
+              id="review-reason-count"
+              class="full-text text-sm text-muted-foreground"
+              i18n="@@authoring.pending-changes.reason-character-count"
+            >
+              <app-number-value [value]="reasonLength()" /> of
+              <app-number-value [value]="reasonLimit" /> characters
+            </p>
           </div>
         }
         <div class="actions">
@@ -125,6 +147,18 @@
           </button>
         </div>
       </form>
+      @if (!policy.canMutate()) {
+        <dl class="facts">
+          <div data-review-comment-snapshot>
+            <dt>{{ copy.commentLabel }}</dt>
+            <dd class="full-text">{{ comment() || copy.reasonUnset }}</dd>
+          </div>
+          <div data-review-reason-snapshot>
+            <dt>{{ ui.queueReason }}</dt>
+            <dd class="full-text">{{ reason() || copy.reasonUnset }}</dd>
+          </div>
+        </dl>
+      }
     </app-request-state>
     <a hlmBtn [variant]="'link'" [routerLink]="queueLink()" class="w-fit whitespace-normal">{{
       ui.openQueue

@@ -11228,6 +11228,12 @@
           <context context-type="linenumber">43</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="authoring.pending-changes.refreshing" datatype="html"><source>Refreshing the queue… Previously loaded changes remain available.</source></trans-unit>
+      <trans-unit id="authoring.pending-changes.delete-consequence" datatype="html"><source>Applying this delete removes the named target item.</source></trans-unit>
+      <trans-unit id="authoring.pending-changes.comment-too-long" datatype="html"><source>Use no more than 2,000 characters for the comment.</source></trans-unit>
+      <trans-unit id="authoring.pending-changes.reason-too-long" datatype="html"><source>Use no more than 500 characters for the reason.</source></trans-unit>
+      <trans-unit id="authoring.pending-changes.character-count" datatype="html"><source><x id="START_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;app-number-value&gt;"/><x id="CLOSE_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;/app-number-value&gt;"/> of <x id="START_TAG_APP-NUMBER-VALUE_1" ctype="x-app-number-value" equiv-text="&lt;app-number-value&gt;"/><x id="CLOSE_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;/app-number-value&gt;"/> characters </source></trans-unit>
+      <trans-unit id="authoring.pending-changes.reason-character-count" datatype="html"><source><x id="START_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;app-number-value&gt;"/><x id="CLOSE_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;/app-number-value&gt;"/> of <x id="START_TAG_APP-NUMBER-VALUE_1" ctype="x-app-number-value" equiv-text="&lt;app-number-value&gt;"/><x id="CLOSE_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;/app-number-value&gt;"/> characters </source></trans-unit>
     </body>
   </file>
 </xliff>

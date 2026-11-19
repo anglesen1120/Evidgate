@@ -73,7 +73,7 @@ describe('AuthoringPendingDataService', () => {
     expect(request.request.method).toBe('POST');
     expect(request.request.headers.get('If-Match')).toBe('"batch-etag-1"');
     expect(request.request.headers.get('Idempotency-Key')).toBe('key-1');
-    expect(request.request.body).toEqual({ change_ids: [CHANGE_ID] });
+    expect(request.request.body).toBe(JSON.stringify({ change_ids: [CHANGE_ID] }));
     request.flush(
       JSON.stringify({
         batch_id: CHANGE_ID,
@@ -117,7 +117,7 @@ describe('AuthoringPendingDataService', () => {
     );
     expect(request.request.method).toBe('POST');
     expect(request.request.headers.get('Idempotency-Key')).toBe('queue-key');
-    expect(request.request.body).toEqual(body);
+    expect(request.request.body).toBe(JSON.stringify(body));
     request.flush(
       JSON.stringify({
         change_id: CHANGE_ID,

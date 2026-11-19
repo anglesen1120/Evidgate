@@ -1,5 +1,41 @@
-import type { ApiError } from '../../../core/http/api-error';
+import type { AuthoringChangeListItem, AuthoringChangeV1 } from '@evidgate/sdk';
+import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { createIntent } from '../../../core/http/intent';
+import { pendingFailure } from './pending-changes.copy';
+
+export interface PendingApplyReplay {
+  readonly ids: readonly string[];
+  readonly rows: readonly AuthoringChangeListItem[];
+  readonly etag: string;
+  readonly key: string;
+}
+
+export function pendingRequestFailure(error: unknown, fallback: string): ApiError {
+  return isApiRequestError(error)
+    ? { ...error.error, message: pendingFailure(error.error, fallback) }
+    : unexpectedFailure('pending_unexpected', fallback);
+}
+
+export function canReplayApply(error: ApiError): boolean {
+  return (
+    error.retryable || error.status >= 500 || error.kind === 'network' || error.kind === 'timeout'
+  );
+}
+
+export function pendingDocument(
+  targetId: string,
+  changeType: 'comment' | 'delete',
+  payload: Record<string, unknown>,
+  reason?: string,
+): AuthoringChangeV1 {
+  return {
+    target_kind: 'checklist_item',
+    target_id: targetId,
+    change_type: changeType,
+    payload,
+    ...(reason === undefined ? {} : { reason }),
+  };
+}
 
 /** One mutation intent: its key is reused only while the same ids, body and batch ETag return. */
 interface KeyedIntent {

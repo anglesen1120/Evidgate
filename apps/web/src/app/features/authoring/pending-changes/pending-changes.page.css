@@ -57,7 +57,7 @@ app-request-state {
   min-inline-size: 0;
 }
 .inspection {
-  border-block: var(--eg-border-width, 1px) solid var(--eg-border);
+  border-block: var(--eg-border-width) solid var(--eg-border);
   padding-block: var(--eg-space-7);
 }
 .blocked-item {

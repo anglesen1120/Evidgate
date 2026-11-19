@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
+import appliedFixture from '../../../../fixtures/web-api/authoring-pending-apply/input.json';
 import {
   FIXTURE_REQUEST_LOG,
   type FixtureCallRecord,
@@ -14,7 +15,7 @@ import {
   withVariant,
 } from './support';
 
-const base = `/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}/authoring/pending-changes`;
+const base = `/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}/pending-changes`;
 const COMMENT = '018f0000-0000-7000-8000-00000000cd01';
 const DELETE = '018f0000-0000-7000-8000-00000000cd02';
 const MERGE = '018f0000-0000-7000-8000-00000000cd03';
@@ -27,6 +28,13 @@ async function calls(page: Page): Promise<FixtureCallRecord[]> {
       ),
     FIXTURE_REQUEST_LOG,
   );
+}
+async function queuedIds(page: Page): Promise<string[]> {
+  return page
+    .locator('[data-pending-change-id]')
+    .evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute('data-pending-change-id') ?? ''),
+    );
 }
 async function keyboardTo(page: Page, target: Locator): Promise<void> {
   for (let step = 0; step < 160; step++) {
@@ -54,6 +62,8 @@ for (const locale of LOCALES) {
         await page.goto(localePath(locale, base));
         await expect(page.locator('main h1')).toHaveCount(1);
         await expect(page.locator('[data-pending-preview]')).toHaveCount(4);
+        const beforeIds = await queuedIds(page);
+        expect(beforeIds).toEqual([COMMENT, DELETE, MERGE, SPLIT]);
         expect(await calls(page)).toEqual([]);
         const preview = page.locator('[data-pending-preview]').first();
         await keyboardTo(page, preview);
@@ -88,6 +98,28 @@ for (const locale of LOCALES) {
           await page.keyboard.press('Enter');
           await expect(page.locator('[data-pending-receipt]')).toBeVisible();
           await expect(page.locator('[data-pending-version]')).toHaveCount(1);
+          const receipt = page.locator('[data-pending-receipt]');
+          const returned = appliedFixture.body;
+          expect(
+            await receipt
+              .locator('[data-pending-applied-id]')
+              .evaluateAll((elements) =>
+                elements.map((element) => element.getAttribute('data-pending-applied-id')),
+              ),
+          ).toEqual(returned.applied_change_ids);
+          expect(
+            await receipt.locator('[data-pending-version]').evaluateAll((elements) =>
+              elements.map((element) => ({
+                entity_id: element.getAttribute('data-pending-version-entity'),
+                version_no: Number(element.getAttribute('data-pending-version-number')),
+              })),
+            ),
+          ).toEqual(
+            returned.versions.map(({ entity_id, version_no }) => ({ entity_id, version_no })),
+          );
+          expect(await queuedIds(page)).toEqual(
+            beforeIds.filter((id) => !returned.applied_change_ids.includes(id)),
+          );
           await expect(page.locator('[data-pending-preview]')).toHaveCount(2);
           const written = await calls(page);
           expect(written).toHaveLength(1);
@@ -110,9 +142,10 @@ for (const locale of LOCALES) {
   }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto(
-      withVariant(localePath(locale, base), 'fixture.variant.applyAuthoringChanges=conflict'),
+      withVariant(localePath(locale, base), 'fixture.variant.applyAuthoringChanges=stale'),
     );
     await expect(page.locator('[data-pending-preview]')).toHaveCount(4);
+    const beforeIds = await queuedIds(page);
     await page.locator('#pending-local-reason').fill('Keep my local reason');
     await selectSupported(page);
     await page.locator('[data-pending-apply]').click();
@@ -121,6 +154,7 @@ for (const locale of LOCALES) {
     await expect(page.getByRole('dialog')).toBeVisible();
     expect(await calls(page)).toHaveLength(1);
     await expect(page.locator('[data-pending-preview]')).toHaveCount(4);
+    expect(await queuedIds(page)).toEqual(beforeIds);
     await expect(page.locator('#pending-local-reason')).toHaveValue('Keep my local reason');
     await expect(page.locator('[data-pending-receipt]')).toHaveCount(0);
     await expectNoA11yViolations(page, `pending conflict ${locale}`);

@@ -179,23 +179,35 @@ describe('PendingChangesStore', () => {
     expect(store().batchEtag()).toBeNull();
   });
 
-  it('reuses the same key when the same ids and batch ETag are retried after a 503', async () => {
-    await store().init(PROJECT);
-    apply.mockRejectedValueOnce(new ApiRequestError(failure('unavailable', 503)));
-    await store().apply();
-    expect(store().applyError()?.kind).toBe('unavailable');
-    expect(store().retryAfterSeconds()).toBe(5);
-    await store().apply();
-    const first = apply.mock.calls[0]?.[3];
-    const second = apply.mock.calls[1]?.[3];
-    expect(first).toBeDefined();
-    expect(second).toBe(first);
-  });
+  it.each(['unavailable', 'network', 'timeout', 'unexpected'] as const)(
+    'replays the original request after an unresolved %s before reading changed selection',
+    async (kind) => {
+      const row = change(DELETE_ID, 'delete');
+      listPending.mockResolvedValue({ items: [row], next_cursor: null });
+      selection.mockResolvedValueOnce({ items: [row], batchEtag: '"batch-1"' });
+      selection.mockResolvedValue({ items: [{ ...row, stale: true }], batchEtag: '"batch-2"' });
+      await store().init(PROJECT);
+      const status = kind === 'unexpected' ? 500 : kind === 'unavailable' ? 503 : 0;
+      const error = failure(kind, status);
+      apply.mockRejectedValueOnce(new ApiRequestError(error));
+      await expect(store().apply()).resolves.toBe(false);
+      store().clearSelection();
+      await expect(store().apply()).resolves.toBe(true);
+      expect(selection).toHaveBeenCalledTimes(1);
+      expect(apply).toHaveBeenCalledTimes(2);
+      const first = apply.mock.calls[0];
+      const second = apply.mock.calls[1];
+      expect(first?.[3]).toBeTruthy();
+      expect(second?.slice(0, 4)).toEqual(first?.slice(0, 4));
+      expect(second?.slice(0, 3)).toEqual([PROJECT, '"batch-1"', [DELETE_ID]]);
+    },
+  );
 
   it('mints a new key when the reviewed batch changes', async () => {
     await store().init(PROJECT);
     await store().apply();
     const first = apply.mock.calls[0]?.[3];
+    expect(first).toBeTruthy();
 
     listPending.mockResolvedValue({
       items: [change(COMMENT_ID, 'comment'), change(DELETE_ID, 'delete')],
@@ -208,6 +220,9 @@ describe('PendingChangesStore', () => {
       batchEtag: '"batch-2"',
     });
     await store().apply();
+    expect(apply).toHaveBeenCalledTimes(2);
+    expect(apply.mock.calls[1]?.[3]).toBeTruthy();
+    expect(apply.mock.calls[1]?.slice(0, 3)).toEqual([PROJECT, '"batch-2"', [DELETE_ID]]);
     expect(apply.mock.calls[1]?.[3]).not.toBe(first);
   });
 

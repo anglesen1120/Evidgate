@@ -7,8 +7,17 @@ import {
   listChecklistItems,
   queueAuthoringChange,
 } from '@evidgate/sdk';
-import type { ListChecklistItemsData, QueueAuthoringChangeData } from '@evidgate/sdk';
+import type {
+  AuthoringChangeListItem,
+  ListChecklistItemsData,
+  QueueAuthoringChangeData,
+} from '@evidgate/sdk';
 import { ApiGateway } from '../http/api-gateway';
+
+export interface AuthoringPendingSelection {
+  readonly items: readonly AuthoringChangeListItem[];
+  readonly batchEtag: string;
+}
 
 @Injectable({ providedIn: 'root' })
 export class AuthoringPendingDataService {
@@ -25,7 +34,11 @@ export class AuthoringPendingDataService {
     );
   }
 
-  async selection(project: string, ids: readonly string[], signal?: AbortSignal) {
+  async selection(
+    project: string,
+    ids: readonly string[],
+    signal?: AbortSignal,
+  ): Promise<AuthoringPendingSelection> {
     const result = await this.gateway.callWithResponse((client) =>
       listAuthoringChanges({
         client,
