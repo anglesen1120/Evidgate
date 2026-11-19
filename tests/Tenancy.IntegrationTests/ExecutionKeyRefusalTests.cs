@@ -11,8 +11,9 @@ namespace Tenancy.IntegrationTests;
 /// The ingest route refuses a well-formed execution key (64 lowercase hex) that was computed with the wrong byte
 /// layout or from a wrong field: it is not any planned key, so membership validation answers
 /// <c>unknown_execution_key</c> for exactly that event and the whole batch commits nothing. The canonical key is built
-/// here from the documented layout, not by the production helper, so a layout regression in production turns the
-/// positive control red instead of silently moving both sides together.
+/// here from the documented layout and compared with the seeded plan, so a drift between the documented layout and
+/// the keys the plan carries turns the positive control red. The ingest route only matches strings against the
+/// stored plan; the production planner helper is pinned by its own golden-vector tests.
 /// </summary>
 [Trait("Category", "Docker")]
 public sealed class ExecutionKeyRefusalTests : IClassFixture<TenancyHostPool>
@@ -121,6 +122,7 @@ public sealed class ExecutionKeyRefusalTests : IClassFixture<TenancyHostPool>
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
         (await EventRowsAsync(world)).ShouldBe(1);
+        (await world.EventColumnAsync<string>("execution_key")).ShouldBe([first.ExecutionKey]);
     }
 
     [Fact]
@@ -165,9 +167,11 @@ public sealed class ExecutionKeyRefusalTests : IClassFixture<TenancyHostPool>
 
             answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, name);
             answer.ErrorCode.ShouldBe("unknown_execution_key", name);
+            BadIndices(answer).ShouldBe([0], name);
         }
 
         (await EventRowsAsync(world)).ShouldBe(0);
+        (await BatchRowsAsync(world)).ShouldBe(0);
     }
 
     [Fact]
@@ -175,25 +179,18 @@ public sealed class ExecutionKeyRefusalTests : IClassFixture<TenancyHostPool>
     {
         await using var world = await IngestTestWorld.StartAsync(
             _fixture, IngestTestWorld.Writer(), planned: 5, hosts: _hosts);
-        var e0 = world.Plan.Executions[0];
-        var e1 = world.Plan.Executions[1];
         string[] good = [.. world.Plan.Executions.Select(e => Canonical(e.CaseId, e.VariantHash, e.TargetEnv))];
-        var good0 = good[0];
-        var good1 = good[2];
-        var wrongLayout = WrongLayouts(e0)["no_length_prefixes"];
-        var wrongField = WrongFields(e1)["changed_target_env"];
-        var wrongLayout2 = WrongLayouts(e1)["little_endian_prefixes"];
+        var wrongLayout = WrongLayouts(world.Plan.Executions[0])["no_length_prefixes"];
+        var wrongField = WrongFields(world.Plan.Executions[1])["changed_target_env"];
+        var wrongLayout2 = WrongLayouts(world.Plan.Executions[1])["little_endian_prefixes"];
+        Guid[] ids = [.. Enumerable.Range(0, 5).Select(_ => Guid.CreateVersion7())];
 
         // Indices 1, 3 and 4 are bad; 0 and 2 are canonical and must not be named.
-        object Mixed(string k0, string k1, string k2, string k3, string k4) => IngestEventBatchTests.Batch(
-            IngestEventBatchTests.Event(Guid.CreateVersion7(), k0, 1),
-            IngestEventBatchTests.Event(Guid.CreateVersion7(), k1, 2),
-            IngestEventBatchTests.Event(Guid.CreateVersion7(), k2, 3),
-            IngestEventBatchTests.Event(Guid.CreateVersion7(), k3, 4),
-            IngestEventBatchTests.Event(Guid.CreateVersion7(), k4, 5));
+        object Mixed(params string[] keys) => IngestEventBatchTests.Batch(
+            [.. keys.Select((key, i) => IngestEventBatchTests.Event(ids[i], key, i + 1))]);
 
         var refused = await IngestEventBatchTests.PostEventsAsync(
-            world, Mixed(good0, wrongLayout, good1, wrongField, wrongLayout2));
+            world, Mixed(good[0], wrongLayout, good[2], wrongField, wrongLayout2));
 
         refused.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         refused.ErrorCode.ShouldBe("unknown_execution_key");
@@ -201,11 +198,12 @@ public sealed class ExecutionKeyRefusalTests : IClassFixture<TenancyHostPool>
         (await EventRowsAsync(world)).ShouldBe(0);
         (await BatchRowsAsync(world)).ShouldBe(0);
 
-        // Positive control: the same batch with the bad keys corrected commits whole.
+        // Positive control: the same event ids and sequences with only the bad keys corrected commit whole.
         var retry = await IngestEventBatchTests.PostEventsAsync(world, Mixed(good[0], good[1], good[2], good[3], good[4]));
 
         retry.Status.ShouldBe(HttpStatusCode.OK, retry.ErrorMessage);
         (await EventRowsAsync(world)).ShouldBe(5);
+        (await world.EventColumnAsync<Guid>("event_id")).ShouldBe(ids);
         (await BatchRowsAsync(world)).ShouldBe(1);
     }
 }
