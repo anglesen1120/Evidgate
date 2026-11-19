@@ -63,6 +63,9 @@
             <hlm-select-item [value]="'editor'" i18n="@@authoring.editor.editor-tab"
               >Editor</hlm-select-item
             >
+            <hlm-select-item [value]="'review'" i18n="@@authoring.editor.review-select-option"
+              >Checklist review</hlm-select-item
+            >
             <hlm-select-item [value]="'timeline'" i18n="@@authoring.editor.timeline-tab"
               >Timeline</hlm-select-item
             >
@@ -78,6 +81,13 @@
           i18n-aria-label="@@authoring.editor.panels"
         >
           <button [hlmTabsTrigger]="'editor'" i18n="@@authoring.editor.editor-tab">Editor</button>
+          <button
+            [hlmTabsTrigger]="'review'"
+            data-editor-review-tab
+            i18n="@@authoring.editor.review-tab-trigger"
+          >
+            Checklist review
+          </button>
           <button
             [hlmTabsTrigger]="'timeline'"
             data-editor-timeline-tab
@@ -385,6 +395,16 @@
                 </ol>
                 <p class="text-sm">{{ reasonUnavailable }}</p>
               </section>
+            }
+          }
+        </div>
+        <div [hlmTabsContent]="'review'" class="min-w-0 pt-6">
+          @if (tab() === 'review') {
+            @if (store.scope(); as scope) {
+              <app-checklist-review-tab
+                [projectId]="scope.project"
+                [itemId]="base.view.checklist_item_id"
+              />
             }
           }
         </div>

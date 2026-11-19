@@ -33,6 +33,7 @@ import { DesktopRequiredNoticeComponent, NarrowMutationPolicy } from '../../../s
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
+import { ChecklistReviewTabComponent } from '../pending-changes/checklist-review-tab.component';
 import { EditorStore } from './editor.store';
 import { TimelineComponent } from './timeline.component';
 import {
@@ -52,6 +53,7 @@ import {
 /** Tab labels the narrow panel select shows; the tab list carries the same translations. */
 const PANEL_LABELS: Readonly<Record<string, string>> = {
   editor: $localize`:@@authoring.editor.editor-tab:Editor`,
+  review: $localize`:@@authoring.editor.review-tab-label:Checklist review`,
   timeline: $localize`:@@authoring.editor.timeline-tab:Timeline`,
 };
 
@@ -95,6 +97,7 @@ function stepsSnapshot(
     CopyableIdentifierComponent,
     StatusPillComponent,
     TimelineComponent,
+    ChecklistReviewTabComponent,
   ],
   providers: [EditorStore],
   templateUrl: './editor.page.html',
@@ -281,7 +284,7 @@ export class EditorPage {
     if (priority) this.store.editPriority(priority.value);
   }
   protected selectTab(value: unknown): void {
-    if (value === 'editor' || value === 'timeline') this.tab.set(value);
+    if (value === 'editor' || value === 'review' || value === 'timeline') this.tab.set(value);
   }
   protected moveStep(id: string, offset: -1 | 1): void {
     if (this.blocked() || !this.viewport.allowsMutation()) return;
