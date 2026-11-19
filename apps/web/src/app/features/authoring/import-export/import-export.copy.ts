@@ -1,5 +1,5 @@
 import type { ApiError } from '../../../core/http/api-error';
-import { IMPORT_COLUMNS } from './local-file-preview';
+import { IMPORT_BYTE_CAP, IMPORT_COLUMNS, type AuthoringFormat } from './local-file-preview';
 
 export const AUTHORING_READ = 'authoring:read';
 export const AUTHORING_WRITE = 'authoring:write';
@@ -14,13 +14,15 @@ export const IMPEX_COPY = {
   exportTab: $localize`:@@authoring.import-export.export-tab:Export`,
   intake: $localize`:@@authoring.import-export.intake:File and target`,
   file: $localize`:@@authoring.import-export.file:Source file`,
-  limits: $localize`:@@authoring.import-export.limits:CSV or JSON. The server accepts at most 5 MiB and 5,000 data rows. File selection is not validation.`,
+  limits: $localize`:@@authoring.import-export.file-limits:CSV, JSON or XLSX. The server accepts at most 5 MiB and 5,000 data rows. File selection is not validation.`,
   format: $localize`:@@authoring.import-export.format:Format`,
   preview: $localize`:@@authoring.import-export.preview:Preview without importing`,
   previewTitle: $localize`:@@authoring.import-export.preview-title:Preview rows`,
   fromFile: $localize`:@@authoring.import-export.from-file:From your file, not validated. Row identity, status and totals come only from the server.`,
   noFile: $localize`:@@authoring.import-export.no-file:No file has been selected for import.`,
-  xlsx: $localize`:@@authoring.import-export.xlsx:XLSX is unavailable because this client cannot transfer spreadsheet files. Use CSV or JSON; no XLSX request is sent.`,
+  xlsxPreview: $localize`:@@authoring.import-export.xlsx-preview:Workbook cells are not read in this browser. Preview sends the original XLSX file for a server dry run; only the server report is shown.`,
+  xlsxTooLarge: $localize`:@@authoring.import-export.xlsx-too-large:The XLSX file exceeds 5 MiB. Choose a smaller workbook and preview it again. No import request was sent.`,
+  formatMismatch: $localize`:@@authoring.import-export.format-mismatch:An .xlsx file must use the XLSX format. Choose XLSX and preview it again. No import request was sent.`,
   localUnreadable: $localize`:@@authoring.import-export.local-unreadable:Local preview could not read this file. The original file can still be sent for server validation.`,
   invalidUtf8: $localize`:@@authoring.import-export.invalid-utf8:CSV files must use valid UTF-8 encoding. Save this file as UTF-8 and preview it again. No import request was sent.`,
   displayCap: $localize`:@@authoring.import-export.display-cap:Local display stops at the server's 5,000-row cap. No rows are removed from the upload; the server validates the original file.`,
@@ -54,7 +56,6 @@ export const IMPEX_COPY = {
   previewComplete: $localize`:@@authoring.import-export.preview-complete:Preview complete — not applied. Review the validated scope before confirming.`,
   inspected: $localize`:@@authoring.import-export.inspected:Inspected rows`,
   snapshot: $localize`:@@authoring.import-export.snapshot:Selected file and format`,
-  unavailable: $localize`:@@authoring.import-export.unavailable:Unavailable`,
   headerGuide: $localize`:@@authoring.import-export.header-guide:Correct the CSV header to these thirteen contract columns, in this order:`,
   limit: $localize`:@@authoring.import-export.limit:Server limit`,
   actual: $localize`:@@authoring.import-export.actual:Measured value`,
@@ -124,6 +125,8 @@ export function importReason(reason: string | undefined): string {
     : UNKNOWN_IMPORT_REASON;
 }
 export function importFailure(error: ApiError, exporting = false): string {
+  if (error.code === 'xlsx_too_large') return IMPEX_COPY.xlsxTooLarge;
+  if (error.code === 'format_mismatch') return IMPEX_COPY.formatMismatch;
   if (error.code === 'invalid_utf8') return IMPEX_COPY.invalidUtf8;
   switch (error.kind) {
     case 'payload_too_large':
@@ -156,6 +159,23 @@ export function importFailure(error: ApiError, exporting = false): string {
         ? $localize`:@@authoring.import-export.failure.export-unknown:The export could not be completed or its server file was unavailable. No file was downloaded. Retry the exact scope explicitly.`
         : $localize`:@@authoring.import-export.failure.unknown:The request could not be completed. Its outcome is unconfirmed; retry only the same intent.`;
   }
+}
+
+export function importSizeError(file: File, format: AuthoringFormat): ApiError {
+  const workbook = format === 'xlsx';
+  const error: ApiError = {
+    kind: workbook ? 'validation' : 'payload_too_large',
+    status: workbook ? 422 : 413,
+    code: workbook ? 'xlsx_too_large' : 'payload_too_large',
+    message: '',
+    requestId: null,
+    retryable: false,
+    retryAfterSeconds: null,
+    details: [
+      { path: '/file', reason: 'body_too_large', limit: IMPORT_BYTE_CAP, actual: file.size },
+    ],
+  };
+  return { ...error, message: importFailure(error) };
 }
 
 const IMPORT_PATHS = new Set([

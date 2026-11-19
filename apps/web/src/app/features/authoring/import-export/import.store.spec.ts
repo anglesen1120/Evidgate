@@ -153,21 +153,58 @@ describe('ImportStore confirmation and refusal boundary', () => {
     expect(upload).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps XLSX unavailable even when selected outside the file picker and never sends it', async () => {
-    store.selectFile(new File(['xlsx-bytes'], 'file.xlsx'));
-    await store.preview();
+  it('dry-runs XLSX without reading workbook content locally, then confirms with a separate intent', async () => {
+    const file = new File([new Uint8Array([0x50, 0x4b, 3, 4])], 'file.xlsx');
+    const text = vi.spyOn(file, 'text');
+    const bytes = vi.spyOn(file, 'arrayBuffer');
+    store.selectFile(file);
     await store.confirm();
-    await store.retry();
     expect(upload).not.toHaveBeenCalled();
-    expect(store.canConfirm()).toBe(false);
-    expect(store.work().file?.name).toBe('file.xlsx');
+    await vi.waitFor(() => expect(store.local.value()?.issue).toBe('xlsx'));
+    expect(text).not.toHaveBeenCalled();
+    expect(bytes).not.toHaveBeenCalled();
     store.setFormat('csv');
-    store.setFormat('xlsx');
     expect(store.work().format).toBe('xlsx');
     await store.preview();
-    expect(upload).not.toHaveBeenCalled();
-    store.selectFile(new File(['kind,key\nnode,n1'], 'file.csv'));
+    expect(store.canConfirm()).toBe(true);
+    await store.confirm();
+    expect(upload.mock.calls.map((call) => [call[2], call[3]])).toEqual([
+      ['xlsx', true],
+      ['xlsx', false],
+    ]);
+    expect(upload.mock.calls[0]?.[4]).not.toBe(upload.mock.calls[1]?.[4]);
+    expect(store.work().committed).toEqual(report);
+  });
+
+  it('refuses an oversized XLSX locally with a 422 file detail and accepts exactly 5 MiB', async () => {
+    store.selectFile(new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'large.xlsx'));
     await store.preview();
+    expect(upload).not.toHaveBeenCalled();
+    expect(store.work().error).toMatchObject({
+      kind: 'validation',
+      status: 422,
+      code: 'xlsx_too_large',
+      details: [{ path: '/file', reason: 'body_too_large', limit: 5 * 1024 * 1024 }],
+    });
+    store.selectFile(new File([new Uint8Array(5 * 1024 * 1024)], 'limit.xlsx'));
+    await store.preview();
+    expect(upload).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([413, 422])('keeps an XLSX %s refusal out of the confirmation path', async (status) => {
+    store.selectFile(new File(['PK'], 'file.xlsx'));
+    const kind = status === 413 ? 'payload_too_large' : 'validation';
+    const details = [
+      { path: '/file', reason: status === 413 ? 'body_too_large' : 'unsupported_format' },
+    ];
+    upload.mockRejectedValueOnce(
+      new ApiRequestError({ ...refusal().error, kind, status, code: kind, details }),
+    );
+    await store.preview();
+    expect(store.work().error).toMatchObject({ kind, status, details });
+    expect(store.work().report).toBeNull();
+    expect(store.canConfirm()).toBe(false);
+    await store.confirm();
     expect(upload).toHaveBeenCalledTimes(1);
   });
 

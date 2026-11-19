@@ -71,18 +71,10 @@
     /></hlm-select-trigger>
     <hlm-select-content *hlmSelectPortal [aria-label]="copy.format">
       @for (format of formats; track format) {
-        <hlm-select-item
-          [value]="format"
-          [disabled]="format === 'xlsx'"
-          [attr.aria-describedby]="format === 'xlsx' ? 'export-xlsx-reason' : null"
-          >{{ formatLabel(format) }}</hlm-select-item
-        >
+        <hlm-select-item [value]="format">{{ formatLabel(format) }}</hlm-select-item>
       }
     </hlm-select-content>
   </hlm-select>
-  <p id="export-xlsx-reason" class="m-0 text-sm text-muted-foreground" data-export-xlsx-reason>
-    {{ exportCopy.xlsxUnavailable }}
-  </p>
 </div>
 <fieldset class="grid min-w-0 gap-(--eg-space-2)">
   <legend class="mb-(--eg-space-2) text-sm font-medium">{{ copy.include }}</legend>

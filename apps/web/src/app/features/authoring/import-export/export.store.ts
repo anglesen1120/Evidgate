@@ -122,7 +122,6 @@ export const ExportStore = signalStore(
         return IMPEX_COPY.selectionUnavailable;
       if (draft.scope === 'node' && !draft.nodeId.trim()) return IMPEX_COPY.noNode;
       if (draft.scope === 'node' && !UUID.test(draft.nodeId)) return IMPEX_COPY.nodeInvalid;
-      if (draft.format === 'xlsx') return EXPORT_COPY.xlsxUnavailable;
       if (!draft.kinds.length) return IMPEX_COPY.noKinds;
       return null;
     }),
