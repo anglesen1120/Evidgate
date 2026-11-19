@@ -16,6 +16,17 @@ export function pendingRequestFailure(error: unknown, fallback: string): ApiErro
     : unexpectedFailure('pending_unexpected', fallback);
 }
 
+/**
+ * Whether two selections are the same mutation intent. The order a user picked the ids in is not
+ * part of the intent, so a reordered set keeps replaying the original key.
+ */
+export function sameSelection(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) return false;
+  const remaining = new Set(right);
+  for (const id of left) if (!remaining.delete(id)) return false;
+  return true;
+}
+
 export function canReplayApply(error: ApiError): boolean {
   return (
     error.retryable || error.status >= 500 || error.kind === 'network' || error.kind === 'timeout'
