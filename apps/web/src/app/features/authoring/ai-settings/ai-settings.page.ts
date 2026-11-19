@@ -78,9 +78,9 @@ export class AiSettingsPage {
   protected readonly composition = signal<ReadonlySet<TextField>>(new Set());
   protected readonly announcement = signal('');
   protected readonly preview = signal<AiSettingsTemplateView | null>(null);
-  protected readonly title = $localize`:@@authoring.aiSettings.title:AI settings`;
-  protected readonly description = $localize`:@@authoring.aiSettings.intro:Project guidance for authored cases. Saving creates an immutable settings version.`;
-  protected readonly authorLabel = $localize`:@@authoring.aiSettings.author:Author membership`;
+  protected readonly title = $localize`:@@authoring.ai-settings.title:AI settings`;
+  protected readonly description = $localize`:@@authoring.ai-settings.intro:Project guidance for authored cases. Saving creates an immutable settings version.`;
+  protected readonly authorLabel = $localize`:@@authoring.ai-settings.author:Author membership`;
   private templateOpener: HTMLElement | null = null;
   private readonly compositionBands = new Map<TextField, number>();
   private readonly readOnlyHeading = viewChild<ElementRef<HTMLElement>>('readOnlyHeading');
@@ -109,7 +109,7 @@ export class AiSettingsPage {
       ...fields,
       {
         id: 'languages',
-        label: $localize`:@@authoring.aiSettings.languages:Output languages`,
+        label: $localize`:@@authoring.ai-settings.languages:Output languages`,
         local: draft?.languages.join(', ') ?? null,
         server: server?.languages.join(', ') ?? null,
       },
@@ -125,11 +125,11 @@ export class AiSettingsPage {
   });
   protected languageError(): string | null {
     if (!this.store.draft()?.languages.length)
-      return $localize`:@@authoring.aiSettings.languageRequired:Select at least one output language.`;
+      return $localize`:@@authoring.ai-settings.language-required:Select at least one output language.`;
     return this.store
       .failure()
       ?.details.some((entry) => entry.path?.startsWith('/settings/languages'))
-      ? $localize`:@@authoring.aiSettings.serverField:The server refused this field. Review its value before saving.`
+      ? $localize`:@@authoring.ai-settings.server-field:The server refused this field. Review its value before saving.`
       : null;
   }
   protected readonly feedback = createFormFeedback([
@@ -141,7 +141,7 @@ export class AiSettingsPage {
     })),
     {
       id: 'ai-languages',
-      label: $localize`:@@authoring.aiSettings.languages:Output languages`,
+      label: $localize`:@@authoring.ai-settings.languages:Output languages`,
       error: () => this.languageError(),
     },
   ]);
@@ -185,14 +185,14 @@ export class AiSettingsPage {
     if (this.composition().has(key)) return null;
     const field = FIELDS.find((entry) => entry.key === key);
     if (field && count(this.value(key)) > field.limit)
-      return $localize`:@@authoring.aiSettings.overLimit:Shorten this field before saving.`;
+      return $localize`:@@authoring.ai-settings.over-limit:Shorten this field before saving.`;
     if (key === 'environment_url' && this.value(key).trim()) {
       try {
         const url = new URL(this.value(key).normalize('NFC').trim());
         if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password)
-          return $localize`:@@authoring.aiSettings.urlError:Enter an absolute HTTP or HTTPS URL without credentials.`;
+          return $localize`:@@authoring.ai-settings.url-error:Enter an absolute HTTP or HTTPS URL without credentials.`;
       } catch {
-        return $localize`:@@authoring.aiSettings.urlError:Enter an absolute HTTP or HTTPS URL without credentials.`;
+        return $localize`:@@authoring.ai-settings.url-error:Enter an absolute HTTP or HTTPS URL without credentials.`;
       }
     }
     const failure = this.store.failure();
@@ -205,7 +205,7 @@ export class AiSettingsPage {
             key,
       )
     )
-      return $localize`:@@authoring.aiSettings.serverField:The server refused this field. Review its value before saving.`;
+      return $localize`:@@authoring.ai-settings.server-field:The server refused this field. Review its value before saving.`;
     return null;
   }
   protected edit(key: TextField, value: string): void {
@@ -238,10 +238,10 @@ export class AiSettingsPage {
   private announceBoundary(band: number): void {
     this.announcement.set(
       band > 0
-        ? $localize`:@@authoring.aiSettings.overAnnouncement:Character limit exceeded. Shorten the field before saving.`
+        ? $localize`:@@authoring.ai-settings.over-announcement:Character limit exceeded. Shorten the field before saving.`
         : band === 0
-          ? $localize`:@@authoring.aiSettings.atAnnouncement:Character limit reached.`
-          : $localize`:@@authoring.aiSettings.withinAnnouncement:Within the character limit.`,
+          ? $localize`:@@authoring.ai-settings.at-announcement:Character limit reached.`
+          : $localize`:@@authoring.ai-settings.within-announcement:Within the character limit.`,
     );
   }
   protected language(language: 'en' | 'vi', checked: boolean): void {

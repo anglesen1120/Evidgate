@@ -13,7 +13,7 @@
   >
     @if (store.base(); as base) {
       @if (store.head.error() && status() === 'ready') {
-        <p i18n="@@authoring.aiSettings.stale">
+        <p i18n="@@authoring.ai-settings.stale">
           Refresh failed. Previously loaded settings and your unsaved draft are retained.
         </p>
         <app-request-state
@@ -24,16 +24,16 @@
         />
       }
       <aside class="grid gap-2 border-l-2 border-border pl-4 text-sm">
-        <h2 hlmCardTitle [size]="'section'" i18n="@@authoring.aiSettings.consent">
+        <h2 hlmCardTitle [size]="'section'" i18n="@@authoring.ai-settings.consent">
           AI consent unavailable
         </h2>
-        <p i18n="@@authoring.aiSettings.consentReason">
+        <p i18n="@@authoring.ai-settings.consent-reason">
           These settings do not report tenant consent. Saving guidance does not opt in to AI; manual
           authoring remains available.
         </p>
-        <p i18n="@@authoring.aiSettings.version">Current version: {{ base.view.version_no }}</p>
+        <p i18n="@@authoring.ai-settings.version">Current version: {{ base.view.version_no }}</p>
         @if (base.view.version_no === 0) {
-          <p i18n="@@authoring.aiSettings.default">
+          <p i18n="@@authoring.ai-settings.default">
             Using default guidance; no saved version exists yet.
           </p>
         }
@@ -49,15 +49,15 @@
           hlmTabsList
           [variant]="'line'"
           aria-label="AI guidance panels"
-          i18n-aria-label="@@authoring.aiSettings.panels"
+          i18n-aria-label="@@authoring.ai-settings.panels"
         >
-          <button [hlmTabsTrigger]="'settings'" i18n="@@authoring.aiSettings.settingsTab">
+          <button [hlmTabsTrigger]="'settings'" i18n="@@authoring.ai-settings.settings-tab">
             Settings
           </button>
           <button
             [hlmTabsTrigger]="'history'"
             data-ai-history-tab
-            i18n="@@authoring.aiSettings.historyTab"
+            i18n="@@authoring.ai-settings.history-tab"
           >
             Version history
           </button>
@@ -71,7 +71,7 @@
             >
               <app-form-error-summary [summaryId]="'ai-errors'" [feedback]="feedback" />
               <section class="grid gap-3">
-                <h2 hlmCardTitle [size]="'section'" i18n="@@authoring.aiSettings.templates">
+                <h2 hlmCardTitle [size]="'section'" i18n="@@authoring.ai-settings.templates">
                   Built-in templates
                 </h2>
                 <app-request-state
@@ -101,7 +101,7 @@
                       {{ template.name }} ({{ template.locale }})
                     </button>
                   } @empty {
-                    <p i18n="@@authoring.aiSettings.noTemplates">No templates are available.</p>
+                    <p i18n="@@authoring.ai-settings.no-templates">No templates are available.</p>
                   }
                 </app-request-state>
               </section>
@@ -126,7 +126,7 @@
                   <p
                     class="m-0 text-sm text-muted-foreground tabular-nums"
                     [id]="'ai-' + field.key + '-counter'"
-                    i18n="@@authoring.aiSettings.counter"
+                    i18n="@@authoring.ai-settings.counter"
                   >
                     {{ count(value(field.key)) }} / {{ field.limit }} characters
                   </p>
@@ -142,7 +142,7 @@
                     [attr.aria-invalid]="feedback.fields[fields.length]?.ariaInvalid()"
                     [attr.aria-describedby]="feedback.fields[fields.length]?.describedBy() ?? null"
                   >
-                    <legend class="mb-2" i18n="@@authoring.aiSettings.languages">
+                    <legend class="mb-2" i18n="@@authoring.ai-settings.languages">
                       Output languages
                     </legend>
                     @for (locale of languages; track locale) {
@@ -159,9 +159,9 @@
                         />
                         <span [id]="'ai-language-label-' + locale">
                           @if (locale === 'en') {
-                            <span i18n="@@authoring.aiSettings.english">English</span>
+                            <span i18n="@@authoring.ai-settings.english">English</span>
                           } @else {
-                            <span i18n="@@authoring.aiSettings.vietnamese">Vietnamese</span>
+                            <span i18n="@@authoring.ai-settings.vietnamese">Vietnamese</span>
                           }
                         </span>
                       </label>
@@ -173,12 +173,12 @@
                 }
               }
               @if (!store.canWrite()) {
-                <p id="ai-write-reason" i18n="@@authoring.aiSettings.readOnly">
+                <p id="ai-write-reason" i18n="@@authoring.ai-settings.read-only">
                   Saving requires project:write. You can read settings and history.
                 </p>
               }
               @if (!base.etag) {
-                <p i18n="@@authoring.aiSettings.missingTag">
+                <p i18n="@@authoring.ai-settings.missing-tag">
                   The server did not supply an ETag. Reload before saving.
                 </p>
                 <button
@@ -188,16 +188,16 @@
                   data-ai-reload
                   [disabled]="store.head.isLoading()"
                   (click)="store.head.reload()"
-                  i18n="@@authoring.aiSettings.reload"
+                  i18n="@@authoring.ai-settings.reload"
                 >
                   Reload settings
                 </button>
               }
               @if (store.dirty()) {
-                <p i18n="@@authoring.aiSettings.dirty">Settings have unsaved changes.</p>
+                <p i18n="@@authoring.ai-settings.dirty">Settings have unsaved changes.</p>
               }
               @if (store.failure(); as failure) {
-                <p data-ai-save-error i18n="@@authoring.aiSettings.failed">
+                <p data-ai-save-error i18n="@@authoring.ai-settings.failed">
                   Could not save; your settings draft is retained.
                 </p>
                 @if (failure.kind !== 'validation' && failure.kind !== 'precondition_failed') {
@@ -217,7 +217,7 @@
                   data-ai-save
                   [disabled]="blocked()"
                   [attr.aria-describedby]="!store.canWrite() ? 'ai-write-reason' : null"
-                  i18n="@@authoring.aiSettings.save"
+                  i18n="@@authoring.ai-settings.save"
                 >
                   Save new version
                 </button>
@@ -230,11 +230,11 @@
                 tabindex="-1"
                 hlmCardTitle
                 [size]="'section'"
-                i18n="@@authoring.aiSettings.readOnlyDraft"
+                i18n="@@authoring.ai-settings.read-only-draft"
               >
                 Read-only settings draft
               </h2>
-              <p i18n="@@authoring.aiSettings.draftNotice">
+              <p i18n="@@authoring.ai-settings.draft-notice">
                 Unsaved desktop edits are retained, not saved. Widen the screen to edit.
               </p>
               <dl class="grid min-w-0 gap-4 wrap-anywhere">
@@ -245,7 +245,7 @@
                   </div>
                 }
                 <div>
-                  <dt i18n="@@authoring.aiSettings.languages">Output languages</dt>
+                  <dt i18n="@@authoring.ai-settings.languages">Output languages</dt>
                   <dd>{{ store.draft()?.languages?.join(', ') }}</dd>
                 </div>
               </dl>
@@ -259,15 +259,15 @@
   <p class="min-h-[var(--eg-leading-sm)] text-sm" role="status" [attr.aria-live]="'polite'">
     {{ announcement() }}
     @if (store.saving()) {
-      <span i18n="@@authoring.aiSettings.saving">Saving settings…</span>
+      <span i18n="@@authoring.ai-settings.saving">Saving settings…</span>
     }
     @if (store.saved() === 'saved') {
-      <span data-ai-saved i18n="@@authoring.aiSettings.saved"
+      <span data-ai-saved i18n="@@authoring.ai-settings.saved"
         >A new settings version was saved.</span
       >
     }
     @if (store.saved() === 'unchanged') {
-      <span data-ai-saved i18n="@@authoring.aiSettings.unchanged"
+      <span data-ai-saved i18n="@@authoring.ai-settings.unchanged"
         >No changes; the existing version is unchanged.</span
       >
     }
@@ -295,10 +295,10 @@
     class="max-h-[calc(100dvh-var(--eg-space-8))] overflow-y-auto"
   >
     <header hlmDialogHeader>
-      <h2 hlmDialogTitle i18n="@@authoring.aiSettings.previewTitle">
+      <h2 hlmDialogTitle i18n="@@authoring.ai-settings.preview-title">
         Preview template replacement
       </h2>
-      <p hlmDialogDescription i18n="@@authoring.aiSettings.previewDescription">
+      <p hlmDialogDescription i18n="@@authoring.ai-settings.preview-description">
         Replace every guidance field in the draft only. Nothing is saved until Save new version.
       </p>
     </header>
@@ -311,11 +311,11 @@
               <dt class="font-semibold">{{ field.label }}</dt>
               <dd class="m-0 grid min-w-0 gap-3 md:grid-cols-2 whitespace-pre-wrap">
                 <div>
-                  <span i18n="@@authoring.aiSettings.before">Before</span>
+                  <span i18n="@@authoring.ai-settings.before">Before</span>
                   <p>{{ value(field.key) }}</p>
                 </div>
                 <div>
-                  <span i18n="@@authoring.aiSettings.after">After</span>
+                  <span i18n="@@authoring.ai-settings.after">After</span>
                   <p>{{ textOf(template.settings, field.key) }}</p>
                 </div>
               </dd>
@@ -323,14 +323,14 @@
           }
         }
         <div>
-          <dt i18n="@@authoring.aiSettings.languages">Output languages</dt>
+          <dt i18n="@@authoring.ai-settings.languages">Output languages</dt>
           <dd class="m-0 grid min-w-0 gap-3 md:grid-cols-2">
             <div data-ai-languages-before>
-              <span i18n="@@authoring.aiSettings.before">Before</span>
+              <span i18n="@@authoring.ai-settings.before">Before</span>
               <p>{{ store.draft()?.languages?.join(', ') }}</p>
             </div>
             <div data-ai-languages-after>
-              <span i18n="@@authoring.aiSettings.after">After</span>
+              <span i18n="@@authoring.ai-settings.after">After</span>
               <p>{{ template.settings.languages.join(', ') }}</p>
             </div>
           </dd>
@@ -344,7 +344,7 @@
         type="button"
         hlmDialogClose
         data-ai-template-cancel
-        i18n="@@authoring.aiSettings.cancel"
+        i18n="@@authoring.ai-settings.cancel"
       >
         Cancel
       </button>
@@ -352,7 +352,7 @@
         hlmBtn
         type="button"
         (click)="replaceTemplate()"
-        i18n="@@authoring.aiSettings.replace"
+        i18n="@@authoring.ai-settings.replace"
       >
         Replace draft
       </button>

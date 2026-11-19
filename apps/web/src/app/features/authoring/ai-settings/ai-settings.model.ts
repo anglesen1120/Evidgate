@@ -18,57 +18,57 @@ export type TextField =
 export const FIELDS: readonly { key: TextField; label: string; limit: number }[] = [
   {
     key: 'description',
-    label: $localize`:@@authoring.aiSettings.description:Description`,
+    label: $localize`:@@authoring.ai-settings.description:Description`,
     limit: schema.properties.description.maxLength,
   },
   {
     key: 'environment_url',
-    label: $localize`:@@authoring.aiSettings.environment:Environment URL`,
+    label: $localize`:@@authoring.ai-settings.environment:Environment URL`,
     limit: schema.properties.environment_url.maxLength,
   },
   {
     key: 'writing_style',
-    label: $localize`:@@authoring.aiSettings.style:Writing style`,
+    label: $localize`:@@authoring.ai-settings.style:Writing style`,
     limit: schema.properties.writing_style.maxLength,
   },
   {
     key: 'coverage_strategy',
-    label: $localize`:@@authoring.aiSettings.coverage:Coverage strategy`,
+    label: $localize`:@@authoring.ai-settings.coverage:Coverage strategy`,
     limit: schema.properties.coverage_strategy.maxLength,
   },
   {
     key: 'critical',
-    label: $localize`:@@authoring.aiSettings.critical:Critical priority criteria`,
+    label: $localize`:@@authoring.ai-settings.critical:Critical priority criteria`,
     limit: schema.properties.priority_criteria.properties.critical.maxLength,
   },
   {
     key: 'high',
-    label: $localize`:@@authoring.aiSettings.high:High priority criteria`,
+    label: $localize`:@@authoring.ai-settings.high:High priority criteria`,
     limit: schema.properties.priority_criteria.properties.high.maxLength,
   },
   {
     key: 'medium',
-    label: $localize`:@@authoring.aiSettings.medium:Medium priority criteria`,
+    label: $localize`:@@authoring.ai-settings.medium:Medium priority criteria`,
     limit: schema.properties.priority_criteria.properties.medium.maxLength,
   },
   {
     key: 'low',
-    label: $localize`:@@authoring.aiSettings.low:Low priority criteria`,
+    label: $localize`:@@authoring.ai-settings.low:Low priority criteria`,
     limit: schema.properties.priority_criteria.properties.low.maxLength,
   },
   {
     key: 'exclusion_rules',
-    label: $localize`:@@authoring.aiSettings.exclusions:Exclusion rules`,
+    label: $localize`:@@authoring.ai-settings.exclusions:Exclusion rules`,
     limit: schema.properties.exclusion_rules.maxLength,
   },
   {
     key: 'step_detail',
-    label: $localize`:@@authoring.aiSettings.detail:Step detail`,
+    label: $localize`:@@authoring.ai-settings.detail:Step detail`,
     limit: schema.properties.step_detail.maxLength,
   },
   {
     key: 'reason',
-    label: $localize`:@@authoring.aiSettings.reason:Save reason (optional)`,
+    label: $localize`:@@authoring.ai-settings.reason:Save reason (optional)`,
     limit: 500,
   },
 ];
