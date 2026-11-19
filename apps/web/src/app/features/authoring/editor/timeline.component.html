@@ -69,7 +69,7 @@
     }
   </ng-template>
   <ng-template #actions let-row>
-    <div class="flex flex-wrap gap-2" [class.flex-nowrap]="virtualRows()">
+    <div class="flex gap-2" [class.flex-wrap]="!virtualRows()" [class.flex-nowrap]="virtualRows()">
       <button
         hlmBtn
         [variant]="'outline'"
@@ -203,6 +203,12 @@
           </h3>
           <app-copyable-identifier [value]="detail.view.version_id" [label]="versionLabel" />
           <app-copyable-identifier [value]="detail.etag" [label]="etagLabel" />
+          <app-absolute-time [value]="detail.view.created_at" />
+          @if (detail.view.author) {
+            <app-copyable-identifier [value]="detail.view.author" [label]="authorLabel" />
+          } @else {
+            <p class="m-0 text-muted-foreground">{{ noAuthor }}</p>
+          }
           <pre
             class="m-0 max-h-[60vh] overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-muted p-4 text-sm wrap-anywhere"
             tabindex="0"

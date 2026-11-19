@@ -254,6 +254,74 @@ describe('TimelineComponent', () => {
     expect(data.restoreVersion).not.toHaveBeenCalled();
     expect(document.activeElement?.getAttribute('data-restore-open')).not.toBeNull();
   });
+  it('virtual rows wrap actions exclusively and reserve a track for both buttons', async () => {
+    const rows = Array.from({ length: 201 }, (_, index) => ({
+      ...version(201 - index),
+      version_id: 'version-' + (201 - index),
+    }));
+    data.versions.mockResolvedValue({ items: rows, next_cursor: null });
+    const { fixture } = await mount();
+    const host = fixture.nativeElement as HTMLElement;
+    const actions = host.querySelector('[data-row-id] [data-inspect-version]')?.parentElement;
+    expect(actions?.classList.contains('flex-nowrap')).toBe(true);
+    expect(actions?.classList.contains('flex-wrap')).toBe(false);
+    const tracks = [...host.querySelectorAll('table.header-table col')];
+    const style = tracks[tracks.length - 1]?.getAttribute('style') ?? '';
+    expect(Number(/([\d.]+)ch/.exec(style)?.[1])).toBeGreaterThanOrEqual(40);
+  });
+  it('keeps the author and UTC timestamp reachable in the virtual row version detail', async () => {
+    const authored = { ...version(4), author: 'member-42', created_at: '2026-11-14T00:00:00Z' };
+    const rows = Array.from({ length: 201 }, (_, index) => ({
+      ...version(201 - index),
+      version_id: 'version-' + (201 - index),
+    }));
+    data.versions.mockResolvedValue({ items: [authored, ...rows], next_cursor: null });
+    data.version.mockResolvedValue({ view: authored, etag: '"author"' });
+    const { harness } = await mount();
+    expect(await harness.count('cdk-virtual-scroll-viewport')).toBe(1);
+    await harness.click('[data-inspect-version="version-4"]');
+    const text = await harness.text();
+    expect(text).toContain('member-42');
+    expect(text).toContain('2026');
+  });
+  it('focuses the outcome status when an active filter hides the appended row', async () => {
+    const { fixture, harness } = await mount();
+    await harness.filter('Reason 2');
+    await harness.click('[data-inspect-version="version-2"]');
+    await fixture.whenStable();
+    await harness.click('[data-restore-open]');
+    await (
+      await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(RestoreHarness)
+    ).confirm();
+    await fixture.whenStable();
+    const active = document.activeElement as HTMLElement | null;
+    expect(active?.getAttribute('role')).toBe('status');
+    expect(active?.textContent).toContain('Version 4 was appended');
+  });
+  it('a restore that finishes after Cancel does not suppress the next dialog restore focus', async () => {
+    let release: (value: { version: number }) => void = () => {};
+    // `Promise.withResolvers` is ES2024 and this project's lib is ES2022.
+    const pending = new Promise<{ version: number }>((resolve) => {
+      release = resolve;
+    });
+    data.restoreVersion.mockReturnValue(pending);
+    const { fixture, harness } = await mount();
+    await harness.click('[data-inspect-version="version-2"]');
+    await fixture.whenStable();
+    await harness.click('[data-restore-open]');
+    const loader = TestbedHarnessEnvironment.documentRootLoader(fixture);
+    await (await loader.getHarness(RestoreHarness)).confirm();
+    await fixture.whenStable();
+    await (await loader.getHarness(RestoreHarness)).cancel();
+    await fixture.whenStable();
+    appended = true;
+    release({ version: 4 });
+    await fixture.whenStable();
+    await harness.click('[data-restore-open]');
+    await (await loader.getHarness(RestoreHarness)).cancel();
+    await fixture.whenStable();
+    expect(document.activeElement?.getAttribute('data-restore-open')).not.toBeNull();
+  });
   it('moves focus to the refresh status when the appended row never arrives', async () => {
     let release: (value: { version: number }) => void = () => {};
     // `Promise.withResolvers` is ES2024 and this project's lib is ES2022.

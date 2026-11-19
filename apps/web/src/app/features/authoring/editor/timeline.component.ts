@@ -146,6 +146,9 @@ export class TimelineComponent {
           header: $localize`:@@authoring.editor.inspect-column:Inspection`,
           cell: () => '',
           role: 'actions',
+          // Both single-line buttons share this fixed track in virtual mode; the default actions
+          // track would clip the second one because a template cell has no text to measure.
+          virtualWidth: '48ch',
           ...(actions ? { cellTemplate: actions } : {}),
         },
       ];
@@ -181,7 +184,13 @@ export class TimelineComponent {
       [...host.querySelectorAll<HTMLElement>('[data-row-id]')].find(
         (element) => element.dataset['rowId'] === row.version_id,
       );
-    if (!target) return;
+    // An active filter can load the appended row and still keep it out of the rendered list; the
+    // status outside the dialog then carries the outcome and is the only focusable place for it.
+    if (!target || !this.rows().some((entry) => entry.version_id === row.version_id)) {
+      this.timelineStatus()?.nativeElement.focus();
+      this.restoredFocus.set(null);
+      return;
+    }
     target.focus();
     this.restoredFocus.set(null);
   }
@@ -251,9 +260,13 @@ export class TimelineComponent {
     const attempt = this.store.restore(id);
     this.holdFocusDuringRestore();
     if (await attempt) {
-      this.restoredJustNow = true;
       this.restoredFocus.set(this.store.appendedVersion());
-      this.confirmation.set(null);
+      // Only a completion that closes the confirmation on screen may suppress the opener restore;
+      // a request that finished after Cancel must not silence the next dialog's Cancel.
+      if (this.confirmation() !== null) {
+        this.restoredJustNow = true;
+        this.confirmation.set(null);
+      }
     }
   }
 }

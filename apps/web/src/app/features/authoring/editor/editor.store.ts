@@ -74,15 +74,37 @@ export const EditorStore = signalStore(
         equal: (a, b) => a?.org === b?.org && a?.project === b?.project && a?.caseId === b?.caseId,
       },
     );
-    // Destination scope guards publish the next org/project before this route's canDeactivate
-    // runs. Keeping the loaded case until the URL names another case keeps the draft, and its
-    // dirty state, intact while the visitor decides whether to leave.
-    const scope = linkedSignal<EditorScope | undefined, EditorScope | undefined>({
+    // Destination scope guards drop the published org/project pair and its grants before this
+    // route's canDeactivate runs, so an unresolved pair is an interval, not evidence that the
+    // draft's own scope is gone. Keep the loaded case through it, and through a switch to another
+    // org/project, until the visitor's decision is known.
+    const lastPublished = linkedSignal<EditorScope | undefined, EditorScope | undefined>({
       source: () => publishedScope(),
-      computation: (source, previous) =>
-        source && previous?.value && previous.value.caseId === source.caseId
-          ? previous.value
-          : source,
+      computation: (source, previous) => {
+        const retained = previous?.value;
+        if (!retained) return source;
+        return !source || source.caseId === retained.caseId ? retained : source;
+      },
+    });
+    // Abandoning the draft is only right when the case itself can no longer be read: the same
+    // org/project is published without the read grant, or the route now names another case.
+    const released = computed(() => {
+      const retained = lastPublished();
+      const id = caseId();
+      if (!retained || !id || id !== retained.caseId) return true;
+      const org = store.session.currentOrg()?.id;
+      const project = store.session.currentProject()?.id;
+      if (!org || !project) return false;
+      return (
+        org === retained.org && project === retained.project && !store.session.has(EDITOR_READ)
+      );
+    });
+    const scope = linkedSignal<
+      { retained: EditorScope | undefined; released: boolean },
+      EditorScope | undefined
+    >({
+      source: () => ({ retained: lastPublished(), released: released() }),
+      computation: (source) => (source.released ? undefined : source.retained),
     });
     const head = resource({
       params: scope,
@@ -92,7 +114,10 @@ export const EditorStore = signalStore(
     const base = linkedSignal<HeadSource, AuthoringCaseHead | undefined>({
       source: () => ({ scope: scope(), value: head.hasValue() ? head.value() : undefined }),
       computation: (source, previous) =>
-        source.value ?? (source.scope === previous?.source.scope ? previous?.value : undefined),
+        source.scope === undefined
+          ? undefined
+          : (source.value ??
+            (source.scope === previous?.source.scope ? previous?.value : undefined)),
     });
     const baseDraft = computed(() => {
       const current = base();
@@ -109,6 +134,18 @@ export const EditorStore = signalStore(
     });
     return {
       scope,
+      published: publishedScope,
+      // A retained draft is read-only while the live pair is unresolved or names another org or
+      // project, so a queued write can never land under a tenant the draft does not belong to.
+      scopeAvailable: computed(() => {
+        const published = publishedScope();
+        const loaded = scope();
+        return (
+          published?.org === loaded?.org &&
+          published?.project === loaded?.project &&
+          published?.caseId === loaded?.caseId
+        );
+      }),
       head,
       base,
       baseDraft,
@@ -135,7 +172,10 @@ export const EditorStore = signalStore(
     }),
     // A case write or a head refresh must finish before the draft accepts input, because the
     // arriving head replaces baseDraft and would otherwise discard edits made during the read.
-    locked: computed(() => store.saving() || store.restoring() || store.head.isLoading()),
+    locked: computed(
+      () =>
+        store.saving() || store.restoring() || store.head.isLoading() || !store.scopeAvailable(),
+    ),
   })),
   withMethods((store) => {
     function edit(next: CaseDraft): void {

@@ -93,8 +93,9 @@ function refused(kind: ApiErrorKind, status: number, path?: string) {
 }
 
 describe('EditorPage', () => {
-  const org = signal({ id: 'o1' });
-  const project = signal({ id: 'p1' });
+  const org = signal<{ id: string } | null>({ id: 'o1' });
+  const project = signal<{ id: string } | null>({ id: 'p1' });
+  const readable = signal(true);
   const writable = signal(true);
   const narrow = signal(false);
   let data: {
@@ -107,6 +108,7 @@ describe('EditorPage', () => {
   beforeEach(() => {
     org.set({ id: 'o1' });
     project.set({ id: 'p1' });
+    readable.set(true);
     writable.set(true);
     narrow.set(false);
     data = {
@@ -137,7 +139,7 @@ describe('EditorPage', () => {
           useValue: {
             currentOrg: org,
             currentProject: project,
-            has: (code: string) => (code === EDITOR_WRITE ? writable() : true),
+            has: (code: string) => readable() && (code === EDITOR_WRITE ? writable() : true),
           },
         },
         {
@@ -273,11 +275,22 @@ describe('EditorPage', () => {
     expect(await decision).toBe(false);
     expect(await harness.value('case-title')).toBe('Unsaved title');
   });
-  it('retains dirty state while destination guards publish a different scope before leave consent', async () => {
+  it('retains the dirty draft while guards clear the scope and grants before leave consent', async () => {
     const { fixture, harness } = await mount();
     await harness.fill('case-title', 'Unsaved source title');
     org.set({ id: 'o2' });
+    project.set(null);
+    readable.set(false);
+    await fixture.whenStable();
+    const store = fixture.debugElement.injector.get(EditorStore);
+    expect(store.scope()).toMatchObject({ org: 'o1', project: 'p1' });
+    expect(store.scopeAvailable()).toBe(false);
+    expect(store.dirty()).toBe(true);
+    expect(await harness.value('case-title')).toBe('Unsaved source title');
+    expect(await store.save()).toBe(false);
+    org.set({ id: 'o2' });
     project.set({ id: 'p2' });
+    readable.set(true);
     await fixture.whenStable();
     const decision = fixture.componentInstance.confirmLeave();
     await fixture.whenStable();
@@ -285,9 +298,25 @@ describe('EditorPage', () => {
       await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(LeaveHarness);
     await dialog.cancel();
     expect(await decision).toBe(false);
+    expect(store.dirty()).toBe(true);
+    expect(await store.save()).toBe(false);
+    org.set({ id: 'o1' });
+    project.set({ id: 'p1' });
+    await fixture.whenStable();
     expect(await harness.value('case-title')).toBe('Unsaved source title');
     expect(data.readCase).toHaveBeenCalledTimes(1);
     expect(fixture.debugElement.injector.get(EditorStore).dirty()).toBe(true);
+  });
+  it('discards the retained draft when its own scope loses read permission', async () => {
+    const { fixture, harness } = await mount();
+    await harness.fill('case-title', 'Revoked draft');
+    readable.set(false);
+    await fixture.whenStable();
+    const store = fixture.debugElement.injector.get(EditorStore);
+    expect(store.dirty()).toBe(false);
+    expect(store.draft()).toBeUndefined();
+    expect(await harness.text()).not.toContain('Revoked draft');
+    expect(await fixture.componentInstance.confirmLeave()).toBe(true);
   });
   it('keeps fields read-only until the post-restore head refresh settles', async () => {
     const { fixture, harness } = await mount();
