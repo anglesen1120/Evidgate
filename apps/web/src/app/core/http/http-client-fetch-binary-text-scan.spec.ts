@@ -2,14 +2,11 @@
 // adapter. The scan reads each UTF-16 unit with `charCodeAt`, so its calls count the scans.
 import { BrowserPlatformLocation, PlatformLocation } from '@angular/common';
 import { HttpClient, provideHttpClient } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-  type TestRequest,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
+import { EXACT_MATCH_PROFILE, takeRequestWith } from '../../shared/testing/http-data.testing';
 import {
   BINARY_BODY_LIMIT_BYTES,
   BINARY_REQUEST,
@@ -19,16 +16,7 @@ import { createHttpClientFetch, type HttpClientFetch } from './http-client-fetch
 
 const URL = 'http://localhost/v1/projects/project/authoring/import';
 
-async function nextRequest(httpMock: HttpTestingController): Promise<TestRequest> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const [request] = httpMock.match(URL);
-    if (request !== undefined) {
-      return request;
-    }
-    await Promise.resolve();
-  }
-  throw new Error('The adapter has not issued the request.');
-}
+const takeRequest = takeRequestWith(EXACT_MATCH_PROFILE);
 
 function requestOnly(): Request {
   return new Request(URL, {
@@ -82,7 +70,7 @@ describe('request-only binary call text reply scan', () => {
     const text = 'x'.repeat(BINARY_BODY_LIMIT_BYTES / 2);
     const units = await countScannedUnits(async () => {
       const pending = adapter(requestOnly());
-      (await nextRequest(httpMock)).flush(text, { headers: { 'Content-Type': 'text/plain' } });
+      (await takeRequest(httpMock, URL)).flush(text, { headers: { 'Content-Type': 'text/plain' } });
       await pending;
     });
     expect(units).toBe(text.length);
@@ -92,7 +80,7 @@ describe('request-only binary call text reply scan', () => {
     const text = 'é'.repeat(BINARY_BODY_LIMIT_BYTES / 2 + 1);
     const units = await countScannedUnits(async () => {
       const pending = adapter(requestOnly()).catch((error: unknown) => error);
-      (await nextRequest(httpMock)).flush(text);
+      (await takeRequest(httpMock, URL)).flush(text);
       expect(await pending).toBeInstanceOf(TypeError);
     });
     expect(units).toBeLessThanOrEqual(text.length);

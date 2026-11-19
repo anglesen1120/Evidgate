@@ -264,7 +264,8 @@ export function toBinaryResponse(
   if (body !== null && finalBodySize(body) > BINARY_BODY_LIMIT_BYTES) {
     throw limitError('response', source);
   }
-  // Only a buffer, view, Blob or string has a finite size, and that is what `Response` accepts.
+  // Only a buffer, view, Blob or string has a finite size, and that is what `Response` accepts. A
+  // view over shared memory is measured too, but `Response` then refuses it: still fail-closed.
   return toFetchResponse(status, statusText, headers, body as FetchBody | null, source, true);
 }
 
