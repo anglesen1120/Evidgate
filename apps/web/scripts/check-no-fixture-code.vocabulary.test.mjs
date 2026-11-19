@@ -41,7 +41,16 @@ async function gate(document, word) {
 const detail = (reason) => ({ body: { error: { details: [{ path: '/steps', reason }] } } });
 
 test('the vocabulary holds exactly the eight documented reason words', () => {
-  assert.equal(ERROR_DETAIL_REASONS.size, 8);
+  assert.deepEqual([...ERROR_DETAIL_REASONS].sort(), [
+    'body_too_large',
+    'code_conflict',
+    'duplicate_key',
+    'invalid_text',
+    'steps_invalid',
+    'unknown_parent',
+    'unsupported_format',
+    'value_invalid',
+  ]);
 });
 
 for (const word of ERROR_DETAIL_REASONS) {
@@ -63,6 +72,20 @@ test('an exempt reason word under a reason member elsewhere is still a leak', as
   assert.equal(result.status, 1);
   assert.match(result.stderr, /duplicate_key/);
 });
+
+const widened = {
+  'a nested member': { body: { error: { details: [{ extra: { reason: 'duplicate_key' } }] } } },
+  'an array value': { body: { error: { details: [{ reason: ['duplicate_key'] }] } } },
+  'a nested array': { body: { error: { details: [[{ reason: 'duplicate_key' }]] } } },
+  'a case variant': detail('Duplicate_Key'),
+};
+for (const [name, document] of Object.entries(widened)) {
+  test(`reason under ${name} of body.error.details[] is still a leak`, async () => {
+    const word = name === 'a case variant' ? 'Duplicate_Key' : 'duplicate_key';
+    const result = await gate(document, word);
+    assert.equal(result.status, 1);
+  });
+}
 
 test('the export format discriminator is exempt, another format value is a leak', async () => {
   const exempt = await gate({ body: { format: 'authoring-import' } }, 'authoring-import');

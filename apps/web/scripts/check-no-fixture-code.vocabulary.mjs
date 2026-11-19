@@ -20,8 +20,8 @@ const MISSING_CODES = new Set([
 ]);
 
 export const ENUM_MEMBERS = new Map([
-  // The export document's discriminator: `contracts/schemas/authoring-import.v1.json`
-  // `properties.format.const`, which the authoring export screen checks.
+  // `contracts/schemas/authoring-import.v1.json` `properties.format.const`, the export document's
+  // discriminator; production code carries it inside longer identifiers.
   ['format', new Set(['authoring-import'])],
   ['provider', new Set(['github_actions'])],
   [

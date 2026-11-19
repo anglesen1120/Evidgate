@@ -32,6 +32,8 @@
 //    `rotated`, `expired`, `revoked`, which the step-2 page renders) are exempt, and the exemption
 //    matches per value — a fixture that grows any other status or provider word keeps it as a
 //    needle, so it cannot hide a new fixture string behind a common member name.
+//    `details[].reason` is exempt per value for the words listed in the vocabulary module, only at
+//    that trail position; the `format` discriminator is a per-value `ENUM_MEMBERS` entry.
 //    The error envelope's `details[].path` (`body.error.details[].path`, 00 §9.2) names the
 //    request member a refusal is about, so it holds contract property names such as
 //    `artifact_days`; production code names the same property. That one member is exempt per
