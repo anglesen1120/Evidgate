@@ -72,7 +72,7 @@ internal static class ForwardedHeadersTestHost
     {
         ArgumentNullException.ThrowIfNull(host);
 
-        return host.Services.GetRequiredService<IOptions<CiAuthOptions>>().Value.ExchangeBurstLimit;
+        return host.Services.GetRequiredService<IOptions<RateLimitOptions>>().Value.CiExchangeLimit;
     }
 
     /// <summary>Places the sender's socket address before any middleware of the Api pipeline runs.</summary>

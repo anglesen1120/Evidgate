@@ -111,7 +111,7 @@ public sealed class IsolationApiFactory : WebApplicationFactory<Program>
                 ["EVIDGATE:Ci:Pepper"] = Convert.ToBase64String(_pepper),
                 ["EVIDGATE:Ci:PepperVersion"] = "2",
                 ["EVIDGATE:Ci:GithubOidcAudience"] = GithubAudience,
-                ["EVIDGATE:Ci:ExchangeBurstLimit"] = "1000",
+                ["EVIDGATE:Identity:RateLimits:CiExchangeLimit"] = "1000",
                 // 02.1.2-T2: the invite routes mint a token, so the pepper must exist (see IdentityApiFactory).
                 ["EVIDGATE:Invite:Pepper"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
             }));

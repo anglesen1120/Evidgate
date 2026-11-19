@@ -119,11 +119,12 @@ internal static class DevSessionEndpoints
         context.Response.Headers.CacheControl = NoStore;
 
         // First, before the body is touched: a wrong guess must not be free, and the route is anonymous.
-        var throttled = LoginEndpoints.Throttle(
+        var throttled = await LoginEndpoints.ThrottleAsync(
             context,
             limiter,
             LimiterPrefix + ClientIp.LimiterKey(context),
-            cost: 1);
+            cost: 1,
+            cancellationToken).ConfigureAwait(false);
         if (throttled is not null)
         {
             return Result.Failure(throttled);

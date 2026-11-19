@@ -161,7 +161,7 @@ public sealed class InviteTokenStagingTests
     {
         using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();
-        var burst = host.Services.GetRequiredService<IOptions<CiAuthOptions>>().Value.ExchangeBurstLimit;
+        var burst = host.Services.GetRequiredService<IOptions<RateLimitOptions>>().Value.InviteLimit;
 
         for (var attempt = 1; attempt <= burst; attempt++)
         {

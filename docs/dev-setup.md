@@ -443,8 +443,11 @@ deployment has to terminate TLS at the Api or trust the proxy that does. It is n
 relaxing the cookie flags.
 
 The route is throttled per client address: 30 attempts per 60-second window by default
-(`EVIDGATE__CI__EXCHANGEBURSTLIMIT` and `EVIDGATE__CI__EXCHANGEWINDOWSECONDS`), counted
-before anything else, so a successful sign-in spends one unit exactly like a wrong guess.
+(`EVIDGATE__IDENTITY__RATELIMITS__LOGINLIMIT` and `EVIDGATE__IDENTITY__RATELIMITS__LOGINWINDOWSECONDS`),
+counted before anything else, so a successful sign-in spends one unit exactly like a wrong guess.
+The window lives in PostgreSQL (`rate_limit_window`), shared by every Api replica, so the budget no
+longer multiplies with the replica count; a surface that reaches `…__LOGINMAXKEYS` keys evicts its
+oldest windows instead of refusing new addresses.
 The key is the address the Api sees — every caller behind one proxy or tunnel shares a
 single key unless forwarded headers are trusted — and a spent window answers `429
 rate_limited` with `Retry-After` until it resets.

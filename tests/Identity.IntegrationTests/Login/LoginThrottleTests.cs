@@ -1,9 +1,12 @@
 using System.Net;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.Modules.Identity.Login;
+using Evidgate.Modules.Identity.Options;
 using Identity.IntegrationTests.Forwarding;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Shouldly;
 using Xunit;
 
@@ -200,7 +203,7 @@ public sealed class LoginThrottleTests
         var cookieValue = pair[(LoginStateCookie.Name.Length + 1)..];
         var state = StateOf(start);
 
-        // The callback's second unit is best-effort: a legal ExchangeBurstLimit of 1 must still let the
+        // The callback's second unit is best-effort: a legal login limit of 1 must still let the
         // first login through to the provider, not answer every callback with 429.
         using var first = await LoginTestHost.SendAsync(
             client,
@@ -247,12 +250,12 @@ public sealed class LoginThrottleTests
         refused.Headers.CacheControl!.NoStore.ShouldBeTrue();
     }
 
-    /// <summary>The same login host with a different CI exchange budget bound at boot.</summary>
+    /// <summary>The same login host with a different login budget bound at boot.</summary>
     private static WebApplicationFactory<Program> HostWithBudget(WebApplicationFactory<Program> host, int burst) =>
         host.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, configuration) =>
             configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
             {
-                ["EVIDGATE:Ci:ExchangeBurstLimit"] = burst.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["EVIDGATE:Identity:RateLimits:LoginLimit"] = burst.ToString(System.Globalization.CultureInfo.InvariantCulture),
             })));
 
     /// <summary>The <c>state</c> the start redirect carries (base64url, so it needs no decoding).</summary>
@@ -273,8 +276,9 @@ public sealed class LoginThrottleTests
     /// <summary>The request header the address-setting filter reads the client address from.</summary>
     private const string ClientIpHeader = ForwardedHeadersTestHost.SocketAddressHeader;
 
-    /// <summary>The burst the routes actually spend: the CI exchange limiter's own budget, bound at boot.</summary>
-    private static int Burst(WebApplicationFactory<Program> host) => ForwardedHeadersTestHost.Burst(host);
+    /// <summary>The burst the login routes actually spend: the login surface's own budget, bound at boot.</summary>
+    private static int Burst(WebApplicationFactory<Program> host) =>
+        host.Services.GetRequiredService<IOptions<RateLimitOptions>>().Value.LoginLimit;
 
     /// <summary>A <c>start</c> request that reaches the app from <paramref name="address"/>.</summary>
     private static HttpRequestMessage Start(string address)

@@ -363,9 +363,9 @@ paths:
         boundary, because a cross-site `enctype=text/plain` form post is the one encoding that can reach a
         response's `Set-Cookie` without a CORS preflight and a browser cannot label a form post
         `application/json`. Every response carries `Cache-Control: no-store`, and the route is
-        throttled per client address from the CI exchange limiter's budget
-        (`EVIDGATE__CI__EXCHANGEBURSTLIMIT`) under its own key prefix at one unit — the cost of a
-        `start` — so one client cannot fill every browser's cookie jar. No `Idempotency-Key` (see
+        throttled per client address from the invite surface's budget
+        (`EVIDGATE__IDENTITY__RATELIMITS__INVITELIMIT`) under its own key prefix at one unit — the
+        cost of a `start` — so one client cannot fill every browser's cookie jar. No `Idempotency-Key` (see
         `contracts/README.md`): nothing is created, and repeating the request stages the same token
         again.
       x-permission: none
@@ -542,8 +542,8 @@ paths:
         the sign-in route's `returnUrl` (a refused value lands on `/` and is not an error); a body
         over 4096 bytes is 413 and a body whose media type is not `application/json`, or one that is
         not JSON, is 422. Every response carries `Cache-Control: no-store`, spends its own prefix of
-        the CI exchange limiter's per-client budget (`EVIDGATE__CI__EXCHANGEBURSTLIMIT`, one unit) so
-        a flood here cannot spend another route's window, and refuses a present `Origin` header that
+        the link surface's per-client budget (`EVIDGATE__IDENTITY__RATELIMITS__LINKLIMIT`, one unit)
+        so a flood here cannot spend another route's window, and refuses a present `Origin` header that
         is not this deployment's public origin (`EVIDGATE__LOGIN__PUBLICBASEURL`) with 403
         `forbidden` — defence in depth on top of `SameSite=Lax`, because a same-site browser form post
         still carries the session cookie. No token, code, subject, email or cookie value is echoed,
