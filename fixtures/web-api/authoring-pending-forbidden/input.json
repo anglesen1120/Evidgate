@@ -1,0 +1,18 @@
+{
+  "operation_id": "listAuthoringChanges",
+  "variant": "forbidden",
+  "status": 403,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000af0a"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "permission_denied",
+      "message": "This account cannot read the project's authoring changes.",
+      "request_id": "018f0000-0000-7000-8000-00000000af0a",
+      "retryable": false,
+      "details": []
+    }
+  }
+}

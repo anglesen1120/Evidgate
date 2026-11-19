@@ -4,6 +4,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   inject,
   Injector,
   linkedSignal,
@@ -19,6 +20,7 @@ import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
 import { combineLatest, distinctUntilChanged, map } from 'rxjs';
 import { InlineFeedbackComponent } from '../../shared/ui/states/inline-feedback.component';
+import { LiveStatusComponent } from '../../shared/ui/states/live-status.component';
 import { RequestStateComponent } from '../../shared/ui/states/request-state.component';
 import { AuthoringCaseRowsComponent } from './authoring-case-rows.component';
 import {
@@ -44,6 +46,7 @@ import { AuthoringCaseTableStore } from './authoring-case-table.store';
     HlmLabel,
     HlmSelectImports,
     InlineFeedbackComponent,
+    LiveStatusComponent,
     RequestStateComponent,
     AuthoringCaseRowsComponent,
   ],
@@ -111,6 +114,10 @@ export class AuthoringCaseTableComponent {
     ),
   );
   protected readonly pageLabel = (value: unknown) => String(value);
+  /** The cap notice is inserted with its message, so it announces through this mounted region. */
+  protected readonly capAnnouncement = computed(() =>
+    this.store.browseCapped() ? `${this.copy.browseCapped}. ${this.copy.browseCappedHelp}` : '',
+  );
   protected readonly unavailableFilters = [
     { id: 'source', label: this.copy.source, help: this.copy.sourceHelp },
     { id: 'owner', label: this.copy.owner, help: this.copy.ownerHelp },
@@ -146,6 +153,7 @@ export class AuthoringCaseTableComponent {
     this.filterFields.flatMap((field) => field.options).find((option) => option.value === value)
       ?.label ?? this.copy.all;
   private readonly rows = viewChild(AuthoringCaseRowsComponent);
+  private readonly loadedCount = viewChild<ElementRef<HTMLElement>>('loadedCount');
 
   protected update(patch: Partial<AuthoringCaseFilters>): void {
     this.draft.update((draft) => ({ ...draft, ...patch }));
@@ -174,6 +182,15 @@ export class AuthoringCaseTableComponent {
     this.draft.set({ ...EMPTY_CASE_FILTERS, limit: this.draft().limit });
     this.apply();
   }
+  /** The refused route value is dropped from the URL itself; the draft cannot carry it out. */
+  protected clearInvalidLink(): void {
+    if (this.store.invalidLinkField() === 'node') {
+      this.navigate({ node_id: null, cursor: null });
+      return;
+    }
+    this.draft.update((draft) => ({ ...draft, itemId: '' }));
+    this.navigate({ item_id: null, cursor: null });
+  }
   protected setPageSize(value: unknown): void {
     const limit = Number(value);
     if (!Number.isInteger(limit) || limit < 1 || limit > 200) return;
@@ -186,12 +203,25 @@ export class AuthoringCaseTableComponent {
     const scope = this.routeState();
     const scopeKey = this.store.scopeKey();
     const cursor = await this.store.loadMore();
-    if (!cursor || scope !== this.routeState()) return;
+    if (scope !== this.routeState()) return;
+    // A pager that could not continue removes the control the visitor was on. When that
+    // interaction still owns focus, hand it to the surviving loaded count rather than leaving it
+    // on a detached node; a pager that still has a cursor stays where the visitor put it.
+    if (!cursor) {
+      if (this.store.nextCursor() === null && owned) this.focusLoadedCount(source, scopeKey);
+      return;
+    }
     // A page step is a position in the same result, not a new history entry: Back must return to
     // the filters that produced the walk instead of stepping through every page.
     this.navigate({ cursor }, true);
     const first = this.store.rows().find((row) => !before.has(row.case_id));
-    if (!first || !owned) return;
+    if (!owned) return;
+    // An accepted page can also be the last one while adding nothing (an empty or duplicate-only
+    // tail): the pager is gone, so the same surviving target takes the focus.
+    if (!first) {
+      if (this.store.nextCursor() === null) this.focusLoadedCount(source, scopeKey);
+      return;
+    }
     afterNextRender(
       () => {
         if (
@@ -200,6 +230,17 @@ export class AuthoringCaseTableComponent {
             this.document.activeElement === this.document.body)
         )
           this.rows()?.focusRow(first.case_id);
+      },
+      { injector: this.injector },
+    );
+  }
+  private focusLoadedCount(source: EventTarget | null, scopeKey: string): void {
+    afterNextRender(
+      () => {
+        if (scopeKey !== this.store.scopeKey()) return;
+        const active = this.document.activeElement;
+        if (active !== source && active !== this.document.body) return;
+        this.loadedCount()?.nativeElement.focus();
       },
       { injector: this.injector },
     );

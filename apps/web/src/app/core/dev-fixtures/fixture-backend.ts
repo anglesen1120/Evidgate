@@ -36,6 +36,7 @@
 // therefore contains none of it, and `scripts/check-no-fixture-code.mjs` greps the bundle for the
 // three marker strings below (plus the corpus's own long string values) to prove it.
 
+import { AuthoringPendingFixtureScenario } from './fixture-authoring-pending';
 import {
   HttpBackend,
   HttpErrorResponse,
@@ -55,6 +56,8 @@ import type { RetentionPolicy, RunPage } from '@evidgate/sdk';
 import { mergeMap, type Observable, of, throwError, timer } from 'rxjs';
 
 import { newUuid } from '../http/random-id';
+import { AUTHORING_XLSX_MEDIA_TYPE } from '../data/authoring-import-export-gateway';
+import { AUTHORING_XLSX_BASE64 } from './fixture-catalog-authoring-impex-rows';
 import {
   findFixtureEntry,
   findFixtureEntryByCursor,
@@ -78,6 +81,7 @@ import { findUsageSummaryFixture } from './fixture-usage-summary';
 import { securityEventsBody } from './fixture-security-events';
 import { caseListFixtureBody } from './fixture-case-list';
 import { findBulkCaseListFixture } from './fixture-case-list-bulk';
+import { findBrowseCapFixture } from './fixture-browse-cap';
 import { AuthoringTreeFixtureScenario } from './fixture-authoring-tree';
 import { AuthoringCasesFixtureScenario } from './fixture-authoring-cases';
 import { AiSettingsFixtureScenario, aiSettingsPermissions } from './fixture-ai-settings';
@@ -141,6 +145,12 @@ function wireBody(body: unknown, responseType: string, contentType: string): unk
   if (body === null || body === undefined) {
     return null;
   }
+  if (contentType === AUTHORING_XLSX_MEDIA_TYPE) {
+    const bytes = Uint8Array.from(atob(AUTHORING_XLSX_BASE64), (value) => value.charCodeAt(0));
+    if (responseType === 'blob') return new Blob([bytes], { type: contentType });
+    if (responseType === 'arraybuffer') return bytes.buffer;
+    throw new Error('XLSX fixture requires a binary response type');
+  }
   const text = JSON.stringify(body);
   switch (responseType) {
     case 'blob':
@@ -148,7 +158,8 @@ function wireBody(body: unknown, responseType: string, contentType: string): unk
     case 'text':
       return text;
     case 'arraybuffer':
-      return new TextEncoder().encode(text).buffer;
+      // Host-provided encoders may belong to another realm; HttpClient buffers belong to this one.
+      return Uint8Array.from(new TextEncoder().encode(text)).buffer;
     default:
       return structuredClone(body);
   }
@@ -193,9 +204,15 @@ function fixtureNotFoundBody(request: HttpRequest<unknown>, target: string): unk
   };
 }
 
-/** `Content-Type: application/json`, then the fixture's headers, then the answering-fixture header. */
+/** The corpus stores logical JSON; workbook fixtures choose their binary wire media type here. */
 function fixtureHeaders(entry: FixtureEntry): HttpHeaders {
-  let headers = new HttpHeaders({ 'Content-Type': JSON_CONTENT_TYPE });
+  const workbook =
+    entry.document.operation_id === 'exportAuthoring' &&
+    entry.document.variant === 'xlsx' &&
+    entry.document.status === 200;
+  let headers = new HttpHeaders({
+    'Content-Type': workbook ? AUTHORING_XLSX_MEDIA_TYPE : JSON_CONTENT_TYPE,
+  });
   for (const [name, value] of Object.entries(entry.document.headers)) {
     headers = headers.set(name, value);
   }
@@ -206,7 +223,7 @@ function fixtureHeaders(entry: FixtureEntry): HttpHeaders {
  * Appends the request the backend is about to answer to the page-global log. A spec runs in Node
  * (`window` absent), and the log is a review seam, never app state, so a missing window is a no-op.
  */
-function recordRequest(request: HttpRequest<unknown>): void {
+function recordRequest(request: HttpRequest<unknown>, path: string | null): void {
   if (typeof window === 'undefined') {
     return;
   }
@@ -214,7 +231,16 @@ function recordRequest(request: HttpRequest<unknown>): void {
   for (const name of request.headers.keys()) {
     headers[name.toLowerCase()] = request.headers.getAll(name) ?? [];
   }
-  const recorded: FixtureCallRecord = { method: request.method, url: request.url, headers };
+  const captureBody =
+    request.method === 'POST' &&
+    path !== null &&
+    /^\/projects\/[^/]+\/authoring\/changes$/.test(path);
+  const recorded: FixtureCallRecord = {
+    method: request.method,
+    url: request.url,
+    headers,
+    ...(captureBody ? { body: request.body } : {}),
+  };
   const log = (window[FIXTURE_REQUEST_LOG] ??= []);
   log.push(recorded);
 }
@@ -231,11 +257,12 @@ export class FixtureHttpBackend implements HttpBackend {
   private readonly authoring = new AuthoringTreeFixtureScenario();
   private readonly authoringCases = new AuthoringCasesFixtureScenario();
   private readonly aiSettings = new AiSettingsFixtureScenario();
+  private readonly authoringPending = new AuthoringPendingFixtureScenario();
   private readonly authoringEditor = new AuthoringEditorFixtureScenario();
 
   handle(request: HttpRequest<unknown>): Observable<HttpEvent<unknown>> {
-    recordRequest(request);
     const relativePath = apiRelativePath(request.url);
+    recordRequest(request, relativePath);
     const entry = relativePath === null ? undefined : this.requestEntry(request, relativePath);
     if (entry === undefined) {
       return this.respond(
@@ -270,10 +297,35 @@ export class FixtureHttpBackend implements HttpBackend {
     return undefined;
   }
 
+  private xlsxEntry(request: HttpRequest<unknown>, relativePath: string): FixtureEntry | undefined {
+    if (queryParameter(request.urlWithParams, 'format') !== 'xlsx') return undefined;
+    const importing =
+      request.method === 'POST' && /^\/projects\/[^/]+\/authoring\/import$/.test(relativePath);
+    const exporting =
+      request.method === 'GET' && /^\/projects\/[^/]+\/authoring\/export$/.test(relativePath);
+    const operation = importing ? 'importAuthoring' : exporting ? 'exportAuthoring' : null;
+    if (!operation) return undefined;
+    const variant = this.toggles.variantFor(operation);
+    if (variant !== 'ok' && variant !== 'xlsx') return undefined;
+    const confirmed = importing && queryParameter(request.urlWithParams, 'dry_run') === 'false';
+    return findFixtureEntry(operation, confirmed ? 'xlsx-confirmed' : 'xlsx');
+  }
+
   private requestEntry(
     request: HttpRequest<unknown>,
     relativePath: string,
   ): FixtureEntry | undefined {
+    const capped = findBrowseCapFixture(
+      request.method,
+      relativePath,
+      request.urlWithParams,
+      (operation) => this.toggles.variantFor(operation),
+    );
+    if (capped !== undefined) return capped;
+    const pending = this.authoringPending.entry(request, relativePath, (operation) =>
+      this.toggles.variantFor(operation),
+    );
+    if (pending !== undefined) return pending;
     const authoring = this.authoringEntry(request, relativePath);
     if (authoring !== undefined) return authoring;
     const settings = this.aiSettings.entry(request, relativePath, (operation) =>
@@ -334,6 +386,8 @@ export class FixtureHttpBackend implements HttpBackend {
       const bulk = findBulkCaseListFixture(this.toggles.variantFor('listCases'));
       if (bulk !== undefined) return bulk;
     }
+    const workbook = this.xlsxEntry(request, relativePath);
+    if (workbook) return workbook;
     if (
       request.method === 'POST' &&
       /^\/projects\/[^/]+\/authoring\/import$/.test(relativePath) &&

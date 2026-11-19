@@ -121,6 +121,8 @@
           [roots]="store.roots()"
           [children]="store.children()"
           [selectedNodeId]="store.selectedNodeId()"
+          [expanded]="expanded()"
+          (expandedChange)="expanded.set($event)"
           (selectNode)="select($event)"
           (expand)="expand($event)"
           (loadMore)="loadMore($event)"

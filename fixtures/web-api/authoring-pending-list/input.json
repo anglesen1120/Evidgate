@@ -1,0 +1,89 @@
+{
+  "operation_id": "listAuthoringChanges",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000af01"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "change_id": "018f0000-0000-7000-8000-00000000cd01",
+        "target_kind": "checklist_item",
+        "target_id": "018f0000-0000-7000-8000-00000000ab01",
+        "change_type": "comment",
+        "payload": { "body": "Please confirm the refund wording with support." },
+        "state": "pending",
+        "source": "manual",
+        "base_version": 4,
+        "author_membership_id": "018f0000-0000-7000-8000-00000000ad01",
+        "reason": "Reviewer note",
+        "created_at": "2026-11-19T08:10:00Z",
+        "applied_at": null,
+        "applied_batch_id": null,
+        "discarded_at": null
+      },
+      {
+        "change_id": "018f0000-0000-7000-8000-00000000cd02",
+        "target_kind": "checklist_item",
+        "target_id": "018f0000-0000-7000-8000-00000000ab02",
+        "change_type": "delete",
+        "payload": {},
+        "state": "pending",
+        "source": "ai",
+        "base_version": 2,
+        "author_membership_id": "018f0000-0000-7000-8000-00000000ad01",
+        "reason": null,
+        "created_at": "2026-11-19T08:12:00Z",
+        "applied_at": null,
+        "applied_batch_id": null,
+        "discarded_at": null
+      },
+      {
+        "change_id": "018f0000-0000-7000-8000-00000000cd03",
+        "target_kind": "checklist_item",
+        "target_id": "018f0000-0000-7000-8000-00000000ab01",
+        "change_type": "merge",
+        "payload": {
+          "source_item_ids": [
+            "018f0000-0000-7000-8000-00000000ab01",
+            "018f0000-0000-7000-8000-00000000ab03"
+          ],
+          "survivor_item_id": "018f0000-0000-7000-8000-00000000ab01"
+        },
+        "state": "pending",
+        "source": "manual",
+        "base_version": 4,
+        "author_membership_id": "018f0000-0000-7000-8000-00000000ad01",
+        "reason": "Duplicate item",
+        "created_at": "2026-11-19T08:14:00Z",
+        "applied_at": null,
+        "applied_batch_id": null,
+        "discarded_at": null
+      },
+      {
+        "change_id": "018f0000-0000-7000-8000-00000000cd04",
+        "target_kind": "checklist_item",
+        "target_id": "018f0000-0000-7000-8000-00000000ab04",
+        "change_type": "split",
+        "payload": {
+          "new_items": [
+            { "title": "Card refund", "priority": "high" },
+            { "title": "Bank transfer refund", "priority": "medium" }
+          ]
+        },
+        "state": "pending",
+        "source": "manual",
+        "base_version": 3,
+        "author_membership_id": "018f0000-0000-7000-8000-00000000ad01",
+        "reason": null,
+        "created_at": "2026-11-19T08:16:00Z",
+        "applied_at": null,
+        "applied_batch_id": null,
+        "discarded_at": null
+      }
+    ],
+    "next_cursor": null
+  }
+}

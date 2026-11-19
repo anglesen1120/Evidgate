@@ -100,6 +100,9 @@ class ImportOptionHarness extends ComponentHarness {
   async attr(name: string) {
     return (await this.host()).getAttribute(name);
   }
+  async click() {
+    await (await this.host()).click();
+  }
 }
 
 describe('ImportExportPage presentation and route heading contract', () => {
@@ -364,15 +367,48 @@ describe('ImportExportPage presentation and route heading contract', () => {
     expect(await harness.focused('app-desktop-required-notice')).toBe(true);
   });
 
-  it('keeps the XLSX-selected import format readable and unselectable', async () => {
+  it('previews XLSX through the server report without parsing workbook content', async () => {
     const source = new File(['PK'], 'workbook.xlsx');
-    const { store, harness } = await setup(source);
+    const text = vi.spyOn(source, 'text');
+    const { fixture, store, harness } = await setup(source);
     expect(store.work().format).toBe('xlsx');
-    expect(await harness.textAt('#authoring-import-format')).toContain('XLSX — Unavailable');
+    expect(await harness.textAt('#authoring-import-format')).toBe('XLSX');
+    expect(await harness.text()).toContain(IMPEX_COPY.xlsxPreview);
+    expect(upload).not.toHaveBeenCalled();
+    await harness.click('[data-import-preview]');
+    await settle(fixture);
+    expect(await harness.textAt('app-import-preview')).toContain('Would create');
+    expect(await harness.attr('[data-import-confirm]', 'disabled')).toBeNull();
+    expect(text).not.toHaveBeenCalled();
+  });
+
+  it('explains the disabled XLSX format and unlocks it when a text file replaces the workbook', async () => {
+    const { fixture, store, harness } = await setup(new File(['PK'], 'workbook.XLSX'));
+    expect(await harness.textAt('#authoring-import-format')).toBe('XLSX');
+    expect(await harness.attr('#authoring-import-format', 'disabled')).not.toBeNull();
+    expect(await harness.attr('#authoring-import-format', 'aria-describedby')).toBe(
+      'import-format-lock-reason',
+    );
+    expect(await harness.textAt('app-inline-feedback#import-format-lock-reason')).toBe(
+      'Files ending in .xlsx must use XLSX. Choose a CSV or JSON file to change the format.',
+    );
+    store.setFormat('csv');
+    expect(store.work().format).toBe('xlsx');
+    store.selectFile(file());
+    await settle(fixture);
+    expect(await harness.attr('#authoring-import-format', 'disabled')).toBeNull();
+    expect(await harness.attr('#authoring-import-format', 'aria-describedby')).toBeNull();
+    expect(await harness.has('#import-format-lock-reason')).toBe(false);
+    await harness.click('#authoring-import-format');
+    const root = TestbedHarnessEnvironment.documentRootLoader(fixture);
+    for (const option of await root.getAllHarnesses(ImportOptionHarness)) {
+      if ((await option.text()) === 'JSON') await option.click();
+    }
+    expect(store.work().format).toBe('json');
     expect(upload).not.toHaveBeenCalled();
   });
 
-  it('keeps 360px stacked field errors expanded above the virtual-row threshold and describes unavailable XLSX', async () => {
+  it('keeps 360px stacked field errors expanded above the virtual-row threshold and offers XLSX', async () => {
     const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(360);
     try {
       const source =
@@ -386,13 +422,13 @@ describe('ImportExportPage presentation and route heading contract', () => {
       await harness.click('#authoring-import-format');
       const root = TestbedHarnessEnvironment.documentRootLoader(fixture);
       const options = await root.getAllHarnesses(ImportOptionHarness);
-      let unavailable: ImportOptionHarness | undefined;
+      let xlsx: ImportOptionHarness | undefined;
       for (const option of options) {
-        if ((await option.text()).includes('XLSX')) unavailable = option;
+        if ((await option.text()) === 'XLSX') xlsx = option;
       }
-      expect(unavailable).toBeDefined();
-      expect(await unavailable?.attr('aria-disabled')).toBe('true');
-      expect(await unavailable?.attr('aria-describedby')).toBe('import-xlsx-unavailable');
+      expect(xlsx).toBeDefined();
+      expect(await xlsx?.attr('aria-disabled')).not.toBe('true');
+      expect(await xlsx?.attr('aria-describedby')).toBeNull();
       await harness.key('#authoring-import-format', TestKey.ESCAPE);
       upload.mockRejectedValueOnce(refusal([{ index: 1, path: '/title', reason: 'invalid_text' }]));
       await harness.click('[data-import-preview]');

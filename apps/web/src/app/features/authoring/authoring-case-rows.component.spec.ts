@@ -81,6 +81,15 @@ describe('AuthoringCaseRowsComponent', () => {
     expect(await (await harness.summary()).text()).toContain('0 of 1 loaded selected');
   });
 
+  it('keeps case-id selection when Load more appends rows', async () => {
+    const { fixture, harness } = await mount();
+    await (await harness.rowBoxes())[0]?.click();
+    fixture.componentRef.setInput('rows', [row(1), row(2), row(3)]);
+    fixture.detectChanges();
+    expect(await (await harness.rowBoxes())[0]?.getAttribute('aria-checked')).toBe('true');
+    expect(await (await harness.summary()).text()).toContain('1 of 3 loaded selected');
+  });
+
   it('never enables export or hides its visible reason, and shows canonical linked UUIDs', async () => {
     const { harness } = await mount();
     expect(await (await harness.exportAction()).getAttribute('aria-disabled')).toBe('true');
@@ -117,6 +126,25 @@ describe('AuthoringCaseRowsComponent', () => {
     fixture.detectChanges();
     expect(await (await harness.summary()).text()).toContain('2 of 2 loaded selected');
   });
+
+  it('keeps case-id selection across table and stacked-record switches above 200 rows', async () => {
+    const { fixture, harness } = await mount(201);
+    const table = fixture.debugElement
+      .query(By.directive(DataTableComponent))
+      .injector.get(DataTableComponent<ManualCaseListItemDto>);
+    table.narrow.set(true);
+    fixture.detectChanges();
+    const records = await harness.rowBoxes();
+    expect(records.length).toBeGreaterThan(0);
+    await records[0]?.click();
+    expect(await records[0]?.getAttribute('aria-checked')).toBe('true');
+    table.narrow.set(false);
+    fixture.detectChanges();
+    table.narrow.set(true);
+    fixture.detectChanges();
+    expect(await (await harness.rowBoxes())[0]?.getAttribute('aria-checked')).toBe('true');
+    expect(await (await harness.summary()).text()).toContain('1 of 201 loaded selected');
+  }, 20_000);
 
   it('gives the case code its own column and keeps the UUID in a separate cell', async () => {
     const { fixture } = await mount(1);

@@ -1,0 +1,27 @@
+{
+  "operation_id": "importAuthoring",
+  "variant": "xlsx-confirmed",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000af01"
+  },
+  "latency_ms": 0,
+  "body": {
+    "batch_id": "018f0000-0000-7000-8000-00000000af02",
+    "counts": {
+      "created": 1,
+      "updated": 0,
+      "restored": 0,
+      "unchanged": 0
+    },
+    "rows": [
+      {
+        "index": 1,
+        "key": "n1",
+        "kind": "node",
+        "outcome": "create",
+        "code": null
+      }
+    ]
+  }
+}

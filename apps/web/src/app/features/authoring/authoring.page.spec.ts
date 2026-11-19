@@ -53,6 +53,7 @@ describe('AuthoringPage', () => {
     status: 'ready',
     error: null,
   });
+  const children = signal<Record<string, AuthoringNodePage>>({});
   const node = signal<NodeDto | null>(selected);
   const selectedId = signal<string | null>(selected.node_id);
   const path = signal<AuthoringNodePathEntry[]>([root]);
@@ -64,7 +65,7 @@ describe('AuthoringPage', () => {
   const store = {
     projectId: signal('project'),
     roots,
-    children: signal({}),
+    children,
     selectedNode: node,
     selectedNodeId: selectedId,
     path,
@@ -87,6 +88,7 @@ describe('AuthoringPage', () => {
     stale.set(false);
     selectionStatus.set('ready');
     roots.set({ items: [root], nextCursor: null, status: 'ready', error: null });
+    children.set({});
     node.set(selected);
     selectedId.set(selected.node_id);
     path.set([root]);
@@ -274,6 +276,74 @@ describe('AuthoringPage', () => {
     await fixture.whenStable();
     expect(region.textContent).toContain('Renamed scope');
     expect(region.textContent).not.toContain(selected.title);
+  });
+
+  it('announces the roots cap through the page region while the notice stays silent', async () => {
+    roots.set({ items: [root], nextCursor: null, status: 'capped', error: null });
+    const { fixture } = await render();
+    const region = host(fixture).querySelector('[data-authoring-announcement]');
+    if (!(region instanceof HTMLElement)) throw new Error('No live region is rendered.');
+    expect(region.textContent).toContain(`Selected scope ${selected.title}`);
+    expect(region.textContent).toContain('Hierarchy list is at its load limit');
+    expect(region.closest('[aria-busy]')).toBeNull();
+    expect(host(fixture).querySelectorAll('app-authoring-tree-pane [aria-live]')).toHaveLength(0);
+  });
+
+  it('announces a capped branch only once its notice renders', async () => {
+    const { fixture, harness } = await render();
+    children.set({
+      [root.node_id]: { items: [selected], nextCursor: null, status: 'capped', error: null },
+    });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const region = host(fixture).querySelector('[data-authoring-announcement]');
+    if (!(region instanceof HTMLElement)) throw new Error('No live region is rendered.');
+    expect(region.textContent).not.toContain('Hierarchy list is at its load limit');
+
+    const tree = await harness.tree();
+    if (!tree) throw new Error('The tree must render for an expanded branch.');
+    await (await tree.disclosure(root.node_id)).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(region.textContent).toContain('Hierarchy list is at its load limit');
+    expect(await tree.capped()).toHaveLength(1);
+    expect(host(fixture).querySelectorAll('app-authoring-tree-pane [aria-live]')).toHaveLength(0);
+  });
+
+  it('stops announcing a nested cap once its ancestors are collapsed', async () => {
+    const feature: NodeDto = {
+      ...selected,
+      node_id: '018f0000-0000-7000-8000-000000000103',
+      title: 'Feature with capped children',
+      child_count: 1,
+    };
+    const leaf: NodeDto = { ...selected, node_id: '018f0000-0000-7000-8000-000000000104' };
+    children.set({
+      [root.node_id]: { items: [feature], nextCursor: null, status: 'ready', error: null },
+      [feature.node_id]: { items: [leaf], nextCursor: null, status: 'capped', error: null },
+    });
+    const { fixture, harness } = await render();
+    const region = host(fixture).querySelector('[data-authoring-announcement]');
+    if (!(region instanceof HTMLElement)) throw new Error('No live region is rendered.');
+    const tree = await harness.tree();
+    if (!tree) throw new Error('The tree must render.');
+    await (await tree.disclosure(root.node_id)).click();
+    await (await tree.disclosure(feature.node_id)).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(region.textContent).toContain('Hierarchy list is at its load limit');
+
+    await (await tree.disclosure(root.node_id)).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await tree.capped()).toHaveLength(0);
+    expect(region.textContent).not.toContain('Hierarchy list is at its load limit');
+
+    await (await tree.disclosure(root.node_id)).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await tree.capped()).toHaveLength(1);
+    expect(region.textContent).toContain('Hierarchy list is at its load limit');
   });
 
   it('announces the roots scope when the selection is cleared', async () => {

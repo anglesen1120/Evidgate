@@ -9890,13 +9890,16 @@
       <trans-unit id="authoring.import-export.export-tab" datatype="html"><source>Export</source></trans-unit>
       <trans-unit id="authoring.import-export.intake" datatype="html"><source>File and target</source></trans-unit>
       <trans-unit id="authoring.import-export.file" datatype="html"><source>Source file</source></trans-unit>
-      <trans-unit id="authoring.import-export.limits" datatype="html"><source>CSV or JSON. The server accepts at most 5 MiB and 5,000 data rows. File selection is not validation.</source></trans-unit>
+      <trans-unit id="authoring.import-export.file-limits" datatype="html"><source>CSV, JSON or XLSX. The server accepts at most 5 MiB and 5,000 data rows. File selection is not validation.</source></trans-unit>
       <trans-unit id="authoring.import-export.format" datatype="html"><source>Format</source></trans-unit>
       <trans-unit id="authoring.import-export.preview" datatype="html"><source>Preview without importing</source></trans-unit>
       <trans-unit id="authoring.import-export.preview-title" datatype="html"><source>Preview rows</source></trans-unit>
       <trans-unit id="authoring.import-export.from-file" datatype="html"><source>From your file, not validated. Row identity, status and totals come only from the server.</source></trans-unit>
       <trans-unit id="authoring.import-export.no-file" datatype="html"><source>No file has been selected for import.</source></trans-unit>
-      <trans-unit id="authoring.import-export.xlsx" datatype="html"><source>XLSX is unavailable because this client cannot transfer spreadsheet files. Use CSV or JSON; no XLSX request is sent.</source></trans-unit>
+      <trans-unit id="authoring.import-export.xlsx-preview" datatype="html"><source>Workbook cells are not read in this browser. Preview sends the original XLSX file for a server dry run; only the server report is shown.</source></trans-unit>
+      <trans-unit id="authoring.import-export.xlsx-format-locked" datatype="html"><source>Files ending in .xlsx must use XLSX. Choose a CSV or JSON file to change the format.</source></trans-unit>
+      <trans-unit id="authoring.import-export.xlsx-too-large" datatype="html"><source>The XLSX file exceeds 5 MiB. Choose a smaller workbook and preview it again. No import request was sent.</source></trans-unit>
+      <trans-unit id="authoring.import-export.format-mismatch" datatype="html"><source>An .xlsx file must use the XLSX format. Choose XLSX and preview it again. No import request was sent.</source></trans-unit>
       <trans-unit id="authoring.import-export.local-unreadable" datatype="html"><source>Local preview could not read this file. The original file can still be sent for server validation.</source></trans-unit>
       <trans-unit id="authoring.import-export.invalid-utf8" datatype="html"><source>CSV files must use valid UTF-8 encoding. Save this file as UTF-8 and preview it again. No import request was sent.</source></trans-unit>
       <trans-unit id="authoring.import-export.display-cap" datatype="html"><source>Local display stops at the server's 5,000-row cap. No rows are removed from the upload; the server validates the original file.</source></trans-unit>
@@ -9952,8 +9955,6 @@
       <trans-unit id="authoring.import-export.scope-mismatch" datatype="html"><source>This credential is scoped to another project. Use a credential permitted for this exact project; no rows were imported and no file was exported.</source></trans-unit>
       <trans-unit id="authoring.import-export.empty-export" datatype="html"><source>This export scope is empty. No file was downloaded; choose another scope explicitly.</source></trans-unit>
       <trans-unit id="authoring.import-export.no-scope" datatype="html"><source>No scope</source></trans-unit>
-      <trans-unit id="authoring.import-export.xlsx-option" datatype="html"><source>XLSX — unavailable</source></trans-unit>
-      <trans-unit id="authoring.import-export.xlsx-unavailable" datatype="html"><source>XLSX export is unavailable: the current transport carries text only, so no workbook is requested. Choose CSV or JSON.</source></trans-unit>
       <trans-unit id="authoring.import-export.narrow-notice" datatype="html"><source>Desktop required to change the export scope. Downloading the scope shown is still available.</source></trans-unit>
       <trans-unit id="authoring.import-export.reason.unknown-parent" datatype="html"><source>The parent must name an earlier node of the required kind.</source></trans-unit>
       <trans-unit id="authoring.import-export.reason.orphan-row" datatype="html"><source>The row has no valid owning item or node.</source></trans-unit>
@@ -10139,8 +10140,17 @@
       <trans-unit id="authoring.case-table.pending" datatype="html"><source>Pending changes</source></trans-unit>
       <trans-unit id="authoring.case-table.pending-help" datatype="html"><source>Pending change count unavailable; this list does not supply it.</source></trans-unit>
       <trans-unit id="authoring.case-table.unresolved" datatype="html"><source>The case list request did not complete. Retry explicitly.</source></trans-unit>
-      <trans-unit id="authoring.case-table.cursor-repeated" datatype="html"><source>The server repeated the case cursor. Reload the list.</source></trans-unit>
-      <trans-unit id="authoring.case-table.page-repeated" datatype="html"><source>The next page had no new cases. Reload the list.</source></trans-unit>
+      <trans-unit id="authoring.case-table.cursor-repeated" datatype="html"><source>The server repeated the case cursor, so paging stopped. Refresh to reload this list, or narrow the filters.</source></trans-unit>
+      <trans-unit id="authoring.case-table.page-repeated" datatype="html"><source>The next page carried no new cases, so paging stopped. Refresh to reload this list, or narrow the filters.</source></trans-unit>
+      <trans-unit id="authoring.case-table.query-too-long" datatype="html"><source>This search is longer than the server accepts, so no case list was requested. Shorten the search and apply filters again.</source></trans-unit>
+      <trans-unit id="authoring.case-table.invalid-item-link" datatype="html"><source>This link&apos;s checklist ID is not a UUID, so no case list was requested. Clear the checklist filter or open the checklist from the feature tree.</source></trans-unit>
+      <trans-unit id="authoring.case-table.invalid-node-link" datatype="html"><source>This link&apos;s category ID is not a UUID, so no case list was requested. Clear the category filter or choose a category in the feature tree.</source></trans-unit>
+      <trans-unit id="authoring.case-table.invalid-link" datatype="html"><source>Invalid checklist link</source></trans-unit>
+      <trans-unit id="authoring.case-table.invalid-link-help" datatype="html"><source>This link&apos;s checklist ID is not a UUID, so the case list was not requested. Clear filters to browse this scope, or open the checklist from the feature tree.</source></trans-unit>
+      <trans-unit id="authoring.case-table.invalid-node" datatype="html"><source>Invalid category link</source></trans-unit>
+      <trans-unit id="authoring.case-table.invalid-node-help" datatype="html"><source>This link&apos;s category ID is not a UUID, so the case list was not requested. Clear filters to browse the project, or choose a category in the feature tree.</source></trans-unit>
+      <trans-unit id="authoring.case-table.browse-capped" datatype="html"><source>Case list is at its load limit</source></trans-unit>
+      <trans-unit id="authoring.case-table.browse-capped-help" datatype="html"><source>Narrow the filters or choose another scope in the hierarchy to reach cases beyond the 10,000 loaded here.</source></trans-unit>
       <trans-unit id="authoring.editor.action" datatype="html">
         <source>Action</source>
       </trans-unit>
@@ -10472,7 +10482,6 @@
       <trans-unit id="authoring.import-export.preview-complete" datatype="html"><source>Preview complete — not applied. Review the validated scope before confirming.</source></trans-unit>
       <trans-unit id="authoring.import-export.inspected" datatype="html"><source>Inspected rows</source></trans-unit>
       <trans-unit id="authoring.import-export.snapshot" datatype="html"><source>Selected file and format</source></trans-unit>
-      <trans-unit id="authoring.import-export.unavailable" datatype="html"><source>Unavailable</source></trans-unit>
       <trans-unit id="authoring.import-export.header-guide" datatype="html"><source>Correct the CSV header to these thirteen contract columns, in this order:</source></trans-unit>
       <trans-unit id="authoring.import-export.limit" datatype="html"><source>Server limit</source></trans-unit>
       <trans-unit id="authoring.import-export.actual" datatype="html"><source>Measured value</source></trans-unit>
@@ -10507,6 +10516,747 @@
       <trans-unit id="authoring.import-export.field-code" datatype="html"><source>Case code</source></trans-unit>
       <trans-unit id="authoring.import-export.field-position" datatype="html"><source>Position</source></trans-unit>
       <trans-unit id="authoring.import-export.row-field-label" datatype="html"><source>Row <x id="INDEX" equiv-text="detail.index"/> — <x id="FIELD" equiv-text="importFieldLabel(detail.path)"/></source></trans-unit>
+      <trans-unit id="authoring.pending-changes.title" datatype="html">
+        <source>Pending changes</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">5</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.description" datatype="html">
+        <source>Review the queued changes and apply the confirmed set as one batch. There is no per-row apply and no partial success.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">6</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.back" datatype="html">
+        <source>Back to feature tree</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">7</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.queue-title" datatype="html">
+        <source>Queued changes</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">8</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.queue-scope" datatype="html">
+        <source>Loaded pending changes</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">9</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.preview-title" datatype="html">
+        <source>Selected change</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">10</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.preview-none" datatype="html">
+        <source>Choose a queued change to read its preview.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">11</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.select-all" datatype="html">
+        <source>Select every loaded change</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">12</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.clear-selection" datatype="html">
+        <source>Clear the selection</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">13</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.selection-summary" datatype="html">
+        <source>Selected changes</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">14</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.reason-label" datatype="html">
+        <source>Batch reason</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">15</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.reason-hint" datatype="html">
+        <source>Kept in this page only. The apply request carries the selected ids, so this note is not stored.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">16</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.reason-unset" datatype="html">
+        <source>Not set</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">17</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.apply-action" datatype="html">
+        <source>Apply all changes as one atomic batch</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">18</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.apply-confirm-title" datatype="html">
+        <source>Apply the selected changes?</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">19</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.apply-confirm-body" datatype="html">
+        <source>Every selected pending change is applied in one transaction. Nothing is applied if the batch is stale.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">20</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.apply-confirm" datatype="html">
+        <source>Apply changes</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">21</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.applying" datatype="html">
+        <source>Applying the batch…</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">22</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.cancel" datatype="html">
+        <source>Cancel</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">23</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.discard-action" datatype="html">
+        <source>Discard this change</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">24</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.discard-confirm-title" datatype="html">
+        <source>Discard this pending change?</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">25</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.discard-confirm-body" datatype="html">
+        <source>Only this queued change is discarded. Every other queued change is kept.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">26</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.discard-confirm" datatype="html">
+        <source>Discard change</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">27</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.receipt-title" datatype="html">
+        <source>Applied batch</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">28</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.receipt-batch" datatype="html">
+        <source>Batch</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">29</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.receipt-committed" datatype="html">
+        <source>Committed</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">30</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.receipt-versions" datatype="html">
+        <source>Written versions</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">31</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.receipt-comment-only" datatype="html">
+        <source>This batch wrote no entity version because every change was a comment.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">32</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.receipt-lineage" datatype="html">
+        <source>Lineage</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">33</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.conflict-title" datatype="html">
+        <source>The batch changed before it was applied</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">34</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.conflict-body" datatype="html">
+        <source>Nothing was applied. Every queued change and the local reason are kept. Reload is an explicit read; there is no automatic retry or merge.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">35</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.conflict-reload" datatype="html">
+        <source>Reload the queue</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">36</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.conflict-close" datatype="html">
+        <source>Close</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">37</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.read-only" datatype="html">
+        <source>You can read this queue but not change it. Applying and discarding need the authoring write permission.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">38</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.blocked-structural" datatype="html">
+        <source>This selection contains a merge or split. Structural changes cannot be applied yet.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">39</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.blocked-stale" datatype="html">
+        <source>An affected item changed after this change was queued. Reload the queue before applying.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">40</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.blocked-empty" datatype="html">
+        <source>Select at least one pending change.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">41</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.blocked-too-many" datatype="html">
+        <source>One apply takes at most 200 exact changes.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">42</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.replay-selection-changed" datatype="html">
+        <source>The earlier apply never got an answer, so its exact selection must be retried. Restore the original selection to retry it, or reload the queue to start a new batch.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">44</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.empty-title" datatype="html">
+        <source>No pending changes</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">43</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.empty-body" datatype="html">
+        <source>This project has no queued authoring change.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">44</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.not-found-title" datatype="html">
+        <source>Project not found</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">45</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.not-found-body" datatype="html">
+        <source>This project is unknown or not available to this account.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">46</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.forbidden-title" datatype="html">
+        <source>Authoring changes are not available</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">47</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.forbidden-body" datatype="html">
+        <source>This account cannot read this project&apos;s authoring changes.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">48</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.retry-after" datatype="html">
+        <source>The server asked to wait before trying again.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">49</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.apply-failed" datatype="html">
+        <source>The batch was not applied.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">50</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.discard-failed" datatype="html">
+        <source>The change was not discarded.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">51</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.queue-failed" datatype="html">
+        <source>The change was not queued.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">52</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.duplicate-pending" datatype="html">
+        <source>An affected item already has a pending structural change.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">53</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.comment-action" datatype="html">
+        <source>Queue a comment</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">54</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.delete-action" datatype="html">
+        <source>Queue a delete</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">55</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.comment-label" datatype="html">
+        <source>Comment</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">56</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.delete-label" datatype="html">
+        <source>Delete</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">57</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.merge-label" datatype="html">
+        <source>Merge</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">58</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.split-label" datatype="html">
+        <source>Split</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">59</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.target-label" datatype="html">
+        <source>Target item</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">60</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.source-label" datatype="html">
+        <source>Merge sources</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">61</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.survivor-label" datatype="html">
+        <source>Surviving item</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">62</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.new-item-label" datatype="html">
+        <source>New item</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">63</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.lineage-label" datatype="html">
+        <source>Lineage</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">64</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.author-label" datatype="html">
+        <source>Author</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">65</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.queued-source" datatype="html">
+        <source>Queued source</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">66</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.impact-unavailable" datatype="html">
+        <source>The affected cases and the full before/after impact are not supplied by this response.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">67</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.loaded-scope" datatype="html">
+        <source>Loaded count, not the project total</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.copy.ts</context>
+          <context context-type="linenumber">68</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.atomic-scope" datatype="html">
+        <source>One atomic batch, exact reviewed selection</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">5</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.atomic-body" datatype="html">
+        <source>Only the selected change ids are submitted. Unselected and unloaded changes stay queued. Applying does not publish or approve drafts.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">6</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.operation" datatype="html">
+        <source>Operation</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">7</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.state" datatype="html">
+        <source>State</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">8</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.pending-state" datatype="html">
+        <source>Queued</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">9</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.stale-state" datatype="html">
+        <source>Stale</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">10</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.unavailable-state" datatype="html">
+        <source>Unavailable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">11</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.structural-unavailable" datatype="html">
+        <source>Unavailable until structural apply lands. Merge and split changes stay queued and block Apply when selected.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">12</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.stale-queue" datatype="html">
+        <source>Refresh failed. These are previously loaded changes, not a confirmed current queue.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">13</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.select-change" datatype="html">
+        <source>Select change</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">14</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.preview-action" datatype="html">
+        <source>Preview</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">15</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.change-id" datatype="html">
+        <source>Change id</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">16</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.load-more" datatype="html">
+        <source>Load more changes</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">17</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.batch-summary" datatype="html">
+        <source>Batch summary</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">18</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.exact-ids" datatype="html">
+        <source>Exact reviewed change ids</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">19</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.metadata" datatype="html">
+        <source>Implementation metadata · read-only</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">20</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.batch-etag" datatype="html">
+        <source>Batch ETag</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">21</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.etag-not-read" datatype="html">
+        <source>The exact-selection ETag is read immediately before applying. No batch token has been read for this selection yet.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">22</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.idempotency-note" datatype="html">
+        <source>The same apply intent reuses one idempotency key. The batch ETag comes from the exact-selection read, never from an individual item version.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">23</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.manual-source" datatype="html">
+        <source>Manual</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">24</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.ai-source" datatype="html">
+        <source>AI</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">25</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.import-source" datatype="html">
+        <source>Import</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">26</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.base-version" datatype="html">
+        <source>Target base version</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">27</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.queued-at" datatype="html">
+        <source>Queued at (UTC)</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">28</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.applied-ids" datatype="html">
+        <source>Applied change ids</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">29</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.entity" datatype="html">
+        <source>Entity</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">30</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.comment-hint" datatype="html">
+        <source>Queue a plain-text comment for review. This does not apply it.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">31</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.queue-reason" datatype="html">
+        <source>Change reason (optional)</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">32</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.comment-required" datatype="html">
+        <source>Enter a comment before queueing it.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">33</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.review-tab-title" datatype="html">
+        <source>Pending changes for this item</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">34</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.item-empty" datatype="html">
+        <source>No loaded pending change targets this item.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">35</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.item-scope" datatype="html">
+        <source>This list includes loaded changes for this item. Load more to inspect older pending changes.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">36</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.open-queue" datatype="html">
+        <source>Review the project pending queue</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">37</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.queue-delete-title" datatype="html">
+        <source>Queue a delete for this item?</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">38</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.queue-delete-body" datatype="html">
+        <source>This only queues a delete for review. The item is not deleted until an authorized reviewer applies the batch.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">39</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.queued-success" datatype="html">
+        <source>The change was queued for review.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">40</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.reason-rejected" datatype="html">
+        <source>The server refused the change reason. Review it before trying again.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">41</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.quota-reached" datatype="html">
+        <source>The pending-change limit has been reached. Review or discard existing changes before queueing another.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">42</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.write-denied" datatype="html">
+        <source>Write access was refused. The queue stays readable; reload after your permissions have been restored.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.ui-copy.ts</context>
+          <context context-type="linenumber">43</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.refreshing" datatype="html"><source>Refreshing the queue… Previously loaded changes remain available.</source></trans-unit>
+      <trans-unit id="authoring.pending-changes.delete-consequence" datatype="html"><source>Applying this delete removes the named target item.</source></trans-unit>
+      <trans-unit id="authoring.pending-changes.comment-too-long" datatype="html"><source>Use no more than 2,000 characters for the comment.</source></trans-unit>
+      <trans-unit id="authoring.pending-changes.reason-too-long" datatype="html"><source>Use no more than 500 characters for the reason.</source></trans-unit>
+      <trans-unit id="authoring.pending-changes.character-count" datatype="html"><source><x id="START_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;app-number-value&gt;"/><x id="CLOSE_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;/app-number-value&gt;"/> of <x id="START_TAG_APP-NUMBER-VALUE_1" ctype="x-app-number-value" equiv-text="&lt;app-number-value&gt;"/><x id="CLOSE_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;/app-number-value&gt;"/> characters </source></trans-unit>
+      <trans-unit id="authoring.pending-changes.reason-character-count" datatype="html"><source><x id="START_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;app-number-value&gt;"/><x id="CLOSE_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;/app-number-value&gt;"/> of <x id="START_TAG_APP-NUMBER-VALUE_1" ctype="x-app-number-value" equiv-text="&lt;app-number-value&gt;"/><x id="CLOSE_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;/app-number-value&gt;"/> characters </source></trans-unit>
+      <trans-unit id="authoring.editor.review-tab-label" datatype="html"><source>Checklist review</source></trans-unit>
+      <trans-unit id="authoring.editor.review-select-option" datatype="html"><source>Checklist review</source></trans-unit>
+      <trans-unit id="authoring.editor.review-tab-trigger" datatype="html"><source>Checklist review</source></trans-unit>
+      <trans-unit id="catalog.browse-capped" datatype="html"><source>Case list is at its load limit</source></trans-unit>
+      <trans-unit id="catalog.browse-capped-help" datatype="html"><source>Narrow the status or framework filters to reach cases beyond the 10,000 loaded here. Search only checks loaded results.</source></trans-unit>
+      <trans-unit id="authoring.tree.browse-capped" datatype="html"><source>Hierarchy list is at its load limit</source></trans-unit>
+      <trans-unit id="authoring.tree.browse-capped-help" datatype="html"><source>Showing the first 10,000 nodes in this list. Open a known node link to inspect a scope outside these results.</source></trans-unit>
     </body>
   </file>
 </xliff>

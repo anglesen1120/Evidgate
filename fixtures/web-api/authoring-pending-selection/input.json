@@ -1,0 +1,43 @@
+{
+  "operation_id": "listAuthoringChanges",
+  "variant": "selection",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000af02",
+    "ETag": "\"batch-7\""
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "change_id": "018f0000-0000-7000-8000-00000000cd01",
+        "target_kind": "checklist_item",
+        "target_id": "018f0000-0000-7000-8000-00000000ab01",
+        "change_type": "comment",
+        "payload": { "body": "Please confirm the refund wording with support." },
+        "state": "pending",
+        "source": "manual",
+        "base_version": 4,
+        "author_membership_id": "018f0000-0000-7000-8000-00000000ad01",
+        "reason": "Reviewer note",
+        "created_at": "2026-11-19T08:10:00Z",
+        "stale": false
+      },
+      {
+        "change_id": "018f0000-0000-7000-8000-00000000cd02",
+        "target_kind": "checklist_item",
+        "target_id": "018f0000-0000-7000-8000-00000000ab02",
+        "change_type": "delete",
+        "payload": {},
+        "state": "pending",
+        "source": "ai",
+        "base_version": 2,
+        "author_membership_id": "018f0000-0000-7000-8000-00000000ad01",
+        "reason": null,
+        "created_at": "2026-11-19T08:12:00Z",
+        "stale": true
+      }
+    ],
+    "next_cursor": null
+  }
+}

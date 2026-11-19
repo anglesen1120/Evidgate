@@ -245,7 +245,7 @@ describe('authoring tree read coordination', () => {
         await expect(store.loadMoreChildren(parentId)).resolves.toBe(false);
         const result = parentId === null ? store.roots() : store.children()[parentId];
         expect(result?.items).toEqual([child]);
-        expect(result?.nextCursor).toBe('more');
+        expect(result?.nextCursor).toBeNull();
         expect(result?.error).toEqual(expect.objectContaining({ kind: 'unexpected', code }));
       });
     }

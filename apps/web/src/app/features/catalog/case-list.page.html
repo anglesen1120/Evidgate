@@ -107,6 +107,9 @@
       >
     }
   }
+  @if (store.browseCapped()) {
+    <span>{{ capAnnouncement() }}</span>
+  }
 </p>
 <app-request-state
   [status]="store.status()"
@@ -144,6 +147,16 @@
     (reloadOwners)="store.reloadOwner($event)"
   />
 </app-request-state>
+@if (store.browseCapped()) {
+  <app-inline-feedback
+    class="mt-(--eg-space-4) block min-w-0"
+    [tone]="'warning'"
+    [title]="copy.browseCapped"
+    [description]="copy.browseCappedHelp"
+    [announcement]="'off'"
+    data-catalog-browse-capped
+  />
+}
 @if (store.status() === 'ready') {
   <nav
     class="mt-(--eg-space-4) flex min-w-0 flex-wrap items-end gap-(--eg-space-4)"

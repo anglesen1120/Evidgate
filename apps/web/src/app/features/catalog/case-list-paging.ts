@@ -2,6 +2,7 @@ import type { CaseDto, CaseListResponse } from '@evidgate/sdk';
 import { isApiRequestError, type ApiError } from '../../core/http/api-error';
 import type { CaseListDataService, CaseListQuery } from '../../core/data/case-list-data.service';
 import { takeKeysetPage, type KeysetRefusals } from '../../shared/keyset-walk';
+import { retainKeysetRows } from '../../shared/keyset-retention';
 
 const NO_ROWS: readonly CaseDto[] = [];
 
@@ -63,6 +64,7 @@ export interface CasePagingPatch {
   readonly loadError?: ApiError | null;
   readonly rows?: readonly CaseDto[];
   readonly nextCursor?: string | null;
+  readonly browseCapped?: boolean;
   readonly paging?: boolean;
   readonly pagingError?: ApiError | null;
 }
@@ -125,18 +127,21 @@ function readFirstPage(
     loadError: null,
     rows: NO_ROWS,
     nextCursor: null,
+    browseCapped: false,
     paging: false,
     pagingError: null,
   });
   void data.list(projectId, query, controller.signal).then(
     (page) => {
       if (sequence !== run.generation) return;
-      run.seen = new Set(page.items.map((row) => row.id));
+      const retained = retainKeysetRows(page.items, page.next_cursor);
+      run.seen = new Set(retained.rows.map((row) => row.id));
       host.patch({
         phase: 'ready',
         loadError: null,
-        rows: page.items,
-        nextCursor: page.next_cursor,
+        rows: retained.rows,
+        nextCursor: retained.nextCursor,
+        browseCapped: retained.capped,
       });
     },
     (error: unknown) => {
@@ -170,12 +175,14 @@ function appendPage(
     host.patch({ paging: false, pagingError: step.error });
     return false;
   }
-  run.seen = step.seen;
+  const retained = retainKeysetRows([...host.rows(), ...step.fresh], step.nextCursor);
+  run.seen = retained.capped ? new Set(retained.rows.map((row) => row.id)) : step.seen;
   host.patch({
     paging: false,
     pagingError: null,
-    rows: [...host.rows(), ...step.fresh],
-    nextCursor: step.nextCursor,
+    rows: retained.rows,
+    nextCursor: retained.nextCursor,
+    browseCapped: retained.capped,
   });
   return true;
 }

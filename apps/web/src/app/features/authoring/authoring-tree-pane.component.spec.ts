@@ -161,6 +161,31 @@ describe('AuthoringTreePaneComponent', () => {
     expect(more).toHaveBeenCalledWith(root.node_id);
   });
 
+  it('keeps scoped cap notices silent so the page region is the only announcer', async () => {
+    const { fixture, harness } = await render();
+    expect(await harness.capped()).toHaveLength(0);
+    fixture.componentRef.setInput('roots', { ...page([root]), status: 'capped' });
+    fixture.componentRef.setInput('children', {
+      [root.node_id]: { ...page([child]), status: 'capped' },
+    });
+    expect(await harness.capped()).toHaveLength(1);
+    await (await harness.disclosure(root.node_id)).click();
+
+    const notices = await harness.capped();
+    expect(notices).toHaveLength(2);
+    expect(await notices[0]?.text()).toContain('Hierarchy list is at its load limit');
+    expect(await notices[0]?.text()).toContain('10,000');
+    expect(await notices[1]?.text()).toContain('10,000');
+    expect(await harness.cappedLiveRegions()).toHaveLength(0);
+    expect(await harness.moreControls()).toHaveLength(0);
+    expect(await harness.visibleIds()).toEqual([root.node_id, child.node_id]);
+    expect(await harness.loading()).toBeNull();
+
+    fixture.componentRef.setInput('roots', page([root]));
+    fixture.componentRef.setInput('children', { [root.node_id]: page([child]) });
+    expect(await harness.capped()).toHaveLength(0);
+  });
+
   it('ignores control shortcuts and composing input without expanding or selecting', async () => {
     const { fixture, harness } = await render();
     const expand = vi.fn();

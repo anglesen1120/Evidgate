@@ -12,6 +12,16 @@
     "
   />
 </ul>
+@if (roots().status === 'capped') {
+  <app-inline-feedback
+    class="mt-(--eg-space-3) block min-w-0"
+    [tone]="'warning'"
+    [title]="copy.browseCapped"
+    [description]="copy.browseCappedHelp"
+    [announcement]="'off'"
+    data-tree-browse-capped
+  />
+}
 @if (roots().nextCursor) {
   <button
     hlmBtn
@@ -95,7 +105,13 @@
           >
             @if (expanded().has(node.node_id)) {
               @let page = children()[node.node_id];
-              @if (!page || page.status !== 'ready' || page.error || page.items.length === 0) {
+              @if (
+                !page ||
+                page.status === 'idle' ||
+                page.status === 'loading' ||
+                page.error ||
+                page.items.length === 0
+              ) {
                 <li class="branch-state" [attr.aria-busy]="!page || page.status === 'loading'">
                   <app-request-state
                     [status]="pageStatus(page)"
@@ -124,6 +140,17 @@
                     }
                   "
                 />
+                @if (page?.status === 'capped') {
+                  <li class="branch-state">
+                    <app-inline-feedback
+                      [tone]="'warning'"
+                      [title]="copy.browseCapped"
+                      [description]="copy.browseCappedHelp"
+                      [announcement]="'off'"
+                      data-tree-browse-capped
+                    />
+                  </li>
+                }
                 @if (page?.nextCursor) {
                   <li class="branch-state">
                     <button

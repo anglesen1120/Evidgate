@@ -1,0 +1,16 @@
+{
+  "operation_id": "applyAuthoringChanges",
+  "variant": "comment_only",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000af04"
+  },
+  "latency_ms": 0,
+  "body": {
+    "batch_id": "018f0000-0000-7000-8000-00000000ce02",
+    "applied_change_ids": ["018f0000-0000-7000-8000-00000000cd01"],
+    "versions": [],
+    "lineage": [],
+    "committed_at": "2026-11-19T09:05:00Z"
+  }
+}
