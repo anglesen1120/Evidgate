@@ -16,7 +16,8 @@
 --     refused caller be charged too, so a client at its limit cannot widen its budget by retrying;
 --   * a full surface evicts instead of refusing: only the INSERT path of a new key does housekeeping, so a hit costs
 --     one primary-key upsert. That path first deletes up to 100 EXPIRED windows of its own surface
---     (`window_start <= database now - window`, never the caller's row, `for update skip locked`), then one new
+--     (`window_start <= database now - window`, never the caller's row, `for update skip locked` in a
+--     materialized batch, so the delete cannot rescan the locking subquery past the cap), then one new
 --     key in 16 by digest (`get_byte(key_hash, 0) < 16`) runs the capacity check and deletes up to 100 of the
 --     surface's oldest windows beyond max_keys. The bound is therefore approximate: a surface can sit above
 --     max_keys by the new keys admitted between two sampled checks (a small multiple of the request concurrency
@@ -103,20 +104,23 @@ begin
   returning w.window_start, w.hit_count, (xmax = 0) into v_start, v_hits, v_inserted;
 
   if v_inserted then
-    -- Every new key sheds up to 100 of its surface's expired windows, so stale keys do not accumulate between
-    -- sampled capacity checks. `skip locked` keeps a concurrent admission from blocking this one.
+    -- Every new key sheds up to 100 of its surface's expired windows; skip locked avoids waiting on admissions.
+    -- Materialize the locking batch: a rescanned SKIP LOCKED subquery can select fresh rows during the delete.
+    with expired_windows as materialized (
+      select e.key_hash
+        from public.rate_limit_window e
+       where e.surface = p_surface
+         and e.key_hash <> p_key_hash
+         and e.window_start <= v_expired_before
+       limit 100
+         for update skip locked
+    )
     delete from public.rate_limit_window w
+     using expired_windows e
      where w.surface = p_surface
+       and w.key_hash = e.key_hash
        and w.key_hash <> p_key_hash
-       and w.window_start <= v_expired_before
-       and w.key_hash in (
-             select e.key_hash
-               from public.rate_limit_window e
-              where e.surface = p_surface
-                and e.key_hash <> p_key_hash
-                and e.window_start <= v_expired_before
-              limit 100
-                for update skip locked);
+       and w.window_start <= v_expired_before;
 
     -- The capacity count scans up to max_keys + 100 index entries, so it runs on one new key in 16 rather than on
     -- every insert. `limit` caps that work and v_excess caps one call's deletes at 100; a later sampled check removes
@@ -126,16 +130,20 @@ begin
         from (select 1 from public.rate_limit_window w where w.surface = p_surface limit p_max_keys::bigint + 100) as bounded;
 
       if v_excess > 0 then
+        with excess_windows as materialized (
+          select e.key_hash
+            from public.rate_limit_window e
+           where e.surface = p_surface
+             and e.key_hash <> p_key_hash
+           order by e.window_start
+           limit least(100::bigint, v_excess)
+             for update skip locked
+        )
         delete from public.rate_limit_window w
+         using excess_windows e
          where w.surface = p_surface
-           and w.key_hash in (
-                 select e.key_hash
-                   from public.rate_limit_window e
-                  where e.surface = p_surface
-                    and e.key_hash <> p_key_hash
-                  order by e.window_start
-                  limit least(100::bigint, v_excess)
-                    for update skip locked);
+           and w.key_hash = e.key_hash
+           and w.key_hash <> p_key_hash;
       end if;
     end if;
   end if;
