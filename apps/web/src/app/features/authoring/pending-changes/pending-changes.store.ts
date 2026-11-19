@@ -104,7 +104,8 @@ export const PendingChangesStore = signalStore(
 
     return {
       async init(projectId: string, scope: { readonly targetId?: string } = {}): Promise<void> {
-        const targetId = scope.targetId ?? null;
+        // An empty id is no scope; keeping it would claim a scope the request drops.
+        const targetId = scope.targetId || null;
         if (store.projectId() !== projectId || store.targetId() !== targetId) {
           store._keys.reset();
           store._run.stop();
