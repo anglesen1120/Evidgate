@@ -305,7 +305,7 @@ function escapes(rel: string): boolean {
 }
 
 /** True when `target` is `root` itself or sits under it (both already realpath'd). */
-function contains(root: string, target: string): boolean {
+export function contains(root: string, target: string): boolean {
   const rel = relative(root, target);
   return rel === '' || !escapes(rel);
 }
