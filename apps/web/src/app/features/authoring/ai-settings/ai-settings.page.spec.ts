@@ -12,14 +12,27 @@ import { NarrowMutationPolicy } from '../../../shared/ui/narrow';
 import { ApiRequestError } from '../../../core/http/api-error';
 import { AiSettingsPage } from './ai-settings.page';
 import { FIELDS, AI_WRITE } from './ai-settings.model';
+import { AiSettingsStore } from './ai-settings.store';
 import headDocument from '../../../../../../../fixtures/web-api/ai-settings-head/input.json';
 import versionDocument from '../../../../../../../fixtures/web-api/ai-settings-version-1/input.json';
+import templatesDocument from '../../../../../../../fixtures/web-api/ai-settings-templates/input.json';
 
 provideLayoutTestStubs();
 
 class SettingsHarness extends ComponentHarness {
   static hostSelector = 'app-ai-settings-page';
   readonly saveButton = this.locatorFor('[data-ai-save]');
+  readonly retryButton = this.locatorFor('app-retry-after button');
+  async attribute(selector: string, name: string) {
+    return (await this.locatorFor(selector)()).getAttribute(name);
+  }
+  async count(selector: string) {
+    return (await this.locatorForAll(selector)()).length;
+  }
+  async accessibleLabel(selector: string) {
+    const id = await this.attribute(selector, 'aria-labelledby');
+    return (await this.locatorFor('#' + id)()).text();
+  }
   async fill(key: string, value: string) {
     const field = await this.locatorFor('#ai-' + key)();
     await field.setInputValue(value);
@@ -45,9 +58,11 @@ describe('AiSettingsPage', () => {
   const head = headDocument.body as AiSettingsView;
   const version = versionDocument.body as AiSettingsVersion;
   let writable: WritableSignal<boolean>;
+  let readable: WritableSignal<boolean>;
   let data: { read: Mock; save: Mock; versions: Mock; version: Mock; templates: Mock };
   beforeEach(() => {
     writable = signal(true);
+    readable = signal(true);
     data = {
       read: vi.fn().mockResolvedValue({ view: head, etag: '"2"' }),
       save: vi.fn().mockResolvedValue({ view: head, etag: '"2"', appended: false }),
@@ -66,7 +81,7 @@ describe('AiSettingsPage', () => {
           useValue: {
             currentOrg: signal({ id: 'o1' }),
             currentProject: signal({ id: 'p1' }),
-            has: (code: string) => (code === AI_WRITE ? writable() : true),
+            has: (code: string) => (code === AI_WRITE ? writable() : readable()),
           },
         },
         {
@@ -76,7 +91,10 @@ describe('AiSettingsPage', () => {
       ],
     });
   });
-  afterEach(() => TestBed.resetTestingModule());
+  afterEach(() => {
+    vi.useRealTimers();
+    TestBed.resetTestingModule();
+  });
   async function mount() {
     const fixture = TestBed.createComponent(AiSettingsPage);
     await fixture.whenStable();
@@ -216,5 +234,125 @@ describe('AiSettingsPage', () => {
     await harness.click('[data-ai-save]');
     expect(data.save).toHaveBeenCalledTimes(2);
     expect(data.save.mock.calls[0]?.[3]).toBe(data.save.mock.calls[1]?.[3]);
+  });
+  it('gives each output checkbox its own input id and visible language label', async () => {
+    const { harness } = await mount();
+    for (const language of ['en', 'vi']) {
+      expect(await harness.count('#ai-language-' + language)).toBe(1);
+      expect(await harness.accessibleLabel('#ai-language-' + language)).toContain(
+        language === 'en' ? 'English' : 'Vietnamese',
+      );
+    }
+    expect(await harness.attribute('#ai-language-label-en', 'id')).not.toBe(
+      await harness.attribute('#ai-language-label-vi', 'id'),
+    );
+  });
+  for (const kind of ['rate_limited', 'unavailable'] as const) {
+    it('blocks Save and Retry until the ' + kind + ' deadline, even after editing', async () => {
+      data.save.mockRejectedValue(
+        new ApiRequestError({
+          kind,
+          status: kind === 'rate_limited' ? 429 : 503,
+          code: kind,
+          message: 'Wait',
+          details: [],
+          retryable: true,
+          retryAfterSeconds: 2,
+          requestId: null,
+        }),
+      );
+      const { harness } = await mount();
+      vi.useFakeTimers();
+      await harness.click('[data-ai-save]');
+      expect(await (await harness.saveButton()).getProperty<boolean>('disabled')).toBe(true);
+      expect(await (await harness.retryButton()).getProperty<boolean>('disabled')).toBe(true);
+      await harness.fill('writing_style', 'Edited while waiting');
+      expect(await (await harness.saveButton()).getProperty<boolean>('disabled')).toBe(true);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(await (await harness.saveButton()).getProperty<boolean>('disabled')).toBe(false);
+      expect(await (await harness.retryButton()).getProperty<boolean>('disabled')).toBe(false);
+      expect(data.save).toHaveBeenCalledTimes(1);
+    });
+  }
+  it('replaces a permission-lost loading state with an error and removes the form', async () => {
+    const { fixture, harness } = await mount();
+    readable.set(false);
+    await fixture.whenStable();
+    expect(await harness.count('app-loading-pattern')).toBe(0);
+    expect(await harness.count('app-forbidden-pattern, app-error-pattern')).toBe(1);
+    expect(await harness.count('#ai-writing_style')).toBe(0);
+  });
+  it('offers head reload after a successful save answers without an ETag', async () => {
+    data.save.mockResolvedValue({ view: head, etag: '', appended: true });
+    const { fixture, harness } = await mount();
+    await harness.click('[data-ai-save]');
+    expect(await (await harness.saveButton()).getProperty<boolean>('disabled')).toBe(true);
+    await harness.click('[data-ai-reload]');
+    await fixture.whenStable();
+    expect(data.read).toHaveBeenCalledTimes(2);
+    expect(await (await harness.saveButton()).getProperty<boolean>('disabled')).toBe(false);
+  });
+  it('compares current and replacement output languages before replacing a template', async () => {
+    data.read.mockResolvedValue({
+      view: { ...head, settings: { ...head.settings, languages: ['vi'] } },
+      etag: '"2"',
+    });
+    const template = templatesDocument.body.items[0];
+    data.templates.mockResolvedValue({
+      items: [{ ...template, settings: { ...template?.settings, languages: ['en'] } }],
+      next_cursor: null,
+    });
+    const { fixture, harness } = await mount();
+    await harness.click('form section button');
+    const dialog = await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(
+      class extends ComponentHarness {
+        static hostSelector = '[role="dialog"]';
+        readonly before = this.locatorFor('[data-ai-languages-before]');
+        readonly after = this.locatorFor('[data-ai-languages-after]');
+      },
+    );
+    expect(await (await dialog.before()).text()).toContain('Before');
+    expect(await (await dialog.before()).text()).toContain('vi');
+    expect(await (await dialog.after()).text()).toContain('After');
+    expect(await (await dialog.after()).text()).toContain('en');
+    expect(data.save).not.toHaveBeenCalled();
+  });
+  it('refuses direct store saves before Retry-After and permits them at the deadline', async () => {
+    const { fixture } = await mount();
+    const store = fixture.debugElement.injector.get(AiSettingsStore);
+    data.save.mockRejectedValueOnce(
+      new ApiRequestError({
+        kind: 'unavailable',
+        status: 503,
+        code: 'unavailable',
+        message: 'Wait',
+        details: [],
+        retryable: true,
+        retryAfterSeconds: 2,
+        requestId: null,
+      }),
+    );
+    vi.useFakeTimers();
+    await store.save();
+    store.setReason('Edited reason');
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(await store.save()).toBe(false);
+    expect(data.save).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await store.save()).toBe(true);
+    expect(data.save).toHaveBeenCalledTimes(2);
+  });
+  it('resets history to the first page after saving from the second page', async () => {
+    data.versions.mockResolvedValue({ items: [version], next_cursor: 'page-two' });
+    const { fixture } = await mount();
+    const store = fixture.debugElement.injector.get(AiSettingsStore);
+    store.nextPage();
+    await fixture.whenStable();
+    expect(store.cursor()).toBe('page-two');
+    await store.save();
+    await fixture.whenStable();
+    expect(store.cursor()).toBeUndefined();
+    expect(store.cursorPath()).toEqual([]);
+    expect(data.versions).toHaveBeenLastCalledWith('p1', { limit: 50 }, expect.any(AbortSignal));
   });
 });

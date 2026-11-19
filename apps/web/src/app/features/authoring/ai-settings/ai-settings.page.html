@@ -8,7 +8,7 @@
   <app-request-state
     [status]="status()"
     [error]="store.error()"
-    [retryEligible]="true"
+    [retryEligible]="!!store.scope()"
     (retry)="store.head.reload()"
   >
     @if (store.base(); as base) {
@@ -111,6 +111,7 @@
                   <textarea
                     hlmInput
                     rows="3"
+                    class="h-auto resize-y"
                     [id]="'ai-' + field.key"
                     [name]="field.key"
                     [ngModel]="value(field.key)"
@@ -150,8 +151,8 @@
                         [for]="'ai-language-' + locale"
                       >
                         <hlm-checkbox
-                          [id]="'ai-language-' + locale"
-                          [attr.aria-labelledby]="'ai-language-label-' + locale"
+                          [inputId]="'ai-language-' + locale"
+                          [aria-labelledby]="'ai-language-label-' + locale"
                           [checked]="store.draft()?.languages?.includes(locale) ?? false"
                           [disabled]="!store.canWrite() || store.saving()"
                           (checkedChange)="language(locale, $event === true)"
@@ -180,6 +181,17 @@
                 <p i18n="@@authoring.aiSettings.missingTag">
                   The server did not supply an ETag. Reload before saving.
                 </p>
+                <button
+                  hlmBtn
+                  [variant]="'outline'"
+                  type="button"
+                  data-ai-reload
+                  [disabled]="store.head.isLoading()"
+                  (click)="store.head.reload()"
+                  i18n="@@authoring.aiSettings.reload"
+                >
+                  Reload settings
+                </button>
               }
               @if (store.dirty()) {
                 <p i18n="@@authoring.aiSettings.dirty">Settings have unsaved changes.</p>
@@ -312,7 +324,16 @@
         }
         <div>
           <dt i18n="@@authoring.aiSettings.languages">Output languages</dt>
-          <dd>{{ template.settings.languages.join(', ') }}</dd>
+          <dd class="m-0 grid min-w-0 gap-3 md:grid-cols-2">
+            <div data-ai-languages-before>
+              <span i18n="@@authoring.aiSettings.before">Before</span>
+              <p>{{ store.draft()?.languages?.join(', ') }}</p>
+            </div>
+            <div data-ai-languages-after>
+              <span i18n="@@authoring.aiSettings.after">After</span>
+              <p>{{ template.settings.languages.join(', ') }}</p>
+            </div>
+          </dd>
         </div>
       </dl>
     }

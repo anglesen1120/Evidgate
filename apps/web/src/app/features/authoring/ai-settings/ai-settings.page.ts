@@ -86,6 +86,7 @@ export class AiSettingsPage {
   private readonly readOnlyHeading = viewChild<ElementRef<HTMLElement>>('readOnlyHeading');
   private lastFocused: Element | null = null;
   protected readonly status = computed(() => {
+    if (!this.store.scope()) return 'error';
     const error = this.store.error();
     if (
       error?.kind === 'forbidden' ||
@@ -155,6 +156,7 @@ export class AiSettingsPage {
       !this.store.canWrite() ||
       !this.viewport.canMutate() ||
       this.store.saving() ||
+      !this.store.retryWait.ready() ||
       !this.store.base()?.etag ||
       this.invalid(),
   );

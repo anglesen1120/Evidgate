@@ -9924,6 +9924,7 @@
       <trans-unit id="authoring.aiSettings.languageRequired" datatype="html"><source>Select at least one output language.</source></trans-unit>
       <trans-unit id="authoring.aiSettings.readOnly" datatype="html"><source>Saving requires project:write. You can read settings and history.</source></trans-unit>
       <trans-unit id="authoring.aiSettings.missingTag" datatype="html"><source>The server did not supply an ETag. Reload before saving.</source></trans-unit>
+      <trans-unit id="authoring.aiSettings.reload" datatype="html"><source>Reload settings</source></trans-unit>
       <trans-unit id="authoring.aiSettings.dirty" datatype="html"><source>Settings have unsaved changes.</source></trans-unit>
       <trans-unit id="authoring.aiSettings.failed" datatype="html"><source>Could not save; your settings draft is retained.</source></trans-unit>
       <trans-unit id="authoring.aiSettings.save" datatype="html"><source>Save new version</source></trans-unit>

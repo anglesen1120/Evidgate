@@ -32,6 +32,13 @@ for (const locale of LOCALES) {
       await expect(page.locator('#ai-writing_style')).toHaveValue(
         'Use concise observable steps for the fixture checkout.',
       );
+      const guidance = page.locator('#ai-writing_style');
+      expect(
+        await guidance.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return element.getBoundingClientRect().height >= 3 * parseFloat(style.lineHeight);
+        }),
+      ).toBe(true);
       await page
         .locator('#ai-writing_style')
         .fill('Concise updated review-only checkout guidance.');
@@ -109,6 +116,49 @@ for (const locale of LOCALES) {
       await page.goto(path(locale, 'ok', true, 'forbidden'));
       await expect(page.locator('app-forbidden-pattern')).toBeVisible();
       await expect(page.locator('#ai-writing_style')).toHaveCount(0);
+    });
+    test('visible output-language labels toggle uniquely named checkboxes', async ({ page }) => {
+      await page.goto(path(locale));
+      const names =
+        locale === 'vi'
+          ? { en: 'Tiếng Anh', vi: 'Tiếng Việt' }
+          : { en: 'English', vi: 'Vietnamese' };
+      for (const language of ['en', 'vi'] as const) {
+        const checkbox = page.getByRole('checkbox', { name: names[language], exact: true });
+        await expect(checkbox).toHaveCount(1);
+        const checked = await checkbox.isChecked();
+        await page.locator('#ai-language-label-' + language).click();
+        if (checked) await expect(checkbox).not.toBeChecked();
+        else await expect(checkbox).toBeChecked();
+        await page.locator('#ai-language-label-' + language).click();
+        if (checked) await expect(checkbox).toBeChecked();
+        else await expect(checkbox).not.toBeChecked();
+      }
+    });
+    test('Save and Retry respect Retry-After without automatic resubmission', async ({ page }) => {
+      await page.clock.install({ time: new Date('2026-11-19T00:00:00Z') });
+      await page.goto(path(locale, 'unavailable'));
+      await expect(page.locator('#ai-writing_style')).toBeVisible();
+      await page.clock.pauseAt(new Date('2026-11-19T01:00:00Z'));
+      await page.locator('[data-ai-save]').click();
+      await page.clock.runFor(50);
+      const retry = page.locator('app-retry-after button');
+      await expect(page.locator('[data-ai-save]')).toBeDisabled();
+      await expect(retry).toBeDisabled();
+      await page.locator('#ai-writing_style').fill('Draft edited during the wait.');
+      await page.clock.runFor(50);
+      await expect(page.locator('[data-ai-save]')).toBeDisabled();
+      await expect(retry).toBeDisabled();
+      await page.clock.runFor(1000);
+      await expect(page.locator('[data-ai-save]')).toBeEnabled();
+      await expect(retry).toBeEnabled();
+      expect(
+        await page.evaluate(
+          () =>
+            (window.__evidgateFixtureRequests ?? []).filter((request) => request.method === 'PUT')
+              .length,
+        ),
+      ).toBe(1);
     });
     for (const theme of THEMES) {
       test('theme, keyboard, template Cancel and narrow read-only: ' + theme, async ({ page }) => {

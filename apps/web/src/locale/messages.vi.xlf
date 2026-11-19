@@ -3793,6 +3793,7 @@
       <trans-unit id="authoring.aiSettings.languageRequired" datatype="html"><source>Select at least one output language.</source><target>Chọn ít nhất một ngôn ngữ đầu ra.</target></trans-unit>
       <trans-unit id="authoring.aiSettings.readOnly" datatype="html"><source>Saving requires project:write. You can read settings and history.</source><target>Cần quyền project:write để lưu. Bạn có thể đọc cài đặt và lịch sử.</target></trans-unit>
       <trans-unit id="authoring.aiSettings.missingTag" datatype="html"><source>The server did not supply an ETag. Reload before saving.</source><target>Máy chủ không cung cấp ETag. Tải lại trước khi lưu.</target></trans-unit>
+      <trans-unit id="authoring.aiSettings.reload" datatype="html"><source>Reload settings</source><target>Tải lại cài đặt</target></trans-unit>
       <trans-unit id="authoring.aiSettings.dirty" datatype="html"><source>Settings have unsaved changes.</source><target>Cài đặt có thay đổi chưa lưu.</target></trans-unit>
       <trans-unit id="authoring.aiSettings.failed" datatype="html"><source>Could not save; your settings draft is retained.</source><target>Không lưu được; bản nháp cài đặt được giữ lại.</target></trans-unit>
       <trans-unit id="authoring.aiSettings.save" datatype="html"><source>Save new version</source><target>Lưu phiên bản mới</target></trans-unit>

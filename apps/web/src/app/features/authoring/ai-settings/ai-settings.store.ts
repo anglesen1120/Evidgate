@@ -16,6 +16,7 @@ import {
 import { SessionStore } from '../../../core/session/session.store';
 import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { newUuid } from '../../../core/http/random-id';
+import { createRetryAfterWait } from '../../../core/http/retry';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow';
 import { AI_READ, AI_WRITE, normalized, submission } from './ai-settings.model';
 
@@ -44,6 +45,7 @@ export const AiSettingsStore = signalStore(
     data: inject(AiSettingsDataService),
     session: inject(SessionStore),
     viewport: inject(NarrowMutationPolicy),
+    retryWait: createRetryAfterWait(),
   })),
   withProps((store) => {
     const scope = computed<SettingsScope | undefined>(
@@ -151,17 +153,17 @@ export const AiSettingsStore = signalStore(
   withMethods((store) => ({
     edit(document: AiSettingsDocument): void {
       store.draft.set(document);
-      patchState(store, { saved: '', failure: null });
+      patchState(store, { saved: '', failure: store.retryWait.ready() ? null : store.failure() });
     },
     setReason(reason: string): void {
       store.reason.set(reason);
-      patchState(store, { saved: '', failure: null });
+      patchState(store, { saved: '', failure: store.retryWait.ready() ? null : store.failure() });
     },
     useTemplate(settings: AiSettingsDocument, template: AiSettingsTemplateRef): void {
       if (!store.canWrite() || !store.viewport.allowsMutation()) return;
       store.draft.set(settings);
       store.template.set(template);
-      patchState(store, { saved: '', failure: null });
+      patchState(store, { saved: '', failure: store.retryWait.ready() ? null : store.failure() });
     },
     selectVersion(version: number): void {
       patchState(store, { selectedVersion: version });
@@ -204,7 +206,8 @@ export const AiSettingsStore = signalStore(
         !draft ||
         !store.canWrite() ||
         !store.viewport.allowsMutation() ||
-        store.saving()
+        store.saving() ||
+        !store.retryWait.ready()
       )
         return false;
       const template = store.template();
@@ -229,17 +232,21 @@ export const AiSettingsStore = signalStore(
         const result = await store.data.save(scope.project, body, base.etag, store.intent.key);
         if (store.scope() !== scope) return false;
         store.head.set(result);
+        patchState(store, { cursor: undefined, cursorPath: [], cursorCycle: false });
         store.history.reload();
         store.intent.body = '';
         patchState(store, { saved: result.appended ? 'saved' : 'unchanged' });
         return true;
       } catch (error) {
         if (!isApiRequestError(error)) throw error;
-        if (store.scope() === scope)
+        if (store.scope() === scope) {
           patchState(store, {
             failure: error.error,
             conflictOpen: error.error.kind === 'precondition_failed',
           });
+          if (error.error.kind === 'rate_limited' || error.error.kind === 'unavailable')
+            store.retryWait.start(error.error.retryAfterSeconds);
+        }
         return false;
       } finally {
         patchState(store, { saving: false });
@@ -254,6 +261,7 @@ export const AiSettingsStore = signalStore(
         if (current === previous) return;
         previous = current;
         store.intent.body = '';
+        store.retryWait.clear();
         patchState(store, {
           failure: null,
           conflictOpen: false,
@@ -265,6 +273,9 @@ export const AiSettingsStore = signalStore(
           compareVersion: 0,
         });
       });
+    },
+    onDestroy() {
+      store.retryWait.clear();
     },
   })),
 );
