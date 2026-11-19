@@ -90,7 +90,7 @@ export class ChecklistReviewTabComponent {
     null,
   );
   protected readonly load = resource({
-    params: () => (this.store.canRead() ? this.scope() : undefined),
+    params: () => (this.store.canRead() && this.itemId() ? this.scope() : undefined),
     loader: async ({ params }) => {
       await this.store.init(params.project, { targetId: params.item });
       return params;
@@ -109,8 +109,9 @@ export class ChecklistReviewTabComponent {
     this.projectId(),
     'pending-changes',
   ]);
+  // An empty item id never reads the queue (an empty scope would list every item).
   protected readonly status = computed<'loading' | 'ready' | 'error'>(() =>
-    this.store.queueStatus() === 'ready'
+    !this.itemId() || this.store.queueStatus() === 'ready'
       ? 'ready'
       : this.store.queueStatus() === 'error'
         ? 'error'

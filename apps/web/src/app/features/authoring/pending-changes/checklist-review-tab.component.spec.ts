@@ -127,6 +127,7 @@ describe('ChecklistReviewTabComponent', () => {
     const { ui } = await setup('');
     expect(await ui.count('[data-review-change]')).toBe(0);
     expect(await ui.text()).toContain(PENDING_UI.itemEmpty);
+    expect(listPending).not.toHaveBeenCalled();
   });
   it('queues a comment through the store and retains the optional reason', async () => {
     const { ui, fixture } = await setup();
