@@ -120,6 +120,22 @@ describe('AuthoringTreePaneComponent', () => {
     expect(await harness.visibleIds()).toEqual([root.node_id, second.node_id]);
   });
 
+  it('skips a retained child page once its expanded row becomes childless', async () => {
+    const { fixture, harness } = await render();
+    await (await harness.disclosure(root.node_id)).click();
+    expect(await harness.visibleIds()).toEqual([root.node_id, child.node_id, second.node_id]);
+
+    fixture.componentRef.setInput('roots', page([{ ...root, child_count: 0 }, second]));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await harness.visibleIds()).toEqual([root.node_id, second.node_id]);
+
+    const rootScope = await harness.scope(root.node_id);
+    await rootScope.focus();
+    await rootScope.sendKeys(TestKey.DOWN_ARROW);
+    expect(await (await harness.scope(second.node_id)).isFocused()).toBe(true);
+  });
+
   it('cycles repeated locale-aware type-ahead and starts a new prefix after an arrow key', async () => {
     const { harness } = await render();
     const first = await harness.disclosure(root.node_id);
