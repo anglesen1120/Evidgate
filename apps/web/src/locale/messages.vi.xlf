@@ -3947,6 +3947,438 @@
       <trans-unit id="authoring.ai-settings.stale" datatype="html"><source>Refresh failed. Previously loaded settings and your unsaved draft are retained.</source><target>Không thể làm mới. Cài đặt đã tải và bản nháp chưa lưu của bạn được giữ lại.</target></trans-unit>
       <trans-unit id="authoring.ai-settings.cursor-cycle" datatype="html"><source>The server repeated a page cursor. Return to the first page to retry.</source><target>Máy chủ lặp lại con trỏ trang. Quay về trang đầu để thử lại.</target></trans-unit>
       <trans-unit id="authoring.ai-settings.compare-reason" datatype="html"><source>View a version before choosing a second version to compare.</source><target>Xem một phiên bản trước khi chọn phiên bản thứ hai để so sánh.</target></trans-unit>
+      <trans-unit id="authoring.editor.action" datatype="html">
+        <source>Action</source>
+        <target state="translated">Thao tác</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.add-step" datatype="html">
+        <source>Add step</source>
+        <target state="translated">Thêm bước</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.author-membership" datatype="html">
+        <source>Author membership</source>
+        <target state="translated">Tư cách thành viên của tác giả</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.cancel" datatype="html">
+        <source>Cancel</source>
+        <target state="translated">Hủy</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.case-code" datatype="html">
+        <source>Case code</source>
+        <target state="translated">Mã ca kiểm thử</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.change-create" datatype="html">
+        <source>Created</source>
+        <target state="translated">Đã tạo</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.change-delete" datatype="html">
+        <source>Deleted</source>
+        <target state="translated">Đã xóa</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.change-restore" datatype="html">
+        <source>Restored</source>
+        <target state="translated">Đã khôi phục</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.change-update" datatype="html">
+        <source>Updated</source>
+        <target state="translated">Đã cập nhật</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.character-count" datatype="html">
+        <source><x id="INTERPOLATION" equiv-text="{{ count(draft[field.key]) }}"/> / <x id="INTERPOLATION_1" equiv-text="{{ field.limit }}"/> characters</source>
+        <target state="translated"><x id="INTERPOLATION" equiv-text="{{ count(draft[field.key]) }}"/> / <x id="INTERPOLATION_1" equiv-text="{{ field.limit }}"/> ký tự</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.choose-panel" datatype="html">
+        <source>Choose a section</source>
+        <target state="translated">Chọn phần</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.compare-version" datatype="html">
+        <source>Compare with <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></source>
+        <target state="translated">So sánh với phiên bản <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.comparison-prerequisite" datatype="html">
+        <source>View one version before choosing a second version to compare.</source>
+        <target state="translated">Xem một phiên bản trước khi chọn phiên bản thứ hai để so sánh.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.critical" datatype="html">
+        <source>Critical</source>
+        <target state="translated">Nghiêm trọng</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.current-version" datatype="html">
+        <source>Current version: <x id="INTERPOLATION" equiv-text="{{ base.view.version }}"/></source>
+        <target state="translated">Phiên bản hiện tại: <x id="INTERPOLATION" equiv-text="{{ base.view.version }}"/></target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.cursor-cycle" datatype="html">
+        <source>The server repeated a page cursor. Refresh the timeline before loading more.</source>
+        <target state="translated">Máy chủ đã lặp lại con trỏ trang. Hãy làm mới dòng thời gian trước khi tải thêm.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.description" datatype="html">
+        <source>Description</source>
+        <target state="translated">Mô tả</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.detail-heading" datatype="html">
+        <source>Version <x id="INTERPOLATION" equiv-text="{{ detail.view.version_no }}"/> · read-only snapshot</source>
+        <target state="translated">Phiên bản <x id="INTERPOLATION" equiv-text="{{ detail.view.version_no }}"/> · bản chụp chỉ đọc</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.diff-after" datatype="html">
+        <source>+ After</source>
+        <target state="translated">+ Sau</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.diff-before" datatype="html">
+        <source>− Before</source>
+        <target state="translated">− Trước</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.diff-empty" datatype="html">
+        <source>Both stored snapshots are empty.</source>
+        <target state="translated">Cả hai bản chụp đã lưu đều trống.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.diff-loading" datatype="html">
+        <source>Loading snapshot comparison…</source>
+        <target state="translated">Đang tải nội dung so sánh bản chụp…</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.diff-title" datatype="html">
+        <source>Stored snapshot comparison · read-only</source>
+        <target state="translated">So sánh bản chụp đã lưu · chỉ đọc</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.diff-unchanged" datatype="html">
+        <source>Unchanged</source>
+        <target state="translated">Không thay đổi</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.diff-versions" datatype="html">
+        <source>Version <x id="INTERPOLATION" equiv-text="{{ before.view.version_no }}"/> → version <x id="INTERPOLATION_1" equiv-text="{{ after.view.version_no }}"/></source>
+        <target state="translated">Phiên bản <x id="INTERPOLATION" equiv-text="{{ before.view.version_no }}"/> → phiên bản <x id="INTERPOLATION_1" equiv-text="{{ after.view.version_no }}"/></target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.discard" datatype="html">
+        <source>Discard and leave</source>
+        <target state="translated">Bỏ thay đổi và rời đi</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.editor-tab" datatype="html">
+        <source>Editor</source>
+        <target state="translated">Trình chỉnh sửa</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.expected" datatype="html">
+        <source>Expected result</source>
+        <target state="translated">Kết quả mong đợi</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.high" datatype="html">
+        <source>High</source>
+        <target state="translated">Cao</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.history-empty" datatype="html">
+        <source>No versions recorded</source>
+        <target state="translated">Chưa có phiên bản nào</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.history-filter" datatype="html">
+        <source>Filter loaded versions by reason</source>
+        <target state="translated">Lọc các phiên bản đã tải theo lý do</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.history-no-match" datatype="html">
+        <source>No loaded versions match this filter</source>
+        <target state="translated">Không có phiên bản đã tải nào khớp với bộ lọc này</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.history-partial" datatype="html">
+        <source>Loading more versions failed. Previously loaded versions are retained.</source>
+        <target state="translated">Không tải được các phiên bản tiếp theo. Những phiên bản đã tải vẫn được giữ nguyên.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.inspect-column" datatype="html">
+        <source>Inspection</source>
+        <target state="translated">Xem chi tiết</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.inspect-version" datatype="html">
+        <source>View version <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></source>
+        <target state="translated">Xem phiên bản <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.intro" datatype="html">
+        <source>Edit an existing manual case. Saving appends a version; past versions remain unchanged.</source>
+        <target state="translated">Chỉnh sửa ca kiểm thử thủ công hiện có. Khi lưu, một phiên bản được thêm vào; các phiên bản trước không thay đổi.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.keep-editing" datatype="html">
+        <source>Keep editing</source>
+        <target state="translated">Tiếp tục chỉnh sửa</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.leave-description" datatype="html">
+        <source>Your draft is only in this tab. Leaving discards it without saving a version.</source>
+        <target state="translated">Bản nháp chỉ nằm trong thẻ này. Nếu rời đi, bản nháp sẽ bị bỏ mà không lưu thành phiên bản.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.leave-title" datatype="html">
+        <source>Discard unsaved changes?</source>
+        <target state="translated">Bỏ các thay đổi chưa lưu?</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.length-error" datatype="html">
+        <source>Shorten this field to the character limit shown below.</source>
+        <target state="translated">Rút ngắn nội dung để không vượt giới hạn ký tự bên dưới.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.load-more" datatype="html">
+        <source>Load more</source>
+        <target state="translated">Tải thêm</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.loaded-count" datatype="html">
+        <source><x id="INTERPOLATION" equiv-text="{{ store.rows().length }}"/> versions loaded</source>
+        <target state="translated">Đã tải <x id="INTERPOLATION" equiv-text="{{ store.rows().length }}"/> phiên bản</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.loading-more" datatype="html">
+        <source>Loading older versions…</source>
+        <target state="translated">Đang tải các phiên bản cũ hơn…</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.low" datatype="html">
+        <source>Low</source>
+        <target state="translated">Thấp</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.medium" datatype="html">
+        <source>Medium</source>
+        <target state="translated">Trung bình</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.move-down" datatype="html">
+        <source>Move down</source>
+        <target state="translated">Chuyển xuống</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.move-up" datatype="html">
+        <source>Move up</source>
+        <target state="translated">Chuyển lên</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.narrow-draft" datatype="html">
+        <source>Unsaved desktop edits are retained, not saved. Open a wider screen to edit.</source>
+        <target state="translated">Các chỉnh sửa chưa lưu trên màn hình rộng vẫn được giữ lại, chưa được lưu. Hãy mở trên màn hình rộng hơn để chỉnh sửa.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.narrow-saved" datatype="html">
+        <source>These saved values are shown read-only on a narrow screen. Open a wider screen to edit them.</source>
+        <target state="translated">Các giá trị đã lưu được hiển thị chỉ đọc trên màn hình hẹp. Hãy mở trên màn hình rộng hơn để chỉnh sửa.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.no-author" datatype="html">
+        <source>Author membership unavailable</source>
+        <target state="translated">Không có thông tin tư cách thành viên của tác giả</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.no-reason" datatype="html">
+        <source>No reason recorded</source>
+        <target state="translated">Chưa ghi nhận lý do</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.not-set" datatype="html">
+        <source>Not set</source>
+        <target state="translated">Chưa có</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.page-title" datatype="html">
+        <source>Case editor</source>
+        <target state="translated">Trình chỉnh sửa ca kiểm thử</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.panels" datatype="html">
+        <source>Case sections</source>
+        <target state="translated">Các phần của ca kiểm thử</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.preconditions" datatype="html">
+        <source>Preconditions</source>
+        <target state="translated">Điều kiện tiên quyết</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.priority" datatype="html">
+        <source>Priority</source>
+        <target state="translated">Mức ưu tiên</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.readonly-heading" datatype="html">
+        <source>Read-only case draft</source>
+        <target state="translated">Bản nháp ca kiểm thử chỉ đọc</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.reason-unavailable" datatype="html">
+        <source>The current API cannot record a version reason for this operation. The reason field is unavailable; you can continue without a recorded reason.</source>
+        <target state="translated">API hiện tại không thể ghi nhận lý do cho phiên bản trong thao tác này. Trường lý do chưa khả dụng; bạn vẫn có thể tiếp tục mà không ghi nhận lý do.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.refresh-failed" datatype="html">
+        <source>Refresh failed. The last loaded case and your unsaved draft are retained.</source>
+        <target state="translated">Làm mới không thành công. Ca kiểm thử đã tải gần nhất và bản nháp chưa lưu của bạn vẫn được giữ lại.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.refresh-timeline" datatype="html">
+        <source>Refresh timeline</source>
+        <target state="translated">Làm mới dòng thời gian</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.remove-step" datatype="html">
+        <source>Remove step</source>
+        <target state="translated">Xóa bước</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.required-error" datatype="html">
+        <source>Enter a value for this required field.</source>
+        <target state="translated">Nhập giá trị cho trường bắt buộc này.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restore-confirm" datatype="html">
+        <source>Restore as new version</source>
+        <target state="translated">Khôi phục thành phiên bản mới</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restore-description" datatype="html">
+        <source>This replaces the live case content with the selected stored snapshot and appends a version. Earlier versions remain unchanged.</source>
+        <target state="translated">Thao tác này thay nội dung ca kiểm thử hiện tại bằng bản chụp đã chọn và thêm một phiên bản. Các phiên bản trước không thay đổi.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restore-open" datatype="html">
+        <source>Restore version <x id="INTERPOLATION" equiv-text="{{ detail.view.version_no }}"/> as a new version</source>
+        <target state="translated">Khôi phục phiên bản <x id="INTERPOLATION" equiv-text="{{ detail.view.version_no }}"/> thành phiên bản mới</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restore-reason" datatype="html">
+        <source>Restore reason</source>
+        <target state="translated">Lý do khôi phục</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restore-refresh" datatype="html">
+        <source>Restore was confirmed, but the appended version is not yet visible. Refresh the timeline.</source>
+        <target state="translated">Đã xác nhận khôi phục nhưng phiên bản mới chưa hiển thị. Hãy làm mới dòng thời gian.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restore-source" datatype="html">
+        <source>Source version <x id="INTERPOLATION" equiv-text="{{ detail.view.version_no }}"/></source>
+        <target state="translated">Phiên bản nguồn <x id="INTERPOLATION" equiv-text="{{ detail.view.version_no }}"/></target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restore-title" datatype="html">
+        <source>Restore as a new version?</source>
+        <target state="translated">Khôi phục thành phiên bản mới?</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restored" datatype="html">
+        <source>Version <x id="INTERPOLATION" equiv-text="{{ store.appendedVersion() }}"/> was appended. Earlier versions are unchanged.</source>
+        <target state="translated">Đã thêm phiên bản <x id="INTERPOLATION" equiv-text="{{ store.appendedVersion() }}"/>. Các phiên bản trước không thay đổi.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.restoring" datatype="html">
+        <source>Restoring version…</source>
+        <target state="translated">Đang khôi phục phiên bản…</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.retired" datatype="html">
+        <source>This case is retired. Its content is read-only.</source>
+        <target state="translated">Ca kiểm thử này đã ngừng sử dụng. Nội dung ở chế độ chỉ đọc.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.save" datatype="html">
+        <source>Save new version</source>
+        <target state="translated">Lưu phiên bản mới</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.save-failed" datatype="html">
+        <source>The save was not confirmed. Every draft field is retained.</source>
+        <target state="translated">Chưa xác nhận lưu thành công. Mọi trường trong bản nháp vẫn được giữ nguyên.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.saved" datatype="html">
+        <source>A new case version was saved.</source>
+        <target state="translated">Đã lưu một phiên bản ca kiểm thử mới.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.saving" datatype="html">
+        <source>Saving case…</source>
+        <target state="translated">Đang lưu ca kiểm thử…</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.server-field-error" datatype="html">
+        <source>The server refused this field. Review its value before saving again.</source>
+        <target state="translated">Máy chủ từ chối trường này. Hãy kiểm tra giá trị trước khi lưu lại.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.snapshot-content" datatype="html">
+        <source>Stored snapshot</source>
+        <target state="translated">Bản chụp đã lưu</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.snapshot-missing" datatype="html">
+        <source>Not present in this snapshot</source>
+        <target state="translated">Không có trong bản chụp này</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.source-ai" datatype="html">
+        <source>AI</source>
+        <target state="translated">AI</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.source-import" datatype="html">
+        <source>Import</source>
+        <target state="translated">Nhập dữ liệu</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.source-manual" datatype="html">
+        <source>Manual</source>
+        <target state="translated">Thủ công</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.step-character-count" datatype="html">
+        <source><x id="INTERPOLATION" equiv-text="{{ count(step[field.key] ?? &#x27;&#x27;) }}"/> / 2000 characters</source>
+        <target state="translated"><x id="INTERPOLATION" equiv-text="{{ count(step[field.key] ?? &#x27;&#x27;) }}"/> / 2000 ký tự</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.step-field" datatype="html">
+        <source>Step <x id="step" equiv-text="index + 1"/> · <x id="field" equiv-text="field.label"/></source>
+        <target state="translated">Bước <x id="step" equiv-text="index + 1"/> · <x id="field" equiv-text="field.label"/></target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.step-limits" datatype="html">
+        <source>Keep 1–100 steps. Use Move up and Move down to change execution order with the keyboard.</source>
+        <target state="translated">Giữ từ 1–100 bước. Dùng Chuyển lên và Chuyển xuống để đổi thứ tự thực hiện bằng bàn phím.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.step-moved" datatype="html">
+        <source>Step moved to position <x id="position" equiv-text="index + 1"/>.</source>
+        <target state="translated">Đã chuyển bước đến vị trí <x id="position" equiv-text="index + 1"/>.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.step-number" datatype="html">
+        <source>Step <x id="INTERPOLATION" equiv-text="{{ index + 1 }}"/></source>
+        <target state="translated">Bước <x id="INTERPOLATION" equiv-text="{{ index + 1 }}"/></target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.step-removed" datatype="html">
+        <source>Step removed. The remaining steps have been renumbered.</source>
+        <target state="translated">Đã xóa bước. Các bước còn lại đã được đánh số lại.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.steps" datatype="html">
+        <source>Steps</source>
+        <target state="translated">Các bước</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.steps-heading" datatype="html">
+        <source>Steps · action and expected result</source>
+        <target state="translated">Các bước · thao tác và kết quả mong đợi</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.test-data" datatype="html">
+        <source>Test data</source>
+        <target state="translated">Dữ liệu kiểm thử</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.timeline-draft" datatype="html">
+        <source>Your unsaved Editor draft is retained. Restoring does not merge it; saving that draft still checks its original ETag.</source>
+        <target state="translated">Bản nháp chưa lưu trong Trình chỉnh sửa vẫn được giữ lại. Khôi phục không hợp nhất nội dung; khi lưu bản nháp này, ETag gốc vẫn được kiểm tra.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.timeline-heading" datatype="html">
+        <source>Timeline · immutable history</source>
+        <target state="translated">Dòng thời gian · lịch sử bất biến</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.timeline-intro" datatype="html">
+        <source>Versions are newest first. Inspect stored snapshots or restore one as a new version. Restore never rewrites earlier versions.</source>
+        <target state="translated">Các phiên bản mới nhất được hiển thị trước. Xem bản chụp đã lưu hoặc khôi phục thành phiên bản mới. Khôi phục không ghi đè các phiên bản trước.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.timeline-tab" datatype="html">
+        <source>Timeline</source>
+        <target state="translated">Dòng thời gian</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.title-field" datatype="html">
+        <source>Title</source>
+        <target state="translated">Tiêu đề</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.unchanged" datatype="html">
+        <source>No changes; the existing version is unchanged.</source>
+        <target state="translated">Không có thay đổi; phiên bản hiện tại được giữ nguyên.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.unsaved" datatype="html">
+        <source>Unsaved changes are kept in this tab only.</source>
+        <target state="translated">Các thay đổi chưa lưu chỉ được giữ trong thẻ này.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.version-etag" datatype="html">
+        <source>Snapshot ETag</source>
+        <target state="translated">ETag của bản chụp</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.version-id" datatype="html">
+        <source>Version id</source>
+        <target state="translated">ID phiên bản</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.version-number" datatype="html">
+        <source>Version <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></source>
+        <target state="translated">Phiên bản <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.version-reason" datatype="html">
+        <source>Reason for this version</source>
+        <target state="translated">Lý do cho phiên bản này</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.write-reason" datatype="html">
+        <source>Read-only: authoring:write permission is required to save or restore a case.</source>
+        <target state="translated">Chỉ đọc: cần quyền authoring:write để lưu hoặc khôi phục ca kiểm thử.</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.lifecycle" datatype="html">
+        <source>Status</source>
+        <target state="translated">Trạng thái</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.lifecycle-draft" datatype="html">
+        <source>Draft</source>
+        <target state="translated">Bản nháp</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.lifecycle-approved" datatype="html">
+        <source>Approved</source>
+        <target state="translated">Đã phê duyệt</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.lifecycle-retired" datatype="html">
+        <source>Retired</source>
+        <target state="translated">Đã ngừng sử dụng</target>
+      </trans-unit>
+      <trans-unit id="authoring.editor.live-provenance-unavailable" datatype="html">
+        <source>Source and author are unavailable in the case detail. Timeline shows the metadata supplied for each version.</source>
+        <target state="translated">Chi tiết ca kiểm thử chưa có thông tin nguồn và tác giả. Dòng thời gian hiển thị siêu dữ liệu được cung cấp cho từng phiên bản.</target>
+      </trans-unit>
       <trans-unit id="authoring.import-export.would-create" datatype="html"><source>Would create</source><target>Sẽ tạo mới</target></trans-unit>
       <trans-unit id="authoring.import-export.would-update" datatype="html"><source>Would update</source><target>Sẽ cập nhật</target></trans-unit>
       <trans-unit id="authoring.import-export.would-restore" datatype="html"><source>Would restore</source><target>Sẽ khôi phục</target></trans-unit>

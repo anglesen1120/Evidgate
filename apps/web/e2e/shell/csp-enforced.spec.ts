@@ -88,6 +88,7 @@ const READY: Readonly<Record<string, string>> = {
   RunDetailPage: 'app-run-detail-page[data-run-detail-status="ready"]',
   SuiteCompositionComponent: 'app-suite-composition[data-suite-composition-status="ready"]',
   OnboardingShellComponent: WIZARD,
+  EditorPage: 'app-authoring-editor #case-title',
 };
 
 /** The fields of a catalogue document the walk reads; the corpus rows carry more than this. */
@@ -145,6 +146,7 @@ const IDS: Readonly<Record<string, string>> = {
   projectId: PROJECT_STOREFRONT,
   runId: runFixture.body.run_id,
   revisionId: suiteFixture.body.id,
+  caseId: 'a4430000-0000-4000-8000-000000000001',
 };
 
 /**

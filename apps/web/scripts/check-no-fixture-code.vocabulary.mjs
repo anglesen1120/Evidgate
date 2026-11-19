@@ -23,6 +23,9 @@ export const ENUM_MEMBERS = new Map([
   // `contracts/schemas/authoring-import.v1.json` `properties.format.const`, the export document's
   // discriminator; production code carries it inside longer identifiers.
   ['format', new Set(['authoring-import'])],
+  // `entity_kind` enum of contracts/openapi.yaml (authoring versions); the version timeline sends
+  // it on the wire, so production code carries each value.
+  ['entity_kind', new Set(['feature_node', 'checklist_item', 'manual_test_case'])],
   ['provider', new Set(['github_actions'])],
   [
     'status',
