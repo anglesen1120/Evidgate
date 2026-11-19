@@ -3,6 +3,7 @@ import { declaredResponseHeaderNames, isRecord, VALIDATOR } from './fixture-cont
 import preview from '../../../../../../fixtures/web-api/authoring-import-preview/input.json';
 import invalid from '../../../../../../fixtures/web-api/authoring-import-mixed/input.json';
 import exported from '../../../../../../fixtures/web-api/authoring-export-json/input.json';
+import history from '../../../../../../fixtures/web-api/authoring-import-history/input.json';
 import { FixtureHttpBackend } from './fixture-backend';
 import { FixtureToggles } from './fixture-toggles';
 import { HttpRequest, HttpResponse } from '@angular/common/http';
@@ -44,6 +45,28 @@ describe('authoring import/export fixture contract pins', () => {
         rows: [{ kind: 'node', key: 'n1' }],
       }).errors.length,
     ).toBeGreaterThan(0);
+  });
+  it('serves authorized project import history with server version metadata and an unsupplied import author', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        FixtureHttpBackend,
+        { provide: FixtureToggles, useValue: { variantFor: () => 'ok', latencyFor: () => null } },
+      ],
+    });
+    const backend = TestBed.inject(FixtureHttpBackend);
+    const result = await firstValueFrom(
+      backend.handle(
+        new HttpRequest(
+          'GET',
+          'https://example.test/v1/projects/018f0000-0000-7000-8000-000000000011/authoring/versions?source=import&limit=50',
+        ),
+      ),
+    );
+    expect(result instanceof HttpResponse && result.body).toEqual(history.body);
+    expect(history.body.items[0]?.source).toBe('import');
+    expect(history.body.items[0]?.author).toBeNull();
+    expect(history.body.items[0]?.reason).toBeNull();
+    TestBed.resetTestingModule();
   });
   it('answers a dry-run preview without a batch and an explicit confirmation with a batch', async () => {
     TestBed.configureTestingModule({

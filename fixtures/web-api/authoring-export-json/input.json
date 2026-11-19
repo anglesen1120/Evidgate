@@ -4,7 +4,7 @@
   "status": 200,
   "headers": {
     "X-Request-Id": "018f0000-0000-7000-8000-00000000af01",
-    "Content-Disposition": "attachment; filename=\"authoring-export.json\"",
+    "Content-Disposition": "attachment; filename=authoring-export.json; filename*=UTF-8''authoring-export.json",
     "Cache-Control": "no-store"
   },
   "latency_ms": 0,

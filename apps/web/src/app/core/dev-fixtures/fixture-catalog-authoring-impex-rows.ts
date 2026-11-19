@@ -17,6 +17,7 @@ import fixture15 from '../../../../../../fixtures/web-api/authoring-export-too-l
 import fixture16 from '../../../../../../fixtures/web-api/authoring-export-denied/input.json';
 import fixture17 from '../../../../../../fixtures/web-api/authoring-export-unavailable/input.json';
 import fixture18 from '../../../../../../fixtures/web-api/authoring-export-rate-limited/input.json';
+import fixture19 from '../../../../../../fixtures/web-api/authoring-import-history/input.json';
 import type { FixtureCatalogRow } from './fixture-document';
 
 export const FIXTURE_CATALOG_AUTHORING_IMPEX_ROWS: readonly FixtureCatalogRow[] = [
@@ -39,4 +40,5 @@ export const FIXTURE_CATALOG_AUTHORING_IMPEX_ROWS: readonly FixtureCatalogRow[] 
   { name: 'authoring-export-denied', document: fixture16 },
   { name: 'authoring-export-unavailable', document: fixture17 },
   { name: 'authoring-export-rate-limited', document: fixture18 },
+  { name: 'authoring-import-history', document: fixture19 },
 ];

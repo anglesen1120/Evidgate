@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseLocalPreview, IMPORT_COLUMNS } from './local-file-preview';
+import { parseLocalPreview, exportedCsvRows, IMPORT_COLUMNS } from './local-file-preview';
 
 const header = IMPORT_COLUMNS.join(',');
 
@@ -44,10 +44,20 @@ describe('local file preview (display only)', () => {
     expect(parseLocalPreview('title\nHello', 'csv').issue).toBe('header');
   });
 
-  it('retains blank data rows rather than silently dropping them', () => {
-    expect(
-      parseLocalPreview(`${header}\n\nnode,n1,,,module,Hello,,,,,,,`, 'csv').rows,
-    ).toHaveLength(2);
+  it('skips blank lines without shifting indices and keeps a record of empty fields', () => {
+    const rows = parseLocalPreview(
+      `${header}\n\nnode,n1,,,module,Hello,,,,,,,\n\n,,,,,,,,,,,,`,
+      'csv',
+    ).rows;
+    expect(rows.map((row) => row.index)).toEqual([1, 2]);
+    expect(rows[0]?.cells['title']).toBe('Hello');
+    expect(rows[1]?.cells['title']).toBe('');
+  });
+
+  it('counts logical export records past the header, ignoring blank lines and the BOM', () => {
+    expect(exportedCsvRows(`${header}\n`)).toBe(0);
+    expect(exportedCsvRows(`\uFEFF${header}\r\n\r\n`)).toBe(0);
+    expect(exportedCsvRows(`\uFEFF${header}\r\n\r\nnode,n1,,,module,Hello,,,,,,,\r\n`)).toBe(1);
   });
 
   it('bounds display at the contract row cap and labels omitted data without changing the upload', () => {

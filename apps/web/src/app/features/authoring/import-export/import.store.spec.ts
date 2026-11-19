@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
-import type { ImportResponse } from '@evidgate/sdk';
+import type { AuthoringVersionListResponse, ImportResponse } from '@evidgate/sdk';
 import { SessionStore } from '../../../core/session/session.store';
 import { ApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
@@ -31,18 +31,24 @@ export function refusal(
 describe('ImportStore confirmation and refusal boundary', () => {
   let store: InstanceType<typeof ImportStore>;
   const upload = vi.fn<ImportExportDataService['importFile']>();
+  const versions =
+    vi.fn<(project: string, signal?: AbortSignal) => Promise<AuthoringVersionListResponse>>();
   let desktop = true;
   let permitted = true;
   const project = signal({ id: 'project', case_prefix: 'SHOP' });
   beforeEach(() => {
     upload.mockReset().mockResolvedValue(report);
+    versions.mockReset().mockResolvedValue({ items: [], next_cursor: null });
     desktop = true;
     permitted = true;
     project.set({ id: 'project', case_prefix: 'SHOP' });
     TestBed.configureTestingModule({
       providers: [
         ImportStore,
-        { provide: ImportExportDataService, useValue: { importFile: upload } },
+        {
+          provide: ImportExportDataService,
+          useValue: { importFile: upload, listVersions: versions },
+        },
         {
           provide: SessionStore,
           useValue: {
@@ -69,7 +75,7 @@ describe('ImportStore confirmation and refusal boundary', () => {
     expect(store.canConfirm()).toBe(true);
     await store.confirm();
     expect(upload.mock.calls.map((call) => call[3])).toEqual([true, false]);
-    expect(upload.mock.calls[0]?.[4]).toBe(upload.mock.calls[1]?.[4]);
+    expect(upload.mock.calls[0]?.[4]).not.toBe(upload.mock.calls[1]?.[4]);
   });
 
   it('refuses a file strictly greater than 5 MiB before any server request, but accepts the exact cap', async () => {
@@ -97,7 +103,7 @@ describe('ImportStore confirmation and refusal boundary', () => {
     expect(upload).toHaveBeenCalledTimes(1);
   });
 
-  it('retries preview and uncertain confirmed writes with the same idempotency key', async () => {
+  it('uses distinct preview and commit keys and retains each key across its own retries', async () => {
     store.selectFile(new File(['{}'], 'file.json'));
     upload.mockRejectedValueOnce(refusal('unavailable'));
     await store.preview();
@@ -105,7 +111,12 @@ describe('ImportStore confirmation and refusal boundary', () => {
     upload.mockRejectedValueOnce(refusal('unavailable'));
     await store.confirm();
     await store.retry();
-    expect(new Set(upload.mock.calls.map((call) => call[4])).size).toBe(1);
+    const keys = upload.mock.calls.map((call) => call[4]);
+    expect(keys[0]).toBeTruthy();
+    expect(keys[0]).toBe(keys[1]);
+    expect(keys[2]).toBeTruthy();
+    expect(keys[2]).toBe(keys[3]);
+    expect(keys[0]).not.toBe(keys[2]);
     expect(upload.mock.calls.map((call) => call[3])).toEqual([true, true, false, false]);
   });
 
@@ -142,11 +153,41 @@ describe('ImportStore confirmation and refusal boundary', () => {
     expect(upload).toHaveBeenCalledTimes(1);
   });
 
-  it('distinguishes a confirmed batch from a no-op without inventing a version', async () => {
-    store.selectFile(new File(['{}'], 'file.json'));
+  it('keeps XLSX unavailable even when selected outside the file picker and never sends it', async () => {
+    store.selectFile(new File(['xlsx-bytes'], 'file.xlsx'));
     await store.preview();
     await store.confirm();
-    expect(store.work().committed?.batch_id).toBeNull();
+    await store.retry();
+    expect(upload).not.toHaveBeenCalled();
+    expect(store.canConfirm()).toBe(false);
+    expect(store.work().file?.name).toBe('file.xlsx');
+    store.setFormat('csv');
+    store.setFormat('xlsx');
+    expect(store.work().format).toBe('xlsx');
+    await store.preview();
+    expect(upload).not.toHaveBeenCalled();
+    store.selectFile(new File(['kind,key\nnode,n1'], 'file.csv'));
+    await store.preview();
+    expect(upload).toHaveBeenCalledTimes(1);
+  });
+
+  it('distinguishes a non-null committed batch from an all-unchanged no-op', async () => {
+    store.selectFile(new File(['{}'], 'changed.json'));
+    await store.preview();
+    upload.mockResolvedValueOnce({ ...report, batch_id: '018f0000-0000-7000-8000-00000000af01' });
+    await store.confirm();
+    expect(store.work().committed?.batch_id).toBe('018f0000-0000-7000-8000-00000000af01');
+    expect(store.canConfirm()).toBe(false);
+    store.selectFile(new File(['{}'], 'unchanged.json'));
+    const unchanged: ImportResponse = {
+      batch_id: null,
+      counts: { created: 0, updated: 0, restored: 0, unchanged: 1 },
+      rows: [{ index: 1, key: 'n1', kind: 'node', outcome: 'unchanged', code: null }],
+    };
+    upload.mockResolvedValue(unchanged);
+    await store.preview();
+    await store.confirm();
+    expect(store.work().committed).toEqual(unchanged);
     expect(store.canConfirm()).toBe(false);
   });
 });

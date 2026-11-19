@@ -14,13 +14,13 @@ export const IMPEX_COPY = {
   exportTab: $localize`:@@authoring.import-export.export-tab:Export`,
   intake: $localize`:@@authoring.import-export.intake:File and target`,
   file: $localize`:@@authoring.import-export.file:Source file`,
-  limits: $localize`:@@authoring.import-export.limits:CSV, JSON or XLSX. The server accepts at most 5 MiB and 5,000 data rows. File selection is not validation.`,
+  limits: $localize`:@@authoring.import-export.limits:CSV or JSON. The server accepts at most 5 MiB and 5,000 data rows. File selection is not validation.`,
   format: $localize`:@@authoring.import-export.format:Format`,
   preview: $localize`:@@authoring.import-export.preview:Preview without importing`,
   previewTitle: $localize`:@@authoring.import-export.preview-title:Preview rows`,
   fromFile: $localize`:@@authoring.import-export.from-file:From your file, not validated. Row identity, status and totals come only from the server.`,
   noFile: $localize`:@@authoring.import-export.no-file:No file has been selected for import.`,
-  xlsx: $localize`:@@authoring.import-export.xlsx:XLSX cell text is not available without a spreadsheet parser. Server rows are shown after preview; no parser dependency is added.`,
+  xlsx: $localize`:@@authoring.import-export.xlsx:XLSX is unavailable because this client cannot transfer spreadsheet files. Use CSV or JSON; no XLSX request is sent.`,
   localUnreadable: $localize`:@@authoring.import-export.local-unreadable:Local preview could not read this file. The original file can still be sent for server validation.`,
   displayCap: $localize`:@@authoring.import-export.display-cap:Local display stops at the server's 5,000-row cap. No rows are removed from the upload; the server validates the original file.`,
   busy: $localize`:@@authoring.import-export.busy:Previewing rows; no version has been created.`,
@@ -46,6 +46,35 @@ export const IMPEX_COPY = {
   updated: $localize`:@@authoring.import-export.updated:Updated`,
   restored: $localize`:@@authoring.import-export.restored:Restored`,
   unchanged: $localize`:@@authoring.import-export.unchanged:Unchanged`,
+  wouldCreate: $localize`:@@authoring.import-export.would-create:Would create`,
+  wouldUpdate: $localize`:@@authoring.import-export.would-update:Would update`,
+  wouldRestore: $localize`:@@authoring.import-export.would-restore:Would restore`,
+  wouldUnchanged: $localize`:@@authoring.import-export.would-unchanged:Would remain unchanged`,
+  previewComplete: $localize`:@@authoring.import-export.preview-complete:Preview complete — not applied. Review the validated scope before confirming.`,
+  inspected: $localize`:@@authoring.import-export.inspected:Inspected rows`,
+  snapshot: $localize`:@@authoring.import-export.snapshot:Selected file and format`,
+  unavailable: $localize`:@@authoring.import-export.unavailable:Unavailable`,
+  headerGuide: $localize`:@@authoring.import-export.header-guide:Correct the CSV header to these thirteen contract columns, in this order:`,
+  limit: $localize`:@@authoring.import-export.limit:Server limit`,
+  actual: $localize`:@@authoring.import-export.actual:Measured value`,
+  bytes: $localize`:@@authoring.import-export.bytes:bytes`,
+  dataRows: $localize`:@@authoring.import-export.data-rows:data rows`,
+  history: $localize`:@@authoring.import-export.history:Authoring versions`,
+  historyHint: $localize`:@@authoring.import-export.history-hint:Latest import versions in this project, up to 50 per page. Version numbers belong to each entity. Only this authorized history read confirms a version.`,
+  historyFailed: $localize`:@@authoring.import-export.history-failed:Version history could not be loaded. The file and preview remain available.`,
+  historyStale: $localize`:@@authoring.import-export.history-stale:Version history is stale because its refresh failed. The file and preview remain available.`,
+  historyEmpty: $localize`:@@authoring.import-export.history-empty:No import versions were returned for this project.`,
+  historyRefresh: $localize`:@@authoring.import-export.history-refresh:Refresh version history`,
+  historyOlder: $localize`:@@authoring.import-export.history-older:Older import versions`,
+  historyLatest: $localize`:@@authoring.import-export.history-latest:Latest import versions`,
+  version: $localize`:@@authoring.import-export.version:Entity version`,
+  entity: $localize`:@@authoring.import-export.entity:Entity`,
+  source: $localize`:@@authoring.import-export.source:Source`,
+  author: $localize`:@@authoring.import-export.author:Author`,
+  reason: $localize`:@@authoring.import-export.reason:Reason`,
+  notSupplied: $localize`:@@authoring.import-export.not-supplied:Not supplied`,
+  changedAt: $localize`:@@authoring.import-export.changed-at:Created at`,
+  change: $localize`:@@authoring.import-export.change:Change`,
   retry: $localize`:@@authoring.import-export.retry:Retry the same intent`,
   pending: $localize`:@@authoring.import-export.pending:Import is awaiting a server response.`,
   exportScope: $localize`:@@authoring.import-export.export-scope:Export scope`,
@@ -109,7 +138,7 @@ export function importFailure(error: ApiError, exporting = false): string {
           ? IMPEX_COPY.exportDenied
           : IMPEX_COPY.denied;
     case 'idempotency_conflict':
-      return $localize`:@@authoring.import-export.failure.conflict:This intent key belongs to a different file. Select the original file or start a new import intent. Nothing was retried automatically.`;
+      return $localize`:@@authoring.import-export.failure.conflict:This intent key belongs to a different request. Select the original file and format or start a new import intent. Nothing was retried automatically.`;
     case 'rate_limited':
     case 'unavailable':
       return exporting
@@ -134,4 +163,30 @@ const IMPORT_PATHS = new Set([
 ]);
 export function safeImportPath(path: string | undefined): string {
   return path && IMPORT_PATHS.has(path) ? path : '/file';
+}
+
+export const IMPORT_FIELD_LABELS: Readonly<Record<(typeof IMPORT_COLUMNS)[number], string>> = {
+  kind: IMPEX_COPY.kind,
+  key: $localize`:@@authoring.import-export.field-key:File-local key`,
+  parent_key: $localize`:@@authoring.import-export.field-parent-key:Parent key`,
+  item_key: $localize`:@@authoring.import-export.field-item-key:Owning item key`,
+  node_kind: $localize`:@@authoring.import-export.field-node-kind:Node kind`,
+  title: $localize`:@@authoring.import-export.field-title:Title`,
+  description: $localize`:@@authoring.import-export.field-description:Description`,
+  precondition: $localize`:@@authoring.import-export.field-precondition:Precondition`,
+  steps: $localize`:@@authoring.import-export.field-steps:Action and expected-result steps`,
+  priority: $localize`:@@authoring.import-export.field-priority:Priority`,
+  state: $localize`:@@authoring.import-export.field-state:State`,
+  code: $localize`:@@authoring.import-export.field-code:Case code`,
+  position: $localize`:@@authoring.import-export.field-position:Position`,
+};
+
+export function importFieldLabel(path: string | undefined): string {
+  const column = IMPORT_COLUMNS.find((name) => '/' + name === safeImportPath(path));
+  return column ? IMPORT_FIELD_LABELS[column] : IMPEX_COPY.file;
+}
+
+export function importProblemTarget(index: number, path: string | undefined): string {
+  const column = IMPORT_COLUMNS.find((name) => '/' + name === safeImportPath(path));
+  return `import-row-${index}-${column ?? 'status'}`;
 }

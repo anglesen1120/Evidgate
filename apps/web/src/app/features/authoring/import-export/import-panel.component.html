@@ -1,94 +1,119 @@
 <app-desktop-required-notice />
 <app-section-header [title]="copy.intake" [description]="copy.limits" />
 @if (store.canWrite()) {
-  <form
-    *appDesktopMutation
-    class="grid min-w-0 gap-(--eg-space-4) rounded-lg border bg-card p-(--eg-space-5)"
-    (submit)="submit($event)"
-  >
-    <div class="grid min-w-0 gap-(--eg-space-2)">
-      <label hlmLabel for="authoring-import-file">{{ copy.file }}</label>
-      <input
-        hlmInput
-        id="authoring-import-file"
-        type="file"
-        [accept]="'.csv,.json,.xlsx,text/csv,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'"
-        class="min-h-(--eg-control-touch) max-w-full"
-        [attr.aria-describedby]="
-          store.work().error ? 'import-file-hint import-file-refusal' : 'import-file-hint'
-        "
-        [attr.aria-invalid]="store.work().error ? 'true' : null"
-        [disabled]="store.work().pending"
-        (change)="pick($event)"
-        data-import-file
-      />
-      <p id="import-file-hint" class="m-0 text-sm text-muted-foreground wrap-anywhere">
-        {{ copy.limits }}
-      </p>
-      @if (store.work().file; as file) {
-        <p class="m-0 wrap-anywhere" data-import-filename>{{ file.name }}</p>
-      }
-    </div>
-    <div class="grid min-w-0 gap-(--eg-space-2) md:max-w-sm">
-      <label hlmLabel for="authoring-import-format">{{ copy.format }}</label>
-      <hlm-select
-        name="importFormat"
-        [ngModel]="store.work().format"
-        (ngModelChange)="store.setFormat($event)"
-        [disabled]="store.work().pending"
-      >
-        <hlm-select-trigger
-          [buttonId]="'authoring-import-format'"
-          class="min-h-(--eg-control-touch) w-full"
-          ><hlm-select-value
-        /></hlm-select-trigger>
-        <hlm-select-content *hlmSelectPortal [aria-label]="copy.format">
-          @for (format of formats; track format) {
-            <hlm-select-item [value]="format">{{ format.toUpperCase() }}</hlm-select-item>
-          }
-        </hlm-select-content>
-      </hlm-select>
-    </div>
-    <div class="flex flex-wrap items-center gap-(--eg-space-3)">
-      <button
-        hlmBtn
-        [variant]="'outline'"
-        type="submit"
-        class="min-h-(--eg-control-touch) whitespace-normal"
-        data-import-preview
-        [disabled]="
-          !store.work().file ||
-          store.work().pending ||
-          !store.retryReady() ||
-          store.work().stage === 'confirm'
-        "
-      >
-        {{ copy.preview }}
-      </button>
-      @if (store.work().pending && store.work().stage === 'preview') {
+  <form hlmCard [size]="'sm'" *appDesktopMutation (submit)="submit($event)" data-import-mutation>
+    <div hlmCardContent class="grid min-w-0 gap-(--eg-space-4)">
+      <div class="grid min-w-0 gap-(--eg-space-2)">
+        <label hlmLabel for="authoring-import-file">{{ copy.file }}</label>
+        <input
+          hlmInput
+          id="authoring-import-file"
+          type="file"
+          [accept]="'.csv,.json,text/csv,application/json'"
+          class="min-h-(--eg-control-touch) max-w-full"
+          [attr.aria-describedby]="
+            store.work().error ? 'import-file-hint import-file-refusal' : 'import-file-hint'
+          "
+          [attr.aria-invalid]="store.work().error ? 'true' : null"
+          [disabled]="store.work().pending"
+          (change)="pick($event)"
+          data-import-file
+        />
+        <p id="import-file-hint" class="m-0 text-sm text-muted-foreground wrap-anywhere">
+          {{ copy.limits }}
+        </p>
+      </div>
+      <div class="grid min-w-0 gap-(--eg-space-2) md:max-w-sm">
+        <label hlmLabel for="authoring-import-format">{{ copy.format }}</label>
+        <hlm-select
+          name="importFormat"
+          [ngModel]="store.work().format"
+          (ngModelChange)="store.setFormat($event)"
+          [disabled]="store.work().pending"
+        >
+          <hlm-select-trigger
+            [buttonId]="'authoring-import-format'"
+            class="min-h-(--eg-control-touch) w-full"
+          >
+            <hlm-select-value />
+          </hlm-select-trigger>
+          <hlm-select-content *hlmSelectPortal [aria-label]="copy.format">
+            @for (format of formats; track format) {
+              <hlm-select-item
+                [value]="format"
+                [disabled]="format === 'xlsx'"
+                [attr.aria-describedby]="format === 'xlsx' ? 'import-xlsx-unavailable' : null"
+                >{{ format.toUpperCase()
+                }}{{ format === 'xlsx' ? ' — ' + copy.unavailable : '' }}</hlm-select-item
+              >
+            }
+          </hlm-select-content>
+        </hlm-select>
+      </div>
+      <div class="flex flex-wrap items-center gap-(--eg-space-3)">
         <button
           hlmBtn
-          [variant]="'ghost'"
-          type="button"
+          [variant]="'outline'"
+          type="submit"
           class="min-h-(--eg-control-touch) whitespace-normal"
-          (click)="store.cancel()"
+          data-import-preview
+          [attr.aria-describedby]="
+            store.work().format === 'xlsx' ? 'import-xlsx-unavailable' : null
+          "
+          [disabled]="
+            !store.work().file ||
+            store.work().format === 'xlsx' ||
+            store.work().pending ||
+            !store.retryReady() ||
+            store.work().stage === 'confirm'
+          "
         >
-          {{ copy.cancelPreview }}
+          {{ copy.preview }}
         </button>
-      }
+        @if (store.work().pending && store.work().stage === 'preview') {
+          <button
+            hlmBtn
+            [variant]="'ghost'"
+            type="button"
+            class="min-h-(--eg-control-touch) whitespace-normal"
+            (click)="store.cancel()"
+          >
+            {{ copy.cancelPreview }}
+          </button>
+        }
+      </div>
     </div>
   </form>
 } @else {
   <app-inline-feedback [title]="copy.denied" [tone]="'warning'" />
 }
-@if (!store.work().file) {
+<p id="import-xlsx-unavailable" class="m-0 text-sm text-muted-foreground wrap-anywhere">
+  {{ copy.xlsx }}
+</p>
+@if (store.work().file; as file) {
+  <section
+    #snapshot
+    tabindex="-1"
+    [attr.aria-label]="copy.snapshot"
+    class="grid min-w-0 gap-(--eg-space-3) focus-visible:outline-2 focus-visible:outline-ring"
+    data-import-snapshot
+  >
+    <app-section-header [title]="copy.snapshot" />
+    <dl class="m-0 grid min-w-0 gap-(--eg-space-3) md:grid-cols-2">
+      <div class="min-w-0">
+        <dt class="text-sm text-muted-foreground">{{ copy.file }}</dt>
+        <dd class="m-0 wrap-anywhere" data-import-filename>
+          <bdi>{{ file.name }}</bdi>
+        </dd>
+      </div>
+      <div>
+        <dt class="text-sm text-muted-foreground">{{ copy.format }}</dt>
+        <dd class="m-0">{{ store.work().format.toUpperCase() }}</dd>
+      </div>
+    </dl>
+  </section>
+} @else {
   <app-request-state [status]="'ready'" [empty]="true" [emptyTitle]="copy.noFile" />
-}
-@if (store.work().pending) {
-  <app-request-state
-    [status]="'loading'"
-    [loadingLabel]="store.work().stage === 'preview' ? copy.busy : copy.pending"
-  />
 }
 @if (store.work().error; as error) {
   <div
@@ -103,6 +128,46 @@
       [retryBusy]="store.work().pending"
       (retry)="submit(undefined, false, true)"
     />
+    @for (detail of capDetails(); track detail) {
+      <dl class="grid min-w-0 gap-(--eg-space-3) md:grid-cols-2" data-import-cap>
+        @if (detail.limit !== undefined) {
+          <div>
+            <dt>{{ copy.limit }}</dt>
+            <dd class="m-0">
+              <app-number-value [value]="detail.limit" />
+              {{
+                detail.reason === 'body_too_large'
+                  ? copy.bytes
+                  : detail.reason === 'row_limit_exceeded'
+                    ? copy.dataRows
+                    : ''
+              }}
+            </dd>
+          </div>
+        }
+        @if (detail.actual !== undefined) {
+          <div>
+            <dt>{{ copy.actual }}</dt>
+            <dd class="m-0">
+              <app-number-value [value]="detail.actual" />
+              {{
+                detail.reason === 'body_too_large'
+                  ? copy.bytes
+                  : detail.reason === 'row_limit_exceeded'
+                    ? copy.dataRows
+                    : ''
+              }}
+            </dd>
+          </div>
+        }
+      </dl>
+    }
+    @if (headerRefused()) {
+      <div class="grid min-w-0 gap-(--eg-space-2)" data-import-header-guide>
+        <p class="m-0">{{ copy.headerGuide }}</p>
+        <p class="m-0 whitespace-pre-wrap wrap-anywhere">{{ columns.join(',') }}</p>
+      </div>
+    }
   </div>
 }
 <app-form-error-summary
@@ -110,13 +175,42 @@
   [feedback]="feedback()"
   (click)="revealProblem($event)"
 />
+@if (store.work().error?.details?.length; as count) {
+  <p class="m-0" data-import-problems>{{ copy.errors }}: <app-number-value [value]="count" /></p>
+}
 @if (store.work().file) {
-  <section class="grid min-w-0 gap-(--eg-space-3)" aria-labelledby="import-preview-title">
+  <section
+    class="grid min-w-0 gap-(--eg-space-3)"
+    aria-labelledby="import-preview-title"
+    [attr.aria-busy]="store.work().pending"
+    data-import-preview-region
+  >
     <app-section-header
       [titleId]="'import-preview-title'"
       [title]="copy.previewTitle"
       [description]="copy.fromFile"
     />
+    @if (store.work().pending) {
+      <app-request-state
+        [status]="'loading'"
+        [loadingLabel]="store.work().stage === 'preview' ? copy.busy : copy.pending"
+      />
+    }
+    <p
+      class="m-0 text-sm"
+      [attr.aria-live]="'polite'"
+      aria-atomic="true"
+      data-import-preview-status
+    >
+      {{
+        store.work().report &&
+        !store.work().committed &&
+        !store.work().error &&
+        !store.work().pending
+          ? copy.previewComplete
+          : ''
+      }}
+    </p>
     @if (localMessage(); as message) {
       <app-inline-feedback [title]="message" [tone]="'info'" />
     }
@@ -125,7 +219,8 @@
     }
     <app-import-preview
       [local]="local()"
-      [report]="store.work().committed ?? store.work().report"
+      [report]="report()"
+      [applied]="store.work().committed !== null"
       [details]="store.work().error?.details ?? []"
     />
   </section>
@@ -139,44 +234,189 @@
     @if (result.batch_id; as batch) {
       <app-copyable-identifier [label]="copy.batch" [value]="batch" />
     }
-    <dl class="grid min-w-0 grid-cols-2 gap-(--eg-space-4) md:grid-cols-4">
-      <div>
-        <dt class="text-sm text-muted-foreground">{{ copy.created }}</dt>
-        <dd class="m-0"><app-number-value [value]="result.counts.created" /></dd>
-      </div>
-      <div>
-        <dt class="text-sm text-muted-foreground">{{ copy.updated }}</dt>
-        <dd class="m-0"><app-number-value [value]="result.counts.updated" /></dd>
-      </div>
-      <div>
-        <dt class="text-sm text-muted-foreground">{{ copy.restored }}</dt>
-        <dd class="m-0"><app-number-value [value]="result.counts.restored" /></dd>
-      </div>
-      <div>
-        <dt class="text-sm text-muted-foreground">{{ copy.unchanged }}</dt>
-        <dd class="m-0"><app-number-value [value]="result.counts.unchanged" /></dd>
-      </div>
-    </dl>
   </section>
-} @else if (store.canWrite()) {
+}
+@if (store.work().file && (store.work().report || store.work().committed || store.work().error)) {
+  <section hlmCard [size]="'sm'" data-import-confirm-region>
+    <div hlmCardContent class="grid min-w-0 gap-(--eg-space-4)">
+      <app-section-header
+        [title]="store.work().error ? copy.errors : copy.confirmTitle"
+        [description]="copy.confirmHint"
+      />
+      <dl class="m-0 grid min-w-0 gap-(--eg-space-4) md:grid-cols-2">
+        <div class="min-w-0">
+          <dt>{{ copy.file }}</dt>
+          <dd class="m-0 wrap-anywhere">
+            <bdi>{{ store.work().file?.name }}</bdi>
+          </dd>
+        </div>
+        <div>
+          <dt>{{ copy.format }}</dt>
+          <dd class="m-0">{{ store.work().format.toUpperCase() }}</dd>
+        </div>
+        <div class="min-w-0">
+          <dt>{{ copy.project }}</dt>
+          <dd class="m-0 wrap-anywhere">
+            <bdi>{{ session.currentProject()?.name }}</bdi>
+          </dd>
+        </div>
+        <div class="min-w-0">
+          <dt>{{ copy.prefix }}</dt>
+          <dd class="m-0 wrap-anywhere">
+            <bdi>{{ session.currentProject()?.case_prefix }}</bdi>
+          </dd>
+        </div>
+        @if (report(); as summary) {
+          @if (!store.work().error) {
+            <div>
+              <dt>{{ copy.inspected }}</dt>
+              <dd class="m-0" data-import-inspected>
+                <app-number-value [value]="summary.rows.length" />
+              </dd>
+            </div>
+          }
+        }
+      </dl>
+      @if (report(); as summary) {
+        @if (!store.work().error) {
+          <dl
+            class="m-0 grid min-w-0 grid-cols-2 gap-(--eg-space-4) md:grid-cols-4"
+            data-import-outcome-totals
+          >
+            <div>
+              <dt>{{ store.work().committed ? copy.created : copy.wouldCreate }}</dt>
+              <dd class="m-0"><app-number-value [value]="summary.counts.created" /></dd>
+            </div>
+            <div>
+              <dt>{{ store.work().committed ? copy.updated : copy.wouldUpdate }}</dt>
+              <dd class="m-0"><app-number-value [value]="summary.counts.updated" /></dd>
+            </div>
+            <div>
+              <dt>{{ store.work().committed ? copy.restored : copy.wouldRestore }}</dt>
+              <dd class="m-0"><app-number-value [value]="summary.counts.restored" /></dd>
+            </div>
+            <div>
+              <dt>{{ store.work().committed ? copy.unchanged : copy.wouldUnchanged }}</dt>
+              <dd class="m-0"><app-number-value [value]="summary.counts.unchanged" /></dd>
+            </div>
+          </dl>
+        }
+      }
+      @if (store.canWrite() && !store.work().committed) {
+        <div *appDesktopMutation class="grid min-w-0 gap-(--eg-space-3)" data-import-mutation>
+          @if (!store.canConfirm()) {
+            <p id="import-confirm-hint" class="m-0 text-sm text-muted-foreground">
+              {{ copy.blocked }}
+            </p>
+          }
+          <button
+            hlmBtn
+            type="button"
+            class="min-h-(--eg-control-touch) w-fit whitespace-normal"
+            data-import-confirm
+            [disabled]="!store.canConfirm()"
+            [attr.aria-describedby]="!store.canConfirm() ? 'import-confirm-hint' : null"
+            (click)="submit(undefined, true)"
+          >
+            {{ copy.confirm }}
+          </button>
+        </div>
+      }
+    </div>
+  </section>
+}
+@if (store.work().file && store.canReadHistory()) {
   <section
-    *appDesktopMutation
-    class="grid min-w-0 gap-(--eg-space-3) rounded-lg border bg-card p-(--eg-space-5)"
+    class="grid min-w-0 gap-(--eg-space-4)"
+    aria-labelledby="import-history-title"
+    [attr.aria-busy]="store.history.isLoading()"
+    data-import-history
   >
-    <app-section-header [title]="copy.confirmTitle" [description]="copy.confirmHint" />
-    @if (!store.canConfirm()) {
-      <p id="import-confirm-hint" class="m-0 text-sm text-muted-foreground">{{ copy.blocked }}</p>
+    <app-section-header
+      [titleId]="'import-history-title'"
+      [title]="copy.history"
+      [description]="copy.historyHint"
+    />
+    @if (store.history.isLoading()) {
+      <app-request-state [status]="'loading'" />
+    }
+    @if (history()?.error; as error) {
+      <app-request-state [status]="'error'" [error]="error" />
+    } @else if (store.history.error()) {
+      <app-inline-feedback [title]="copy.historyFailed" [tone]="'warning'" />
+    }
+    @if (history()?.page; as page) {
+      @if (page.items.length) {
+        <ol class="m-0 grid min-w-0 list-none gap-(--eg-space-5) p-0">
+          @for (version of page.items; track version.version_id) {
+            <li class="grid min-w-0 gap-(--eg-space-3)">
+              <app-revision-chip [revision]="version.version_no" [label]="copy.version" />
+              <app-copyable-identifier [value]="version.version_id" [label]="copy.version" />
+              <app-copyable-identifier [value]="version.entity_id" [label]="copy.entity" />
+              <app-copyable-identifier [value]="version.batch_id" [label]="copy.batch" />
+              <dl class="m-0 grid min-w-0 gap-(--eg-space-3) md:grid-cols-2">
+                <div>
+                  <dt>{{ copy.source }}</dt>
+                  <dd class="m-0">
+                    <bdi>{{ version.source }}</bdi>
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ copy.change }}</dt>
+                  <dd class="m-0">
+                    <bdi>{{ version.change_kind }}</bdi>
+                  </dd>
+                </div>
+                <div class="min-w-0">
+                  <dt>{{ copy.author }}</dt>
+                  <dd class="m-0">
+                    @if (version.author; as author) {
+                      <app-copyable-identifier [value]="author" [label]="copy.author" />
+                    } @else {
+                      {{ copy.notSupplied }}
+                    }
+                  </dd>
+                </div>
+                <div class="min-w-0">
+                  <dt>{{ copy.reason }}</dt>
+                  <dd class="m-0 wrap-anywhere">
+                    <bdi>{{ version.reason ?? copy.notSupplied }}</bdi>
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ copy.changedAt }}</dt>
+                  <dd class="m-0"><app-absolute-time [value]="version.created_at" /></dd>
+                </div>
+              </dl>
+            </li>
+          }
+        </ol>
+      } @else {
+        <app-request-state [status]="'ready'" [empty]="true" [emptyTitle]="copy.historyEmpty" />
+      }
+      @if (page.next_cursor) {
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          type="button"
+          class="min-h-(--eg-control-touch) w-fit whitespace-normal"
+          [disabled]="store.history.isLoading() || !store.historyRetryReady()"
+          (click)="store.olderHistory()"
+        >
+          {{ copy.historyOlder }}
+        </button>
+      }
     }
     <button
       hlmBtn
+      [variant]="'outline'"
       type="button"
       class="min-h-(--eg-control-touch) w-fit whitespace-normal"
-      data-import-confirm
-      [disabled]="!store.canConfirm()"
-      [attr.aria-describedby]="!store.canConfirm() ? 'import-confirm-hint' : null"
-      (click)="submit(undefined, true)"
+      data-history-refresh
+      [disabled]="store.history.isLoading() || !store.historyRetryReady()"
+      (click)="store.refreshHistory()"
     >
-      {{ copy.confirm }}
+      {{ store.historyCursor() ? copy.historyLatest : copy.historyRefresh }}
     </button>
   </section>
 }

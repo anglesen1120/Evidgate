@@ -17,11 +17,7 @@ const report = {
 const BASE_URL = `${location.origin}${API_BASE_PATH}`;
 const JSON_HEADERS = new HttpHeaders({ 'Content-Type': 'application/json' });
 
-/**
- * Drives the production chain (`provideApi` → interceptors → SDK client → adapter) over Angular's
- * testing backend. The adapter forwards a textual body as the exact characters the caller sent,
- * so the recorded `HttpRequest.body` is where "the original bytes were sent" is asserted.
- */
+/** Exercises the configured SDK/interceptor chain with textual CSV/JSON uploads. */
 describe('ImportExportDataService', () => {
   let http: HttpTestingController;
   let service: ImportExportDataService;
@@ -48,7 +44,7 @@ describe('ImportExportDataService', () => {
     );
   }
 
-  it('sends the exact original file bytes with explicit dry_run=true and the intent key', async () => {
+  it('sends the original CSV text with explicit dry_run=true and the preview intent key', async () => {
     const file = new File(['kind,key\r\nnode,n1'], 'source.csv');
     const call = service.importFile('project', file, 'csv', true, 'intent-one');
     const pending = await takeRequest('/authoring/import');
@@ -60,18 +56,42 @@ describe('ImportExportDataService', () => {
     await call;
   });
 
-  it('sends dry_run=false only when the caller explicitly confirms with the same key', async () => {
+  it('forwards the distinct caller-provided preview and commit keys with their dry_run intent', async () => {
     const file = new File(['{}'], 'source.json');
     for (const dryRun of [true, false]) {
-      const call = service.importFile('project', file, 'json', dryRun, 'same-intent');
+      const key = dryRun ? 'preview-intent' : 'commit-intent';
+      const call = service.importFile('project', file, 'json', dryRun, key);
       const pending = await takeRequest('/authoring/import');
       expect(new URL(pending.request.urlWithParams).searchParams.get('dry_run')).toBe(
         String(dryRun),
       );
-      expect(pending.request.headers.get('Idempotency-Key')).toBe('same-intent');
+      expect(pending.request.headers.get('Idempotency-Key')).toBe(key);
       pending.flush(JSON.stringify(report));
       await call;
     }
+  });
+
+  it('never sends an XLSX import, even if a caller bypasses the unavailable option', async () => {
+    await expect(
+      service.importFile('project', new File(['PK'], 'file.xlsx'), 'xlsx', true, 'key'),
+    ).rejects.toMatchObject({ error: { kind: 'validation', code: 'format_unavailable' } });
+    await expect(
+      service.importFile('project', new File(['PK'], 'file.xlsx'), 'csv', true, 'key'),
+    ).rejects.toMatchObject({ error: { kind: 'validation', code: 'format_unavailable' } });
+    http.expectNone((request) => request.url.includes('/authoring/import'));
+  });
+
+  it('reads authorized project import history through the SDK without a fabricated actor or version', async () => {
+    const call = service.listVersions('project');
+    const pending = await takeRequest('/authoring/versions');
+    expect(pending.request.method).toBe('GET');
+    expect([...new URL(pending.request.urlWithParams).searchParams]).toEqual([
+      ['source', 'import'],
+      ['limit', '50'],
+    ]);
+    expect(pending.request.headers.has('Idempotency-Key')).toBe(false);
+    pending.flush(JSON.stringify({ items: [], next_cursor: null }), { headers: JSON_HEADERS });
+    expect(await call).toEqual({ items: [], next_cursor: null });
   });
 
   it('exports exactly the chosen format, node and included kinds and keeps the server filename', async () => {

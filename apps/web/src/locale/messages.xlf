@@ -9890,13 +9890,13 @@
       <trans-unit id="authoring.import-export.export-tab" datatype="html"><source>Export</source></trans-unit>
       <trans-unit id="authoring.import-export.intake" datatype="html"><source>File and target</source></trans-unit>
       <trans-unit id="authoring.import-export.file" datatype="html"><source>Source file</source></trans-unit>
-      <trans-unit id="authoring.import-export.limits" datatype="html"><source>CSV, JSON or XLSX. The server accepts at most 5 MiB and 5,000 data rows. File selection is not validation.</source></trans-unit>
+      <trans-unit id="authoring.import-export.limits" datatype="html"><source>CSV or JSON. The server accepts at most 5 MiB and 5,000 data rows. File selection is not validation.</source></trans-unit>
       <trans-unit id="authoring.import-export.format" datatype="html"><source>Format</source></trans-unit>
       <trans-unit id="authoring.import-export.preview" datatype="html"><source>Preview without importing</source></trans-unit>
       <trans-unit id="authoring.import-export.preview-title" datatype="html"><source>Preview rows</source></trans-unit>
       <trans-unit id="authoring.import-export.from-file" datatype="html"><source>From your file, not validated. Row identity, status and totals come only from the server.</source></trans-unit>
       <trans-unit id="authoring.import-export.no-file" datatype="html"><source>No file has been selected for import.</source></trans-unit>
-      <trans-unit id="authoring.import-export.xlsx" datatype="html"><source>XLSX cell text is not available without a spreadsheet parser. Server rows are shown after preview; no parser dependency is added.</source></trans-unit>
+      <trans-unit id="authoring.import-export.xlsx" datatype="html"><source>XLSX is unavailable because this client cannot transfer spreadsheet files. Use CSV or JSON; no XLSX request is sent.</source></trans-unit>
       <trans-unit id="authoring.import-export.local-unreadable" datatype="html"><source>Local preview could not read this file. The original file can still be sent for server validation.</source></trans-unit>
       <trans-unit id="authoring.import-export.display-cap" datatype="html"><source>Local display stops at the server's 5,000-row cap. No rows are removed from the upload; the server validates the original file.</source></trans-unit>
       <trans-unit id="authoring.import-export.busy" datatype="html"><source>Previewing rows; no version has been created.</source></trans-unit>
@@ -9950,6 +9950,10 @@
       <trans-unit id="authoring.import-export.export-denied" datatype="html"><source>You do not have permission to export from this project. No file was created.</source></trans-unit>
       <trans-unit id="authoring.import-export.scope-mismatch" datatype="html"><source>This credential is scoped to another project. Use a credential permitted for this exact project; no rows were imported and no file was exported.</source></trans-unit>
       <trans-unit id="authoring.import-export.empty-export" datatype="html"><source>This export scope is empty. No file was downloaded; choose another scope explicitly.</source></trans-unit>
+      <trans-unit id="authoring.import-export.no-scope" datatype="html"><source>No scope</source></trans-unit>
+      <trans-unit id="authoring.import-export.xlsx-option" datatype="html"><source>XLSX — unavailable</source></trans-unit>
+      <trans-unit id="authoring.import-export.xlsx-unavailable" datatype="html"><source>XLSX export is unavailable: the current transport carries text only, so no workbook is requested. Choose CSV or JSON.</source></trans-unit>
+      <trans-unit id="authoring.import-export.narrow-notice" datatype="html"><source>Desktop required to change the export scope. Downloading the scope shown is still available.</source></trans-unit>
       <trans-unit id="authoring.import-export.reason.unknown-parent" datatype="html"><source>The parent must name an earlier node of the required kind.</source></trans-unit>
       <trans-unit id="authoring.import-export.reason.orphan-row" datatype="html"><source>The row has no valid owning item or node.</source></trans-unit>
       <trans-unit id="authoring.import-export.reason.duplicate-key" datatype="html"><source>This file-local key is duplicated. All rows are retained; nothing was imported.</source></trans-unit>
@@ -9960,7 +9964,7 @@
       <trans-unit id="authoring.import-export.reason.unsupported-format" datatype="html"><source>The file structure, CSV header or chosen format is not supported.</source></trans-unit>
       <trans-unit id="authoring.import-export.reason.unknown" datatype="html"><source>This file could not be processed.</source></trans-unit>
       <trans-unit id="authoring.import-export.failure.size" datatype="html"><source>The file exceeds the allowed limit of 5 MiB or 5,000 data rows. Nothing was imported.</source></trans-unit>
-      <trans-unit id="authoring.import-export.failure.conflict" datatype="html"><source>This intent key belongs to a different file. Select the original file or start a new import intent. Nothing was retried automatically.</source></trans-unit>
+      <trans-unit id="authoring.import-export.failure.conflict" datatype="html"><source>This intent key belongs to a different request. Select the original file and format or start a new import intent. Nothing was retried automatically.</source></trans-unit>
       <trans-unit id="authoring.import-export.failure.wait" datatype="html"><source>The server is busy. Wait as directed by Retry-After, then retry explicitly. Your file is retained.</source></trans-unit>
       <trans-unit id="authoring.import-export.failure.sign-in" datatype="html"><source>Sign in again before retrying. No request is sent automatically after sign-in.</source></trans-unit>
       <trans-unit id="authoring.import-export.failure.not-found" datatype="html"><source>This project or node was not found. No file is available.</source></trans-unit>
@@ -10042,6 +10046,48 @@
       <trans-unit id="authoring.ai-settings.stale" datatype="html"><source>Refresh failed. Previously loaded settings and your unsaved draft are retained.</source></trans-unit>
       <trans-unit id="authoring.ai-settings.cursor-cycle" datatype="html"><source>The server repeated a page cursor. Return to the first page to retry.</source></trans-unit>
       <trans-unit id="authoring.ai-settings.compare-reason" datatype="html"><source>View a version before choosing a second version to compare.</source></trans-unit>
+      <trans-unit id="authoring.import-export.would-create" datatype="html"><source>Would create</source></trans-unit>
+      <trans-unit id="authoring.import-export.would-update" datatype="html"><source>Would update</source></trans-unit>
+      <trans-unit id="authoring.import-export.would-restore" datatype="html"><source>Would restore</source></trans-unit>
+      <trans-unit id="authoring.import-export.would-unchanged" datatype="html"><source>Would remain unchanged</source></trans-unit>
+      <trans-unit id="authoring.import-export.preview-complete" datatype="html"><source>Preview complete — not applied. Review the validated scope before confirming.</source></trans-unit>
+      <trans-unit id="authoring.import-export.inspected" datatype="html"><source>Inspected rows</source></trans-unit>
+      <trans-unit id="authoring.import-export.snapshot" datatype="html"><source>Selected file and format</source></trans-unit>
+      <trans-unit id="authoring.import-export.unavailable" datatype="html"><source>Unavailable</source></trans-unit>
+      <trans-unit id="authoring.import-export.header-guide" datatype="html"><source>Correct the CSV header to these thirteen contract columns, in this order:</source></trans-unit>
+      <trans-unit id="authoring.import-export.limit" datatype="html"><source>Server limit</source></trans-unit>
+      <trans-unit id="authoring.import-export.actual" datatype="html"><source>Measured value</source></trans-unit>
+      <trans-unit id="authoring.import-export.bytes" datatype="html"><source>bytes</source></trans-unit>
+      <trans-unit id="authoring.import-export.data-rows" datatype="html"><source>data rows</source></trans-unit>
+      <trans-unit id="authoring.import-export.history" datatype="html"><source>Authoring versions</source></trans-unit>
+      <trans-unit id="authoring.import-export.history-hint" datatype="html"><source>Latest import versions in this project, up to 50 per page. Version numbers belong to each entity. Only this authorized history read confirms a version.</source></trans-unit>
+      <trans-unit id="authoring.import-export.history-failed" datatype="html"><source>Version history could not be loaded. The file and preview remain available.</source></trans-unit>
+      <trans-unit id="authoring.import-export.history-stale" datatype="html"><source>Version history is stale because its refresh failed. The file and preview remain available.</source></trans-unit>
+      <trans-unit id="authoring.import-export.history-empty" datatype="html"><source>No import versions were returned for this project.</source></trans-unit>
+      <trans-unit id="authoring.import-export.history-refresh" datatype="html"><source>Refresh version history</source></trans-unit>
+      <trans-unit id="authoring.import-export.history-older" datatype="html"><source>Older import versions</source></trans-unit>
+      <trans-unit id="authoring.import-export.history-latest" datatype="html"><source>Latest import versions</source></trans-unit>
+      <trans-unit id="authoring.import-export.version" datatype="html"><source>Entity version</source></trans-unit>
+      <trans-unit id="authoring.import-export.entity" datatype="html"><source>Entity</source></trans-unit>
+      <trans-unit id="authoring.import-export.source" datatype="html"><source>Source</source></trans-unit>
+      <trans-unit id="authoring.import-export.author" datatype="html"><source>Author</source></trans-unit>
+      <trans-unit id="authoring.import-export.reason" datatype="html"><source>Reason</source></trans-unit>
+      <trans-unit id="authoring.import-export.not-supplied" datatype="html"><source>Not supplied</source></trans-unit>
+      <trans-unit id="authoring.import-export.changed-at" datatype="html"><source>Created at</source></trans-unit>
+      <trans-unit id="authoring.import-export.change" datatype="html"><source>Change</source></trans-unit>
+      <trans-unit id="authoring.import-export.field-key" datatype="html"><source>File-local key</source></trans-unit>
+      <trans-unit id="authoring.import-export.field-parent-key" datatype="html"><source>Parent key</source></trans-unit>
+      <trans-unit id="authoring.import-export.field-item-key" datatype="html"><source>Owning item key</source></trans-unit>
+      <trans-unit id="authoring.import-export.field-node-kind" datatype="html"><source>Node kind</source></trans-unit>
+      <trans-unit id="authoring.import-export.field-title" datatype="html"><source>Title</source></trans-unit>
+      <trans-unit id="authoring.import-export.field-description" datatype="html"><source>Description</source></trans-unit>
+      <trans-unit id="authoring.import-export.field-precondition" datatype="html"><source>Precondition</source></trans-unit>
+      <trans-unit id="authoring.import-export.field-steps" datatype="html"><source>Action and expected-result steps</source></trans-unit>
+      <trans-unit id="authoring.import-export.field-priority" datatype="html"><source>Priority</source></trans-unit>
+      <trans-unit id="authoring.import-export.field-state" datatype="html"><source>State</source></trans-unit>
+      <trans-unit id="authoring.import-export.field-code" datatype="html"><source>Case code</source></trans-unit>
+      <trans-unit id="authoring.import-export.field-position" datatype="html"><source>Position</source></trans-unit>
+      <trans-unit id="authoring.import-export.row-field-label" datatype="html"><source>Row <x id="INDEX" equiv-text="detail.index"/> — <x id="FIELD" equiv-text="importFieldLabel(detail.path)"/></source></trans-unit>
     </body>
   </file>
 </xliff>

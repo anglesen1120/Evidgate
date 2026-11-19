@@ -17,7 +17,8 @@ import { createRetryAfterWait } from '../../../core/http/retry';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { ImportExportDataService, type AuthoringDownload } from './import-export-data.service';
 import { AUTHORING_READ, IMPEX_COPY, importFailure } from './import-export.copy';
-import type { AuthoringFormat } from './local-file-preview';
+import { EXPORT_COPY } from './export.copy';
+import { exportedCsvRows, exportedJsonRows, type AuthoringFormat } from './local-file-preview';
 
 type ExportKind = 'nodes' | 'items' | 'cases';
 export interface ExportDraft {
@@ -38,6 +39,17 @@ const DEFAULT: ExportDraft = {
   kinds: ['nodes', 'items', 'cases'],
 };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Whether the served file holds no data rows. Every serializer writes a non-empty file for an
+ * empty scope, so the row count decides; an unreadable count or a workbook never claims emptiness.
+ */
+async function emptyScope(file: AuthoringDownload, format: AuthoringFormat): Promise<boolean> {
+  if (format === 'xlsx') return false;
+  const text = await file.blob.text();
+  const rows = format === 'json' ? exportedJsonRows(text) : exportedCsvRows(text);
+  return rows === 0;
+}
 
 /**
  * A stable, order-independent identity for the route's query parameters. `ParamMap.toString()`
@@ -110,14 +122,18 @@ export const ExportStore = signalStore(
         return IMPEX_COPY.selectionUnavailable;
       if (draft.scope === 'node' && !draft.nodeId.trim()) return IMPEX_COPY.noNode;
       if (draft.scope === 'node' && !UUID.test(draft.nodeId)) return IMPEX_COPY.nodeInvalid;
+      if (draft.format === 'xlsx') return EXPORT_COPY.xlsxUnavailable;
       if (!draft.kinds.length) return IMPEX_COPY.noKinds;
       return null;
     }),
-    scopeLabel: computed(() =>
-      store.draft().scope === 'node'
-        ? `${IMPEX_COPY.nodeScope}: ${store.draft().nodeId}`
-        : `${IMPEX_COPY.projectScope}: ${store._session.currentProject()?.name ?? ''}`,
-    ),
+    scopeLabel: computed(() => {
+      const draft = store.draft(),
+        project = store._session.currentProject()?.name ?? '';
+      if (draft.scope === 'project') return `${IMPEX_COPY.projectScope}: ${project}`;
+      if (draft.scope === 'node')
+        return `${IMPEX_COPY.nodeScope}: ${draft.nodeId.trim() || EXPORT_COPY.noScope}`;
+      return `${EXPORT_COPY.noScope}: ${IMPEX_COPY.selectionUnavailable}`;
+    }),
   })),
   withComputed((store) => ({
     query: computed<ExportAuthoringData['query'] | null>(() => {
@@ -210,9 +226,10 @@ export const ExportStore = signalStore(
             confirmation.query,
             active.signal,
           );
+          const empty = await emptyScope(file, confirmation.query.format);
           if (!owns() || !store.canRead()) return null;
-          patchState(store, { completedScope: confirmation.label, empty: file.blob.size === 0 });
-          return file.blob.size === 0 ? null : file;
+          patchState(store, { completedScope: confirmation.label, empty });
+          return empty ? null : file;
         } catch (cause) {
           if (!owns()) return null;
           const error: ApiError = isApiRequestError(cause)

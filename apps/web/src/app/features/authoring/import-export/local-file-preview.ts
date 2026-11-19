@@ -49,13 +49,16 @@ function jsonRows(text: string): LocalPreview {
   return { rows, issue: source.length > IMPORT_ROW_CAP ? 'display-cap' : null };
 }
 
-// Display-only scanner: quoted newlines and doubled quotes are data, not row boundaries.
+// Display-only scanner: quoted newlines and doubled quotes are data, not row boundaries. A blank
+// line carries no record, so it neither gets an index nor shifts the ones after it (the server's
+// CSV index skips it the same way).
 function csvRows(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [],
     cell = '',
     quoted = false,
-    closed = false;
+    closed = false,
+    sawQuote = false;
   for (let index = 0; index < text.length; index++) {
     const character = text[index];
     if (quoted) {
@@ -67,14 +70,17 @@ function csvRows(text: string): string[][] {
         quoted = false;
         closed = true;
       }
-    } else if (character === '"' && cell === '' && !closed) quoted = true;
-    else if (character === ',' || character === '\r' || character === '\n') {
+    } else if (character === '"' && cell === '' && !closed) {
+      quoted = true;
+      sawQuote = true;
+    } else if (character === ',' || character === '\r' || character === '\n') {
       row.push(cell);
       cell = '';
       closed = false;
       if (character !== ',') {
-        rows.push(row);
+        if (row.length > 1 || row[0] !== '' || sawQuote) rows.push(row);
         row = [];
+        sawQuote = false;
         if (character === '\r' && text[index + 1] === '\n') index++;
         if (rows.length > IMPORT_ROW_CAP + 1) return rows;
       }
@@ -107,5 +113,29 @@ export function parseLocalPreview(text: string, format: AuthoringFormat): LocalP
     return format === 'json' ? jsonRows(text) : csvPreview(text);
   } catch {
     return { rows: [], issue: 'unreadable' };
+  }
+}
+
+/**
+ * Data rows in a serialized export, or `null` when the text cannot be read. An empty scope is
+ * still a non-empty file (a `rows: []` envelope, a CSV header), so the download guards on this
+ * count rather than on the file's byte length.
+ */
+export function exportedJsonRows(text: string): number | null {
+  try {
+    const document: unknown = JSON.parse(text);
+    return record(document) && Array.isArray(document['rows']) ? document['rows'].length : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Logical CSV records after the header; blank lines are not records; `null` when unreadable. */
+export function exportedCsvRows(text: string): number | null {
+  try {
+    const [, ...records] = csvRows(text.replace(/^\uFEFF/, ''));
+    return records.length;
+  } catch {
+    return null;
   }
 }

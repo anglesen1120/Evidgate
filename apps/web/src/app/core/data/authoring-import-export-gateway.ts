@@ -16,10 +16,30 @@ export interface AuthoringExportFile {
 }
 
 /**
- * The only filename the export route sends (`authoring-export.<format>`). A caller-supplied name
+ * The only filenames the export route sends (`authoring-export.<format>`). A caller-supplied name
  * is never accepted: the server decides it, so a download cannot be steered by query data.
  */
-const SERVER_FILENAME = /^attachment;\s*filename="(authoring-export\.(?:csv|json|xlsx))"$/i;
+const SERVER_FILENAME = /^authoring-export\.(?:csv|json|xlsx)$/;
+const FILENAME_PARAMETER = /^\s*filename\s*=\s*(?:"([^"]*)"|([^";\s]+))\s*$/;
+
+/**
+ * `Results.Stream` writes `attachment; filename=<name>; filename*=UTF-8''<name>`, and the bare
+ * name is a token rather than a quoted string. Read the parameters instead of the whole header,
+ * accept one `filename` value, and refuse anything that is not the fixed name.
+ */
+function serverFilename(disposition: string | null): string | null {
+  if (!disposition || /[\r\n]/.test(disposition)) return null;
+  const [type, ...parameters] = disposition.split(';');
+  if (type?.trim().toLowerCase() !== 'attachment') return null;
+  let found: string | null = null;
+  for (const parameter of parameters) {
+    const match = FILENAME_PARAMETER.exec(parameter);
+    if (!match) continue;
+    if (found !== null) return null;
+    found = match[1] ?? match[2] ?? '';
+  }
+  return found !== null && SERVER_FILENAME.test(found) ? found : null;
+}
 
 @Injectable({ providedIn: 'root' })
 export class AuthoringImportExportGateway {
@@ -42,8 +62,7 @@ export class AuthoringImportExportGateway {
     // The same generator chooses the JSON response type even for parseAs: 'blob'. Narrow the
     // actual value rather than asserting that wire bytes match that generated JSON DTO.
     const blob: unknown = result.data;
-    const disposition = result.headers.get('Content-Disposition');
-    const filename = disposition ? SERVER_FILENAME.exec(disposition)?.[1] : undefined;
+    const filename = serverFilename(result.headers.get('Content-Disposition'));
     if (!(blob instanceof Blob) || !filename)
       throw new Error('Export response is missing its file or fixed server filename');
     return { blob, filename };

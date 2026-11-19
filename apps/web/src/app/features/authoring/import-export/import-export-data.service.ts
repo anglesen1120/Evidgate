@@ -9,21 +9,28 @@ import {
   AuthoringImportExportGateway,
   type AuthoringExportFile,
 } from '../../../core/data/authoring-import-export-gateway';
+import { AuthoringVersionsDataService } from '../../../core/data/authoring-versions-data.service';
+import { ApiRequestError } from '../../../core/http/api-error';
 import { ApiGateway } from '../../../core/http/api-gateway';
 import type { AuthoringFormat } from './local-file-preview';
+import { IMPEX_COPY } from './import-export.copy';
 
 export type ExportQuery = ExportAuthoringData['query'];
 export type AuthoringDownload = AuthoringExportFile;
-const MEDIA_TYPE: Readonly<Record<AuthoringFormat, string>> = {
+const MEDIA_TYPE: Readonly<Record<'csv' | 'json', string>> = {
   csv: 'text/csv',
   json: 'application/json',
-  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 };
 
 @Injectable()
 export class ImportExportDataService {
   private readonly gateway = inject(ApiGateway);
   private readonly authoring = inject(AuthoringImportExportGateway);
+  private readonly versions = inject(AuthoringVersionsDataService);
+
+  listVersions(project: string, signal?: AbortSignal, cursor?: string) {
+    return this.versions.list(project, signal, cursor);
+  }
 
   importFile(
     project: string,
@@ -33,8 +40,21 @@ export class ImportExportDataService {
     key: string,
     signal?: AbortSignal,
   ) {
-    // The generated multi-media operation types only its JSON body. The configured SDK client
-    // still owns URL serialization, XSRF/interceptors and error mapping; its raw serializer sends the file unchanged.
+    if (format === 'xlsx' || file.name.toLowerCase().endsWith('.xlsx'))
+      return Promise.reject(
+        new ApiRequestError({
+          kind: 'validation',
+          status: 422,
+          code: 'format_unavailable',
+          message: IMPEX_COPY.xlsx,
+          requestId: null,
+          retryable: false,
+          retryAfterSeconds: null,
+          details: [{ path: '/format', reason: 'unsupported_format' }],
+        }),
+      );
+    // The generated multi-media operation types only its JSON body. CSV/JSON use the existing
+    // text SDK transport; XLSX is refused above without sending a request.
     const url: ImportAuthoringData['url'] = '/projects/{p}/authoring/import';
     return this.gateway.call((client) =>
       client.post<ImportAuthoringResponses, ImportAuthoringErrors>({

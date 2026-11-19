@@ -7,6 +7,8 @@ import {
   importFailure,
   importReason,
   safeImportPath,
+  importFieldLabel,
+  importProblemTarget,
 } from './import-export.copy';
 
 describe('authoring import/export typed refusal presentation', () => {
@@ -44,7 +46,7 @@ describe('authoring import/export typed refusal presentation', () => {
   for (const [kind, text] of [
     ['payload_too_large', '5 MiB or 5,000'],
     ['validation', 'Remaining rows are unverified'],
-    ['idempotency_conflict', 'different file'],
+    ['idempotency_conflict', 'different request'],
     ['forbidden', 'permission'],
     ['rate_limited', 'Retry-After'],
     ['unavailable', 'Retry-After'],
@@ -63,5 +65,12 @@ describe('authoring import/export typed refusal presentation', () => {
     expect(safeImportPath('/REFUSED PRIVATE CELL')).toBe('/file');
     expect(safeImportPath('/header')).toBe('/header');
     expect(safeImportPath('/steps')).toBe('/steps');
+  });
+  it('labels field-specific error links without presenting raw wire paths as localized labels', () => {
+    expect(importFieldLabel('/title')).toBe('Title');
+    expect(importFieldLabel('/steps')).toBe('Action and expected-result steps');
+    expect(importProblemTarget(2, '/steps')).toBe('import-row-2-steps');
+    expect(importProblemTarget(2, '/PRIVATE REFUSED CELL')).toBe('import-row-2-status');
+    expect(importFieldLabel('/PRIVATE REFUSED CELL')).toBe(IMPEX_COPY.file);
   });
 });

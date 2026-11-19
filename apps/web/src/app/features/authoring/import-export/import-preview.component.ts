@@ -9,6 +9,7 @@ import {
   input,
   TemplateRef,
   viewChild,
+  viewChildren,
 } from '@angular/core';
 import type { ErrorEnvelopeDetail, ImportResponse, ImportRowDto } from '@evidgate/sdk';
 import { DataTableComponent } from '../../../shared/ui/data-table/data-table.component';
@@ -17,15 +18,21 @@ import type {
   DataTableCellContext,
 } from '../../../shared/ui/data-table/data-table-column';
 import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
-import { IMPORT_COLUMNS, type LocalPreview, type LocalPreviewRow } from './local-file-preview';
-import { IMPEX_COPY, importReason, safeImportPath } from './import-export.copy';
+import { IMPORT_COLUMNS, type LocalPreview } from './local-file-preview';
+import {
+  IMPEX_COPY,
+  IMPORT_FIELD_LABELS,
+  importReason,
+  importProblemTarget,
+  safeImportPath,
+} from './import-export.copy';
 
+type ImportColumn = (typeof IMPORT_COLUMNS)[number];
 interface PreviewRow {
   readonly index: number;
-  readonly local?: LocalPreviewRow;
   readonly server?: ImportRowDto;
-  readonly problems: readonly ErrorEnvelopeDetail[];
-  readonly content: string;
+  readonly cells: Readonly<Record<ImportColumn, string>>;
+  readonly errors: ReadonlyMap<string, string>;
   readonly status: string;
 }
 
@@ -35,18 +42,50 @@ interface PreviewRow {
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
-    <ng-template #contentCell let-row>
-      <span [attr.aria-describedby]="row.problems.length ? 'import-row-' + row.index : null">
-        <app-data-table-value [value]="row.content" [fixedRow]="true" />
-      </span>
-    </ng-template>
-    <ng-template #statusCell let-row>
+    @for (field of fields; track field) {
+      <ng-template #fieldCell let-row let-stacked="stacked">
+        <div
+          [id]="'import-row-' + row.index + '-' + field"
+          tabindex="-1"
+          [attr.aria-label]="labels[field]"
+          [attr.aria-describedby]="
+            row.errors.has(field) ? 'import-row-' + row.index + '-' + field + '-error' : null
+          "
+          class="grid min-w-0 gap-(--eg-space-2) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          @if (fixedRows() && !stacked) {
+            <app-data-table-value
+              [value]="
+                row.cells[field] + (row.errors.has(field) ? ' — ' + row.errors.get(field) : '')
+              "
+              [fixedRow]="true"
+            />
+            @if (row.errors.get(field); as error) {
+              <span [id]="'import-row-' + row.index + '-' + field + '-error'" class="sr-only">{{
+                error
+              }}</span>
+            }
+          } @else {
+            <app-data-table-value [value]="row.cells[field]" />
+            @if (row.errors.get(field); as error) {
+              <p
+                [id]="'import-row-' + row.index + '-' + field + '-error'"
+                class="m-0 whitespace-pre-wrap wrap-anywhere"
+              >
+                {{ error }}
+              </p>
+            }
+          }
+        </div>
+      </ng-template>
+    }
+    <ng-template #statusCell let-row let-stacked="stacked">
       <span
-        [id]="'import-row-' + row.index"
+        [id]="'import-row-' + row.index + '-status'"
         tabindex="-1"
         class="block min-w-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
-        <app-data-table-value [value]="row.status" [fixedRow]="true" />
+        <app-data-table-value [value]="row.status" [fixedRow]="fixedRows() && !stacked" />
       </span>
     </ng-template>
     <app-data-table
@@ -54,7 +93,6 @@ interface PreviewRow {
       [columns]="columns()"
       [rowId]="rowId"
       [caption]="copy.previewTitle"
-      [fitToContainer]="true"
       [fixedHeightCells]="true"
     />
   `,
@@ -65,17 +103,20 @@ export class ImportPreviewComponent {
   readonly local = input<LocalPreview | null>(null);
   readonly report = input<ImportResponse | null>(null);
   readonly details = input<readonly ErrorEnvelopeDetail[]>([]);
+  readonly applied = input(false);
   protected readonly copy = IMPEX_COPY;
+  protected readonly fields = IMPORT_COLUMNS;
+  protected readonly labels = IMPORT_FIELD_LABELS;
   private readonly table = viewChild.required(DataTableComponent<PreviewRow>);
-  private readonly contentCell =
-    viewChild.required<TemplateRef<DataTableCellContext<PreviewRow>>>('contentCell');
+  private readonly fieldCells =
+    viewChildren<TemplateRef<DataTableCellContext<PreviewRow>>>('fieldCell');
   private readonly statusCell =
     viewChild.required<TemplateRef<DataTableCellContext<PreviewRow>>>('statusCell');
   protected readonly rowId = (row: PreviewRow): number => row.index;
+  protected readonly fixedRows = computed(() => this.rows().length > 200);
   protected readonly rows = computed<readonly PreviewRow[]>(() => {
-    const localRows = this.local()?.rows ?? [];
     const reports = new Map(this.report()?.rows.map((row) => [row.index, row]));
-    const locals = new Map(localRows.map((row) => [row.index, row]));
+    const locals = new Map(this.local()?.rows.map((row) => [row.index, row]));
     const problems = new Map<number, ErrorEnvelopeDetail[]>();
     for (const detail of this.details()) {
       if (typeof detail.index !== 'number') continue;
@@ -87,66 +128,71 @@ export class ImportPreviewComponent {
     return [...indices]
       .sort((a, b) => a - b)
       .map((index) => {
-        const local = locals.get(index),
-          server = reports.get(index),
-          issues = problems.get(index) ?? [];
-        const content = local
-          ? IMPORT_COLUMNS.map((column) => {
-              const value = issues.some((issue) => issue.path === '/' + column)
-                ? IMPEX_COPY.withheld
-                : local.cells[column];
-              return value ? `${column}: ${value}` : '';
-            })
-              .filter(Boolean)
-              .join('\n')
-          : IMPEX_COPY.xlsx;
-        const outcomes = {
-          create: IMPEX_COPY.created,
-          update: IMPEX_COPY.updated,
-          restore: IMPEX_COPY.restored,
-          unchanged: IMPEX_COPY.unchanged,
-        };
-        const status = issues.length
-          ? issues
-              .map((issue) => `${safeImportPath(issue.path)}: ${importReason(issue.reason)}`)
-              .join('\n')
-          : server
-            ? outcomes[server.outcome]
-            : IMPEX_COPY.unverified;
+        const local = locals.get(index);
+        const server = reports.get(index);
+        const errors = new Map<string, string>();
+        for (const issue of problems.get(index) ?? []) {
+          const field = safeImportPath(issue.path).slice(1);
+          errors.set(
+            field,
+            [errors.get(field), importReason(issue.reason)].filter(Boolean).join('; '),
+          );
+        }
+        const cells = Object.fromEntries(
+          IMPORT_COLUMNS.map((column) => [
+            column,
+            errors.has(column)
+              ? IMPEX_COPY.withheld
+              : local?.cells[column] || IMPEX_COPY.notSupplied,
+          ]),
+        ) as Record<ImportColumn, string>;
+        const outcomes = this.applied()
+          ? {
+              create: IMPEX_COPY.created,
+              update: IMPEX_COPY.updated,
+              restore: IMPEX_COPY.restored,
+              unchanged: IMPEX_COPY.unchanged,
+            }
+          : {
+              create: IMPEX_COPY.wouldCreate,
+              update: IMPEX_COPY.wouldUpdate,
+              restore: IMPEX_COPY.wouldRestore,
+              unchanged: IMPEX_COPY.wouldUnchanged,
+            };
         return {
           index,
-          ...(local ? { local } : {}),
           ...(server ? { server } : {}),
-          problems: issues,
-          content,
-          status,
+          cells,
+          errors,
+          status: errors.size
+            ? IMPEX_COPY.errors
+            : server
+              ? outcomes[server.outcome]
+              : IMPEX_COPY.unverified,
         };
       });
   });
   protected readonly columns = computed<readonly DataTableColumn<PreviewRow>[]>(() => [
     { id: 'index', header: this.copy.row, cell: (row) => row.index, role: 'number', align: 'end' },
     {
-      id: 'kind',
-      header: this.copy.kind,
-      cell: (row) => row.server?.kind ?? this.copy.unverified,
-      role: 'status',
-    },
-    {
       id: 'identity',
       header: this.copy.identity,
       cell: (row) =>
         row.server
-          ? [row.server.key, row.server.code].filter(Boolean).join(' · ')
+          ? [row.server.kind, row.server.key, row.server.code].filter(Boolean).join(' · ')
           : this.copy.unverified,
       role: 'identity',
     },
-    {
-      id: 'content',
-      header: this.copy.content,
-      cell: (row) => row.content,
-      role: 'text',
-      cellTemplate: this.contentCell(),
-    },
+    ...IMPORT_COLUMNS.map((column, index): DataTableColumn<PreviewRow> => {
+      const template = this.fieldCells()[index];
+      return {
+        id: column,
+        header: `${IMPORT_FIELD_LABELS[column]} (${column})`,
+        cell: (row) => row.cells[column],
+        role: 'text',
+        ...(template ? { cellTemplate: template } : {}),
+      };
+    }),
     {
       id: 'status',
       header: this.copy.status,
@@ -156,10 +202,10 @@ export class ImportPreviewComponent {
     },
   ]);
 
-  reveal(index: number): void {
+  reveal(index: number, path?: string): void {
     const position = this.rows().findIndex((row) => row.index === index);
     this.table().revealRow(position);
-    afterNextRender(() => this.document.getElementById('import-row-' + index)?.focus(), {
+    afterNextRender(() => this.document.getElementById(importProblemTarget(index, path))?.focus(), {
       injector: this.injector,
     });
   }

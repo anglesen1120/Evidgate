@@ -78,7 +78,7 @@ for (const locale of LOCALES) {
           expect(
             new URL(imported[1]!.url, 'https://example.test').searchParams.get('dry_run'),
           ).toBe('false');
-          expect(imported[1]!.headers['idempotency-key']).toEqual(
+          expect(imported[1]!.headers['idempotency-key']).not.toEqual(
             imported[0]!.headers['idempotency-key'],
           );
           await expect(page.locator('[data-import-success]')).toContainText(
@@ -204,5 +204,22 @@ for (const locale of LOCALES) {
       locale === 'vi' ? 'nhỏ hơn' : 'smaller node scope',
     );
     await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+
+  test(`XLSX export is announced unavailable and stays unselectable (${locale})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(localePath(locale, base));
+    await page.locator('[data-impex-export-tab]').click();
+    await expect(page.locator('[data-export-xlsx-reason]')).toBeVisible();
+    await page.locator('#authoring-export-format').click();
+    const xlsx = page.getByRole('option', { name: /XLSX/ });
+    await expect(xlsx).toHaveAttribute('aria-disabled', 'true');
+    await expect(xlsx).toHaveAttribute('aria-describedby', 'export-xlsx-reason');
+    await xlsx.click({ force: true });
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#authoring-export-format')).toContainText('CSV');
+    expect(await calls(page, 'export')).toEqual([]);
   });
 }
