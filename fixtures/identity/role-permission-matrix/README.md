@@ -67,7 +67,7 @@ precedence is the one 00 §2 itself sets:
    is excluded for `viewer` by 00 §2:50 "No secrets" and for `tenant_admin` by 00 §2:54,
    so the other three member roles hold it). These grants are marked `basis: inferred` in
    the section below, so the cells the plans leave implicit are visible.
-4. **The `permissions` axis** is every catalogue code the plans name — all 60 codes of
+4. **The `permissions` axis** is every catalogue code the plans name — all 63 codes of
    `contracts/permissions.json` appear somewhere in `plans/`, so the axis equals the
    catalogue's code list. The matrix test asserts that equality, so a catalogue code the
    fixture omits fails before any cell is compared.

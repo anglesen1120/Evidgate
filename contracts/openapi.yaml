@@ -5729,6 +5729,67 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /suite-revisions/{r}/execution-plan:
+    get:
+      operationId: getSuiteRevisionExecutionPlan
+      tags: [catalog]
+      summary: The ordered execution plan of a suite revision, for manifest generation (04.2.2-T3)
+      description: >-
+        Cursor list of the members of one suite revision, in the order a run
+        executes them — `(ordinal, id)` ascending — serving both `draft` and
+        `published` revisions: a revision is `draft` until a run references it
+        (03.2.1), so a published-only read could never generate the manifest
+        that makes it published. Items carry exactly the three members a
+        producer needs to map a test to its pinned case revision: `case_id`,
+        `variant_hash` and `case_revision_id`; no member `id`, `params`,
+        `required`, edge or name is served, so this read is not a replacement
+        for `GET /v1/suite-revisions/{r}` (`suite:read`) — a credential holding
+        only `suite:plan_read` never gains the full revision. The opaque
+        `cursor` is not signed; it records the revision and the caller's project
+        it was minted for, and a value this endpoint did not issue — including
+        one from another revision, project or tenant — is 422
+        `request_invalid` (`details[].path` = `cursor`), as is an integer
+        `limit` outside 1–500 (`limit`). A `limit` that is not the canonical
+        spelling of an integer (`abc`, `1.5`, ` 5`, `+5`, `01`), an undecodable
+        or truncated cursor, and an undecodable query string are 400
+        `request_invalid` before the handler runs. The permission check runs
+        before the lookup, so 403 depends only on the credential, never on the
+        id. An unknown revision, another project's revision and another
+        tenant's revision answer the one 404 `not_found` body of
+        `GET /v1/suite-revisions/{r}` — no existence oracle (00 §5.4) — and
+        there is no per-member filtering. `limit` defaults to 200 and is at
+        most 500 (route-specific, not the shared `Limit`); `next_cursor: null`
+        ends the walk.
+      x-permission: suite:plan_read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/SuiteRevisionId'
+        - $ref: '#/components/parameters/ExecutionPlanCursor'
+        - $ref: '#/components/parameters/ExecutionPlanLimit'
+      responses:
+        '200':
+          description: Page of the revision's execution-plan members
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuiteRevisionExecutionPlan'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /webhooks/github:
     post:
       operationId: receiveGithubWebhook
@@ -9366,6 +9427,31 @@ components:
       schema:
         type: string
         format: uuid
+    ExecutionPlanCursor:
+      name: cursor
+      in: query
+      required: false
+      description: >-
+        Opaque cursor from `next_cursor` of
+        `GET /v1/suite-revisions/{r}/execution-plan`; ordering `(ordinal, id)`
+        ascending, bound to the revision and the caller's project (00 §9.1,
+        04.2.2-T3). A value this endpoint did not issue, including one from
+        another revision or project, is 422 `request_invalid`.
+      schema:
+        type: string
+    ExecutionPlanLimit:
+      name: limit
+      in: query
+      required: false
+      description: >-
+        Members per page. Route-specific, not the shared `Limit`: default 200,
+        maximum 500 (04.2.2-T3). An integer outside 1–500 is 422
+        `request_invalid`; a non-canonical integer is 400.
+      schema:
+        type: integer
+        default: 200
+        minimum: 1
+        maximum: 500
     DraftId:
       name: d
       in: path
@@ -12201,6 +12287,22 @@ components:
       properties:
         case_revision_id: { type: string, format: uuid }
         variant_hash: { type: string }
+    SuiteRevisionExecutionPlanMember:
+      type: object
+      required: [case_id, variant_hash, case_revision_id]
+      properties:
+        case_id: { type: string, format: uuid }
+        variant_hash: { type: string }
+        case_revision_id: { type: string, format: uuid }
+    SuiteRevisionExecutionPlan:
+      type: object
+      required: [suite_revision_id, members, next_cursor]
+      properties:
+        suite_revision_id: { type: string, format: uuid }
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/SuiteRevisionExecutionPlanMember' }
+        next_cursor: { type: [string, 'null'] }
     SuiteEdgeKey:
       type: object
       required: [parent, child]
@@ -12422,10 +12524,10 @@ components:
         scopes:
           type: [array, 'null']
           minItems: 1
-          maxItems: 4
+          maxItems: 5
           items:
             type: string
-          description: Subset of the permission codes `event:write`, `artifact:write`, `run:create` and `decision:read`; default all four.
+          description: Subset of the permission codes `event:write`, `artifact:write`, `run:create`, `decision:read` and `suite:plan_read`; default all five.
         expires_at:
           type: [string, 'null']
           format: date-time
