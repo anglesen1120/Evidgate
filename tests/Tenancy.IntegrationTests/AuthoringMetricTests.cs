@@ -53,7 +53,7 @@ public sealed class AuthoringMetricTests(PostgresTenancyFixture fixture)
         var unknown = await QueueAsync(world, Guid.CreateVersion7(), "delete", "{}");
 
         overlap.Status.ShouldBe(HttpStatusCode.Conflict, overlap.ErrorMessage);
-        ((int)unknown.Status).ShouldBeInRange(400, 499);
+        unknown.Status.ShouldBe(HttpStatusCode.NotFound, unknown.ErrorMessage);
         capture.Taken.ShouldBe([$"{Queued}|1|change_type=delete"]);
     }
 
@@ -68,6 +68,7 @@ public sealed class AuthoringMetricTests(PostgresTenancyFixture fixture)
         var applied = await ApplyAsync(world, [first, second], Etag(world.Items[0], world.Items[1]));
 
         applied.Status.ShouldBe(HttpStatusCode.OK, applied.ErrorMessage);
+        // The histogram has no tags on purpose: the trailing separator is its empty tag list.
         capture.Taken.ShouldBe([$"{Apply}|1|outcome=applied", $"{BatchSize}|2|"]);
     }
 
@@ -94,7 +95,11 @@ public sealed class AuthoringMetricTests(PostgresTenancyFixture fixture)
         var refused = await ApplyAsync(world, [change], "0f0e0d0c0b0a09080706050403020100");
 
         refused.Status.ShouldBe(HttpStatusCode.PreconditionFailed, refused.ErrorMessage);
-        capture.Taken.ShouldBe([$"{Apply}|1|outcome=stale"]);
+
+        // Control in the same world: the right tag applies, so the refusal was the tag and nothing else.
+        var control = await ApplyAsync(world, [change], Etag(world.Items[0]));
+        control.Status.ShouldBe(HttpStatusCode.OK, control.ErrorMessage);
+        capture.Taken.ShouldBe([$"{Apply}|1|outcome=stale", $"{Apply}|1|outcome=applied", $"{BatchSize}|1|"]);
     }
 
     [Fact]
@@ -121,8 +126,9 @@ public sealed class AuthoringMetricTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task Apply_DeleteTargetWithLiveCase_CurrentlyCountsConflict()
     {
-        await using var world = await StartAsync(1);
+        await using var world = await StartAsync(2);
         var change = await QueueOkAsync(world, world.Items[0], "delete", "{}");
+        var control = await QueueOkAsync(world, world.Items[1], "delete", "{}");
         await fixture.ExecuteAsync(world.Database, $"""
             insert into public.manual_test_case (id, org_id, project_id, checklist_item_id, code, title, steps, priority, state, source)
             values ('{Guid.CreateVersion7()}', '{world.Org}', '{world.Project}', '{world.Items[0]}', 'MET-001', 'Case',
@@ -132,27 +138,50 @@ public sealed class AuthoringMetricTests(PostgresTenancyFixture fixture)
         using var capture = new AuthoringMetricCapture();
 
         var refused = await ApplyAsync(world, [change], Etag(world.Items[0]));
+        var allowed = await ApplyAsync(world, [control], Etag(world.Items[1]));
 
         refused.Status.ShouldBe(HttpStatusCode.Conflict, refused.ErrorMessage);
         refused.ErrorCode.ShouldBe("authoring_not_empty");
-        capture.Taken.ShouldBe([$"{Apply}|1|outcome=conflict"]);
+        allowed.Status.ShouldBe(HttpStatusCode.OK, allowed.ErrorMessage);
+        capture.Taken.ShouldBe([$"{Apply}|1|outcome=conflict", $"{Apply}|1|outcome=applied", $"{BatchSize}|1|"]);
     }
 
     [Fact]
-    public async Task Apply_RefusalsOutsideTheVocabulary_CountNothing()
+    public async Task Apply_UnknownChangeId_CountsNothing()
+    {
+        await using var world = await StartAsync(1);
+        using var capture = new AuthoringMetricCapture();
+
+        var refused = await ApplyAsync(world, [Guid.CreateVersion7()], Etag(world.Items[0]));
+
+        refused.Status.ShouldBe(HttpStatusCode.NotFound, refused.ErrorMessage);
+        capture.Taken.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Apply_EmptySelection_CountsNothing()
+    {
+        await using var world = await StartAsync(1);
+        using var capture = new AuthoringMetricCapture();
+
+        var refused = await ApplyAsync(world, [], Etag(world.Items[0]));
+
+        refused.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, refused.ErrorMessage);
+        capture.Taken.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Apply_MissingIfMatch_CountsNothing()
     {
         await using var world = await StartAsync(1);
         var change = await QueueOkAsync(world, world.Items[0], "delete", "{}");
         using var capture = new AuthoringMetricCapture();
 
-        var unknownIds = await ApplyAsync(world, [Guid.CreateVersion7()], Etag(world.Items[0]));
-        var empty = await ApplyAsync(world, [], Etag(world.Items[0]));
-        var noTag = await world.Client.SendAsync(
+        var refused = await world.Client.SendAsync(
             HttpMethod.Post, world.ApplyPath, world.Caller, new { change_ids = new[] { change } }, NewKey());
 
-        unknownIds.Status.ShouldBe(HttpStatusCode.NotFound, unknownIds.ErrorMessage);
-        empty.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, empty.ErrorMessage);
-        ((int)noTag.Status).ShouldBeInRange(400, 499);
+        refused.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, refused.ErrorMessage);
+        refused.ErrorCode.ShouldBe("request_invalid");
         capture.Taken.ShouldBeEmpty();
     }
 
@@ -195,25 +224,34 @@ public sealed class AuthoringMetricTests(PostgresTenancyFixture fixture)
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, "metrics-" + Guid.CreateVersion7().ToString("N"));
-        var project = Guid.CreateVersion7();
-        var node = Guid.CreateVersion7();
-        var items = Enumerable.Range(0, itemCount).Select(_ => Guid.CreateVersion7()).ToArray();
-        var rows = string.Join(
-            ',',
-            items.Select((item, index) =>
-                $"('{item}', '{org}', '{project}', '{node}', 'Item {index}', 'high', 'active', 'manual', {index})"));
+        var project = await CreateProjectAsync(client, user, org, "metrics-" + Guid.CreateVersion7().ToString("N"));
+        var caller = TenancyApiFactory.Resolved(user: user, orgHeader: org);
+        var module = Guid.CreateVersion7();
+        var feature = Guid.CreateVersion7();
+        var category = Guid.CreateVersion7();
 
         await fixture.ExecuteAsync(database, $"""
-            insert into public.project (id, org_id, name, slug)
-            values ('{project}', '{org}', 'Metrics', 'metrics-{project:N}');
-            insert into public.feature_node (id, org_id, project_id, kind, title, position)
-            values ('{node}', '{org}', '{project}', 'module', 'Metrics', 0);
-            insert into public.checklist_item
-                (id, org_id, project_id, feature_node_id, title, priority, state, source, position)
-            values {rows};
+            insert into public.feature_node (id, org_id, project_id, parent_id, kind, title, position)
+            values ('{module}', '{org}', '{project}', null, 'module', 'Shop', 0),
+                   ('{feature}', '{org}', '{project}', '{module}', 'feature', 'Checkout', 0),
+                   ('{category}', '{org}', '{project}', '{feature}', 'category', 'Payment', 0);
             """);
 
-        return new World(database, api, client, org, project, items, TenancyApiFactory.Resolved(user: user, orgHeader: org));
+        // Items go through the real create route so each has the version-1 history an apply extends.
+        var items = new List<Guid>();
+        for (var index = 0; index < itemCount; index++)
+        {
+            var created = await client.SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project:D}/authoring/checklist-items",
+                caller,
+                new { node_id = category, title = $"Item {index}", priority = "high" },
+                NewKey());
+            created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
+            items.Add(created.Id("item_id"));
+        }
+
+        return new World(database, api, client, org, project, items, caller);
     }
 
     private sealed record World(

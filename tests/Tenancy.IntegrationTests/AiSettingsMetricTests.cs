@@ -50,7 +50,11 @@ public sealed class AiSettingsMetricTests(PostgresTenancyFixture fixture)
         var refused = await AiSettingsCalls.SaveAsync(world.Client, world.As, world, AiSettingsCalls.Body(AiSettingsCalls.Document()), "\"5\"");
 
         refused.Status.ShouldBe(HttpStatusCode.PreconditionFailed, refused.ErrorMessage);
-        capture.Taken.ShouldBe([$"{Metric}|1|outcome=stale"]);
+
+        // Control in the same world: the right tag saves, so the refusal above was the tag and nothing else.
+        var control = await AiSettingsCalls.SaveAsync(world.Client, world.As, world, AiSettingsCalls.Body(AiSettingsCalls.Document()), "\"0\"");
+        control.Status.ShouldBe(HttpStatusCode.Created, control.ErrorMessage);
+        capture.Taken.ShouldBe([$"{Metric}|1|outcome=stale", $"{Metric}|1|outcome=created"]);
     }
 
     [Fact]
@@ -64,7 +68,12 @@ public sealed class AiSettingsMetricTests(PostgresTenancyFixture fixture)
         var refused = await AiSettingsCalls.SaveAsync(world.Client, world.As, world, AiSettingsCalls.Body(document), "\"0\"");
 
         refused.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, refused.ErrorMessage);
-        capture.Taken.ShouldBe([$"{Metric}|1|outcome=invalid"]);
+
+        // Control: the cap itself is accepted.
+        document["description"] = AiSettingsCalls.ProseOfLength(AiSettingsCalls.DescriptionLimit);
+        var control = await AiSettingsCalls.SaveAsync(world.Client, world.As, world, AiSettingsCalls.Body(document), "\"0\"");
+        control.Status.ShouldBe(HttpStatusCode.Created, control.ErrorMessage);
+        capture.Taken.ShouldBe([$"{Metric}|1|outcome=invalid", $"{Metric}|1|outcome=created"]);
     }
 
     [Fact]
@@ -77,7 +86,12 @@ public sealed class AiSettingsMetricTests(PostgresTenancyFixture fixture)
         var refused = await AiSettingsCalls.SaveAsync(world.Client, world.As, world, body, "\"0\"");
 
         refused.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, refused.ErrorMessage);
-        capture.Taken.ShouldBe([$"{Metric}|1|outcome=invalid"]);
+
+        // Control: the seeded default template is accepted.
+        var known = AiSettingsCalls.Body(AiSettingsCalls.Document(), AiSettingsCalls.Template("default", 1));
+        var control = await AiSettingsCalls.SaveAsync(world.Client, world.As, world, known, "\"0\"");
+        control.Status.ShouldBe(HttpStatusCode.Created, control.ErrorMessage);
+        capture.Taken.ShouldBe([$"{Metric}|1|outcome=invalid", $"{Metric}|1|outcome=created"]);
     }
 
     [Fact]
@@ -96,5 +110,10 @@ public sealed class AiSettingsMetricTests(PostgresTenancyFixture fixture)
 
         refused.Status.ShouldBe(HttpStatusCode.NotFound, refused.ErrorMessage);
         capture.Taken.ShouldBeEmpty();
+
+        // Control: the same body to the world's own project saves.
+        var control = await AiSettingsCalls.SaveAsync(world.Client, world.As, world, AiSettingsCalls.Body(AiSettingsCalls.Document()), "\"0\"");
+        control.Status.ShouldBe(HttpStatusCode.Created, control.ErrorMessage);
+        capture.Taken.ShouldBe([$"{Metric}|1|outcome=created"]);
     }
 }
