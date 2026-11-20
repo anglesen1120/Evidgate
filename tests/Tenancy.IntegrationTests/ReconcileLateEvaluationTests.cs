@@ -125,6 +125,8 @@ public sealed partial class ReconcileRunTests
         (await EvaluationRowsAsync(world)).ShouldBe(0);
         (await FrozenEventRowsOfRunAsync(world, world.RunId)).ShouldBe(0);
         (await FrozenEvaluationTaskCountAsync(world)).ShouldBe(0);
+        (await ReconcileTaskCountAsync(world))
+            .ShouldBe(0, "post-cancel evidence must not enqueue a reconcile task, even one already consumed");
         (await StateAsync(world, world.RunId)).ShouldBe("canceled");
     }
 
@@ -150,6 +152,8 @@ public sealed partial class ReconcileRunTests
         (await LiveEvaluationSnapshotAsync(world, revision: 1)).ShouldBe(first);
         (await FrozenEventRowsOfRunAsync(world, world.RunId)).ShouldBe(1);
         (await FrozenEvaluationTaskCountAsync(world)).ShouldBe(1);
+        (await ReconcileTaskCountAsync(world))
+            .ShouldBe(0, "refused evidence must not enqueue a reconcile task, even one already consumed");
     }
 
     private async Task StartEvaluatedIncompleteRunAsync(IngestTestWorld world)
@@ -188,19 +192,28 @@ public sealed partial class ReconcileRunTests
         return snapshot;
     }
 
+    /// <summary>How many reconcile task rows the tenant holds, whatever state they reached.</summary>
+    private static Task<long> ReconcileTaskCountAsync(IngestTestWorld world) =>
+        world.ScalarAsync<long>(
+            $"select count(*) from public.task where org_id = '{world.Org:D}' "
+            + $"and task_type = '{RunReconcileContract.OutboxTaskType}'");
+
     /// <summary>
-    /// Drives the ingest outbox and the consumer until no task of this tenant is claimable, so a refusal that enqueued
-    /// anything would be caught a moment later instead of passing because nothing was polled yet.
+    /// Drives handlers that could turn rejected evidence into a revision or evaluation. Only the two types these flows
+    /// can produce are counted: the baseline run's state-change notification has no handler, so its row stays queued
+    /// forever and waiting on it would time the drain out on work that can never run.
     /// </summary>
     private static async Task DrainLateEvaluationQueueAsync(IngestTestWorld world)
     {
         var dispatcher = world.Host.Services.GetRequiredService<OutboxDispatcher>();
         var consumer = world.Host.Services.GetRequiredService<TaskConsumer>();
+        var handled = $"'{RunReconcileContract.OutboxTaskType}', '{EvidenceRevisionFrozenContract.OutboxTaskType}'";
         for (var poll = 0; poll < 12; poll++)
         {
             await dispatcher.DispatchBatchAsync(Token);
             var claimable = await world.ScalarAsync<long>(
                 $"select count(*) from public.task where org_id = '{world.Org:D}' "
+                + $"and task_type in ({handled}) "
                 + $"and queue = '{DefaultQueue}' and (state = 'active' "
                 + "or (state in ('queued', 'retry') and available_at <= now()))");
             if (claimable == 0)
@@ -213,7 +226,8 @@ public sealed partial class ReconcileRunTests
 
         (await world.ScalarAsync<long>(
             $"select count(*) from public.task where org_id = '{world.Org:D}' "
+            + $"and task_type in ({handled}) "
             + "and state in ('queued', 'active', 'retry')"))
-            .ShouldBe(0, "the refused or post-cancel evidence left no claimable or waiting work behind");
+            .ShouldBe(0, "the refused or post-cancel evidence left no claimable handler work waiting");
     }
 }
