@@ -154,7 +154,7 @@ public sealed partial class LargeReportBudgetTests
         var artifactId = Guid.CreateVersion7();
         var executionKey = await SlotKeyAsync(world);
         var objectKey = string.Create(CultureInfo.InvariantCulture,
-            $"org/{world.Org:D}/project/{world.Project:D}/run/{world.RunId:D}/attempt/{executionKey}/{artifactId:D}");
+            $"org/{world.Org:D}/project/{world.Project:D}/run/{world.RunId:D}/attempt/{executionKey}/1/{artifactId:D}");
         var checksum = "sha256:" + Convert.ToHexStringLower(SHA256.HashData(body));
 
         await _store.PutAsync(objectKey, body);
