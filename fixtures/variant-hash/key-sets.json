@@ -1,0 +1,28 @@
+{
+  "enum_like": [
+    "browser",
+    "channel",
+    "device",
+    "engine",
+    "env",
+    "environment",
+    "locale",
+    "mode",
+    "os",
+    "platform",
+    "viewport"
+  ],
+  "non_identifying": [
+    "comment",
+    "comments",
+    "description",
+    "display_name",
+    "displayname",
+    "label",
+    "labels",
+    "note",
+    "notes",
+    "tags",
+    "title"
+  ]
+}
