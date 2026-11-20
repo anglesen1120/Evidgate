@@ -272,7 +272,9 @@ public static class CatalogEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var (body, readError) = await CatalogRequestRules.ReadJsonAsync(context, MaxBodyBytes, cancellationToken).ConfigureAwait(false);
+        // A bad requirement_ref value keeps its field path below, so only an unreadable member name is refused at the read.
+        var (body, readError) = await CatalogRequestRules
+            .ReadJsonAsync(context, MaxBodyBytes, cancellationToken, refuseUnstorableValues: false).ConfigureAwait(false);
         if (readError is not null)
         {
             return Result.Failure<CaseDto>(readError);
