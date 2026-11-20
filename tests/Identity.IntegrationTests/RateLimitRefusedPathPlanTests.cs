@@ -180,7 +180,23 @@ public sealed class RateLimitRefusedPathPlanTests(DatabaseFixture fixture)
         return (string)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))!;
     }
 
-    private static void Print(string text) => TestContext.Current.TestOutputHelper?.WriteLine(text);
+    // A passing test's output is not in the runner log, so the witnesses also go to a file the LAN gate copies back.
+    private static void Print(string text)
+    {
+        TestContext.Current.TestOutputHelper?.WriteLine(text);
+
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "scripts", "verify.sh")))
+        {
+            root = root.Parent;
+        }
+
+        if (root is not null)
+        {
+            var directory = Directory.CreateDirectory(Path.Combine(root.FullName, "artifacts", "test-results"));
+            File.AppendAllText(Path.Combine(directory.FullName, "rate-limit-plan-witnesses.txt"), text + "\n");
+        }
+    }
 
     private static byte[] Hash(string key) => SHA256.HashData(Encoding.UTF8.GetBytes(key));
 
