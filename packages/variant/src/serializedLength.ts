@@ -73,7 +73,7 @@ function dotnetDoubleLength(value: number): number {
  * `dotnetDoubleLength`. The reporter has no raw text, so it branches on `String(value)` — the
  * shortest round-trip form `JSON.stringify` emits — exactly as the server branches on the raw
  * text; the spellings where that stands in for the raw text incorrectly are listed in the
- * `variant.ts` header.
+ * `normalize.ts` header.
  */
 function serverNumberLength(value: number): number {
   const text = String(value);

@@ -21,5 +21,5 @@
   // `createAttachmentUploader`/`AttachmentUploader`, which wraps `uploadFile()`; npm
   // workspaces links it via node_modules). The dependency is one-way: packages/cli never
   // references the adapter.
-  "references": [{ "path": "../cli" }]
+  "references": [{ "path": "../cli" }, { "path": "../variant" }]
 }
