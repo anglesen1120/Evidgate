@@ -19,6 +19,9 @@ public sealed class RequestMemberPathTests
     [InlineData("a\u007fb", "/<invalid-member-name>")]
     [InlineData("a\u200bb", "/<invalid-member-name>")]
     [InlineData("a\u202eb", "/<invalid-member-name>")]
+    [InlineData("a\u2028b", "/<invalid-member-name>")]
+    [InlineData("a\u2029b", "/<invalid-member-name>")]
+    [InlineData("a\u0085b", "/<invalid-member-name>")]
     [InlineData(null, "/<invalid-member-name>")]
     public void UnknownMember_TextHygiene_PinsPath(string? name, string expected) =>
         RequestMemberPath.ForUnknown(name).ShouldBe(expected);
@@ -49,6 +52,7 @@ public sealed class RequestMemberPathTests
         RequestMemberPath.ForUnknown("zzz", "/ref").ShouldBe("/ref/zzz");
         RequestMemberPath.ForUnknown(string.Empty, "/ref").ShouldBe("/ref/");
         RequestMemberPath.ForUnknown("a/b", "/ref").ShouldBe("/<invalid-member-name>");
+        RequestMemberPath.ForUnknown("a\u2028b", "/ref").ShouldBe("/<invalid-member-name>");
         RequestMemberPath.ForUnknown(new string('a', 65), "/ref").ShouldBe("/<invalid-member-name>");
         RequestMemberPath.ForUnknown(null, "/ref").ShouldBe("/<invalid-member-name>");
     }

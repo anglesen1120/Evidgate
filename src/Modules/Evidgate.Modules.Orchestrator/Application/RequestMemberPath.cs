@@ -5,8 +5,8 @@ namespace Evidgate.Modules.Orchestrator.Application;
 
 /// <summary>
 /// The <c>details[].path</c> of a request member the route does not accept. Echoing the caller's name answers "which
-/// member?", but a name holding a pointer separator, an invisible character, an unpaired surrogate or unbounded length
-/// would steer or bloat the refusal, so those answer the placeholder instead.
+/// member?", but a name holding a pointer separator, an invisible or line-breaking character, an unpaired surrogate or
+/// unbounded length would steer, split or bloat the refusal, so those answer the placeholder instead.
 /// </summary>
 internal static class RequestMemberPath
 {
@@ -23,6 +23,7 @@ internal static class RequestMemberPath
             || name.Length > MaxEchoedNameLength
             || name.Contains('/')
             || name.Contains('~')
+            || HoldsLineBreak(name)
             || !UnicodeCleanliness.IsClean(name))
         {
             return InvalidMemberName;
@@ -30,6 +31,13 @@ internal static class RequestMemberPath
 
         return prefix + "/" + name;
     }
+
+    /// <summary>
+    /// U+2028 and U+2029 are storable and pass <see cref="UnicodeCleanliness"/> (neither is a control or a format
+    /// character), yet each splits a rendered path in two, so the echo refuses them; U+0085 is a control character.
+    /// </summary>
+    private static bool HoldsLineBreak(string name) =>
+        name.Contains('\u2028') || name.Contains('\u2029');
 
     /// <summary>
     /// The path of the first member outside <paramref name="allowed"/>, or null when all of them are allowed. A name

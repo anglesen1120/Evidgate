@@ -9,9 +9,8 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// An unknown body member is named in <c>details[].path</c> only while echoing it is safe: a pointer separator, a
-/// tilde, an invisible character, an unpaired surrogate or an unbounded name answers the stable placeholder. The five
-/// routes that scan a closed member set share the rule, and an ordinary short name keeps answering its pointer.
+/// An unknown body member is echoed only when its name is safe and bounded. These requests reach the closed-member
+/// scan; earlier text guards can refuse NUL or unpaired-surrogate names before that scan.
 /// </summary>
 [Trait("Category", "Docker")]
 public sealed class UnknownMemberPathRouteTests(
@@ -30,7 +29,7 @@ public sealed class UnknownMemberPathRouteTests(
     public async Task CreateRun_UnknownShortName_422NamesIt_AndTheSameBodyWithoutItCreates()
     {
         await using var world = await RunCreationTests.StartAsync(fixture, cases: 1, hosts: hosts);
-        var body = $$"""{"manifest_id":"{{world.ManifestId}}","zzz":1}""";
+        var body = Member(world.ManifestId, "zzz");
 
         AssertRefusal(await PostAsync(world.Client, RunRoute(world), body, world.Admin), HttpStatusCode.UnprocessableEntity, "/zzz");
 
@@ -41,7 +40,7 @@ public sealed class UnknownMemberPathRouteTests(
     [Fact]
     public async Task CreateRun_UnsafeAndBoundaryNames_AnswerPlaceholder()
     {
-        await using var world = await RunCreationTests.StartRefusalWorldAsync(fixture, hosts: hosts);
+        await using var world = await RunCreationTests.StartAsync(fixture, cases: 1, hosts: hosts);
 
         foreach (var name in UnsafeNames())
         {
@@ -54,12 +53,15 @@ public sealed class UnknownMemberPathRouteTests(
             await PostAsync(world.Client, RunRoute(world), Member(world.ManifestId, boundary), world.Admin),
             HttpStatusCode.UnprocessableEntity,
             "/" + boundary);
+
+        var control = await PostAsync(world.Client, RunRoute(world), RunCreationTests.RunBody(world.ManifestId), world.Admin);
+        control.Status.ShouldBe(HttpStatusCode.Created, control.ErrorMessage);
     }
 
     [Fact]
     public async Task CreateRun_TenThousandCharacterName_AnswersPlaceholderWithinTheBodyBound()
     {
-        await using var world = await RunCreationTests.StartRefusalWorldAsync(fixture, hosts: hosts);
+        await using var world = await RunCreationTests.StartAsync(fixture, cases: 1, hosts: hosts);
         var name = new string('n', 10_000);
 
         var answer = await PostAsync(world.Client, RunRoute(world), Member(world.ManifestId, name), world.Admin);
@@ -68,42 +70,41 @@ public sealed class UnknownMemberPathRouteTests(
         AssertRefusal(answer, HttpStatusCode.UnprocessableEntity, Placeholder);
         text.Length.ShouldBeLessThan(RefusalBodyBound);
         text.ShouldNotContain(new string('n', 100));
+
+        var control = await PostAsync(world.Client, RunRoute(world), RunCreationTests.RunBody(world.ManifestId), world.Admin);
+        control.Status.ShouldBe(HttpStatusCode.Created, control.ErrorMessage);
     }
 
     [Fact]
-    public async Task CreateRun_UnknownRefMember_NamesItsRefPath_AndALongOneAnswersPlaceholder()
+    public async Task CreateRun_UnknownRefMembers_EchoOnlySafeNames_AndTheSameBodyWithoutThemCreates()
     {
-        await using var world = await RunCreationTests.StartRefusalWorldAsync(fixture, hosts: hosts);
-        var shortBody = JsonSerializer.Serialize(new Dictionary<string, object?>
-        {
-            ["manifest_id"] = world.ManifestId,
-            ["ref"] = new Dictionary<string, object?> { ["zzz"] = 1 },
-        });
-
+        await using var world = await RunCreationTests.StartAsync(fixture, cases: 1, hosts: hosts);
         AssertRefusal(
-            await PostAsync(world.Client, RunRoute(world), shortBody, world.Admin),
+            await PostAsync(world.Client, RunRoute(world), RefBody(world.ManifestId, "zzz"), world.Admin),
             HttpStatusCode.UnprocessableEntity,
             "/ref/zzz");
 
-        var name = new string('n', 10_000);
-        var longBody = JsonSerializer.Serialize(new Dictionary<string, object?>
+        foreach (var name in UnsafeNames())
         {
-            ["manifest_id"] = world.ManifestId,
-            ["ref"] = new Dictionary<string, object?> { [name] = 1 },
-        });
-        var longAnswer = await PostAsync(world.Client, RunRoute(world), longBody, world.Admin);
+            AssertRefusal(
+                await PostAsync(world.Client, RunRoute(world), RefBody(world.ManifestId, name), world.Admin),
+                HttpStatusCode.UnprocessableEntity,
+                Placeholder);
+        }
 
+        var boundary = new string('a', 64);
+        AssertRefusal(
+            await PostAsync(world.Client, RunRoute(world), RefBody(world.ManifestId, boundary), world.Admin),
+            HttpStatusCode.UnprocessableEntity,
+            "/ref/" + boundary);
+
+        var longAnswer = await PostAsync(
+            world.Client, RunRoute(world), RefBody(world.ManifestId, new string('n', 10_000)), world.Admin);
         AssertRefusal(longAnswer, HttpStatusCode.UnprocessableEntity, Placeholder);
         longAnswer.Body.GetRawText().Length.ShouldBeLessThan(RefusalBodyBound);
 
-        // The same block with a declared member passes the shape check and reaches the manifest lookup (404 here).
-        var controlBody = JsonSerializer.Serialize(new Dictionary<string, object?>
-        {
-            ["manifest_id"] = world.ManifestId,
-            ["ref"] = new Dictionary<string, object?> { ["kind"] = "branch", ["name"] = "main" },
-        });
-        var control = await PostAsync(world.Client, RunRoute(world), controlBody, world.Admin);
-        control.Status.ShouldBe(HttpStatusCode.NotFound, control.ErrorMessage);
+        var control = await PostAsync(world.Client, RunRoute(world), RefBody(world.ManifestId), world.Admin);
+        control.Status.ShouldBe(HttpStatusCode.Created, control.ErrorMessage);
     }
 
     // ---------------------------------------------------------------- cancel
@@ -114,11 +115,12 @@ public sealed class UnknownMemberPathRouteTests(
         await using var world = await RunCreationTests.StartAsync(fixture, cases: 1, hosts: hosts);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
 
-        var answer = await CancelRunTestData.CancelRawAsync(world.Client, runId, """{"zzz":1}""", world.Admin);
+        var answer = await CancelRunTestData.CancelRawAsync(
+            world.Client, runId, Member("zzz", ("reason", "probe")), world.Admin);
 
         AssertRefusal(answer, HttpStatusCode.UnprocessableEntity, "/zzz");
 
-        var control = await CancelRunTestData.CancelAsync(world, runId, reason: "probe");
+        var control = await CancelRunTestData.CancelRawAsync(world.Client, runId, """{"reason":"probe"}""", world.Admin);
         control.Status.ShouldBe(HttpStatusCode.Accepted, control.ErrorMessage);
     }
 
@@ -130,18 +132,23 @@ public sealed class UnknownMemberPathRouteTests(
 
         foreach (var name in UnsafeNames())
         {
-            var answer = await CancelRunTestData.CancelRawAsync(world.Client, runId, Member(name: name), world.Admin);
+            var answer = await CancelRunTestData.CancelRawAsync(
+                world.Client, runId, Member(name, ("reason", "probe")), world.Admin);
             AssertRefusal(answer, HttpStatusCode.UnprocessableEntity, Placeholder);
         }
 
         // 4 KiB is the cancel cap, so the over-long case is 3 000 characters rather than 10 000.
         var longName = new string('n', 3_000);
-        var longAnswer = await CancelRunTestData.CancelRawAsync(world.Client, runId, Member(name: longName), world.Admin);
+        var longAnswer = await CancelRunTestData.CancelRawAsync(
+            world.Client, runId, Member(longName, ("reason", "probe")), world.Admin);
         var text = longAnswer.Body.GetRawText();
 
         AssertRefusal(longAnswer, HttpStatusCode.UnprocessableEntity, Placeholder);
         text.Length.ShouldBeLessThan(RefusalBodyBound);
         text.ShouldNotContain(new string('n', 100));
+
+        var control = await CancelRunTestData.CancelRawAsync(world.Client, runId, """{"reason":"probe"}""", world.Admin);
+        control.Status.ShouldBe(HttpStatusCode.Accepted, control.ErrorMessage);
     }
 
     // ---------------------------------------------------------------- finalize
@@ -155,7 +162,7 @@ public sealed class UnknownMemberPathRouteTests(
         var manifestHash = await ManifestHashAsync(world);
 
         AssertRefusal(
-            await PostAsync(world.Client, FinalizeRoute(world), $$"""{"zzz":1,"manifest_hash":"{{manifestHash}}"}""", NoHeaders),
+            await PostAsync(world.Client, FinalizeRoute(world), FinalizeBody(manifestHash, "zzz"), NoHeaders),
             HttpStatusCode.UnprocessableEntity,
             "/zzz");
 
@@ -168,11 +175,12 @@ public sealed class UnknownMemberPathRouteTests(
     {
         await using var world = await IngestTestWorld.StartAsync(
             fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.Jti, hosts: hosts);
+        await RunStateWalk.MoveAsync(fixture, world.Database, world.RunId, "running");
         var manifestHash = await ManifestHashAsync(world);
 
         foreach (var name in UnsafeNames())
         {
-            var body = Member(name: name, extra: ("manifest_hash", manifestHash));
+            var body = FinalizeBody(manifestHash, name);
             var answer = await PostAsync(world.Client, FinalizeRoute(world), body, NoHeaders);
             AssertRefusal(answer, HttpStatusCode.UnprocessableEntity, Placeholder);
         }
@@ -180,12 +188,15 @@ public sealed class UnknownMemberPathRouteTests(
         // 8 KiB is the finalize cap, so the over-long case is 3 000 characters rather than 10 000.
         var longName = new string('n', 3_000);
         var longAnswer = await PostAsync(
-            world.Client, FinalizeRoute(world), Member(name: longName, extra: ("manifest_hash", manifestHash)), NoHeaders);
+            world.Client, FinalizeRoute(world), FinalizeBody(manifestHash, longName), NoHeaders);
         var text = longAnswer.Body.GetRawText();
 
         AssertRefusal(longAnswer, HttpStatusCode.UnprocessableEntity, Placeholder);
         text.Length.ShouldBeLessThan(RefusalBodyBound);
         text.ShouldNotContain(new string('n', 100));
+
+        var control = await PostAsync(world.Client, FinalizeRoute(world), FinalizeBody(manifestHash), NoHeaders);
+        control.Status.ShouldBe(HttpStatusCode.Accepted, control.ErrorMessage);
     }
 
     // ---------------------------------------------------------------- release create
@@ -207,7 +218,7 @@ public sealed class UnknownMemberPathRouteTests(
     [Fact]
     public async Task CreateRelease_UnsafeAndBoundaryNames_AnswerPlaceholder()
     {
-        await using var world = await RunCreationTests.StartRefusalWorldAsync(fixture, hosts: hosts);
+        await using var world = await RunCreationTests.StartAsync(fixture, cases: 1, hosts: hosts);
 
         foreach (var name in UnsafeNames())
         {
@@ -222,12 +233,15 @@ public sealed class UnknownMemberPathRouteTests(
             await PostAsync(world.Client, ReleaseRoute(world), ReleaseBody(world, boundary), world.Admin),
             HttpStatusCode.UnprocessableEntity,
             "/" + boundary);
+
+        var control = await PostAsync(world.Client, ReleaseRoute(world), ReleaseBody(world), world.Admin);
+        control.Status.ShouldBe(HttpStatusCode.Created, control.ErrorMessage);
     }
 
     [Fact]
     public async Task CreateRelease_TenThousandCharacterName_AnswersPlaceholderWithinTheBodyBound()
     {
-        await using var world = await RunCreationTests.StartRefusalWorldAsync(fixture, hosts: hosts);
+        await using var world = await RunCreationTests.StartAsync(fixture, cases: 1, hosts: hosts);
         var name = new string('n', 10_000);
 
         var answer = await PostAsync(world.Client, ReleaseRoute(world), ReleaseBody(world, name), world.Admin);
@@ -236,6 +250,9 @@ public sealed class UnknownMemberPathRouteTests(
         AssertRefusal(answer, HttpStatusCode.UnprocessableEntity, Placeholder);
         text.Length.ShouldBeLessThan(RefusalBodyBound);
         text.ShouldNotContain(new string('n', 100));
+
+        var control = await PostAsync(world.Client, ReleaseRoute(world), ReleaseBody(world), world.Admin);
+        control.Status.ShouldBe(HttpStatusCode.Created, control.ErrorMessage);
     }
 
     // ---------------------------------------------------------------- helpers
@@ -243,9 +260,9 @@ public sealed class UnknownMemberPathRouteTests(
     /// <summary>A caller whose identity the host injects (the service-principal seam), so no header is added here.</summary>
     private static readonly Action<HttpRequestHeaders> NoHeaders = _ => { };
 
-    /// <summary>The names whose echo could steer the pointer, hide a member or split a surrogate pair.</summary>
+    /// <summary>Names whose echo could steer the pointer, hide a member, split the line or exceed the UTF-16 unit bound.</summary>
     private static IEnumerable<string> UnsafeNames() =>
-        ["a/b", "a~b", "a\nb", "a\u0001b", "a\u200bb", new string('a', 65)];
+        ["a/b", "a~b", "a\nb", "a\u0001b", "a\u200bb", "a\u2028b", "a\u2029b", new string('a', 65)];
 
     private static string RunRoute(RunCreationTests.World world) => $"/v1/projects/{world.Project}/runs";
 
@@ -270,14 +287,38 @@ public sealed class UnknownMemberPathRouteTests(
         return JsonSerializer.Serialize(members);
     }
 
-    private static string FinalizeBody(string manifestHash) => JsonSerializer.Serialize(new Dictionary<string, object?>
+    private static string RefBody(Guid manifestId, string? unknownMember = null)
     {
-        ["producer_id"] = IngestTestWorld.ProducerId,
-        ["shard"] = 1,
-        ["last_sequence"] = 3,
-        ["count"] = 3,
-        ["manifest_hash"] = manifestHash,
-    });
+        var reference = new Dictionary<string, object?> { ["kind"] = "branch", ["name"] = "main" };
+        if (unknownMember is not null)
+        {
+            reference[unknownMember] = 1;
+        }
+
+        return JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["manifest_id"] = manifestId,
+            ["ref"] = reference,
+        });
+    }
+
+    private static string FinalizeBody(string manifestHash, string? unknownMember = null)
+    {
+        var members = new Dictionary<string, object?>
+        {
+            ["producer_id"] = IngestTestWorld.ProducerId,
+            ["shard"] = 1,
+            ["last_sequence"] = 3,
+            ["count"] = 3,
+            ["manifest_hash"] = manifestHash,
+        };
+        if (unknownMember is not null)
+        {
+            members[unknownMember] = 1;
+        }
+
+        return JsonSerializer.Serialize(members);
+    }
 
     private static string ReleaseBody(RunCreationTests.World world, string? unknownMember = null)
     {
