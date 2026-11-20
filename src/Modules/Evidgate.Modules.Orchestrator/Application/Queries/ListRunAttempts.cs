@@ -178,8 +178,9 @@ internal sealed class ListRunAttemptsQueryHandler(
 /// keys on — with the attempt's ready-artifact count as one grouped aggregate over the run's artifacts in the same
 /// statement, never a per-row round trip. <c>org_id</c> is left to RLS (forced on <c>case_attempt</c> and
 /// <c>artifact</c>), so the run predicate is the only extra filter and an invisible run's rows are unreachable. The
-/// members are <c>internal</c> as this module's statement surface: nothing outside this assembly binds them, and no
-/// plan test runs <c>EXPLAIN</c> over them today.
+/// members are <c>internal</c> as this module's statement surface: nothing outside this assembly binds them, and
+/// <c>tests/Tenancy.IntegrationTests</c> pins their plans with <c>EXPLAIN (FORMAT JSON)</c> — the page's keyset
+/// index, the ready-artifact slot index and the counts index — so a change that loses one fails there.
 /// </summary>
 internal static class ListRunAttemptsSql
 {
