@@ -166,4 +166,49 @@ public sealed class ManifestSecretUploadTests
         details.First().Reason.ShouldBe("secret_in_variant_params");
         details.Select(detail => detail.Reason).ShouldContain("invalid_value");
     }
+
+    [Fact]
+    public async Task TokenHiddenByZeroWidthSpaceInAProducerHint_IsRefusedAsASecret_NoEcho()
+    {
+        await using var world = await ManifestTests.StartAsync(_fixture);
+        var manifest = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "x" }], ["staging"]);
+        manifest["shard_plan"]!["shards"]![0]!["producer_hint"] = "gh\u200Bp_AAAAAAAAAAAA";
+
+        var answer = await UploadAsync(world, manifest.ToJsonString());
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        var details = answer.Body.GetProperty("error").GetProperty("details").EnumerateArray().ToList();
+        details.Select(detail => detail.GetProperty("reason").GetString()).Distinct().ShouldBe(["secret_value_detected"]);
+        details.First().GetProperty("path").GetString().ShouldBe("/shard_plan/shards/0/producer_hint");
+        answer.Body.GetRawText().ShouldNotContain("AAAAAAAAAAAA");
+    }
+
+    [Fact]
+    public async Task BomPrefixedWordAsAProducerHint_Is422InvalidValue_NoEcho()
+    {
+        await using var world = await ManifestTests.StartAsync(_fixture);
+        var manifest = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "x" }], ["staging"]);
+        manifest["shard_plan"]!["shards"]![0]!["producer_hint"] = "\uFEFFpytest-zzqq";
+
+        var answer = await UploadAsync(world, manifest.ToJsonString());
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        var details = answer.Body.GetProperty("error").GetProperty("details").EnumerateArray().ToList();
+        details.Select(detail => detail.GetProperty("reason").GetString()).Distinct().ShouldBe(["invalid_value"]);
+        details.First().GetProperty("path").GetString().ShouldBe("/shard_plan/shards/0/producer_hint");
+        answer.Body.GetRawText().ShouldNotContain("zzqq");
+    }
+
+    [Fact]
+    public async Task OrdinaryAndCleanNonAsciiProducerHints_StayAccepted()
+    {
+        await using var world = await ManifestTests.StartAsync(_fixture);
+        var ordinary = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "x" }], ["staging"]);
+        ordinary["shard_plan"]!["shards"]![0]!["producer_hint"] = "pytest-junitxml";
+        (await UploadAsync(world, ordinary.ToJsonString())).Status.ShouldBe(HttpStatusCode.Created);
+
+        var accepted = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "y" }], ["staging"]);
+        accepted["shard_plan"]!["shards"]![0]!["producer_hint"] = "ünïcödé 日本語";
+        (await UploadAsync(world, accepted.ToJsonString())).Status.ShouldBe(HttpStatusCode.Created);
+    }
 }
