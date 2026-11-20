@@ -124,8 +124,12 @@ internal sealed class ApplyAuthoringChangesCommandHandler(
                 ["outcome"] = AuthoringApplyOutcomes.Applied,
             }));
 
-        EvidgateTelemetry.RecordAuthoringApply(AuthoringApplyOutcomes.Applied);
-        EvidgateTelemetry.RecordAuthoringApplyBatchSize(command.ChangeIds.Count);
+        var batchSize = command.ChangeIds.Count;
+        scopes.Require().AfterCommit(() =>
+        {
+            EvidgateTelemetry.RecordAuthoringApply(AuthoringApplyOutcomes.Applied);
+            EvidgateTelemetry.RecordAuthoringApplyBatchSize(batchSize);
+        });
 
         return Result.Success(new ApplyAuthoringChangesResponse(
             batchId,

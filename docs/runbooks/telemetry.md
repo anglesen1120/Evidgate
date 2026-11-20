@@ -312,8 +312,18 @@ no alert rule for this counter yet: watch it by hand. An increase means a batch 
 billed and the task that recorded it completed instead of retrying; the only recovery is to re-enqueue the batch
 once the producer stops reusing the key for new work.
 
-Apart from that refusal counter, counters describe committed work. Every counter other than the billing-key conflict
-counter is recorded after the transaction that causes it commits, so a rolled-back attempt contributes nothing, and
+`evidgate_runs_created_total` carries `trigger_event` (`push`, `pull_request`, `schedule`, `manual`, `dispatch`, or
+`none` when the run recorded none), `is_fork` and `unverified_ref`, and counts a run after its creating transaction
+commits. Read the `is_fork="true"` share to see fork traffic reach the API; fork runs are advisory-only. No alert rule
+reads it yet.
+
+`evidgate_authoring_apply_total` carries `outcome` (`applied`, `stale`, `conflict`). `applied` is counted after the
+batch commits; `stale` and `conflict` count refused apply requests, which write nothing, so a high `stale` share
+means maintainers act on an old selection. The authoring save and queue counters and the apply batch-size histogram
+are not catalogued: nothing reads them yet.
+
+Apart from the refusal counters (the billing-key conflict counter and the `stale` and `conflict` outcomes of the apply
+counter), counters of business work describe committed work. Every such counter's success sample is recorded after the transaction that causes it commits, so a rolled-back attempt contributes nothing, and
 the `incomplete` counter counts only a reconcile that settles the run: an append of late or reprocessed evidence
 writes a revision and adds no sample. Read a counter's rate against the same window as the denominator it divides
 into.
