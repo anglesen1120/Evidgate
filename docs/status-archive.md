@@ -1127,7 +1127,6 @@ Replaced by S539 (#1102, 5e891236): JsonCanonicalizer.cs (751 lines) was split i
 
 Closed by S540 (#1104, 2581eb60): the approve and revoke handler pre-checks are pinned by trigger-off tests in SupportGrantTests.PreCheck.cs, and IsolationWorld seeds an expired support grant (SupportGrantIds[2]) with a cross-org approve probe; the list, approve and revoke routes of the third row are all served and covered in IsolationRouteCases. The org-predicate mutant half stays open as the carried row 'Support grant org-predicate mutant on the app role (S536)'.
 
-
 ## Moved from status-carried.md by S541 (2026-11-21)
 
 | Source files over 500 lines (S539 count) | 23 under src, wave 5e891236 (`git ls-files 'src/*.cs' then wc -l`, over 500): SafeZipArchive 1234, XlsxReader 1234, AuthoringImporter 1047, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, seventeen of 528-746. JsonCanonicalizer (751) is split (298/160/306, #1102) and leaves the list. | receiver: backend lanes |
