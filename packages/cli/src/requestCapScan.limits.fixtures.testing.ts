@@ -76,6 +76,97 @@ export const everyDeclarationForms: readonly LimitForm[] = [
     'uncapped-fetch',
     'Request-typed first argument',
   ],
+  [
+    'a body var shadowing an outer Request in a parameter default',
+    'function typed(r: Request) { function inner(x = fetch(r)) { var r; return x; } inner(); }',
+    'function typed(u: string) { function inner(x = fetch(u)) { var u; return x; } inner(); }',
+    'uncapped-fetch',
+    'Request-typed first argument',
+  ],
+  [
+    'a reassigned untyped alias of a Request',
+    'function typed(r: Request) { return r; } function send(o: Request) { let r = o; r = o; fetch(r); }',
+    'function typed(r: Request) { return r; } function send(u: string) { let r = u; r = u; fetch(r); }',
+    'uncapped-fetch',
+    'Request inherits a body',
+  ],
+  [
+    'an untyped local holding a member read shadowing a typed name',
+    'function a(req: Request) { return req; } function b(d: { request: Request }) { const req = d.request; fetch(req); }',
+    "function a(req: Request) { return req; } function b(d: { n: string }) { const req = 'x'; fetch(req); }",
+    'uncapped-fetch',
+    'rebound by an untyped declaration',
+  ],
+  [
+    'a typed name overwritten through a parenthesised target',
+    "function a(u: string, o: Request) { let r: Request = new Request(u, { method: 'GET' }); (r) = o; fetch(r); }",
+    "function a(u: string) { const r: Request = new Request(u, { method: 'GET' }); fetch(r); }",
+    'uncapped-fetch',
+    'reassigned after its declaration',
+  ],
+  [
+    'a typed name overwritten through an as-cast target',
+    "function a(u: string, o: Request) { let r: Request = new Request(u, { method: 'GET' }); (r as Request) = o; fetch(r); }",
+    "function a(u: string) { const r: Request = new Request(u, { method: 'GET' }); fetch(r); }",
+    'uncapped-fetch',
+    'reassigned after its declaration',
+  ],
+  [
+    'a typed name overwritten through an array pattern',
+    "function a(u: string, o: Request[]) { let r: Request = new Request(u, { method: 'GET' }); [r] = o; fetch(r); }",
+    "function a(u: string) { const r: Request = new Request(u, { method: 'GET' }); fetch(r); }",
+    'uncapped-fetch',
+    'reassigned after its declaration',
+  ],
+  [
+    'a typed name overwritten through a rest element',
+    "function a(u: string, o: Request[]) { let r: Request = new Request(u, { method: 'GET' }); [...r] = o; fetch(r); }",
+    "function a(u: string) { const r: Request = new Request(u, { method: 'GET' }); fetch(r); }",
+    'uncapped-fetch',
+    'reassigned after its declaration',
+  ],
+  [
+    'a typed name overwritten through an object rest',
+    "function a(u: string, o: { r: Request }) { let r: Request = new Request(u, { method: 'GET' }); ({ ...r } = o); fetch(r); }",
+    "function a(u: string) { const r: Request = new Request(u, { method: 'GET' }); fetch(r); }",
+    'uncapped-fetch',
+    'reassigned after its declaration',
+  ],
+  [
+    'a typed name overwritten through a for-in head',
+    "function a(u: string, o: Record<string, Request>) { let r: Request = new Request(u, { method: 'GET' }); for (r in o) { fetch(r); } }",
+    "function a(u: string) { const r: Request = new Request(u, { method: 'GET' }); fetch(r); }",
+    'uncapped-fetch',
+    'reassigned after its declaration',
+  ],
+  [
+    'two Request constructions feeding each other',
+    "function a(u: string) { const x: Request = new Request(y, { method: 'GET' }); const y: Request = new Request(x, { method: 'GET' }); fetch(x); }",
+    "function a(u: string) { const x: Request = new Request(u, { method: 'GET' }); fetch(x); }",
+    'uncapped-fetch',
+    'Request inherits a body',
+  ],
+  [
+    'a for-of binding shadowing a typed name',
+    'function a(r: Request) { return r; } function b(list: unknown[]) { for (const r of list) { fetch(r); } }',
+    'function a(r: Request) { return r; } function b(u: string) { fetch(u); }',
+    'uncapped-fetch',
+    'rebound by an untyped declaration',
+  ],
+  [
+    'an untyped alias overwritten with a Request',
+    'function f(u: string, o: Request) { let r = u; r = o; fetch(r); }',
+    'function f(u: string, v: string) { let r = u; r = v; fetch(r); }',
+    'uncapped-fetch',
+    'Request inherits a body',
+  ],
+  [
+    'an untyped alias overwritten through a logical assignment',
+    'function f(u: string, o: Request) { let r = u; r ||= o; fetch(r); }',
+    'function f(u: string, v: string) { let r = u; r ||= v; fetch(r); }',
+    'uncapped-fetch',
+    'Request inherits a body',
+  ],
 ];
 
 /** Same-named locals in other functions: not one declaration, so one does not taint the other. */
@@ -91,6 +182,18 @@ export const shadowedCleanSources: readonly (readonly [name: string, source: str
   [
     'an untyped inner local shadowing a typed parameter',
     'function a(request: Request) { const send = (u: string) => { const request = u; fetch(request); }; return send; }',
+  ],
+  [
+    'a catch binding in another function',
+    "function a(u: string) { const r: Request = new Request(u, { method: 'GET' }); try { fetch(r); } catch (e) { return e; } }",
+  ],
+  [
+    'a function declaration with a typed name used elsewhere',
+    "function r() { return 1; } function a(u: string) { const q: Request = new Request(u, { method: 'GET' }); fetch(q); } function b() { return r(); }",
+  ],
+  [
+    'a conditional reading one constructed Request on both sides',
+    "function a(u: string, ok: boolean) { const x: Request = new Request(u, { method: 'GET' }); fetch(new Request(ok ? x : x, { method: 'GET' })); }",
   ],
 ];
 
@@ -142,6 +245,13 @@ export const closedLimitForms: readonly LimitForm[] = [
     'an SDK operation through a namespace import',
     "import * as sdk from './sdk.gen.js'; function f(client: C) { return sdk.postWidgets({ client, body: { a: 1 } }); }",
     "import * as sdk from './sdk.gen.js'; function f(client: C) { return sdk.postWidgets({ client }); }",
+    'uncapped-route',
+    'POST /widgets',
+  ],
+  [
+    'an SDK operation through a parenthesised alias callee',
+    "import { postWidgets as pw } from './sdk.gen.js'; function f(client: C) { return (pw)({ client, body: { a: 1 } }); }",
+    "import { postWidgets as pw } from './sdk.gen.js'; function f(client: C) { return (pw)({ client }); }",
     'uncapped-route',
     'POST /widgets',
   ],

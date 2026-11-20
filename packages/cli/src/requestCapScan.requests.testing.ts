@@ -15,8 +15,16 @@ export type Declaration = {
   typed: boolean;
   init: ts.Expression | undefined;
   reassigned: boolean;
-  /** A destructured binding: what it holds is unknown, so it never proves a name is not a `Request`. */
-  opaque?: boolean;
+  /** Values later assigned with a plain `=`; they can carry a `Request` as much as the initializer. */
+  assigned: ts.Expression[];
+  /** Written by a form whose value syntax cannot read (destructuring, `for...of`, compound). */
+  unknownAssign: boolean;
+  /** A parameter: visible to the parameter initializers of its function, unlike a body `var`. */
+  param: boolean;
+  /** Carries a non-`Request` type annotation (or is a function): it is known not to be one. */
+  annotated: boolean;
+  /** A destructured binding: what it holds is unknown. */
+  opaque: boolean;
 };
 
 /** Every declaration in the file, by name; a use resolves to the nearest scope declaring it. */
@@ -63,8 +71,11 @@ function bindingIdentifiers(name: ts.BindingName): ts.Identifier[] {
 function resolveDeclarations(typed: RequestTyped, id: ts.Identifier): Declaration[] | undefined {
   const declarations = typed.get(id.text);
   if (declarations === undefined) return undefined;
-  for (let scope: ts.Node | undefined = id.parent; scope; scope = scope.parent) {
-    const here = declarations.filter((d) => d.scope === scope);
+  let child: ts.Node = id;
+  for (let scope: ts.Node | undefined = id.parent; scope; child = scope, scope = scope.parent) {
+    // A parameter initializer cannot see the body's `var`s of its own function.
+    const inParameters = ts.isFunctionLike(scope) && ts.isParameter(child);
+    const here = declarations.filter((d) => d.scope === scope && (!inParameters || d.param));
     if (here.length > 0) return here;
   }
   // No declaration in reach (a global, a name bound where the walk cannot see): fail closed on
@@ -74,12 +85,16 @@ function resolveDeclarations(typed: RequestTyped, id: ts.Identifier): Declaratio
 }
 
 /** Marks the names an assignment target overwrites, including destructuring targets. */
-function markAssigned(target: ts.Node, typed: RequestTyped): void {
+function markAssigned(node: ts.Node, typed: RequestTyped, value?: ts.Expression): void {
+  const target = ts.isExpression(node) ? unwrap(node) : node;
   if (ts.isIdentifier(target)) {
-    for (const decl of resolveDeclarations(typed, target) ?? []) decl.reassigned = true;
+    for (const decl of resolveDeclarations(typed, target) ?? []) {
+      decl.reassigned = true;
+      if (value === undefined) decl.unknownAssign = true;
+      else decl.assigned.push(value);
+    }
     return;
   }
-  if (ts.isParenthesizedExpression(target)) return markAssigned(target.expression, typed);
   if (ts.isArrayLiteralExpression(target)) {
     for (const element of target.elements) markAssigned(element, typed);
   } else if (ts.isObjectLiteralExpression(target)) {
@@ -95,33 +110,48 @@ function markAssigned(target: ts.Node, typed: RequestTyped): void {
 export function requestTypedNames(sf: ts.SourceFile): RequestTyped {
   const typed: RequestTyped = new Map();
   const declare = (id: ts.Identifier, declaration: Declaration): void => {
-    typed.set(id.text, [...(typed.get(id.text) ?? []), declaration]);
+    const list = typed.get(id.text);
+    if (list === undefined) typed.set(id.text, [declaration]);
+    else list.push(declaration);
   };
+  const fresh = (scope: ts.Node): Declaration => ({
+    scope,
+    typed: false,
+    init: undefined,
+    reassigned: false,
+    assigned: [],
+    unknownAssign: false,
+    param: false,
+    annotated: false,
+    opaque: false,
+  });
   const collect = (node: ts.Node): void => {
     if (ts.isParameter(node) || ts.isVariableDeclaration(node)) {
       const scope = declarationScope(node);
       if (ts.isIdentifier(node.name)) {
         const isTyped = isRequestTypeNode(node.type);
         declare(node.name, {
-          scope,
+          ...fresh(scope),
           typed: isTyped,
           init: node.initializer,
-          reassigned: false,
+          param: ts.isParameter(node),
+          annotated: node.type !== undefined && !isTyped,
         });
       } else {
         for (const id of bindingIdentifiers(node.name)) {
-          declare(id, { scope, typed: false, init: undefined, reassigned: false, opaque: true });
+          declare(id, { ...fresh(scope), param: ts.isParameter(node), opaque: true });
         }
       }
     } else if (ts.isFunctionDeclaration(node) && node.name !== undefined) {
-      declare(node.name, { scope: node.parent, typed: false, init: undefined, reassigned: false });
+      declare(node.name, { ...fresh(node.parent), annotated: true });
     }
     ts.forEachChild(node, collect);
   };
   collect(sf);
   const findAssignments = (node: ts.Node): void => {
     if (ts.isBinaryExpression(node) && assignmentOperators.has(node.operatorToken.kind)) {
-      markAssigned(node.left, typed);
+      const plain = node.operatorToken.kind === ts.SyntaxKind.EqualsToken;
+      markAssigned(node.left, typed, plain || ts.isIdentifier(node.left) ? node.right : undefined);
     } else if (
       (ts.isForOfStatement(node) || ts.isForInStatement(node)) &&
       !ts.isVariableDeclarationList(node.initializer)
@@ -183,15 +213,13 @@ const assignmentOperators: ReadonlySet<ts.SyntaxKind> = new Set([
 
 const reassignedReason = 'Request-typed value reassigned after its declaration';
 const opaqueReason = 'Request-typed name rebound by destructuring';
+const unknownReason = 'Request-typed name rebound by an untyped declaration';
 const unprovenReason = 'Request-typed value without a visible Request construction';
 
 /**
- * Why a name used as a `Request` input may carry a body, or undefined when it is not a `Request`
- * or its own `new Request` init proves it cannot. The use resolves to the declarations of the
- * nearest scope that declares the name, and every one of them is checked. A typed name is
- * body-free only through a visible construction; any other initializer, and a later assignment,
- * is reported. An untyped alias is followed to what it holds. A declaration already being
- * followed is circular, so it is reported rather than followed into a loop.
+ * Why a name used as a `Request` input may carry a body, or undefined. The use resolves to the
+ * declarations of the nearest scope declaring the name and every one is checked: a typed name is
+ * body-free only through a visible construction, an untyped one is followed to what it holds.
  */
 function declaredReason(
   id: ts.Identifier,
@@ -202,30 +230,78 @@ function declaredReason(
 ): string | undefined {
   for (const decl of resolveDeclarations(typed, id) ?? []) {
     let reason: string | undefined;
-    if (decl.typed) {
-      if (decl.reassigned) reason = reassignedReason;
-      else if (decl.init === undefined) reason = bareReason;
-      else if (seen.has(decl)) reason = 'Request inherits a body';
-      else {
-        seen.add(decl);
-        const construction = unwrap(decl.init);
-        reason = isRequestConstruction(construction, constructors)
-          ? requestBodyReason(construction, typed, constructors, seen)
-          : unprovenReason;
-      }
-    } else if (decl.opaque === true) {
-      // A destructured name hides what it holds: reported when the file also types the name `Request`.
-      if (typed.get(id.text)?.some((d) => d.typed) === true) reason = opaqueReason;
-    } else if (decl.init !== undefined && !decl.reassigned && !seen.has(decl)) {
+    if (!decl.typed) {
+      reason = untypedReason(decl, id.text, typed, constructors, seen);
+    } else if (decl.reassigned) reason = reassignedReason;
+    else if (decl.init === undefined) reason = bareReason;
+    else if (seen.has(decl)) reason = 'Request inherits a body';
+    else {
       seen.add(decl);
-      const held = unwrap(decl.init);
-      reason = isRequestConstruction(held, constructors)
-        ? requestBodyReason(held, typed, constructors, seen)
-        : inheritedBodyReason(held, typed, constructors, seen);
+      const construction = unwrap(decl.init);
+      reason = isRequestConstruction(construction, constructors)
+        ? requestBodyReason(construction, typed, constructors, seen)
+        : unprovenReason;
     }
     if (reason !== undefined) return reason;
   }
   return undefined;
+}
+
+/** Whether syntax says what the value is: a literal holds no `Request`. */
+function isInertValue(value: ts.Expression): boolean {
+  return (
+    ts.isLiteralExpression(value) ||
+    ts.isTemplateExpression(value) ||
+    ts.isArrayLiteralExpression(value) ||
+    ts.isObjectLiteralExpression(value) ||
+    value.kind === ts.SyntaxKind.TrueKeyword ||
+    value.kind === ts.SyntaxKind.FalseKeyword ||
+    value.kind === ts.SyntaxKind.NullKeyword
+  );
+}
+
+/**
+ * An untyped declaration is followed to its initializer and every plain assignment. What syntax
+ * cannot read (a call result, a member, a destructured or compound write) is reported when the
+ * file also types the name `Request`, so a shadow never turns a flagged use into a pass.
+ */
+function untypedReason(
+  decl: Declaration,
+  name: string,
+  typed: RequestTyped,
+  constructors: ReadonlySet<string>,
+  seen: Set<Declaration>,
+): string | undefined {
+  if (decl.annotated || seen.has(decl)) return undefined;
+  const rebound = typed.get(name)?.some((d) => d.typed) === true;
+  if (decl.opaque || decl.unknownAssign) return rebound ? opaqueReason : undefined;
+  seen.add(decl);
+  const values = decl.init === undefined ? decl.assigned : [decl.init, ...decl.assigned];
+  if (values.length === 0) return rebound ? unknownReason : undefined;
+  for (const value of values) {
+    const held = unwrap(value);
+    const construction = isRequestConstruction(held, constructors);
+    const reason = construction
+      ? requestBodyReason(held, typed, constructors, seen)
+      : inheritedBodyReason(held, typed, constructors, seen);
+    if (reason !== undefined) return reason;
+    if (rebound && !construction && !isInertValue(held) && !isFollowed(held)) return unknownReason;
+  }
+  return undefined;
+}
+
+/** The expression shapes inheritedBodyReason follows itself. */
+function isFollowed(value: ts.Expression): boolean {
+  if (ts.isIdentifier(value) || ts.isConditionalExpression(value)) return true;
+  if (ts.isBinaryExpression(value)) {
+    const kind = value.operatorToken.kind;
+    return (
+      kind === ts.SyntaxKind.QuestionQuestionToken ||
+      kind === ts.SyntaxKind.BarBarToken ||
+      kind === ts.SyntaxKind.AmpersandAmpersandToken
+    );
+  }
+  return ts.isCallExpression(value) && memberName(unwrap(value.expression)) === 'clone';
 }
 
 /**
@@ -245,8 +321,8 @@ function inheritedBodyReason(
   }
   if (ts.isConditionalExpression(source)) {
     return (
-      inheritedBodyReason(source.whenTrue, typed, constructors, seen) ??
-      inheritedBodyReason(source.whenFalse, typed, constructors, seen)
+      inheritedBodyReason(source.whenTrue, typed, constructors, new Set(seen)) ??
+      inheritedBodyReason(source.whenFalse, typed, constructors, new Set(seen))
     );
   }
   if (
@@ -256,8 +332,8 @@ function inheritedBodyReason(
       source.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken)
   ) {
     return (
-      inheritedBodyReason(source.left, typed, constructors, seen) ??
-      inheritedBodyReason(source.right, typed, constructors, seen)
+      inheritedBodyReason(source.left, typed, constructors, new Set(seen)) ??
+      inheritedBodyReason(source.right, typed, constructors, new Set(seen))
     );
   }
   if (ts.isCallExpression(source) && memberName(unwrap(source.expression)) === 'clone') {
