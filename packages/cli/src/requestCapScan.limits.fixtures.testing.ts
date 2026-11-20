@@ -167,6 +167,55 @@ export const everyDeclarationForms: readonly LimitForm[] = [
     'uncapped-fetch',
     'Request inherits a body',
   ],
+  [
+    'a RequestInfo-typed shadow of a typed name',
+    'function a(req: Request) { return req; } function b(req: RequestInfo) { fetch(req); }',
+    'function a(req: Request) { return req; } function b(req: string) { fetch(req); }',
+    'uncapped-fetch',
+    'rebound by an untyped declaration',
+  ],
+  [
+    'an any-typed shadow overwritten with a Request',
+    "function a(req: Request) { return req; } function b(o: Request) { let req: any = 'x'; req = o; fetch(req); }",
+    "function a(req: Request) { return req; } function b(v: string) { let req: any = 'x'; req = v; fetch(req); }",
+    'uncapped-fetch',
+    'Request inherits a body',
+  ],
+  [
+    'a function declaration overwritten with a Request',
+    'function a(req: Request) { return req; } function b(o: Request) { function req() { return 1; } req = o; fetch(req); }',
+    'function a(req: Request) { return req; } function b(v: string) { function req() { return 1; } req = v; fetch(req); }',
+    'uncapped-fetch',
+    'Request inherits a body',
+  ],
+  [
+    'an untyped local copying an untyped parameter',
+    'function a(req: Request) { return req; } function b(d) { const req = d; fetch(req); }',
+    'function a(req: Request) { return req; } function b(d: string) { const req = d; fetch(req); }',
+    'uncapped-fetch',
+    'rebound by an untyped declaration',
+  ],
+  [
+    'an untyped local asserted to Request',
+    'function a(req: Request) { return req; } function b(h) { const req = h as Request; fetch(req); }',
+    'function a(req: Request) { return req; } function b(h: string) { const req = h; fetch(req); }',
+    'uncapped-fetch',
+    'rebound by an untyped declaration',
+  ],
+  [
+    'an untyped parameter defaulting to an unresolved name',
+    'function a(req: Request) { return req; } function b(req = url) { fetch(req); }',
+    "function a(req: Request) { return req; } function b(req = 'x') { fetch(req); }",
+    'uncapped-fetch',
+    'rebound by an untyped declaration',
+  ],
+  [
+    'an untyped alias whose later assignment is unknown',
+    "function a(req: Request) { return req; } function b(d) { let x = 'a'; x = d; const req = x; fetch(req); }",
+    "function a(req: Request) { return req; } function b(d: string) { let x = 'a'; x = d; const req = x; fetch(req); }",
+    'uncapped-fetch',
+    'rebound by an untyped declaration',
+  ],
 ];
 
 /** Same-named locals in other functions: not one declaration, so one does not taint the other. */
@@ -194,6 +243,18 @@ export const shadowedCleanSources: readonly (readonly [name: string, source: str
   [
     'a conditional reading one constructed Request on both sides',
     "function a(u: string, ok: boolean) { const x: Request = new Request(u, { method: 'GET' }); fetch(new Request(ok ? x : x, { method: 'GET' })); }",
+  ],
+  [
+    'a primitive-typed parameter of the same name',
+    'function a(r: Request) { return r; } function b(r: string) { fetch(r); }',
+  ],
+  [
+    'a function declaration of the same name',
+    'function a(r: Request) { return r; } function b() { function r() { return 1; } fetch(r); }',
+  ],
+  [
+    'a loop head binding used only inside the loop',
+    "function a(u: string, list: string[]) { const r: Request = new Request(u, { method: 'GET' }); for (const r of list) { u; } fetch(r); }",
   ],
 ];
 

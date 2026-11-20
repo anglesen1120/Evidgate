@@ -135,7 +135,7 @@ export function requestTypedNames(sf: ts.SourceFile): RequestTyped {
           typed: isTyped,
           init: node.initializer,
           param: ts.isParameter(node),
-          annotated: node.type !== undefined && !isTyped,
+          annotated: isKeywordType(node.type),
         });
       } else {
         for (const id of bindingIdentifiers(node.name)) {
@@ -272,7 +272,8 @@ function untypedReason(
   constructors: ReadonlySet<string>,
   seen: Set<Declaration>,
 ): string | undefined {
-  if (decl.annotated || seen.has(decl)) return undefined;
+  const settled = decl.annotated && decl.assigned.length === 0 && !decl.unknownAssign;
+  if (settled || seen.has(decl)) return undefined;
   const rebound = typed.get(name)?.some((d) => d.typed) === true;
   if (decl.opaque || decl.unknownAssign) return rebound ? opaqueReason : undefined;
   seen.add(decl);
@@ -285,23 +286,53 @@ function untypedReason(
       ? requestBodyReason(held, typed, constructors, seen)
       : inheritedBodyReason(held, typed, constructors, seen);
     if (reason !== undefined) return reason;
-    if (rebound && !construction && !isInertValue(held) && !isFollowed(held)) return unknownReason;
+    if (rebound && !knownOther(held, typed, new Set())) return unknownReason;
   }
   return undefined;
 }
 
-/** The expression shapes inheritedBodyReason follows itself. */
-function isFollowed(value: ts.Expression): boolean {
-  if (ts.isIdentifier(value) || ts.isConditionalExpression(value)) return true;
-  if (ts.isBinaryExpression(value)) {
-    const kind = value.operatorToken.kind;
-    return (
-      kind === ts.SyntaxKind.QuestionQuestionToken ||
-      kind === ts.SyntaxKind.BarBarToken ||
-      kind === ts.SyntaxKind.AmpersandAmpersandToken
-    );
+/** Whether a type annotation is a primitive keyword (`string`, `number`, ...), never a `Request`. */
+function isKeywordType(type: ts.TypeNode | undefined): boolean {
+  if (type === undefined) return false;
+  if (ts.isArrayTypeNode(type)) return isKeywordType(type.elementType);
+  return (
+    ts.isLiteralTypeNode(type) ||
+    type.kind === ts.SyntaxKind.StringKeyword ||
+    type.kind === ts.SyntaxKind.NumberKeyword ||
+    type.kind === ts.SyntaxKind.BooleanKeyword ||
+    type.kind === ts.SyntaxKind.BigIntKeyword ||
+    type.kind === ts.SyntaxKind.VoidKeyword ||
+    type.kind === ts.SyntaxKind.UndefinedKeyword
+  );
+}
+
+/** Whether syntax proves a value is not a `Request` that inheritedBodyReason missed. */
+function knownOther(
+  value: ts.Expression,
+  typed: RequestTyped,
+  visiting: Set<Declaration>,
+): boolean {
+  const v = unwrap(value);
+  if (isInertValue(v) || ts.isNewExpression(v)) return true;
+  if (ts.isConditionalExpression(v)) {
+    return knownOther(v.whenTrue, typed, visiting) && knownOther(v.whenFalse, typed, visiting);
   }
-  return ts.isCallExpression(value) && memberName(unwrap(value.expression)) === 'clone';
+  if (ts.isBinaryExpression(v)) {
+    return knownOther(v.left, typed, visiting) && knownOther(v.right, typed, visiting);
+  }
+  if (!ts.isIdentifier(v)) return false;
+  const decls = resolveDeclarations(typed, v);
+  return (
+    decls !== undefined &&
+    decls.every((d) => {
+      if (d.typed) return true;
+      if (d.opaque || d.unknownAssign || visiting.has(d)) return false;
+      if (d.annotated && d.assigned.length === 0) return true;
+      visiting.add(d);
+      const values = d.init === undefined ? d.assigned : [d.init, ...d.assigned];
+      return values.length > 0 && values.every((x) => knownOther(x, typed, visiting));
+    })
+  );
 }
 
 /**
