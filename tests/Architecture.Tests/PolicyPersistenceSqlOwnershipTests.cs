@@ -25,8 +25,7 @@ public class PolicyPersistenceSqlOwnershipTests
     };
 
     /// <summary>The persistence directory whose SQL text is this module's own; SQL lives nowhere else.</summary>
-    private static string PersistenceDirectory =>
-        Path.Combine(SolutionLayout.RepoRoot, "src", "Modules", "Evidgate.Modules.Policy", "Infrastructure", "Persistence");
+    private const string PersistenceDirectory = "src/Modules/Evidgate.Modules.Policy/Infrastructure/Persistence";
 
     [Fact]
     public void Synthetic_Cross_Module_Read_Is_Detected()
@@ -68,10 +67,8 @@ public class PolicyPersistenceSqlOwnershipTests
     [Fact]
     public void Persistence_Sql_Names_Only_Tables_Policy_Owns()
     {
-        var files = Directory
-            .EnumerateFiles(PersistenceDirectory, "*.cs", SearchOption.AllDirectories)
-            .Order(StringComparer.Ordinal)
-            .Select(path => (Path: Path.GetRelativePath(PersistenceDirectory, path), Text: File.ReadAllText(path)))
+        var files = SolutionLayout.SourcesOf(PersistenceDirectory)
+            .Select(file => (Path: file.Path[(PersistenceDirectory.Length + 1)..], file.Text))
             .ToList();
 
         // The statements must actually be in the scan, or a clean result proves nothing.

@@ -267,25 +267,8 @@ public class EvaluatorPurityTests
         mutable.ShouldBeEmpty();
     }
 
-    private static SortedDictionary<string, string> EvaluatorSources()
-    {
-        var root = Path.Combine(SolutionLayout.RepoRoot, EvaluatorDirectory);
-        var sources = new SortedDictionary<string, string>(StringComparer.Ordinal);
-
-        foreach (var file in Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories))
-        {
-            var relative = Path.GetRelativePath(SolutionLayout.RepoRoot, file).Replace('\\', '/');
-            if (relative.Contains("/obj/", StringComparison.Ordinal)
-                || relative.Contains("/bin/", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            sources[relative] = File.ReadAllText(file);
-        }
-
-        return sources;
-    }
+    private static SortedDictionary<string, string> EvaluatorSources() =>
+        new(SolutionLayout.SourcesOf(EvaluatorDirectory).ToDictionary(file => file.Path, file => file.Text), StringComparer.Ordinal);
 
     /// <summary>A type with the two shapes the static-state rule must reject.</summary>
     private static class SharedState

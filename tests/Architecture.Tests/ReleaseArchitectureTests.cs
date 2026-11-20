@@ -33,14 +33,9 @@ public sealed class ReleaseArchitectureTests
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     /// <summary>Every C# source of the module that owns the release and run tables.</summary>
-    private static IReadOnlyList<(string Path, string Text)> ModuleSources()
+    private static List<(string Path, string Text)> ModuleSources()
     {
-        var root = Path.Combine(SolutionLayout.RepoRoot, "src", "Modules", "Evidgate.Modules.Orchestrator");
-
-        var paths = Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories)
-            .Order(StringComparer.Ordinal);
-
-        return [.. paths.Select(path => (Path.GetRelativePath(SolutionLayout.RepoRoot, path), File.ReadAllText(path)))];
+        return SolutionLayout.SourcesOf("src/Modules/Evidgate.Modules.Orchestrator");
     }
 
     /// <summary>The statements of a source file, split on the semicolon that ends them.</summary>
