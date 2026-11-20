@@ -220,9 +220,10 @@ public sealed class IsolationOrg
     public required long GithubInstallationId { get; init; }
 
     /// <summary>
-    /// The org's two support grants (<c>{g}</c>), owner-seeded because the request route is the operator's and is not
-    /// mapped. Both are <c>requested</c> and both ids are distinct so the approve and revoke probes never share a row;
-    /// nothing in this suite approves one, so the list walk reads the same two states every time it runs.
+    /// The org's three support grants (<c>{g}</c>), owner-seeded because the request route is the operator's and is not
+    /// mapped. [0] and [1] are <c>requested</c> and distinct so the approve and revoke probes never share a row; [2]
+    /// is already past its expiry. Nothing in this suite approves one, so the list walk reads the same three states
+    /// every time it runs.
     /// </summary>
     public required IReadOnlyList<Guid> SupportGrantIds { get; init; }
 
@@ -309,8 +310,6 @@ public sealed class IsolationOrg
 /// </para>
 /// <para>Not buildable yet (see <see cref="NotYetBuildable"/>):</para>
 /// <list type="bullet">
-/// <item>an expired support grant — the request route (02.8.1) is not served, so the world seeds two
-/// <c>requested</c> grants through the owner seam and never expires one;</item>
 /// <item>one real session per user — 02.3.2 (sessions) is not merged; members are identified by
 /// <see cref="IsolationApiFactory"/>'s header stand-in instead;</item>
 /// <item>a custom role — <c>POST /v1/roles</c> is off by default (<c>EVIDGATE:Identity:CustomRolesEnabled</c>);
@@ -338,7 +337,6 @@ public sealed class IsolationWorld
     /// <summary>The 02 §7 fixture items this world cannot build yet, with the reason.</summary>
     public static IReadOnlyList<string> NotYetBuildable { get; } =
     [
-        "expired support grant: the request route (02.8.1) is not served; the world seeds requested grants only",
         "one session per user: 02.3.2 (sessions) not merged; members use the header stand-in",
         "custom role: POST /v1/roles disabled by default (EVIDGATE:Identity:CustomRolesEnabled=false)",
     ];
@@ -573,9 +571,9 @@ public sealed class IsolationWorld
         }
 
         /// <summary>
-        /// The org's two support grants (02.8.1 §5), both filed as <c>requested</c>: the tenant's request route is the
+        /// The org's three support grants (02.8.1 §5): two filed as <c>requested</c> and one whose expiry has passed. The tenant's request route is the
         /// operator's and is not mapped in this host, so no route of this world can file one and only the owner seam
-        /// can. Two rows, and two distinct operator accounts, so the approve and revoke probes never touch one row —
+        /// can. Three rows, and three distinct operator accounts, so the approve and revoke probes never touch one row —
         /// the suite's world is shared by every test in the collection, and a mutated grant would change what a later
         /// test reads. The operator accounts are real <c>public."user"</c> rows because the table's FK requires them;
         /// they hold no membership, which is what an operator account is.
@@ -586,7 +584,12 @@ public sealed class IsolationWorld
             var grants = new List<Guid>();
 
             await using var connection = await OpenOwnerAsync().ConfigureAwait(false);
-            foreach (var reason in new[] { "isolation probe: approve", "isolation probe: revoke" })
+            foreach (var (reason, expired) in new[]
+                     {
+                         ("isolation probe: approve", false),
+                         ("isolation probe: revoke", false),
+                         ("isolation probe: expired", true),
+                     })
             {
                 var operatorUser = Guid.CreateVersion7();
                 var grant = Guid.CreateVersion7();
@@ -598,7 +601,7 @@ public sealed class IsolationWorld
                         (id, org_id, operator_user_id, scopes, project_ids, reason, expires_at, created_at)
                     values
                         (@id, @org_id, @operator, array['run:read'], '{}'::uuid[], @reason,
-                         now() + interval '2 hours', now())
+                         now() + @expires_in::interval, now() - @age::interval)
                     """,
                     connection);
 
@@ -607,6 +610,9 @@ public sealed class IsolationWorld
                 insert.Parameters.AddWithValue("id", grant);
                 insert.Parameters.AddWithValue("org_id", org);
                 insert.Parameters.AddWithValue("reason", reason);
+                // An expired grant is filed four hours ago and lapsed one hour ago: inside the 72 h expiry window.
+                insert.Parameters.AddWithValue("expires_in", expired ? "-1 hour" : "2 hours");
+                insert.Parameters.AddWithValue("age", expired ? "4 hours" : "0 seconds");
                 await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
                 grants.Add(grant);
