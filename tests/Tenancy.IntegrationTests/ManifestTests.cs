@@ -277,9 +277,12 @@ public sealed class ManifestTests
         answer.Body.GetRawText().ShouldNotContain(token);
         reasons.ShouldContain("secret_in_variant_params");
 
-        // A reference is not a secret.
+        // A reference under a secret-named key is refused here because run creation refuses it (the normaliser has no reference exemption).
         var referenced = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "x", ["api_token"] = "secret:ci_token" }], ["staging"]);
-        (await UploadAsync(world, referenced.ToJsonString())).Status.ShouldBe(HttpStatusCode.Created);
+        var refused = await UploadAsync(world, referenced.ToJsonString());
+        refused.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        Details(refused).Select(detail => detail.GetProperty("reason").GetString()).Distinct().ShouldBe(["invalid_variant"]);
+        refused.Body.GetRawText().ShouldNotContain("ci_token");
     }
 
     // ------------------------------------------------------------------ AC5
