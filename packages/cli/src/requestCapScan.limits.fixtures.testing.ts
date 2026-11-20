@@ -272,6 +272,13 @@ export const everyDeclarationForms: readonly LimitForm[] = [
     'uncapped-fetch',
     'rebound by an untyped declaration',
   ],
+  [
+    'an untyped parameter defaulting to an outer typed Request',
+    'function outer(r: Request) { function inner(alias = r) { fetch(alias); } inner(); }',
+    'function outer(r: string) { function inner(alias = r) { fetch(alias); } inner(); }',
+    'uncapped-fetch',
+    'Request inherits a body',
+  ],
 ];
 
 /** Same-named locals in other functions: not one declaration, so one does not taint the other. */

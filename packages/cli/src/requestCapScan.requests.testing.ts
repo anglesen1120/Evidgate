@@ -277,7 +277,7 @@ function untypedReason(
   const rebound = typed.get(name)?.some((d) => d.typed) === true;
   if (decl.opaque || decl.unknownAssign) return rebound ? opaqueReason : undefined;
   // A caller can pass any value for an untyped parameter, whatever its default.
-  if (decl.param && !decl.annotated) return rebound ? unknownReason : undefined;
+  if (decl.param && !decl.annotated && rebound) return unknownReason;
   seen.add(decl);
   const values = decl.init === undefined ? decl.assigned : [decl.init, ...decl.assigned];
   if (values.length === 0) return rebound ? unknownReason : undefined;
