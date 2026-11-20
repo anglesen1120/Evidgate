@@ -101,12 +101,37 @@ public sealed class RateLimitGateSeamBoundaryTests
     [InlineData("nameof", "var n = nameof(RateLimitGate);", "non-call reference")]
     [InlineData("unresolvable argument count", "RateLimitGate.AcquireAsync(ctx, 0, Admit, \"m\", token, extra);", "unresolved call shape")]
     [InlineData("string literal reflection", "var t = Type.GetType(\"Evidgate.Modules.Identity.Ci.RateLimitGate\");", "string literal")]
-    [InlineData("type redeclared", "internal static partial class RateLimitGate { }", "declares RateLimitGate")]
     public void Scan_BypassForm_IsRedAndNamed(string form, string statement, string expected)
     {
-        var report = Scan([(OtherFile, Wrap(statement))], Allowed.Where(_ => false).ToArray());
+        var report = Scan([(OtherFile, Wrap(statement))], []);
 
         report.Violations.ShouldContain(finding => finding.StartsWith(OtherFile, StringComparison.Ordinal) && finding.Contains(expected, StringComparison.Ordinal), form);
+    }
+
+    [Fact]
+    public void Scan_TypeRedeclaredOutsideTheAllowedFile_IsRed()
+    {
+        var report = Scan([(OtherFile, "namespace Evidgate.Modules.Identity.Ci { internal static partial class RateLimitGate { } }")], []);
+
+        report.Violations.ShouldContain(finding => finding.Contains("declares RateLimitGate", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Scan_UnicodeEscapedGateName_IsStillSeen()
+    {
+        var report = Scan([(OtherFile, Wrap("R\\u0061teLimitGate.AcquireAsync(ctx, 0, Admit, \"m\", token);"))], []);
+
+        report.Violations.ShouldContain(finding => finding.Contains("delegate overload called", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("#if NET10_0\nRateLimitGate.AcquireAsync(ctx, 0, Admit, \"m\", token);\n#endif")]
+    [InlineData("#if NET10_0\nR\\u0061teLimitGate.Go(ctx);\n#endif")]
+    public void Scan_CallInsideADisabledPreprocessorRegion_IsRed(string statement)
+    {
+        var report = Scan([(OtherFile, Wrap(statement))], []);
+
+        report.Violations.ShouldContain(finding => finding.Contains("disabled preprocessor region", StringComparison.Ordinal));
     }
 
     [Theory]
@@ -224,7 +249,7 @@ public sealed class RateLimitGateSeamBoundaryTests
     }
 
     private static string Wrap(string statement) =>
-        "using System; class Route { async System.Threading.Tasks.Task M() { " + statement + " } }";
+        "using System; class Route { async System.Threading.Tasks.Task M() {\n" + statement + "\n} }";
 
     private static (string Path, string Text)[] ProductionSources() =>
         Directory
@@ -248,16 +273,22 @@ public sealed class RateLimitGateSeamBoundaryTests
         {
             scanned++;
 
-            // A cheap pre-filter: a file that never mentions the type cannot reach it, and parsing every file is slow.
-            if (!text.Contains(GateType, StringComparison.Ordinal))
+            var tree = CSharpSyntaxTree.ParseText(text);
+
+            // Code under a symbol-dependent #if is compiled in production but parsed as disabled text here, so any
+            // disabled region that could hold the call is red instead of being skipped.
+            foreach (var trivia in tree.GetRoot().DescendantTrivia().Where(trivia => trivia.IsKind(SyntaxKind.DisabledTextTrivia)))
             {
-                continue;
+                var disabled = trivia.ToString();
+                if (disabled.Contains(GateType, StringComparison.Ordinal) || disabled.Contains(MethodName, StringComparison.Ordinal) || disabled.Contains("\\u", StringComparison.Ordinal))
+                {
+                    violations.Add($"{path}:{trivia.GetLocation().GetLineSpan().StartLinePosition.Line + 1}: disabled preprocessor region could hold a call to the gate");
+                }
             }
 
-            var tree = CSharpSyntaxTree.ParseText(text);
             if (tree.GetDiagnostics().Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error))
             {
-                violations.Add($"{path}: source that mentions {GateType} does not parse, so the scan cannot resolve it");
+                violations.Add($"{path}: source does not parse, so the scan cannot rule out a call to {GateType}");
 
                 continue;
             }
