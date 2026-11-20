@@ -11,14 +11,21 @@ import { CliError } from './errors.js';
  */
 export const maxResponseBytes = 1024 * 1024;
 
-/** Refusal for an answer over its cap; the text names neither the URL nor any body byte. */
+/**
+ * Refusal for an answer over its cap; the text names neither the URL nor any body byte. `cap` is
+ * the limit the refusing reader counted against, so a caller reading through a second, smaller
+ * wrapper can tell which of the two caps fired.
+ */
 export class ResponseTooLargeError extends CliError {
-  constructor() {
+  readonly cap: number;
+
+  constructor(cap: number) {
     super('the server answer is larger than the CLI accepts', {
       code: 'response_too_large',
       hint: 'the answer exceeded the size limit; retrying will not help',
     });
     this.name = 'ResponseTooLargeError';
+    this.cap = cap;
   }
 }
 
@@ -84,13 +91,22 @@ type Chunk =
   | { readonly done: true; readonly value?: Uint8Array | undefined }
   | { readonly done: false; readonly value: Uint8Array };
 
-/** One chunk, or undefined when the read itself failed (abort, timeout, socket drop). */
-async function readChunk(source: ChunkSource): Promise<Chunk | undefined> {
+/** What one read settles with, including a nested bounded wrapper's own refusal. */
+type ReadOutcome =
+  | { readonly kind: 'chunk'; readonly chunk: Chunk }
+  | { readonly kind: 'refused'; readonly error: CliError }
+  | { readonly kind: 'failed' };
+
+/**
+ * One chunk. A nested wrapper refuses by erroring its stream, and that `CliError` is the answer:
+ * only a bare rejection (abort, timeout, socket drop) is a read failure.
+ */
+async function readChunk(source: ChunkSource): Promise<ReadOutcome> {
   source.reading = true;
   try {
-    return await source.reader.read();
-  } catch {
-    return undefined;
+    return { kind: 'chunk', chunk: await source.reader.read() };
+  } catch (error) {
+    return error instanceof CliError ? { kind: 'refused', error } : { kind: 'failed' };
   } finally {
     source.reading = false;
   }
@@ -111,7 +127,8 @@ async function refuse(
  * The same answer with a body that errors with `ResponseTooLargeError` once it passes `cap`
  * bytes, or with `ResponseReadError` when the source fails or ends mid-answer. The refusal is
  * raised from the stream, so `text()`, `json()` and a manual reader all see it, and the
- * underlying reader is cancelled and released as soon as it fires.
+ * underlying reader is cancelled and released as soon as it fires. A nested wrapper's refusal is
+ * re-raised unchanged instead of being counted as a read failure.
  */
 export function boundedResponse(response: Response, cap: number = maxResponseBytes): Response {
   const body = response.body;
@@ -126,15 +143,21 @@ export function boundedResponse(response: Response, cap: number = maxResponseByt
   const bounded = new ReadableStream<Uint8Array>({
     async pull(controller) {
       if (declared !== undefined && declared > cap) {
-        await refuse(source, controller, new ResponseTooLargeError());
+        await refuse(source, controller, new ResponseTooLargeError(cap));
         return;
       }
-      const chunk = await readChunk(source);
-      if (chunk === undefined) {
+      const read = await readChunk(source);
+      if (read.kind === 'refused') {
+        // The inner wrapper's own refusal already says whether retrying can help; re-raise it.
+        await refuse(source, controller, read.error);
+        return;
+      }
+      if (read.kind === 'failed') {
         // An abort, a timeout or a socket drop mid-answer is a read failure, not bad JSON.
         await refuse(source, controller, new ResponseReadError());
         return;
       }
+      const chunk = read.chunk;
       if (chunk.done) {
         release(source);
         controller.close();
@@ -144,7 +167,7 @@ export function boundedResponse(response: Response, cap: number = maxResponseByt
       const value = chunk.value;
       bytes += value instanceof Uint8Array ? value.byteLength : Number.POSITIVE_INFINITY;
       if (bytes > cap) {
-        await refuse(source, controller, new ResponseTooLargeError());
+        await refuse(source, controller, new ResponseTooLargeError(cap));
         return;
       }
       controller.enqueue(value);

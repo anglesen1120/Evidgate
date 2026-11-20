@@ -337,14 +337,15 @@ class DecisionBodyStreamError extends CliError {
 /**
  * Reads the decision body under the shared reader's hard cap. An answer larger than
  * `maxDecisionBytes`, or one whose stream breaks after its headers, is refused: a verdict the
- * CLI only half read is never a verdict, so neither case may end as a pass.
+ * CLI only half read is never a verdict, so neither case may end as a pass. A refusal the shared
+ * wrapper raised past the transport cap keeps its own `response_too_large`, which is final.
  */
 async function readDecisionText(response: Response): Promise<string> {
   // A declared length already past the transport cap is that reader's refusal and keeps its
   // own code; only a body this read counts past `maxDecisionBytes` is a decision-cap refusal.
   const declared = response.body === null ? undefined : declaredLength(response);
   if (declared !== undefined && declared > maxResponseBytes) {
-    throw new ResponseTooLargeError();
+    throw new ResponseTooLargeError(maxResponseBytes);
   }
   try {
     return await readBoundedText(response, maxDecisionBytes);
@@ -354,6 +355,10 @@ async function readDecisionText(response: Response): Promise<string> {
       throw new DecisionBodyStreamError();
     }
     if (error instanceof ResponseTooLargeError) {
+      // The transport cap fired, not this reader's: retrying cannot help, so keep it fatal.
+      if (error.cap > maxDecisionBytes) {
+        throw error;
+      }
       throw new CliError(`the run decision body exceeded ${maxDecisionBytes} bytes`, {
         code: 'request_failed',
       });

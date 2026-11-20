@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { boundedResponse, readBoundedText, ResponseTooLargeError } from './boundedResponse.js';
+import {
+  boundedResponse,
+  readBoundedText,
+  ResponseReadError,
+  ResponseTooLargeError,
+} from './boundedResponse.js';
+import { CliError } from './errors.js';
 
 interface Counting {
   readonly response: Response;
@@ -176,6 +182,43 @@ describe('boundedResponse edge cases', () => {
     expect(() => boundedResponse(hostile)).toThrowError(
       expect.objectContaining({ code: 'request_failed' }) as Error,
     );
+  });
+});
+
+describe('boundedResponse nested wrappers', () => {
+  it('keeps an inner size refusal when its first chunk also exceeds the outer cap', async () => {
+    const source = counting([chunkOf(11)]);
+    const inner = boundedResponse(source.response, 10);
+    const outer = boundedResponse(inner, 5);
+    const reader = outer.body?.getReader();
+
+    expect(reader).toBeDefined();
+    await expect(reader?.read()).rejects.toMatchObject({
+      name: 'ResponseTooLargeError',
+      code: 'response_too_large',
+      cap: 10,
+    });
+    reader?.releaseLock();
+    expect(source.cancelled()).toBe(true);
+    expect(source.response.body?.locked).toBe(false);
+    expect(inner.body?.locked).toBe(false);
+  });
+
+  it.each([
+    new ResponseTooLargeError(10),
+    new ResponseReadError(),
+    new CliError('the inner wrapper refused the answer', { code: 'request_failed' }),
+  ])('preserves an inner $name instance through nested wrappers', async (error) => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.error(error);
+      },
+    });
+    const inner = boundedResponse(new Response(body), 10);
+
+    await expect(readBoundedText(inner, 5)).rejects.toBe(error);
+    expect(body.locked).toBe(false);
+    expect(inner.body?.locked).toBe(false);
   });
 });
 

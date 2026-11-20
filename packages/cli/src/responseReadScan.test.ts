@@ -29,7 +29,8 @@ function unwrap(expression: ts.Expression): ts.Expression {
     ts.isAsExpression(expression) ||
     ts.isTypeAssertionExpression(expression) ||
     ts.isNonNullExpression(expression) ||
-    ts.isSatisfiesExpression(expression)
+    ts.isSatisfiesExpression(expression) ||
+    ts.isAwaitExpression(expression)
   ) {
     expression = expression.expression;
   }
@@ -172,13 +173,24 @@ function enclosingFunction(node: ts.Node): string {
   return method ?? '<top-level>';
 }
 
+/**
+ * The read a destructured key names. A computed key counts only as a string literal, so
+ * `const { ['text']: read } = answer` is flagged while `[name]` and `[text]` — a dynamic name
+ * that may hold anything — stay out of scope.
+ */
 function keyKind(name: ts.Node | undefined): string | undefined {
-  if (!name || !(ts.isIdentifier(name) || ts.isStringLiteralLike(name))) {
+  if (name === undefined) {
     return undefined;
   }
-  return bodyMethods.has(name.text) || name.text === 'body'
-    ? `destructure:${name.text}`
-    : undefined;
+  if (ts.isComputedPropertyName(name)) {
+    const key = unwrap(name.expression);
+    return ts.isStringLiteralLike(key) ? readKind(key.text) : undefined;
+  }
+  return ts.isIdentifier(name) || ts.isStringLiteralLike(name) ? readKind(name.text) : undefined;
+}
+
+function readKind(name: string): string | undefined {
+  return bodyMethods.has(name) || name === 'body' ? `destructure:${name}` : undefined;
 }
 
 function destructuredKinds(node: ts.Node): string[] {
@@ -290,8 +302,33 @@ describe('response body reads', () => {
     ['method destructure', 'const { text: read } = incoming;', '<top-level>', 'destructure:text'],
     ['assignment destructure', '({ json: read } = incoming);', '<top-level>', 'destructure:json'],
     [
+      'computed destructure',
+      "const { ['text']: read } = incoming;",
+      '<top-level>',
+      'destructure:text',
+    ],
+    [
+      'computed assignment destructure',
+      "({ ['body']: stream } = incoming);",
+      '<top-level>',
+      'destructure:body',
+    ],
+    [
       'direct iteration',
       'for await (const chunk of incoming.body) {}',
+      '<top-level>',
+      'for-await:body',
+    ],
+    [
+      'awaited iteration source',
+      'for await (const chunk of await incoming.body) {}',
+      '<top-level>',
+      'for-await:body',
+    ],
+    ['awaited stream receiver', '(await incoming.body).values()', '<top-level>', 'values'],
+    [
+      'awaited non-null iteration source',
+      'for await (const chunk of (await incoming.body)!) {}',
       '<top-level>',
       'for-await:body',
     ],
@@ -348,6 +385,19 @@ describe('response body reads', () => {
     expect(
       findWholeBodyReads('readHelper(incoming.body); await file.read();', 'control.ts'),
     ).toEqual([]);
+  });
+
+  it('keeps dynamic keys and non-body awaited sources out of scope', () => {
+    const source = [
+      'const { [name]: read } = incoming;',
+      "const text = 'other';",
+      'const { [text]: read } = incoming;',
+      "const body = 'other';",
+      'const { [body]: stream } = incoming;',
+      'for await (const chunk of await items) {}',
+    ].join(' ');
+
+    expect(findWholeBodyReads(source, 'control.ts')).toEqual([]);
   });
 
   it('finds no production reads outside the three used, reasoned function exceptions', () => {
