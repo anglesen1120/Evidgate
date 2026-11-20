@@ -25,7 +25,8 @@
  * import, an alias import or a namespace import's member (`const { op } = sdk`, `const f = op`,
  * a default import, `sdk['op']`, a dynamic `import()`, `.call` on it, `export { op } from`);
  * `Function.prototype.call` held in a variable and used with a fetch; an input of `new Request(input, init)` that is a member read
- * or a call result other than `x.clone()` (`deps.request`); a fetch-named call (not `fetch`
+ * or a call result other than `x.clone()` (`deps.request`), or an identifier that
+ * resolves to nothing or to an untyped parameter (`new Request(d, init)`, `d` unknown); a fetch-named call (not `fetch`
  * itself, not a tracked alias) with more than two arguments, read as another function
  * (`fetchActionsIdToken(config, fetchImpl, deps)`). Alias and property names are file-wide, so a
  * same-named local that never holds a fetch is still treated as one (fail closed).
