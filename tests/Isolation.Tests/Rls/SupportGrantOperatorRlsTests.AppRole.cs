@@ -148,8 +148,7 @@ public sealed partial class SupportGrantOperatorRlsTests
         await using var scope = await AppAsync(database, OrgA);
         var error = await scope.CaptureErrorAsync(InsertWithProjects, ("o", OrgB), ("u", Operator), ("p", "{}"));
         error.SqlState.ShouldBe("42501");
-        error.MessageText.ShouldContain("row-level security policy");
-        error.TableName.ShouldBe("support_grant");
+        error.MessageText.ShouldContain("new row violates row-level security policy for table \"support_grant\"");
     }
 
     private const string InsertWithProjects = """
