@@ -224,12 +224,13 @@ unattributable signal, or a record stream that breaks the protocol — is report
 `parse_oom` or `parse_crashed`; those are host verdicts, not facts about the
 report, and reach the row as the refusal's reason all the same.
 
-`DocumentSlackBytes` (`1048576`) is not a report cap. It applies only to the
-record-list entry point (`Map(IReadOnlyList<ParseRecord>, …)`), where the mapper
-rebuilds a document from the parse child's records: the rebuild may be slightly
-larger than the source (attribute quoting, element spelling), so it is permitted
-1 MiB over the report cap before the reader refuses it. The byte entry point
-(`Map(Stream, …)`) uses the cap itself, unchanged.
+`ChildXmlRecords.DocumentSlackBytes` (`1048576`) is not a report cap. It applies
+only to the record-stream entry point (`OpenRecordMapper(…)`), where the mapper
+counts the structural bytes a document rebuilt from the parse child's records
+would have used, without rebuilding it. Attribute quoting and element spelling may
+make that structure larger than the source, so the allowance is 1 MiB over the
+report cap before the stream is refused. The byte entry point (`Map(Stream, …)`)
+uses the cap itself, unchanged.
 
 ## Declared vs observed
 
@@ -367,7 +368,10 @@ every constant of the listed types has a row.
 | `PytestJUnitMapper.ClassnameAttribute`       | `classname`       | identity hint 1                                                      |
 | `PytestJUnitMapper.NameAttribute`            | `name`            | identity hint 2                                                      |
 | `PytestJUnitMapper.TimeAttribute`            | `time`            | the seconds attribute behind `duration_ms`                           |
-| `PytestJUnitMapper.DocumentSlackBytes`       | `1048576`         | extra room for a document rebuilt from the parse child's records     |
+| `PytestJUnitMapper.TestsAttribute`           | `tests`           | the declared test count attribute                                    |
+| `PytestJUnitMapper.FailuresAttribute`        | `failures`        | the declared failure count attribute                                 |
+| `PytestJUnitMapper.ErrorsAttribute`          | `errors`          | the declared error count attribute                                   |
+| `PytestJUnitMapper.SkippedAttribute`         | `skipped`         | the declared skip count attribute                                    |
 | `PytestStatus.Failure`                       | `failure`         | the raw and element word of a failed assertion                       |
 | `PytestStatus.Error`                         | `error`           | the raw, element and normalised word of an unexpected exception      |
 | `PytestStatus.Skipped`                       | `skipped`         | the raw, element and normalised word of a skip                       |
