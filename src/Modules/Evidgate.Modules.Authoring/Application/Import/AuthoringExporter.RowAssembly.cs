@@ -1,13 +1,4 @@
 using System.Globalization;
-using System.Text.Encodings.Web;
-using System.Text.Json;
-using System.Text.Unicode;
-using Evidgate.BuildingBlocks.Contracts.Validation;
-using Evidgate.BuildingBlocks.Persistence.Tenancy;
-using Evidgate.BuildingBlocks.SharedKernel.Api;
-using Evidgate.BuildingBlocks.SharedKernel.Results;
-using Evidgate.Modules.Authoring.Contracts;
-using Evidgate.Modules.Authoring.Infrastructure.Persistence;
 
 namespace Evidgate.Modules.Authoring.Application.Import;
 
