@@ -23,11 +23,6 @@ public sealed class SecretShapeTimeoutTests
 
     private const string LongNonHex = "abcdefghij klmnopqrstuvwxyz012345";
 
-    private static Func<SecretPattern, string, bool> TimesOutOn(SecretPattern target, bool otherwise = false) =>
-        (pattern, text) => pattern == target
-            ? throw new RegexMatchTimeoutException(string.Empty, pattern.ToString(), TimeSpan.FromMilliseconds(100))
-            : otherwise;
-
     [Theory]
     [InlineData("Jwt", PlainWord)]
     [InlineData("UrlCredentials", PlainWord)]
@@ -57,24 +52,62 @@ public sealed class SecretShapeTimeoutTests
             () => SecretShape.ValueLooksSecret(PlainWord, (_, _) => throw new InvalidOperationException("boom")));
     }
 
-    [Fact]
-    public void ShortValue_NeverRunsAPattern()
+    [Theory]
+    [InlineData("short")]
+    [InlineData("abcdefg")]
+    [InlineData("  abcdefg  ")]
+    public void ValueUnderEightAfterTrim_NeverRunsAPattern(string value)
     {
-        SecretShape.ValueLooksSecret("short", (_, _) => throw new InvalidOperationException("no pattern may run")).ShouldBeFalse();
+        SecretShape.ValueLooksSecret(value, (_, _) => throw new InvalidOperationException("no pattern may run")).ShouldBeFalse();
     }
 
     [Fact]
-    public void Timeout_IsCountedOncePerCheck_WithThePatternAndNeverTheValue()
+    public void EightCharactersAfterTrim_RunsPatternsOnTheTrimmedText()
     {
+        var seen = new List<string>();
+
+        SecretShape.ValueLooksSecret("  abcdefgh  ", (_, text) =>
+        {
+            seen.Add(text);
+            return false;
+        }).ShouldBeFalse();
+
+        seen.ShouldNotBeEmpty();
+        seen.ShouldAllBe(text => text == "abcdefgh");
+    }
+
+    [Fact]
+    public void UuidTimeout_AnswersSecretShaped_EvenWhenEntropyWouldClear()
+    {
+        // Low entropy (1 bit): a finished uuid check leaves the value clean, so only the timeout can make it secret-shaped.
+        var lowEntropy = string.Concat(Enumerable.Repeat("a1", 12));
+
+        SecretShape.ValueLooksSecret(lowEntropy, (pattern, _) => pattern == SecretPattern.RandomRun).ShouldBeFalse();
+        SecretShape.ValueLooksSecret(lowEntropy, (pattern, _) => pattern == SecretPattern.Uuid
+            ? throw new RegexMatchTimeoutException(string.Empty, "uuid", TimeSpan.FromMilliseconds(100))
+            : pattern == SecretPattern.RandomRun).ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("Jwt", PlainWord, "jwt")]
+    [InlineData("UrlCredentials", PlainWord, "url_credentials")]
+    [InlineData("HexRun", LongNonHex, "hex_run")]
+    [InlineData("RandomRun", RandomLooking, "random_run")]
+    [InlineData("Uuid", RandomLooking, "uuid")]
+    public void Timeout_IsCountedOncePerCheck_WithThePatternAndNeverTheValue(string targetName, string value, string label)
+    {
+        var target = Enum.Parse<SecretPattern>(targetName);
         var measurements = new List<(long Value, string Pattern, List<string> TagValues)>();
         using var listener = Listen(measurements);
 
-        SecretShape.ValueLooksSecret(RandomLooking, TimesOutOn(SecretPattern.RandomRun)).ShouldBeTrue();
+        SecretShape.ValueLooksSecret(value, (pattern, _) => pattern == target
+            ? throw new RegexMatchTimeoutException(string.Empty, pattern.ToString(), TimeSpan.FromMilliseconds(100))
+            : pattern == SecretPattern.RandomRun && target == SecretPattern.Uuid).ShouldBeTrue();
 
         var one = measurements.ShouldHaveSingleItem();
         one.Value.ShouldBe(1);
-        one.Pattern.ShouldBe("random_run");
-        one.TagValues.ShouldAllBe(tag => !tag.Contains("abcdefgh", StringComparison.Ordinal));
+        one.Pattern.ShouldBe(label);
+        one.TagValues.ShouldBe([label]);
     }
 
     [Fact]
