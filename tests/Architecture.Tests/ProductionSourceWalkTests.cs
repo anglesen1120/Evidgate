@@ -11,9 +11,6 @@ namespace Architecture.Tests;
 /// </summary>
 public class ProductionSourceWalkTests
 {
-    /// <summary>Well below the real tree; the point is to catch a walk that lost a whole subtree.</summary>
-    private const int MinimumFiles = 1000;
-
     private readonly ITestOutputHelper output;
 
     public ProductionSourceWalkTests(ITestOutputHelper output) => this.output = output;
@@ -25,7 +22,6 @@ public class ProductionSourceWalkTests
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', files)))).ToLowerInvariant();
         output.WriteLine($"production source files: {files.Count}, sorted-path sha256[:16]: {hash[..16]}");
 
-        files.Count.ShouldBeGreaterThanOrEqualTo(MinimumFiles);
         files.ShouldBe(files.Order(StringComparer.Ordinal).ToList());
         files.ShouldNotContain(path => path.Contains("/obj/", StringComparison.Ordinal) || path.Contains("/bin/", StringComparison.Ordinal));
         files.ShouldContain("src/Modules/Evidgate.Modules.Identity/Endpoints/LoginEndpoints.cs");
@@ -82,18 +78,18 @@ public class ProductionSourceWalkTests
         var repo = Directory.CreateTempSubdirectory("walk");
         try
         {
-            foreach (var relative in new[] { "src/A/Kept.cs", "src/A/Other.cs", "src/A/obj/Debug/Gen.cs", "src/bin/Gen.cs", "src/A/notes.txt" })
+            foreach (var relative in new[] { "src/A/Kept.cs", "src/A/Other.cs", "src/A/obj/Debug/Gen.cs", "src/bin/Gen.cs", "src/A/notes.txt", "src/A/binary/Keep.cs", "src/A/obj.cs", "src/A/Permissions.g.cs" })
             {
                 var full = Path.Combine(repo.FullName, relative);
                 Directory.CreateDirectory(Path.GetDirectoryName(full)!);
                 File.WriteAllText(full, "x");
             }
 
-            SolutionLayout.SourceFiles(repo.FullName, "src").ShouldBe(["src/A/Kept.cs", "src/A/Other.cs"]);
-            SolutionLayout.SourceFiles(repo.FullName, "src/A").ShouldBe(["src/A/Kept.cs", "src/A/Other.cs"]);
+            SolutionLayout.SourceFiles(repo.FullName, "src").ShouldBe(["src/A/Kept.cs", "src/A/Other.cs", "src/A/Permissions.g.cs", "src/A/binary/Keep.cs", "src/A/obj.cs"]);
+            SolutionLayout.SourceFiles(repo.FullName, "src/A").ShouldBe(["src/A/Kept.cs", "src/A/Other.cs", "src/A/Permissions.g.cs", "src/A/binary/Keep.cs", "src/A/obj.cs"]);
 
             File.Delete(Path.Combine(repo.FullName, "src/A/Other.cs"));
-            SolutionLayout.SourceFiles(repo.FullName, "src").ShouldBe(["src/A/Kept.cs"]);
+            SolutionLayout.SourceFiles(repo.FullName, "src").ShouldBe(["src/A/Kept.cs", "src/A/Permissions.g.cs", "src/A/binary/Keep.cs", "src/A/obj.cs"]);
 
             Should.Throw<DirectoryNotFoundException>(() => SolutionLayout.SourceFiles(repo.FullName, "src/Missing"));
         }

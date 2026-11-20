@@ -68,7 +68,7 @@ public class PolicyPersistenceSqlOwnershipTests
     public void Persistence_Sql_Names_Only_Tables_Policy_Owns()
     {
         var files = SolutionLayout.SourcesOf(PersistenceDirectory)
-            .Select(file => (Path: Path.GetRelativePath(PersistenceDirectory, file.Path), file.Text))
+            .Select(file => (Path: file.Path[(PersistenceDirectory.Length + 1)..], file.Text))
             .ToList();
 
         // The statements must actually be in the scan, or a clean result proves nothing.

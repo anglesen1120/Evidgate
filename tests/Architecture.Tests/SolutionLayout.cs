@@ -75,7 +75,7 @@ public static class SolutionLayout
 
     /// <summary>
     /// Every hand-written <c>src/**/*.cs</c> file as a repo-relative path with '/', sorted ordinally. A file is
-    /// build output when a directory below <c>src</c> is named <c>bin</c> or <c>obj</c>.
+    /// build output when a directory below the walk root is named <c>bin</c> or <c>obj</c>.
     /// </summary>
     public static IReadOnlyList<string> ProductionSourceFiles() => SourceFiles("src");
 
@@ -112,12 +112,12 @@ public static class SolutionLayout
     public static List<(string Path, string Text)> ProductionSources() => SourcesOf("src");
 
     /// <summary>
-    /// True when a directory below <paramref name="srcRoot"/> is named <c>bin</c> or <c>obj</c>. Only the part of
-    /// the path below the source root is inspected, so the directories the checkout lives in never count.
+    /// True when a directory below <paramref name="walkRoot"/> is named <c>bin</c> or <c>obj</c>. Only the part of
+    /// the path below the walk root is inspected, so the directories the checkout lives in never count.
     /// </summary>
-    public static bool IsBuildOutput(string srcRoot, string path)
+    public static bool IsBuildOutput(string walkRoot, string path)
     {
-        var segments = Path.GetRelativePath(srcRoot, path).Split(
+        var segments = Path.GetRelativePath(walkRoot, path).Split(
             [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
             StringSplitOptions.RemoveEmptyEntries);
 
