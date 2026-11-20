@@ -12660,20 +12660,18 @@ components:
     SupportGrant:
       type: object
       required:
-        [
-          id,
-          org_id,
-          operator_user_id,
-          scopes,
-          project_ids,
-          reason,
-          state,
-          approved_by,
-          approved_at,
-          expires_at,
-          revoked_at,
-          created_at,
-        ]
+        - id
+        - org_id
+        - operator_user_id
+        - scopes
+        - project_ids
+        - reason
+        - state
+        - approved_by
+        - approved_at
+        - expires_at
+        - revoked_at
+        - created_at
       properties:
         id:
           type: string
