@@ -13,7 +13,7 @@
 // Naming must equal the manifest slot the server registered: `shard-<index>`, 1-based, and
 // `shard-1` for an unsharded run, matching
 // `ProducerRegistry.ProducerId(int shardIndex) => $"shard-{shardIndex}"`
-// (src/Modules/Evidgate.Modules.Ingestion/Application/ProducerRegistry.cs:344) and
+// (`ProducerRegistry.ProducerId` in src/Modules/Evidgate.Modules.Ingestion/Application/ProducerRegistry.cs) and
 // `planned_execution.shard_id = shard-<ordinal>`. A mismatch is a 422 `unknown_producer`
 // server-side, so the id is derived here and never invented.
 import { EvidgateInvalidShardError } from './spool.js';
