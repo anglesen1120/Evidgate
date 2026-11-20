@@ -55,6 +55,44 @@ public sealed class RefDetailCapParseTests
         errors[^1].Reason.ShouldBe(ContractValidationError.TruncatedReason);
     }
 
+    [Theory]
+    [InlineData("kind", "1")]
+    [InlineData("name", "1")]
+    [InlineData("pr_number", "\"x\"")]
+    [InlineData("head_sha", "1")]
+    [InlineData("base_sha", "1")]
+    [InlineData("trigger_event", "1")]
+    [InlineData("is_fork", "\"x\"")]
+    public void ParseBodyRef_EveryKnownMemberRepeatedInvalid_IsCappedWithTheMarker(string member, string invalid)
+    {
+        var members = string.Join(",", Enumerable.Repeat($"\"{member}\":{invalid}", Cap + 20));
+
+        var errors = RunIdentityRules.ParseBodyRef(Body(RefWith(members))).Errors;
+
+        errors.Count.ShouldBe(Cap + 1);
+        errors.Take(Cap).ShouldAllBe(e => e.Path == "/ref/" + member && e.Reason == "invalid_value");
+        errors[^1].ShouldBe(new Evidgate.BuildingBlocks.SharedKernel.Api.ErrorDetail(string.Empty, ContractValidationError.TruncatedReason));
+    }
+
+    [Fact]
+    public void ParseBodyRef_ValidMembersAfterTheCap_NeverAddOrRemoveRows()
+    {
+        var valid = "\"kind\":\"branch\",\"name\":\"main\"";
+
+        var exact = RunIdentityRules.ParseBodyRef(Body(RefWith(Unknowns(Cap) + "," + valid))).Errors;
+        exact.Count.ShouldBe(Cap);
+        exact.ShouldNotContain(e => e.Reason == ContractValidationError.TruncatedReason);
+
+        var over = RunIdentityRules.ParseBodyRef(Body(RefWith(Unknowns(Cap + 1) + "," + valid))).Errors;
+        over.Count.ShouldBe(Cap + 1);
+        over[^1].Reason.ShouldBe(ContractValidationError.TruncatedReason);
+
+        var manyValid = string.Join(",", Enumerable.Repeat("\"kind\":\"branch\"", Cap + 50));
+        var (block, errors) = RunIdentityRules.ParseBodyRef(Body(RefWith(manyValid)));
+        errors.ShouldBeEmpty();
+        block.ShouldNotBeNull();
+    }
+
     [Fact]
     public void ParseBodyRef_SameBodyTwice_GivesTheSameDetails()
     {
@@ -80,8 +118,11 @@ public sealed class RefDetailCapRouteTests(
     PostgresTenancyFixture fixture,
     TenancyHostPool hosts) : IClassFixture<TenancyHostPool>
 {
-    /// <summary>101 rows of at most about 120 bytes plus the envelope stay far below this.</summary>
+    /// <summary>101 ASCII rows (path of at most 69 characters, about 120 bytes each) plus the envelope.</summary>
     private const int AnswerBound = 16 * 1024;
+
+    /// <summary>The same rows with 64-character non-ASCII names, which the serializer escapes to six bytes each: about 45 KB.</summary>
+    private const int EscapedAnswerBound = 48 * 1024;
 
     private const int Cap = ContractValidationResult.MaxDetails;
 
@@ -115,6 +156,25 @@ public sealed class RefDetailCapRouteTests(
         var details = AssertCapped(first);
         details.Take(Cap).ShouldAllBe(d => d.Path == "/ref/kind" && d.Reason == "invalid_value");
         DetailsText(second).ShouldBe(DetailsText(first));
+
+        var control = await PostAsync(world.Client, RunRoute(world), RunBody(world, "\"kind\":\"branch\",\"name\":\"main\""), world.Admin);
+        control.Status.ShouldBe(HttpStatusCode.Created, control.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task CreateRun_NonAsciiNameFlood_StaysUnderTheEscapedBound()
+    {
+        await using var world = await RunCreationTests.StartAsync(fixture, cases: 1, hosts: hosts);
+        var body = Flood(world, i => $"\"{new string('\u00e9', 60)}{i:D4}\":1");
+
+        var answer = await PostAsync(world.Client, RunRoute(world), body, world.Admin);
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, answer.ErrorMessage);
+        Details(answer).Count.ShouldBe(Cap + 1);
+        answer.Body.GetRawText().Length.ShouldBeLessThan(EscapedAnswerBound);
+
+        var control = await PostAsync(world.Client, RunRoute(world), RunBody(world, "\"kind\":\"branch\",\"name\":\"main\""), world.Admin);
+        control.Status.ShouldBe(HttpStatusCode.Created, control.ErrorMessage);
     }
 
     [Fact]
@@ -130,6 +190,9 @@ public sealed class RefDetailCapRouteTests(
         var after = await PostAsync(
             world.Client, RunRoute(world), Flood(world, i => $"\"m{i}\":1", suffix: ",\"is_fork\":\"x\""), world.Admin);
         AssertCapped(after).ShouldNotContain(d => d.Path == "/ref/is_fork");
+
+        var control = await PostAsync(world.Client, RunRoute(world), RunBody(world, "\"kind\":\"branch\",\"name\":\"main\""), world.Admin);
+        control.Status.ShouldBe(HttpStatusCode.Created, control.ErrorMessage);
     }
 
     [Fact]
@@ -143,6 +206,9 @@ public sealed class RefDetailCapRouteTests(
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, answer.ErrorMessage);
         Details(answer).Select(d => (d.Path, d.Reason)).ShouldBe(
             [("/ref/kind", "invalid_value"), ("/ref/zzz", "additional_properties")]);
+
+        var control = await PostAsync(world.Client, RunRoute(world), RunBody(world, "\"kind\":\"branch\",\"name\":\"main\""), world.Admin);
+        control.Status.ShouldBe(HttpStatusCode.Created, control.ErrorMessage);
     }
 
     /// <summary>A create-run body filled with ref members up to just under the 64 KiB route cap.</summary>
@@ -155,15 +221,21 @@ public sealed class RefDetailCapRouteTests(
         var head = $"{{\"manifest_id\":\"{world.ManifestId}\",\"ref\":{{" + prefix;
         var tail = suffix + "}}";
         var builder = new StringBuilder(head);
-        var limit = Evidgate.Modules.Orchestrator.Endpoints.OrchestratorEndpoints.MaxRunBytes - tail.Length - 32;
-        for (var i = 0; builder.Length < limit; i++)
+        var limit = Evidgate.Modules.Orchestrator.Endpoints.OrchestratorEndpoints.MaxRunBytes - tail.Length - 32 - 400;
+        var bytes = Encoding.UTF8.GetByteCount(head);
+        for (var i = 0; bytes < limit; i++)
         {
-            builder.Append(member(i)).Append(',');
+            var text = member(i);
+            builder.Append(text).Append(',');
+            bytes += Encoding.UTF8.GetByteCount(text) + 1;
         }
 
         builder.Length--;
         return builder.Append(tail).ToString();
     }
+
+    private static string RunBody(RunCreationTests.World world, string refMembers) =>
+        $"{{\"manifest_id\":\"{world.ManifestId}\",\"ref\":{{{refMembers}}}}}";
 
     private static List<(string Path, string Reason)> AssertCapped(ApiAnswer answer)
     {
