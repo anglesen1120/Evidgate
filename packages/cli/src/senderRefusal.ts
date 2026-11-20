@@ -1,6 +1,7 @@
 // Classifying one attempt's answer: a transport failure is always retryable and carries no
 // status, a non-2xx keeps the server's own code and request id, and only a retryable status
 // (or the envelope's own `retryable: false` veto) decides whether another attempt follows.
+import { CliError } from './errors.js';
 import { serverErrorFromResponse, transportError } from './serverError.js';
 
 import { transportFailedCode } from './senderLimits.js';
@@ -20,6 +21,15 @@ export type AttemptOutcome =
       readonly retryable: boolean;
       readonly retryAfterMs?: number;
     };
+
+/**
+ * A 2xx whose body the client could not read to the end rejects the SDK call with the
+ * read seam's `response_read_failed`. It is a lost connection, not an answer, so it takes
+ * the transport path; the class is matched by its contract code.
+ */
+export function isResponseReadFailure(error: unknown): boolean {
+  return error instanceof CliError && error.code === 'response_read_failed';
+}
 
 /** No response at all: always retryable, and it carries no status. */
 export function transportRefusal(batch: Batch, error: unknown): AttemptOutcome {

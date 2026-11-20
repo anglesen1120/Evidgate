@@ -1,0 +1,6 @@
+// Iterating the answer's own stream: no cap, no reader method name, so only the stream shape shows.
+export async function drainStream(response: Answer): Promise<void> {
+  for await (const chunk of response.body) {
+    use(chunk);
+  }
+}

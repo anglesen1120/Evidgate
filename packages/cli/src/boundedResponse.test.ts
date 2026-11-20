@@ -178,3 +178,56 @@ describe('boundedResponse edge cases', () => {
     );
   });
 });
+
+describe('boundedResponse read failures', () => {
+  it.each([0, 1])(
+    'maps a read error after %i chunks to ResponseReadError and releases',
+    async (chunks) => {
+      let pulled = 0;
+      const body = new ReadableStream<Uint8Array>(
+        {
+          pull(controller) {
+            if (pulled++ < chunks) {
+              controller.enqueue(new TextEncoder().encode('ghp_SECRETBODYPREFIX'));
+              return;
+            }
+            controller.error(new TypeError('terminated', { cause: new Error('secret cause') }));
+          },
+        },
+        { highWaterMark: 0 },
+      );
+      const response = new Response(body);
+
+      const error: unknown = await readBoundedText(response, 100).catch(
+        (caught: unknown) => caught,
+      );
+
+      expect(error).toMatchObject({
+        name: 'ResponseReadError',
+        code: 'response_read_failed',
+        message: 'the server answer could not be read to the end',
+        hint: 'the answer could not be read; the command can be run again',
+      });
+      expect(String(error)).not.toContain('ghp_SECRETBODYPREFIX');
+      expect(String(error)).not.toContain('secret cause');
+      expect(body.locked).toBe(false);
+    },
+  );
+
+  it('releases the source reader after EOF, a size refusal and consumer cancellation', async () => {
+    const complete = counting([chunkOf(5)]);
+    await expect(readBoundedText(complete.response, 5)).resolves.toBe('aaaaa');
+    expect(complete.response.body?.locked).toBe(false);
+
+    const overCap = counting([chunkOf(6)]);
+    await expect(readBoundedText(overCap.response, 5)).rejects.toBeInstanceOf(
+      ResponseTooLargeError,
+    );
+    expect(overCap.response.body?.locked).toBe(false);
+
+    const cancelled = counting([chunkOf(5)]);
+    await boundedResponse(cancelled.response).body?.cancel();
+    expect(cancelled.cancelled()).toBe(true);
+    expect(cancelled.response.body?.locked).toBe(false);
+  });
+});

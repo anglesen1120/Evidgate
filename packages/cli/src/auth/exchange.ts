@@ -241,9 +241,10 @@ function buildBody(
 }
 
 /**
- * Fetches a GitHub Actions ID token from `ACTIONS_ID_TOKEN_REQUEST_URL` with the `evidgate`
- * audience. The URL must be `https:` (or `http:` on a loopback host); a non-2xx reply or a
- * body without a `value` is `oidc_request_failed`, a transport failure is `transport`.
+ * Fetches a GitHub Actions ID token from `ACTIONS_ID_TOKEN_REQUEST_URL` (https, or http on a
+ * loopback host) with the `evidgate` audience. A body that fails or ends early is
+ * `response_read_failed`; a complete non-JSON body, a non-2xx reply or a missing `value` is
+ * `oidc_request_failed`; a transport failure is `transport`.
  */
 async function fetchActionsIdToken(
   config: ResolvedConfig,
