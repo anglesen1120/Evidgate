@@ -81,11 +81,13 @@ public sealed class ManifestCleanTextRuleTests
 
     /// <summary>Free-text keys: unclean text is accepted (ZWJ emoji, ZWNJ script), as the normaliser does; a hidden token is a secret.</summary>
     [Theory]
-    [InlineData("label", "\uFEFFGHP_AAAAAAAA", true)]
+    [InlineData("label", "\uFEFFghp_AAAAAAAAAAAA", true)]
     [InlineData("label", "gh\u200Bp_AAAAAAAAAAAA", true)]
     [InlineData("title", "gh\u00ADp_AAAAAAAAAAAA", true)]
     [InlineData("description", "gh\u202Ep_AAAAAAAAAAAA", true)]
-    [InlineData("note", "GHP_AAAAAAAA\uFEFF", true)]
+    [InlineData("note", "ghp_AAAAAAAAAAAA\uFEFF", true)]
+    [InlineData("label", "\u200Bsecret:ghp_AAAAAAAAAAAA", true)]
+    [InlineData("label", "\u200Bsecret:ci_token", false)]
     [InlineData("description", "family \uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67", false)]
     [InlineData("title", "می\u200Cخواهم", false)]
     [InlineData("label", "क्‍ष", false)]
@@ -103,7 +105,7 @@ public sealed class ManifestCleanTextRuleTests
 
     [Theory]
     [InlineData("mode", "\uFEFFGHP_AAAAAAAA", 2)]
-    [InlineData("label", "gh\u200Bp_AAAAAAAAAAAA", 2)]
+    [InlineData("region", "gh\u200Bp_AAAAAAAAAAAA", 2)]
     [InlineData("mode", "GHP_AAAAAAAA\uFEFF", 2)]
     public void AnUncleanValue_IsRefusedAtItsPosition(string key, string value, int position) =>
         ManifestVerifier.UncleanPositions(Params(key, value)).ShouldBe([position]);

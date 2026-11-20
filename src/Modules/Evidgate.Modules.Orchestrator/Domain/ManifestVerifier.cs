@@ -224,8 +224,7 @@ internal static class ManifestVerifier
     {
         if (value.StartsWith("secret:", StringComparison.Ordinal))
         {
-            // The name of a reference must still be a name: `secret:ghp_…` carries the token in the reference itself.
-            return !SecretShape.IsReference(value) || SecretShape.SecretNameLooksLikeValue(value[7..]) || SecretShape.ValueLooksSecret(value[7..]);
+            return ParameterSecretRule.ReferenceLooksSecret(value);
         }
 
         return SecretShape.KeyLooksSecret(key) || SecretShape.ValueLooksSecret(key) || ParameterSecretRule.ValueLooksSecret(key, value)

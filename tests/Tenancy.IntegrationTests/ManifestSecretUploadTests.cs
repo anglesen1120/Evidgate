@@ -156,7 +156,7 @@ public sealed class ManifestSecretUploadTests
     public async Task UncleanAndSecretMembers_ListTheSecretFirst()
     {
         await using var world = await ManifestTests.StartAsync(_fixture);
-        var manifest = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "x", ["api_token"] = "plain", ["region"] = "a\u200Bb" }], ["staging"]);
+        var manifest = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "x", ["region"] = "a\u200Bb", ["api_token"] = "plain" }], ["staging"]);
 
         var answer = await UploadAsync(world, manifest.ToJsonString());
 
