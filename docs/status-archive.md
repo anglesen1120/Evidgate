@@ -796,3 +796,13 @@ Closed by S477 (#983, 48844c2d): a live window at the limit is refused by a plai
 | T3.1b execution-plan CLI wiring (S467) | T3.1a (#963) maps tests behind an input port; the route GET /v1/suite-revisions/{r}/execution-plan, its narrow permission, the SDK read, command wiring (401 purge, 403/404/5xx passthrough, exit 3), the `contracts/cli.md` section and quickstart are not built. Draft is in the 04.2.2 plan T3 section | receiver: S469 route lane, then a CLI lane; the route and permission landed in #970 (S469), SDK read, command wiring, `contracts/cli.md` and quickstart remain; receiver now: coordinator (CLI lane) |
 
 Closed by S476 (#982): `evidgate manifests build` reads the execution plan through the generated SDK (401 purge, 403 re-mint hint, 404/5xx passthrough, exit 3), maps through the #963 input port and writes `manifest.v1`; `contracts/cli.md` §14 and the quickstart note landed.
+
+## Moved from status-carried.md by S479 (2026-11-20)
+
+| Blob final body payload and empty-body pins (S475) | `toFetchBody` reads `Blob.size` for an empty body and forwards a Blob to `Response`, but no spec pins the payload bytes or the empty-Blob case: the two jsdom-Blob cases failed in the shared vitest worker (jsdom Blob is not accepted by Node's native Response). Pin them with a Blob from `node:buffer` in an isolated spec file, or in the Playwright path. | receiver: core/http owner |
+
+Closed by S479 (#981): `http-client-fetch-binary-blob.spec.ts` runs in the node environment with Node's Blob and pins the non-empty payload bytes and the empty Blob; green alone and in the full ng test run (455 files, 6448 tests).
+
+| Trace error bound exact UTF-8 (S472) | `stringFitsTracedBound` in `trace.interceptor.ts` now counts exact UTF-8 bytes (it used the same encode before, via the shared `utf8ExceedsBytes`), so a CJK-heavy error body between 21 and 64 KiB of UTF-16 text can skip span enrichment; tracing is fail-open. Decide whether the 64 KiB bound should stay in bytes. | receiver: telemetry owner |
+
+Closed by S479 (#981): the bound stays in exact UTF-8 bytes by COORDINATOR-DECISION; it caps the input parsed for enrichment, and `trace.interceptor.error-bound.spec.ts` pins ASCII, 2-byte, CJK and surrogate-pair text at the bound and one byte over.
