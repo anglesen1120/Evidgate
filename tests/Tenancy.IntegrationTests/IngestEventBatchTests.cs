@@ -400,6 +400,13 @@ public sealed class IngestEventBatchTests : IClassFixture<TenancyHostPool>
         await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
         await world.SetRunStateAsync("complete");
 
+        // A complete run admits late evidence only inside its window (completed_at + late_window_minutes); the zero-minute
+        // window is the state it is in once that window is spent, and that is when the route refuses the batch.
+        await _fixture.ExecuteAsync(
+            world.Database, $"update public.run set late_window_minutes = 0 where id = '{world.RunId:D}'");
+        (await world.ScalarAsync<bool>($"select now() > completed_at from public.run where id = '{world.RunId:D}'"))
+            .ShouldBeTrue("the refusal needs the window closed, which the later transaction's clock proves");
+
         var answer = await PostEventsAsync(world, Batch(Event(Guid.CreateVersion7(), KeyOf(world, 0), sequence: 1)));
 
         answer.Status.ShouldBe(HttpStatusCode.Conflict);

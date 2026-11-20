@@ -156,6 +156,201 @@ public sealed partial class ReconcileRunTests
             .ShouldBe(0, "refused evidence must not enqueue a reconcile task, even one already consumed");
     }
 
+    [Fact]
+    public async Task LateEval_CompleteRun_InsideWindow_SecondLiveEvaluation_FirstRowByteIdentical()
+    {
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(attemptsSkip: 0, database: owned.Name);
+        await StartEvaluatedCompleteRunAsync(world);
+        await OpenLateWindowAsync(world, world.RunId);
+        var first = await LiveEvaluationSnapshotAsync(world, revision: 1);
+
+        await AppendCompleteLateEvaluationAsync(world);
+
+        (await EvaluationRowsAsync(world)).ShouldBe(2);
+        (await RevisionCountAsync(world)).ShouldBe(2);
+        (await world.ScalarAsync<long>(
+            "select count(distinct evidence_revision) from public.evaluation where mode = 'live' "
+            + $"and org_id = '{world.Org:D}' and run_id = '{world.RunId:D}'"))
+            .ShouldBe(2, "the second revision decides through a live row of its own");
+        var second = await LiveEvaluationSnapshotAsync(world, revision: 2);
+        second.ShouldNotBe(first, "a new revision is a new decision");
+        (await LiveEvaluationSnapshotAsync(world, revision: 1)).ShouldBe(first, "the prior row is byte-identical");
+        (await StateAsync(world, world.RunId)).ShouldBe("complete", "the terminal state never moves for late evidence");
+    }
+
+    [Fact]
+    public async Task LateEval_CompleteRun_AfterWindow_NoEvaluation()
+    {
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(attemptsSkip: 0, database: owned.Name);
+        await StartEvaluatedCompleteRunAsync(world);
+        var first = await LiveEvaluationSnapshotAsync(world, revision: 1);
+        var completed = await CompletedAtTextAsync(world, world.RunId);
+        await CloseCompleteWindowAsync(world, world.RunId);
+
+        var refused = await IngestQaRequests.PostEventsAsync(world.Client, world.RunId,
+            IngestQaRequests.Batch(IngestQaRequests.Event(Guid.CreateVersion7(),
+                world.Plan.Executions[^1].ExecutionKey, sequence: 4, attemptNo: 2)));
+
+        refused.Status.ShouldBe(HttpStatusCode.Conflict, refused.ErrorMessage);
+        refused.ErrorCode.ShouldBe("run_closed");
+        await DrainLateEvaluationQueueAsync(world);
+        (await RevisionCountAsync(world)).ShouldBe(1);
+        (await EvaluationRowsAsync(world)).ShouldBe(1);
+        (await LiveEvaluationSnapshotAsync(world, revision: 1)).ShouldBe(first);
+        (await FrozenEvaluationTaskCountAsync(world)).ShouldBe(1);
+        (await ReconcileTaskCountAsync(world)).ShouldBe(0, "refused evidence must not enqueue a reconcile task");
+        (await StateAsync(world, world.RunId)).ShouldBe("complete");
+        (await CompletedAtTextAsync(world, world.RunId)).ShouldBe(completed, "a refusal never moves the anchor");
+    }
+
+    // ---------------------------------------------------------------- a complete run's three ordinary entry points
+
+    /// <summary>
+    /// The deadline sweep's scan names only runs that can still take evidence, so a complete run inside its late window
+    /// is never swept: the window is what a late batch asks for, never an ordinary scan.
+    /// </summary>
+    [Fact]
+    public async Task Complete_DeadlineSweep_DoesNotNameTheRun()
+    {
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(attemptsSkip: 0, database: owned.Name);
+        await StartEvaluatedCompleteRunAsync(world);
+        await OpenLateWindowAsync(world, world.RunId);
+        var first = await LiveEvaluationSnapshotAsync(world, revision: 1);
+        var completed = await CompletedAtTextAsync(world, world.RunId);
+
+        (await world.ScalarAsync<long>("select count(*) from evidgate.reconcile_overdue_runs(null, null, 1000)"))
+            .ShouldBe(0, "the scan names only queued, running and collecting runs");
+
+        (await RevisionCountAsync(world)).ShouldBe(1);
+        (await EvaluationRowsAsync(world)).ShouldBe(1);
+        (await LiveEvaluationSnapshotAsync(world, revision: 1)).ShouldBe(first);
+        (await CompletedAtTextAsync(world, world.RunId)).ShouldBe(completed);
+    }
+
+    /// <summary>
+    /// At-least-once delivery of an ordinary trigger — a redelivery of the deadline attempt, under a fresh key — finds a
+    /// complete run inside its window and still answers as today: no comparison, no revision, no state move.
+    /// </summary>
+    [Fact]
+    public async Task Complete_OldTaskRedelivery_AnswersNotCollectable()
+    {
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(attemptsSkip: 0, database: owned.Name);
+        await StartEvaluatedCompleteRunAsync(world);
+        await OpenLateWindowAsync(world, world.RunId);
+        var first = await LiveEvaluationSnapshotAsync(world, revision: 1);
+        var completed = await CompletedAtTextAsync(world, world.RunId);
+        var history = await RunStateEventCountAsync(world, world.RunId);
+        var counter = world.Host.Services.GetRequiredService<ReconcileCallCounter>();
+
+        for (var delivery = 1; delivery <= 2; delivery++)
+        {
+            (await EnqueueOrdinaryReconcileAsync(world)).ShouldNotBeNull();
+            await RunQueuedReconcilesAsync(world, expectedDone: delivery);
+        }
+
+        counter.Calls.ShouldBe(2, "the handler really ran for each delivery instead of the row being skipped");
+        (await RevisionCountAsync(world)).ShouldBe(1);
+        (await EvaluationRowsAsync(world)).ShouldBe(1);
+        (await LiveEvaluationSnapshotAsync(world, revision: 1)).ShouldBe(first);
+        (await StateAsync(world, world.RunId)).ShouldBe("complete");
+        (await CompletedAtTextAsync(world, world.RunId)).ShouldBe(completed);
+        (await RunStateEventCountAsync(world, world.RunId)).ShouldBe(history, "a non-collectable attempt appends no state history");
+    }
+
+    /// <summary>An operator enqueue of the ordinary trigger answers exactly like the redelivery: nothing to compare.</summary>
+    [Fact]
+    public async Task Complete_ManualEnqueue_AnswersNotCollectable()
+    {
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(attemptsSkip: 0, database: owned.Name);
+        await StartEvaluatedCompleteRunAsync(world);
+        await OpenLateWindowAsync(world, world.RunId);
+        var first = await LiveEvaluationSnapshotAsync(world, revision: 1);
+        var completed = await CompletedAtTextAsync(world, world.RunId);
+        var history = await RunStateEventCountAsync(world, world.RunId);
+
+        (await EnqueueOrdinaryReconcileAsync(world)).ShouldNotBeNull();
+        await RunQueuedReconcilesAsync(world, expectedDone: 1);
+
+        (await RevisionCountAsync(world)).ShouldBe(1);
+        (await EvaluationRowsAsync(world)).ShouldBe(1);
+        (await LiveEvaluationSnapshotAsync(world, revision: 1)).ShouldBe(first);
+        (await StateAsync(world, world.RunId)).ShouldBe("complete");
+        (await CompletedAtTextAsync(world, world.RunId)).ShouldBe(completed);
+        (await RunStateEventCountAsync(world, world.RunId)).ShouldBe(history);
+    }
+
+    private async Task StartEvaluatedCompleteRunAsync(IngestTestWorld world)
+    {
+        await SeedPinnedPolicyAsync(world, world.RunId, "trace");
+        await StartCompleteRunAsync(world);
+        await DispatchFrozenEvaluationsAsync(world, expectedDone: 1);
+        (await RevisionCountAsync(world)).ShouldBe(1);
+        (await EvaluationRowsAsync(world)).ShouldBe(1);
+    }
+
+    /// <summary>The late event of a complete run: a fourth event past the shard's declared three, and a second attempt.</summary>
+    private static async Task AppendCompleteLateEvaluationAsync(IngestTestWorld world)
+    {
+        var accepted = await IngestQaRequests.PostEventsAsync(world.Client, world.RunId,
+            IngestQaRequests.Batch(IngestQaRequests.Event(Guid.CreateVersion7(),
+                world.Plan.Executions[^1].ExecutionKey, sequence: 4, attemptNo: 2)));
+        accepted.Status.ShouldBe(HttpStatusCode.OK, accepted.ErrorMessage);
+        accepted.Body.GetProperty("accepted").GetInt32().ShouldBe(1);
+        await DispatchAndReconcileAsync(world, expectedReconciles: 1);
+        await DispatchFrozenEvaluationsAsync(world, expectedDone: 2);
+    }
+
+    /// <summary>A complete run's window is closed by its zero-minute window: the anchor is the completion instant itself.</summary>
+    private Task CloseCompleteWindowAsync(IngestTestWorld world, Guid runId) =>
+        _fixture.ExecuteAsync(world.Database, $"update public.run set late_window_minutes = 0 where id = '{runId:D}'");
+
+    private static Task<string?> CompletedAtTextAsync(IngestTestWorld world, Guid runId) =>
+        world.ScalarAsync<string?>($"select completed_at::text from public.run where id = '{runId:D}'");
+
+    private static Task<long> RunStateEventCountAsync(IngestTestWorld world, Guid runId) =>
+        world.CountAsync("run_state_event", $"run_id = '{runId:D}'");
+
+    /// <summary>One ordinary (non-late) reconcile task row for the world's run, as an operator enqueue writes it.</summary>
+    private static Task<Guid?> EnqueueOrdinaryReconcileAsync(IngestTestWorld world) =>
+        world.Host.Services.GetRequiredService<ITaskQueueWriter>().EnqueueAsync(
+            new TaskEnqueue
+            {
+                Queue = DefaultQueue,
+                TaskType = RunReconcileContract.OutboxTaskType,
+                PayloadJson = RunReconcileContract.DeadlinePayloadJson(world.RunId),
+                IdempotencyKey = Guid.CreateVersion7().ToString("D"),
+                OrgId = world.Org,
+            }, Token);
+
+    /// <summary>Claims queued work until the org's reconcile rows reach <paramref name="expectedDone"/> completed.</summary>
+    private static async Task RunQueuedReconcilesAsync(IngestTestWorld world, int expectedDone)
+    {
+        await world.Host.Services.GetRequiredService<OutboxDispatcher>().DispatchBatchAsync(Token);
+        var consumer = world.Host.Services.GetRequiredService<TaskConsumer>();
+        for (var poll = 0; poll < 12; poll++)
+        {
+            var done = await world.ScalarAsync<long>(
+                $"select count(*) from public.task where org_id = '{world.Org:D}' "
+                + $"and task_type = '{RunReconcileContract.OutboxTaskType}' and state = 'done'");
+            if (done >= expectedDone)
+            {
+                return;
+            }
+
+            await consumer.PollOnceAsync(DefaultQueue, Token);
+        }
+
+        (await world.ScalarAsync<long>(
+            $"select count(*) from public.task where org_id = '{world.Org:D}' "
+            + $"and task_type = '{RunReconcileContract.OutboxTaskType}' and state = 'done'"))
+            .ShouldBeGreaterThanOrEqualTo(expectedDone, "the queued reconcile ran");
+    }
+
     private async Task StartEvaluatedIncompleteRunAsync(IngestTestWorld world)
     {
         await SeedPinnedPolicyAsync(world, world.RunId, "trace");
