@@ -2,10 +2,11 @@
 --
 -- WHY: the attempts page of one run (`GET /v1/runs/{r}/attempts`) counts that run's `ready` artifacts per
 -- `(execution_key, attempt_no)` slot for the page's own rows. `artifact_run_idx (org_id, run_id) where
--- state <> 'deleted'` narrows the aggregate to one run, but it still returns every artifact of that run in
--- every state, so each page reads the whole run's artifact set and throws away all but the ready rows of the
--- page's slots. One run of a large suite therefore costs a scan of its entire artifact set per page, while the
--- answer needs only the ready rows of at most `limit` slots.
+-- state <> 'deleted'` narrows the aggregate to one run's non-deleted artifacts, but it still returns every
+-- non-deleted artifact of that run in every other state, so each page reads the run's whole non-deleted
+-- artifact set and throws away all but the ready rows of the page's slots. One run of a large suite therefore
+-- costs a scan of its entire non-deleted artifact set per page, while the answer needs only the ready rows of
+-- at most `limit + 1` slots — the page's `limit` rows plus the lookahead row the next cursor is derived from.
 --
 -- SHAPE: one partial index on the columns the aggregate filters, groups and counts by: `run_id` (the page's
 -- tenant-scoped filter), then the slot pair the `in (select … from page)` comparison and the `group by` read.
@@ -20,8 +21,8 @@
 -- since; `create index concurrently` cannot run there, see migrations/README.md "Known limits"). It takes a
 -- SHARE lock on `public.artifact` for the build, which blocks writes to that table but not reads, and
 -- `lock_timeout` bounds the wait for it — not the time the lock is held until commit. Build cost on the
--- pilot-size artifact set is a single-digit number of seconds [INFERENCE: not measured here; the table has no
--- production volume yet).
+-- pilot-size artifact set is a single-digit number of seconds [INFERENCE: not measured here; the table
+-- carries no production volume yet].
 --
 -- ORDER: migration first, then the application. Either order is safe for correctness — the previous page
 -- statements read the same rows with or without the index, and the index only changes their plan — but the

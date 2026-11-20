@@ -44,14 +44,24 @@ public sealed partial class ListRunAttemptsTests
     /// <summary>A run of <see cref="DenseExecutions"/> planned executions with four attempts each and ready artifacts on a subset.</summary>
     private async Task<(World World, Guid RunId)> StartWalkRunAsync(string database)
     {
-        var dense = await RunCreationTests.StartAsync(_fixture, database: database);
-        var world = new World(dense.Api, dense.Client, dense.Database, dense.User, dense.Org, dense.Project);
-        var plan = await PlannedExecutionSeeder.SeedPlanAsync(_fixture, database, dense.Org, DenseExecutions);
+        var world = await DedicatedWorldAsync(database);
 
-        await SeedExecutionAttemptsAsync(database, dense.Org, plan.RunId, DenseAttemptsPerExecution);
-        await SeedReadyArtifactsAsync(database, dense.Org, dense.Project, plan.RunId);
+        try
+        {
+            var plan = await PlannedExecutionSeeder.SeedPlanAsync(_fixture, database, world.Org, DenseExecutions);
 
-        return (world, plan.RunId);
+            await SeedExecutionAttemptsAsync(database, world.Org, plan.RunId, DenseAttemptsPerExecution);
+            await SeedReadyArtifactsAsync(database, world.Org, world.Project, plan.RunId);
+
+            return (world, plan.RunId);
+        }
+        catch
+        {
+            // A world that never returns owns nothing: a failed arrange must not leave the host's connections
+            // behind for the assembly's database cleanup.
+            await world.DisposeAsync();
+            throw;
+        }
     }
 
     /// <summary>
@@ -69,7 +79,8 @@ public sealed partial class ListRunAttemptsTests
             var query = $"?limit={limit}" + (cursor is null ? string.Empty : $"&cursor={Uri.EscapeDataString(cursor)}");
             var answer = await GetAsync(world, runId, query: query);
             answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
-            walked.AddRange(Items(answer).EnumerateArray().Select(Row));
+            var rows = Items(answer).EnumerateArray().Select(Row).ToList();
+            walked.AddRange(rows);
 
             if (!appended)
             {
@@ -77,7 +88,18 @@ public sealed partial class ListRunAttemptsTests
                 await AppendAsync(world, runId, appendKey);
             }
 
-            cursor = answer.Body.GetProperty("next_cursor").GetString();
+            var next = answer.Body.GetProperty("next_cursor").GetString();
+            if (next is not null)
+            {
+                // A page with a next cursor is full: the statement asks for limit + 1 and drops the lookahead row.
+                rows.Count.ShouldBe(limit, $"page {page} has a next cursor, so it must serve the whole limit");
+            }
+            else
+            {
+                (rows.Count <= limit).ShouldBeTrue($"the last page serves at most the limit, {rows.Count} > {limit}");
+            }
+
+            cursor = next;
             if (cursor is null)
             {
                 break;
