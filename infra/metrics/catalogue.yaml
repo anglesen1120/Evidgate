@@ -162,6 +162,15 @@ entries:
     labels: []
     source: src/Modules/Evidgate.Modules.Usage/Infrastructure/Persistence/UsageLedgerStore.cs
 
+  - id: secret_shape_timeout
+    instrument: evidgate_secret_shape_timeout_total
+    meter: evidgate
+    kind: counter
+    unit: '{check}'
+    description: Secret-shape checks whose regex timed out and were answered as secret-shaped (the value is refused, never passed as clean). By pattern; never the checked value. A rise means customer values are hitting the match budget or the host is stalling.
+    labels: [pattern]
+    source: src/BuildingBlocks/SharedKernel/Security/SecretShapeMetrics.cs
+
   # --- .NET runtime health (the built-in System.Runtime meter; .NET 9+ supplies these itself) --
   - id: gc_heap_size
     instrument: dotnet.gc.last_collection.heap.size
