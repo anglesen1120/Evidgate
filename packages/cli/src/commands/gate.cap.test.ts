@@ -39,4 +39,25 @@ describe('gate response cap', () => {
       expect(out.stderr.join('')).toContain('error response_too_large:');
     },
   );
+
+  it('refuses a status Response cannot represent after one request, without a replay', async () => {
+    const env = await devEnv(dirs);
+    let cancelled = false;
+    const stub = devStubFetch(() => {
+      const body = new ReadableStream<Uint8Array>({
+        cancel() {
+          cancelled = true;
+        },
+      });
+      return Object.defineProperty(new Response(body), 'status', { value: 600 });
+    });
+    const out = capture();
+
+    const { code } = await invoke(gateArgv(['--run', runId]), env, out, stub.fetchImpl);
+
+    expect(code).toBe(3);
+    expect(stub.calls).toHaveLength(1);
+    expect(cancelled).toBe(true);
+    expect(out.stderr.join('')).toContain('error request_failed:');
+  });
 });

@@ -16,10 +16,25 @@ export class ResponseTooLargeError extends CliError {
   constructor() {
     super('the server answer is larger than the CLI accepts', {
       code: 'response_too_large',
-      hint: 'retrying will not help; check that EVIDGATE_API_URL names an Evidgate API',
+      hint: 'the answer exceeded the size limit; retrying will not help',
     });
     this.name = 'ResponseTooLargeError';
   }
+}
+
+/**
+ * `Response` cannot represent a status outside 200-599, so such an answer cannot be re-wrapped
+ * or have its error body cut. Refusing is final: a rejection from `fetch` would be retried as
+ * a transport failure. The body is cancelled so the socket is released.
+ */
+export function refuseUnsupportedStatus(response: Response): void {
+  if (response.status >= 200 && response.status <= 599) {
+    return;
+  }
+  void response.body?.cancel().catch(() => undefined);
+  throw new CliError('the server answered with a status the CLI does not support', {
+    code: 'request_failed',
+  });
 }
 
 /**
@@ -46,16 +61,9 @@ export function boundedResponse(response: Response, cap: number = maxResponseByt
   if (body === null) {
     return response;
   }
+  refuseUnsupportedStatus(response);
   // `response.body` is typed as a stream of `any`; the reader fixes the chunk type.
   const reader: ReadableStreamDefaultReader<Uint8Array> = body.getReader();
-  if (response.status < 200 || response.status > 599) {
-    // `Response` cannot represent this status, so the body cannot be re-wrapped. Refusing is
-    // final; a rejection from `fetch` would be retried as a transport failure.
-    void reader.cancel().catch(() => undefined);
-    throw new CliError('the server answered with a status the CLI does not support', {
-      code: 'request_failed',
-    });
-  }
   const declared = declaredLength(response);
   let bytes = 0;
   const bounded = new ReadableStream<Uint8Array>({

@@ -7,7 +7,7 @@ import { ExchangeAuthError } from '../auth/exchange.js';
 import { getToken, type GetTokenDeps } from '../auth/getToken.js';
 import { deleteCachedToken } from '../auth/tokenCache.js';
 import { callApi, type ApiResult } from '../callApi.js';
-import { ResponseTooLargeError } from '../boundedResponse.js';
+import { refuseUnsupportedStatus, ResponseTooLargeError } from '../boundedResponse.js';
 import { createApiClient } from '../client.js';
 import type { ResolvedConfig } from '../config.js';
 import { parseDuration } from '../duration.js';
@@ -402,7 +402,12 @@ async function readChunk(reader: ReadableStreamDefaultReader<Uint8Array>): Promi
  */
 function transport(fetchImpl: typeof fetch): typeof fetch {
   const guarded = refuseRedirects(fetchImpl);
-  return async (input, init) => boundedErrorBody(await guarded(input, init));
+  return async (input, init) => {
+    const response = await guarded(input, init);
+    // Before the error-body cut, which rebuilds the `Response` and cannot hold such a status.
+    refuseUnsupportedStatus(response);
+    return boundedErrorBody(response);
+  };
 }
 
 /**

@@ -41,8 +41,8 @@ export function createApiClient(
     parseAs: 'json',
     // The generated client spreads per-call options after the config, so a caller could
     // re-enable redirects. Rebuild the Request with `redirect: 'error'` on every call,
-    // whatever the caller passed, so no request can follow a redirect.
-    // Every answer is read through the byte cap, so no command can buffer an unbounded body.
+    // whatever the caller passed, so no request can follow a redirect. Every answer then goes
+    // through the byte cap, so no command can buffer an unbounded body.
     fetch: async (input, init) =>
       boundedResponse(await fetchImpl(new Request(input, { ...init, redirect: 'error' }))),
   });
