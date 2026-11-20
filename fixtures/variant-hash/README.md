@@ -8,6 +8,11 @@ normaliser, the RFC 8785 canonicaliser or the digest fails one of them:
 - `tests/Tenancy.IntegrationTests/VariantGoldenVectorTests.cs` — the server
   (`Evidgate.Modules.Catalog.Domain.VariantNormalizer` + `CanonicalHash`).
 
+`key-sets.json` pins the enum-like and non-identifying key sets of both runtimes (exact, order-free):
+`packages/variant/src/keySets.test.ts` reads the literals from `normalize.ts`, and
+`tests/Tenancy.IntegrationTests/VariantKeySetPinTests.cs` reads the private sets of `ParameterSecretRule`.
+Change a key set on one side and this file together.
+
 ## Provenance
 
 Handcrafted, synthetic values only. Every `expect` value is what the server's
