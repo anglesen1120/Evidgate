@@ -33,6 +33,14 @@ public sealed class IngestUnauthenticatedRefusalMetricTests(PostgresTenancyFixtu
         refused.ErrorMessage.ShouldBe("the request is not authenticated");
         refused.Headers.Contains("Retry-After").ShouldBeFalse();
         reasons.ToArray().ShouldBe([Unauthenticated]);
+
+        // Same host, same member: only the organization header changes, and the guard no longer refuses.
+        reasons.Clear();
+        var resolved = await PostAsync(client, world, headers =>
+            TenancyApiFactory.Resolved(user: world.User, orgHeader: world.Org)(headers));
+
+        resolved.Status.ShouldNotBe(HttpStatusCode.Unauthorized, resolved.ErrorMessage);
+        reasons.ShouldNotContain(Unauthenticated);
     }
 
     [Fact]

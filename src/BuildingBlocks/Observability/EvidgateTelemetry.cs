@@ -260,7 +260,7 @@ public static partial class EvidgateTelemetry
     /// The anonymous and the tenant-less refusal of the events route share the <c>unauthenticated</c> reason, so the
     /// counter cannot tell them apart.
     /// </remarks>
-    /// <param name="reason">One of <c>body_too_large</c>, <c>event_count</c>, <c>expanded_too_large</c>, <c>ratio_exceeded</c>, <c>encoding_unsupported</c>, <c>gzip_invalid</c>, <c>rate_limited</c>, <c>quota_exceeded</c>, <c>unauthenticated</c>.</param>
+    /// <param name="reason">One of <c>body_too_large</c>, <c>event_count</c>, <c>expanded_too_large</c>, <c>ratio_exceeded</c>, <c>encoding_unsupported</c>, <c>gzip_invalid</c>, <c>rate_limited</c>, <c>quota_exceeded</c>, <c>event_invalid</c>, <c>forbidden</c>, <c>run_closed</c>, <c>not_found</c>, <c>unauthenticated</c> or <c>other</c>.</param>
     public static void RecordIngestBatchRejected(string reason) =>
         IngestBatchRejections.Add(1, new KeyValuePair<string, object?>("reason", reason));
 
