@@ -260,7 +260,7 @@ internal sealed class SaveAiSettingsCommandHandler(
             return Result.Failure<AiSettingsView>(AiSettingsValidation.Stale(current?.VersionNo ?? 0));
         }
 
-        EvidgateTelemetry.RecordAiSettingsWrite("created");
+        scopes.Require().AfterCommit(() => EvidgateTelemetry.RecordAiSettingsWrite("created"));
 
         audit.Describe(AiSettingsValidation.AuditObject(
             row.Id,
