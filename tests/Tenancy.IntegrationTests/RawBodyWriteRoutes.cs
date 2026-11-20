@@ -116,7 +116,9 @@ internal static class RawBodyWriteRoutes
             $"/v1/projects/{Project}/environments/staging/revisions",
             64 * 1024,
             Unauthenticated,
-            """{"base_urls":{}}"""),
+            """{"base_urls":{}}""",
+            DeclaredLimit: 64 * 1024,
+            HandlerRefusesFirst: false),
         new("orchestrator.run-cancel", HttpMethod.Post, $"/v1/runs/{Run}/cancel", 4 * 1024, Unauthenticated, """{"reason":"stop tests"}"""),
         new("orchestrator.run-finalize", HttpMethod.Post, $"/v1/runs/{Run}/finalize", 8 * 1024, ProducerUnauthenticated, """{"shard":0}"""),
         new("release.create", HttpMethod.Post, $"/v1/projects/{Project}/releases", 64 * 1024, Unauthenticated, """{"version":"1.0.0"}"""),
@@ -129,7 +131,9 @@ internal static class RawBodyWriteRoutes
             $"/v1/projects/{Project}/policies",
             64 * 1024,
             Unauthenticated,
-            """{"rules":{}}"""),
+            """{"rules":{}}""",
+            DeclaredLimit: 64 * 1024,
+            HandlerRefusesFirst: false),
         new("policy.activate", HttpMethod.Post, $"/v1/projects/{Project}/policy-activation", 4 * 1024, Unauthenticated, """{"policy_revision_id":"018f0000-0000-7000-8000-00000000a009"}"""),
 
         // Authoring: every write delegate that reads a request body, in the order its endpoint map declares them.

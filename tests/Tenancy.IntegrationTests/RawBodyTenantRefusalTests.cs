@@ -28,6 +28,10 @@ namespace Tenancy.IntegrationTests;
 /// guard sits inside the shared reader, after that tag: without a tag those routes answer 422 <c>/If-Match</c> first,
 /// and no byte is read in that case either.
 /// </para>
+/// <para>
+/// The AI settings save guards before its own <c>If-Match</c>, so it is also exercised with no tag at all: an
+/// unresolved caller keeps the pipeline 401 there, and a resolved one reaches the route's own 422 instead.
+/// </para>
 /// </remarks>
 [Trait("Category", "Docker")]
 public sealed class RawBodyTenantRefusalTests(
@@ -100,7 +104,11 @@ public sealed class RawBodyTenantRefusalTests(
         var caller = TenancyApiFactory.Resolved(user: world.User);
         var client = world.Client;
 
-        foreach (var route in RawBodyWriteRoutes.Routes.Where(route => route.DeclaredLimit is not null))
+        var limited = RawBodyWriteRoutes.Routes.Where(route => route.DeclaredLimit is not null).ToArray();
+        limited.Any(route => route.HandlerRefusesFirst).ShouldBeTrue("the table covers handler-owned refusals");
+        limited.Any(route => !route.HandlerRefusesFirst).ShouldBeTrue("the table covers middleware-owned refusals");
+
+        foreach (var route in limited)
         {
             var declared = new byte[route.DeclaredLimit!.Value + 1];
 
@@ -117,6 +125,39 @@ public sealed class RawBodyTenantRefusalTests(
                 headers => headers.TryAddWithoutValidation("X-Evidgate-Org", "not-a-uuid"));
             AssertAnswer(route.HandlerRefusesFirst ? RawBodyWriteRoutes.PipelineUnauthenticated : TooLarge, route, tenantless);
         }
+    }
+
+    [Fact]
+    public async Task AiSettings_WithoutIfMatch_RefusesUnresolvedCallersBeforeThePrecondition()
+    {
+        await using var world = await SeededAsync();
+        var caller = TenancyApiFactory.Resolved(user: world.User);
+        var route = RawBodyWriteRoutes.Routes.Single(route => route.Key == "authoring.ai-settings")
+            with
+        { Preconditions = null };
+
+        var anonymous = await SendAsync(world.Client, route, Json(route.WellFormed), Anonymous, tenantHeader: null);
+        AssertPipelineRefusal(route, "no If-Match and no principal", anonymous);
+
+        var tenantless = await SendAsync(
+            world.Client,
+            route,
+            Json(route.WellFormed),
+            caller,
+            headers => headers.TryAddWithoutValidation("X-Evidgate-Org", "not-a-uuid"));
+        AssertPipelineRefusal(route, "no If-Match and no resolved tenant", tenantless);
+
+        var resolved = await SendAsync(
+            world.Client,
+            route,
+            Json(route.WellFormed),
+            caller,
+            headers => headers.TryAddWithoutValidation("X-Evidgate-Org", world.Org.ToString()));
+        AssertAnswer(
+            new RefusalAnswer(HttpStatusCode.UnprocessableEntity, "request_invalid", "the AI settings request is not valid"),
+            route,
+            resolved,
+            "a resolved tenant reaches the missing If-Match refusal");
     }
 
     private async Task<World> SeededAsync() =>
