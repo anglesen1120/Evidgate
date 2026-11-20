@@ -54,9 +54,9 @@ public sealed partial class SupportGrantOperatorRlsTests
               ('{ProjectA2}', '{OrgA}', 'A2', 'a2', 'AB'),
               ('{ProjectB1}', '{OrgB}', 'B1', 'b1', 'BA');
             insert into public.test_case (id, org_id, project_id, annotation_id, name, framework, first_seen_commit) values
-              (uuidv7(), '{OrgA}', '{ProjectA1}', 'case-a1', 'a1', 'pytest', 'aaaaaaa'),
-              (uuidv7(), '{OrgA}', '{ProjectA2}', 'case-a2', 'a2', 'pytest', 'aaaaaaa'),
-              (uuidv7(), '{OrgB}', '{ProjectB1}', 'case-b1', 'b1', 'pytest', 'aaaaaaa');
+              (uuidv7(), '{OrgA}', '{ProjectA1}', uuidv7(), 'a1', 'pytest', 'aaaaaaa'),
+              (uuidv7(), '{OrgA}', '{ProjectA2}', uuidv7(), 'a2', 'pytest', 'aaaaaaa'),
+              (uuidv7(), '{OrgB}', '{ProjectB1}', uuidv7(), 'b1', 'pytest', 'aaaaaaa');
             """);
         return database;
     }
