@@ -19,15 +19,21 @@
  * transport. It does not exempt SDK-route findings (`uncapped-route`, `unprovable-args`,
  * `unprovable-spread`, `unresolved-url`), which name a route rather than a send.
  *
- * Named limits: a body built in another module and handed to a fetch-like helper not named like
- * one; a fetch alias imported from another file; alias and property names, which are file-wide,
- * so a same-named local that never holds a fetch is still treated as one (fail closed); an SDK
- * operation reached through an import alias or namespace object; a callee chosen by a computed
- * (non-literal) name; a fetch-named call (not `fetch` itself, not a tracked alias) with more
- * than two arguments, read as another function (`fetchActionsIdToken(config, fetchImpl, deps)`);
- * an inherited body reaching `new Request(input, init)` through a non-identifier input
- * (`r.clone()`, a conditional, an alias of an alias), which is not followed; and an exotic call
- * such as `Function.prototype.call.call(fetch, ...)`.
+ * Named limits (passed silently, syntax cannot cross them): a body built in another module and
+ * handed to a fetch-like helper not named like one; a fetch alias imported from another file;
+ * a callee chosen by a computed (non-literal) name; an SDK operation destructured from a
+ * namespace (`const { op } = sdk`); an input of `new Request(input, init)` that is a member read
+ * or a call result other than `x.clone()` (`deps.request`); a fetch-named call (not `fetch`
+ * itself, not a tracked alias) with more than two arguments, read as another function
+ * (`fetchActionsIdToken(config, fetchImpl, deps)`). Alias and property names are file-wide, so a
+ * same-named local that never holds a fetch is still treated as one (fail closed).
+ *
+ * Reported rather than passed: a `Request` input through `r.clone()`, a conditional, `??`/`||`/`&&`
+ * or an untyped alias chain; `Function.prototype.call.call(fetch, ...)`; an SDK operation imported
+ * under an alias or through a namespace import; a name rebound by destructuring that the file also
+ * types `Request`. Request names resolve by lexical scope: every declaration of the nearest scope
+ * is checked, a same-named local in another function is another name, and a use no declaration
+ * reaches is checked against every `Request`-typed declaration of the name.
  */
 import ts from 'typescript';
 
@@ -35,16 +41,18 @@ import {
   fetchAliases,
   fetchKind,
   type FetchRefs,
-  isRequestConstruction,
   memberName,
   propertyNamed,
+  unwrap,
+} from './requestCapScan.aliases.testing.js';
+import {
+  isRequestConstruction,
   requestBodyReason,
   requestConstructorAliases,
   type RequestTyped,
   requestTypedNames,
   typedRequestReason,
-  unwrap,
-} from './requestCapScan.aliases.testing.js';
+} from './requestCapScan.requests.testing.js';
 
 export type Finding = { file: string; function: string; kind: string; detail: string };
 const verbs: Readonly<Record<string, true>> = { post: true, put: true, patch: true, delete: true };
@@ -115,6 +123,27 @@ function stringConstants(sf: ts.SourceFile): Map<string, string> {
   return constants;
 }
 
+/** SDK operations imported under another name, and the names of namespace imports. */
+function sdkImports(
+  sf: ts.SourceFile,
+  routes: ReadonlyMap<string, string>,
+): { locals: Map<string, string>; namespaces: Set<string> } {
+  const locals = new Map<string, string>();
+  const namespaces = new Set<string>();
+  for (const node of sf.statements) {
+    const bindings = ts.isImportDeclaration(node) ? node.importClause?.namedBindings : undefined;
+    if (bindings === undefined) continue;
+    if (ts.isNamespaceImport(bindings)) namespaces.add(bindings.name.text);
+    else {
+      for (const spec of bindings.elements) {
+        const op = (spec.propertyName ?? spec.name).text;
+        if (routes.has(op)) locals.set(spec.name.text, op);
+      }
+    }
+  }
+  return { locals, namespaces };
+}
+
 export function scanSource(
   file: string,
   text: string,
@@ -128,6 +157,23 @@ export function scanSource(
   const refs: FetchRefs = { names: aliasSets.names, properties: aliasSets.properties };
   const requestTyped: RequestTyped = requestTypedNames(sf);
   const constructors = requestConstructorAliases(sf);
+  const sdk = sdkImports(sf, routes);
+  /** The SDK operation a callee names: bare, imported under an alias, or on a namespace import. */
+  const operationOf = (callee: ts.Expression): string | undefined => {
+    if (ts.isIdentifier(callee)) {
+      const op = sdk.locals.get(callee.text) ?? callee.text;
+      return routes.has(op) ? op : undefined;
+    }
+    if (
+      ts.isPropertyAccessExpression(callee) &&
+      ts.isIdentifier(callee.expression) &&
+      sdk.namespaces.has(callee.expression.text) &&
+      routes.has(callee.name.text)
+    ) {
+      return callee.name.text;
+    }
+    return undefined;
+  };
   const findings: Finding[] = [];
   const usedRoutes = new Set<string>();
   const handled = new Set<ts.Node>();
@@ -278,6 +324,21 @@ export function scanSource(
       ) {
         reportSend(node, 'unresolved-fetch', `${boundTarget.getText()}.bind`, 'bound arguments');
       }
+      if (
+        ['call', 'apply', 'bind'].includes(memberName(boundCallee) ?? '') &&
+        ['call', 'apply'].includes(
+          boundTarget === undefined ? '' : (memberName(unwrap(boundTarget)) ?? ''),
+        ) &&
+        arg !== undefined &&
+        fetchKind(unwrap(arg), refs) !== undefined
+      ) {
+        reportSend(
+          node,
+          'unresolved-fetch',
+          boundCallee.getText().slice(0, 60),
+          'fetch handed to call',
+        );
+      }
       if (reflectApplyTarget(node) !== undefined) {
         reportSend(node, 'unresolved-fetch', 'Reflect.apply', 'target is a fetch');
       }
@@ -285,10 +346,12 @@ export function scanSource(
       const object = plain !== undefined && ts.isObjectLiteralExpression(plain) ? plain : undefined;
       let route: string | undefined;
       let named = false;
-      if (ts.isIdentifier(callee) && routes.has(callee.text)) {
-        route = routes.get(callee.text);
+      const operation = operationOf(callee);
+      if (operation !== undefined) {
+        route = routes.get(operation);
         named = true;
-        if (object === undefined) report(node, 'unprovable-args', `${callee.text} without options`);
+        if (object === undefined)
+          report(node, 'unprovable-args', `${callee.getText()} without options`);
       } else if (ts.isPropertyAccessExpression(callee) && Object.hasOwn(verbs, callee.name.text)) {
         if (object === undefined && /client/i.test(callee.expression.getText())) {
           report(node, 'unprovable-args', `${callee.getText()} without options`);
