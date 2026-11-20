@@ -8,8 +8,8 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// The Dapper read behind <see cref="IRunReconciler"/>: statements in a fixed order over the ambient tenant scope, so it
 /// joins the caller's transaction and RLS scopes every row, exactly like <see cref="RunEventScopeReader"/>. The run row
 /// is locked first and the state decides the outcome: only a <c>collecting</c> run — a <c>queued</c> or <c>running</c> one
-/// past its collection deadline, a finished <c>incomplete</c> one this attempt carries late evidence for, or a
-/// <c>canceled</c> one it carries reprocessed evidence for — is compared,
+/// past its collection deadline, a finished <c>incomplete</c> or <c>complete</c> one this attempt carries late evidence
+/// for, or an <c>incomplete</c>/<c>complete</c>/<c>canceled</c> one it carries reprocessed evidence for — is compared,
 /// and nothing is read beyond its state,
 /// because an enqueued finalize trigger is not evidence that the run is collectable. Read-only by construction — it never
 /// writes and never changes the run state; the work after the lock is the slot list, the one grouped event aggregate and,
@@ -50,16 +50,19 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
             return new ReconcileOutcome(ReconcileDisposition.RunNotFound, Comparison: null);
         }
 
-        // A run that finished as incomplete still takes evidence once a late trigger names it, and that evidence only
-        // counts once a revision of its own says so. The trigger's marker is the whole half the reconciler needs: the
-        // ingest route admitted the batch inside the window under its own lock, so that decision is authoritative here
+        // A run that finished as incomplete or complete still takes evidence once a late trigger names it, and that
+        // evidence only counts once a revision of its own says so. The trigger's marker is the whole half the reconciler
+        // needs: the ingest route admitted the batch inside the window under its own lock, so that decision is authoritative here
         // and the queue's delay cannot withdraw it — a late batch accepted at the edge of the window must still reach a
         // revision. An ordinary trigger carries no evidence and appends a revision with nothing behind it, so it stays
         // uncollectable.
         // A reprocess of an incomplete run is that same evidence — its admission marks those rows late — so its marker
-        // answers the late path too.
+        // answers the late path too. A complete run is reached only by the late marker: a reprocess keeps its own
+        // disposition below, so the two append settlements never blur, and a deadline sweep or an old trigger on a
+        // complete run stays uncollectable exactly as before.
         var incomplete = string.Equals(locked.State, RunStates.Incomplete, StringComparison.Ordinal);
-        var late = (lateTrigger || reprocessTrigger) && incomplete;
+        var complete = string.Equals(locked.State, RunStates.Complete, StringComparison.Ordinal);
+        var late = (lateTrigger && (incomplete || complete)) || (reprocessTrigger && incomplete);
 
         // A reprocess marker on a run that already holds a verdict appends a revision and never settles it: <c>complete</c>
         // and <c>canceled</c> are terminal, so the revision the re-read rows reach is the only place they count.

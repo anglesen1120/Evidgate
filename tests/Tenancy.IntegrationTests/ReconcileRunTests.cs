@@ -2383,15 +2383,13 @@ public sealed partial class ReconcileRunTests : IClassFixture<TenancyHostPool>
             + $"now() - interval '5 minutes' - interval '1 second' where id = '{runId:D}'");
 
     /// <summary>
-    /// The run's late window as the ingest route evaluates it
-    /// (<c>now() &lt;= collection_deadline_at + late_window_minutes</c>), so a case can prove a scenario really is inside
-    /// or outside the window instead of trusting the arithmetic in its own comment. The reconciler does not read it: the
-    /// route's decision at ingest time is the one that counts.
+    /// The run's late window as the ingest route evaluates it: the shared <see cref="RunAdmissionPolicy.LateWindowOpenSql"/>
+    /// predicate, so a case proves the scenario really is inside or outside the window instead of trusting the arithmetic
+    /// in its own comment. The reconciler does not read it: the route's decision at ingest time is the one that counts.
     /// </summary>
     private static Task<bool> LateWindowOpenAsync(IngestTestWorld world, Guid runId) =>
         world.ScalarAsync<bool>(
-            "select now() <= collection_deadline_at + make_interval(mins => late_window_minutes) "
-            + $"from public.run where id = '{runId:D}'");
+            "select " + RunAdmissionPolicy.LateWindowOpenSql + $" from public.run r where r.id = '{runId:D}'");
 
     /// <summary>
     /// The reconcile triggers the ingest path enqueued for one run's late evidence: the key shape is the contract's,
