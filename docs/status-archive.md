@@ -828,3 +828,9 @@ Closed by S485 (#995): `ExchangeRateLimiter` is sealed and `AcquireAsync` is non
 | CLI variant normaliser duplicated from adapter (S476) | `packages/cli/src/variantHash.ts` and `variantShape.ts` mirror `normalizeVariant` of `packages/adapter-playwright/src/variant.ts` because the CLI cannot import the adapter; parity is pinned by test vectors only, so the two can drift. Same receiver as the canonical case-id validator duplicate in 04.2.2 T3 | receiver: shared CLI module lane (adapter imports CLI) |
 
 Closed by S487 (#999): `normalizeVariant`, the secret-shape rules, the serialised-length measure and the sha256 digest live once in `packages/variant` (`@evidgate/variant`); the CLI and the adapter import it and the mirrored copies are deleted. The case-id validator duplicate stays, recorded in a new carried row.
+
+## Moved from status-carried.md by S489 (2026-11-20)
+
+| Variant normaliser test ideas not applied (S487) | QA proposed, without a checked expectation: a lone-surrogate string value, `NaN`/`Infinity` numbers, and a secret-shaped value inside an array element (path form). Expected reasons were never read from `packages/variant/src/normalize.ts`, so none was added. | receiver: shared variant package owner (next lane touching `packages/variant`) |
+
+Closed by S489 (#1001): `packages/variant/src/normalize.edges.test.ts` pins the TS answer for secret-shaped array elements, non-finite and unsafe numbers, lone surrogates, array limits, sparse arrays and extra array properties; two differences found are recorded in new carried rows.
