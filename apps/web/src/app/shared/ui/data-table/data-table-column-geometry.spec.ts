@@ -191,23 +191,8 @@ describe('shared table content-class minimum widths', () => {
   let browser: Browser;
   let css: string;
 
-  beforeAll(async () => {
-    css = productionRules();
-    browser = await chromium.launch({ channel: 'chrome' });
-  });
-  afterAll(async () => {
-    await browser?.close();
-  });
-
-  const scenarios = ['en', 'vi'].flatMap((locale) =>
-    [900, 1280].flatMap((width) => [1, 2].map((scale) => ({ locale, width, scale }))),
-  );
-  it.each(scenarios)(
-    'keeps $locale role content intact at $width px and $scale× text',
-    async ({ locale, width, scale }) => {
-      const page = await browser.newPage({ viewport: { width, height: 900 } });
-      try {
-        await page.setContent(`<!doctype html><html lang="${locale}"><head><style>
+  function roleContentDocument(locale: string, scale: number, rules: string): string {
+    return `<!doctype html><html lang="${locale}"><head><style>
         :root { --eg-space-3:8px; --eg-space-4:12px; --eg-control-touch:44px;
           --eg-row-default:44px; --eg-font-mono:ui-monospace,monospace; }
         body { margin:0; font:${14 * scale}px/${20 * scale}px Arial,sans-serif; }
@@ -222,8 +207,36 @@ describe('shared table content-class minimum widths', () => {
         .chip i { inline-size:12px; flex-shrink:0; }
         .chip span { min-inline-size:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         button { min-inline-size:var(--eg-control-touch); font:inherit; }
-        ${css}
-      </style></head><body>${specimen(locale)}</body></html>`);
+        ${rules}
+      </style></head><body>${specimen(locale)}</body></html>`;
+  }
+
+  beforeAll(async () => {
+    css = productionRules();
+    browser = await chromium.launch({ channel: 'chrome' });
+    // Pay renderer start, font and first-layout cost here (hook budget) so the first measured
+    // test is not the one near the 5 s test timeout on a cold, loaded host.
+    const warm = await browser.newPage({ viewport: { width: 900, height: 900 } });
+    try {
+      await warm.setContent(roleContentDocument('en', 1, css));
+      await geometry(warm);
+    } finally {
+      await warm.close();
+    }
+  });
+  afterAll(async () => {
+    await browser?.close();
+  });
+
+  const scenarios = ['en', 'vi'].flatMap((locale) =>
+    [900, 1280].flatMap((width) => [1, 2].map((scale) => ({ locale, width, scale }))),
+  );
+  it.each(scenarios)(
+    'keeps $locale role content intact at $width px and $scale× text',
+    async ({ locale, width, scale }) => {
+      const page = await browser.newPage({ viewport: { width, height: 900 } });
+      try {
+        await page.setContent(roleContentDocument(locale, scale, css));
         const measured = await geometry(page);
         for (const cell of measured.cells) {
           expect(cell.width, JSON.stringify(cell)).toBeGreaterThanOrEqual(cell.minimum - 1);
