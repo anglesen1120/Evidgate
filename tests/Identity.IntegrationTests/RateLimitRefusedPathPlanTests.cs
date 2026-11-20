@@ -131,32 +131,44 @@ public sealed class RateLimitRefusedPathPlanTests(DatabaseFixture fixture)
     private static async Task<Witness> MeasureAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, byte[] keyHash)
     {
         var token = TestContext.Current.CancellationToken;
+
+        // pg_stat_xact_* also carries counts of earlier transactions of the session that are not flushed yet, so the
+        // witness is the difference across the measured statement, not the absolute value.
+        var before = await TupleCountersAsync(connection, transaction);
         await using var explain = new NpgsqlCommand(
             "explain (analyze, buffers, wal, format json) select * from " + Call, connection, transaction);
         explain.Parameters.Add(new NpgsqlParameter("key_hash", NpgsqlDbType.Bytea) { Value = keyHash });
         var json = (string)(await explain.ExecuteScalarAsync(token))!;
+        var after = await TupleCountersAsync(connection, transaction);
 
         using var document = JsonDocument.Parse(json);
         var plan = document.RootElement[0].GetProperty("Plan");
 
+        await using var xidCommand = new NpgsqlCommand("select pg_current_xact_id_if_assigned()::text", connection, transaction);
+
+        return new Witness(
+            json,
+            (string?)await xidCommand.ExecuteScalarAsync(token) is { } xid ? xid : null,
+            after.Inserted - before.Inserted,
+            after.Updated - before.Updated,
+            after.Deleted - before.Deleted,
+            plan.GetProperty("WAL Records").GetInt64(),
+            plan.GetProperty("WAL Bytes").GetInt64());
+    }
+
+    private static async Task<(long Inserted, long Updated, long Deleted)> TupleCountersAsync(
+        NpgsqlConnection connection, NpgsqlTransaction transaction)
+    {
+        var token = TestContext.Current.CancellationToken;
         await using var stats = new NpgsqlCommand(
-            "select pg_current_xact_id_if_assigned()::text, coalesce(n_tup_ins, 0), coalesce(n_tup_upd, 0), coalesce(n_tup_del, 0) " +
+            "select coalesce(n_tup_ins, 0), coalesce(n_tup_upd, 0), coalesce(n_tup_del, 0) " +
             "from (select 1) one left join pg_stat_xact_user_tables t on t.relname = 'rate_limit_window'",
             connection,
             transaction);
         await using var reader = await stats.ExecuteReaderAsync(token);
         (await reader.ReadAsync(token)).ShouldBeTrue();
 
-        var xid = await reader.IsDBNullAsync(0, token) ? null : reader.GetString(0);
-
-        return new Witness(
-            json,
-            xid,
-            reader.GetInt64(1),
-            reader.GetInt64(2),
-            reader.GetInt64(3),
-            plan.GetProperty("WAL Records").GetInt64(),
-            plan.GetProperty("WAL Bytes").GetInt64());
+        return (reader.GetInt64(0), reader.GetInt64(1), reader.GetInt64(2));
     }
 
     private static async Task<string> SettingsAsync(NpgsqlConnection connection)
