@@ -230,7 +230,7 @@ internal static class RunIdentityRules
                     break;
 
                 default:
-                    errors.Add(new ErrorDetail($"/ref/{member.Name}", "additional_properties"));
+                    errors.Add(new ErrorDetail(RequestMemberPath.ForUnknown(member.Name, "/ref"), "additional_properties"));
                     break;
             }
         }
