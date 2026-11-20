@@ -48,4 +48,58 @@ public class ProductionSourceWalkTests
         SolutionLayout.IsBuildOutput(srcRoot, Path.Combine(srcRoot, "Api", "obj.cs")).ShouldBeFalse();
         SolutionLayout.IsBuildOutput(srcRoot, Path.Combine(srcRoot, "binary", "Host.cs")).ShouldBeFalse();
     }
+
+    /// <summary>
+    /// The subtrees the source-text rules read through <see cref="SolutionLayout.SourceFiles(string)"/>: the count
+    /// measured when the rule moved to the shared walk (a floor, so adding a file needs no edit) and a file that
+    /// must be in it. A failure names the row: a file moved or deleted, so update the row, or the walk lost a subtree.
+    /// </summary>
+    public static TheoryData<string, int, string> Subtrees => new()
+    {
+        { "src/Evidgate.Evaluation", 14, "src/Evidgate.Evaluation/PolicyEvaluator.cs" },
+        { "src/Modules/Evidgate.Modules.Orchestrator", 70, "src/Modules/Evidgate.Modules.Orchestrator/Endpoints/ReleaseEndpoints.cs" },
+        { "src/Modules/Evidgate.Modules.Catalog", 54, "src/Modules/Evidgate.Modules.Catalog/Endpoints/CatalogEndpoints.cs" },
+        { "src/Modules/Evidgate.Modules.Policy/Infrastructure/Persistence", 6, "src/Modules/Evidgate.Modules.Policy/Infrastructure/Persistence/EvaluationSql.cs" },
+        { "src", 1050, "src/Modules/Evidgate.Modules.Healing/Application/HealingSystemSwitch.cs" },
+        { "tests", 1172, "tests/Architecture.Tests/SolutionLayout.cs" },
+    };
+
+    [Theory]
+    [MemberData(nameof(Subtrees))]
+    public void RealTree_Subtree_Keeps_Its_Floor_And_Anchor(string root, int floor, string anchor)
+    {
+        var files = SolutionLayout.SourceFiles(root);
+        output.WriteLine($"{root}: {files.Count} files");
+
+        files.Count.ShouldBeGreaterThanOrEqualTo(floor, $"{root} lost files; if intended, lower its row in {nameof(Subtrees)}");
+        files.ShouldContain(anchor);
+        files.ShouldAllBe(path => path.StartsWith(root + "/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void SourceFiles_On_A_Temp_Tree_Drops_Build_Output_And_Sees_A_Deleted_File_Go()
+    {
+        var repo = Directory.CreateTempSubdirectory("walk");
+        try
+        {
+            foreach (var relative in new[] { "src/A/Kept.cs", "src/A/Other.cs", "src/A/obj/Debug/Gen.cs", "src/bin/Gen.cs", "src/A/notes.txt" })
+            {
+                var full = Path.Combine(repo.FullName, relative);
+                Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+                File.WriteAllText(full, "x");
+            }
+
+            SolutionLayout.SourceFiles(repo.FullName, "src").ShouldBe(["src/A/Kept.cs", "src/A/Other.cs"]);
+            SolutionLayout.SourceFiles(repo.FullName, "src/A").ShouldBe(["src/A/Kept.cs", "src/A/Other.cs"]);
+
+            File.Delete(Path.Combine(repo.FullName, "src/A/Other.cs"));
+            SolutionLayout.SourceFiles(repo.FullName, "src").ShouldBe(["src/A/Kept.cs"]);
+
+            Should.Throw<DirectoryNotFoundException>(() => SolutionLayout.SourceFiles(repo.FullName, "src/Missing"));
+        }
+        finally
+        {
+            repo.Delete(recursive: true);
+        }
+    }
 }
