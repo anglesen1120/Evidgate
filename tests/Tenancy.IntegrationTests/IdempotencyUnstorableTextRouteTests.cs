@@ -10,11 +10,12 @@ using World = Tenancy.IntegrationTests.RunCreationTests.World;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// The idempotency stage re-serialises a parsed body before the handler runs, so a body the writer refuses — an unpaired
-/// UTF-16 surrogate in a member name or string, or nesting the command wrapper pushes past the writer's depth limit — must
-/// answer 400 <c>request_invalid</c> with nothing stored and no echo. The second route is <c>CreateRun</c>, whose handler
-/// refuses unparsed text itself because those bytes never reach the command; the Authoring edge answers 422
-/// <c>invalid_text</c> before the pipeline, so no Authoring route can reach this guard.
+/// The idempotency stage re-serialises a parsed body before the handler runs, so a body the writer refuses — nesting the
+/// command wrapper pushes past the writer's depth limit — must answer 400 <c>request_invalid</c> with nothing stored and
+/// no echo. An unpaired UTF-16 surrogate in a member name or string never gets that far on the Catalog suite route: the
+/// shared Catalog body reader refuses it first as 422 <c>request_invalid</c>, with the same no-write, no-echo rule. The
+/// <c>CreateRun</c> route answers 422 from its own handler because those bytes never reach the command; the Authoring
+/// edge answers 422 <c>invalid_text</c> before the pipeline, so no Authoring route can reach this guard.
 /// </summary>
 [Trait("Category", "Docker")]
 public sealed class IdempotencyUnstorableTextRouteTests(
@@ -22,19 +23,19 @@ public sealed class IdempotencyUnstorableTextRouteTests(
     TenancyHostPool hosts) : IClassFixture<TenancyHostPool>
 {
     [Fact]
-    public Task SuiteRevision_LoneHighSurrogateName_400WithoutEchoOrWrites() =>
+    public Task SuiteRevision_LoneHighSurrogateName_422WithoutEchoOrWrites() =>
         AssertSuiteRefusedAsync(
             """{"\ud800":1,"marker-zq7":"SECRETMARK"}""",
             """{"k":1,"marker-zq7":"SECRETMARK"}""");
 
     [Fact]
-    public Task SuiteRevision_LoneLowSurrogateName_400WithoutEchoOrWrites() =>
+    public Task SuiteRevision_LoneLowSurrogateName_422WithoutEchoOrWrites() =>
         AssertSuiteRefusedAsync(
             """{"\udc00":1,"marker-zq7":"SECRETMARK"}""",
             """{"k":1,"marker-zq7":"SECRETMARK"}""");
 
     [Fact]
-    public Task SuiteRevision_LoneHighSurrogateValue_400WithoutEchoOrWrites() =>
+    public Task SuiteRevision_LoneHighSurrogateValue_422WithoutEchoOrWrites() =>
         AssertSuiteRefusedAsync(
             """{"k":"\ud800","marker-zq7":"SECRETMARK"}""",
             """{"k":"ok","marker-zq7":"SECRETMARK"}""");
@@ -151,7 +152,8 @@ public sealed class IdempotencyUnstorableTextRouteTests(
         using var response = await PostAsync(world, route, RevisionBody(world, malformedParams), key);
         var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
-        AssertRefusal(response.StatusCode, text, HttpStatusCode.BadRequest);
+        // The Catalog reader refuses unstorable text before the idempotency stage, so the answer is 422, not the stage's 400.
+        AssertRefusal(response.StatusCode, text, HttpStatusCode.UnprocessableEntity);
         (await RecordCountAsync(world, key)).ShouldBe(0);
         (await CountsAsync(world)).ShouldBe(before,
             "a refused request adds no audit entry, outbox row, task, run or suite revision");

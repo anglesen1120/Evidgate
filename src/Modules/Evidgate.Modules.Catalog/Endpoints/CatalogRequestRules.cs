@@ -1,11 +1,14 @@
 using System.Globalization;
 using System.Numerics;
 using System.Text.Json;
+using Evidgate.BuildingBlocks.Pipeline.Authorization;
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using Evidgate.Modules.Catalog.Domain;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Evidgate.Modules.Catalog.Endpoints;
 
@@ -15,6 +18,38 @@ namespace Evidgate.Modules.Catalog.Endpoints;
 /// </summary>
 internal static class CatalogRequestRules
 {
+    /// <summary>
+    /// The body read every catalog write shares. An anonymous caller is refused here, before any byte is buffered, so
+    /// it gets the pipeline's own 401 rather than a 400/413/422 for a body no caller was allowed to send.
+    /// </summary>
+    /// <param name="context">The request.</param>
+    /// <param name="principals">The caller of the current async flow.</param>
+    /// <param name="limit">The cap in bytes.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    /// <param name="refuseUnstorableValues">As <see cref="ReadJsonAsync"/>.</param>
+    public static async Task<(JsonElement Body, Error? Error)> ReadAuthenticatedJsonAsync(
+        HttpContext context,
+        IRequestPrincipalAccessor principals,
+        int limit,
+        CancellationToken cancellationToken,
+        bool refuseUnstorableValues = true)
+    {
+        if (principals.Current is null)
+        {
+            // The envelope middleware renders this as the pipeline's own 401, so the answer keeps one copy.
+            throw new TenantContextMissingException();
+        }
+
+        // A session with an unreadable organization header is published as a principal but resolves no
+        // tenant, so the pipeline's own tenant 401 is raised here too, before a byte of the body is read.
+        if (context.RequestServices.GetRequiredService<IRequestTenantContextAccessor>().Current is null)
+        {
+            throw new TenantContextMissingException();
+        }
+
+        return await ReadJsonAsync(context, limit, cancellationToken, refuseUnstorableValues).ConfigureAwait(false);
+    }
+
     /// <summary>
     /// The body, capped before it is buffered, so an oversize request costs one header check and a 413. A body whose
     /// text cannot be stored (an unpaired surrogate or NUL in any name or value) is refused here, before any caller
@@ -27,7 +62,7 @@ internal static class CatalogRequestRules
     /// False only for a route that must answer a bad value with its own field path: then just an unstorable member
     /// name is refused here and the route owns the value check.
     /// </param>
-    public static async Task<(JsonElement Body, Error? Error)> ReadJsonAsync(
+    private static async Task<(JsonElement Body, Error? Error)> ReadJsonAsync(
         HttpContext context,
         int limit,
         CancellationToken cancellationToken,
