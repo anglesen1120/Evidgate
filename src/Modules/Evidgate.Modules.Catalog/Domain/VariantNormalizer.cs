@@ -45,12 +45,6 @@ internal static class VariantNormalizer
         "description", "label", "labels", "note", "notes", "comment", "comments", "title", "tags", "display_name", "displayname",
     };
 
-    /// <summary>Keys whose string values are case-insensitive enum-like names: lower-cased and trimmed before hashing.</summary>
-    private static readonly HashSet<string> EnumLike = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "browser", "engine", "platform", "os", "mode", "env", "environment", "channel", "device", "locale", "viewport",
-    };
-
     /// <summary>Normalises <paramref name="parameters"/> (null means no parameters).</summary>
     /// <param name="parameters">The parameter object as sent.</param>
     /// <param name="basePath">The path prefix used in problems, e.g. <c>/members/m0/params</c>.</param>
@@ -244,8 +238,8 @@ internal static class VariantNormalizer
 
         // The stored form is what must not look like a secret: an upper-cased token prefix only shows after the
         // enum-like fold, so both the text as sent and the text as stored are scanned.
-        var stored = EnumLike.Contains(key) ? text.Trim().ToLowerInvariant() : text;
-        if (SecretShape.ValueLooksSecret(text) || SecretShape.ValueLooksSecret(stored))
+        var stored = ParameterSecretRule.StoredForm(key, text);
+        if (ParameterSecretRule.ValueLooksSecret(key, text))
         {
             problems.Add(new VariantProblem(path, "secret_value"));
 

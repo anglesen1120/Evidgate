@@ -152,7 +152,7 @@ internal static class ManifestVerifier
         }
     }
 
-    /// <summary>The 1-based positions of the secret-shaped parameters of one params object.</summary>
+    /// <summary>The 1-based positions of the secret-shaped parameters of one params object; an unreadable name counts as one.</summary>
     internal static int[] SecretPositions(JsonElement parameters)
     {
         List<int>? found = null;
@@ -160,8 +160,7 @@ internal static class ManifestVerifier
         foreach (var member in parameters.EnumerateObject())
         {
             position++;
-            var value = member.Value.ValueKind == JsonValueKind.String ? member.Value.GetString() ?? string.Empty : member.Value.GetRawText();
-            if (IsSecret(member.Name, value))
+            if (MemberIsSecret(member))
             {
                 (found ??= []).Add(position);
             }
@@ -179,7 +178,26 @@ internal static class ManifestVerifier
             return !SecretShape.IsReference(value) || SecretShape.SecretNameLooksLikeValue(value[7..]) || SecretShape.ValueLooksSecret(value[7..]);
         }
 
-        return SecretShape.KeyLooksSecret(key) || SecretShape.ValueLooksSecret(key) || SecretShape.ValueLooksSecret(value);
+        return SecretShape.KeyLooksSecret(key) || SecretShape.ValueLooksSecret(key) || ParameterSecretRule.ValueLooksSecret(key, value);
+    }
+
+    private static bool MemberIsSecret(JsonProperty member)
+    {
+        string name;
+        string value;
+        try
+        {
+            name = member.Name;
+            value = member.Value.ValueKind == JsonValueKind.String ? member.Value.GetString()! : member.Value.GetRawText();
+        }
+        catch (InvalidOperationException)
+        {
+            // A lone surrogate cannot be read: refused by position, never echoed. The upload path rejects it earlier
+            // (HasUnstorableText runs before this check), so only a direct caller reaches this.
+            return true;
+        }
+
+        return IsSecret(name, value);
     }
 
     private static List<ErrorDetail> CoverageDetails(
