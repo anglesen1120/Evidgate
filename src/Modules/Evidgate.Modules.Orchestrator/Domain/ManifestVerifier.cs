@@ -47,7 +47,7 @@ internal static class ManifestVerifier
         var matrix = root.GetProperty("matrix");
 
         var secrets = SecretDetails(planned, matrix, out var unclean);
-        SecretRefDetails(root, secrets);
+        SecretRefDetails(root, secrets, unclean);
 
         // Secret refusals fill the detail budget first and name the reason; unclean text only adds to what is left.
         secrets.AddRange(unclean.Take(Math.Max(0, MaxDetails - secrets.Count)));
@@ -128,7 +128,7 @@ internal static class ManifestVerifier
     /// The other free text of a manifest that must not carry a secret: <c>env_needs</c> references (the schema fixes their
     /// shape, not whether the name is a token) and shard <c>producer_hint</c>s.
     /// </summary>
-    private static void SecretRefDetails(JsonElement root, List<ErrorDetail> details)
+    private static void SecretRefDetails(JsonElement root, List<ErrorDetail> details, List<ErrorDetail> unclean)
     {
         var need = 0;
         foreach (var entry in root.GetProperty("env_needs").GetProperty("target_envs").EnumerateArray())
@@ -153,11 +153,30 @@ internal static class ManifestVerifier
         var shard = 0;
         foreach (var entry in root.GetProperty("shard_plan").GetProperty("shards").EnumerateArray())
         {
-            if (details.Count < MaxDetails
-                && entry.TryGetProperty("producer_hint", out var hint)
-                && SecretShape.ValueLooksSecret(hint.GetString()!))
+            if (entry.TryGetProperty("producer_hint", out var hint))
             {
-                details.Add(new ErrorDetail(string.Create(CultureInfo.InvariantCulture, $"/shard_plan/shards/{shard}/producer_hint"), SecretValueDetected));
+                var path = string.Create(CultureInfo.InvariantCulture, $"/shard_plan/shards/{shard}/producer_hint");
+                var text = hint.GetString()!;
+
+                // A hint is never a variant identity, so unclean text is refused outright; a token hidden by it keeps the secret reason.
+                if (UnicodeCleanliness.IsClean(text))
+                {
+                    if (details.Count < MaxDetails && SecretShape.ValueLooksSecret(text))
+                    {
+                        details.Add(new ErrorDetail(path, SecretValueDetected));
+                    }
+                }
+                else if (SecretShape.ValueLooksSecret(UnicodeCleanliness.StripInvisible(text)))
+                {
+                    if (details.Count < MaxDetails)
+                    {
+                        details.Add(new ErrorDetail(path, SecretValueDetected));
+                    }
+                }
+                else if (unclean.Count < MaxDetails)
+                {
+                    unclean.Add(new ErrorDetail(path, InvalidValue));
+                }
             }
 
             shard++;
