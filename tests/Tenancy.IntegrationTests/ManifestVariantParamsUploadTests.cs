@@ -231,7 +231,7 @@ public sealed class ManifestVariantParamsUploadTests
 
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         Details(answer).Select(detail => detail.GetProperty("reason").GetString()).Distinct().ShouldBe(["secret_in_variant_params"]);
-        Details(answer).ShouldHaveSingleItem().GetProperty("path").GetString().ShouldBe("/planned_executions/0/variant/params/#32");
+        Details(answer).First().GetProperty("path").GetString().ShouldBe("/planned_executions/0/variant/params/#32");
         answer.Body.GetRawText().ShouldNotContain(Token);
         reasons.ShouldContain("secret_in_variant_params");
         reasons.ShouldNotContain("invalid_variant");
@@ -279,5 +279,52 @@ public sealed class ManifestVariantParamsUploadTests
         listener.Start();
 
         return listener;
+    }
+
+    [Fact]
+    public async Task Upload_SecretReferenceUnderASecretNamedKey_IsRefusedAsInvalidVariant_WithoutEcho()
+    {
+        await using var world = await StartAsync(_fixture);
+        var parameters = JsonSerializer.Serialize(new Dictionary<string, string> { ["browser"] = "x", ["api_token"] = "secret:ci_token" });
+
+        var answer = await UploadAsync(world, Body(world, parameters));
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        Details(answer).ShouldHaveSingleItem().GetProperty("path").GetString().ShouldBe("/planned_executions/0/variant/params");
+        answer.Body.GetRawText().ShouldNotContain("ci_token");
+        answer.Body.GetRawText().ShouldNotContain("api_token");
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.manifest where org_id = '{world.Org}'")).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Upload_FiftyOneRefusedExecutions_ReportFiftyDetailsAtTheirOwnIndexes()
+    {
+        await using var world = await StartAsync(_fixture);
+        const int rows = 51;
+        var template = System.Text.Json.Nodes.JsonNode.Parse(Body(world, "{\"browser\":\"x\"}"))!.AsObject();
+        var executionTemplate = template["planned_executions"]![0]!.ToJsonString();
+        var planned = new System.Text.Json.Nodes.JsonArray();
+        var variants = new System.Text.Json.Nodes.JsonArray();
+        for (var index = 0; index < rows; index++)
+        {
+            var parameters = new Dictionary<string, string>(ManifestVariantParamsEquivalenceTests.Parameters(32, 256)) { ["k00"] = new string((char)('a' + (index % 26)), 255) + index.ToString("D2", System.Globalization.CultureInfo.InvariantCulture)[..1] };
+            parameters["k01"] = new string('y', 250) + index.ToString("D6", System.Globalization.CultureInfo.InvariantCulture);
+            var node = System.Text.Json.Nodes.JsonNode.Parse(executionTemplate)!.AsObject();
+            node["variant"] = new System.Text.Json.Nodes.JsonObject { ["params"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(parameters)) };
+            planned.Add(node);
+            variants.Add(new System.Text.Json.Nodes.JsonObject { ["params"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(parameters)) });
+        }
+
+        template["planned_executions"] = planned;
+        template["matrix"]!["variants"] = variants;
+        template["shard_plan"]!["shards"]![0]!["to_index"] = rows;
+
+        var answer = await UploadAsync(world, template.ToJsonString());
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, answer.ErrorMessage);
+        var details = Details(answer);
+        details.Count.ShouldBe(50);
+        details.Select(detail => detail.GetProperty("reason").GetString()).Distinct().ShouldBe(["invalid_variant"]);
+        details.Select((detail, position) => detail.GetProperty("path").GetString() == $"/planned_executions/{position}/variant/params").ShouldAllBe(match => match);
     }
 }

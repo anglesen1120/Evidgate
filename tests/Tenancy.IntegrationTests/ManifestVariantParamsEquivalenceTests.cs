@@ -36,6 +36,7 @@ public sealed class ManifestVariantParamsEquivalenceTests
         yield return Row("cjk_6_by_256", JsonSerializer.Serialize(Parameters(6, 256, '\u754c')), refused: true);
         yield return Row("astral_128", AstralParameters(128), refused: false);
         yield return Row("astral_129", AstralParameters(129), refused: true);
+        yield return Row("astral_128_plus_one_unit", JsonSerializer.Serialize(new Dictionary<string, string> { ["browser"] = string.Concat(Enumerable.Repeat("\U0001f600", 128)) + "x" }), refused: true);
         yield return Row("keys_32", JsonSerializer.Serialize(Parameters(32, 1)), refused: false);
         yield return Row("keys_33", JsonSerializer.Serialize(Parameters(33, 1)), refused: true);
         yield return Row("named_non_identifying", NonIdentifyingParameters(), refused: false);
@@ -123,7 +124,7 @@ public sealed class ManifestVariantParamsEquivalenceTests
     {
         var caseText = caseRevision.ToString("D", CultureInfo.InvariantCulture);
         var environment = environmentRevision is { } id
-            ? "{\"environment_revision_id\":\"" + id.ToString("D", CultureInfo.InvariantCulture) + "\"},"
+            ? "\"environment_revision_id\":\"" + id.ToString("D", CultureInfo.InvariantCulture) + "\","
             : string.Empty;
         var planned = includePlanned
             ? "{\"case_revision_id\":\"" + caseText + "\",\"variant\":{\"params\":" + parameters + "},\"target_env\":\"" + targetEnv + "\"}"
