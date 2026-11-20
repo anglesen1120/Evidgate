@@ -980,3 +980,9 @@ Closed by #1055 (657df323): `keySets.test.ts` now reads the literals through the
 | Release and Policy guard sites have no individual mutant (S507) | The LAN mutant chain removed the guard at Orchestrator, Authoring, Ingestion and the shared guard, but not at `ReleaseEndpoints.cs:81,123` or `PolicyEndpoints.cs:94,125`; only the 27-route table fact and the shared-guard mutant cover them. | receiver: next lane touching `RawBodyTenantRefusalTests`, run one mutant per site |
 
 Closed by #1055 (657df323): one mutant per site (`ReleaseEndpoints.cs:81,123`, `PolicyEndpoints.cs:94,125`, M5-M8, LAN runs on 04c127b7) ran red in `RawBodyTenantRefusalTests.RawBodyWrite_MemberWithoutTenant_ReadsNoBodyByteAndReturnsPipelineUnauthenticated`, naming release.create, release.bind-run, policy.append-revision and policy.activate.
+
+## Moved from status-carried.md by S518 (2026-11-21)
+
+| Secret-shape timeout runbook polish (S510) | Not done in #1044: the runbook is missing from the `incident-process.md` §6 table (needs a P-class mapping); `alert-rules.md` still says Last review 2026-11-05; the runbook lacks purpose/known-gaps/evidence sections; the catalogue says "customer values are hitting the match budget" while the runbook and `SecretShape.cs:94-98` say a stalled host, not hostile input. Two runbook statements are `[INFERENCE]`: every caller maps a true result to a refusal and never a 500, and a retry after recovery passes. No check validates rule-spec semantics. | receiver: observability lane, 10.3.1-T5.2 |
+
+Closed by #1059 (6a06088a): the runbook is in the incident-process §6 table (P3-c, escalating to P2-g), has purpose, known-gaps and evidence sections, the catalogue wording says a stalled host (`SecretShape.cs:96-98`), `alert-rules.md` §6 was reviewed on 442f1fd1, and the 'every caller refuses' statement is now a read caller table; what stays open is carried as 'Secret-shape timeout runbook: untraced and unproven parts (S518)'.
