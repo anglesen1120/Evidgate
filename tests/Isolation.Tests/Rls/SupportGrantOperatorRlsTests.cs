@@ -57,7 +57,20 @@ public sealed partial class SupportGrantOperatorRlsTests
               (uuidv7(), '{OrgA}', '{ProjectA1}', uuidv7(), 'a1', 'pytest', 'aaaaaaa'),
               (uuidv7(), '{OrgA}', '{ProjectA2}', uuidv7(), 'a2', 'pytest', 'aaaaaaa'),
               (uuidv7(), '{OrgB}', '{ProjectB1}', uuidv7(), 'b1', 'pytest', 'aaaaaaa');
+            insert into public.membership (id, org_id, user_id, invited_email, status) values
+              (uuidv7(), '{OrgA}', '{Approver}', 'admin@sg.test', 'active'),
+              (uuidv7(), '{OrgA}', '{Operator}', 'op@sg.test', 'active');
+            insert into public.membership_role (id, org_id, membership_id, role_id)
+            select uuidv7(), m.org_id, m.id, r.id
+              from public.membership m
+              join public.role r on r.org_id is null and r.is_builtin and r.code = 'tenant_admin'
+             where m.org_id = '{OrgA}' and m.user_id in ('{Approver}', '{Operator}');
             """);
+        (await _fixture.ScalarAsync<int>(database, $"""
+            select count(*)::int from public.membership_role mr
+              join public.role r on r.id = mr.role_id
+             where mr.org_id = '{OrgA}' and r.code = 'tenant_admin'
+            """)).ShouldBe(2, "the world must hold the approvers the approval facts need");
         return database;
     }
 

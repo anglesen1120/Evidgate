@@ -39,4 +39,7 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
 
     /// <summary>The project API tokens (create/revoke only; the list is the Dapper read path).</summary>
     public DbSet<ApiToken> ApiTokens => Set<ApiToken>();
+
+    /// <summary>The operator support grants (approve/revoke only; the list is the Dapper read path).</summary>
+    public DbSet<SupportGrant> SupportGrants => Set<SupportGrant>();
 }

@@ -675,6 +675,15 @@ internal static class RouteRequests
         Add("GET", "/v1/projects/{p}/api-tokens", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/api-tokens"));
         Add("DELETE", "/v1/api-tokens/{t}", ctx => new(HttpMethod.Delete, $"/v1/api-tokens/{ctx.ApiTokenId}"));
 
+        // ---- Support grants (SupportGrantEndpoints.cs; 02.8.1 §5) ---------------------------------------------
+        // The tenant's approve, revoke and list. The openapi /support-grants request route is the operator's and is not
+        // mapped, and a fresh grant id is a valid probe because authorization precedes the lookup.
+        Add("POST", "/v1/support-grants/{g}/approve", _ =>
+            new(HttpMethod.Post, $"/v1/support-grants/{Guid.CreateVersion7()}/approve", IdempotencyKey: Key()));
+        Add("POST", "/v1/support-grants/{g}/revoke", _ =>
+            new(HttpMethod.Post, $"/v1/support-grants/{Guid.CreateVersion7()}/revoke", IdempotencyKey: Key()));
+        Add("GET", "/v1/orgs/{o}/support-grants", ctx => new(HttpMethod.Get, $"/v1/orgs/{ctx.OrgId}/support-grants"));
+
         // ---- CI token exchange (pre-tenant) ------------------------------------------------------------------
         Add("POST", "/v1/ci/token", _ => new(HttpMethod.Post, "/v1/ci/token",
             new JsonObject { ["ingest_token"] = "egt_probe" }));

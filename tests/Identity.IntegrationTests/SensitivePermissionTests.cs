@@ -489,6 +489,9 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             // The API-token list: one row was created above, so the scan is not vacuous, and the route answers
             // metadata only — the plaintext and the HMAC are never selected.
             ["/v1/projects/{p}/api-tokens"] = $"/v1/projects/{project}/api-tokens",
+            // The tenant's support-grant page (02.8.1 §5): this fixture files no grant, so the scan reads an empty
+            // page. Its rows are ids, permission strings, a reason and instants — no secret among them.
+            ["/v1/orgs/{o}/support-grants"] = $"/v1/orgs/{org}/support-grants",
             ["/v1/projects/{p}/cases"] = $"/v1/projects/{project}/cases",
             ["/v1/projects/{p}/suites"] = $"/v1/projects/{project}/suites",
             ["/v1/projects/{p}/waivers"] = $"/v1/projects/{project}/waivers",
