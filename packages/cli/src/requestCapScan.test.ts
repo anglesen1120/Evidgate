@@ -23,9 +23,10 @@ const sdkText = readFileSync(join(sourceRoot, '../../sdk/gen/sdk.gen.ts'), 'utf8
 
 /**
  * `file#function` of every direct send that may carry a body an SDK cap cannot bound, with why
- * it is bounded. A row exempts every request-body finding in that function — uncapped route,
- * direct fetch, `Request` construction and other transport alike — because it names the bound
- * that holds there, not one callee.
+ * it is bounded. A row exempts only the findings the send path reports in that function — direct
+ * fetch, `Request` construction, unresolved fetch and other transport — because it names the
+ * bound that holds for that send. SDK-route findings (`uncapped-route`, `unprovable-args`,
+ * `unprovable-spread`, `unresolved-url`) are not exempted: they name a route, not a send.
  */
 const directFetchAllowList: Readonly<Record<string, string>> = {
   'uploadPut.ts#sendPutRequest':

@@ -4,7 +4,8 @@
  * a `body` must be a row of the cap table; a `fetch` call carrying a body and a `Request` built
  * with one are allowed only in the allow-list's functions; any other transport (`node:http(s)`,
  * `node:http2`, `node:net`, `node:tls`, `node:dgram`, `undici`, `node-fetch`, `axios`, `got`,
- * `ws`, `XMLHttpRequest`, `sendBeacon`) is refused.
+ * `ws`, `XMLHttpRequest`, `sendBeacon`) is refused, and a subpath of a transport module
+ * (`node:http/promises`, `axios/lib/x`) is the same transport.
  *
  * The scan fails closed: a form it cannot prove body-free is reported, not passed. The alias and
  * `Request` analysis lives in requestCapScan.aliases.testing.ts; it follows a fetch through
@@ -13,15 +14,20 @@
  * class properties holding one, `.call` and `.apply` (also `fetch['call']`), `.bind` without
  * bound arguments, element access, and a `Request` built with a body wherever it goes.
  *
- * An allow-list entry is keyed by `file#function` and allows that function to send through any
- * of these forms: it exempts every finding kind there, not one callee.
+ * An allow-list entry is keyed by `file#function` and exempts only the findings the send path
+ * reports there: a direct fetch, a `Request` construction, an unresolved fetch, another
+ * transport. It does not exempt SDK-route findings (`uncapped-route`, `unprovable-args`,
+ * `unprovable-spread`, `unresolved-url`), which name a route rather than a send.
  *
  * Named limits: a body built in another module and handed to a fetch-like helper not named like
  * one; a fetch alias imported from another file; alias and property names, which are file-wide,
  * so a same-named local that never holds a fetch is still treated as one (fail closed); an SDK
  * operation reached through an import alias or namespace object; a callee chosen by a computed
- * (non-literal) name; and a fetch-named call (not `fetch` itself, not a tracked alias) with more
- * than two arguments, read as another function (`fetchActionsIdToken(config, fetchImpl, deps)`).
+ * (non-literal) name; a fetch-named call (not `fetch` itself, not a tracked alias) with more
+ * than two arguments, read as another function (`fetchActionsIdToken(config, fetchImpl, deps)`);
+ * an inherited body reaching `new Request(input, init)` through a non-identifier input
+ * (`r.clone()`, a conditional, an alias of an alias), which is not followed; and an exotic call
+ * such as `Function.prototype.call.call(fetch, ...)`.
  */
 import ts from 'typescript';
 
@@ -43,7 +49,7 @@ import {
 export type Finding = { file: string; function: string; kind: string; detail: string };
 const verbs: Readonly<Record<string, true>> = { post: true, put: true, patch: true, delete: true };
 const otherTransportModules =
-  /^(node:)?(https?|http2|net|tls|dgram|undici|node-fetch|axios|got|ws)$/;
+  /^(node:)?(https?|http2|net|tls|dgram|undici|node-fetch|axios|got|ws)(\/.*)?$/;
 const otherTransportGlobals: Readonly<Record<string, true>> = {
   XMLHttpRequest: true,
   sendBeacon: true,

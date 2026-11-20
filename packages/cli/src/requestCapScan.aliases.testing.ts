@@ -9,8 +9,15 @@ import ts from 'typescript';
 /** Names bound to a fetch, and static property names that hold one. */
 export type FetchRefs = { names: ReadonlySet<string>; properties: ReadonlySet<string> };
 
-/** Identifiers typed `Request` with no initializer, and the initializers of the typed ones. */
-export type RequestTyped = { bare: Set<string>; initialized: Map<string, ts.Expression> };
+/**
+ * Identifiers typed `Request`: those with no initializer, the initializers of the others, and
+ * every name a later assignment overwrites, whose initializer then proves nothing.
+ */
+export type RequestTyped = {
+  bare: Set<string>;
+  initialized: Map<string, ts.Expression>;
+  reassigned: Set<string>;
+};
 
 /** The static name of a property, including `'body'` and computed `['body']` keys. */
 export function propertyName(name: ts.PropertyName): string | undefined {
@@ -194,7 +201,7 @@ function isRequestTypeNode(node: ts.TypeNode | undefined): boolean {
 export function requestTypedNames(sf: ts.SourceFile): RequestTyped {
   const bare = new Set<string>();
   const initialized = new Map<string, ts.Expression>();
-  const walk = (node: ts.Node): void => {
+  const collect = (node: ts.Node): void => {
     if (
       (ts.isParameter(node) || ts.isVariableDeclaration(node)) &&
       ts.isIdentifier(node.name) &&
@@ -204,10 +211,23 @@ export function requestTypedNames(sf: ts.SourceFile): RequestTyped {
       if (node.initializer === undefined) bare.add(name);
       else if (!initialized.has(name)) initialized.set(name, node.initializer);
     }
-    ts.forEachChild(node, walk);
+    ts.forEachChild(node, collect);
   };
-  walk(sf);
-  return { bare, initialized };
+  collect(sf);
+  const reassigned = new Set<string>();
+  const findAssignments = (node: ts.Node): void => {
+    if (
+      ts.isBinaryExpression(node) &&
+      assignmentOperators.has(node.operatorToken.kind) &&
+      ts.isIdentifier(node.left) &&
+      (bare.has(node.left.text) || initialized.has(node.left.text))
+    ) {
+      reassigned.add(node.left.text);
+    }
+    ts.forEachChild(node, findAssignments);
+  };
+  findAssignments(sf);
+  return { bare, initialized, reassigned };
 }
 
 /** Identifiers bound to the `Request` constructor, to a fixpoint: `const R = Request`. */
@@ -249,37 +269,66 @@ export function isRequestConstruction(
   return memberName(callee) === 'Request';
 }
 
-/** Why a `Request`-typed value may already carry a body, or undefined. */
+/** Assignment operators that overwrite a typed name, so its initializer proves nothing. */
+const assignmentOperators: ReadonlySet<ts.SyntaxKind> = new Set([
+  ts.SyntaxKind.EqualsToken,
+  ts.SyntaxKind.QuestionQuestionEqualsToken,
+  ts.SyntaxKind.BarBarEqualsToken,
+  ts.SyntaxKind.AmpersandAmpersandEqualsToken,
+]);
+
+const reassignedReason = 'Request-typed value reassigned after its declaration';
+const unprovenReason = 'Request-typed value without a visible Request construction';
+
+/**
+ * Why a `Request`-typed name may carry a body, or undefined when it is not typed or its own
+ * `new Request` init proves it cannot. A typed name is body-free only through a visible
+ * construction; any other initializer, and a later assignment, is reported. A name already
+ * being followed is circular, so it is reported rather than followed into a loop.
+ */
+function typedReason(
+  name: string,
+  bareReason: string,
+  typed: RequestTyped,
+  constructors: ReadonlySet<string>,
+  seen: Set<string>,
+): string | undefined {
+  const init = typed.initialized.get(name);
+  if (init === undefined && !typed.bare.has(name)) return undefined;
+  if (typed.reassigned.has(name)) return reassignedReason;
+  if (init === undefined) return bareReason;
+  if (seen.has(name)) return 'Request inherits a body';
+  seen.add(name);
+  const construction = unwrap(init);
+  return isRequestConstruction(construction, constructors)
+    ? requestBodyReason(construction, typed, constructors, seen)
+    : unprovenReason;
+}
+
+/**
+ * Why a `Request`-typed `new Request` input may already carry a body, or undefined: only an
+ * identifier is followed, so `r.clone()`, a conditional and an alias of an alias are not.
+ */
 function inheritedBodyReason(
   input: ts.Expression,
   typed: RequestTyped,
   constructors: ReadonlySet<string>,
+  seen: Set<string>,
 ): string | undefined {
   const source = unwrap(input);
-  if (!ts.isIdentifier(source)) return undefined;
-  if (typed.bare.has(source.text)) return 'Request inherits a body';
-  const init = typed.initialized.get(source.text);
-  if (init === undefined) return undefined;
-  const construction = unwrap(init);
-  return isRequestConstruction(construction, constructors)
-    ? requestBodyReason(construction, typed, constructors)
+  return ts.isIdentifier(source)
+    ? typedReason(source.text, 'Request inherits a body', typed, constructors, seen)
     : undefined;
 }
 
-/** Why a `Request`-typed identifier may carry a body, or undefined when its own init denies it. */
+/** Why a `Request`-typed identifier may carry a body, or undefined when it is not typed. */
 export function typedRequestReason(
   id: ts.Identifier,
   typed: RequestTyped,
   constructors: ReadonlySet<string>,
+  seen: Set<string> = new Set<string>(),
 ): string | undefined {
-  const init = typed.initialized.get(id.text);
-  if (init === undefined) {
-    return typed.bare.has(id.text) ? 'Request-typed first argument' : undefined;
-  }
-  const construction = unwrap(init);
-  return isRequestConstruction(construction, constructors)
-    ? requestBodyReason(construction, typed, constructors)
-    : undefined;
+  return typedReason(id.text, 'Request-typed first argument', typed, constructors, seen);
 }
 
 /** Why a `new Request(input, init)` may carry a body, or undefined when `init` proves it cannot. */
@@ -287,10 +336,11 @@ export function requestBodyReason(
   node: ts.NewExpression,
   typed: RequestTyped,
   constructors: ReadonlySet<string>,
+  seen: Set<string> = new Set<string>(),
 ): string | undefined {
   const input = node.arguments?.[0];
   if (input !== undefined) {
-    const inherited = inheritedBodyReason(input, typed, constructors);
+    const inherited = inheritedBodyReason(input, typed, constructors, seen);
     if (inherited !== undefined) return inherited;
   }
   const init = node.arguments?.[1];

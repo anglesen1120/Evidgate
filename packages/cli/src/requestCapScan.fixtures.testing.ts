@@ -11,7 +11,68 @@ export type IndirectForm = readonly [
   words: string,
 ];
 
+/** A body-free `new Request`, the visible construction a `Request`-typed value needs. */
+const typedInit = "new Request(u, { method: 'GET' })";
+
+/** How a typed `Request` is used, and the finding that use must produce when it is unproven. */
+const typedUses: ReadonlyArray<readonly [string, string]> = [
+  ['fetch(r)', 'uncapped-fetch'],
+  ["fetch(new Request(r, { redirect: 'error' }))", 'uncapped-fetch'],
+  ["new Request(r, { redirect: 'error' })", 'uncapped-request'],
+];
+
 export const indirectForms: ReadonlyArray<IndirectForm> = [
+  ...(
+    [
+      ['an identifier', 'inb'],
+      ['a call', 'mk()'],
+      ['an await', 'await mk()'],
+      ['a conditional', 'ok ? inb : other'],
+      ['a property', 'deps.request'],
+    ] as const
+  ).flatMap(([source, init]): IndirectForm[] =>
+    typedUses.map(([use, kind]): IndirectForm => [
+      `typed Request from ${source} ${use}`,
+      `const r: Request = ${init}; ${use}`,
+      `const r: Request = ${typedInit}; ${use}`,
+      kind,
+      'without a visible Request construction',
+    ]),
+  ),
+  [
+    'Request-typed parameter with a computed default',
+    'const run = (r: Request = mk()) => fetch(r)',
+    'const run = (r: Request = new Request(u, { method: "GET" })) => fetch(r)',
+    'uncapped-fetch',
+    'without a visible Request construction',
+  ],
+  ...(
+    [
+      ['before its send', 'r = inb;', ''],
+      ['after its send', '', '; r = inb'],
+    ] as const
+  ).flatMap(([label, before, after]): IndirectForm[] =>
+    typedUses.map(([use, kind]): IndirectForm => [
+      `Request-typed let reassigned ${label} ${use}`,
+      `let r: Request = ${typedInit}; ${before} ${use}${after}`,
+      `let r: Request = ${typedInit}; ${use}`,
+      kind,
+      'reassigned after its declaration',
+    ]),
+  ),
+  ...(
+    [
+      ["import transport from 'node:http/promises'", 'node:http/promises'],
+      ["import lib from 'axios/lib/x'", 'axios/lib/x'],
+      ["const undici = await import('undici/foo')", 'undici/foo'],
+    ] as const
+  ).map(([bad, module]): IndirectForm => [
+    `transport module subpath ${module}`,
+    bad,
+    `// ${bad}\nconst note = '${module}'`,
+    'other-transport',
+    module,
+  ]),
   [
     'Request with a body plus an init',
     "fetch(new Request(u, { body: 'x' }), { redirect: 'error' })",
