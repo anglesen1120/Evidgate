@@ -1106,3 +1106,15 @@ Replaced by S537 (#1095, 388f3235): recount in the carried row 'Source files ove
 | Support grant test gaps (S512, I2) | The guard tests run on a superuser connection and there is no test for a two-dimensional `scopes` array (the CHECK uses `array_ndims`) nor for the project-in-org check on the RLS path (only the guard INSERT branch is exercised). | receiver: 02.8.1-T1.2 test pass |
 
 Closed by S536 (#1098, 75b95f23): tests only, in SupportGrantOperatorRlsTests.AppRole.cs. The guard now runs on the app role (AppRole_Guard_Refuses_Transition, AppRole_Guard_Refuses_Approving_An_Expired_Request_That_A_Fresh_One_Passes); two-dimensional `scopes` and `project_ids` are refused with the CHECK name (AppRole_Insert_Refuses_A_MultiDimensional_Array); the project-in-org check is covered on the RLS path (AppRole_ProjectScope_Refuses_Foreign_Unknown_And_Mixed_Lists_But_Accepts_Duplicates) and on the owner path (OwnerPath_ProjectScope_Refuses_A_Project_Of_Another_Org_Where_Rls_Does_Not_Narrow); a cross-org insert is refused by the tenant policy (AppRole_Insert_For_Another_Org_Is_Refused_By_The_Tenant_Policy). What stays open: carried row 'Support grant expired fixture and org-predicate mutant (S536)'.
+
+## Moved from status-carried.md by S538 (2026-11-21)
+
+| Source files over 500 lines (S537 count) | 25 under src, wave 388f3235 (`git ls-files 'src/*.cs'` fed to `wc -l`, over 500): SafeZipArchive 1234, XlsxReader 1234, AuthoringImporter 1047, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, JsonCanonicalizer 751, eighteen of 528-746. Over 60 lines: AuthoringVersionWriter AppendCore 156, CreateAsync 129, UpdateAsync 208, MoveManualTestCaseCore 121, RestoreCore 250, SoftDeleteAsync 112, ReorderNodesCore 184; ListAuthoringVersionsQueryHandler 114; AuthoringExporter.ExportAsync ~107, RowAssembly.Build ~75; ManualCase, Node handlers; ProducerRegistry RegisterSlotsAsync 85, BindOrCheckAsync 85, CloseSlotAsync 111; ParseArtifactTaskHandler.HandleAsync 152 | receiver: backend lanes |
+
+Replaced by S538 (#1100, c14e7020): S3ObjectStorage.cs (672 lines) was split into three files and the recount is the carried row 'Source files over 500 lines (S538 count)'.
+
+## Moved from status-carried.md by S539 (2026-11-21)
+
+| Source files over 500 lines (S538 count) | 24 under src, wave c14e7020 (`git ls-files 'src/*.cs'` fed to `wc -l`, over 500): SafeZipArchive 1234, XlsxReader 1234, AuthoringImporter 1047, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, JsonCanonicalizer 751, seventeen of 528-746. S3ObjectStorage is split (418/125/141, #1100) and leaves the list. | receiver: backend lanes |
+
+Replaced by S539 (#1102, 5e891236): JsonCanonicalizer.cs (751 lines) was split into three files and the recount is the carried row 'Source files over 500 lines (S539 count)'.
