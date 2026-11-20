@@ -311,24 +311,52 @@ describe('variant_hash edge acceptances', () => {
   });
 });
 
-describe('variant_hash known gap: token prefix revealed by case folding', () => {
-  // KNOWN GAP, not intended behaviour. The secret-shape scan runs before the enum-like fold and
-  // matches token prefixes case-sensitively, so an upper-cased prefix passes the scan and the
-  // stored form is the lower-cased, token-looking text. The server runs the same steps in the
-  // same order, so both sides agree today; fixing it needs both sides and the vectors together.
+describe('variant_hash: the stored form never looks like a secret', () => {
+  // The secret scan covers the text as sent and the text as stored (enum-like keys fold it), so an
+  // upper-cased token prefix cannot reach storage as a lower-cased, token-looking value.
   it.each([
-    ['GHP_AAAAAAAA', 'ghp_aaaaaaaa'],
-    ['GITHUB_PAT_AAAAAAAA', 'github_pat_aaaaaaaa'],
-    ['XOXB-AAAAAAAA', 'xoxb-aaaaaaaa'],
-  ])('accepts %s under an enum-like key and stores %s', (input, stored) => {
-    const result = normalizeVariant({ mode: input });
+    'GHP_AAAAAAAA',
+    'GITHUB_PAT_AAAAAAAA',
+    'XOXB-AAAAAAAA',
+    '  GHP_AAAAAAAA  ',
+    'SK-LIVE-CHANNEL',
+    'NPM_REGISTRY',
+  ])('refuses %j under an enum-like key', (input) => {
+    expect(normalizeVariant({ mode: input })).toEqual({
+      ok: false,
+      problems: [{ path: '/params/mode', reason: 'secret_value' }],
+    });
+  });
 
-    expect(valueLooksSecret(stored)).toBe(true);
-    expect(result.ok && result.params).toEqual({ mode: stored });
+  it('refuses a folded token prefix inside an enum-like array', () => {
+    expect(normalizeVariant({ locale: ['en', 'GHP_AAAAAAAA'] })).toEqual({
+      ok: false,
+      problems: [{ path: '/params/locale/1', reason: 'secret_value' }],
+    });
+  });
+
+  it('names neither the value nor the key in a refusal', () => {
+    const result = normalizeVariant({ mode: 'GHP_ZZECHOZZ' });
+    const text = result.ok ? '' : result.problems.map((p) => `${p.path} ${p.reason}`).join(' ');
+
+    expect(result.ok).toBe(false);
+    expect(text.toLowerCase()).not.toContain('echo');
+  });
+
+  it.each([
+    ['GHP_MODE', 'ghp_mode'],
+    ['ghost_town_mode', 'ghost_town_mode'],
+    ['PYPI-TEST', 'pypi-test'],
+    ['EVG_STAGING', 'evg_staging'],
+  ])('accepts %s under an enum-like key and stores %s', (input, stored) => {
+    const result = normalizeVariant({ env: input });
+
+    expect(result.ok && result.params).toEqual({ env: stored });
+    expect(valueLooksSecret(stored)).toBe(false);
   });
 
   it.each(['GHP_AAAAAAAA', 'GITHUB_PAT_AAAAAAAA', 'XOXB-AAAAAAAA'])(
-    'accepts %s unchanged under a key that is not enum-like',
+    'accepts %s unchanged under a key that is not enum-like (stored as sent)',
     (input) => {
       const result = normalizeVariant({ other: input });
 
@@ -336,7 +364,7 @@ describe('variant_hash known gap: token prefix revealed by case folding', () => 
     },
   );
 
-  it('refuses the same upper-cased token at 24+ characters through the entropy rule', () => {
+  it('keeps refusing the same upper-cased token at 24+ characters', () => {
     const result = normalizeVariant({ mode: TOKEN.toUpperCase() });
 
     expect(result).toEqual({

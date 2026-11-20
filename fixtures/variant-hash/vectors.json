@@ -534,5 +534,75 @@
         }
       ]
     }
+  },
+  {
+    "name": "refuse-folded-token-prefix-ghp",
+    "params": { "mode": "GHP_AAAAAAAA" },
+    "expect": { "problems": [{ "path": "/params/mode", "reason": "secret_value" }] }
+  },
+  {
+    "name": "refuse-folded-token-prefix-github-pat",
+    "params": { "mode": "GITHUB_PAT_AAAAAAAA" },
+    "expect": { "problems": [{ "path": "/params/mode", "reason": "secret_value" }] }
+  },
+  {
+    "name": "refuse-folded-token-prefix-xoxb-padded",
+    "params": { "channel": "  XOXB-AAAAAAAA  " },
+    "expect": { "problems": [{ "path": "/params/channel", "reason": "secret_value" }] }
+  },
+  {
+    "name": "refuse-folded-token-prefix-sk-live",
+    "params": { "env": "SK-LIVE-CHANNEL" },
+    "expect": { "problems": [{ "path": "/params/env", "reason": "secret_value" }] }
+  },
+  {
+    "name": "refuse-folded-token-prefix-in-array",
+    "params": { "locale": ["en", "GHP_AAAAAAAA"] },
+    "expect": { "problems": [{ "path": "/params/locale/1", "reason": "secret_value" }] }
+  },
+  {
+    "name": "refuse-lone-surrogate-key",
+    "params": { "\ud800": 1 },
+    "expect": { "problems": [{ "path": "/params/#1", "reason": "invalid_key" }] }
+  },
+  {
+    "name": "refuse-lone-surrogate-key-after-valid",
+    "params": { "retries": 1, "x\udc00y": 2 },
+    "expect": { "problems": [{ "path": "/params/#2", "reason": "invalid_key" }] }
+  },
+  {
+    "name": "accept-folded-short-prefix-ghp-mode",
+    "params": { "mode": "GHP_MODE" },
+    "expect": { "hash": "sha256:397a118f23bdffdc5e7b70d352098ae647df6bdb68309262b4bbcd6ffb0bc536" }
+  },
+  {
+    "name": "accept-folded-ordinary-ghost-town",
+    "params": { "mode": "ghost_town_mode" },
+    "expect": { "hash": "sha256:80396116783b25e618d225d433fc48b8d62df07a1edd2a0365516346564d8ea0" }
+  },
+  {
+    "name": "accept-upper-prefix-under-non-enum-key",
+    "params": { "other": "GHP_AAAAAAAA" },
+    "expect": { "hash": "sha256:6c20d0fea59d271db32f015e119a1f12d1ae8ac3c1b68fb31a634b50e874087e" }
+  },
+  {
+    "name": "accept-pypi-test-env",
+    "params": { "env": "PYPI-TEST" },
+    "expect": { "hash": "sha256:84520d69d280a9f28181009e770aacabf0cb0a8a6e59139af1c7d643b5cd27cf" }
+  },
+  {
+    "name": "accept-locale-sk-sk-in-array",
+    "params": { "locale": ["EN", "sk-SK"] },
+    "expect": { "hash": "sha256:5ec4bb34bfadee93f13ebe24273c10ecb7194e96acaf6f7f671dc2b268ed139e" }
+  },
+  {
+    "name": "accept-evg-staging-env",
+    "params": { "env": "EVG_STAGING" },
+    "expect": { "hash": "sha256:b4f7c8427bf018926b975c2f22777167a881d87a51deea712c5d9fbc26a2b886" }
+  },
+  {
+    "name": "refuse-folded-token-prefix-npm-registry",
+    "params": { "mode": "NPM_REGISTRY" },
+    "expect": { "problems": [{ "path": "/params/mode", "reason": "secret_value" }] }
   }
 ]
