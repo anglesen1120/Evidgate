@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { boundedResponse, readBoundedText, ResponseTooLargeError } from './boundedResponse.js';
+import {
+  boundedResponse,
+  readBoundedText,
+  ResponseReadError,
+  ResponseTooLargeError,
+} from './boundedResponse.js';
+import { CliError } from './errors.js';
 
 interface Counting {
   readonly response: Response;
@@ -176,5 +182,95 @@ describe('boundedResponse edge cases', () => {
     expect(() => boundedResponse(hostile)).toThrowError(
       expect.objectContaining({ code: 'request_failed' }) as Error,
     );
+  });
+});
+
+describe('boundedResponse nested wrappers', () => {
+  it('keeps an inner size refusal when its first chunk also exceeds the outer cap', async () => {
+    const source = counting([chunkOf(11)]);
+    const inner = boundedResponse(source.response, 10);
+    const outer = boundedResponse(inner, 5);
+    const reader = outer.body?.getReader();
+
+    expect(reader).toBeDefined();
+    await expect(reader?.read()).rejects.toMatchObject({
+      name: 'ResponseTooLargeError',
+      code: 'response_too_large',
+      cap: 10,
+    });
+    reader?.releaseLock();
+    expect(source.cancelled()).toBe(true);
+    expect(source.response.body?.locked).toBe(false);
+    expect(inner.body?.locked).toBe(false);
+  });
+
+  it.each([
+    new ResponseTooLargeError(10),
+    new ResponseReadError(),
+    new CliError('the inner wrapper refused the answer', { code: 'request_failed' }),
+  ])('preserves an inner $name instance through nested wrappers', async (error) => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.error(error);
+      },
+    });
+    const inner = boundedResponse(new Response(body), 10);
+
+    await expect(readBoundedText(inner, 5)).rejects.toBe(error);
+    expect(body.locked).toBe(false);
+    expect(inner.body?.locked).toBe(false);
+  });
+});
+
+describe('boundedResponse read failures', () => {
+  it.each([0, 1])(
+    'maps a read error after %i chunks to ResponseReadError and releases',
+    async (chunks) => {
+      let pulled = 0;
+      const body = new ReadableStream<Uint8Array>(
+        {
+          pull(controller) {
+            if (pulled++ < chunks) {
+              controller.enqueue(new TextEncoder().encode('ghp_SECRETBODYPREFIX'));
+              return;
+            }
+            controller.error(new TypeError('terminated', { cause: new Error('secret cause') }));
+          },
+        },
+        { highWaterMark: 0 },
+      );
+      const response = new Response(body);
+
+      const error: unknown = await readBoundedText(response, 100).catch(
+        (caught: unknown) => caught,
+      );
+
+      expect(error).toMatchObject({
+        name: 'ResponseReadError',
+        code: 'response_read_failed',
+        message: 'the server answer could not be read to the end',
+        hint: 'the answer could not be read; the command can be run again',
+      });
+      expect(String(error)).not.toContain('ghp_SECRETBODYPREFIX');
+      expect(String(error)).not.toContain('secret cause');
+      expect(body.locked).toBe(false);
+    },
+  );
+
+  it('releases the source reader after EOF, a size refusal and consumer cancellation', async () => {
+    const complete = counting([chunkOf(5)]);
+    await expect(readBoundedText(complete.response, 5)).resolves.toBe('aaaaa');
+    expect(complete.response.body?.locked).toBe(false);
+
+    const overCap = counting([chunkOf(6)]);
+    await expect(readBoundedText(overCap.response, 5)).rejects.toBeInstanceOf(
+      ResponseTooLargeError,
+    );
+    expect(overCap.response.body?.locked).toBe(false);
+
+    const cancelled = counting([chunkOf(5)]);
+    await boundedResponse(cancelled.response).body?.cancel();
+    expect(cancelled.cancelled()).toBe(true);
+    expect(cancelled.response.body?.locked).toBe(false);
   });
 });

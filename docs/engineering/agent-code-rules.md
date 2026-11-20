@@ -139,6 +139,7 @@ The binding text of A1–A7 and W1–W9 now lives in one place: [`docs/engineeri
 | Error envelope | `ErrorEnvelope`, `Result`, `ResultFactory` | `src/BuildingBlocks/SharedKernel/{Api,Results}/` |
 | Canonical JSON and hash (RFC 8785) | `JsonCanonicalizer`, `CanonicalHash` | `src/BuildingBlocks/Canonicalization/` |
 | Secret-reference shape | `SecretShape` | `src/BuildingBlocks/SharedKernel/Security/SecretShape.cs` |
+| Variant parameter secret judgement (value as sent or as stored, enum-like fold) | `ParameterSecretRule` | `src/BuildingBlocks/SharedKernel/Security/ParameterSecretRule.cs` |
 | Identifier shape (first/rest/last character sets, length bounds, no regex timeout) | `AsciiShape` | `src/BuildingBlocks/SharedKernel/Security/AsciiShape.cs` |
 | Secrets | `ISecretProvider`, `SecretNames` | `src/BuildingBlocks/SharedKernel/Secrets/` |
 | Log redaction | `SecretRedactor` (the copy in `src/Evidgate.Migrator/SecretRedactor.cs` is to be removed) | `src/BuildingBlocks/Observability/Redaction/` |

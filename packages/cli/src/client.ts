@@ -6,7 +6,7 @@
 // call.
 import { createClient, type Client } from '@evidgate/sdk';
 
-import { boundedResponse } from './boundedResponse.js';
+import { boundedResponse, ResponseReadError } from './boundedResponse.js';
 import { CliError } from './errors.js';
 import type { ResolvedConfig } from './config.js';
 import { registerSecret } from './redact.js';
@@ -46,10 +46,16 @@ export function createApiClient(
     fetch: async (input, init) =>
       boundedResponse(await fetchImpl(new Request(input, { ...init, redirect: 'error' }))),
   });
-  // The generated client turns a body-read failure into a returned error next to an `ok`
-  // response. The refusal is rethrown so it rejects the whole call: `callApi` never retries
-  // it and no command can mistake it for an answer without data.
-  client.interceptors.error.use((error) => {
+  // The generated client turns a body-read failure into a returned error next to the response
+  // it was reading. A failure on a 2xx answer can never be an answer, so it is rethrown; on an
+  // error status the error is returned, keeping the status mapping and retry policy unchanged.
+  client.interceptors.error.use((error, response) => {
+    if (error instanceof ResponseReadError) {
+      if (response?.ok === true) {
+        throw error;
+      }
+      return error;
+    }
     if (error instanceof CliError) {
       throw error;
     }

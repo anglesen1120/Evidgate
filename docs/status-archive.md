@@ -856,3 +856,9 @@ Closed by S490 (#1007): `normalizeString` and `VariantNormalizer.StringValue` no
 | Variant normaliser lone-surrogate key unguarded on server (S489) | `{"\\ud800":1}`: TS answers `invalid_key` at `/params/#1` (`normalize.ts` key check); server `VariantNormalizer.cs:75-86` reads `member.Name` with no try/catch before `IsValidKey`, so it likely throws InvalidOperationException (500) [INFERENCE: read, not run; Authoring has the guard, `AuthoringContentSurrogateTests.cs:24`]. Fix: catch and answer `invalid_key` by position, add a server test and a vector. | receiver: Catalog variant normaliser lane |
 
 Closed by S490 (#1007): `VariantNormalizer.TryReadName` answers `invalid_key` at `/params/#N` like TS. The HTTP path still answers 500 before the normaliser (`IdempotencyBehaviour`), owned by S492.
+
+## Moved from status-carried.md by S493 (2026-11-20)
+
+| ManifestVerifier secret check has no fold or array scan (S490) | `src/Modules/Evidgate.Modules.Orchestrator/Domain/ManifestVerifier.cs:156-183` keeps its own secret check over the raw JSON: no enum-like trim/lower-case fold (an upper-cased token prefix passes) and no scan of array items. The variant normaliser fixed this on both sides in S490; the manifest path was not in the lane. | receiver: orchestrator backend lane (reuse the normaliser rule) |
+
+Closed by S493 (#1010): the fold is closed: `ParameterSecretRule` (SharedKernel) scans the value as sent and as stored, used by `ManifestVerifier` and `VariantNormalizer`. The array claim was wrong: `contracts/manifest/manifest.v1.json:123-134` admits string params only and the schema runs before the verifier (`UploadManifest.cs:93`, `:102`), so arrays never reach it; an array param is a schema 422.
