@@ -1139,3 +1139,10 @@ Replaced by S541 (#1106, f0b7f046): AssertionExtractor.cs (728 lines) was split 
 | Methods over 60 lines missing from the S538 list (S541 finds) | AssertionExtractor.ParseExpect (111 lines, in AssertionExtractor.Script.cs) and AssertionExtractor.ScanPython (85 lines, in AssertionExtractor.Python.cs) were over 60 lines before and after #1106 but are not in the row 'Methods over 60 lines (S538 list)'. That list was built from a narrower scan, so other entries may be missing too; a full method-length recount is owed. | receiver: the lane that next recounts methods |
 
 Replaced by S542 (#1108, cb3ab0e7): AuthoringImporter.cs (1047 lines) was split into three files (300/403/362) and the recounts are the carried rows 'Source files over 500 lines (S542 count)' and 'Methods over 60 lines missing from the S538 list (S542 finds)'.
+
+## Moved from status-carried.md by S543 (2026-11-21)
+
+| Source files over 500 lines (S542 count) | 21 under src, wave cb3ab0e7 (`git ls-files 'src/*.cs'` fed to `wc -l`, over 500, files only): SafeZipArchive 1234, XlsxReader 1234, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, sixteen of 528-746. AuthoringImporter (1047) is split (300/403/362, #1108) and leaves the list. | receiver: backend lanes |
+| Methods over 60 lines missing from the S538 list (S542 finds) | AssertionExtractor.ParseExpect (111 lines, in AssertionExtractor.Script.cs) and AssertionExtractor.ScanPython (85 lines, in AssertionExtractor.Python.cs); AuthoringImporter (split in #1108, bodies unchanged): ApplyAsync 197 and LockRanksAsync 101 (AuthoringImporter.Apply.cs), ImportCoreAsync 94 and CodesAsync 73 (AuthoringImporter.cs). Rule: the signature line through the closing brace, without XML docs or attributes. None of these is in the row 'Methods over 60 lines (S538 list)'; a full method-length recount is owed. | receiver: the lane that next recounts methods |
+
+Replaced by S543 (#1110, aa3b79fb): XlsxReader.cs (1234 lines) was split into three files (435/385/437) and the recounts are the carried rows 'Source files over 500 lines (S543 count)' and 'Methods over 60 lines missing from the S538 list (S543 finds)'.
