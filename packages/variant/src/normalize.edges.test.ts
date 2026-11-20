@@ -1,11 +1,14 @@
 // Edge cases of the shared variant normaliser that fixtures/variant-hash/vectors.json does not
-// carry, because the corpus holds only what both sides can express in JSON text. Each row records
-// what this normaliser answers and what VariantNormalizer.Normalize (the server) answers for the
-// same input, so a parity gap is visible in the table. Rows marked `ts-only` have no JSON spelling
-// the server could be handed.
+// carry, because the corpus holds only what both sides can express in JSON text. Each refusal row
+// records what this normaliser answers and what VariantNormalizer.Normalize (the server) answers
+// for the same input, so a parity gap is visible in the table; the acceptance tests name the
+// server's answer in their titles. Rows marked `ts-only` have no JSON spelling the server could be
+// handed. Row prefixes: a secret-shaped values, b fold order, c numbers, d surrogates, e arrays,
+// f values only a JavaScript caller can build.
 import { describe, expect, it } from 'vitest';
 
 import { normalizeVariant } from './normalize.js';
+import { valueLooksSecret } from './secretShape.js';
 
 type Problems = readonly { readonly path: string; readonly reason: string }[];
 
@@ -51,11 +54,11 @@ const rows: readonly RefusalRow[] = [
     name: 'b: padded secret-shaped value under an enum-like key is checked before the trim',
     params: { mode: `  ${TOKEN}  ` },
     problems: [{ path: '/params/mode', reason: 'secret_value' }],
-    server: 'same (check at cs:228 precedes the fold at cs:235)',
+    server: 'same (StringValue scans before it folds)',
     offending: [TOKEN],
   },
   {
-    name: 'b: upper-case secret-shaped value under an enum-like key is refused, not lower-cased into a token',
+    name: 'b: upper-case 40-character token under an enum-like key is refused by the entropy rule',
     params: { mode: `  ${TOKEN.toUpperCase()} ` },
     problems: [{ path: '/params/mode', reason: 'secret_value' }],
     server: 'same',
@@ -65,7 +68,7 @@ const rows: readonly RefusalRow[] = [
     name: 'c: NaN scalar is invalid_value',
     params: { v: Number.NaN },
     problems: [{ path: '/params/v', reason: 'invalid_value' }],
-    server: 'not expressible in JSON text; 1e999 is invalid_value (TryGetDouble fails)',
+    server: 'not expressible in JSON text; 1e999 is invalid_value',
     offending: ['NaN'],
   },
   {
@@ -117,7 +120,7 @@ const rows: readonly RefusalRow[] = [
     name: 'd: lone surrogate in a value is invalid_value',
     params: { v: 'a\ud800b' },
     problems: [{ path: '/params/v', reason: 'invalid_value' }],
-    server: 'same (GetString throws, caught at cs:173)',
+    server: 'same (Scalar catches the GetString failure)',
     offending: ['\ud800'],
   },
   {
@@ -131,7 +134,7 @@ const rows: readonly RefusalRow[] = [
     name: 'd: lone surrogate in a key is invalid_key by position',
     params: { 'zzkey\ud800': 1 },
     problems: [{ path: '/params/#1', reason: 'invalid_key' }],
-    server: 'DIFFERENT: member.Name is read uncaught (cs:86), likely InvalidOperationException',
+    server: 'DIFFERENT: Normalize reads member.Name uncaught, likely InvalidOperationException',
     offending: ['\ud800', 'zzkey'],
   },
   {
@@ -181,6 +184,34 @@ const rows: readonly RefusalRow[] = [
     server: 'no analogue: JSON has no undefined',
     offending: [],
   },
+  {
+    name: 'b: secret-shaped prefix padded with whitespace under an enum-like key is refused, not folded into an accepted value',
+    params: { browser: ['  AKIAaaaaaaaa  '] },
+    problems: [{ path: '/params/browser/0', reason: 'secret_value' }],
+    server: 'same',
+    offending: ['AKIAaaaaaaaa'],
+  },
+  {
+    name: 'b: 257 characters padded to be trimmed to 256 under an enum-like key is refused, length is checked before the trim',
+    params: { mode: ` ${'x'.repeat(256)}` },
+    problems: [{ path: '/params/mode', reason: 'invalid_value' }],
+    server: 'same',
+    offending: ['xxxxxxxx'],
+  },
+  {
+    name: 'c: -Infinity as an array element is indexed invalid_value',
+    params: { v: [Number.NEGATIVE_INFINITY] },
+    problems: [{ path: '/params/v/0', reason: 'invalid_value' }],
+    server: 'same as -1e999',
+    offending: ['Infinity'],
+  },
+  {
+    name: 'c: an integer well above 2^53 as an array element is indexed invalid_value',
+    params: { v: [2 ** 60] },
+    problems: [{ path: '/params/v/0', reason: 'invalid_value' }],
+    server: 'same for the digits of 2^60',
+    offending: ['1152921504606846976'],
+  },
 ];
 
 describe('variant_hash edge refusals', () => {
@@ -192,7 +223,7 @@ describe('variant_hash edge refusals', () => {
     const checked = rows.flatMap((row) => {
       const result = normalizeVariant(row.params);
       expect(result.ok).toBe(false);
-      const text = result.ok ? '' : JSON.stringify(result.problems);
+      const text = result.ok ? '' : result.problems.map((p) => `${p.path}\n${p.reason}`).join('\n');
       for (const offending of row.offending) {
         expect(text, row.name).not.toContain(offending);
       }
@@ -200,6 +231,11 @@ describe('variant_hash edge refusals', () => {
     });
 
     expect(checked.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      if (row.problems.some((p) => p.reason === 'secret_value')) {
+        expect(row.offending.length, row.name).toBeGreaterThan(0);
+      }
+    }
   });
 });
 
@@ -272,5 +308,40 @@ describe('variant_hash edge acceptances', () => {
       expect(text).not.toContain('extraname');
       expect(text).not.toContain(TOKEN);
     }
+  });
+});
+
+describe('variant_hash known gap: token prefix revealed by case folding', () => {
+  // KNOWN GAP, not intended behaviour. The secret-shape scan runs before the enum-like fold and
+  // matches token prefixes case-sensitively, so an upper-cased prefix passes the scan and the
+  // stored form is the lower-cased, token-looking text. The server runs the same steps in the
+  // same order, so both sides agree today; fixing it needs both sides and the vectors together.
+  it.each([
+    ['GHP_AAAAAAAA', 'ghp_aaaaaaaa'],
+    ['GITHUB_PAT_AAAAAAAA', 'github_pat_aaaaaaaa'],
+    ['XOXB-AAAAAAAA', 'xoxb-aaaaaaaa'],
+  ])('accepts %s under an enum-like key and stores %s', (input, stored) => {
+    const result = normalizeVariant({ mode: input });
+
+    expect(valueLooksSecret(stored)).toBe(true);
+    expect(result.ok && result.params).toEqual({ mode: stored });
+  });
+
+  it.each(['GHP_AAAAAAAA', 'GITHUB_PAT_AAAAAAAA', 'XOXB-AAAAAAAA'])(
+    'accepts %s unchanged under a key that is not enum-like',
+    (input) => {
+      const result = normalizeVariant({ other: input });
+
+      expect(result.ok && result.params).toEqual({ other: input });
+    },
+  );
+
+  it('refuses the same upper-cased token at 24+ characters through the entropy rule', () => {
+    const result = normalizeVariant({ mode: TOKEN.toUpperCase() });
+
+    expect(result).toEqual({
+      ok: false,
+      problems: [{ path: '/params/mode', reason: 'secret_value' }],
+    });
   });
 });
