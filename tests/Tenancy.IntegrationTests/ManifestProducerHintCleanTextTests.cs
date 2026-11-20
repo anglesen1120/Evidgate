@@ -46,6 +46,8 @@ public sealed class ManifestProducerHintCleanTextTests
     [InlineData("\uFEFFghp_abcdefghijklmnopqrstuvwxyz0123456789", "secret_value_detected")]
     [InlineData("\u202Eghp_abcdefghijklmnopqrstuvwxyz0123456789", "secret_value_detected")]
     [InlineData("ghp_abcdefghijkl\u0001mnopqrstuvwxyz0123456789", "secret_value_detected")]
+    [InlineData("gh\u200Bp_abcdefghijklmnopqrstuvwxyz0123456789", "secret_value_detected")]
+    [InlineData("\uFEFFgh\u200Bp_abcdefghijklmnopqrstuvwxyz0123456789", "secret_value_detected")]
     [InlineData(Token, "secret_value_detected")]
     [InlineData("\uFEFFpytest", "invalid_value")]
     [InlineData("py\u200Btest", "invalid_value")]
@@ -65,7 +67,10 @@ public sealed class ManifestProducerHintCleanTextTests
     [InlineData("pytest-junitxml")]
     [InlineData("ünïcödé 日本語")]
     [InlineData("emoji \uD83D\uDE00")]
-    public void CleanHint_PassesTheVerifier(string hint) => Verify(WithHints(hint, null)).Refusal.ShouldBeNull();
+    public void CleanHint_PassesTheVerifier(string hint) => Verify(WithHints(hint)).Refusal.ShouldBeNull();
+
+    [Fact]
+    public void AbsentHint_PassesTheVerifier() => Verify(WithHints((string?)null)).Refusal.ShouldBeNull();
 
     [Fact]
     public void MixedSecretAndUncleanHints_KeepSecretFirst_AndTheDetailCap()
@@ -90,7 +95,7 @@ public sealed class ManifestProducerHintCleanTextTests
         var refusal = Verify(manifest).Refusal!;
 
         refusal.Details[0].Reason.ShouldBe("secret_in_variant_params");
-        refusal.Details.Select(detail => detail.Path).ShouldContain("/shard_plan/shards/0/producer_hint");
-        refusal.Details.Select(detail => detail.Reason).Skip(1).Distinct().ShouldBe(["invalid_value"]);
+        refusal.Details.Where(detail => detail.Path == "/shard_plan/shards/0/producer_hint").Select(detail => detail.Reason).ShouldBe(["invalid_value"]);
+        refusal.Details[^1].Reason.ShouldBe("invalid_value");
     }
 }

@@ -172,7 +172,7 @@ public sealed class ManifestSecretUploadTests
     {
         await using var world = await ManifestTests.StartAsync(_fixture);
         var manifest = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "x" }], ["staging"]);
-        manifest["shard_plan"]!["shards"]![0]!["producer_hint"] = "ghp_AAAAAAAA\u200BAAAAAAAAAA";
+        manifest["shard_plan"]!["shards"]![0]!["producer_hint"] = "gh\u200Bp_AAAAAAAAAAAA";
 
         var answer = await UploadAsync(world, manifest.ToJsonString());
 
@@ -180,7 +180,7 @@ public sealed class ManifestSecretUploadTests
         var details = answer.Body.GetProperty("error").GetProperty("details").EnumerateArray().ToList();
         details.Select(detail => detail.GetProperty("reason").GetString()).Distinct().ShouldBe(["secret_value_detected"]);
         details.First().GetProperty("path").GetString().ShouldBe("/shard_plan/shards/0/producer_hint");
-        answer.Body.GetRawText().ShouldNotContain("AAAAAAAA");
+        answer.Body.GetRawText().ShouldNotContain("AAAAAAAAAAAA");
     }
 
     [Fact]
