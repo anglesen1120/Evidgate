@@ -790,3 +790,9 @@ Closed by S477 (#983, 48844c2d): `rate_limit_acquire` takes a cost (1..16) and `
 |CR-13 slice B: no-op update on already-refused rows (S461)|Once a window is at limit+1 the upsert still writes the row (hit_count stays, tuple is rewritten), so a refused flood causes row churn and WAL. Skip the write when the row is already refused and the window is live; not measured.|receiver: perf lane|
 
 Closed by S477 (#983, 48844c2d): a live window at the limit is refused by a plain read that writes and locks nothing; row xmin/ctid stay unchanged across refusals (`Acquire_RefusalsOnALiveWindow_LeaveTheRowVersionUnchangedUntilTheRolloverRewritesIt`, red when the write was restored). WAL volume itself is not measured, see the new carried row.
+
+## Moved from status-carried.md by S476 (2026-11-20)
+
+| T3.1b execution-plan CLI wiring (S467) | T3.1a (#963) maps tests behind an input port; the route GET /v1/suite-revisions/{r}/execution-plan, its narrow permission, the SDK read, command wiring (401 purge, 403/404/5xx passthrough, exit 3), the `contracts/cli.md` section and quickstart are not built. Draft is in the 04.2.2 plan T3 section | receiver: S469 route lane, then a CLI lane; the route and permission landed in #970 (S469), SDK read, command wiring, `contracts/cli.md` and quickstart remain; receiver now: coordinator (CLI lane) |
+
+Closed by S476 (#982): `evidgate manifests build` reads the execution plan through the generated SDK (401 purge, 403 re-mint hint, 404/5xx passthrough, exit 3), maps through the #963 input port and writes `manifest.v1`; `contracts/cli.md` §14 and the quickstart note landed.
