@@ -1,8 +1,11 @@
 using System.Text;
+using Evidgate.BuildingBlocks.Pipeline.Authorization;
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.Modules.Authoring.Domain;
 using Evidgate.Modules.Authoring.Endpoints;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
 
@@ -227,7 +230,18 @@ public sealed partial class AuthoringUnitTests
         long? contentLength = -1)
     {
         var bytes = Encoding.UTF8.GetBytes(json);
-        var context = new DefaultHttpContext();
+        // The reader refuses a request with no principal or tenant first, so the unit context publishes both.
+        var principals = new RequestPrincipalAccessor();
+        var tenants = new RequestTenantContextAccessor();
+        using var principalScope = principals.Publish(RequestPrincipal.Member(Guid.NewGuid()));
+        using var tenantScope = tenants.Publish(Guid.NewGuid(), null);
+        var context = new DefaultHttpContext
+        {
+            RequestServices = new ServiceCollection()
+                .AddSingleton<IRequestPrincipalAccessor>(principals)
+                .AddSingleton<IRequestTenantContextAccessor>(tenants)
+                .BuildServiceProvider(),
+        };
         context.Request.Body = new MemoryStream(bytes);
         context.Request.ContentLength = contentLength == -1 ? bytes.Length : contentLength;
 
