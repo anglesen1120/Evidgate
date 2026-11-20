@@ -3,7 +3,7 @@
 // must be refused wherever it sits. The generator is seeded, so a failure reproduces.
 import { describe, expect, it } from 'vitest';
 
-import { normalizeVariant } from './normalize.js';
+import { normalizeVariant, type VariantResult } from './normalize.js';
 
 function rng(seed: number): () => number {
   let state = seed >>> 0;
@@ -50,7 +50,7 @@ describe('variant normaliser properties', () => {
       if (forward.ok) {
         expect(reversed).toEqual(forward);
       } else {
-        const reasons = (result: typeof forward): string[] =>
+        const reasons = (result: VariantResult): string[] =>
           result.ok ? [] : result.problems.map((problem) => problem.reason).sort();
         expect(reasons(reversed)).toEqual(reasons(forward));
       }
@@ -67,13 +67,23 @@ describe('variant normaliser properties', () => {
     ['ghp_abcdefghijklmnopqrstuvwxyz0123456789'],
     ['AKIAIOSFODNN7EXAMPLE'],
     ['-----BEGIN PRIVATE KEY-----'],
-  ])('refuses the secret-shaped value %s under any key', (value) => {
+  ])('refuses the secret-shaped value %s under any valid key', (value) => {
     const next = rng(11);
-    for (let i = 0; i < 50; i += 1) {
-      const entries = generated(next).filter(([key]) => key !== 'browser');
-      entries.splice(Math.floor(next() * (entries.length + 1)), 0, ['browser', value]);
-      const result = normalizeVariant(Object.fromEntries(entries));
-      expect(result.ok).toBe(false);
+    for (const key of ['browser', 'locale', 'viewport', 'b_c', 'x.y', 'a']) {
+      expect(normalizeVariant({ [key]: 'ordinary' }).ok).toBe(true);
+      for (let i = 0; i < 20; i += 1) {
+        const others = generated(next).filter(([other]) => other !== key);
+        const result = normalizeVariant(Object.fromEntries([...others, [key, value]]));
+        if (!result.ok) {
+          continue;
+        }
+        throw new Error(`secret under ${key} was accepted`);
+      }
+      const alone = normalizeVariant({ [key]: value });
+      expect(alone).toEqual({
+        ok: false,
+        problems: [{ path: `/params/${key}`, reason: 'secret_value' }],
+      });
     }
   });
 });

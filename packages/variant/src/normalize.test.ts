@@ -86,8 +86,41 @@ describe('variant_hash properties', () => {
 
   it('keeps a constructor key as an ordinary own property', () => {
     const parsed = JSON.parse('{"constructor":"x"}') as Record<string, unknown>;
+    const result = normalizeVariant(parsed);
 
-    expect(normalizeVariant(parsed)).toEqual(normalizeVariant({ constructor: 'x' }));
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.paramsJson).toBe('{"constructor":"x"}');
+      expect(Object.hasOwn(result.params, 'constructor')).toBe(true);
+    }
+  });
+
+  it('accepts exactly 8000 serialised bytes and refuses 8001', () => {
+    const params = Object.fromEntries(
+      Array.from({ length: 31 }, (_, i): [string, string] => [
+        `k${String(i).padStart(2, '0')}`,
+        'x'.repeat(i === 30 ? 40 : 256),
+      ]),
+    );
+
+    expect(Buffer.byteLength(JSON.stringify(params))).toBe(8000);
+    expect(normalizeVariant(params).ok).toBe(true);
+    params['k30'] += 'x';
+    expect(Buffer.byteLength(JSON.stringify(params))).toBe(8001);
+    expect(normalizeVariant(params)).toEqual({
+      ok: false,
+      problems: [{ path: '/params', reason: 'too_large' }],
+    });
+  });
+
+  it('accepts 32 keys and refuses the 33rd', () => {
+    const params = Object.fromEntries(Array.from({ length: 32 }, (_, i) => [`k${i}`, 1]));
+
+    expect(normalizeVariant(params).ok).toBe(true);
+    expect(normalizeVariant({ ...params, k32: 1 })).toEqual({
+      ok: false,
+      problems: [{ path: '/params', reason: 'too_many_keys' }],
+    });
   });
 });
 
