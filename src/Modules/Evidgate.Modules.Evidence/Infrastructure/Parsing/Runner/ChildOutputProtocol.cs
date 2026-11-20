@@ -6,19 +6,17 @@ using System.Text.Unicode;
 namespace Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 
 /// <summary>
-/// What one stdout stream yielded: how many bytes and lines arrived, the accepted records (only when the stream was
-/// the protocol end to end) and the failure kind that stopped the read early.
+/// What one stdout stream yielded: how many bytes and lines arrived, how many records were accepted (only when the
+/// stream was the protocol end to end) and the failure kind that stopped the read early.
 /// </summary>
 /// <param name="OutputBytes">Every byte the child wrote to stdout, marker and newlines included.</param>
 /// <param name="Lines">Every complete line, the marker included.</param>
 /// <param name="RecordCount">How many record lines were accepted by the moment the read stopped.</param>
-/// <param name="Records">The records before the marker, or <see langword="null"/> when the stream failed.</param>
 /// <param name="Failure">The failure kind, or <see langword="null"/> when the stream was valid.</param>
 internal sealed record ChildOutputCapture(
     long OutputBytes,
     int Lines,
     int RecordCount,
-    IReadOnlyList<ParseRecord>? Records,
     ParseRunFailureKind? Failure);
 
 /// <summary>
@@ -35,13 +33,14 @@ internal sealed record ChildOutputCapture(
 /// <c>count</c> key means nothing).
 /// </para>
 /// <para>
-/// Nothing is buffered past the caps: a stream over <c>maxBytes</c> stops the read, a single line longer than
-/// <c>maxRecordBytes</c> stops the read (a legit record can carry a whole text node escaped at about 3x, so that
-/// cap is derived from the input cap too), and the record list is capped at <c>maxRecords</c>. A line must also be
-/// valid UTF-8 and nest no deeper than <see cref="MaxLineDepth"/> — the profile's document depth plus the record
-/// wrapper — so a record the child could not have written from an accepted document is malformed, not data. Each
-/// stop invokes the caller's failure hook so the runner can kill the child at once instead of waiting for the wall
-/// clock while it blocks on a full pipe.
+/// Every accepted record line goes to the caller's <see cref="IParseRecordSink"/> as it is framed, so nothing is
+/// kept here: a stream over <c>maxBytes</c> stops the read, a single line longer than <c>maxRecordBytes</c> stops
+/// the read (a legit record can carry a whole text node escaped at about 3x, so that cap is derived from the input
+/// cap too), and the accepted record count is capped at <c>maxRecords</c>. A line must also be valid UTF-8 and nest
+/// no deeper than <see cref="MaxLineDepth"/> — the profile's document depth plus the record wrapper — so a record
+/// the child could not have written from an accepted document is malformed, not data. Each stop invokes the
+/// caller's failure hook so the runner can kill the child at once instead of waiting for the wall clock while it
+/// blocks on a full pipe.
 /// </para>
 /// </summary>
 internal sealed class ChildOutputProtocol
@@ -76,20 +75,24 @@ internal sealed class ChildOutputProtocol
     private readonly long maxBytes;
     private readonly int maxRecords;
     private readonly int maxRecordBytes;
+    private readonly IParseRecordSink sink;
 
     /// <summary>Creates a reader bound to one run's caps.</summary>
     /// <param name="maxBytes">The most stdout bytes the run may write (positive).</param>
     /// <param name="maxRecords">The most lines the run may write, the marker included (positive).</param>
     /// <param name="maxRecordBytes">The longest single line (positive).</param>
-    public ChildOutputProtocol(long maxBytes, int maxRecords, int maxRecordBytes)
+    /// <param name="sink">Where each accepted record line goes.</param>
+    public ChildOutputProtocol(long maxBytes, int maxRecords, int maxRecordBytes, IParseRecordSink sink)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytes);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxRecords);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxRecordBytes);
+        ArgumentNullException.ThrowIfNull(sink);
 
         this.maxBytes = maxBytes;
         this.maxRecords = maxRecords;
         this.maxRecordBytes = maxRecordBytes;
+        this.sink = sink;
     }
 
     /// <summary>
@@ -99,7 +102,8 @@ internal sealed class ChildOutputProtocol
     /// verdict is the stream's absence, not its byte count.
     /// </summary>
     /// <returns>The capture to return for a stream the parent had to abandon.</returns>
-    public ChildOutputCapture Abandoned() => new Accumulator(maxBytes, maxRecords, maxRecordBytes).FailedAtTransport();
+    public ChildOutputCapture Abandoned() =>
+        new Accumulator(maxBytes, maxRecords, maxRecordBytes, sink).FailedAtTransport();
 
     /// <summary>Reads the child's stdout until the stream ends or a cap or a protocol violation stops the read.</summary>
     /// <param name="stdout">The child's stdout pipe; the caller keeps ownership.</param>
@@ -110,7 +114,7 @@ internal sealed class ChildOutputProtocol
         ArgumentNullException.ThrowIfNull(stdout);
         ArgumentNullException.ThrowIfNull(onProtocolFailure);
 
-        var state = new Accumulator(maxBytes, maxRecords, maxRecordBytes);
+        var state = new Accumulator(maxBytes, maxRecords, maxRecordBytes, sink);
         var buffer = ArrayPool<byte>.Shared.Rent(ReadBufferBytes);
 
         try
@@ -265,19 +269,21 @@ internal sealed class ChildOutputProtocol
         private readonly long maxBytes;
         private readonly int maxRecords;
         private readonly int maxRecordBytes;
-        private readonly List<ParseRecord> records = [];
+        private readonly IParseRecordSink sink;
 
         private byte[] line;
         private int lineLength;
         private long bytes;
         private int lines;
+        private int records;
         private bool markerSeen;
 
-        public Accumulator(long maxBytes, int maxRecords, int maxRecordBytes)
+        public Accumulator(long maxBytes, int maxRecords, int maxRecordBytes, IParseRecordSink sink)
         {
             this.maxBytes = maxBytes;
             this.maxRecords = maxRecords;
             this.maxRecordBytes = maxRecordBytes;
+            this.sink = sink;
             line = new byte[Math.Min(maxRecordBytes, InitialLineBytes)];
         }
 
@@ -339,7 +345,7 @@ internal sealed class ChildOutputProtocol
                 return Failed(ParseRunFailureKind.MalformedOutput);
             }
 
-            return new ChildOutputCapture(bytes, lines, records.Count, records, null);
+            return new ChildOutputCapture(bytes, lines, records, null);
         }
 
         /// <summary>The pipe broke before the stream ended: no marker can arrive, so the run is malformed.</summary>
@@ -347,7 +353,7 @@ internal sealed class ChildOutputProtocol
         public ChildOutputCapture FailedAtTransport() => Failed(ParseRunFailureKind.MalformedOutput);
 
         private ChildOutputCapture Failed(ParseRunFailureKind failure) =>
-            new(bytes, lines, records.Count, null, failure);
+            new(bytes, lines, records, failure);
 
         private ChildOutputCapture? Append(ReadOnlySpan<byte> bytesToAppend)
         {
@@ -392,8 +398,8 @@ internal sealed class ChildOutputProtocol
             }
 
             // Invalid UTF-8 is not a record. The reader below scans strings without decoding them, so a byte the
-            // child's own writer cannot emit would otherwise reach a consumer as a record it cannot decode; and a
-            // record is kept as the child's bytes, so nothing downstream could repair it.
+            // child's own writer cannot emit would otherwise reach a sink as a record it cannot decode; and the
+            // sink only ever sees the child's own bytes, so nothing downstream could repair it.
             if (!Utf8.IsValid(text))
             {
                 return Failed(ParseRunFailureKind.MalformedOutput);
@@ -409,7 +415,7 @@ internal sealed class ChildOutputProtocol
             if (kind == LineKind.Marker)
             {
                 // A second marker, or one that does not count the records before it, is a crash, not a success.
-                if (markerSeen || records.Count != count)
+                if (markerSeen || records != count)
                 {
                     return Failed(ParseRunFailureKind.MalformedOutput);
                 }
@@ -425,7 +431,8 @@ internal sealed class ChildOutputProtocol
                 return Failed(ParseRunFailureKind.MalformedOutput);
             }
 
-            records.Add(new ParseRecord(text.ToArray()));
+            sink.Accept(text);
+            records++;
             lineLength = 0;
 
             return null;

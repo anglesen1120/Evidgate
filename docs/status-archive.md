@@ -806,3 +806,9 @@ Closed by S479 (#981): `http-client-fetch-binary-blob.spec.ts` runs in the node 
 | Trace error bound exact UTF-8 (S472) | `stringFitsTracedBound` in `trace.interceptor.ts` now counts exact UTF-8 bytes (it used the same encode before, via the shared `utf8ExceedsBytes`), so a CJK-heavy error body between 21 and 64 KiB of UTF-16 text can skip span enrichment; tracing is fail-open. Decide whether the 64 KiB bound should stay in bytes. | receiver: telemetry owner |
 
 Closed by S479 (#981): the bound stays in exact UTF-8 bytes by COORDINATOR-DECISION; it caps the input parsed for enrichment, and `trace.interceptor.error-bound.spec.ts` pins ASCII, 2-byte, CJK and surrogate-pair text at the bound and one byte over.
+
+## Moved from status-carried.md by S484 (2026-11-20)
+
+| CLI response size cap and manifest size precheck (S476) | The generated SDK client reads `response.text()` and `JSON.parse` with no byte cap for every command, and `manifests build` builds a manifest over the 32 MiB cap (about 1.4 s CPU, 60 MB string) before the schema check refuses it. Bounded by 30 s per attempt, 20 pages and the 16 MiB report cap | receiver: CLI owner (shared client change, then a size estimate before emission) |
+
+Closed by S484 (#991): `boundedResponse.ts` reads every API answer under a 1 MiB decoded-byte cap (OIDC 64 KiB, `gate` keeps its own smaller caps) and `manifests build` refuses an oversize manifest from an exact `planned_executions` size before `manifestAxes`; `contracts/cli.md` §5.1 and §14.4 record both.
