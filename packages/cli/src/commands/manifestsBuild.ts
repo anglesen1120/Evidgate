@@ -6,6 +6,7 @@ import { lstat, open, unlink, type FileHandle } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
 
 import { getSuiteRevisionExecutionPlan, type Client } from '@evidgate/sdk';
+import { normalizeVariant, type VariantResult } from '@evidgate/variant';
 
 import type { ExchangeDeps } from '../auth/exchange.js';
 import { getToken } from '../auth/getToken.js';
@@ -31,7 +32,7 @@ import { loadPackagedContractSchemas } from '../packagedSchemas.js';
 import { parsePlaywrightListWithParams, readPlaywrightList } from '../playwrightList.js';
 import { serverErrorFromResponse, transportError } from '../serverError.js';
 import { bodyTooLargeReason } from '../validateErrors.js';
-import { manifestParams, normalizeVariant, type VariantResult } from '../variantHash.js';
+import { manifestParams } from '../variantHash.js';
 
 import { requiredFlag, uuidPattern } from './eventsSendArgs.js';
 import { readBuildFlags } from './manifestsBuildArgs.js';

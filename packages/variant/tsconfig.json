@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    // The digest uses node:crypto, the only Node API this package touches.
+    "types": ["node"]
+  },
+  "include": ["src"],
+  // Specs are type-checked by tsconfig.spec.json and never emitted into the shipped dist.
+  "exclude": ["src/**/*.test.ts", "src/**/*.testing.ts", "vitest.config.ts"]
+}

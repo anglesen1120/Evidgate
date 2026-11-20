@@ -1,0 +1,21 @@
+{
+  // 01.6.1-T1.2: type-checks the specs and the Vitest config without emitting, so they
+  // stay out of the dist build (see `exclude` in tsconfig.json). eslint.config.js points
+  // the parser for `*.test.ts` and `vitest.config.ts` at this file.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // The workspace config imports the shared base by its real `.mts` path: the
+    // Vitest native config loader (Node ESM) does not remap `.js`/`.mjs` specifiers
+    // to the `.mts` source, and tsc only allows the `.mts` extension under noEmit.
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "src/**/*.test.ts",
+    // The fixture modules the specs share; unlisted, the emitting project excludes them
+    // and their exports would resolve to `error` types in the type-aware lint run.
+    "src/**/*.testing.ts",
+    "vitest.config.ts",
+    "../../vitest.config.base.mts"
+  ]
+}
