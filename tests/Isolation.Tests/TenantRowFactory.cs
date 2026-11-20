@@ -166,9 +166,16 @@ internal sealed class TenantRowFactory
     /// <c>github_install_state</c> (0108) is the second entry for a different reason: its <c>user_id</c> is
     /// NOT NULL and references <c>public."user"</c>, which the app role deliberately holds no INSERT on
     /// (02.9.1 §8 T1), so the generated row needs a platform identity parent only the owner can write.
+    /// <c>support_grant</c> (0115) is the third: its <c>operator_user_id</c> is NOT NULL and references the same
+    /// platform identity table, for the same reason.
     /// </remarks>
     internal static readonly IReadOnlySet<string> OwnerProvisionedTables =
-        new HashSet<string>(StringComparer.Ordinal) { "public.healing_llm_budget", "public.github_install_state" };
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            "public.healing_llm_budget",
+            "public.github_install_state",
+            "public.support_grant",
+        };
 
     /// <summary>
     /// The tenant tables a generated row cannot be written for at all: the parent table's trigger writes
@@ -534,9 +541,10 @@ internal sealed class TenantRowFactory
             values[column.Name] = Value(table, column, isOwnId ? forcedId : null);
         }
 
-        // The OAuth state's primary key is its digest, so its defaulted surrogate id is not generated above, yet
-        // the suite addresses every tenant row by its `id`.
-        if (string.Equals(table, "public.github_install_state", StringComparison.Ordinal)
+        // The OAuth state's primary key is its digest, and a support grant's id has a database default, so
+        // neither id is generated above, yet the suite addresses every tenant row by its `id`.
+        if ((string.Equals(table, "public.github_install_state", StringComparison.Ordinal)
+                || string.Equals(table, "public.support_grant", StringComparison.Ordinal))
             && !values.ContainsKey(TenantFkScan.TenantKeyColumn))
         {
             values[TenantFkScan.TenantKeyColumn] = forcedId ?? Guid.CreateVersion7();
@@ -879,6 +887,10 @@ internal sealed class TenantRowFactory
             // so both are fresh per row and the RLS suite's two orgs never collide on them.
             ("public.github_installation", "installation_id") =>
                 8_000_000_000L + Interlocked.Increment(ref _githubInstallationId),
+            // support_grant.scopes has a shape CHECK and expires_at must fall within 72 hours of creation, so
+            // the generic "probe" and the 400-day timestamp are both refused.
+            ("public.support_grant", "scopes") => new[] { "case:read" },
+            ("public.support_grant", "expires_at") => DateTimeOffset.UtcNow.AddHours(1),
             ("public.github_install_state", "state_hash") =>
                 (byte[])[.. Guid.NewGuid().ToByteArray(), .. Guid.NewGuid().ToByteArray()],
             _ => (object?)null,
