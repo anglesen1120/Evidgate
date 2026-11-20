@@ -74,6 +74,9 @@ public static partial class EvidgateTelemetry
 
     private static readonly ActivitySource Source = new(ActivitySourceName);
 
+    // Every partial's instrument initialiser reads this field, so this file must be compiled before them:
+    // a wrong order leaves it null and fails the whole type's first use. Keep the other parts' file names
+    // sorting after this one.
     private static readonly Meter Meter = new(MeterName);
 
     private static readonly Counter<long> ModuleOperations = Meter.CreateCounter<long>(
