@@ -14,7 +14,7 @@ Legend as in [`../../AGENTS.md`](../../AGENTS.md): ✅ verified with a link · �
 
 1. Never ask for, copy or paste the checked value, a request body, a URL with identifiers, a token or a header into a ticket. Collect request times and route templates only.
 2. The 100 ms budget is a code decision (`src/BuildingBlocks/SharedKernel/Security/SecretShape.cs:96-99` ✅), not an operator setting; do not look for a knob.
-3. Incident class: P3-c ([incident process](incident-process.md) §2) for one ticket; P2-g when §5 says escalate.
+3. Incident class: P3-c ([incident process](incident-process.md) §2) only while triage (§5) shows no refused ordinary value, since P3-c requires no customer impact; P2-g when §5 says escalate or a customer value was refused.
 
 ## 2. What the counter means
 
@@ -39,7 +39,7 @@ The check never throws on a timeout: it returns true, "secret-shaped" (`SecretSh
 | `src/Modules/Evidgate.Modules.Orchestrator/Domain/ReleaseRules.cs:65` | `IsName` false, then `ReleaseBody.cs:100,105-112`: 422 `release_invalid`, detail `/name` = `invalid_value` |
 | `src/BuildingBlocks/SharedKernel/Security/ParameterSecretRule.cs:60,78` | feeds the callers above |
 
-The HTTP status was traced to the endpoint only for the environment-revision and release routes (422). For the other call sites the statement is: the code turns a true result into a validation failure; the status was not traced. A legitimate caller can therefore see a refusal of a value that is not a secret, only while the condition lasts. A retry after the host recovers passes because the timeout is per call and `ValueLooksSecret` keeps no state, cache or stored verdict (`SecretShape.cs:102-122` ✅ read); no test retries across a real stall `[INFERENCE]` ⚠️ (the matcher seam `ValueLooksSecret(value, match)` is exercised in `tests/Tenancy.IntegrationTests/SecretShapeTimeoutTests.cs`).
+The HTTP status was traced to the endpoint only for the environment-revision and release routes (422). For the other call sites the statement is: the code turns a true result into a validation failure; the status was not traced. A legitimate caller can therefore see a refusal of a value that is not a secret, only while the condition lasts. A retry after the host recovers can pass the shape check when the timeout was the only refusal reason: the timeout is per call and `ValueLooksSecret` keeps no state, cache or stored verdict (`SecretShape.cs:102-122` ✅ read). It does not guarantee success: a release retry can meet a different refusal, for example 409 `release_name_conflict` (`src/Modules/Evidgate.Modules.Orchestrator/Application/Releases/CreateRelease.cs:124-153`). No test retries across a real stall `[INFERENCE]` ⚠️ (the matcher seam `ValueLooksSecret(value, match)` is exercised in `tests/Tenancy.IntegrationTests/SecretShapeTimeoutTests.cs`).
 
 ## 4. Alert rule (specification)
 
