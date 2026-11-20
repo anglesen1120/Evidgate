@@ -2,4 +2,8 @@
   <PropertyGroup>
     <RootNamespace>Evidgate.BuildingBlocks.SharedKernel</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Tenancy.IntegrationTests" />
+    <InternalsVisibleTo Include="Hosts.IntegrationTests" />
+  </ItemGroup>
 </Project>
