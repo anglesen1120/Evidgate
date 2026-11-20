@@ -276,6 +276,8 @@ function untypedReason(
   if (settled || seen.has(decl)) return undefined;
   const rebound = typed.get(name)?.some((d) => d.typed) === true;
   if (decl.opaque || decl.unknownAssign) return rebound ? opaqueReason : undefined;
+  // A caller can pass any value for an untyped parameter, whatever its default.
+  if (decl.param && !decl.annotated) return rebound ? unknownReason : undefined;
   seen.add(decl);
   const values = decl.init === undefined ? decl.assigned : [decl.init, ...decl.assigned];
   if (values.length === 0) return rebound ? unknownReason : undefined;
@@ -318,6 +320,10 @@ function knownOther(
     return knownOther(v.whenTrue, typed, visiting) && knownOther(v.whenFalse, typed, visiting);
   }
   if (ts.isBinaryExpression(v)) {
+    const kind = v.operatorToken.kind;
+    // An assignment evaluates to the assigned value, which may be a `Request`.
+    if (kind === ts.SyntaxKind.EqualsToken) return knownOther(v.right, typed, visiting);
+    if (kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment) return false;
     return knownOther(v.left, typed, visiting) && knownOther(v.right, typed, visiting);
   }
   if (!ts.isIdentifier(v)) return false;
@@ -325,7 +331,7 @@ function knownOther(
   return (
     decls !== undefined &&
     decls.every((d) => {
-      if (d.typed) return true;
+      if (d.typed || (d.param && !d.annotated)) return false;
       if (d.opaque || d.unknownAssign || visiting.has(d)) return false;
       if (d.annotated && d.assigned.length === 0) return true;
       visiting.add(d);

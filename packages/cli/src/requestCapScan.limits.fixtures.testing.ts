@@ -205,7 +205,7 @@ export const everyDeclarationForms: readonly LimitForm[] = [
   [
     'an untyped parameter defaulting to an unresolved name',
     'function a(req: Request) { return req; } function b(req = url) { fetch(req); }',
-    "function a(req: Request) { return req; } function b(req = 'x') { fetch(req); }",
+    "function a(req: Request) { return req; } function b(req: string = 'x') { fetch(req); }",
     'uncapped-fetch',
     'rebound by an untyped declaration',
   ],
@@ -243,6 +243,34 @@ export const everyDeclarationForms: readonly LimitForm[] = [
     'function a(req: Request) { return req; } function b(v: string[]) { let req: string[] = []; req = v; fetch(req); }',
     'uncapped-fetch',
     'Request inherits a body',
+  ],
+  [
+    'an untyped parameter with a body-free default',
+    "function a(req: Request) { return req; } function b(u: string, req = new Request(u, { method: 'GET' })) { fetch(req); }",
+    "function a(req: Request) { return req; } function b(req: string = 'x') { fetch(req); }",
+    'uncapped-fetch',
+    'rebound by an untyped declaration',
+  ],
+  [
+    'an untyped local holding an assignment expression',
+    'function a(req: Request) { return req; } function b(r: Request) { let x; const req = (x = r); fetch(req); }',
+    'function a(req: Request) { return req; } function b(v: string) { let x; const req = (x = v); fetch(req); }',
+    'uncapped-fetch',
+    'rebound by an untyped declaration',
+  ],
+  [
+    'an untyped local holding a logical assignment expression',
+    'function a(req: Request) { return req; } function b(r: Request) { let x; const req = (x ||= r); fetch(req); }',
+    'function a(req: Request) { return req; } function b(v: string) { let x; const req = (x = v); fetch(req); }',
+    'uncapped-fetch',
+    'rebound by an untyped declaration',
+  ],
+  [
+    'an untyped local copying an unresolved global',
+    'function a(req: Request) { return req; } function b() { const req = glob; fetch(req); }',
+    "function a(req: Request) { return req; } function b() { const req = 'x'; fetch(req); }",
+    'uncapped-fetch',
+    'rebound by an untyped declaration',
   ],
 ];
 
