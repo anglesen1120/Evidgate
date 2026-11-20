@@ -257,6 +257,38 @@ public sealed class ManifestUnitTests
         UnstorableJsonText.HasUnstorableText(pair.RootElement).ShouldBeFalse();
     }
 
+    [Fact]
+    public void UnstorableName_AnUnreadableNameAtAnyDepth_IsDetected()
+    {
+        using var rootHigh = JsonDocument.Parse("""{"\ud800":1}""");
+        using var rootLow = JsonDocument.Parse("""{"\udc00":{"ok":1}}""");
+        using var nested = JsonDocument.Parse("""{"outer":{"\ud800":1}}""");
+        using var inArray = JsonDocument.Parse("""{"rows":[{"\udc00":1}]}""");
+        using var nulName = JsonDocument.Parse("""{"a\u0000b":1}""");
+
+        UnstorableJsonText.HasUnstorableName(rootHigh.RootElement).ShouldBeTrue();
+        UnstorableJsonText.HasUnstorableName(rootLow.RootElement).ShouldBeTrue();
+        UnstorableJsonText.HasUnstorableName(nested.RootElement).ShouldBeTrue();
+        UnstorableJsonText.HasUnstorableName(inArray.RootElement).ShouldBeTrue();
+        UnstorableJsonText.HasUnstorableName(nulName.RootElement).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void UnstorableName_AnUnreadableValueOrACleanName_IsNotDetected()
+    {
+        using var loneValue = JsonDocument.Parse("""{"a":"x\ud800y"}""");
+        using var nulArrayItem = JsonDocument.Parse("""{"a":["x","b\u0000"]}""");
+        using var clean = JsonDocument.Parse("""{"\u00e9":"x","\ud83d\ude00":["y"],"plain":{"\u00e9":1}}""");
+
+        UnstorableJsonText.HasUnstorableName(loneValue.RootElement).ShouldBeFalse();
+        UnstorableJsonText.HasUnstorableName(nulArrayItem.RootElement).ShouldBeFalse();
+        UnstorableJsonText.HasUnstorableName(clean.RootElement).ShouldBeFalse();
+
+        // The whole-text rule is unchanged: the same values are still refused there.
+        UnstorableJsonText.HasUnstorableText(loneValue.RootElement).ShouldBeTrue();
+        UnstorableJsonText.HasUnstorableText(nulArrayItem.RootElement).ShouldBeTrue();
+    }
+
     [Theory]
     [InlineData("/planned_executions/0/variant/params/ghp_abcdefghijklmnop", "type", "/planned_executions/0/variant/params/*")]
     [InlineData("/dependency_versions/AKIAABCDEFGHIJKLMNOP", "max_length", "/dependency_versions/*")]

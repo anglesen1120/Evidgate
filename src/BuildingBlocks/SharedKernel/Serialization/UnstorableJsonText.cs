@@ -23,14 +23,21 @@ public static class UnstorableJsonText
     /// </summary>
     public static bool HasUnpairedSurrogate(JsonElement element) => Walk(element, nulIsUnstorable: false);
 
+    /// <summary>
+    /// True when a member name at any depth of <paramref name="element"/> is unstorable (a surrogate without its partner, or
+    /// U+0000); string values are not looked at. A name that cannot be transcoded counts. Use it to tell an unreadable name,
+    /// which no code may read, from unreadable text in a value, which can be read around.
+    /// </summary>
+    public static bool HasUnstorableName(JsonElement element) => Walk(element, nulIsUnstorable: true, namesOnly: true);
+
     /// <summary>NUL, or a surrogate without its partner.</summary>
     public static bool Unstorable(string text) => Has(text, nulIsUnstorable: true);
 
-    private static bool Walk(JsonElement element, bool nulIsUnstorable)
+    private static bool Walk(JsonElement element, bool nulIsUnstorable, bool namesOnly = false)
     {
         try
         {
-            return Visit(element, nulIsUnstorable);
+            return Visit(element, nulIsUnstorable, namesOnly);
         }
         catch (InvalidOperationException)
         {
@@ -38,12 +45,12 @@ public static class UnstorableJsonText
             return true;
         }
 
-        static bool Visit(JsonElement element, bool nulIsUnstorable) => element.ValueKind switch
+        static bool Visit(JsonElement element, bool nulIsUnstorable, bool namesOnly) => element.ValueKind switch
         {
-            JsonValueKind.String => Has(element.GetString()!, nulIsUnstorable),
-            JsonValueKind.Array => element.EnumerateArray().Any(item => Visit(item, nulIsUnstorable)),
+            JsonValueKind.String => !namesOnly && Has(element.GetString()!, nulIsUnstorable),
+            JsonValueKind.Array => element.EnumerateArray().Any(item => Visit(item, nulIsUnstorable, namesOnly)),
             JsonValueKind.Object => element.EnumerateObject()
-                .Any(member => Has(member.Name, nulIsUnstorable) || Visit(member.Value, nulIsUnstorable)),
+                .Any(member => Has(member.Name, nulIsUnstorable) || Visit(member.Value, nulIsUnstorable, namesOnly)),
             _ => false,
         };
     }
