@@ -65,7 +65,7 @@ internal sealed class CreateChecklistItemCommandHandler(
         var orgId = scopes.Require().OrgId;
 
         // AC10 / 00 §9.3: a project the tenant cannot see — or one that is soft-deleted — is 404 before any write, like
-        // the node and manual-case creates (NodeCommands.cs:99-105, ManualCaseCommands.cs:77). Without it the writer's
+        // the node and manual-case creates (NodeCreate.cs:98-104, ManualCaseCreate.cs:72). Without it the writer's
         // parent probe answers 422 parent_not_found and the route would report an unknown project as a placement problem.
         if (await AuthoringProjectProbe.MissingAsync(db, orgId, command.ProjectId, cancellationToken).ConfigureAwait(false)
             is { } missingProject)
