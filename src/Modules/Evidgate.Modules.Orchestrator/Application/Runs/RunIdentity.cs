@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 
 namespace Evidgate.Modules.Orchestrator.Application.Runs;
@@ -161,12 +162,17 @@ internal static class RunIdentityRules
 
         foreach (var member in element.EnumerateObject())
         {
+            if (errors.Count > ContractValidationResult.MaxDetails)
+            {
+                break;
+            }
+
             switch (member.Name)
             {
                 case "kind":
                     if (!TryString(member.Value, out kind) || !Kinds.Contains(kind, StringComparer.Ordinal))
                     {
-                        errors.Add(new ErrorDetail("/ref/kind", InvalidValue));
+                        AddDetail(errors, new ErrorDetail("/ref/kind", InvalidValue));
                     }
 
                     break;
@@ -174,7 +180,7 @@ internal static class RunIdentityRules
                 case "name":
                     if (!TryString(member.Value, out name) || !IsStorableName(name))
                     {
-                        errors.Add(new ErrorDetail("/ref/name", InvalidValue));
+                        AddDetail(errors, new ErrorDetail("/ref/name", InvalidValue));
                     }
 
                     break;
@@ -184,7 +190,7 @@ internal static class RunIdentityRules
                         || !member.Value.TryGetInt32(out var number)
                         || number <= 0)
                     {
-                        errors.Add(new ErrorDetail("/ref/pr_number", InvalidValue));
+                        AddDetail(errors, new ErrorDetail("/ref/pr_number", InvalidValue));
                     }
                     else
                     {
@@ -196,7 +202,7 @@ internal static class RunIdentityRules
                 case "head_sha":
                     if (!TryString(member.Value, out headSha) || !IsSha(headSha))
                     {
-                        errors.Add(new ErrorDetail("/ref/head_sha", InvalidValue));
+                        AddDetail(errors, new ErrorDetail("/ref/head_sha", InvalidValue));
                     }
 
                     break;
@@ -204,7 +210,7 @@ internal static class RunIdentityRules
                 case "base_sha":
                     if (!TryString(member.Value, out baseSha) || !IsSha(baseSha))
                     {
-                        errors.Add(new ErrorDetail("/ref/base_sha", InvalidValue));
+                        AddDetail(errors, new ErrorDetail("/ref/base_sha", InvalidValue));
                     }
 
                     break;
@@ -212,7 +218,7 @@ internal static class RunIdentityRules
                 case "trigger_event":
                     if (!TryString(member.Value, out triggerEvent) || !TriggerEvents.Contains(triggerEvent, StringComparer.Ordinal))
                     {
-                        errors.Add(new ErrorDetail("/ref/trigger_event", InvalidValue));
+                        AddDetail(errors, new ErrorDetail("/ref/trigger_event", InvalidValue));
                     }
 
                     break;
@@ -220,7 +226,7 @@ internal static class RunIdentityRules
                 case "is_fork":
                     if (member.Value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
                     {
-                        errors.Add(new ErrorDetail("/ref/is_fork", InvalidValue));
+                        AddDetail(errors, new ErrorDetail("/ref/is_fork", InvalidValue));
                     }
                     else
                     {
@@ -230,7 +236,7 @@ internal static class RunIdentityRules
                     break;
 
                 default:
-                    errors.Add(new ErrorDetail(RequestMemberPath.ForUnknown(member.Name, "/ref"), "additional_properties"));
+                    AddDetail(errors, new ErrorDetail(RequestMemberPath.ForUnknown(member.Name, "/ref"), "additional_properties"));
                     break;
             }
         }
@@ -238,6 +244,23 @@ internal static class RunIdentityRules
         return errors.Count > 0
             ? (null, errors)
             : (new RunRefInput(kind, name, prNumber, headSha, baseSha, triggerEvent, isFork), errors);
+    }
+
+    /// <summary>
+    /// Adds one member failure, bounded like every contract refusal: past <see cref="ContractValidationResult.MaxDetails"/>
+    /// rows a single terminal <c>truncated</c> marker is added and the caller stops, so a body of repeated or unknown
+    /// members cannot be answered with one row each.
+    /// </summary>
+    private static void AddDetail(List<ErrorDetail> errors, ErrorDetail detail)
+    {
+        if (errors.Count < ContractValidationResult.MaxDetails)
+        {
+            errors.Add(detail);
+        }
+        else if (errors.Count == ContractValidationResult.MaxDetails)
+        {
+            errors.Add(new ErrorDetail(string.Empty, ContractValidationError.TruncatedReason));
+        }
     }
 
     /// <summary>
