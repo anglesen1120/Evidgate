@@ -1,8 +1,8 @@
 // Edge cases of the shared variant normaliser that fixtures/variant-hash/vectors.json does not
 // carry, because the corpus holds only what both sides can express in JSON text. Each refusal row
 // records what this normaliser answers and what VariantNormalizer.Normalize (the server) answers
-// for the same input, so a parity gap is visible in the table; the acceptance tests name the
-// server's answer in their titles. Rows marked `ts-only` have no JSON spelling the server could be
+// for the same input, so a parity gap is visible in the table; the acceptance tests
+// pin this normaliser only. Rows marked `ts-only` have no JSON spelling the server could be
 // handed. Row prefixes: a secret-shaped values, b fold order, c numbers, d surrogates, e arrays,
 // f values only a JavaScript caller can build.
 import { describe, expect, it } from 'vitest';
@@ -210,7 +210,7 @@ const rows: readonly RefusalRow[] = [
     params: { v: [2 ** 60] },
     problems: [{ path: '/params/v/0', reason: 'invalid_value' }],
     server: 'same for the digits of 2^60',
-    offending: ['1152921504606846976'],
+    offending: ['1152921504606847000', '11529215046068'],
   },
 ];
 
