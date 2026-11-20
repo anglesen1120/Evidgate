@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Contracts;
@@ -17,12 +18,8 @@ namespace Evidgate.Modules.Authoring.Endpoints;
 /// the authoring contract needs: the <c>"order:&lt;sha256&gt;"</c> reorder precondition (AC2/AC19) and a body reader
 /// that refuses a duplicate member or a lone surrogate as a caller error instead of letting the reader throw later
 /// (OI-13-116, never a 500).
-/// <para>
-/// Every member here answers in <see cref="Error"/> terms — never by writing the response — so the delegate returns
-/// <c>Result.Failure(error)</c> and the host's <c>ResultEndpointFilter</c> renders the 00 §9.2 envelope once. Nothing in
-/// this file touches the tenant, the pipeline or the database: authorization, the tenant scope and the idempotency
-/// claim are the C2 pipeline's (00 §5.5 C2).
-/// </para>
+/// <para>Failures use <see cref="Error"/> so the host renders one envelope. The shared body guard requires
+/// a caller and tenant before validation; permissions, transactions and idempotency remain in the pipeline.</para>
 /// <para>
 /// <b>The contract the three route files may rely on</b> (do not add a member without updating this block):
 /// <list type="bullet">
@@ -370,6 +367,8 @@ internal static class AuthoringEndpointSupport
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+        // Refuse unresolved callers before body-specific validation or buffering.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
         if (context.Request.ContentLength > maxBytes)
         {

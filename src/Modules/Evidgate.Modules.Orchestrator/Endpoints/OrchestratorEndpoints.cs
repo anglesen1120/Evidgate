@@ -3,6 +3,7 @@ using System.Text.Json;
 using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Orchestrator.Application.Manifests;
@@ -21,11 +22,7 @@ using Microsoft.Extensions.Options;
 
 namespace Evidgate.Modules.Orchestrator.Endpoints;
 
-/// <summary>
-/// The manifest and environment-revision routes of 05.1.1 §5 and 05.1.2 §5. The body is read with a hard byte cap and
-/// validated against its contract schema before anything binds (00 §5.5 edge); authorization is the C2 pipeline and the
-/// 00 §9.2 envelope is the host's <c>ResultEndpointFilter</c>.
-/// </summary>
+/// <summary>Reads capped manifest and run bodies before binding; authorization and envelopes belong to the host pipeline.</summary>
 public static class OrchestratorEndpoints
 {
     /// <summary>The environment-revision transport cap (the schema's <c>x-max-bytes</c>).</summary>
@@ -150,12 +147,12 @@ public static class OrchestratorEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        // Nothing of the body is read for a caller who is nobody; parsing and the schema run in the handler, after the
-        // pipeline's permission check.
+        // A principal without a tenant must get the pipeline's 401 before body processing.
         if (principals.Current is null)
         {
             return Result.Failure<ManifestAccepted>(Unauthenticated);
         }
+        RawBodyGuard.RequireResolvedTenant(context.RequestServices);
 
         AllowCounterToOwnTheRefusal(context);
 
@@ -184,13 +181,12 @@ public static class OrchestratorEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        // Nothing of the body is read for a caller who is nobody; parsing and validation run in the handler, after the
-        // pipeline's permission check (05.2.1 §5).
         var principal = principals.Current;
         if (principal is null)
         {
             return Result.Failure<RunCreated>(Unauthenticated);
         }
+        RawBodyGuard.RequireResolvedTenant(context.RequestServices);
 
         AllowCounterToOwnTheRefusal(context);
 
@@ -200,10 +196,8 @@ public static class OrchestratorEndpoints
             return Result.Failure<RunCreated>(tooLarge);
         }
 
-        // 05.2.2-T1.4: the caller's verified CI run reference joins the request identity the idempotency store keys on,
-        // so the same key and body replayed from a different run attempt of the repository is a 409 conflict instead of
-        // a replay (while a re-minted token for the same attempt still replays). Null for every caller whose token
-        // carries no reference, which leaves the digest of such a request exactly as it was before this story.
+        // Bind idempotency to the verified CI attempt: another attempt conflicts, while a re-minted
+        // token for the same attempt replays. Callers without a CI reference retain their digest.
         return await mediator.Send(
             new CreateRunCommand(p, bytes, IdempotencyKey(context), principal.CiRun?.ToBindingReference()),
             cancellationToken).ConfigureAwait(false);
@@ -221,6 +215,7 @@ public static class OrchestratorEndpoints
         {
             return Result.Failure<EnvironmentRevisionCreated>(Unauthenticated);
         }
+        RawBodyGuard.RequireResolvedTenant(context.RequestServices);
 
         var (bytes, tooLarge) = await ReadBodyAsync(context, MaxEnvironmentBytes, null, cancellationToken).ConfigureAwait(false);
         if (tooLarge is not null)
@@ -270,6 +265,7 @@ public static class OrchestratorEndpoints
         {
             return Result.Failure(Unauthenticated);
         }
+        RawBodyGuard.RequireResolvedTenant(context.RequestServices);
 
         var (bytes, tooLarge) = await ReadBodyAsync(context, MaxCancelBytes, null, cancellationToken).ConfigureAwait(false);
         if (tooLarge is not null)
@@ -439,6 +435,7 @@ public static class OrchestratorEndpoints
         {
             return Result.Failure(UnauthenticatedProducer);
         }
+        RawBodyGuard.RequireResolvedTenant(context.RequestServices);
 
         var (bytes, tooLarge) = await ReadBodyAsync(context, MaxFinalizeBytes, null, cancellationToken).ConfigureAwait(false);
         if (tooLarge is not null)

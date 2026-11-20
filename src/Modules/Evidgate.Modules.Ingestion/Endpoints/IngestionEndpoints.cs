@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using Evidgate.BuildingBlocks.Observability.Correlation;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Ingestion.Application;
@@ -98,6 +99,8 @@ public static partial class IngestionEndpoints
                 "no authenticated producer could be resolved",
                 StatusCodes.Status401Unauthorized));
         }
+        // A principal without a tenant must not spend ingest budget or cause a body read.
+        RawBodyGuard.RequireResolvedTenant(context.RequestServices);
 
         var limits = context.RequestServices.GetRequiredService<IOptions<IngestionLimits>>().Value;
 
