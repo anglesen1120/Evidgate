@@ -152,7 +152,7 @@ internal static class ManifestVerifier
         }
     }
 
-    /// <summary>The 1-based positions of the secret-shaped parameters of one params object.</summary>
+    /// <summary>The 1-based positions of the secret-shaped parameters of one params object; an unreadable name counts as one.</summary>
     internal static int[] SecretPositions(JsonElement parameters)
     {
         List<int>? found = null;
@@ -160,8 +160,7 @@ internal static class ManifestVerifier
         foreach (var member in parameters.EnumerateObject())
         {
             position++;
-            var value = member.Value.ValueKind == JsonValueKind.String ? member.Value.GetString() ?? string.Empty : member.Value.GetRawText();
-            if (IsSecret(member.Name, value))
+            if (MemberIsSecret(member))
             {
                 (found ??= []).Add(position);
             }
@@ -179,7 +178,63 @@ internal static class ManifestVerifier
             return !SecretShape.IsReference(value) || SecretShape.SecretNameLooksLikeValue(value[7..]) || SecretShape.ValueLooksSecret(value[7..]);
         }
 
-        return SecretShape.KeyLooksSecret(key) || SecretShape.ValueLooksSecret(key) || SecretShape.ValueLooksSecret(value);
+        return SecretShape.KeyLooksSecret(key) || SecretShape.ValueLooksSecret(key) || ParameterSecretRule.ValueLooksSecret(key, value);
+    }
+
+    private static bool MemberIsSecret(JsonProperty member)
+    {
+        string name;
+        try
+        {
+            name = member.Name;
+        }
+        catch (InvalidOperationException)
+        {
+            // A lone surrogate in a member name cannot be read; refused by position, never echoed.
+            return true;
+        }
+
+        return SecretShape.KeyLooksSecret(name) || SecretShape.ValueLooksSecret(name) || ValueIsSecret(name, member.Value);
+    }
+
+    /// <summary>Strings are judged as text (raw or folded), array items and nested members each as a value under the same key.</summary>
+    private static bool ValueIsSecret(string key, JsonElement value)
+    {
+        switch (value.ValueKind)
+        {
+            case JsonValueKind.String:
+                try
+                {
+                    return IsSecret(key, value.GetString()!);
+                }
+                catch (InvalidOperationException)
+                {
+                    return true;
+                }
+
+            case JsonValueKind.Array:
+                foreach (var item in value.EnumerateArray())
+                {
+                    if (ValueIsSecret(key, item))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            case JsonValueKind.Object:
+                foreach (var member in value.EnumerateObject())
+                {
+                    if (MemberIsSecret(member))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            default:
+                return IsSecret(key, value.GetRawText());
+        }
     }
 
     private static List<ErrorDetail> CoverageDetails(
