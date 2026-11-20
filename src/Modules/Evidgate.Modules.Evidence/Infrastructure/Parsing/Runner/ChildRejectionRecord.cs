@@ -48,21 +48,32 @@ internal static class ChildRejectionRecord
     {
         foreach (var record in succeeded.Records)
         {
-            // A record that does not carry the literal `"rejected"` anywhere cannot be a rejection — no encoding of
-            // that value escapes it — so the overwhelming majority of a stream's records are dismissed by one
-            // vectorised search over bytes, without a reader, a string or a copy.
-            if (record.Utf8Json.Span.IndexOf(RejectedRecordKindBytes) < 0)
+            if (ReasonOf(record.Utf8Json.Span) is { } reason)
             {
-                continue;
-            }
-
-            if (TryReadRejectedReason(record.Utf8Json, out var reason))
-            {
-                return IsCodeWord(reason) ? reason : ArtifactFailureCode.ParseCrashed;
+                return reason;
             }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The failure code one framed record carries, or <see langword="null"/> when the record is not the child's
+    /// <c>rejected</c> record. A rejection whose reason is absent, not a string or not a code word becomes
+    /// <see cref="ArtifactFailureCode.ParseCrashed"/>, so no document-influenced text reaches a tenant-visible column.
+    /// </summary>
+    /// <param name="record">One record's bytes, without the terminating newline.</param>
+    /// <returns>The code to write, or <see langword="null"/> for a record that is not a rejection.</returns>
+    public static string? ReasonOf(ReadOnlySpan<byte> record)
+    {
+        if (record.IndexOf(RejectedRecordKindBytes) < 0)
+        {
+            return null;
+        }
+
+        return TryReadRejectedReason(record, out var reason)
+            ? IsCodeWord(reason) ? reason : ArtifactFailureCode.ParseCrashed
+            : null;
     }
 
     /// <summary>
@@ -73,7 +84,7 @@ internal static class ChildRejectionRecord
     /// <param name="utf8">The record's bytes, without the terminating newline.</param>
     /// <param name="reason">The rejection's <c>reason</c> string, or <see langword="null"/> when it is absent or not a string.</param>
     /// <returns><see langword="true"/> when the record is object-kind <c>rejected</c>.</returns>
-    private static bool TryReadRejectedReason(ReadOnlyMemory<byte> utf8, out string? reason)
+    private static bool TryReadRejectedReason(ReadOnlySpan<byte> utf8, out string? reason)
     {
         reason = null;
 
@@ -84,7 +95,7 @@ internal static class ChildRejectionRecord
 
         try
         {
-            var reader = new Utf8JsonReader(utf8.Span);
+            var reader = new Utf8JsonReader(utf8);
 
             if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
             {

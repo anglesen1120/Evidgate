@@ -178,7 +178,7 @@ public sealed class PytestJUnitMapperEdgeTests
         Should.Throw<ArgumentNullException>(
             () => mapper.Map(new MemoryStream(), null!));
         Should.Throw<ArgumentNullException>(
-            () => mapper.Map((IReadOnlyList<ParseRecord>)null!, new JUnitMapContext(PytestJUnitMapperReplay.ReportId, PytestJUnitMapperReplay.NodeId)));
+            () => PytestJUnitMapperReplay.MapRecords(mapper, (IReadOnlyList<ParseRecord>)null!, new JUnitMapContext(PytestJUnitMapperReplay.ReportId, PytestJUnitMapperReplay.NodeId)));
     }
 
     [Fact]

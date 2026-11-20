@@ -426,7 +426,8 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
         RunLimits limits,
         CancellationToken cancellationToken)
     {
-        var protocol = new ChildOutputProtocol(limits.MaxOutputBytes, limits.MaxOutputRecords, limits.MaxRecordBytes);
+        var sink = request.Sink ?? new BufferingParseRecordSink();
+        var protocol = new ChildOutputProtocol(limits.MaxOutputBytes, limits.MaxOutputRecords, limits.MaxRecordBytes, sink);
         var streamStop = new StreamStop();
 
         // The stdin copy stops on its own token: nothing reads the pipe once the child is gone, so the run must not
@@ -566,7 +567,9 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
                 stderrExcerpt);
         }
 
-        if (capture.Failure is not null || capture.Records is not { } records)
+        // Only a list this run created is handed back: a caller that supplies any sink, including its own
+        // BufferingParseRecordSink, has already taken delivery and must not also receive a second copy.
+        if (capture.Failure is not null)
         {
             return new ParseRunFailed(
                 ParseRunFailureKind.MalformedOutput,
@@ -576,7 +579,11 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
                 stderrExcerpt);
         }
 
-        return new ParseRunSucceeded(records, exitCode, capture.OutputBytes, records.Count);
+        var records = request.Sink is null && sink is BufferingParseRecordSink buffering
+            ? buffering.Records
+            : Array.Empty<ParseRecord>();
+
+        return new ParseRunSucceeded(records, exitCode, capture.OutputBytes, capture.RecordCount);
     }
 
     private static ParseRunFailed SpawnFailed() =>
