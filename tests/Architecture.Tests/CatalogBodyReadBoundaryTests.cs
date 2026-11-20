@@ -33,6 +33,13 @@ public sealed class CatalogBodyReadBoundaryTests
         "ReadFromJsonAsync",
         "Request.Body",
         "BodyReader",
+        "PipeReader",
+        "StreamReader(",
+        ".Body.Read",
+        ".Body)",
+        ".Body,",
+        "new StreamReader(",
+        "ReadToEndAsync",
         "JsonSerializer.Deserialize<JsonElement>(",
         "ReadJsonAsync(",
     ];
@@ -85,8 +92,15 @@ public sealed class CatalogBodyReadBoundaryTests
         guard.ShouldBeGreaterThanOrEqualTo(0);
         var refusal = reader.IndexOf("throw new TenantContextMissingException()", guard, StringComparison.Ordinal);
         refusal.ShouldBeGreaterThan(guard);
+        var tenantGuard = reader.IndexOf(
+            "if (context.RequestServices.GetRequiredService<IRequestTenantContextAccessor>().Current is null)",
+            StringComparison.Ordinal);
+        tenantGuard.ShouldBeGreaterThanOrEqualTo(0);
+        var tenantRefusal = reader.IndexOf("throw new TenantContextMissingException()", tenantGuard, StringComparison.Ordinal);
+        tenantRefusal.ShouldBeGreaterThan(tenantGuard);
         var read = reader.IndexOf("ReadJsonAsync(", StringComparison.Ordinal);
         read.ShouldBeGreaterThan(refusal);
+        read.ShouldBeGreaterThan(tenantRefusal);
     }
 
     /// <summary>
@@ -100,6 +114,11 @@ public sealed class CatalogBodyReadBoundaryTests
     [InlineData("context.Request.Body.ReadAsync(buffer)")]
     [InlineData("context.Request.BodyReader.ReadAsync()")]
     [InlineData("request.BodyReader.ReadAsync()")]
+    [InlineData("HttpRequest request; new StreamReader(request.Body)")]
+    [InlineData("request.Body.ReadAsync(buffer)")]
+    [InlineData("ReadBody(request.Body, cancellationToken)")]
+    [InlineData("PipeReader.Create(stream)")]
+    [InlineData("reader.ReadToEndAsync()")]
     [InlineData("JsonSerializer.Deserialize<JsonElement>(requestText)")]
     [InlineData("CatalogRequestRules.ReadJsonAsync(context, limit, cancellationToken)")]
     public void Scan_DirectBodyReadOutsideRules_FlagsFile(string source)
@@ -118,6 +137,11 @@ public sealed class CatalogBodyReadBoundaryTests
     [InlineData("context.Request.ReadFromJsonAsync<JsonElement>()")]
     [InlineData("context.Request.Body.ReadAsync(buffer)")]
     [InlineData("context.Request.BodyReader.ReadAsync()")]
+    [InlineData("HttpRequest request; new StreamReader(request.Body)")]
+    [InlineData("request.Body.ReadAsync(buffer)")]
+    [InlineData("ReadBody(request.Body, cancellationToken)")]
+    [InlineData("PipeReader.Create(stream)")]
+    [InlineData("reader.ReadToEndAsync()")]
     [InlineData("JsonSerializer.Deserialize<JsonElement>(requestText)")]
     [InlineData("ReadJsonAsync(context, limit, cancellationToken)")]
     public void Scan_DirectBodyReadInsideRules_AllowsFile(string source) =>
