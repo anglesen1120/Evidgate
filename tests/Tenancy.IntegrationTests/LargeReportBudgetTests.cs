@@ -55,6 +55,8 @@ public sealed partial class LargeReportBudgetTests(
     ITestOutputHelper output)
     : IClassFixture<SeaweedFsStore>, IClassFixture<TenancyHostPool>
 {
+    private readonly List<string> transcript = [];
+
     /// <summary>The registry's producer kind for a pytest JUnit XML report.</summary>
     private const string ProducerKind = "pytest-junitxml";
 
@@ -120,10 +122,13 @@ public sealed partial class LargeReportBudgetTests(
         Print(measured, phase.Child, phase.Parent, parentBefore, parentAfter, walk);
 
         var verdict = budget.Compare(measured);
-        output.WriteLine(string.Create(
+        Log(string.Create(
             CultureInfo.InvariantCulture,
             $"budget parent retained baseline={baseline} bytes (GC.WaitForPendingFinalizers, then GC.Collect(MaxGeneration, Forced, blocking: true, compacting: true), then GC.GetTotalMemory(false))"));
-        output.WriteLine($"budget verdict: {verdict.Message}");
+        Log($"budget verdict: {verdict.Message}");
+        // A passing test's output is not kept by the gate; the file lets a green run's numbers be read from the build
+        // output directory (it is overwritten by every run and holds only what the test printed).
+        await File.WriteAllLinesAsync(Path.Combine(AppContext.BaseDirectory, "budget-run.txt"), transcript, Token);
         verdict.WithinBudget.ShouldBeTrue(verdict.Message);
     }
 
@@ -159,9 +164,22 @@ public sealed partial class LargeReportBudgetTests(
         }
         finally
         {
-            await child.DisposeAsync();
-            await parent.DisposeAsync();
+            try
+            {
+                await child.DisposeAsync();
+            }
+            finally
+            {
+                // A failed child disposal must not leave the parent sampler thread running into later tests.
+                await parent.DisposeAsync();
+            }
         }
+    }
+
+    private void Log(string line)
+    {
+        output.WriteLine(line);
+        transcript.Add(line);
     }
 
     /// <summary>The world: one dedicated database's tenant and project, plus a run a report can move.</summary>
@@ -305,18 +323,18 @@ public sealed partial class LargeReportBudgetTests(
     {
         foreach (var line in measured.Lines())
         {
-            output.WriteLine($"budget {line}");
+            Log($"budget {line}");
         }
 
-        output.WriteLine($"budget walk pages={walk.Pages} rows={walk.Rows}");
-        output.WriteLine($"budget child peak source: {child.Method}, {child.Samples} samples, {child.FinalObservation}");
-        output.WriteLine("budget child peak is a floor: a peak after the last observation is never seen");
-        output.WriteLine(string.Create(CultureInfo.InvariantCulture,
+        Log($"budget walk pages={walk.Pages} rows={walk.Rows}");
+        Log($"budget child peak source: {child.Method}, {child.Samples} samples, {child.FinalObservation}");
+        Log("budget child peak is a floor: a peak after the last observation is never seen");
+        Log(string.Create(CultureInfo.InvariantCulture,
             $"budget parent retained source: forced-GC managed heap, {parent.Samples} samples every 500 ms, GC pause inside sampler calls total={parent.GcPauseTime.TotalMilliseconds:F0} ms (each sample pauses the parse; the retained peak is a floor)"));
-        output.WriteLine(string.Create(CultureInfo.InvariantCulture,
+        Log(string.Create(CultureInfo.InvariantCulture,
             $"budget parent working set before={parentBefore.Bytes} after={parentAfter.Bytes} "
             + $"source={parentAfter.Source} (printed, not asserted)"));
-        output.WriteLine($"budget host {Environment.MachineName} {Environment.OSVersion.VersionString}");
+        Log($"budget host {Environment.MachineName} {Environment.OSVersion.VersionString}");
     }
 
     private sealed record World(TenancyApiFactory Host, HttpClient Client, string Database, Guid Org, Guid Project, Guid RunId)
