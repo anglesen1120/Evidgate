@@ -890,3 +890,9 @@ Closed by S492 (#1014): `IdempotencyBehaviour` answers 400 `request_invalid` (de
 | CLI request-body caps not covered (S484) | S484 bounds what the CLI reads from the server only. What it sends (event batches in `sender.ts`, the manifest and report uploads, artifact PUTs) keeps the per-command limits it had, and no test pins an upper bound for a request body across all commands | receiver: CLI owner (inventory of request bodies and their caps, then one test) |
 
 Closed by S495 (#1017): every CLI request body has one named cap in `packages/cli/src/requestCaps.ts` at or under the server limit, one request interceptor in `client.ts` refuses an over-cap body before any request is sent (`request_too_large`, exit 3, never retried), and `requestCapScan.test.ts` pins every send site. Residuals are carried as three rows at the end of `status-carried.md`.
+
+## Moved from status-carried.md by S496 (2026-11-20)
+
+| Manifest producer_hint has no clean-text rule (S494) | Shard `producer_hint` gets the secret scan only (`ManifestVerifier.cs` `SecretRefDetails`), no clean-text rule and no stripped scan, so a token behind U+200B passes (the schema allows the character). `env_needs` `secret_refs` are not affected: the schema pattern `manifest.v1.json:195-201` refuses it. Not a variant param, out of the S494 task. | receiver: orchestrator backend lane |
+
+Closed by S496 (#1018): `ManifestVerifier.SecretRefDetails` refuses a shard `producer_hint` with a control or format character by path (`secret_value_detected` when the stripped text looks secret, else `invalid_value`), using `UnicodeCleanliness`; covered by `ManifestProducerHintCleanTextTests` and three HTTP tests in `ManifestSecretUploadTests`. Residuals are carried as two rows at the end of `status-carried.md`.
