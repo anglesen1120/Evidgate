@@ -6,6 +6,8 @@
 // call.
 import { createClient, type Client } from '@evidgate/sdk';
 
+import { boundedResponse } from './boundedResponse.js';
+import { CliError } from './errors.js';
 import type { ResolvedConfig } from './config.js';
 import { registerSecret } from './redact.js';
 
@@ -29,13 +31,29 @@ export function createApiClient(
     registerSecret(token);
     headers.Authorization = `Bearer ${token}`;
   }
-  return createClient({
+  const client = createClient({
     baseUrl: `${config.apiUrl}${API_VERSION_PREFIX}`,
     headers,
     redirect: 'error',
+    // Without a JSON content type the client would hand back the unread body stream, and the
+    // cap only fires on a read. Reading it as JSON keeps every ordinary answer under the cap;
+    // `gate` asks for the stream explicitly and applies its own cap.
+    parseAs: 'json',
     // The generated client spreads per-call options after the config, so a caller could
     // re-enable redirects. Rebuild the Request with `redirect: 'error'` on every call,
-    // whatever the caller passed, so no request can follow a redirect.
-    fetch: (input, init) => fetchImpl(new Request(input, { ...init, redirect: 'error' })),
+    // whatever the caller passed, so no request can follow a redirect. Every answer then goes
+    // through the byte cap, so no command can buffer an unbounded body.
+    fetch: async (input, init) =>
+      boundedResponse(await fetchImpl(new Request(input, { ...init, redirect: 'error' }))),
   });
+  // The generated client turns a body-read failure into a returned error next to an `ok`
+  // response. The refusal is rethrown so it rejects the whole call: `callApi` never retries
+  // it and no command can mistake it for an answer without data.
+  client.interceptors.error.use((error) => {
+    if (error instanceof CliError) {
+      throw error;
+    }
+    return error;
+  });
+  return client;
 }

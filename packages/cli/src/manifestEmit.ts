@@ -56,6 +56,9 @@ export function buildManifest(
   options: ManifestOptions = {},
 ): string {
   const targetEnvs = options.targetEnvs ?? [defaultTargetEnv];
+  if (plannedExecutionsBytes(executions, targetEnvs) > manifestMaxBytes) {
+    throw manifestTooLarge();
+  }
   const axes = manifestAxes(executions, targetEnvs);
   assertMatrixCoverage(
     axes.planned.length,
@@ -74,6 +77,36 @@ export function buildManifest(
       : { environmentRevisionId: options.environmentRevisionId }),
   });
   return serializedManifest(document);
+}
+
+/** The schema's own `x-max-bytes` for manifest.v1 (contracts/manifest/manifest.v1.json). */
+export const manifestMaxBytes = 33_554_432;
+
+const encoder = new TextEncoder();
+
+/**
+ * Exact UTF-8 size of the `planned_executions` array, computed without building it. The
+ * array is only part of the document, so this is a lower bound of the serialised size: a
+ * manifest it refuses is always over the cap, and nothing the schema accepts is refused.
+ * Each member's variant is stringified once and reused for every target environment.
+ */
+export function plannedExecutionsBytes(
+  executions: readonly PlannedExecution[],
+  targetEnvs: readonly string[],
+): number {
+  const envBytes = targetEnvs.reduce(
+    (sum, env) => sum + encoder.encode(JSON.stringify(env)).byteLength,
+    0,
+  );
+  // {"case_revision_id":"<36>","variant":<v>,"target_env":<e>} without the variable parts.
+  const fixed = '{"case_revision_id":"","variant":,"target_env":}'.length;
+  let bytes = 2; // [ ]
+  for (const execution of executions) {
+    const variant = encoder.encode(JSON.stringify({ params: execution.params })).byteLength;
+    bytes += targetEnvs.length * (fixed + execution.caseRevisionId.length + variant) + envBytes;
+  }
+  const entries = executions.length * targetEnvs.length;
+  return bytes + Math.max(entries - 1, 0);
 }
 
 /**

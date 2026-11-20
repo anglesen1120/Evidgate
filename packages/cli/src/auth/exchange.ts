@@ -7,6 +7,7 @@
 // writer.
 import { exchangeCiToken, type CiTokenRequest } from '@evidgate/sdk';
 
+import { readBoundedText } from '../boundedResponse.js';
 import { callApi } from '../callApi.js';
 import { createApiClient } from '../client.js';
 import { envNames, isLoopbackApiUrl, resolveTokenSource, type ResolvedConfig } from '../config.js';
@@ -61,6 +62,12 @@ const exchangeBudget = 120_000;
 const defaultRetryAfterMs = 1_000;
 /** The audience the server's `CiAuthOptions.GithubOidcAudience` expects. */
 const githubOidcAudience = 'evidgate';
+/**
+ * Cap for the GitHub ID-token answer: `{"count":n,"value":"<JWT>"}`. A signed token is a few
+ * KiB; 64 KiB leaves more than ten times that headroom. [INFERENCE] sized from the token
+ * shape, not from a published GitHub limit.
+ */
+const maxOidcAnswerBytes = 64 * 1024;
 /** Strict RFC 3339 `date-time` (openapi); a value that is not one is refused un-echoed (S1). */
 const rfc3339Pattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
 /** The `project_id` is a UUID (openapi `format: uuid`); a non-UUID is refused un-echoed (S1). */
@@ -277,8 +284,11 @@ async function fetchActionsIdToken(
   }
   let payload: unknown;
   try {
-    payload = await response.json();
-  } catch {
+    payload = JSON.parse(await readBoundedText(response, maxOidcAnswerBytes));
+  } catch (error) {
+    if (error instanceof CliError) {
+      throw error;
+    }
     throw new CliError('the GitHub Actions ID token response was not valid JSON', {
       code: 'oidc_request_failed',
     });
