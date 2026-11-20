@@ -125,8 +125,7 @@ public sealed partial class ListRunAttemptsTests
                 $"{row.ExecutionKey}/{row.AttemptNo} must count only its own run's ready artifacts");
         }
 
-        var emptySlots = own.Where(pair => pair.Value == 0).Select(pair => pair.Key).ToHashSet();
-        collided.Any(row => emptySlots.Contains((row.ExecutionKey, row.AttemptNo))).ShouldBeTrue(
+        collided.Any(row => !own.ContainsKey((row.ExecutionKey, row.AttemptNo))).ShouldBeTrue(
             "a slot with no ready artifact of its own must still read 0 beside the sibling's three");
     }
 
