@@ -300,7 +300,6 @@ internal sealed partial class S3ObjectStorage : IObjectStorage, IDisposable
         }
     }
 
-
     /// <inheritdoc />
     public async Task CopyAsync(string sourceKey, string destinationKey, CancellationToken cancellationToken)
     {
