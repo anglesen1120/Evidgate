@@ -281,7 +281,8 @@ position (`#n`) rather than by value, is the server contract (05.1.1, openapi
 | `manifest_report_invalid`               | 3    | the Playwright list report has invalid JSON or an unsupported/malformed report shape                                                                                                                                                                                                                                                                              |
 | `manifest_variant_invalid`              | 3    | local variant metadata or parameters cannot produce a valid canonical variant identity; refused while the report is parsed                                                                                                                                                                                                                                        |
 | `manifest_variant_unrepresentable`      | 3    | the variant identity is valid but its parameters cannot be carried in a manifest (keys must be lowercase, values strings only); refused after the plan is read, naming the test                                                                                                                                                                                   |
-| `manifest_invalid`                      | 3    | the built document fails the packaged `manifest.v1` validation before any write (local guard; the same code coming from a server is still passed through verbatim, §8)                                                                                                                                                                                            |
+| `manifest_invalid`                      | 3    | the built document fails the packaged `manifest.v1` validation before any write (local guard; the same code coming from a server is still passed through verbatim, §8) ; also refused before the document is built when the exact size of its `planned_executions` array (members × target environments) is already over the 32 MiB `manifest.v1` cap (§14.4)     |
+| `response_too_large`                    | 3    | a server answer, success or error, is larger than the response cap (§5.1); raised while the body is read, never retried; the message and hint name no URL, token or body byte                                                                                                                                                                                     |
 | `manifest_test_unmapped`                | 3    | a local test has no matching execution-plan member; no manifest is written                                                                                                                                                                                                                                                                                        |
 | `manifest_test_ambiguous`               | 3    | a local test matches more than one execution-plan member; no manifest is written                                                                                                                                                                                                                                                                                  |
 | `manifest_test_duplicate`               | 3    | two local tests have the same `case_id` and `variant_hash`; refused, never deduplicated                                                                                                                                                                                                                                                                           |
@@ -361,6 +362,28 @@ server subcode changes the exit code.
   `unknown_producer`, `manifest_invalid`, `idempotency_conflict`, …). Finalize
   never retries; `events send` retries only 429, 408, 5xx and transport failures
   (§11.6) and then exits 3.
+
+### 5.1 Response size cap
+
+Every API answer is read through one bounded read in the client transport
+(`client.ts`, `boundedResponse.ts`). The body is consumed as a stream and the read
+is aborted, and the connection body cancelled, once the count of **decoded** bytes
+(after any `Content-Encoding`) passes the cap, so at most the cap plus one chunk is
+ever pulled. `Content-Length` is only a fast path: an absent or false value does
+not lift the cap. The cap applies to success and error bodies alike. An over-cap
+answer ends the command with exit code `3` (§2: every tool, transport or auth
+error is `3`) and `error.code` `response_too_large`; it is never retried.
+
+| Answer                                                                            | Largest legitimate size          | Cap                                |
+| --------------------------------------------------------------------------------- | -------------------------------- | ---------------------------------- |
+| Execution plan page (500 members × `case_id`, `variant_hash`, `case_revision_id`) | about 100 KiB                    | 1 MiB (the one default)            |
+| Token exchange, run create, manifest accepted, finalize, upload-url, errors       | small objects, well under 64 KiB | 1 MiB                              |
+| Run decision (`gate`)                                                             | under 256 KiB                    | 256 KiB (`gate` keeps its own cap) |
+| `gate` non-2xx body                                                               | an error envelope                | 64 KiB, cut (`gate` keeps its own) |
+| GitHub Actions ID-token answer (`auth`)                                           | a signed token, a few KiB        | 64 KiB                             |
+
+There is no environment variable for the cap. Request bodies (uploads) are not
+covered by this section.
 
 ## 6. Output and redaction
 
@@ -1658,6 +1681,13 @@ an unmapped test, ignoring an unexercised member, choosing an ambiguous member
 or silently merging duplicate tests.
 
 ### 14.4 Emitted file and output
+
+Before the document is built, the exact UTF-8 size of its `planned_executions`
+array (every member × every target environment) is computed; a size over the
+32 MiB (`33554432` byte) `x-max-bytes` is refused as `manifest_invalid` and no
+file is created. The estimate is a lower bound of the document, so it never
+refuses a manifest the schema check accepts; the check after serialisation stays
+as the backstop.
 
 The manifest is validated with the existing packaged `manifest.v1` validator
 against [manifest.v1.json](manifest/manifest.v1.json) **before** writing; a

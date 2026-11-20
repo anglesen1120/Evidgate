@@ -6,6 +6,7 @@
 // call.
 import { createClient, type Client } from '@evidgate/sdk';
 
+import { boundedResponse, ResponseTooLargeError } from './boundedResponse.js';
 import type { ResolvedConfig } from './config.js';
 import { registerSecret } from './redact.js';
 
@@ -29,13 +30,25 @@ export function createApiClient(
     registerSecret(token);
     headers.Authorization = `Bearer ${token}`;
   }
-  return createClient({
+  const client = createClient({
     baseUrl: `${config.apiUrl}${API_VERSION_PREFIX}`,
     headers,
     redirect: 'error',
     // The generated client spreads per-call options after the config, so a caller could
     // re-enable redirects. Rebuild the Request with `redirect: 'error'` on every call,
     // whatever the caller passed, so no request can follow a redirect.
-    fetch: (input, init) => fetchImpl(new Request(input, { ...init, redirect: 'error' })),
+    // Every answer is read through the byte cap, so no command can buffer an unbounded body.
+    fetch: async (input, init) =>
+      boundedResponse(await fetchImpl(new Request(input, { ...init, redirect: 'error' }))),
   });
+  // The generated client turns a body-read failure into a returned error next to an `ok`
+  // response. The refusal is rethrown so it rejects the whole call: `callApi` never retries
+  // it and no command can mistake it for an answer without data.
+  client.interceptors.error.use((error) => {
+    if (error instanceof ResponseTooLargeError) {
+      throw error;
+    }
+    return error;
+  });
+  return client;
 }
