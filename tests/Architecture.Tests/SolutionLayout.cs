@@ -73,6 +73,42 @@ public static class SolutionLayout
             .SelectMany(Rules.ArchitectureRules.SafeGetTypes)
             .ToList();
 
+    /// <summary>
+    /// Every hand-written <c>src/**/*.cs</c> file as a repo-relative path with '/', sorted ordinally. A file is
+    /// build output when a directory below <c>src</c> is named <c>bin</c> or <c>obj</c>.
+    /// </summary>
+    public static IReadOnlyList<string> ProductionSourceFiles()
+    {
+        var srcRoot = Path.Combine(RepoRoot, "src");
+
+        return Directory.EnumerateFiles(srcRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !IsBuildOutput(srcRoot, path))
+            .Select(path => Normalize(Path.GetRelativePath(RepoRoot, path)))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+    }
+
+    /// <summary><see cref="ProductionSourceFiles"/> with each file's text.</summary>
+    public static List<(string Path, string Text)> ProductionSources() =>
+        ProductionSourceFiles()
+            .Select(path => (path, File.ReadAllText(Path.Combine(RepoRoot, path))))
+            .ToList();
+
+    /// <summary>
+    /// True when a directory below <paramref name="srcRoot"/> is named <c>bin</c> or <c>obj</c>. Only the part of
+    /// the path below the source root is inspected, so the directories the checkout lives in never count.
+    /// </summary>
+    public static bool IsBuildOutput(string srcRoot, string path)
+    {
+        var segments = Path.GetRelativePath(srcRoot, path).Split(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries);
+
+        return segments[..^1].Any(segment =>
+            string.Equals(segment, "bin", StringComparison.Ordinal)
+            || string.Equals(segment, "obj", StringComparison.Ordinal));
+    }
+
     private static string LocateRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
