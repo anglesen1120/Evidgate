@@ -167,7 +167,7 @@ entries:
     meter: evidgate
     kind: counter
     unit: '{check}'
-    description: Secret-shape checks whose regex timed out and were answered as secret-shaped (the value is refused, never passed as clean). By pattern; never the checked value. A rise means customer values are hitting the match budget or the host is stalling. Operator steps and the alert specification are in docs/runbooks/secret-shape-timeout.md; no deployed alert rule exists yet.
+    description: Secret-shape checks whose regex timed out and were answered as secret-shaped (the value is refused, never passed as clean). By pattern; never the checked value. The patterns are linear, so a rise means a stalled host, not hostile input; ordinary values can be refused while it lasts. Operator steps and the alert specification are in docs/runbooks/secret-shape-timeout.md; no deployed alert rule exists yet.
     labels: [pattern]
     source: src/BuildingBlocks/SharedKernel/Security/SecretShapeMetrics.cs
 
