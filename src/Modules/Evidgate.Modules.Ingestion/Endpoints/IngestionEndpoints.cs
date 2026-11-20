@@ -159,17 +159,9 @@ public static partial class IngestionEndpoints
 
             if (!gzip)
             {
-                return await CountedAsync(
-                        await mediator
-                            .Send(new IngestEventBatch(r, bytes, context.TraceIdentifier, bytesIn, bytesIn), cancellationToken)
-                            .ConfigureAwait(false),
-                        logger,
-                        context,
-                        r,
-                        bytesIn,
-                        quotaVeto,
-                        blockStamp,
-                        cancellationToken)
+                return await SendCountedAsync(
+                        new IngestEventBatch(r, bytes, context.TraceIdentifier, bytesIn, bytesIn),
+                        mediator, logger, context, quotaVeto, blockStamp, cancellationToken)
                     .ConfigureAwait(false);
             }
 
@@ -177,26 +169,12 @@ public static partial class IngestionEndpoints
             if (decoded.Reason is { } reason)
             {
                 IngestBatchRejection.Record(logger, reason, context.TraceIdentifier, r, bytesIn, decoded.ExpandedBytes);
-                return reason == IngestBatchRejection.GzipInvalid
-                    ? Result.Failure<BatchAckResult>(Error.Invalid(
-                        "the gzip request body could not be decoded",
-                        [new ErrorDetail("Content-Encoding", "invalid_gzip", null)]))
-                    : Result.Failure<BatchAckResult>(TooLarge());
+                return Result.Failure<BatchAckResult>(GzipRefusal(reason));
             }
 
-            return await CountedAsync(
-                    await mediator
-                        .Send(
-                            new IngestEventBatch(r, decoded.Bytes, context.TraceIdentifier, bytesIn, decoded.ExpandedBytes),
-                            cancellationToken)
-                        .ConfigureAwait(false),
-                    logger,
-                    context,
-                    r,
-                    bytesIn,
-                    quotaVeto,
-                    blockStamp,
-                    cancellationToken)
+            return await SendCountedAsync(
+                    new IngestEventBatch(r, decoded.Bytes, context.TraceIdentifier, bytesIn, decoded.ExpandedBytes),
+                    mediator, logger, context, quotaVeto, blockStamp, cancellationToken)
                 .ConfigureAwait(false);
         }
         finally
@@ -205,6 +183,31 @@ public static partial class IngestionEndpoints
             ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
         }
     }
+
+    private static async Task<Result<BatchAckResult>> SendCountedAsync(
+        IngestEventBatch command,
+        IMediator mediator,
+        ILogger logger,
+        HttpContext context,
+        IngestQuotaVeto quotaVeto,
+        IQuotaBlockStamp blockStamp,
+        CancellationToken cancellationToken) =>
+        await CountedAsync(
+                await mediator.Send(command, cancellationToken).ConfigureAwait(false),
+                logger,
+                context,
+                command.RunId,
+                command.BytesIn,
+                quotaVeto,
+                blockStamp,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+    private static Error GzipRefusal(string reason) => reason == IngestBatchRejection.GzipInvalid
+        ? Error.Invalid(
+            "the gzip request body could not be decoded",
+            [new ErrorDetail("Content-Encoding", "invalid_gzip", null)])
+        : TooLarge();
 
     // The burst limit runs before a byte of the body is read, keyed by the authenticated project and token id
     // only: no header or body value moves a caller into another partition. A caller whose key cannot be
