@@ -2,7 +2,8 @@
 """Structural checks for plans/features/<NN>-<area>/<story-id>-<slug>.md against the area plans.
 
 Checks: one file per story; H1; header table; the 11 sections of 00 §12 in order; one
-`### <task-id>` block per area task in §10; sub-task ids/sizes (each ≤ S, sum == task size);
+`### <task-id>` block per area task in §10; sub-task ids/sizes (each ≤ S, sum == task size; ids 1..n, optional letter suffix a, b, c per 00 §12;
+an `[OPEN]` row with an `unsized` size cell is a warning and left out of the sum);
 balanced code fences; every referenced story/task id exists. Exit 1 on any error.
 """
 import glob, json, os, re, subprocess, sys
@@ -53,17 +54,29 @@ for sid, st in sorted(stories.items(), key=lambda kv: [int(x) for x in kv[0].spl
         subs = []
         for ln in blk.group(0).splitlines():
             cells = [c.strip() for c in re.split(r"(?<!\\)\|", ln.strip().strip("|"))] if ln.startswith("|") else []
-            m = re.match(rf"{re.escape(tid)}\.(\d+)$", cells[0]) if cells else None
+            m = re.match(rf"{re.escape(tid)}\.(\d+)([a-z]?)$", cells[0]) if cells else None
             if m and len(cells) >= 3:
+                sid = f"{tid}.{m.group(1)}{m.group(2)}"
                 size = next((c for c in cells[2:] if c in SIZE), None)
-                if size is None: errors.append(f"{f}: {tid}.{m.group(1)} has no size cell"); continue
-                subs.append((m.group(1), size))
+                if size is None and "[OPEN]" in ln and cells[2].startswith("unsized"):
+                    warn.append(f"{f}: {sid} is [OPEN] and unsized: left out of the sum"); size = ""
+                elif size is None: errors.append(f"{f}: {sid} has no size cell"); continue
+                subs.append((int(m.group(1)), m.group(2), size))
         if not subs: errors.append(f"{f}: {tid} has no sub-task rows"); continue
-        nums = [int(n) for n, _ in subs]
-        if nums != list(range(1, len(nums) + 1)): errors.append(f"{f}: {tid} sub-task ids not 1..n: {nums}")
-        big = [f"{tid}.{n}={s}" for n, s in subs if SIZE[s] > .5]
+        if not any(l for _, l, _ in subs):
+            nums = [n for n, _, _ in subs]
+            if nums != list(range(1, len(nums) + 1)): errors.append(f"{f}: {tid} sub-task ids not 1..n: {nums}")
+        else:  # a number is either bare or fully lettered; letters run a, b, c... in any row order
+            order = list(dict.fromkeys(n for n, _, _ in subs))
+            if order != list(range(1, len(order) + 1)): errors.append(f"{f}: {tid} sub-task ids not 1..n: {order}")
+            for n in order:
+                ls = sorted(l for k, l, _ in subs if k == n)
+                if ls == [""] or ls == [chr(97 + i) for i in range(len(ls))]: continue
+                if "" in ls: errors.append(f"{f}: {tid}.{n} mixes a bare id with letter suffixes: {ls}")
+                else: errors.append(f"{f}: {tid}.{n} letter suffixes not contiguous from a: {ls}")
+        big = [f"{tid}.{n}{l}={s}" for n, l, s in subs if s and SIZE[s] > .5]
         if big: errors.append(f"{f}: sub-tasks > S: {big}")
-        tot = sum(SIZE[s] for _, s in subs); want_sz = SIZE[tasks[tid]["size"]]
+        tot = sum(SIZE[s] for _, _, s in subs if s); want_sz = SIZE[tasks[tid]["size"]]
         if abs(tot - want_sz) > 1e-9: errors.append(f"{f}: {tid} sub-tasks sum {tot} != task size {want_sz} ({tasks[tid]['size']})")
     extra = set(re.findall(r"^### (\d{2}\.\d+\.\d+-T\d+)\b", sec10, re.M)) - set(st["tasks"])
     if extra: errors.append(f"{f}: §10 has blocks for tasks not in the area plan: {sorted(extra)}")
