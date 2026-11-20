@@ -12,7 +12,7 @@ namespace Isolation.Tests;
 /// </summary>
 [Collection(IsolationSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class SupportGrantOperatorRlsTests
+public sealed partial class SupportGrantOperatorRlsTests
 {
     private static readonly Guid OrgA = Guid.Parse("11111111-1111-7111-8111-1111111111a1");
     private static readonly Guid OrgB = Guid.Parse("22222222-2222-7222-8222-2222222222b2");
@@ -169,11 +169,11 @@ public sealed class SupportGrantOperatorRlsTests
     }
 
     [Fact]
-    public async Task OperatorRls_WriteOnlyScope_ZeroRows()
+    public async Task OperatorRls_WriteOnlyScope_ReadsNothingButItsOwnGrantRow()
     {
         var database = await WorldAsync();
         var grant = await GrantAsync(database, OrgA, Operator, State.Approved, "{case:write}", [ProjectA1]);
-        (await CountsAsync(database, grant, Operator)).ShouldBe([0, 0, 0, 0]);
+        (await CountsAsync(database, grant, Operator)).ShouldBe([0, 0, 0, 1]);
     }
 
     [Fact]
@@ -267,105 +267,13 @@ public sealed class SupportGrantOperatorRlsTests
         (await scope.ScalarAsync<int>("select count(*)::int from public.test_case")).ShouldBe(0);
     }
 
-    [Theory]
-    [InlineData("approved_to_requested", "update public.support_grant set approved_at = null, approved_by = null where id = '{approved}'")]
-    [InlineData("approver_rewritten", "update public.support_grant set approved_by = '{operator}' where id = '{approved}'")]
-    [InlineData("approved_again", "update public.support_grant set approved_at = now() where id = '{approved}'")]
-    [InlineData("revoked_to_approved", "update public.support_grant set approved_at = now(), approved_by = '{approver}', revoked_at = null where id = '{revoked}'")]
-    [InlineData("revoked_unrevoked", "update public.support_grant set revoked_at = null where id = '{revoked}'")]
-    [InlineData("revoked_edited", "update public.support_grant set reason = 'again' where id = '{revoked}'")]
-    [InlineData("expired_requested_approved", "update public.support_grant set approved_at = now(), approved_by = '{approver}' where id = '{expiredRequested}'")]
-    [InlineData("scopes_changed", "update public.support_grant set scopes = '{case:*}' where id = '{requested}'")]
-    [InlineData("projects_changed", "update public.support_grant set project_ids = '{}' where id = '{requested}'")]
-    [InlineData("expiry_extended", "update public.support_grant set expires_at = expires_at + interval '1 day' where id = '{requested}'")]
-    [InlineData("operator_changed", "update public.support_grant set operator_user_id = '{other}' where id = '{requested}'")]
-    [InlineData("org_changed", "update public.support_grant set org_id = '{orgB}' where id = '{requested}'")]
-    [InlineData("approve_and_revoke_together", "update public.support_grant set approved_at = now(), approved_by = '{approver}', revoked_at = now() where id = '{requested}'")]
-    [InlineData("delete", "delete from public.support_grant where id = '{requested}'")]
-    public async Task Guard_Refuses_Transition(string name, string template)
-    {
-        var database = await WorldAsync();
-        var requested = await GrantAsync(database, OrgA, Operator, State.Requested);
-        var approved = await GrantAsync(database, OrgA, Operator, State.Approved);
-        var revoked = await GrantAsync(database, OrgA, Operator, State.Revoked);
-        var expiredRequested = await ExpiredRequestedAsync(database);
-
-        var sql = template
-            .Replace("{requested}", requested.ToString())
-            .Replace("{approved}", approved.ToString())
-            .Replace("{revoked}", revoked.ToString())
-            .Replace("{expiredRequested}", expiredRequested.ToString())
-            .Replace("{approver}", Approver.ToString())
-            .Replace("{operator}", Operator.ToString())
-            .Replace("{other}", OtherOperator.ToString())
-            .Replace("{orgB}", OrgB.ToString());
-
-        var error = await Should.ThrowAsync<PostgresException>(() => _fixture.ExecuteAsync(database, sql), name);
-        error.SqlState.ShouldBe("23514", name);
-    }
-
-    [Fact]
-    public async Task Guard_Refuses_ApproverEqualToRequester()
-    {
-        var database = await WorldAsync();
-        var requested = await GrantAsync(database, OrgA, Operator, State.Requested);
-        var error = await Should.ThrowAsync<PostgresException>(() => _fixture.ExecuteAsync(
-            database,
-            $"update public.support_grant set approved_at = now(), approved_by = '{Operator}' where id = '{requested}'"));
-        error.SqlState.ShouldBe("23514");
-    }
-
-    [Fact]
-    public async Task Guard_Refuses_InsertOfAnAlreadyApprovedGrant()
-    {
-        var database = await WorldAsync();
-        var error = await Should.ThrowAsync<PostgresException>(() => _fixture.ExecuteAsync(database, $"""
-            insert into public.support_grant (org_id, operator_user_id, scopes, reason, approved_by, approved_at, expires_at)
-            values ('{OrgA}', '{Operator}', '{CaseRead}', 'r', '{Approver}', now(), now() + interval '1 hour')
-            """));
-        error.SqlState.ShouldBe("23514");
-    }
-
-    [Fact]
-    public async Task Guard_Allows_Approve_ThenRevoke()
-    {
-        var database = await WorldAsync();
-        var requested = await GrantAsync(database, OrgA, Operator, State.Requested, projects: [ProjectA1]);
-
-        await _fixture.ExecuteAsync(database,
-            $"update public.support_grant set approved_at = now(), approved_by = '{Approver}' where id = '{requested}'");
-        (await CountsAsync(database, requested, Operator)).ShouldBe([1, 1, 1, 1], "an approved grant reads");
-
-        await _fixture.ExecuteAsync(database, $"update public.support_grant set revoked_at = now() where id = '{requested}'");
-        (await CountsAsync(database, requested, Operator)).ShouldBe([0, 0, 0, 0], "a revoked grant reads nothing");
-    }
-
-    [Theory]
-    [InlineData("scopes", "'{}'")]
-    [InlineData("scopes", "'{Case:read}'")]
-    [InlineData("scopes", "'{read}'")]
-    [InlineData("reason", "''")]
-    [InlineData("expires_at", "now() - interval '3 hours'")]
-    public async Task Shape_Checks_Refuse_Bad_Input(string column, string value)
-    {
-        var database = await WorldAsync();
-        var scopes = column == "scopes" ? value : "'{case:read}'";
-        var reason = column == "reason" ? value : "'r'";
-        var expires = column == "expires_at" ? value : "now() + interval '1 hour'";
-
-        var error = await Should.ThrowAsync<PostgresException>(() => _fixture.ExecuteAsync(database, $"""
-            insert into public.support_grant (org_id, operator_user_id, scopes, reason, expires_at)
-            values ('{OrgA}', '{Operator}', {scopes}, {reason}, {expires})
-            """));
-        error.SqlState.ShouldBe("23514");
-    }
-
     [Fact]
     public async Task Definers_Are_Hardened_And_Callable_Only_By_The_Operator()
     {
         var database = await WorldAsync();
         var rows = await _fixture.ColumnAsync<string>(database, """
-            select p.proname || '|' || p.prosecdef || '|' || p.provolatile || '|' || coalesce(p.proconfig::text, '')
+            select p.proname || '|' || pg_catalog.pg_get_userbyid(p.proowner) || '|' || p.prosecdef || '|' || p.provolatile
+                   || '|' || coalesce(array_to_string(p.proconfig, ','), '')
                    || '|' || (select count(*) from aclexplode(p.proacl) a where a.grantee = 0)
                    || '|' || has_function_privilege('evidgate_operator', p.oid, 'execute')
                    || '|' || has_function_privilege('evidgate_app', p.oid, 'execute')
@@ -374,16 +282,19 @@ public sealed class SupportGrantOperatorRlsTests
               from pg_catalog.pg_proc p
               join pg_catalog.pg_namespace n on n.oid = p.pronamespace
              where n.nspname = 'evidgate'
-               and p.proname in ('operator_grant_id', 'operator_grant_org', 'operator_grant_ok', 'resolve_active_grant')
+               and p.proname in ('operator_grant_id', 'operator_grant_ok', 'operator_grant_org',
+                                 'operator_grant_read_projects', 'resolve_active_grant')
              order by p.proname
             """);
 
+        const string Tail = "|evidgate_owner|true|s|search_path=\"\"|0|true|false|false|false";
         rows.ShouldBe(
         [
-            "operator_grant_id|True|s|{search_path=\"\"}|0|True|False|False|False",
-            "operator_grant_ok|True|s|{search_path=\"\"}|0|True|False|False|False",
-            "operator_grant_org|True|s|{search_path=\"\"}|0|True|False|False|False",
-            "resolve_active_grant|True|s|{search_path=\"\"}|0|True|False|False|False",
+            "operator_grant_id" + Tail,
+            "operator_grant_ok" + Tail,
+            "operator_grant_org" + Tail,
+            "operator_grant_read_projects" + Tail,
+            "resolve_active_grant" + Tail,
         ]);
     }
 
@@ -399,12 +310,19 @@ public sealed class SupportGrantOperatorRlsTests
         await GrantAsync(database, org, Operator, State.Requested);
         await GrantAsync(database, org, OtherOperator, State.Approved);
 
-        await using var scope = await TenantScope.BeginAsync(_fixture.OperatorConnectionString(database));
+        await using var scope = await OperatorAsync(_fixture, database, null, Operator);
         var ids = await scope.ScalarAsync<string>(
             "select string_agg(grant_id::text, ',') from evidgate.resolve_active_grant(@u, @o)", ("u", Operator), ("o", org));
         ids.ShouldBe(valid.ToString());
         (await scope.ScalarAsync<int>(
             "select count(*)::int from evidgate.resolve_active_grant(@u, @o)", ("u", Operator), ("o", Guid.CreateVersion7()))).ShouldBe(0);
+
+        // Another operator's id as the argument, or no claim at all, lists nothing.
+        (await scope.ScalarAsync<int>(
+            "select count(*)::int from evidgate.resolve_active_grant(@u, @o)", ("u", OtherOperator), ("o", org))).ShouldBe(0);
+        await using var unclaimed = await TenantScope.BeginAsync(_fixture.OperatorConnectionString(database));
+        (await unclaimed.ScalarAsync<int>(
+            "select count(*)::int from evidgate.resolve_active_grant(@u, @o)", ("u", Operator), ("o", org))).ShouldBe(0);
     }
 
     [Fact]
@@ -441,14 +359,36 @@ public sealed class SupportGrantOperatorRlsTests
         (await rewrite.CaptureErrorAsync("update public.support_grant set reason = 'x' where id = @i", ("i", requested))).SqlState.ShouldBe("42501");
     }
 
-    private async Task<Guid> ExpiredRequestedAsync(string database)
+    [Fact]
+    public async Task App_Role_Cannot_Choose_Audit_Columns_On_Insert()
     {
+        var database = await WorldAsync();
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(database), OrgA);
+        var error = await scope.CaptureErrorAsync(
+            "insert into public.support_grant (org_id, operator_user_id, scopes, reason, expires_at, created_at) values (@o, @u, '{case:read}', 'r', now() + interval '1 hour', now() - interval '1 day')",
+            ("o", OrgA), ("u", Operator));
+        error.SqlState.ShouldBe("42501");
+    }
+
+    [Fact]
+    public async Task OperatorRls_OpenTransaction_StopsReadingWhenTheGrantExpires()
+    {
+        var database = await WorldAsync();
         var id = Guid.CreateVersion7();
+        var projectList = "{" + ProjectA1 + "}";
         await _fixture.ExecuteAsync(database, $"""
             set session_replication_role = replica;
-            insert into public.support_grant (id, org_id, operator_user_id, scopes, reason, expires_at, created_at)
-            values ('{id}', '{OrgA}', '{Operator}', '{CaseRead}', 'late', now() - interval '10 minutes', now() - interval '2 hours');
+            insert into public.support_grant
+              (id, org_id, operator_user_id, scopes, project_ids, reason, approved_by, approved_at, expires_at, created_at)
+            values ('{id}', '{OrgA}', '{Operator}', '{CaseRead}', '{projectList}', 'short', '{Approver}', now() - interval '1 minute',
+                    now() + interval '3 seconds', now() - interval '2 hours');
             """);
-        return id;
+
+        await using var scope = await OperatorAsync(_fixture, database, id, Operator);
+        (await scope.ScalarAsync<int>("select count(*)::int from public.test_case")).ShouldBe(1);
+        await Task.Delay(TimeSpan.FromSeconds(4), TestContext.Current.CancellationToken);
+
+        // Same transaction, so now() would still be the start time: the statement clock is what ends the grant.
+        (await scope.ScalarAsync<int>("select count(*)::int from public.test_case")).ShouldBe(0);
     }
 }

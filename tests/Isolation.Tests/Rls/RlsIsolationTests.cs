@@ -380,7 +380,21 @@ public sealed class RlsIsolationTests : HarnessTest
         public async ValueTask DisposeAsync()
         {
             await using var owner = await TenantScope.BeginAsync(connectionString);
+
+            // A support grant is never deleted (its guard refuses it for every role), so the seed's own table is
+            // cleared with the guard trigger off for this one transaction; a failure rolls the change back.
+            var guarded = string.Equals(table, "public.support_grant", StringComparison.Ordinal);
+            if (guarded)
+            {
+                await owner.ExecuteAsync("alter table public.support_grant disable trigger support_grant_guard");
+            }
+
             await owner.ExecuteAsync($"delete from {table} where id = any(@ids)", ("ids", rowIds));
+            if (guarded)
+            {
+                await owner.ExecuteAsync("alter table public.support_grant enable trigger support_grant_guard");
+            }
+
             if (userIds.Length > 0)
             {
                 await owner.ExecuteAsync("delete from public.\"user\" where id = any(@ids)", ("ids", userIds));

@@ -40,7 +40,8 @@
 -- READ-ONLY. There is no write policy and no DML grant for `evidgate_operator`: a policy nothing can
 -- reach is not shipped, and the operator write path is owed to the operator access task.
 --
--- DEFINERS. `evidgate.operator_grant_org`, `evidgate.operator_grant_id`, `evidgate.operator_grant_ok` and
+-- DEFINERS. `evidgate.operator_grant_org`, `evidgate.operator_grant_id`, `evidgate.operator_grant_read_projects`,
+-- `evidgate.operator_grant_ok` and
 -- `evidgate.resolve_active_grant` are owner-owned, SECURITY DEFINER, `search_path` pinned empty,
 -- schema-qualified, STABLE and write nothing. EXECUTE is revoked from PUBLIC and granted to
 -- `evidgate_operator` only: the app role has no use for them. A per-call audit row is impossible
@@ -49,8 +50,10 @@
 -- docs/security/resolver-review.md.
 --
 -- LOCKS. One new table and new functions: `create table` and `create function` take no lock on an
--- existing relation. `create policy` on organization/project/test_case takes SHARE UPDATE EXCLUSIVE on
--- each, for a catalogue write only (no row is read). `lock_timeout` bounds every wait.
+-- existing relation, but the foreign keys take SHARE ROW EXCLUSIVE on organization and "user", and
+-- `create policy` takes ACCESS EXCLUSIVE on organization, project and test_case (a catalogue write only,
+-- no row is read). The runner uses one transaction per script, so those locks last to the end of this
+-- file; the policies are its last statements to keep that window short. `lock_timeout` bounds each wait.
 --
 -- ROLLBACK (application first: nothing may present a grant to the database):
 --   drop policy if exists organization_operator_grant_read on public.organization;
@@ -59,6 +62,7 @@
 --   drop policy if exists support_grant_operator_grant_read on public.support_grant;
 --   drop function if exists evidgate.resolve_active_grant(uuid, uuid);
 --   drop function if exists evidgate.operator_grant_ok(uuid, uuid, text);
+--   drop function if exists evidgate.operator_grant_read_projects();
 --   drop function if exists evidgate.operator_grant_id();
 --   drop function if exists evidgate.operator_grant_org();
 --   drop table if exists public.support_grant;
@@ -88,8 +92,11 @@ create table if not exists public.support_grant (
   constraint support_grant_approver_fk foreign key (approved_by) references public."user" (id),
   constraint support_grant_scopes_check check (
     cardinality(scopes) between 1 and 64
+    and pg_catalog.array_position(scopes, null) is null
     and pg_catalog.array_to_string(scopes, ',')
-        ~ '^[a-z_]+:([a-z_]+|\*)(,[a-z_]+:([a-z_]+|\*))*$'),
+        ~ '^[a-z_]+:([a-z_]+|\*)(,[a-z_]+:([a-z_]+|\*))*$'
+    and pg_catalog.char_length(pg_catalog.array_to_string(scopes, ',')) <= 4096
+    and pg_catalog.cardinality(pg_catalog.string_to_array(pg_catalog.array_to_string(scopes, ','), ',')) = cardinality(scopes)),
   constraint support_grant_project_ids_check check (
     cardinality(project_ids) <= 100 and pg_catalog.array_position(project_ids, null) is null),
   constraint support_grant_reason_check check (char_length(reason) between 1 and 1000),
@@ -123,6 +130,11 @@ begin
     if new.approved_at is not null or new.approved_by is not null or new.revoked_at is not null then
       raise exception 'support_grant is filed as requested; approval and revocation are updates' using errcode = '23514';
     end if;
+    if cardinality(new.project_ids) > 0
+       and (select count(*) from public.project p where p.org_id = new.org_id and p.id = any (new.project_ids))
+           <> (select count(distinct x) from pg_catalog.unnest(new.project_ids) as x) then
+      raise exception 'support_grant lists a project that is not in the organization' using errcode = '23503';
+    end if;
     return new;
   end if;
 
@@ -133,10 +145,7 @@ begin
   end if;
 
   if old.revoked_at is not null then
-    if new is distinct from old then
-      raise exception 'support_grant % is revoked; a revoked grant accepts no change', old.id using errcode = '23514';
-    end if;
-    return new;
+    raise exception 'support_grant % is revoked; a revoked grant accepts no change', old.id using errcode = '23514';
   end if;
 
   if old.approved_at is not null
@@ -148,9 +157,15 @@ begin
     if new.revoked_at is not null then
       raise exception 'support_grant % cannot be approved and revoked in one change', old.id using errcode = '23514';
     end if;
-    if new.expires_at <= now() then
+    if new.expires_at <= statement_timestamp() then
       raise exception 'support_grant % has expired and cannot be approved', old.id using errcode = '23514';
     end if;
+    -- The decision time is the server's, never a value the caller picked.
+    new.approved_at := statement_timestamp();
+  end if;
+
+  if old.revoked_at is null and new.revoked_at is not null then
+    new.revoked_at := statement_timestamp();
   end if;
 
   return new;
@@ -181,11 +196,12 @@ create policy support_grant_owner_backfill on public.support_grant for all to ev
 -- deletes. The operator reads grants only through the policy below.
 revoke all on public.support_grant from public;
 revoke all on public.support_grant from evidgate_app, evidgate_operator, evidgate_worker, evidgate_worker_sched;
-grant select, insert on public.support_grant to evidgate_app;
+grant select on public.support_grant to evidgate_app;
+grant insert (id, org_id, operator_user_id, scopes, project_ids, reason, expires_at) on public.support_grant to evidgate_app;
 grant update (approved_by, approved_at, revoked_at) on public.support_grant to evidgate_app;
 grant select on public.support_grant to evidgate_operator;
 
--- lint: audit-deferred policy-predicate evidgate.operator_grant_org, evidgate.operator_grant_id, evidgate.operator_grant_ok, evidgate.resolve_active_grant
+-- lint: audit-deferred policy-predicate evidgate.operator_grant_org, evidgate.operator_grant_id, evidgate.operator_grant_read_projects, evidgate.operator_grant_ok, evidgate.resolve_active_grant
 
 -- The org of the caller's valid grant, or NULL. A malformed setting is NULL, not an error, so a bad
 -- client string never turns a read into a server error that differs from "no grant".
@@ -213,7 +229,7 @@ begin
      and g.operator_user_id = v_user::uuid
      and g.approved_at is not null
      and g.revoked_at is null
-     and g.expires_at > now();
+     and g.expires_at > statement_timestamp();
 
   return v_org;
 end
@@ -245,9 +261,45 @@ begin
      and g.operator_user_id = v_user::uuid
      and g.approved_at is not null
      and g.revoked_at is null
-     and g.expires_at > now();
+     and g.expires_at > statement_timestamp();
 
   return v_id;
+end
+$$;
+
+-- The projects the caller's valid grant lets it read, or an empty array: one value per statement, so a
+-- project-keyed policy compares each row with it instead of validating the grant once per row.
+create or replace function evidgate.operator_grant_read_projects() returns uuid[]
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_grant text := nullif(current_setting('evidgate.support_grant_id', true), '');
+  v_user text := nullif(current_setting('evidgate.operator_user_id', true), '');
+  v_projects uuid[];
+begin
+  if v_grant is null or v_user is null
+     or v_grant !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+     or v_user !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+    return '{}';
+  end if;
+
+  select g.project_ids
+    into v_projects
+    from public.support_grant g
+   where g.id = v_grant::uuid
+     and g.operator_user_id = v_user::uuid
+     and g.approved_at is not null
+     and g.revoked_at is null
+     and g.expires_at > statement_timestamp()
+     and exists (
+       select 1
+         from pg_catalog.unnest(g.scopes) as s(scope)
+        where pg_catalog.split_part(s.scope, ':', 2) in ('read', '*'));
+
+  return coalesce(v_projects, '{}');
 end
 $$;
 
@@ -280,7 +332,7 @@ begin
        and g.org_id = p_org_id
        and g.approved_at is not null
        and g.revoked_at is null
-       and g.expires_at > now()
+       and g.expires_at > statement_timestamp()
        and (p_project_id is null or p_project_id = any (g.project_ids))
        and exists (
          select 1
@@ -300,7 +352,16 @@ stable
 security definer
 set search_path = ''
 as $$
+declare
+  v_user text := nullif(current_setting('evidgate.operator_user_id', true), '');
 begin
+  -- Only the caller's own grants: the argument must equal the operator the session claims to be, so the
+  -- function never lists another operator's grant ids.
+  if v_user is null or v_user !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+     or v_user::uuid <> p_operator_user_id then
+    return;
+  end if;
+
   return query
     select g.id, g.org_id, g.scopes, g.project_ids, g.expires_at, g.approved_by
       from public.support_grant g
@@ -308,7 +369,7 @@ begin
        and g.org_id = p_org_id
        and g.approved_at is not null
        and g.revoked_at is null
-       and g.expires_at > now()
+       and g.expires_at > statement_timestamp()
      order by g.expires_at desc, g.id;
 end
 $$;
@@ -319,6 +380,9 @@ grant execute on function evidgate.operator_grant_org() to evidgate_operator;
 revoke all on function evidgate.operator_grant_id() from public;
 revoke all on function evidgate.operator_grant_id() from evidgate_app, evidgate_worker, evidgate_worker_sched, evidgate_platform_operator;
 grant execute on function evidgate.operator_grant_id() to evidgate_operator;
+revoke all on function evidgate.operator_grant_read_projects() from public;
+revoke all on function evidgate.operator_grant_read_projects() from evidgate_app, evidgate_worker, evidgate_worker_sched, evidgate_platform_operator;
+grant execute on function evidgate.operator_grant_read_projects() to evidgate_operator;
 revoke all on function evidgate.operator_grant_ok(uuid, uuid, text) from public;
 revoke all on function evidgate.operator_grant_ok(uuid, uuid, text) from evidgate_app, evidgate_worker, evidgate_worker_sched, evidgate_platform_operator;
 grant execute on function evidgate.operator_grant_ok(uuid, uuid, text) to evidgate_operator;
@@ -340,9 +404,9 @@ create policy organization_operator_grant_read on public.organization for select
 drop policy if exists project_operator_grant_read on public.project;
 create policy project_operator_grant_read on public.project for select to evidgate_operator
   using (org_id = (select evidgate.operator_grant_org())
-         and evidgate.operator_grant_ok(org_id, id, 'read'));
+         and id = any ((select evidgate.operator_grant_read_projects())));
 
 drop policy if exists test_case_operator_grant_read on public.test_case;
 create policy test_case_operator_grant_read on public.test_case for select to evidgate_operator
   using (org_id = (select evidgate.operator_grant_org())
-         and evidgate.operator_grant_ok(org_id, project_id, 'read'));
+         and project_id = any ((select evidgate.operator_grant_read_projects())));

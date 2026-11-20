@@ -1,0 +1,159 @@
+using Npgsql;
+using Shouldly;
+using Xunit;
+
+namespace Isolation.Tests;
+
+/// <summary>The transition guard and shape checks of <c>support_grant</c>, exercised on the superuser connection.</summary>
+public sealed partial class SupportGrantOperatorRlsTests
+{
+    [Theory]
+    [InlineData("approved_to_requested", "update public.support_grant set approved_at = null, approved_by = null where id = '{approved}'")]
+    [InlineData("approver_rewritten", "update public.support_grant set approved_by = '{operator}' where id = '{approved}'")]
+    [InlineData("approved_again", "update public.support_grant set approved_at = now() where id = '{approved}'")]
+    [InlineData("revoked_to_approved", "update public.support_grant set approved_at = now(), approved_by = '{approver}', revoked_at = null where id = '{revoked}'")]
+    [InlineData("revoked_unrevoked", "update public.support_grant set revoked_at = null where id = '{revoked}'")]
+    [InlineData("revoked_edited", "update public.support_grant set reason = 'again' where id = '{revoked}'")]
+    [InlineData("expired_requested_approved", "update public.support_grant set approved_at = now(), approved_by = '{approver}' where id = '{expiredRequested}'")]
+    [InlineData("scopes_changed", "update public.support_grant set scopes = '{case:*}' where id = '{requested}'")]
+    [InlineData("projects_changed", "update public.support_grant set project_ids = '{}' where id = '{requested}'")]
+    [InlineData("expiry_extended", "update public.support_grant set expires_at = expires_at + interval '1 day' where id = '{requested}'")]
+    [InlineData("operator_changed", "update public.support_grant set operator_user_id = '{other}' where id = '{requested}'")]
+    [InlineData("org_changed", "update public.support_grant set org_id = '{orgB}' where id = '{requested}'")]
+    [InlineData("approve_and_revoke_together", "update public.support_grant set approved_at = now(), approved_by = '{approver}', revoked_at = now() where id = '{requested}'")]
+    [InlineData("revoked_noop", "update public.support_grant set revoked_at = revoked_at where id = '{revoked}'")]
+    [InlineData("delete", "delete from public.support_grant where id = '{requested}'")]
+    public async Task Guard_Refuses_Transition(string name, string template)
+    {
+        var database = await WorldAsync();
+        var requested = await GrantAsync(database, OrgA, Operator, State.Requested);
+        var approved = await GrantAsync(database, OrgA, Operator, State.Approved);
+        var revoked = await GrantAsync(database, OrgA, Operator, State.Revoked);
+        var expiredRequested = await ExpiredRequestedAsync(database);
+
+        var sql = template
+            .Replace("{requested}", requested.ToString())
+            .Replace("{approved}", approved.ToString())
+            .Replace("{revoked}", revoked.ToString())
+            .Replace("{expiredRequested}", expiredRequested.ToString())
+            .Replace("{approver}", Approver.ToString())
+            .Replace("{operator}", Operator.ToString())
+            .Replace("{other}", OtherOperator.ToString())
+            .Replace("{orgB}", OrgB.ToString());
+
+        var error = await Should.ThrowAsync<PostgresException>(() => _fixture.ExecuteAsync(database, sql), name);
+        error.SqlState.ShouldBe("23514", name);
+    }
+
+    [Fact]
+    public async Task Guard_Refuses_ApproverEqualToRequester()
+    {
+        var database = await WorldAsync();
+        var requested = await GrantAsync(database, OrgA, Operator, State.Requested);
+        var error = await Should.ThrowAsync<PostgresException>(() => _fixture.ExecuteAsync(
+            database,
+            $"update public.support_grant set approved_at = now(), approved_by = '{Operator}' where id = '{requested}'"));
+        error.SqlState.ShouldBe("23514");
+    }
+
+    [Fact]
+    public async Task Guard_Refuses_InsertOfAnAlreadyApprovedGrant()
+    {
+        var database = await WorldAsync();
+        var error = await Should.ThrowAsync<PostgresException>(() => _fixture.ExecuteAsync(database, $"""
+            insert into public.support_grant (org_id, operator_user_id, scopes, reason, approved_by, approved_at, expires_at)
+            values ('{OrgA}', '{Operator}', '{CaseRead}', 'r', '{Approver}', now(), now() + interval '1 hour')
+            """));
+        error.SqlState.ShouldBe("23514");
+    }
+
+    [Fact]
+    public async Task Guard_Allows_Approve_ThenRevoke()
+    {
+        var database = await WorldAsync();
+        var requested = await GrantAsync(database, OrgA, Operator, State.Requested, projects: [ProjectA1]);
+
+        await _fixture.ExecuteAsync(database,
+            $"update public.support_grant set approved_at = now(), approved_by = '{Approver}' where id = '{requested}'");
+        (await CountsAsync(database, requested, Operator)).ShouldBe([1, 1, 1, 1], "an approved grant reads");
+
+        await _fixture.ExecuteAsync(database, $"update public.support_grant set revoked_at = now() where id = '{requested}'");
+        (await CountsAsync(database, requested, Operator)).ShouldBe([0, 0, 0, 0], "a revoked grant reads nothing");
+    }
+
+    [Theory]
+    [InlineData("scopes", "'{}'")]
+    [InlineData("scopes", "'{Case:read}'")]
+    [InlineData("scopes", "'{read}'")]
+    [InlineData("scopes", "'{\"case:read,case:write\"}'")]
+    [InlineData("scopes", "'{NULL,case:read}'")]
+    [InlineData("scopes", "'{NULL,\"case:read,case:write\"}'")]
+    [InlineData("reason", "''")]
+    [InlineData("expires_at", "now() - interval '3 hours'")]
+    public async Task Shape_Checks_Refuse_Bad_Input(string column, string value)
+    {
+        var database = await WorldAsync();
+        var scopes = column == "scopes" ? value : "'{case:read}'";
+        var reason = column == "reason" ? value : "'r'";
+        var expires = column == "expires_at" ? value : "now() + interval '1 hour'";
+
+        var error = await Should.ThrowAsync<PostgresException>(() => _fixture.ExecuteAsync(database, $"""
+            insert into public.support_grant (org_id, operator_user_id, scopes, reason, expires_at)
+            values ('{OrgA}', '{Operator}', {scopes}, {reason}, {expires})
+            """));
+        error.SqlState.ShouldBe("23514");
+    }
+
+    [Fact]
+    public async Task Guard_Allows_Withdrawing_A_Requested_Grant()
+    {
+        var database = await WorldAsync();
+        var requested = await GrantAsync(database, OrgA, Operator, State.Requested);
+        await _fixture.ExecuteAsync(database, $"update public.support_grant set revoked_at = now() where id = '{requested}'");
+        (await CountsAsync(database, requested, Operator)).ShouldBe([0, 0, 0, 0]);
+    }
+
+    [Fact]
+    public async Task Guard_Replaces_Caller_Chosen_Decision_Times_With_The_Server_Time()
+    {
+        var database = await WorldAsync();
+        var requested = await GrantAsync(database, OrgA, Operator, State.Requested);
+        await _fixture.ExecuteAsync(database, $"""
+            update public.support_grant
+               set approved_at = now() + interval '5 years', approved_by = '{Approver}'
+             where id = '{requested}'
+            """);
+        (await _fixture.ScalarAsync<bool>(database, $"select approved_at < now() + interval '1 minute' from public.support_grant where id = '{requested}'"))
+            .ShouldBeTrue("a future approval time must not survive");
+
+        await _fixture.ExecuteAsync(database, $"update public.support_grant set revoked_at = now() - interval '1 minute' where id = '{requested}'");
+        (await _fixture.ScalarAsync<bool>(database, $"select revoked_at > now() - interval '10 seconds' from public.support_grant where id = '{requested}'"))
+            .ShouldBeTrue("a caller-chosen revocation time must not survive");
+    }
+
+    [Fact]
+    public async Task Guard_Refuses_A_Project_Of_Another_Org_And_An_Unknown_Project()
+    {
+        var database = await WorldAsync();
+        foreach (var project in new[] { ProjectB1, Guid.CreateVersion7() })
+        {
+            var list = "{" + project + "}";
+            var error = await Should.ThrowAsync<PostgresException>(() => _fixture.ExecuteAsync(database, $"""
+                insert into public.support_grant (org_id, operator_user_id, scopes, project_ids, reason, expires_at)
+                values ('{OrgA}', '{Operator}', '{CaseRead}', '{list}', 'r', now() + interval '1 hour')
+                """));
+            error.SqlState.ShouldBe("23503");
+        }
+    }
+
+    private async Task<Guid> ExpiredRequestedAsync(string database)
+    {
+        var id = Guid.CreateVersion7();
+        await _fixture.ExecuteAsync(database, $"""
+            set session_replication_role = replica;
+            insert into public.support_grant (id, org_id, operator_user_id, scopes, reason, expires_at, created_at)
+            values ('{id}', '{OrgA}', '{Operator}', '{CaseRead}', 'late', now() - interval '10 minutes', now() - interval '2 hours');
+            """);
+        return id;
+    }
+}
