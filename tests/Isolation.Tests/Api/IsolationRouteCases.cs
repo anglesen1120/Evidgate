@@ -255,7 +255,7 @@ public static partial class IsolationRouteCases
             new(Get("/v1/orgs/{o}/security-events"), "org B's security events", bAdmin, $"/v1/orgs/{b.Id}/security-events?limit=1", "id",
                 runner => runner.TenantIdsAsync("select id::text from public.security_event where org_id = @org", b.Id),
                 aAdmin, $"/v1/orgs/{a.Id}/security-events?limit=1"),
-            // 02.8.1 §5: the org's support grants, two owner-seeded requests per org so limit=1 pages twice. No probe
+            // 02.8.1 §5: the org's support grants, three owner-seeded grants per org (two requested, one expired) so limit=1 pages three times. No probe
             // approves or revokes one (the world is shared by the whole collection), so this set is stable.
             new(Get("/v1/orgs/{o}/support-grants"), "org B's support grants", bAdmin, $"/v1/orgs/{b.Id}/support-grants?limit=1", "id",
                 Fixed(b.SupportGrantIds), aAdmin, $"/v1/orgs/{a.Id}/support-grants?limit=1"),
@@ -654,6 +654,9 @@ public static partial class IsolationRouteCases
             [
                 Pair(route, "org A grant id in {g}", ProbeExpect.NotFound, OrgBAdmin(w),
                     new(HttpMethod.Post, $"/v1/support-grants/{w.Acme.SupportGrantIds[0]}/approve"),
+                    new(HttpMethod.Post, $"/v1/support-grants/{Guid.CreateVersion7()}/approve")),
+                Pair(route, "org A expired grant id in {g}", ProbeExpect.NotFound, OrgBAdmin(w),
+                    new(HttpMethod.Post, $"/v1/support-grants/{w.Acme.SupportGrantIds[2]}/approve"),
                     new(HttpMethod.Post, $"/v1/support-grants/{Guid.CreateVersion7()}/approve")),
             ],
             (route, w) =>
