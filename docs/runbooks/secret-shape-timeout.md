@@ -14,7 +14,7 @@ Legend as in [`../../AGENTS.md`](../../AGENTS.md): ✅ verified with a link · �
 
 1. Never ask for, copy or paste the checked value, a request body, a URL with identifiers, a token or a header into a ticket. Collect request times and route templates only.
 2. The 100 ms budget is a code decision (`src/BuildingBlocks/SharedKernel/Security/SecretShape.cs:96-99` ✅), not an operator setting; do not look for a knob.
-3. Incident class: P3-c ([incident process](incident-process.md) §2) only while triage (§5) shows no refused ordinary value, since P3-c requires no customer impact; P2-g when §5 says escalate or a customer value was refused.
+3. Incident class: P3-c ([incident process](incident-process.md) §2) only while triage (§5) shows no ordinary value refused because of a timeout, since P3-c requires no customer impact; P2-g when §5 says escalate.
 
 ## 2. What the counter means
 
@@ -50,7 +50,7 @@ The rule is the row `AR-secret-shape-timeout` in [alert rules](../security/alert
 1. Read the `pattern` split. One pattern only points at a value shape; all patterns at once point at the host.
 2. Compare with host health in the same window: CPU, `dotnet.gc.last_collection.heap.size`, `dotnet.thread_pool.queue.length` ([telemetry](telemetry.md) §6).
 3. Check whether callers report refusals of ordinary values from the same time window (§3).
-4. Escalate to P2-g through the [incident process](incident-process.md) when the counter rises in 3 consecutive windows or on every pattern at once: treat it as a host stall.
+4. Escalate to P2-g through the [incident process](incident-process.md) when the counter rises in 3 consecutive windows or on every pattern at once (treat it as a host stall), or when a caller confirms that an otherwise acceptable value was refused during a timeout window. A refused real secret is the normal outcome, not an escalation.
 5. Customers report refused ordinary values and the host looks healthy: raise it to the secret-shape owner.
 
 ## 6. Known gaps
