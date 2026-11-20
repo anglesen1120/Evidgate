@@ -980,3 +980,9 @@ Closed by #1055 (657df323): `keySets.test.ts` now reads the literals through the
 | Release and Policy guard sites have no individual mutant (S507) | The LAN mutant chain removed the guard at Orchestrator, Authoring, Ingestion and the shared guard, but not at `ReleaseEndpoints.cs:81,123` or `PolicyEndpoints.cs:94,125`; only the 27-route table fact and the shared-guard mutant cover them. | receiver: next lane touching `RawBodyTenantRefusalTests`, run one mutant per site |
 
 Closed by #1055 (657df323): one mutant per site (`ReleaseEndpoints.cs:81,123`, `PolicyEndpoints.cs:94,125`, M5-M8, LAN runs on 04c127b7) ran red in `RawBodyTenantRefusalTests.RawBodyWrite_MemberWithoutTenant_ReadsNoBodyByteAndReturnsPipelineUnauthenticated`, naming release.create, release.bind-run, policy.append-revision and policy.activate.
+
+## Moved from status-carried.md by S517 (2026-11-21)
+
+| Architecture tests copy the src walk (S504) | Closed by #1037: one `SolutionLayout.ProductionSourceFiles()` walk for 5 copies, `Scan` split. Open: explicit Roslyn reference decision (5.3.0 stays transitive via Corvus); six subtree walks keep their own filter (EvaluatorPurity, ReleaseArchitecture has no bin/obj filter, HealingSystemSwitch, UsagePriceInsertGlobal, PolicyPersistenceSqlOwnership, CatalogBodyRead); walk floor is 1000 plus anchors, not an exact count | receiver: coordinator (next architecture-test lane) |
+
+Closed by #1062 (422946b5): `SolutionLayout.SourceFiles` is the one source walk with one bin/obj filter, and EvaluatorPurity, ReleaseArchitecture, HealingSystemSwitch, UsagePriceInsertGlobal, PolicyPersistenceSqlOwnership and CatalogBodyRead use it; per-subtree floors with anchors pin it, and eight LAN mutants ran red. The Roslyn reference decision moved to its own carried row.
