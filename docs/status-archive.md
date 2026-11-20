@@ -1036,3 +1036,9 @@ Closed by S526 (#1075, bb96af2e): the S525 row counted `## Notes` headings only.
 | EvidgateTelemetry.cs is over the 500-line limit (S522) | `src/BuildingBlocks/Observability/EvidgateTelemetry.cs` is 510 lines after #1069 (506 on the wave base 3ad7b646, so already over); split by responsibility (meter and counters, record methods). Also noted by the #1069 delta check: the resolved-tenant positive control in `IngestUnauthenticatedRefusalMetricTests` asserts only status != 401; the expected path is 403 forbidden (member lacks event:write), not observed. | receiver: observability lane |
 
 Closed by S524 (#1071, d3152c9a): EvidgateTelemetry.cs is split into three partial files (285, 112 and 136 lines) with no member changed, and the positive control in IngestUnauthenticatedRefusalMetricTests asserts Forbidden.
+
+## Moved from status-carried.md by S528 (2026-11-21)
+
+| Telemetry partials depend on compile order for the Meter (S524) | Seven EvidgateTelemetry partial files (HealingGateway, Operations, Quota, RawReportEnqueue, Releases, Sessions, Workflow) read the Meter of EvidgateTelemetry.cs in field initialisers, so that file must compile first (true on the LAN: csc lists it first); an order-independent holder is a design change. The AI settings and authoring counters have no recording test. | receiver: observability lane |
+
+Closed in part by S528 (#1079, fa1328be): AiSettingsMetricTests and AuthoringMetricTests record and assert the AI settings and authoring instruments through the real handlers; the compile-order claim stays open in the corrected row.
