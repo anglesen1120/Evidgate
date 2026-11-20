@@ -376,17 +376,17 @@ public sealed partial class SupportGrantOperatorRlsTests
         var database = await WorldAsync();
         var id = Guid.CreateVersion7();
         var projectList = "{" + ProjectA1 + "}";
+        await using var scope = await OperatorAsync(_fixture, database, id, Operator);
         await _fixture.ExecuteAsync(database, $"""
             set session_replication_role = replica;
             insert into public.support_grant
               (id, org_id, operator_user_id, scopes, project_ids, reason, approved_by, approved_at, expires_at, created_at)
             values ('{id}', '{OrgA}', '{Operator}', '{CaseRead}', '{projectList}', 'short', '{Approver}', now() - interval '1 minute',
-                    now() + interval '3 seconds', now() - interval '2 hours');
+                    now() + interval '5 seconds', now() - interval '2 hours');
             """);
 
-        await using var scope = await OperatorAsync(_fixture, database, id, Operator);
         (await scope.ScalarAsync<int>("select count(*)::int from public.test_case")).ShouldBe(1);
-        await Task.Delay(TimeSpan.FromSeconds(4), TestContext.Current.CancellationToken);
+        await Task.Delay(TimeSpan.FromSeconds(6), TestContext.Current.CancellationToken);
 
         // Same transaction, so now() would still be the start time: the statement clock is what ends the grant.
         (await scope.ScalarAsync<int>("select count(*)::int from public.test_case")).ShouldBe(0);

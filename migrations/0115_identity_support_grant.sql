@@ -20,11 +20,11 @@
 -- valid grant of that org) and only the action CLASS (`:read` or `:*` for a read; any other action
 -- suffix or `:*` for a write). Matching one permission code against `scopes` is the pipeline's job.
 --
--- THE POLICY SHAPE. `org_id = (select evidgate.operator_grant_org()) and
--- evidgate.operator_grant_ok(org_id, <project>, 'read')`. The first conjunct is one InitPlan per
--- statement that confines the tenant by a value the session cannot choose (the grant row), and it is
--- the comparison shape scripts/check-rls.py accepts as a gate. The second runs per row that survives
--- the first and adds the project and action-class test. `support_grant` itself shows the operator
+-- THE POLICY SHAPE. `org_id = (select evidgate.operator_grant_org()) and <project key> = any
+-- ((select evidgate.operator_grant_read_projects())::uuid[])`. Both subqueries are one InitPlan per
+-- statement: the first confines the tenant by a value the session cannot choose (the grant row) and is
+-- the comparison shape scripts/check-rls.py accepts as a gate; the second is the grant's project list
+-- when its scope allows a read. `organization` calls operator_grant_ok once per row instead. `support_grant` itself shows the operator
 -- only its own valid grant row (`org_id` as above and `id = (select evidgate.operator_grant_id())`). The operator is identified by two settings,
 -- `evidgate.support_grant_id` and `evidgate.operator_user_id`. The role may set both itself, so they
 -- name a claim, not a credential: a claim only opens a row when an approved, unrevoked, unexpired
@@ -91,14 +91,14 @@ create table if not exists public.support_grant (
   constraint support_grant_operator_fk foreign key (operator_user_id) references public."user" (id),
   constraint support_grant_approver_fk foreign key (approved_by) references public."user" (id),
   constraint support_grant_scopes_check check (
-    cardinality(scopes) between 1 and 64
+    pg_catalog.array_ndims(scopes) = 1 and cardinality(scopes) between 1 and 64
     and pg_catalog.array_position(scopes, null) is null
     and pg_catalog.array_to_string(scopes, ',')
         ~ '^[a-z_]+:([a-z_]+|\*)(,[a-z_]+:([a-z_]+|\*))*$'
     and pg_catalog.char_length(pg_catalog.array_to_string(scopes, ',')) <= 4096
     and pg_catalog.cardinality(pg_catalog.string_to_array(pg_catalog.array_to_string(scopes, ','), ',')) = cardinality(scopes)),
   constraint support_grant_project_ids_check check (
-    cardinality(project_ids) <= 100 and pg_catalog.array_position(project_ids, null) is null),
+    (project_ids = '{}' or pg_catalog.array_ndims(project_ids) = 1) and cardinality(project_ids) <= 100 and pg_catalog.array_position(project_ids, null) is null),
   constraint support_grant_reason_check check (char_length(reason) between 1 and 1000),
   constraint support_grant_expiry_check check (expires_at > created_at),
   constraint support_grant_approval_pair_check check ((approved_at is null) = (approved_by is null)),
@@ -358,7 +358,7 @@ begin
   -- Only the caller's own grants: the argument must equal the operator the session claims to be, so the
   -- function never lists another operator's grant ids.
   if v_user is null or v_user !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-     or v_user::uuid <> p_operator_user_id then
+     or p_operator_user_id is null or v_user::uuid <> p_operator_user_id then
     return;
   end if;
 
@@ -404,9 +404,9 @@ create policy organization_operator_grant_read on public.organization for select
 drop policy if exists project_operator_grant_read on public.project;
 create policy project_operator_grant_read on public.project for select to evidgate_operator
   using (org_id = (select evidgate.operator_grant_org())
-         and id = any ((select evidgate.operator_grant_read_projects())));
+         and id = any (((select evidgate.operator_grant_read_projects())::uuid[])));
 
 drop policy if exists test_case_operator_grant_read on public.test_case;
 create policy test_case_operator_grant_read on public.test_case for select to evidgate_operator
   using (org_id = (select evidgate.operator_grant_org())
-         and project_id = any ((select evidgate.operator_grant_read_projects())));
+         and project_id = any (((select evidgate.operator_grant_read_projects())::uuid[])));
