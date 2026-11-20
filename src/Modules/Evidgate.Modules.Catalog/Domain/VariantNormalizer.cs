@@ -39,12 +39,6 @@ internal static class VariantNormalizer
     /// <summary>A variant key's first character: an ASCII letter or <c>_</c>.</summary>
     private static readonly SearchValues<char> KeyFirst = SearchValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_");
 
-    /// <summary>Keys that describe a variant for humans and say nothing about what it runs: dropped before hashing.</summary>
-    private static readonly HashSet<string> NonIdentifying = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "description", "label", "labels", "note", "notes", "comment", "comments", "title", "tags", "display_name", "displayname",
-    };
-
     /// <summary>Normalises <paramref name="parameters"/> (null means no parameters).</summary>
     /// <param name="parameters">The parameter object as sent.</param>
     /// <param name="basePath">The path prefix used in problems, e.g. <c>/members/m0/params</c>.</param>
@@ -91,7 +85,7 @@ internal static class VariantNormalizer
 
                 path = basePath + "/" + name;
 
-                if (name.StartsWith('_') || NonIdentifying.Contains(name))
+                if (ParameterSecretRule.IsNonIdentifying(name))
                 {
                     continue;
                 }
