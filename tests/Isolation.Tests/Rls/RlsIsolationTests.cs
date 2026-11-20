@@ -348,7 +348,7 @@ public sealed class RlsIsolationTests : HarnessTest
             projects = SeededIds(rowA, rowB, "project_id");
             // A table whose row needs a platform identity parent (TenantRowFactory.OwnerProvisionedTables) gets one
             // generated per org; the cleanup removes them with the rows so the shared database is left as found.
-            users = SeededIds(rowA, rowB, "user_id");
+            users = [.. SeededIds(rowA, rowB, "user_id"), .. SeededIds(rowA, rowB, "operator_user_id")];
             await owner.CommitAsync();
         }
 

@@ -166,9 +166,16 @@ internal sealed class TenantRowFactory
     /// <c>github_install_state</c> (0108) is the second entry for a different reason: its <c>user_id</c> is
     /// NOT NULL and references <c>public."user"</c>, which the app role deliberately holds no INSERT on
     /// (02.9.1 §8 T1), so the generated row needs a platform identity parent only the owner can write.
+    /// <c>support_grant</c> (0115) is the third: its <c>operator_user_id</c> is NOT NULL and references the same
+    /// platform identity table, for the same reason.
     /// </remarks>
     internal static readonly IReadOnlySet<string> OwnerProvisionedTables =
-        new HashSet<string>(StringComparer.Ordinal) { "public.healing_llm_budget", "public.github_install_state" };
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            "public.healing_llm_budget",
+            "public.github_install_state",
+            "public.support_grant",
+        };
 
     /// <summary>
     /// The tenant tables a generated row cannot be written for at all: the parent table's trigger writes
@@ -879,6 +886,8 @@ internal sealed class TenantRowFactory
             // so both are fresh per row and the RLS suite's two orgs never collide on them.
             ("public.github_installation", "installation_id") =>
                 8_000_000_000L + Interlocked.Increment(ref _githubInstallationId),
+            // support_grant.scopes is a permission-string list with a shape CHECK, so the generic "probe" is refused.
+            ("public.support_grant", "scopes") => new[] { "case:read" },
             ("public.github_install_state", "state_hash") =>
                 (byte[])[.. Guid.NewGuid().ToByteArray(), .. Guid.NewGuid().ToByteArray()],
             _ => (object?)null,
