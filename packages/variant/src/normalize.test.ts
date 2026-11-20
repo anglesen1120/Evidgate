@@ -1,4 +1,4 @@
-// 04.3.2-T1.3 / AC3: `variant_hash` stability and cross-runtime parity. The corpus
+// `variant_hash` stability and cross-runtime parity. The corpus
 // fixtures/variant-hash/vectors.json is asserted here and by the server's own suite
 // (tests/Tenancy.IntegrationTests/VariantGoldenVectorTests.cs), so a regression on either
 // side fails that side's suite. The `*-near-limit-*` vectors pin the `too_large` boundary: the

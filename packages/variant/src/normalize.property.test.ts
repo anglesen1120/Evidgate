@@ -46,7 +46,14 @@ describe('variant normaliser properties', () => {
       const entries = generated(next);
       const forward = normalizeVariant(Object.fromEntries(entries));
       const reversed = normalizeVariant(Object.fromEntries([...entries].reverse()));
-      expect(reversed).toEqual(forward);
+      // A refusal names a rejected key by its position, so only the reasons are order-free.
+      if (forward.ok) {
+        expect(reversed).toEqual(forward);
+      } else {
+        const reasons = (result: typeof forward): string[] =>
+          result.ok ? [] : result.problems.map((problem) => problem.reason).sort();
+        expect(reasons(reversed)).toEqual(reasons(forward));
+      }
       if (forward.ok) {
         accepted += 1;
         const again = normalizeVariant(JSON.parse(forward.paramsJson));

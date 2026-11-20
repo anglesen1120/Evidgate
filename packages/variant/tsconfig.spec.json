@@ -1,5 +1,5 @@
 {
-  // 01.6.1-T1.2: type-checks the specs and the Vitest config without emitting, so they
+  // Type-checks the specs and the Vitest config without emitting, so they
   // stay out of the dist build (see `exclude` in tsconfig.json). eslint.config.js points
   // the parser for `*.test.ts` and `vitest.config.ts` at this file.
   "extends": "../../tsconfig.base.json",
