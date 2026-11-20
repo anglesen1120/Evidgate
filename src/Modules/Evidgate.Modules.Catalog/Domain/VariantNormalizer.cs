@@ -83,29 +83,29 @@ internal static class VariantNormalizer
 
                 // A rejected key is named by its position, never echoed: it may itself be the secret.
                 var path = basePath + "/#" + count.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                if (!IsValidKey(member.Name) || !TextRules.IsClean(member.Name))
+                if (!TryReadName(member, out var name) || !IsValidKey(name) || !TextRules.IsClean(name))
                 {
                     problems.Add(new VariantProblem(path, "invalid_key"));
                     continue;
                 }
 
-                if (SecretShape.KeyLooksSecret(member.Name) || SecretShape.ValueLooksSecret(member.Name))
+                if (SecretShape.KeyLooksSecret(name) || SecretShape.ValueLooksSecret(name))
                 {
                     problems.Add(new VariantProblem(path, "secret_key"));
                     continue;
                 }
 
-                path = basePath + "/" + member.Name;
+                path = basePath + "/" + name;
 
-                if (member.Name.StartsWith('_') || NonIdentifying.Contains(member.Name))
+                if (name.StartsWith('_') || NonIdentifying.Contains(name))
                 {
                     continue;
                 }
 
-                var value = Scalar(member.Value, member.Name, path, problems);
+                var value = Scalar(member.Value, name, path, problems);
                 if (value is not null)
                 {
-                    result[member.Name] = value;
+                    result[name] = value;
                 }
             }
         }
@@ -216,6 +216,23 @@ internal static class VariantNormalizer
         }
     }
 
+    /// <summary>A member name that carries a lone surrogate (<c>{"\ud800":1}</c>) cannot be read: the reader throws, so it is a refused key.</summary>
+    private static bool TryReadName(JsonProperty member, out string name)
+    {
+        try
+        {
+            name = member.Name;
+
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            name = string.Empty;
+
+            return false;
+        }
+    }
+
     private static JsonValue? StringValue(string text, string key, string path, List<VariantProblem> problems)
     {
         if (text.Length > MaxStringChars || !TextRules.IsClean(text))
@@ -225,14 +242,17 @@ internal static class VariantNormalizer
             return null;
         }
 
-        if (SecretShape.ValueLooksSecret(text))
+        // The stored form is what must not look like a secret: an upper-cased token prefix only shows after the
+        // enum-like fold, so both the text as sent and the text as stored are scanned.
+        var stored = EnumLike.Contains(key) ? text.Trim().ToLowerInvariant() : text;
+        if (SecretShape.ValueLooksSecret(text) || SecretShape.ValueLooksSecret(stored))
         {
             problems.Add(new VariantProblem(path, "secret_value"));
 
             return null;
         }
 
-        return JsonValue.Create(EnumLike.Contains(key) ? text.Trim().ToLowerInvariant() : text);
+        return JsonValue.Create(stored);
     }
 
     /// <summary>Variant keys: 1-64 characters, the first an ASCII letter or <c>_</c>, the rest also digits, <c>.</c> and <c>-</c>.</summary>

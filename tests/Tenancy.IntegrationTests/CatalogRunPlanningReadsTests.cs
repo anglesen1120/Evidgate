@@ -140,6 +140,23 @@ public sealed class CatalogRunPlanningReadsTests
         hashes[4].ShouldBeNull();   // a null element is not a variant object
     }
 
+    [Fact]
+    public async Task NormalizeVariantHashes_RefusesFoldedTokenPrefixesAndLoneSurrogateKeys_WithoutThrowing()
+    {
+        await using var world = await StartAsync();
+        await using var services = world.Api.Services.CreateAsyncScope();
+        var contracts = services.ServiceProvider.GetRequiredService<ICatalogContracts>();
+
+        using var document = JsonDocument.Parse(
+            """[{"mode":"GHP_AAAAAAAA"},{"retries":1,"\ud800":1},{"mode":"GHP_MODE"}]""");
+        var hashes = contracts.NormalizeVariantHashes([.. document.RootElement.EnumerateArray()]);
+
+        hashes.Count.ShouldBe(3);
+        hashes[0].ShouldBeNull();    // folded form is token-shaped
+        hashes[1].ShouldBeNull();    // unreadable key: refused, not a reader exception
+        hashes[2].ShouldNotBeNull(); // too short to be token-shaped: unchanged
+    }
+
     // ------------------------------------------------------------------ GetCaseIdsAsync
 
     [Fact]
