@@ -1,8 +1,8 @@
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Identity.Ci;
-using Evidgate.Modules.Identity.Options;
 using Microsoft.AspNetCore.Http;
+using Evidgate.Modules.Identity.Options;
 using Microsoft.Extensions.Options;
 using Npgsql;
 using Shouldly;
@@ -33,10 +33,10 @@ public sealed class RateLimitGateFaultClauseTests
     {
         using var cancelled = new CancellationTokenSource();
         await cancelled.CancelAsync();
-        var limiter = new FaultingLimiter(new OperationCanceledException(cancelled.Token), failAfterCalls: 0);
+        var store = new FaultingStore(new OperationCanceledException(cancelled.Token), failAfterCalls: 0);
 
         await Should.ThrowAsync<OperationCanceledException>(() => RateLimitGate.AcquireAsync(
-            new DefaultHttpContext(), limiter, RateSurface.Login, "k", 1, "refused", cancelled.Token).AsTask());
+            new DefaultHttpContext(), store, static (fake, token) => fake.AcquireAsync(token), "refused", cancelled.Token).AsTask());
     }
 
     [Fact]
@@ -46,24 +46,38 @@ public sealed class RateLimitGateFaultClauseTests
     [Fact]
     public async Task Acquire_ATwoUnitStoreCallFailingWithTimeoutException_AnswersUnavailable()
     {
-        var limiter = new FaultingLimiter(new TimeoutException("weighted attempt"), failAfterCalls: 0);
+        var store = new FaultingStore(new TimeoutException("weighted attempt"), failAfterCalls: 0);
         var context = new DefaultHttpContext();
 
         var refused = await RateLimitGate.AcquireAsync(
-            context, limiter, RateSurface.Login, "k", 2, "refused", TestContext.Current.CancellationToken);
+            context, store, static (fake, token) => fake.AcquireAsync(token), "refused", TestContext.Current.CancellationToken);
 
         refused.ShouldNotBeNull().Code.ShouldBe(ApiErrorCode.Unavailable);
-        limiter.Calls.ShouldBe(1);
-        limiter.LastCost.ShouldBe(2);
+        store.Calls.ShouldBe(1);
 
         // Control: the same weighted attempt through a store that answers is one call, so the case above fails
         // for the fault and not for a cost the gate cannot spend.
-        var answering = new FaultingLimiter(new TimeoutException("never thrown"), failAfterCalls: 1);
+        var answering = new FaultingStore(new TimeoutException("never thrown"), failAfterCalls: 1);
         (await RateLimitGate.AcquireAsync(
-            new DefaultHttpContext(), answering, RateSurface.Login, "k", 2, "refused", TestContext.Current.CancellationToken))
+            new DefaultHttpContext(), answering, static (fake, token) => fake.AcquireAsync(token), "refused", TestContext.Current.CancellationToken))
             .ShouldBeNull();
         answering.Calls.ShouldBe(1);
-        answering.LastCost.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Acquire_TheLimiterOverloadAgainstAnUnreachableStore_CallsTheLimiterAndAnswersUnavailable()
+    {
+        // The production overload, a real limiter and a store that refuses connections: the NpgsqlException is
+        // the real one, so this also proves the limiter overload reaches the store call.
+        await using var dataSource = NpgsqlDataSource.Create("Host=127.0.0.1;Port=1;Database=unused;Timeout=2");
+        var limiter = new ExchangeRateLimiter(dataSource, Options.Create(new RateLimitOptions()));
+        var context = new DefaultHttpContext();
+
+        var refused = await RateLimitGate.AcquireAsync(
+            context, limiter, RateSurface.Login, "k", 1, "refused", TestContext.Current.CancellationToken);
+
+        refused.ShouldNotBeNull().Code.ShouldBe(ApiErrorCode.Unavailable);
+        context.Response.Headers.RetryAfter.ToString().ShouldBe("1");
     }
 
     private static async Task AssertUnavailableAsync(Exception fault)
@@ -81,24 +95,18 @@ public sealed class RateLimitGateFaultClauseTests
     private static ValueTask<Error?> AcquireAsync(Exception fault, DefaultHttpContext? context = null) =>
         RateLimitGate.AcquireAsync(
             context ?? new DefaultHttpContext(),
-            new FaultingLimiter(fault, failAfterCalls: 0),
-            RateSurface.Login,
-            "k",
-            1,
+            new FaultingStore(fault, failAfterCalls: 0),
+            static (fake, token) => fake.AcquireAsync(token),
             "refused",
             TestContext.Current.CancellationToken);
 
-    private sealed class FaultingLimiter(Exception fault, int failAfterCalls)
-        : ExchangeRateLimiter(NpgsqlDataSource.Create("Host=127.0.0.1;Database=unused"), Options.Create(new RateLimitOptions()))
+    private sealed class FaultingStore(Exception fault, int failAfterCalls)
     {
         public int Calls { get; private set; }
-        public int LastCost { get; private set; }
 
-        public override ValueTask<RateDecision> AcquireAsync(
-            RateSurface surface, string key, int cost, CancellationToken cancellationToken)
+        public ValueTask<RateDecision> AcquireAsync(CancellationToken cancellationToken)
         {
             Calls++;
-            LastCost = cost;
             if (Calls > failAfterCalls)
             {
                 throw fault;
