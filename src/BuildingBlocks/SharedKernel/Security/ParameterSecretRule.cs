@@ -24,9 +24,36 @@ public static class ParameterSecretRule
         return EnumLike.Contains(key) ? text.Trim().ToLowerInvariant() : text;
     }
 
-    /// <summary>True when the value as sent, or as stored, has a secret's shape.</summary>
+    /// <summary>
+    /// True when the value as sent, as stored, or as stored with its invisible characters (control and format, such as a
+    /// zero-width space or a byte-order mark) removed has a secret's shape.
+    /// </summary>
     /// <param name="key">The parameter name.</param>
     /// <param name="text">The value as sent.</param>
-    public static bool ValueLooksSecret(string key, string text) =>
-        SecretShape.ValueLooksSecret(text) || SecretShape.ValueLooksSecret(StoredForm(key, text));
+    public static bool ValueLooksSecret(string key, string text)
+    {
+        var stored = StoredForm(key, text);
+        if (SecretShape.ValueLooksSecret(text) || (!string.Equals(stored, text, StringComparison.Ordinal) && SecretShape.ValueLooksSecret(stored)))
+        {
+            return true;
+        }
+
+        return HasInvisible(stored) && SecretShape.ValueLooksSecret(string.Concat(stored.Where(c => !IsInvisible(c))));
+    }
+
+    private static bool HasInvisible(string text)
+    {
+        foreach (var c in text)
+        {
+            if (IsInvisible(c))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsInvisible(char c) =>
+        char.GetUnicodeCategory(c) is System.Globalization.UnicodeCategory.Format or System.Globalization.UnicodeCategory.Control;
 }

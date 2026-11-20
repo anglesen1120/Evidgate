@@ -26,6 +26,9 @@ public sealed class ManifestSecretRuleTests
     [InlineData("""{"mode":" ghp_AAAAAAAA"}""", 1)]
     [InlineData("""{"tags":["ghp_AAAAAAAAAAAAAAAAAAAA"]}""", 1)]
     [InlineData("""{"locale":["en","GHP_AAAAAAAA"]}""", 1)]
+    [InlineData("""{"mode":"\ufeffGHP_AAAAAAAA"}""", 1)]
+    [InlineData("""{"other":"gh\u200bp_AAAAAAAAAAAA"}""", 1)]
+    [InlineData("""{"api_token":["secret:ci_token"]}""", 1)]
     [InlineData("""{"x":1,"n":{"k":"ghp_AAAAAAAAAAAAAAAAAAAA"}}""", 2)]
     [InlineData("""{"n":{"deep":[["ghp_AAAAAAAAAAAAAAAAAAAA"]]}}""", 1)]
     [InlineData("""{"n":{"api_token":"x"}}""", 1)]
@@ -35,6 +38,8 @@ public sealed class ManifestSecretRuleTests
 
     [Theory]
     [InlineData("""{"tags":["x","secret:ghp_AAAA"]}""")]
+    [InlineData("""{"api_token":"secret:ci_token"}""")]
+    [InlineData("""{"password":"secret:db.password","browser":"x"}""")]
     [InlineData("""{"mode":"CHROMIUM"}""")]
     [InlineData("""{"mode":"GHP_MODE"}""")]
     [InlineData("""{"n":{"k":"plain"},"retries":3,"headless":true,"x":null}""")]
@@ -90,7 +95,7 @@ public sealed class ManifestSecretRuleTests
             }
 
             var positions = ManifestVerifier.SecretPositions(parameters);
-            if (name.StartsWith("accept", StringComparison.Ordinal))
+            if (vector.GetProperty("expect").TryGetProperty("hash", out _) && !name.StartsWith("refuse", StringComparison.Ordinal))
             {
                 positions.ShouldBeEmpty(name);
                 checkedAccept++;
@@ -98,7 +103,8 @@ public sealed class ManifestSecretRuleTests
             else if (name.StartsWith("refuse", StringComparison.Ordinal)
                 && vector.GetProperty("expect").GetProperty("problems").EnumerateArray()
                     .Any(problem => problem.GetProperty("reason").GetString() is "secret_value" or "secret_key"
-                        || (problem.GetProperty("reason").GetString() == "invalid_key" && name.Contains("surrogate", StringComparison.Ordinal))))
+                        || (problem.GetProperty("reason").GetString() == "invalid_key" && name.Contains("surrogate", StringComparison.Ordinal))
+                        || name.StartsWith("refuse-format-padding", StringComparison.Ordinal)))
             {
                 positions.ShouldNotBeEmpty(name);
                 checkedRefuse++;
@@ -107,6 +113,6 @@ public sealed class ManifestSecretRuleTests
 
         // Structural refusals (size, nesting, key shape) are the normaliser's own and not a secret question.
         checkedRefuse.ShouldBeGreaterThanOrEqualTo(10);
-        checkedAccept.ShouldBeGreaterThanOrEqualTo(5);
+        checkedAccept.ShouldBeGreaterThanOrEqualTo(20);
     }
 }

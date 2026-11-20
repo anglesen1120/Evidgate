@@ -194,7 +194,11 @@ internal static class ManifestVerifier
             return true;
         }
 
-        return SecretShape.KeyLooksSecret(name) || SecretShape.ValueLooksSecret(name) || ValueIsSecret(name, member.Value);
+        // A string goes straight to IsSecret: a well-formed reference is allowed under any key. A container has no
+        // reference form, so a secret-shaped name alone refuses it.
+        return member.Value.ValueKind is JsonValueKind.Array or JsonValueKind.Object
+            ? SecretShape.KeyLooksSecret(name) || SecretShape.ValueLooksSecret(name) || ValueIsSecret(name, member.Value)
+            : ValueIsSecret(name, member.Value);
     }
 
     /// <summary>Strings are judged as text (raw or folded), array items and nested members each as a value under the same key.</summary>

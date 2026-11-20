@@ -44,30 +44,19 @@ public sealed class ManifestSecretUploadTests
         answer.Body.GetRawText().ShouldNotContain("GHP_AAAAAAAA", Case.Insensitive);
     }
 
+    /// <summary>Parameter values are strings by contract, so arrays reach only the pure rule; here the string controls stay accepted.</summary>
     [Fact]
-    public async Task SecretInsideAnArray_Is422_PositionOnly_AndReferencesAndOrdinaryArraysStayAccepted()
+    public async Task ReferencesAndOrdinaryEnumValues_StayAccepted_AndAZeroWidthPaddedTokenIsRefused()
     {
         await using var world = await ManifestTests.StartAsync(_fixture);
-        const string token = "ghp_AAAAAAAAAAAAAAAAAAAA";
-        var refused = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "x" }], ["staging"]);
-        refused["planned_executions"]![0]!["variant"]!["params"]!["tags"] = new System.Text.Json.Nodes.JsonArray("a", token);
-        refused["matrix"]!["variants"]![0]!["params"]!["tags"] = new System.Text.Json.Nodes.JsonArray("a", token);
+        var accepted = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "CHROMIUM", ["api_token"] = "secret:ci_token", ["tags"] = "secret:ghp_AAAA" }], ["staging"]);
+        (await UploadAsync(world, accepted.ToJsonString())).Status.ShouldBe(HttpStatusCode.Created);
 
+        var refused = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "x", ["mode"] = "\ufeffGHP_AAAAAAAA" }], ["staging"]);
         var answer = await UploadAsync(world, refused.ToJsonString());
 
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        var details = answer.Body.GetProperty("error").GetProperty("details").EnumerateArray().ToList();
-        details.Select(detail => detail.GetProperty("reason").GetString()).Distinct().ShouldBe(["secret_in_variant_params"]);
-        details.First().GetProperty("path").GetString().ShouldEndWith("/params/#2");
-        answer.Body.GetRawText().ShouldNotContain(token);
-
-        var accepted = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "x" }], ["staging"]);
-        foreach (var path in new[] { "planned_executions", "matrix" })
-        {
-            var holder = path == "matrix" ? accepted["matrix"]!["variants"]![0]! : accepted["planned_executions"]![0]!["variant"]!;
-            holder["params"]!["tags"] = new System.Text.Json.Nodes.JsonArray("a", "secret:ghp_AAAA", "CHROMIUM");
-        }
-
-        (await UploadAsync(world, accepted.ToJsonString())).Status.ShouldBe(HttpStatusCode.Created);
+        answer.Body.GetProperty("error").GetProperty("details").EnumerateArray().First().GetProperty("path").GetString().ShouldEndWith("/params/#2");
+        answer.Body.GetRawText().ShouldNotContain("AAAAAAAA");
     }
 }
