@@ -100,7 +100,6 @@ public sealed partial class CatalogAnonymousBodyTests
         Target target,
         string body,
         Action<HttpRequestHeaders>? caller = null,
-        bool undeclaredLength = false,
         HttpClient? client = null,
         Action<HttpRequestHeaders>? extraHeaders = null)
     {
@@ -114,9 +113,7 @@ public sealed partial class CatalogAnonymousBodyTests
             request.Headers.TryAddWithoutValidation("If-Match", target.IfMatch);
         }
 
-        request.Content = undeclaredLength
-            ? new UndeclaredJson(body)
-            : new StringContent(body, Encoding.UTF8, "application/json");
+        request.Content = new StringContent(body, Encoding.UTF8, "application/json");
 
         using var response = await (client ?? world.Client).SendAsync(request, TestContext.Current.CancellationToken);
         var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
@@ -144,32 +141,4 @@ public sealed partial class CatalogAnonymousBodyTests
         return answer.ETag ?? throw new InvalidOperationException("the case read carried no ETag");
     }
 
-    /// <summary>
-    /// A JSON body that declares no length, the shape a chunked upload has: the route's own cap answers it, instead of
-    /// the host middleware's declared-length pre-check.
-    /// </summary>
-    private sealed class UndeclaredJson(string body) : HttpContent
-    {
-        private readonly byte[] _bytes = Encoding.UTF8.GetBytes(body);
-
-        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
-            SerializeToStreamAsync(stream, context, CancellationToken.None);
-
-        protected override async Task SerializeToStreamAsync(
-            Stream stream,
-            TransportContext? context,
-            CancellationToken cancellationToken)
-        {
-            Headers.ContentLength = null;
-            await stream.WriteAsync(_bytes, cancellationToken).ConfigureAwait(false);
-            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
-        }
-
-        protected override bool TryComputeLength(out long length)
-        {
-            length = 0;
-
-            return false;
-        }
-    }
 }

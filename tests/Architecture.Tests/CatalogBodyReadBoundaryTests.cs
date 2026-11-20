@@ -31,16 +31,23 @@ public sealed class CatalogBodyReadBoundaryTests
     [
         "JsonDocument.Parse",
         "ReadFromJsonAsync",
+        "JsonNode.Parse",
+        "Utf8JsonReader",
         "Request.Body",
         "BodyReader",
         "PipeReader",
         "StreamReader(",
         ".Body.Read",
+        ".Body;",
+        ".Body.CopyTo",
         ".Body)",
         ".Body,",
         "new StreamReader(",
+        "ReadFormAsync",
+        "ReadToEnd(",
         "ReadToEndAsync",
         "JsonSerializer.Deserialize<JsonElement>(",
+        "JsonSerializer.DeserializeAsync",
         "ReadJsonAsync(",
     ];
 
@@ -96,6 +103,7 @@ public sealed class CatalogBodyReadBoundaryTests
             "if (context.RequestServices.GetRequiredService<IRequestTenantContextAccessor>().Current is null)",
             StringComparison.Ordinal);
         tenantGuard.ShouldBeGreaterThanOrEqualTo(0);
+        tenantGuard.ShouldBeGreaterThan(refusal);
         var tenantRefusal = reader.IndexOf("throw new TenantContextMissingException()", tenantGuard, StringComparison.Ordinal);
         tenantRefusal.ShouldBeGreaterThan(tenantGuard);
         var read = reader.IndexOf("ReadJsonAsync(", StringComparison.Ordinal);
@@ -114,6 +122,13 @@ public sealed class CatalogBodyReadBoundaryTests
     [InlineData("context.Request.Body.ReadAsync(buffer)")]
     [InlineData("context.Request.BodyReader.ReadAsync()")]
     [InlineData("request.BodyReader.ReadAsync()")]
+    [InlineData("JsonNode.Parse(requestText)")]
+    [InlineData("new Utf8JsonReader(bytes)")]
+    [InlineData("var body = req.Body;")]
+    [InlineData("await req.Body.CopyToAsync(buffer)")]
+    [InlineData("await context.Request.ReadFormAsync()")]
+    [InlineData("reader.ReadToEnd()")]
+    [InlineData("JsonSerializer.DeserializeAsync<JsonElement>(stream)")]
     [InlineData("HttpRequest request; new StreamReader(request.Body)")]
     [InlineData("request.Body.ReadAsync(buffer)")]
     [InlineData("ReadBody(request.Body, cancellationToken)")]
@@ -134,6 +149,13 @@ public sealed class CatalogBodyReadBoundaryTests
     /// <summary>The shared reader owns the raw read and the parse, so those calls are clean inside it.</summary>
     [Theory]
     [InlineData("JsonDocument.Parse(requestText)")]
+    [InlineData("JsonNode.Parse(requestText)")]
+    [InlineData("new Utf8JsonReader(bytes)")]
+    [InlineData("var body = req.Body;")]
+    [InlineData("await req.Body.CopyToAsync(buffer)")]
+    [InlineData("await context.Request.ReadFormAsync()")]
+    [InlineData("reader.ReadToEnd()")]
+    [InlineData("JsonSerializer.DeserializeAsync<JsonElement>(stream)")]
     [InlineData("context.Request.ReadFromJsonAsync<JsonElement>()")]
     [InlineData("context.Request.Body.ReadAsync(buffer)")]
     [InlineData("context.Request.BodyReader.ReadAsync()")]

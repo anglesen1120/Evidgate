@@ -7,13 +7,13 @@ using World = Tenancy.IntegrationTests.RunCreationTests.World;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// The six raw-body Catalog write routes: an anonymous caller is refused 401 before a byte of the body is buffered,
-/// walked or parsed, so the answer never discloses whether the body was malformed, oversized or valid.
+/// The six raw-body Catalog write routes refuse anonymous callers before buffering, walking or parsing their body,
+/// except when the host's body-limit middleware answers a declared length 413 first.
 /// </summary>
 /// <remarks>
-/// The cap case sends an undeclared-length (chunked) body: a declared <c>Content-Length</c> above the route's or the
-/// host's limit is answered 413 by <c>RequestBodyLimitMiddleware</c> before the endpoint runs, so it could not show
-/// the route's own ordering. Cap and payload answers for authorized callers are unchanged.
+/// A declared <c>Content-Length</c> over the limit <c>RequestBodyLimitMiddleware</c> enforces — the host's 1 MiB
+/// default, or the 4 MiB the suite-revision route declares — is answered 413 before authentication. The in-process
+/// host declares every body's length, so only suite-revision's over-cap case sees that refusal.
 /// </remarks>
 [Trait("Category", "Docker")]
 public sealed partial class CatalogAnonymousBodyTests(
@@ -36,17 +36,32 @@ public sealed partial class CatalogAnonymousBodyTests(
         var valid = await SendBodyAsync(world, target, target.ValidBody, Anonymous);
         AssertUnauthenticated(valid.Answer);
 
-        foreach (var (body, _, undeclared) in BadBodies(target))
+        foreach (var (body, status) in BadBodies(target))
         {
-            var answer = await SendBodyAsync(world, target, body, Anonymous, undeclared);
+            var answer = await SendBodyAsync(world, target, body, Anonymous);
 
-            AssertUnauthenticated(answer.Answer);
-            answer.Text.ShouldBe(valid.Text, "the refusal must not disclose which body was sent");
+            if (route == "suite-revision" && status == HttpStatusCode.RequestEntityTooLarge)
+            {
+                answer.Answer.Status.ShouldBe(HttpStatusCode.RequestEntityTooLarge, answer.Text);
+                answer.Answer.ErrorCode.ShouldBe("payload_too_large");
+            }
+            else
+            {
+                AssertUnauthenticated(answer.Answer);
+                answer.Text.ShouldBe(valid.Text, "the refusal must not disclose which body was sent");
+            }
         }
 
         var control = await SendBodyAsync(world, target, target.ValidBody, world.Admin);
-        control.Answer.Status.ShouldNotBe(HttpStatusCode.Unauthorized,
-            "the same request from an authenticated caller must not be refused as anonymous");
+        if (route == "git-binding")
+        {
+            // This domain refusal proves the authenticated request progressed past authentication.
+            control.Answer.ErrorCode.ShouldBe("installation_not_owned", control.Text);
+        }
+        else
+        {
+            control.Answer.Status.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.Created);
+        }
     }
 
     [Theory]
@@ -68,9 +83,9 @@ public sealed partial class CatalogAnonymousBodyTests(
              where m.org_id = '{world.Org}' and m.user_id = '{user}'
             """)).ShouldBe(0, $"the session holds no role granting {target.Permission}");
 
-        foreach (var (body, status, undeclared) in BadBodies(target))
+        foreach (var (body, status) in BadBodies(target))
         {
-            var answer = await SendBodyAsync(world, target, body, caller, undeclared);
+            var answer = await SendBodyAsync(world, target, body, caller);
 
             answer.Answer.Status.ShouldBe(status, answer.Text);
             answer.Answer.ErrorCode.ShouldBe(status == HttpStatusCode.RequestEntityTooLarge
@@ -145,11 +160,11 @@ public sealed partial class CatalogAnonymousBodyTests(
 
     private static readonly Action<System.Net.Http.Headers.HttpRequestHeaders> Anonymous = _ => { };
 
-    private static (string Body, HttpStatusCode Status, bool UndeclaredLength)[] BadBodies(Target target) =>
+    private static (string Body, HttpStatusCode Status)[] BadBodies(Target target) =>
     [
-        ("{", HttpStatusCode.BadRequest, false),
-        (new string(' ', target.Cap + 1), HttpStatusCode.RequestEntityTooLarge, true),
-        (UnstorableName, HttpStatusCode.UnprocessableEntity, false),
+        ("{", HttpStatusCode.BadRequest),
+        (new string(' ', target.Cap + 1), HttpStatusCode.RequestEntityTooLarge),
+        (UnstorableName, HttpStatusCode.UnprocessableEntity),
     ];
 
     private static void AssertUnauthenticated(ApiAnswer answer)
