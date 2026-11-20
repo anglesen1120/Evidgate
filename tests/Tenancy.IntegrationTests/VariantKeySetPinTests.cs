@@ -88,6 +88,9 @@ public sealed class VariantKeySetPinTests
         var path = Path.Combine(RlsExceptionFile.RepositoryRoot, "fixtures", "variant-hash", "key-sets.json");
         using var document = JsonDocument.Parse(File.ReadAllText(path));
 
-        return document.RootElement.GetProperty(name).EnumerateArray().Select(key => key.GetString()!).ToHashSet(StringComparer.Ordinal);
+        var keys = document.RootElement.GetProperty(name).EnumerateArray().Select(key => key.GetString()!).ToList();
+        keys.Distinct(StringComparer.Ordinal).Count().ShouldBe(keys.Count, $"{name} in key-sets.json has duplicate keys");
+
+        return keys.ToHashSet(StringComparer.Ordinal);
     }
 }

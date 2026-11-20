@@ -24,14 +24,17 @@ function sourceKeys(constName: string): string[] {
       `const ${constName}: Record<string, true> = { ... } not found in normalize.ts: update this pin test`,
     );
   }
-  const rest = source.slice(start.index + start[0].length);
-  const end = rest.indexOf('}');
-  if (end < 0) {
-    throw new Error(`closing brace of ${constName} not found in normalize.ts`);
-  }
+  const lines = source.slice(start.index + start[0].length).split('\n');
   const keys: string[] = [];
-  for (const line of rest.slice(0, end).split('\n')) {
-    if (line.trim() === '' || line.trim().startsWith('//')) {
+  let closed = false;
+  // The first line is the rest of the opening line; the literal ends at a line that starts with `}`.
+  for (const line of lines.slice(1)) {
+    const text = line.trim();
+    if (text.startsWith('}')) {
+      closed = true;
+      break;
+    }
+    if (text === '' || text.startsWith('//')) {
       continue;
     }
     const m = ENTRY.exec(line);
@@ -39,6 +42,9 @@ function sourceKeys(constName: string): string[] {
       throw new Error(`${constName}: cannot parse entry ${JSON.stringify(line)} in normalize.ts`);
     }
     keys.push(m[1] ?? m[2] ?? m[3] ?? '');
+  }
+  if (!closed) {
+    throw new Error(`closing brace of ${constName} not found in normalize.ts`);
   }
   if (keys.length === 0) {
     throw new Error(`${constName} parsed to an empty set from normalize.ts`);
@@ -64,9 +70,9 @@ describe('variant key sets match the shared pin', () => {
 
     const actual = sourceKeys(constName);
 
-    expect(actual.length, 'parsed count differs from the fixture count').toBe(pinned.length);
-    expect(new Set(actual).size, 'duplicate keys').toBe(actual.length);
     expect(drift(actual, pinned)).toBe('missing in normalize.ts [], extra in normalize.ts []');
+    expect(new Set(actual).size, 'duplicate keys').toBe(actual.length);
+    expect(actual.length, 'parsed count differs from the fixture count').toBe(pinned.length);
   });
 });
 
