@@ -1042,3 +1042,9 @@ Closed by S524 (#1071, d3152c9a): EvidgateTelemetry.cs is split into three parti
 | Telemetry partials depend on compile order for the Meter (S524) | Seven EvidgateTelemetry partial files (HealingGateway, Operations, Quota, RawReportEnqueue, Releases, Sessions, Workflow) read the Meter of EvidgateTelemetry.cs in field initialisers, so that file must compile first (true on the LAN: csc lists it first); an order-independent holder is a design change. The AI settings and authoring counters have no recording test. | receiver: observability lane |
 
 Closed in part by S528 (#1079, fa1328be): AiSettingsMetricTests and AuthoringMetricTests record and assert the AI settings and authoring instruments through the real handlers; the compile-order claim stays open in the corrected row.
+
+## Moved from status-carried.md by S529 (2026-11-21)
+
+| Merge debt (#427) | D-S205-M1, merged under 6c: (a) the perf lens ran inside the security-reviewer, no separate performance agent; (b) U7: `IngestEventBatch.Handle` and its file exceed the size limits (the PR added about 20 lines) and must be split; (c) U1: plan ids remain in two comments of `src/Modules/Evidgate.Modules.Ingestion/Endpoints/IngestionEndpoints.cs` | receiver: next ingestion task |
+
+Closed by S529: superseded by the carried row 'Ingest Handle cut and usage-emitter allow-list (S529)'; the file split was abandoned (Handle is one 509-line method).
