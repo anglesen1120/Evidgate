@@ -14,6 +14,7 @@ import { authLogoutCommand } from './authLogout.js';
 import { configCheckCommand } from './configCheck.js';
 import { eventsSendCommand } from './eventsSend.js';
 import { gateCommand } from './gate.js';
+import { manifestsBuildCommand } from './manifestsBuild.js';
 import { manifestsUploadCommand } from './manifestsUpload.js';
 import { quickstartCommand } from './quickstart.js';
 import { runsCreateCommand } from './runsCreate.js';
@@ -63,6 +64,7 @@ export const commandRegistry: Readonly<Record<string, CommandDefinition>> = {
   [configCheckCommand.name]: configCheckCommand,
   [authLoginCommand.name]: authLoginCommand,
   [authLogoutCommand.name]: authLogoutCommand,
+  [manifestsBuildCommand.name]: manifestsBuildCommand,
   [manifestsUploadCommand.name]: manifestsUploadCommand,
   [quickstartCommand.name]: quickstartCommand,
   [runsCreateCommand.name]: runsCreateCommand,

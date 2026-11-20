@@ -25,6 +25,8 @@ holds only the process-level contract.
   `--json` member order); 07.7.1 adds the advisory exit rule; 07.8.1 adds
   `gate --release --target`.
 - 03.5.1 records `evidgate init`.
+- `manifests build` adds §14: build a manifest from a suite revision's execution
+  plan and a Playwright list report, before `manifests upload` sends it.
 
 Command registry: a command is one `CommandDefinition` entry — `name`
 (space-separated words, e.g. `config check`), `summary`, `requireToken`, an
@@ -258,44 +260,57 @@ escaping. That no submitted value is echoed, and that a parameter is named by
 position (`#n`) rather than by value, is the server contract (05.1.1, openapi
 `createManifest`), not a CLI guarantee.
 
-| Code                       | Exit | Meaning                                                                                                                                                                                                                                                                                 |
-| -------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `usage`                    | 3    | unknown command or flag, or a missing flag value; a one-line help pointer follows                                                                                                                                                                                                       |
-| `write_failed`             | 3    | `quickstart --write` could not create or write the file (permissions, read-only filesystem, full disk, I/O); the message is fixed and never names the path                                                                                                                              |
-| `missing_config`           | 3    | a required field or token source is unset; the message lists every missing name at once                                                                                                                                                                                                 |
-| `invalid_config`           | 3    | a value fails validation; the message names the variable and does not echo the value                                                                                                                                                                                                    |
-| `dev_token_refused`        | 3    | `EVIDGATE_DEV_TOKEN` set while `EVIDGATE_ENV` is not exactly `dev`, or the API URL host is not loopback                                                                                                                                                                                 |
-| `transport`                | 3    | the exchange request failed at the network layer, timed out (30 s) or was refused a redirect                                                                                                                                                                                            |
-| `exchange_failed`          | 3    | a non-2xx reply without a usable error envelope, or a 2xx body that fails validation; the body is never echoed                                                                                                                                                                          |
-| `oidc_request_failed`      | 3    | the `ACTIONS_ID_TOKEN_REQUEST_URL` fetch failed (non-2xx, or a body without `value`)                                                                                                                                                                                                    |
-| `token_cache_error`        | 3    | `auth logout` could not delete the token cache; the message names the operation, never a token value. A cache **write** that fails is not this code: it is one stderr warning and the command continues (§7)                                                                            |
-| `manifest_unreadable`      | 3    | the manifest file could not be read (missing, unreadable, not a regular file or empty); the message names the errno code, never the path or the content                                                                                                                                 |
-| `manifest_too_large`       | 3    | the manifest file is larger than the server's published manifest body cap (openapi `x-evidgate-limits.manifest_bytes`, 32 MiB by default); refused locally, before any request                                                                                                          |
-| `request_failed`           | 3    | a non-2xx reply from a project-scoped command (`manifests upload`, `runs create`) without a usable error envelope, or a 2xx body that fails validation; the body is never echoed                                                                                                        |
-| `binding_pending`          | 3    | 403: the repository has not presented the binding challenge yet; hint: set the repository variable `EVIDGATE_BINDING_CHALLENGE` to the challenge shown when the binding was created                                                                                                     |
-| `binding_conflict`         | 3    | 409: this repository is already bound to another organization; hint: its admin must disable that binding first                                                                                                                                                                          |
-| `transport_failed`         | 3    | an `events send` request failed at the network layer or before a reply (connection refused, the 30 s per-request timeout aborting it, a refused redirect); retried while the send deadline allows and reported only when the retries or the deadline are exhausted                      |
-| `deadline_exceeded`        | 3    | `events send` or `artifacts upload` would have to sleep past `EVIDGATE_SEND_DEADLINE` / `EVIDGATE_UPLOAD_DEADLINE`; nothing further is dispatched, and the message names the last error's code, status and `request_id` (plus the unsent batch range for a send)                        |
-| `ack_mismatch`             | 3    | an events 200 whose acks are not one per event, in request order, for the same `event_id` and `accepted`/`duplicate`, or whose counts disagree, or whose body is not an object; nothing advances                                                                                        |
-| `invalid_spool_line`       | 3    | a line handed to the CLI intake is not one JSON envelope with an advancing integer `sequence`                                                                                                                                                                                           |
-| `invalid_spool_id`         | 3    | a run or producer id is not a safe spool path segment, or resolves outside the spool root                                                                                                                                                                                               |
-| `invalid_spool_max_bytes`  | 3    | a spool cap that is not a positive integer (`EVIDGATE_SPOOL_MAX_BYTES` parsing is `invalid_config`)                                                                                                                                                                                     |
-| `invalid_spool_input`      | 3    | `events send --from` input is unreadable or malformed (blank line, invalid UTF-8, bad `sequence`/`producer_id`); see §11                                                                                                                                                                |
-| `envelope_invalid`         | 3    | a line fails the Ajv envelope schema; the message names the line and adds one `detail:` per schema path                                                                                                                                                                                 |
-| `event_too_large`          | 3    | one event cannot fit a 1 MiB batch on its own; the message names its `event_id` and `sequence`                                                                                                                                                                                          |
-| `spool_cap_exceeded`       | 3    | the run directory would cross `EVIDGATE_SPOOL_MAX_BYTES`; nothing was written; names the run and the unsent range                                                                                                                                                                       |
-| `spool_corrupt`            | 3    | a spool line or `cursor.json` that is neither a torn tail nor valid (an `acked_count` above `last_acked_sequence` included), or a line longer than the 32 MiB per-line guard; the message names the chunk and line                                                                      |
-| `spool_missing`            | 3    | no spool exists for that run and producer (never written, or purged)                                                                                                                                                                                                                    |
-| `spool_locked`             | 3    | a live process holds `spool.lock`, a live taker holds the `spool.lock.takeover` mutex while breaking a stale lock, or a live reporter holds `writer.lock` (§11.2, D-S56-Q8), for that producer directory; the message names its pid                                                     |
-| `spool_unsafe_path`        | 3    | a spool path is not a real, owned object — a symlink, another user's directory, or a non-file where a file belongs — or the lock could not be created (the filesystem cannot hard-link) or inspected (an I/O errno); hint: an owned, symlink-free spool on a filesystem with hard links |
-| `invalid_ack`              | 3    | a cursor advance that is not a contiguous prefix already durable in the spool (internal guard)                                                                                                                                                                                          |
-| `unsent_events`            | 3    | `runs finalize` refused: the spool still holds unacked events; the message names the run and the unsent range                                                                                                                                                                           |
-| `upload_path_refused`      | 3    | `artifacts upload --file` is empty, has a control character, is missing/unreadable, is not a regular file (symlink, FIFO, device, directory), changed between the allow-list check and the open, or its real path is outside the allowed roots; refused before any request (§12)        |
-| `upload_too_large`         | 3    | the file is larger than the kind's static cap (`artifact-kind-defaults.v1.json`); refused before any request. A project policy cap is the server's 413 `payload_too_large`, surfaced verbatim (§12)                                                                                     |
-| `upload_checksum_mismatch` | 3    | the file changed between the hash pass and the streaming PUT (size or digest), so the upload was aborted: no `complete`, never retried; the message names the mismatch, never the bytes (§12)                                                                                           |
-| `upload_put_failed`        | 3    | the object store refused the PUT (its XML/text body is never echoed), or the presigned URL expired and no renewal was left; retried only for 408/429/5xx/transport (§12)                                                                                                                |
-| `artifact_rejected`        | 3    | `complete` committed `state: rejected`: the message names the artifact id and the server's `failure_code`, with no retry. A re-run asks `complete` again (a rejection is replayable), so a re-run never reports `ready` for rejected bytes (§12)                                        |
-| `internal_error`           | 3    | an unexpected exception; the message is redacted, and the stack is printed only under `--verbose` (also redacted)                                                                                                                                                                       |
+| Code                               | Exit | Meaning                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `usage`                            | 3    | unknown command or flag, or a missing flag value; a one-line help pointer follows                                                                                                                                                                                                                                                          |
+| `write_failed`                     | 3    | `quickstart --write` could not create or write the file (permissions, read-only filesystem, full disk, I/O); the message is fixed and never names the path                                                                                                                                                                                 |
+| `missing_config`                   | 3    | a required field or token source is unset; the message lists every missing name at once                                                                                                                                                                                                                                                    |
+| `invalid_config`                   | 3    | a value fails validation; the message names the variable and does not echo the value                                                                                                                                                                                                                                                       |
+| `dev_token_refused`                | 3    | `EVIDGATE_DEV_TOKEN` set while `EVIDGATE_ENV` is not exactly `dev`, or the API URL host is not loopback                                                                                                                                                                                                                                    |
+| `transport`                        | 3    | the exchange request failed at the network layer, timed out (30 s) or was refused a redirect                                                                                                                                                                                                                                               |
+| `exchange_failed`                  | 3    | a non-2xx reply without a usable error envelope, or a 2xx body that fails validation; the body is never echoed                                                                                                                                                                                                                             |
+| `oidc_request_failed`              | 3    | the `ACTIONS_ID_TOKEN_REQUEST_URL` fetch failed (non-2xx, or a body without `value`)                                                                                                                                                                                                                                                       |
+| `token_cache_error`                | 3    | `auth logout` could not delete the token cache; the message names the operation, never a token value. A cache **write** that fails is not this code: it is one stderr warning and the command continues (§7)                                                                                                                               |
+| `manifest_unreadable`              | 3    | the manifest file could not be read (missing, unreadable, not a regular file or empty); the message names the errno code, never the path or the content                                                                                                                                                                                    |
+| `manifest_too_large`               | 3    | the manifest file is larger than the server's published manifest body cap (openapi `x-evidgate-limits.manifest_bytes`, 32 MiB by default); refused locally, before any request                                                                                                                                                             |
+| `manifest_report_unreadable`       | 3    | the Playwright list report cannot be read as a bounded regular file; no token acquisition or API request                                                                                                                                                                                                                                   |
+| `manifest_report_invalid`          | 3    | the Playwright list report has invalid JSON or an unsupported/malformed report shape                                                                                                                                                                                                                                                       |
+| `manifest_variant_invalid`         | 3    | local variant metadata or parameters cannot produce a valid canonical variant identity; refused while the report is parsed                                                                                                                                                                                                                 |
+| `manifest_variant_unrepresentable` | 3    | the variant identity is valid but its parameters cannot be carried in a manifest (keys must be lowercase, values strings only); refused after the plan is read, naming the test                                                                                                                                                            |
+| `manifest_invalid`                 | 3    | the built document fails the packaged `manifest.v1` validation before any write (local guard; the same code coming from a server is still passed through verbatim, §8)                                                                                                                                                                     |
+| `manifest_test_unmapped`           | 3    | a local test has no matching execution-plan member; no manifest is written                                                                                                                                                                                                                                                                 |
+| `manifest_test_ambiguous`          | 3    | a local test matches more than one execution-plan member; no manifest is written                                                                                                                                                                                                                                                           |
+| `manifest_test_duplicate`          | 3    | two local tests have the same `case_id` and `variant_hash`; refused, never deduplicated                                                                                                                                                                                                                                                    |
+| `manifest_plan_invalid`            | 3    | the execution plan is unusable: empty, a member or page is malformed, a page names another suite revision, a cursor repeats or a non-null cursor is empty, one case revision and variant is listed twice, the plan changed while it was read, a variant is not the one the plan lists, or the members are not a full case × variant matrix |
+| `manifest_input_too_large`         | 3    | a manifest-build input is over its cap: more than 10,000 tests in the report, more than 20 plan pages, or more than 10,000 plan members                                                                                                                                                                                                    |
+| `manifest_plan_member_unexercised` | 3    | at least one execution-plan member has no local test; at most 20 member identities are named, with a count of the remainder                                                                                                                                                                                                                |
+| `manifest_output_exists`           | 3    | the manifest output path already exists, including a symlink; the command never overwrites it                                                                                                                                                                                                                                              |
+| `manifest_output_unwritable`       | 3    | exclusive creation or writing of the manifest output failed; no credential or file content is echoed                                                                                                                                                                                                                                       |
+| `request_failed`                   | 3    | a non-2xx reply from a project-scoped command (`manifests upload`, `runs create`) without a usable error envelope, or a 2xx body that fails validation; the body is never echoed                                                                                                                                                           |
+| `binding_pending`                  | 3    | 403: the repository has not presented the binding challenge yet; hint: set the repository variable `EVIDGATE_BINDING_CHALLENGE` to the challenge shown when the binding was created                                                                                                                                                        |
+| `binding_conflict`                 | 3    | 409: this repository is already bound to another organization; hint: its admin must disable that binding first                                                                                                                                                                                                                             |
+| `transport_failed`                 | 3    | an `events send` request failed at the network layer or before a reply (connection refused, the 30 s per-request timeout aborting it, a refused redirect); retried while the send deadline allows and reported only when the retries or the deadline are exhausted                                                                         |
+| `deadline_exceeded`                | 3    | `events send` or `artifacts upload` would have to sleep past `EVIDGATE_SEND_DEADLINE` / `EVIDGATE_UPLOAD_DEADLINE`; nothing further is dispatched, and the message names the last error's code, status and `request_id` (plus the unsent batch range for a send)                                                                           |
+| `ack_mismatch`                     | 3    | an events 200 whose acks are not one per event, in request order, for the same `event_id` and `accepted`/`duplicate`, or whose counts disagree, or whose body is not an object; nothing advances                                                                                                                                           |
+| `invalid_spool_line`               | 3    | a line handed to the CLI intake is not one JSON envelope with an advancing integer `sequence`                                                                                                                                                                                                                                              |
+| `invalid_spool_id`                 | 3    | a run or producer id is not a safe spool path segment, or resolves outside the spool root                                                                                                                                                                                                                                                  |
+| `invalid_spool_max_bytes`          | 3    | a spool cap that is not a positive integer (`EVIDGATE_SPOOL_MAX_BYTES` parsing is `invalid_config`)                                                                                                                                                                                                                                        |
+| `invalid_spool_input`              | 3    | `events send --from` input is unreadable or malformed (blank line, invalid UTF-8, bad `sequence`/`producer_id`); see §11                                                                                                                                                                                                                   |
+| `envelope_invalid`                 | 3    | a line fails the Ajv envelope schema; the message names the line and adds one `detail:` per schema path                                                                                                                                                                                                                                    |
+| `event_too_large`                  | 3    | one event cannot fit a 1 MiB batch on its own; the message names its `event_id` and `sequence`                                                                                                                                                                                                                                             |
+| `spool_cap_exceeded`               | 3    | the run directory would cross `EVIDGATE_SPOOL_MAX_BYTES`; nothing was written; names the run and the unsent range                                                                                                                                                                                                                          |
+| `spool_corrupt`                    | 3    | a spool line or `cursor.json` that is neither a torn tail nor valid (an `acked_count` above `last_acked_sequence` included), or a line longer than the 32 MiB per-line guard; the message names the chunk and line                                                                                                                         |
+| `spool_missing`                    | 3    | no spool exists for that run and producer (never written, or purged)                                                                                                                                                                                                                                                                       |
+| `spool_locked`                     | 3    | a live process holds `spool.lock`, a live taker holds the `spool.lock.takeover` mutex while breaking a stale lock, or a live reporter holds `writer.lock` (§11.2, D-S56-Q8), for that producer directory; the message names its pid                                                                                                        |
+| `spool_unsafe_path`                | 3    | a spool path is not a real, owned object — a symlink, another user's directory, or a non-file where a file belongs — or the lock could not be created (the filesystem cannot hard-link) or inspected (an I/O errno); hint: an owned, symlink-free spool on a filesystem with hard links                                                    |
+| `invalid_ack`                      | 3    | a cursor advance that is not a contiguous prefix already durable in the spool (internal guard)                                                                                                                                                                                                                                             |
+| `unsent_events`                    | 3    | `runs finalize` refused: the spool still holds unacked events; the message names the run and the unsent range                                                                                                                                                                                                                              |
+| `upload_path_refused`              | 3    | `artifacts upload --file` is empty, has a control character, is missing/unreadable, is not a regular file (symlink, FIFO, device, directory), changed between the allow-list check and the open, or its real path is outside the allowed roots; refused before any request (§12)                                                           |
+| `upload_too_large`                 | 3    | the file is larger than the kind's static cap (`artifact-kind-defaults.v1.json`); refused before any request. A project policy cap is the server's 413 `payload_too_large`, surfaced verbatim (§12)                                                                                                                                        |
+| `upload_checksum_mismatch`         | 3    | the file changed between the hash pass and the streaming PUT (size or digest), so the upload was aborted: no `complete`, never retried; the message names the mismatch, never the bytes (§12)                                                                                                                                              |
+| `upload_put_failed`                | 3    | the object store refused the PUT (its XML/text body is never echoed), or the presigned URL expired and no renewal was left; retried only for 408/429/5xx/transport (§12)                                                                                                                                                                   |
+| `artifact_rejected`                | 3    | `complete` committed `state: rejected`: the message names the artifact id and the server's `failure_code`, with no retry. A re-run asks `complete` again (a rejection is replayable), so a re-run never reports `ready` for rejected bytes (§12)                                                                                           |
+| `internal_error`                   | 3    | an unexpected exception; the message is redacted, and the stack is printed only under `--verbose` (also redacted)                                                                                                                                                                                                                          |
 
 An uncaught exception, an unhandled rejection or a stdout/stderr `'error'`
 (EPIPE) exits 3 `internal_error` — never 1. `bin.ts` routes its backstop through
@@ -1514,3 +1529,197 @@ generated SDK type, so the CLI never probes a member it cannot see:
   parsing it; the added keys are the only difference.
 - The release route (`GET /v1/releases/{id}/decision`, `ReleaseDecision`) keeps
   its own shape and is not read by this command.
+
+## 14. Manifest build
+
+Build a local [manifest.v1](manifest/manifest.v1.json) file from the catalog's
+execution plan and a Playwright list report, then pass that file to
+`manifests upload` (§8). Building does not upload a manifest or create a run.
+
+```text
+evidgate manifests build --suite-revision <uuid> --playwright-list <file> --out <file> [--json]
+```
+
+| Flag                       | Required | Meaning                                                                                                                     |
+| -------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `--suite-revision <uuid>`  | yes      | Suite revision whose complete execution plan must be exercised; a value that is not a UUID is a `usage` error.              |
+| `--playwright-list <file>` | yes      | Bounded JSON report produced by Playwright list mode; not a test-results report or an identity sidecar.                     |
+| `--out <file>`             | yes      | New manifest file to create; an existing file or symlink is refused.                                                        |
+| `--json`                   | no       | The global JSON mode: print the one-line success object instead of the text summary; the manifest file itself is unchanged. |
+
+Global API/project configuration and token sources remain those of §3–§4.
+The command requires a token (`requireToken: true`) with `suite:plan_read`.
+
+### 14.1 Local checks before authentication
+
+The command validates its flags and reads and parses the list report **before**
+calling `getToken`. A missing flag, unreadable report, invalid JSON, unsupported
+report shape, invalid local variant metadata or a repeated case-and-variant
+therefore causes no token exchange and no execution-plan request. The report is
+read as a bounded file whose containment root is the report's own directory:
+the reader resolves the entry name under that root's realpath and refuses a
+report that resolves outside it, so a symlink whose target stays inside the
+directory is followed. A report over
+10,000 tests is refused with `manifest_input_too_large` at this stage.
+
+The identity input is the existing Playwright list mapping, including the
+selected project's `metadata.evidgate.params` when present. It is not a
+filename/title-only guess and it does not introduce a second identity source:
+`normalizeVariant` resolves each test's variant hash while the report is parsed.
+Invalid report input is `manifest_report_invalid`; unreadable input is
+`manifest_report_unreadable`; invalid variant metadata is
+`manifest_variant_invalid`. Two tests that resolve to the same `case_id` and
+`variant_hash` are `manifest_test_duplicate`: the report is refused, never
+deduplicated, so one execution can never be claimed by two results. All failures
+exit 3, including flag/configuration errors and authentication, transport,
+mapping, schema and output failures.
+
+### 14.2 Execution-plan walk and server errors
+
+After local validation, the generated SDK operation
+`getSuiteRevisionExecutionPlan` reads
+`GET /v1/suite-revisions/{r}/execution-plan` through the shared API-call helper
+with the GET replay-safe policy. Every request uses `limit=500`; subsequent
+requests pass the preceding page's `next_cursor`. A null cursor ends the walk.
+
+The complete walk is bounded to 20 pages and 10,000 members. A continuation
+requiring a twenty-first page or a member count above 10,000 is refused with
+`manifest_input_too_large`, not silently truncated. A page above the route's
+500-member limit is `manifest_plan_invalid` (see below) and is refused before
+any of its members is mapped.
+
+The command refuses the entire plan with `manifest_plan_invalid` when:
+
+- the plan has no members (a manifest that runs nothing must not claim a
+  revision);
+- a continuation cursor repeats, or a non-null `next_cursor` is empty;
+- a page has no `members` list, lists more than 500 members, or its
+  `suite_revision_id` is missing or differs from `--suite-revision`;
+- the page's `next_cursor` is neither `null` nor a string;
+- a member is not an object, its `case_id` is not canonical lowercase,
+  `variant_hash` is not `sha256:` followed by 64 lowercase hexadecimal
+  characters, or `case_revision_id` is not a lowercase UUID;
+- one `case_revision_id` and `variant_hash` pair is listed twice;
+- a member's variant is not the one the local test resolves to, or a member
+  has no matched test by the time executions are built (the plan changed while
+  it was read);
+- the members are not a full case × variant product: the execution count must
+  equal distinct case revisions × distinct variants, because no manifest can
+  describe a partial matrix (the upload would otherwise reject it as
+  `matrix_not_covered`).
+
+No partial plan is mapped or written. A 401 deletes the cached token
+best-effort, then reports the original server error. A 403 keeps the cached
+token, preserves the server problem, and adds the hint `this token lacks
+suite:plan_read; re-mint it (tokens minted before that permission existed lack
+it)`: the permission arrived with migration 0111, so tokens minted before it
+lack the scope while the cached copy is otherwise still valid. A 404 or 5xx also
+preserves the server problem body through the normal §5 redaction/error-envelope
+handling, rather than replacing it with a mapping error. An unusable server
+envelope uses the §5 fallback `request_failed`, whose message names the HTTP
+status only; network, timeout and refused-redirect failures use `transport`.
+These failures exit 3 and do not print a stack trace, a request URL or a token.
+
+### 14.3 Complete, one-to-one mapping
+
+The command builds the execution plan directly from the paged plan read and
+passes it to the existing `mapTestsToMembers` mapping; there is no separate
+manifest-build matching algorithm. Both directions must be complete before
+output is created:
+
+- A local test with no plan member is `manifest_test_unmapped`.
+- A local test matching multiple plan members is `manifest_test_ambiguous`.
+- A plan member without a local test is
+  `manifest_plan_member_unexercised`. Diagnostics name at most 20 members as
+  `case=… variant=…` and count the remainder; they never echo an unbounded
+  member list.
+- Two local tests resolving to the same `case_id` and `variant_hash` were
+  already refused as `manifest_test_duplicate` in §14.1, before the plan was
+  read.
+- A variant that resolves but holds parameters a manifest cannot carry is
+  `manifest_variant_unrepresentable`: manifest parameters need lowercase keys
+  and string values only. The refusal names the test and gives that hint.
+
+Each refusal exits 3. The command cannot produce a success manifest by dropping
+an unmapped test, ignoring an unexercised member, choosing an ambiguous member
+or silently merging duplicate tests.
+
+### 14.4 Emitted file and output
+
+The manifest is validated with the existing packaged `manifest.v1` validator
+against [manifest.v1.json](manifest/manifest.v1.json) **before** writing; a
+document that fails it is `manifest_invalid` and no file is created. Its minimal
+shape contains:
+
+- `schema_version: 1` and the requested `suite_revision_id`;
+- `planned_executions`, one entry per plan member, in plan order, with that
+  member's `case_revision_id`, the matched local test's `variant.params` and a
+  single `target_env`. `required` is omitted, so the schema default `true`
+  applies;
+- `matrix.case_revision_ids` in first-appearance plan order, `matrix.variants`
+  de-duplicated by canonical parameters, and `matrix.target_envs` holding the
+  one target;
+- `shard_plan.shards` with one shard spanning every planned execution, using
+  an inclusive `from_index: 0` and exclusive `to_index` equal to the execution
+  count;
+- `env_needs.target_envs` with that one target and no secret references.
+
+The fixed target label is `default`; it denotes the single local planning
+target, not a discovered or provisioned deployment environment. The shard id
+is `shard-1`. Variant parameters come from the matching project's
+`metadata.evidgate.params` when available; the unparameterized variant uses
+`{}`. `environment_revision_id` is omitted. The builder does not invent an
+environment revision or infer secrets.
+
+The manifest bytes are compact JSON with a single trailing newline and a fixed
+key order: the same complete plan, report and options produce identical bytes.
+No timestamp, random id, token or credential is added. Creation is exclusive,
+with a requested mode of 0600 (subject to the platform's permission model); an
+existing output is `manifest_output_exists`, including an existing symlink. The
+command never follows an output symlink or overwrites an existing manifest.
+Other output creation/write failures are `manifest_output_unwritable`. A
+partial `--out` created by this run is removed when the write fails (best
+effort: an entry that replaced it before the identity check is left untouched;
+a swap between the check and the unlink cannot be excluded, Node has no
+unlink-by-identity call).
+
+Success exits 0. Text mode prints one line:
+
+```text
+manifest=<out> executions=<n> suite_revision_id=<id>
+```
+
+`--json` prints one compact object line plus a trailing newline, with the path,
+execution count and suite revision id:
+
+```json
+{
+  "manifest": "evidgate-manifest.json",
+  "executions": 2,
+  "suite_revision_id": "11111111-1111-4111-8111-111111111111"
+}
+```
+
+Neither output mode prints a credential. Errors follow §5 and the global
+redaction rules; `--json` does not turn a failure into a success object.
+
+### 14.5 Examples and boundaries
+
+For a project whose Playwright configuration supplies the existing Evidgate
+identity metadata, enumerate first, build into a new path, then upload:
+
+```sh
+npx playwright test --list --reporter=json > playwright-list.json
+evidgate manifests build \
+  --suite-revision 11111111-1111-4111-8111-111111111111 \
+  --playwright-list playwright-list.json --out evidgate-manifest.json
+evidgate manifests upload --file evidgate-manifest.json --json
+```
+
+Use a new output path for another build; the command has no overwrite flag and
+no Playwright-project selection flag: the report itself is already scoped to the
+project that produced it. Sidecar identity sources, multi-shard planning and
+`environment_revision_id` selection are not supported. Removing or replacing
+the Pilot-0 script builder is also outside this command's scope. The Pilot-0
+live build/upload path has **not been exercised against a real server**; these
+examples do not claim that live validation.
