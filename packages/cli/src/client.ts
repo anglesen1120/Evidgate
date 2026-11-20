@@ -10,6 +10,7 @@ import { boundedResponse, ResponseReadError } from './boundedResponse.js';
 import { CliError } from './errors.js';
 import type { ResolvedConfig } from './config.js';
 import { registerSecret } from './redact.js';
+import { assertRequestBodyWithinCap, wireBody } from './requestCaps.js';
 
 /**
  * The API version prefix every SDK operation path is relative to. The openapi document
@@ -45,6 +46,12 @@ export function createApiClient(
     // through the byte cap, so no command can buffer an unbounded body.
     fetch: async (input, init) =>
       boundedResponse(await fetchImpl(new Request(input, { ...init, redirect: 'error' }))),
+  });
+  // Every body is measured before the request is sent; a CliError thrown here is rethrown
+  // by the error interceptor below, so nothing reaches the network and no retry is attempted.
+  client.interceptors.request.use((request, options) => {
+    assertRequestBodyWithinCap(options.method, options.url, wireBody(options));
+    return request;
   });
   // The generated client turns a body-read failure into a returned error next to the response
   // it was reading. A failure on a 2xx answer can never be an answer, so it is rethrown; on an
