@@ -8,7 +8,6 @@ using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using Evidgate.Modules.Catalog.Domain;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Evidgate.Modules.Catalog.Endpoints;
 
@@ -40,12 +39,8 @@ internal static class CatalogRequestRules
             throw new TenantContextMissingException();
         }
 
-        // A session with an unreadable organization header is published as a principal but resolves no
-        // tenant, so the pipeline's own tenant 401 is raised here too, before a byte of the body is read.
-        if (context.RequestServices.GetRequiredService<IRequestTenantContextAccessor>().Current is null)
-        {
-            throw new TenantContextMissingException();
-        }
+        // A published principal may still lack a tenant; refuse before inspecting its body.
+        RawBodyGuard.RequireResolvedTenant(context.RequestServices);
 
         return await ReadJsonAsync(context, limit, cancellationToken, refuseUnstorableValues).ConfigureAwait(false);
     }

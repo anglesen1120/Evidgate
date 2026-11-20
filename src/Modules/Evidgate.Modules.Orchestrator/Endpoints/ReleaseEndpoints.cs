@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Orchestrator.Application.Releases;
 using Evidgate.Modules.Orchestrator.Contracts;
@@ -76,6 +77,8 @@ internal static class ReleaseEndpoints
         {
             return Result.Failure<ReleaseCreated>(OrchestratorEndpoints.Unauthenticated);
         }
+        // A principal without a tenant must get the pipeline's 401 before body processing.
+        RawBodyGuard.RequireResolvedTenant(context.RequestServices);
 
         var (bytes, tooLarge) = await OrchestratorEndpoints
             .ReadBodyAsync(context, MaxReleaseBytes, null, cancellationToken)
@@ -117,6 +120,7 @@ internal static class ReleaseEndpoints
         {
             return Result.Failure<ReleaseBindResult>(OrchestratorEndpoints.Unauthenticated);
         }
+        RawBodyGuard.RequireResolvedTenant(context.RequestServices);
 
         var (bytes, tooLarge) = await OrchestratorEndpoints
             .ReadBodyAsync(context, MaxReleaseBytes, null, cancellationToken)
