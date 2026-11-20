@@ -79,8 +79,8 @@ public sealed partial class RawBodyGuardBoundaryTests
     {
         var text = File.ReadAllText(Path.Combine(SolutionLayout.RepoRoot, GuardFile));
 
-        text.ShouldContain("static void RequireAuthenticatedTenant(HttpContext");
-        text.ShouldContain("static void RequireResolvedTenant(HttpContext");
+        text.ShouldContain("static void RequireAuthenticatedTenant(IServiceProvider");
+        text.ShouldContain("static void RequireResolvedTenant(IServiceProvider");
         text.ShouldContain("TenantContextMissingException");
     }
 
@@ -423,8 +423,12 @@ public sealed partial class RawBodyGuardBoundaryTests
         var context = method.ParameterList.Parameters
             .FirstOrDefault(parameter => parameter.Type?.ToString().EndsWith("HttpContext", StringComparison.Ordinal) == true);
         return IsGuard(call) && context is not null && call.ArgumentList.Arguments.Count == 1
-            && call.ArgumentList.Arguments[0].Expression is IdentifierNameSyntax argument
-            && argument.Identifier.ValueText == context.Identifier.ValueText;
+            && call.ArgumentList.Arguments[0].Expression is MemberAccessExpressionSyntax
+            {
+                Expression: IdentifierNameSyntax owner,
+                Name.Identifier.ValueText: "RequestServices",
+            }
+            && owner.Identifier.ValueText == context.Identifier.ValueText;
     }
 
     private static bool IsGuard(InvocationExpressionSyntax call) => call.Expression is MemberAccessExpressionSyntax access
