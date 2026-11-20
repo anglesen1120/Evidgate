@@ -51,9 +51,13 @@
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Usage.Contracts\Evidgate.Modules.Usage.Contracts.csproj" />
     <!-- 02.1.1-T2: the endpoint suites drive Program (ApiHost) through WebApplicationFactory. -->
     <ProjectReference Include="..\..\src\Evidgate.Api\Evidgate.Api.csproj" />
+    <!-- The 100k budget test launches the parse child as a real process, so a build of this project must produce
+         Evidgate.Parser.dll beside its own output. The assembly is never referenced: only the file is launched. -->
+    <ProjectReference Include="..\..\src\Evidgate.Parser\Evidgate.Parser.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
+    <Compile Include="..\Shared\FixtureLoader.cs" Link="FixtureLoader.cs" />
     <Compile Include="..\Shared\ContainerStart.cs" Link="ContainerStart.cs" />
     <Compile Include="..\Shared\ContainerStartReaper.cs" Link="ContainerStartReaper.cs" />
     <Compile Include="..\Shared\ContractSchemaWarmup.cs" Link="ContractSchemaWarmup.cs" />
