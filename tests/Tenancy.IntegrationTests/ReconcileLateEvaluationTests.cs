@@ -287,6 +287,11 @@ public sealed partial class ReconcileRunTests
     private async Task StartEvaluatedCompleteRunAsync(IngestTestWorld world)
     {
         await SeedPinnedPolicyAsync(world, world.RunId, "trace");
+        foreach (var execution in world.Plan.Executions)
+        {
+            await SeedReadyArtifactAsync(world, world.RunId, execution.ExecutionKey, attemptNo: 1, kind: "trace");
+        }
+
         await StartCompleteRunAsync(world);
         await DispatchFrozenEvaluationsAsync(world, expectedDone: 1);
         (await RevisionCountAsync(world)).ShouldBe(1);
@@ -305,9 +310,17 @@ public sealed partial class ReconcileRunTests
         await DispatchFrozenEvaluationsAsync(world, expectedDone: 2);
     }
 
-    /// <summary>A complete run's window is closed by its zero-minute window: the anchor is the completion instant itself.</summary>
-    private Task CloseCompleteWindowAsync(IngestTestWorld world, Guid runId) =>
-        _fixture.ExecuteAsync(world.Database, $"update public.run set late_window_minutes = 0 where id = '{runId:D}'");
+    /// <summary>
+    /// A complete run's window is closed by its zero-minute window: the anchor is the completion instant itself, and the
+    /// later statement's clock is the proof that the window is spent, so no case waits for wall-clock time.
+    /// </summary>
+    private async Task CloseCompleteWindowAsync(IngestTestWorld world, Guid runId)
+    {
+        await _fixture.ExecuteAsync(
+            world.Database, $"update public.run set late_window_minutes = 0 where id = '{runId:D}'");
+        (await world.ScalarAsync<bool>($"select now() > completed_at from public.run where id = '{runId:D}'"))
+            .ShouldBeTrue("the refusal needs the window spent, which the later transaction's clock proves");
+    }
 
     private static Task<string?> CompletedAtTextAsync(IngestTestWorld world, Guid runId) =>
         world.ScalarAsync<string?>($"select completed_at::text from public.run where id = '{runId:D}'");

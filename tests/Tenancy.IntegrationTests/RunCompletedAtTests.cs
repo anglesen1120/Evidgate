@@ -1,7 +1,9 @@
 // `run.completed_at` against a real PostgreSQL: the collecting -> complete edge stamps it once, every role is refused a
 // caller-chosen instant (update and insert), the app role cannot write the column at all, and a complete row without it
-// is closed. The late-window admission itself is covered by the reconcile suite; this class owns the column's shape.
+// is closed. The admission decisions built on it live in the reconcile and report suites; this class owns the column's
+// shape and the window edge the shared predicate is measured from.
 using System.Net;
+using Evidgate.Modules.Orchestrator.Contracts;
 using Shouldly;
 using Xunit;
 
@@ -60,6 +62,34 @@ public sealed class RunCompletedAtTests : IClassFixture<TenancyHostPool>
         (await CompletedAtAsync(world, world.RunId)).ShouldBe(stamped, "the completion instant is stamped once");
     }
 
+    /// <summary>
+    /// The window's own edge: one transaction completes the run, so the instant the guard stamps is that transaction's
+    /// <c>now()</c>, and the shared predicate asked in the same transaction still admits. A later transaction is past it.
+    /// </summary>
+    [Fact]
+    public async Task ZeroMinuteWindow_AtTheCompletionInstant_IsOpen_ThenClosedByALaterTransaction()
+    {
+        await using var world = await StartAsync();
+        await world.SetRunStateAsync("collecting");
+        await _fixture.ExecuteAsync(
+            world.Database, $"update public.run set late_window_minutes = 0 where id = '{world.RunId:D}'");
+
+        await using (var scope = await AppScopeAsync(world))
+        {
+            (await scope.ExecuteAsync($"update public.run set state = 'complete' where id = '{world.RunId:D}'"))
+                .ShouldBe(1);
+            (await scope.ScalarAsync<bool>(LateWindowSql(world)))
+                .ShouldBeTrue("the completion instant plus zero is this transaction's own now(), so the edge is included");
+            await scope.CommitAsync();
+        }
+
+        await using (var later = await AppScopeAsync(world))
+        {
+            (await later.ScalarAsync<bool>(LateWindowSql(world)))
+                .ShouldBeFalse("a later transaction's clock is past a zero-minute window");
+        }
+    }
+
     [Fact]
     public async Task IncompleteAndCanceled_LeaveCompletedAtNull()
     {
@@ -114,15 +144,63 @@ public sealed class RunCompletedAtTests : IClassFixture<TenancyHostPool>
         refused.SqlState.ShouldBe("23514");
         refused.MessageText.ShouldStartWith("run_completed_at_immutable");
         (await CompletedAtAsync(world, world.RunId)).ShouldBeNull();
+    }
 
-        // The state CHECK is the second lock: a row that somehow carried an instant outside complete cannot exist.
-        (await world.ScalarAsync<string>(
-            "select pg_get_constraintdef(c.oid) from pg_constraint c "
-            + "join pg_class t on t.oid = c.conrelid "
-            + "where t.relname = 'run' and c.conname = 'run_completed_at_state_check'"))
-            .ShouldBe(
-                "CHECK (((completed_at IS NULL) OR (state = 'complete'::text)))",
-                "the constraint binds the instant to the terminal state");
+    /// <summary>
+    /// The CHECK is the row's second lock, reachable only once the invoker guard is out of the way. Both guards are
+    /// disabled inside a transaction that rolls back, so the update reaches the constraint and the constraint fires.
+    /// </summary>
+    [Fact]
+    public async Task StateCheck_RefusesAnUpdatedInstantOnANonCompleteRow_WhenTheGuardsAreDisabled()
+    {
+        await using var world = await StartAsync();
+        await world.SetRunStateAsync("collecting");
+
+        await using (var scope = await OwnerScopeAsync(world))
+        {
+            await scope.ExecuteAsync("alter table public.run disable trigger run_completed_at_guard_trg");
+            await scope.ExecuteAsync("alter table public.run disable trigger run_completed_at_insert_guard_trg");
+
+            var refused = await scope.CaptureErrorAsync(
+                $"update public.run set completed_at = now() where id = '{world.RunId:D}'");
+
+            refused.SqlState.ShouldBe("23514");
+            refused.ConstraintName.ShouldBe(
+                "run_completed_at_state_check", "the CHECK binds the instant to the terminal state");
+        }
+
+        // The DDL above is transactional, so the rollback put both guards back: the column is immutable again.
+        (await OwnerErrorAsync(world, $"update public.run set completed_at = now() where id = '{world.RunId:D}'"))
+            .MessageText.ShouldStartWith("run_completed_at_immutable");
+    }
+
+    /// <summary>The same second lock on the insert path: a non-complete row never carries a caller's instant.</summary>
+    [Fact]
+    public async Task StateCheck_RefusesAnInsertedInstantOnANonCompleteRow_WhenTheGuardsAreDisabled()
+    {
+        await using var world = await StartAsync();
+
+        await using (var scope = await OwnerScopeAsync(world))
+        {
+            await scope.ExecuteAsync("alter table public.run disable trigger run_completed_at_guard_trg");
+            await scope.ExecuteAsync("alter table public.run disable trigger run_completed_at_insert_guard_trg");
+
+            var refused = await scope.CaptureErrorAsync(
+                InsertRunWithInstantSql, ("id", Guid.CreateVersion7()), ("seed", world.RunId), ("state", "collecting"));
+
+            refused.SqlState.ShouldBe("23514");
+            refused.ConstraintName.ShouldBe(
+                "run_completed_at_state_check", "the CHECK binds the instant to the terminal state");
+        }
+
+        // Positive control for the rollback: with the insert guard restored, the same insert is refused before the CHECK.
+        await using (var control = await OwnerScopeAsync(world))
+        {
+            var refused = await control.CaptureErrorAsync(
+                InsertRunWithInstantSql, ("id", Guid.CreateVersion7()), ("seed", world.RunId), ("state", "collecting"));
+
+            refused.MessageText.ShouldStartWith("run_completed_at_insert_refused");
+        }
     }
 
     [Fact]
@@ -245,6 +323,10 @@ public sealed class RunCompletedAtTests : IClassFixture<TenancyHostPool>
 
     private static Task<string?> CompletedAtAsync(IngestTestWorld world, Guid runId) =>
         world.ScalarAsync<string?>($"select completed_at::text from public.run where id = '{runId:D}'");
+
+    /// <summary>The shared window predicate, asked the way both admission readers compose it: one run row under <c>r</c>.</summary>
+    private static string LateWindowSql(IngestTestWorld world) =>
+        "select " + RunAdmissionPolicy.LateWindowOpenSql + $" from public.run r where r.id = '{world.RunId:D}'";
 
     /// <summary>Runs one statement as the owner that the schema must refuse, and returns the server error.</summary>
     private async Task<Npgsql.PostgresException> OwnerErrorAsync(IngestTestWorld world, string sql)

@@ -278,12 +278,12 @@ internal sealed class IngestEventBatchHandler(
                 "the run belongs to a project outside the credential's scope"));
         }
 
-        // T12/T81: a canceled run still accepts events and marks them after_cancel (T12); an incomplete run
+        // A canceled run still accepts events and marks them after_cancel; an incomplete run
         // still accepts late evidence inside its late window, and a complete run inside the window that starts
         // at its own completion instant, each marked late = true - after the window either answers 409
-        // run_closed (T81). The run row's immutable window (T93) and its completion instant (stamped once by the
+        // run_closed. The run row's immutable window and its completion instant (stamped once by the
         // transition, never moved) are what close it; a complete row written before that instant existed carries
-        // NULL and is closed. The state and the window are read from the run row taken FOR SHARE (T91), so a
+        // NULL and is closed. The state and the window are read from the run row taken FOR SHARE, so a
         // committed cancel or completion can never be missed. The decision itself is shared with every other
         // evidence writer, so no route can disagree on what is closed.
         var admission = RunAdmissionPolicy.Decide(scope.ProjectState, scope.RunState, scope.LateWindowOpen);

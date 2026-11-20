@@ -9,7 +9,8 @@
 -- also covers new columns, so the insert guard refuses a caller-supplied completion instant independently of role.
 -- The UPDATE OF guard runs only for explicitly targeted columns; the state trigger's assignment still stamps it.
 --
--- LOCKS / ORDER: lock_timeout bounds DDL waits; apply this file before deploying the readers of completed_at.
+-- LOCKS / ORDER: the validated CHECK scans public.run under ACCESS EXCLUSIVE; lock_timeout bounds only DDL waits.
+-- Pilot-size table assumed small [INFERENCE: scan duration unmeasured]. Apply before deploying completed_at readers.
 -- All changes and the journal entry share the migrator's one transaction. Guarded DDL permits replay.
 -- ROLLBACK: deploy the previous readers first, restore run_guard_transition from 0099, then drop this file's
 -- two triggers/functions, CHECK and column. Dropping the column loses completion instants, never evidence revisions.
