@@ -791,6 +791,12 @@ Closed by S477 (#983, 48844c2d): `rate_limit_acquire` takes a cost (1..16) and `
 
 Closed by S477 (#983, 48844c2d): a live window at the limit is refused by a plain read that writes and locks nothing; row xmin/ctid stay unchanged across refusals (`Acquire_RefusalsOnALiveWindow_LeaveTheRowVersionUnchangedUntilTheRolloverRewritesIt`, red when the write was restored). WAL volume itself is not measured, see the new carried row.
 
+## Moved from status-carried.md by S476 (2026-11-20)
+
+| T3.1b execution-plan CLI wiring (S467) | T3.1a (#963) maps tests behind an input port; the route GET /v1/suite-revisions/{r}/execution-plan, its narrow permission, the SDK read, command wiring (401 purge, 403/404/5xx passthrough, exit 3), the `contracts/cli.md` section and quickstart are not built. Draft is in the 04.2.2 plan T3 section | receiver: S469 route lane, then a CLI lane; the route and permission landed in #970 (S469), SDK read, command wiring, `contracts/cli.md` and quickstart remain; receiver now: coordinator (CLI lane) |
+
+Closed by S476 (#982): `evidgate manifests build` reads the execution plan through the generated SDK (401 purge, 403 re-mint hint, 404/5xx passthrough, exit 3), maps through the #963 input port and writes `manifest.v1`; `contracts/cli.md` §14 and the quickstart note landed.
+
 ## Moved from status-carried.md by S479 (2026-11-20)
 
 | Blob final body payload and empty-body pins (S475) | `toFetchBody` reads `Blob.size` for an empty body and forwards a Blob to `Response`, but no spec pins the payload bytes or the empty-Blob case: the two jsdom-Blob cases failed in the shared vitest worker (jsdom Blob is not accepted by Node's native Response). Pin them with a Blob from `node:buffer` in an isolated spec file, or in the Playwright path. | receiver: core/http owner |
