@@ -992,3 +992,9 @@ Closed by #1059 (6a06088a): the runbook is in the incident-process §6 table (P3
 | Architecture tests copy the src walk (S504) | Closed by #1037: one `SolutionLayout.ProductionSourceFiles()` walk for 5 copies, `Scan` split. Open: explicit Roslyn reference decision (5.3.0 stays transitive via Corvus); six subtree walks keep their own filter (EvaluatorPurity, ReleaseArchitecture has no bin/obj filter, HealingSystemSwitch, UsagePriceInsertGlobal, PolicyPersistenceSqlOwnership, CatalogBodyRead); walk floor is 1000 plus anchors, not an exact count | receiver: coordinator (next architecture-test lane) |
 
 Closed by #1062 (422946b5): `SolutionLayout.SourceFiles` is the one source walk with one bin/obj filter, and EvaluatorPurity, ReleaseArchitecture, HealingSystemSwitch, UsagePriceInsertGlobal, PolicyPersistenceSqlOwnership and CatalogBodyRead use it; per-subtree floors with anchors pin it, and eight LAN mutants ran red. The Roslyn reference decision moved to its own carried row.
+
+## Moved from status-carried.md by S520 (2026-11-21)
+
+| Estimate rows of feature plan 04.1.3 sum to 3.0 d against 2.5 d in its re-estimate (S511) | The sub-task rows T1.1 0.25 + T1.2 0.25 + T2.1 0.5 + T2.2a 0.5 + T2.2b 0.5 + T3.1 0.5 + T3.2 0.5 = 3.0 d (T2.2c unsized, not counted), while the feature plan Re-estimate line and the area plan epic 04.1 (T1 S 0.5, T2 M 1.0, T3 M 1.0) say 2.5 d. T2's three delivered sub-rows (T2.1, T2.2a, T2.2b) add up to 1.5 d against the 1.0 d M row. No roll-up in 00 §14 was changed. | receiver: next lane touching the 04.1.3 plan, decide whether 00 §14 takes +0.5 d or the sub-task sizes are re-cut |
+
+Closed by #1065 (4a2afcd6): the 04.1.3 sub-rows were re-cut (T2.1 and T2.2b to XS) so each parent sums to its area-plan row and the total equals the 2.5 d Re-estimate line; T2.2c stays [OPEN] outside the roll-up (new carried row).
