@@ -115,6 +115,18 @@ error responses reference
 value where it has one (`EVIDGATE__LOGIN__RETRYAFTERSECONDS` on the pre-tenant auth routes),
 otherwise the envelope filter's default `60` (00 §9.2).
 
+The support-grant surface (02.8.1) is the one place a tenant admin reads and decides
+operator access: `GET /v1/orgs/{o}/support-grants` (`support:read`) is a keyset page
+whose `state` is derived as `requested`, `approved`, `revoked` or `expired`;
+`POST /v1/support-grants/{g}/approve` and `/revoke` (`support:approve`) answer a bodyless
+`200`. Approval takes its approver from the authenticated principal only — never from a
+body or header — and refuses a principal who is not an active `tenant_admin` of the
+grant's org with `403 approver_not_tenant_admin`, a grant that is no longer requested
+with `409 grant_not_requested`, and self-approval with `422 approver_must_differ`; revoke
+refuses an already revoked grant with `409 grant_already_revoked`. Both mutations keep
+`Idempotency-Key`, so neither appears in the exemption list below. `POST /v1/support-grants`
+(request) stays declared but unserved in this scope.
+
 `Idempotency-Key` exemptions (00-grounded, enforced by the spectral
 `evg-mutation-idempotency` rule — keep this list, the function's
 `IDEMPOTENCY_EXEMPT` map and the helper's `IDEM_EXEMPT` in sync):

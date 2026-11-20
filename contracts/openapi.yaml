@@ -4948,6 +4948,13 @@ paths:
       operationId: approveSupportGrant
       tags: [support]
       summary: Approve a support grant; approver is a `tenant_admin` of the target org ≠ requester
+      description: >-
+        No request body. The approver is taken only from the authenticated principal and must be an
+        active member holding the built-in `tenant_admin` role of the grant's organization, distinct
+        from the requester. Returns 200 with no body. Missing permission is 403 `forbidden`; an
+        ineligible approver is 403 `approver_not_tenant_admin`; a missing grant or one of another org
+        is 404 `not_found`; a grant no longer requested is 409 `grant_not_requested`; self-approval
+        is 422 `approver_must_differ`.
       x-permission: support:approve
       x-version: v1
       parameters:
@@ -4980,9 +4987,10 @@ paths:
       tags: [support]
       summary: Revoke a support grant
       description: >-
-        Permission: 00 §9.3 lists `support:grant` / `support:approve` for the
-        `approve|revoke` route pair; `support:approve` is carried here pending
-        CR clarification.
+        No request body. Any holder of `support:approve` in the grant's organization may revoke a
+        requested or approved grant; the caller need not be its approver. Returns 200 with no body.
+        A missing grant or one of another org is 404 `not_found`; a previously revoked grant is
+        409 `grant_already_revoked`.
       x-permission: support:approve
       x-version: v1
       parameters:
@@ -5003,6 +5011,42 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /orgs/{o}/support-grants:
+    get:
+      operationId: listSupportGrants
+      tags: [support]
+      summary: Cursor page of the organization's support grants
+      description: >-
+        Keyset-ordered on `(created_at, id)` descending. State is derived from approval, revocation
+        and expiry timestamps: requested, approved, revoked or expired. Another org's id is 404.
+      x-permission: support:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of support grants
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportGrantList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -12593,6 +12637,72 @@ components:
         expires_at:
           type: string
           format: date-time
+    SupportGrant:
+      type: object
+      required:
+        [
+          id,
+          org_id,
+          operator_user_id,
+          scopes,
+          project_ids,
+          reason,
+          state,
+          approved_by,
+          approved_at,
+          expires_at,
+          revoked_at,
+          created_at,
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        operator_user_id:
+          type: string
+          format: uuid
+        scopes:
+          type: array
+          items:
+            type: string
+        project_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        reason:
+          type: string
+        state:
+          type: string
+          enum: [requested, approved, revoked, expired]
+        approved_by:
+          type: [string, 'null']
+          format: uuid
+        approved_at:
+          type: [string, 'null']
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type: [string, 'null']
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    SupportGrantList:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SupportGrant'
+        next_cursor:
+          type: [string, 'null']
     ApiTokenListResponse:
       type: object
       required: [items, next_cursor]
