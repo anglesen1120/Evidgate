@@ -212,8 +212,9 @@ public sealed partial class SupportGrantTests
         (await AuditCountAsync("support_grant.approve")).ShouldBe(0, "a losing decision queues no audit row");
 
         // The 412 rolled its idempotency row back, so the key is still usable and now meets the decided grant.
-        (await client.SendAsync(HttpMethod.Post, ApproveUrl(grant), Admin(founder, org), null, key))
-            .Status.ShouldBe(HttpStatusCode.Conflict);
+        var retry = await client.SendAsync(HttpMethod.Post, ApproveUrl(grant), Admin(founder, org), null, key);
+        retry.Status.ShouldBe(HttpStatusCode.Conflict, retry.ErrorMessage);
+        retry.ErrorCode.ShouldBe("grant_not_requested", "the key was usable again and met the decided grant, not a stale idempotency row");
         (await ColumnAsync<int>("version", grant)).ShouldBe(2, "the refused retry wrote nothing either");
     }
 
