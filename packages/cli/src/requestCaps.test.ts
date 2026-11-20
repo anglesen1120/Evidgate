@@ -1,6 +1,12 @@
 // One cap per request body: a body one byte over its cap is refused before the network sees
 // it, a body exactly at the cap is sent, and the refusal text carries no body byte or token.
-import { createRun, createArtifactUploadUrl, exchangeCiToken, finalizeRun } from '@evidgate/sdk';
+import {
+  completeArtifact,
+  createRun,
+  createArtifactUploadUrl,
+  exchangeCiToken,
+  finalizeRun,
+} from '@evidgate/sdk';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { callApi } from './callApi.js';
@@ -30,13 +36,21 @@ const uuid = '11111111-1111-4111-8111-111111111111';
 // Assembled at runtime so no secret-shaped literal sits in the file.
 const marker = ['egt', 'SECRETMARKER', 'value'].join('_');
 
-function recorder(): { fetch: typeof fetch; calls: () => number } {
+function recorder(): {
+  fetch: typeof fetch;
+  calls: () => number;
+  byteLengths: () => readonly number[];
+} {
   let calls = 0;
+  const byteLengths: number[] = [];
   return {
     calls: () => calls,
-    fetch: () => {
+    byteLengths: () => byteLengths,
+    fetch: async (input, init) => {
       calls += 1;
-      return Promise.resolve(jsonResponse(201, {}));
+      const request = input instanceof Request ? input : new Request(input, init);
+      byteLengths.push((await request.arrayBuffer()).byteLength);
+      return jsonResponse(201, {});
     },
   };
 }
@@ -52,6 +66,13 @@ type Send = (
 ) => Promise<unknown>;
 
 const sends: Record<string, Send> = {
+  'POST /runs/{r}/events': (client, body) =>
+    client.post({
+      url: '/runs/{r}/events',
+      path: { r: uuid },
+      body,
+      bodySerializer: () => body,
+    }),
   'POST /projects/{p}/manifests': (client, body) =>
     client.post({
       url: '/projects/{p}/manifests',
@@ -145,6 +166,7 @@ describe('request body caps', () => {
       );
       expect(outcome).toBeInstanceOf(CliError);
       expect((outcome as CliError).code).toBe('request_too_large');
+      expect((outcome as CliError).hint).toBe('this request was not sent');
       expect((outcome as CliError).message).not.toContain(marker);
       expect((outcome as CliError).message).not.toContain('xxxx');
       expect(transport.calls()).toBe(0);
@@ -159,6 +181,7 @@ describe('request body caps', () => {
         : bodyOf(cap);
       await send(client, exact);
       expect(transport.calls()).toBe(1);
+      expect(transport.byteLengths()).toEqual([cap]);
     });
   });
 
@@ -189,6 +212,49 @@ describe('request body caps', () => {
     expect(transport.calls()).toBe(0);
   });
 
+  it.each([
+    { form: 'empty string', body: '' },
+    { form: 'empty typed array', body: new Uint8Array(0) },
+  ])('refuses a present $form on a route with no cap', async ({ body }) => {
+    const transport = recorder();
+    const client = createApiClient(config, marker, transport.fetch);
+    await expect(
+      client.post({ url: '/unlisted', body, bodySerializer: null }),
+    ).rejects.toMatchObject({ code: 'request_failed' });
+    expect(transport.calls()).toBe(0);
+  });
+
+  it.each([
+    { form: 'empty string', body: '' },
+    { form: 'empty typed array', body: new Uint8Array(0) },
+  ])('sends a present $form on a capped route', async ({ body }) => {
+    const transport = recorder();
+    const client = createApiClient(config, marker, transport.fetch);
+    await client.post({
+      url: '/projects/{p}/manifests',
+      path: { p: 'p' },
+      body,
+      bodySerializer: null,
+    });
+    expect(transport.calls()).toBe(1);
+    expect(transport.byteLengths()).toEqual([0]);
+  });
+
+  it.each([
+    { form: 'empty string', serializedBody: '' },
+    { form: 'undefined', serializedBody: undefined },
+  ])('omits a serializer output of $form on a route with no cap', async ({ serializedBody }) => {
+    const transport = recorder();
+    const client = createApiClient(config, marker, transport.fetch);
+    await client.post({ url: '/unlisted', body: {}, bodySerializer: () => serializedBody });
+    expect(transport.calls()).toBe(1);
+    expect(transport.byteLengths()).toEqual([0]);
+  });
+
+  it.each([undefined, null])('accepts an absent body (%s) on a route with no cap', (body) => {
+    expect(() => assertRequestBodyWithinCap('POST', '/unlisted', body)).not.toThrow();
+  });
+
   it('refuses a body whose length cannot be measured', () => {
     const route = 'POST /projects/{p}/manifests';
     for (const body of [new ReadableStream(), new ArrayBuffer(4), { a: 1 }]) {
@@ -203,6 +269,8 @@ describe('request body caps', () => {
     const transport = recorder();
     const client = createApiClient(config, marker, transport.fetch);
     await client.get({ url: '/runs/{r}/decision', path: { r: uuid } });
-    expect(transport.calls()).toBe(1);
+    await completeArtifact({ client, path: { a: uuid }, headers: { 'Idempotency-Key': 'k' } });
+    expect(transport.calls()).toBe(2);
+    expect(transport.byteLengths()).toEqual([0, 0]);
   });
 });

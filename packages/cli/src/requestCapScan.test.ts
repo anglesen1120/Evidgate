@@ -3,6 +3,12 @@
  * Two kinds of site exist: a generated SDK operation (or the client's own `post`) called with
  * a `body`, whose `METHOD route` must be a row of the cap table; and a direct `fetch` with a
  * `body`, which bypasses the client and is allowed only in the functions listed below.
+ * The scan resolves the property forms a body can take (unquoted, quoted `'body'` and
+ * computed `['body']` keys), a fetch-named callee (`fetch`, `fetchImpl`, `deps.fetch`) and a
+ * one-hop alias of one (`const send = fetch`). A `fetch` whose first argument is a
+ * `new Request(input, init)` expression carries a body unless `init` is an object literal
+ * without `body` and without a spread; a `Request`-typed argument with no provable init
+ * carries one too, so a wrapper cannot hide a body behind an identifier.
  * Syntax cannot follow a body handed to a helper in another module, a computed `url`, or an
  * options object built elsewhere; a spread in the options is reported as unprovable so a
  * `body` cannot hide in it.
@@ -21,7 +27,11 @@ const sdkText = readFileSync(join(sourceRoot, '../../sdk/gen/sdk.gen.ts'), 'utf8
 /** `file#function` of every direct fetch that may carry a body, with why it is bounded. */
 const directFetchAllowList: Readonly<Record<string, string>> = {
   'uploadPut.ts#sendPutRequest':
-    'presigned artifact PUT: streamed from the guarded descriptor, counted and aborted past the declared size, kind caps checked before the token exchange',
+    'presigned artifact PUT: signed Content-Length equals the fstat size and the streamed body aborts past it (BodyStream); only four kinds have a static cap',
+  'client.ts#createApiClient':
+    'wraps the SDK request that the request interceptor already measured',
+  'commands/gate.ts#refuseRedirects':
+    'passes the SDK request through unchanged after the request interceptor measured its body; only a refused redirect is rewritten',
 };
 
 type Finding = { file: string; function: string; kind: string; detail: string };
@@ -54,11 +64,92 @@ function enclosingFunction(node: ts.Node): string {
   return '<module>';
 }
 
+/** The static name of a property, including `'body'` and computed `['body']` keys. */
+function propertyName(name: ts.PropertyName): string | undefined {
+  if (ts.isComputedPropertyName(name)) {
+    return ts.isStringLiteralLike(name.expression) ? name.expression.text : undefined;
+  }
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
+    return name.text;
+  }
+  return undefined;
+}
+
 function propertyNamed(
   arg: ts.ObjectLiteralExpression,
   name: string,
 ): ts.ObjectLiteralElementLike | undefined {
-  return arg.properties.find((p) => p.name !== undefined && p.name.getText() === name);
+  return arg.properties.find((p) => p.name !== undefined && propertyName(p.name) === name);
+}
+
+/** Whether a reference names a fetch: `fetch`, `fetchImpl`, `o.fetch`, `deps.fetch`, ... */
+function fetchLikeName(text: string): boolean {
+  return /fetch/i.test(text);
+}
+
+/** `name -> variable` for `const send = fetch` / `const send = deps.fetch` (one hop only). */
+function fetchAliases(sf: ts.SourceFile): Set<string> {
+  const aliases = new Set<string>();
+  const walk = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined
+    ) {
+      const init = node.initializer;
+      const reference = ts.isIdentifier(init)
+        ? init.text
+        : ts.isPropertyAccessExpression(init)
+          ? init.name.text
+          : undefined;
+      if (reference !== undefined && fetchLikeName(reference)) aliases.add(node.name.text);
+    }
+    ts.forEachChild(node, walk);
+  };
+  walk(sf);
+  return aliases;
+}
+
+function isFetchCallee(callee: ts.Expression, aliases: ReadonlySet<string>): boolean {
+  if (ts.isIdentifier(callee)) return fetchLikeName(callee.text) || aliases.has(callee.text);
+  return ts.isPropertyAccessExpression(callee) && fetchLikeName(callee.name.text);
+}
+
+/** Identifiers declared `Request` (a parameter or a typed variable) with no visible init. */
+function requestTypedNames(sf: ts.SourceFile): Set<string> {
+  const names = new Set<string>();
+  const walk = (node: ts.Node): void => {
+    if (
+      (ts.isParameter(node) || ts.isVariableDeclaration(node)) &&
+      node.type !== undefined &&
+      ts.isIdentifier(node.name) &&
+      /(^|\.)Request$/.test(node.type.getText())
+    ) {
+      names.add(node.name.text);
+    }
+    ts.forEachChild(node, walk);
+  };
+  walk(sf);
+  return names;
+}
+
+/** Whether a single fetch argument proves it carries a body (a `Request` or a typed one). */
+function requestCarriesBody(
+  arg: ts.Expression | undefined,
+  requestTyped: ReadonlySet<string>,
+): boolean {
+  if (arg === undefined) return false;
+  if (
+    ts.isNewExpression(arg) &&
+    ts.isIdentifier(arg.expression) &&
+    arg.expression.text === 'Request'
+  ) {
+    const init = arg.arguments?.[1];
+    if (init === undefined) return true;
+    if (!ts.isObjectLiteralExpression(init)) return true;
+    return propertyNamed(init, 'body') !== undefined || init.properties.some(ts.isSpreadAssignment);
+  }
+  return ts.isIdentifier(arg) && requestTyped.has(arg.text);
 }
 
 function stringConstants(sf: ts.SourceFile): Map<string, string> {
@@ -87,6 +178,8 @@ export function scanSource(
 ): { findings: Finding[]; usedRoutes: Set<string> } {
   const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
   const constants = stringConstants(sf);
+  const aliases = fetchAliases(sf);
+  const requestTyped = requestTypedNames(sf);
   const findings: Finding[] = [];
   const usedRoutes = new Set<string>();
   const report = (node: ts.Node, kind: string, detail: string): void => {
@@ -128,16 +221,17 @@ export function scanSource(
           if (caps[route] === undefined) report(node, 'uncapped-route', route);
         }
       }
-      const isFetch =
-        (ts.isIdentifier(callee) && callee.text === 'fetch') ||
-        (ts.isPropertyAccessExpression(callee) && callee.name.text === 'fetch');
       const second = node.arguments[1];
-      if (isFetch && second !== undefined) {
-        const init = ts.isObjectLiteralExpression(second) ? second : undefined;
+      // `fetch` takes at most two arguments, so a longer fetch-named call is not a send.
+      if (isFetchCallee(callee, aliases) && node.arguments.length <= 2) {
+        const init =
+          second !== undefined && ts.isObjectLiteralExpression(second) ? second : undefined;
         const carries =
-          init === undefined ||
-          propertyNamed(init, 'body') !== undefined ||
-          init.properties.some(ts.isSpreadAssignment);
+          second !== undefined
+            ? init === undefined ||
+              propertyNamed(init, 'body') !== undefined ||
+              init.properties.some(ts.isSpreadAssignment)
+            : requestCarriesBody(node.arguments[0], requestTyped);
         const key = `${file}#${enclosingFunction(node)}`;
         if (carries && allow[key] === undefined) report(node, 'uncapped-fetch', key);
       }
@@ -236,6 +330,45 @@ describe('request body cap scan', () => {
         "export async function leak(u: string) { await fetch(u, { method: 'POST', body: 'x' }); }",
       );
       expect(found.map((f) => f.kind)).toEqual(['uncapped-fetch']);
+    });
+
+    it.each([
+      ["postWidgets({ 'body': 'x' })", 'uncapped-route'],
+      ["postWidgets({ ['body']: 'x' })", 'uncapped-route'],
+      ["fetch(u, { 'body': 'x' })", 'uncapped-fetch'],
+      ["fetch(u, { ['body']: 'x' })", 'uncapped-fetch'],
+      ["const send = fetch; send(u, { method: 'POST', body: 'x' })", 'uncapped-fetch'],
+      ["const send = deps.fetch; send(u, { body: 'x' })", 'uncapped-fetch'],
+      ["fetchImpl(u, { method: 'POST', body: 'x' })", 'uncapped-fetch'],
+      ["o.fetch(u, { body: 'x' })", 'uncapped-fetch'],
+      ["fetch(new Request(u, { method: 'POST', body: 'x' }))", 'uncapped-fetch'],
+      ["fetch(new Request(u, { ['body']: 'x' }))", 'uncapped-fetch'],
+      ['fetch(new Request(u, { ...init, redirect }))', 'uncapped-fetch'],
+      ['fetch(new Request(u, init))', 'uncapped-fetch'],
+      ['fetch(new Request(u, makeInit()))', 'uncapped-fetch'],
+      ['fetch(new Request(u))', 'uncapped-fetch'],
+      ['fetch(request)', 'uncapped-fetch'],
+    ])('detects the body-carrying form %s', (statement, kind) => {
+      expect(
+        scan(`function leak(u: string, request: Request) { ${statement}; }`).map(
+          (finding) => finding.kind,
+        ),
+      ).toEqual([kind]);
+    });
+
+    it('normalizes quoted and computed client route keys', () => {
+      expect(
+        scan("client.post({ ['url']: '/widgets', 'body': 'x' })").map((finding) => finding.kind),
+      ).toEqual(['uncapped-route']);
+    });
+
+    it.each([
+      'fetch(u)',
+      "fetch('/widgets')",
+      'fetch(new Request(u, { method: "GET" }))',
+      'const request = new Request(u, { method: "GET" }); fetch(request)',
+    ])('keeps the provably body-free form %s clean', (statement) => {
+      expect(scan(`function get(u: string) { ${statement}; }`)).toEqual([]);
     });
 
     it('a body hidden in a spread is reported as unprovable', () => {

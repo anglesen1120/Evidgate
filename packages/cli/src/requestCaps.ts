@@ -33,7 +33,8 @@ export type SerializedBody = unknown;
 /**
  * The body the client puts on the wire, chosen exactly as the generated client does: the
  * serialized form when a serializer ran, otherwise the raw `body` (a manifest is sent with
- * `bodySerializer: null`, so its `serializedBody` is empty).
+ * `bodySerializer: null`, so its `serializedBody` is empty). A serializer that produced nothing
+ * leaves the request bodyless, so the result is `undefined` and never a zero-length body.
  */
 export function wireBody(options: {
   readonly body?: unknown;
@@ -43,17 +44,19 @@ export function wireBody(options: {
   if (options.body === undefined) {
     return undefined;
   }
-  return options.bodySerializer ? options.serializedBody : options.body;
+  if (!options.bodySerializer) {
+    return options.body;
+  }
+  const serialized = options.serializedBody;
+  return serialized === undefined || serialized === '' ? undefined : serialized;
 }
 
 /**
  * Byte length without a copy: `Buffer.byteLength` counts a string's UTF-8 form in place and a
- * typed array reports its own `byteLength`, so a 32 MiB manifest is never duplicated.
+ * typed array reports its own `byteLength`, so a 32 MiB manifest is never duplicated. Absent
+ * bodies are answered before this runs; a body of unmeasurable length answers `undefined`.
  */
 function bodyBytes(body: SerializedBody): number | undefined {
-  if (body === undefined || body === null) {
-    return 0;
-  }
   if (typeof body === 'string') {
     return Buffer.byteLength(body, 'utf8');
   }
@@ -64,19 +67,21 @@ function bodyBytes(body: SerializedBody): number | undefined {
 }
 
 /**
- * Throws before the request is sent when the body is over the cap of its route. The message
- * names the route template and the numbers only: never a body byte, a path or a token. A body
- * whose size cannot be measured, or a body on a route with no cap, is refused too.
+ * Throws before the request is sent when the body is over the cap of its route. Only an absent
+ * body (`undefined` or `null`) passes freely: a present body of any length, a body of
+ * unmeasurable length, or a body on a route with no cap is measured and refused when it does
+ * not fit. The message names the route template and the numbers only: never a body byte, a path
+ * or a token.
  */
 export function assertRequestBodyWithinCap(
   method: string | undefined,
   urlTemplate: string | undefined,
   body: SerializedBody,
 ): void {
-  const size = bodyBytes(body);
-  if (size === 0) {
+  if (body === undefined || body === null) {
     return;
   }
+  const size = bodyBytes(body);
   const route = `${(method ?? '').toUpperCase()} ${urlTemplate ?? ''}`;
   const cap = requestBodyCaps[route];
   if (cap === undefined || size === undefined) {
@@ -85,7 +90,7 @@ export function assertRequestBodyWithinCap(
   if (size > cap) {
     throw new CliError(`the request body for ${route} is ${size} bytes, over its ${cap}-byte cap`, {
       code: 'request_too_large',
-      hint: 'nothing was sent',
+      hint: 'this request was not sent',
     });
   }
 }
