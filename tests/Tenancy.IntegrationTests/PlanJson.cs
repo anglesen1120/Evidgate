@@ -11,9 +11,9 @@ namespace Tenancy.IntegrationTests;
 /// <para>
 /// Index and sequential-scan assertions read the <em>whole</em> plan, because the statement under test may
 /// reach a relation through a detached subplan (the page CTE's producer is an <c>InitPlan</c>) and that read
-/// is still the statement's. An ordering assertion does not: a <c>Sort</c> inside a detached subplan belongs
-/// to that subplan, not to the query whose ordering is being pinned, so <see cref="SortsScanOf"/> walks only
-/// the child plans the query itself attaches as nested nodes.
+/// is still the statement's. An ordering assertion starts from every <c>Sort</c> of the plan, a producer's
+/// included, and follows only that sort's own row input: an <c>InitPlan</c> or <c>SubPlan</c> child is a
+/// subplan the sort does not order, while a <c>Subquery Scan</c>'s child is exactly the rows it does.
 /// </para>
 /// </summary>
 internal static class PlanJson
@@ -32,12 +32,12 @@ internal static class PlanJson
             && Text(node, "Relation Name") == relation);
 
     /// <summary>
-    /// True when a <c>Sort</c> node of the plan's own query has a scan of <paramref name="relation"/> in its
-    /// input — the planner ordering that relation's rows in memory instead of reading them in index order.
-    /// <c>InitPlan</c>, <c>SubPlan</c> and <c>Subquery</c> children are separate subplans and are not followed:
-    /// a sort inside them is that subplan's ordering, not the query's.
+    /// True when a <c>Sort</c> anywhere in the plan orders rows of <paramref name="relation"/> — the planner
+    /// ordering that relation's rows in memory instead of reading them in index order. Each sort is checked
+    /// against its own row input, so sorting a bounded CTE's output is not a sort of the producer's table.
     /// </summary>
-    internal static bool SortsScanOf(string json, string relation) => SortsInside(Root(json), relation);
+    internal static bool SortsScanOf(string json, string relation) =>
+        Nodes(json).Where(node => Text(node, "Node Type") == "Sort").Any(sort => Reads(sort, relation));
 
     /// <summary>The plan of the document's one statement, detached from the parsed document.</summary>
     private static JsonElement Root(string json)
@@ -48,22 +48,18 @@ internal static class PlanJson
         return document.RootElement[0].GetProperty("Plan").Clone();
     }
 
-    private static bool SortsInside(JsonElement node, string relation) =>
-        (Text(node, "Node Type") == "Sort" && Attached(node).Any(child => Reads(child, relation)))
-        || Attached(node).Any(child => SortsInside(child, relation));
-
+    /// <summary>
+    /// Whether <paramref name="node"/>'s own row input reaches <paramref name="relation"/>. Only an
+    /// <c>InitPlan</c> or <c>SubPlan</c> child is skipped: its rows are a scalar value here, not this node's
+    /// input. A <c>Subquery Scan</c>'s child supplies its rows and is followed.
+    /// </summary>
     private static bool Reads(JsonElement node, string relation) =>
-        Text(node, "Relation Name") == relation || Attached(node).Any(child => Reads(child, relation));
+        Text(node, "Relation Name") == relation || Inputs(node).Any(child => Reads(child, relation));
 
-    /// <summary>The children the node's own query attaches by nesting.</summary>
-    private static IEnumerable<JsonElement> Attached(JsonElement node) =>
+    private static IEnumerable<JsonElement> Inputs(JsonElement node) =>
         node.TryGetProperty("Plans", out var children)
-            ? children.EnumerateArray().Where(child => !Detached(child))
+            ? children.EnumerateArray().Where(child => Text(child, "Parent Relationship") is not ("InitPlan" or "SubPlan"))
             : Enumerable.Empty<JsonElement>();
-
-    /// <summary>A child plan the parent only refers to: a CTE producer, a scalar subplan or a subquery scan's input.</summary>
-    private static bool Detached(JsonElement child) =>
-        Text(child, "Parent Relationship") is "InitPlan" or "SubPlan" or "Subquery";
 
     private static IEnumerable<JsonElement> Flatten(JsonElement node)
     {

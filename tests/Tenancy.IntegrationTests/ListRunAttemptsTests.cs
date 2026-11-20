@@ -31,18 +31,6 @@ public sealed partial class ListRunAttemptsTests : IClassFixture<TenancyHostPool
     private const string Checksum = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     public ListRunAttemptsTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
-    private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project)
-        : IAsyncDisposable
-    {
-        public Action<HttpRequestHeaders> Admin => TenancyApiFactory.Resolved(user: User, orgHeader: Org);
-
-        public async ValueTask DisposeAsync()
-        {
-            Client.Dispose();
-            await Api.DisposeAsync();
-        }
-    }
-
     /// <summary>
     /// One <c>case_attempt</c> row to seed. <paramref name="Normalized"/> defaults to the server's normalisation of
     /// <paramref name="Raw"/>; the <c>blocked</c> rows pass both explicitly, because only the blocked-attempt resolver
@@ -395,19 +383,6 @@ public sealed partial class ListRunAttemptsTests : IClassFixture<TenancyHostPool
     }
 
     // ------------------------------------------------------------------ seeding
-
-    /// <summary>One shared migrated database with its own org and project, created through the real registry routes.</summary>
-    private async Task<World> StartAsync()
-    {
-        var database = await _fixture.SharedDatabaseAsync();
-        var api = _hosts.RealResolver(database);
-        var client = api.CreateClient();
-        var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
-        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
-
-        return new World(api, client, database, user, org, project);
-    }
 
     /// <summary>
     /// The run and its planned executions, seeded as the migration role into the org's first project (the project

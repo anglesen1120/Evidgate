@@ -95,6 +95,9 @@ public sealed partial class ListRunAttemptsTests
         PlanJson.ScansSequentially(nodes, "case_attempt").ShouldBeFalse(plan);
     }
 
+    /// <summary>Ready artifacts the colliding sibling run holds on each of the own run's slots.</summary>
+    private const int CollidingReadyPerSlot = 3;
+
     /// <summary>
     /// A sibling run of the same org repeats the own run's first execution keys with three ready artifacts on
     /// every one of their slots: the aggregate counts by run as well as by slot, so the sibling's rows on the same
@@ -108,7 +111,13 @@ public sealed partial class ListRunAttemptsTests
         var (world, runId) = await StartDenseRunAsync(dedicated.Name);
         await using var lease = world;
 
-        var collidedKeys = await SeedCollidingRunAsync(world.Database, world.Org, world.Project, runId, keys: 20, perSlot: 3);
+        var collidedKeys = await SeedCollidingRunAsync(
+            world.Database, world.Org, world.Project, runId, keys: 20, perSlot: CollidingReadyPerSlot);
+        // A positive control first: the sibling's rows are committed and visible on every collided slot, so a
+        // zero below would mean a missing arrangement rather than the ownership filter the case is about.
+        var siblingPerSlot = await SiblingReadyPerSlotAsync(world.Database, world.Org, runId, collidedKeys);
+        siblingPerSlot.ShouldBe(
+            CollidingReadyPerSlot, "the sibling run's ready artifacts must be committed on every collided slot");
         var own = await ReadyCountsAsync(world.Database, world.Org, runId);
 
         var answer = await GetAsync(world, runId, query: "?limit=100");
@@ -134,10 +143,15 @@ public sealed partial class ListRunAttemptsTests
     /// <see cref="DenseAttemptsPerExecution"/> attempts each, ready artifacts on a hash-chosen subset of the slots,
     /// beside <see cref="DenseOtherRuns"/> other runs of the same org. The database's statistics are refreshed so
     /// the planner chooses from selectivity, never from <c>enable_seqscan = off</c>.
+    /// <para>
+    /// No world-level environment is created: <see cref="PlannedExecutionSeeder.SeedPlanAsync"/> mints the
+    /// environment, its revision and the run's suite in its own transaction, so one from the world would take the
+    /// project's environment key from the seeded one.
+    /// </para>
     /// </summary>
     private async Task<(World World, Guid RunId)> StartDenseRunAsync(string database)
     {
-        var world = await DedicatedWorldAsync(database);
+        var world = await StartAsync(database);
 
         try
         {
@@ -160,23 +174,6 @@ public sealed partial class ListRunAttemptsTests
             await world.DisposeAsync();
             throw;
         }
-    }
-
-    /// <summary>
-    /// One org and project on <paramref name="database"/> through the real registry routes, with its own
-    /// disposable host. No environment is created here: <see cref="PlannedExecutionSeeder.SeedPlanAsync"/>
-    /// mints the environment, its revision and the run's suite in its own transaction, so a world-level
-    /// environment would take the project's environment key from the seeded one.
-    /// </summary>
-    private async Task<World> DedicatedWorldAsync(string database)
-    {
-        var api = _hosts.RealResolver(database);
-        var client = api.CreateClient();
-        var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
-        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
-
-        return new World(api, client, database, user, org, project);
     }
 
     /// <summary>
@@ -321,6 +318,66 @@ public sealed partial class ListRunAttemptsTests
     }
 
     /// <summary>
+    /// <see cref="SeedCollidingRunAsync"/>'s statement: one sibling run of the own run's parents, its planned rows
+    /// and attempts copied from the own run's first <c>@keys</c> execution keys, and <c>@per_slot</c> ready
+    /// artifacts on every copied slot.
+    /// </summary>
+    private const string CollidingRunSql = """
+        with own as (
+            select r.org_id, r.project_id, r.manifest_id, r.suite_revision_id, r.environment_revision_id
+              from public.run r
+             where r.org_id = @org_id and r.id = @own_run_id
+        ), copied as (
+            select distinct a.execution_key
+              from public.case_attempt a
+             where a.org_id = @org_id and a.run_id = @own_run_id
+             order by a.execution_key
+             limit @keys
+        ), sibling as (
+            insert into public.run
+              (id, org_id, project_id, manifest_id, suite_revision_id, environment_revision_id,
+               collection_deadline_at, late_window_minutes)
+            select gen_random_uuid(), o.org_id, o.project_id, o.manifest_id, o.suite_revision_id,
+                   o.environment_revision_id, now() + interval '2 hours', 1440
+              from own o
+            returning id, org_id
+        ), planned as (
+            insert into public.planned_execution
+              (id, org_id, run_id, execution_key, case_revision_id, variant_hash, target_env, shard_id)
+            select gen_random_uuid(), s.org_id, s.id, c.execution_key, p.case_revision_id, p.variant_hash,
+                   p.target_env, p.shard_id
+              from sibling s
+              cross join copied c
+              join public.planned_execution p
+                on p.org_id = @org_id and p.run_id = @own_run_id and p.execution_key = c.execution_key
+            returning run_id, execution_key
+        ), attempts as (
+            insert into public.case_attempt
+              (id, org_id, run_id, execution_key, case_id, attempt_no, raw_status, normalized_status, started_at)
+            select gen_random_uuid(), @org_id, pl.run_id, pl.execution_key, a.case_id, a.attempt_no,
+                   a.raw_status, a.normalized_status, a.started_at
+              from planned pl
+              join public.case_attempt a
+                on a.org_id = @org_id and a.run_id = @own_run_id and a.execution_key = pl.execution_key
+            returning run_id, execution_key, attempt_no
+        ), ready as (
+            insert into public.artifact
+              (id, org_id, project_id, run_id, execution_key, attempt_no, kind, object_key, media_type,
+               checksum, sensitivity, scan_state, state)
+            select a.id, @org_id, @project_id, a.run_id, a.execution_key, a.attempt_no, 'trace',
+                   'pending/' || @org_id::text || '/' || a.id::text, 'application/zip', @checksum,
+                   'normal', 'pending', 'ready'
+              from (
+                  select gen_random_uuid() as id, t.run_id, t.execution_key, t.attempt_no
+                    from attempts t cross join generate_series(1, @per_slot) g
+              ) a
+            returning execution_key
+        )
+        select array_agg(distinct execution_key)
+          from ready
+        """;
+
+    /// <summary>
     /// A sibling run of the same org that repeats the own run's first <paramref name="keys"/> execution keys with
     /// <paramref name="perSlot"/> ready artifacts on every one of their slots — the same slot pairs, a larger count —
     /// and returns the keys it copied. Its parents come from the own run's row, so no world-level environment is
@@ -330,64 +387,37 @@ public sealed partial class ListRunAttemptsTests
         string database, Guid org, Guid project, Guid runId, int keys, int perSlot)
     {
         await using var scope = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database));
-
-        return await scope.ScalarAsync<string[]>(
-            """
-            with own as (
-                select r.org_id, r.project_id, r.manifest_id, r.suite_revision_id, r.environment_revision_id
-                  from public.run r
-                 where r.org_id = @org_id and r.id = @own_run_id
-            ), copied as (
-                select distinct a.execution_key
-                  from public.case_attempt a
-                 where a.org_id = @org_id and a.run_id = @own_run_id
-                 order by a.execution_key
-                 limit @keys
-            ), sibling as (
-                insert into public.run
-                  (id, org_id, project_id, manifest_id, suite_revision_id, environment_revision_id,
-                   collection_deadline_at, late_window_minutes)
-                select gen_random_uuid(), o.org_id, o.project_id, o.manifest_id, o.suite_revision_id,
-                       o.environment_revision_id, now() + interval '2 hours', 1440
-                  from own o
-                returning id, org_id
-            ), planned as (
-                insert into public.planned_execution
-                  (id, org_id, run_id, execution_key, case_revision_id, variant_hash, target_env, shard_id)
-                select gen_random_uuid(), s.org_id, s.id, c.execution_key, p.case_revision_id, p.variant_hash,
-                       p.target_env, p.shard_id
-                  from sibling s
-                  cross join copied c
-                  join public.planned_execution p
-                    on p.org_id = @org_id and p.run_id = @own_run_id and p.execution_key = c.execution_key
-                returning run_id, execution_key
-            ), attempts as (
-                insert into public.case_attempt
-                  (id, org_id, run_id, execution_key, case_id, attempt_no, raw_status, normalized_status, started_at)
-                select gen_random_uuid(), @org_id, pl.run_id, pl.execution_key, a.case_id, a.attempt_no,
-                       a.raw_status, a.normalized_status, a.started_at
-                  from planned pl
-                  join public.case_attempt a
-                    on a.org_id = @org_id and a.run_id = @own_run_id and a.execution_key = pl.execution_key
-                returning run_id, execution_key, attempt_no
-            ), ready as (
-                insert into public.artifact
-                  (id, org_id, project_id, run_id, execution_key, attempt_no, kind, object_key, media_type,
-                   checksum, sensitivity, scan_state, state)
-                select a.id, @org_id, @project_id, a.run_id, a.execution_key, a.attempt_no, 'trace',
-                       'pending/' || @org_id::text || '/' || a.id::text, 'application/zip', @checksum,
-                       'normal', 'pending', 'ready'
-                  from (
-                      select gen_random_uuid() as id, t.run_id, t.execution_key, t.attempt_no
-                        from attempts t cross join generate_series(1, @per_slot) g
-                  ) a
-                returning execution_key
-            )
-            select array_agg(distinct execution_key)
-              from ready
-            """,
+        var copied = await scope.ScalarAsync<string[]>(
+            CollidingRunSql,
             ("org_id", org), ("project_id", project), ("own_run_id", runId),
             ("keys", keys), ("per_slot", perSlot), ("checksum", Checksum));
+
+        await scope.CommitAsync();
+
+        return copied;
+    }
+
+    /// <summary>
+    /// The smallest count of ready artifacts any other run of the org holds on one of the
+    /// <paramref name="keys"/>' slots, or 0 when it holds none: the collision case's positive control, read on the
+    /// owner connection after the seed committed.
+    /// </summary>
+    private async Task<int> SiblingReadyPerSlotAsync(string database, Guid org, Guid runId, string[] keys)
+    {
+        await using var scope = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database));
+
+        return await scope.ScalarAsync<int>(
+            """
+            select coalesce(min(c), 0)
+              from (
+                  select count(*)::int as c
+                    from public.artifact
+                   where org_id = @org_id and run_id <> @own_run_id and state = 'ready'
+                     and execution_key = any(@keys)
+                   group by execution_key, attempt_no
+              ) slots
+            """,
+            ("org_id", org), ("own_run_id", runId), ("keys", keys));
     }
 
     /// <summary>The plan of one handler statement bound with its parameters, read as the application role.</summary>

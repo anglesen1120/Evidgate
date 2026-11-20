@@ -4,11 +4,8 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// The reader of <c>EXPLAIN (FORMAT JSON)</c> documents the plan cases assert with: an ordering assertion
-/// must not attribute a detached subplan's <c>Sort</c> (an <c>InitPlan</c>, <c>SubPlan</c> or <c>Subquery</c>
-/// child — a CTE producer, a scalar subplan) to the query it belongs to, while index and sequential-scan
-/// assertions must still see every relation the whole statement reads. Both fixtures are literal plan
-/// documents in the shape PostgreSQL emits, so the two rules are pinned without a database.
+/// Sorts anywhere in a statement must be checked against their own row input, not detached producers.
+/// Literal PostgreSQL-shaped plans distinguish bounded CTE output ordering from sorting attempt rows.
 /// </summary>
 public sealed class PlanJsonTests
 {
@@ -28,15 +25,21 @@ public sealed class PlanJsonTests
                   ]
                 },
                 {
-                  "Node Type": "Sort",
+                  "Node Type": "Limit",
                   "Parent Relationship": "InitPlan",
                   "Subplan Name": "CTE page",
                   "Plans": [
                     {
-                      "Node Type": "Index Scan",
+                      "Node Type": "Sort",
                       "Parent Relationship": "Outer",
-                      "Relation Name": "case_attempt",
-                      "Index Name": "case_attempt_run_execution_attempt_key"
+                      "Plans": [
+                        {
+                          "Node Type": "Index Scan",
+                          "Parent Relationship": "Outer",
+                          "Relation Name": "case_attempt",
+                          "Index Name": "case_attempt_run_execution_attempt_key"
+                        }
+                      ]
                     }
                   ]
                 },
@@ -79,12 +82,11 @@ public sealed class PlanJsonTests
         ]
         """;
 
-    /// <summary>A sort inside a detached <c>InitPlan</c> is that subplan's ordering, not the query's.</summary>
     [Fact]
-    public void SortsScanOf_IgnoresADetachedSubplanSort_ButKeepsItsIndexRead()
+    public void SortsScanOf_DetachedProducerSort_IsDetectedAlongsideItsIndexRead()
     {
-        PlanJson.SortsScanOf(DetachedProducer, "case_attempt").ShouldBeFalse(
-            "the CTE producer's sort is an InitPlan's, not the page query's ordering");
+        PlanJson.SortsScanOf(DetachedProducer, "case_attempt").ShouldBeTrue(
+            "the CTE producer must read attempt rows in index order without sorting them");
 
         PlanJson.UsesIndex(PlanJson.Nodes(DetachedProducer), "artifact_run_slot_ready_idx").ShouldBeTrue(
             "index assertions read the whole plan, detached subplans included");
@@ -100,5 +102,64 @@ public sealed class PlanJsonTests
         PlanJson.SortsScanOf(SortsTheRun, "artifact").ShouldBeFalse();
         PlanJson.ScansSequentially(PlanJson.Nodes(SortsTheRun), "case_attempt").ShouldBeFalse();
         PlanJson.UsesIndex(PlanJson.Nodes(SortsTheRun), "case_attempt_run_status_idx").ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("InitPlan")]
+    [InlineData("SubPlan")]
+    public void SortsScanOf_OuterCteSort_DoesNotSortDetachedProducersRows(string relationship)
+    {
+        var plan = $$"""
+            [{
+              "Plan": {
+                "Node Type": "Sort",
+                "Plans": [
+                  {
+                    "Node Type": "Limit",
+                    "Parent Relationship": "{{relationship}}",
+                    "Subplan Name": "CTE page",
+                    "Plans": [{
+                      "Node Type": "Index Scan",
+                      "Parent Relationship": "Outer",
+                      "Relation Name": "case_attempt",
+                      "Index Name": "case_attempt_run_execution_attempt_key"
+                    }]
+                  },
+                  { "Node Type": "CTE Scan", "Parent Relationship": "Outer", "CTE Name": "page" }
+                ]
+              }
+            }]
+            """;
+
+        PlanJson.SortsScanOf(plan, "case_attempt").ShouldBeFalse(
+            "sorting bounded CTE output does not sort the producer's attempt scan");
+        PlanJson.UsesIndex(PlanJson.Nodes(plan), "case_attempt_run_execution_attempt_key").ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("Seq Scan")]
+    [InlineData("Index Scan")]
+    public void SortsScanOf_SubqueryScanInput_IsIncluded(string scan)
+    {
+        var plan = $$"""
+            [{
+              "Plan": {
+                "Node Type": "Sort",
+                "Plans": [{
+                  "Node Type": "Subquery Scan",
+                  "Parent Relationship": "Outer",
+                  "Plans": [{
+                    "Node Type": "{{scan}}",
+                    "Parent Relationship": "Subquery",
+                    "Relation Name": "case_attempt"
+                  }]
+                }]
+              }
+            }]
+            """;
+
+        PlanJson.SortsScanOf(plan, "case_attempt").ShouldBeTrue(
+            "a Subquery Scan's child supplies the rows the parent sorts");
+        PlanJson.SortsScanOf(plan, "artifact").ShouldBeFalse();
     }
 }

@@ -44,7 +44,7 @@ public sealed partial class ListRunAttemptsTests
     /// <summary>A run of <see cref="DenseExecutions"/> planned executions with four attempts each and ready artifacts on a subset.</summary>
     private async Task<(World World, Guid RunId)> StartWalkRunAsync(string database)
     {
-        var world = await DedicatedWorldAsync(database);
+        var world = await StartAsync(database);
 
         try
         {
