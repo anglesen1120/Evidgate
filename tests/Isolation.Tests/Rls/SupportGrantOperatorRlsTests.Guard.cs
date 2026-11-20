@@ -90,6 +90,7 @@ public sealed partial class SupportGrantOperatorRlsTests
     [InlineData("scopes", "'{NULL,\"case:read,case:write\"}'")]
     [InlineData("reason", "''")]
     [InlineData("expires_at", "now() - interval '3 hours'")]
+    [InlineData("expires_at", "now() + interval '72 hours 1 second'")]
     public async Task Shape_Checks_Refuse_Bad_Input(string column, string value)
     {
         var database = await WorldAsync();
@@ -102,6 +103,16 @@ public sealed partial class SupportGrantOperatorRlsTests
             values ('{OrgA}', '{Operator}', {scopes}, {reason}, {expires})
             """));
         error.SqlState.ShouldBe("23514");
+    }
+
+    [Fact]
+    public async Task Expiry_Window_Accepts_Exactly_72_Hours_After_The_Server_Set_Creation_Time()
+    {
+        var database = await WorldAsync();
+        await _fixture.ExecuteAsync(database, $"""
+            insert into public.support_grant (org_id, operator_user_id, scopes, reason, expires_at)
+            values ('{OrgA}', '{Operator}', '{CaseRead}', 'edge', now() + interval '72 hours')
+            """);
     }
 
     [Fact]

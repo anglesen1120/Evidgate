@@ -100,7 +100,7 @@ create table if not exists public.support_grant (
   constraint support_grant_project_ids_check check (
     (project_ids = '{}' or pg_catalog.array_ndims(project_ids) = 1) and cardinality(project_ids) <= 100 and pg_catalog.array_position(project_ids, null) is null),
   constraint support_grant_reason_check check (char_length(reason) between 1 and 1000),
-  constraint support_grant_expiry_check check (expires_at > created_at),
+  constraint support_grant_expiry_window_check check (expires_at > created_at and expires_at <= created_at + interval '72 hours'),
   constraint support_grant_approval_pair_check check ((approved_at is null) = (approved_by is null)),
   constraint support_grant_approver_differs_check check (approved_by is null or approved_by <> operator_user_id),
   constraint support_grant_approved_after_created_check check (approved_at is null or approved_at >= created_at),
