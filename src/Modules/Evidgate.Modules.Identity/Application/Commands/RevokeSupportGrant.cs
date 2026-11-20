@@ -13,13 +13,13 @@ using Microsoft.EntityFrameworkCore;
 namespace Evidgate.Modules.Identity.Application.Commands;
 
 /// <summary>
-/// <c>POST /v1/support-grants/{g}/revoke</c> (02.8.1 §5): any holder of <c>support:approve</c> in the grant's org
-/// may end a requested or approved grant, because the person who approved it may be unavailable during the very
-/// incident the access exists for. Revocation is final: a second call answers 409 and writes no second audit row.
+/// <c>POST /v1/support-grants/{g}/revoke</c>: any holder of <c>support:approve</c> in the grant's org may end a
+/// requested or approved grant, because the person who approved it may be unavailable during the very incident the
+/// access exists for. Revocation is final: a second call answers 409 and writes no second audit row.
 /// </summary>
 /// <param name="GrantId">The grant from the route.</param>
-/// <param name="IdempotencyKey">The client's <c>Idempotency-Key</c> (00 §9.1): the openapi operation declares it, so a
-/// replay answers the stored 200 rather than a second 409 or a second audit row.</param>
+/// <param name="IdempotencyKey">The client's <c>Idempotency-Key</c>: the openapi operation declares it, so a replay
+/// answers the stored 200 rather than a second 409 or a second audit row.</param>
 internal sealed record RevokeSupportGrantCommand(Guid GrantId, string IdempotencyKey) : ICommand<Result>, IIdempotentCommand;
 
 /// <summary>Handler of <see cref="RevokeSupportGrantCommand"/>; the tenant factory's RLS scope decides visibility.</summary>
@@ -49,9 +49,7 @@ internal sealed class RevokeSupportGrantCommandHandler(
 
         if (grant.RevokedAt is not null)
         {
-            // Nothing changed, so there is nothing to audit; the first revocation already recorded it.
-            audit.Suppress();
-
+            // A failure queues no audit row at all, so the first revocation's row stays the only one.
             return Result.Failure(SupportGrantErrors.GrantAlreadyRevoked);
         }
 

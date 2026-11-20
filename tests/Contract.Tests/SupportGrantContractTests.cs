@@ -5,10 +5,8 @@ using Xunit;
 namespace Contract.Tests;
 
 /// <summary>
-/// The support-grant wire contract (02.8.1 §5): the operator's request operation, the tenant's approve and revoke
-/// (bodiless 200s, idempotent, <c>support:approve</c>), and the keyset list with its derived state. Shapes and
-/// parameters are parsed from <c>contracts/openapi.yaml</c> through <see cref="OpenApiSpec"/> with component
-/// references resolved; the refusal vocabulary is pinned as the documentation a client reads.
+/// The tenant decisions bind no body so only the authenticated principal can approve or revoke. Pinning their
+/// statuses beside the list shape keeps the documentation clients consume aligned with the served routes.
 /// </summary>
 public sealed class SupportGrantContractTests
 {
@@ -63,8 +61,11 @@ public sealed class SupportGrantContractTests
             responses["200"]!.AsObject().ShouldNotContain(
                 pair => pair.Key == "content",
                 $"{path} answers 200 with no body");
+            responses.ContainsKey("400").ShouldBeTrue();
             responses.ContainsKey("409").ShouldBeTrue();
-            responses.ContainsKey("422").ShouldBeTrue();
+            responses.ContainsKey("412").ShouldBeTrue();
+            responses.ContainsKey("422").ShouldBe(
+                path == ApprovePath, "only approval has the two-person rule; revoke has no 422");
         }
 
         spec.DocumentedText("approveSupportGrant").ShouldContain("403 `approver_not_tenant_admin`", Case.Sensitive);

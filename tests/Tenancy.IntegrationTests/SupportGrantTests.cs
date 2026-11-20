@@ -7,14 +7,12 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// The tenant's side of support grants (02.8.1 §5) through the real host and a real database: approval records the
-/// authenticated member and nothing a request body can name, revocation is final, and the list pages newest first
-/// with the state derived in SQL. Grants are owner-seeded because the request route is the operator's and is not
-/// served yet, so no route of this suite's host can file one.
+/// Real HTTP and database assertions keep approval tied to the authenticated member and revocation final.
+/// Owner-seeded grants isolate tenant decisions from the separately served operator request flow.
 /// </summary>
 [Collection(ExclusiveTenancySuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class SupportGrantTests : IAsyncLifetime
+public sealed partial class SupportGrantTests : IAsyncLifetime
 {
     private readonly PostgresTenancyFixture _fixture;
     private DedicatedDatabase? _dedicated;
@@ -87,8 +85,7 @@ public sealed class SupportGrantTests : IAsyncLifetime
         var (api, client, founder, org) = await StartAsync();
         await using var _ = api;
 
-        // The requester is an operator in the fixture, so the only way to make requester and approver the same
-        // account is a grant whose operator IS the member approving it (00 §9.3's two-person rule).
+        // Reusing the founder as requester isolates the two-person rule from role eligibility.
         var grant = await SeedGrantAsync(org, "requested", operatorUserId: founder);
 
         var refused = await client.SendAsync(
@@ -257,10 +254,12 @@ public sealed class SupportGrantTests : IAsyncLifetime
 
         (await ItemsAsync(client, otherFounder, otherOrg)).ShouldBe([theirs], "org B's page holds its grant and no other org's");
 
-        // Naming the other org in the path while the header names its own org is refused at tenant resolution.
+        // The path names the org and a header cannot override it, so a caller with no membership there is
+        // refused at tenant resolution with 403 `forbidden`, and the body never carries the other org's rows.
         var crossed = await client.SendAsync(
             HttpMethod.Get, $"/v1/orgs/{org}/support-grants", Admin(otherFounder, otherOrg));
-        crossed.Status.ShouldBeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.NotFound);
+        crossed.Status.ShouldBe(HttpStatusCode.Forbidden);
+        crossed.ErrorCode.ShouldBe("forbidden");
         crossed.Body.GetRawText().ShouldNotContain(mine.ToString("D"));
 
         (await client.SendAsync(HttpMethod.Post, $"/v1/support-grants/{mine}/revoke", Admin(otherFounder, otherOrg), null, NewKey()))

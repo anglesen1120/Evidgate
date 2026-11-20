@@ -13,7 +13,7 @@ namespace Evidgate.Modules.Identity.Endpoints;
 /// <summary>
 /// The support-grant routes a tenant serves: <c>POST /v1/support-grants/{g}/approve</c>,
 /// <c>POST /v1/support-grants/{g}/revoke</c> and <c>GET /v1/orgs/{o}/support-grants</c>. Delegates bind and answer
-/// in <see cref="Result"/> terms — authorization is the handlers' <c>[Permission]</c>, the tenant and the 00 §9.2
+/// in <see cref="Result"/> terms — authorization is the handlers' <c>[Permission]</c>, the tenant and the error
 /// envelope are the pipeline's and the host's. The openapi <c>/support-grants</c> request route is not mapped here:
 /// it is the operator side and is not part of this change.
 /// </summary>
@@ -31,13 +31,13 @@ public static class SupportGrantEndpoints
         // `.Produces(200)` keeps the internal Result wrapper out of the served OpenAPI document.
         group.MapPost("/support-grants/{g}/approve", ApproveAsync)
             .Produces(StatusCodes.Status200OK)
-            .WithSummary("Approve a support grant as a tenant_admin of its org (02.8.1)");
+            .WithSummary("Approve a support grant as a tenant_admin of its org");
         group.MapPost("/support-grants/{g}/revoke", RevokeAsync)
             .Produces(StatusCodes.Status200OK)
-            .WithSummary("Revoke a support grant immediately (02.8.1)");
+            .WithSummary("Revoke a support grant immediately");
         group.MapGet("/orgs/{o}/support-grants", ListAsync)
             .Produces<SupportGrantList>(StatusCodes.Status200OK)
-            .WithSummary("Cursor page of the org's support grants, newest first (02.8.1)");
+            .WithSummary("Cursor page of the org's support grants, newest first");
 
         return group;
     }

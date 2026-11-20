@@ -1,7 +1,7 @@
 namespace Evidgate.Modules.Identity.Infrastructure.Persistence;
 
 /// <summary>
-/// Read SQL of the tenant's support-grant list (02.8.1 §5): one statement per page, keyset on
+/// Read SQL of the tenant's support-grant list: one statement per page, keyset on
 /// <c>(created_at, id)</c> descending, served by <c>support_grant_org_created_idx</c>. The state is derived in the
 /// statement from the stored instants, so a grant that expires between two pages changes state with no write.
 /// </summary>

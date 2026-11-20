@@ -117,15 +117,26 @@ otherwise the envelope filter's default `60` (00 §9.2).
 
 The support-grant surface (02.8.1) is the one place a tenant admin reads and decides
 operator access: `GET /v1/orgs/{o}/support-grants` (`support:read`) is a keyset page
-whose `state` is derived as `requested`, `approved`, `revoked` or `expired`;
+whose `state` is derived as `requested`, `approved`, `revoked` or `expired`; an
+authenticated caller who is not an active member of `{o}` is refused at tenant resolution
+with `403 forbidden` (the same body for an unknown org, so the answer never discloses
+which org ids exist), and `404 not_found` is answered only for a resolved tenant that
+differs from `{o}`.
 `POST /v1/support-grants/{g}/approve` and `/revoke` (`support:approve`) answer a bodyless
 `200`. Approval takes its approver from the authenticated principal only — never from a
 body or header — and refuses a principal who is not an active `tenant_admin` of the
 grant's org with `403 approver_not_tenant_admin`, a grant that is no longer requested
 with `409 grant_not_requested`, and self-approval with `422 approver_must_differ`; revoke
 refuses an already revoked grant with `409 grant_already_revoked`. Both mutations keep
-`Idempotency-Key`, so neither appears in the exemption list below. `POST /v1/support-grants`
-(request) stays declared but unserved in this scope.
+`Idempotency-Key`, so neither appears in the exemption list below: a missing or over-long
+key is `400 request_invalid` and writes nothing, a key already used for a different grant
+is `409 idempotency_conflict`, and a replay of the same request answers the stored `200`
+with no second audit row. A decision that lost a race to a concurrent change is
+`412 precondition_failed` and wrote nothing. On approval, a lock wait that deadlocked
+or was cut short is the retryable `503 unavailable`, nothing written; either route also
+answers that same retryable `503 unavailable` (with `Retry-After`) when the
+organization's audit chain is busy.
+`POST /v1/support-grants` (request) stays declared but unserved in this scope.
 
 `Idempotency-Key` exemptions (00-grounded, enforced by the spectral
 `evg-mutation-idempotency` rule — keep this list, the function's

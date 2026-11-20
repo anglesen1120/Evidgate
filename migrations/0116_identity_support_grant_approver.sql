@@ -6,10 +6,10 @@
 -- tenant role at all. The rule runs inside the existing guard trigger, so it changes no table, policy
 -- or grant; the function body is 0115's plus one clause.
 --
--- WHY EVERY ROLE. The check is a trigger, not a policy or a command: `evidgate_app`, `evidgate_owner`
--- and a superuser all fire it, so a row cannot become approved through any path unless the membership
--- and its role grant are committed and visible. A guard that only the app role could bypass would fail
--- open for the migration owner and for a hand-run statement.
+-- WHY A TRIGGER, AND WHAT IT MISSES. `evidgate_app` cannot skip the check, but this is a normal row
+-- trigger: a superuser with session_replication_role = replica, or the table owner disabling or
+-- dropping it, bypasses the check; table CHECKs, including approver ≠ requester, still fire. The
+-- handler remains the only application writer of approval identity, taken from the session principal.
 --
 -- WHY FOR SHARE OF m, mr. The clause takes a share lock on the membership row and on the
 -- `membership_role` row it matched. A concurrent removal (`status = 'removed'`) or role revoke then

@@ -4954,7 +4954,11 @@ paths:
         from the requester. Returns 200 with no body. Missing permission is 403 `forbidden`; an
         ineligible approver is 403 `approver_not_tenant_admin`; a missing grant or one of another org
         is 404 `not_found`; a grant no longer requested is 409 `grant_not_requested`; self-approval
-        is 422 `approver_must_differ`.
+        is 422 `approver_must_differ`. A missing or over-long `Idempotency-Key` is 400
+        `request_invalid` and wrote nothing; a key already used for a different grant is 409
+        `idempotency_conflict`. A concurrent decision that changed the row first is 412
+        `precondition_failed`; a lock wait that deadlocked or timed out is the retryable 503
+        `unavailable`, as is a busy audit chain, and neither wrote anything.
       x-permission: support:approve
       x-version: v1
       parameters:
@@ -4967,6 +4971,8 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -4975,6 +4981,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
         '422':
           $ref: '#/components/responses/Unprocessable'
         '429':
@@ -4990,7 +4998,11 @@ paths:
         No request body. Any holder of `support:approve` in the grant's organization may revoke a
         requested or approved grant; the caller need not be its approver. Returns 200 with no body.
         A missing grant or one of another org is 404 `not_found`; a previously revoked grant is
-        409 `grant_already_revoked`.
+        409 `grant_already_revoked`. A missing or over-long `Idempotency-Key` is 400
+        `request_invalid` and wrote nothing; a key already used for a different grant is 409
+        `idempotency_conflict`. A concurrent decision that changed the row first is 412
+        `precondition_failed`, and it wrote nothing either. A busy audit chain answers the
+        retryable 503 `unavailable` with `Retry-After`, also without a write.
       x-permission: support:approve
       x-version: v1
       parameters:
@@ -5003,6 +5015,8 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -5011,6 +5025,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -5022,7 +5038,11 @@ paths:
       summary: Cursor page of the organization's support grants
       description: >-
         Keyset-ordered on `(created_at, id)` descending. State is derived from approval, revocation
-        and expiry timestamps: requested, approved, revoked or expired. Another org's id is 404.
+        and expiry timestamps: requested, approved, revoked or expired. An authenticated caller who
+        is not an active member of the organization named in the path is refused at tenant
+        resolution with 403 `forbidden` (the same body for an unknown org, so the answer never
+        discloses which org ids exist); 404 `not_found` is answered only for a resolved tenant that
+        differs from `{o}`, such as a service credential bound to another org.
       x-permission: support:read
       x-version: v1
       parameters:

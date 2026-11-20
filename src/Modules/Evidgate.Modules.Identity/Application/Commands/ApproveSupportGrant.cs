@@ -16,14 +16,14 @@ using Microsoft.EntityFrameworkCore;
 namespace Evidgate.Modules.Identity.Application.Commands;
 
 /// <summary>
-/// <c>POST /v1/support-grants/{g}/approve</c> (02.8.1 §5): a tenant admin approves an operator's request. The
-/// approver is the authenticated principal and nothing else — no field of the request can name one — and the
-/// database re-checks that they are an active built-in <c>tenant_admin</c> under locks, so a concurrent membership
-/// removal or role revocation either wins the race or waits for this transaction.
+/// <c>POST /v1/support-grants/{g}/approve</c>: a tenant admin approves an operator's request. The approver is the
+/// authenticated principal and nothing else — no field of the request can name one — and the database re-checks
+/// that they are an active built-in <c>tenant_admin</c> under locks, so a concurrent membership removal or role
+/// revocation either wins the race or waits for this transaction.
 /// </summary>
 /// <param name="GrantId">The grant from the route.</param>
-/// <param name="IdempotencyKey">The client's <c>Idempotency-Key</c> (00 §9.1): the openapi operation declares it, so a
-/// replay of the same approval answers the stored 200 instead of running the handler and the trigger again.</param>
+/// <param name="IdempotencyKey">The client's <c>Idempotency-Key</c>: the openapi operation declares it, so a replay of
+/// the same approval answers the stored 200 instead of running the handler and the trigger again.</param>
 internal sealed record ApproveSupportGrantCommand(Guid GrantId, string IdempotencyKey) : ICommand<Result>, IIdempotentCommand;
 
 /// <summary>Handler of <see cref="ApproveSupportGrantCommand"/>; RLS decides which grants exist for the tenant.</summary>
@@ -66,49 +66,86 @@ internal sealed class ApproveSupportGrantCommandHandler(
             return Result.Failure(SupportGrantErrors.NotFound);
         }
 
-        if (grant.OperatorUserId == approver)
+        if (await RefusalAsync(context, grant, org, approver, now, cancellationToken).ConfigureAwait(false)
+            is { } refusal)
         {
-            return Result.Failure(SupportGrantErrors.ApproverMustDiffer);
-        }
-
-        if (!grant.IsApprovableAt(now))
-        {
-            return Result.Failure(SupportGrantErrors.GrantNotRequested);
-        }
-
-        if (!await IsTenantAdminAsync(context, org, approver, cancellationToken).ConfigureAwait(false))
-        {
-            return Result.Failure(SupportGrantErrors.ApproverNotTenantAdmin);
+            return Result.Failure(refusal);
         }
 
         grant.Approve(approver, now);
 
-        try
+        if (await SaveAsync(context, cancellationToken).ConfigureAwait(false) is { } saveRefusal)
         {
-            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return Result.Failure(Error.PreconditionFailed("the support grant changed; retry"));
-        }
-        catch (DbUpdateException exception) when (PgErrors.IsCheckViolation(exception, ApproverRefusal))
-        {
-            // The trigger found the approver ineligible under its locks: a membership or role change committed
-            // after the pre-check. The client sees the same 403, never a 500 for losing the race.
-            return Result.Failure(SupportGrantErrors.ApproverNotTenantAdmin);
-        }
-        catch (DbUpdateException exception) when (PgErrors.IsCheckViolation(exception, "has expired and cannot be approved"))
-        {
-            return Result.Failure(SupportGrantErrors.GrantNotRequested);
-        }
-        catch (DbUpdateException exception) when (PgErrors.IsCheckViolation(exception, "is revoked; a revoked grant accepts no change"))
-        {
-            return Result.Failure(SupportGrantErrors.GrantNotRequested);
+            return Result.Failure(saveRefusal);
         }
 
         audit.Describe(new AuditObject("support_grant", grant.Id.ToString("D")));
 
         return Result.Success(StatusCodes.Status200OK);
+    }
+
+    /// <summary>
+    /// The answers that stop the request before it writes: the requester may not approve, the grant must still be
+    /// awaiting approval, and the approver must hold the built-in <c>tenant_admin</c> role of this org. They run in
+    /// that order so the answer is the same one the trigger raises when the same condition breaks under its locks.
+    /// </summary>
+    private static async ValueTask<Error?> RefusalAsync(
+        IdentityDbContext context,
+        Domain.SupportGrant grant,
+        Guid org,
+        Guid approver,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        if (grant.OperatorUserId == approver)
+        {
+            return SupportGrantErrors.ApproverMustDiffer;
+        }
+
+        if (!grant.IsApprovableAt(now))
+        {
+            return SupportGrantErrors.GrantNotRequested;
+        }
+
+        return await IsTenantAdminAsync(context, org, approver, cancellationToken).ConfigureAwait(false)
+            ? null
+            : SupportGrantErrors.ApproverNotTenantAdmin;
+    }
+
+    /// <summary>
+    /// Saves the approval, translating each database refusal into the answer the pre-check would have given: the
+    /// trigger re-reads membership and role state under locks, so a condition can change between that read and this
+    /// write, and a client must not see a 500 for losing the race.
+    /// </summary>
+    private static async ValueTask<Error?> SaveAsync(IdentityDbContext context, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            return null;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Error.PreconditionFailed("the support grant changed; retry");
+        }
+        catch (DbUpdateException exception) when (MembershipRoleRefusal.IsContention(exception))
+        {
+            // A concurrent membership change deadlocked with the trigger's share locks (or a lock timeout set outside this request fired); nothing was written.
+            return MembershipRoleRefusal.Contention;
+        }
+        catch (DbUpdateException exception) when (PgErrors.IsCheckViolation(exception, ApproverRefusal))
+        {
+            return SupportGrantErrors.ApproverNotTenantAdmin;
+        }
+        catch (DbUpdateException exception) when (PgErrors.IsCheckViolation(exception, "has expired and cannot be approved"))
+        {
+            return SupportGrantErrors.GrantNotRequested;
+        }
+        catch (DbUpdateException exception) when (PgErrors.IsCheckViolation(exception, "is revoked; a revoked grant accepts no change"))
+        {
+            return SupportGrantErrors.GrantNotRequested;
+        }
     }
 
     /// <summary>

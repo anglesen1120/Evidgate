@@ -14,7 +14,7 @@ internal static class SupportGrantErrors
         "approver_not_tenant_admin",
         "the approver must be an active tenant_admin of the grant's organization");
 
-    /// <summary>422: the requester and the approver must be different people (00 §9.3); revoke has no such rule.</summary>
+    /// <summary>422: the requester and the approver must be different people; revoke has no such rule.</summary>
     public static Error ApproverMustDiffer { get; } =
         Error.Unprocessable("approver_must_differ", "the grant's requester cannot approve it");
 

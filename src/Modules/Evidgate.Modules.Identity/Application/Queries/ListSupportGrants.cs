@@ -11,7 +11,7 @@ using Mediator;
 
 namespace Evidgate.Modules.Identity.Application.Queries;
 
-/// <summary><c>GET /v1/orgs/{o}/support-grants</c> (02.8.1 §5): one cursor page of the org's grants, newest first.</summary>
+/// <summary><c>GET /v1/orgs/{o}/support-grants</c>: one cursor page of the org's grants, newest first.</summary>
 /// <param name="OrgId">The org from the route.</param>
 /// <param name="Cursor">Opaque cursor of a previous page, or null for the first.</param>
 /// <param name="Limit">Page size, already bounded by the route.</param>

@@ -1427,7 +1427,7 @@ export const requestSupportGrant = <ThrowOnError extends boolean = false>(option
 /**
  * Approve a support grant; approver is a `tenant_admin` of the target org ≠ requester
  *
- * No request body. The approver is taken only from the authenticated principal and must be an active member holding the built-in `tenant_admin` role of the grant's organization, distinct from the requester. Returns 200 with no body. Missing permission is 403 `forbidden`; an ineligible approver is 403 `approver_not_tenant_admin`; a missing grant or one of another org is 404 `not_found`; a grant no longer requested is 409 `grant_not_requested`; self-approval is 422 `approver_must_differ`.
+ * No request body. The approver is taken only from the authenticated principal and must be an active member holding the built-in `tenant_admin` role of the grant's organization, distinct from the requester. Returns 200 with no body. Missing permission is 403 `forbidden`; an ineligible approver is 403 `approver_not_tenant_admin`; a missing grant or one of another org is 404 `not_found`; a grant no longer requested is 409 `grant_not_requested`; self-approval is 422 `approver_must_differ`. A missing or over-long `Idempotency-Key` is 400 `request_invalid` and wrote nothing; a key already used for a different grant is 409 `idempotency_conflict`. A concurrent decision that changed the row first is 412 `precondition_failed`; a lock wait that deadlocked or timed out is the retryable 503 `unavailable`, as is a busy audit chain, and neither wrote anything.
  */
 export const approveSupportGrant = <ThrowOnError extends boolean = false>(options: Options<ApproveSupportGrantData, ThrowOnError>): RequestResult<ApproveSupportGrantResponses, ApproveSupportGrantErrors, ThrowOnError> => (options.client ?? client).post<ApproveSupportGrantResponses, ApproveSupportGrantErrors, ThrowOnError>({
     security: [{
@@ -1442,7 +1442,7 @@ export const approveSupportGrant = <ThrowOnError extends boolean = false>(option
 /**
  * Revoke a support grant
  *
- * No request body. Any holder of `support:approve` in the grant's organization may revoke a requested or approved grant; the caller need not be its approver. Returns 200 with no body. A missing grant or one of another org is 404 `not_found`; a previously revoked grant is 409 `grant_already_revoked`.
+ * No request body. Any holder of `support:approve` in the grant's organization may revoke a requested or approved grant; the caller need not be its approver. Returns 200 with no body. A missing grant or one of another org is 404 `not_found`; a previously revoked grant is 409 `grant_already_revoked`. A missing or over-long `Idempotency-Key` is 400 `request_invalid` and wrote nothing; a key already used for a different grant is 409 `idempotency_conflict`. A concurrent decision that changed the row first is 412 `precondition_failed`, and it wrote nothing either. A busy audit chain answers the retryable 503 `unavailable` with `Retry-After`, also without a write.
  */
 export const revokeSupportGrant = <ThrowOnError extends boolean = false>(options: Options<RevokeSupportGrantData, ThrowOnError>): RequestResult<RevokeSupportGrantResponses, RevokeSupportGrantErrors, ThrowOnError> => (options.client ?? client).post<RevokeSupportGrantResponses, RevokeSupportGrantErrors, ThrowOnError>({
     security: [{
@@ -1457,7 +1457,7 @@ export const revokeSupportGrant = <ThrowOnError extends boolean = false>(options
 /**
  * Cursor page of the organization's support grants
  *
- * Keyset-ordered on `(created_at, id)` descending. State is derived from approval, revocation and expiry timestamps: requested, approved, revoked or expired. Another org's id is 404.
+ * Keyset-ordered on `(created_at, id)` descending. State is derived from approval, revocation and expiry timestamps: requested, approved, revoked or expired. An authenticated caller who is not an active member of the organization named in the path is refused at tenant resolution with 403 `forbidden` (the same body for an unknown org, so the answer never discloses which org ids exist); 404 `not_found` is answered only for a resolved tenant that differs from `{o}`, such as a service credential bound to another org.
  */
 export const listSupportGrants = <ThrowOnError extends boolean = false>(options: Options<ListSupportGrantsData, ThrowOnError>): RequestResult<ListSupportGrantsResponses, ListSupportGrantsErrors, ThrowOnError> => (options.client ?? client).get<ListSupportGrantsResponses, ListSupportGrantsErrors, ThrowOnError>({
     security: [{
