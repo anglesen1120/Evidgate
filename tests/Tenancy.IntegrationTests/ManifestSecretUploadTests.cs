@@ -65,9 +65,15 @@ public sealed class ManifestSecretUploadTests
     public async Task ReferencesAndOrdinaryEnumValues_StayAccepted()
     {
         await using var world = await ManifestTests.StartAsync(_fixture);
-        var accepted = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "CHROMIUM", ["api_token"] = "secret:ci_token", ["tags"] = "secret:ghp_AAAA" }], ["staging"]);
+        var accepted = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "CHROMIUM", ["tags"] = "secret:ghp_AAAA" }], ["staging"]);
 
         (await UploadAsync(world, accepted.ToJsonString())).Status.ShouldBe(HttpStatusCode.Created);
+
+        // The same reference under a secret-named key never created a run (the normaliser refuses the key), so upload refuses it too.
+        var refused = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "CHROMIUM", ["api_token"] = "secret:ci_token" }], ["staging"]);
+        var answer = await UploadAsync(world, refused.ToJsonString());
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        answer.Body.GetRawText().ShouldNotContain("ci_token");
     }
 
     [Fact]
