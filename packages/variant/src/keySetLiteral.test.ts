@@ -17,9 +17,7 @@ describe('readKeySet', () => {
 
   it('is not ended by a brace-leading line inside a block comment', () => {
     const text = [
-      'const S: Record<string, true> = {',
-      '  a: true,',
-      '  /* retired:',
+      'const S: Record<string, true> = { a: true, /* retired:',
       '} was here',
       '  */',
       '  b: true,',
@@ -27,6 +25,14 @@ describe('readKeySet', () => {
     ].join('\n');
 
     expect(readKeySet(text, 'S')).toEqual(['a', 'b']);
+  });
+
+  it.each([
+    'const S: Record<string, true> = { a: true',
+    'const S: Record<string, true> = { a: true b: true };',
+    'const S: Record<string, true> = { a: true, /* no close',
+  ])('fails closed on malformed source %#', (text) => {
+    expect(() => readKeySet(text, 'S')).toThrow(/syntax error/);
   });
 
   it('fails closed on an entry it does not understand', () => {

@@ -27,6 +27,13 @@ function isRecordOfTrue(type: ts.TypeNode | undefined): boolean {
 
 export function readKeySet(sourceText: string, constName: string, file = 'source.ts'): string[] {
   const sf = ts.createSourceFile(file, sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const syntax =
+    ts.transpileModule(sourceText, { fileName: file, reportDiagnostics: true }).diagnostics ?? [];
+  if (syntax.length > 0) {
+    throw new Error(
+      `${file} has a syntax error: ${ts.flattenDiagnosticMessageText(syntax[0]?.messageText, ' ')}`,
+    );
+  }
   for (const statement of sf.statements) {
     if (!ts.isVariableStatement(statement)) continue;
     for (const d of statement.declarationList.declarations) {
