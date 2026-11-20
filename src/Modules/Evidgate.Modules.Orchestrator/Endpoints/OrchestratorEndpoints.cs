@@ -408,8 +408,8 @@ public static class OrchestratorEndpoints
     /// <c>POST /v1/runs/{r}/finalize</c> (05.3.2 §5): a CI shard declares it has sent everything; the body is read
     /// with a hard 8 KiB cap and handed to the handler as bytes, because the five member shapes are the handler's.
     /// The read happens <b>before</b> <c>mediator.Send</c>, so up to 8 KiB is buffered for any resolved principal —
-    /// the C2 pipeline's permission, scope and idempotency stages answer later, inside the send — and only a caller
-    /// with no principal at all is refused before a byte is read. The handler answers bodiless <c>202</c>:
+    /// the C2 pipeline's permission, scope and idempotency stages answer later, inside the send — and a caller
+    /// with no principal or tenant is refused before a byte is read. The handler answers bodiless <c>202</c>:
     /// reconciliation is asynchronous.
     /// <para>
     /// The credential gate mirrors the events route exactly: a caller with no principal is <c>401 unauthenticated</c>

@@ -87,7 +87,7 @@ public sealed partial class RawBodyGuardBoundaryTests
     public void Scan_UnicodeEscapedGuardCallIsStillSeen()
     {
         var source = Source("Route",
-            "static async Task M(HttpContext context)\n{\nR\\u0061wBodyGuard.RequireResolvedTenant(context);\nawait ReadBodyAsync(context, token);\n}",
+            "static async Task M(HttpContext context)\n{\nR\\u0061wBodyGuard.RequireResolvedTenant(context.RequestServices);\nawait ReadBodyAsync(context, token);\n}",
             "static async Task ReadBodyAsync(HttpContext context, CancellationToken token)\n{\nawait context.Request.Body.ReadAsync(new byte[1], token);\n}");
 
         Scan([(RouteFile, source)], RouteReader).ShouldBeEmpty();
