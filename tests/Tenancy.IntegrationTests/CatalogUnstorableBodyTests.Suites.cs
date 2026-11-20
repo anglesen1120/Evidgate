@@ -50,6 +50,26 @@ public sealed partial class CatalogUnstorableBodyTests
     }
 
     [Fact]
+    public async Task SuiteRevisionDryRun_LoneSurrogateValue_RefusesWithoutWritesOrRecord()
+    {
+        await using var world = await StartAsync();
+        var target = await SuiteTargetAsync(world, dryRun: true);
+
+        await AssertRefusedAndRecoverAsync(world, target,
+            RevisionBody(world, """{"k":"\ud800","marker-zq7":"SECRETMARK"}"""));
+    }
+
+    [Fact]
+    public async Task SuiteRevisionDryRun_NulValue_RefusesWithoutWritesOrRecord()
+    {
+        await using var world = await StartAsync();
+        var target = await SuiteTargetAsync(world, dryRun: true);
+
+        await AssertRefusedAndRecoverAsync(world, target,
+            RevisionBody(world, """{"k":"\u0000","marker-zq7":"SECRETMARK"}"""));
+    }
+
+    [Fact]
     public async Task SuiteRevision_UnstorableEnvironmentRequirementName_RefusesWithoutWritesOrRecord()
     {
         await using var world = await StartAsync();
