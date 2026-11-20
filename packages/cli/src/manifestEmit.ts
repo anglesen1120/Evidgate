@@ -73,7 +73,31 @@ export function buildManifest(
       ? {}
       : { environmentRevisionId: options.environmentRevisionId }),
   });
-  return `${JSON.stringify(document)}\n`;
+  return serializedManifest(document);
+}
+
+/**
+ * The one oversize refusal of the builder: the transport cap is the schema's own
+ * `x-max-bytes`, so the message names the cause and the environment/plan axes a caller can
+ * shrink, never a value it supplied.
+ */
+export function manifestTooLarge(): CliError {
+  return new CliError('the manifest exceeds the manifest.v1 transport limit', {
+    code: 'manifest_invalid',
+    hint: 'the manifest exceeds the 32 MiB manifest.v1 limit; reduce --target-env entries or plan members',
+  });
+}
+
+/** Serialises the document; a document past the engine's string limit is the same refusal. */
+function serializedManifest(document: object): string {
+  try {
+    return `${JSON.stringify(document)}\n`;
+  } catch (error) {
+    if (error instanceof RangeError) {
+      throw manifestTooLarge();
+    }
+    throw error;
+  }
 }
 
 /** Expands each plan member across the target environments, in member order then target order. */

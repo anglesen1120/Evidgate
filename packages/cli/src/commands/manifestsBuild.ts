@@ -17,7 +17,7 @@ import type { ResolvedConfig } from '../config.js';
 import { CliError, escapeControlCharacters } from '../errors.js';
 import { planPageLimit, readExecutionPlan } from '../executionPlanRead.js';
 import { ExitCode } from '../exitCodes.js';
-import { buildManifest, type PlannedExecution } from '../manifestEmit.js';
+import { buildManifest, manifestTooLarge, type PlannedExecution } from '../manifestEmit.js';
 import {
   assertDistinctTests,
   assertMembersExercised,
@@ -30,6 +30,7 @@ import {
 import { loadPackagedContractSchemas } from '../packagedSchemas.js';
 import { parsePlaywrightListWithParams, readPlaywrightList } from '../playwrightList.js';
 import { serverErrorFromResponse, transportError } from '../serverError.js';
+import { bodyTooLargeReason } from '../validateErrors.js';
 import { manifestParams, normalizeVariant, type VariantResult } from '../variantHash.js';
 
 import { requiredFlag, uuidPattern } from './eventsSendArgs.js';
@@ -220,6 +221,11 @@ function assertSchemaValid(text: string): void {
   const result = loadPackagedContractSchemas().validate('manifest.v1', text);
   if (result.errors.length === 0) {
     return;
+  }
+  // The schema's own `x-max-bytes` cap is checked before parsing, so an oversize body never
+  // reaches the engine; it is the same refusal the stringify limit produces.
+  if (result.errors.some((error) => error.reason === bodyTooLargeReason)) {
+    throw manifestTooLarge();
   }
   throw new CliError('the built manifest failed manifest.v1 validation', {
     code: 'manifest_invalid',

@@ -1,12 +1,21 @@
 import { access, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { CliError } from '../errors.js';
+import { buildManifest } from '../manifestEmit.js';
 import { loadPackagedContractSchemas } from '../packagedSchemas.js';
 import { resetSecrets } from '../redact.js';
 
-import { member, page, report, stubFetch, useBuildSpec } from './manifestsBuild.testing.js';
+import {
+  member,
+  page,
+  report,
+  revision,
+  stubFetch,
+  useBuildSpec,
+} from './manifestsBuild.testing.js';
 
 const defaultBytes =
   '{"schema_version":1,"suite_revision_id":"11111111-1111-4111-8111-111111111111",' +
@@ -300,5 +309,62 @@ describe('manifests build environment and shard emission', () => {
     expect(outcome.stderr.join('')).toContain('evidgate: error manifest_plan_invalid: ');
     expect(outcome.stderr.join('')).toContain('4 execution(s) where 8 are needed');
     await expect(access(fixture.out)).rejects.toThrow();
+  });
+
+  it('a_manifest_over_the_32_mib_transport_cap_refuses_without_writing', async () => {
+    // 2000 members x 32 environments of 64 characters, with 500-byte variant params: the
+    // document is ~43 MiB, past the schema's own 32 MiB x-max-bytes transport cap.
+    const params = { a: 'x'.repeat(250), b: 'y'.repeat(250) };
+    const members = Array.from({ length: 2000 }, (_, index) => member(index + 1, params));
+    const envs = Array.from({ length: 32 }, (_, index) =>
+      `e${String(index).padStart(2, '0')}`.padEnd(64, 'x'),
+    );
+    const fixture = await setup({ text: report(members, params) });
+    const stub = stubFetch((_call, index) => {
+      const slice = members.slice(index * 500, (index + 1) * 500);
+      const next = (index + 1) * 500 < members.length ? `page-${index + 1}` : null;
+      return Response.json(page(slice, next));
+    });
+
+    const outcome = await run(fixture, stub.fetchImpl, [
+      ...fixture.args,
+      ...envs.flatMap((env) => ['--target-env', env]),
+    ]);
+
+    expect(outcome.code).toBe(3);
+    expect(outcome.stderr.join('')).toContain('evidgate: error manifest_invalid: ');
+    expect(outcome.stderr.join('')).toContain(
+      'evidgate: hint: the manifest exceeds the 32 MiB manifest.v1 limit',
+    );
+    expect(outcome.stdout).toEqual([]);
+    expect(stub.calls).toHaveLength(4);
+    await expect(access(fixture.out)).rejects.toThrow();
+  });
+
+  it('a_document_past_the_engine_string_limit_is_refused_as_manifest_invalid', () => {
+    // Allocating a >512 MiB document to reach the engine's own limit would dominate the run, so
+    // the stub throws for the one object carrying `schema_version` and delegates everything else.
+    const original = JSON.stringify;
+    const stub = vi.spyOn(JSON, 'stringify').mockImplementation((value: unknown): string => {
+      if (typeof value === 'object' && value !== null && 'schema_version' in value) {
+        throw new RangeError('Invalid string length');
+      }
+      return original(value);
+    });
+    let refused: unknown;
+    try {
+      buildManifest(revision, [
+        { caseRevisionId: '33333333-3333-4333-8333-000000000001', params: {} },
+      ]);
+    } catch (error) {
+      refused = error;
+    } finally {
+      stub.mockRestore();
+    }
+
+    expect(refused).toBeInstanceOf(CliError);
+    const error = refused as CliError;
+    expect(error.code).toBe('manifest_invalid');
+    expect(error.hint).toContain('the manifest exceeds the 32 MiB manifest.v1 limit');
   });
 });
