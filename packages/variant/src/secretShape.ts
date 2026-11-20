@@ -1,4 +1,4 @@
-// The secret-shape rules `VariantNormalizer` refuses on — the reporter's port of
+// The secret-shape rules `VariantNormalizer` refuses on — the port of
 // `SharedKernel/Security/SecretShape.cs`. A key and a value are checked separately because they
 // fail for different reasons: a secret-shaped *name* means the parameter is a credential, and a
 // secret-shaped *value* means a credential was pasted into a value, so both refuse the variant.
