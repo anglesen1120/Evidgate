@@ -202,6 +202,8 @@ internal sealed class MetricCatalogueHarness : IAsyncDisposable
         internal async Task MeasureAsync(CancellationToken cancellationToken)
         {
             EvidgateTelemetry.RecordRunIncomplete();
+            EvidgateTelemetry.RecordRunCreated("push", isFork: false, unverifiedRef: false);
+            EvidgateTelemetry.RecordAuthoringApply("applied");
             EvidgateTelemetry.RecordArtifactFailure("upload", "checksum_mismatch");
             EvidgateTelemetry.RecordUsageUnits("results", 1);
             EvidgateTelemetry.RecordUsageBillingKeyConflict();
