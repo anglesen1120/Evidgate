@@ -27,6 +27,8 @@ public sealed class VariantNormalizerFoldTests
     [InlineData("XOXB-AAAAAAAA")]
     [InlineData("  GHP_AAAAAAAA  ")]
     [InlineData("SK-LIVE-CHANNEL")]
+    [InlineData("\u00a0GHP_AAAAAAAA\u00a0")]
+    [InlineData("S\u212a-AAAAAAAA")]
     public void EnumLikeValue_WhoseFoldedFormIsSecretShaped_IsRefused(string value)
     {
         var (variant, problems) = Normalize(JsonSerializer.Serialize(new { mode = value }));
@@ -74,8 +76,10 @@ public sealed class VariantNormalizerFoldTests
     [Fact]
     public void Refusals_NeverEchoTheValue()
     {
-        var (_, problems) = Normalize("""{"mode":"GHP_ZZECHOZZ"}""");
+        var (variant, problems) = Normalize("""{"mode":"GHP_ZZECHOZZ"}""");
 
+        variant.ShouldBeNull();
+        problems.ShouldHaveSingleItem().Reason.ShouldBe("secret_value");
         problems.ShouldAllBe(problem => !problem.Path.Contains("ECHO", StringComparison.OrdinalIgnoreCase) && !problem.Reason.Contains("ECHO", StringComparison.OrdinalIgnoreCase));
     }
 }

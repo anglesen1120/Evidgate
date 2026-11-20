@@ -134,7 +134,7 @@ const rows: readonly RefusalRow[] = [
     name: 'd: lone surrogate in a key is invalid_key by position',
     params: { 'zzkey\ud800': 1 },
     problems: [{ path: '/params/#1', reason: 'invalid_key' }],
-    server: 'DIFFERENT: Normalize reads member.Name uncaught, likely InvalidOperationException',
+    server: 'same',
     offending: ['\ud800', 'zzkey'],
   },
   {
@@ -370,6 +370,18 @@ describe('variant_hash: the stored form never looks like a secret', () => {
     expect(result).toEqual({
       ok: false,
       problems: [{ path: '/params/mode', reason: 'secret_value' }],
+    });
+  });
+
+  it.each([
+    ['NBSP padding is trimmed before the scan', '\u00a0GHP_AAAAAAAA\u00a0', 'secret_value'],
+    ['U+0085 is refused before any fold', '\u0085GHP_AAAAAAAA', 'invalid_value'],
+    ['U+FEFF is refused before any fold', '\ufeffGHP_AAAAAAAA', 'invalid_value'],
+    ['the Kelvin sign folds to k', 'S\u212a-AAAAAAAA', 'secret_value'],
+  ])('%s', (_name, input, reason) => {
+    expect(normalizeVariant({ mode: input })).toEqual({
+      ok: false,
+      problems: [{ path: '/params/mode', reason }],
     });
   });
 });

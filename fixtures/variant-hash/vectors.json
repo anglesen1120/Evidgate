@@ -604,5 +604,25 @@
     "name": "refuse-folded-token-prefix-npm-registry",
     "params": { "mode": "NPM_REGISTRY" },
     "expect": { "problems": [{ "path": "/params/mode", "reason": "secret_value" }] }
+  },
+  {
+    "name": "refuse-folded-token-prefix-nbsp-padded",
+    "params": { "mode": "\u00a0GHP_AAAAAAAA\u00a0" },
+    "expect": { "problems": [{ "path": "/params/mode", "reason": "secret_value" }] }
+  },
+  {
+    "name": "refuse-control-padding-nel",
+    "params": { "mode": "\u0085GHP_AAAAAAAA" },
+    "expect": { "problems": [{ "path": "/params/mode", "reason": "invalid_value" }] }
+  },
+  {
+    "name": "refuse-format-padding-bom",
+    "params": { "mode": "\ufeffGHP_AAAAAAAA" },
+    "expect": { "problems": [{ "path": "/params/mode", "reason": "invalid_value" }] }
+  },
+  {
+    "name": "refuse-folded-token-prefix-kelvin-sign",
+    "params": { "mode": "S\u212a-AAAAAAAA" },
+    "expect": { "problems": [{ "path": "/params/mode", "reason": "secret_value" }] }
   }
 ]
