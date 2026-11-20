@@ -374,21 +374,17 @@ public sealed partial class SupportGrantOperatorRlsTests
     public async Task OperatorRls_OpenTransaction_StopsReadingWhenTheGrantExpires()
     {
         var database = await WorldAsync();
-        var id = Guid.CreateVersion7();
-        var projectList = "{" + ProjectA1 + "}";
-        await using var scope = await OperatorAsync(_fixture, database, id, Operator);
+        var grant = await GrantAsync(database, OrgA, Operator, State.Approved, projects: [ProjectA1]);
+
+        await using var scope = await OperatorAsync(_fixture, database, grant, Operator);
+        (await scope.ScalarAsync<int>("select count(*)::int from public.test_case")).ShouldBe(1);
+
+        // The expiry moves to a statement clock that is later than this transaction's start and earlier than
+        // the next read, with no sleep: a policy that froze time at transaction start would still see the row.
         await _fixture.ExecuteAsync(database, $"""
             set session_replication_role = replica;
-            insert into public.support_grant
-              (id, org_id, operator_user_id, scopes, project_ids, reason, approved_by, approved_at, expires_at, created_at)
-            values ('{id}', '{OrgA}', '{Operator}', '{CaseRead}', '{projectList}', 'short', '{Approver}', now() - interval '1 minute',
-                    now() + interval '5 seconds', now() - interval '2 hours');
+            update public.support_grant set expires_at = statement_timestamp() where id = '{grant}';
             """);
-
-        (await scope.ScalarAsync<int>("select count(*)::int from public.test_case")).ShouldBe(1);
-        await Task.Delay(TimeSpan.FromSeconds(6), TestContext.Current.CancellationToken);
-
-        // Same transaction, so now() would still be the start time: the statement clock is what ends the grant.
         (await scope.ScalarAsync<int>("select count(*)::int from public.test_case")).ShouldBe(0);
     }
 }

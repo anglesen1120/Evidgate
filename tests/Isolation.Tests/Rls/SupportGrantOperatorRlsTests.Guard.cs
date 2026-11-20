@@ -122,7 +122,11 @@ public sealed partial class SupportGrantOperatorRlsTests
     {
         var database = await WorldAsync();
         var requested = await GrantAsync(database, OrgA, Operator, State.Requested);
-        await _fixture.ExecuteAsync(database, $"update public.support_grant set revoked_at = now() where id = '{requested}'");
+        (await _fixture.ScalarAsync<bool>(database, $"""
+            with u as (update public.support_grant set revoked_at = now() where id = '{requested}'
+                       returning revoked_at, approved_at, approved_by)
+            select revoked_at is not null and approved_at is null and approved_by is null from u
+            """)).ShouldBeTrue("the withdrawal is stored as a revocation of a never-approved grant");
         (await CountsAsync(database, requested, Operator)).ShouldBe([0, 0, 0, 0]);
     }
 
@@ -131,17 +135,18 @@ public sealed partial class SupportGrantOperatorRlsTests
     {
         var database = await WorldAsync();
         var requested = await GrantAsync(database, OrgA, Operator, State.Requested);
-        await _fixture.ExecuteAsync(database, $"""
-            update public.support_grant
-               set approved_at = now() + interval '5 years', approved_by = '{Approver}'
-             where id = '{requested}'
-            """);
-        (await _fixture.ScalarAsync<bool>(database, $"select approved_at < now() + interval '1 minute' from public.support_grant where id = '{requested}'"))
-            .ShouldBeTrue("a future approval time must not survive");
+        (await _fixture.ScalarAsync<bool>(database, $"""
+            with u as (update public.support_grant
+                          set approved_at = now() + interval '5 years', approved_by = '{Approver}'
+                        where id = '{requested}' returning approved_at)
+            select approved_at = statement_timestamp() from u
+            """)).ShouldBeTrue("the approval time is the server's statement time, not the caller's");
 
-        await _fixture.ExecuteAsync(database, $"update public.support_grant set revoked_at = now() - interval '1 minute' where id = '{requested}'");
-        (await _fixture.ScalarAsync<bool>(database, $"select revoked_at > now() - interval '10 seconds' from public.support_grant where id = '{requested}'"))
-            .ShouldBeTrue("a caller-chosen revocation time must not survive");
+        (await _fixture.ScalarAsync<bool>(database, $"""
+            with u as (update public.support_grant set revoked_at = now() - interval '1 minute'
+                        where id = '{requested}' returning revoked_at)
+            select revoked_at = statement_timestamp() from u
+            """)).ShouldBeTrue("the revocation time is the server's statement time, not the caller's");
     }
 
     [Fact]
