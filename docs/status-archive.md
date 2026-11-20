@@ -812,3 +812,13 @@ Closed by S479 (#981): the bound stays in exact UTF-8 bytes by COORDINATOR-DECIS
 | CLI response size cap and manifest size precheck (S476) | The generated SDK client reads `response.text()` and `JSON.parse` with no byte cap for every command, and `manifests build` builds a manifest over the 32 MiB cap (about 1.4 s CPU, 60 MB string) before the schema check refuses it. Bounded by 30 s per attempt, 20 pages and the 16 MiB report cap | receiver: CLI owner (shared client change, then a size estimate before emission) |
 
 Closed by S484 (#991): `boundedResponse.ts` reads every API answer under a 1 MiB decoded-byte cap (OIDC 64 KiB, `gate` keeps its own smaller caps) and `manifests build` refuses an oversize manifest from an exact `planned_executions` size before `manifestAxes`; `contracts/cli.md` §5.1 and §14.4 record both.
+
+## Moved from status-carried.md by S485 (2026-11-20)
+
+| CR-13 slice B: refused-path plan not measured (S477) | Migration 0112 skips the write on a live refused row, but no test prints EXPLAIN (ANALYZE, BUFFERS, WAL) for that path, so the saving is shown by row identity and statement-count tests only. Add a test inside a granted LAN call that prints the plan, or measure in the 10.1.1 load test. | receiver: perf lane |
+
+Closed by S485 (#995): `RateLimitRefusedPathPlanTests` prints EXPLAIN (ANALYZE, BUFFERS, WAL) for a granted and a live-refused acquire of the 0112 function, called as the application calls it. On run lan-rate-limit-plan-s485-1795140456-28117 (9dc264fe; data_checksums=on, wal_log_hints=off) the refused path showed xid none, 0/0/0 tuple inserts/updates/deletes and 0 WAL records in three runs, the granted control xid 1691, 1/0/0 and 4 WAL records (323 bytes). A function replacement that rewrites the refused row turned the test red (run lan-rate-limit-plan-s485-1795140602-221: xid 882, 1 update, 1 WAL record). The load-test measurement stays with the perf lane.
+
+| Test seam on the rate limiter (S473) | `ExchangeRateLimiter` is un-sealed and `AcquireAsync` is virtual only so `RateLimitGateFaultClauseTests` can make the store throw a chosen exception; nothing in production derives from it. Replace with an injected command executor if the limiter ever gets a second implementation. | receiver: coordinator (Identity lane) |
+
+Closed by S485 (#995): `ExchangeRateLimiter` is sealed and `AcquireAsync` is non-virtual again; the fault-clause tests inject the failure through an internal generic delegate overload of `RateLimitGate.AcquireAsync` (new rows record its callers and the dropped cost assertion).
