@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Catalog.Application.Commands;
@@ -64,10 +65,11 @@ internal static class FixtureEndpoints
     private static async Task<Result<FixtureRevisionHead>> CreateFixtureAsync(
         Guid p,
         HttpContext context,
+        IRequestPrincipalAccessor principals,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var (body, readError) = await CatalogRequestRules.ReadJsonAsync(context, MaxBodyBytes, cancellationToken).ConfigureAwait(false);
+        var (body, readError) = await CatalogRequestRules.ReadAuthenticatedJsonAsync(context, principals, MaxBodyBytes, cancellationToken).ConfigureAwait(false);
         if (readError is not null)
         {
             return Result.Failure<FixtureRevisionHead>(readError);
@@ -104,10 +106,11 @@ internal static class FixtureEndpoints
     private static async Task<Result<FixtureRevisionHead>> CreateFixtureRevisionAsync(
         Guid f,
         HttpContext context,
+        IRequestPrincipalAccessor principals,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var (body, readError) = await CatalogRequestRules.ReadJsonAsync(context, MaxBodyBytes, cancellationToken).ConfigureAwait(false);
+        var (body, readError) = await CatalogRequestRules.ReadAuthenticatedJsonAsync(context, principals, MaxBodyBytes, cancellationToken).ConfigureAwait(false);
         if (readError is not null)
         {
             return Result.Failure<FixtureRevisionHead>(readError);

@@ -169,10 +169,11 @@ public static class CatalogEndpoints
     private static async Task<Result> CreateSuiteRevisionAsync(
         Guid s,
         HttpContext context,
+        IRequestPrincipalAccessor principals,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var (body, readError) = await CatalogRequestRules.ReadJsonAsync(context, MaxRevisionBodyBytes, cancellationToken).ConfigureAwait(false);
+        var (body, readError) = await CatalogRequestRules.ReadAuthenticatedJsonAsync(context, principals, MaxRevisionBodyBytes, cancellationToken).ConfigureAwait(false);
         if (readError is not null)
         {
             return Result.Failure<SuiteRevisionHead>(readError);
@@ -269,12 +270,13 @@ public static class CatalogEndpoints
         Guid p,
         Guid c,
         HttpContext context,
+        IRequestPrincipalAccessor principals,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
         // A bad requirement_ref value keeps its field path below, so only an unreadable member name is refused at the read.
         var (body, readError) = await CatalogRequestRules
-            .ReadJsonAsync(context, MaxBodyBytes, cancellationToken, refuseUnstorableValues: false).ConfigureAwait(false);
+            .ReadAuthenticatedJsonAsync(context, principals, MaxBodyBytes, cancellationToken, refuseUnstorableValues: false).ConfigureAwait(false);
         if (readError is not null)
         {
             return Result.Failure<CaseDto>(readError);
@@ -322,6 +324,7 @@ public static class CatalogEndpoints
     private static async Task<Result<CaseDto>> UpdateCaseAsync(
         Guid c,
         HttpContext context,
+        IRequestPrincipalAccessor principals,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
@@ -330,7 +333,7 @@ public static class CatalogEndpoints
             return Result.Failure<CaseDto>(ifMatch);
         }
 
-        var (body, readError) = await CatalogRequestRules.ReadJsonAsync(context, MaxBodyBytes, cancellationToken).ConfigureAwait(false);
+        var (body, readError) = await CatalogRequestRules.ReadAuthenticatedJsonAsync(context, principals, MaxBodyBytes, cancellationToken).ConfigureAwait(false);
         if (readError is not null)
         {
             return Result.Failure<CaseDto>(readError);

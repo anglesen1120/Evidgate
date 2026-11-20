@@ -4,9 +4,9 @@ using Xunit;
 namespace Architecture.Tests;
 
 /// <summary>
-/// Every Catalog route that reads a request body goes through <c>CatalogRequestRules.ReadJsonAsync</c>: the size cap, the
-/// closed-member set and the unstorable-text refusal only hold when the body is read there and nowhere else. A route
-/// that parsed the body itself would skip the refusal and could answer 500 on a name it cannot read, so a second reader
+/// Every raw-body Catalog route goes through <c>CatalogRequestRules.ReadAuthenticatedJsonAsync</c>: authentication,
+/// the size cap and unstorable-text refusal only hold when the body is read there and nowhere else. A route that
+/// parsed the body itself would skip the refusal and could answer 500 on a name it cannot read, so a second reader
 /// is a boundary break, not a style choice.
 /// </summary>
 /// <remarks>
@@ -34,6 +34,7 @@ public sealed class CatalogBodyReadBoundaryTests
         "Request.Body",
         "BodyReader",
         "JsonSerializer.Deserialize<JsonElement>(",
+        "ReadJsonAsync(",
     ];
 
     [Fact]
@@ -43,7 +44,7 @@ public sealed class CatalogBodyReadBoundaryTests
 
         files.Length.ShouldBeGreaterThanOrEqualTo(4);
         files.Count(file => file.Path == RulesFile).ShouldBe(1);
-        Scan(files).ShouldBeEmpty("Catalog endpoints must read request bodies through CatalogRequestRules.ReadJsonAsync");
+        Scan(files).ShouldBeEmpty("Catalog endpoints must read request bodies through CatalogRequestRules.ReadAuthenticatedJsonAsync");
     }
 
     [Fact]
@@ -51,7 +52,7 @@ public sealed class CatalogBodyReadBoundaryTests
     {
         var calls = Endpoints()
             .Where(file => file.Path != RulesFile)
-            .Sum(file => Occurrences(file.Text, "ReadJsonAsync("));
+            .Sum(file => Occurrences(file.Text, "ReadAuthenticatedJsonAsync("));
 
         calls.ShouldBeGreaterThanOrEqualTo(RawBodyRoutes);
     }
@@ -60,7 +61,7 @@ public sealed class CatalogBodyReadBoundaryTests
     public void ReadJsonAsync_ParsedBody_IsClassifiedBeforeItIsReturned()
     {
         var text = File.ReadAllText(Path.Combine(SolutionLayout.RepoRoot, RulesFile));
-        var start = text.IndexOf(" ReadJsonAsync(", StringComparison.Ordinal);
+        var start = text.IndexOf(" Task<(JsonElement Body, Error? Error)> ReadJsonAsync(", StringComparison.Ordinal);
         start.ShouldBeGreaterThanOrEqualTo(0, "CatalogRequestRules must still declare ReadJsonAsync");
         var end = text.IndexOf("\n    }", start, StringComparison.Ordinal);
         end.ShouldBeGreaterThan(start);
@@ -68,6 +69,24 @@ public sealed class CatalogBodyReadBoundaryTests
         var reader = text[start..end];
         reader.ShouldContain("UnstorableJsonText.HasUnstorableText(");
         reader.ShouldContain("UnstorableJsonText.HasUnstorableName(");
+    }
+
+    [Fact]
+    public void ReadAuthenticatedJsonAsync_MissingPrincipal_IsRefusedBeforeReading()
+    {
+        var text = File.ReadAllText(Path.Combine(SolutionLayout.RepoRoot, RulesFile));
+        var start = text.IndexOf(" ReadAuthenticatedJsonAsync(", StringComparison.Ordinal);
+        start.ShouldBeGreaterThanOrEqualTo(0, "CatalogRequestRules must declare ReadAuthenticatedJsonAsync");
+        var end = text.IndexOf("\n    }", start, StringComparison.Ordinal);
+        end.ShouldBeGreaterThan(start);
+
+        var reader = text[start..end];
+        var guard = reader.IndexOf("if (principals.Current is null)", StringComparison.Ordinal);
+        guard.ShouldBeGreaterThanOrEqualTo(0);
+        var refusal = reader.IndexOf("throw new TenantContextMissingException()", guard, StringComparison.Ordinal);
+        refusal.ShouldBeGreaterThan(guard);
+        var read = reader.IndexOf("ReadJsonAsync(", StringComparison.Ordinal);
+        read.ShouldBeGreaterThan(refusal);
     }
 
     /// <summary>
@@ -82,10 +101,11 @@ public sealed class CatalogBodyReadBoundaryTests
     [InlineData("context.Request.BodyReader.ReadAsync()")]
     [InlineData("request.BodyReader.ReadAsync()")]
     [InlineData("JsonSerializer.Deserialize<JsonElement>(requestText)")]
+    [InlineData("CatalogRequestRules.ReadJsonAsync(context, limit, cancellationToken)")]
     public void Scan_DirectBodyReadOutsideRules_FlagsFile(string source)
     {
         (string Path, string Text) sharedRead =
-            (SyntheticRouteFile, "CatalogRequestRules.ReadJsonAsync(context, limit, cancellationToken)");
+            (SyntheticRouteFile, "CatalogRequestRules.ReadAuthenticatedJsonAsync(context, principals, limit, cancellationToken)");
         (string Path, string Text) direct = (SyntheticRouteFile, source);
 
         Scan([sharedRead]).ShouldBeEmpty();
@@ -99,6 +119,7 @@ public sealed class CatalogBodyReadBoundaryTests
     [InlineData("context.Request.Body.ReadAsync(buffer)")]
     [InlineData("context.Request.BodyReader.ReadAsync()")]
     [InlineData("JsonSerializer.Deserialize<JsonElement>(requestText)")]
+    [InlineData("ReadJsonAsync(context, limit, cancellationToken)")]
     public void Scan_DirectBodyReadInsideRules_AllowsFile(string source) =>
         Scan([(RulesFile, source)]).ShouldBeEmpty();
 

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Catalog.Application;
@@ -49,11 +50,12 @@ internal static class GitRepoBindingEndpoints
     private static async Task<Result<GitRepoBindingDto>> RegisterAsync(
         Guid p,
         HttpContext context,
+        IRequestPrincipalAccessor principals,
         GitRepoBindingRegistration registration,
         CancellationToken cancellationToken)
     {
         var (body, readError) = await CatalogRequestRules
-            .ReadJsonAsync(context, MaxBodyBytes, cancellationToken)
+            .ReadAuthenticatedJsonAsync(context, principals, MaxBodyBytes, cancellationToken)
             .ConfigureAwait(false);
         if (readError is not null)
         {
