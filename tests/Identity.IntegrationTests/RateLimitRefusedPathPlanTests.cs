@@ -148,7 +148,7 @@ public sealed class RateLimitRefusedPathPlanTests(DatabaseFixture fixture)
 
         return new Witness(
             json,
-            (string?)await xidCommand.ExecuteScalarAsync(token) is { } xid ? xid : null,
+            await xidCommand.ExecuteScalarAsync(token) is string xid ? xid : null,
             after.Inserted - before.Inserted,
             after.Updated - before.Updated,
             after.Deleted - before.Deleted,
