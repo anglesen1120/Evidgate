@@ -12,7 +12,7 @@ namespace Architecture.Tests;
 public class ProductionSourceWalkTests
 {
     /// <summary>Well below the real tree; the point is to catch a walk that lost a whole subtree.</summary>
-    private const int MinimumFiles = 900;
+    private const int MinimumFiles = 1000;
 
     private readonly ITestOutputHelper output;
 
@@ -29,6 +29,8 @@ public class ProductionSourceWalkTests
         files.ShouldBe(files.Order(StringComparer.Ordinal).ToList());
         files.ShouldNotContain(path => path.Contains("/obj/", StringComparison.Ordinal) || path.Contains("/bin/", StringComparison.Ordinal));
         files.ShouldContain("src/Modules/Evidgate.Modules.Identity/Endpoints/LoginEndpoints.cs");
+        files.ShouldContain("src/Modules/Evidgate.Modules.Identity/Ci/ExchangeRateLimiter.cs");
+        files.ShouldContain("src/Evidgate.Migrator/DevSeedToken.cs");
         files.ShouldAllBe(path => path.StartsWith("src/", StringComparison.Ordinal) && path.EndsWith(".cs", StringComparison.Ordinal));
     }
 
