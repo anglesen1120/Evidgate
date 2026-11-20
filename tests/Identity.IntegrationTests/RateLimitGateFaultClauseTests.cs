@@ -36,7 +36,7 @@ public sealed class RateLimitGateFaultClauseTests
         var store = new FaultingStore(new OperationCanceledException(cancelled.Token), failAfterCalls: 0);
 
         await Should.ThrowAsync<OperationCanceledException>(() => RateLimitGate.AcquireAsync(
-            new DefaultHttpContext(), store.AcquireAsync, "refused", cancelled.Token).AsTask());
+            new DefaultHttpContext(), store, static (fake, token) => fake.AcquireAsync(token), "refused", cancelled.Token).AsTask());
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public sealed class RateLimitGateFaultClauseTests
         var context = new DefaultHttpContext();
 
         var refused = await RateLimitGate.AcquireAsync(
-            context, store.AcquireAsync, "refused", TestContext.Current.CancellationToken);
+            context, store, static (fake, token) => fake.AcquireAsync(token), "refused", TestContext.Current.CancellationToken);
 
         refused.ShouldNotBeNull().Code.ShouldBe(ApiErrorCode.Unavailable);
         store.Calls.ShouldBe(1);
@@ -59,7 +59,7 @@ public sealed class RateLimitGateFaultClauseTests
         // for the fault and not for a cost the gate cannot spend.
         var answering = new FaultingStore(new TimeoutException("never thrown"), failAfterCalls: 1);
         (await RateLimitGate.AcquireAsync(
-            new DefaultHttpContext(), answering.AcquireAsync, "refused", TestContext.Current.CancellationToken))
+            new DefaultHttpContext(), answering, static (fake, token) => fake.AcquireAsync(token), "refused", TestContext.Current.CancellationToken))
             .ShouldBeNull();
         answering.Calls.ShouldBe(1);
     }
@@ -95,7 +95,8 @@ public sealed class RateLimitGateFaultClauseTests
     private static ValueTask<Error?> AcquireAsync(Exception fault, DefaultHttpContext? context = null) =>
         RateLimitGate.AcquireAsync(
             context ?? new DefaultHttpContext(),
-            new FaultingStore(fault, failAfterCalls: 0).AcquireAsync,
+            new FaultingStore(fault, failAfterCalls: 0),
+            static (fake, token) => fake.AcquireAsync(token),
             "refused",
             TestContext.Current.CancellationToken);
 

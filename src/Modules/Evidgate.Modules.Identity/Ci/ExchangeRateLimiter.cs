@@ -160,28 +160,35 @@ internal static class RateLimitGate
         ArgumentNullException.ThrowIfNull(limiter);
 
         return await AcquireAsync(
-            context, token => limiter.AcquireAsync(surface, key, cost, token), refusalMessage, cancellationToken)
-            .ConfigureAwait(false);
+            context,
+            (limiter, surface, key, cost),
+            static (call, token) => call.limiter.AcquireAsync(call.surface, call.key, call.cost, token),
+            refusalMessage,
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
     /// The gate over any single store call. The limiter overload is the only production caller; the delegate lets a
-    /// test make the call fail with an exception type the real store cannot be steered into.
+    /// test make the call fail with an exception type the real store cannot be steered into. The state is passed to a
+    /// static delegate so the hot path allocates no closure.
     /// </summary>
+    /// <typeparam name="TState">What the store call needs.</typeparam>
     /// <param name="context">The request whose response carries the refusal headers.</param>
+    /// <param name="state">Handed to <paramref name="acquire"/> unchanged.</param>
     /// <param name="acquire">One store call that spends the attempt's units.</param>
     /// <param name="refusalMessage">The route's 429 message.</param>
     /// <param name="cancellationToken">The request's cancellation token.</param>
-    internal static async ValueTask<Error?> AcquireAsync(
+    internal static async ValueTask<Error?> AcquireAsync<TState>(
         HttpContext context,
-        Func<CancellationToken, ValueTask<RateDecision>> acquire,
+        TState state,
+        Func<TState, CancellationToken, ValueTask<RateDecision>> acquire,
         string refusalMessage,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(acquire);
 
-        if (await TryAcquireAsync(acquire, cancellationToken).ConfigureAwait(false) is not { } decision)
+        if (await TryAcquireAsync(state, acquire, cancellationToken).ConfigureAwait(false) is not { } decision)
         {
             return Unavailable(context);
         }
@@ -196,12 +203,12 @@ internal static class RateLimitGate
         return null;
     }
 
-    private static async ValueTask<RateDecision?> TryAcquireAsync(
-        Func<CancellationToken, ValueTask<RateDecision>> acquire, CancellationToken cancellationToken)
+    private static async ValueTask<RateDecision?> TryAcquireAsync<TState>(
+        TState state, Func<TState, CancellationToken, ValueTask<RateDecision>> acquire, CancellationToken cancellationToken)
     {
         try
         {
-            return await acquire(cancellationToken).ConfigureAwait(false);
+            return await acquire(state, cancellationToken).ConfigureAwait(false);
         }
         catch (NpgsqlException)
         {

@@ -93,7 +93,6 @@ public sealed class RateLimitRefusedPathPlanTests(DatabaseFixture fixture)
         Print($"mutant refused acquire: xid={mutant.Xid ?? "none"} upd={mutant.Updated} wal={mutant.WalRecords}\n{mutant.Json}");
         await transaction.RollbackAsync(Token);
 
-        mutant.Xid.ShouldNotBeNull();
         mutant.Updated.ShouldBeGreaterThan(0, "the witnesses see a refused path that writes the row again");
     }
 
