@@ -125,6 +125,11 @@ public sealed partial class ResolverTests : HarnessTest
         ["evidgate.purge_expired_github_install_state"] = "0108_identity_github_installation.sql:160",
         ["evidgate.list_dead_letter_tasks"] = "0104_platform_worker_role.sql:291",
         ["evidgate.replay_dead_letter_task"] = "0104_platform_worker_role.sql:352",
+        ["evidgate.operator_grant_org"] = "0115_identity_support_grant.sql:208",
+        ["evidgate.operator_grant_id"] = "0115_identity_support_grant.sql:240",
+        ["evidgate.operator_grant_read_projects"] = "0115_identity_support_grant.sql:272",
+        ["evidgate.operator_grant_ok"] = "0115_identity_support_grant.sql:309",
+        ["evidgate.resolve_active_grant"] = "0115_identity_support_grant.sql:348",
     };
 
     /// <summary>
