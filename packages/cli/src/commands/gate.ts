@@ -7,7 +7,14 @@ import { ExchangeAuthError } from '../auth/exchange.js';
 import { getToken, type GetTokenDeps } from '../auth/getToken.js';
 import { deleteCachedToken } from '../auth/tokenCache.js';
 import { callApi, type ApiResult } from '../callApi.js';
-import { refuseUnsupportedStatus, ResponseTooLargeError } from '../boundedResponse.js';
+import {
+  declaredLength,
+  maxResponseBytes,
+  readBoundedText,
+  refuseUnsupportedStatus,
+  ResponseReadError,
+  ResponseTooLargeError,
+} from '../boundedResponse.js';
 import { createApiClient } from '../client.js';
 import type { ResolvedConfig } from '../config.js';
 import { parseDuration } from '../duration.js';
@@ -328,70 +335,38 @@ class DecisionBodyStreamError extends CliError {
 }
 
 /**
- * Reads the decision body under a hard cap. An answer larger than `maxDecisionBytes`, or one
- * whose stream breaks after its headers, is refused: a verdict the CLI only half read is never
- * a verdict, so neither case may end as a pass.
+ * Reads the decision body under the shared reader's hard cap. An answer larger than
+ * `maxDecisionBytes`, or one whose stream breaks after its headers, is refused: a verdict the
+ * CLI only half read is never a verdict, so neither case may end as a pass. A refusal the shared
+ * wrapper raised past the transport cap keeps its own `response_too_large`, which is final.
  */
 async function readDecisionText(response: Response): Promise<string> {
-  const body = response.body;
-  if (body === null) {
-    return '';
+  // A declared length already past the transport cap is that reader's refusal and keeps its
+  // own code; only a body this read counts past `maxDecisionBytes` is a decision-cap refusal.
+  const declared = response.body === null ? undefined : declaredLength(response);
+  if (declared !== undefined && declared > maxResponseBytes) {
+    throw new ResponseTooLargeError(maxResponseBytes);
   }
-  // `response.body` is typed as a stream of `any`; the reader is what fixes the chunk type,
-  // so a byte count cannot silently become `NaN`.
-  const reader: ReadableStreamDefaultReader<Uint8Array> = body.getReader();
-  const decoder = new TextDecoder();
-  let text = '';
-  let bytes = 0;
   try {
-    for (;;) {
-      const chunk = await readChunk(reader);
-      if (chunk.done) {
-        break;
-      }
-      const value = chunk.value;
-      if (!(value instanceof Uint8Array)) {
-        // A non-byte chunk (only an injected fetch can produce one) would leave the cap
-        // unsized, so the body is refused rather than read without a bound.
-        throw new CliError('the run decision body could not be read', { code: 'request_failed' });
-      }
-      bytes += value.byteLength;
-      if (bytes > maxDecisionBytes) {
-        throw new CliError(`the run decision body exceeded ${maxDecisionBytes} bytes`, {
-          code: 'request_failed',
-        });
-      }
-      text += decoder.decode(value, { stream: true });
-    }
-    return text + decoder.decode();
+    return await readBoundedText(response, maxDecisionBytes);
   } catch (error) {
-    if (error instanceof CliError) {
-      throw error;
+    // A cut stream is retryable; the size refusal is this command's contract violation.
+    if (error instanceof ResponseReadError) {
+      throw new DecisionBodyStreamError();
     }
-    throw new DecisionBodyStreamError();
-  } finally {
-    await reader.cancel().catch(() => undefined);
-  }
-}
-
-/** One chunk of a body; `value` is undefined on the read that ends the stream. */
-interface BodyChunk {
-  readonly done: boolean;
-  readonly value: Uint8Array | undefined;
-}
-
-/**
- * One chunk. A stream that breaks, or one the request's own abort ends after the headers
- * arrived, is reported as the transport failure it is, so the poll loop may retry it.
- */
-async function readChunk(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<BodyChunk> {
-  try {
-    return await reader.read();
-  } catch (error) {
     if (error instanceof ResponseTooLargeError) {
-      throw error;
+      // The transport cap fired, not this reader's: retrying cannot help, so keep it fatal.
+      if (error.cap > maxDecisionBytes) {
+        throw error;
+      }
+      throw new CliError(`the run decision body exceeded ${maxDecisionBytes} bytes`, {
+        code: 'request_failed',
+      });
     }
-    throw new DecisionBodyStreamError();
+    if (!(error instanceof CliError)) {
+      throw new DecisionBodyStreamError();
+    }
+    throw error;
   }
 }
 
