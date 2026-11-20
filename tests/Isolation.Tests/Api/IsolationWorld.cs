@@ -219,6 +219,13 @@ public sealed class IsolationOrg
     /// <summary>The GitHub installation id (bigint) that row carries.</summary>
     public required long GithubInstallationId { get; init; }
 
+    /// <summary>
+    /// The org's two support grants (<c>{g}</c>), owner-seeded because the request route is the operator's and is not
+    /// mapped. Both are <c>requested</c> and both ids are distinct so the approve and revoke probes never share a row;
+    /// nothing in this suite approves one, so the list walk reads the same two states every time it runs.
+    /// </summary>
+    public required IReadOnlyList<Guid> SupportGrantIds { get; init; }
+
     /// <summary>The role ids this org can name: the built-in catalogue (custom roles are off, see <see cref="IsolationWorld.CustomRoleId"/>).</summary>
     public required IReadOnlyDictionary<string, Guid> RoleIds { get; init; }
 
@@ -302,7 +309,8 @@ public sealed class IsolationOrg
 /// </para>
 /// <para>Not buildable yet (see <see cref="NotYetBuildable"/>):</para>
 /// <list type="bullet">
-/// <item>an expired support grant — 02.8.1 (support access) is not merged;</item>
+/// <item>an expired support grant — the request route (02.8.1) is not served, so the world seeds two
+/// <c>requested</c> grants through the owner seam and never expires one;</item>
 /// <item>one real session per user — 02.3.2 (sessions) is not merged; members are identified by
 /// <see cref="IsolationApiFactory"/>'s header stand-in instead;</item>
 /// <item>a custom role — <c>POST /v1/roles</c> is off by default (<c>EVIDGATE:Identity:CustomRolesEnabled</c>);
@@ -330,7 +338,7 @@ public sealed class IsolationWorld
     /// <summary>The 02 §7 fixture items this world cannot build yet, with the reason.</summary>
     public static IReadOnlyList<string> NotYetBuildable { get; } =
     [
-        "expired support grant: 02.8.1 (support access) not merged",
+        "expired support grant: the request route (02.8.1) is not served; the world seeds requested grants only",
         "one session per user: 02.3.2 (sessions) not merged; members use the header stand-in",
         "custom role: POST /v1/roles disabled by default (EVIDGATE:Identity:CustomRolesEnabled=false)",
     ];
@@ -513,6 +521,7 @@ public sealed class IsolationWorld
 
             await SeedSecurityEventsAsync(org, projects[0]).ConfigureAwait(false);
             var (installationId, githubInstallationId) = await SeedInstallationAsync(org, adminUser, 7000 + orgIndex).ConfigureAwait(false);
+            var supportGrants = await SeedSupportGrantsAsync(org).ConfigureAwait(false);
 
             return new IsolationOrg
             {
@@ -526,6 +535,7 @@ public sealed class IsolationWorld
                 Projects = seeded,
                 InstallationId = installationId,
                 GithubInstallationId = githubInstallationId,
+                SupportGrantIds = supportGrants,
                 RoleIds = roles,
             };
         }
@@ -560,6 +570,49 @@ public sealed class IsolationWorld
             await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
             return (id, githubInstallationId);
+        }
+
+        /// <summary>
+        /// The org's two support grants (02.8.1 §5), both filed as <c>requested</c>: the tenant's request route is the
+        /// operator's and is not mapped in this host, so no route of this world can file one and only the owner seam
+        /// can. Two rows, and two distinct operator accounts, so the approve and revoke probes never touch one row —
+        /// the suite's world is shared by every test in the collection, and a mutated grant would change what a later
+        /// test reads. The operator accounts are real <c>public."user"</c> rows because the table's FK requires them;
+        /// they hold no membership, which is what an operator account is.
+        /// </summary>
+        /// <param name="org">The tenant the grants open.</param>
+        private async Task<IReadOnlyList<Guid>> SeedSupportGrantsAsync(Guid org)
+        {
+            var grants = new List<Guid>();
+
+            await using var connection = await OpenOwnerAsync().ConfigureAwait(false);
+            foreach (var reason in new[] { "isolation probe: approve", "isolation probe: revoke" })
+            {
+                var operatorUser = Guid.CreateVersion7();
+                var grant = Guid.CreateVersion7();
+
+                await using var insert = new NpgsqlCommand(
+                    """
+                    insert into public."user" (id, email) values (@operator, @email);
+                    insert into public.support_grant
+                        (id, org_id, operator_user_id, scopes, project_ids, reason, expires_at, created_at)
+                    values
+                        (@id, @org_id, @operator, array['run:read'], '{}'::uuid[], @reason,
+                         now() + interval '2 hours', now())
+                    """,
+                    connection);
+
+                insert.Parameters.AddWithValue("operator", operatorUser);
+                insert.Parameters.AddWithValue("email", $"operator-{operatorUser:N}@example.test");
+                insert.Parameters.AddWithValue("id", grant);
+                insert.Parameters.AddWithValue("org_id", org);
+                insert.Parameters.AddWithValue("reason", reason);
+                await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+                grants.Add(grant);
+            }
+
+            return grants;
         }
 
         /// <summary>

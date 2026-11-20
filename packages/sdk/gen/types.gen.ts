@@ -1586,6 +1586,26 @@ export type ApiTokenCreatedResponse = {
     expires_at: string;
 };
 
+export type SupportGrant = {
+    id: string;
+    org_id: string;
+    operator_user_id: string;
+    scopes: Array<string>;
+    project_ids: Array<string>;
+    reason: string;
+    state: 'requested' | 'approved' | 'revoked' | 'expired';
+    approved_by: string | null;
+    approved_at: string | null;
+    expires_at: string;
+    revoked_at: string | null;
+    created_at: string;
+};
+
+export type SupportGrantList = {
+    items: Array<SupportGrant>;
+    next_cursor: string | null;
+};
+
 export type ApiTokenListResponse = {
     items: Array<ApiTokenView>;
     next_cursor: string | null;
@@ -8898,6 +8918,10 @@ export type ApproveSupportGrantData = {
 
 export type ApproveSupportGrantErrors = {
     /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
      * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
      */
     401: ErrorEnvelope;
@@ -8913,6 +8937,10 @@ export type ApproveSupportGrantErrors = {
      * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
      */
     409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
     /**
      * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
@@ -8957,6 +8985,10 @@ export type RevokeSupportGrantData = {
 
 export type RevokeSupportGrantErrors = {
     /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
      * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
      */
     401: ErrorEnvelope;
@@ -8972,6 +9004,10 @@ export type RevokeSupportGrantErrors = {
      * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
      */
     409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
     /**
      * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
      */
@@ -8990,6 +9026,59 @@ export type RevokeSupportGrantResponses = {
      */
     200: unknown;
 };
+
+export type ListSupportGrantsData = {
+    body?: never;
+    path: {
+        o: string;
+    };
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/orgs/{o}/support-grants';
+};
+
+export type ListSupportGrantsErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListSupportGrantsError = ListSupportGrantsErrors[keyof ListSupportGrantsErrors];
+
+export type ListSupportGrantsResponses = {
+    /**
+     * Page of support grants
+     */
+    200: SupportGrantList;
+};
+
+export type ListSupportGrantsResponse = ListSupportGrantsResponses[keyof ListSupportGrantsResponses];
 
 export type ListSecurityEventsData = {
     body?: never;
