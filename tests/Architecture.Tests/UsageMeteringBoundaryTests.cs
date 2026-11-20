@@ -155,30 +155,5 @@ public class UsageMeteringBoundaryTests
     }
 
     /// <summary>Every hand-written <c>src/**/*.cs</c> file, repo-relative with '/'.</summary>
-    private static List<(string Path, string Text)> SourceFiles()
-    {
-        var root = Path.Combine(SolutionLayout.RepoRoot, "src");
-
-        return
-        [
-            .. Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
-                .Where(path => !IsGenerated(root, path))
-                .Select(path => (Relative(path), File.ReadAllText(path)))
-        ];
-    }
-
-    private static bool IsGenerated(string srcRoot, string path)
-    {
-        var relative = Path.GetRelativePath(srcRoot, path);
-        var segments = relative.Split(
-            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
-            StringSplitOptions.RemoveEmptyEntries);
-
-        return segments[..^1].Any(segment =>
-            string.Equals(segment, "bin", StringComparison.Ordinal)
-            || string.Equals(segment, "obj", StringComparison.Ordinal));
-    }
-
-    private static string Relative(string path) =>
-        Path.GetRelativePath(SolutionLayout.RepoRoot, path).Replace('\\', '/');
+    private static List<(string Path, string Text)> SourceFiles() => SolutionLayout.ProductionSources();
 }

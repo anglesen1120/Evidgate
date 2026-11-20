@@ -131,20 +131,16 @@ public sealed class SecurityEventEmitterCoverageTests
     private static Dictionary<string, string> ProductionSources()
     {
         var root = SolutionLayout.RepoRoot;
-        var files = Directory.EnumerateFiles(Path.Combine(root, "src"), "*.cs", SearchOption.AllDirectories)
-            .Where(f => !IsBuildOutput(root, f))
+        var files = SolutionLayout.ProductionSourceFiles()
+            .Select(relative => Path.Combine(root, relative))
             .Concat(Directory.EnumerateFiles(Path.Combine(root, "migrations"), "*.sql")
                 .Where(f => !f.EndsWith(SchemaMigration, StringComparison.Ordinal)));
         return files.ToDictionary(
             f => Path.GetRelativePath(root, f).Replace('\\', '/'), File.ReadAllText, StringComparer.Ordinal);
     }
 
-    private static bool IsBuildOutput(string root, string path)
-    {
-        var relative = Path.GetRelativePath(root, path);
-        return relative.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-            || relative.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
-    }
+    private static bool IsBuildOutput(string root, string path) =>
+        SolutionLayout.IsBuildOutput(Path.Combine(root, "src"), path);
 
     /// <summary>Data rows of the first markdown table after <paramref name="heading"/>, split into trimmed cells.</summary>
     private static List<string[]> TableRows(string markdown, string heading)
