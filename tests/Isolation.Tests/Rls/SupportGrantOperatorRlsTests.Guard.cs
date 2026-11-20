@@ -8,22 +8,22 @@ namespace Isolation.Tests;
 public sealed partial class SupportGrantOperatorRlsTests
 {
     [Theory]
-    [InlineData("approved_to_requested", "update public.support_grant set approved_at = null, approved_by = null where id = '{approved}'")]
-    [InlineData("approver_rewritten", "update public.support_grant set approved_by = '{operator}' where id = '{approved}'")]
-    [InlineData("approved_again", "update public.support_grant set approved_at = now() where id = '{approved}'")]
-    [InlineData("revoked_to_approved", "update public.support_grant set approved_at = now(), approved_by = '{approver}', revoked_at = null where id = '{revoked}'")]
-    [InlineData("revoked_unrevoked", "update public.support_grant set revoked_at = null where id = '{revoked}'")]
-    [InlineData("revoked_edited", "update public.support_grant set reason = 'again' where id = '{revoked}'")]
-    [InlineData("expired_requested_approved", "update public.support_grant set approved_at = now(), approved_by = '{approver}' where id = '{expiredRequested}'")]
-    [InlineData("scopes_changed", "update public.support_grant set scopes = '{case:*}' where id = '{requested}'")]
-    [InlineData("projects_changed", "update public.support_grant set project_ids = array[gen_random_uuid()] where id = '{requested}'")]
-    [InlineData("expiry_extended", "update public.support_grant set expires_at = expires_at + interval '1 day' where id = '{requested}'")]
-    [InlineData("operator_changed", "update public.support_grant set operator_user_id = '{other}' where id = '{requested}'")]
-    [InlineData("org_changed", "update public.support_grant set org_id = '{orgB}' where id = '{requested}'")]
-    [InlineData("approve_and_revoke_together", "update public.support_grant set approved_at = now(), approved_by = '{approver}', revoked_at = now() where id = '{requested}'")]
-    [InlineData("revoked_noop", "update public.support_grant set revoked_at = revoked_at where id = '{revoked}'")]
-    [InlineData("delete", "delete from public.support_grant where id = '{requested}'")]
-    public async Task Guard_Refuses_Transition(string name, string template)
+    [InlineData("approved_to_requested", "update public.support_grant set approved_at = null, approved_by = null where id = '{approved}'", "approval is write-once")]
+    [InlineData("approver_rewritten", "update public.support_grant set approved_by = '{operator}' where id = '{approved}'", "approval is write-once")]
+    [InlineData("approved_again", "update public.support_grant set approved_at = now() where id = '{approved}'", "approval is write-once")]
+    [InlineData("revoked_to_approved", "update public.support_grant set approved_at = now(), approved_by = '{approver}', revoked_at = null where id = '{revoked}'", "a revoked grant accepts no change")]
+    [InlineData("revoked_unrevoked", "update public.support_grant set revoked_at = null where id = '{revoked}'", "a revoked grant accepts no change")]
+    [InlineData("revoked_edited", "update public.support_grant set reason = 'again' where id = '{revoked}'", "identity, scope and expiry are immutable")]
+    [InlineData("expired_requested_approved", "update public.support_grant set approved_at = now(), approved_by = '{approver}' where id = '{expiredRequested}'", "has expired and cannot be approved")]
+    [InlineData("scopes_changed", "update public.support_grant set scopes = '{case:*}' where id = '{requested}'", "identity, scope and expiry are immutable")]
+    [InlineData("projects_changed", "update public.support_grant set project_ids = '{projectA1}' where id = '{requested}'", "identity, scope and expiry are immutable")]
+    [InlineData("expiry_extended", "update public.support_grant set expires_at = expires_at + interval '1 day' where id = '{requested}'", "identity, scope and expiry are immutable")]
+    [InlineData("operator_changed", "update public.support_grant set operator_user_id = '{other}' where id = '{requested}'", "identity, scope and expiry are immutable")]
+    [InlineData("org_changed", "update public.support_grant set org_id = '{orgB}' where id = '{requested}'", "identity, scope and expiry are immutable")]
+    [InlineData("approve_and_revoke_together", "update public.support_grant set approved_at = now(), approved_by = '{approver}', revoked_at = now() where id = '{requested}'", "cannot be approved and revoked in one change")]
+    [InlineData("revoked_noop", "update public.support_grant set revoked_at = revoked_at where id = '{revoked}'", "a revoked grant accepts no change")]
+    [InlineData("delete", "delete from public.support_grant where id = '{requested}'", "is never deleted")]
+    public async Task Guard_Refuses_Transition(string name, string template, string refusal)
     {
         var database = await WorldAsync();
         var requested = await GrantAsync(database, OrgA, Operator, State.Requested);
@@ -39,10 +39,12 @@ public sealed partial class SupportGrantOperatorRlsTests
             .Replace("{approver}", Approver.ToString())
             .Replace("{operator}", Operator.ToString())
             .Replace("{other}", OtherOperator.ToString())
-            .Replace("{orgB}", OrgB.ToString());
+            .Replace("{orgB}", OrgB.ToString())
+            .Replace("{projectA1}", "{" + ProjectA1 + "}");
 
         var error = await Should.ThrowAsync<PostgresException>(() => _fixture.ExecuteAsync(database, sql), name);
         error.SqlState.ShouldBe("23514", name);
+        error.MessageText.ShouldContain(refusal, customMessage: name);
     }
 
     [Fact]
