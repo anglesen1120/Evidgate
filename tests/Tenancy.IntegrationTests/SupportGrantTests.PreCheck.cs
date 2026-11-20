@@ -6,10 +6,9 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// The approve handler's own refusals, with the guard trigger switched off. With the trigger on, every refusal the
-/// handler makes before it writes is also made by the trigger and mapped to the same answer, so no test can tell
-/// the two apart. Each test here disables <c>support_grant_guard</c> in its own dedicated database (dropped when
-/// the test ends, so nothing leaks into another test) and proves the handler still refuses and writes nothing.
+/// The approve and revoke handlers' own refusals, with the guard trigger off: with it on, the trigger refuses the
+/// same cases and the handler maps that to the same answer, so no test could tell the two apart. Each test disables
+/// the trigger in its own dedicated database, which is dropped when the test ends.
 /// </summary>
 public sealed partial class SupportGrantTests
 {
@@ -57,6 +56,7 @@ public sealed partial class SupportGrantTests
         await using var _ = api;
         var grant = await SeedGrantAsync(org, state, approver: founder);
         var twin = await SeedGrantAsync(org, state, approver: founder);
+        var open = await SeedGrantAsync(org, "requested");
         await DisableGuardAsync();
 
         // Control: the guard refuses this move on a grant of the same state; with it off the row changes.
@@ -75,6 +75,10 @@ public sealed partial class SupportGrantTests
         refused.ErrorCode.ShouldBe("grant_not_requested");
         (await StateAsync(grant)).ShouldBe(before);
         (await AuditCountAsync("support_grant.approve")).ShouldBe(0);
+
+        // Same caller, same route, a grant that is awaiting approval: accepted, so the refusal is about the state.
+        (await client.SendAsync(HttpMethod.Post, $"/v1/support-grants/{open}/approve", Admin(founder, org), null, NewKey()))
+            .Status.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -98,6 +102,10 @@ public sealed partial class SupportGrantTests
         refused.ErrorCode.ShouldBe("grant_already_revoked");
         (await StateAsync(grant)).ShouldBe(before);
         (await AuditCountAsync("support_grant.revoke")).ShouldBe(0);
+
+        // Same caller, same route, the twin the control just un-revoked: accepted, so the refusal is about the state.
+        (await client.SendAsync(HttpMethod.Post, $"/v1/support-grants/{twin}/revoke", Admin(founder, org), null, NewKey()))
+            .Status.ShouldBe(HttpStatusCode.OK);
     }
 
     private async Task DisableGuardAsync()
@@ -109,5 +117,5 @@ public sealed partial class SupportGrantTests
     private Task<string> StateAsync(Guid grant) =>
         _fixture.ScalarAsync<string>(
             _database!,
-            $"select concat_ws('|', approved_by, approved_at, revoked_at) from public.support_grant where id = '{grant}'");
+            $"select to_jsonb(g)::text from public.support_grant g where g.id = '{grant}'");
 }

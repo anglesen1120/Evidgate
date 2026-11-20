@@ -573,7 +573,7 @@ public sealed class IsolationWorld
         /// <summary>
         /// The org's three support grants (02.8.1 §5): two filed as <c>requested</c> and one whose expiry has passed. The tenant's request route is the
         /// operator's and is not mapped in this host, so no route of this world can file one and only the owner seam
-        /// can. Two rows, and two distinct operator accounts, so the approve and revoke probes never touch one row —
+        /// can. Three rows, and three distinct operator accounts, so the approve and revoke probes never touch one row —
         /// the suite's world is shared by every test in the collection, and a mutated grant would change what a later
         /// test reads. The operator accounts are real <c>public."user"</c> rows because the table's FK requires them;
         /// they hold no membership, which is what an operator account is.
