@@ -822,3 +822,9 @@ Closed by S485 (#995): `RateLimitRefusedPathPlanTests` prints EXPLAIN (ANALYZE, 
 | Test seam on the rate limiter (S473) | `ExchangeRateLimiter` is un-sealed and `AcquireAsync` is virtual only so `RateLimitGateFaultClauseTests` can make the store throw a chosen exception; nothing in production derives from it. Replace with an injected command executor if the limiter ever gets a second implementation. | receiver: coordinator (Identity lane) |
 
 Closed by S485 (#995): `ExchangeRateLimiter` is sealed and `AcquireAsync` is non-virtual again; the fault-clause tests inject the failure through an internal generic delegate overload of `RateLimitGate.AcquireAsync` (new rows record its callers and the dropped cost assertion).
+
+## Moved from status-carried.md by S487 (2026-11-20)
+
+| CLI variant normaliser duplicated from adapter (S476) | `packages/cli/src/variantHash.ts` and `variantShape.ts` mirror `normalizeVariant` of `packages/adapter-playwright/src/variant.ts` because the CLI cannot import the adapter; parity is pinned by test vectors only, so the two can drift. Same receiver as the canonical case-id validator duplicate in 04.2.2 T3 | receiver: shared CLI module lane (adapter imports CLI) |
+
+Closed by S487 (#999): `normalizeVariant`, the secret-shape rules, the serialised-length measure and the sha256 digest live once in `packages/variant` (`@evidgate/variant`); the CLI and the adapter import it and the mirrored copies are deleted. The case-id validator duplicate stays, recorded in a new carried row.

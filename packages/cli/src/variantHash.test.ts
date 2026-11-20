@@ -1,12 +1,13 @@
-// The CLI's variant normaliser against the shared corpus: `fixtures/variant-hash/vectors.json`
-// is the same file the adapter's own suite and the server's variant suite assert, so a copy
-// that drifts from `packages/adapter-playwright/src/variant.ts` fails here first.
+// The CLI's use of the shared variant normaliser against the corpus
+// `fixtures/variant-hash/vectors.json`, the same file the adapter and the server suites assert.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { manifestParams, normalizeVariant, type VariantProblem } from './variantHash.js';
+import { normalizeVariant, type VariantProblem } from '@evidgate/variant';
+
+import { manifestParams } from './variantHash.js';
 
 interface Vector {
   readonly name: string;
