@@ -130,7 +130,10 @@ public sealed class IdempotencyUnstorableTextRouteTests(
         var parameters = leaf;
         for (var depth = 3; depth < requestDepth; depth++)
         {
-            parameters = "{\"_meta\":" + parameters + "}";
+            // The outermost level carries a real parameter: an all-metadata body hashes like the seeded empty-params revision
+            // and would answer the deduplicated 200 instead of 201.
+            var identity = depth == requestDepth - 1 ? "\"k\":\"ok\"," : string.Empty;
+            parameters = "{" + identity + "\"_meta\":" + parameters + "}";
         }
 
         return parameters;
