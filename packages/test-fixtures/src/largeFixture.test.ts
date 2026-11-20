@@ -114,7 +114,10 @@ function assertBudgetContract(budget: unknown): void {
   const headroom = asJsonObject(requiredMember(root, 'headroom'), 'budget.headroom');
   const wall = requiredNumber(headroom, 'wall');
   const memory = requiredNumber(headroom, 'memory');
-  require(wall === 5 && memory === 2, 'budget.headroom must be wall 5 and memory 2');
+  const retained = requiredNumber(headroom, 'retained');
+  require(wall === 5 &&
+    memory === 2 &&
+    retained === 1.05, 'budget.headroom must be wall 5, memory 2 and retained 1.05');
   const measured = asJsonObject(requiredMember(root, 'measured'), 'budget.measured');
   const limits = asJsonObject(requiredMember(root, 'limits'), 'budget.limits');
   assertMetricKeys(measured, 'budget.measured');
@@ -122,10 +125,20 @@ function assertBudgetContract(budget: unknown): void {
   for (const metric of BUDGET_METRICS) {
     const value = requiredMetric(measured, metric);
     const limit = requiredMetric(limits, metric);
-    const factor = metric.endsWith('_wall_ms') ? wall : memory;
+    const factor = headroomFactor(metric, { wall, memory, retained });
     require(limit >= value &&
       limit >= Math.ceil(value * factor), `budget.limits.${metric} is below measured/headroom`);
   }
+}
+
+// The child's resident set varies with host load, so it keeps a loose factor; the parent's retained managed heap is
+// measured after a forced collection and repeats within a percent, so only a tight factor can see a buffering regression.
+function headroomFactor(
+  metric: string,
+  factors: { wall: number; memory: number; retained: number },
+): number {
+  if (metric.endsWith('_wall_ms')) return factors.wall;
+  return metric === 'parent_inflight_retained_bytes' ? factors.retained : factors.memory;
 }
 
 function assertMetricKeys(metrics: JsonObject, label: string): void {
@@ -191,7 +204,7 @@ function measuredBudget(): JsonObject {
   return {
     status: 'measured',
     measured_on: { date: '2026-11-20', host: 'budget-host', sha: 'abcdef12' },
-    headroom: { wall: 5, memory: 2 },
+    headroom: { wall: 5, memory: 2, retained: 1.05 },
     measured: {
       parse_wall_ms: 1,
       reconcile_wall_ms: 1,
@@ -394,6 +407,7 @@ describe('large fixture budget contract', () => {
     { label: 'measured_on.sha', parent: 'measured_on', member: 'sha' },
     { label: 'headroom.wall', parent: 'headroom', member: 'wall' },
     { label: 'headroom.memory', parent: 'headroom', member: 'memory' },
+    { label: 'headroom.retained', parent: 'headroom', member: 'retained' },
   ];
 
   it.each(missingMemberCases)('refuses a measured budget missing $label', ({ parent, member }) => {
@@ -440,6 +454,8 @@ describe('large fixture budget contract', () => {
     { label: 'headroom.wall factor', section: 'headroom', member: 'wall', value: 4 },
     { label: 'headroom.memory', section: 'headroom', member: 'memory', value: -1 },
     { label: 'headroom.memory factor', section: 'headroom', member: 'memory', value: 3 },
+    { label: 'headroom.retained', section: 'headroom', member: 'retained', value: -1 },
+    { label: 'headroom.retained factor', section: 'headroom', member: 'retained', value: 2 },
     { label: 'measured.parse_wall_ms', section: 'measured', member: 'parse_wall_ms', value: 1.5 },
     {
       label: 'measured.parent_inflight_retained_bytes',

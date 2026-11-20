@@ -120,6 +120,10 @@ public sealed partial class LargeReportBudgetTests(
         Print(measured, phase.Child, phase.Parent, parentBefore, parentAfter, walk);
 
         var verdict = budget.Compare(measured);
+        output.WriteLine(string.Create(
+            CultureInfo.InvariantCulture,
+            $"budget parent retained baseline={baseline} bytes (GC.WaitForPendingFinalizers, then GC.Collect(MaxGeneration, Forced, blocking: true, compacting: true), then GC.GetTotalMemory(false))"));
+        output.WriteLine($"budget verdict: {verdict.Message}");
         verdict.WithinBudget.ShouldBeTrue(verdict.Message);
     }
 

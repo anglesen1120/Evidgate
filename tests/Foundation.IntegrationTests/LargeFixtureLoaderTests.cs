@@ -115,6 +115,7 @@ public sealed class LargeFixtureLoaderTests(ITestOutputHelper output)
     [InlineData("measured_on", "sha")]
     [InlineData("headroom", "wall")]
     [InlineData("headroom", "memory")]
+    [InlineData("headroom", "retained")]
     public void LargeFixture_MeasuredBudgetMissingMember_Rejects(string parent, string member)
     {
         var budget = MeasuredBudget();
@@ -168,6 +169,8 @@ public sealed class LargeFixtureLoaderTests(ITestOutputHelper output)
     [InlineData("headroom", "wall", "4")]
     [InlineData("headroom", "memory", "-1")]
     [InlineData("headroom", "memory", "3")]
+    [InlineData("headroom", "retained", "-1")]
+    [InlineData("headroom", "retained", "2")]
     [InlineData("measured", "parse_wall_ms", "1.5")]
     [InlineData("measured", "parent_inflight_retained_bytes", "-1")]
     [InlineData("limits", "walk_wall_ms", "5.5")]
@@ -227,7 +230,7 @@ public sealed class LargeFixtureLoaderTests(ITestOutputHelper output)
         {
           "status": "measured",
           "measured_on": {"date": "2026-11-20", "host": "budget-host", "sha": "abcdef12"},
-          "headroom": {"wall": 5, "memory": 2},
+          "headroom": {"wall": 5, "memory": 2, "retained": 1.05},
           "measured": {
             "parse_wall_ms": 1, "reconcile_wall_ms": 1, "walk_wall_ms": 1,
             "child_peak_working_set_bytes": 1, "parent_inflight_retained_bytes": 1
@@ -263,7 +266,8 @@ public sealed class LargeFixtureLoaderTests(ITestOutputHelper output)
         var headroom = RequiredMember(budget, "headroom");
         var wall = RequiredNumber(headroom, "wall");
         var memory = RequiredNumber(headroom, "memory");
-        Require(wall == 5 && memory == 2, "budget.headroom must be wall 5 and memory 2");
+        var retained = RequiredNumber(headroom, "retained");
+        Require(wall == 5 && memory == 2 && retained == 1.05, "budget.headroom must be wall 5, memory 2 and retained 1.05");
         var measured = RequiredMember(budget, "measured");
         var limits = RequiredMember(budget, "limits");
         AssertMetricKeys(measured);
@@ -272,7 +276,10 @@ public sealed class LargeFixtureLoaderTests(ITestOutputHelper output)
         {
             var value = RequiredMetric(measured, metric);
             var limit = RequiredMetric(limits, metric);
-            var factor = metric.EndsWith("_wall_ms", StringComparison.Ordinal) ? wall : memory;
+            // The child's resident set varies with host load, so it keeps a loose factor; the parent's retained managed
+            // heap repeats within a percent after a forced collection, so only a tight factor sees a buffering regression.
+            var factor = metric.EndsWith("_wall_ms", StringComparison.Ordinal) ? wall
+                : metric == "parent_inflight_retained_bytes" ? retained : memory;
             Require(limit >= value && limit >= Math.Ceiling(value * factor), $"budget.limits.{metric} is below measured/headroom");
         }
     }
