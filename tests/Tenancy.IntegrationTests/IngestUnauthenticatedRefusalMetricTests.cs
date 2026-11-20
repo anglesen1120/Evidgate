@@ -39,7 +39,7 @@ public sealed class IngestUnauthenticatedRefusalMetricTests(PostgresTenancyFixtu
         var resolved = await PostAsync(client, world, headers =>
             TenancyApiFactory.Resolved(user: world.User, orgHeader: world.Org)(headers));
 
-        resolved.Status.ShouldNotBe(HttpStatusCode.Unauthorized, resolved.ErrorMessage);
+        resolved.Status.ShouldBe(HttpStatusCode.Forbidden, resolved.ErrorMessage);
         reasons.ShouldNotContain(Unauthenticated);
     }
 
