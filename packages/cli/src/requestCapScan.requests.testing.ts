@@ -286,7 +286,7 @@ function untypedReason(
       ? requestBodyReason(held, typed, constructors, seen)
       : inheritedBodyReason(held, typed, constructors, seen);
     if (reason !== undefined) return reason;
-    if (rebound && !knownOther(held, typed, new Set())) return unknownReason;
+    if (rebound && !construction && !knownOther(held, typed, new Set())) return unknownReason;
   }
   return undefined;
 }
@@ -313,7 +313,7 @@ function knownOther(
   visiting: Set<Declaration>,
 ): boolean {
   const v = unwrap(value);
-  if (isInertValue(v) || ts.isNewExpression(v)) return true;
+  if (isInertValue(v)) return true;
   if (ts.isConditionalExpression(v)) {
     return knownOther(v.whenTrue, typed, visiting) && knownOther(v.whenFalse, typed, visiting);
   }

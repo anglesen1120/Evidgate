@@ -216,6 +216,34 @@ export const everyDeclarationForms: readonly LimitForm[] = [
     'uncapped-fetch',
     'rebound by an untyped declaration',
   ],
+  [
+    'an untyped local built from a Request subclass',
+    "function a(req: Request) { return req; } class MyReq extends Request {} function b(u: string) { const req = new MyReq(u, { body: 'x' }); fetch(req); }",
+    "function a(req: Request) { return req; } function b(u: string) { const req = 'x'; fetch(req); }",
+    'uncapped-fetch',
+    'rebound by an untyped declaration',
+  ],
+  [
+    'an untyped local concatenating an unknown value',
+    "function a(req: Request) { return req; } function b(d) { const req = 'a' + d; fetch(req); }",
+    "function a(req: Request) { return req; } function b() { const req = 'a' + 'b'; fetch(req); }",
+    'uncapped-fetch',
+    'rebound by an untyped declaration',
+  ],
+  [
+    'a typed name overwritten through a default in an array pattern',
+    "function a(u: string, o: Request[], x: Request) { let r: Request = new Request(u, { method: 'GET' }); [r = x] = o; fetch(r); }",
+    "function a(u: string) { const r: Request = new Request(u, { method: 'GET' }); fetch(r); }",
+    'uncapped-fetch',
+    'reassigned after its declaration',
+  ],
+  [
+    'a string-array annotated shadow overwritten with a Request',
+    'function a(req: Request) { return req; } function b(o: Request) { let req: string[] = []; req = o; fetch(req); }',
+    'function a(req: Request) { return req; } function b(v: string[]) { let req: string[] = []; req = v; fetch(req); }',
+    'uncapped-fetch',
+    'Request inherits a body',
+  ],
 ];
 
 /** Same-named locals in other functions: not one declaration, so one does not taint the other. */
@@ -255,6 +283,10 @@ export const shadowedCleanSources: readonly (readonly [name: string, source: str
   [
     'a loop head binding used only inside the loop',
     "function a(u: string, list: string[]) { const r: Request = new Request(u, { method: 'GET' }); for (const r of list) { u; } fetch(r); }",
+  ],
+  [
+    'an untyped body-free Request construction of a typed name',
+    "function a(req: Request) { return req; } function b(u: string) { const req = new Request(u, { method: 'GET' }); fetch(req); }",
   ],
 ];
 
