@@ -1060,3 +1060,9 @@ Closed in part by S531 (#1083, 3d97e720): ManualCaseCommands.cs and NodeCommands
 | Authoring and AI settings instruments absent from the metric catalogue (S528) | evidgate_authoring_ai_settings_write_total, evidgate_authoring_change_queued_total, evidgate_authoring_apply_total, evidgate_authoring_apply_batch_size and evidgate_runs_created_total are in neither infra/metrics/catalogue.yaml nor docs/runbooks/telemetry.md; MetricCatalogueTests only checks entries that exist. | receiver: observability lane |
 
 Closed by S530 (#1085, 6061272d): the success recordings moved after commit and runs_created and authoring_apply are catalogued; what stays open is the carried row 'Authoring instruments without a reader stay out of the metric catalogue (S530)'.
+
+## Moved from status-carried.md by S532 (2026-11-21)
+
+| Source files over 500 lines (S531 count) | 30 under src, wave 3d97e720 (`git ls-files 'src/*.cs'` fed to `wc -l`, files over 500 lines, total line excluded): AuthoringVersionWriter 2444, SafeZipArchive 1234, XlsxReader 1234, AuthoringImporter 1047, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, JsonCanonicalizer 751, IngestEventBatch 746, SafeXml 741, OrchestratorEndpoints 729, AssertionExtractor 728, AuthoringContent 702, ImportValidator 697, S3ObjectStorage 672, and fifteen of 517-666. Methods over 60 lines in the moved types: ManualCase{Create,Update,State,Move} Handle, Node{Create,Update} HandleCoreAsync | receiver: backend lanes, split when next touched |
+
+Closed by S532 (#1087, 7b9f936e): AuthoringVersionWriter.cs was split into partial files of at most 420 lines; the recount is the carried row 'Source files over 500 lines (S532 count)'.
