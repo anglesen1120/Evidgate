@@ -873,6 +873,12 @@ Closed by S491 (#1009): `response_read_failed` (exit 3, `contracts/cli.md` §5) 
 
 Closed by S491 (#1009): the scan walks the TypeScript syntax tree (aliases, `new Response(x)`, `for await` over the body, destructured methods, computed literal keys), with a per-function allow-list and fixtures; the gate decision reader now delegates to the shared reader, `boundedErrorBody` stays as the one truncating reader (`responseReadScan.test.ts`, `commands/gate.readerFold.test.ts`).
 
+## Moved from status-carried.md by S494 (2026-11-20)
+
+| Manifest secret check has no invisible-character guard (S493) | `{"mode":"\ufeffGHP_AAAAAAAA"}` (BOM; also `gh\u200bp_AAAAAAAAAAAA`, zero-width space) passes `ManifestVerifier.SecretPositions` (`ManifestVerifier.cs:156`, `ParameterSecretRule.cs:30-31`) and is stored verbatim; the normaliser refuses it as `invalid_value` through `TextRules.IsClean` (`TextRules.cs:16-35`, control and format characters) before any scan. Run creation then refuses it, so the secret-shaped text stays in the manifest row. | receiver: orchestrator backend lane (needs `IsClean` in SharedKernel) |
+
+Closed by S494 (#1013): the manifest upload refuses an unclean string value under an identifying key with `invalid_value` by position through the shared `UnicodeCleanliness.IsClean`; free-text keys scan the value with Cc/Cf removed and answer the secret refusal (`ManifestSecretUploadTests`, `ManifestCleanTextRuleTests`). Param names with invisible characters never reach the verifier over HTTP (the schema pattern `manifest.v1.json:127-128` refuses them first); the verifier checks them directly and is pinned at unit level. Characters outside Cc/Cf stay open (row 'Secret scan hides behind non-Cc/Cf invisible characters (S494)').
+
 ## Moved from status-carried.md by S492 (2026-11-20)
 
 | Idempotency behaviour answers 500 on an unreadable JSON member name (S490) | `src/BuildingBlocks/Pipeline/Behaviours/IdempotencyBehaviour.cs:70-79,116` re-serialises the command `JsonElement` before the handler; a lone-surrogate member name makes `JsonSerializer.Serialize` throw and the envelope middleware answers 500 (seen on `POST /v1/suites/{id}/revisions`, gate.log of lan-variant-fold-s490-1795148005-30138, ~line 1231). Every idempotent `JsonElement` route is affected; untrusted input should be a 4xx problem. | receiver: S492 (in progress) |
