@@ -3,6 +3,7 @@ using System.Numerics;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using Evidgate.Modules.Catalog.Domain;
 using Microsoft.AspNetCore.Http;
 
@@ -14,11 +15,23 @@ namespace Evidgate.Modules.Catalog.Endpoints;
 /// </summary>
 internal static class CatalogRequestRules
 {
-    /// <summary>The body, capped before it is buffered, so an oversize request costs one header check and a 413.</summary>
+    /// <summary>
+    /// The body, capped before it is buffered, so an oversize request costs one header check and a 413. A body whose
+    /// text cannot be stored (an unpaired surrogate or NUL in any name or value) is refused here, before any caller
+    /// reads a member name.
+    /// </summary>
     /// <param name="context">The request.</param>
     /// <param name="limit">The cap in bytes.</param>
     /// <param name="cancellationToken">Cancellation.</param>
-    public static async Task<(JsonElement Body, Error? Error)> ReadJsonAsync(HttpContext context, int limit, CancellationToken cancellationToken)
+    /// <param name="refuseUnstorableValues">
+    /// False only for a route that must answer a bad value with its own field path: then just an unstorable member
+    /// name is refused here and the route owns the value check.
+    /// </param>
+    public static async Task<(JsonElement Body, Error? Error)> ReadJsonAsync(
+        HttpContext context,
+        int limit,
+        CancellationToken cancellationToken,
+        bool refuseUnstorableValues = true)
     {
         if (context.Request.ContentLength > limit)
         {
@@ -41,6 +54,14 @@ internal static class CatalogRequestRules
 
             using var document = JsonDocument.Parse(buffered.ToArray());
 
+            var unstorable = refuseUnstorableValues
+                ? UnstorableJsonText.HasUnstorableText(document.RootElement)
+                : UnstorableJsonText.HasUnstorableName(document.RootElement);
+            if (unstorable)
+            {
+                return (default, UnstorableText());
+            }
+
             return (document.RootElement.Clone(), null);
         }
         catch (JsonException)
@@ -48,6 +69,11 @@ internal static class CatalogRequestRules
             return (default, Error.BadRequest("the body is not valid JSON"));
         }
     }
+
+    /// <summary>The 422 of text that cannot be stored; it names no member and no value.</summary>
+    public static Error UnstorableText() => Error.Invalid(
+        "the body carries text that cannot be stored",
+        [new ErrorDetail(string.Empty, "invalid_value")]);
 
     /// <summary>The 413 of a body over the route's cap.</summary>
     public static Error TooLarge() => new(ApiErrorCode.PayloadTooLarge, "the request body is too large", StatusCodes.Status413PayloadTooLarge);

@@ -445,7 +445,7 @@ internal sealed partial class FinalizeShardCommandHandler(
         {
             if (!Members.Contains(member.Name, StringComparer.Ordinal))
             {
-                return BodyInvalid("the request body carries an unknown field", [new ErrorDetail($"/{member.Name}", "additional_properties")]);
+                return BodyInvalid("the request body carries an unknown field", [new ErrorDetail(RequestMemberPath.ForUnknown(member.Name), "additional_properties")]);
             }
         }
 
