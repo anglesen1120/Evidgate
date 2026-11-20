@@ -48,8 +48,7 @@ public sealed partial class CatalogUnstorableBodyTests
         await AssertRefusedAndRecoverAsync(world, target,
             """{"requirement_ref":null,"x":"\ud800"}""",
             path: "x",
-            reason: "unknown_field",
-            recover: false);
+            reason: "unknown_field");
     }
 
     [Fact]

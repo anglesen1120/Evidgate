@@ -63,8 +63,7 @@ public sealed partial class CatalogUnstorableBodyTests(
         Target target,
         string malformed,
         string path = "",
-        string reason = "invalid_value",
-        bool recover = true)
+        string reason = "invalid_value")
     {
         var key = NewKey();
         var before = await SnapshotAsync(world);
@@ -76,7 +75,7 @@ public sealed partial class CatalogUnstorableBodyTests(
         (await RecordCountAsync(world, key)).ShouldBe(0);
         (await SnapshotAsync(world)).ShouldBe(before,
             "a refusal changes no audit, outbox, task, Catalog row or case field");
-        if (!target.Recover || !recover)
+        if (!target.Recover)
         {
             return;
         }
