@@ -32,7 +32,10 @@ public sealed partial class EvaluationSchemaTests
             $"select count(*) from public.evaluation where id = '{original.Id:D}'"))
             .ShouldBe(1);
 
-        var inserted = await SeedAsync(world);
+        // A second revision of the same run: the policy revision's content address is unique per project, so the
+        // control reuses the stored one instead of seeding another.
+        var inserted = original with { Id = Guid.CreateVersion7(), EvidenceRevision = 2 };
+        (await InsertAsync(world, world.Org, inserted)).ShouldBe(1);
         (await ScalarAsOrgAsync<long>(world, world.Org, "select count(*) from public.evaluation")).ShouldBe(2);
         (await ScalarAsOrgAsync<long>(
             world,
