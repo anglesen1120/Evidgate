@@ -95,6 +95,9 @@ public sealed partial class ListRunAttemptsTests
         PlanJson.ScansSequentially(nodes, "case_attempt").ShouldBeFalse(plan);
     }
 
+    /// <summary>Execution keys of the own run that the colliding sibling run repeats.</summary>
+    private const int CollidingKeys = 20;
+
     /// <summary>Ready artifacts the colliding sibling run holds on each of the own run's slots.</summary>
     private const int CollidingReadyPerSlot = 3;
 
@@ -112,12 +115,19 @@ public sealed partial class ListRunAttemptsTests
         await using var lease = world;
 
         var collidedKeys = await SeedCollidingRunAsync(
-            world.Database, world.Org, world.Project, runId, keys: 20, perSlot: CollidingReadyPerSlot);
-        // A positive control first: the sibling's rows are committed and visible on every collided slot, so a
-        // zero below would mean a missing arrangement rather than the ownership filter the case is about.
-        var siblingPerSlot = await SiblingReadyPerSlotAsync(world.Database, world.Org, runId, collidedKeys);
-        siblingPerSlot.ShouldBe(
-            CollidingReadyPerSlot, "the sibling run's ready artifacts must be committed on every collided slot");
+            world.Database, world.Org, world.Project, runId, keys: CollidingKeys, perSlot: CollidingReadyPerSlot);
+        collidedKeys.Length.ShouldBe(CollidingKeys, "the seed must return the keys it copied");
+        // A positive control first: the sibling's rows are committed and visible on every one of the own run's
+        // slots on those keys, so a zero below would mean a missing arrangement rather than the ownership filter
+        // the case is about. Slots come from the own run, never from the sibling's rows, so a slot the seed
+        // failed to copy counts as zero instead of disappearing from the check.
+        var siblingSlots = await SiblingReadyPerSlotAsync(world.Database, world.Org, runId, collidedKeys);
+        siblingSlots.Length.ShouldBe(
+            CollidingKeys * DenseAttemptsPerExecution,
+            "the sibling must repeat every attempt slot of the copied keys");
+        siblingSlots.ShouldAllBe(
+            count => count == CollidingReadyPerSlot,
+            "every collided slot must hold the sibling run's ready artifacts before the page is read");
         var own = await ReadyCountsAsync(world.Database, world.Org, runId);
 
         var answer = await GetAsync(world, runId, query: "?limit=100");
@@ -398,23 +408,32 @@ public sealed partial class ListRunAttemptsTests
     }
 
     /// <summary>
-    /// The smallest count of ready artifacts any other run of the org holds on one of the
-    /// <paramref name="keys"/>' slots, or 0 when it holds none: the collision case's positive control, read on the
-    /// owner connection after the seed committed.
+    /// One count per <em>expected</em> slot of the own run on <paramref name="keys"/> — its
+    /// <c>(execution_key, attempt_no)</c> pairs — of the ready artifacts any other run of the org holds there, and
+    /// zero for a slot it holds none on: the collision case's positive control, read on the owner connection after
+    /// the seed committed. The left join keeps a slot the sibling never copied in the result, so a missing slot
+    /// cannot pass as no evidence.
     /// </summary>
-    private async Task<int> SiblingReadyPerSlotAsync(string database, Guid org, Guid runId, string[] keys)
+    private async Task<int[]> SiblingReadyPerSlotAsync(string database, Guid org, Guid runId, string[] keys)
     {
         await using var scope = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database));
 
-        return await scope.ScalarAsync<int>(
+        return await scope.ScalarAsync<int[]>(
             """
-            select coalesce(min(c), 0)
+            with expected as (
+                select a.execution_key, a.attempt_no
+                  from public.case_attempt a
+                 where a.org_id = @org_id and a.run_id = @own_run_id
+                   and a.execution_key = any(@keys)
+            )
+            select coalesce(array_agg(ready_count order by execution_key, attempt_no), '{}'::int[])
               from (
-                  select count(*)::int as c
-                    from public.artifact
-                   where org_id = @org_id and run_id <> @own_run_id and state = 'ready'
-                     and execution_key = any(@keys)
-                   group by execution_key, attempt_no
+                  select e.execution_key, e.attempt_no, count(r.id)::int as ready_count
+                    from expected e
+                    left join public.artifact r
+                      on r.org_id = @org_id and r.run_id <> @own_run_id and r.state = 'ready'
+                     and r.execution_key = e.execution_key and r.attempt_no = e.attempt_no
+                   group by e.execution_key, e.attempt_no
               ) slots
             """,
             ("org_id", org), ("own_run_id", runId), ("keys", keys));
