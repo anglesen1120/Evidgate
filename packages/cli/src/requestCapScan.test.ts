@@ -9,6 +9,7 @@ import { join, relative } from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
+import { indirectForms } from './requestCapScan.fixtures.testing.js';
 import { requestBodyCaps } from './requestCaps.js';
 import {
   enclosingFunction,
@@ -20,7 +21,12 @@ import {
 const sourceRoot = import.meta.dirname;
 const sdkText = readFileSync(join(sourceRoot, '../../sdk/gen/sdk.gen.ts'), 'utf8');
 
-/** `file#function` of every direct fetch that may carry a body, with why it is bounded. */
+/**
+ * `file#function` of every direct send that may carry a body an SDK cap cannot bound, with why
+ * it is bounded. A row exempts every request-body finding in that function — uncapped route,
+ * direct fetch, `Request` construction and other transport alike — because it names the bound
+ * that holds there, not one callee.
+ */
 const directFetchAllowList: Readonly<Record<string, string>> = {
   'uploadPut.ts#sendPutRequest':
     'presigned artifact PUT: signed Content-Length equals the fstat size and the streamed body aborts past it (BodyStream); only four kinds have a static cap',
@@ -146,199 +152,23 @@ describe('request body cap scan', () => {
 
     // Each row: a form that carried a body past the scan before, its body-free twin, and the
     // words the failure text must contain so the report names the form.
-    const indirectForms: ReadonlyArray<[string, string, string, string, string]> = [
-      [
-        'Request with a body plus an init',
-        "fetch(new Request(u, { body: 'x' }), { redirect: 'error' })",
-        "fetch(new Request(u, { method: 'GET' }), { redirect: 'error' })",
-        'uncapped-fetch',
-        'Request with a body as the first argument',
-      ],
-      [
-        'Request kept in a variable',
-        "const r = new Request(u, { body: 'x' }); fetch(r)",
-        "const r = new Request(u, { method: 'GET' }); fetch(r)",
-        'uncapped-request',
-        'new Request (Request with a body)',
-      ],
-      [
-        'Request handed to a helper',
-        "const r = new Request(u, { body: 'x' }); send(r)",
-        "const r = new Request(u, { method: 'GET' }); send(r)",
-        'uncapped-request',
-        'Request with a body',
-      ],
-      [
-        'alias through ??',
-        "const f = deps.fetch ?? fetch; f(u, { body: 'x' })",
-        'const f = deps.fetch ?? fetch; f(u)',
-        'uncapped-fetch',
-        'body in init',
-      ],
-      [
-        'alias through a ternary',
-        "const f = ok ? fetch : other; f(u, { body: 'x' })",
-        'const f = ok ? fetch : other; f(u)',
-        'uncapped-fetch',
-        'body in init',
-      ],
-      [
-        'alias through ||',
-        "const f = other || fetch; f(u, { body: 'x' })",
-        'const f = other || fetch; f(u)',
-        'uncapped-fetch',
-        'body in init',
-      ],
-      [
-        'alias through destructuring with a rename',
-        "const { fetch: f } = deps; f(u, { body: 'x' })",
-        'const { fetch: f } = deps; f(u)',
-        'uncapped-fetch',
-        'body in init',
-      ],
-      [
-        'chained alias',
-        "const a = fetch; const b = a; b(u, { body: 'x' })",
-        'const a = fetch; const b = a; b(u)',
-        'uncapped-fetch',
-        'body in init',
-      ],
-      [
-        'alias read before its source is declared',
-        "const b = a; const a = fetch; b(u, { body: 'x' })",
-        'const b = a; const a = fetch; b(u)',
-        'uncapped-fetch',
-        'body in init',
-      ],
-      [
-        'alias through as',
-        "const f = fetch as typeof fetch; f(u, { body: 'x' })",
-        'const f = fetch as typeof fetch; f(u)',
-        'uncapped-fetch',
-        'body in init',
-      ],
-      [
-        'alias taken as a default parameter',
-        "const run = (g = fetch) => g(u, { body: 'x' })",
-        'const run = (g = fetch) => g(u)',
-        'uncapped-fetch',
-        'body in init',
-      ],
-      [
-        'fetch.call',
-        "fetch.call(null, u, { body: 'x' })",
-        'fetch.call(null, u)',
-        'uncapped-fetch',
-        'fetch.call (body in init)',
-      ],
-      [
-        'alias.call',
-        "const f = fetch; f.call(null, u, { body: 'x' })",
-        'const f = fetch; f.call(null, u)',
-        'uncapped-fetch',
-        'f.call (body in init)',
-      ],
-      [
-        'fetch.apply with an array literal',
-        "fetch.apply(null, [u, { body: 'x' }])",
-        'fetch.apply(null, [u])',
-        'uncapped-fetch',
-        'fetch.apply (body in init)',
-      ],
-      [
-        'fetch.bind',
-        "const g = fetch.bind(globalThis); g(u, { body: 'x' })",
-        'const g = fetch.bind(globalThis); g(u)',
-        'uncapped-fetch',
-        'body in init',
-      ],
-      [
-        'fetch.bind called at once',
-        "fetch.bind(globalThis)(u, { body: 'x' })",
-        'fetch.bind(globalThis)(u)',
-        'uncapped-fetch',
-        'body in init',
-      ],
-      [
-        'globalThis element access',
-        "globalThis['fetch'](u, { body: 'x' })",
-        "globalThis['fetch'](u)",
-        'uncapped-fetch',
-        'body in init',
-      ],
-      [
-        'comma expression',
-        "(0, fetch)(u, { body: 'x' })",
-        '(0, fetch)(u)',
-        'uncapped-fetch',
-        'body in init',
-      ],
-      ['spread argument list', 'fetch(...args)', 'fetch(u)', 'unresolved-fetch', 'spread argument'],
-      [
-        'spread argument list on a fetch-named callee',
-        'fetchImpl(...args)',
-        'fetchImpl(u)',
-        'unresolved-fetch',
-        'spread argument',
-      ],
-      [
-        'computed first argument',
-        'fetch(make())',
-        'fetch(u)',
-        'unresolved-fetch',
-        'first argument is computed',
-      ],
-      [
-        'apply with a non-literal argument list',
-        'fetch.apply(null, args)',
-        'fetch.apply(null)',
-        'unresolved-fetch',
-        'arguments are not an array literal',
-      ],
-      [
-        'node:http import',
-        "import { request } from 'node:http'",
-        "const text = 'node:http'",
-        'other-transport',
-        'import node:http',
-      ],
-      [
-        'https require',
-        "const https = require('https')",
-        "// require('https')\nconst text = 'require(\\'https\\')'",
-        'other-transport',
-        'require https',
-      ],
-      [
-        'dynamic undici import',
-        "const undici = await import('undici')",
-        "const text = 'undici'",
-        'other-transport',
-        'import() undici',
-      ],
-      [
-        'XMLHttpRequest',
-        "const x = new XMLHttpRequest(); x.send('b')",
-        "// XMLHttpRequest\nconst note = 'XMLHttpRequest'",
-        'other-transport',
-        'XMLHttpRequest (global)',
-      ],
-      [
-        'sendBeacon',
-        "navigator.sendBeacon(u, 'b')",
-        "const note = 'sendBeacon'",
-        'other-transport',
-        'sendBeacon (global)',
-      ],
-    ];
-
     it.each(indirectForms)(
       'flags %s and keeps its body-free twin clean',
       (_name, bad, twin, kind, words) => {
         const wrap = (statement: string): string =>
-          statement.startsWith('import ') || statement.startsWith('//')
+          /^(import|export)\b/.test(statement) || statement.startsWith('//')
             ? statement
-            : `function leak(u: string, deps: Deps, ok: boolean, args: unknown[]) { ${statement}; }`;
+            : `async function leak(
+                 u: string,
+                 deps: Deps,
+                 ok: boolean,
+                 args: unknown[],
+                 request: Request,
+                 client: C,
+                 config: unknown,
+                 dynamicUrl: string,
+                 page: unknown,
+               ): Promise<void> { ${statement}; }`;
         const found = scan(wrap(bad));
         expect(found.map((finding) => finding.kind)).toContain(kind);
         expect(found.map((finding) => finding.detail).join('\n')).toContain(words);
@@ -372,10 +202,17 @@ describe('request body cap scan', () => {
       'fetch(u)',
       "fetch('/widgets')",
       'fetch(new Request(u, { method: "GET" }))',
+      'fetch(new Request(u, ({ method: "GET" })))',
       'const request = new Request(u, { method: "GET" }); fetch(request)',
       'fetchPage(cursor)',
+      'fetchActionsIdToken(config, fetchImpl, deps)',
+      'Reflect.apply(page, null, [u])',
     ])('keeps the provably body-free form %s clean', (statement) => {
-      expect(scan(`function get(u: string) { ${statement}; }`)).toEqual([]);
+      expect(
+        scan(
+          `function get(u: string, config: unknown, deps: Deps, page: unknown) { ${statement}; }`,
+        ),
+      ).toEqual([]);
     });
 
     it('a body hidden in a spread is reported as unprovable', () => {

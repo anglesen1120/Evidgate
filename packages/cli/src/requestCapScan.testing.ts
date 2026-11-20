@@ -1,26 +1,53 @@
 /*
- * The syntax scan behind requestCapScan.test.ts: finds every site that sends a request body
- * and reports the ones without a cap. Three kinds of site exist: a generated SDK operation
- * (or the client's own `post`) called with a `body`, whose `METHOD route` must be a row of the
- * cap table; a `fetch` call that carries a body, and a `Request` built with one, which bypass
- * the client and are allowed only in the functions of the allow-list; and any other
- * transport (`node:http(s)`, `undici`, `XMLHttpRequest`, `sendBeacon`), which is refused.
+ * The syntax scan behind requestCapScan.test.ts: it finds every site that sends a request body
+ * and reports the ones without a cap. An SDK operation (or the client's own `post`) called with
+ * a `body` must be a row of the cap table; a `fetch` call carrying a body and a `Request` built
+ * with one are allowed only in the allow-list's functions; any other transport (`node:http(s)`,
+ * `node:http2`, `node:net`, `node:tls`, `node:dgram`, `undici`, `node-fetch`, `axios`, `got`,
+ * `ws`, `XMLHttpRequest`, `sendBeacon`) is refused.
  *
- * The scan fails closed: a form it cannot prove body-free is reported, not passed. It follows
- * a fetch through aliases (`const f = fetch`, `??`, `||`, a ternary, destructuring, a default
- * parameter, `as`, comma and parentheses), `.call`, `.apply` and `.bind`, and a `Request`
- * built with a body, wherever the `Request` goes.
+ * The scan fails closed: a form it cannot prove body-free is reported, not passed. The alias and
+ * `Request` analysis lives in requestCapScan.aliases.testing.ts; it follows a fetch through
+ * aliases (`const f = fetch`, assignment, `??`, `||`, `&&`, a ternary, destructuring with a
+ * literal key, a default parameter, `as`, `satisfies`, `!`, comma and parentheses), object and
+ * class properties holding one, `.call` and `.apply` (also `fetch['call']`), `.bind` without
+ * bound arguments, element access, and a `Request` built with a body wherever it goes.
  *
- * What syntax cannot decide, and stays a named limit: a body built in another module and
- * handed to a fetch-like helper that is not named like one, a fetch alias imported from
- * another file, and a property or callee chosen by a computed (non-literal) name.
+ * An allow-list entry is keyed by `file#function` and allows that function to send through any
+ * of these forms: it exempts every finding kind there, not one callee.
+ *
+ * Named limits: a body built in another module and handed to a fetch-like helper not named like
+ * one; a fetch alias imported from another file; alias and property names, which are file-wide,
+ * so a same-named local that never holds a fetch is still treated as one (fail closed); an SDK
+ * operation reached through an import alias or namespace object; a callee chosen by a computed
+ * (non-literal) name; and a fetch-named call (not `fetch` itself, not a tracked alias) with more
+ * than two arguments, read as another function (`fetchActionsIdToken(config, fetchImpl, deps)`).
  */
 import ts from 'typescript';
 
+import {
+  fetchAliases,
+  fetchKind,
+  type FetchRefs,
+  isRequestConstruction,
+  memberName,
+  propertyNamed,
+  requestBodyReason,
+  requestConstructorAliases,
+  type RequestTyped,
+  requestTypedNames,
+  typedRequestReason,
+  unwrap,
+} from './requestCapScan.aliases.testing.js';
+
 export type Finding = { file: string; function: string; kind: string; detail: string };
-const verbs = new Set(['post', 'put', 'patch', 'delete']);
-const otherTransportModules = /^(node:)?(https?|http2|undici)$/;
-const otherTransportGlobals = new Set(['XMLHttpRequest', 'sendBeacon']);
+const verbs: Readonly<Record<string, true>> = { post: true, put: true, patch: true, delete: true };
+const otherTransportModules =
+  /^(node:)?(https?|http2|net|tls|dgram|undici|node-fetch|axios|got|ws)$/;
+const otherTransportGlobals: Readonly<Record<string, true>> = {
+  XMLHttpRequest: true,
+  sendBeacon: true,
+};
 
 /** `operationName -> "METHOD /path/{param}"` read from the generated operations file. */
 export function operationRoutes(text: string): Map<string, string> {
@@ -29,9 +56,12 @@ export function operationRoutes(text: string): Map<string, string> {
     const match = /^(\w+) = [\s\S]*?\)\.(post|put|patch|delete)<[\s\S]*?\burl: '([^']+)'/.exec(
       chunk,
     );
-    if (match !== null) {
-      routes.set(match[1]!, `${match[2]!.toUpperCase()} ${match[3]!}`);
-    }
+    if (match === null) continue;
+    const name = match[1];
+    const verb = match[2];
+    const url = match[3];
+    if (name === undefined || verb === undefined || url === undefined) continue;
+    routes.set(name, `${verb.toUpperCase()} ${url}`);
   }
   return routes;
 }
@@ -47,171 +77,6 @@ export function enclosingFunction(node: ts.Node): string {
     }
   }
   return '<module>';
-}
-
-/** The static name of a property, including `'body'` and computed `['body']` keys. */
-function propertyName(name: ts.PropertyName): string | undefined {
-  if (ts.isComputedPropertyName(name)) {
-    return ts.isStringLiteralLike(name.expression) ? name.expression.text : undefined;
-  }
-  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
-    return name.text;
-  }
-  return undefined;
-}
-
-function propertyNamed(
-  arg: ts.ObjectLiteralExpression,
-  name: string,
-): ts.ObjectLiteralElementLike | undefined {
-  return arg.properties.find((p) => p.name !== undefined && propertyName(p.name) === name);
-}
-
-/** Whether a name is a fetch: `fetch`, `fetchImpl`, `o.fetch`, `deps.fetch`, ... */
-function fetchLikeName(text: string): boolean {
-  return /fetch/i.test(text);
-}
-
-/** Strips parentheses, `as`, `satisfies`, `!`, type assertions and a comma list's last item. */
-function unwrap(node: ts.Expression): ts.Expression {
-  let current = node;
-  for (;;) {
-    if (
-      ts.isParenthesizedExpression(current) ||
-      ts.isAsExpression(current) ||
-      ts.isSatisfiesExpression(current) ||
-      ts.isNonNullExpression(current) ||
-      ts.isTypeAssertionExpression(current)
-    ) {
-      current = current.expression;
-    } else if (
-      ts.isBinaryExpression(current) &&
-      current.operatorToken.kind === ts.SyntaxKind.CommaToken
-    ) {
-      current = current.right;
-    } else {
-      return current;
-    }
-  }
-}
-
-/** Whether an expression evaluates to a fetch, through names, aliases and `.bind`. */
-function isFetchExpression(node: ts.Expression, aliases: ReadonlySet<string>): boolean {
-  const e = unwrap(node);
-  if (ts.isIdentifier(e)) return fetchLikeName(e.text) || aliases.has(e.text);
-  if (ts.isPropertyAccessExpression(e)) return fetchLikeName(e.name.text);
-  if (ts.isElementAccessExpression(e)) {
-    return ts.isStringLiteralLike(e.argumentExpression) && fetchLikeName(e.argumentExpression.text);
-  }
-  if (ts.isBinaryExpression(e)) {
-    const kind = e.operatorToken.kind;
-    const logical =
-      kind === ts.SyntaxKind.QuestionQuestionToken ||
-      kind === ts.SyntaxKind.BarBarToken ||
-      kind === ts.SyntaxKind.AmpersandAmpersandToken;
-    return logical && (isFetchExpression(e.left, aliases) || isFetchExpression(e.right, aliases));
-  }
-  if (ts.isConditionalExpression(e)) {
-    return isFetchExpression(e.whenTrue, aliases) || isFetchExpression(e.whenFalse, aliases);
-  }
-  return (
-    ts.isCallExpression(e) &&
-    ts.isPropertyAccessExpression(e.expression) &&
-    e.expression.name.text === 'bind' &&
-    isFetchExpression(e.expression.expression, aliases)
-  );
-}
-
-/** Names bound to a fetch, to a fixpoint: chained aliases, destructuring, defaults, assignments. */
-function fetchAliases(sf: ts.SourceFile): Set<string> {
-  const aliases = new Set<string>();
-  const add = (name: string): void => {
-    aliases.add(name);
-  };
-  let changed = true;
-  const walk = (node: ts.Node): void => {
-    if (
-      (ts.isVariableDeclaration(node) || ts.isParameter(node)) &&
-      node.initializer !== undefined &&
-      ts.isIdentifier(node.name) &&
-      !aliases.has(node.name.text) &&
-      isFetchExpression(node.initializer, aliases)
-    ) {
-      add(node.name.text);
-      changed = true;
-    }
-    if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-      ts.isIdentifier(node.left) &&
-      !aliases.has(node.left.text) &&
-      isFetchExpression(node.right, aliases)
-    ) {
-      add(node.left.text);
-      changed = true;
-    }
-    if (ts.isObjectBindingPattern(node)) {
-      for (const element of node.elements) {
-        const source = element.propertyName ?? element.name;
-        const key = ts.isIdentifier(source)
-          ? source.text
-          : ts.isStringLiteralLike(source)
-            ? source.text
-            : undefined;
-        if (
-          key !== undefined &&
-          fetchLikeName(key) &&
-          ts.isIdentifier(element.name) &&
-          !aliases.has(element.name.text)
-        ) {
-          add(element.name.text);
-          changed = true;
-        }
-      }
-    }
-    ts.forEachChild(node, walk);
-  };
-  while (changed) {
-    changed = false;
-    walk(sf);
-  }
-  return aliases;
-}
-
-/** Identifiers declared `Request` (a parameter or a typed variable) with no visible init. */
-function requestTypedNames(sf: ts.SourceFile): Set<string> {
-  const names = new Set<string>();
-  const walk = (node: ts.Node): void => {
-    if (
-      (ts.isParameter(node) || ts.isVariableDeclaration(node)) &&
-      node.type !== undefined &&
-      ts.isIdentifier(node.name) &&
-      /(^|\.)Request$/.test(node.type.getText())
-    ) {
-      names.add(node.name.text);
-    }
-    ts.forEachChild(node, walk);
-  };
-  walk(sf);
-  return names;
-}
-
-function isRequestConstruction(node: ts.Node): node is ts.NewExpression {
-  return (
-    ts.isNewExpression(node) &&
-    ts.isIdentifier(node.expression) &&
-    node.expression.text === 'Request'
-  );
-}
-
-/** Why a `new Request(input, init)` may carry a body, or undefined when `init` proves it cannot. */
-function requestBodyReason(node: ts.NewExpression): string | undefined {
-  const init = node.arguments?.[1];
-  if (init === undefined) return 'Request without a visible init';
-  if (!ts.isObjectLiteralExpression(init)) return 'Request init is not an object literal';
-  if (propertyNamed(init, 'body') !== undefined) return 'Request with a body';
-  if (init.properties.some(ts.isSpreadAssignment)) return 'Request init with a spread';
-  return undefined;
 }
 
 /** The arguments a call passes to the fetch, resolving `.call` and `.apply`; undefined = unresolved. */
@@ -253,8 +118,10 @@ export function scanSource(
 ): { findings: Finding[]; usedRoutes: Set<string> } {
   const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
   const constants = stringConstants(sf);
-  const aliases = fetchAliases(sf);
-  const requestTyped = requestTypedNames(sf);
+  const aliasSets = fetchAliases(sf);
+  const refs: FetchRefs = { names: aliasSets.names, properties: aliasSets.properties };
+  const requestTyped: RequestTyped = requestTypedNames(sf);
+  const constructors = requestConstructorAliases(sf);
   const findings: Finding[] = [];
   const usedRoutes = new Set<string>();
   const handled = new Set<ts.Node>();
@@ -266,66 +133,114 @@ export function scanSource(
     if (allow[key] === undefined) report(node, kind, `${key}: ${form} (${why})`);
   };
 
-  /** The fetch callee of a call and how the arguments are reached, or undefined. */
+  /** The fetch callee of a call and how its arguments are reached, or undefined. */
   const fetchCall = (
     call: ts.CallExpression,
-  ): { form: string; via: 'call' | 'apply' | undefined } | undefined => {
+  ): { form: string; via: 'call' | 'apply' | undefined; exact: boolean } | undefined => {
     const callee = unwrap(call.expression);
-    if (
-      ts.isPropertyAccessExpression(callee) &&
-      (callee.name.text === 'call' || callee.name.text === 'apply') &&
-      isFetchExpression(callee.expression, aliases)
-    ) {
-      return { form: `${callee.expression.getText()}.${callee.name.text}`, via: callee.name.text };
+    const name = memberName(callee);
+    const receiver =
+      ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee)
+        ? callee.expression
+        : undefined;
+    if ((name === 'call' || name === 'apply') && receiver !== undefined) {
+      const kind = fetchKind(receiver, refs);
+      if (kind !== undefined) {
+        return { form: `${receiver.getText()}.${name}`, via: name, exact: kind === 'exact' };
+      }
     }
-    return isFetchExpression(callee, aliases)
-      ? { form: callee.getText().slice(0, 60), via: undefined }
-      : undefined;
+    const kind = fetchKind(callee, refs);
+    return kind === undefined
+      ? undefined
+      : { form: callee.getText().slice(0, 60), via: undefined, exact: kind === 'exact' };
+  };
+
+  /** The fetch handed to `Reflect.apply`, whose argument list syntax cannot read, or undefined. */
+  const reflectApplyTarget = (call: ts.CallExpression): ts.Expression | undefined => {
+    const callee = unwrap(call.expression);
+    if (memberName(callee) !== 'apply') return undefined;
+    if (!ts.isPropertyAccessExpression(callee) && !ts.isElementAccessExpression(callee)) {
+      return undefined;
+    }
+    const owner = unwrap(callee.expression);
+    const ownerName = ts.isIdentifier(owner) ? owner.text : memberName(owner);
+    if (ownerName !== 'Reflect') return undefined;
+    const target = call.arguments[0];
+    if (target === undefined || fetchKind(unwrap(target), refs) === undefined) return undefined;
+    return target;
   };
 
   const checkFetch = (
     call: ts.CallExpression,
-    target: { form: string; via: 'call' | 'apply' | undefined },
+    target: { form: string; via: 'call' | 'apply' | undefined; exact: boolean },
   ): void => {
     const args = effectiveArguments(call, target.via);
     const send = (kind: string, why: string): void => reportSend(call, kind, target.form, why);
     if (args === undefined) return send('unresolved-fetch', 'arguments are not an array literal');
-    // `fetch` takes at most two arguments, so a longer fetch-named call is not a send.
-    if (args.length > 2) return;
+    // Only `fetch`, a tracked alias or `.call`/`.apply` on one takes exactly two arguments; a
+    // longer fetch-named helper is read as another function (see the header's named limits).
+    if (!target.exact && args.length > 2) return;
     if (args.some(ts.isSpreadElement)) return send('unresolved-fetch', 'spread argument');
     const first = args[0] === undefined ? undefined : unwrap(args[0]);
     const second = args[1] === undefined ? undefined : unwrap(args[1]);
-    if (first !== undefined && isRequestConstruction(first)) {
-      handled.add(first);
-      const why = requestBodyReason(first);
-      if (why !== undefined) return send('uncapped-fetch', `${why} as the first argument`);
-    } else if (first !== undefined && ts.isIdentifier(first) && requestTyped.has(first.text)) {
-      return send('uncapped-fetch', 'Request-typed first argument');
-    } else if (first !== undefined && (ts.isCallExpression(first) || ts.isAwaitExpression(first))) {
-      return send('unresolved-fetch', 'first argument is computed');
+    if (first !== undefined) {
+      if (isRequestConstruction(first, constructors)) {
+        handled.add(first);
+        const why = requestBodyReason(first, requestTyped, constructors);
+        if (why !== undefined) return send('uncapped-fetch', `${why} as the first argument`);
+      } else if (ts.isIdentifier(first)) {
+        const why = typedRequestReason(first, requestTyped, constructors);
+        if (why !== undefined) return send('uncapped-fetch', why);
+      } else if (ts.isCallExpression(first) || ts.isAwaitExpression(first)) {
+        return send('unresolved-fetch', 'first argument is computed');
+      }
     }
     if (second === undefined) return;
     if (!ts.isObjectLiteralExpression(second)) {
       return send('uncapped-fetch', 'init is not an object literal');
     }
     if (propertyNamed(second, 'body') !== undefined) return send('uncapped-fetch', 'body in init');
-    if (second.properties.some(ts.isSpreadAssignment)) {
-      send('uncapped-fetch', 'spread in init');
-    }
+    if (second.properties.some(ts.isSpreadAssignment)) send('uncapped-fetch', 'spread in init');
   };
 
   const visit = (node: ts.Node): void => {
     if (ts.isImportDeclaration(node) && ts.isStringLiteralLike(node.moduleSpecifier)) {
       const name = node.moduleSpecifier.text;
-      if (otherTransportModules.test(name))
+      if (otherTransportModules.test(name)) {
         reportSend(node, 'other-transport', `import ${name}`, 'module');
+      }
     }
-    if (ts.isIdentifier(node) && otherTransportGlobals.has(node.text)) {
+    if (
+      ts.isExportDeclaration(node) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteralLike(node.moduleSpecifier) &&
+      otherTransportModules.test(node.moduleSpecifier.text)
+    ) {
+      const name = node.moduleSpecifier.text;
+      reportSend(node, 'other-transport', `export ${name}`, 'module');
+    }
+    if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference) &&
+      ts.isStringLiteralLike(node.moduleReference.expression) &&
+      otherTransportModules.test(node.moduleReference.expression.text)
+    ) {
+      const name = node.moduleReference.expression.text;
+      reportSend(node, 'other-transport', `import ${name}`, 'module');
+    }
+    if (ts.isIdentifier(node) && Object.hasOwn(otherTransportGlobals, node.text)) {
       reportSend(node, 'other-transport', node.text, 'global');
     }
-    if (isRequestConstruction(node) && !handled.has(node)) {
-      const why = requestBodyReason(node);
+    const member = ts.isElementAccessExpression(node) ? memberName(node) : undefined;
+    if (member !== undefined && Object.hasOwn(otherTransportGlobals, member)) {
+      reportSend(node, 'other-transport', member, 'global');
+    }
+    if (isRequestConstruction(node, constructors) && !handled.has(node)) {
+      const why = requestBodyReason(node, requestTyped, constructors);
       if (why !== undefined) reportSend(node, 'uncapped-request', 'new Request', why);
+    }
+    if (ts.isTaggedTemplateExpression(node) && fetchKind(node.tag, refs) !== undefined) {
+      reportSend(node, 'unresolved-fetch', node.tag.getText().slice(0, 60), 'tagged template');
     }
     if (ts.isCallExpression(node)) {
       const callee = node.expression;
@@ -344,19 +259,36 @@ export function scanSource(
           'module',
         );
       }
-      const object = arg !== undefined && ts.isObjectLiteralExpression(arg) ? arg : undefined;
+      const boundCallee = unwrap(callee);
+      const boundTarget =
+        ts.isPropertyAccessExpression(boundCallee) || ts.isElementAccessExpression(boundCallee)
+          ? boundCallee.expression
+          : undefined;
+      if (
+        memberName(boundCallee) === 'bind' &&
+        boundTarget !== undefined &&
+        fetchKind(boundTarget, refs) !== undefined &&
+        node.arguments.length > 1
+      ) {
+        reportSend(node, 'unresolved-fetch', `${boundTarget.getText()}.bind`, 'bound arguments');
+      }
+      if (reflectApplyTarget(node) !== undefined) {
+        reportSend(node, 'unresolved-fetch', 'Reflect.apply', 'target is a fetch');
+      }
+      const plain = arg === undefined ? undefined : unwrap(arg);
+      const object = plain !== undefined && ts.isObjectLiteralExpression(plain) ? plain : undefined;
       let route: string | undefined;
       let named = false;
       if (ts.isIdentifier(callee) && routes.has(callee.text)) {
         route = routes.get(callee.text);
         named = true;
-      } else if (
-        ts.isPropertyAccessExpression(callee) &&
-        verbs.has(callee.name.text) &&
-        object !== undefined
-      ) {
-        const url = propertyNamed(object, 'url');
-        if (url !== undefined && ts.isPropertyAssignment(url)) {
+        if (object === undefined) report(node, 'unprovable-args', `${callee.text} without options`);
+      } else if (ts.isPropertyAccessExpression(callee) && Object.hasOwn(verbs, callee.name.text)) {
+        if (object === undefined && /client/i.test(callee.expression.getText())) {
+          report(node, 'unprovable-args', `${callee.getText()} without options`);
+        }
+        const url = object === undefined ? undefined : propertyNamed(object, 'url');
+        if (object !== undefined && url !== undefined && ts.isPropertyAssignment(url)) {
           const value = ts.isStringLiteralLike(url.initializer)
             ? url.initializer.text
             : ts.isIdentifier(url.initializer)
