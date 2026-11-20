@@ -307,8 +307,8 @@ public sealed class ManifestVariantParamsUploadTests
         var variants = new System.Text.Json.Nodes.JsonArray();
         for (var index = 0; index < rows; index++)
         {
-            var parameters = new Dictionary<string, string>(ManifestVariantParamsEquivalenceTests.Parameters(32, 256)) { ["k00"] = new string((char)('a' + (index % 26)), 255) + index.ToString("D2", System.Globalization.CultureInfo.InvariantCulture)[..1] };
-            parameters["k01"] = new string('y', 250) + index.ToString("D6", System.Globalization.CultureInfo.InvariantCulture);
+            // A different k00 length per row keeps every params text distinct; the total stays over 8000 bytes.
+            var parameters = new Dictionary<string, string>(ManifestVariantParamsEquivalenceTests.Parameters(32, 256)) { ["k00"] = new string('x', 256 - index) };
             var node = System.Text.Json.Nodes.JsonNode.Parse(executionTemplate)!.AsObject();
             node["variant"] = new System.Text.Json.Nodes.JsonObject { ["params"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(parameters)) };
             planned.Add(node);

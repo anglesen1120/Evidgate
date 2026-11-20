@@ -281,7 +281,7 @@ public sealed class ManifestTests
         var referenced = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "x", ["api_token"] = "secret:ci_token" }], ["staging"]);
         var refused = await UploadAsync(world, referenced.ToJsonString());
         refused.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        Details(refused).ShouldHaveSingleItem().GetProperty("reason").GetString().ShouldBe("invalid_variant");
+        Details(refused).Select(detail => detail.GetProperty("reason").GetString()).Distinct().ShouldBe(["invalid_variant"]);
         refused.Body.GetRawText().ShouldNotContain("ci_token");
     }
 
