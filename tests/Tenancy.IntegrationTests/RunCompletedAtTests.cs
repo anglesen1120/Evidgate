@@ -20,7 +20,7 @@ public sealed class RunCompletedAtTests : IClassFixture<TenancyHostPool>
         + "collection_deadline_at, late_window_minutes from public.run where id = @seed";
 
     /// <summary>The same insert with a caller-chosen completion instant, which no role may write.</summary>
-    private const string InsertRunWithInstantSql =
+    internal const string InsertRunWithInstantSql =
         "insert into public.run (id, org_id, project_id, manifest_id, suite_revision_id, environment_revision_id, "
         + "state, collection_deadline_at, late_window_minutes, completed_at) "
         + "select @id, org_id, project_id, manifest_id, suite_revision_id, environment_revision_id, @state, "
@@ -144,63 +144,6 @@ public sealed class RunCompletedAtTests : IClassFixture<TenancyHostPool>
         refused.SqlState.ShouldBe("23514");
         refused.MessageText.ShouldStartWith("run_completed_at_immutable");
         (await CompletedAtAsync(world, world.RunId)).ShouldBeNull();
-    }
-
-    /// <summary>
-    /// The CHECK is the row's second lock, reachable only once the invoker guard is out of the way. Both guards are
-    /// disabled inside a transaction that rolls back, so the update reaches the constraint and the constraint fires.
-    /// </summary>
-    [Fact]
-    public async Task StateCheck_RefusesAnUpdatedInstantOnANonCompleteRow_WhenTheGuardsAreDisabled()
-    {
-        await using var world = await StartAsync();
-        await world.SetRunStateAsync("collecting");
-
-        await using (var scope = await OwnerScopeAsync(world))
-        {
-            await scope.ExecuteAsync("alter table public.run disable trigger run_completed_at_guard_trg");
-            await scope.ExecuteAsync("alter table public.run disable trigger run_completed_at_insert_guard_trg");
-
-            var refused = await scope.CaptureErrorAsync(
-                $"update public.run set completed_at = now() where id = '{world.RunId:D}'");
-
-            refused.SqlState.ShouldBe("23514");
-            refused.ConstraintName.ShouldBe(
-                "run_completed_at_state_check", "the CHECK binds the instant to the terminal state");
-        }
-
-        // The DDL above is transactional, so the rollback put both guards back: the column is immutable again.
-        (await OwnerErrorAsync(world, $"update public.run set completed_at = now() where id = '{world.RunId:D}'"))
-            .MessageText.ShouldStartWith("run_completed_at_immutable");
-    }
-
-    /// <summary>The same second lock on the insert path: a non-complete row never carries a caller's instant.</summary>
-    [Fact]
-    public async Task StateCheck_RefusesAnInsertedInstantOnANonCompleteRow_WhenTheGuardsAreDisabled()
-    {
-        await using var world = await StartAsync();
-
-        await using (var scope = await OwnerScopeAsync(world))
-        {
-            await scope.ExecuteAsync("alter table public.run disable trigger run_completed_at_guard_trg");
-            await scope.ExecuteAsync("alter table public.run disable trigger run_completed_at_insert_guard_trg");
-
-            var refused = await scope.CaptureErrorAsync(
-                InsertRunWithInstantSql, ("id", Guid.CreateVersion7()), ("seed", world.RunId), ("state", "collecting"));
-
-            refused.SqlState.ShouldBe("23514");
-            refused.ConstraintName.ShouldBe(
-                "run_completed_at_state_check", "the CHECK binds the instant to the terminal state");
-        }
-
-        // Positive control for the rollback: with the insert guard restored, the same insert is refused before the CHECK.
-        await using (var control = await OwnerScopeAsync(world))
-        {
-            var refused = await control.CaptureErrorAsync(
-                InsertRunWithInstantSql, ("id", Guid.CreateVersion7()), ("seed", world.RunId), ("state", "collecting"));
-
-            refused.MessageText.ShouldStartWith("run_completed_at_insert_refused");
-        }
     }
 
     [Fact]
