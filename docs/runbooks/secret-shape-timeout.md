@@ -6,13 +6,13 @@ Legend as in [`../../AGENTS.md`](../../AGENTS.md): ✅ verified with a link · �
 
 ## 1. What the counter means
 
-`evidgate_secret_shape_timeout_total` (catalogue id `secret_shape_timeout`, [`infra/metrics/catalogue.yaml`](../../infra/metrics/catalogue.yaml), meter `Evidgate`) increases by one each time a secret-shape regex runs out of its 100 ms match budget (`src/BuildingBlocks/SharedKernel/Security/SecretShape.cs` ✅). Its only label is `pattern`, one of `Jwt`, `UrlCredentials`, `HexRun`, `RandomRun`, `Uuid` (`SecretShapeMetrics.cs` ✅). The checked value is never a label, a log line or an exception message.
+`evidgate_secret_shape_timeout_total` (catalogue id `secret_shape_timeout`, [`infra/metrics/catalogue.yaml`](../../infra/metrics/catalogue.yaml), meter `Evidgate`) increases by one each time a secret-shape regex runs out of its 100 ms match budget (`src/BuildingBlocks/SharedKernel/Security/SecretShape.cs:102-121` ✅). Its only label is `pattern`, one of `jwt`, `url_credentials`, `hex_run`, `random_run`, `uuid` (`src/BuildingBlocks/SharedKernel/Security/SecretShapeMetrics.cs:51-58` ✅). The checked value is never a label, a log line or an exception message.
 
-The patterns are linear, so a timeout means the host stalled (CPU starvation, GC pause, noisy neighbour) or an unusually large value hit the budget. It does not mean a secret was found.
+The patterns are linear, so a timeout means a stalled host (CPU starvation, GC pause, noisy neighbour) rather than a hostile input (`SecretShape.cs:94-98` ✅). It does not mean a secret was found.
 
 ## 2. What the caller sees
 
-The check fails closed: the value is answered as secret-shaped and refused with the usual secret refusal, never passed as clean and never a 500. A legitimate caller can therefore see a refusal of a value that is not a secret, only while the condition lasts; a retry after the host recovers should pass `[INFERENCE]` ⚠️.
+The check never throws: it returns true (secret-shaped), and callers refuse secret-shaped values (`SecretShape.cs:94-98` ✅; that every caller maps true to a refusal and never a 500 is `[INFERENCE]` ⚠️). A legitimate caller can therefore see a refusal of a value that is not a secret, only while the condition lasts; a retry after the host recovers should pass `[INFERENCE]` ⚠️.
 
 ## 3. Alert rule (specification) `[INFERENCE]` ⚠️
 
@@ -22,8 +22,8 @@ The rule is the row `AR-secret-shape-timeout` in [alert rules](../security/alert
 
 1. Read the `pattern` split. One pattern only points at a value shape; all patterns at once point at the host.
 2. Compare with host health in the same window: CPU, `dotnet.gc.last_collection.heap.size`, `dotnet.thread_pool.queue.length` ([telemetry](telemetry.md) §6).
-3. Check whether callers report refusals of ordinary values from the same time window. Collect request times and routes, never the refused value.
-4. Do not paste a request body, token or header into a ticket.
+3. Check whether callers report refusals of ordinary values from the same time window. Collect request times and route templates, never the refused value, and never ask the customer for it.
+4. Do not paste a request body, URL with identifiers, token or header into a ticket.
 
 ## 5. When to escalate
 
