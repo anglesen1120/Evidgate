@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Shouldly;
 using Xunit;
 
@@ -16,15 +17,55 @@ namespace Architecture.Tests;
 /// </remarks>
 public sealed class CatalogBodyReadBoundaryTests
 {
-    private const string EndpointsDirectory = "src/Modules/Evidgate.Modules.Catalog/Endpoints";
+    private const string ModuleDirectory = "src/Modules/Evidgate.Modules.Catalog";
+    private const string EndpointsDirectory = ModuleDirectory + "/Endpoints";
     private const string RulesFile = EndpointsDirectory + "/CatalogRequestRules.cs";
     private const string SyntheticRouteFile = EndpointsDirectory + "/SyntheticRoute.cs";
 
     /// <summary>
-    /// The six raw-body routes (suite revision with its dry run, requirement revision, case revision, fixture, fixture
-    /// revision, git binding). A route that stops reading its body drops below this count and has to be looked at.
+    /// The six raw-body routes by handler, per file (suite revision with its dry run, requirement ref, case update,
+    /// fixture, fixture revision, git binding). Each reads through the shared guard; a route added here must too.
     /// </summary>
-    private const int RawBodyRoutes = 6;
+    private static readonly Dictionary<string, string[]> RawBodyRoutes = new()
+    {
+        [EndpointsDirectory + "/CatalogEndpoints.cs"] = ["SetCaseRequirementRefAsync", "UpdateCaseAsync", "CreateSuiteRevisionAsync"],
+        [EndpointsDirectory + "/FixtureEndpoints.cs"] = ["CreateFixtureAsync", "CreateFixtureRevisionAsync"],
+        [EndpointsDirectory + "/GitRepoBindingEndpoints.cs"] = ["RegisterAsync"],
+    };
+
+    /// <summary>
+    /// Write routes that bind a typed body before any filter runs and so cannot use the raw-body guard. They are known
+    /// and NOT guarded: the carried row "Typed-body write routes bind before filters" owns closing that gap.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> TypedBodyRoutes = new()
+    {
+        [EndpointsDirectory + "/CatalogEndpoints.cs"] = ["CreateSuiteAsync"],
+    };
+
+    /// <summary>
+    /// Files outside the shared reader that parse a document that is not the request body (a stored JSON column, a
+    /// repository sidecar file, an outbound response). Pinned by matched call text and count, so an added or changed
+    /// body-shaped call in one of them is flagged while an unrelated edit is not.
+    /// </summary>
+    private static readonly Dictionary<string, (string[] Matches, string Reason)> NonRequestParses = new()
+    {
+        [ModuleDirectory + "/Application/CaseIdentityService.cs"] =
+            (["JsonSerializer.Deserialize<JsonElement>( x1"], "decodes the stored case identity metadata column"),
+        [ModuleDirectory + "/Application/SuiteRevisionPlanner.cs"] =
+            (["JsonSerializer.Deserialize<JsonElement>( x3"], "builds default shard, retry and environment JSON from literals"),
+        [ModuleDirectory + "/Application/Queries/SuiteQueries.cs"] =
+            (["JsonSerializer.Deserialize<JsonElement>( x3"], "decodes stored suite revision JSON columns for the read model"),
+        [ModuleDirectory + "/Application/Commands/SuiteCommands.cs"] =
+            (["JsonSerializer.Deserialize<JsonElement>( x1"], "decodes the stored variant params JSON"),
+        [ModuleDirectory + "/Infrastructure/GitHub/GitHubClient.cs"] =
+            (["ReadJsonAsync( x1"], "reads the outbound GitHub API response through its own capped reader, not a request body"),
+        [ModuleDirectory + "/Domain/SidecarManifestReader.cs"] =
+            (["JsonDocument.Parse x1"], "parses a repository sidecar manifest after converting it from YAML"),
+    };
+
+    private static readonly Regex RequestBodyMember = new(@"\b(?:req|request|Request|httpRequest)\.Body\b", RegexOptions.CultureInvariant);
+
+    private static readonly Regex WriteRoute = new(@"\.Map(?:Post|Put|Patch)\(\s*""([^""]+)""\s*,\s*(\w+)", RegexOptions.CultureInvariant);
 
     /// <summary>The calls a route would use to read a request body without the shared cap and refusal.</summary>
     private static readonly string[] DirectBodyReadNeedles =
@@ -33,15 +74,11 @@ public sealed class CatalogBodyReadBoundaryTests
         "ReadFromJsonAsync",
         "JsonNode.Parse",
         "Utf8JsonReader",
-        "Request.Body",
         "BodyReader",
         "PipeReader",
         "StreamReader(",
         ".Body.Read",
-        ".Body;",
         ".Body.CopyTo",
-        ".Body)",
-        ".Body,",
         "new StreamReader(",
         "ReadFormAsync",
         "ReadToEnd(",
@@ -52,23 +89,99 @@ public sealed class CatalogBodyReadBoundaryTests
     ];
 
     [Fact]
-    public void CatalogEndpoints_RawBodyReads_UseSharedBoundary()
+    public void CatalogModule_RawBodyReads_UseSharedBoundary()
     {
-        var files = Endpoints();
+        var files = Module();
 
-        files.Length.ShouldBeGreaterThanOrEqualTo(4);
+        files.Length.ShouldBeGreaterThanOrEqualTo(30);
         files.Count(file => file.Path == RulesFile).ShouldBe(1);
-        Scan(files).ShouldBeEmpty("Catalog endpoints must read request bodies through CatalogRequestRules.ReadAuthenticatedJsonAsync");
+        foreach (var folder in new[] { "Endpoints", "Application", "Domain", "Infrastructure", "Contracts" })
+        {
+            files.ShouldContain(file => file.Path.StartsWith($"{ModuleDirectory}/{folder}/", StringComparison.Ordinal), $"the scan must cover {folder}");
+        }
+
+        Scan(files).ShouldBeEmpty("the Catalog module must read request bodies only through CatalogRequestRules.ReadAuthenticatedJsonAsync");
     }
 
     [Fact]
-    public void CatalogBodyRoutes_ReadThroughTheSharedReader()
+    public void NonRequestParses_AreStillPresentWithTheirPinnedCalls()
     {
-        var calls = Endpoints()
-            .Where(file => file.Path != RulesFile)
-            .Sum(file => Occurrences(file.Text, "ReadAuthenticatedJsonAsync("));
+        var files = Module().ToDictionary(file => file.Path, file => file.Text);
 
-        calls.ShouldBeGreaterThanOrEqualTo(RawBodyRoutes);
+        foreach (var (path, pinned) in NonRequestParses)
+        {
+            files.ContainsKey(path).ShouldBeTrue($"{path} is allow-listed ({pinned.Reason}) but no longer exists: delete the entry");
+            Matches(files[path]).ShouldBe(pinned.Matches, $"{path} is allow-listed ({pinned.Reason}); a changed call must be re-judged");
+        }
+    }
+
+    [Fact]
+    public void CatalogWriteRoutes_AreExactlyTheNamedRawBodyAndTypedBodyRoutes()
+    {
+        var endpoints = Endpoints().Where(file => file.Path != RulesFile).ToArray();
+        var expected = RawBodyRoutes.Concat(TypedBodyRoutes)
+            .SelectMany(entry => entry.Value.Select(handler => $"{entry.Key}:{handler}"))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var actual = endpoints
+            .SelectMany(file => WriteHandlers(file.Text).Select(handler => $"{file.Path}:{handler}"))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        actual.ShouldBe(expected, "a new Catalog write route must be added to the raw-body or typed-body list, and a raw one must use the guard");
+    }
+
+    [Fact]
+    public void CatalogRawBodyRoutes_EachCallTheGuardOnceAndNoOtherRouteDoes()
+    {
+        var endpoints = Endpoints().Where(file => file.Path != RulesFile).ToDictionary(file => file.Path, file => file.Text);
+
+        foreach (var (path, handlers) in RawBodyRoutes)
+        {
+            foreach (var handler in handlers)
+            {
+                Occurrences(HandlerBody(endpoints[path], handler), "ReadAuthenticatedJsonAsync(").ShouldBe(1, $"{handler} must read its body through the guard exactly once");
+            }
+        }
+
+        foreach (var (path, handlers) in TypedBodyRoutes)
+        {
+            foreach (var handler in handlers)
+            {
+                Occurrences(HandlerBody(endpoints[path], handler), "ReadAuthenticatedJsonAsync(").ShouldBe(0, $"{handler} binds a typed body and is not behind the raw-body guard");
+            }
+        }
+
+        endpoints.Values.Sum(text => Occurrences(text, "ReadAuthenticatedJsonAsync("))
+            .ShouldBe(RawBodyRoutes.Sum(entry => entry.Value.Length), "a guard call outside a named raw-body route is unaccounted for");
+    }
+
+    [Theory]
+    [InlineData("command.Body, cancellationToken")]
+    [InlineData("RuleFor(command => command.Body.SeedVersion)")]
+    public void Scan_DomainBodyProperty_IsNotARequestBodyRead(string source) =>
+        Scan([(ModuleDirectory + "/Application/Commands/SyntheticHandler.cs", source)]).ShouldBeEmpty();
+
+    [Theory]
+    [InlineData("var body = request.Body;")]
+    [InlineData("JsonDocument.Parse(text)")]
+    [InlineData("await JsonSerializer.DeserializeAsync<JsonElement>(stream)")]
+    public void Scan_BodyReadInApplicationFolder_FlagsFile(string source)
+    {
+        var path = ModuleDirectory + "/Application/Commands/SyntheticHandler.cs";
+
+        Scan([(path, source)]).ShouldBe([path]);
+    }
+
+    [Fact]
+    public void Scan_AllowListedFileWithAnExtraOrChangedCall_IsFlagged()
+    {
+        var (path, pinned) = NonRequestParses.First(entry => entry.Value.Matches.Single().StartsWith("JsonDocument.Parse", StringComparison.Ordinal));
+
+        Scan([(path, "JsonDocument.Parse(a); ")]).ShouldBeEmpty();
+        Scan([(path, "JsonDocument.Parse(a); JsonDocument.Parse(b);")]).ShouldBe([path]);
+        Scan([(path, "JsonDocument.Parse(a); new Utf8JsonReader(bytes);")]).ShouldBe([path]);
+        pinned.Reason.ShouldNotBeNullOrWhiteSpace();
     }
 
     [Fact]
@@ -165,21 +278,59 @@ public sealed class CatalogBodyReadBoundaryTests
     public void Scan_DirectBodyReadInsideRules_AllowsFile(string source) =>
         Scan([(RulesFile, source)]).ShouldBeEmpty();
 
-    private static (string Path, string Text)[] Endpoints() =>
+    private static (string Path, string Text)[] Module() =>
         Directory
-            .EnumerateFiles(Path.Combine(SolutionLayout.RepoRoot, EndpointsDirectory), "*.cs", SearchOption.AllDirectories)
-            .Select(file => (
-                Path: Path.GetRelativePath(SolutionLayout.RepoRoot, file).Replace('\\', '/'),
-                Text: File.ReadAllText(file)))
+            .EnumerateFiles(Path.Combine(SolutionLayout.RepoRoot, ModuleDirectory), "*.cs", SearchOption.AllDirectories)
+            .Select(file => Path.GetRelativePath(SolutionLayout.RepoRoot, file).Replace('\\', '/'))
+            .Where(path => !path[ModuleDirectory.Length..].Contains("/obj/", StringComparison.Ordinal)
+                && !path[ModuleDirectory.Length..].Contains("/bin/", StringComparison.Ordinal))
+            .Select(path => (Path: path, Text: File.ReadAllText(Path.Combine(SolutionLayout.RepoRoot, path))))
             .ToArray();
 
+    private static (string Path, string Text)[] Endpoints() =>
+        Module().Where(file => file.Path.StartsWith(EndpointsDirectory + "/", StringComparison.Ordinal)).ToArray();
+
+    /// <summary>
+    /// Files that read a body-shaped call and are not the shared reader. A file is clean when it has no match, or when
+    /// it is allow-listed and its matches equal the pinned call texts and counts exactly.
+    /// </summary>
     private static string[] Scan(IEnumerable<(string Path, string Text)> files) =>
         files
             .Where(file => file.Path != RulesFile)
-            .Where(file => DirectBodyReadNeedles.Any(needle => file.Text.Contains(needle, StringComparison.Ordinal)))
+            .Where(file =>
+            {
+                var matches = Matches(file.Text);
+                return matches.Length > 0
+                    && !(NonRequestParses.TryGetValue(file.Path, out var pinned) && matches.SequenceEqual(pinned.Matches));
+            })
             .Select(file => file.Path)
             .Order(StringComparer.Ordinal)
             .ToArray();
+
+    /// <summary>Each matched call text with its count, sorted, so an unrelated edit does not move a pin.</summary>
+    private static string[] Matches(string text) =>
+        DirectBodyReadNeedles
+            .Select(needle => (Needle: needle, Count: Occurrences(text, needle)))
+            .Concat(RequestBodyMember.Matches(text).Select(match => match.Value).GroupBy(value => value)
+                .Select(group => (Needle: group.Key, Count: group.Count())))
+            .Where(entry => entry.Count > 0)
+            .Select(entry => $"{entry.Needle} x{entry.Count}")
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+    /// <summary>The write verbs a route file maps, as handler name to route, in declaration order.</summary>
+    private static string[] WriteHandlers(string text) =>
+        WriteRoute.Matches(text).Select(match => match.Groups[2].Value).ToArray();
+
+    private static string HandlerBody(string text, string handler)
+    {
+        var declaration = Regex.Match(text, $@"\bTask(?:<.+>)?\s+{handler}\(");
+        declaration.Success.ShouldBeTrue($"{handler} must be declared as a Task-returning method");
+        var end = text.IndexOf("\n    }", declaration.Index, StringComparison.Ordinal);
+        end.ShouldBeGreaterThan(declaration.Index);
+
+        return text[declaration.Index..end];
+    }
 
     private static int Occurrences(string text, string needle)
     {

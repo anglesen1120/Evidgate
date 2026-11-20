@@ -71,6 +71,26 @@ public sealed partial class CatalogUnstorableBodyTests
             """{"name":"renamed-zq7","\ud800":1,"marker-zq7":"SECRETMARK"}""");
     }
 
+    [Fact]
+    public async Task CaseUpdate_LoneSurrogateValue_RefusesWithoutWritesOrRecord()
+    {
+        await using var world = await StartAsync();
+        var target = await CaseTargetAsync(world);
+
+        await AssertRefusedAndRecoverAsync(world, target,
+            """{"name":"\ud800","marker-zq7":"SECRETMARK"}""");
+    }
+
+    [Fact]
+    public async Task CaseUpdate_NulValue_RefusesWithoutWritesOrRecord()
+    {
+        await using var world = await StartAsync();
+        var target = await CaseTargetAsync(world);
+
+        await AssertRefusedAndRecoverAsync(world, target,
+            """{"name":"\u0000","marker-zq7":"SECRETMARK"}""");
+    }
+
     private async Task<Target> RequirementTargetAsync(World world)
     {
         var caseId = await CaseIdAsync(world);
