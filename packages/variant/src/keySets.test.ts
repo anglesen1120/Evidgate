@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { readKeySet } from './keySetLiteral.testing.js';
 import { normalizeVariant } from './normalize.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -12,44 +13,9 @@ const pin = JSON.parse(
 ) as Record<string, string[]>;
 const source = readFileSync(resolve(here, 'normalize.ts'), 'utf8');
 
-const ENTRY = /^\s*(?:'([^'\n]+)'|"([^"\n]+)"|([A-Za-z_$][\w$]*))\s*:\s*true\s*,?\s*$/;
-
-/** The keys of `const <name>: Record<string, true> = { ... };`; throws when the literal or any entry is not understood. */
+/** The keys of `const <name>: Record<string, true> = { ... };` in normalize.ts. */
 function sourceKeys(constName: string): string[] {
-  const start = new RegExp(`const ${constName}\\s*:\\s*Record<string,\\s*true>\\s*=\\s*\\{`).exec(
-    source,
-  );
-  if (start === null) {
-    throw new Error(
-      `const ${constName}: Record<string, true> = { ... } not found in normalize.ts: update this pin test`,
-    );
-  }
-  const lines = source.slice(start.index + start[0].length).split('\n');
-  const keys: string[] = [];
-  let closed = false;
-  // The first line is the rest of the opening line; the literal ends at a line that starts with `}`.
-  for (const line of lines.slice(1)) {
-    const text = line.trim();
-    if (text.startsWith('}')) {
-      closed = true;
-      break;
-    }
-    if (text === '' || text.startsWith('//')) {
-      continue;
-    }
-    const m = ENTRY.exec(line);
-    if (m === null) {
-      throw new Error(`${constName}: cannot parse entry ${JSON.stringify(line)} in normalize.ts`);
-    }
-    keys.push(m[1] ?? m[2] ?? m[3] ?? '');
-  }
-  if (!closed) {
-    throw new Error(`closing brace of ${constName} not found in normalize.ts`);
-  }
-  if (keys.length === 0) {
-    throw new Error(`${constName} parsed to an empty set from normalize.ts`);
-  }
-  return keys;
+  return readKeySet(source, constName, 'normalize.ts');
 }
 
 function drift(actual: readonly string[], pinned: readonly string[]): string {
