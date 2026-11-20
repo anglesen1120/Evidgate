@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Orchestrator.Domain;
@@ -31,7 +32,7 @@ internal static class BindReleaseBody
         using (document)
         {
             var root = document.RootElement;
-            if (JsonBody.HasUnstorableText(root))
+            if (UnstorableJsonText.HasUnstorableText(root))
             {
                 return (Guid.Empty, Error.Invalid(
                     "the body carries a string that cannot be stored",

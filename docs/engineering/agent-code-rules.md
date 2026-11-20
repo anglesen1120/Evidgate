@@ -140,6 +140,7 @@ The binding text of A1–A7 and W1–W9 now lives in one place: [`docs/engineeri
 | Canonical JSON and hash (RFC 8785) | `JsonCanonicalizer`, `CanonicalHash` | `src/BuildingBlocks/Canonicalization/` |
 | Secret-reference shape | `SecretShape` | `src/BuildingBlocks/SharedKernel/Security/SecretShape.cs` |
 | Variant parameter secret judgement (value as sent or as stored, enum-like fold) | `ParameterSecretRule` | `src/BuildingBlocks/SharedKernel/Security/ParameterSecretRule.cs` |
+| Customer text hygiene (well-formed, no control or format characters; one rule for the variant normaliser and the manifest check) | `UnicodeCleanliness.IsClean` | `src/BuildingBlocks/SharedKernel/Security/UnicodeCleanliness.cs` |
 | Identifier shape (first/rest/last character sets, length bounds, no regex timeout) | `AsciiShape` | `src/BuildingBlocks/SharedKernel/Security/AsciiShape.cs` |
 | Secrets | `ISecretProvider`, `SecretNames` | `src/BuildingBlocks/SharedKernel/Secrets/` |
 | Log redaction | `SecretRedactor` (the copy in `src/Evidgate.Migrator/SecretRedactor.cs` is to be removed) | `src/BuildingBlocks/Observability/Redaction/` |
@@ -153,6 +154,7 @@ The binding text of A1–A7 and W1–W9 now lives in one place: [`docs/engineeri
 | Headless `Retry-After` deadline without automatic retries | `createRetryAfterWait` | `apps/web/src/app/core/http/retry.ts` |
 | Bounded outbound HTTP response body (cap checked on `Content-Length` and while streaming, optional object-root check) | `BoundedHttpBody.ReadBytesAsync`, `BoundedHttpBody.ReadJsonAsync`, or `BoundedStreamBody` for a caller that owns a raw stream | `src/BuildingBlocks/Pipeline/Serialization/BoundedHttpBody.cs` (HTTP types stay out of SharedKernel, which the evaluator closure reaches) and `src/BuildingBlocks/SharedKernel/Serialization/BoundedStreamBody.cs` |
 | Late-window predicate for evidence admission (`incomplete` until its collection deadline, `complete` until its own completion instant, null-safe over the run alias `r`) | `RunAdmissionPolicy.LateWindowOpenSql` | `src/Modules/Evidgate.Modules.Orchestrator.Contracts/RunAdmissionPolicy.cs` |
+| Text a jsonb column and the RFC 8785 form cannot carry (unpaired UTF-16 surrogate or NUL in any member name or string, any depth), and the writer-side subset a serialisation may be refused for (unpaired surrogate only, NUL excluded because the writer emits it; nesting the command wrapper pushes past the writer's default depth limit); the idempotency stage answers a body only the writer rejects as 400 `request_invalid` through it | `UnstorableJsonText.HasUnstorableText`, `UnstorableJsonText.HasUnpairedSurrogate`, `UnstorableTextProbe` (internal, runs only after `Serialize` failed) | `src/BuildingBlocks/SharedKernel/Serialization/UnstorableJsonText.cs`, `src/BuildingBlocks/Pipeline/Behaviours/UnstorableTextProbe.cs` |
 | Bounded inbound request body reader, `Base64Url`, client-IP throttle key, regex `Shapes`, pepper ring, polling loop | **to be extracted** `[OPEN]`: until then, the PR that adds a third copy must extract it instead | — |
 
 Add a row whenever a shared helper is created.

@@ -1,4 +1,5 @@
 using System.Buffers;
+using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Evidgate.BuildingBlocks.Contracts.Validation;
@@ -188,7 +189,7 @@ internal sealed class CreateEnvironmentRevisionCommandHandler(
 
         using (document)
         {
-            if (JsonBody.HasUnstorableText(document.RootElement))
+            if (UnstorableJsonText.HasUnstorableText(document.RootElement))
             {
                 return OrchestratorErrors.EnvironmentRevisionInvalid("the body carries a string that cannot be stored", [new ErrorDetail(string.Empty, "invalid_value")]);
             }

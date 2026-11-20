@@ -1,6 +1,7 @@
 // Test inputs are written inline so each case reads as the document it checks.
 #pragma warning disable CA1861
 using System.Text.Json;
+using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using System.Text.Json.Nodes;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Orchestrator.Domain;
@@ -249,11 +250,11 @@ public sealed class ManifestUnitTests
         using var escaped = JsonDocument.Parse("""{"a":"\\u0000 is text"}""");
         using var pair = JsonDocument.Parse("""{"a":"\ud83d\ude00"}""");
 
-        JsonBody.HasUnstorableText(nul.RootElement).ShouldBeTrue();
-        JsonBody.HasUnstorableText(lone.RootElement).ShouldBeTrue();
-        JsonBody.HasUnstorableText(loneKey.RootElement).ShouldBeTrue();
-        JsonBody.HasUnstorableText(escaped.RootElement).ShouldBeFalse();
-        JsonBody.HasUnstorableText(pair.RootElement).ShouldBeFalse();
+        UnstorableJsonText.HasUnstorableText(nul.RootElement).ShouldBeTrue();
+        UnstorableJsonText.HasUnstorableText(lone.RootElement).ShouldBeTrue();
+        UnstorableJsonText.HasUnstorableText(loneKey.RootElement).ShouldBeTrue();
+        UnstorableJsonText.HasUnstorableText(escaped.RootElement).ShouldBeFalse();
+        UnstorableJsonText.HasUnstorableText(pair.RootElement).ShouldBeFalse();
     }
 
     [Theory]

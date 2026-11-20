@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Orchestrator.Domain;
@@ -48,7 +49,7 @@ internal static class ReleaseBody
 
         using (document)
         {
-            if (JsonBody.HasUnstorableText(document.RootElement))
+            if (UnstorableJsonText.HasUnstorableText(document.RootElement))
             {
                 return (default!, Invalid("the body carries a string that cannot be stored", [new ErrorDetail(string.Empty, "invalid_value")]));
             }
