@@ -11,12 +11,8 @@ import { describe, expect, it } from 'vitest';
 
 import { indirectForms } from './requestCapScan.fixtures.testing.js';
 import { requestBodyCaps } from './requestCaps.js';
-import {
-  enclosingFunction,
-  type Finding,
-  operationRoutes,
-  scanSource,
-} from './requestCapScan.testing.js';
+import { enclosingFunction, type Finding } from './requestCapScan.context.testing.js';
+import { operationRoutes, scanSource } from './requestCapScan.testing.js';
 
 const sourceRoot = import.meta.dirname;
 const sdkText = readFileSync(join(sourceRoot, '../../sdk/gen/sdk.gen.ts'), 'utf8');
