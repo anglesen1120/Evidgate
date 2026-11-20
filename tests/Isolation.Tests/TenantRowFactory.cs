@@ -886,8 +886,10 @@ internal sealed class TenantRowFactory
             // so both are fresh per row and the RLS suite's two orgs never collide on them.
             ("public.github_installation", "installation_id") =>
                 8_000_000_000L + Interlocked.Increment(ref _githubInstallationId),
-            // support_grant.scopes is a permission-string list with a shape CHECK, so the generic "probe" is refused.
+            // support_grant.scopes has a shape CHECK and expires_at must fall within 72 hours of creation, so
+            // the generic "probe" and the 400-day timestamp are both refused.
             ("public.support_grant", "scopes") => new[] { "case:read" },
+            ("public.support_grant", "expires_at") => DateTimeOffset.UtcNow.AddHours(1),
             ("public.github_install_state", "state_hash") =>
                 (byte[])[.. Guid.NewGuid().ToByteArray(), .. Guid.NewGuid().ToByteArray()],
             _ => (object?)null,
