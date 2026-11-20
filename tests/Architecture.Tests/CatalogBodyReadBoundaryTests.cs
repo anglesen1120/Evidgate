@@ -99,16 +99,12 @@ public sealed class CatalogBodyReadBoundaryTests
         guard.ShouldBeGreaterThanOrEqualTo(0);
         var refusal = reader.IndexOf("throw new TenantContextMissingException()", guard, StringComparison.Ordinal);
         refusal.ShouldBeGreaterThan(guard);
-        var tenantGuard = reader.IndexOf(
-            "if (context.RequestServices.GetRequiredService<IRequestTenantContextAccessor>().Current is null)",
-            StringComparison.Ordinal);
-        tenantGuard.ShouldBeGreaterThanOrEqualTo(0);
+        var tenantGuard = reader.IndexOf("RawBodyGuard.RequireResolvedTenant(context.RequestServices)", StringComparison.Ordinal);
         tenantGuard.ShouldBeGreaterThan(refusal);
-        var tenantRefusal = reader.IndexOf("throw new TenantContextMissingException()", tenantGuard, StringComparison.Ordinal);
-        tenantRefusal.ShouldBeGreaterThan(tenantGuard);
+        reader.Contains("IRequestTenantContextAccessor", StringComparison.Ordinal).ShouldBeFalse("the tenant check is the shared guard's, not a local copy");
         var read = reader.IndexOf("ReadJsonAsync(", StringComparison.Ordinal);
         read.ShouldBeGreaterThan(refusal);
-        read.ShouldBeGreaterThan(tenantRefusal);
+        read.ShouldBeGreaterThan(tenantGuard);
     }
 
     /// <summary>
