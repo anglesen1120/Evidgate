@@ -966,3 +966,17 @@ Closed by S513 (#1053, sha: 7b546dc5): the 18 flag-direction lines are pinned by
 | Catalog scan mutants are static only (S501) | `CatalogBodyReadBoundaryTests` proves the scan by 38 `InlineData` source strings and three facts red on base; no mutant of a real new raw-body route file ran on the LAN. Rules-file exemption and the `>= 6` text-count assertion are test-design nits. | receiver: backend lane (Catalog), add a mutant run when the file is next touched |
 
 Closed by #1056 (71665d89): eight value and NUL facts (case update, fixture revision, git binding, suite dry-run) bring `CatalogUnstorableBodyTests` to 29 facts; `CatalogBodyReadBoundaryTests` scans the whole Catalog module with a six-file allow-list pinned by call text and count and exact route pins; mutants M1-M5 (real route file guard removed, new route file, Application body read, new typed-body route, extra parse in an allow-listed file) ran red on the LAN. Remaining limits are the row "Catalog scan limits (S515)".
+
+## Moved from status-carried.md by S516 (2026-11-21)
+
+| Key-set pin: renaming the private .NET field was not mutant-run (S498) | `VariantKeySetPinTests` fails closed on a renamed or retyped `ParameterSecretRule.EnumLike`/`NonIdentifying` (`ShouldNotBeNull` on the reflected field), but only the added-key and fixture-key mutants ran on the LAN; the rename mutant ran for the TS constant on the Mac only. | receiver: variant package lane |
+
+Closed by #1055 (657df323): all four mutants (rename and `HashSet<string>` to `SortedSet<string>` retype of `EnumLike` and `NonIdentifying`, LAN runs lan-pin-mutant-s516-mut-1795192697-28682 and siblings on 04c127b7, M1-M4) ran red in `VariantKeySetPinTests.ServerKeySet_EqualsTheSharedPin`.
+
+| Key-set pin parser edge cases (S498) | `keySets.test.ts` reads the `ENUM_LIKE`/`NON_IDENTIFYING` literals line by line: text after `{` on the opening line is dropped and a `}`-leading line inside a block comment ends the literal. Both still fail closed on today's layout. | receiver: variant package lane |
+
+Closed by #1055 (657df323): `keySets.test.ts` now reads the literals through the TypeScript parser (`keySetLiteral.testing.ts`, syntax errors and unknown entries fail closed) with one test per edge case, red on the old reader; the real sets read identically (11 + 11).
+
+| Release and Policy guard sites have no individual mutant (S507) | The LAN mutant chain removed the guard at Orchestrator, Authoring, Ingestion and the shared guard, but not at `ReleaseEndpoints.cs:81,123` or `PolicyEndpoints.cs:94,125`; only the 27-route table fact and the shared-guard mutant cover them. | receiver: next lane touching `RawBodyTenantRefusalTests`, run one mutant per site |
+
+Closed by #1055 (657df323): one mutant per site (`ReleaseEndpoints.cs:81,123`, `PolicyEndpoints.cs:94,125`, M5-M8, LAN runs on 04c127b7) ran red in `RawBodyTenantRefusalTests.RawBodyWrite_MemberWithoutTenant_ReadsNoBodyByteAndReturnsPipelineUnauthenticated`, naming release.create, release.bind-run, policy.append-revision and policy.activate.
