@@ -41,7 +41,7 @@ namespace Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 /// logs nothing — it holds no logger for a reason — and a success result carries no stderr at all.
 /// </para>
 /// </summary>
-internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
+internal sealed partial class ChildProcessParseRunner : IParseRunner, IDisposable
 {
     /// <summary>
     /// The stdin block the caller's stream is read in. At least 64 KiB, so a large artifact is not syscall-bound
@@ -426,7 +426,8 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
         RunLimits limits,
         CancellationToken cancellationToken)
     {
-        var protocol = new ChildOutputProtocol(limits.MaxOutputBytes, limits.MaxOutputRecords, limits.MaxRecordBytes);
+        var sink = request.Sink ?? new BufferingParseRecordSink();
+        var protocol = new ChildOutputProtocol(limits.MaxOutputBytes, limits.MaxOutputRecords, limits.MaxRecordBytes, sink);
         var streamStop = new StreamStop();
 
         // The stdin copy stops on its own token: nothing reads the pipe once the child is gone, so the run must not
@@ -566,17 +567,7 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
                 stderrExcerpt);
         }
 
-        if (capture.Failure is not null || capture.Records is not { } records)
-        {
-            return new ParseRunFailed(
-                ParseRunFailureKind.MalformedOutput,
-                exitCode,
-                capture.OutputBytes,
-                capture.RecordCount,
-                stderrExcerpt);
-        }
-
-        return new ParseRunSucceeded(records, exitCode, capture.OutputBytes, records.Count);
+        return CompleteOutput(request, sink, capture, exitCode, stderrExcerpt);
     }
 
     private static ParseRunFailed SpawnFailed() =>

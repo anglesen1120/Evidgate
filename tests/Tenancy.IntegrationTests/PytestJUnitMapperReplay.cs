@@ -1,6 +1,7 @@
 using System.Text;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
+using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 
 namespace Tenancy.IntegrationTests;
 
@@ -32,6 +33,37 @@ internal static class PytestJUnitMapperReplay
         long maxCases = MaxCases) =>
         new PytestJUnitMapper(new ParsingService(maxCases), maxBytes)
             .Map(new MemoryStream(Encoding.UTF8.GetBytes(xml)), new JUnitMapContext(ReportId, resolve ?? NodeId));
+
+    /// <summary>
+    /// Maps the child's records through the push mapper the way a runner feeds it: one line at a time, then the
+    /// verdict. A child rejection is the run's own verdict on the report, so it is raised as the refusal a caller of
+    /// the byte path would catch instead of being mapped.
+    /// </summary>
+    /// <param name="mapper">The dialect mapper.</param>
+    /// <param name="records">The child's records in stream order, its marker excluded.</param>
+    /// <param name="context">The synthetic producer identity and the caller's execution-key resolution.</param>
+    /// <returns>What the push mapping produced.</returns>
+    public static JUnitMapResult MapRecords(
+        PytestJUnitMapper mapper,
+        IReadOnlyList<ParseRecord> records,
+        JUnitMapContext context)
+    {
+        ArgumentNullException.ThrowIfNull(mapper);
+        ArgumentNullException.ThrowIfNull(records);
+
+        var sink = mapper.OpenRecordMapper(context);
+        foreach (var record in records)
+        {
+            sink.Accept(record.Utf8Json.Span);
+        }
+
+        if (sink.RejectedReason is { } reason)
+        {
+            throw new JUnitParseRefusedException(reason, "the parse child refused the report");
+        }
+
+        return sink.Finish();
+    }
 
     /// <summary>The identity hint rule this harness uses: the raw pair, joined.</summary>
     public static string? NodeId(string classname, string name) => classname + "::" + name;
