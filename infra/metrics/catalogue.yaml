@@ -112,7 +112,7 @@ entries:
     meter: evidgate
     kind: counter
     unit: '{apply}'
-    description: Batched authoring apply attempts by outcome. applied is counted after the batch commits; stale (a precondition or version lost) and conflict (a selected change was no longer pending) count refused requests, which write nothing. The stale share is how an operator sees the UI holding an old selection.
+    description: Batched authoring apply attempts by outcome. applied is counted after the batch commits; stale (a precondition or version lost) and conflict (any 409 refusal, for example a selected change no longer pending or a delete whose target still has live cases) count refused requests, which write nothing. The stale share is how an operator sees the UI holding an old selection.
     labels: [outcome]
     source: src/Modules/Evidgate.Modules.Authoring/Application/Changes/ApplyAuthoringChangesCommand.cs
 

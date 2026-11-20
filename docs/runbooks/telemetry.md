@@ -323,7 +323,7 @@ means maintainers act on an old selection. The authoring save and queue counters
 are not catalogued: nothing reads them yet.
 
 Apart from the refusal counters (the billing-key conflict counter and the `stale` and `conflict` outcomes of the apply
-counter), counters describe committed work. Every other count is recorded after the transaction that causes it commits, so a rolled-back attempt contributes nothing, and
+counter), counters of business work describe committed work. Every such counter's success sample is recorded after the transaction that causes it commits, so a rolled-back attempt contributes nothing, and
 the `incomplete` counter counts only a reconcile that settles the run: an append of late or reprocessed evidence
 writes a revision and adds no sample. Read a counter's rate against the same window as the denominator it divides
 into.
