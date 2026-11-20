@@ -83,7 +83,8 @@ internal static class ChildRejectionRecord
     /// </summary>
     /// <param name="utf8">The record's bytes, without the terminating newline.</param>
     /// <param name="reason">The rejection's <c>reason</c> string, or <see langword="null"/> when it is absent or not a string.</param>
-    /// <returns><see langword="true"/> when the record is object-kind <c>rejected</c>.</returns>
+    /// <returns><see langword="true"/> when the record is object-kind <c>rejected</c>; <see langword="false"/> for
+    /// every record this reader cannot decode, including one whose escaped text is not valid UTF-16.</returns>
     private static bool TryReadRejectedReason(ReadOnlySpan<byte> utf8, out string? reason)
     {
         reason = null;
@@ -154,10 +155,11 @@ internal static class ChildRejectionRecord
                 return true;
             }
         }
-        catch (JsonException)
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException)
         {
-            // A line the runner framed but that is not one JSON object is not a rejection this reader can read; the
-            // framing check already reports such a stream as malformed output, and no verdict is invented from it.
+            // A line that is not one JSON object is not a rejection this reader can read; the framing check already
+            // reports such a stream as malformed. An undecodable string (a lone surrogate escape) makes GetString
+            // throw outside any caller's guard, so it is answered here too: the record then fails the mapper's decode.
         }
 
         reason = null;

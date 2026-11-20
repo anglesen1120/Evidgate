@@ -95,6 +95,107 @@ public sealed class ParseRecordStreamingMemoryTests(ITestOutputHelper output)
         perCase.ShouldBeGreaterThan(MaxRetainedPerCase);
     }
 
+    [Fact]
+    public async Task RecordSink_InFlightPerCaseRetainedBytes_StayBoundedAtBothSizes()
+    {
+        await MeasureInFlightAsync(10, SmallTextBytes);
+        var thousand = await MeasureInFlightAsync(1_000, TextBytes);
+        var twentyThousand = await MeasureInFlightAsync(20_000, TextBytes);
+
+        output.WriteLine($"in flight: 1000 cases {thousand} B; 20000 cases {twentyThousand} B");
+        (thousand / 1_000).ShouldBeLessThanOrEqualTo(MaxRetainedPerCase);
+        (twentyThousand - thousand).ShouldBeLessThan(MaxRetainedPerCase * 19_000);
+    }
+
+    [Fact]
+    public async Task RecordSink_InFlightRetainedBytes_DoNotFollowTheTextVolume()
+    {
+        await MeasureInFlightAsync(10, SmallTextBytes);
+        var small = await MeasureInFlightAsync(1_000, SmallTextBytes);
+        var large = await MeasureInFlightAsync(1_000, LargeTextBytes);
+
+        output.WriteLine($"in flight: text {SmallTextBytes} B retains {small} B; text {LargeTextBytes} B retains {large} B");
+        (large - small).ShouldBeLessThan(TextVolumeTolerance);
+    }
+
+    private static async Task<long> MeasureInFlightAsync(int cases, int textBytes)
+    {
+        var mapper = new PytestJUnitMapper(new ParsingService()).OpenRecordMapper(Context);
+        var protocol = new ChildOutputProtocol(MaxOutputBytes, 3 * cases + 3, MaxRecordBytes, mapper);
+        using var stdout = new PausingRecordStream(new GeneratedRecordStream(cases, textBytes));
+        var before = GC.GetTotalMemory(forceFullCollection: true);
+        var reading = protocol.ReadAsync(stdout, static () => { });
+        long retained;
+        try
+        {
+            await stdout.WaitPausedAsync(TestContext.Current.CancellationToken);
+            reading.IsCompleted.ShouldBeFalse();
+
+            // Measured with the read still suspended after the last testcase: the accumulator is rooted, so a sink
+            // that appended every record to a list and dropped it at the end is visible here, while the mapped cases
+            // that are kept by design stay inside the per-case bound above.
+            retained = GC.GetTotalMemory(forceFullCollection: true) - before;
+            GC.KeepAlive(reading);
+            GC.KeepAlive(mapper);
+        }
+        finally
+        {
+            stdout.Release();
+            var capture = await reading;
+            capture.Failure.ShouldBeNull();
+            capture.RecordCount.ShouldBe(3 * cases + 2);
+        }
+
+        var mapped = mapper.Finish();
+        mapped.Cases.Count.ShouldBe(cases);
+        mapped.Discrepancies.ShouldBeEmpty();
+        return retained;
+    }
+
+    private sealed class PausingRecordStream(GeneratedRecordStream source) : Stream
+    {
+        private readonly TaskCompletionSource paused = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task WaitPausedAsync(CancellationToken cancellationToken) => await paused.Task.WaitAsync(cancellationToken);
+        public void Release() => released.TrySetResult();
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (source.BeforeRootEnd)
+            {
+                paused.TrySetResult();
+                await released.Task.WaitAsync(cancellationToken);
+            }
+
+            return source.Read(buffer.Span);
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override void Flush() => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                source.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
+    }
+
     private static async Task WarmUpAsync() => await MeasureMapperAsync(10, SmallTextBytes);
 
     private static async Task<long> MeasureMapperAsync(int cases, int textBytes)
@@ -146,6 +247,8 @@ public sealed class ParseRecordStreamingMemoryTests(ITestOutputHelper output)
         private int stage;
         private byte[] line = [];
         private int offset;
+
+        public bool BeforeRootEnd => stage == 4 && offset == line.Length;
 
         public override bool CanRead => true;
 

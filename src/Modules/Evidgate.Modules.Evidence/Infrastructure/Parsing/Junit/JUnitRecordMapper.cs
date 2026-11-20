@@ -16,19 +16,15 @@ namespace Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
 /// </summary>
 internal sealed class JUnitRecordMapper : IJUnitRecordMapper
 {
-    private const string XmlNamespaceUri = "http://www.w3.org/XML/1998/namespace";
-    private const string XmlnsNamespaceUri = "http://www.w3.org/2000/xmlns/";
-    private const string XmlPrefix = "xml";
-    private const string XmlnsPrefix = "xmlns";
     private const string TestCaseElement = "testcase";
 
     private readonly long maxDocumentBytes;
     private readonly JUnitMapContext context;
     private readonly List<Frame> open = [];
-    private readonly List<Dictionary<string, string>?> declared = [];
     private readonly List<MappedCase> cases = [];
     private readonly List<string> discrepancies = [];
     private readonly Dictionary<string, int> resolved = new(StringComparer.Ordinal);
+    private readonly JUnitNamespaceScope namespaceScope = new();
     private readonly PytestJUnitMapper.CounterReader counters = new();
 
     private long rebuiltBytes;
@@ -36,6 +32,7 @@ internal sealed class JUnitRecordMapper : IJUnitRecordMapper
     private int testcases;
     private int testcaseDepth = -1;
     private JUnitParseRefusedException? fault;
+    private JUnitParseRefusedException? dialectRefusal;
     private string? rejectedReason;
 
     /// <summary>Creates one single-use sink.</summary>
@@ -97,6 +94,13 @@ internal sealed class JUnitRecordMapper : IJUnitRecordMapper
             throw ChildXmlRecords.Crashed();
         }
 
+        // A root the dialect does not map is refused last: every structural fault above is a crashed child, which
+        // outranks a verdict about the report's content.
+        if (dialectRefusal is not null)
+        {
+            throw dialectRefusal;
+        }
+
         var declaredCounters = counters.Result();
         if (declaredCounters.Tests is { } claimed && claimed != testcases)
         {
@@ -125,7 +129,7 @@ internal sealed class JUnitRecordMapper : IJUnitRecordMapper
     private void Start(in XmlRecord record)
     {
         var name = record.Name ?? throw new InvalidOperationException("a start record has no name");
-        var (prefix, local) = SplitName(name);
+        var (prefix, local) = JUnitNamespaceScope.SplitName(name);
 
         if (open.Count == 0 && ++roots > 1)
         {
@@ -137,40 +141,48 @@ internal sealed class JUnitRecordMapper : IJUnitRecordMapper
             throw new InvalidOperationException("the child streamed elements nested deeper than the profile admits");
         }
 
-        declared.Add(Declare(record.Attributes));
-        ResolveElementPrefix(prefix);
-        CheckAttributes(record.Attributes);
+        namespaceScope.Push(record.Attributes);
+        namespaceScope.VerifyElementPrefix(prefix);
+        namespaceScope.VerifyAttributes(record.Attributes);
         ChargeRebuild(ChildXmlRecords.StartTagBytes(record));
 
         var depth = open.Count;
         if (depth == 0)
         {
-            if (!PytestJUnitMapper.IsKnownRoot(local))
+            if (PytestJUnitMapper.IsKnownRoot(local))
             {
-                fault = PytestJUnitMapper.RootRefusal();
-                return;
+                counters.ReadRoot(local, PytestJUnitMapper.SuiteAttributes.Of(record.Attributes));
             }
-
-            counters.ReadRoot(local, PytestJUnitMapper.SuiteAttributes.Of(record.Attributes));
+            else
+            {
+                // The frame is still pushed, and charged: a foreign root that is unbalanced, deeper than the
+                // profile or over the byte budget is a crashed child, so the dialect's refusal must not short-circuit
+                // the structural checks the way an early return did.
+                dialectRefusal = PytestJUnitMapper.RootRefusal();
+            }
         }
-        else if (testcaseDepth < 0 && depth == 1)
+        else if (dialectRefusal is null && testcaseDepth < 0 && depth == 1)
         {
             counters.ReadSuite(local, PytestJUnitMapper.SuiteAttributes.Of(record.Attributes));
         }
 
         var sequence = 0;
-        if (testcaseDepth < 0 && string.Equals(local, TestCaseElement, StringComparison.Ordinal))
+        if (dialectRefusal is null && testcaseDepth < 0 && string.Equals(local, TestCaseElement, StringComparison.Ordinal))
         {
             sequence = ++testcases;
             testcaseDepth = depth;
         }
-        else if (testcaseDepth >= 0 && depth == testcaseDepth + 1)
+        else if (dialectRefusal is null && testcaseDepth >= 0 && depth == testcaseDepth + 1)
         {
             // Only a testcase's direct children are outcomes: a word inside a stack trace is not a status.
             MarkOutcome(local);
         }
 
-        open.Add(new Frame(name, PytestJUnitMapper.TestCaseAttributes.Of(record.Attributes), sequence));
+        // Only a testcase carries attributes that are ever read back, and a foreign root maps no cases at all.
+        open.Add(new Frame(
+            name,
+            sequence == 0 ? default : PytestJUnitMapper.TestCaseAttributes.Of(record.Attributes),
+            sequence));
     }
 
     private void End(in XmlRecord record)
@@ -188,7 +200,7 @@ internal sealed class JUnitRecordMapper : IJUnitRecordMapper
         }
 
         open.RemoveAt(index);
-        declared.RemoveAt(index);
+        namespaceScope.Pop();
         ChargeRebuild(ChildXmlRecords.EndTagBytes(frame.QualifiedName));
 
         if (frame.Sequence == 0)
@@ -251,179 +263,6 @@ internal sealed class JUnitRecordMapper : IJUnitRecordMapper
         }
 
         open[testcaseDepth] = frame;
-    }
-
-    /// <summary>Splits a qualified name the way a name-aware reader did, refusing a name it could not have read.</summary>
-    private static (string? Prefix, string Local) SplitName(string name)
-    {
-        var colon = name.IndexOf(':');
-        if (colon < 0)
-        {
-            XmlConvert.VerifyNCName(name);
-
-            return (null, name);
-        }
-
-        if (colon == 0 || colon == name.Length - 1 || name.LastIndexOf(':') != colon)
-        {
-            throw new XmlException("a name is not one prefix and one local part");
-        }
-
-        var prefix = name[..colon];
-        var local = name[(colon + 1)..];
-
-        // NCName refuses a colon in either part, so a name can never carry a second one.
-        XmlConvert.VerifyNCName(prefix);
-        XmlConvert.VerifyNCName(local);
-
-        return (prefix, local);
-    }
-
-    private static Dictionary<string, string>? Declare(List<(string Key, string Value)>? attributes)
-    {
-        if (attributes is null)
-        {
-            return null;
-        }
-
-        Dictionary<string, string>? declarations = null;
-        foreach (var (key, value) in attributes)
-        {
-            var (prefix, local) = SplitName(key);
-            if (prefix is null)
-            {
-                if (!string.Equals(key, XmlnsPrefix, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-            }
-            else if (!string.Equals(prefix, XmlnsPrefix, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            var declaredPrefix = prefix is null ? string.Empty : local;
-            CheckDeclaration(declaredPrefix, value);
-
-            declarations ??= new Dictionary<string, string>(StringComparer.Ordinal);
-            if (!declarations.TryAdd(declaredPrefix, value))
-            {
-                throw new XmlException("an element declares one prefix twice");
-            }
-        }
-
-        return declarations;
-    }
-
-    private static void CheckDeclaration(string prefix, string value)
-    {
-        XmlConvert.VerifyXmlChars(value);
-
-        if (string.Equals(prefix, XmlnsPrefix, StringComparison.Ordinal))
-        {
-            throw new XmlException("the xmlns prefix may not be declared");
-        }
-
-        if (string.Equals(value, XmlnsNamespaceUri, StringComparison.Ordinal))
-        {
-            throw new XmlException("no prefix may be bound to the xmlns namespace");
-        }
-
-        if (string.Equals(prefix, XmlPrefix, StringComparison.Ordinal))
-        {
-            if (!string.Equals(value, XmlNamespaceUri, StringComparison.Ordinal))
-            {
-                throw new XmlException("the xml prefix may only be bound to its own namespace");
-            }
-
-            return;
-        }
-
-        if (value.Length == 0)
-        {
-            if (prefix.Length != 0)
-            {
-                throw new XmlException("a prefix may not be undeclared");
-            }
-
-            return;
-        }
-
-        if (string.Equals(value, XmlNamespaceUri, StringComparison.Ordinal))
-        {
-            throw new XmlException("the xml namespace may not be bound to another prefix");
-        }
-    }
-
-    private void CheckAttributes(List<(string Key, string Value)>? attributes)
-    {
-        if (attributes is null)
-        {
-            return;
-        }
-
-        // A duplicate is the same namespace and local part, so two prefixes for one namespace are a duplicate too.
-        HashSet<(string Namespace, string Local)>? seen = attributes.Count > 1 ? [] : null;
-        foreach (var (key, value) in attributes)
-        {
-            var (prefix, local) = SplitName(key);
-            if (string.Equals(prefix, XmlnsPrefix, StringComparison.Ordinal)
-                || (prefix is null && string.Equals(local, XmlnsPrefix, StringComparison.Ordinal)))
-            {
-                // A namespace declaration was validated with the element's scope; its own namespace is not the
-                // attribute namespace below, so it takes no part in the duplicate set either.
-                continue;
-            }
-
-            XmlConvert.VerifyXmlChars(value);
-
-            var attributeNamespace = prefix is null
-                ? string.Empty
-                : string.Equals(prefix, XmlPrefix, StringComparison.Ordinal)
-                    ? XmlNamespaceUri
-                    : Lookup(prefix) ?? throw new XmlException("an attribute names a prefix that is not declared");
-
-            if (seen is not null && !seen.Add((attributeNamespace, local)))
-            {
-                throw new XmlException("an element carries one attribute twice");
-            }
-        }
-    }
-
-    private void ResolveElementPrefix(string? prefix)
-    {
-        if (prefix is null)
-        {
-            return;
-        }
-
-        if (string.Equals(prefix, XmlnsPrefix, StringComparison.Ordinal))
-        {
-            throw new XmlException("the xmlns prefix may not name an element");
-        }
-
-        if (string.Equals(prefix, XmlPrefix, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        if (Lookup(prefix) is null)
-        {
-            throw new XmlException("an element names a prefix that is not declared");
-        }
-    }
-
-    private string? Lookup(string prefix)
-    {
-        for (var index = declared.Count - 1; index >= 0; index--)
-        {
-            if (declared[index] is { } bindings && bindings.TryGetValue(prefix, out var uri))
-            {
-                return uri;
-            }
-        }
-
-        return null;
     }
 
     /// <summary>One open element: the name to close, the testcase it may hold, and the outcomes seen under it.</summary>

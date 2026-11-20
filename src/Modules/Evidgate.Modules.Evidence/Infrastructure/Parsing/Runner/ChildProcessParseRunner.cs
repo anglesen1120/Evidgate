@@ -41,7 +41,7 @@ namespace Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 /// logs nothing — it holds no logger for a reason — and a success result carries no stderr at all.
 /// </para>
 /// </summary>
-internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
+internal sealed partial class ChildProcessParseRunner : IParseRunner, IDisposable
 {
     /// <summary>
     /// The stdin block the caller's stream is read in. At least 64 KiB, so a large artifact is not syscall-bound
@@ -567,23 +567,7 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
                 stderrExcerpt);
         }
 
-        // Only a list this run created is handed back: a caller that supplies any sink, including its own
-        // BufferingParseRecordSink, has already taken delivery and must not also receive a second copy.
-        if (capture.Failure is not null)
-        {
-            return new ParseRunFailed(
-                ParseRunFailureKind.MalformedOutput,
-                exitCode,
-                capture.OutputBytes,
-                capture.RecordCount,
-                stderrExcerpt);
-        }
-
-        var records = request.Sink is null && sink is BufferingParseRecordSink buffering
-            ? buffering.Records
-            : Array.Empty<ParseRecord>();
-
-        return new ParseRunSucceeded(records, exitCode, capture.OutputBytes, capture.RecordCount);
+        return CompleteOutput(request, sink, capture, exitCode, stderrExcerpt);
     }
 
     private static ParseRunFailed SpawnFailed() =>
