@@ -24,25 +24,27 @@
  * a callee chosen by a computed (non-literal) name; an SDK operation reached any way but a named
  * import, an alias import or a namespace import's member (`const { op } = sdk`, `const f = op`,
  * a default import, `sdk['op']`, a dynamic `import()`, `.call` on it, `export { op } from`);
- * `Function.prototype.call` held in a variable and used with a fetch; an input of `new Request(input, init)` that is a member read
- * or a call result other than `x.clone()` (`deps.request`), and a member read of a `Request`-typed
- * parameter property used as the first argument of a fetch (`fetch(this.req)`: that needs member
- * flow analysis; `fetch(req)` on the parameter itself is reported); a fetch-named call (not `fetch`
- * itself, not a tracked alias) with more than two arguments, read as another function
+ * `Function.prototype.call` held in a variable and used with a fetch; an input of
+ * `new Request(input, init)` that is a member read or a call result other than `x.clone()`
+ * (`deps.request`); a member read of a `Request`-typed parameter property as the first argument
+ * of a fetch (`fetch(this.req)` needs member flow analysis; `fetch(req)` is reported); a fetch
+ * whose first argument is an untyped parameter or typed `RequestInfo`; a fetch-named call (not
+ * `fetch` itself, not a tracked alias) with more than two arguments, read as another function
  * (`fetchActionsIdToken(config, fetchImpl, deps)`). Alias and property names are file-wide, so a
  * same-named local that never holds a fetch is still treated as one (fail closed).
  *
- * Reported rather than passed: a `Request` input through `r.clone()`, a conditional, `??`/`||`/`&&`
- * or an untyped alias chain; `Function.prototype.call.call(fetch, ...)`; an SDK operation imported
- * under an alias or through a namespace import; a name rebound by a destructuring, a call result or
- * an untyped declaration with no initializer that the file also types `Request`; a `new Request`
- * whose input is a bare name no declaration holds or an untyped parameter (only the direct
- * identifier: the same name inside a conditional arm or an alias chain is not read). Request names
- * resolve by lexical scope: every declaration of the nearest scope is checked, a same-named local
- * in another function is another name, and a use no declaration reaches is checked against every
- * `Request`-typed declaration of the name. A type is a `Request` through its name, a file alias
- * or interface of one, an import of `Request` under another name, `Readonly`/`Required`/`Partial`/`NonNullable` of one, a union or an
- * intersection with one.
+ * Reported rather than passed: a `Request` input through `r.clone()`, a conditional, `??`/`||`/`&&`;
+ * `Function.prototype.call.call(fetch, ...)`; an SDK operation imported under an alias or through
+ * a namespace import; a name rebound by a destructuring, a call result or an untyped declaration
+ * with no initializer, or an untyped alias chain, when the file also types the name `Request`; a
+ * `new Request` whose direct identifier input is a name no declaration holds or a parameter with
+ * no string type (inside a conditional arm or an alias chain such a name is not read).
+ *
+ * Names resolve by lexical scope: every declaration of the nearest scope is checked, a same-named
+ * local in another function is another name, and a use no declaration reaches is checked against
+ * every `Request`-typed declaration of the name. A type is a `Request` through its name, a file
+ * alias or interface of one, an import of `Request` under another name, `Readonly`, `Required`,
+ * `Partial` or `NonNullable` of one, a union or an intersection with one.
  */
 import ts from 'typescript';
 
@@ -81,7 +83,7 @@ export function scanSource(
   allow: Readonly<Record<string, string>>,
 ): { findings: Finding[]; usedRoutes: Set<string> } {
   const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
-  const ctx = createContext(sf, routes, caps, allow);
+  const ctx = createContext(file, sf, routes, caps, allow);
   const visit = (node: ts.Node): void => {
     checkTransportModule(ctx, node);
     checkTransportGlobal(ctx, node);

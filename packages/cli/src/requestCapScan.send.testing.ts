@@ -80,7 +80,7 @@ export function callsWithFetchAsThis(
   );
 }
 
-/** Judges the first argument of a fetch; returns true when a finding was reported. */
+/** Judges the first argument of a fetch; returns true when the first argument decided the call. */
 function checkFirstArgument(
   ctx: ScanContext,
   first: ts.Expression,

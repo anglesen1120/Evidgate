@@ -145,7 +145,9 @@ export function resolveDeclarations(
   for (let scope: ts.Node | undefined = id.parent; scope; child = scope, scope = scope.parent) {
     // A parameter initializer cannot see the body's `var`s of its own function.
     const inParameters = ts.isFunctionLike(scope) && ts.isParameter(child);
-    const here = (byScope.get(scope) ?? []).filter((d) => !inParameters || d.param);
+    const inScope = byScope.get(scope);
+    if (inScope === undefined) continue;
+    const here = inParameters ? inScope.filter((d) => d.param) : inScope;
     if (here.length > 0) return here;
   }
   // No declaration in reach (a global, a name bound where the walk cannot see): fail closed on

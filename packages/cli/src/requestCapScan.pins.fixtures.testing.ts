@@ -26,6 +26,13 @@ const untypedRows = (
 
 export const pinForms: ReadonlyArray<IndirectForm> = [
   [
+    'a body-carrying construction held by an untyped name',
+    `${typedR}function leak(u: string) { const r = new Request(u, { body: 'x' }); fetch(r); }`,
+    `${typedR}function ok(u: string) { const r = new Request(u, { method: 'GET' }); fetch(r); }`,
+    'uncapped-fetch',
+    'Request with a body',
+  ],
+  [
     'a Request type in parentheses',
     'function leak(r: (Request)) { fetch(r); }',
     'function ok(r: (string)) { fetch(r); }',
@@ -218,13 +225,13 @@ export const unreadInputForms: ReadonlyArray<IndirectForm> = [
     "function leak(d) { fetch(new Request(d, { method: 'GET' })); }",
     "function ok(d: string) { fetch(new Request(d, { method: 'GET' })); }",
     'uncapped-fetch',
-    'untyped parameter',
+    'parameter with no string type',
   ],
   [
     'a Request input that is an untyped parameter with a default',
     "const leak = (d = 'x') => new Request(d, { method: 'GET' });",
     "const ok = (d: string = 'x') => new Request(d, { method: 'GET' });",
     'uncapped-request',
-    'untyped parameter',
+    'parameter with no string type',
   ],
 ];

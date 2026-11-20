@@ -80,6 +80,7 @@ export type ScanContext = {
 };
 
 export function createContext(
+  file: string,
   sf: ts.SourceFile,
   routes: ReadonlyMap<string, string>,
   caps: Readonly<Record<string, number>>,
@@ -87,7 +88,7 @@ export function createContext(
 ): ScanContext {
   const aliasSets = fetchAliases(sf);
   return {
-    file: sf.fileName,
+    file,
     routes,
     caps,
     allow,

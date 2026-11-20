@@ -224,7 +224,7 @@ function unreadInputReason(input: ts.Expression, typed: RequestTyped): string | 
   const declarations = resolveDeclarations(typed, source);
   if (declarations === undefined) return 'Request input is not a declared name';
   const untypedParameter = declarations.some((d) => d.param && !d.typed && !d.annotated);
-  return untypedParameter ? 'Request input is an untyped parameter' : undefined;
+  return untypedParameter ? 'Request input is a parameter with no string type' : undefined;
 }
 
 /** Why a `new Request(input, init)` may carry a body, or undefined when `init` proves it cannot. */
