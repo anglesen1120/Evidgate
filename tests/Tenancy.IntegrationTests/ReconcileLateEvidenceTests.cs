@@ -333,46 +333,80 @@ public sealed partial class ReconcileRunTests
     }
 
     [Fact]
-    public async Task Late_Evidence_On_Complete_Run_Is_Refused_And_Appends_No_Revision()
+    public async Task Late_Evidence_On_Complete_Run_InsideWindow_IsAcceptedAndRevised()
     {
-        // The dispatcher and consumer claim rows of every tenant, so these tests keep a database of their own.
         await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
         await using var world = await StartWithQueueAsync(database: dedicated.Name);
-
-        var runId = world.RunId;
-        await SetRunStateAsync(world, runId, "collecting");
-        await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 1, declaredCount: 1);
-        await StoreEventsAsync(
-            world,
-            runId,
-            new StoredEvent(Producer, 1, "test.step", null, ExecutionKey: world.Plan.Executions[0].ExecutionKey));
-
-        var (outcome, finalization) = await ReconcileAndFinishAsync(world, runId);
-        outcome.Disposition.ShouldBe(ReconcileDisposition.Compared, Describe(outcome));
-        finalization.ShouldNotBeNull().Completeness.ShouldBe(ReconcileFinisher.Complete, Describe(outcome));
-        (await StateAsync(world, runId)).ShouldBe("complete");
-
-        // A complete run is closed whatever its window says: the batch is refused before any row is written.
+        var (runId, first) = await StartCompleteRunAsync(world);
         await OpenLateWindowAsync(world, runId);
-        var refused = await IngestQaRequests.PostEventsAsync(
-            world.Client,
-            runId,
-            IngestQaRequests.Batch(IngestQaRequests.Event(
-                Guid.CreateVersion7(),
-                world.Plan.Executions[1].ExecutionKey,
-                sequence: 2)));
+        var completed = await CompletedAtTextAsync(world, runId);
+        completed.ShouldNotBeNullOrEmpty();
+        var history = await RunStateEventCountAsync(world, runId);
 
+        var accepted = await IngestQaRequests.PostEventsAsync(world.Client, runId,
+            IngestQaRequests.Batch(IngestQaRequests.Event(Guid.CreateVersion7(),
+                world.Plan.Executions[^1].ExecutionKey, sequence: 4, attemptNo: 2)));
+
+        accepted.Status.ShouldBe(HttpStatusCode.OK, accepted.ErrorMessage);
+        accepted.Body.GetProperty("accepted").GetInt32().ShouldBe(1);
+        (await EventFlagAsync(world, 4, "late")).ShouldBeTrue();
+        (await LateTriggerRowsAsync(world, runId)).ShouldBe(1);
+        await DispatchAndReconcileAsync(world, expectedReconciles: 1);
+        var latest = await RevisionSummaryAsync(world, runId);
+        latest.RevisionNo.ShouldBe(2);
+        latest.Completeness.ShouldBe(ReconcileFinisher.Incomplete, "the fourth event exceeds the closed shard's count");
+        (await RevisionRowAsync(world, runId, 1)).ShouldBe(first);
+        (await RevisionCountAsync(world)).ShouldBe(2);
+        (await PointerAsync(world, runId)).ShouldBe(latest.Id);
+        (await StateAsync(world, runId)).ShouldBe("complete", "late completeness cannot reopen a terminal run");
+        (await CompletedAtTextAsync(world, runId)).ShouldBe(completed, "a new revision must not move the late-window anchor");
+        (await RunStateEventCountAsync(world, runId))
+            .ShouldBe(history, "a late revision appends evidence, never state history");
+    }
+
+    [Fact]
+    public async Task Late_Evidence_On_Complete_Run_OutsideWindow_IsRefusedAndAppendsNoRevision()
+    {
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(database: dedicated.Name);
+        var (runId, first) = await StartCompleteRunAsync(world);
+        await CloseCompleteWindowAsync(world, runId);
+        (await world.ScalarAsync<bool>($"select now() > completed_at from public.run where id = '{runId:D}'"))
+            .ShouldBeTrue("the completion transaction precedes this admission transaction without a sleep");
+        var outbox = await world.CountAsync("outbox", $"org_id = '{world.Org:D}'");
+        var tasks = await world.CountAsync("task", $"org_id = '{world.Org:D}'");
+        var refused = await IngestQaRequests.PostEventsAsync(world.Client, runId,
+            IngestQaRequests.Batch(IngestQaRequests.Event(Guid.CreateVersion7(),
+                world.Plan.Executions[^1].ExecutionKey, sequence: 4, attemptNo: 2)));
         refused.Status.ShouldBe(HttpStatusCode.Conflict, refused.ErrorMessage);
         refused.ErrorCode.ShouldBe("run_closed");
-        (await LateTriggerRowsAsync(world, runId)).ShouldBe(0, "nothing was accepted, so no trigger was written");
-        (await world.CountAsync("event", $"org_id = '{world.Org:D}'")).ShouldBe(1);
-
-        // And a trigger that named a complete run anyway decides nothing: only a late window reopens the comparison.
-        var attempt = await ReconcileAsync(world, runId);
-        attempt.Disposition.ShouldBe(
-            ReconcileDisposition.NotCollectable,
-            "completeness is decided once; a later trigger cannot append over it");
+        (await LateTriggerRowsAsync(world, runId)).ShouldBe(0);
         (await RevisionCountAsync(world)).ShouldBe(1);
+        (await RevisionRowAsync(world, runId, 1)).ShouldBe(first);
+        (await world.CountAsync("event", $"run_id = '{runId:D}'")).ShouldBe(3);
+        (await world.CountAsync("outbox", $"org_id = '{world.Org:D}'")).ShouldBe(outbox);
+        (await world.CountAsync("task", $"org_id = '{world.Org:D}'")).ShouldBe(tasks);
+    }
+
+    [Fact]
+    public async Task Late_Evidence_On_Complete_Run_NullCompletedAt_IsRefused()
+    {
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(database: dedicated.Name);
+        var runId = await RunCompletedAtTests.InsertCompleteAsync(world);
+        (await world.ScalarAsync<bool>($"select completed_at is null from public.run where id = '{runId:D}'"))
+            .ShouldBeTrue("legacy complete rows receive no backfill and stay closed");
+        var outbox = await world.CountAsync("outbox", $"org_id = '{world.Org:D}'");
+        var refused = await IngestQaRequests.PostEventsAsync(world.Client, runId,
+            IngestQaRequests.Batch(IngestQaRequests.Event(Guid.CreateVersion7(),
+                world.Plan.Executions[0].ExecutionKey, sequence: 1)));
+        refused.Status.ShouldBe(HttpStatusCode.Conflict, refused.ErrorMessage);
+        refused.ErrorCode.ShouldBe("run_closed");
+        (await RevisionCountAsync(world)).ShouldBe(0);
+        (await LateTriggerRowsAsync(world, runId)).ShouldBe(0);
+        (await ReconcileTaskCountAsync(world)).ShouldBe(0);
+        (await world.CountAsync("event", $"run_id = '{runId:D}'")).ShouldBe(0);
+        (await world.CountAsync("outbox", $"org_id = '{world.Org:D}'")).ShouldBe(outbox);
     }
 
     [Fact]

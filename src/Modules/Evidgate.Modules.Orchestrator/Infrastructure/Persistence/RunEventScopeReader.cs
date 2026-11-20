@@ -27,8 +27,9 @@ internal sealed partial class RunEventScopeReader(ITenantDb db, ITenantScopeAcce
     /// <c>FOR SHARE OF r</c> — only <c>run</c>, not the joined <c>project</c> — so it serialises against the
     /// <c>FOR NO KEY UPDATE</c> the transition takes (a cancel, a completion, the first event; T12/T81) and a
     /// committed state change can never be missed;
-    /// the same statement carries the project's state and the planned-execution membership probe. The probe is one
-    /// <c>execution_key = ANY(@keys)</c> on the unique index <c>planned_execution_run_execution_key</c>
+    /// the same statement carries the project's state, the one late-window predicate
+    /// (<see cref="RunAdmissionPolicy.LateWindowOpenSql"/>) and the planned-execution membership probe. The probe is
+    /// one <c>execution_key = ANY(@keys)</c> on the unique index <c>planned_execution_run_execution_key</c>
     /// (00 §5.7 P3, T90): the run's whole planned set is never loaded, and an empty key set yields the empty array.
     /// <c>org_id</c> and <c>run_id</c> are passed explicitly as well as relying on RLS. An invisible run answers no row.
     /// <para>
@@ -41,11 +42,16 @@ internal sealed partial class RunEventScopeReader(ITenantDb db, ITenantScopeAcce
     /// <c>policy_revision</c>).
     /// </para>
     /// </summary>
-    internal const string ReadScope = """
+    internal const string ReadScope =
+        """
         select r.project_id as project_id,
                p.status as project_state,
                r.state as run_state,
-               now() <= r.collection_deadline_at + make_interval(mins => r.late_window_minutes) as late_window_open,
+               (
+        """
+        + RunAdmissionPolicy.LateWindowOpenSql
+        + """
+               ) as late_window_open,
                (select coalesce(array_agg(pe.execution_key order by pe.execution_key), '{}'::text[])
                   from public.planned_execution pe
                  where pe.org_id = @org_id and pe.run_id = @run_id
