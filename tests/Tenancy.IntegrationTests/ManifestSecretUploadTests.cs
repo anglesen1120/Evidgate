@@ -44,19 +44,29 @@ public sealed class ManifestSecretUploadTests
         answer.Body.GetRawText().ShouldNotContain("GHP_AAAAAAAA", Case.Insensitive);
     }
 
-    /// <summary>Parameter values are strings by contract, so arrays reach only the pure rule; here the string controls stay accepted.</summary>
+    /// <summary>Parameter values are strings by contract, so an array never reaches the secret check: the schema refuses it first, without echoing it.</summary>
     [Fact]
-    public async Task ReferencesAndOrdinaryEnumValues_StayAccepted_AndAZeroWidthPaddedTokenIsRefused()
+    public async Task ArrayParamCarryingASecret_IsRefusedBySchema_NoEcho()
+    {
+        await using var world = await ManifestTests.StartAsync(_fixture);
+        const string token = "ghp_AAAAAAAAAAAAAAAAAAAA";
+        var manifest = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "x" }], ["staging"]);
+        manifest["planned_executions"]![0]!["variant"]!["params"]!["tags"] = new System.Text.Json.Nodes.JsonArray("a", token);
+        manifest["matrix"]!["variants"]![0]!["params"]!["tags"] = new System.Text.Json.Nodes.JsonArray("a", token);
+
+        var answer = await UploadAsync(world, manifest.ToJsonString());
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        answer.Body.GetRawText().ShouldNotContain(token);
+        answer.Body.GetRawText().ShouldNotContain("secret_in_variant_params");
+    }
+
+    [Fact]
+    public async Task ReferencesAndOrdinaryEnumValues_StayAccepted()
     {
         await using var world = await ManifestTests.StartAsync(_fixture);
         var accepted = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "CHROMIUM", ["api_token"] = "secret:ci_token", ["tags"] = "secret:ghp_AAAA" }], ["staging"]);
+
         (await UploadAsync(world, accepted.ToJsonString())).Status.ShouldBe(HttpStatusCode.Created);
-
-        var refused = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "x", ["mode"] = "\ufeffGHP_AAAAAAAA" }], ["staging"]);
-        var answer = await UploadAsync(world, refused.ToJsonString());
-
-        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        answer.Body.GetProperty("error").GetProperty("details").EnumerateArray().First().GetProperty("path").GetString().ShouldEndWith("/params/#2");
-        answer.Body.GetRawText().ShouldNotContain("AAAAAAAA");
     }
 }

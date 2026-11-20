@@ -184,61 +184,20 @@ internal static class ManifestVerifier
     private static bool MemberIsSecret(JsonProperty member)
     {
         string name;
+        string value;
         try
         {
             name = member.Name;
+            value = member.Value.ValueKind == JsonValueKind.String ? member.Value.GetString()! : member.Value.GetRawText();
         }
         catch (InvalidOperationException)
         {
-            // A lone surrogate in a member name cannot be read; refused by position, never echoed.
+            // A lone surrogate cannot be read: refused by position, never echoed. The upload path rejects it earlier
+            // (HasUnstorableText runs before this check), so only a direct caller reaches this.
             return true;
         }
 
-        // A string goes straight to IsSecret: a well-formed reference is allowed under any key. A container has no
-        // reference form, so a secret-shaped name alone refuses it.
-        return member.Value.ValueKind is JsonValueKind.Array or JsonValueKind.Object
-            ? SecretShape.KeyLooksSecret(name) || SecretShape.ValueLooksSecret(name) || ValueIsSecret(name, member.Value)
-            : ValueIsSecret(name, member.Value);
-    }
-
-    /// <summary>Strings are judged as text (raw or folded), array items and nested members each as a value under the same key.</summary>
-    private static bool ValueIsSecret(string key, JsonElement value)
-    {
-        switch (value.ValueKind)
-        {
-            case JsonValueKind.String:
-                try
-                {
-                    return IsSecret(key, value.GetString()!);
-                }
-                catch (InvalidOperationException)
-                {
-                    return true;
-                }
-
-            case JsonValueKind.Array:
-                foreach (var item in value.EnumerateArray())
-                {
-                    if (ValueIsSecret(key, item))
-                    {
-                        return true;
-                    }
-                }
-
-                return false;
-            case JsonValueKind.Object:
-                foreach (var member in value.EnumerateObject())
-                {
-                    if (MemberIsSecret(member))
-                    {
-                        return true;
-                    }
-                }
-
-                return false;
-            default:
-                return IsSecret(key, value.GetRawText());
-        }
+        return IsSecret(name, value);
     }
 
     private static List<ErrorDetail> CoverageDetails(
