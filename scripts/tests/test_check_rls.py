@@ -216,6 +216,27 @@ class DefinerRules(unittest.TestCase):
         findings = run(GOOD_DEFINER.replace("from public.membership m", "from membership m"))
         self.assertEqual(rules(findings), {"definer_unqualified"})
 
+    def test_the_set_of_an_upsert_is_not_an_unqualified_relation(self):
+        sql = GOOD_DEFINER.replace(
+            "insert into public.audit_log (k) values (p_key);",
+            "insert into public.audit_log (k) values (p_key)\n  on conflict (k) do update set k = excluded.k;",
+        )
+        self.assertEqual(run(sql), [])
+
+    def test_an_unqualified_update_target_is_still_an_unqualified_relation(self):
+        sql = GOOD_DEFINER.replace(
+            "select m.org_id from public.membership m where m.invite_secret_prefix = p_key",
+            "update membership m set org_id = m.org_id where m.invite_secret_prefix = p_key;",
+        )
+        self.assertEqual(rules(run(sql)), {"definer_unqualified"})
+
+    def test_an_unqualified_insert_target_of_an_upsert_is_still_an_unqualified_relation(self):
+        sql = GOOD_DEFINER.replace(
+            "insert into public.audit_log (k) values (p_key);",
+            "insert into audit_log (k) values (p_key)\n  on conflict (k) do update set k = excluded.k;",
+        )
+        self.assertEqual(rules(run(sql)), {"definer_unqualified"})
+
     def test_a_cte_name_is_not_an_unqualified_relation(self):
         sql = GOOD_DEFINER.replace(
             "select m.org_id from public.membership m where m.invite_secret_prefix = p_key",

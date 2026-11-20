@@ -1,6 +1,7 @@
 using System.Net;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.Modules.Identity.Login;
+using Evidgate.Testing;
 using Shouldly;
 using Xunit;
 
@@ -10,9 +11,10 @@ namespace Identity.IntegrationTests.Login.Qa;
 /// QA pass over 02.3.1-T1.1/T1.2 (negative, boundary and exploratory probes through the real routes).
 /// Not part of the author's suite: each probe proves a property the author's tests do not reach.
 /// </summary>
-// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+// The assembly Fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
 [Trait("Category", "Docker")]
-public sealed class LoginQaTests
+public sealed class LoginQaTests(DatabaseFixture fixture)
+    : CatalogueTestBase(fixture, DatabaseIsolation.Dedicated)
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 25, 9, 0, 0, TimeSpan.Zero);
 
@@ -32,7 +34,7 @@ public sealed class LoginQaTests
     [InlineData("javascript:alert(1)")]
     public async Task Qa_Off_App_Or_Smuggled_ReturnUrl_Resolves_To_The_Root(string returnUrl)
     {
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();
 
         using var response = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake", returnUrl));
@@ -44,7 +46,7 @@ public sealed class LoginQaTests
     [Fact]
     public async Task Qa_Encoded_Plain_App_Path_Is_Kept_After_One_Decode()
     {
-        using var host = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var client = host.CreateLoginClient();
 
         using var response = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake", "/runs%2F42"));
@@ -62,7 +64,7 @@ public sealed class LoginQaTests
         {
             Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity("fake")),
         };
-        using var host = LoginTestHost.Start(clock, completion, provider);
+        using var host = LoginTestHost.Start(Fixture, clock, completion, provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake", "/runs/42?tab=x"));
@@ -82,11 +84,12 @@ public sealed class LoginQaTests
     public async Task Qa_Callback_At_Exactly_The_Cookie_Lifetime_Is_Accepted()
     {
         var clock = new MutableClock(Now);
+        var completion = new FakeLoginCompletion();
         var provider = new FakeLoginProvider("fake")
         {
             Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity("fake")),
         };
-        using var host = LoginTestHost.Start(clock, provider);
+        using var host = LoginTestHost.Start(Fixture, clock, completion, provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -98,7 +101,8 @@ public sealed class LoginQaTests
             client,
             LoginTestHost.CallbackRequest("fake", cookieValue, payload.State));
 
-        callback.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable, "the gates admitted the callback and completion could not reach its dead database");
+        callback.StatusCode.ShouldBe(HttpStatusCode.Found, "the gates admitted the callback at exactly the lifetime");
+        completion.Last.ShouldNotBeNull();
         provider.Completions.ShouldBe(1);
     }
 
@@ -110,7 +114,7 @@ public sealed class LoginQaTests
         {
             Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity("fake")),
         };
-        using var host = LoginTestHost.Start(clock, provider);
+        using var host = LoginTestHost.Start(Fixture, clock, provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -131,11 +135,12 @@ public sealed class LoginQaTests
     public async Task Qa_Cookie_59_Seconds_In_The_Future_Is_Accepted_Within_Skew()
     {
         var clock = new MutableClock(Now);
+        var completion = new FakeLoginCompletion();
         var provider = new FakeLoginProvider("fake")
         {
             Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity("fake")),
         };
-        using var host = LoginTestHost.Start(clock, provider);
+        using var host = LoginTestHost.Start(Fixture, clock, completion, provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -147,7 +152,8 @@ public sealed class LoginQaTests
             client,
             LoginTestHost.CallbackRequest("fake", cookieValue, payload.State));
 
-        callback.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable, "the gates admitted the callback and completion could not reach its dead database");
+        callback.StatusCode.ShouldBe(HttpStatusCode.Found, "59 seconds of future skew is inside the allowance");
+        completion.Last.ShouldNotBeNull();
         provider.Completions.ShouldBe(1);
     }
 
@@ -159,7 +165,7 @@ public sealed class LoginQaTests
         {
             Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity("fake")),
         };
-        using var host = LoginTestHost.Start(clock, provider);
+        using var host = LoginTestHost.Start(Fixture, clock, provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -179,11 +185,12 @@ public sealed class LoginQaTests
     [Fact]
     public async Task Qa_Code_Of_Exactly_2048_Characters_Is_Accepted()
     {
+        var completion = new FakeLoginCompletion();
         var provider = new FakeLoginProvider("fake")
         {
             Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity("fake")),
         };
-        using var host = LoginTestHost.Start(new MutableClock(Now), provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), completion, provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -193,7 +200,8 @@ public sealed class LoginQaTests
             client,
             LoginTestHost.CallbackRequest("fake", cookieValue, payload.State, code: new string('c', 2048)));
 
-        callback.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable, "the gates admitted the callback and completion could not reach its dead database");
+        callback.StatusCode.ShouldBe(HttpStatusCode.Found, "the longest legal code is admitted, never refused by its length");
+        completion.Last.ShouldNotBeNull();
         provider.Completions.ShouldBe(1);
     }
 
@@ -201,7 +209,7 @@ public sealed class LoginQaTests
     public async Task Qa_Empty_Code_Is_Token_Invalid_Without_An_Outbound_Call()
     {
         var provider = new FakeLoginProvider("fake");
-        using var host = LoginTestHost.Start(new MutableClock(Now), provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -220,7 +228,7 @@ public sealed class LoginQaTests
     public async Task Qa_Present_But_Empty_Error_Key_Is_Token_Invalid()
     {
         var provider = new FakeLoginProvider("fake");
-        using var host = LoginTestHost.Start(new MutableClock(Now), provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -239,7 +247,7 @@ public sealed class LoginQaTests
     public async Task Qa_Oversized_State_Is_Token_Invalid_Without_An_Outbound_Call()
     {
         var provider = new FakeLoginProvider("fake");
-        using var host = LoginTestHost.Start(new MutableClock(Now), provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -261,7 +269,7 @@ public sealed class LoginQaTests
         {
             Result = LoginProviderResult.Fail(LoginFailure.ProviderUnavailable),
         };
-        using var host = LoginTestHost.Start(new MutableClock(Now), provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -290,7 +298,7 @@ public sealed class LoginQaTests
         {
             Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity("fake")),
         };
-        using var host = LoginTestHost.Start(new MutableClock(Now), provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -332,7 +340,7 @@ public sealed class LoginQaTests
         foreach (var (label, make) in failures)
         {
             var provider = new FakeLoginProvider("fake") { OnComplete = _ => throw make() };
-            using var host = LoginTestHost.Start(new MutableClock(Now), provider);
+            using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), provider);
             using var client = host.CreateLoginClient();
 
             using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -361,7 +369,7 @@ public sealed class LoginQaTests
         {
             Result = LoginProviderResult.Fail(LoginFailure.ProviderUnavailable),
         };
-        using var host = LoginTestHost.Start(new MutableClock(Now), provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), provider);
         using var client = host.CreateLoginClient();
 
         using var startOk = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -393,7 +401,7 @@ public sealed class LoginQaTests
         {
             Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity("fake")),
         };
-        using var host = LoginTestHost.Start(new MutableClock(Now), provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));

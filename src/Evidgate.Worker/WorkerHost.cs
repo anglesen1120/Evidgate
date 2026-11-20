@@ -12,6 +12,7 @@ using Evidgate.Modules.Evidence;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 using Evidgate.Modules.Healing;
 using Evidgate.Modules.Identity;
+using Evidgate.Modules.Identity.Options;
 using Evidgate.Modules.Ingestion;
 using Evidgate.Modules.Orchestrator;
 using Evidgate.Modules.Policy;
@@ -207,5 +208,9 @@ public static class WorkerHost
         // The healing provider is a deployment selection: unset outside Development, a mock outside Development or an
         // incomplete HTTP selection must refuse the boot instead of degrading to no provider at the first call.
         host.Services.ValidateHealingOptions();
+
+        // The Worker composes the Identity module too, so a limiter budget the store cannot honour refuses the boot
+        // here with one named line, as in the Api, instead of through the host's start-failure stack trace.
+        host.Services.ValidateRateLimitOptions();
     }
 }

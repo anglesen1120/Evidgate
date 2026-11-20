@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Microsoft.AspNetCore.Http;
@@ -37,6 +38,8 @@ internal static class AiSettingsPayload
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+        // Authentication and tenant resolution must precede even the If-Match refusal.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
         if (IfMatch(context.Request, out var version) is { } tagError)
         {

@@ -218,6 +218,9 @@ export function isTextualContentType(contentType: string | null): boolean {
   );
 }
 
+/** What a fetch `Response` is built from: text, a buffer, a view or a Blob. */
+export type FetchBody = string | ArrayBuffer | ArrayBufferView<ArrayBuffer> | Blob;
+
 /**
  * Turns one `HttpClient` result into the fetch `Response` the SDK reads. `binaryBody` marks a
  * call whose caller opted into the byte path: only then may a 2xx carry bytes, and only then is
@@ -228,7 +231,7 @@ export function toFetchResponse(
   status: number,
   statusText: string,
   headers: HttpHeaders,
-  body: string | ArrayBuffer | null,
+  body: FetchBody | null,
   source: HttpResponseBase,
   binaryBody: boolean,
 ): Response {
@@ -263,14 +266,15 @@ export function toFetchResponse(
 
 // `null` is a bodyless response and an empty body/length is no body at all, and both reach the
 // SDK as no body; anything else is forwarded untouched.
-function toFetchBody(body: string | ArrayBuffer | null): string | ArrayBuffer | null {
+function toFetchBody(body: FetchBody | null): FetchBody | null {
   if (body === null) {
     return null;
   }
   if (typeof body === 'string') {
     return body === '' ? null : body;
   }
-  return body.byteLength === 0 ? null : body;
+  const length = body instanceof Blob ? body.size : body.byteLength;
+  return length === 0 ? null : body;
 }
 
 function toFetchResponseHeaders(headers: HttpHeaders): Record<string, string> {

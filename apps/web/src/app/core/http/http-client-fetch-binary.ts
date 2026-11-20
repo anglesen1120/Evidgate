@@ -19,7 +19,13 @@ import {
   BINARY_RESPONSE,
   BINARY_TRANSPORT_HEADER,
 } from './binary-transport';
-import { type Deadline, readUnderCall, toFetchResponse } from './http-client-fetch-transport';
+import { utf8ExceedsBytes } from './utf8-size';
+import {
+  type Deadline,
+  type FetchBody,
+  readUnderCall,
+  toFetchResponse,
+} from './http-client-fetch-transport';
 
 /** Which directions of one call the caller opted into the byte path. */
 export interface BinaryModes {
@@ -251,26 +257,25 @@ export function toBinaryResponse(
   status: number,
   statusText: string,
   headers: HttpHeaders,
-  body: ArrayBuffer | null,
+  body: unknown,
   source: HttpResponseBase,
 ): Response {
-  if (body !== null && body.byteLength > BINARY_BODY_LIMIT_BYTES) {
+  // An unmeasurable body is infinite, so it is refused here like an over-cap one.
+  if (body !== null && finalBodySize(body) > BINARY_BODY_LIMIT_BYTES) {
     throw limitError('response', source);
   }
-  return toFetchResponse(status, statusText, headers, body, source, true);
+  // Only a buffer, view, Blob or string has a finite size, and that is what `Response` accepts. A
+  // view over shared memory is measured too, but `Response` then refuses it: still fail-closed.
+  return toFetchResponse(status, statusText, headers, body as FetchBody | null, source, true);
 }
 
-// A `Content-Length` the server declared, the bytes downloaded so far, or the final byte length. Anything else (the
-// `Sent` event, a textual response) says nothing about the size. Only a plain run of digits is a
-// declared length: `Number()` would also accept `0x10` or `1e9`, which are not valid headers and
-// must not decide the call either way.
+// A `Content-Length` the server declared, the bytes downloaded so far, the final byte length or
+// the UTF-8 size of a final text reply. Anything else (the `Sent` event) says nothing about the
+// size.
 function advertisedSize<T>(event: HttpEvent<T>): number | null {
   if (event.type === HttpEventType.ResponseHeader) {
-    const declared = event.headers.get('Content-Length');
-    if (declared === null) {
-      return null;
-    }
-    return /^\d+$/.test(declared.trim()) ? Number(declared) : null;
+    const declared = event.headers.getAll('Content-Length');
+    return declared === null ? null : declaredLength(declared.join(','));
   }
   if (event.type === HttpEventType.DownloadProgress) {
     // A length that is not a finite number proves nothing about the size, and letting it through
@@ -280,10 +285,57 @@ function advertisedSize<T>(event: HttpEvent<T>): number | null {
       ? loaded
       : Number.POSITIVE_INFINITY;
   }
-  if (event.type === HttpEventType.Response && event.body instanceof ArrayBuffer) {
-    return event.body.byteLength;
+  if (event.type === HttpEventType.Response) {
+    return event.body === null ? null : finalBodySize(event.body);
   }
   return null;
+}
+
+// Slot getters read the internal slot, so they are realm-proof and cannot be shadowed by an own
+// property; they throw on anything that is not the genuine type.
+function slotGetter(proto: object, key: string): (this: unknown) => number {
+  return Reflect.get(Object.getOwnPropertyDescriptor(proto, key) ?? {}, 'get') as (
+    this: unknown,
+  ) => number;
+}
+const bufferByteLength = slotGetter(ArrayBuffer.prototype, 'byteLength');
+const blobSize = slotGetter(Blob.prototype, 'size');
+const viewSize = slotGetter(DataView.prototype, 'byteLength');
+
+/**
+ * The size of a non-null final body, the one rule for the streaming check and the adapter. A
+ * buffer, view or Blob of any realm is measured exactly, a string by its UTF-8 size (a request-only
+ * call gets its reply as text); anything else cannot be measured and so counts as over the cap.
+ */
+export function finalBodySize(body: unknown): number {
+  if (typeof body === 'string') {
+    return utf8ExceedsBytes(body, BINARY_BODY_LIMIT_BYTES) ? Number.POSITIVE_INFINITY : 0;
+  }
+  for (const measure of [byteLengthOf, bufferByteLength, viewSize, blobSize]) {
+    try {
+      const size = measure.call(body);
+      if (typeof size === 'number' && Number.isFinite(size)) {
+        return size;
+      }
+    } catch {
+      // Not this kind of body: try the next getter.
+    }
+  }
+  return Number.POSITIVE_INFINITY;
+}
+
+// Repeated `Content-Length` fields reach the page comma-joined (the Fetch header list combines
+// them, as does `getResponseHeader`). RFC 9110 section 8.6 allows a list only when every member is
+// the same length, and says any other value is invalid framing. Only a plain run of digits is a
+// length (`Number()` would accept `0x10` or `1e9`); a value that is not one valid length is
+// refused early, and the decoded bytes stay the authority for everything that passes.
+function declaredLength(value: string): number {
+  const members = value.split(',').map((member) => member.replace(/^[ \t]+|[ \t]+$/g, ''));
+  const [first] = members;
+  if (first === undefined || !/^\d+$/.test(first) || members.some((member) => member !== first)) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return Number(first);
 }
 
 /**
@@ -292,15 +344,13 @@ function advertisedSize<T>(event: HttpEvent<T>): number | null {
  * can never be shorter in bytes than in UTF-16 units, which lets the common cases skip the encode.
  */
 export function assertTextWithinCap(text: string | null, source: unknown): void {
-  if (text === null || text.length * 3 <= BINARY_BODY_LIMIT_BYTES) {
-    return;
-  }
-  if (
-    text.length > BINARY_BODY_LIMIT_BYTES ||
-    new TextEncoder().encode(text).byteLength > BINARY_BODY_LIMIT_BYTES
-  ) {
+  if (text !== null && textExceedsCap(text)) {
     throw limitError('response', source);
   }
+}
+
+function textExceedsCap(text: string): boolean {
+  return utf8ExceedsBytes(text, BINARY_BODY_LIMIT_BYTES);
 }
 
 // The single place the cap is worded, so both directions and every refusal site report the same

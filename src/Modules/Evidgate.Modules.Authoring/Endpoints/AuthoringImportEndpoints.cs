@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.Contracts.Validation;
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Application.Import;
@@ -165,6 +166,9 @@ internal static class AuthoringImportEndpoints
         int maxBytes,
         CancellationToken cancellationToken)
     {
+        // Refuse unresolved callers before file-size validation or buffering.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
         if (context.Request.ContentLength > maxBytes)
         {
             return ([], TooLarge(maxBytes));

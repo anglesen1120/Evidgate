@@ -270,6 +270,15 @@ internal static class IdentityModule
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IPostConfigureOptions<CiAuthOptions>, CiAuthOptionsSecretPostConfigure>());
 
+        // Every throttled pre-tenant route (login, link, invite, CI exchange) spends from one shared PostgreSQL
+        // window table; each surface carries its own limit, window and key capacity, validated at boot.
+        services
+            .AddOptions<RateLimitOptions>()
+            .Bind(configuration.GetSection(RateLimitOptions.SectionName))
+            .ValidateOnStart();
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<RateLimitOptions>, RateLimitOptionsValidator>());
+
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<CiSecrets>();
         services.TryAddSingleton<CiProducerTokens>();

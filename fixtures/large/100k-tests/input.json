@@ -1,0 +1,7 @@
+{
+  "format_version": 1,
+  "generator": "scripts/dev/gen-large-report/gen-large-report.mjs",
+  "seed": 1,
+  "tests": 100000,
+  "small_tests": 1000
+}

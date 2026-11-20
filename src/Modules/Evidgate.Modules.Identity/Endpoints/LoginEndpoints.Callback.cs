@@ -56,7 +56,8 @@ public static partial class LoginEndpoints
         InviteTokenCookie.Delete(context);
 
         // Ahead of every expensive step: an anonymous flood fills the replay set and drives provider calls here.
-        if (Throttle(context, limiter, CallbackLimiterPrefix + ClientIp.LimiterKey(context), CallbackCost) is { } throttled)
+        if (await ThrottleAsync(context, limiter, CallbackLimiterPrefix + ClientIp.LimiterKey(context), CallbackCost, cancellationToken)
+                .ConfigureAwait(false) is { } throttled)
         {
             return Result.Failure(throttled);
         }

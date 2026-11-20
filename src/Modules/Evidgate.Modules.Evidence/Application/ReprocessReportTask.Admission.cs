@@ -22,7 +22,11 @@ internal static class ReprocessAdmission
     /// <returns>The decision, with the rows' <c>after_cancel</c>/<c>late</c> markers already resolved.</returns>
     public static RunAdmission Decide(string projectState, string runState, bool lateWindowOpen)
     {
-        var intake = RunAdmissionPolicy.Decide(projectState, runState, lateWindowOpen);
+        // A complete run never takes the ingest late marker: its re-read rows reach the next revision as ordinary
+        // evidence and never as evidence the clock already judged. The shared predicate opens a complete run's own
+        // window, so the flag is masked here instead of giving the shared decision a second meaning.
+        var open = string.Equals(runState, "complete", StringComparison.Ordinal) ? false : lateWindowOpen;
+        var intake = RunAdmissionPolicy.Decide(projectState, runState, open);
         if (intake.Allowed || !string.Equals(intake.Refusal, RunAdmissionPolicy.RunClosed, StringComparison.Ordinal))
         {
             return intake;

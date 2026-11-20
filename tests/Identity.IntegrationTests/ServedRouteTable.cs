@@ -748,6 +748,8 @@ internal static class RouteRequests
         Add("GET", "/v1/suite-revisions/{r}", ctx => new(HttpMethod.Get, $"/v1/suite-revisions/{ctx.SuiteRevisionId}"));
         Add("GET", "/v1/suite-revisions/{r}/diff", ctx =>
             new(HttpMethod.Get, $"/v1/suite-revisions/{ctx.SuiteRevisionId}/diff?against={ctx.SuiteRevisionId}"));
+        Add("GET", "/v1/suite-revisions/{r}/execution-plan", ctx =>
+            new(HttpMethod.Get, $"/v1/suite-revisions/{ctx.SuiteRevisionId}/execution-plan"));
 
         // Fixtures: the create recipe is the closed create body with the mandatory key, so a granted caller reaches
         // the command; the detail and the revision append address a fresh fixture id, so a granted call answers 404

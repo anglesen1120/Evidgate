@@ -14,6 +14,11 @@
         { "permission": "project:read", "source": "00 §2:60", "basis": "explicit" },
         { "permission": "role:read", "source": "02 §4.2:80", "basis": "inferred" },
         { "permission": "run:read", "source": "00 §9.3:330", "basis": "inferred" },
+        {
+          "permission": "suite:plan_read",
+          "source": "00 §2:60 + 03 §4.5:127",
+          "basis": "explicit"
+        },
         { "permission": "suite:read", "source": "03 §4.5:123", "basis": "explicit" }
       ]
     },
@@ -46,6 +51,11 @@
         { "permission": "run:cancel", "source": "00 §9.3:331", "basis": "inferred" },
         { "permission": "run:create", "source": "00 §9.3:328", "basis": "inferred" },
         { "permission": "run:read", "source": "00 §9.3:330", "basis": "inferred" },
+        {
+          "permission": "suite:plan_read",
+          "source": "00 §2:60 + 03 §4.5:127",
+          "basis": "explicit"
+        },
         { "permission": "suite:read", "source": "03 §4.5:123", "basis": "explicit" }
       ]
     },
@@ -85,6 +95,11 @@
         { "permission": "run:create", "source": "00 §9.3:328", "basis": "inferred" },
         { "permission": "run:read", "source": "00 §9.3:330", "basis": "inferred" },
         { "permission": "script:generate", "source": "00 §2:60", "basis": "explicit" },
+        {
+          "permission": "suite:plan_read",
+          "source": "00 §2:60 + 03 §4.5:127",
+          "basis": "explicit"
+        },
         { "permission": "suite:read", "source": "03 §4.5:123", "basis": "explicit" },
         { "permission": "suite:write", "source": "03 §4.5:125", "basis": "explicit" }
       ]
@@ -108,6 +123,11 @@
         { "permission": "project:read", "source": "00 §2:60", "basis": "explicit" },
         { "permission": "role:read", "source": "02 §4.2:80", "basis": "inferred" },
         { "permission": "run:read", "source": "00 §9.3:330", "basis": "inferred" },
+        {
+          "permission": "suite:plan_read",
+          "source": "00 §2:60 + 03 §4.5:127",
+          "basis": "explicit"
+        },
         { "permission": "suite:read", "source": "03 §4.5:123", "basis": "explicit" }
       ]
     },
@@ -157,6 +177,11 @@
         { "permission": "service_identity:write", "source": "00 §2:60", "basis": "explicit" },
         { "permission": "sso:read", "source": "00 §2:60", "basis": "explicit" },
         { "permission": "sso:write", "source": "00 §2:60", "basis": "explicit" },
+        {
+          "permission": "suite:plan_read",
+          "source": "00 §2:60 + 03 §4.5:127",
+          "basis": "explicit"
+        },
         { "permission": "suite:read", "source": "03 §4.5:123", "basis": "explicit" },
         { "permission": "suite:write", "source": "03 §4.5:125", "basis": "explicit" },
         { "permission": "support:approve", "source": "02 §4.2:84", "basis": "explicit" },
@@ -177,7 +202,12 @@
         },
         { "permission": "decision:read", "source": "00 §2:56 + 07.6.1:102", "basis": "explicit" },
         { "permission": "event:write", "source": "00 §2:56 + 02 FR-02-7:22", "basis": "explicit" },
-        { "permission": "run:create", "source": "00 §2:56 + 02 FR-02-7:22", "basis": "explicit" }
+        { "permission": "run:create", "source": "00 §2:56 + 02 FR-02-7:22", "basis": "explicit" },
+        {
+          "permission": "suite:plan_read",
+          "source": "00 §2:56 + 00 §2:60 + 02 FR-02-7:25",
+          "basis": "explicit"
+        }
       ]
     },
     {
@@ -266,6 +296,7 @@
     "service_identity:write",
     "sso:read",
     "sso:write",
+    "suite:plan_read",
     "suite:read",
     "suite:write",
     "support:approve",

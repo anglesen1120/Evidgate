@@ -6,6 +6,7 @@ using Dapper;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
+using Evidgate.BuildingBlocks.SharedKernel.Security;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -206,6 +207,7 @@ internal sealed class MetricCatalogueHarness : IAsyncDisposable
             EvidgateTelemetry.RecordUsageBillingKeyConflict();
             EvidgateTelemetry.RecordEvaluationDecisionLatency(TimeSpan.FromMilliseconds(1));
             EvidgateTelemetry.RecordHealingLlmRefused("provider_disabled");
+            SecretShapeMetrics.RecordTimeout(SecretPattern.Jwt);
 
             // The classes that own the remaining instruments create them in a static constructor.
             RuntimeHelpers.RunClassConstructor(AlertNotifierType().TypeHandle);

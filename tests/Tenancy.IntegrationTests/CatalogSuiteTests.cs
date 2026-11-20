@@ -17,7 +17,7 @@ namespace Tenancy.IntegrationTests;
 /// DAG, secret-free validation, concurrent numbering, publishing, diff, ETag and the preview.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class CatalogSuiteTests : IClassFixture<TenancyHostPool>
+public sealed partial class CatalogSuiteTests : IClassFixture<TenancyHostPool>
 {
     private const string Commit1 = "aaaaaaa1111111";
 

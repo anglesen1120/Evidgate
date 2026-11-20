@@ -25,9 +25,9 @@ namespace Evidgate.Modules.Identity.Login;
 /// any provider still boots: both routes then answer 404 <c>not_found</c> for every route value.
 /// </para>
 /// <para>
-/// The two routes also resolve the CI exchange limiter (<c>ExchangeRateLimiter</c>), which
+/// The two routes also resolve the shared attempt-budget limiter (<c>ExchangeRateLimiter</c>), which
 /// <c>IdentityModule.AddCiAuthentication</c> registers earlier in the same composition: the login routes
-/// spend that limiter's per-client budget instead of introducing a second throttle with its own options.
+/// spend the <c>login</c> surface's per-client budget instead of introducing a second throttle with its own store.
 /// </para>
 /// </remarks>
 internal static class FederatedLoginServiceCollectionExtensions

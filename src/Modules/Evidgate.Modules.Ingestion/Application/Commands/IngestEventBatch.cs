@@ -278,14 +278,14 @@ internal sealed class IngestEventBatchHandler(
                 "the run belongs to a project outside the credential's scope"));
         }
 
-        // T12/T81 (replacing 04.1.1's D6 fail-closed for the incomplete case): a canceled run still accepts
-        // events and marks them after_cancel (T12); an incomplete run still accepts late evidence inside its
-        // late window and marks it late = true, because the run row's own immutable window (T93) is what
-        // closes it - after the window the run answers 409 run_closed (T81). A complete run is closed: its
-        // window runs "since completion" and the run row stores no completion instant (T101's run.completed_at
-        // is 05.3.1's to add), so nothing here could open it. The state and the window are read from the run
-        // row taken FOR SHARE (T91), so a committed cancel or completion can never be missed. The decision
-        // itself is shared with every other evidence writer, so no route can disagree on what is closed.
+        // A canceled run still accepts events and marks them after_cancel; an incomplete run
+        // still accepts late evidence inside its late window, and a complete run inside the window that starts
+        // at its own completion instant, each marked late = true - after the window either answers 409
+        // run_closed. The run row's immutable window and its completion instant (stamped once by the
+        // transition, never moved) are what close it; a complete row written before that instant existed carries
+        // NULL and is closed. The state and the window are read from the run row taken FOR SHARE, so a
+        // committed cancel or completion can never be missed. The decision itself is shared with every other
+        // evidence writer, so no route can disagree on what is closed.
         var admission = RunAdmissionPolicy.Decide(scope.ProjectState, scope.RunState, scope.LateWindowOpen);
 
         if (string.Equals(admission.Refusal, RunAdmissionPolicy.ProjectDeleted, StringComparison.Ordinal))

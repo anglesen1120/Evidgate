@@ -148,4 +148,54 @@ describe('createApiClient', () => {
 
     expect(new URL(seen[0]?.url ?? '').pathname).toBe('/api/v1/ci/token');
   });
+
+  /** A JSON body that hands out one chunk and then fails, so the read ends mid-answer. */
+  function cutBody(): ReadableStream<Uint8Array> {
+    let served = false;
+    return new ReadableStream<Uint8Array>(
+      {
+        pull(controller) {
+          if (!served) {
+            served = true;
+            controller.enqueue(new TextEncoder().encode('{"partial":'));
+            return;
+          }
+          controller.error(new TypeError('terminated'));
+        },
+      },
+      { highWaterMark: 0 },
+    );
+  }
+
+  function clientAnswering(status: number) {
+    const config = resolveConfig({
+      env: { EVIDGATE_API_URL: 'https://api.evidgate.test', EVIDGATE_PROJECT: 'proj-1' },
+    });
+    const fetchImpl: typeof fetch = () =>
+      Promise.resolve(
+        new Response(cutBody(), { status, headers: { 'content-type': 'application/json' } }),
+      );
+    return createApiClient(config, 'bearer-token-value', fetchImpl);
+  }
+
+  it('rejects a 2xx answer whose body ends before the end, never mistaking it for data', async () => {
+    const client = clientAnswering(200);
+
+    await expect(client.get({ url: '/' })).rejects.toMatchObject({
+      name: 'ResponseReadError',
+      code: 'response_read_failed',
+      message: 'the server answer could not be read to the end',
+      hint: 'the answer could not be read; the command can be run again',
+    });
+  });
+
+  it('returns a cut 5xx answer instead of rejecting, so its status keeps the retry policy', async () => {
+    const client = clientAnswering(500);
+
+    const result = await client.get({ url: '/' });
+
+    expect(result.response?.ok).toBe(false);
+    expect(result.response?.status).toBe(500);
+    expect(result.error).toBeDefined();
+  });
 });

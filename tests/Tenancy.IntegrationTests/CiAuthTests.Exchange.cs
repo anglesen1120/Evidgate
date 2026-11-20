@@ -29,7 +29,7 @@ public sealed partial class CiAuthTests
         exchanged.Status.ShouldBe(HttpStatusCode.OK);
         exchanged.Id("project_id").ShouldBe(project);
         exchanged.Body.GetProperty("permission_set").EnumerateArray().Select(e => e.GetString()).Order()
-            .ShouldBe(["artifact:write", "decision:read", "event:write", "run:create"]);
+            .ShouldBe(["artifact:write", "decision:read", "event:write", "run:create", "suite:plan_read"]);
         (await _fixture.ScalarAsync<string>(_database!, "select status from public.ci_binding")).ShouldBe("active");
         (await _fixture.ScalarAsync<bool>(_database!, "select binding_challenge_hash is null from public.ci_binding")).ShouldBeTrue();
 
@@ -322,10 +322,10 @@ public sealed partial class CiAuthTests
     public async Task Exchange_IsRateLimited_WithRetryAfter()
     {
         var database = _dedicated!.Name;
-        // The burst counter lives in memory per host, so the count must start at zero: a fresh private Ci host.
+        // The window lives in the database now, so the count starts at zero only on a fresh private Ci host.
         await using var api = TenancyApiFactory.Ci(
             _fixture.AppConnectionString(database),
-            new Dictionary<string, string?> { ["EVIDGATE:Ci:ExchangeBurstLimit"] = "3" });
+            new Dictionary<string, string?> { ["EVIDGATE:Identity:RateLimits:CiExchangeLimit"] = "3" });
         using var client = api.CreateClient();
 
         var answers = new List<ApiAnswer>();

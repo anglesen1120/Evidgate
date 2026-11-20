@@ -265,13 +265,18 @@ internal sealed partial class ParseRawReportHandler(
             return readStopped!;
         }
 
-        var (succeeded, childStopped) = await RunChildAsync(prepared, content, orgId, payload, cancellationToken).ConfigureAwait(false);
-        if (succeeded is not { } run)
+        // The mapper is opened before the child runs: it is the sink the child's records stream into, so no record list
+        // is ever built on this side, and its deferred faults surface only after the runner's own verdict.
+        var recordMapper = prepared.Mapper.OpenRecordMapper(
+            new JUnitMapContext(payload.ArtifactId, prepared.Plan.Resolve));
+
+        if (await RunChildAsync(prepared, content, orgId, payload, recordMapper, cancellationToken)
+                .ConfigureAwait(false) is { } childStopped)
         {
-            return childStopped!;
+            return childStopped;
         }
 
-        var (mapped, mapStopped) = await MapAsync(run, prepared, orgId, payload, cancellationToken).ConfigureAwait(false);
+        var (mapped, mapStopped) = await MapAsync(recordMapper, prepared, orgId, payload, cancellationToken).ConfigureAwait(false);
         if (mapped is not { } resolution)
         {
             return mapStopped!;
@@ -327,13 +332,15 @@ internal sealed partial class ParseRawReportHandler(
     /// <param name="bytes">The report's bytes, owned by this attempt.</param>
     /// <param name="orgId">The tenant the claimed task row names.</param>
     /// <param name="payload">The run, artifact and producer kind.</param>
+    /// <param name="recordMapper">The mapper the child's records reach as they are read; it also carries the rejection.</param>
     /// <param name="cancellationToken">Cancels the child.</param>
-    /// <returns>The child's record stream, or the refused outcome that ended the attempt.</returns>
-    private async Task<(ParseRunSucceeded? Succeeded, ParseRawReportOutcome? Stopped)> RunChildAsync(
+    /// <returns>The refused outcome that ended the attempt, or null when the child succeeded.</returns>
+    private async Task<ParseRawReportOutcome?> RunChildAsync(
         Prepared prepared,
         byte[] bytes,
         Guid orgId,
         ParseRawReportPayload payload,
+        IJUnitRecordMapper recordMapper,
         CancellationToken cancellationToken)
     {
         await using var input = new MemoryStream(bytes, writable: false);
@@ -344,7 +351,8 @@ internal sealed partial class ParseRawReportHandler(
                     prepared.MaxBytes,
                     XmlMediaType,
                     input,
-                    limits.Value.MaxReportCases),
+                    limits.Value.MaxReportCases,
+                    recordMapper),
                 cancellationToken)
             .ConfigureAwait(false);
 
@@ -358,11 +366,10 @@ internal sealed partial class ParseRawReportHandler(
             }
 
             LogRefused(logger, payload.ArtifactId, failure);
-            return (null, await RefuseMalformedAsync(prepared, orgId, payload, failure, cancellationToken).ConfigureAwait(false));
+            return await RefuseMalformedAsync(prepared, orgId, payload, failure, cancellationToken).ConfigureAwait(false);
         }
 
-        var succeeded = (ParseRunSucceeded)run;
-        if (ChildRejectionRecord.ReasonIn(succeeded) is { } reported)
+        if (recordMapper.RejectedReason is { } reported)
         {
             if (string.Equals(reported, ArtifactFailureCode.CapExceeded, StringComparison.Ordinal))
             {
@@ -371,21 +378,21 @@ internal sealed partial class ParseRawReportHandler(
             }
 
             LogRefused(logger, payload.ArtifactId, reported);
-            return (null, await RefuseMalformedAsync(prepared, orgId, payload, reported, cancellationToken).ConfigureAwait(false));
+            return await RefuseMalformedAsync(prepared, orgId, payload, reported, cancellationToken).ConfigureAwait(false);
         }
 
-        return (succeeded, null);
+        return null;
     }
 
-    /// <summary>The mapping: the child's records become cases through the parser release the registry named.</summary>
-    /// <param name="succeeded">The child's records, its marker excluded and no rejection among them.</param>
+    /// <summary>The mapping: the records the child fed become cases through the parser release the registry named.</summary>
+    /// <param name="recordMapper">The mapper that received the child's records, its marker excluded and no rejection among them.</param>
     /// <param name="prepared">The mapper and the plan the cases resolve against.</param>
     /// <param name="orgId">The tenant the claimed task row names.</param>
     /// <param name="payload">The run, artifact and producer kind.</param>
     /// <param name="cancellationToken">Cancels the refusal write.</param>
     /// <returns>The mapping, or the refused outcome that ended the attempt.</returns>
     private async Task<(JUnitMapResult? Mapped, ParseRawReportOutcome? Stopped)> MapAsync(
-        ParseRunSucceeded succeeded,
+        IJUnitRecordMapper recordMapper,
         Prepared prepared,
         Guid orgId,
         ParseRawReportPayload payload,
@@ -393,11 +400,7 @@ internal sealed partial class ParseRawReportHandler(
     {
         try
         {
-            return (
-                prepared.Mapper.Map(
-                    succeeded.Records,
-                    new JUnitMapContext(payload.ArtifactId, prepared.Plan.Resolve)),
-                null);
+            return (recordMapper.Finish(), null);
         }
         catch (JUnitParseRefusedException refused)
         {

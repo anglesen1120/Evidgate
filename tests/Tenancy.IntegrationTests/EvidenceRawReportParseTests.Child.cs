@@ -210,7 +210,7 @@ public sealed partial class EvidenceRawReportParseTests
             new ParseRunRequest(ParseRunnerProfile.Xml, 1 << 20, "application/xml", new MemoryStream(bytes), 1000),
             Token);
 
-        var viaRecords = mapper.Map(run.Records, context);
+        var viaRecords = PytestJUnitMapperReplay.MapRecords(mapper, run.Records, context);
         var viaBytes = mapper.Map(new MemoryStream(bytes), context);
 
         viaRecords.Cases.ShouldBe(viaBytes.Cases);
@@ -221,11 +221,11 @@ public sealed partial class EvidenceRawReportParseTests
     [Fact]
     public void Records_Nested_Past_The_Profile_Depth_Are_A_Crashed_Child()
     {
-        var records = Enumerable.Range(0, 200).Select(_ => Record("{\"t\":\"xml\",\"e\":\"start\",\"n\":\"a\",\"a\":[]}")).ToList();
+        var records = Enumerable.Range(0, 200).Select(_ => Record("{\"t\":\"xml\",\"e\":\"start\",\"n\":\"testsuite\",\"a\":[]}")).ToList();
         var mapper = new PytestJUnitMapper(new ParsingService(maxReportCases: 10));
 
         var refused = Should.Throw<JUnitParseRefusedException>(
-            () => mapper.Map(records, new JUnitMapContext(Guid.NewGuid(), (_, _) => null)));
+            () => PytestJUnitMapperReplay.MapRecords(mapper, records, new JUnitMapContext(Guid.NewGuid(), (_, _) => null)));
 
         refused.Reason.ShouldBe("parse_crashed");
     }
@@ -273,24 +273,45 @@ internal sealed class EmulatedChildRunner(IParsing parsing) : IParseRunner
         Profiles.Add(request.Profile);
         buffer.Position = 0;
 
-        return Emulate(buffer, request.MaxBytes, cancellationToken);
+        return Emulate(buffer, request.MaxBytes, request.Sink, cancellationToken);
     }
 
-    private ParseRunSucceeded Emulate(Stream buffer, long maxBytes, CancellationToken cancellationToken)
+    private ParseRunSucceeded Emulate(
+        Stream buffer,
+        long maxBytes,
+        IParseRecordSink? sink,
+        CancellationToken cancellationToken)
     {
-        var records = new List<ParseRecord>();
+        // The real child writes these lines to stdout. A run whose request named a sink delivers them there and keeps
+        // nothing, which is the shape the production runner produces for a caller with its own sink.
+        var records = sink is null ? new List<ParseRecord>() : null;
+        var emitted = 0;
+
+        void Emit(ParseRecord record)
+        {
+            emitted++;
+            if (sink is null)
+            {
+                records!.Add(record);
+            }
+            else
+            {
+                sink.Accept(record.Utf8Json.Span);
+            }
+        }
+
         var parsed = parsing.ParseXmlReport(buffer, maxBytes, cancellationToken);
         if (parsed.Error is { } failure)
         {
             var reason = JUnitParseRefusedException.From(failure).Reason;
-            records.Add(Json(w =>
+            Emit(Json(w =>
             {
                 w.WriteString("t", "rejected");
                 w.WriteString("code", failure.Code);
                 w.WriteString("reason", reason);
             }));
 
-            return new ParseRunSucceeded(records, 0, 0, records.Count);
+            return new ParseRunSucceeded((IReadOnlyList<ParseRecord>?)records ?? Array.Empty<ParseRecord>(), 0, 0, emitted);
         }
 
         using var reader = parsed.Value.OpenReader();
@@ -307,7 +328,7 @@ internal sealed class EmulatedChildRunner(IParsing parsing) : IParseRunner
                     }
 
                     reader.MoveToElement();
-                    records.Add(Json(w =>
+                    Emit(Json(w =>
                     {
                         w.WriteString("t", "xml");
                         w.WriteString("e", "start");
@@ -325,19 +346,19 @@ internal sealed class EmulatedChildRunner(IParsing parsing) : IParseRunner
                     }));
                     if (empty)
                     {
-                        records.Add(End());
+                        Emit(End());
                     }
 
                     break;
                 case System.Xml.XmlNodeType.EndElement:
-                    records.Add(End());
+                    Emit(End());
                     break;
                 case System.Xml.XmlNodeType.Text:
                 case System.Xml.XmlNodeType.CDATA:
                 case System.Xml.XmlNodeType.Whitespace:
                 case System.Xml.XmlNodeType.SignificantWhitespace:
                     var text = reader.Value;
-                    records.Add(Json(w =>
+                    Emit(Json(w =>
                     {
                         w.WriteString("t", "xml");
                         w.WriteString("e", "text");
@@ -347,7 +368,7 @@ internal sealed class EmulatedChildRunner(IParsing parsing) : IParseRunner
             }
         }
 
-        return new ParseRunSucceeded(records, 0, 0, records.Count);
+        return new ParseRunSucceeded((IReadOnlyList<ParseRecord>?)records ?? Array.Empty<ParseRecord>(), 0, 0, emitted);
     }
 
     private static ParseRecord End() => Json(w =>

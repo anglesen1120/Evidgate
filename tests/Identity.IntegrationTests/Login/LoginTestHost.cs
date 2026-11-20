@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Identity.Login;
+using Evidgate.Testing;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -97,17 +98,20 @@ internal sealed class FakeLinkCompletion : ILinkCompletion
 /// where the case is about the completion — a completion seam that signs in.
 /// </summary>
 /// <remarks>
-/// Every path these suites exercise is answered before a handler could reach PostgreSQL, so the connection
-/// string points at a closed port and the boot-time isolation self-check is told so — the same two keys
-/// <c>tests/Contract.Tests</c> sets (02.6.1-T1.4), never a skipped check.
+/// The host runs on the test's own migrated database: the rate limiter of the pre-tenant routes keeps its
+/// windows there, so a 429 is the deployment's own decision. The replay set and the key ring stay in the test
+/// process (see <see cref="InMemoryLoginSeams"/>), so replay expiry follows the clock the case moves.
 /// </remarks>
 internal sealed class LoginTestHost : WebApplicationFactory<Program>
 {
     /// <summary>The <c>EVIDGATE:Login:PublicBaseUrl</c> the redirect URIs are built from.</summary>
     internal const string PublicBaseUrl = "https://app.evidgate.test";
 
-    private const string NoDatabase =
-        "Host=127.0.0.1;Port=1;Username=evidgate_app;Password=y;Database=evidgate;Timeout=2";
+    // One hour: a case's attempts must not cross into a fresh window while it runs.
+    private const int RateLimitWindowSeconds = 3600;
+
+    // Twenty: every protocol case stays well inside it, while the throttle cases can spend it and observe 429.
+    private const int RateLimitAttempts = 20;
 
     private const int StateLifetimeSeconds = 600;
 
@@ -118,14 +122,18 @@ internal sealed class LoginTestHost : WebApplicationFactory<Program>
     private readonly ILoginCompletion? _completion;
     private readonly ILinkCompletion? _linkCompletion;
     private readonly ILoggerProvider? _logs;
+    private readonly string _connectionString;
 
     private LoginTestHost(
+        DatabaseFixture fixture,
         MutableClock clock,
         ILoginProvider[] providers,
         ILoginCompletion? completion,
         ILinkCompletion? linkCompletion = null,
         ILoggerProvider? logs = null)
     {
+        ArgumentNullException.ThrowIfNull(fixture);
+        _connectionString = fixture.AppConnectionString;
         _clock = clock;
         _providers = providers;
         _completion = completion;
@@ -139,14 +147,16 @@ internal sealed class LoginTestHost : WebApplicationFactory<Program>
     /// <summary>
     /// A deployment with the given providers registered and the REAL completion. The protocol cases never reach
     /// it (they stop at a refusal or at their own fake seam), and the cases that do complete run on the
-    /// database-backed host of <c>Login/Completion</c> instead.
+    /// <c>Login/Completion</c> host instead.
     /// </summary>
-    internal static LoginTestHost Start(MutableClock clock, params ILoginProvider[] providers) =>
-        new(clock, providers, completion: null);
+    /// <param name="fixture">The test's database, which the rate limiter spends its windows in.</param>
+    internal static LoginTestHost Start(DatabaseFixture fixture, MutableClock clock, params ILoginProvider[] providers) =>
+        new(fixture, clock, providers, completion: null);
 
     /// <summary>A deployment with the given providers and a completion seam that signs in.</summary>
-    internal static LoginTestHost Start(MutableClock clock, ILoginCompletion completion, params ILoginProvider[] providers) =>
-        new(clock, providers, completion);
+    internal static LoginTestHost Start(
+        DatabaseFixture fixture, MutableClock clock, ILoginCompletion completion, params ILoginProvider[] providers) =>
+        new(fixture, clock, providers, completion);
 
     /// <summary>
     /// A deployment with a completion seam that signs in AND a link seam, so both halves of the callback's
@@ -154,31 +164,35 @@ internal sealed class LoginTestHost : WebApplicationFactory<Program>
     /// <see cref="ILinkCompletion"/>; until then a case substitutes it exactly like the completion.
     /// </summary>
     internal static LoginTestHost Start(
+        DatabaseFixture fixture,
         MutableClock clock,
         ILoginCompletion completion,
         ILinkCompletion linkCompletion,
         params ILoginProvider[] providers) =>
-        new(clock, providers, completion, linkCompletion);
+        new(fixture, clock, providers, completion, linkCompletion);
 
     /// <summary>A deployment with no link seam at all: a link attempt must then fail closed, never sign in.</summary>
-    internal static LoginTestHost Start(MutableClock clock, ILinkCompletion linkCompletion, params ILoginProvider[] providers) =>
-        new(clock, providers, completion: null, linkCompletion);
+    internal static LoginTestHost Start(
+        DatabaseFixture fixture, MutableClock clock, ILinkCompletion linkCompletion, params ILoginProvider[] providers) =>
+        new(fixture, clock, providers, completion: null, linkCompletion);
 
     /// <summary>
     /// The same deployment plus an extra logger provider in its container, for the redaction cases
     /// (<c>RequestLogRedactionTests</c>' mechanism: the host's own filters apply to it as to the deployment's
     /// sinks).
     /// </summary>
+    /// <param name="fixture">The test's migrated database, isolated from other clients' global windows.</param>
     /// <param name="clock">The clock the test moves.</param>
     /// <param name="logs">The provider to add.</param>
     /// <param name="completion">A completion seam that signs in.</param>
     /// <param name="providers">The providers to register.</param>
     internal static LoginTestHost StartWithLogs(
+        DatabaseFixture fixture,
         MutableClock clock,
         ILoggerProvider logs,
         ILoginCompletion completion,
         params ILoginProvider[] providers) =>
-        new(clock, providers, completion, linkCompletion: null, logs);
+        new(fixture, clock, providers, completion, linkCompletion: null, logs);
 
     /// <summary>An <c>start</c> request, optionally naming a <c>returnUrl</c>.</summary>
     internal static HttpRequestMessage StartRequest(string provider, string? returnUrl = null) =>
@@ -409,7 +423,19 @@ internal sealed class LoginTestHost : WebApplicationFactory<Program>
                     StateLifetimeSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 ["EVIDGATE:Login:RetryAfterSeconds"] =
                     RetryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                ["EVIDGATE:Database:ConnectionString"] = NoDatabase,
+                ["EVIDGATE:Database:ConnectionString"] = _connectionString,
+                ["EVIDGATE:Identity:RateLimits:LoginLimit"] =
+                    RateLimitAttempts.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["EVIDGATE:Identity:RateLimits:LoginWindowSeconds"] =
+                    RateLimitWindowSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["EVIDGATE:Identity:RateLimits:LinkLimit"] =
+                    RateLimitAttempts.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["EVIDGATE:Identity:RateLimits:LinkWindowSeconds"] =
+                    RateLimitWindowSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["EVIDGATE:Identity:RateLimits:InviteLimit"] =
+                    RateLimitAttempts.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["EVIDGATE:Identity:RateLimits:InviteWindowSeconds"] =
+                    RateLimitWindowSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
                 ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
                 ["EVIDGATE:Isolation:SelfCheck"] = "Disabled",

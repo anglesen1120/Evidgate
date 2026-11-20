@@ -725,3 +725,228 @@ closed by S454 (#936, sha: aae8e25c): the review tab shows the parent item ident
 | Binary http path: span outcome, chunk copy, wire-size cap (S451, #929) | Open P3s from the S451 security review: an over-cap success span ends ok (interceptor runs before the adapter cap); request chunks held by reference until the final copy; text replies measured as re-encoded UTF-8; DownloadProgress.loaded under Content-Encoding unverified per browser, so a gzip body is bounded only by the post-hoc length check. | receiver: core/http owner |
 
 closed by S457 (#939, sha: 3d5c2c6e): the span records an over-cap byte reply as error/network (trace.interceptor.binary.spec.ts); request chunks accumulate into one capped growing buffer with the intrinsic byteLength getter (http-client-fetch-binary-bounds.spec.ts); the size check is shared by adapter and interceptor and counts decoded bytes, with a non-finite loaded failing closed; the string error body is bounded to 64 KiB UTF-8 before JSON.parse; an unaborted EmptyError maps to the network error. Remaining residuals are in the row "Binary http path: text-reply span outcome (S457)".
+
+## Moved from status-carried.md by S466 (2026-11-20)
+
+Closed carried row, verbatim (closed by #957, aeeab06f: GetEvaluationRunHeaderAsync_ReportsIsForkTrueForAForkRunAndFalseForANormalRun and GetEvaluationRunHeaderAsync_WithACancelledToken_ThrowsInsteadOfAnsweringTheHeader in OrchestratorEvaluationPlanTests; mutation run showed both fail with IsFork forced false and the token dropped):
+
+|Decision header read optional tests (S464)|Two optional tests were not added in #951: cancellation propagation of `GetEvaluationRunHeaderAsync`, and a header assertion with `IsFork` true (every current assertion expects false, so a constant-false mapping would survive). Add both to `OrchestratorEvaluationPlanTests`.|receiver: backend lane|
+| CR-13 slice B: rate-limit windows in PostgreSQL, evict instead of refuse, per-surface limiter options (S377) | `ExchangeRateLimiter` windows stay local to each process, so with N replicas the limits are N times looser, and at 50,000 keys it refuses every new key shared across login and CI. Slice A (#768) moved only the key ring and the login replay set. | receiver: coordinator (next CR-13 lane) |
+
+closed by S461 (#958, sha: ee2cd9b7): windows are in PostgreSQL (migration 0110, `evidgate_resolve.rate_limit_acquire`), eviction replaces refusal at the key bound, and login, link, invite and CI exchange have their own validated options (`Identity:RateLimits:*`); a store outage answers 503. Residuals are the carried rows added in the same commit.
+
+## Moved from status-carried.md by S471 (2026-11-20)
+
+Closed carried rows, verbatim (closed by #965, 120cc9ac: `readFileBounded` takes a `verify` callback that runs before the close and `playwrightList` checks lstat identity plus realpath equality there, the residual race is the carried row "Report read residual race (S471)"; the case-id validator is kept two by design, drift pinned by test, coordinator decision 471 B: `cli/src/caseId.ts` and `sidecarRules.ts` stay, and `cli/src/caseId.table.json` drives both tests):
+
+| Report identity check after close (S467) | `readFileBounded` compares dev/ino after the descriptor closes, so a replaced file can reuse the inode and pass; `O_NOFOLLOW` covers only the last path component. Move the check before the close and re-check the parent path. Fix commit 1e1bbde2 only keeps the old inode alive in the test | receiver: T3.1b CLI lane |
+| Case-id validator duplicate (S467) | `packages/cli/src/playwrightList.ts` carries a second canonical case-id regex because the CLI may not import the adapter; `adapter-playwright/src/sidecarRules.ts` owns the first. Move it into one shared CLI module the adapter imports (it already depends on the CLI) | receiver: T3.1b CLI lane |
+
+## Moved from status-carried.md by S470 (2026-11-20)
+
+Closed carried rows, verbatim (closed by #966, faee2c0b: the outage row by `SharedRateLimitOutageTests` (link, invite, CI exchange answer 503 with Retry-After on a store outage); the startup-refusal row by `OptionsValidationTests.Invalid_Rate_Limit_Option_Fails_Startup_Cleanly` (Production and Development, exit 1, named key, no stack trace), its `TimeoutException` half stays open as the carried row "CR-13 slice B: TimeoutException clause not separately observable (S470)"; the concurrent row by `RateLimitStoreFaultTests` (parallel new keys at the bound plus the exact-bound Fact); the mutation row ran on 59e01b78 against the unchanged migration 0110: removing the on-conflict update failed 10 C# tests, disabling eviction failed 6):
+
+|CR-13 slice B: outage 503 tests for link, invite, CI exchange (S461)|Only the login surface has an HTTP test of the fail-closed 503 with Retry-After on a store outage (`Hosts.IntegrationTests`); `RateLimitGateTests` covers the helper, and the other three endpoints rely on the shared helper without an HTTP-level test.|receiver: coordinator (next CR-13 lane)|
+|CR-13 slice B: startup-refusal host test and TimeoutException branch (S461)|`RateLimitOptionsValidator` is unit tested, but no host test shows the Api refusing to start on a bad limiter option, and no test drives the `TimeoutException` branch of `RateLimitGate` (for example with pg_sleep).|receiver: coordinator (next CR-13 lane)|
+|CR-13 slice B: concurrent new-key-at-bound test (S461)|No test runs many callers inserting new keys at the key bound in parallel to show the bound converges and eviction never removes the caller; the sampled eviction is only covered sequentially (`RateLimitStoreTests`).|receiver: coordinator (next CR-13 lane)|
+|CR-13 slice B: C# mutation evidence not run (S461)|Acceptance 9 was shown only on a throwaway local PostgreSQL 17 (removing the on-conflict update breaks counting; disabling eviction leaves 200 rows at bound 10), not by running the C# tests against a mutated migration, and the two-instance test was not run on the old wave head (the in-process limiter cannot pass it). One LAN run of a mutated migration closes it.|receiver: coordinator (LAN round)|
+
+## Moved from status-carried.md by S473 (2026-11-20)
+
+Closed carried rows, verbatim (closed by #971, 5653cc73: the Worker row by `OptionsValidationTests.Invalid_Rate_Limit_Option_Fails_Worker_Startup_Cleanly` and a LAN mutation that removed the Worker call and failed all 6 cases; the clause row by `RateLimitGateFaultClauseTests`, whose mutations of the NpgsqlException and TimeoutException clauses each fail their own tests).
+
+|CR-13 slice B: Worker eager rate-limit validation (S470) | `ApiHost.ValidateOptions` now materialises `RateLimitOptions` through `RateLimitOptionsValidation` (clean exit 1, named key, no stack trace, proven in Production by `OptionsValidationTests.Invalid_Rate_Limit_Option_Fails_Startup_Cleanly`). `WorkerHost.ValidateOptions` lacks the same call although the Worker also calls `AddIdentityModule`: a bad value still refuses via `ValidateOnStart` but logs a start-failure stack trace. Add the call plus a Worker refusal case (decided: not this lane) | receiver: coordinator (Identity/hosts lane) |
+|CR-13 slice B: TimeoutException clause not separately observable (S470) | The held-lock test (`RateLimitStoreFaultTests`) proves a stalled store answers 503 within the 15 s bound and recovers, but not whether the `NpgsqlException` or the `TimeoutException` clause of `RateLimitGate.AcquireAsync` fired; that needs a seam in src (an injectable command executor) and no test can tell them apart today | receiver: coordinator (src seam, Identity lane) |
+
+## Moved from status-carried.md by S472 (2026-11-20)
+
+Closed carried rows, verbatim (closed by #969, f65c92ae: `finalBodySize` is the one size rule for the streaming check and the adapter and fails closed on a body it cannot measure, and `utf8ExceedsBytes` counts UTF-8 bytes without allocating for all text-size sites; the header-event row stays open and the leftovers are the carried rows "Binary http path: redundant third text scan (S472)", "Trace error bound exact UTF-8 (S472)" and "toBinaryResponse body type (S472)").
+
+| Binary http path: unknown final body type (S460) | `advertisedSize` in `http-client-fetch-binary.ts` returns no size for a final body that is neither an `ArrayBuffer` nor a string (cross-realm buffer, Blob, view), so the early cap check and the span treat it as within the cap; `toBinaryResponse` bounds only `byteLength`, which covers buffers and views but not a Blob (it has `size`). Unreachable with the adapter's `arraybuffer` and `text` response types. Fix = return an infinite size for any other non-null body and re-check the jsdom cross-realm specs. | receiver: core/http owner |
+| Binary http path: repeated text size encode (S460) | `textExceedsCap` UTF-8 encodes a 2.8 to 8 MiB text reply in the trace interceptor, in `enforceBinarySizeCap` and in `assertTextWithinCap`: up to 24 MiB of temporary buffers for an accepted reply (3 encodes with telemetry), none measured. Fix = count UTF-8 bytes in a loop without allocation, or carry the first result to the later checks. | receiver: core/http owner |
+
+## Moved from status-carried.md by S474 (2026-11-20)
+
+| Options tests env sweep drops explicit overrides (S473) | `OptionsValidationTests.RunUntilExitAsync` removes every inherited `EVIDGATE__` key after applying the case environment, so a case that sets such a key (for example the Worker queue credential) loses it when the parent also exports it; only the forwarded-proxy and no-healing keys are exempt. Exempt keys the case sets itself. | receiver: coordinator (Hosts tests lane) |
+
+Closed by S474 (#974, 6ef7bc33): the helper now keeps every key a case states and still removes the other inherited EVIDGATE__ keys; the Forwarded-Headers case got the same fix and a regression test pins both.
+
+## Moved from status-carried.md by S475 (2026-11-20)
+
+| Binary http path: redundant third text scan (S472) | `assertTextWithinCap` at `http-client-fetch.ts:192` rescans a text reply that `enforceBinarySizeCap` and the trace interceptor already measured; the scan is allocation-free (about 13 ms on 8 MiB) but provably redundant for capped calls. Delete it or memoise the size per event, then re-check the text specs. | receiver: core/http owner |
+
+Closed by S475 (#977, 7f6577ec): the redundant scan after the capped text reply is removed and a spec counts one adapter-side scan (8388608 reads before, 4194304 after); the error-body scan stays.
+
+| toBinaryResponse body type (S472) | `toBinaryResponse` still types `body` as `ArrayBuffer \| null` while `finalBodySize` accepts views, Blobs and strings, so `http-client-fetch-binary-final-body.spec.ts` passes hostile bodies with `as never`. Widen the parameter to `unknown` (production change) and drop the casts. | receiver: core/http owner |
+
+Closed by S475 (#977, 7f6577ec): `toBinaryResponse` takes `unknown`, keeps the fail-closed rule, and the final-body spec has no `as never` left.
+
+## Moved from status-carried.md by S477 (2026-11-20)
+
+|CR-13 slice B: cost-2 routes take two round trips (S461)|Routes that charge a cost of 2 call `AcquireAsync` twice, so two statements per request. A single call with a cost argument would halve the round trips; not measured, no latency evidence either way.|receiver: coordinator (next CR-13 lane)|
+
+Closed by S477 (#983, 48844c2d): `rate_limit_acquire` takes a cost (1..16) and `ExchangeRateLimiter.AcquireAsync` makes one call; `Acquire_ACostTwoGateCall_SendsOneStatement` pins one statement and went red when the second call was restored.
+
+|CR-13 slice B: no-op update on already-refused rows (S461)|Once a window is at limit+1 the upsert still writes the row (hit_count stays, tuple is rewritten), so a refused flood causes row churn and WAL. Skip the write when the row is already refused and the window is live; not measured.|receiver: perf lane|
+
+Closed by S477 (#983, 48844c2d): a live window at the limit is refused by a plain read that writes and locks nothing; row xmin/ctid stay unchanged across refusals (`Acquire_RefusalsOnALiveWindow_LeaveTheRowVersionUnchangedUntilTheRolloverRewritesIt`, red when the write was restored). WAL volume itself is not measured, see the new carried row.
+
+## Moved from status-carried.md by S476 (2026-11-20)
+
+| T3.1b execution-plan CLI wiring (S467) | T3.1a (#963) maps tests behind an input port; the route GET /v1/suite-revisions/{r}/execution-plan, its narrow permission, the SDK read, command wiring (401 purge, 403/404/5xx passthrough, exit 3), the `contracts/cli.md` section and quickstart are not built. Draft is in the 04.2.2 plan T3 section | receiver: S469 route lane, then a CLI lane; the route and permission landed in #970 (S469), SDK read, command wiring, `contracts/cli.md` and quickstart remain; receiver now: coordinator (CLI lane) |
+
+Closed by S476 (#982): `evidgate manifests build` reads the execution plan through the generated SDK (401 purge, 403 re-mint hint, 404/5xx passthrough, exit 3), maps through the #963 input port and writes `manifest.v1`; `contracts/cli.md` §14 and the quickstart note landed.
+
+## Moved from status-carried.md by S479 (2026-11-20)
+
+| Blob final body payload and empty-body pins (S475) | `toFetchBody` reads `Blob.size` for an empty body and forwards a Blob to `Response`, but no spec pins the payload bytes or the empty-Blob case: the two jsdom-Blob cases failed in the shared vitest worker (jsdom Blob is not accepted by Node's native Response). Pin them with a Blob from `node:buffer` in an isolated spec file, or in the Playwright path. | receiver: core/http owner |
+
+Closed by S479 (#981): `http-client-fetch-binary-blob.spec.ts` runs in the node environment with Node's Blob and pins the non-empty payload bytes and the empty Blob; green alone and in the full ng test run (455 files, 6448 tests).
+
+| Trace error bound exact UTF-8 (S472) | `stringFitsTracedBound` in `trace.interceptor.ts` now counts exact UTF-8 bytes (it used the same encode before, via the shared `utf8ExceedsBytes`), so a CJK-heavy error body between 21 and 64 KiB of UTF-16 text can skip span enrichment; tracing is fail-open. Decide whether the 64 KiB bound should stay in bytes. | receiver: telemetry owner |
+
+Closed by S479 (#981): the bound stays in exact UTF-8 bytes by COORDINATOR-DECISION; it caps the input parsed for enrichment, and `trace.interceptor.error-bound.spec.ts` pins ASCII, 2-byte, CJK and surrogate-pair text at the bound and one byte over.
+
+## Moved from status-carried.md by S484 (2026-11-20)
+
+| CLI response size cap and manifest size precheck (S476) | The generated SDK client reads `response.text()` and `JSON.parse` with no byte cap for every command, and `manifests build` builds a manifest over the 32 MiB cap (about 1.4 s CPU, 60 MB string) before the schema check refuses it. Bounded by 30 s per attempt, 20 pages and the 16 MiB report cap | receiver: CLI owner (shared client change, then a size estimate before emission) |
+
+Closed by S484 (#991): `boundedResponse.ts` reads every API answer under a 1 MiB decoded-byte cap (OIDC 64 KiB, `gate` keeps its own smaller caps) and `manifests build` refuses an oversize manifest from an exact `planned_executions` size before `manifestAxes`; `contracts/cli.md` §5.1 and §14.4 record both.
+
+## Moved from status-carried.md by S485 (2026-11-20)
+
+| CR-13 slice B: refused-path plan not measured (S477) | Migration 0112 skips the write on a live refused row, but no test prints EXPLAIN (ANALYZE, BUFFERS, WAL) for that path, so the saving is shown by row identity and statement-count tests only. Add a test inside a granted LAN call that prints the plan, or measure in the 10.1.1 load test. | receiver: perf lane |
+
+Closed by S485 (#995): `RateLimitRefusedPathPlanTests` prints EXPLAIN (ANALYZE, BUFFERS, WAL) for a granted and a live-refused acquire of the 0112 function, called as the application calls it. On run lan-rate-limit-plan-s485-1795140456-28117 (9dc264fe; data_checksums=on, wal_log_hints=off) the refused path showed xid none, 0/0/0 tuple inserts/updates/deletes and 0 WAL records in three runs, the granted control xid 1691, 1/0/0 and 4 WAL records (323 bytes). A function replacement that rewrites the refused row turned the test red (run lan-rate-limit-plan-s485-1795140602-221: xid 882, 1 update, 1 WAL record). The load-test measurement stays with the perf lane.
+
+| Test seam on the rate limiter (S473) | `ExchangeRateLimiter` is un-sealed and `AcquireAsync` is virtual only so `RateLimitGateFaultClauseTests` can make the store throw a chosen exception; nothing in production derives from it. Replace with an injected command executor if the limiter ever gets a second implementation. | receiver: coordinator (Identity lane) |
+
+Closed by S485 (#995): `ExchangeRateLimiter` is sealed and `AcquireAsync` is non-virtual again; the fault-clause tests inject the failure through an internal generic delegate overload of `RateLimitGate.AcquireAsync` (new rows record its callers and the dropped cost assertion).
+
+## Moved from status-carried.md by S487 (2026-11-20)
+
+| CLI variant normaliser duplicated from adapter (S476) | `packages/cli/src/variantHash.ts` and `variantShape.ts` mirror `normalizeVariant` of `packages/adapter-playwright/src/variant.ts` because the CLI cannot import the adapter; parity is pinned by test vectors only, so the two can drift. Same receiver as the canonical case-id validator duplicate in 04.2.2 T3 | receiver: shared CLI module lane (adapter imports CLI) |
+
+Closed by S487 (#999): `normalizeVariant`, the secret-shape rules, the serialised-length measure and the sha256 digest live once in `packages/variant` (`@evidgate/variant`); the CLI and the adapter import it and the mirrored copies are deleted. The case-id validator duplicate stays, recorded in a new carried row.
+
+## Moved from status-carried.md by S489 (2026-11-20)
+
+| Variant normaliser test ideas not applied (S487) | QA proposed, without a checked expectation: a lone-surrogate string value, `NaN`/`Infinity` numbers, and a secret-shaped value inside an array element (path form). Expected reasons were never read from `packages/variant/src/normalize.ts`, so none was added. | receiver: shared variant package owner (next lane touching `packages/variant`) |
+
+Closed by S489 (#1001): `packages/variant/src/normalize.edges.test.ts` pins the TS answer for secret-shaped array elements, non-finite and unsafe numbers, lone surrogates, array limits, sparse arrays and extra array properties; two differences found are recorded in new carried rows.
+
+## Moved from status-carried.md by S486 (2026-11-20)
+
+| T3.2 budget test for the 100k fixture (S478, 04.1.3-T3.2) | `fixtures/large/100k-tests/expected.json` carries `budget: {status: unset}`; nothing asserts a budget yet. AC8 now reads the budget from the `budget` member of `expected.json` (the loaders refuse a separate `budget.json`). The `Category=Budget` test must measure peak working set and wall time, fill `budget`, and add the 10.6.1-T1 note. Unblocked by S481 (#993): the parser path no longer buffers records, so the parser half of the budget can be measured now; the case and event buffers stay (carried row 04.1.3-T2.2c). | receiver: 04.1.3-T3.2 (backend lane) |
+
+Closed by S486 (#1004): `LargeReport_100k_ParseReconcileCompare_WithinBudget` measures parse, reconcile and the page walk against the measured `budget` in `expected.json`; acceptance (4), the buffering mutant turning it red, stayed open (see 'Budget test cannot detect a return to buffering (S486)').
+
+## Moved from status-carried.md by S488 (2026-11-20)
+
+| AC8 wording vs T81 (S160, CR-08) | 05.3.2 AC8 still reads as if a late event on a `complete` run were accepted; the merged ingest gate refuses it with `409 run_closed` (pinned by `Late_Evidence_On_Complete_Run_Is_Refused_And_Appends_No_Revision`), and the complete-run clause needs `run.completed_at` (T101). The 07.5.1 re-evaluation of a refused late event is unimplemented. Fix: reword AC8 or land T101 and the 07.5.1 task (PR #344). S483 (#996): the re-evaluation of an ACCEPTED late event (incomplete run, window open) is now pinned by `ReconcileRunTests.LateEval_*`; the complete-run-in-window clause stays open and is the only part of this row still unimplemented | receiver: 07.5.1 / T101 |
+
+Closed by S488 (#1002): migration `0114` adds `run.completed_at` (stamped once by `run_guard_transition` on the transition into `complete`, immutable, NULL reads closed); the ingest, report-parse and reprocess gates share `RunAdmissionPolicy.LateWindowOpenSql`; a late event on a `complete` run inside the window is stored late and produces a new revision plus a second evaluation (`ReconcileRunTests.Late_Evidence_On_Complete_Run_InsideWindow_IsAcceptedAndRevised`, `LateEval_CompleteRun_InsideWindow_SecondLiveEvaluation_FirstRowByteIdentical`), outside it `409 run_closed`. 05.3.2 AC8/T81 and 07.5.1 reworded. The operator re-evaluation route stays on its own row (07.5.1-T1.2).
+
+## Moved from status-carried.md by S490 (2026-11-20)
+
+| Variant normaliser accepts token prefix revealed by case folding (S489) | `{mode:'GHP_AAAAAAAA'}` (also `GITHUB_PAT_AAAAAAAA`, `XOXB-AAAAAAAA`) is accepted and stored as `ghp_aaaaaaaa`: the secret scan runs before the enum-like fold and matches prefixes case-sensitively (`packages/variant/src/normalize.ts` normalizeString, `secretShape.ts` TOKEN_PREFIXES). Server same: `SecretShape.cs:110`, `VariantNormalizer.cs` StringValue [INFERENCE: read, not run]. Low: an upper-cased prefix is not a live credential. Fix: scan the folded text too, both sides, plus vectors; pinned by the known-gap tests in `normalize.edges.test.ts`. | receiver: variant normaliser lane, TS + server together |
+
+Closed by S490 (#1007): `normalizeString` and `VariantNormalizer.StringValue` now refuse a value whose raw or stored (enum-like folded) text is secret-shaped; re-submitting a previously accepted upper-cased value is refused (intended fail-closed, no back-fill, no stored-row rewrite); vectors and per-side tests pin it.
+
+| Variant normaliser lone-surrogate key unguarded on server (S489) | `{"\\ud800":1}`: TS answers `invalid_key` at `/params/#1` (`normalize.ts` key check); server `VariantNormalizer.cs:75-86` reads `member.Name` with no try/catch before `IsValidKey`, so it likely throws InvalidOperationException (500) [INFERENCE: read, not run; Authoring has the guard, `AuthoringContentSurrogateTests.cs:24`]. Fix: catch and answer `invalid_key` by position, add a server test and a vector. | receiver: Catalog variant normaliser lane |
+
+Closed by S490 (#1007): `VariantNormalizer.TryReadName` answers `invalid_key` at `/params/#N` like TS. The HTTP path still answers 500 before the normaliser (`IdempotencyBehaviour`), owned by S492.
+
+## Moved from status-carried.md by S493 (2026-11-20)
+
+| ManifestVerifier secret check has no fold or array scan (S490) | `src/Modules/Evidgate.Modules.Orchestrator/Domain/ManifestVerifier.cs:156-183` keeps its own secret check over the raw JSON: no enum-like trim/lower-case fold (an upper-cased token prefix passes) and no scan of array items. The variant normaliser fixed this on both sides in S490; the manifest path was not in the lane. | receiver: orchestrator backend lane (reuse the normaliser rule) |
+
+Closed by S493 (#1010): the fold is closed: `ParameterSecretRule` (SharedKernel) scans the value as sent and as stored, used by `ManifestVerifier` and `VariantNormalizer`. The array claim was wrong: `contracts/manifest/manifest.v1.json:123-134` admits string params only and the schema runs before the verifier (`UploadManifest.cs:93`, `:102`), so arrays never reach it; an array param is a schema 422.
+
+## Moved from status-carried.md by S491 (2026-11-20)
+
+| CLI body-read failure mapping (S484) | `fetchActionsIdToken` in `auth/exchange.ts` reports a timeout or abort in the middle of the OIDC body as "not valid JSON" (a read failure is not told from bad JSON), and the same mid-body failure on an ok answer comes back from the SDK as a returned error next to an ok response, so only callers that read `result.data` fail closed. Exit stays non-zero | receiver: CLI owner, next touch of `auth/exchange.ts` or `callApi.ts` |
+
+Closed by S491 (#1009): `response_read_failed` (exit 3, `contracts/cli.md` §5) is the shared reader's code for a failed or cut response body (`gate` and `events send` keep their documented mappings, `contracts/cli.md` §5.1); `boundedResponse.ts` maps any reader failure and the `client.ts` interceptor rethrows it on a 2xx answer, so every caller of `createApiClient` fails closed (`callers.readFail.test.ts`, `auth/exchange.readFail.test.ts`).
+
+| CLI response-read scan is name-based (S484) | `responseReadScan.test.ts` matches whole-body reads by receiver name (`response`, `res`), so an alias (`const r = response; r.json()`), `new Response(x).arrayBuffer()` or `for await (... of response.body)` is not caught; every current read was checked by hand and is bounded. `gate.ts` also keeps two own bounded readers beside `boundedResponse.ts` | receiver: CLI owner (an AST-based scan, then fold the gate readers into the shared one) |
+
+Closed by S491 (#1009): the scan walks the TypeScript syntax tree (aliases, `new Response(x)`, `for await` over the body, destructured methods, computed literal keys), with a per-function allow-list and fixtures; the gate decision reader now delegates to the shared reader, `boundedErrorBody` stays as the one truncating reader (`responseReadScan.test.ts`, `commands/gate.readerFold.test.ts`).
+
+## Moved from status-carried.md by S494 (2026-11-20)
+
+| Manifest secret check has no invisible-character guard (S493) | `{"mode":"\ufeffGHP_AAAAAAAA"}` (BOM; also `gh\u200bp_AAAAAAAAAAAA`, zero-width space) passes `ManifestVerifier.SecretPositions` (`ManifestVerifier.cs:156`, `ParameterSecretRule.cs:30-31`) and is stored verbatim; the normaliser refuses it as `invalid_value` through `TextRules.IsClean` (`TextRules.cs:16-35`, control and format characters) before any scan. Run creation then refuses it, so the secret-shaped text stays in the manifest row. | receiver: orchestrator backend lane (needs `IsClean` in SharedKernel) |
+
+Closed by S494 (#1013): the manifest upload refuses an unclean string value under an identifying key with `invalid_value` by position through the shared `UnicodeCleanliness.IsClean`; free-text keys scan the value with Cc/Cf removed and answer the secret refusal (`ManifestSecretUploadTests`, `ManifestCleanTextRuleTests`). Param names with invisible characters never reach the verifier over HTTP (the schema pattern `manifest.v1.json:127-128` refuses them first); the verifier checks them directly and is pinned at unit level. Characters outside Cc/Cf stay open (row 'Secret scan hides behind non-Cc/Cf invisible characters (S494)').
+
+## Moved from status-carried.md by S492 (2026-11-20)
+
+| Idempotency behaviour answers 500 on an unreadable JSON member name (S490) | `src/BuildingBlocks/Pipeline/Behaviours/IdempotencyBehaviour.cs:70-79,116` re-serialises the command `JsonElement` before the handler; a lone-surrogate member name makes `JsonSerializer.Serialize` throw and the envelope middleware answers 500 (seen on `POST /v1/suites/{id}/revisions`, gate.log of lan-variant-fold-s490-1795148005-30138, ~line 1231). Every idempotent `JsonElement` route is affected; untrusted input should be a 4xx problem. | receiver: S492 (in progress) |
+
+Closed by S492 (#1014): `IdempotencyBehaviour` answers 400 `request_invalid` (detail `("", "invalid_value")`, fixed message) when `Serialize` throws and `UnstorableTextProbe` shows the cause is an unpaired surrogate in a member name or string, or nesting that only the command wrapper pushes past the writer depth; the first `Serialize` call is unchanged, so stored request hashes are unchanged. Proven on `POST /v1/suites/{id}/revisions` and the create-run route (red on the wave base, green on the branch, three mutants red). Residual 500 causes are carried below.
+
+## Moved from status-carried.md by S495 (2026-11-20)
+
+| CLI request-body caps not covered (S484) | S484 bounds what the CLI reads from the server only. What it sends (event batches in `sender.ts`, the manifest and report uploads, artifact PUTs) keeps the per-command limits it had, and no test pins an upper bound for a request body across all commands | receiver: CLI owner (inventory of request bodies and their caps, then one test) |
+
+Closed by S495 (#1017): every CLI request body has one named cap in `packages/cli/src/requestCaps.ts` at or under the server limit, one request interceptor in `client.ts` refuses an over-cap body before any request is sent (`request_too_large`, exit 3, never retried), and `requestCapScan.test.ts` pins every send site. Residuals are carried as three rows at the end of `status-carried.md`.
+
+## Moved from status-carried.md by S496 (2026-11-20)
+
+| Manifest producer_hint has no clean-text rule (S494) | Shard `producer_hint` gets the secret scan only (`ManifestVerifier.cs` `SecretRefDetails`), no clean-text rule and no stripped scan, so a token behind U+200B passes (the schema allows the character). `env_needs` `secret_refs` are not affected: the schema pattern `manifest.v1.json:195-201` refuses it. Not a variant param, out of the S494 task. | receiver: orchestrator backend lane |
+
+Closed by S496 (#1018): `ManifestVerifier.SecretRefDetails` refuses a shard `producer_hint` with a control or format character by path (`secret_value_detected` when the stripped text looks secret, else `invalid_value`), using `UnicodeCleanliness`; covered by `ManifestProducerHintCleanTextTests` and three HTTP tests in `ManifestSecretUploadTests`. Residuals are carried as two rows at the end of `status-carried.md`.
+
+## Moved from status-carried.md by S498 (2026-11-20)
+
+| Enum-like key set has no cross-runtime pin test (S493) | The .NET set is `ParameterSecretRule.EnumLike` (`ParameterSecretRule.cs`), the TS set `ENUM_LIKE` (`packages/variant/src/normalize.ts:101`); only some keys appear in `fixtures/variant-hash/vectors.json`, so adding a key on one side passes every test. | receiver: variant package lane |
+
+Closed by S498 (#1021): `fixtures/variant-hash/key-sets.json` pins both key sets; `VariantKeySetPinTests` (server, reflection on the private sets) and `packages/variant/src/keySets.test.ts` (parses the `normalize.ts` literals) each compare exact sets and name missing/extra keys, plus per-key behaviour checks. The `_` prefix rule for non-identifying keys is the same on both sides (`ParameterSecretRule.IsNonIdentifying`, `normalize.ts` `name.startsWith('_')`) and is not part of the key-set pin (its behaviour is covered by the shared vector `non-identifying-dropped`, which carries `_internal`). Residuals are carried as two rows at the end of `status-carried.md`.
+
+## Moved from status-carried.md by S497 (2026-11-20)
+
+| Catalog edge reads an unreadable member name before any guard (S492) | `CatalogRequestRules.cs:62-73` `UnknownMember` (callers `FixtureEndpoints.cs:76,116`, `GitRepoBindingEndpoints.cs:63`), `CatalogEndpoints.cs:390-402` `RequirementBodyError` and `:416-432` `BodyError` read `member.Name` on the parsed body; a lone-surrogate name throws there before the idempotency stage. [INFERENCE] answers 500: read statically by the S492 security review, not run. The dry-run preview path (`SuiteRevisionPlanner.cs:112-130`) is the same [INFERENCE]. | receiver: backend lane (Catalog), refuse with `UnstorableJsonText` first |
+
+Closed by S497 (#1022): `CatalogRequestRules.ReadJsonAsync` refuses a body with an unreadable member name (and, on every route but the requirement route, unstorable values) as 422 `request_invalid` before any name is read; `UnstorableJsonText.HasUnstorableName` is the names-only walk, and `CatalogUnstorableBodyTests` plus `CatalogBodyReadBoundaryTests` pin it.
+
+## Moved from status-carried.md by S499 (2026-11-20)
+
+| Create-run refusal echoes an unknown member name unbounded (S492) | `src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/CreateRunCommand.cs:246` puts the member name into the refusal path (`/{member.Name}`) with no truncation, while Catalog shortens the same echo with `TextRules.Brief(member.Name, 64)` (`CatalogEndpoints.cs:402`). A lone-surrogate name no longer reaches it (check at `:235-239` runs first). | receiver: backend lane (Orchestrator run endpoints) |
+
+Closed by S499 (#1025): `RequestMemberPath.ForUnknown` (`Application/RequestMemberPath.cs`) bounds the echoed member name on create-run, cancel, finalize, the `ref` block and release create: a name over 64 UTF-16 units, or holding `/`, `~`, a control or format character, U+2028/U+2029 or an unpaired surrogate, answers the fixed path `/<invalid-member-name>`; `UnknownMemberPathRouteTests` and `RequestMemberPathTests` pin it.
+
+## Moved from status-carried.md by S500 (2026-11-20)
+
+| Request-cap scan misses indirect fetch forms (S495) | `requestCapScan.test.ts` (`requestCarriesBody` :137, `fetchAliases` :91, `requestTypedNames` :119) does not flag `fetch(new Request(u, {body}), {redirect})` (init is checked, the Request is not), `const r = new Request(u, {body}); fetch(r)`, an alias taken through `??` or destructuring, or `fetch.call/apply/bind`. The runtime interceptor (`client.ts`) still measures every SDK-client body, so only a direct fetch outside the client can slip past the scan; today the sole direct body send is the allow-listed PUT (`uploadPut.ts`) | receiver: CLI lane (extend the scan, then add the fixtures) |
+
+Closed by S500 (#1027): the scan (`requestCapScan.testing.ts`, `requestCapScan.aliases.testing.ts`, fixtures in `requestCapScan.fixtures.testing.ts`) now flags `Request` values and aliases, `fetch.call/apply/bind`, `Reflect.apply`, tagged templates, bracket and `globalThis` forms and other transports, and fails closed on what it cannot prove body-free; each form has a fixture and a body-free twin. The residual limits are the row 'Request-cap scan static limits (S500)'.
+
+## Moved from status-carried.md by S504 (2026-11-20)
+
+| Rate limiter delegate seam callers not pinned (S485) | `RateLimitGate.AcquireAsync<TState>(HttpContext, TState, Func<TState,CancellationToken,ValueTask<RateDecision>>, …)` is internal and the Api, Worker and Migrator hosts see it through InternalsVisibleTo. A future route could pass a lambda that always admits and skip the store; the four production routes all use the limiter overload today. An architecture test would pin the overload's callers to `ExchangeRateLimiter.cs` and the test assemblies. | receiver: coordinator (next Identity or architecture-test lane) |
+
+Closed by S504 (#1031, sha: 48a41878): `tests/Architecture.Tests/RateLimitGateSeamBoundaryTests.cs` pins the delegate overload to `ExchangeRateLimiter.cs` and the limiter overload to the four route files, red on any other mention, with a fixture per bypass form, a stale-entry check and a mutant run (a second caller in an Identity production file turned it red). The residual limits are the rows below, added by S504.
+
+## Moved from status-carried.md by S503 (2026-11-20)
+
+| Run ref block emits one detail per unknown member, uncapped (S499) | `RunIdentity.cs:233` adds one `ErrorDetail` per unknown `ref` member with no cap; a 64 KiB create-run body (`MaxRunBytes`) can carry about 9 000 or more, so the answer can reach several hundred KB. Each path is bounded since S499; only the count is not. Lone-surrogate names reach no raw read first-hand: `CreateRunCommand.cs:235-239` (`HasUnstorableText`) refuses them before the member loop at `:243-246` and before `ParseBodyRef` at `:365` (its only caller besides tests); `FinalizeShardCommand.cs:438-442` does the same before `:445-448`. | receiver: backend lane (Orchestrator run endpoints), cap or stop at the first unknown member |
+
+Closed by S503 (#1034, sha: 06ac579e): `RunIdentityRules.ParseBodyRef` keeps at most 100 member rows plus one terminal `truncated` marker (101 total) through one counter shared by unknown and repeated known members, calling `ContractValidationResult.MaxDetails` and `ContractValidationError.TruncatedReason`; bodies with up to 100 errors answer as before. Trade-off: an error after more than 100 refused members is behind the marker and is reported only after the earlier ones are fixed (pinned by `CreateRun_ErrorBeforeTheFlood_IsReported_ErrorAfterIt_IsBehindTheMarker`). A 64 KiB flood answered 365 159 B on the base; now about 5 KB (ASCII) and under 48 KiB for 64-character non-ASCII names.
+
+## Moved from status-carried.md by S506 (2026-11-20)
+
+| Manifest upload accepts variant params the normaliser later refuses (S493) | The schema (`manifest.v1.json:123-134`) allows 32 string params of 256 chars; `VariantNormalizer` refuses a set over 8000 bytes (`MaxParamsBytes`) and counts `MaxStringChars` 256 in UTF-16 units, so 32 x 256 ASCII chars (8192 bytes) or astral text uploads (201) and fails at run creation (422 `invalid_variant`, `CreateRunCommand.cs:706-710`). No 500. | receiver: orchestrator backend lane |
+
+Closed by S506 (#1040, sha: 6330de0e): `UploadManifest.cs` `RefusedVariantParams` calls the same `catalog.NormalizeVariantHashes` as run creation and answers 422 `manifest_invalid`, detail `invalid_variant`, pointer `/planned_executions/{i}/variant/params` (no value echo, at most 50 details, nothing stored); equivalence and boundary tests `ManifestVariantParamsEquivalenceTests`, `ManifestVariantParamsUploadTests`, six mutants red.
+
+## Moved from status-carried.md by S508 (2026-11-20)
+
+| Request-cap scan static limits (S500) | P2: for a name with several `Request`-typed declarations `requestCapScan.aliases.testing.ts` checks only the first initialiser. P3: the reassignment check is file-wide, so a shadowed name can be over-flagged. Named limits in the `requestCapScan.testing.ts` header: a body inherited via `r.clone()`, a ternary or an alias of an alias; `Function.prototype.call.call(fetch, ...)`; an SDK op reached through an import alias or namespace; a body built in another module. The 18-mutant set was run on the first scan version, not rerun on the final head (`2dff7917`) | receiver: CLI lane (fix the P2, then the P3) |
+
+Closed by S508 (#1039, sha: e6252c1c): P2 (every `Request`-typed declaration of a name is checked, `requestCapScan.requests.testing.ts`) and P3 (lexical-scope resolution, no file-wide reassignment) are fixed; `r.clone()`, ternary and `??`/`||`/`&&` inputs, untyped alias chains, `Function.prototype.call.call(fetch, ...)`, and an SDK op via import alias or namespace are now flagged with a fixture and body-free twin each; the body built in another module stays open. The mutant set was rerun on `e6252c1c`: 52 red, 1 equivalent (assignment-operator guard). Open leftovers moved to three new carried rows (S508).
+
+## Moved from status-carried.md by S507 (2026-11-20)
+
+| Principal-only pre-read guards outside Catalog lack the tenant check (S501) | These routes already refuse a null principal before their body read: `IngestionEndpoints.cs:92`, `OrchestratorEndpoints.cs:155,220`, `ReleaseEndpoints.cs:75,116`, `PolicyEndpoints.cs:90,120`. A session with an unreadable `X-Evidgate-Org` is published as a principal without a tenant, so it passes that guard (the Catalog fix, `CatalogRequestRules.cs:42-47`, added the tenant check). [INFERENCE: not reproduced on these routes.] Authoring edge not examined. | receiver: backend lane (Ingestion, Orchestrator, Policy, Authoring), add the tenant check beside the principal check |
+
+Closed by S507 (#1045, sha: 29e6375d): the ten route-local sites (Ingestion events; Orchestrator upload, create-run, environment-revision, cancel, finalize; Release create, bind; Policy append, activate) now call `RawBodyGuard.RequireResolvedTenant` after their own principal check, Authoring routes call `RequireAuthenticatedTenant` in the shared readers, and Catalog uses the same guard; the row's "Authoring edge not examined" is answered (Authoring had no guard). Mutants on 29e6375d went red for the Orchestrator, Authoring, Ingestion, shared-guard and new-file cases. Open leftovers moved to six new carried rows (S507).

@@ -102,10 +102,11 @@ internal sealed class EvaluationInputReader(
                 "run pins no policy revision, so there are no rules to judge its evidence against");
 
         var suite = await RequireSuiteAsync(orgId, plan.SuiteRevisionId, cancellationToken).ConfigureAwait(false);
-        var revision = await RequireRevisionAsync(orgId, runId, evidenceRevision, cancellationToken)
+        var frozen = await RequireFrozenAsync(orgId, runId, evidenceRevision, cancellationToken)
             .ConfigureAwait(false);
+        var revision = frozen.Revision;
         var policy = await RequirePolicyAsync(orgId, policyRevisionId, cancellationToken).ConfigureAwait(false);
-        var results = await ResultsAsync(orgId, runId, evidenceRevision, plan.Executions, cancellationToken)
+        var results = await ResultsAsync(orgId, frozen.Attempts, plan.Executions, cancellationToken)
             .ConfigureAwait(false);
 
         var evidence = new EvidenceRevisionInput(
@@ -153,13 +154,16 @@ internal sealed class EvaluationInputReader(
             ?? throw new InvalidOperationException(
                 "the run has no manifest or pinned suite, so its evidence cannot be judged");
 
-    /// <summary>The frozen revision the task names, or the refusal a revision nobody stored deserves.</summary>
-    private async ValueTask<FrozenEvidenceRevision> RequireRevisionAsync(
+    /// <summary>
+    /// The frozen revision the task names with its admitted attempt statuses, or the refusal a revision nobody stored
+    /// deserves.
+    /// </summary>
+    private async ValueTask<FrozenEvidenceInput> RequireFrozenAsync(
         Guid orgId,
         Guid runId,
         int evidenceRevision,
         CancellationToken cancellationToken) =>
-        await frozenEvidence.GetRevisionAsync(orgId, runId, evidenceRevision, cancellationToken)
+        await frozenEvidence.GetFrozenInputAsync(orgId, runId, evidenceRevision, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new InvalidOperationException(
                 $"the run has no evidence revision {evidenceRevision}, so there is nothing to evaluate");
@@ -185,20 +189,13 @@ internal sealed class EvaluationInputReader(
     /// </summary>
     private async ValueTask<ResultRow[]> ResultsAsync(
         Guid orgId,
-        Guid runId,
-        int evidenceRevision,
+        IReadOnlyList<FrozenAttemptStatus> attempts,
         IReadOnlyList<EvaluationPlannedExecution> executions,
         CancellationToken cancellationToken)
     {
         var cases = await catalog.GetEvaluationCasesAsync(
             orgId,
             CaseRevisionIdsOf(executions),
-            cancellationToken).ConfigureAwait(false);
-
-        var attempts = await frozenEvidence.GetLatestAttemptStatusesAsync(
-            orgId,
-            runId,
-            evidenceRevision,
             cancellationToken).ConfigureAwait(false);
 
         // Keyed by the execution key, so a plan and a status list that arrive in any order still meet on the key.

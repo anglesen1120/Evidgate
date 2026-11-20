@@ -39,6 +39,7 @@ public sealed partial class OptionsValidationTests
         var allEvidgateKeys = Environment.GetEnvironmentVariables().Keys
             .Cast<string>()
             .Where(key => key.StartsWith("EVIDGATE__", StringComparison.Ordinal))
+            .Where(key => !environment.ContainsKey(key))
             .ToArray();
 
         using var process = ProcessRunner.Start(HostLocator.AppHost("Evidgate.Api"), environment, allEvidgateKeys);

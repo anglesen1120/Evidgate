@@ -7,12 +7,12 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// <see cref="IFrozenEvidence"/> over a real PostgreSQL and the real host, on a caller-owned tenant transaction: the
-/// frozen revision row, and the latest attempt each execution key had at or before that revision's own
-/// <c>created_at</c>. Every test names the predicate whose removal or narrowing makes it fail.
+/// <see cref="IFrozenEvidence"/> over a real PostgreSQL and the real host, on a caller-owned tenant transaction: one
+/// call answers the frozen revision row and, per execution key, the latest attempt the revision's own
+/// <c>created_at</c> admits. Every test names the predicate whose removal or narrowing makes it fail.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class FrozenEvidenceTests : IClassFixture<TenancyHostPool>
+public sealed partial class FrozenEvidenceTests : IClassFixture<TenancyHostPool>
 {
     /// <summary>A fixed clock base so the freeze bounds are exact instead of "a few milliseconds ago".</summary>
     private static readonly DateTimeOffset Base = new(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
@@ -125,10 +125,10 @@ public sealed class FrozenEvidenceTests : IClassFixture<TenancyHostPool>
         await owner.CommitAsync();
     }
 
-    // ------------------------------------------------------------------ GetRevisionAsync
+    // ------------------------------------------------------------------ Frozen revision headers
 
     [Fact]
-    public async Task GetRevisionAsync_ReturnsTheRevisionTheRunFroze()
+    public async Task GetFrozenInput_ReturnsTheRevisionTheRunFrozeWithNoAttempts()
     {
         await using var world = await StartAsync();
         var plan = await SeedPlanAsync(world, 1);
@@ -142,37 +142,46 @@ public sealed class FrozenEvidenceTests : IClassFixture<TenancyHostPool>
         await using var caller = await ContractScope.BeginAsync(world.Api, world.Org);
         var evidence = caller.Resolve<IFrozenEvidence>();
 
-        // The mutation this pins: dropping `run_id` or `revision_no` makes the statement answer more than one row.
-        var first = await evidence.GetRevisionAsync(world.Org, plan.RunId, 1, TestContext.Current.CancellationToken);
+        // The mutation this pins: dropping `run_id` answers an unknown run; dropping `revision_no` answers revision 1
+        // to the revision-2 request.
+        var first = await evidence.GetFrozenInputAsync(world.Org, plan.RunId, 1, TestContext.Current.CancellationToken);
         first.ShouldNotBeNull();
-        first.RevisionNo.ShouldBe(1);
-        first.Completeness.ShouldBe("incomplete");
-        first.Missing.ShouldBe(["missing_result", "artifact_missing"]);
-        first.ManifestHash.ShouldBe("sha256:" + new string('b', 64));
-        first.CreatedAt.ShouldBe(frozen, TimeSpan.FromMilliseconds(1));
+        first.Revision.RevisionNo.ShouldBe(1);
+        first.Revision.Completeness.ShouldBe("incomplete");
+        first.Revision.Missing.ShouldBe(["missing_result", "artifact_missing"]);
+        first.Revision.ManifestHash.ShouldBe("sha256:" + new string('b', 64));
+        first.Revision.CreatedAt.ShouldBe(frozen, TimeSpan.FromMilliseconds(1));
+        first.Attempts.ShouldBeEmpty();
 
-        var second = await evidence.GetRevisionAsync(world.Org, plan.RunId, 2, TestContext.Current.CancellationToken);
+        var second = await evidence.GetFrozenInputAsync(world.Org, plan.RunId, 2, TestContext.Current.CancellationToken);
         second.ShouldNotBeNull();
-        second.Completeness.ShouldBe("complete");
-        second.Missing.ShouldBeEmpty();
+        second.Revision.Completeness.ShouldBe("complete");
+        second.Revision.Missing.ShouldBeEmpty();
+        second.Attempts.ShouldBeEmpty();
+
+        (await evidence.GetFrozenInputAsync(
+            world.Org, Guid.NewGuid(), 1, TestContext.Current.CancellationToken)).ShouldBeNull();
     }
 
     [Fact]
-    public async Task GetRevisionAsync_ReturnsNothingForARevisionNumberTheRunNeverFroze()
+    public async Task GetFrozenInput_ReturnsNothingForARevisionNumberTheRunNeverFroze()
     {
         await using var world = await StartAsync();
         var plan = await SeedPlanAsync(world, 1);
         await SeedRevisionAsync(world, plan.RunId, 1, Base.AddMinutes(10));
+        await SeedAttemptAsync(world, plan.RunId, plan.Executions[0], 1, "passed", Base);
 
         await using var caller = await ContractScope.BeginAsync(world.Api, world.Org);
         var evidence = caller.Resolve<IFrozenEvidence>();
 
-        (await evidence.GetRevisionAsync(world.Org, plan.RunId, 1, TestContext.Current.CancellationToken)).ShouldNotBeNull();
-        (await evidence.GetRevisionAsync(world.Org, plan.RunId, 2, TestContext.Current.CancellationToken)).ShouldBeNull();
+        var present = await evidence.GetFrozenInputAsync(world.Org, plan.RunId, 1, TestContext.Current.CancellationToken);
+        present.ShouldNotBeNull();
+        present.Attempts.Count.ShouldBe(1);
+        (await evidence.GetFrozenInputAsync(world.Org, plan.RunId, 2, TestContext.Current.CancellationToken)).ShouldBeNull();
     }
 
     [Fact]
-    public async Task GetRevisionAsync_ReturnsNothingForAnotherTenantsRun()
+    public async Task GetFrozenInput_ReturnsNothingForAnotherTenantsRun()
     {
         await using var world = await StartAsync();
         var (otherOrg, _) = await CreateOtherTenantAsync(world, Unique.Slug("rival"));
@@ -184,12 +193,12 @@ public sealed class FrozenEvidenceTests : IClassFixture<TenancyHostPool>
         await using var caller = await ContractScope.BeginAsync(world.Api, world.Org);
         var evidence = caller.Resolve<IFrozenEvidence>();
 
-        (await evidence.GetRevisionAsync(world.Org, mine.RunId, 1, TestContext.Current.CancellationToken)).ShouldNotBeNull();
-        (await evidence.GetRevisionAsync(world.Org, theirs.RunId, 1, TestContext.Current.CancellationToken)).ShouldBeNull();
+        (await evidence.GetFrozenInputAsync(world.Org, mine.RunId, 1, TestContext.Current.CancellationToken)).ShouldNotBeNull();
+        (await evidence.GetFrozenInputAsync(world.Org, theirs.RunId, 1, TestContext.Current.CancellationToken)).ShouldBeNull();
     }
 
     [Fact]
-    public async Task GetRevisionAsync_ReturnsNothingWhenTheRequestedOrgIsNotTheScopesOrg()
+    public async Task GetFrozenInput_ReturnsNothingWhenTheRequestedOrgIsNotTheScopesOrg()
     {
         await using var world = await StartAsync();
         var plan = await SeedPlanAsync(world, 1);
@@ -201,14 +210,14 @@ public sealed class FrozenEvidenceTests : IClassFixture<TenancyHostPool>
 
         // The mutation this pins: without `er.org_id = @org_id` the scope's own revision is answered for a foreign org,
         // because row level security alone still admits it.
-        (await evidence.GetRevisionAsync(otherOrg, plan.RunId, 1, TestContext.Current.CancellationToken)).ShouldBeNull();
-        (await evidence.GetRevisionAsync(world.Org, plan.RunId, 1, TestContext.Current.CancellationToken)).ShouldNotBeNull();
+        (await evidence.GetFrozenInputAsync(otherOrg, plan.RunId, 1, TestContext.Current.CancellationToken)).ShouldBeNull();
+        (await evidence.GetFrozenInputAsync(world.Org, plan.RunId, 1, TestContext.Current.CancellationToken)).ShouldNotBeNull();
     }
 
-    // ------------------------------------------------------------------ GetLatestAttemptStatusesAsync
+    // ------------------------------------------------------------------ Frozen attempts
 
     [Fact]
-    public async Task GetLatestAttemptStatuses_ReturnsTheLatestAttemptTheFreezeAdmits()
+    public async Task GetFrozenInput_ReturnsTheLatestAttemptTheFreezeAdmits()
     {
         await using var world = await StartAsync();
         var plan = await SeedPlanAsync(world, 2);
@@ -222,10 +231,11 @@ public sealed class FrozenEvidenceTests : IClassFixture<TenancyHostPool>
         var evidence = caller.Resolve<IFrozenEvidence>();
 
         // The mutation this pins: without `order by attempt_no desc` the lower attempt wins and exec 0 reads `failed`.
-        var statuses = await evidence.GetLatestAttemptStatusesAsync(
+        var input = await evidence.GetFrozenInputAsync(
             world.Org, plan.RunId, 1, TestContext.Current.CancellationToken);
+        input.ShouldNotBeNull();
 
-        statuses.Select(row => (row.ExecutionKey, row.Status)).ShouldBe(
+        input.Attempts.Select(row => (row.ExecutionKey, row.Status)).ShouldBe(
             [
                 (plan.Executions[0].ExecutionKey, "passed"),
                 (plan.Executions[1].ExecutionKey, "blocked"),
@@ -234,7 +244,7 @@ public sealed class FrozenEvidenceTests : IClassFixture<TenancyHostPool>
     }
 
     [Fact]
-    public async Task GetLatestAttemptStatuses_ExcludesAttemptsCreatedAfterTheFreezeStamp()
+    public async Task GetFrozenInput_ExcludesAttemptsCreatedAfterTheFreezeStamp()
     {
         await using var world = await StartAsync();
         var plan = await SeedPlanAsync(world, 1);
@@ -247,14 +257,15 @@ public sealed class FrozenEvidenceTests : IClassFixture<TenancyHostPool>
         var evidence = caller.Resolve<IFrozenEvidence>();
 
         // The mutation this pins: dropping `a.created_at <= er.created_at` lets the retry decide, answering `passed`.
-        var statuses = await evidence.GetLatestAttemptStatusesAsync(
+        var input = await evidence.GetFrozenInputAsync(
             world.Org, plan.RunId, 1, TestContext.Current.CancellationToken);
+        input.ShouldNotBeNull();
 
-        statuses.Select(row => row.Status).ShouldBe(["failed"]);
+        input.Attempts.Select(row => row.Status).ShouldBe(["failed"]);
     }
 
     [Fact]
-    public async Task GetLatestAttemptStatuses_AdmitsAnAttemptCreatedAtTheFreezeStamp()
+    public async Task GetFrozenInput_AdmitsAnAttemptCreatedAtTheFreezeStamp()
     {
         await using var world = await StartAsync();
         var plan = await SeedPlanAsync(world, 1);
@@ -267,14 +278,15 @@ public sealed class FrozenEvidenceTests : IClassFixture<TenancyHostPool>
         var evidence = caller.Resolve<IFrozenEvidence>();
 
         // The mutation this pins: narrowing the bound to `a.created_at < er.created_at` answers `failed`.
-        var statuses = await evidence.GetLatestAttemptStatusesAsync(
+        var input = await evidence.GetFrozenInputAsync(
             world.Org, plan.RunId, 1, TestContext.Current.CancellationToken);
+        input.ShouldNotBeNull();
 
-        statuses.Select(row => row.Status).ShouldBe(["passed"]);
+        input.Attempts.Select(row => row.Status).ShouldBe(["passed"]);
     }
 
     [Fact]
-    public async Task GetLatestAttemptStatuses_LeavesOutAnExecutionWhoseAttemptsAllPostdateTheFreeze()
+    public async Task GetFrozenInput_LeavesOutAnExecutionWhoseAttemptsAllPostdateTheFreeze()
     {
         await using var world = await StartAsync();
         var plan = await SeedPlanAsync(world, 2);
@@ -286,14 +298,15 @@ public sealed class FrozenEvidenceTests : IClassFixture<TenancyHostPool>
         await using var caller = await ContractScope.BeginAsync(world.Api, world.Org);
         var evidence = caller.Resolve<IFrozenEvidence>();
 
-        var statuses = await evidence.GetLatestAttemptStatusesAsync(
+        var input = await evidence.GetFrozenInputAsync(
             world.Org, plan.RunId, 1, TestContext.Current.CancellationToken);
+        input.ShouldNotBeNull();
 
-        statuses.Select(row => row.ExecutionKey).ShouldBe([plan.Executions[0].ExecutionKey]);
+        input.Attempts.Select(row => row.ExecutionKey).ShouldBe([plan.Executions[0].ExecutionKey]);
     }
 
     [Fact]
-    public async Task GetLatestAttemptStatuses_ReturnsNothingForAnotherTenantsRun()
+    public async Task GetFrozenInput_ReturnsNothingForAnotherTenantsRunWithAttempts()
     {
         await using var world = await StartAsync();
         var (otherOrg, _) = await CreateOtherTenantAsync(world, Unique.Slug("rival"));
@@ -309,15 +322,17 @@ public sealed class FrozenEvidenceTests : IClassFixture<TenancyHostPool>
         var evidence = caller.Resolve<IFrozenEvidence>();
 
         // Positive control: the scope's own run answers its attempt.
-        (await evidence.GetLatestAttemptStatusesAsync(world.Org, mine.RunId, 1, TestContext.Current.CancellationToken))
-            .Count.ShouldBe(1);
+        var mineInput = await evidence.GetFrozenInputAsync(
+            world.Org, mine.RunId, 1, TestContext.Current.CancellationToken);
+        mineInput.ShouldNotBeNull();
+        mineInput.Attempts.Count.ShouldBe(1);
 
-        (await evidence.GetLatestAttemptStatusesAsync(world.Org, theirs.RunId, 1, TestContext.Current.CancellationToken))
-            .ShouldBeEmpty();
+        (await evidence.GetFrozenInputAsync(world.Org, theirs.RunId, 1, TestContext.Current.CancellationToken))
+            .ShouldBeNull();
     }
 
     [Fact]
-    public async Task GetLatestAttemptStatuses_ReturnsNothingWhenTheRequestedOrgIsNotTheScopesOrg()
+    public async Task GetFrozenInput_ReturnsNothingForAMismatchedOrgWithAttempts()
     {
         await using var world = await StartAsync();
         var plan = await SeedPlanAsync(world, 1);
@@ -328,15 +343,18 @@ public sealed class FrozenEvidenceTests : IClassFixture<TenancyHostPool>
         await using var caller = await ContractScope.BeginAsync(world.Api, world.Org);
         var evidence = caller.Resolve<IFrozenEvidence>();
 
-        // The mutation this pins: dropping `a.org_id = @org_id` answers the scope's own attempt for a foreign org.
-        (await evidence.GetLatestAttemptStatusesAsync(otherOrg, plan.RunId, 1, TestContext.Current.CancellationToken))
-            .ShouldBeEmpty();
-        (await evidence.GetLatestAttemptStatusesAsync(world.Org, plan.RunId, 1, TestContext.Current.CancellationToken))
-            .Count.ShouldBe(1);
+        // The mutation this pins: removing requested-org filtering would answer the scope's own attempt for a foreign org.
+        // The combined read rejects that mismatch at the revision header before it can return any attempts.
+        (await evidence.GetFrozenInputAsync(otherOrg, plan.RunId, 1, TestContext.Current.CancellationToken))
+            .ShouldBeNull();
+        var input = await evidence.GetFrozenInputAsync(
+            world.Org, plan.RunId, 1, TestContext.Current.CancellationToken);
+        input.ShouldNotBeNull();
+        input.Attempts.Count.ShouldBe(1);
     }
 
     [Fact]
-    public async Task GetLatestAttemptStatuses_ReadsAttemptsWrittenInTheCallersTransaction()
+    public async Task GetFrozenInput_ReadsAttemptsWrittenInTheCallersTransaction()
     {
         await using var world = await StartAsync();
         var plan = await SeedPlanAsync(world, 1);
@@ -355,16 +373,66 @@ public sealed class FrozenEvidenceTests : IClassFixture<TenancyHostPool>
             outcomes.ShouldAllBe(outcome => outcome.Status == CaseAttemptWriteStatus.Accepted);
 
             var evidence = caller.Resolve<IFrozenEvidence>();
-            var seen = await evidence.GetLatestAttemptStatusesAsync(
+            var seen = await evidence.GetFrozenInputAsync(
                 world.Org, plan.RunId, 1, TestContext.Current.CancellationToken);
+            seen.ShouldNotBeNull();
 
             // The mutation this pins: a second connection (or an inner commit) would not see the uncommitted row.
-            seen.Select(row => row.Status).ShouldBe(["passed"]);
+            seen.Attempts.Select(row => row.Status).ShouldBe(["passed"]);
             caller.Committed.ShouldBeFalse();
         }
 
         await using var fresh = await ContractScope.BeginAsync(world.Api, world.Org);
-        (await fresh.Resolve<IFrozenEvidence>().GetLatestAttemptStatusesAsync(
-            world.Org, plan.RunId, 1, TestContext.Current.CancellationToken)).ShouldBeEmpty();
+        var unseen = await fresh.Resolve<IFrozenEvidence>().GetFrozenInputAsync(
+            world.Org, plan.RunId, 1, TestContext.Current.CancellationToken);
+        unseen.ShouldNotBeNull();
+        unseen.Attempts.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task GetFrozenInput_OrdersAttemptsByOrdinalExecutionKey()
+    {
+        await using var world = await StartAsync();
+        var plan = await SeedPlanAsync(world, 4);
+        await SeedRevisionAsync(world, plan.RunId, 1, Base.AddMinutes(10));
+        foreach (var execution in plan.Executions.OrderByDescending(row => row.ExecutionKey, StringComparer.Ordinal))
+        {
+            await SeedAttemptAsync(world, plan.RunId, execution, 1, "passed", Base);
+        }
+
+        await using var caller = await ContractScope.BeginAsync(world.Api, world.Org);
+        var input = await caller.Resolve<IFrozenEvidence>().GetFrozenInputAsync(
+            world.Org, plan.RunId, 1, TestContext.Current.CancellationToken);
+        input.ShouldNotBeNull();
+
+        // Seeded keys are lowercase hex: DB ordering agrees with the evaluator's ordinal ordering for this alphabet.
+        var expected = plan.Executions.Select(row => row.ExecutionKey).ToArray();
+        expected.ShouldAllBe(key => key.All(character =>
+            (character >= '0' && character <= '9') || (character >= 'a' && character <= 'f')));
+        Array.Sort(expected, string.CompareOrdinal);
+        input.Attempts.Select(row => row.ExecutionKey).ShouldBe(expected);
+    }
+
+    [Fact]
+    public async Task GetFrozenInput_UsesEachRevisionsOwnFreezeStamp()
+    {
+        await using var world = await StartAsync();
+        var plan = await SeedPlanAsync(world, 1);
+        await SeedRevisionAsync(world, plan.RunId, 1, Base.AddMinutes(10));
+        await SeedRevisionAsync(world, plan.RunId, 2, Base.AddMinutes(20));
+        await SeedAttemptAsync(world, plan.RunId, plan.Executions[0], 1, "failed", Base);
+        await SeedAttemptAsync(world, plan.RunId, plan.Executions[0], 2, "passed", Base.AddMinutes(15));
+
+        await using var caller = await ContractScope.BeginAsync(world.Api, world.Org);
+        var evidence = caller.Resolve<IFrozenEvidence>();
+        var first = await evidence.GetFrozenInputAsync(world.Org, plan.RunId, 1, TestContext.Current.CancellationToken);
+        var second = await evidence.GetFrozenInputAsync(world.Org, plan.RunId, 2, TestContext.Current.CancellationToken);
+
+        first.ShouldNotBeNull();
+        second.ShouldNotBeNull();
+        first.Revision.RevisionNo.ShouldBe(1);
+        first.Attempts.Select(row => row.Status).ShouldBe(["failed"]);
+        second.Revision.RevisionNo.ShouldBe(2);
+        second.Attempts.Select(row => row.Status).ShouldBe(["passed"]);
     }
 }

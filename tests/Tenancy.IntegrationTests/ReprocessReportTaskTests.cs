@@ -13,7 +13,6 @@ using Evidgate.Modules.Evidence.Application;
 using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
-using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 using Evidgate.Modules.Ingestion.Contracts;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Microsoft.Extensions.DependencyInjection;
@@ -440,6 +439,6 @@ internal sealed class PinnedReleaseMapper(IJUnitMapper inner) : IJUnitMapper
     public JUnitMapResult Map(Stream xml, JUnitMapContext context) => inner.Map(xml, context);
 
     /// <inheritdoc />
-    public JUnitMapResult Map(IReadOnlyList<ParseRecord> records, JUnitMapContext context) =>
-        inner.Map(records, context);
+    public IJUnitRecordMapper OpenRecordMapper(JUnitMapContext context) =>
+        inner.OpenRecordMapper(context);
 }

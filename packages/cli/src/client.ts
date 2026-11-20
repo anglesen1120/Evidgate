@@ -6,8 +6,11 @@
 // call.
 import { createClient, type Client } from '@evidgate/sdk';
 
+import { boundedResponse, ResponseReadError } from './boundedResponse.js';
+import { CliError } from './errors.js';
 import type { ResolvedConfig } from './config.js';
 import { registerSecret } from './redact.js';
+import { assertRequestBodyWithinCap, wireBody } from './requestCaps.js';
 
 /**
  * The API version prefix every SDK operation path is relative to. The openapi document
@@ -29,13 +32,41 @@ export function createApiClient(
     registerSecret(token);
     headers.Authorization = `Bearer ${token}`;
   }
-  return createClient({
+  const client = createClient({
     baseUrl: `${config.apiUrl}${API_VERSION_PREFIX}`,
     headers,
     redirect: 'error',
+    // Without a JSON content type the client would hand back the unread body stream, and the
+    // cap only fires on a read. Reading it as JSON keeps every ordinary answer under the cap;
+    // `gate` asks for the stream explicitly and applies its own cap.
+    parseAs: 'json',
     // The generated client spreads per-call options after the config, so a caller could
     // re-enable redirects. Rebuild the Request with `redirect: 'error'` on every call,
-    // whatever the caller passed, so no request can follow a redirect.
-    fetch: (input, init) => fetchImpl(new Request(input, { ...init, redirect: 'error' })),
+    // whatever the caller passed, so no request can follow a redirect. Every answer then goes
+    // through the byte cap, so no command can buffer an unbounded body.
+    fetch: async (input, init) =>
+      boundedResponse(await fetchImpl(new Request(input, { ...init, redirect: 'error' }))),
   });
+  // Every body is measured before the request is sent; a CliError thrown here is rethrown
+  // by the error interceptor below, so nothing reaches the network and no retry is attempted.
+  client.interceptors.request.use((request, options) => {
+    assertRequestBodyWithinCap(options.method, options.url, wireBody(options));
+    return request;
+  });
+  // The generated client turns a body-read failure into a returned error next to the response
+  // it was reading. A failure on a 2xx answer can never be an answer, so it is rethrown; on an
+  // error status the error is returned, keeping the status mapping and retry policy unchanged.
+  client.interceptors.error.use((error, response) => {
+    if (error instanceof ResponseReadError) {
+      if (response?.ok === true) {
+        throw error;
+      }
+      return error;
+    }
+    if (error instanceof CliError) {
+      throw error;
+    }
+    return error;
+  });
+  return client;
 }

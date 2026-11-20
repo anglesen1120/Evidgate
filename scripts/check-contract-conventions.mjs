@@ -162,6 +162,7 @@ const EXPECTED = [
   ['/suites/{s}/revisions', 'post', 'suite:write', 'v1'],
   ['/suite-revisions/{r}', 'get', 'suite:read', 'v1'],
   ['/suite-revisions/{r}/diff', 'get', 'suite:read', 'v1'],
+  ['/suite-revisions/{r}/execution-plan', 'get', 'suite:plan_read', 'v1'],
   // The binding route is declared by the catalog feature specification rather than the core table, so it is listed
   // beside the catalog group it belongs to.
   ['/projects/{p}/git-repo-bindings', 'post', 'project:write', 'v1'],

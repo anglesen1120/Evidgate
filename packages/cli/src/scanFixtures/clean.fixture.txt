@@ -1,0 +1,12 @@
+// Reads that are not an answer body: file reads, map iteration, plain properties, helper input.
+export async function collectItems(reader: LineReader, record: Record): Promise<void> {
+  const lines = reader.readLines();
+  const parsed = JSON.parse('{}');
+  const label = payload.text;
+  const values = [...new Map<string, number>().values()];
+  for await (const item of items) {
+    use(item);
+  }
+  const { name, id } = record;
+  handToHelper(incoming.body, lines, parsed, label, values, name, id);
+}

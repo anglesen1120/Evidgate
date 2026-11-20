@@ -1412,6 +1412,18 @@ export type SuiteMemberKey = {
     variant_hash: string;
 };
 
+export type SuiteRevisionExecutionPlanMember = {
+    case_id: string;
+    variant_hash: string;
+    case_revision_id: string;
+};
+
+export type SuiteRevisionExecutionPlan = {
+    suite_revision_id: string;
+    members: Array<SuiteRevisionExecutionPlanMember>;
+    next_cursor: string | null;
+};
+
 export type SuiteEdgeKey = {
     parent: SuiteMemberKey;
     child: SuiteMemberKey;
@@ -1527,7 +1539,7 @@ export type IngestTokenListResponse = {
 export type CreateIngestTokenRequest = {
     name: string;
     /**
-     * Subset of the permission codes `event:write`, `artifact:write`, `run:create` and `decision:read`; default all four.
+     * Subset of the permission codes `event:write`, `artifact:write`, `run:create`, `decision:read` and `suite:plan_read`; default all five.
      */
     scopes?: Array<string> | null;
     expires_at?: string | null;
@@ -3857,6 +3869,16 @@ export type AgainstRevision = string;
 
 export type SuiteRevisionId = string;
 
+/**
+ * Opaque cursor from `next_cursor` of `GET /v1/suite-revisions/{r}/execution-plan`; ordering `(ordinal, id)` ascending, bound to the revision and the caller's project (00 §9.1, 04.2.2-T3). A value this endpoint did not issue, including one from another revision or project, is 422 `request_invalid`.
+ */
+export type ExecutionPlanCursor = string;
+
+/**
+ * Members per page. Route-specific, not the shared `Limit`: default 200, maximum 500 (04.2.2-T3). An integer outside 1–500 is 422 `request_invalid`; a non-canonical integer is 400.
+ */
+export type ExecutionPlanLimit = number;
+
 export type DraftId = string;
 
 export type IncidentId = string;
@@ -4175,7 +4197,7 @@ export type CompleteFederatedLoginErrors = {
      */
     429: ErrorEnvelope;
     /**
-     * 503 `unavailable`, always with `Retry-After` — the same answer as on `start` (`EVIDGATE__LOGIN__RETRYAFTERSECONDS`) for a provider that is configured at composition but has no usable client credential or JWKS, for a deployment with no `EVIDGATE__LOGIN__PUBLICBASEURL`, and for a provider timeout, transport failure or 5xx (02.3.1 AC8); plus the completion's own infrastructure faults: a database outage, an audit chain that could not be appended (fail-closed, 02.3.1-T2.2), and — on a state of purpose `link` — a deployment that composes no link seam, a missing session pepper or a session lookup fault. The callback it answers is already spent (both cookies deleted, `state` consumed), so the header says when the browser may sign in or start the link again.
+     * 503 `unavailable`, always with `Retry-After` — the same answer as on `start` (`EVIDGATE__LOGIN__RETRYAFTERSECONDS`) for a provider that is configured at composition but has no usable client credential or JWKS, for a deployment with no `EVIDGATE__LOGIN__PUBLICBASEURL`, and for a provider timeout, transport failure or 5xx (02.3.1 AC8); plus the completion's own infrastructure faults: a database outage, an audit chain that could not be appended (fail-closed, 02.3.1-T2.2), and — on a state of purpose `link` — a deployment that composes no link seam, a missing session pepper or a session lookup fault. A rate-store outage instead fails closed with retryable 503 `unavailable` and `Retry-After: 1` before the `state` is consumed in the replay store; the pending-login cookies are still deleted on the way out, so the browser starts the login again. For the completion faults above, the callback is already spent (both cookies deleted, `state` consumed), so the header says when the browser may sign in or start the link again.
      */
     503: ErrorEnvelope;
 };
@@ -4202,6 +4224,10 @@ export type StageInviteTokenErrors = {
      * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
      */
     429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
 };
 
 export type StageInviteTokenError = StageInviteTokenErrors[keyof StageInviteTokenErrors];
@@ -4244,7 +4270,7 @@ export type CreateDevSessionErrors = {
      */
     429: ErrorEnvelope;
     /**
-     * 503 `unavailable` — the audit chain or the session write failed, so the sign-in did not happen (no session exists for a sign-in nothing recorded), or the request did not arrive over HTTPS: the cookie pair this route must issue is Secure-only, so a plaintext sign-in can never complete. The plaintext refusal is answered before the secret is judged, so the status code says nothing about whether the presented secret was right, and it writes neither a row nor a cookie.
+     * 503 `unavailable` — the audit chain or the session write failed, so the sign-in did not happen (no session exists for a sign-in nothing recorded), a rate-store outage (retryable, with `Retry-After: 1`), or the request did not arrive over HTTPS: the cookie pair this route must issue is Secure-only, so a plaintext sign-in can never complete. The plaintext refusal is answered before the secret is judged, so the status code says nothing about whether the presented secret was right, and it writes neither a row nor a cookie.
      */
     503: ErrorEnvelope;
 };
@@ -4304,7 +4330,7 @@ export type StartProviderLinkErrors = {
      */
     429: ErrorEnvelope;
     /**
-     * 503 `unavailable` — the identity store or the session lookup is not usable: a registered provider whose client credential is missing, a deployment with no `EVIDGATE__LOGIN__PUBLICBASEURL` (one answer for both, so the route is no oracle for the deployment's configuration), no session pepper (`EVIDGATE__SESSION__PEPPER`) or a database outage. The route sets `Retry-After` through `EVIDGATE__LOGIN__RETRYAFTERSECONDS` when it reports the outage itself; a refusal raised by the session lookup (the missing-pepper case) leaves the header to the envelope filter's default `60` (00 §9.2).
+     * 503 `unavailable` — the identity store or the session lookup is not usable: a registered provider whose client credential is missing, a deployment with no `EVIDGATE__LOGIN__PUBLICBASEURL` (one answer for both, so the route is no oracle for the deployment's configuration), no session pepper (`EVIDGATE__SESSION__PEPPER`) or a database outage. The route sets `Retry-After` through `EVIDGATE__LOGIN__RETRYAFTERSECONDS` when it reports the outage itself; a refusal raised by the session lookup (the missing-pepper case) leaves the header to the envelope filter's default `60` (00 §9.2). A rate-store outage instead fails closed with retryable 503 `unavailable` and `Retry-After: 1`.
      */
     503: ErrorEnvelope;
 };
@@ -4347,7 +4373,7 @@ export type DiscardPendingProviderLinkErrors = {
      */
     429: ErrorEnvelope;
     /**
-     * 503 `unavailable` — no session pepper (`EVIDGATE__SESSION__PEPPER`) or a database outage in the session lookup; the route sets no `Retry-After`, so the envelope filter's default `60` applies (00 §9.2).
+     * 503 `unavailable` — a rate-store outage, no session pepper (`EVIDGATE__SESSION__PEPPER`) or a database outage in the session lookup. A rate-store outage is retryable and the route sets `Retry-After: 1`; session-lookup failures use the envelope filter's default `60` (00 §9.2).
      */
     503: ErrorEnvelope;
 };
@@ -4388,7 +4414,7 @@ export type GetPendingProviderLinkErrors = {
      */
     429: ErrorEnvelope;
     /**
-     * 503 `unavailable` — no session pepper (`EVIDGATE__SESSION__PEPPER`) or a database outage in the session lookup. The answer is the 00 §9.2 envelope and never a 200 with an empty body; the route sets no `Retry-After`, so the envelope filter's default `60` applies.
+     * 503 `unavailable` — a rate-store outage, no session pepper (`EVIDGATE__SESSION__PEPPER`) or a database outage in the session lookup. The answer is the 00 §9.2 envelope and never a 200 with an empty body. A rate-store outage is retryable and the route sets `Retry-After: 1`; session-lookup failures use the envelope filter's default `60`.
      */
     503: ErrorEnvelope;
 };
@@ -4435,7 +4461,7 @@ export type ConfirmProviderLinkErrors = {
      */
     429: ErrorEnvelope;
     /**
-     * 503 `unavailable`, retryable — a database fault, an audit chain that could not be extended (the staging is kept, so the retry converges), no session pepper (`EVIDGATE__SESSION__PEPPER`) or a stored contract this build does not know. The route sets `Retry-After` (`EVIDGATE__LOGIN__RETRYAFTERSECONDS`) on the answers it raises itself (the unknown stored contract, the audit failure); the session lookup and the store command leave the header to the envelope filter's default `60` (00 §9.2).
+     * 503 `unavailable`, retryable — a database fault, an audit chain that could not be extended (the staging is kept, so the retry converges), no session pepper (`EVIDGATE__SESSION__PEPPER`) or a stored contract this build does not know. The route sets `Retry-After` (`EVIDGATE__LOGIN__RETRYAFTERSECONDS`) on the answers it raises itself (the unknown stored contract, the audit failure); the session lookup and the store command leave the header to the envelope filter's default `60` (00 §9.2). A rate-store outage instead fails closed with retryable 503 `unavailable` and `Retry-After: 1`.
      */
     503: ErrorEnvelope;
 };
@@ -9937,6 +9963,66 @@ export type GetSuiteRevisionDiffResponses = {
 };
 
 export type GetSuiteRevisionDiffResponse = GetSuiteRevisionDiffResponses[keyof GetSuiteRevisionDiffResponses];
+
+export type GetSuiteRevisionExecutionPlanData = {
+    body?: never;
+    path: {
+        r: string;
+    };
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor` of `GET /v1/suite-revisions/{r}/execution-plan`; ordering `(ordinal, id)` ascending, bound to the revision and the caller's project (00 §9.1, 04.2.2-T3). A value this endpoint did not issue, including one from another revision or project, is 422 `request_invalid`.
+         */
+        cursor?: string;
+        /**
+         * Members per page. Route-specific, not the shared `Limit`: default 200, maximum 500 (04.2.2-T3). An integer outside 1–500 is 422 `request_invalid`; a non-canonical integer is 400.
+         */
+        limit?: number;
+    };
+    url: '/suite-revisions/{r}/execution-plan';
+};
+
+export type GetSuiteRevisionExecutionPlanErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetSuiteRevisionExecutionPlanError = GetSuiteRevisionExecutionPlanErrors[keyof GetSuiteRevisionExecutionPlanErrors];
+
+export type GetSuiteRevisionExecutionPlanResponses = {
+    /**
+     * Page of the revision's execution-plan members
+     */
+    200: SuiteRevisionExecutionPlan;
+};
+
+export type GetSuiteRevisionExecutionPlanResponse = GetSuiteRevisionExecutionPlanResponses[keyof GetSuiteRevisionExecutionPlanResponses];
 
 export type ReceiveGithubWebhookData = {
     body?: never;

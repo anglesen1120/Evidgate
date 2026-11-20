@@ -329,9 +329,9 @@ internal sealed class ReconcileFinisher(
         // transaction already holds FOR NO KEY UPDATE, which is a no-op for the holder). An applied edge is credited to
         // the system actor, which is what a task consumer is, and its outbox row and audit row join this unit of work;
         // a run that left queued/running meanwhile answers NoOp, not an applied edge. An append — late evidence into an
-        // incomplete run, reprocessed evidence into an incomplete, complete or canceled one — never moves the state: those
-        // states hold the run's last word, so the revision, not the state, is what a later reader follows.
-        // `incomplete -> complete`, `complete -> *` and
+        // incomplete or a complete run, reprocessed evidence into an incomplete, complete or canceled one — never moves
+        // the state: those states hold the run's last word, so the revision, not the state, is what a later reader
+        // follows. `incomplete -> complete`, `complete -> *` and
         // `canceled -> *` are not edges the machine allows, and inventing one would let new evidence rewrite a finished
         // verdict.
         if (!AppendsEvidence(settlement))

@@ -42,7 +42,7 @@ internal sealed class GetRunDecisionQueryHandler(
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Policy, nameof(GetRunDecisionQuery));
 
         var orgId = scopes.Require().OrgId;
-        var plan = await plans.GetEvaluationRunPlanAsync(orgId, query.RunId, cancellationToken).ConfigureAwait(false);
+        var plan = await plans.GetEvaluationRunHeaderAsync(orgId, query.RunId, cancellationToken).ConfigureAwait(false);
         if (plan is null || PolicyScope.Project(plan.ProjectId, principals, tenant) is not null)
         {
             return Result.Failure<Decision>(RunNotFound);

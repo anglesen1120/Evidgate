@@ -21,5 +21,5 @@
   "exclude": ["src/**/*.test.ts", "src/**/*.testing.ts", "vitest.config.ts"],
   // 01.3.2-T1.2: @evidgate/sdk workspace dependency — the build must see its emitted
   // declarations (npm workspaces links it via node_modules).
-  "references": [{ "path": "../sdk" }]
+  "references": [{ "path": "../sdk" }, { "path": "../variant" }]
 }

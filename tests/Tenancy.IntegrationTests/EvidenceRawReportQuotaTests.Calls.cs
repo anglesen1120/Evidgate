@@ -258,6 +258,21 @@ public sealed partial class EvidenceRawReportQuotaTests
             world.Org,
             Token);
 
+    /// <summary>
+    /// Completes the run and spends its window: the edge stamps <c>completed_at</c>, and a zero-minute window read by a
+    /// later transaction (<c>now() &gt; completed_at</c>) is the closed state these refusal cases name. The later
+    /// statement's clock is the proof, so no case waits for wall-clock time.
+    /// </summary>
+    private async Task CloseCompleteRunAsync(World world)
+    {
+        await RunStateWalk.MoveAsync(_fixture, world.Database, world.RunId, "complete");
+        await _fixture.ExecuteAsync(
+            world.Database, $"update public.run set late_window_minutes = 0 where id = '{world.RunId:D}'");
+        (await _fixture.ScalarAsync<bool>(
+            world.Database, $"select now() > completed_at from public.run where id = '{world.RunId:D}'"))
+            .ShouldBeTrue("the refusal needs the window spent, which the later transaction's clock proves");
+    }
+
     private Task<long> OrgCountAsync(World world, string table) =>
         _fixture.ScalarAsync<long>(
             world.Database,
@@ -289,7 +304,7 @@ public sealed partial class EvidenceRawReportQuotaTests
             "insert into public.task (id, org_id, queue, task_type, payload, idempotency_key, state, last_error) values "
             + $"('{Guid.CreateVersion7():D}', '{world.Org:D}', 'tasks', '{EvidenceTaskTypes.ReportParse}', {payload}, "
             + $"'outbox:{outboxId:D}', 'retry', '{persistedError}')");
-        await RunStateWalk.MoveAsync(_fixture, world.Database, world.RunId, "complete");
+        await CloseCompleteRunAsync(world);
 
         var log = new CapturedLog();
         var outcome = await ParseAsync(world, artifactId, log);
@@ -337,7 +352,7 @@ public sealed partial class EvidenceRawReportQuotaTests
 
         // The run closes while the row still carries its deferral: the retry is refused by the admission, which is the
         // loss this case names. The deferral stays on the task row either way.
-        await RunStateWalk.MoveAsync(_fixture, world.Database, world.RunId, "complete");
+        await CloseCompleteRunAsync(world);
         var log = new CapturedLog();
         var outcome = await ParseAsync(world, artifact, log);
 
@@ -364,7 +379,7 @@ public sealed partial class EvidenceRawReportQuotaTests
         // it only postpones a refusal the operator must see now.
         await SeedCounterAsync(counters, world, used: 10m, limit: 10m);
         var taskId = await SeedDeferredTaskAsync(world, artifactId, queue);
-        await RunStateWalk.MoveAsync(_fixture, world.Database, world.RunId, "complete");
+        await CloseCompleteRunAsync(world);
 
         var log = new CapturedLog();
         var outcome = await ParseAsync(world, artifactId, log);
@@ -397,7 +412,7 @@ public sealed partial class EvidenceRawReportQuotaTests
         await SeedPlanAsync(world);
         var artifactId = await SeedArtifactAsync(world, OneEventBody);
         await SeedCounterAsync(counters, world, used: 0m, limit: 100m);
-        await RunStateWalk.MoveAsync(_fixture, world.Database, world.RunId, "complete");
+        await CloseCompleteRunAsync(world);
 
         var log = new CapturedLog();
         var outcome = await ParseAsync(world, artifactId, log);

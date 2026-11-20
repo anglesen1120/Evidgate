@@ -1,4 +1,4 @@
-import { DecimalPipe, DOCUMENT } from '@angular/common';
+import { DecimalPipe, DOCUMENT, formatNumber } from '@angular/common';
 import {
   afterNextRender,
   ChangeDetectionStrategy,
@@ -10,6 +10,7 @@ import {
   inject,
   Injector,
   linkedSignal,
+  LOCALE_ID,
   untracked,
   viewChild,
 } from '@angular/core';
@@ -25,6 +26,7 @@ import { SessionStore } from '../../core/session/session.store';
 import { PageHeaderImports, SectionHeaderImports } from '../../shared/ui/page-header';
 import { RequestStateComponent } from '../../shared/ui/states/request-state.component';
 import { InlineFeedbackComponent } from '../../shared/ui/states/inline-feedback.component';
+import { RETAINED_ROWS_CAP } from '../../shared/keyset-retention';
 import { NarrowMutationPolicy } from '../../shared/ui/narrow/narrow-mutation-policy';
 import { CatalogMembersReader } from './catalog-members.reader';
 import { CaseListTableComponent } from './case-list-table.component';
@@ -69,6 +71,8 @@ export class CaseListPage {
   private readonly session = inject(SessionStore);
   private readonly document = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly locale = inject(LOCALE_ID);
+  private readonly cap = inject(RETAINED_ROWS_CAP);
   private readonly routeState = toSignal(
     combineLatest([
       combineLatest(this.route.pathFromRoot.map((route) => route.paramMap)),
@@ -114,7 +118,7 @@ export class CaseListPage {
     noMatchDescription: $localize`:@@catalog.loaded-no-match-description:Clear the filters to return to loaded results, or load more identities below. Local search does not inspect unloaded results.`,
     contractNote: $localize`:@@catalog.available-fields-note:This list does not supply revision, platform, level, purpose or rename history; these columns are not displayed.`,
     browseCapped: $localize`:@@catalog.browse-capped:Case list is at its load limit`,
-    browseCappedHelp: $localize`:@@catalog.browse-capped-help:Narrow the status or framework filters to reach cases beyond the 10,000 loaded here. Search only checks loaded results.`,
+    browseCappedHelp: $localize`:@@catalog.browse-capped-help:Narrow the status or framework filters to reach cases beyond the ${formatNumber(this.cap, this.locale)}:cap: loaded here. Search only checks loaded results.`,
     pagination: $localize`:@@catalog.pagination:Catalog pagination`,
     pageSize: $localize`:@@catalog.page-size:Page size`,
     loadMore: $localize`:@@catalog.load-more:Load more`,

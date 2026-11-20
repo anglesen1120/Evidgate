@@ -1,6 +1,7 @@
 // Test inputs are written inline so each case reads as the document it checks.
 #pragma warning disable CA1861
 using System.Text.Json;
+using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using System.Text.Json.Nodes;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Orchestrator.Domain;
@@ -249,11 +250,43 @@ public sealed class ManifestUnitTests
         using var escaped = JsonDocument.Parse("""{"a":"\\u0000 is text"}""");
         using var pair = JsonDocument.Parse("""{"a":"\ud83d\ude00"}""");
 
-        JsonBody.HasUnstorableText(nul.RootElement).ShouldBeTrue();
-        JsonBody.HasUnstorableText(lone.RootElement).ShouldBeTrue();
-        JsonBody.HasUnstorableText(loneKey.RootElement).ShouldBeTrue();
-        JsonBody.HasUnstorableText(escaped.RootElement).ShouldBeFalse();
-        JsonBody.HasUnstorableText(pair.RootElement).ShouldBeFalse();
+        UnstorableJsonText.HasUnstorableText(nul.RootElement).ShouldBeTrue();
+        UnstorableJsonText.HasUnstorableText(lone.RootElement).ShouldBeTrue();
+        UnstorableJsonText.HasUnstorableText(loneKey.RootElement).ShouldBeTrue();
+        UnstorableJsonText.HasUnstorableText(escaped.RootElement).ShouldBeFalse();
+        UnstorableJsonText.HasUnstorableText(pair.RootElement).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void UnstorableName_AnUnreadableNameAtAnyDepth_IsDetected()
+    {
+        using var rootHigh = JsonDocument.Parse("""{"\ud800":1}""");
+        using var rootLow = JsonDocument.Parse("""{"\udc00":{"ok":1}}""");
+        using var nested = JsonDocument.Parse("""{"outer":{"\ud800":1}}""");
+        using var inArray = JsonDocument.Parse("""{"rows":[{"\udc00":1}]}""");
+        using var nulName = JsonDocument.Parse("""{"a\u0000b":1}""");
+
+        UnstorableJsonText.HasUnstorableName(rootHigh.RootElement).ShouldBeTrue();
+        UnstorableJsonText.HasUnstorableName(rootLow.RootElement).ShouldBeTrue();
+        UnstorableJsonText.HasUnstorableName(nested.RootElement).ShouldBeTrue();
+        UnstorableJsonText.HasUnstorableName(inArray.RootElement).ShouldBeTrue();
+        UnstorableJsonText.HasUnstorableName(nulName.RootElement).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void UnstorableName_AnUnreadableValueOrACleanName_IsNotDetected()
+    {
+        using var loneValue = JsonDocument.Parse("""{"a":"x\ud800y"}""");
+        using var nulArrayItem = JsonDocument.Parse("""{"a":["x","b\u0000"]}""");
+        using var clean = JsonDocument.Parse("""{"\u00e9":"x","\ud83d\ude00":["y"],"plain":{"\u00e9":1}}""");
+
+        UnstorableJsonText.HasUnstorableName(loneValue.RootElement).ShouldBeFalse();
+        UnstorableJsonText.HasUnstorableName(nulArrayItem.RootElement).ShouldBeFalse();
+        UnstorableJsonText.HasUnstorableName(clean.RootElement).ShouldBeFalse();
+
+        // The whole-text rule is unchanged: the same values are still refused there.
+        UnstorableJsonText.HasUnstorableText(loneValue.RootElement).ShouldBeTrue();
+        UnstorableJsonText.HasUnstorableText(nulArrayItem.RootElement).ShouldBeTrue();
     }
 
     [Theory]

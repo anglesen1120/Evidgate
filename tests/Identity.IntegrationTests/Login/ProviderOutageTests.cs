@@ -2,6 +2,7 @@ using System.Net;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Identity.Login;
+using Evidgate.Testing;
 using Shouldly;
 using Xunit;
 
@@ -13,9 +14,10 @@ namespace Identity.IntegrationTests.Login;
 /// answers 401 <c>token_invalid</c>. The verified-identity half — the user upsert, the membership check, the
 /// session row and the cookie — is <c>Login/Completion/LoginFlowTests</c>', which runs on a real database.
 /// </summary>
-// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+// The assembly Fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
 [Trait("Category", "Docker")]
-public sealed class ProviderOutageTests
+public sealed class ProviderOutageTests(DatabaseFixture fixture)
+    : CatalogueTestBase(fixture, DatabaseIsolation.Dedicated)
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 25, 9, 0, 0, TimeSpan.Zero);
 
@@ -26,7 +28,7 @@ public sealed class ProviderOutageTests
         {
             Result = LoginProviderResult.Fail(LoginFailure.ProviderUnavailable),
         };
-        using var host = LoginTestHost.Start(new MutableClock(Now), provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -53,7 +55,7 @@ public sealed class ProviderOutageTests
             // What an HttpClient timeout looks like once it escapes the provider's own handling.
             OnComplete = _ => throw new TaskCanceledException(FakeLoginProvider.Canary),
         };
-        using var host = LoginTestHost.Start(new MutableClock(Now), provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -78,7 +80,7 @@ public sealed class ProviderOutageTests
         {
             OnComplete = _ => throw new HttpRequestException(FakeLoginProvider.Canary),
         };
-        using var host = LoginTestHost.Start(new MutableClock(Now), provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -100,7 +102,7 @@ public sealed class ProviderOutageTests
         {
             Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity("fake")),
         };
-        using var host = LoginTestHost.Start(new MutableClock(Now), provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), provider);
         using var client = host.CreateLoginClient();
 
         // start, with the provider's client credential missing (02.3.1 §5: 503 unavailable, retryable).
@@ -128,7 +130,7 @@ public sealed class ProviderOutageTests
     public async Task Rejected_Code_Answers_401_Token_Invalid()
     {
         var provider = new FakeLoginProvider("fake") { Result = LoginProviderResult.Fail(LoginFailure.TokenInvalid) };
-        using var host = LoginTestHost.Start(new MutableClock(Now), provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
@@ -151,7 +153,7 @@ public sealed class ProviderOutageTests
             Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity("fake")),
         };
         var completion = new FakeLoginCompletion { Failure = Error.Denied(ApiErrorCode.NoMembership, "no active membership") };
-        using var host = LoginTestHost.Start(new MutableClock(Now), completion, provider);
+        using var host = LoginTestHost.Start(Fixture, new MutableClock(Now), completion, provider);
         using var client = host.CreateLoginClient();
 
         using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));

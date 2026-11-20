@@ -2,6 +2,7 @@ using Evidgate.BuildingBlocks.Contracts.Validation;
 using System.Globalization;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Policy.Application;
@@ -85,12 +86,12 @@ public static class PolicyEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        // Nothing of the body is read for a caller who is nobody; parsing and the schema run in the handler, after the
-        // pipeline's permission check.
+        // A principal without a tenant must get the pipeline's 401 before body processing.
         if (principals.Current is null)
         {
             return Result.Failure<PolicyRevisionDto>(Unauthenticated);
         }
+        RawBodyGuard.RequireResolvedTenant(context.RequestServices);
 
         var (bytes, tooLarge) = await ReadBodyAsync(context, MaxPolicyBytes, cancellationToken).ConfigureAwait(false);
         if (tooLarge is not null)
@@ -121,6 +122,7 @@ public static class PolicyEndpoints
         {
             return Result.Failure<PolicyActivationDto>(Unauthenticated);
         }
+        RawBodyGuard.RequireResolvedTenant(context.RequestServices);
 
         var (bytes, tooLarge) = await ReadBodyAsync(context, MaxActivationBytes, cancellationToken).ConfigureAwait(false);
         if (tooLarge is not null)

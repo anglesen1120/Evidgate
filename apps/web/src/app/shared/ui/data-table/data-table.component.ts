@@ -49,6 +49,11 @@ import { hlm } from '@evidgate/ui/utils';
 import { DataTableCellComponent } from './data-table-cell.component';
 import { resolveTableColumns } from './data-table-column';
 import type { DataTableColumn } from './data-table-column';
+import {
+  captureTableLayoutFocus,
+  type DataTableLayoutFocus,
+  restoreTableLayoutFocus,
+} from './data-table-layout-focus';
 import { DataTableRecordsComponent } from './data-table-records.component';
 
 export type { DataTableColumn } from './data-table-column';
@@ -56,17 +61,6 @@ export type { DataTableColumn } from './data-table-column';
 export type DataTableDensity = 'default' | 'compact';
 export type DataTableFlow = 'bounded' | 'page';
 export type DataTableRowId<T> = (row: T) => string | number;
-
-interface DataTableLayoutFocus {
-  readonly source: HTMLElement;
-  readonly rowId: string;
-  readonly columnId: string | null;
-  readonly control: string;
-  readonly index: number;
-  readonly rowIndex: number;
-}
-
-const ROW_CONTROL_SELECTOR = 'a[href],button,input,select,textarea,summary,[tabindex]';
 
 let nextTableId = 0;
 
@@ -330,83 +324,24 @@ export class DataTableComponent<T> {
   }
 
   private captureLayoutFocus(): DataTableLayoutFocus | undefined {
-    const source = this.document.activeElement;
-    if (!(source instanceof HTMLElement) || !this.scrollElement().nativeElement.contains(source)) {
-      return undefined;
-    }
-    const cell = source.closest<HTMLElement>('app-data-table-cell[data-column-id]');
-    const row = source.closest<HTMLElement>('[data-row-id]');
-    const rowId = row?.dataset['rowId'];
-    const columnId = cell?.dataset['columnId'];
-    if (rowId === undefined || (!cell && source !== row)) return undefined;
-    const rowIndex = this.rows().findIndex((row) => String(this.rowId()(row)) === rowId);
-    if (rowIndex < 0) return undefined;
-    if (source === row) return { source, rowId, columnId: null, control: '', index: 0, rowIndex };
-    if (!cell || columnId === undefined) return undefined;
-    const control = this.controlKey(source);
-    let index = 0;
-    for (const candidate of cell.querySelectorAll<HTMLElement>(ROW_CONTROL_SELECTOR)) {
-      if (candidate === source) return { source, rowId, columnId, control, index, rowIndex };
-      if (this.controlKey(candidate) === control) index++;
-    }
-    return undefined;
-  }
-
-  private controlKey(control: HTMLElement): string {
-    const kind =
-      control.getAttribute('role') ??
-      (control.tagName === 'A' ? 'link' : control.tagName.toLowerCase());
-    const action =
-      kind === 'link'
-        ? control.getAttribute('href')
-        : (control.getAttribute('aria-label') ?? control.textContent?.trim());
-    return `${kind}:${action ?? ''}`;
+    return captureTableLayoutFocus(
+      this.document,
+      this.scrollElement().nativeElement,
+      this.rows(),
+      this.rowId(),
+    );
   }
 
   private restoreLayoutFocus(): void {
     const anchor = this.layoutFocus;
     if (!anchor) return;
-    const active = this.document.activeElement;
-    if (
-      anchor.source.isConnected ||
-      (active instanceof HTMLElement &&
-        active !== this.document.body &&
-        active !== anchor.source &&
-        active.isConnected)
-    ) {
-      this.layoutFocus = undefined;
-      return;
-    }
-    // Compare identifiers as data, never interpolate server values into selectors.
-    for (const cell of this.scrollElement().nativeElement.querySelectorAll<HTMLElement>(
-      anchor.columnId === null ? '[data-row-id]' : 'app-data-table-cell[data-column-id]',
-    )) {
-      if (
-        (anchor.columnId !== null && cell.dataset['columnId'] !== anchor.columnId) ||
-        cell.closest<HTMLElement>('[data-row-id]')?.dataset['rowId'] !== anchor.rowId
-      )
-        continue;
-      if (anchor.columnId === null) {
+    restoreTableLayoutFocus(this.document, this.scrollElement().nativeElement, anchor, {
+      virtual: this.virtual(),
+      rowExists: (rowId) => this.rows().some((row) => String(this.rowId()(row)) === rowId),
+      clear: () => {
         this.layoutFocus = undefined;
-        cell.tabIndex = -1;
-        cell.focus();
-        return;
-      }
-      let index = anchor.index;
-      for (const control of cell.querySelectorAll<HTMLElement>(ROW_CONTROL_SELECTOR)) {
-        if (this.controlKey(control) !== anchor.control || index-- !== 0) continue;
-        this.layoutFocus = undefined;
-        if (control.tabIndex >= 0 && !control.matches(':disabled,[aria-disabled="true"]')) {
-          control.focus();
-        }
-        return;
-      }
-      this.layoutFocus = undefined;
-      return;
-    }
-    if (!this.virtual() || !this.rows().some((row) => String(this.rowId()(row)) === anchor.rowId)) {
-      this.layoutFocus = undefined;
-    }
+      },
+    });
   }
 
   private measure(): void {

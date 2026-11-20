@@ -2,6 +2,8 @@
 // transport per request; the adapter never infers it from a server `Content-Type`. The marker is
 // removed before the request reaches `HttpClient`, so interceptors and the wire never see it.
 
+import { HttpContext, HttpContextToken } from '@angular/common/http';
+
 /** Request header a data service sets to choose the binary path for one call. */
 export const BINARY_TRANSPORT_HEADER = 'X-Evidgate-Transport';
 
@@ -22,4 +24,19 @@ export function binaryTransport(
   ...modes: readonly (typeof BINARY_REQUEST | typeof BINARY_RESPONSE)[]
 ): string {
   return modes.join(', ');
+}
+
+const CAPPED_BINARY_CALL = new HttpContextToken<boolean>(() => false);
+
+/**
+ * Request context the adapter sets on the calls it caps, so the telemetry interceptor measures
+ * exactly those; `reportProgress` alone also belongs to callers that never opted in.
+ */
+export function cappedBinaryContext(): HttpContext {
+  return new HttpContext().set(CAPPED_BINARY_CALL, true);
+}
+
+/** Whether the adapter capped this request (see {@link cappedBinaryContext}). */
+export function isCappedBinaryCall(request: { readonly context: HttpContext }): boolean {
+  return request.context.get(CAPPED_BINARY_CALL);
 }

@@ -18,12 +18,19 @@ namespace Evidgate.Modules.Identity.Application.Commands;
 
 /// <summary>
 /// The permissions an exchange may mint: a GitHub token always gets the whole <c>ci_producer</c> set (AC6), which
-/// includes the read of its own project's run decision so the gate command can use the same credential.
+/// includes the read of its own project's run decision so the gate command can use the same credential, and the
+/// execution plan of a suite revision so a manifest can be generated without <c>suite:read</c>.
 /// </summary>
 internal static class CiProducerPermissions
 {
     public static readonly IReadOnlyList<string> Set =
-        [Permissions.Artifact.Write, Permissions.Decision.Read, Permissions.Event.Write, Permissions.Run.Create];
+    [
+        Permissions.Artifact.Write,
+        Permissions.Decision.Read,
+        Permissions.Event.Write,
+        Permissions.Run.Create,
+        Permissions.Suite.PlanRead,
+    ];
 }
 
 /// <summary>

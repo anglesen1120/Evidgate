@@ -365,4 +365,17 @@ public sealed partial class EvidenceRawReportEnqueueTests
         _fixture.ScalarAsync<string?>(
             world.Database,
             $"select idempotency_key from public.outbox where task_type = '{ReportParseTask}' and payload->>'artifact_id' = '{artifactId:D}'");
+
+    /// <summary>
+    /// Spends a complete run's late window: a zero-minute window read by a later transaction is a run that admits no new
+    /// report, which is the terminal state the admission case names. The clock comparison is the proof, never a sleep.
+    /// </summary>
+    private async Task SpendLateWindowAsync(World world, Guid runId)
+    {
+        await _fixture.ExecuteAsync(
+            world.Database, $"update public.run set late_window_minutes = 0 where id = '{runId:D}'");
+        (await _fixture.ScalarAsync<bool>(
+            world.Database, $"select now() > completed_at from public.run where id = '{runId:D}'"))
+            .ShouldBeTrue("the refusal needs the window spent, which the later transaction's clock proves");
+    }
 }

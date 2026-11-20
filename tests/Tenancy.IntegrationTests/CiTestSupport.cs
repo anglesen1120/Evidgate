@@ -35,7 +35,7 @@ internal sealed class CiTestKeys
         ["EVIDGATE:Ci:Pepper"] = Convert.ToBase64String(Pepper),
         ["EVIDGATE:Ci:PepperVersion"] = "2",
         ["EVIDGATE:Ci:GithubOidcAudience"] = GithubAudience,
-        ["EVIDGATE:Ci:ExchangeBurstLimit"] = "1000",
+        ["EVIDGATE:Identity:RateLimits:CiExchangeLimit"] = "1000",
     };
 }
 

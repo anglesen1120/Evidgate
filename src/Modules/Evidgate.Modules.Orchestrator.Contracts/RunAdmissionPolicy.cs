@@ -17,9 +17,23 @@ public static class RunAdmissionPolicy
     public const string RunClosed = "run_closed";
 
     /// <summary>
+    /// The one late-window predicate every admission read composes into its statement, over the run alias <c>r</c>:
+    /// an <c>incomplete</c> run until its collection deadline plus the window, a <c>complete</c> run until its own
+    /// completion instant plus the window, and no other state ever. Null-safe: a missing instant answers false.
+    /// </summary>
+    public const string LateWindowOpenSql = """
+        coalesce(case r.state
+            when 'incomplete' then now() <= r.collection_deadline_at + make_interval(mins => r.late_window_minutes)
+            when 'complete' then r.completed_at is not null
+                and now() <= r.completed_at + make_interval(mins => r.late_window_minutes)
+            else false
+        end, false)
+        """;
+
+    /// <summary>
     /// Decides one write against the run's own row. A canceled run still accepts evidence and marks it
-    /// (<see cref="RunAdmission.AfterCancel"/>), an incomplete run accepts it only inside its late window and marks it
-    /// (<see cref="RunAdmission.Late"/>), and a complete run or a closed incomplete one is refused.
+    /// (<see cref="RunAdmission.AfterCancel"/>); an incomplete or a complete run accepts it only inside its late
+    /// window and marks it (<see cref="RunAdmission.Late"/>); a finished run outside that window is refused.
     /// </summary>
     /// <param name="projectState">The project's state: <c>active</c>, <c>suspended</c> or <c>deleted</c>.</param>
     /// <param name="runState">
@@ -31,10 +45,10 @@ public static class RunAdmissionPolicy
     public static RunAdmission Decide(string projectState, string runState, bool lateWindowOpen)
     {
         var afterCancel = string.Equals(runState, "canceled", StringComparison.Ordinal);
-        var late = string.Equals(runState, "incomplete", StringComparison.Ordinal) && lateWindowOpen;
-        var closed = (string.Equals(runState, "complete", StringComparison.Ordinal)
-                || string.Equals(runState, "incomplete", StringComparison.Ordinal))
-            && !late;
+        var incomplete = string.Equals(runState, "incomplete", StringComparison.Ordinal);
+        var complete = string.Equals(runState, "complete", StringComparison.Ordinal);
+        var late = (incomplete || complete) && lateWindowOpen;
+        var closed = (incomplete || complete) && !late;
 
         var refusal = string.Equals(projectState, "deleted", StringComparison.Ordinal)
             ? ProjectDeleted
@@ -55,5 +69,5 @@ public static class RunAdmissionPolicy
 /// <param name="Allowed">True when the evidence may be written.</param>
 /// <param name="Refusal">The refusal reason when <paramref name="Allowed"/> is false, otherwise null.</param>
 /// <param name="AfterCancel">True when the run is canceled, so the evidence is post-cancel.</param>
-/// <param name="Late">True when the run finished incomplete and its late window is still open.</param>
+/// <param name="Late">True when the run finished incomplete or complete and its late window is still open.</param>
 public sealed record RunAdmission(bool Allowed, string? Refusal, bool AfterCancel, bool Late);

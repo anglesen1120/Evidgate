@@ -36,18 +36,41 @@ internal interface IJUnitMapper
     JUnitMapResult Map(Stream xml, JUnitMapContext context);
 
     /// <summary>
-    /// Maps one report the parse child already validated: the child's XML record stream, not the report's bytes. This is
-    /// the production path; <see cref="Map(Stream, JUnitMapContext)"/> parses in this process and exists for offline
-    /// tooling (the golden harness) that has no child to spawn.
+    /// Opens the push mapper for one report the parse child already validated. This is the production path: the
+    /// runner hands every accepted record line to the returned sink while the child is still writing, so the records
+    /// are never kept, and <see cref="IJUnitRecordMapper.Finish"/> decides after the run's verdict.
+    /// <see cref="Map(Stream, JUnitMapContext)"/> parses in this process and exists for offline tooling (the golden
+    /// harness) that has no child to spawn.
     /// </summary>
-    /// <param name="records">The child's records in stream order, its marker excluded and no rejection among them.</param>
     /// <param name="context">The synthetic producer identity and the caller's execution-key resolution.</param>
+    /// <returns>One sink for the run's records; single-use, and the caller reads its result from <c>Finish</c>.</returns>
+    IJUnitRecordMapper OpenRecordMapper(JUnitMapContext context);
+}
+
+/// <summary>
+/// The push half of a JUnit mapping: the child's XML records arrive one at a time and the document is never rebuilt.
+/// <para>
+/// No method throws for the content of a record: the stdout pump calls <see cref="Accept"/> and a throw there would
+/// replace the runner's verdict (a cap, the wall clock, an exit code, malformed framing) with an unhandled exception.
+/// A fault is stored instead, the first one wins, and <see cref="Finish"/> raises it only after the runner said the
+/// run succeeded. A child <c>rejected</c> record is remembered as <see cref="RejectedReason"/> and still outranks a
+/// mapping fault, because it is the child's own verdict on the report.
+/// </para>
+/// </summary>
+internal interface IJUnitRecordMapper : IParseRecordSink
+{
+    /// <summary>The first child <c>rejected</c> record's reason, or <see langword="null"/>.</summary>
+    string? RejectedReason { get; }
+
+    /// <summary>
+    /// Ends the stream: returns the mapping, or the fault that was deferred while the records arrived.
+    /// </summary>
     /// <returns>One mapped case per resolvable <c>testcase</c>, the declared counters and the discrepancies.</returns>
     /// <exception cref="JUnitParseRefusedException">
-    /// The records are not a well-formed element tree (<c>parse_crashed</c>), or they describe a document whose root
-    /// is neither a <c>testsuite</c> nor a <c>testsuites</c>.
+    /// The records are not a well-formed element tree, namespace-correct document description (<c>parse_crashed</c>),
+    /// or they describe a document whose root is neither a <c>testsuite</c> nor a <c>testsuites</c>.
     /// </exception>
-    JUnitMapResult Map(IReadOnlyList<ParseRecord> records, JUnitMapContext context);
+    JUnitMapResult Finish();
 }
 
 /// <summary>

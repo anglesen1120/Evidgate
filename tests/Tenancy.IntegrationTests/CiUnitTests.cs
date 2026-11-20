@@ -242,42 +242,6 @@ public sealed class CiUnitTests
     }
 
     [Fact]
-    public void RateLimiter_AllowsTheBurst_ThenRefusesWithRetryAfter_ThenResets()
-    {
-        var clock = new FakeClock(new DateTimeOffset(2026, 10, 3, 12, 0, 0, TimeSpan.Zero));
-        var limiter = new ExchangeRateLimiter(
-            Microsoft.Extensions.Options.Options.Create(new CiAuthOptions { ExchangeBurstLimit = 3, ExchangeWindowSeconds = 60 }), clock);
-
-        for (var i = 0; i < 3; i++)
-        {
-            limiter.TryAcquire("k", out _).ShouldBeTrue();
-        }
-
-        limiter.TryAcquire("k", out var retryAfter).ShouldBeFalse();
-        retryAfter.ShouldBeInRange(1, 60);
-        limiter.TryAcquire("other", out _).ShouldBeTrue();
-
-        clock.Advance(TimeSpan.FromSeconds(61));
-        limiter.TryAcquire("k", out _).ShouldBeTrue();
-    }
-
-    [Fact]
-    public void RateLimiter_DoesNotGrowWithoutBound()
-    {
-        var clock = new FakeClock(DateTimeOffset.UtcNow);
-        var limiter = new ExchangeRateLimiter(
-            Microsoft.Extensions.Options.Options.Create(new CiAuthOptions { ExchangeBurstLimit = 5, ExchangeWindowSeconds = 1 }), clock);
-
-        for (var i = 0; i < 1000; i++)
-        {
-            limiter.TryAcquire("k" + i, out _).ShouldBeTrue();
-        }
-
-        clock.Advance(TimeSpan.FromSeconds(5));
-        limiter.TryAcquire("fresh", out _).ShouldBeTrue();
-    }
-
-    [Fact]
     public void RateLimiter_ClientKey_GroupsAnIpv6SubscriberBySlash64_AndUnwrapsMappedIpv4()
     {
         ExchangeRateLimiter.ClientKey(System.Net.IPAddress.Parse("2001:db8:1:2:aaaa:bbbb:cccc:dddd"))
@@ -286,26 +250,6 @@ public sealed class CiUnitTests
             .ShouldNotBe(ExchangeRateLimiter.ClientKey(System.Net.IPAddress.Parse("2001:db8:1:2::1")));
         ExchangeRateLimiter.ClientKey(System.Net.IPAddress.Parse("::ffff:203.0.113.9")).ShouldBe("203.0.113.9");
         ExchangeRateLimiter.ClientKey(null).ShouldBe("none");
-    }
-
-    [Fact]
-    public void RateLimiter_WhenFullOfLiveWindows_RefusesNewKeys_ButKeepsServingTrackedOnes()
-    {
-        var clock = new FakeClock(DateTimeOffset.UtcNow);
-        var limiter = new ExchangeRateLimiter(
-            Microsoft.Extensions.Options.Options.Create(new CiAuthOptions { ExchangeBurstLimit = 5, ExchangeWindowSeconds = 60 }), clock);
-
-        for (var i = 0; i < 50_000; i++)
-        {
-            limiter.TryAcquire("k" + i, out _).ShouldBeTrue();
-        }
-
-        limiter.TryAcquire("sprayed", out var retryAfter).ShouldBeFalse();
-        retryAfter.ShouldBeGreaterThan(0);
-        limiter.TryAcquire("k0", out _).ShouldBeTrue();
-
-        clock.Advance(TimeSpan.FromSeconds(61));
-        limiter.TryAcquire("sprayed", out _).ShouldBeTrue();
     }
 
     // ------------------------------------------------------------ JWKS provider

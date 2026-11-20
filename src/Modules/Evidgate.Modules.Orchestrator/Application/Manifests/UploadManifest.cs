@@ -1,4 +1,5 @@
 using System.Text;
+using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Evidgate.BuildingBlocks.Canonicalization;
@@ -14,6 +15,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Messaging;
 using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Catalog.Contracts;
+using Evidgate.Modules.Orchestrator.Application.Runs;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Orchestrator.Domain;
 using Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
@@ -84,7 +86,7 @@ internal sealed class UploadManifestCommandHandler(
 
         using var parsed = document;
         var body = parsed.RootElement;
-        if (JsonBody.HasUnstorableText(body))
+        if (UnstorableJsonText.HasUnstorableText(body))
         {
             // A lone surrogate or a NUL: neither the canonical form nor jsonb can carry it.
             return Refuse(InvalidValue, [new ErrorDetail(string.Empty, InvalidValue)]);
@@ -103,6 +105,11 @@ internal sealed class UploadManifestCommandHandler(
         if (refusal is not null)
         {
             return Refuse(refusal.Reason, refusal.Details);
+        }
+
+        if (RefusedVariantParams(body, catalog) is { Count: > 0 } variantRefusals)
+        {
+            return Refuse(CreateRunCommandHandler.InvalidVariant, variantRefusals);
         }
 
         string hash;
@@ -191,6 +198,33 @@ internal sealed class UploadManifestCommandHandler(
         audit.Describe(new AuditObject("manifest", manifestId.ToString("D")));
 
         return Result.Success(new ManifestAccepted(manifestId, hash), 201);
+    }
+
+    /// <summary>
+    /// The planned executions whose variant params run creation would refuse. It makes the same Catalog call over the same
+    /// elements, so the limits and their counting live in one place; the call is pure (no I/O) and normalises each distinct
+    /// params text once. Matrix variants are not read by run creation and are not checked here.
+    /// </summary>
+    private static List<ErrorDetail> RefusedVariantParams(JsonElement body, ICatalogContracts catalog)
+    {
+        var planned = body.GetProperty("planned_executions");
+        var parameters = new List<JsonElement>(planned.GetArrayLength());
+        foreach (var execution in planned.EnumerateArray())
+        {
+            parameters.Add(execution.GetProperty("variant").GetProperty("params"));
+        }
+
+        var hashes = catalog.NormalizeVariantHashes(parameters);
+        var details = new List<ErrorDetail>();
+        for (var index = 0; index < hashes.Count && details.Count < ManifestVerifier.MaxDetails; index++)
+        {
+            if (hashes[index] is null)
+            {
+                details.Add(new ErrorDetail($"/planned_executions/{index}/variant/params", CreateRunCommandHandler.InvalidVariant, index));
+            }
+        }
+
+        return details;
     }
 
     private static Result<ManifestAccepted> Refuse(string reason, IReadOnlyList<ErrorDetail> details)

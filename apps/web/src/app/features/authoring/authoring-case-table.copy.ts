@@ -1,3 +1,5 @@
+import { formatNumber } from '@angular/common';
+
 export const CASE_TABLE_COPY = {
   scopeHelp: $localize`:@@authoring.case-table.scope-help:Filters search the server list. Authoring coverage means a live automated identity is linked; it is not an execution result.`,
   filters: $localize`:@@authoring.case-table.filters:Filter manual cases`,
@@ -42,7 +44,6 @@ export const CASE_TABLE_COPY = {
   invalidNode: $localize`:@@authoring.case-table.invalid-node:Invalid category link`,
   invalidNodeHelp: $localize`:@@authoring.case-table.invalid-node-help:This link's category ID is not a UUID, so the case list was not requested. Clear filters to browse the project, or choose a category in the feature tree.`,
   browseCapped: $localize`:@@authoring.case-table.browse-capped:Case list is at its load limit`,
-  browseCappedHelp: $localize`:@@authoring.case-table.browse-capped-help:Narrow the filters or choose another scope in the hierarchy to reach cases beyond the 10,000 loaded here.`,
   pagination: $localize`:@@authoring.case-table.pagination:Manual case pagination`,
   pageSize: $localize`:@@authoring.case-table.page-size:Page size`,
   more: $localize`:@@authoring.case-table.more:Load more cases`,
@@ -62,3 +63,11 @@ export const CASE_TABLE_COPY = {
   pending: $localize`:@@authoring.case-table.pending:Pending changes`,
   pendingHelp: $localize`:@@authoring.case-table.pending-help:Pending change count unavailable; this list does not supply it.`,
 };
+
+/**
+ * The cap is injected, so the figure cannot be a source literal; it is grouped for the active
+ * locale exactly like the counts beside it.
+ */
+export function caseTableBrowseCappedHelp(cap: number, locale: string): string {
+  return $localize`:@@authoring.case-table.browse-capped-help:Narrow the filters or choose another scope in the hierarchy to reach cases beyond the ${formatNumber(cap, locale)}:cap: loaded here.`;
+}

@@ -303,6 +303,10 @@ public static class Permissions
     /// <summary>The <c>suite</c> resource.</summary>
     public static class Suite
     {
+        /// suite:plan_read — Read a suite revision's execution plan — each member's case id, variant hash and
+        /// pinned case revision — for manifest generation (00 §9.3, 04.2.2-T3). It never substitutes for
+        /// `suite:read`.
+        public const string PlanRead = "suite:plan_read";
         /// suite:read — Read suite revisions, their diffs and the fixtures they reference (00 §9.3, T56).
         public const string Read = "suite:read";
         /// suite:write — Write suite revisions (03 §4.5). A published revision is immutable.
@@ -402,6 +406,7 @@ public static class Permissions
         "service_identity:write",
         "sso:read",
         "sso:write",
+        "suite:plan_read",
         "suite:read",
         "suite:write",
         "support:approve",
@@ -510,6 +515,7 @@ public static class Permissions
         "service_identity:write",
         "sso:read",
         "sso:write",
+        "suite:plan_read",
         "suite:read",
         "suite:write",
         "support:approve",

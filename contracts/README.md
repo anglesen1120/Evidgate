@@ -95,7 +95,12 @@ Every operation declares:
 
 Shared `components/parameters` carry the 00 §9.1 conventions: `cursor` and
 `limit` (default 50, max 200), `Idempotency-Key` (≤ 128 chars, 00 §7),
-`If-Match` and `X-XSRF-TOKEN`. Mutations must reference `Idempotency-Key`
+`If-Match` and `X-XSRF-TOKEN`. A route whose ordering or bound differs declares
+its own parameter component and names it in its 00 §9.3 row: `RunAttemptCursor`,
+`RunEvidenceRevisionCursor`, `PolicyRevisionCursor`, and for
+`GET /v1/suite-revisions/{r}/execution-plan` `ExecutionPlanCursor` with
+`ExecutionPlanLimit` (default 200, max 500, 04.2.2-T3); the shared `Limit`
+stays 50/200 and `check-contract-conventions` pins that. Mutations must reference `Idempotency-Key`
 unless listed in the exemption list (below); every cookie-authenticated
 mutation references `X-XSRF-TOKEN`, while bearer-only routes (e.g. the V2
 agent job routes) must not (T38). The server enforces that header host-wide

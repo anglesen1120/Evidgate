@@ -76,12 +76,4 @@ internal sealed class CiAuthOptions
     /// <see cref="AllowedEventNames"/>, and silently ignoring the old variable would leave an operator believing it still applies.
     /// </summary>
     public string? DeniedEventNames { get; init; }
-
-    /// <summary>Exchange attempts allowed per key within <see cref="ExchangeWindowSeconds"/> (AC8).</summary>
-    [Range(1, 10000)]
-    public int ExchangeBurstLimit { get; init; } = 30;
-
-    /// <summary>Length of the rate-limit window in seconds.</summary>
-    [Range(1, 3600)]
-    public int ExchangeWindowSeconds { get; init; } = 60;
 }

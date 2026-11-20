@@ -19,11 +19,15 @@ internal sealed partial class ReprocessReportHandler
     /// The run's state, its project's state and its late window, read under the run's own lock (the same admission facts
     /// the parse path reads, plus the lock the synthetic slot's shard index needs).
     /// </summary>
-    private const string RunGateSql = """
+    private const string RunGateSql =
+        """
         select r.state as "RunState",
                p.status as "ProjectState",
-               (r.state = 'incomplete'
-                and now() <= r.collection_deadline_at + make_interval(mins => r.late_window_minutes)) as "LateWindowOpen"
+               (
+        """
+        + RunAdmissionPolicy.LateWindowOpenSql
+        + """
+               ) as "LateWindowOpen"
           from public.run r
           join public.project p on p.org_id = r.org_id and p.id = r.project_id
          where r.org_id = @org_id

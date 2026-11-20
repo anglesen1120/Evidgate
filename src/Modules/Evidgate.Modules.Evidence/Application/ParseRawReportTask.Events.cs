@@ -134,11 +134,15 @@ internal sealed partial class ParseRawReportHandler
     /// The run's state, its project's state and its late window: the admission facts the event batch route reads, shared
     /// by the write transaction's lock read and the unlocked read the pre-check asks before the fetch.
     /// </summary>
-    private const string RunFactsSql = """
+    private const string RunFactsSql =
+        """
         select r.state as "RunState",
                p.status as "ProjectState",
-               (r.state = 'incomplete'
-                and now() <= r.collection_deadline_at + make_interval(mins => r.late_window_minutes)) as "LateWindowOpen",
+               (
+        """
+        + RunAdmissionPolicy.LateWindowOpenSql
+        + """
+               ) as "LateWindowOpen",
                r.project_id as "ProjectId"
           from public.run r
           join public.project p on p.org_id = r.org_id and p.id = r.project_id

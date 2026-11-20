@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Evidgate.BuildingBlocks.SharedKernel.Security;
 
 namespace Evidgate.Modules.Catalog.Domain;
 
@@ -11,32 +12,9 @@ namespace Evidgate.Modules.Catalog.Domain;
 /// </summary>
 internal static class TextRules
 {
-    /// <summary>True when <paramref name="text"/> is non-null, well-formed and free of control and format characters.</summary>
+    /// <summary>True when <paramref name="text"/> is non-null, well-formed and free of control and format characters; the rule lives in <c>UnicodeCleanliness</c> (SharedKernel), shared with the manifest check.</summary>
     /// <param name="text">The candidate.</param>
-    public static bool IsClean(string? text)
-    {
-        if (text is null)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < text.Length;)
-        {
-            if (!Rune.TryGetRuneAt(text, i, out var rune))
-            {
-                return false;
-            }
-
-            if (Rune.IsControl(rune) || Rune.GetUnicodeCategory(rune) == UnicodeCategory.Format)
-            {
-                return false;
-            }
-
-            i += rune.Utf16SequenceLength;
-        }
-
-        return true;
-    }
+    public static bool IsClean(string? text) => UnicodeCleanliness.IsClean(text);
 
     /// <summary>True when <paramref name="text"/> is well-formed UTF-16 (no unpaired surrogate); control and format characters are allowed, as in source code.</summary>
     /// <param name="text">The candidate.</param>

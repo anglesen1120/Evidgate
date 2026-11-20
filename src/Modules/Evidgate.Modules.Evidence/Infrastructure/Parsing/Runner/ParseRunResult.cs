@@ -58,7 +58,10 @@ internal readonly record struct ParseRecord(ReadOnlyMemory<byte> Utf8Json);
 internal abstract record ParseRunResult(int? ExitCode, long OutputBytes, int OutputRecords);
 
 /// <summary>A run that streamed a complete, well-framed record set and exited 0.</summary>
-/// <param name="Records">Every record before the marker, in stream order.</param>
+/// <param name="Records">
+/// Every record before the marker, in stream order, when the request named no sink; empty when the caller supplied
+/// its own sink, because the records were delivered there instead.
+/// </param>
 /// <param name="ChildExitCode">The child's exit code, always 0 on this shape.</param>
 /// <param name="OutputBytes">How many stdout bytes the child wrote, marker included.</param>
 /// <param name="OutputRecords">How many record lines were accepted; the marker is not counted.</param>

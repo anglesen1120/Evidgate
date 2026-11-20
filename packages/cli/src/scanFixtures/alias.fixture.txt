@@ -1,0 +1,11 @@
+// The body and its reader reach the read through local aliases, so no receiver name helps.
+export async function drainAnswer(incoming: Answer): Promise<void> {
+  const answer = incoming;
+  const body = answer.body;
+  const copy = body;
+  for await (const chunk of copy) {
+    use(chunk);
+  }
+  const reader = incoming.body.getReader();
+  await reader.read();
+}

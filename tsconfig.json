@@ -6,6 +6,7 @@
   "files": [],
   "references": [
     { "path": "packages/sdk" },
+    { "path": "packages/variant" },
     { "path": "packages/cli" },
     { "path": "packages/adapter-playwright" },
     { "path": "packages/test-fixtures" },

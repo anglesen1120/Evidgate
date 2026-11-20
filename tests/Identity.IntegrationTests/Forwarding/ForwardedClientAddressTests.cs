@@ -1,6 +1,7 @@
 using System.Net;
 using Evidgate.Api.Forwarding;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
+using Evidgate.Testing;
 using Identity.IntegrationTests.Login;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,9 +20,10 @@ namespace Identity.IntegrationTests.Forwarding;
 /// Each case drives the real <c>start</c> route through the real composition, so the limiter key is the address
 /// the forwarded-headers middleware left on the connection — no case reads the key directly.
 /// </remarks>
-// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
+// The assembly Fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
 [Trait("Category", "Docker")]
-public sealed class ForwardedClientAddressTests
+public sealed class ForwardedClientAddressTests(DatabaseFixture fixture)
+    : CatalogueTestBase(fixture, DatabaseIsolation.Dedicated)
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 25, 9, 0, 0, TimeSpan.Zero);
 
@@ -40,7 +42,7 @@ public sealed class ForwardedClientAddressTests
     [Fact]
     public async Task Two_Clients_Behind_A_Listed_Proxy_Keep_Separate_Budgets()
     {
-        using var plain = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var plain = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var host = plain.WithWebHostBuilder(builder =>
             ForwardedHeadersTestHost.Configure(builder, proxies: Proxy));
         using var client = ForwardedHeadersTestHost.CreateClient(host);
@@ -68,7 +70,7 @@ public sealed class ForwardedClientAddressTests
     [Fact]
     public async Task An_Unlisted_Sender_Cannot_Rotate_X_Forwarded_For_To_Escape_Its_Budget()
     {
-        using var plain = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var plain = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var host = plain.WithWebHostBuilder(builder =>
             ForwardedHeadersTestHost.Configure(builder, proxies: Proxy + ", " + ListedSender));
         using var client = ForwardedHeadersTestHost.CreateClient(host);
@@ -95,7 +97,7 @@ public sealed class ForwardedClientAddressTests
     {
         // Both proxies sit in one network, so the sender address and the header's last hop are both trusted;
         // the header is the deployed shape `spoof, client, proxy2`.
-        using var plain = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var plain = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var host = plain.WithWebHostBuilder(builder =>
             ForwardedHeadersTestHost.Configure(builder, proxies: string.Empty, networks: "203.0.113.0/24"));
         using var client = ForwardedHeadersTestHost.CreateClient(host);
@@ -121,7 +123,7 @@ public sealed class ForwardedClientAddressTests
     [Fact]
     public async Task Malformed_X_Forwarded_For_Values_Fall_Back_To_The_Senders_Key()
     {
-        using var plain = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var plain = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var host = plain.WithWebHostBuilder(builder =>
             ForwardedHeadersTestHost.Configure(builder, proxies: Proxy));
         using var client = ForwardedHeadersTestHost.CreateClient(host);
@@ -158,7 +160,7 @@ public sealed class ForwardedClientAddressTests
     [Fact]
     public async Task A_Direct_Api_Ignores_X_Forwarded_For()
     {
-        using var plain = LoginTestHost.Start(new MutableClock(Now), new FakeLoginProvider("fake"));
+        using var plain = LoginTestHost.Start(Fixture, new MutableClock(Now), new FakeLoginProvider("fake"));
         using var host = plain.WithWebHostBuilder(builder =>
             ForwardedHeadersTestHost.Configure(builder, proxies: TrustedProxyOptions.None));
 

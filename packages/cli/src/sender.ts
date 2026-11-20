@@ -13,7 +13,12 @@ import { createApiClient } from './client.js';
 import { maxInFlight } from './senderLimits.js';
 import { verifyAcks } from './senderAck.js';
 import { deadlineExceeded, stoppedElsewhere } from './senderFailure.js';
-import { httpRefusal, transportRefusal, type AttemptOutcome } from './senderRefusal.js';
+import {
+  httpRefusal,
+  isResponseReadFailure,
+  transportRefusal,
+  type AttemptOutcome,
+} from './senderRefusal.js';
 import { attemptSignal, backoffDelay } from './senderRetry.js';
 
 import type { Batch } from './batchPack.js';
@@ -299,7 +304,8 @@ const rawBody = (body: unknown): unknown => body;
 
 /**
  * One request. The SDK returns `response: undefined` when the transport itself failed
- * (connection refused, the request timeout aborting the request, a refused redirect).
+ * (connection refused, the request timeout aborting the request, a refused redirect). A
+ * 2xx whose body dies mid-read rejects instead: that is the same lost connection.
  */
 async function attemptOnce(
   client: Client,
@@ -312,7 +318,7 @@ async function attemptOnce(
   const gzip = gzipBody !== undefined;
   const payload = gzipBody ?? batch.body;
 
-  const result = await postRunEvents({
+  const settled = await postRunEvents({
     client,
     path: { r: options.runId },
     // `PostRunEventsData` types `body` as the JSON `EventBatch` and `headers` as the CSRF
@@ -325,7 +331,22 @@ async function attemptOnce(
     bodySerializer: rawBody,
     headers: requestHeaders(batch, gzip),
     signal: attemptSignal(deadlineAt, deps.now()),
-  });
+  }).then(
+    (outcome) => ({ outcome }),
+    (error: unknown) => {
+      // Only a body that died after a 2xx answer is retried as a transport loss; every
+      // other rejection keeps propagating unchanged.
+      if (!isResponseReadFailure(error)) {
+        throw error;
+      }
+      return { readFailure: error };
+    },
+  );
+
+  if ('readFailure' in settled) {
+    return transportRefusal(batch, settled.readFailure);
+  }
+  const result = settled.outcome;
 
   const response = result.response;
   if (response === undefined) {

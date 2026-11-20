@@ -1,0 +1,9 @@
+// Tearing the reader off the answer hides the call site from a name-based scan.
+export function splitAnswer(incoming: Answer): void {
+  const { text } = incoming;
+  const { json: readJson } = incoming;
+  const { body } = incoming;
+  use(text, readJson, body);
+  incoming['text']();
+  incoming.text.call(incoming);
+}

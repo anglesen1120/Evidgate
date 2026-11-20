@@ -52,6 +52,7 @@ const VI = {
   'authoring.review-context.discarded': 'Đã loại bỏ',
   'authoring.review-context.reason': 'Lý do thay đổi',
   'authoring.pending-changes.change-id': 'Mã thay đổi',
+  'authoring.pending-changes.comment-label': 'Bình luận',
   'authoring.pending-changes.manual-source': 'Thủ công',
   'authoring.pending-changes.ai-source': 'AI',
   'authoring.pending-changes.import-source': 'Nhập',
@@ -166,10 +167,11 @@ describe.each(['en', 'vi'] as const)('Checklist review context in %s', (locale) 
     );
   });
 
-  it('renders the supplied operation as the row heading', async () => {
+  it('renders the supplied operation as the localized row heading', async () => {
     const { ui } = await mount();
-    // Operation copy is evaluated before this spec loads each locale’s translations.
-    expect(await ui.textAt('[data-review-change] h3')).toBe('Comment');
+    expect(await ui.textAt('[data-review-change] h3')).toBe(
+      locale === 'vi' ? VI['authoring.pending-changes.comment-label'] : 'Comment',
+    );
   });
 
   it('renders the change identifier with the shared copy primitive', async () => {

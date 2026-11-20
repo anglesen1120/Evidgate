@@ -30,4 +30,19 @@ internal static class EvaluationPlanSql
            and r.id = @run_id
          order by pe.execution_key
         """;
+
+    /// <summary>
+    /// The run's scope columns alone: one primary-key row of <c>run</c>, no manifest and no planned execution, so a
+    /// poll costs the same for a run of any size. The trusted <c>org_id</c> is a predicate as well as a scope.
+    /// </summary>
+    internal const string LoadHeader = """
+        select r.project_id as "ProjectId",
+               r.policy_revision_id as "PolicyRevisionId",
+               r.purpose as "Purpose",
+               r.is_fork as "IsFork",
+               r.suite_revision_id as "SuiteRevisionId"
+          from public.run r
+         where r.org_id = @org_id
+           and r.id = @run_id
+        """;
 }

@@ -174,7 +174,8 @@ public sealed partial class OptionsValidationTests
 
     private static async Task<ProcessRunner.Result> RunUntilExitAsync(
         string fileName,
-        IReadOnlyDictionary<string, string> env)
+        IReadOnlyDictionary<string, string> env,
+        bool statingNoHealingProvider = false)
     {
         // The Api materialises the proxy stance while building the pipeline, before the option
         // groups blanked below are validated, so that stance is a boot baseline here and not the
@@ -184,10 +185,19 @@ public sealed partial class OptionsValidationTests
             [NoForwardedProxy.Variable] = "none",
         };
 
+        // A Production boot refuses to start while no healing provider is stated, and that check runs before the
+        // option groups a case is about; such a case states the disabled provider and keeps it through the sweep.
+        if (statingNoHealingProvider)
+        {
+            scopedEnv[NoHealingProvider.Variable] = "none";
+        }
+
+        // Every key the case states (including the two baselines above) must reach the child; only inherited
+        // keys it does not state are removed, so the parent environment cannot leak into a case.
         var allEvidgateKeys = Environment.GetEnvironmentVariables().Keys
             .Cast<string>()
             .Where(key => key.StartsWith("EVIDGATE__", StringComparison.Ordinal))
-            .Where(key => !string.Equals(key, NoForwardedProxy.Variable, StringComparison.Ordinal))
+            .Where(key => !scopedEnv.ContainsKey(key))
             .ToArray();
 
         using var process = ProcessRunner.Start(fileName, scopedEnv, allEvidgateKeys);

@@ -1,0 +1,7 @@
+// A rebuilt answer is still an answer: the read happens on a chain, not through a variable.
+export async function rebuild(payload: Payload, url: string): Promise<void> {
+  const text = await new Response(payload, { status: 200 }).text();
+  const bytes = await new Request(url).arrayBuffer();
+  use(text, bytes);
+  new Response(payload).formData();
+}

@@ -20,9 +20,8 @@
 import { type HttpClient, type HttpEvent, type HttpResponse } from '@angular/common/http';
 import { filter, type Observable } from 'rxjs';
 
-import { BINARY_TRANSPORT_HEADER } from './binary-transport';
+import { BINARY_TRANSPORT_HEADER, cappedBinaryContext } from './binary-transport';
 import {
-  assertTextWithinCap,
   decodeBinaryErrorBody,
   enforceBinarySizeCap,
   isFinalResponse,
@@ -188,9 +187,6 @@ async function receiveResponse(
     request.signal,
     deadline,
   );
-  if (modes !== null) {
-    assertTextWithinCap(response.body, response);
-  }
   return toFetchResponse(
     response.status,
     response.statusText,
@@ -231,6 +227,7 @@ function finalResponse(
     headers: toRequestHeaders(request.headers),
     observe: 'events',
     reportProgress: true,
+    context: cappedBinaryContext(),
     responseType: 'arraybuffer',
     withCredentials: request.credentials === 'include',
   });
@@ -250,6 +247,7 @@ function cappedTextResponse(
     headers: toRequestHeaders(request.headers),
     observe: 'events',
     reportProgress: true,
+    context: cappedBinaryContext(),
     responseType: 'text',
     withCredentials: request.credentials === 'include',
   });

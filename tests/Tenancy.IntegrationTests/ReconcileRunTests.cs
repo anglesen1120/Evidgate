@@ -100,7 +100,11 @@ public sealed partial class ReconcileRunTests : IClassFixture<TenancyHostPool>
     /// wrapped in <see cref="CountingRunReconciler"/> so a case can prove the handler body ran, not only that the task
     /// row ended <c>done</c>.
     /// </summary>
-    private async Task<IngestTestWorld> StartWithQueueAsync(int attemptsSkip = 0, int slots = 1, string? database = null)
+    private async Task<IngestTestWorld> StartWithQueueAsync(
+        int attemptsSkip = 0,
+        int slots = 1,
+        string? database = null,
+        Action<IServiceCollection>? configure = null)
     {
         var world = await IngestTestWorld.StartAsync(
             _fixture,
@@ -117,6 +121,7 @@ public sealed partial class ReconcileRunTests : IClassFixture<TenancyHostPool>
                         provider.GetRequiredService<ITenantDb>(),
                         provider.GetRequiredService<ITenantScopeAccessor>()),
                     provider.GetRequiredService<ReconcileCallCounter>()));
+                configure?.Invoke(services);
             });
         await AnswerPlanOrDisposeAsync(world, attemptsSkip);
 
@@ -2378,15 +2383,13 @@ public sealed partial class ReconcileRunTests : IClassFixture<TenancyHostPool>
             + $"now() - interval '5 minutes' - interval '1 second' where id = '{runId:D}'");
 
     /// <summary>
-    /// The run's late window as the ingest route evaluates it
-    /// (<c>now() &lt;= collection_deadline_at + late_window_minutes</c>), so a case can prove a scenario really is inside
-    /// or outside the window instead of trusting the arithmetic in its own comment. The reconciler does not read it: the
-    /// route's decision at ingest time is the one that counts.
+    /// The run's late window as the ingest route evaluates it: the shared <see cref="RunAdmissionPolicy.LateWindowOpenSql"/>
+    /// predicate, so a case proves the scenario really is inside or outside the window instead of trusting the arithmetic
+    /// in its own comment. The reconciler does not read it: the route's decision at ingest time is the one that counts.
     /// </summary>
     private static Task<bool> LateWindowOpenAsync(IngestTestWorld world, Guid runId) =>
         world.ScalarAsync<bool>(
-            "select now() <= collection_deadline_at + make_interval(mins => late_window_minutes) "
-            + $"from public.run where id = '{runId:D}'");
+            "select " + RunAdmissionPolicy.LateWindowOpenSql + $" from public.run r where r.id = '{runId:D}'");
 
     /// <summary>
     /// The reconcile triggers the ingest path enqueued for one run's late evidence: the key shape is the contract's,

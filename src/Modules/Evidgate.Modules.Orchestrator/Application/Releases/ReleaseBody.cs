@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Orchestrator.Domain;
@@ -27,12 +28,6 @@ internal static class ReleaseBody
     /// <summary>The members of one component.</summary>
     private static readonly string[] ComponentMembers = ["component_key", "digest", "environment_revision_id"];
 
-    /// <summary>The one <c>details[].path</c> an unreadable or over-long member name is reported under.</summary>
-    private const string InvalidMemberNamePath = "/<invalid-member-name>";
-
-    /// <summary>Longer member names answer the placeholder, so none is cut inside a surrogate pair.</summary>
-    private const int MaxEchoedMemberName = 64;
-
     /// <summary>Parses bytes already bounded by the route, preserving its syntax and member-specific errors.</summary>
     internal static (ReleaseRequest Request, Error? Error) Parse(ReadOnlyMemory<byte> content)
     {
@@ -48,7 +43,7 @@ internal static class ReleaseBody
 
         using (document)
         {
-            if (JsonBody.HasUnstorableText(document.RootElement))
+            if (UnstorableJsonText.HasUnstorableText(document.RootElement))
             {
                 return (default!, Invalid("the body carries a string that cannot be stored", [new ErrorDetail(string.Empty, "invalid_value")]));
             }
@@ -240,7 +235,7 @@ internal static class ReleaseBody
         }
         catch (InvalidOperationException)
         {
-            return AdditionalMember(InvalidMemberNamePath, index);
+            return AdditionalMember(RequestMemberPath.InvalidMemberName, index);
         }
     }
 
@@ -251,7 +246,7 @@ internal static class ReleaseBody
         {
             if (!allowed.Contains(member.Name))
             {
-                return AdditionalMember(member.Name.Length > MaxEchoedMemberName ? InvalidMemberNamePath : "/" + member.Name, index);
+                return AdditionalMember(RequestMemberPath.ForUnknown(member.Name), index);
             }
 
             if (!seen.Add(member.Name))

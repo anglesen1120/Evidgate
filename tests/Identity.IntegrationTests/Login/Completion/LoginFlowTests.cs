@@ -287,7 +287,9 @@ public sealed partial class LoginFlowTests : CatalogueTestBase
     [Fact]
     public async Task Database_Fault_Answers_503_With_Retry_After_And_No_Database_Text()
     {
-        using var host = LoginCompletionTestHost.StartWithoutDatabase(LoginCompletionTestHost.GoogleProvider());
+        using var host = LoginCompletionTestHost.StartWithIdentityStoreOutage(
+            Fixture,
+            LoginCompletionTestHost.GoogleProvider());
         using var client = host.CreateLoginClient();
 
         using var callback = await host.SignInAsync(client);
@@ -312,7 +314,7 @@ public sealed partial class LoginFlowTests : CatalogueTestBase
     public async Task ReplayStore_Fault_Answers_503_With_Retry_After_And_Never_Calls_The_Provider()
     {
         var provider = LoginCompletionTestHost.GoogleProvider();
-        using var host = LoginCompletionTestHost.StartWithReplayStoreOutage(provider);
+        using var host = LoginCompletionTestHost.StartWithReplayStoreOutage(Fixture, provider);
         using var client = host.CreateLoginClient();
 
         using var callback = await host.SignInAsync(client);

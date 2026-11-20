@@ -20,7 +20,9 @@ import { inject } from '@angular/core';
 import { finalize, tap } from 'rxjs';
 
 import { isApiRequestUrl } from '../http/api-origin';
+import { isCappedBinaryCall } from '../http/binary-transport';
 import { exceedsBinaryCap } from '../http/http-client-fetch-binary';
+import { utf8ExceedsBytes } from '../http/utf8-size';
 import { apiPathTemplate } from './api-path-template';
 import { TelemetryService } from './telemetry.service';
 import type { ApiCallResult } from './telemetry-sdk';
@@ -84,16 +86,13 @@ function readRequestId(headers: HttpHeaders): string | null {
   return value !== null && UUID_SHAPE.test(value) ? value.toLowerCase() : null;
 }
 
-/** Whether a string error body is within the bound, in UTF-8 bytes like the binary decode. */
+/**
+ * Whether a string error body is within the bound. The unit is exact UTF-8 bytes, not UTF-16 units,
+ * like the binary decode: the bound caps the input parsed for enrichment, and a skipped body only
+ * costs the enrichment.
+ */
 function stringFitsTracedBound(text: string): boolean {
-  if (text.length > MAX_TRACED_ERROR_BYTES) {
-    return false;
-  }
-  // UTF-16 units * 3 bounds the encoded size from above, so only a long-ish string is measured.
-  return (
-    text.length * 3 <= MAX_TRACED_ERROR_BYTES ||
-    new TextEncoder().encode(text).byteLength <= MAX_TRACED_ERROR_BYTES
-  );
+  return !utf8ExceedsBytes(text, MAX_TRACED_ERROR_BYTES);
 }
 
 /** The body as JSON, when the server sent it as a string instead of parsed JSON. */
@@ -198,9 +197,9 @@ export const telemetryInterceptor: HttpInterceptorFn = (request, next) => {
     tap({
       next: (event: HttpEvent<unknown>) => {
         // The adapter refuses an over-cap capped reply after this interceptor has seen it; the
-        // span records that refusal instead of an ok response. Both capped directions set
-        // `reportProgress`, while a plain text call does not, so only the former is measured.
-        if (request.reportProgress && exceedsBinaryCap(event)) {
+        // span records that refusal instead of an ok response. Only calls the adapter capped
+        // carry the context marker; a caller's own `reportProgress` request is not measured.
+        if (isCappedBinaryCall(request) && exceedsBinaryCap(event)) {
           call.end(refusedBinaryResult(event));
           return;
         }

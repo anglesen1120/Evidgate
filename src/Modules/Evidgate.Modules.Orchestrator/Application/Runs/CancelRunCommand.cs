@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -299,15 +300,12 @@ internal sealed partial class CancelRunCommandHandler(
             return Invalid("the request body must be a JSON object", string.Empty, ApiErrorCode.RequestInvalid);
         }
 
-        foreach (var member in root.EnumerateObject())
+        if (RequestMemberPath.FirstDisallowed(root, [ReasonMember]) is { } unknownMember)
         {
-            if (!string.Equals(member.Name, ReasonMember, StringComparison.Ordinal))
-            {
-                return Invalid("the request body carries an unknown field", $"/{member.Name}", "additional_properties");
-            }
+            return Invalid("the request body carries an unknown field", unknownMember, "additional_properties");
         }
 
-        if (JsonBody.HasUnstorableText(root))
+        if (UnstorableJsonText.HasUnstorableText(root))
         {
             return Invalid("the request body carries text that cannot be stored", string.Empty, "invalid_value");
         }
