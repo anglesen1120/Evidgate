@@ -256,7 +256,11 @@ public static partial class EvidgateTelemetry
     /// Counts one event batch refused before it was written, tagged by <paramref name="reason"/> from
     /// the closed vocabulary only — never a body, an event id or any request value.
     /// </summary>
-    /// <param name="reason">One of <c>body_too_large</c>, <c>event_count</c>, <c>expanded_too_large</c>, <c>ratio_exceeded</c>, <c>encoding_unsupported</c>, <c>gzip_invalid</c>, <c>rate_limited</c>, <c>quota_exceeded</c>.</param>
+    /// <remarks>
+    /// The anonymous and the tenant-less refusal of the events route share the <c>unauthenticated</c> reason, so the
+    /// counter cannot tell them apart.
+    /// </remarks>
+    /// <param name="reason">One of <c>body_too_large</c>, <c>event_count</c>, <c>expanded_too_large</c>, <c>ratio_exceeded</c>, <c>encoding_unsupported</c>, <c>gzip_invalid</c>, <c>rate_limited</c>, <c>quota_exceeded</c>, <c>unauthenticated</c>.</param>
     public static void RecordIngestBatchRejected(string reason) =>
         IngestBatchRejections.Add(1, new KeyValuePair<string, object?>("reason", reason));
 
