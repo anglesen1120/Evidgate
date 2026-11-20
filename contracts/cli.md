@@ -284,6 +284,7 @@ position (`#n`) rather than by value, is the server contract (05.1.1, openapi
 | `manifest_invalid`                      | 3    | the built document fails the packaged `manifest.v1` validation before any write (local guard; the same code coming from a server is still passed through verbatim, §8) ; also refused before the document is built when the exact size of its `planned_executions` array (members × target environments) is already over the 32 MiB `manifest.v1` cap (§14.4)                                                                                                                                                                                                                                                                           |
 | `response_too_large`                    | 3    | a server answer, success or error, is larger than the response cap (§5.1); raised while the body is read, never retried; the message and hint name no URL, token or body byte                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `response_read_failed`                  | 3    | the body of a server answer or the GitHub Actions ID-token answer ended or failed (abort, timeout, socket) before the end, on a 2xx answer or while the CLI reads it; never retried by the command's own call path (`callApi`) on a 2xx, with two deliberate exceptions: `events send` retries a cut 2xx acknowledgement as a transport failure under its send deadline (§11), and `gate` keeps its own decision reader, where a cut body is a retryable transient that ends as `request_failed` when the `--wait` runs out; the text names no URL, token or body byte; distinct from `response_too_large` and a complete non-JSON body |
+| `request_too_large`                     | 3    | a request body is larger than the cap of its route (§5.2); refused before any request is sent and never retried; the message names the route template and the two numbers, never a body byte, path or token                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `manifest_test_unmapped`                | 3    | a local test has no matching execution-plan member; no manifest is written                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `manifest_test_ambiguous`               | 3    | a local test matches more than one execution-plan member; no manifest is written                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `manifest_test_duplicate`               | 3    | two local tests have the same `case_id` and `variant_hash`; refused, never deduplicated                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -400,8 +401,22 @@ A status outside 200-599 is refused as `request_failed` and not retried. A
 `Content-Length` on an encoded answer is ignored, because the cap counts
 decoded bytes.
 
-There is no environment variable for the cap. Request bodies (uploads) are not
-covered by this section.
+There is no environment variable for the cap. Request bodies are covered by §5.2.
+
+### 5.2 Request body caps
+
+Every body the client sends is measured before the request is built into a
+network call: the length of the wire body (the gzip bytes of an event batch that
+travels compressed, the raw bytes otherwise; a string is counted as UTF-8 and a
+buffer by its own length, never copied) must not exceed the cap of its route, a
+value at or under the limit the server enforces for that route: events 1 MiB,
+manifests 32 MiB, run create 64 KiB, finalize 8 KiB, token exchange 4096 bytes,
+artifact upload-url 8 KiB. A body over its cap, a body of unmeasurable length, or
+a body on a route with no cap ends the command with exit code `3` and
+`request_too_large` (the last two `request_failed`) with zero requests sent and
+no retry. The file-level refusals `manifest_too_large`, `event_too_large` and
+`upload_too_large` keep firing where they do. The presigned artifact PUT is
+streamed, counted against the declared size, and aborted past it.
 
 ## 6. Output and redaction
 
