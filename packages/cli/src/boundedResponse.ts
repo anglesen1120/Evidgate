@@ -22,8 +22,16 @@ export class ResponseTooLargeError extends CliError {
   }
 }
 
-/** Declared length as a number, or undefined when the header is absent or not a plain integer. */
+/**
+ * Declared length as a number, or undefined when the header is absent, not a plain integer
+ * or describes an encoded body: the cap counts decoded bytes, and an encoded length says
+ * nothing about them.
+ */
 function declaredLength(response: Response): number | undefined {
+  const encoding = response.headers.get('content-encoding')?.trim().toLowerCase();
+  if (encoding !== undefined && encoding !== '' && encoding !== 'identity') {
+    return undefined;
+  }
   const raw = response.headers.get('content-length');
   return raw !== null && /^\d{1,15}$/.test(raw) ? Number(raw) : undefined;
 }
@@ -40,6 +48,14 @@ export function boundedResponse(response: Response, cap: number = maxResponseByt
   }
   // `response.body` is typed as a stream of `any`; the reader fixes the chunk type.
   const reader: ReadableStreamDefaultReader<Uint8Array> = body.getReader();
+  if (response.status < 200 || response.status > 599) {
+    // `Response` cannot represent this status, so the body cannot be re-wrapped. Refusing is
+    // final; a rejection from `fetch` would be retried as a transport failure.
+    void reader.cancel().catch(() => undefined);
+    throw new CliError('the server answered with a status the CLI does not support', {
+      code: 'request_failed',
+    });
+  }
   const declared = declaredLength(response);
   let bytes = 0;
   const bounded = new ReadableStream<Uint8Array>({

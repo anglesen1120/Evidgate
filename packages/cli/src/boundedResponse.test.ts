@@ -87,7 +87,9 @@ describe('boundedResponse', () => {
     expect(source.pulled()).toBe(0);
     expect(source.cancelled()).toBe(true);
   });
+});
 
+describe('boundedResponse decoding', () => {
   it('decodes multi-byte UTF-8 split across chunks like the unbounded read', async () => {
     const text = 'héllo 日本語 😀 end';
     const bytes = new TextEncoder().encode(text);
@@ -100,7 +102,9 @@ describe('boundedResponse', () => {
     expect(bounded).toBe(unbounded);
     expect(bounded).toBe(text);
   });
+});
 
+describe('boundedResponse answers', () => {
   it('keeps status, status text and headers', () => {
     const original = new Response('x', { status: 418, statusText: 'teapot', headers: { a: 'b' } });
 
@@ -132,5 +136,45 @@ describe('boundedResponse', () => {
     ]);
     expect(text).not.toContain('egt_');
     expect(text).not.toContain('evil.example');
+  });
+});
+
+describe('boundedResponse edge cases', () => {
+  it.each([[25], [10, 15], [24, 1], [0, 12, 0, 13, 0]])(
+    'accepts exact-cap chunk layout %j',
+    async (...sizes: number[]) => {
+      const source = counting(sizes.map((size) => chunkOf(size)));
+
+      await expect(readBoundedText(source.response, 25)).resolves.toBe('a'.repeat(25));
+    },
+  );
+
+  it('does not count empty chunks as bytes before refusing an overflow', async () => {
+    const source = counting([0, 10, 0, 15, 0, 1, 100].map((size) => chunkOf(size)));
+
+    await expect(readBoundedText(source.response, 25)).rejects.toBeInstanceOf(
+      ResponseTooLargeError,
+    );
+
+    expect(source.pulled()).toBe(26);
+    expect(source.cancelled()).toBe(true);
+  });
+
+  it('ignores a Content-Length that describes an encoded body', async () => {
+    const source = counting([chunkOf(5)], {
+      'content-length': '1000000',
+      'content-encoding': 'gzip',
+    });
+
+    await expect(readBoundedText(source.response, 25)).resolves.toBe('aaaaa');
+  });
+
+  it('refuses a status Response cannot represent, cancelling the body, without a transport error', () => {
+    const source = counting([chunkOf(5)]);
+    const hostile = Object.defineProperty(source.response, 'status', { value: 600 });
+
+    expect(() => boundedResponse(hostile)).toThrowError(
+      expect.objectContaining({ code: 'request_failed' }) as Error,
+    );
   });
 });

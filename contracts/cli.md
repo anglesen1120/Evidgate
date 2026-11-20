@@ -382,6 +382,14 @@ error is `3`) and `error.code` `response_too_large`; it is never retried.
 | `gate` non-2xx body                                                               | an error envelope                | 64 KiB, cut (`gate` keeps its own) |
 | GitHub Actions ID-token answer (`auth`)                                           | a signed token, a few KiB        | 64 KiB                             |
 
+`gate` keeps its own readers: a decision body over 256 KiB, or a non-2xx body
+over 64 KiB, is handled by `gate` under its own rules (`request_failed`, and a
+cut error body that stays retryable). Only an answer that declares a length over
+the 1 MiB cap, or streams past it, is `response_too_large` and fatal there too.
+A status outside 200-599 is refused as `request_failed` and not retried. A
+`Content-Length` on an encoded answer is ignored, because the cap counts
+decoded bytes.
+
 There is no environment variable for the cap. Request bodies (uploads) are not
 covered by this section.
 
