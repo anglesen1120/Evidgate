@@ -97,7 +97,7 @@ public sealed partial class CatalogUnstorableBodyTests
             "fixture",
             HttpStatusCode.Created);
 
-    private async Task<Target> FixtureRevisionTargetAsync(World world)
+    private static async Task<Target> FixtureRevisionTargetAsync(World world)
     {
         var fixtureId = await CreateFixtureAsync(world);
 
@@ -109,7 +109,7 @@ public sealed partial class CatalogUnstorableBodyTests
             HttpStatusCode.Created);
     }
 
-    private async Task<Guid> CreateFixtureAsync(World world)
+    private static async Task<Guid> CreateFixtureAsync(World world)
     {
         var target = FixtureCreateTarget(world);
         var answer = await SendAsync(world, target, FixtureCreateBody, NewKey());
