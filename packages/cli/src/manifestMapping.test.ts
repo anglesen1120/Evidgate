@@ -1,13 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { CliError } from './errors.js';
 import {
   MAX_MEMBERS,
   MAX_TESTS,
+  assertDistinctTests,
   mapTestsToMembers,
   type EnumeratedTest,
   type PlanMember,
 } from './manifestMapping.js';
+import { registerSecret, resetSecrets } from './redact.js';
+
+afterEach(resetSecrets);
 
 const caseId = '12345678-1234-1234-1234-123456789abc';
 const variantHash = `sha256:${'a'.repeat(64)}`;
@@ -55,6 +59,48 @@ function uniqueId(index: number): string {
 }
 
 describe('mapTestsToMembers', () => {
+  it.each(['unmapped', 'ambiguous', 'duplicate'] as const)(
+    '%s_refusal_redacts_registered_secrets_before_clipping',
+    (kind) => {
+      const secret = 'registered_bearer_secret_value';
+      registerSecret(secret);
+      const titled = { ...test, titlePath: ['x'.repeat(188) + secret] };
+      let error: CliError;
+      if (kind === 'duplicate') {
+        expect(() => assertDistinctTests([test])).not.toThrow();
+        try {
+          assertDistinctTests([titled, titled]);
+          throw new Error('expected duplicate refusal');
+        } catch (caught) {
+          expect(caught).toBeInstanceOf(CliError);
+          if (!(caught instanceof CliError)) throw caught;
+          error = caught;
+        }
+      } else {
+        expect(mapTestsToMembers([test], plan).entries).toHaveLength(1);
+        error = refusal([
+          kind === 'unmapped' ? withoutCaseId(titled) : conflictingIdentity(titled),
+        ]);
+      }
+      const diagnostic = `${error.message}\n${error.details?.join('\n') ?? ''}`;
+      expect(diagnostic).toContain('[REDACTED]');
+      expect(diagnostic).not.toContain(secret.slice(0, 12));
+    },
+  );
+
+  it('a_secret_assembled_across_the_file_and_title_separator_is_redacted', () => {
+    // Neither value contains the whole secret: it exists only once the diagnostic joins them,
+    // so a per-segment redaction would print it and a clip could cut it.
+    const secret = 'tests/checkout.spec.ts: cross boundary secret value';
+    registerSecret(secret);
+    const error = refusal([
+      { ...withoutCaseId(test), titlePath: ['cross boundary secret value and more'] },
+    ]);
+    const diagnostic = `${error.message}\n${(error.details ?? []).join('\n')}`;
+    expect(diagnostic).toContain('[REDACTED]');
+    expect(diagnostic).not.toContain('cross boundary secret value');
+  });
+
   it('all_tests_mapped_returns_suite_and_revisions_in_input_order', () => {
     const later = { ...test, file: 'tests/later.spec.ts' };
     expect(mapTestsToMembers([later, test], plan)).toEqual({

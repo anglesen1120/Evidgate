@@ -206,6 +206,13 @@ describe('parsePlaywrightList', () => {
     expect(parseRefusal(text).code).toBe('manifest_variant_invalid');
   });
 
+  it('spec_file_length_accepts_the_cap_and_refuses_one_character_over', () => {
+    const withFile = (file: string) =>
+      report([project('p1', 'chrome', {})], [fileSuite(file, [spec('works', [testCase('p1')])])]);
+    expect(parsePlaywrightList(withFile('x'.repeat(4096)), hashOf)[0]?.file).toHaveLength(4096);
+    expect(parseRefusal(withFile('x'.repeat(4097))).code).toBe('manifest_report_invalid');
+  });
+
   it('spec_file_escaping_the_root_refuses_path_outside_root', () => {
     const escaping = [
       '../../etc/passwd',

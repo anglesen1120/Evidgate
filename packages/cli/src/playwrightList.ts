@@ -10,6 +10,7 @@ import { errnoName, readFileBounded, type BoundedFileFailure } from './boundedFi
 import { isCanonicalCaseId } from './caseId.js';
 import { CliError } from './errors.js';
 import { MAX_TESTS, type EnumeratedTest } from './manifestMapping.js';
+import { projectRelativePathMemo } from './specFilePath.js';
 import { contains } from './uploadPaths.js';
 
 /** Hard cap on the list report: the reader enforces it on the bytes, the parser on the text. */
@@ -17,11 +18,13 @@ export const MAX_REPORT_BYTES = 16 * 1024 * 1024;
 /** Projects accepted in one report; a report beyond this is refused before any hashing. */
 export const MAX_PROJECTS = 1000;
 
+/** One enumerated test plus the project's raw variant params it was hashed from. */
+export interface ListedTest extends EnumeratedTest {
+  readonly variantParams: unknown;
+}
+
 /** The annotation the adapter reads; its description is the canonical case id. */
 const CASE_ID_ANNOTATION = 'evidgate.id';
-// A path with a C0/DEL control character cannot name a file a person wrote, and a NUL would
-// truncate the path at the syscall boundary, so it is a malformed report, not an escape.
-const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
 // Playwright's suite tree nests once per describe block; a deeper tree is a crafted report.
 const MAX_SUITE_DEPTH = 32;
 
@@ -30,6 +33,8 @@ type HashVariant = (params: unknown) => string | undefined;
 interface ProjectEntry {
   readonly index: number;
   readonly hash: string;
+  /** The project's raw `metadata.evidgate.params`, kept so a caller can rebuild its variant. */
+  readonly params: unknown;
 }
 
 interface ProjectTable {
@@ -46,6 +51,23 @@ export function parsePlaywrightList(
   text: string,
   hashVariant: HashVariant,
 ): readonly EnumeratedTest[] {
+  return parsePlaywrightListWithParams(text, hashVariant).map((test) => ({
+    file: test.file,
+    titlePath: test.titlePath,
+    variantHash: test.variantHash,
+    ...(test.caseId === undefined ? {} : { caseId: test.caseId }),
+    ...(test.identityConflict === true ? { identityConflict: true } : {}),
+  }));
+}
+
+/**
+ * The same enumeration, keeping each test's raw variant params: a manifest generator needs the
+ * parameters themselves, not only the digest they hash to.
+ */
+export function parsePlaywrightListWithParams(
+  text: string,
+  hashVariant: HashVariant,
+): readonly ListedTest[] {
   assertTextUnderCap(text);
   const root = record(parseJson(text));
   if (root === undefined) {
@@ -54,9 +76,10 @@ export function parsePlaywrightList(
   refuseCollectionErrors(optionalArray(root, 'errors', 'the report'));
   const suites = optionalArray(root, 'suites', 'the report');
   const projects = projectTable(root, hashVariant);
-  const tests: EnumeratedTest[] = [];
+  const pathFor = projectRelativePathMemo();
+  const tests: ListedTest[] = [];
   for (const suite of suites) {
-    collectSuite(suite, undefined, [], projects, tests, 1);
+    collectSuite(suite, undefined, [], projects, tests, 1, pathFor);
   }
   if (tests.length === 0) {
     throw invalid('the report lists no tests, so there is nothing to map');
@@ -134,8 +157,9 @@ function collectSuite(
   inherited: string | undefined,
   titles: readonly string[],
   projects: ProjectTable,
-  out: EnumeratedTest[],
+  out: ListedTest[],
   depth: number,
+  pathFor: (raw: string) => string,
 ): void {
   const suite = record(raw);
   if (suite === undefined || depth > MAX_SUITE_DEPTH) {
@@ -151,10 +175,10 @@ function collectSuite(
   const title = string(suite['title']);
   const ownTitles = title === undefined || depth === 1 ? titles : [...titles, title];
   for (const spec of specs) {
-    collectSpec(spec, file, ownTitles, projects, out);
+    collectSpec(spec, file, ownTitles, projects, out, pathFor);
   }
   for (const child of nested) {
-    collectSuite(child, file, ownTitles, projects, out, depth + 1);
+    collectSuite(child, file, ownTitles, projects, out, depth + 1, pathFor);
   }
 }
 
@@ -163,7 +187,8 @@ function collectSpec(
   suiteFile: string | undefined,
   titles: readonly string[],
   projects: ProjectTable,
-  out: EnumeratedTest[],
+  out: ListedTest[],
+  pathFor: (raw: string) => string,
 ): void {
   const spec = record(raw);
   if (spec === undefined) {
@@ -175,7 +200,7 @@ function collectSpec(
   }
   const specTitle = string(spec['title']) ?? '';
   const titlePath = specTitle.length === 0 ? titles : [...titles, specTitle];
-  const enumeratedFile = projectRelativePath(file);
+  const enumeratedFile = pathFor(file);
   for (const rawTest of optionalArray(spec, 'tests', 'the spec')) {
     out.push(enumerateTest(rawTest, enumeratedFile, titlePath, projects));
     if (out.length > MAX_TESTS) {
@@ -189,17 +214,18 @@ function enumerateTest(
   file: string,
   titlePath: readonly string[],
   projects: ProjectTable,
-): EnumeratedTest {
+): ListedTest {
   const test = record(raw);
   if (test === undefined) {
     throw invalid('the report has a malformed test');
   }
-  const hash = testProject(test, projects).hash;
+  const project = testProject(test, projects);
   const identity = readIdentity(test['annotations']);
   return {
     file,
     titlePath,
-    variantHash: hash,
+    variantHash: project.hash,
+    variantParams: project.params,
     ...(identity.caseId === undefined ? {} : { caseId: identity.caseId }),
     ...(identity.conflict ? { identityConflict: true } : {}),
   };
@@ -258,43 +284,6 @@ function readIdentity(annotations: unknown): { caseId?: string; conflict: boolea
 }
 
 /**
- * The report's file is relative to the Playwright root dir. Backslashes are normalised so a
- * Windows-shaped path is judged by the same rule, and any `..` that would climb above the
- * root, a drive-qualified absolute path or a leading slash refuses: only a path under the
- * root is accepted.
- */
-function projectRelativePath(raw: string): string {
-  if (CONTROL_CHARACTERS.test(raw)) {
-    throw invalid('a spec file path contains a control character');
-  }
-  if (/^[A-Za-z]:[\\/]/.test(raw)) {
-    throw outsideRoot('a spec file is named by an absolute path');
-  }
-  const file = raw.replaceAll('\\', '/');
-  if (file.startsWith('/')) {
-    throw outsideRoot('a spec file is named by an absolute path');
-  }
-  const segments: string[] = [];
-  for (const segment of file.split('/')) {
-    if (segment === '' || segment === '.') {
-      continue;
-    }
-    if (segment === '..') {
-      if (segments.length === 0) {
-        throw outsideRoot('a spec file resolves outside the project root');
-      }
-      segments.pop();
-      continue;
-    }
-    segments.push(segment);
-  }
-  if (segments.length === 0) {
-    throw outsideRoot('a spec file resolves to the project root itself');
-  }
-  return segments.join('/');
-}
-
-/**
  * The project table: one entry per declared project, hashed from its variant params. A
  * repeated id, or a repeated name with different params, would make a test's variant depend
  * on declaration order, so both refuse.
@@ -318,11 +307,12 @@ function projectTable(root: Record<string, unknown>, hashVariant: HashVariant): 
     if (project === undefined) {
       throw invalid('the report has a malformed project');
     }
-    const hash = hashVariant(variantParams(project['metadata']));
+    const params = variantParams(project['metadata']);
+    const hash = hashVariant(params);
     if (hash === undefined) {
       throw variantInvalid('a project declares variant params with no valid hash');
     }
-    const entry: ProjectEntry = { index, hash };
+    const entry: ProjectEntry = { index, hash, params };
     const id = string(project['id']);
     const name = string(project['name']);
     if (id !== undefined) {
