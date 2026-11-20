@@ -31,7 +31,7 @@ public sealed partial class CatalogSuiteTests
     public async Task Revision_WithALoneSurrogateParamsKey_Is422_ByPosition_NotAServerError()
     {
         await using var world = await StartAsync();
-        var body = $$"""{"members":[{"ref":"m","case_revision_id":"{{world.Revisions[0]}}","params":{"retries":1,"\ud800":1}}]}""";
+        var body = $$$"""{"members":[{"ref":"m","case_revision_id":"{{{world.Revisions[0]}}}","params":{"retries":1,"\ud800":1}}]}""";
 
         var answer = await world.Client.SendRawAsync(HttpMethod.Post, $"/v1/suites/{world.Suite}/revisions", headers =>
             {
