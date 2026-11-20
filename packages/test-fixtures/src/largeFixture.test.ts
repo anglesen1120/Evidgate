@@ -109,7 +109,8 @@ function assertBudgetContract(budget: unknown): void {
   ), 'budget.measured_on.date must be YYYY-MM-DD');
   requiredString(metadata, 'host');
   const sha = requiredString(metadata, 'sha');
-  require(/^[0-9a-fA-F]{8,}$/.test(sha), 'budget.measured_on.sha must be 8+ hex digits');
+  require(sha.length >= 8 &&
+    !/[^0-9a-fA-F]/.test(sha), 'budget.measured_on.sha must be 8+ hex digits');
   const headroom = asJsonObject(requiredMember(root, 'headroom'), 'budget.headroom');
   const wall = requiredNumber(headroom, 'wall');
   const memory = requiredNumber(headroom, 'memory');
@@ -176,14 +177,14 @@ function require(condition: boolean, message: string): void {
 
 function isIsoDate(text: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
-  if (match === null) return false;
+  if (text.length !== 10 || match === null) return false;
   const year = Number(match[1]);
   const month = Number(match[2]);
   const day = Number(match[3]);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return (
-    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
-  );
+  if (year < 1 || month < 1 || month > 12 || day < 1) return false;
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day <= (days[month - 1] ?? 0);
 }
 
 function measuredBudget(): JsonObject {
@@ -349,6 +350,33 @@ describe('large fixture budget contract', () => {
     expect(() => assertBudgetContract(measuredBudget())).not.toThrow();
   });
 
+  it('LargeFixture_MeasuredBudgetShaTrailingNewline_Rejects', () => {
+    const budget = measuredBudget();
+    expect(() => assertBudgetContract(budget)).not.toThrow();
+    asJsonObject(budget.measured_on, 'test measured_on').sha = 'abcdef12\n';
+    expect(() => assertBudgetContract(budget)).toThrowError(/budget/);
+  });
+
+  it('LargeFixture_MeasuredBudgetDateTrailingNewline_Rejects', () => {
+    const budget = measuredBudget();
+    expect(() => assertBudgetContract(budget)).not.toThrow();
+    asJsonObject(budget.measured_on, 'test measured_on').date = '2026-11-20\n';
+    expect(() => assertBudgetContract(budget)).toThrowError(/budget/);
+  });
+
+  it('LargeFixture_MeasuredBudgetInvalidCalendarDate_Rejects', () => {
+    const budget = measuredBudget();
+    expect(() => assertBudgetContract(budget)).not.toThrow();
+    asJsonObject(budget.measured_on, 'test measured_on').date = '2026-02-30';
+    expect(() => assertBudgetContract(budget)).toThrowError(/budget/);
+  });
+
+  it('LargeFixture_MeasuredBudgetYear0099_Accepts', () => {
+    const budget = measuredBudget();
+    asJsonObject(budget.measured_on, 'test measured_on').date = '0099-01-01';
+    expect(() => assertBudgetContract(budget)).not.toThrow();
+  });
+
   it('refuses an unset budget that carries extra members', () => {
     expect(() => assertBudgetContract({ status: 'unset' })).not.toThrow();
     expect(() => assertBudgetContract({ status: 'unset', limits: {} })).toThrowError(
@@ -406,7 +434,6 @@ describe('large fixture budget contract', () => {
   });
 
   const invalidMemberCases = [
-    { label: 'measured_on.date', section: 'measured_on', member: 'date', value: '2026-02-30' },
     { label: 'measured_on.host', section: 'measured_on', member: 'host', value: ' ' },
     { label: 'measured_on.sha', section: 'measured_on', member: 'sha', value: 'not-a-sha' },
     { label: 'headroom.wall', section: 'headroom', member: 'wall', value: 0 },

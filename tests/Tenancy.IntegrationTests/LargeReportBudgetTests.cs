@@ -89,40 +89,20 @@ public sealed partial class LargeReportBudgetTests(
     {
         var budget = ReportBudget.Read(Expected);
         using var temp = new TempDirectory();
-        var report = GenerateReport(temp.Path);
+        var report = await GenerateReportAsync(temp.Path);
 
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         await using var world = await StartAsync(database.Name);
+        await SeedPlanAsync(world, report);
         await using var stored = new StoredObject(_store, await SeedArtifactAsync(world, report));
         var artifact = stored.Artifact;
 
         var parentBefore = ParentWorkingSet.Peak();
         var baseline = ParentRetainedSampler.Baseline();
+        var phase = await MeasureParseAsync(world, artifact.Id, Path.Combine(temp.Path, "child"), baseline);
 
-        long parseWall;
-        long childPeak;
-        long parentRetained;
-        ParseRawReportOutcome parsed;
-
-        var child = ChildWorkingSetSampler.Start(ParseChildAssembly.Locate(), TimeSpan.FromMilliseconds(250));
-        var parent = ParentRetainedSampler.Start(baseline, TimeSpan.FromSeconds(2));
-        try
-        {
-            var started = Stopwatch.StartNew();
-            parsed = await ParseAsync(world, artifact.Id, Path.Combine(temp.Path, "child"));
-            started.Stop();
-            parseWall = started.ElapsedMilliseconds;
-        }
-        finally
-        {
-            await child.DisposeAsync();
-            await parent.DisposeAsync();
-        }
-
-        childPeak = child.PeakWorkingSetBytes;
-        parentRetained = parent.PeakRetainedBytes;
-        parsed.Status.ShouldBe(ParseRawReportOutcome.Parsed, "the fixture report must parse through the real child");
-        parsed.Events.ShouldBe(PlannedExecutions);
+        phase.Parsed.Status.ShouldBe(ParseRawReportOutcome.Parsed, "the fixture report must parse through the real child");
+        phase.Parsed.Events.ShouldBe(PlannedExecutions);
 
         await RunStateWalk.MoveAsync(_fixture, world.Database, world.RunId, RunStates.Collecting);
         var reconciling = Stopwatch.StartNew();
@@ -133,13 +113,51 @@ public sealed partial class LargeReportBudgetTests(
 
         var walk = await WalkAttemptsAsync(world);
         var measured = new BudgetMetrics(
-            parseWall, reconciling.ElapsedMilliseconds, walk.WallMs, childPeak, parentRetained);
+            phase.WallMs, reconciling.ElapsedMilliseconds, walk.WallMs, phase.Child.PeakWorkingSetBytes,
+            phase.Parent.PeakRetainedBytes);
 
         var parentAfter = ParentWorkingSet.Peak();
-        Print(measured, child, parent, parentBefore, parentAfter, walk);
+        Print(measured, phase.Child, phase.Parent, parentBefore, parentAfter, walk);
 
         var verdict = budget.Compare(measured);
         verdict.WithinBudget.ShouldBeTrue(verdict.Message);
+    }
+
+    /// <summary>Parses the report once with both samplers running, and fails when either observed nothing.</summary>
+    /// <param name="world">The world whose run the report moves.</param>
+    /// <param name="artifactId">The seeded report artifact.</param>
+    /// <param name="childRoot">The temp root the parse child may write under.</param>
+    /// <param name="baseline">The parent's retained bytes before the phase.</param>
+    /// <returns>The phase wall time, the parse result and both samplers, already stopped.</returns>
+    private static async Task<ParseMeasurement> MeasureParseAsync(World world, Guid artifactId, string childRoot, long baseline)
+    {
+        var child = ChildWorkingSetSampler.Start(ParseChildAssembly.Locate(), TimeSpan.FromMilliseconds(250));
+        var parent = ParentRetainedSampler.Start(baseline, TimeSpan.FromMilliseconds(500));
+        try
+        {
+            var started = Stopwatch.StartNew();
+            var parsed = await ParseAsync(world, artifactId, childRoot);
+            started.Stop();
+
+            // The final samples run while the handler's result is still rooted. The child is read first: its process
+            // can exit the moment the runner returns, while the parent sample blocks on a full collection.
+            child.SampleAfterParse();
+            parent.SampleFinal();
+            GC.KeepAlive(parsed);
+
+            // Fail closed before any comparison: a sampler that observed nothing must never record 0 as a measurement.
+            child.Samples.ShouldBeGreaterThan(0, $"the child sampler never observed the parse child ({child.Method})");
+            child.PeakWorkingSetBytes.ShouldBeGreaterThan(0, $"the child sampler reported no resident set ({child.Method})");
+            parent.Samples.ShouldBeGreaterThan(0, "the parent retained sampler took no sample of the parse");
+            parent.PeakRetainedBytes.ShouldBeGreaterThan(0, "the parent retained sampler measured no in-flight retention");
+
+            return new ParseMeasurement(started.ElapsedMilliseconds, parsed, child, parent);
+        }
+        finally
+        {
+            await child.DisposeAsync();
+            await parent.DisposeAsync();
+        }
     }
 
     /// <summary>The world: one dedicated database's tenant and project, plus a run a report can move.</summary>
@@ -287,9 +305,10 @@ public sealed partial class LargeReportBudgetTests(
         }
 
         output.WriteLine($"budget walk pages={walk.Pages} rows={walk.Rows}");
-        output.WriteLine($"budget child peak source: {child.Method}, {child.Samples} samples");
-        output.WriteLine($"budget parent retained source: forced-GC managed heap, {parent.Samples} samples "
-            + "(each sample pauses the parse; the retained peak is a floor)");
+        output.WriteLine($"budget child peak source: {child.Method}, {child.Samples} samples, {child.FinalObservation}");
+        output.WriteLine("budget child peak is a floor: a peak after the last observation is never seen");
+        output.WriteLine(string.Create(CultureInfo.InvariantCulture,
+            $"budget parent retained source: forced-GC managed heap, {parent.Samples} samples every 500 ms, GC pause inside sampler calls total={parent.GcPauseTime.TotalMilliseconds:F0} ms (each sample pauses the parse; the retained peak is a floor)"));
         output.WriteLine(string.Create(CultureInfo.InvariantCulture,
             $"budget parent working set before={parentBefore.Bytes} after={parentAfter.Bytes} "
             + $"source={parentAfter.Source} (printed, not asserted)"));
@@ -309,4 +328,7 @@ public sealed partial class LargeReportBudgetTests(
     internal sealed record Artifact(Guid Id, string ObjectKey);
 
     private sealed record Walk(long WallMs, int Rows, int Pages);
+
+    private sealed record ParseMeasurement(
+        long WallMs, ParseRawReportOutcome Parsed, ChildWorkingSetSampler Child, ParentRetainedSampler Parent);
 }

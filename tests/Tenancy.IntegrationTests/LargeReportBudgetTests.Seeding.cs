@@ -18,10 +18,13 @@ namespace Tenancy.IntegrationTests;
 /// </summary>
 public sealed partial class LargeReportBudgetTests
 {
+    /// <summary>The generator writes an 11 MB report; a run that outlives this is hung, not slow.</summary>
+    private static readonly TimeSpan GeneratorTimeout = TimeSpan.FromSeconds(60);
+
     /// <summary>Generates the pinned report and returns its path; the caller's temp directory owns the file.</summary>
     /// <param name="directory">The directory the generator writes <c>input.xml</c> into.</param>
     /// <returns>The report's path, after the bytes matched the fixture's own pin.</returns>
-    private static string GenerateReport(string directory)
+    private static async Task<string> GenerateReportAsync(string directory)
     {
         var start = new ProcessStartInfo("node")
         {
@@ -36,17 +39,56 @@ public sealed partial class LargeReportBudgetTests
 
         using var process = Process.Start(start)
             ?? throw new InvalidOperationException("node could not be started, so the fixture report cannot be generated");
-        var stdout = process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        process.ExitCode.ShouldBe(0, stderr);
 
-        var summary = JsonDocument.Parse(stdout).RootElement;
+        // Both pipes are drained at once: waiting for exit with a full stderr pipe buffered would deadlock. The reads
+        // outlive the timeout so the killed child's pipes still reach EOF and no reader is left behind.
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(Token);
+        timeout.CancelAfter(GeneratorTimeout);
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException exception)
+        {
+            KillGenerator(process);
+            await process.WaitForExitAsync(CancellationToken.None);
+            _ = await Task.WhenAll(stdout, stderr);
+            if (Token.IsCancellationRequested)
+            {
+                throw new OperationCanceledException(
+                    "the report generator was killed because the test was cancelled", exception, Token);
+            }
+
+            throw new TimeoutException(
+                $"the report generator did not exit within {GeneratorTimeout.TotalSeconds} seconds; it was killed");
+        }
+
+        var error = await stderr;
+        process.ExitCode.ShouldBe(0, error);
+
+        using var document = JsonDocument.Parse(await stdout);
+        var summary = document.RootElement;
         summary.GetProperty("tests").GetInt32().ShouldBe(PlannedExecutions);
         summary.GetProperty("sha256").GetString().ShouldBe(Expected.GetProperty("full").GetProperty("sha256").GetString());
         summary.GetProperty("bytes").GetInt64().ShouldBe(Expected.GetProperty("full").GetProperty("bytes").GetInt64());
 
         return Path.Combine(directory, "input.xml");
+    }
+
+    /// <summary>Ends a generator that passed its deadline; one that exited on its own needs no kill.</summary>
+    /// <param name="process">The generator the timeout caught.</param>
+    private static void KillGenerator(Process process)
+    {
+        try
+        {
+            process.Kill(entireProcessTree: true);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException)
+        {
+            // Between the timeout and this kill the process may have exited, which is what the kill wanted anyway.
+        }
     }
 
     /// <summary>

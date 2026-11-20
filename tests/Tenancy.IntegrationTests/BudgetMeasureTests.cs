@@ -17,19 +17,58 @@ public sealed class BudgetMeasureTests
 
     private static readonly BudgetMetrics AtLimit = new(1000, 1000, 1000, 1000, 1000);
 
-    [Fact]
-    public void Compare_OverOneLimit_FailsWithMeasuredAndLimit()
+    [Theory]
+    [InlineData("parse_wall_ms")]
+    [InlineData("reconcile_wall_ms")]
+    [InlineData("walk_wall_ms")]
+    [InlineData("child_peak_working_set_bytes")]
+    [InlineData("parent_inflight_retained_bytes")]
+    public void Compare_OverOneLimit_FailsWithMeasuredAndLimit(string metric)
     {
-        var budget = Budget("{\"status\":\"measured\",\"limits\":{"
-            + "\"parse_wall_ms\":900,\"reconcile_wall_ms\":1000,\"walk_wall_ms\":1000,"
-            + "\"child_peak_working_set_bytes\":1000,\"parent_inflight_retained_bytes\":1000}}");
+        var limits = string.Join(
+            ",",
+            BudgetMetrics.Names.Select(name => $"\"{name}\":{(name == metric ? 999 : 1000)}"));
+        var budget = Budget("{\"status\":\"measured\",\"limits\":{" + limits + "}}");
 
         var verdict = budget.Compare(AtLimit);
 
         verdict.WithinBudget.ShouldBeFalse();
         verdict.Status.ShouldBe(BudgetStatus.Measured);
-        verdict.Message.ShouldContain("parse_wall_ms measured=1000 limit=900");
-        verdict.Message.ShouldContain("walk_wall_ms measured=1000 limit=1000");
+        verdict.Message.ShouldStartWith("budget exceeded by 1 of 5 metrics");
+        verdict.Message.ShouldContain($"{metric} measured=1000 limit=999");
+    }
+
+    [Fact]
+    public void Compare_OverEveryLimit_NamesEveryExceededMetric()
+    {
+        var budget = Budget("{\"status\":\"measured\",\"limits\":{" + FiveLimits + "}}");
+
+        var verdict = budget.Compare(new BudgetMetrics(1001, 1001, 1001, 1001, 1001));
+
+        verdict.WithinBudget.ShouldBeFalse();
+        verdict.Message.ShouldStartWith("budget exceeded by 5 of 5 metrics");
+        foreach (var metric in BudgetMetrics.Names)
+        {
+            verdict.Message.ShouldContain($"{metric} measured=1001 limit=1000");
+        }
+    }
+
+    [Theory]
+    [InlineData("child_peak_working_set_bytes", "{\"status\":\"unset\"}")]
+    [InlineData("parent_inflight_retained_bytes", "{\"status\":\"unset\"}")]
+    [InlineData("child_peak_working_set_bytes", "{\"status\":\"measured\",\"limits\":{" + FiveLimits + "}}")]
+    [InlineData("parent_inflight_retained_bytes", "{\"status\":\"measured\",\"limits\":{" + FiveLimits + "}}")]
+    public void Compare_ZeroByteMeasurement_IsRefused(string metric, string budgetJson)
+    {
+        var budget = Budget(budgetJson);
+        var measured = metric == "child_peak_working_set_bytes"
+            ? AtLimit with { ChildPeakWorkingSetBytes = 0 }
+            : AtLimit with { ParentInflightRetainedBytes = 0 };
+
+        var error = Should.Throw<InvalidOperationException>(() => budget.Compare(measured));
+
+        error.Message.ShouldContain(ReportBudget.MeasurementMissing);
+        error.Message.ShouldContain(metric);
     }
 
     [Fact]
@@ -98,14 +137,25 @@ public sealed class BudgetMeasureTests
     }
 
     [Fact]
-    public void Read_CommittedFixtureContract_IsAccepted()
+    public void Read_CommittedFixtureContract_AcceptsUnsetOrCompleteMeasurement()
     {
         var budget = ReportBudget.Read(Path.Combine(FixtureLoader.Fixtures("large/100k-tests"), "expected.json"));
 
-        // The committed state is `unset` until the quiet-host run records numbers; a `measured` commit must still read.
-        budget.Status.ShouldBe(BudgetStatus.Unset);
+        // Both committed states are valid: `unset` before a quiet-host run records numbers, `measured` after it.
+        if (budget.Status == BudgetStatus.Unset)
+        {
+            budget.Limits.ShouldBeEmpty();
+            return;
+        }
 
-        budget.Compare(AtLimit).Message.ShouldContain(ReportBudget.RecordTheseNumbers);
+        budget.Status.ShouldBe(BudgetStatus.Measured);
+        budget.Limits.Count.ShouldBe(BudgetMetrics.Names.Length);
+        foreach (var name in BudgetMetrics.Names)
+        {
+            budget.Limits[name].ShouldBeGreaterThanOrEqualTo(0L);
+        }
+
+        budget.Compare(AtLimit).Status.ShouldBe(BudgetStatus.Measured);
     }
 
     private static ReportBudget Budget(string json)

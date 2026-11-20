@@ -70,8 +70,14 @@ internal sealed class ReportBudget
     /// <summary>The failure text an unset budget produces: the numbers a run prints are the ones to record.</summary>
     internal const string RecordTheseNumbers = "budget unset: record these numbers in expected.json";
 
+    /// <summary>The failure text a zero byte metric produces: the sampler reported nothing, which is not a small run.</summary>
+    internal const string MeasurementMissing = "measurement missing";
+
     private static readonly IReadOnlyDictionary<string, long> NoLimits =
         new Dictionary<string, long>(StringComparer.Ordinal);
+
+    private static readonly string[] SampledBytes =
+        [.. BudgetMetrics.Names.Where(name => name.EndsWith("_bytes", StringComparison.Ordinal))];
 
     private ReportBudget(BudgetStatus status, IReadOnlyDictionary<string, long> limits)
     {
@@ -140,13 +146,20 @@ internal sealed class ReportBudget
 
     /// <summary>
     /// Compares one run's numbers with this budget. An unset budget is never a pass: it reports the measured numbers so
-    /// the timing run has something to record.
+    /// the timing run has something to record; a zero byte metric throws because no sampler reported it.
     /// </summary>
     /// <param name="measured">The run's five numbers.</param>
     /// <returns>The verdict, whose message quotes every metric it judged.</returns>
     internal BudgetVerdict Compare(BudgetMetrics measured)
     {
         ArgumentNullException.ThrowIfNull(measured);
+
+        var missing = SampledBytes.Where(name => measured.Value(name) == 0).ToArray();
+        if (missing.Length != 0)
+        {
+            throw new InvalidOperationException(
+                $"{MeasurementMissing}: {string.Join(", ", missing)} measured 0 bytes");
+        }
 
         if (Status == BudgetStatus.Unset)
         {

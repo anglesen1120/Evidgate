@@ -1,17 +1,15 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Runtime.ExceptionServices;
 using Evidgate.Testing;
 
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// Samples the managed bytes this process holds over its baseline while a phase runs, so the parse's in-flight cost
-/// is a measured number rather than an end-state one. Each sample forces a full collection first: garbage queued for
-/// finalisation would otherwise read as retention.
-/// <para>
-/// The interval is a trade: a shorter one sees more of the peak but spends the measured phase in collections it
-/// caused. The sample count is printed with the result, so a reader can tell how much of a wall time was the sampler's.
-/// </para>
+/// Samples managed bytes retained above baseline during the parse. Each sample finalises queued objects and forces one
+/// full collection, so dead records do not read as retention; the sample count and GC pause time expose how much of the
+/// measured parse wall time the sampler itself caused.
 /// </summary>
 internal sealed class ParentRetainedSampler : IAsyncDisposable
 {
@@ -19,26 +17,26 @@ internal sealed class ParentRetainedSampler : IAsyncDisposable
     private readonly TimeSpan _interval;
     private readonly CancellationTokenSource _stop = new();
     private readonly Thread _thread;
+    private readonly object _gate = new();
+    private ExceptionDispatchInfo? _failure;
     private long _peak;
+    private long _gcPauseTicks;
     private int _samples;
 
     private ParentRetainedSampler(long baseline, TimeSpan interval)
     {
         _baseline = baseline;
         _interval = interval;
-
-        // A dedicated thread keeps the sampling off the thread pool, so a collection never competes with the phase's
-        // own continuations for a worker.
         _thread = new Thread(Loop) { IsBackground = true, Name = "budget-parent-retained" };
         _thread.Start();
     }
 
-    /// <summary>The retained bytes before the phase, taken through the same forced collection as every sample.</summary>
-    /// <returns><see cref="GC.GetTotalMemory(bool)"/> after a full, blocking collection.</returns>
+    /// <summary>The retained bytes before the phase, measured with one full collection.</summary>
+    /// <returns>The managed bytes remaining after the collection.</returns>
     internal static long Baseline() => Retained();
 
-    /// <summary>Starts sampling; the caller disposes it once the phase returns.</summary>
-    /// <param name="baseline">The value <see cref="Baseline"/> returned before the phase.</param>
+    /// <summary>Starts sampling; the caller takes a final sample while the parse handler is still rooted.</summary>
+    /// <param name="baseline">The retained bytes before the phase.</param>
     /// <param name="interval">How often a sample runs.</param>
     /// <returns>The running sampler.</returns>
     internal static ParentRetainedSampler Start(long baseline, TimeSpan interval) => new(baseline, interval);
@@ -46,58 +44,80 @@ internal sealed class ParentRetainedSampler : IAsyncDisposable
     /// <summary>The largest retained delta any sample saw.</summary>
     internal long PeakRetainedBytes => Interlocked.Read(ref _peak);
 
-    /// <summary>How many samples ran, including the one taken as the phase ended.</summary>
+    /// <summary>How many samples ran, including the explicit final parse sample.</summary>
     internal int Samples => Volatile.Read(ref _samples);
+
+    /// <summary>The cumulative runtime GC pause time incurred while taking retained samples.</summary>
+    internal TimeSpan GcPauseTime => TimeSpan.FromTicks(Interlocked.Read(ref _gcPauseTicks));
+
+    /// <summary>Samples before the caller releases the parse handler and its result.</summary>
+    internal void SampleFinal() => GuardSample();
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
         await _stop.CancelAsync().ConfigureAwait(false);
-        _ = await Task.Run(() => _thread.Join(TimeSpan.FromSeconds(30))).ConfigureAwait(false);
+        if (!await Task.Run(() => _thread.Join(TimeSpan.FromSeconds(30))).ConfigureAwait(false))
+        {
+            throw new TimeoutException("The parent retained sampler did not stop within 30 seconds.");
+        }
 
-        Record(Retained() - _baseline);
         _stop.Dispose();
+        _failure?.Throw();
     }
 
     private static long Retained()
     {
-        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
+        // Finalise first: the single forced collection then frees the previous sample's finalisable garbage, so the
+        // number is live retention. A second forced collection per sample would double the pause it adds to the parse.
         GC.WaitForPendingFinalizers();
         GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
 
-        return GC.GetTotalMemory(forceFullCollection: true);
+        return GC.GetTotalMemory(forceFullCollection: false);
     }
 
     private void Loop()
     {
         while (!_stop.Token.WaitHandle.WaitOne(_interval))
         {
-            Record(Retained() - _baseline);
+            GuardSample();
         }
     }
 
-    private void Record(long retained)
+    // A sampler thread that dies unobserved would take the host down, and a silent one would record nothing.
+    // The first failure is kept and rethrown by DisposeAsync, so a broken sampler fails the test.
+    [SuppressMessage(
+        "Design",
+        "CA1031:Do not catch general exception types",
+        Justification = "A background sampler may not throw on its thread; the failure is stored and rethrown at disposal.")]
+    private void GuardSample()
     {
-        Interlocked.Increment(ref _samples);
-
-        var peak = Interlocked.Read(ref _peak);
-        while (retained > peak)
+        try
         {
-            var seen = Interlocked.CompareExchange(ref _peak, retained, peak);
-            if (seen == peak)
-            {
-                return;
-            }
+            Sample();
+        }
+        catch (Exception exception)
+        {
+            Interlocked.CompareExchange(ref _failure, ExceptionDispatchInfo.Capture(exception), null);
+        }
+    }
 
-            peak = seen;
+    private void Sample()
+    {
+        lock (_gate)
+        {
+            var before = GC.GetTotalPauseDuration();
+            var retained = Retained() - _baseline;
+            Interlocked.Add(ref _gcPauseTicks, (GC.GetTotalPauseDuration() - before).Ticks);
+            Interlocked.Increment(ref _samples);
+            Interlocked.Exchange(ref _peak, Math.Max(_peak, retained));
         }
     }
 }
 
 /// <summary>
-/// Finds the parse child by its command line and samples its resident set. The runner exposes no process handle, so
-/// the child is recognised by the assembly path the production command line carries: <c>/proc</c> where the host has it
-/// (an exact <c>VmHWM</c> peak), otherwise <c>ps</c> row sampling of the current RSS, which is a floor.
+/// Samples the parse child's RSS. Linux VmHWM includes peaks between observations, but the child may allocate
+/// after the last observation and exit before the next one: either platform's reported number is a peak floor.
 /// </summary>
 internal sealed class ChildWorkingSetSampler : IAsyncDisposable
 {
@@ -106,6 +126,8 @@ internal sealed class ChildWorkingSetSampler : IAsyncDisposable
     private readonly TimeSpan _interval;
     private readonly CancellationTokenSource _stop = new();
     private readonly Thread _thread;
+    private readonly object _gate = new();
+    private ExceptionDispatchInfo? _failure;
     private long _peak;
     private int _samples;
 
@@ -114,35 +136,54 @@ internal sealed class ChildWorkingSetSampler : IAsyncDisposable
         _marker = childAssemblyPath;
         _interval = interval;
         _method = Directory.Exists(ProcRoot)
-            ? "proc-vmhwm (exact peak resident set)"
-            : "ps-rss (sampled resident set, a floor)";
+            ? "proc-vmhwm (last observed kernel high-water mark, peak floor)"
+            : "ps-rss (sampled resident set, peak floor)";
         _thread = new Thread(Loop) { IsBackground = true, Name = "budget-child-rss" };
         _thread.Start();
     }
 
-    /// <summary>The largest resident set any sample saw, in bytes; 0 when the child was never seen.</summary>
+    /// <summary>The largest observed resident set in bytes; zero means no usable sample.</summary>
     internal long PeakWorkingSetBytes => Interlocked.Read(ref _peak);
 
-    /// <summary>How many child samples ran.</summary>
+    /// <summary>How many positive child samples ran.</summary>
     internal int Samples => Volatile.Read(ref _samples);
 
-    /// <summary>How the number was obtained, for the log line that prints it.</summary>
+    /// <summary>How the number was obtained.</summary>
     internal string Method => _method;
 
-    /// <summary>Starts sampling; the caller disposes it once the parse returns.</summary>
+    /// <summary>Whether the child remained observable immediately after the parse returned.</summary>
+    internal string FinalObservation { get; private set; } = "final sample not attempted";
+
+    /// <summary>Starts sampling until the caller disposes it.</summary>
     /// <param name="childAssemblyPath">The absolute assembly path the child is launched with.</param>
     /// <param name="interval">How often a sample runs.</param>
     /// <returns>The running sampler.</returns>
     internal static ChildWorkingSetSampler Start(string childAssemblyPath, TimeSpan interval) =>
         new(childAssemblyPath, interval);
 
+    /// <summary>Takes the latest available high-water mark before the caller does other work.</summary>
+    internal void SampleAfterParse()
+    {
+        lock (_gate)
+        {
+            var observed = GuardSample();
+            FinalObservation = observed
+                ? "child alive for final post-parse sample"
+                : "child already exited before final post-parse sample";
+        }
+    }
+
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
         await _stop.CancelAsync().ConfigureAwait(false);
-        _ = await Task.Run(() => _thread.Join(TimeSpan.FromSeconds(30))).ConfigureAwait(false);
+        if (!await Task.Run(() => _thread.Join(TimeSpan.FromSeconds(30))).ConfigureAwait(false))
+        {
+            throw new TimeoutException("The child working-set sampler did not stop within 30 seconds.");
+        }
 
         _stop.Dispose();
+        _failure?.Throw();
     }
 
     private static string ProcRoot => Path.DirectorySeparatorChar + "proc";
@@ -151,22 +192,38 @@ internal sealed class ChildWorkingSetSampler : IAsyncDisposable
     {
         while (!_stop.Token.WaitHandle.WaitOne(_interval))
         {
-            if (Directory.Exists(ProcRoot))
+            lock (_gate)
             {
-                RecordProc();
-            }
-            else
-            {
-                RecordPs();
+                _ = GuardSample();
             }
         }
     }
 
-    private void RecordProc()
+    // A sampler thread that dies unobserved would take the host down, and a silent one would record nothing.
+    // The first failure is kept and rethrown by DisposeAsync, so a broken sampler fails the test.
+    [SuppressMessage(
+        "Design",
+        "CA1031:Do not catch general exception types",
+        Justification = "A background sampler may not throw on its thread; the failure is stored and rethrown at disposal.")]
+    private bool GuardSample()
     {
+        try
+        {
+            return Directory.Exists(ProcRoot) ? RecordProc() : RecordPs();
+        }
+        catch (Exception exception)
+        {
+            Interlocked.CompareExchange(ref _failure, ExceptionDispatchInfo.Capture(exception), null);
+            return false;
+        }
+    }
+
+    private bool RecordProc()
+    {
+        var observed = false;
         foreach (var directory in Directory.EnumerateDirectories(ProcRoot))
         {
-            if (!int.TryParse(Path.GetFileName(directory), NumberStyles.None, CultureInfo.InvariantCulture, out _))
+            if (!int.TryParse(Path.GetFileName(directory), NumberStyles.None, CultureInfo.InvariantCulture, out var pid))
             {
                 continue;
             }
@@ -178,45 +235,52 @@ internal sealed class ChildWorkingSetSampler : IAsyncDisposable
                     continue;
                 }
 
-                // VmHWM is the kernel's own high-water mark, so a peak between two samples is still observed.
-                foreach (var line in File.ReadAllLines(Path.Combine(directory, "status")))
-                {
-                    if (!line.StartsWith("VmHWM:", StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-
-                    var value = line["VmHWM:".Length..].Trim().Split(' ')[0];
-                    if (long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var kilobytes))
-                    {
-                        Record(kilobytes * 1024);
-                    }
-
-                    break;
-                }
+                observed |= RecordProcPeak(pid);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
             {
-                // A process that exited mid-read (or is not ours to read) is not a sample; the next tick retries.
+                // A process that exited mid-read, or is not ours to read, is not a sample; the next tick retries.
             }
         }
+
+        return observed;
     }
 
-    private void RecordPs()
+    private bool RecordProcPeak(int pid)
+    {
+        // VmHWM is the kernel's own high-water mark, so a peak between two observations is still observed.
+        foreach (var line in File.ReadAllLines(Path.Combine(ProcRoot,
+            pid.ToString(CultureInfo.InvariantCulture), "status")))
+        {
+            if (!line.StartsWith("VmHWM:", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var value = line["VmHWM:".Length..].Trim().Split(' ')[0];
+            Record(checked(long.Parse(value, NumberStyles.Integer, CultureInfo.InvariantCulture) * 1024));
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool RecordPs()
     {
         using var process = Process.Start(new ProcessStartInfo("ps")
         {
             RedirectStandardOutput = true,
-            ArgumentList = { "-axo", "pid=,rss=,command=" },
-        });
-        if (process is null)
-        {
-            return;
-        }
-
+            ArgumentList = { "-axww", "-o", "pid=,rss=,command=" },
+        }) ?? throw new InvalidOperationException("The child RSS sampler could not start ps.");
         var output = process.StandardOutput.ReadToEnd();
         process.WaitForExit();
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"The child RSS sampler's ps exited with {process.ExitCode}.");
+        }
 
+        var observed = false;
         foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
             if (!line.Contains(_marker, StringComparison.Ordinal))
@@ -225,29 +289,27 @@ internal sealed class ChildWorkingSetSampler : IAsyncDisposable
             }
 
             var fields = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (fields.Length >= 2
-                && long.TryParse(fields[1], NumberStyles.None, CultureInfo.InvariantCulture, out var kilobytes))
+            if (fields.Length < 2)
             {
-                Record(kilobytes * 1024);
+                throw new InvalidOperationException($"The child RSS sampler read a ps row without a pid and rss: '{line}'");
             }
+
+            Record(checked(long.Parse(fields[1], NumberStyles.Integer, CultureInfo.InvariantCulture) * 1024));
+            observed = true;
         }
+
+        return observed;
     }
 
     private void Record(long resident)
     {
-        Interlocked.Increment(ref _samples);
-
-        var peak = Interlocked.Read(ref _peak);
-        while (resident > peak)
+        if (resident <= 0)
         {
-            var seen = Interlocked.CompareExchange(ref _peak, resident, peak);
-            if (seen == peak)
-            {
-                return;
-            }
-
-            peak = seen;
+            throw new InvalidOperationException("The child RSS sampler produced a non-positive measurement.");
         }
+
+        Interlocked.Increment(ref _samples);
+        Interlocked.Exchange(ref _peak, Math.Max(_peak, resident));
     }
 }
 
@@ -328,7 +390,10 @@ internal static class ParseChildAssembly
     }
 }
 
-/// <summary>A directory under the system temp path that removes itself, so a budget run leaves no fixture behind.</summary>
+/// <summary>
+/// A directory under the system temp path that removes itself, so a budget run leaves no fixture behind. A directory
+/// that is already gone, or that cannot be emptied, is left alone: cleanup may not replace the run's own verdict.
+/// </summary>
 internal sealed class TempDirectory : IDisposable
 {
     /// <summary>Creates an empty directory whose name is unique to this run.</summary>
@@ -343,7 +408,24 @@ internal sealed class TempDirectory : IDisposable
     public string Path { get; }
 
     /// <inheritdoc />
-    public void Dispose() => Directory.Delete(Path, recursive: true);
+    public void Dispose()
+    {
+        // A child that outlived the run may already have removed files here; the cleanup must not replace the
+        // failure the measurement is reporting, so a vanished or busy directory is not itself a test failure.
+        if (!Directory.Exists(Path))
+        {
+            return;
+        }
+
+        try
+        {
+            Directory.Delete(Path, recursive: true);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // A leftover temp directory is worth less than the measurement failure this dispose would replace.
+        }
+    }
 }
 
 /// <summary>

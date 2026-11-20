@@ -162,7 +162,6 @@ public sealed class LargeFixtureLoaderTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData("measured_on", "date", "\"2026-02-30\"")]
     [InlineData("measured_on", "host", "\" \"")]
     [InlineData("measured_on", "sha", "\"not-a-sha\"")]
     [InlineData("headroom", "wall", "0")]
@@ -178,6 +177,41 @@ public sealed class LargeFixtureLoaderTests(ITestOutputHelper output)
         AssertBudgetContract(Element(budget));
         budget[section]![member] = JsonNode.Parse(value);
         Should.Throw<InvalidOperationException>(() => AssertBudgetContract(Element(budget)));
+    }
+
+    [Fact]
+    public void LargeFixture_MeasuredBudgetShaTrailingNewline_Rejects()
+    {
+        var budget = MeasuredBudget();
+        AssertBudgetContract(Element(budget));
+        budget["measured_on"]!["sha"] = "abcdef12\n";
+        Should.Throw<InvalidOperationException>(() => AssertBudgetContract(Element(budget)));
+    }
+
+    [Fact]
+    public void LargeFixture_MeasuredBudgetDateTrailingNewline_Rejects()
+    {
+        var budget = MeasuredBudget();
+        AssertBudgetContract(Element(budget));
+        budget["measured_on"]!["date"] = "2026-11-20\n";
+        Should.Throw<InvalidOperationException>(() => AssertBudgetContract(Element(budget)));
+    }
+
+    [Fact]
+    public void LargeFixture_MeasuredBudgetInvalidCalendarDate_Rejects()
+    {
+        var budget = MeasuredBudget();
+        AssertBudgetContract(Element(budget));
+        budget["measured_on"]!["date"] = "2026-02-30";
+        Should.Throw<InvalidOperationException>(() => AssertBudgetContract(Element(budget)));
+    }
+
+    [Fact]
+    public void LargeFixture_MeasuredBudgetYear0099_Accepts()
+    {
+        var budget = MeasuredBudget();
+        budget["measured_on"]!["date"] = "0099-01-01";
+        AssertBudgetContract(Element(budget));
     }
 
     [Fact]
