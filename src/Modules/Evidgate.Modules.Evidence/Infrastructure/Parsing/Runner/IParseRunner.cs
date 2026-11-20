@@ -31,12 +31,16 @@ internal sealed class ParseRunRequest
     /// <param name="mediaType">The declared media type, or <see langword="null"/> when the caller already sniffed it.</param>
     /// <param name="input">The artifact's bytes; the caller keeps ownership.</param>
     /// <param name="maxCases">The most report entries the child may emit (positive).</param>
+    /// <param name="sink">
+    /// Where the accepted record lines go instead of a buffered list, or <see langword="null"/> to keep them.
+    /// </param>
     public ParseRunRequest(
         ParseRunnerProfile profile,
         long maxBytes,
         string? mediaType,
         Stream input,
-        long maxCases = ParsingService.DefaultMaxReportCases)
+        long maxCases = ParsingService.DefaultMaxReportCases,
+        IParseRecordSink? sink = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytes);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxCases);
@@ -47,6 +51,7 @@ internal sealed class ParseRunRequest
         MaxCases = maxCases;
         MediaType = mediaType;
         Input = input;
+        Sink = sink;
     }
 
     /// <summary>Which arm of the profile the child runs.</summary>
@@ -63,11 +68,18 @@ internal sealed class ParseRunRequest
 
     /// <summary>The artifact's bytes; the caller keeps ownership and the runner never disposes it.</summary>
     public Stream Input { get; }
+
+    /// <summary>
+    /// The sink the accepted records stream into, or <see langword="null"/> to have the runner buffer them. A caller
+    /// that supplies its own sink receives nothing in <see cref="ParseRunSucceeded.Records"/>.
+    /// </summary>
+    public IParseRecordSink? Sink { get; }
 }
 
 /// <summary>
 /// The parent side of 06.3.6 §7: runs the 06.3.1 profile in the <c>Evidgate.Parser</c> child process and returns
-/// either the buffered record stream or the one failure kind that ended the run.
+/// either the record stream — buffered here, or delivered to the request's own sink — or the one failure kind that
+/// ended the run.
 /// <para>
 /// It is registered only when <c>EVIDGATE__PARSE__OUTOFPROCESS</c> is on (06.3.6 §11 rollout); the
 /// <c>artifact_parse</c> task handler (06.3.6-T1.4) is the one caller and the only place a run becomes a
@@ -87,6 +99,9 @@ internal interface IParseRunner
     /// disposal rethrows the same exception for the same reason, so a shutdown never becomes a verdict either
     /// (06.3.6-T1.4, S125 F3).
     /// </param>
-    /// <returns>The buffered records on success, otherwise the failure kind with the child's exit code.</returns>
+    /// <returns>
+    /// The records on success — the buffered list, or an empty list when the request carried its own sink and they
+    /// were delivered there — otherwise the failure kind with the child's exit code.
+    /// </returns>
     Task<ParseRunResult> RunAsync(ParseRunRequest request, CancellationToken cancellationToken);
 }

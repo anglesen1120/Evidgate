@@ -221,7 +221,8 @@ public sealed class PytestJUnitMapperRootTests
     private static JUnitMapResult MapRecords(
         IReadOnlyList<ParseRecord> records,
         Func<string, string, string?>? resolve = null) =>
-        Mapper().Map(
+        PytestJUnitMapperReplay.MapRecords(
+            Mapper(),
             records,
             new JUnitMapContext(PytestJUnitMapperReplay.ReportId, resolve ?? PytestJUnitMapperReplay.NodeId));
 

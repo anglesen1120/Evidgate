@@ -296,7 +296,7 @@ internal sealed class StubParseRunner : IParseRunner
             throw new InvalidOperationException("the stub has no answer for this run");
         }
 
-        return Result;
+        return ParseRunnerSinkFeed.Feed(request, Result);
     }
 }
 
