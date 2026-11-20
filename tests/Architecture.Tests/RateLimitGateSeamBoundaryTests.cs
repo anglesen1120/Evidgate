@@ -251,86 +251,100 @@ public sealed class RateLimitGateSeamBoundaryTests
     private static string Wrap(string statement) =>
         "using System; class Route { async System.Threading.Tasks.Task M() {\n" + statement + "\n} }";
 
-    private static (string Path, string Text)[] ProductionSources() =>
-        Directory
-            .EnumerateFiles(Path.Combine(SolutionLayout.RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
-            .Select(file => Path.GetRelativePath(SolutionLayout.RepoRoot, file).Replace('\\', '/'))
-            .Where(path => !path.Contains("/obj/", StringComparison.Ordinal) && !path.Contains("/bin/", StringComparison.Ordinal))
-            .Order(StringComparer.Ordinal)
-            .Select(path => (Path: path, Text: File.ReadAllText(Path.Combine(SolutionLayout.RepoRoot, path))))
-            .ToArray();
+    private static (string Path, string Text)[] ProductionSources() => [.. SolutionLayout.ProductionSources()];
 
     private static ScanReport Scan(IEnumerable<(string Path, string Text)> files, string[] allowed, string[]? limiterCallers = null)
     {
         limiterCallers ??= [];
-        var violations = new List<string>();
-        var delegateCalls = new List<string>();
-        var limiterCalls = new List<string>();
-        var mentions = 0;
-        var scanned = 0;
+        var state = new ScanState();
 
         foreach (var (path, text) in files)
         {
-            scanned++;
-
-            var tree = CSharpSyntaxTree.ParseText(text);
-
-            // Code under a symbol-dependent #if is compiled in production but parsed as disabled text here, so any
-            // disabled region that could hold the call is red instead of being skipped.
-            foreach (var trivia in tree.GetRoot().DescendantTrivia().Where(trivia => trivia.IsKind(SyntaxKind.DisabledTextTrivia)))
-            {
-                var disabled = trivia.ToString();
-                if (disabled.Contains(GateType, StringComparison.Ordinal) || disabled.Contains(MethodName, StringComparison.Ordinal) || disabled.Contains("\\u", StringComparison.Ordinal))
-                {
-                    violations.Add($"{path}:{trivia.GetLocation().GetLineSpan().StartLinePosition.Line + 1}: disabled preprocessor region could hold a call to the gate");
-                }
-            }
-
-            if (tree.GetDiagnostics().Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error))
-            {
-                violations.Add($"{path}: source does not parse, so the scan cannot rule out a call to {GateType}");
-
-                continue;
-            }
-
-            var isAllowed = allowed.Contains(path);
-            foreach (var node in tree.GetRoot().DescendantNodesAndTokens())
-            {
-                (bool Delegate, bool Counted)? call = null;
-                var finding = node.IsToken ? CheckToken(node.AsToken()) : CheckNode(node.AsNode()!, isAllowed, out call);
-                var line = node.GetLocation()!.GetLineSpan().StartLinePosition.Line + 1;
-                if (node.IsNode && node.AsNode() is IdentifierNameSyntax { Identifier.ValueText: GateType })
-                {
-                    mentions++;
-                }
-
-                if (node.IsNode && call is not null)
-                {
-                    (call.Value.Delegate ? delegateCalls : limiterCalls).Add(path);
-                    if (!call.Value.Delegate && !limiterCallers.Contains(path))
-                    {
-                        violations.Add($"{path}:{line}: limiter overload called from a file that is not on the caller allow-list");
-                    }
-                }
-
-                if (finding is not null && !(isAllowed && finding.Allowed))
-                {
-                    violations.Add($"{path}:{line}: {finding.Message}");
-                }
-            }
+            state.Scanned++;
+            ScanFile(path, text, allowed.Contains(path), limiterCallers, state);
         }
 
-        foreach (var entry in allowed.Where(entry => !delegateCalls.Contains(entry)))
+        foreach (var entry in allowed.Where(entry => !state.DelegateCalls.Contains(entry)))
         {
-            violations.Add($"{entry}: stale allow-list entry, the file no longer calls the delegate overload");
+            state.Violations.Add($"{entry}: stale allow-list entry, the file no longer calls the delegate overload");
         }
 
-        foreach (var entry in limiterCallers.Where(entry => !limiterCalls.Contains(entry)))
+        foreach (var entry in limiterCallers.Where(entry => !state.LimiterCalls.Contains(entry)))
         {
-            violations.Add($"{entry}: stale caller allow-list entry, the file no longer calls the limiter overload");
+            state.Violations.Add($"{entry}: stale caller allow-list entry, the file no longer calls the limiter overload");
         }
 
-        return new ScanReport(violations, delegateCalls.Distinct().Order(StringComparer.Ordinal).ToArray(), limiterCalls, scanned, mentions);
+        return new ScanReport(state.Violations, state.DelegateCalls.Distinct().Order(StringComparer.Ordinal).ToArray(), state.LimiterCalls, state.Scanned, state.Mentions);
+    }
+
+    private static void ScanFile(string path, string text, bool isAllowed, string[] limiterCallers, ScanState state)
+    {
+        var tree = CSharpSyntaxTree.ParseText(text);
+        FlagDisabledRegions(path, tree, state);
+
+        if (tree.GetDiagnostics().Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error))
+        {
+            state.Violations.Add($"{path}: source does not parse, so the scan cannot rule out a call to {GateType}");
+
+            return;
+        }
+
+        foreach (var node in tree.GetRoot().DescendantNodesAndTokens())
+        {
+            ScanNode(path, node, isAllowed, limiterCallers, state);
+        }
+    }
+
+    // Code under a symbol-dependent #if is compiled in production but parsed as disabled text here, so any
+    // disabled region that could hold the call is red instead of being skipped.
+    private static void FlagDisabledRegions(string path, SyntaxTree tree, ScanState state)
+    {
+        foreach (var trivia in tree.GetRoot().DescendantTrivia().Where(trivia => trivia.IsKind(SyntaxKind.DisabledTextTrivia)))
+        {
+            var disabled = trivia.ToString();
+            if (disabled.Contains(GateType, StringComparison.Ordinal) || disabled.Contains(MethodName, StringComparison.Ordinal) || disabled.Contains("\\u", StringComparison.Ordinal))
+            {
+                state.Violations.Add($"{path}:{trivia.GetLocation().GetLineSpan().StartLinePosition.Line + 1}: disabled preprocessor region could hold a call to the gate");
+            }
+        }
+    }
+
+    private static void ScanNode(string path, SyntaxNodeOrToken node, bool isAllowed, string[] limiterCallers, ScanState state)
+    {
+        (bool Delegate, bool Counted)? call = null;
+        var finding = node.IsToken ? CheckToken(node.AsToken()) : CheckNode(node.AsNode()!, isAllowed, out call);
+        var line = node.GetLocation()!.GetLineSpan().StartLinePosition.Line + 1;
+        if (node.IsNode && node.AsNode() is IdentifierNameSyntax { Identifier.ValueText: GateType })
+        {
+            state.Mentions++;
+        }
+
+        if (node.IsNode && call is not null)
+        {
+            (call.Value.Delegate ? state.DelegateCalls : state.LimiterCalls).Add(path);
+            if (!call.Value.Delegate && !limiterCallers.Contains(path))
+            {
+                state.Violations.Add($"{path}:{line}: limiter overload called from a file that is not on the caller allow-list");
+            }
+        }
+
+        if (finding is not null && !(isAllowed && finding.Allowed))
+        {
+            state.Violations.Add($"{path}:{line}: {finding.Message}");
+        }
+    }
+
+    private sealed class ScanState
+    {
+        public List<string> Violations { get; } = [];
+
+        public List<string> DelegateCalls { get; } = [];
+
+        public List<string> LimiterCalls { get; } = [];
+
+        public int Mentions { get; set; }
+
+        public int Scanned { get; set; }
     }
 
     private static Finding? CheckToken(SyntaxToken token) =>
