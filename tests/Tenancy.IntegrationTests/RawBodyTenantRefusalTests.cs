@@ -172,11 +172,15 @@ public sealed class RawBodyTenantRefusalTests(
             services: services => services.AddSingleton<IStartupFilter>(new CountingBodyStartupFilter()),
             hosts: hosts);
 
+    // A middleware-owned route answers an over-cap body 413 before authentication and the oversize payload reaches
+    // that answer too (seen on the LAN round); the declared-limit fact pins that order, so it is left out here.
     private static (string Name, HttpContent Content)[] Payloads(RawBodyRoute route) =>
     [
         ("a malformed body", Json("{")),
         ("a well-formed body", Json(route.WellFormed)),
-        ("a body of undeclared length", new UndeclaredContent(route.Oversize())),
+        .. route.DeclaredLimit is not null && !route.HandlerRefusesFirst
+            ? Array.Empty<(string, HttpContent)>()
+            : [("a body of undeclared length", new UndeclaredContent(route.Oversize()))],
     ];
 
     private static async Task<BodyReply> SendAsync(
