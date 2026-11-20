@@ -992,3 +992,59 @@ Closed by #1059 (6a06088a): the runbook is in the incident-process §6 table (P3
 | Architecture tests copy the src walk (S504) | Closed by #1037: one `SolutionLayout.ProductionSourceFiles()` walk for 5 copies, `Scan` split. Open: explicit Roslyn reference decision (5.3.0 stays transitive via Corvus); six subtree walks keep their own filter (EvaluatorPurity, ReleaseArchitecture has no bin/obj filter, HealingSystemSwitch, UsagePriceInsertGlobal, PolicyPersistenceSqlOwnership, CatalogBodyRead); walk floor is 1000 plus anchors, not an exact count | receiver: coordinator (next architecture-test lane) |
 
 Closed by #1062 (422946b5): `SolutionLayout.SourceFiles` is the one source walk with one bin/obj filter, and EvaluatorPurity, ReleaseArchitecture, HealingSystemSwitch, UsagePriceInsertGlobal, PolicyPersistenceSqlOwnership and CatalogBodyRead use it; per-subtree floors with anchors pin it, and eight LAN mutants ran red. The Roslyn reference decision moved to its own carried row.
+
+## Moved from status-carried.md by S520 (2026-11-21)
+
+| Estimate rows of feature plan 04.1.3 sum to 3.0 d against 2.5 d in its re-estimate (S511) | The sub-task rows T1.1 0.25 + T1.2 0.25 + T2.1 0.5 + T2.2a 0.5 + T2.2b 0.5 + T3.1 0.5 + T3.2 0.5 = 3.0 d (T2.2c unsized, not counted), while the feature plan Re-estimate line and the area plan epic 04.1 (T1 S 0.5, T2 M 1.0, T3 M 1.0) say 2.5 d. T2's three delivered sub-rows (T2.1, T2.2a, T2.2b) add up to 1.5 d against the 1.0 d M row. No roll-up in 00 §14 was changed. | receiver: next lane touching the 04.1.3 plan, decide whether 00 §14 takes +0.5 d or the sub-task sizes are re-cut |
+
+Closed by #1065 (4a2afcd6): the 04.1.3 sub-rows were re-cut (T2.1 and T2.2b to XS) so each parent sums to its area-plan row and the total equals the 2.5 d Re-estimate line; T2.2c stays [OPEN] outside the roll-up (new carried row).
+
+## Moved from status-carried.md by S519 (2026-11-21)
+
+| data-table-column-geometry first test near the 5 s budget on a cold loaded host (S511) | In the wave gate smoke (load_max about 17) the first test of `apps/web/src/app/shared/ui/data-table/data-table-column-geometry.spec.ts`, `keeps en role content intact at 900 px and 1× text`, took 5048 ms against the 5000 ms vitest timeout; the same test took 686 ms in the full vitest stage and 1177 ms in the smoke rerun on the same sha. No timeout raised, nothing skipped; not on the PROJECT.md known-failures list. | receiver: web lane, cut the cold first test's setup cost, do not raise the timeout |
+
+Closed by #1067 (ff020aa7): a warm-up page in beforeAll moves the cold renderer, font and first-layout cost out of the 5 s test budget into the hook budget; assertions unchanged, no timeout raised. First test of the file: 5048 ms at load about 17 before; 2551 ms at load_max 46.95 and 412 ms at load_max 16.36 after (LAN rounds on 23d7a0a3 and dd018a65). One sample per load level, not a distribution: the first test is no longer the near-budget outlier, which does not prove it can never time out. The wave vitest at load 47 failed on ten tests in nine other specs (new carried row).
+
+## Moved from status-carried.md by S522 (2026-11-21)
+
+| Ingestion tenant-less refusal records no rejection metric (S507) | `IngestEventBatchAsync` (`IngestionEndpoints.cs:103`): the anonymous branch records `IngestBatchRejection`; the `RawBodyGuard` throw for a tenant-less principal records nothing, so that refusal is uncounted. | receiver: Ingestion lane, record it before the guard |
+
+Closed by #1069 (6347395b): the tenant-less refusal of the events route is now counted once in `evidgate_ingest_batch_rejected_total`; it shares the existing `reason=unauthenticated` value with the anonymous refusal, so the counter cannot tell the two apart.
+
+## Moved from status-carried.md by S523 (2026-11-21)
+
+| check_features cannot read letter-suffixed sub-task ids (04.1.3-T2) (S520) | `scripts/check_features.py:56` matches sub-row ids only as `{tid}\.(\d+)$`, so T2.2a/T2.2b/T2.2c are not counted and the script reports `04.1.3-T2 sub-tasks sum ... != task size 1 (M)` (0.5 on base, 0.25 after the S520 re-cut; sizes themselves sum to 1.0). It is not a verify.sh stage. The same script also requires ids 1..n and sub-tasks no larger than S, so widening the regex alone would then flag T2.2c. | receiver: coordinator (plan-tooling lane) |
+
+Closed by #1072 (b6aacb28): `scripts/check_features.py` reads letter-suffixed sub-task ids (contiguous from `a`) and treats an `[OPEN]` row with an `unsized` Size cell as a warning left out of the sum; 00 §12 and its §15 log state the rule, and the checker exits 0 on the wave.
+
+## Moved from status-carried.md by S525 (2026-11-21)
+
+| Feature plans missing for planned stories (found S55; includes the `check_features.py` failure) | `scripts/check_features.py` exits 1 with 6 errors after S139 (10 on dd479e95: the same six `expected 1 feature file, found 0` ids 13.6.1, 13.7.1, 13.7.2, 13.8.1, 13.8.2, 13.9.1 plus two older non-plan-13 structure errors in the 02.3.2 and 08.6.3 plans). S139 wrote the plans for 13.6.1 and 13.8.1 (measured 8 → 6, `files: 199` → `201`, the diff is exactly those two ids; merged in #289, 8f8e365e). S136 wrote the plans for 13.5.1 and 13.5.2 (measured 10 → 8, the diff is exactly those two ids). S112 wrote the plans for 13.3.1 and 13.4.1 (measured: 10 errors on develop, 8 in the worktree, the diff is exactly those two). The remaining task rows cannot be built as written; writing those plans is a T0 feature-plan lane, not product completion. | receiver: queue row F37 (T0 feature-plan lane, next 13.7.1, 13.7.2, 13.8.2, 13.9.1 `plans/13-product-phases.md:33`); hand-over Notes: gap - the receiving plans have no Notes section; receiver queue row F36 (widened: add the Notes section). S112 new `[OPEN]` rows: `plans/open-items/05-product-phases-g1.md` OI-13-401 to OI-13-413, OI-13-501 to OI-13-506 Closed in part by S346 (#708, 39fc58de): the 13.7.1 and 13.7.2 plans are written (check_features 11 → 9, plan_graph totals unchanged); 13.8.2 and 13.9.1 remain. |
+
+Closed in part by S525: the old title and the checker claims are stale. All six named plans exist (13.6.1 and 13.8.1 b4163af3, #289; 13.7.1 and 13.7.2 659102c9, #708; 13.8.2 and 13.9.1 78ecb24d, #755) and `python3 scripts/check_features.py` on 330e7ada prints `stories checked: 205, files: 205`, `errors: 0`, rc 0. The Notes-section gap and the open-item pointers stay in the narrowed row 'Plan-13 feature plans for 13.1.2, 13.5.2 and 13.6.1-13.9.1 have no Notes section (S55 row narrowed by S525)' in docs/status-carried.md.
+
+## Moved from status-carried.md by S526 (2026-11-21)
+
+| Item | Blocker | Owner |
+|---|---|---|
+| Plan-13 feature plans for 13.1.2, 13.5.2 and 13.6.1-13.9.1 have no Notes section (S55 row narrowed by S525) | The 'plans missing' claim is closed (see status-archive S525): all 205 feature files exist and `python3 scripts/check_features.py` exits 0. What remains: 8 of 14 files in `plans/features/13-product-phases/` (13.1.2, 13.5.2, 13.6.1, 13.7.1, 13.7.2, 13.8.1, 13.8.2, 13.9.1) have no Notes heading, so review hand-overs have no durable home; the checker does not test this. Open items: `plans/open-items/05-product-phases-g1.md` OI-13-401 to OI-13-413, OI-13-501 to OI-13-506. | receiver: queue row F36 (T0 feature-plan lane: add the Notes section) |
+
+Closed by S526 (#1075, bb96af2e): the S525 row counted `## Notes` headings only. Six of the eight plans already held a Notes block in bold-line form (13.5.2:231, 13.6.1:254, 13.7.1:237, 13.7.2:220, 13.8.1:253) or under a sub-heading (13.1.2:522, Notes at :547); only 13.8.2 and 13.9.1 had none and now carry `## Notes, decisions and open items` (13.8.2:270, 13.9.1:249). STATUS.md:394 (13.7.1-T1) was corrected. The form difference is recorded in the carried row 'Plan-13 Notes blocks come in two forms (S526)'.
+
+## Moved from status-carried.md by S524 (2026-11-21)
+
+| EvidgateTelemetry.cs is over the 500-line limit (S522) | `src/BuildingBlocks/Observability/EvidgateTelemetry.cs` is 510 lines after #1069 (506 on the wave base 3ad7b646, so already over); split by responsibility (meter and counters, record methods). Also noted by the #1069 delta check: the resolved-tenant positive control in `IngestUnauthenticatedRefusalMetricTests` asserts only status != 401; the expected path is 403 forbidden (member lacks event:write), not observed. | receiver: observability lane |
+
+Closed by S524 (#1071, d3152c9a): EvidgateTelemetry.cs is split into three partial files (285, 112 and 136 lines) with no member changed, and the positive control in IngestUnauthenticatedRefusalMetricTests asserts Forbidden.
+
+## Moved from status-carried.md by S528 (2026-11-21)
+
+| Telemetry partials depend on compile order for the Meter (S524) | Seven EvidgateTelemetry partial files (HealingGateway, Operations, Quota, RawReportEnqueue, Releases, Sessions, Workflow) read the Meter of EvidgateTelemetry.cs in field initialisers, so that file must compile first (true on the LAN: csc lists it first); an order-independent holder is a design change. The AI settings and authoring counters have no recording test. | receiver: observability lane |
+
+Closed in part by S528 (#1079, fa1328be): AiSettingsMetricTests and AuthoringMetricTests record and assert the AI settings and authoring instruments through the real handlers; the compile-order claim stays open in the corrected row.
+
+## Moved from status-carried.md by S529 (2026-11-21)
+
+| Merge debt (#427) | D-S205-M1, merged under 6c: (a) the perf lens ran inside the security-reviewer, no separate performance agent; (b) U7: `IngestEventBatch.Handle` and its file exceed the size limits (the PR added about 20 lines) and must be split; (c) U1: plan ids remain in two comments of `src/Modules/Evidgate.Modules.Ingestion/Endpoints/IngestionEndpoints.cs` | receiver: next ingestion task |
+
+Closed by S529: superseded by the carried row 'Ingest Handle cut and usage-emitter allow-list (S529)'; the file split was abandoned (Handle is one 509-line method).

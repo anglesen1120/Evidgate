@@ -64,10 +64,8 @@ public static partial class IngestionEndpoints
     }
 
     /// <summary>
-    /// Admits, reads and hands one batch to the handler. The burst limit is charged before the
-    /// body is read and before the pipeline's permission check: a caller over its budget is
-    /// refused cheaply there by design, and every refusal is counted once. A caller the limiter
-    /// cannot key on is left to the pipeline and the handler, which refuse it without a write.
+    /// Gates one batch on an authenticated principal and counts the guard's own refusal: a principal the host
+    /// resolved no tenant for is counted once here and the guard's 401 rethrown for the envelope middleware.
     /// </summary>
     private static async Task<Result<BatchAckResult>> IngestEventBatchAsync(
         Guid r,
@@ -99,59 +97,50 @@ public static partial class IngestionEndpoints
                 "no authenticated producer could be resolved",
                 StatusCodes.Status401Unauthorized));
         }
-        // A principal without a tenant must not spend ingest budget or cause a body read.
+
+        // Only the guard throws this once a tenant is resolved (the ambient tenant is published and never
+        // cleared inside a request), so nothing after it in the callee can be counted by mistake.
+        try
+        {
+            return await AdmitReadAndSendAsync(r, context, principals, mediator, quotaVeto, blockStamp, logger, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (TenantContextMissingException)
+        {
+            IngestBatchRejection.Record(logger, IngestBatchRejection.Unauthenticated, context.TraceIdentifier, r, 0, 0);
+
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Admits, reads and hands one batch to the handler. The tenant guard is the first statement so no byte of
+    /// the body, and no ingest budget, is touched for a caller without a tenant. The burst limit is charged
+    /// before the body is read and before the pipeline's permission check: a caller over its budget is refused
+    /// cheaply there by design, and every refusal is counted once.
+    /// </summary>
+    private static async Task<Result<BatchAckResult>> AdmitReadAndSendAsync(
+        Guid r,
+        HttpContext context,
+        IRequestPrincipalAccessor principals,
+        IMediator mediator,
+        IngestQuotaVeto quotaVeto,
+        IQuotaBlockStamp blockStamp,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
         RawBodyGuard.RequireResolvedTenant(context.RequestServices);
 
         var limits = context.RequestServices.GetRequiredService<IOptions<IngestionLimits>>().Value;
 
-        // The burst limit runs before a byte of the body is read, keyed by the authenticated project
-        // and token id only: no header or body value moves a caller into another partition. A caller
-        // whose key cannot be resolved is not refused here — the limiter never answers before the
-        // pipeline does — and the handler refuses it without a write.
-        if (TryRatePartition(principals.Current, out var partition))
+        if (RefuseOverBudget(r, context, principals, logger) is { } overBudget)
         {
-            var limiter = context.RequestServices.GetRequiredService<IngestionRateLimiter>();
-
-            // One charge against both budgets (the token's own and the project's), committed only when
-            // both admit, so a refused token never spends the budget its siblings share.
-            var admission = limiter.AcquireBoth(partition.ProjectId, partition.TokenId);
-
-            if (!admission.Allowed)
-            {
-                context.Response.Headers.RetryAfter = RetryAfterHeader.Format(admission.RetryAfterSeconds);
-                IngestBatchRejection.Record(logger, IngestBatchRejection.RateLimited, context.TraceIdentifier, r, 0, 0);
-
-                return Result.Failure<BatchAckResult>(new Error(
-                    ApiErrorCode.RateLimited,
-                    "the project's event ingest rate was exceeded",
-                    StatusCodes.Status429TooManyRequests,
-                    Retryable: true));
-            }
+            return Result.Failure<BatchAckResult>(overBudget);
         }
 
-        // Content-Encoding must be exactly one of gzip/identity (case-insensitive). Anything else — an
-        // unknown coding or a stacked list — is refused at the header: the 00 §9.2 envelope has no code for
-        // an unsupported encoding, so the detail names it (04.1.1-T3; no new wire code).
-        var encodings = context.Request.Headers.ContentEncoding;
-        var gzip = false;
-        if (encodings.Count > 0)
+        if (TryReadEncoding(context, logger, r, out var gzip) is { } unsupported)
         {
-            if (encodings.Count == 1 && string.Equals(encodings[0], "identity", StringComparison.OrdinalIgnoreCase))
-            {
-                gzip = false;
-            }
-            else if (encodings.Count == 1 && string.Equals(encodings[0], "gzip", StringComparison.OrdinalIgnoreCase))
-            {
-                gzip = true;
-            }
-            else
-            {
-                IngestBatchRejection.Record(
-                    logger, IngestBatchRejection.EncodingUnsupported, context.TraceIdentifier, r, context.Request.ContentLength ?? 0, 0);
-                return Result.Failure<BatchAckResult>(Error.Invalid(
-                    "the request body encoding is not supported",
-                    [new ErrorDetail("Content-Encoding", "unsupported", null)]));
-            }
+            return Result.Failure<BatchAckResult>(unsupported);
         }
 
         // The 1 MiB cap applies to the bytes as sent, so a compressed body is capped on its compressed size
@@ -170,17 +159,9 @@ public static partial class IngestionEndpoints
 
             if (!gzip)
             {
-                return await CountedAsync(
-                        await mediator
-                            .Send(new IngestEventBatch(r, bytes, context.TraceIdentifier, bytesIn, bytesIn), cancellationToken)
-                            .ConfigureAwait(false),
-                        logger,
-                        context,
-                        r,
-                        bytesIn,
-                        quotaVeto,
-                        blockStamp,
-                        cancellationToken)
+                return await SendCountedAsync(
+                        new IngestEventBatch(r, bytes, context.TraceIdentifier, bytesIn, bytesIn),
+                        mediator, logger, context, quotaVeto, blockStamp, cancellationToken)
                     .ConfigureAwait(false);
             }
 
@@ -188,26 +169,12 @@ public static partial class IngestionEndpoints
             if (decoded.Reason is { } reason)
             {
                 IngestBatchRejection.Record(logger, reason, context.TraceIdentifier, r, bytesIn, decoded.ExpandedBytes);
-                return reason == IngestBatchRejection.GzipInvalid
-                    ? Result.Failure<BatchAckResult>(Error.Invalid(
-                        "the gzip request body could not be decoded",
-                        [new ErrorDetail("Content-Encoding", "invalid_gzip", null)]))
-                    : Result.Failure<BatchAckResult>(TooLarge());
+                return Result.Failure<BatchAckResult>(GzipRefusal(reason));
             }
 
-            return await CountedAsync(
-                    await mediator
-                        .Send(
-                            new IngestEventBatch(r, decoded.Bytes, context.TraceIdentifier, bytesIn, decoded.ExpandedBytes),
-                            cancellationToken)
-                        .ConfigureAwait(false),
-                    logger,
-                    context,
-                    r,
-                    bytesIn,
-                    quotaVeto,
-                    blockStamp,
-                    cancellationToken)
+            return await SendCountedAsync(
+                    new IngestEventBatch(r, decoded.Bytes, context.TraceIdentifier, bytesIn, decoded.ExpandedBytes),
+                    mediator, logger, context, quotaVeto, blockStamp, cancellationToken)
                 .ConfigureAwait(false);
         }
         finally
@@ -215,6 +182,91 @@ public static partial class IngestionEndpoints
             // The buffer held the tenant's request body, so it is cleared before it is pooled.
             ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
         }
+    }
+
+    private static async Task<Result<BatchAckResult>> SendCountedAsync(
+        IngestEventBatch command,
+        IMediator mediator,
+        ILogger logger,
+        HttpContext context,
+        IngestQuotaVeto quotaVeto,
+        IQuotaBlockStamp blockStamp,
+        CancellationToken cancellationToken) =>
+        await CountedAsync(
+                await mediator.Send(command, cancellationToken).ConfigureAwait(false),
+                logger,
+                context,
+                command.RunId,
+                command.BytesIn,
+                quotaVeto,
+                blockStamp,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+    private static Error GzipRefusal(string reason) => reason == IngestBatchRejection.GzipInvalid
+        ? Error.Invalid(
+            "the gzip request body could not be decoded",
+            [new ErrorDetail("Content-Encoding", "invalid_gzip", null)])
+        : TooLarge();
+
+    // The burst limit runs before a byte of the body is read, keyed by the authenticated project and token id
+    // only: no header or body value moves a caller into another partition. A caller whose key cannot be
+    // resolved is not refused here — the limiter never answers before the pipeline does — and the handler
+    // refuses it without a write.
+    private static Error? RefuseOverBudget(Guid r, HttpContext context, IRequestPrincipalAccessor principals, ILogger logger)
+    {
+        if (!TryRatePartition(principals.Current, out var partition))
+        {
+            return null;
+        }
+
+        // One charge against both budgets (the token's own and the project's), committed only when
+        // both admit, so a refused token never spends the budget its siblings share.
+        var admission = context.RequestServices.GetRequiredService<IngestionRateLimiter>()
+            .AcquireBoth(partition.ProjectId, partition.TokenId);
+        if (admission.Allowed)
+        {
+            return null;
+        }
+
+        context.Response.Headers.RetryAfter = RetryAfterHeader.Format(admission.RetryAfterSeconds);
+        IngestBatchRejection.Record(logger, IngestBatchRejection.RateLimited, context.TraceIdentifier, r, 0, 0);
+
+        return new Error(
+            ApiErrorCode.RateLimited,
+            "the project's event ingest rate was exceeded",
+            StatusCodes.Status429TooManyRequests,
+            Retryable: true);
+    }
+
+    // Content-Encoding must be exactly one of gzip/identity (case-insensitive). Anything else — an
+    // unknown coding or a stacked list — is refused at the header: the 00 §9.2 envelope has no code for
+    // an unsupported encoding, so the detail names it.
+    private static Error? TryReadEncoding(HttpContext context, ILogger logger, Guid r, out bool gzip)
+    {
+        var encodings = context.Request.Headers.ContentEncoding;
+        gzip = false;
+        if (encodings.Count == 0)
+        {
+            return null;
+        }
+
+        if (encodings.Count == 1 && string.Equals(encodings[0], "identity", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (encodings.Count == 1 && string.Equals(encodings[0], "gzip", StringComparison.OrdinalIgnoreCase))
+        {
+            gzip = true;
+            return null;
+        }
+
+        IngestBatchRejection.Record(
+            logger, IngestBatchRejection.EncodingUnsupported, context.TraceIdentifier, r, context.Request.ContentLength ?? 0, 0);
+        return Error.Invalid(
+            "the request body encoding is not supported",
+            [new ErrorDetail("Content-Encoding", "unsupported", null)]);
     }
 
     /// <summary>
