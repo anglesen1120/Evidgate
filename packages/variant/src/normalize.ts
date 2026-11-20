@@ -182,11 +182,14 @@ function normalizeString(
     problems.push({ path, reason: 'invalid_value' });
     return undefined;
   }
-  if (valueLooksSecret(text)) {
+  // The stored form is what must not look like a secret: an upper-cased token prefix only shows
+  // after the enum-like fold, so both the text as sent and the text as stored are scanned.
+  const stored = ENUM_LIKE[key.toLowerCase()] === true ? text.trim().toLowerCase() : text;
+  if (valueLooksSecret(text) || valueLooksSecret(stored)) {
     problems.push({ path, reason: 'secret_value' });
     return undefined;
   }
-  return ENUM_LIKE[key.toLowerCase()] === true ? text.trim().toLowerCase() : text;
+  return stored;
 }
 
 /** VariantNormalizer.Scalar's array branch: at most 32 scalars, nulls dropped, containers refused. */
