@@ -1,7 +1,7 @@
 // `evidgate manifests build` — maps a Playwright list report onto one suite revision's execution
 // plan and writes the manifest `manifests upload` accepts. The flags and the report are validated
-// before `getToken()`, so a bad flag or a malformed report makes no request; mapping the report
-// onto the plan happens after it is read, so an unmappable report is refused after the fetch.
+// before `getToken()`, so a bad flag or a malformed report makes no request; the shard count
+// against the execution count and the report-to-plan mapping are checked after the plan read.
 import { lstat, open, unlink, type FileHandle } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
 
@@ -17,7 +17,7 @@ import type { ResolvedConfig } from '../config.js';
 import { CliError, escapeControlCharacters } from '../errors.js';
 import { planPageLimit, readExecutionPlan } from '../executionPlanRead.js';
 import { ExitCode } from '../exitCodes.js';
-import { buildManifest, type PlannedExecution } from '../manifestEmit.js';
+import { buildManifest, manifestTooLarge, type PlannedExecution } from '../manifestEmit.js';
 import {
   assertDistinctTests,
   assertMembersExercised,
@@ -25,13 +25,16 @@ import {
   mapTestsToMembers,
   memberKey,
   type ExecutionPlan,
+  type MappingEntry,
 } from '../manifestMapping.js';
 import { loadPackagedContractSchemas } from '../packagedSchemas.js';
 import { parsePlaywrightListWithParams, readPlaywrightList } from '../playwrightList.js';
 import { serverErrorFromResponse, transportError } from '../serverError.js';
+import { bodyTooLargeReason } from '../validateErrors.js';
 import { manifestParams, normalizeVariant, type VariantResult } from '../variantHash.js';
 
 import { requiredFlag, uuidPattern } from './eventsSendArgs.js';
+import { readBuildFlags } from './manifestsBuildArgs.js';
 
 import type { ListedTest } from '../playwrightList.js';
 import type { CommandDefinition } from './index.js';
@@ -40,10 +43,15 @@ export const manifestsBuildCommand: CommandDefinition = {
   name: 'manifests build',
   summary: 'build a run manifest from a suite revision and a Playwright list report',
   requireToken: true,
+  // `--target-env` is the one repeated option; the other two are declared `multiple: true`
+  // so a repetition is observable and refused instead of silently taking the last value.
   options: {
     'suite-revision': { type: 'string' },
     'playwright-list': { type: 'string' },
     out: { type: 'string' },
+    'target-env': { type: 'string', multiple: true },
+    'environment-revision-id': { type: 'string', multiple: true },
+    shards: { type: 'string', multiple: true },
   },
   run: async ({ config, io, values, deps }) => {
     const requested = requiredFlag(values, 'suite-revision');
@@ -55,6 +63,8 @@ export const manifestsBuildCommand: CommandDefinition = {
     const revision = requested.toLowerCase();
     const listPath = requiredFlag(values, 'playwright-list');
     const out = requiredFlag(values, 'out');
+    // Every local flag is validated before `getToken()`: a bad value must not reach the network.
+    const flags = readBuildFlags(values);
     // Report first, token second: an unreadable or malformed report must not reach the network.
     // The report's own directory is the containment root, and only the entry name is handed to
     // the reader: it resolves that name under the root's realpath and refuses a report that
@@ -78,24 +88,18 @@ export const manifestsBuildCommand: CommandDefinition = {
     const mapping = mapTestsToMembers(tests, plan);
     assertMembersExercised(plan, mapping.entries);
 
-    const byIdentity = new Map<string, ListedTest>();
-    for (const entry of mapping.entries) {
-      const caseId = entry.test.caseId;
-      if (caseId !== undefined) {
-        byIdentity.set(memberKey(caseId, entry.test.variantHash), entry.test);
-      }
-    }
-    const executions = planExecutions(members, byIdentity);
-    const text = buildManifest(revision, executions);
+    const executions = mappedExecutions(members, mapping.entries);
+    const text = buildManifest(revision, executions, flags);
+    const planned = executions.length * flags.targetEnvs.length;
     assertSchemaValid(text);
     await writeOutput(out, text);
 
-    const summary = { manifest: out, executions: executions.length, suite_revision_id: revision };
+    const summary = { manifest: out, executions: planned, suite_revision_id: revision };
     if (config.json) {
       io.stdout(`${JSON.stringify(summary)}\n`);
     } else {
       io.stdout(
-        `manifest=${escapeControlCharacters(out)} executions=${executions.length} suite_revision_id=${revision}\n`,
+        `manifest=${escapeControlCharacters(out)} executions=${planned} suite_revision_id=${revision}\n`,
       );
     }
     return ExitCode.Ok;
@@ -154,6 +158,21 @@ function pageRefusal(error: unknown, response: Response): CliError {
   });
 }
 
+/** Indexes each mapped local test by the case and variant hash the plan names it with. */
+function mappedExecutions(
+  members: readonly { case_id: string; variant_hash: string; case_revision_id: string }[],
+  entries: readonly MappingEntry<ListedTest>[],
+): PlannedExecution[] {
+  const byIdentity = new Map<string, ListedTest>();
+  for (const entry of entries) {
+    const caseId = entry.test.caseId;
+    if (caseId !== undefined) {
+      byIdentity.set(memberKey(caseId, entry.test.variantHash), entry.test);
+    }
+  }
+  return planExecutions(members, byIdentity);
+}
+
 /**
  * One execution per plan member, in plan order. The mapping already proved every member has
  * exactly one test; the variant is normalised again because the manifest carries the parameters
@@ -202,6 +221,11 @@ function assertSchemaValid(text: string): void {
   const result = loadPackagedContractSchemas().validate('manifest.v1', text);
   if (result.errors.length === 0) {
     return;
+  }
+  // The schema's own `x-max-bytes` cap is checked before parsing, so an oversize body never
+  // reaches the engine; it is the same refusal the stringify limit produces.
+  if (result.errors.some((error) => error.reason === bodyTooLargeReason)) {
+    throw manifestTooLarge();
   }
   throw new CliError('the built manifest failed manifest.v1 validation', {
     code: 'manifest_invalid',

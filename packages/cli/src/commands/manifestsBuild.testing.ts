@@ -32,7 +32,7 @@ export const revision = '11111111-1111-4111-8111-111111111111';
 export const bearer = 'egt_build_bearer_secret';
 /** A project id in a list report. */
 const projectId = 'p';
-/** The one target environment a built manifest declares. */
+/** The target environment a build without `--target-env` declares. */
 export const targetEnv = 'default';
 
 /** The `n`th plan member: distinct case and revision, `{}` variant unless `params` is given. */
