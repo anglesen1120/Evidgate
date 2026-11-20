@@ -234,7 +234,8 @@ internal sealed class CreateRunCommandHandler(
 
         if (UnstorableJsonText.HasUnstorableText(body))
         {
-            // Checked before any member name is read (a lone-surrogate name throws on read): a lone surrogate or a NUL: neither the canonical form nor jsonb can carry it.
+            // Checked before any member name is read (a lone-surrogate name throws on read): neither the canonical form
+            // nor jsonb can carry a lone surrogate or a NUL.
             return BodyInvalid("the request body carries text that cannot be stored", [new ErrorDetail(string.Empty, InvalidValue)]);
         }
 

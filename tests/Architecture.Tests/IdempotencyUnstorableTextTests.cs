@@ -22,7 +22,7 @@ namespace Architecture.Tests;
 /// </summary>
 public sealed class IdempotencyUnstorableTextTests
 {
-    private const string RefusalMessage = "the request body carries text that cannot be processed";
+    private const string RefusalMessage = "the request body carries text or nesting that cannot be processed";
 
     [Fact]
     public async Task Handle_LoneSurrogate_InMemberName_RefusesWithoutClaimingTheKey()
@@ -199,6 +199,120 @@ public sealed class IdempotencyUnstorableTextTests
         store.ReceivedCalls().ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task Handle_NulBodyBeforeServerCycle_LetsTheOriginalJsonExceptionEscape()
+    {
+        using var document = JsonDocument.Parse("""{"note":"before\u0000after"}""");
+        var node = new CyclicNode("root");
+        node.Self = node;
+        var command = new IdempotentCyclicBodyCommand("key-nul-cycle", document.RootElement.Clone(), node);
+        var expected = Should.Throw<JsonException>(() => JsonSerializer.Serialize(command));
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var store = Substitute.For<IIdempotencyStore>();
+        var calls = 0;
+
+        var thrown = await Should.ThrowAsync<JsonException>(async () =>
+        {
+            await Behaviour<IdempotentCyclicBodyCommand>(services, store).Handle(
+                command,
+                (_, _) =>
+                {
+                    calls++;
+                    return ValueTask.FromResult(Result.Success(new SampleDto()));
+                },
+                TestContext.Current.CancellationToken);
+        });
+
+        thrown.Message.ShouldBe(expected.Message);
+        thrown.Path.ShouldBe(expected.Path);
+        calls.ShouldBe(0);
+        store.ReceivedCalls().ShouldBeEmpty();
+
+        var control = command with { ServerObject = new CyclicNode("root") };
+        var controlStore = ProceedingStore();
+        var (response, controlCalls) = await ProceedAsync(control, controlStore);
+        response.IsSuccess.ShouldBeTrue();
+        controlCalls.ShouldBe(1);
+        ReceivedBeginCount(controlStore).ShouldBe(1);
+    }
+
+    [Theory]
+    [InlineData(63)]
+    [InlineData(64)]
+    public async Task Handle_ParsedBodyAtWriterDepthBoundary_RefusesOnlyWrapperOverflow(int bodyDepth)
+    {
+        var body = new string('[', bodyDepth) + "0" + new string(']', bodyDepth);
+        using var document = JsonDocument.Parse(body);
+        var command = new IdempotentBodyCommand("key-depth", document.RootElement.Clone());
+
+        if (bodyDepth == 64)
+        {
+            Should.Throw<JsonException>(() => JsonSerializer.Serialize(command));
+            await AssertRefusedAsync(command, Substitute.For<IIdempotencyStore>());
+        }
+        else
+        {
+            var store = ProceedingStore();
+            var (response, calls) = await ProceedAsync(command, store);
+            response.IsSuccess.ShouldBeTrue();
+            calls.ShouldBe(1);
+            ReceivedBeginCount(store).ShouldBe(1);
+        }
+    }
+
+    [Fact]
+    public async Task Handle_UndefinedBody_LetsTheInvalidOperationExceptionEscape()
+    {
+        var command = new IdempotentBodyCommand("key-undefined", default);
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var store = Substitute.For<IIdempotencyStore>();
+        var calls = 0;
+
+        await Should.ThrowAsync<InvalidOperationException>(async () =>
+        {
+            await Behaviour<IdempotentBodyCommand>(services, store).Handle(
+                command,
+                (_, _) =>
+                {
+                    calls++;
+                    return ValueTask.FromResult(Result.Success(new SampleDto()));
+                },
+                TestContext.Current.CancellationToken);
+        });
+
+        calls.ShouldBe(0);
+        store.ReceivedCalls().ShouldBeEmpty();
+
+        using var document = JsonDocument.Parse("null");
+        var controlStore = ProceedingStore();
+        var (response, controlCalls) = await ProceedAsync(
+            command with { Body = document.RootElement.Clone() }, controlStore);
+        response.IsSuccess.ShouldBeTrue();
+        controlCalls.ShouldBe(1);
+        ReceivedBeginCount(controlStore).ShouldBe(1);
+    }
+
+    [Theory]
+    [InlineData("""[{"clean":1},{"\ud800do-not-echo":2}]""", """[{"clean":1},{"name":2}]""")]
+    [InlineData("""[{"clean":1},{"note":"do-not-echo\ud800"}]""", """[{"clean":1},{"note":"ok"}]""")]
+    public async Task Handle_LoneSurrogateBesideCleanObject_RefusesOnlyTheMalformedBody(
+        string malformed,
+        string clean)
+    {
+        using var malformedDocument = JsonDocument.Parse(malformed);
+        await AssertRefusedAsync(
+            new IdempotentBodyCommand("key-adjacent", malformedDocument.RootElement.Clone()),
+            Substitute.For<IIdempotencyStore>());
+
+        using var cleanDocument = JsonDocument.Parse(clean);
+        var store = ProceedingStore();
+        var (response, calls) = await ProceedAsync(
+            new IdempotentBodyCommand("key-adjacent", cleanDocument.RootElement.Clone()), store);
+        response.IsSuccess.ShouldBeTrue();
+        calls.ShouldBe(1);
+        ReceivedBeginCount(store).ShouldBe(1);
+    }
+
     private static async Task AssertRefusedAsync<TMessage>(TMessage command, IIdempotencyStore store)
         where TMessage : IMessage
     {
@@ -294,6 +408,9 @@ public sealed class IdempotencyUnstorableTextTests
     private sealed record JsonParamsMember(string Ref, JsonElement? Params);
 
     private sealed record IdempotentCyclicCommand(string IdempotencyKey, CyclicNode Body)
+        : ICommand<Result<SampleDto>>, IIdempotentCommand;
+
+    private sealed record IdempotentCyclicBodyCommand(string IdempotencyKey, JsonElement Body, CyclicNode ServerObject)
         : ICommand<Result<SampleDto>>, IIdempotentCommand;
 
     private sealed record CyclicNode(string Name)

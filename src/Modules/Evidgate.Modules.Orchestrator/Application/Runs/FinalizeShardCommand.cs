@@ -433,8 +433,8 @@ internal sealed partial class FinalizeShardCommandHandler(
             return BodyInvalid("the request body must be a JSON object", [new ErrorDetail(string.Empty, ApiErrorCode.RequestInvalid)]);
         }
 
-        // Before a single member is named: reading member.Name on a lone-surrogate name throws (JsonBody's own
-        // remark), so the body is refused 422 here rather than escaping as a 500 (the ActivatePolicy precedent).
+        // Before a single member is named: reading member.Name on a lone-surrogate name throws, so the body is refused
+        // 422 here rather than escaping as a 500 (the ActivatePolicy precedent).
         if (UnstorableJsonText.HasUnstorableText(root))
         {
             // A lone surrogate or a NUL: neither the canonical form nor jsonb can carry it.

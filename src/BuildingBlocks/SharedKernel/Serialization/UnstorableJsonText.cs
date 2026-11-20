@@ -14,11 +14,23 @@ public static class UnstorableJsonText
     /// carry: an unpaired UTF-16 surrogate (<c>"\ud800"</c>, which also makes the schema engine throw) or U+0000 (refused by
     /// jsonb). Callers check it before the schema runs so such a body is refused, never a 500.
     /// </summary>
-    public static bool HasUnstorableText(JsonElement element)
+    public static bool HasUnstorableText(JsonElement element) => Walk(element, nulIsUnstorable: true);
+
+    /// <summary>
+    /// True when a member name or string anywhere in <paramref name="element"/> holds an unpaired UTF-16 surrogate. U+0000
+    /// does not count: the writer emits it as the <c>\u0000</c> escape, so a probe that classifies write failures must not
+    /// treat it as the cause of one.
+    /// </summary>
+    public static bool HasUnpairedSurrogate(JsonElement element) => Walk(element, nulIsUnstorable: false);
+
+    /// <summary>NUL, or a surrogate without its partner.</summary>
+    public static bool Unstorable(string text) => Has(text, nulIsUnstorable: true);
+
+    private static bool Walk(JsonElement element, bool nulIsUnstorable)
     {
         try
         {
-            return Walk(element);
+            return Visit(element, nulIsUnstorable);
         }
         catch (InvalidOperationException)
         {
@@ -26,22 +38,22 @@ public static class UnstorableJsonText
             return true;
         }
 
-        static bool Walk(JsonElement element) => element.ValueKind switch
+        static bool Visit(JsonElement element, bool nulIsUnstorable) => element.ValueKind switch
         {
-            JsonValueKind.String => Unstorable(element.GetString()!),
-            JsonValueKind.Array => element.EnumerateArray().Any(Walk),
-            JsonValueKind.Object => element.EnumerateObject().Any(member => Unstorable(member.Name) || Walk(member.Value)),
+            JsonValueKind.String => Has(element.GetString()!, nulIsUnstorable),
+            JsonValueKind.Array => element.EnumerateArray().Any(item => Visit(item, nulIsUnstorable)),
+            JsonValueKind.Object => element.EnumerateObject()
+                .Any(member => Has(member.Name, nulIsUnstorable) || Visit(member.Value, nulIsUnstorable)),
             _ => false,
         };
     }
 
-    /// <summary>NUL, or a surrogate without its partner.</summary>
-    public static bool Unstorable(string text)
+    private static bool Has(string text, bool nulIsUnstorable)
     {
         for (var i = 0; i < text.Length; i++)
         {
             var c = text[i];
-            if (c == '\0')
+            if (nulIsUnstorable && c == '\0')
             {
                 return true;
             }

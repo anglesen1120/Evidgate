@@ -10,17 +10,17 @@ using World = Tenancy.IntegrationTests.RunCreationTests.World;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// The idempotency stage re-serialises a parsed body before the handler runs, so text the writer refuses — an unpaired
-/// UTF-16 surrogate in a member name or string — must answer 400 <c>request_invalid</c> with nothing stored and no echo,
-/// on every route that carries a <see cref="JsonElement"/> body, never a 500.
+/// The idempotency stage re-serialises a parsed body before the handler runs, so a body the writer refuses — an unpaired
+/// UTF-16 surrogate in a member name or string, or nesting the command wrapper pushes past the writer's depth limit — must
+/// answer 400 <c>request_invalid</c> with nothing stored and no echo. The second route is <c>CreateRun</c>, whose handler
+/// refuses unparsed text itself because those bytes never reach the command; the Authoring edge answers 422
+/// <c>invalid_text</c> before the pipeline, so no Authoring route can reach this guard.
 /// </summary>
 [Trait("Category", "Docker")]
 public sealed class IdempotencyUnstorableTextRouteTests(
     PostgresTenancyFixture fixture,
     TenancyHostPool hosts) : IClassFixture<TenancyHostPool>
 {
-    private static readonly string[] NodeKinds = ["module", "feature", "category"];
-
     [Fact]
     public Task SuiteRevision_LoneHighSurrogateName_400WithoutEchoOrWrites() =>
         AssertSuiteRefusedAsync(
@@ -38,30 +38,6 @@ public sealed class IdempotencyUnstorableTextRouteTests(
         AssertSuiteRefusedAsync(
             """{"k":"\ud800","marker-zq7":"SECRETMARK"}""",
             """{"k":"ok","marker-zq7":"SECRETMARK"}""");
-
-    [Fact]
-    public async Task ChecklistItem_LoneSurrogateName_400WithoutIdempotencyRecord()
-    {
-        await using var world = await StartAsync();
-        var category = await CreateCategoryAsync(world);
-        var route = $"/v1/projects/{world.Project}/authoring/checklist-items";
-        var key = NewKey();
-        var before = await CountsAsync(world);
-        var malformed = $$"""{"node_id":"{{category}}","title":"An item","\ud800":"high"}""";
-
-        using var response = await PostAsync(world, route, malformed, key);
-        var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-
-        AssertRefusal(response.StatusCode, text, HttpStatusCode.BadRequest);
-        (await RecordCountAsync(world, key)).ShouldBe(0);
-        (await CountsAsync(world)).ShouldBe(before);
-
-        var valid = $$"""{"node_id":"{{category}}","title":"An item","priority":"high"}""";
-        using var accepted = await PostAsync(world, route, valid, key);
-        accepted.StatusCode.ShouldBe(HttpStatusCode.Created,
-            await accepted.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
-        (await RecordCountAsync(world, key)).ShouldBe(1);
-    }
 
     [Fact]
     public async Task CreateRun_LoneSurrogateName_RefusesWithoutRunOrIdempotencyRow()
@@ -106,35 +82,58 @@ public sealed class IdempotencyUnstorableTextRouteTests(
     [InlineData(61)]
     [InlineData(62)]
     [InlineData(63)]
-    [InlineData(64)]
-    public async Task SuiteRevision_RequestDepth55Through64_SucceedsOrRefusesWithout500(int requestDepth)
+    public async Task SuiteRevision_RequestDepth55Through63_IsStoredWithOneIdempotencyRow(int requestDepth)
     {
         await using var world = await StartAsync();
         var route = await SuiteRouteAsync(world);
-        var parameters = "0";
-        // The root, members array and member object consume three levels before params starts.
+        var key = NewKey();
+
+        using var response = await PostAsync(world, route, RevisionBody(world, NestedParams(requestDepth)), key);
+        var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, $"request depth {requestDepth}: HTTP {(int)response.StatusCode}: {text}");
+        await AssertStoredRevisionAsync(world, text);
+        (await RecordCountAsync(world, key)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task SuiteRevision_RequestDepth64_RefusesWithoutEchoOrIdempotencyRecord()
+    {
+        await using var world = await StartAsync();
+        var route = await SuiteRouteAsync(world);
+        var key = NewKey();
+        var before = await CountsAsync(world);
+
+        // The body parses at depth 64; the command wrapper adds the level that overflows the writer's default limit.
+        using var response = await PostAsync(world, route, RevisionBody(world, NestedParams(64, "\"SECRETMARK\"")), key);
+        var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        AssertRefusal(response.StatusCode, text, HttpStatusCode.BadRequest);
+        (await RecordCountAsync(world, key)).ShouldBe(0);
+        (await CountsAsync(world)).ShouldBe(before,
+            "a refused request adds no audit entry, outbox row, task, run or suite revision");
+
+        // The same key still works, so the refusal claimed nothing.
+        using var accepted = await PostAsync(world, route, RevisionBody(world, NestedParams(63)), key);
+        var acceptedText = await accepted.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        accepted.StatusCode.ShouldBe(HttpStatusCode.Created, acceptedText);
+        await AssertStoredRevisionAsync(world, acceptedText);
+        (await RecordCountAsync(world, key)).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// One object level per depth unit: the body root, members array and member object take the first three, so the leaf
+    /// sits at <paramref name="requestDepth"/>.
+    /// </summary>
+    private static string NestedParams(int requestDepth, string leaf = "0")
+    {
+        var parameters = leaf;
         for (var depth = 3; depth < requestDepth; depth++)
         {
             parameters = "{\"_meta\":" + parameters + "}";
         }
 
-        var key = NewKey();
-        using var response = await PostAsync(world, route, RevisionBody(world, parameters), key);
-        var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        var diagnostic = $"request depth {requestDepth}: HTTP {(int)response.StatusCode}: {text}";
-
-        response.StatusCode.ShouldNotBe(HttpStatusCode.InternalServerError, diagnostic);
-        (response.StatusCode is HttpStatusCode.Created or HttpStatusCode.BadRequest
-            or HttpStatusCode.RequestEntityTooLarge or HttpStatusCode.UnprocessableEntity).ShouldBeTrue(diagnostic);
-        if (response.StatusCode == HttpStatusCode.Created)
-        {
-            await AssertStoredRevisionAsync(world, text);
-            (await RecordCountAsync(world, key)).ShouldBe(1);
-        }
-        else
-        {
-            (await RecordCountAsync(world, key)).ShouldBe(0);
-        }
+        return parameters;
     }
 
     private Task<World> StartAsync() => RunCreationTests.StartAsync(fixture, cases: 1, hosts: hosts);
@@ -204,20 +203,6 @@ public sealed class IdempotencyUnstorableTextRouteTests(
         (await fixture.ScalarAsync<long>(world.Database,
             $"select count(*) from public.suite_revision where org_id = '{world.Org}' and id = '{revision}'")).ShouldBe(1);
         return revision;
-    }
-
-    private static async Task<Guid> CreateCategoryAsync(World world)
-    {
-        Guid? parent = null;
-        foreach (var kind in NodeKinds)
-        {
-            var answer = await AuthoringCalls.CreateNodeAsync(
-                world.Client, world.Admin, world.Project, parent, kind, "Checkout");
-            answer.Status.ShouldBe(HttpStatusCode.Created, answer.Body?.GetRawText());
-            parent = answer.Member("node_id").GetGuid();
-        }
-
-        return parent.GetValueOrDefault();
     }
 
     private static async Task<HttpResponseMessage> PostAsync(World world, string route, string body, string key)

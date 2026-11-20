@@ -73,12 +73,18 @@ public sealed class IdempotencyBehaviour<TMessage, TResponse>(
         {
             requestJson = SerializeCommand(message);
         }
-        catch (JsonException) when (UnstorableTextProbe.Explains(message, typeof(TMessage)))
+        catch (JsonException)
         {
-            // The body parsed but holds text the writer cannot re-emit; refuse it before any record is claimed.
-            // The detail names no member and no value of the body.
+            // Probed after unwinding: an exception filter would hold the failed writer open for this second serialisation.
+            if (!UnstorableTextProbe.Explains(message, typeof(TMessage)))
+            {
+                throw;
+            }
+
+            // The body parsed but holds text or nesting the writer cannot re-emit; refuse it before any record is claimed,
+            // naming no member and no value of the body.
             return ResultFactory.Failure<TResponse>(Error.BadRequest(
-                "the request body carries text that cannot be processed",
+                "the request body carries text or nesting that cannot be processed",
                 [new ErrorDetail(string.Empty, "invalid_value")]));
         }
 
