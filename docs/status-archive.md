@@ -1126,3 +1126,16 @@ Replaced by S539 (#1102, 5e891236): JsonCanonicalizer.cs (751 lines) was split i
 | 02.9.1-T1 expired support grant fixture + support-grant routes (from #19) | `support_grant` does not exist yet; add it to `IsolationWorld` and the routes to `IsolationRouteCases`. Recorded in 02.9.1 §10 Notes; a Notes line in the 02.8.1 plan is blocked by `check-dor-security`: "E plans/features/02-identity-tenancy/02.8.1-time-boxed-operator-access.md: §8 does not answer the DoR question 'authorization'" (also 'retention/deletion', 'telemetry', 'failure path') | receiver: 02.8.1-T1; hand-over Notes: `plans/features/02-identity-tenancy/02.9.1-isolation-suite.md:103` |
 
 Closed by S540 (#1104, 2581eb60): the approve and revoke handler pre-checks are pinned by trigger-off tests in SupportGrantTests.PreCheck.cs, and IsolationWorld seeds an expired support grant (SupportGrantIds[2]) with a cross-org approve probe; the list, approve and revoke routes of the third row are all served and covered in IsolationRouteCases. The org-predicate mutant half stays open as the carried row 'Support grant org-predicate mutant on the app role (S536)'.
+
+## Moved from status-carried.md by S541 (2026-11-21)
+
+| Source files over 500 lines (S539 count) | 23 under src, wave 5e891236 (`git ls-files 'src/*.cs' then wc -l`, over 500): SafeZipArchive 1234, XlsxReader 1234, AuthoringImporter 1047, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, seventeen of 528-746. JsonCanonicalizer (751) is split (298/160/306, #1102) and leaves the list. | receiver: backend lanes |
+
+Replaced by S541 (#1106, f0b7f046): AssertionExtractor.cs (728 lines) was split into three files and the recount is the carried row 'Source files over 500 lines (S541 count)'.
+
+## Moved from status-carried.md by S542 (2026-11-21)
+
+| Source files over 500 lines (S541 count) | 22 under src, wave f0b7f046 (`git ls-files 'src/*.cs'` fed to `wc -l`, over 500): SafeZipArchive 1234, XlsxReader 1234, AuthoringImporter 1047, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, sixteen of 528-746. AssertionExtractor (728) is split (309/232/197, #1106) and leaves the list. | receiver: backend lanes |
+| Methods over 60 lines missing from the S538 list (S541 finds) | AssertionExtractor.ParseExpect (111 lines, in AssertionExtractor.Script.cs) and AssertionExtractor.ScanPython (85 lines, in AssertionExtractor.Python.cs) were over 60 lines before and after #1106 but are not in the row 'Methods over 60 lines (S538 list)'. That list was built from a narrower scan, so other entries may be missing too; a full method-length recount is owed. | receiver: the lane that next recounts methods |
+
+Replaced by S542 (#1108, cb3ab0e7): AuthoringImporter.cs (1047 lines) was split into three files (300/403/362) and the recounts are the carried rows 'Source files over 500 lines (S542 count)' and 'Methods over 60 lines missing from the S538 list (S542 finds)'.
