@@ -1132,3 +1132,10 @@ Closed by S540 (#1104, 2581eb60): the approve and revoke handler pre-checks are 
 | Source files over 500 lines (S539 count) | 23 under src, wave 5e891236 (`git ls-files 'src/*.cs' then wc -l`, over 500): SafeZipArchive 1234, XlsxReader 1234, AuthoringImporter 1047, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, seventeen of 528-746. JsonCanonicalizer (751) is split (298/160/306, #1102) and leaves the list. | receiver: backend lanes |
 
 Replaced by S541 (#1106, f0b7f046): AssertionExtractor.cs (728 lines) was split into three files and the recount is the carried row 'Source files over 500 lines (S541 count)'.
+
+## Moved from status-carried.md by S542 (2026-11-21)
+
+| Source files over 500 lines (S541 count) | 22 under src, wave f0b7f046 (`git ls-files 'src/*.cs'` fed to `wc -l`, over 500): SafeZipArchive 1234, XlsxReader 1234, AuthoringImporter 1047, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, sixteen of 528-746. AssertionExtractor (728) is split (309/232/197, #1106) and leaves the list. | receiver: backend lanes |
+| Methods over 60 lines missing from the S538 list (S541 finds) | AssertionExtractor.ParseExpect (111 lines, in AssertionExtractor.Script.cs) and AssertionExtractor.ScanPython (85 lines, in AssertionExtractor.Python.cs) were over 60 lines before and after #1106 but are not in the row 'Methods over 60 lines (S538 list)'. That list was built from a narrower scan, so other entries may be missing too; a full method-length recount is owed. | receiver: the lane that next recounts methods |
+
+Replaced by S542 (#1108, cb3ab0e7): AuthoringImporter.cs (1047 lines) was split into three files (300/403/362) and the recounts are the carried rows 'Source files over 500 lines (S542 count)' and 'Methods over 60 lines missing from the S538 list (S542 finds)'.
