@@ -55,12 +55,16 @@ for sid, st in sorted(stories.items(), key=lambda kv: [int(x) for x in kv[0].spl
         for ln in blk.group(0).splitlines():
             cells = [c.strip() for c in re.split(r"(?<!\\)\|", ln.strip().strip("|"))] if ln.startswith("|") else []
             m = re.match(rf"{re.escape(tid)}\.(\d+)([a-z]?)$", cells[0]) if cells else None
+            if cells and not m and re.match(rf"{re.escape(tid)}\.\d", cells[0]):
+                errors.append(f"{f}: {cells[0]} is not a valid sub-task id (a number, optionally followed by one lower-case letter)")
             if m and len(cells) >= 3:
-                sid = f"{tid}.{m.group(1)}{m.group(2)}"
-                size = next((c for c in cells[2:] if c in SIZE), None)
-                if size is None and "[OPEN]" in ln and cells[2].startswith("unsized"):
-                    warn.append(f"{f}: {sid} is [OPEN] and unsized: left out of the sum"); size = ""
-                elif size is None: errors.append(f"{f}: {sid} has no size cell"); continue
+                subid = f"{tid}.{m.group(1)}{m.group(2)}"
+                if cells[2].startswith("unsized"):  # the Size cell itself decides; later cells never rescue it
+                    if "[OPEN]" not in ln: errors.append(f"{f}: {subid} has no size cell"); continue
+                    warn.append(f"{f}: {subid} is [OPEN] and unsized: left out of the sum"); size = ""
+                else:
+                    size = next((c for c in cells[2:] if c in SIZE), None)
+                    if size is None: errors.append(f"{f}: {subid} has no size cell"); continue
                 subs.append((int(m.group(1)), m.group(2), size))
         if not subs: errors.append(f"{f}: {tid} has no sub-task rows"); continue
         if not any(l for _, l, _ in subs):

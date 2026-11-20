@@ -106,6 +106,19 @@ class CheckFeaturesSubtasks(unittest.TestCase):
         self.assertEqual(len(warns), 1)
         self.assertRegex(errors[0], r"sub-tasks sum 0\.25 != task size 1 \(M\)")
 
+    def test_unsized_cell_is_not_rescued_by_a_later_size_cell(self):
+        rc, errors, warns = self.check(row("1", "S"), row("2a", "S"),
+                                       f"| {TID}.2b | Work [OPEN] | unsized (not counted) | S |")
+        self.assertEqual((rc, errors), (0, []))
+        self.assertEqual(len(warns), 1)
+
+    def test_malformed_suffix_row_is_an_error(self):
+        for bad in ("2A", "2ab"):
+            with self.subTest(bad=bad):
+                rc, errors, _ = self.check(row("1", "S"), row("2", "S"), row(bad, "M"))
+                self.assertEqual(rc, 1)
+                self.assertRegex(errors[0], rf"{TID}\.{bad} is not a valid sub-task id")
+
     def test_sub_task_larger_than_s_is_an_error(self):
         rc, errors, _ = self.check(row("1", "M"))
         self.assertEqual(rc, 1)
