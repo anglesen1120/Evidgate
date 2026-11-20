@@ -1090,3 +1090,13 @@ Closed by S534 (#1091, 2cf1f1ca): AuthoringExporter.cs (609 lines) was split int
 | Source files over 500 lines (S534 count) | 27 under src, wave 2cf1f1ca (`git ls-files 'src/*.cs'` fed to `wc -l`, over 500): SafeZipArchive 1234, XlsxReader 1234, AuthoringImporter 1047, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, JsonCanonicalizer 751, twenty of 517-746. Over 60 lines: AuthoringVersionWriter AppendCoreAsync 156, CreateAsync 129, UpdateAsync 208, MoveManualTestCaseCoreAsync 121, RestoreCoreAsync 250, SoftDeleteAsync 112, ReorderNodesCoreAsync 184; ListAuthoringVersionsQueryHandler.Handle 114; AuthoringExporter.ExportAsync ~107, RowAssembly.Build ~75; ManualCase, Node handlers. Row 'Route 22 from/to' cites AuthoringVersionQueries.cs:635 (now AuthoringVersionInstant.cs:47) | receiver: backend lanes |
 
 Closed by S535 (#1094, d4d41b97): ProducerRegistry.cs (588 lines) was split into ProducerRegistry.cs (387), ProducerSlotErrors.cs (46), ProducerSlotArguments.cs (71) and ProducerSlotSql.cs (94); the recount is the carried row 'Source files over 500 lines (S535 count)'.
+
+## Moved from status-carried.md by S537 (2026-11-21)
+
+| `ParseArtifactTask.cs` over 500 lines (S357, 10.3.1-T3, #732) | The file was 510 lines and is 517 after the artifact-failure counter. Extract the failure-recording block into a partial (rules §Size). P3. [OPEN] | receiver: next lane touching the parse task |
+
+Closed by S537 (#1095, 388f3235): ParseArtifactTask.cs (517 lines) was split into ParseArtifactTask.cs (413) and ParseArtifactTaskHandler.Log.cs (110); the recount is the carried row 'Source files over 500 lines (S537 count)'.
+
+| Source files over 500 lines (S535 count) | 26 under src, wave d4d41b97 (`git ls-files 'src/*.cs'` fed to `wc -l`, over 500): SafeZipArchive 1234, XlsxReader 1234, AuthoringImporter 1047, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, JsonCanonicalizer 751, nineteen of 517-746. Over 60 lines: AuthoringVersionWriter AppendCoreAsync 156, CreateAsync 129, UpdateAsync 208, MoveManualTestCaseCoreAsync 121, RestoreCoreAsync 250, SoftDeleteAsync 112, ReorderNodesCoreAsync 184; ListAuthoringVersionsQueryHandler.Handle 114; AuthoringExporter.ExportAsync ~107, RowAssembly.Build ~75; ManualCase, Node handlers; ProducerRegistry RegisterSlotsAsync 85, BindOrCheckAsync 85, CloseSlotAsync 111 | receiver: backend lanes |
+
+Replaced by S537 (#1095, 388f3235): recount in the carried row 'Source files over 500 lines (S537 count)'.
