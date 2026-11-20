@@ -63,9 +63,14 @@ public sealed class CatalogBodyReadBoundaryTests
             (["JsonDocument.Parse x1"], "parses a repository sidecar manifest after converting it from YAML"),
     };
 
-    private static readonly Regex RequestBodyMember = new(@"\b(?:req|request|Request|httpRequest)\.Body\b", RegexOptions.CultureInvariant);
+    // Any member named Body that is not a command or query DTO, the synchronous form, or a request alias.
+    private static readonly Regex RequestBodyMember = new(
+        @"\b(?!(?:command|query)\.Body\b)\w+\.Body\b|\bRequest\.Form\b|=\s*(?:context|httpContext|http)\.Request\s*;",
+        RegexOptions.CultureInvariant);
 
-    private static readonly Regex WriteRoute = new(@"\.Map(?:Post|Put|Patch)\(\s*""([^""]+)""\s*,\s*(\w+)", RegexOptions.CultureInvariant);
+    private static readonly Regex WriteRoute = new(@"\.Map(?!Group\b|Get\b)\w*\(\s*(?:""[^""]*""|[\w.]+)\s*,\s*(\(|\w+)", RegexOptions.CultureInvariant);
+
+    private static readonly HashSet<string> RawHandlerParameterTypes = ["Guid", "HttpContext", "IRequestPrincipalAccessor", "IMediator", "CancellationToken"];
 
     /// <summary>The calls a route would use to read a request body without the shared cap and refusal.</summary>
     private static readonly string[] DirectBodyReadNeedles =
@@ -154,7 +159,42 @@ public sealed class CatalogBodyReadBoundaryTests
 
         endpoints.Values.Sum(text => Occurrences(text, "ReadAuthenticatedJsonAsync("))
             .ShouldBe(RawBodyRoutes.Sum(entry => entry.Value.Length), "a guard call outside a named raw-body route is unaccounted for");
+
+        // Only the requirement-ref route may let a bad value through the reader to report its own field path.
+        Occurrences(endpoints[EndpointsDirectory + "/CatalogEndpoints.cs"], "refuseUnstorableValues: false").ShouldBe(1);
+        Occurrences(HandlerBody(endpoints[EndpointsDirectory + "/CatalogEndpoints.cs"], "SetCaseRequirementRefAsync"), "refuseUnstorableValues: false").ShouldBe(1);
+        endpoints.Where(entry => entry.Key != EndpointsDirectory + "/CatalogEndpoints.cs")
+            .Sum(entry => Occurrences(entry.Value, "refuseUnstorableValues")).ShouldBe(0);
+
+        // A raw-body handler takes no typed body, form or attribute-bound parameter: only these injected types.
+        foreach (var (path, handlers) in RawBodyRoutes)
+        {
+            foreach (var handler in handlers)
+            {
+                HandlerParameterTypes(endpoints[path], handler)
+                    .Where(type => !RawHandlerParameterTypes.Contains(type) && type != "GitRepoBindingRegistration")
+                    .ShouldBeEmpty($"{handler} must not bind a body parameter");
+            }
+        }
     }
+
+    [Theory]
+    [InlineData("var r = context.Request;")]
+    [InlineData("var form = context.Request.Form;")]
+    [InlineData("var s = http.Body;")]
+    public void Scan_AliasedOrSynchronousRequestAccess_FlagsFile(string source)
+    {
+        var path = ModuleDirectory + "/Application/Commands/SyntheticHandler.cs";
+
+        Scan([(path, source)]).ShouldBe([path]);
+    }
+
+    [Theory]
+    [InlineData("group.MapPost(\"/x\", (Foo body) => Ok(body))", "(")]
+    [InlineData("group.MapDelete(\"/x\", RemoveAsync)", "RemoveAsync")]
+    [InlineData("group.MapPut(\"/x\", ReplaceAsync)", "ReplaceAsync")]
+    public void WriteHandlers_FindEveryNonGetRouteIncludingLambdas(string source, string handler) =>
+        WriteHandlers(source).ShouldBe([handler]);
 
     [Theory]
     [InlineData("command.Body, cancellationToken")]
@@ -222,7 +262,7 @@ public sealed class CatalogBodyReadBoundaryTests
 
     /// <summary>
     /// The mutant proof: a file calling the shared reader is clean and a file reading the body itself is flagged, so a
-    /// green <see cref="CatalogEndpoints_RawBodyReads_UseSharedBoundary"/> cannot come from a scan that matches nothing.
+    /// green <see cref="CatalogModule_RawBodyReads_UseSharedBoundary"/> cannot come from a scan that matches nothing.
     /// </summary>
     [Theory]
     [InlineData("JsonDocument.Parse(requestText)")]
@@ -320,7 +360,19 @@ public sealed class CatalogBodyReadBoundaryTests
 
     /// <summary>The write verbs a route file maps, as handler name to route, in declaration order.</summary>
     private static string[] WriteHandlers(string text) =>
-        WriteRoute.Matches(text).Select(match => match.Groups[2].Value).ToArray();
+        WriteRoute.Matches(text).Select(match => match.Groups[1].Value).ToArray();
+
+    /// <summary>The parameter types of a handler, so a typed body or form parameter shows up as an unknown type.</summary>
+    private static string[] HandlerParameterTypes(string text, string handler)
+    {
+        var declaration = Regex.Match(text, $@"\bTask(?:<.+>)?\s+{handler}\(([^)]*)\)");
+        declaration.Success.ShouldBeTrue($"{handler} must be declared as a Task-returning method");
+
+        return declaration.Groups[1].Value
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Select(parameter => parameter[..parameter.LastIndexOf(' ')].Trim())
+            .ToArray();
+    }
 
     private static string HandlerBody(string text, string handler)
     {
