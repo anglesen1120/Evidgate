@@ -292,7 +292,7 @@ public sealed class EvidenceUploadUrlQaTests : IClassFixture<TenancyHostPool>
 
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         // The id is shape-checked by the binder against ProducerSlotLimits.ProducerIdPattern (\z-anchored):
-        // a trailing newline is a charset violation (ProducerRegistry.cs:126-127), not an unregistered producer.
+        // a trailing newline is a charset violation (ProducerSlotArguments.IsValidProducerId), not an unregistered producer.
         answer.ErrorCode.ShouldBe("request_invalid");
         (await ArtifactRowsAsync(world)).ShouldBe(0);
     }
