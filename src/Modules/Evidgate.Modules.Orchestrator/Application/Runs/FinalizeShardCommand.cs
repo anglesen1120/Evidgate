@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Evidgate.BuildingBlocks.Canonicalization;
@@ -434,7 +435,7 @@ internal sealed partial class FinalizeShardCommandHandler(
 
         // Before a single member is named: reading member.Name on a lone-surrogate name throws (JsonBody's own
         // remark), so the body is refused 422 here rather than escaping as a 500 (the ActivatePolicy precedent).
-        if (JsonBody.HasUnstorableText(root))
+        if (UnstorableJsonText.HasUnstorableText(root))
         {
             // A lone surrogate or a NUL: neither the canonical form nor jsonb can carry it.
             return BodyInvalid("the request body carries text that cannot be stored", [new ErrorDetail(string.Empty, InvalidValue)]);

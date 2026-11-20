@@ -1,4 +1,5 @@
 using System.Globalization;
+using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -231,18 +232,18 @@ internal sealed class CreateRunCommandHandler(
             return BodyInvalid("the request body must be a JSON object", [new ErrorDetail(string.Empty, ApiErrorCode.RequestInvalid)]);
         }
 
+        if (UnstorableJsonText.HasUnstorableText(body))
+        {
+            // Checked before any member name is read (a lone-surrogate name throws on read): a lone surrogate or a NUL: neither the canonical form nor jsonb can carry it.
+            return BodyInvalid("the request body carries text that cannot be stored", [new ErrorDetail(string.Empty, InvalidValue)]);
+        }
+
         foreach (var member in body.EnumerateObject())
         {
             if (member.Name is not ("manifest_id" or "release" or "release_id" or "components" or "purpose" or "replay_grant_id" or "ref"))
             {
                 return BodyInvalid("the request body carries an unknown field", [new ErrorDetail($"/{member.Name}", "additional_properties")]);
             }
-        }
-
-        if (JsonBody.HasUnstorableText(body))
-        {
-            // A lone surrogate or a NUL: neither the canonical form nor jsonb can carry it.
-            return BodyInvalid("the request body carries text that cannot be stored", [new ErrorDetail(string.Empty, InvalidValue)]);
         }
 
         if (!body.TryGetProperty("manifest_id", out var manifestElement)
