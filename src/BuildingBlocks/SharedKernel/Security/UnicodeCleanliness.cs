@@ -37,4 +37,30 @@ public static class UnicodeCleanliness
 
         return true;
     }
+
+    /// <summary><paramref name="text"/> without its control and format characters and without unpaired surrogates.</summary>
+    /// <param name="text">The text.</param>
+    public static string StripInvisible(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        var builder = new StringBuilder(text.Length);
+        for (var i = 0; i < text.Length;)
+        {
+            if (!Rune.TryGetRuneAt(text, i, out var rune))
+            {
+                i++;
+                continue;
+            }
+
+            if (!Rune.IsControl(rune) && Rune.GetUnicodeCategory(rune) != UnicodeCategory.Format)
+            {
+                builder.Append(rune.ToString());
+            }
+
+            i += rune.Utf16SequenceLength;
+        }
+
+        return builder.ToString();
+    }
 }

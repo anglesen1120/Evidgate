@@ -13,6 +13,30 @@ public static class ParameterSecretRule
         "browser", "engine", "platform", "os", "mode", "env", "environment", "channel", "device", "locale", "viewport",
     };
 
+    /// <summary>Free-text keys that never identify a variant: the normaliser leaves them out of the hash and does not check their values.</summary>
+    private static readonly HashSet<string> NonIdentifying = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "description", "label", "labels", "note", "notes", "comment", "comments", "title", "tags", "display_name", "displayname",
+    };
+
+    /// <summary>True for a free-text key (or a <c>_</c>-prefixed one) that is not part of a variant's identity.</summary>
+    /// <param name="key">The parameter name.</param>
+    public static bool IsNonIdentifying(string key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+
+        return key.StartsWith('_') || NonIdentifying.Contains(key);
+    }
+
+    /// <summary>
+    /// True when a value of a free-text key is not clean text and, with its control and format characters removed, has a
+    /// secret's shape: legitimate ZWJ/ZWNJ text stays accepted, a token hidden behind invisible characters does not.
+    /// </summary>
+    /// <param name="key">The parameter name.</param>
+    /// <param name="text">The value as sent.</param>
+    public static bool HiddenSecret(string key, string text) =>
+        IsNonIdentifying(key) && !UnicodeCleanliness.IsClean(text) && ValueLooksSecret(key, UnicodeCleanliness.StripInvisible(text));
+
     /// <summary>The form a string value is stored in under <paramref name="key"/>.</summary>
     /// <param name="key">The parameter name.</param>
     /// <param name="text">The value as sent.</param>

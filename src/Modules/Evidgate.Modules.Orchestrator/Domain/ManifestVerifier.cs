@@ -46,8 +46,11 @@ internal static class ManifestVerifier
         var planned = root.GetProperty("planned_executions");
         var matrix = root.GetProperty("matrix");
 
-        var secrets = SecretDetails(planned, matrix);
+        var secrets = SecretDetails(planned, matrix, out var unclean);
         SecretRefDetails(root, secrets);
+
+        // Secret refusals fill the detail budget first and name the reason; unclean text only adds to what is left.
+        secrets.AddRange(unclean.Take(Math.Max(0, MaxDetails - secrets.Count)));
         if (secrets.Count > 0)
         {
             return (null, new ManifestRefusal(secrets[0].Reason, secrets));
@@ -71,33 +74,36 @@ internal static class ManifestVerifier
     /// allowed under any key; a parameter is named by its position (<c>#n</c>), so neither its value nor its key is echoed.
     /// Identical parameter objects are checked once (a 10 000-row plan repeats a handful of variants).
     /// </summary>
-    private static List<ErrorDetail> SecretDetails(JsonElement planned, JsonElement matrix)
+    private static List<ErrorDetail> SecretDetails(JsonElement planned, JsonElement matrix, out List<ErrorDetail> unclean)
     {
         var details = new List<ErrorDetail>();
+        var cleanliness = new List<ErrorDetail>();
         var memo = new Dictionary<string, int[]>(StringComparer.Ordinal);
 
         var index = 0;
         foreach (var execution in planned.EnumerateArray())
         {
-            Add(details, memo, execution.GetProperty("variant").GetProperty("params"), $"/planned_executions/{index}/variant/params", index);
+            Add(details, cleanliness, memo, execution.GetProperty("variant").GetProperty("params"), $"/planned_executions/{index}/variant/params", index);
             index++;
         }
 
         var variant = 0;
         foreach (var entry in matrix.GetProperty("variants").EnumerateArray())
         {
-            Add(details, memo, entry.GetProperty("params"), $"/matrix/variants/{variant}/params", null);
+            Add(details, cleanliness, memo, entry.GetProperty("params"), $"/matrix/variants/{variant}/params", null);
             variant++;
         }
 
+        unclean = cleanliness;
+
         return details;
 
-        static void Add(List<ErrorDetail> details, Dictionary<string, int[]> memo, JsonElement parameters, string path, int? index)
+        static void Add(List<ErrorDetail> details, List<ErrorDetail> cleanliness, Dictionary<string, int[]> memo, JsonElement parameters, string path, int? index)
         {
             var raw = parameters.GetRawText();
             if (!memo.TryGetValue(raw, out var positions))
             {
-                // A secret refusal keeps precedence wherever it fires; unclean text is the reason only for the rest.
+                // A secret refusal keeps precedence wherever it fires; unclean text is reported only for the rest (negative positions).
                 var secret = SecretPositions(parameters);
                 positions = [.. secret, .. UncleanPositions(parameters).Where(p => !secret.Contains(p)).Select(p => -p)];
                 positions = [.. positions.OrderBy(Math.Abs)];
@@ -106,13 +112,14 @@ internal static class ManifestVerifier
 
             foreach (var position in positions)
             {
-                if (details.Count >= MaxDetails)
+                var target = position < 0 ? cleanliness : details;
+                if (target.Count >= MaxDetails)
                 {
-                    return;
+                    continue;
                 }
 
                 var reason = position < 0 ? InvalidValue : SecretInVariantParams;
-                details.Add(new ErrorDetail(string.Create(CultureInfo.InvariantCulture, $"{path}/#{Math.Abs(position)}"), reason, index));
+                target.Add(new ErrorDetail(string.Create(CultureInfo.InvariantCulture, $"{path}/#{Math.Abs(position)}"), reason, index));
             }
         }
     }
@@ -158,8 +165,9 @@ internal static class ManifestVerifier
     }
 
     /// <summary>
-    /// The 1-based positions of the parameters whose name or string value is not clean text (control, format or invisible
-    /// characters, the normaliser's rule), which would hide a secret from the scan; never echoed.
+    /// The 1-based positions of the parameters whose name, or whose string value under an identifying key, is not clean text
+    /// (control, format or invisible characters: the normaliser's rule); never echoed. Free-text keys are exempt, as in the
+    /// normaliser, and are covered by the stripped secret scan instead.
     /// </summary>
     internal static int[] UncleanPositions(JsonElement parameters)
     {
@@ -181,8 +189,11 @@ internal static class ManifestVerifier
     {
         try
         {
+            // A free-text key may carry any clean-or-not text (a ZWJ emoji, ZWNJ script); only its stripped form is scanned.
             return !UnicodeCleanliness.IsClean(member.Name)
-                || (member.Value.ValueKind == JsonValueKind.String && !UnicodeCleanliness.IsClean(member.Value.GetString()));
+                || (member.Value.ValueKind == JsonValueKind.String
+                    && !ParameterSecretRule.IsNonIdentifying(member.Name)
+                    && !UnicodeCleanliness.IsClean(member.Value.GetString()));
         }
         catch (InvalidOperationException)
         {
@@ -217,7 +228,8 @@ internal static class ManifestVerifier
             return !SecretShape.IsReference(value) || SecretShape.SecretNameLooksLikeValue(value[7..]) || SecretShape.ValueLooksSecret(value[7..]);
         }
 
-        return SecretShape.KeyLooksSecret(key) || SecretShape.ValueLooksSecret(key) || ParameterSecretRule.ValueLooksSecret(key, value);
+        return SecretShape.KeyLooksSecret(key) || SecretShape.ValueLooksSecret(key) || ParameterSecretRule.ValueLooksSecret(key, value)
+            || ParameterSecretRule.HiddenSecret(key, value);
     }
 
     private static bool MemberIsSecret(JsonProperty member)
