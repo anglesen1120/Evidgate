@@ -88,9 +88,21 @@ public static partial class SecretShape
 
     /// <summary>True when the value has the shape of a token, a JWT, a private key, a bearer credential or a long random string.</summary>
     /// <param name="value">A string value.</param>
-    public static bool ValueLooksSecret(string value)
+    public static bool ValueLooksSecret(string value) => ValueLooksSecret(value, GeneratedMatch);
+
+    /// <summary>
+    /// The rule behind <see cref="ValueLooksSecret(string)"/> with the pattern matcher passed in, so a test can make a
+    /// pattern time out without a pathological input. A timeout fails closed: a value the shape check could not finish
+    /// is treated as secret-shaped (callers already refuse those), never as clean and never as an exception. The patterns
+    /// are linear, so a timeout means a stalled host rather than a hostile input; the 100 ms budget stays because
+    /// NonBacktracking would drop source generation without removing the need for this handling.
+    /// </summary>
+    /// <param name="value">A string value.</param>
+    /// <param name="match">Runs one named pattern against the trimmed value; may throw <see cref="RegexMatchTimeoutException"/>.</param>
+    internal static bool ValueLooksSecret(string value, Func<SecretPattern, string, bool> match)
     {
         ArgumentNullException.ThrowIfNull(value);
+        ArgumentNullException.ThrowIfNull(match);
 
         var trimmed = value.Trim();
         if (trimmed.Length < 8)
@@ -98,6 +110,26 @@ public static partial class SecretShape
             return false;
         }
 
+        var running = SecretPattern.Jwt;
+        try
+        {
+            return Looks(trimmed, match, ref running);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            SecretShapeMetrics.RecordTimeout(running);
+            return true;
+        }
+    }
+
+    private static bool Test(Func<SecretPattern, string, bool> match, ref SecretPattern running, SecretPattern pattern, string text)
+    {
+        running = pattern;
+        return match(pattern, text);
+    }
+
+    private static bool Looks(string trimmed, Func<SecretPattern, string, bool> match, ref SecretPattern running)
+    {
         if (trimmed.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
             || trimmed.StartsWith("Basic ", StringComparison.OrdinalIgnoreCase)
             || trimmed.Contains("-----BEGIN ", StringComparison.Ordinal))
@@ -113,7 +145,7 @@ public static partial class SecretShape
             }
         }
 
-        if (Jwt().IsMatch(trimmed) || UrlCredentials().IsMatch(trimmed))
+        if (Test(match, ref running, SecretPattern.Jwt, trimmed) || Test(match, ref running, SecretPattern.UrlCredentials, trimmed))
         {
             return true;
         }
@@ -128,7 +160,7 @@ public static partial class SecretShape
         }
 
         // A bare long hex run is a key however its entropy turns out (many vendor keys are 32 or 40 hex digits); a UUID is an id.
-        if (trimmed.Length >= 32 && HexRun().IsMatch(trimmed))
+        if (trimmed.Length >= 32 && Test(match, ref running, SecretPattern.HexRun, trimmed))
         {
             return true;
         }
@@ -137,10 +169,20 @@ public static partial class SecretShape
         return trimmed.Length >= 24
             && trimmed.AsSpan().ContainsAnyInRange('0', '9')
             && trimmed.AsSpan().ContainsAnyInRange('A', 'z')
-            && RandomRun().IsMatch(trimmed)
-            && !Uuid().IsMatch(trimmed)
+            && Test(match, ref running, SecretPattern.RandomRun, trimmed)
+            && !Test(match, ref running, SecretPattern.Uuid, trimmed)
             && Entropy(trimmed) >= 3.7;
     }
+
+    private static bool GeneratedMatch(SecretPattern pattern, string text) => pattern switch
+    {
+        SecretPattern.Jwt => Jwt().IsMatch(text),
+        SecretPattern.UrlCredentials => UrlCredentials().IsMatch(text),
+        SecretPattern.HexRun => HexRun().IsMatch(text),
+        SecretPattern.RandomRun => RandomRun().IsMatch(text),
+        SecretPattern.Uuid => Uuid().IsMatch(text),
+        _ => throw new ArgumentOutOfRangeException(nameof(pattern)),
+    };
 
     /// <summary>
     /// True when <paramref name="value"/> is the wire shape of a reference, <c>secret:</c> and 1–64 characters of
