@@ -243,7 +243,7 @@ internal sealed class CreateRunCommandHandler(
         {
             if (member.Name is not ("manifest_id" or "release" or "release_id" or "components" or "purpose" or "replay_grant_id" or "ref"))
             {
-                return BodyInvalid("the request body carries an unknown field", [new ErrorDetail($"/{member.Name}", "additional_properties")]);
+                return BodyInvalid("the request body carries an unknown field", [new ErrorDetail(RequestMemberPath.ForUnknown(member.Name), "additional_properties")]);
             }
         }
 
