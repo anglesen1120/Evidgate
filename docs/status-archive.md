@@ -834,3 +834,9 @@ Closed by S487 (#999): `normalizeVariant`, the secret-shape rules, the serialise
 | Variant normaliser test ideas not applied (S487) | QA proposed, without a checked expectation: a lone-surrogate string value, `NaN`/`Infinity` numbers, and a secret-shaped value inside an array element (path form). Expected reasons were never read from `packages/variant/src/normalize.ts`, so none was added. | receiver: shared variant package owner (next lane touching `packages/variant`) |
 
 Closed by S489 (#1001): `packages/variant/src/normalize.edges.test.ts` pins the TS answer for secret-shaped array elements, non-finite and unsafe numbers, lone surrogates, array limits, sparse arrays and extra array properties; two differences found are recorded in new carried rows.
+
+## Moved from status-carried.md by S486 (2026-11-20)
+
+| T3.2 budget test for the 100k fixture (S478, 04.1.3-T3.2) | `fixtures/large/100k-tests/expected.json` carries `budget: {status: unset}`; nothing asserts a budget yet. AC8 now reads the budget from the `budget` member of `expected.json` (the loaders refuse a separate `budget.json`). The `Category=Budget` test must measure peak working set and wall time, fill `budget`, and add the 10.6.1-T1 note. Unblocked by S481 (#993): the parser path no longer buffers records, so the parser half of the budget can be measured now; the case and event buffers stay (carried row 04.1.3-T2.2c). | receiver: 04.1.3-T3.2 (backend lane) |
+
+Closed by S486 (#1004): `LargeReport_100k_ParseReconcileCompare_WithinBudget` measures parse, reconcile and the page walk against the measured `budget` in `expected.json`; acceptance (4), the buffering mutant turning it red, stayed open (see 'Budget test cannot detect a return to buffering (S486)').
