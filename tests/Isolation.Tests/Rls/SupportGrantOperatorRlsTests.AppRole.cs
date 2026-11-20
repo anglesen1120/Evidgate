@@ -7,8 +7,8 @@ namespace Isolation.Tests;
 /// <summary>
 /// The <c>support_grant</c> guard and shape checks as the application role the handlers use
 /// (<c>evidgate_app</c> with <c>evidgate.org_id</c> set), plus the owner path where RLS does not narrow the
-/// project lookup. Every refusal asserts the SQLSTATE and the message fragment or constraint name; a
-/// positive control in the same fact shows the statement is refused for that reason alone.
+/// project lookup. Every refusal asserts the SQLSTATE and the message fragment or constraint name, and the
+/// same fact runs the nearest legal statement as a control so the refusal is the guard's alone.
 /// </summary>
 public sealed partial class SupportGrantOperatorRlsTests
 {
@@ -16,22 +16,37 @@ public sealed partial class SupportGrantOperatorRlsTests
         TenantScope.BeginAsync(_fixture.AppConnectionString(database), org);
 
     [Theory]
-    [InlineData("approver_rewritten", "Approved", "update public.support_grant set approved_by = '{other}' where id = @g", "approval is write-once")]
-    [InlineData("approval_cleared", "Approved", "update public.support_grant set approved_at = null, approved_by = null where id = @g", "approval is write-once")]
-    [InlineData("revoked_unrevoked", "Revoked", "update public.support_grant set revoked_at = null where id = @g", "a revoked grant accepts no change")]
-    [InlineData("revoked_reapproved", "Revoked", "update public.support_grant set approved_at = now(), approved_by = '{approver}', revoked_at = null where id = @g", "a revoked grant accepts no change")]
-    [InlineData("approve_and_revoke_together", "Requested", "update public.support_grant set approved_at = now(), approved_by = '{approver}', revoked_at = now() where id = @g", "cannot be approved and revoked in one change")]
-    public async Task AppRole_Guard_Refuses_Transition(string name, string from, string template, string refusal)
+    [InlineData("approver_rewritten", "Approved", "update public.support_grant set approved_by = '{other}' where id = @g", "approval is write-once",
+        "update public.support_grant set approved_by = approved_by where id = @g")]
+    [InlineData("approval_cleared", "Approved", "update public.support_grant set approved_at = null, approved_by = null where id = @g", "approval is write-once",
+        "update public.support_grant set revoked_at = now() where id = @g")]
+    [InlineData("revoked_unrevoked", "Revoked", "update public.support_grant set revoked_at = null where id = @g", "a revoked grant accepts no change",
+        "update public.support_grant set revoked_at = now() where id = @g")]
+    [InlineData("revoked_reapproved", "Revoked", "update public.support_grant set approved_at = now(), approved_by = '{approver}', revoked_at = null where id = @g", "a revoked grant accepts no change",
+        "update public.support_grant set approved_at = now(), approved_by = '{approver}' where id = @g")]
+    [InlineData("approve_and_revoke_together", "Requested", "update public.support_grant set approved_at = now(), approved_by = '{approver}', revoked_at = now() where id = @g", "cannot be approved and revoked in one change",
+        "update public.support_grant set approved_at = now(), approved_by = '{approver}' where id = @g")]
+    public async Task AppRole_Guard_Refuses_Transition(string name, string from, string template, string refusal, string control)
     {
         var database = await WorldAsync();
         var grant = await GrantAsync(database, OrgA, Operator, Enum.Parse<State>(from));
-        var sql = template.Replace("{other}", OtherOperator.ToString()).Replace("{approver}", Approver.ToString());
+        var sql = Fill(template);
 
-        await using var scope = await AppAsync(database, OrgA);
-        var error = await scope.CaptureErrorAsync(sql, ("g", grant));
-        error.SqlState.ShouldBe("23514", name);
-        error.MessageText.ShouldContain(refusal, customMessage: name);
+        await using (var scope = await AppAsync(database, OrgA))
+        {
+            var error = await scope.CaptureErrorAsync(sql, ("g", grant));
+            error.SqlState.ShouldBe("23514", name);
+            error.MessageText.ShouldContain(refusal, customMessage: name);
+        }
+
+        // The nearest legal statement on a fresh grant of the same state passes, so the refusal is the guard's.
+        var twin = await GrantAsync(database, OrgA, Operator, Enum.Parse<State>(from == "Revoked" ? "Requested" : from));
+        await using var allowed = await AppAsync(database, OrgA);
+        (await allowed.ExecuteAsync(Fill(control), ("g", twin))).ShouldBe(1, name);
     }
+
+    private static string Fill(string template) =>
+        template.Replace("{other}", OtherOperator.ToString()).Replace("{approver}", Approver.ToString());
 
     [Fact]
     public async Task AppRole_Guard_Refuses_Approving_An_Expired_Request_That_A_Fresh_One_Passes()
@@ -72,31 +87,33 @@ public sealed partial class SupportGrantOperatorRlsTests
     }
 
     [Theory]
-    [InlineData("scopes_2d_two_rows", "'{{case:read},{case:write}}'", "'{}'", "support_grant_scopes_check")]
-    [InlineData("scopes_2d_one_row", "'{{case:read,case:write}}'", "'{}'", "support_grant_scopes_check")]
-    [InlineData("project_ids_2d", "'{case:read}'", "'{{P1},{P2}}'", "support_grant_project_ids_check")]
-    public async Task AppRole_Insert_Refuses_A_MultiDimensional_Array(string name, string scopes, string projects, string constraint)
+    [InlineData("scopes_2d_two_rows", "'{{case:read},{case:write}}'", "'{}'", "support_grant_scopes_check", "'{case:read,case:write}'", "'{}'")]
+    [InlineData("scopes_2d_one_row", "'{{case:read,case:write}}'", "'{}'", "support_grant_scopes_check", "'{case:read,case:write}'", "'{}'")]
+    [InlineData("project_ids_2d", "'{case:read}'", "'{{P1},{P2}}'", "support_grant_project_ids_check", "'{case:read}'", "'{P1,P2}'")]
+    public async Task AppRole_Insert_Refuses_A_MultiDimensional_Array(
+        string name, string scopes, string projects, string constraint, string twinScopes, string twinProjects)
     {
         var database = await WorldAsync();
-        projects = projects.Replace("P1", ProjectA1.ToString()).Replace("P2", ProjectA2.ToString());
-        await using var scope = await AppAsync(database, OrgA);
-        var error = await scope.CaptureErrorAsync($"""
+        string Paths(string list) => list.Replace("P1", ProjectA1.ToString()).Replace("P2", ProjectA2.ToString());
+        const string insert = """
             insert into public.support_grant (org_id, operator_user_id, scopes, project_ids, reason, expires_at)
-            values (@o, @u, {scopes}, {projects}, 'r', now() + interval '1 hour')
-            """, ("o", OrgA), ("u", Operator));
-        error.SqlState.ShouldBe("23514", name);
-        error.ConstraintName.ShouldBe(constraint, name);
-    }
+            values (@o, @u, {0}, {1}, 'r', now() + interval '1 hour')
+            """;
 
-    [Fact]
-    public async Task AppRole_Insert_Accepts_The_One_Dimensional_Twin_Of_The_Refused_Arrays()
-    {
-        var database = await WorldAsync();
-        await using var scope = await AppAsync(database, OrgA);
-        (await scope.ExecuteAsync("""
-            insert into public.support_grant (org_id, operator_user_id, scopes, project_ids, reason, expires_at)
-            values (@o, @u, '{case:read,case:write}', @p::uuid[], 'r', now() + interval '1 hour')
-            """, ("o", OrgA), ("u", Operator), ("p", $"{{{ProjectA1},{ProjectA2}}}"))).ShouldBe(1);
+        await using (var scope = await AppAsync(database, OrgA))
+        {
+            var error = await scope.CaptureErrorAsync(
+                string.Format(System.Globalization.CultureInfo.InvariantCulture, insert, scopes, Paths(projects)),
+                ("o", OrgA), ("u", Operator));
+            error.SqlState.ShouldBe("23514", name);
+            error.ConstraintName.ShouldBe(constraint, name);
+        }
+
+        // Only the dimensionality differs in the twin, so the CHECK is what refused the array.
+        await using var allowed = await AppAsync(database, OrgA);
+        (await allowed.ExecuteAsync(
+            string.Format(System.Globalization.CultureInfo.InvariantCulture, insert, twinScopes, Paths(twinProjects)),
+            ("o", OrgA), ("u", Operator))).ShouldBe(1, name);
     }
 
     [Fact]
@@ -145,10 +162,15 @@ public sealed partial class SupportGrantOperatorRlsTests
     public async Task AppRole_Insert_For_Another_Org_Is_Refused_By_The_Tenant_Policy()
     {
         var database = await WorldAsync();
-        await using var scope = await AppAsync(database, OrgA);
-        var error = await scope.CaptureErrorAsync(InsertWithProjects, ("o", OrgB), ("u", Operator), ("p", "{}"));
-        error.SqlState.ShouldBe("42501");
-        error.MessageText.ShouldContain("new row violates row-level security policy for table \"support_grant\"");
+        await using (var scope = await AppAsync(database, OrgA))
+        {
+            var error = await scope.CaptureErrorAsync(InsertWithProjects, ("o", OrgB), ("u", Operator), ("p", "{}"));
+            error.SqlState.ShouldBe("42501");
+            error.MessageText.ShouldContain("new row violates row-level security policy for table \"support_grant\"");
+        }
+
+        await using var own = await AppAsync(database, OrgB);
+        (await own.ExecuteAsync(InsertWithProjects, ("o", OrgB), ("u", Operator), ("p", "{}"))).ShouldBe(1);
     }
 
     private const string InsertWithProjects = """
