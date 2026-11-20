@@ -1010,3 +1010,9 @@ Closed by #1067 (ff020aa7): a warm-up page in beforeAll moves the cold renderer,
 | Ingestion tenant-less refusal records no rejection metric (S507) | `IngestEventBatchAsync` (`IngestionEndpoints.cs:103`): the anonymous branch records `IngestBatchRejection`; the `RawBodyGuard` throw for a tenant-less principal records nothing, so that refusal is uncounted. | receiver: Ingestion lane, record it before the guard |
 
 Closed by #1069 (6347395b): the tenant-less refusal of the events route is now counted once in `evidgate_ingest_batch_rejected_total`; it shares the existing `reason=unauthenticated` value with the anonymous refusal, so the counter cannot tell the two apart.
+
+## Moved from status-carried.md by S523 (2026-11-21)
+
+| check_features cannot read letter-suffixed sub-task ids (04.1.3-T2) (S520) | `scripts/check_features.py:56` matches sub-row ids only as `{tid}\.(\d+)$`, so T2.2a/T2.2b/T2.2c are not counted and the script reports `04.1.3-T2 sub-tasks sum ... != task size 1 (M)` (0.5 on base, 0.25 after the S520 re-cut; sizes themselves sum to 1.0). It is not a verify.sh stage. The same script also requires ids 1..n and sub-tasks no larger than S, so widening the regex alone would then flag T2.2c. | receiver: coordinator (plan-tooling lane) |
+
+Closed by #1072 (b6aacb28): `scripts/check_features.py` reads letter-suffixed sub-task ids (contiguous from `a`) and treats an `[OPEN]` row with an `unsized` Size cell as a warning left out of the sum; 00 §12 and its §15 log state the rule, and the checker exits 0 on the wave.
