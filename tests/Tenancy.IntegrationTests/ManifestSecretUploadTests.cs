@@ -69,4 +69,57 @@ public sealed class ManifestSecretUploadTests
 
         (await UploadAsync(world, accepted.ToJsonString())).Status.ShouldBe(HttpStatusCode.Created);
     }
+
+    [Fact]
+    public async Task BomPrefixedUpperCasedTokenUnderAnEnumLikeKey_Is422_PositionOnly()
+    {
+        await using var world = await ManifestTests.StartAsync(_fixture);
+        var manifest = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "x", ["mode"] = "\uFEFFGHP_AAAAAAAA" }], ["staging"]);
+
+        var answer = await UploadAsync(world, manifest.ToJsonString());
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        var details = answer.Body.GetProperty("error").GetProperty("details").EnumerateArray().ToList();
+        details.Select(detail => detail.GetProperty("reason").GetString()).Distinct().ShouldBe(["invalid_value"]);
+        details.First().GetProperty("path").GetString().ShouldBe("/planned_executions/0/variant/params/#2");
+        answer.Body.GetRawText().ShouldNotContain("GHP_AAAAAAAA", Case.Insensitive);
+    }
+
+    [Fact]
+    public async Task ZeroWidthSpaceInsideATokenUnderANonEnumKey_Is422_PositionOnly()
+    {
+        await using var world = await ManifestTests.StartAsync(_fixture);
+        var manifest = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "x", ["label"] = "gh\u200Bp_AAAAAAAAAAAA" }], ["staging"]);
+
+        var answer = await UploadAsync(world, manifest.ToJsonString());
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        var details = answer.Body.GetProperty("error").GetProperty("details").EnumerateArray().ToList();
+        details.Select(detail => detail.GetProperty("reason").GetString()).Distinct().ShouldBe(["invalid_value"]);
+        details.First().GetProperty("path").GetString().ShouldBe("/planned_executions/0/variant/params/#2");
+        answer.Body.GetRawText().ShouldNotContain("AAAAAAAAAAAA");
+    }
+
+    [Fact]
+    public async Task NonAsciiCleanText_StaysAccepted()
+    {
+        await using var world = await ManifestTests.StartAsync(_fixture);
+        var accepted = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "x", ["label"] = "ünïcödé 日本語 العربية \uD83D\uDE00" }], ["staging"]);
+
+        (await UploadAsync(world, accepted.ToJsonString())).Status.ShouldBe(HttpStatusCode.Created);
+    }
+
+    /// <summary>A secret-named key with unclean text keeps the secret refusal: no input refused today changes its code.</summary>
+    [Fact]
+    public async Task SecretNamedKeyWithUncleanValue_KeepsTheSecretReason()
+    {
+        await using var world = await ManifestTests.StartAsync(_fixture);
+        var manifest = ManifestUnitTests.Build(world.SuiteRevision, world.Cases, [new() { ["browser"] = "x", ["api_token"] = "x\u200By" }], ["staging"]);
+
+        var answer = await UploadAsync(world, manifest.ToJsonString());
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        answer.Body.GetProperty("error").GetProperty("details").EnumerateArray()
+            .Select(detail => detail.GetProperty("reason").GetString()).Distinct().ShouldBe(["secret_in_variant_params"]);
+    }
 }

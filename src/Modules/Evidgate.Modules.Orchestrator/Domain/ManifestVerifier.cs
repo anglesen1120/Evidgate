@@ -20,7 +20,7 @@ internal sealed record ManifestFacts(
     IReadOnlyList<Guid> PlannedCaseRevisionIds);
 
 /// <summary>A refused manifest: the 05.1.1 reason and its indexed details (never a submitted value).</summary>
-/// <param name="Reason"><c>secret_in_variant_params</c> or <c>matrix_not_covered</c>.</param>
+/// <param name="Reason"><c>secret_in_variant_params</c>, <c>invalid_value</c> or <c>matrix_not_covered</c>.</param>
 /// <param name="Details">At most <see cref="ManifestVerifier.MaxDetails"/> rows.</param>
 internal sealed record ManifestRefusal(string Reason, IReadOnlyList<ErrorDetail> Details);
 
@@ -36,6 +36,7 @@ internal static class ManifestVerifier
 
     internal const string SecretInVariantParams = "secret_in_variant_params";
     internal const string MatrixNotCovered = "matrix_not_covered";
+    internal const string InvalidValue = "invalid_value";
     internal const string SecretValueDetected = "secret_value_detected";
 
     /// <summary>Checks <paramref name="root"/>; exactly one of the two results is non-null.</summary>
@@ -96,7 +97,10 @@ internal static class ManifestVerifier
             var raw = parameters.GetRawText();
             if (!memo.TryGetValue(raw, out var positions))
             {
-                positions = SecretPositions(parameters);
+                // A secret refusal keeps precedence wherever it fires; unclean text is the reason only for the rest.
+                var secret = SecretPositions(parameters);
+                positions = [.. secret, .. UncleanPositions(parameters).Where(p => !secret.Contains(p)).Select(p => -p)];
+                positions = [.. positions.OrderBy(Math.Abs)];
                 memo[raw] = positions;
             }
 
@@ -107,7 +111,8 @@ internal static class ManifestVerifier
                     return;
                 }
 
-                details.Add(new ErrorDetail(string.Create(CultureInfo.InvariantCulture, $"{path}/#{position}"), SecretInVariantParams, index));
+                var reason = position < 0 ? InvalidValue : SecretInVariantParams;
+                details.Add(new ErrorDetail(string.Create(CultureInfo.InvariantCulture, $"{path}/#{Math.Abs(position)}"), reason, index));
             }
         }
     }
@@ -149,6 +154,40 @@ internal static class ManifestVerifier
             }
 
             shard++;
+        }
+    }
+
+    /// <summary>
+    /// The 1-based positions of the parameters whose name or string value is not clean text (control, format or invisible
+    /// characters, the normaliser's rule), which would hide a secret from the scan; never echoed.
+    /// </summary>
+    internal static int[] UncleanPositions(JsonElement parameters)
+    {
+        List<int>? found = null;
+        var position = 0;
+        foreach (var member in parameters.EnumerateObject())
+        {
+            position++;
+            if (MemberIsUnclean(member))
+            {
+                (found ??= []).Add(position);
+            }
+        }
+
+        return found?.ToArray() ?? [];
+    }
+
+    private static bool MemberIsUnclean(JsonProperty member)
+    {
+        try
+        {
+            return !UnicodeCleanliness.IsClean(member.Name)
+                || (member.Value.ValueKind == JsonValueKind.String && !UnicodeCleanliness.IsClean(member.Value.GetString()));
+        }
+        catch (InvalidOperationException)
+        {
+            // Unreadable text is refused by SecretPositions; not counted twice.
+            return false;
         }
     }
 
