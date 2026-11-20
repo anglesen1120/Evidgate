@@ -255,6 +255,10 @@ public static partial class IsolationRouteCases
             new(Get("/v1/orgs/{o}/security-events"), "org B's security events", bAdmin, $"/v1/orgs/{b.Id}/security-events?limit=1", "id",
                 runner => runner.TenantIdsAsync("select id::text from public.security_event where org_id = @org", b.Id),
                 aAdmin, $"/v1/orgs/{a.Id}/security-events?limit=1"),
+            // 02.8.1 §5: the org's support grants, two owner-seeded requests per org so limit=1 pages twice. No probe
+            // approves or revokes one (the world is shared by the whole collection), so this set is stable.
+            new(Get("/v1/orgs/{o}/support-grants"), "org B's support grants", bAdmin, $"/v1/orgs/{b.Id}/support-grants?limit=1", "id",
+                Fixed(b.SupportGrantIds), aAdmin, $"/v1/orgs/{a.Id}/support-grants?limit=1"),
             new(Get("/v1/roles"), "built-in roles only, identical to org A's list", bAdmin, "/v1/roles?limit=1", "id",
                 runner => runner.WalkIdsAsync(aAdmin, "/v1/roles?limit=1", "id"), aAdmin, "/v1/roles?limit=1",
                 item => OrgIdOf(item) is { } org && org != b.Id ? $"role {IdOf(item, "id")} belongs to org {org}" : null),
@@ -637,6 +641,39 @@ public static partial class IsolationRouteCases
         // ---- Usage (UsageEndpoints.cs): {o}'s counters, refused at tenant resolution as above -------------------
         // The summary's own org check and RLS add the same 404 backstop the security-events read carries.
         OrgCase("GET", "/v1/orgs/{o}/usage/summary", o => new(HttpMethod.Get, $"/v1/orgs/{o}/usage/summary")),
+
+        // ---- Support grants (SupportGrantEndpoints.cs; 02.8.1 §5) ------------------------------------------------
+        // {o} is the resolved tenant, so the list case is the usual two halves of OrgCase. A grant id is org-level,
+        // not project-level, so the object helpers do not fit the two decisions: org B's admin naming org A's grant
+        // id is refused by RLS (404), and a service credential is refused at the tenant/permission stages. The
+        // success paths (audit row, state transition, list derivation) live in
+        // Tenancy.IntegrationTests/SupportGrantTests.cs: this world is shared by the collection, so a probe that
+        // approved a grant would change what a later test reads.
+        OrgCase("GET", "/v1/orgs/{o}/support-grants", o => new(HttpMethod.Get, $"/v1/orgs/{o}/support-grants")),
+        Case("POST", "/v1/support-grants/{g}/approve", (route, w) =>
+            [
+                Pair(route, "org A grant id in {g}", ProbeExpect.NotFound, OrgBAdmin(w),
+                    new(HttpMethod.Post, $"/v1/support-grants/{w.Acme.SupportGrantIds[0]}/approve"),
+                    new(HttpMethod.Post, $"/v1/support-grants/{Guid.CreateVersion7()}/approve")),
+            ],
+            (route, w) =>
+            [
+                Pair(route, "org A grant id in {g}", ProbeExpect.ServiceRefused, OrgBService(w),
+                    new(HttpMethod.Post, $"/v1/support-grants/{w.Acme.SupportGrantIds[0]}/approve"),
+                    new(HttpMethod.Post, $"/v1/support-grants/{Guid.CreateVersion7()}/approve")),
+            ]),
+        Case("POST", "/v1/support-grants/{g}/revoke", (route, w) =>
+            [
+                Pair(route, "org A grant id in {g}", ProbeExpect.NotFound, OrgBAdmin(w),
+                    new(HttpMethod.Post, $"/v1/support-grants/{w.Acme.SupportGrantIds[1]}/revoke"),
+                    new(HttpMethod.Post, $"/v1/support-grants/{Guid.CreateVersion7()}/revoke")),
+            ],
+            (route, w) =>
+            [
+                Pair(route, "org A grant id in {g}", ProbeExpect.ServiceRefused, OrgBService(w),
+                    new(HttpMethod.Post, $"/v1/support-grants/{w.Acme.SupportGrantIds[1]}/revoke"),
+                    new(HttpMethod.Post, $"/v1/support-grants/{Guid.CreateVersion7()}/revoke")),
+            ]),
 
         // ---- CI admin (CiAdminEndpoints.cs:30-55) --------------------------------------------------------------
         ProjectCase("POST", "/v1/projects/{p}/ci-bindings", p => new(HttpMethod.Post, $"/v1/projects/{p}/ci-bindings", Binding())),

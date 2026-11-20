@@ -150,6 +150,9 @@ const EXPECTED = [
   ['/support-grants', 'post', 'support:grant', 'v1'],
   ['/support-grants/{g}/approve', 'post', 'support:approve', 'v1'],
   ['/support-grants/{g}/revoke', 'post', 'support:approve', 'v1'],
+  // The tenant admin's grant list (02.8.1 §5): declared by the story's route table rather than the
+  // core 00 §9.3 row, which names only the request and the approve/revoke pair.
+  ['/orgs/{o}/support-grants', 'get', 'support:read', 'v1'],
   ['/orgs/{o}/security-events', 'get', 'security_event:read', 'v1'],
   ['/projects/{p}/cases', 'get', 'case:read', 'v1'],
   ['/projects/{p}/cases/{c}', 'patch', 'case:write', 'v1'],

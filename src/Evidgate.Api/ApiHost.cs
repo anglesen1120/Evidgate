@@ -278,6 +278,9 @@ public static partial class ApiHost
         app.MapCiAdminEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // Project API tokens for automation: the same tenant and envelope filters as every /v1 tenant route.
         app.MapApiTokenEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
+        // The tenant's support-grant decisions and list: only approve, revoke and list are served; the operator's
+        // request route stays unmapped in this change.
+        app.MapSupportGrantEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         app.MapCiTokenEndpoints().AddEndpointFilter<ResultEndpointFilter>();
         // 02.3.1-T1: the federated login start/callback routes. Pre-tenant as well (the browser holds no
         // session yet), and the callback resolves nothing before the provider has verified the identity, so

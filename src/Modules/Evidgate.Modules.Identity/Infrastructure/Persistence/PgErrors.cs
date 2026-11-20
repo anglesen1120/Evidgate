@@ -20,4 +20,14 @@ internal static class PgErrors
     public static bool IsForeignKey(DbUpdateException exception, string? constraint = null) =>
         exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.ForeignKeyViolation } pg
         && (constraint is null || string.Equals(pg.ConstraintName, constraint, StringComparison.Ordinal));
+
+    /// <summary>
+    /// A check or guard refusal (SQLSTATE 23514), optionally one whose message contains <paramref name="message"/>:
+    /// the support-grant trigger raises the same SQLSTATE for several rules, and each maps to a different answer.
+    /// </summary>
+    /// <param name="exception">The failed save.</param>
+    /// <param name="message">A fragment the refusal's message must contain, or null for any 23514.</param>
+    public static bool IsCheckViolation(DbUpdateException exception, string? message = null) =>
+        exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.CheckViolation } pg
+        && (message is null || pg.MessageText.Contains(message, StringComparison.Ordinal));
 }
