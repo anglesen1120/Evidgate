@@ -87,7 +87,9 @@ public sealed class ManifestMatrixPathUploadTests
                 "/matrix/variants/1/params/#2",
             ]);
         details.Select(detail => detail.GetProperty("reason").GetString()).Distinct().ShouldBe(["invalid_value"]);
-        details.Select(detail => detail.TryGetProperty("index", out _)).ShouldBe([true, true, false]);
+        details.Select(detail => detail.TryGetProperty("index", out var index) ? index.GetInt32() : -1).ShouldBe([1, 3, -1]);
+        answer.Body.GetRawText().ShouldNotContain("u200B", Case.Insensitive);
+        answer.Body.GetRawText().ShouldNotContain("\u200B");
         (await StoredAsync(world)).ShouldBe(0);
     }
 }

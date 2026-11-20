@@ -88,14 +88,17 @@ public sealed class ManifestCapMixUnitTests
         }
     }
 
-    [Fact]
-    public void TheCleanTwinOfTheLargestMix_IsAccepted()
+    /// <summary>The same rows without the refusals are accepted, so a refusal never comes from the row count or the matrix.</summary>
+    [Theory]
+    [InlineData(21, 30)]
+    [InlineData(5, 50)]
+    public void TheCleanTwinOfALargeMix_IsAcceptedWithEveryRow(int unclean, int secrets)
     {
-        using var document = JsonDocument.Parse(ManifestUnitTests.Build(Suite, [CaseRevision], [new() { ["browser"] = "x" }], ["staging"]).ToJsonString());
+        using var document = JsonDocument.Parse(ManifestCapMixFixture.Build(Suite, CaseRevision, unclean, secrets, hintSecret: false, clean: true).ToJsonString());
 
         var (facts, refusal) = ManifestVerifier.Verify(document.RootElement.Clone());
 
         refusal.ShouldBeNull();
-        facts.ShouldNotBeNull();
+        facts!.PlannedCount.ShouldBe(unclean + secrets);
     }
 }
