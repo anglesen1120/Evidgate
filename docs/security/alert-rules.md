@@ -59,3 +59,11 @@ The gap is also recorded as a carried row, "Security event emitters missing (11.
 | 3 | `AR-support-access-grant` names the on-call ticket window, which has no data source before 02.8.1-T2.2 | 02.8.1-T2.2 | `[OPEN]` |
 | 4 | The rules are silent when an emitter or the scanner is down: a missing row and a missing `masking_event` look exactly like "nothing happened". A dead-man or staleness rule is owed (`scan_state=pending` older than a threshold, or zero rows from an emitter in its expected window) | 10.3.1-T5 | `[OPEN]` |
 | 5 | Two §2 inputs do not exist: the content-free cross-org login counter, and the `platform_security_event` table that carries `scope=system` switch writes and refusals made before a tenant scope exists | 10.3.1-T5 with the platform-table receiver (D-S137-OWNER) | `[OPEN]` |
+
+## 6. Operational counter rules
+
+Rules whose signal is an operational counter of the metrics catalogue, not a baseline `security_event` type. They sit outside §2 on purpose: `tests/Architecture.Tests/SecurityEventEmitterCoverageTests.cs` requires every §2 row to name one baseline type. Same columns and routing vocabulary as §2; the Baseline column is `none`.
+
+| Rule id | Baseline row | Signal source | Threshold / pattern `[INFERENCE]` ⚠️ | Severity | On-call route |
+|---|---|---|---|---|---|
+| `AR-secret-shape-timeout` | none: an operational counter, not a baseline `security_event` type | the counter `evidgate_secret_shape_timeout_total` (catalogue id `secret_shape_timeout`, label `pattern` only), published by `SecretShape.ValueLooksSecret` (`src/BuildingBlocks/SharedKernel/Security/SecretShape.cs:93-98`) ✅. It counts secret-shape checks that ran out of the 100 ms match budget and were answered as secret-shaped; the checked value is never a label | Default: any increase over a 15-minute window raises a ticket; an increase in 3 consecutive windows, or on every `pattern` at once, is read as a stalled host and escalated through the incident process. Basis: the patterns are linear, so a healthy host records zero; no traffic baseline exists, so no rate is proposed and the windows are defaults to tune with pilot data `[INFERENCE]` ⚠️. Grouped by `deployment.environment`; no value, org or request id exists on the series. Runbook: [secret-shape-timeout](../runbooks/secret-shape-timeout.md) | `warning` | `ticket` |
