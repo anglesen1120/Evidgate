@@ -52,8 +52,8 @@ public sealed class SupportGrantContractTests
             operation.ShouldNotContain(
                 pair => pair.Key == "requestBody",
                 $"{path} documents no body: the approver is the authenticated principal");
-            spec.ParameterRefs(path, "post").ShouldContain("#/components/parameters/IdempotencyKey");
-            spec.ParameterRefs(path, "post").ShouldContain("#/components/parameters/SupportGrantId");
+            spec.ParameterRefs(path, "post").ShouldContain("IdempotencyKey");
+            spec.ParameterRefs(path, "post").ShouldContain("SupportGrantId");
 
             var responses = operation["responses"]!.AsObject();
             responses.ContainsKey("200").ShouldBeTrue();
@@ -96,9 +96,9 @@ public sealed class SupportGrantContractTests
         var operation = spec.Operation(ListPath, "get");
 
         operation["x-permission"]!.GetValue<string>().ShouldBe("support:read");
-        spec.ParameterRefs(ListPath, "get").ShouldContain("#/components/parameters/OrgId");
-        spec.ParameterRefs(ListPath, "get").ShouldContain("#/components/parameters/Cursor");
-        spec.ParameterRefs(ListPath, "get").ShouldContain("#/components/parameters/Limit");
+        spec.ParameterRefs(ListPath, "get").ShouldContain("OrgId");
+        spec.ParameterRefs(ListPath, "get").ShouldContain("Cursor");
+        spec.ParameterRefs(ListPath, "get").ShouldContain("Limit");
         spec.ResponseKeys(ListPath, "get").ShouldContain("200");
         operation["responses"]!["200"]!["content"]!["application/json"]!["schema"]!["$ref"]!
             .GetValue<string>()

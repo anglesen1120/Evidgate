@@ -5035,7 +5035,7 @@ paths:
     get:
       operationId: listSupportGrants
       tags: [support]
-      summary: Cursor page of the organization's support grants
+      summary: Cursor page of the support grants of the organization
       description: >-
         Keyset-ordered on `(created_at, id)` descending. State is derived from approval, revocation
         and expiry timestamps: requested, approved, revoked or expired. An authenticated caller who

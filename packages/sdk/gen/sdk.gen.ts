@@ -1455,7 +1455,7 @@ export const revokeSupportGrant = <ThrowOnError extends boolean = false>(options
 });
 
 /**
- * Cursor page of the organization's support grants
+ * Cursor page of the support grants of the organization
  *
  * Keyset-ordered on `(created_at, id)` descending. State is derived from approval, revocation and expiry timestamps: requested, approved, revoked or expired. An authenticated caller who is not an active member of the organization named in the path is refused at tenant resolution with 403 `forbidden` (the same body for an unknown org, so the answer never discloses which org ids exist); 404 `not_found` is answered only for a resolved tenant that differs from `{o}`, such as a service credential bound to another org.
  */
