@@ -99,8 +99,18 @@ public static partial class IngestionEndpoints
                 "no authenticated producer could be resolved",
                 StatusCodes.Status401Unauthorized));
         }
-        // A principal without a tenant must not spend ingest budget or cause a body read.
-        RawBodyGuard.RequireResolvedTenant(context.RequestServices);
+        // A principal without a tenant must not spend ingest budget or cause a body read. The guard's own 401 is
+        // kept: the exception is counted once here and rethrown for the envelope middleware to render.
+        try
+        {
+            RawBodyGuard.RequireResolvedTenant(context.RequestServices);
+        }
+        catch (TenantContextMissingException)
+        {
+            IngestBatchRejection.Record(logger, IngestBatchRejection.Unauthenticated, context.TraceIdentifier, r, 0, 0);
+
+            throw;
+        }
 
         var limits = context.RequestServices.GetRequiredService<IOptions<IngestionLimits>>().Value;
 

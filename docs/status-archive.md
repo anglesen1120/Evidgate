@@ -1004,3 +1004,9 @@ Closed by #1065 (4a2afcd6): the 04.1.3 sub-rows were re-cut (T2.1 and T2.2b to X
 | data-table-column-geometry first test near the 5 s budget on a cold loaded host (S511) | In the wave gate smoke (load_max about 17) the first test of `apps/web/src/app/shared/ui/data-table/data-table-column-geometry.spec.ts`, `keeps en role content intact at 900 px and 1× text`, took 5048 ms against the 5000 ms vitest timeout; the same test took 686 ms in the full vitest stage and 1177 ms in the smoke rerun on the same sha. No timeout raised, nothing skipped; not on the PROJECT.md known-failures list. | receiver: web lane, cut the cold first test's setup cost, do not raise the timeout |
 
 Closed by #1067 (ff020aa7): a warm-up page in beforeAll moves the cold renderer, font and first-layout cost out of the 5 s test budget into the hook budget; assertions unchanged, no timeout raised. First test of the file: 5048 ms at load about 17 before; 2551 ms at load_max 46.95 and 412 ms at load_max 16.36 after (LAN rounds on 23d7a0a3 and dd018a65). One sample per load level, not a distribution: the first test is no longer the near-budget outlier, which does not prove it can never time out. The wave vitest at load 47 failed on ten tests in nine other specs (new carried row).
+
+## Moved from status-carried.md by S522 (2026-11-21)
+
+| Ingestion tenant-less refusal records no rejection metric (S507) | `IngestEventBatchAsync` (`IngestionEndpoints.cs:103`): the anonymous branch records `IngestBatchRejection`; the `RawBodyGuard` throw for a tenant-less principal records nothing, so that refusal is uncounted. | receiver: Ingestion lane, record it before the guard |
+
+Closed by #1069 (6347395b): the tenant-less refusal of the events route is now counted once in `evidgate_ingest_batch_rejected_total`; it shares the existing `reason=unauthenticated` value with the anonymous refusal, so the counter cannot tell the two apart.
