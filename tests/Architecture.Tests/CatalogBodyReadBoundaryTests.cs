@@ -318,14 +318,7 @@ public sealed class CatalogBodyReadBoundaryTests
     public void Scan_DirectBodyReadInsideRules_AllowsFile(string source) =>
         Scan([(RulesFile, source)]).ShouldBeEmpty();
 
-    private static (string Path, string Text)[] Module() =>
-        Directory
-            .EnumerateFiles(Path.Combine(SolutionLayout.RepoRoot, ModuleDirectory), "*.cs", SearchOption.AllDirectories)
-            .Select(file => Path.GetRelativePath(SolutionLayout.RepoRoot, file).Replace('\\', '/'))
-            .Where(path => !path[ModuleDirectory.Length..].Contains("/obj/", StringComparison.Ordinal)
-                && !path[ModuleDirectory.Length..].Contains("/bin/", StringComparison.Ordinal))
-            .Select(path => (Path: path, Text: File.ReadAllText(Path.Combine(SolutionLayout.RepoRoot, path))))
-            .ToArray();
+    private static (string Path, string Text)[] Module() => [.. SolutionLayout.SourcesOf(ModuleDirectory)];
 
     private static (string Path, string Text)[] Endpoints() =>
         Module().Where(file => file.Path.StartsWith(EndpointsDirectory + "/", StringComparison.Ordinal)).ToArray();
