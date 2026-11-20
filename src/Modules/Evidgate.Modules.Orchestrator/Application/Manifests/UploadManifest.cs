@@ -1,4 +1,5 @@
 using System.Text;
+using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Evidgate.BuildingBlocks.Canonicalization;
@@ -84,7 +85,7 @@ internal sealed class UploadManifestCommandHandler(
 
         using var parsed = document;
         var body = parsed.RootElement;
-        if (JsonBody.HasUnstorableText(body))
+        if (UnstorableJsonText.HasUnstorableText(body))
         {
             // A lone surrogate or a NUL: neither the canonical form nor jsonb can carry it.
             return Refuse(InvalidValue, [new ErrorDetail(string.Empty, InvalidValue)]);

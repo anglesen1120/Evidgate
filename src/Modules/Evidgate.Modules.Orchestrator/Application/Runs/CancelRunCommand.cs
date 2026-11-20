@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -307,7 +308,7 @@ internal sealed partial class CancelRunCommandHandler(
             }
         }
 
-        if (JsonBody.HasUnstorableText(root))
+        if (UnstorableJsonText.HasUnstorableText(root))
         {
             return Invalid("the request body carries text that cannot be stored", string.Empty, "invalid_value");
         }
