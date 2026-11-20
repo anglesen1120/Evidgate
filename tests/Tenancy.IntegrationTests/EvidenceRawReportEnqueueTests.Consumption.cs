@@ -258,6 +258,12 @@ public sealed partial class EvidenceRawReportEnqueueTests
         var runId = await SeedRunAsync(world, ProducerKind);
         var artifactId = await MintAndUploadAsync(world, runId, "raw_report", XmlType, MappableUploadBody);
         await RunStateWalk.MoveAsync(_fixture, world.Database, runId, state);
+        if (string.Equals(state, "complete", StringComparison.Ordinal))
+        {
+            // A complete run admits a report only inside its window, so the terminal state this case names is the one
+            // its spent window leaves: zero minutes, read by a later transaction that is past the completion instant.
+            await SpendLateWindowAsync(world, runId);
+        }
 
         await CompleteSucceedsAsync(world, artifactId);
         (await OutboxCountAsync(world, ReportParseTask, artifactId)).ShouldBe(1);
