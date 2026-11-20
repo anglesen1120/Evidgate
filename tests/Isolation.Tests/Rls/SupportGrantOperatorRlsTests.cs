@@ -272,7 +272,7 @@ public sealed partial class SupportGrantOperatorRlsTests
     {
         var database = await WorldAsync();
         var rows = await _fixture.ColumnAsync<string>(database, """
-            select p.proname || '|' || pg_catalog.pg_get_userbyid(p.proowner) || '|' || p.prosecdef || '|' || p.provolatile
+            select p.proname || '|' || pg_catalog.pg_get_userbyid(p.proowner) || '|' || p.prosecdef || '|' || p.provolatile::text
                    || '|' || coalesce(array_to_string(p.proconfig, ','), '')
                    || '|' || (select count(*) from aclexplode(p.proacl) a where a.grantee = 0)
                    || '|' || has_function_privilege('evidgate_operator', p.oid, 'execute')

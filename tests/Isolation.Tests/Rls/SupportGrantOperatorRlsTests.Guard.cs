@@ -16,7 +16,7 @@ public sealed partial class SupportGrantOperatorRlsTests
     [InlineData("revoked_edited", "update public.support_grant set reason = 'again' where id = '{revoked}'")]
     [InlineData("expired_requested_approved", "update public.support_grant set approved_at = now(), approved_by = '{approver}' where id = '{expiredRequested}'")]
     [InlineData("scopes_changed", "update public.support_grant set scopes = '{case:*}' where id = '{requested}'")]
-    [InlineData("projects_changed", "update public.support_grant set project_ids = '{}' where id = '{requested}'")]
+    [InlineData("projects_changed", "update public.support_grant set project_ids = array[gen_random_uuid()] where id = '{requested}'")]
     [InlineData("expiry_extended", "update public.support_grant set expires_at = expires_at + interval '1 day' where id = '{requested}'")]
     [InlineData("operator_changed", "update public.support_grant set operator_user_id = '{other}' where id = '{requested}'")]
     [InlineData("org_changed", "update public.support_grant set org_id = '{orgB}' where id = '{requested}'")]

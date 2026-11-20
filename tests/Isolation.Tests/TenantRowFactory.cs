@@ -541,9 +541,10 @@ internal sealed class TenantRowFactory
             values[column.Name] = Value(table, column, isOwnId ? forcedId : null);
         }
 
-        // The OAuth state's primary key is its digest, so its defaulted surrogate id is not generated above, yet
-        // the suite addresses every tenant row by its `id`.
-        if (string.Equals(table, "public.github_install_state", StringComparison.Ordinal)
+        // The OAuth state's primary key is its digest, and a support grant's id has a database default, so
+        // neither id is generated above, yet the suite addresses every tenant row by its `id`.
+        if ((string.Equals(table, "public.github_install_state", StringComparison.Ordinal)
+                || string.Equals(table, "public.support_grant", StringComparison.Ordinal))
             && !values.ContainsKey(TenantFkScan.TenantKeyColumn))
         {
             values[TenantFkScan.TenantKeyColumn] = forcedId ?? Guid.CreateVersion7();
