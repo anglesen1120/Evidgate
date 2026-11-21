@@ -386,7 +386,9 @@ public sealed partial class DogfoodReportTests
     public async Task Dogfood_Collect_MachineNameInTestcase_IsRefused()
     {
         var hostname = System.Net.Dns.GetHostName();
-        if (hostname.Length == 0 || hostname.Equals("host", StringComparison.OrdinalIgnoreCase)) { return; }
+        // The collector never refuses "host" or "localhost", so a runner named that has nothing to assert.
+        var trimmed = hostname.Trim();
+        if (trimmed.Length == 0 || trimmed.Equals("host", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("localhost", StringComparison.OrdinalIgnoreCase)) { return; }
         await AssertResidualRefused(hostname, inText: false);
     }
 
@@ -400,7 +402,10 @@ public sealed partial class DogfoodReportTests
 
     private static async Task AssertResidualRefused(string value, bool inText)
     {
-        const string Control = "<testsuite><testcase name=\"safe\"><system-out>safe</system-out></testcase></testsuite>";
+        // The name case keeps system-out out of the control so a host named "out" cannot refuse it.
+        var Control = inText
+            ? "<testsuite><testcase name=\"safe\"><system-out>safe</system-out></testcase></testsuite>"
+            : "<testsuite><testcase name=\"safe\"/></testsuite>";
         await WithReports(Control, async (source, output) =>
         {
             var (exit, stderr) = await RunCollect(source, output);
@@ -462,7 +467,8 @@ public sealed partial class DogfoodReportTests
             var stdout = await process.StandardOutput.ReadToEndAsync(timeout.Token);
             await process.WaitForExitAsync(timeout.Token);
             var error = await stderr;
-            if (forbiddenValue is not null)
+            // The diagnostic itself names "xunit" and "refusing", so a very short value cannot be searched for.
+            if (forbiddenValue is not null && forbiddenValue.Length >= 4)
             {
                 stdout.ShouldNotContain(forbiddenValue);
                 error.ShouldNotContain(forbiddenValue);

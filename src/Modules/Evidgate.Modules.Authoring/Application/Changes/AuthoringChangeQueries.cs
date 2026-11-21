@@ -27,6 +27,7 @@ namespace Evidgate.Modules.Authoring.Application.Changes;
 /// <param name="Ids">An optional selection of 1..200 change ids; no other filter may accompany it.</param>
 /// <param name="Cursor">The opaque cursor of the next page, or null for the first.</param>
 /// <param name="Limit">The page size the route bounded.</param>
+/// <param name="RequestError">The first edge validation error, answered after authorization.</param>
 internal sealed record ListAuthoringChangesQuery(
     Guid ProjectId,
     string? State,
@@ -34,7 +35,8 @@ internal sealed record ListAuthoringChangesQuery(
     Guid? TargetId,
     IReadOnlyList<Guid>? Ids,
     string? Cursor,
-    int Limit) : IQuery<Result<AuthoringChangePageResponse>>;
+    int Limit,
+    Error? RequestError = null) : IQuery<Result<AuthoringChangePageResponse>>;
 
 /// <summary>
 /// Handler of <see cref="ListAuthoringChangesQuery"/>: one keyset statement on the shared-database read scope. The
@@ -67,6 +69,11 @@ internal sealed class ListAuthoringChangesQueryHandler(
         ListAuthoringChangesQuery query,
         CancellationToken cancellationToken)
     {
+        if (query.RequestError is { } requestError)
+        {
+            return Result.Failure<AuthoringChangePageResponse>(requestError);
+        }
+
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(ListAuthoringChangesQuery));
 
         ArgumentNullException.ThrowIfNull(query);
