@@ -52,22 +52,10 @@ internal sealed class ListSuitesQueryHandler(
         var orgId = scopes.Require().OrgId;
 
         // A filter is part of the closed taxonomy, so an unknown value is a 422 naming the member, never an empty page.
-        var platform = query.Platform is null ? null : Taxonomy.Canonical(query.Platform, Taxonomy.Platforms);
-        if (query.Platform is not null && platform is null)
+        if (CatalogPreconditions.TaxonomyFilters(query.Platform, query.Level, query.Purpose, out var platform, out var level, out var purpose)
+            is { } filterError)
         {
-            return Result.Failure<SuiteListResponse>(SuiteErrors.Invalid("platform must be one of web, api, unit or mobile", [new ErrorDetail("platform", "invalid_value")]));
-        }
-
-        var level = query.Level is null ? null : Taxonomy.Canonical(query.Level, Taxonomy.Levels);
-        if (query.Level is not null && level is null)
-        {
-            return Result.Failure<SuiteListResponse>(SuiteErrors.Invalid("level must be one of unit, integration, e2e or smoke", [new ErrorDetail("level", "invalid_value")]));
-        }
-
-        var purpose = query.Purpose is null ? null : Taxonomy.Canonical(query.Purpose, Taxonomy.Purposes);
-        if (query.Purpose is not null && purpose is null)
-        {
-            return Result.Failure<SuiteListResponse>(SuiteErrors.Invalid("purpose must be one of regression, smoke, release_gate or exploratory", [new ErrorDetail("purpose", "invalid_value")]));
+            return Result.Failure<SuiteListResponse>(filterError);
         }
 
         IReadOnlyList<SuiteDto> rows;

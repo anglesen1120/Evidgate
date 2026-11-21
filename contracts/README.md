@@ -150,8 +150,9 @@ routes. A body that is not JSON (400), over 256 KiB (413) or carries unstorable 
 the shared reader before the permission check, so those refusals are visible to an unpermitted caller.
 
 The template registry (03.5.1) is read-only: `GET /v1/templates` is a keyset page on `(created_at, id)`
-with an optional `kind` filter, and `GET /v1/templates/{t}` answers one row with its `conformance_rules`.
-Both require `case:read`. Active built-ins (`org_id IS NULL`) are visible to every member role, plus the
+with optional `kind`, `platform`, `level` and `purpose` filters (03.1.4 AC3: a value outside the closed
+catalogue is `422 request_invalid` naming the member), and `GET /v1/templates/{t}` answers one row with its
+`conformance_rules`. Both require `case:read`. Active built-ins (`org_id IS NULL`) are visible to every member role, plus the
 caller's own org rows; an inactive row, another org's row and an unknown id all answer the same `404 not_found`.
 
 `ETag` is the quoted draft `version`. `PATCH` requires both `If-Match` and `Idempotency-Key`: a missing
