@@ -44,7 +44,7 @@ public sealed class ApiHostRequestLogFloorTests
     public async Task RealApiHost_WithNoLoweringKey_StartsTheNoticeWithoutALine()
     {
         var sink = new CapturingLoggerProvider();
-        await using var app = BuildApi(sink, []);
+        await using var app = BuildApi(sink, [], isolate: true);
 
         await StartNoticeAsync(app);
 
@@ -52,7 +52,53 @@ public sealed class ApiHostRequestLogFloorTests
     }
 
     [Fact]
-    public async Task RealApiHost_FloorRulesAreTheLastRules_ForEveryProviderAndProviderLess()
+    public async Task RealApiHost_NoLoweringKey_IgnoresAnAmbientLoweringKey()
+    {
+        var sink = new CapturingLoggerProvider();
+        await using var app = BuildApi(sink, [], isolate: true, ambient: new() { [LoweringKey] = "Trace", ["Logging:LogLevel:Microsoft.AspNetCore"] = "Debug" });
+
+        await StartNoticeAsync(app);
+
+        sink.Entries.Where(entry => entry.Category == NoticeCategory).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task RealApiHost_NoticeSurvivesDefaultErrorAndANoneRuleOnEvidgate()
+    {
+        var sink = new CapturingLoggerProvider();
+        var logging = new Dictionary<string, string?>
+        {
+            [LoweringKey] = "Trace",
+            ["Logging:LogLevel:Default"] = "Error",
+            ["Logging:LogLevel:Evidgate"] = "None",
+            ["Logging:" + typeof(CapturingLoggerProvider).FullName + ":LogLevel:Default"] = "Error",
+        };
+        await using var app = BuildApi(sink, logging);
+
+        await StartNoticeAsync(app);
+
+        var notice = sink.Entries.Where(entry => entry.Category == NoticeCategory).ToList();
+        notice.ShouldHaveSingleItem().Level.ShouldBe(LogLevel.Warning);
+    }
+
+    [Fact]
+    public async Task RealApiHost_LaterRuleAfterTheFloor_RefusesToStart()
+    {
+        var sink = new CapturingLoggerProvider();
+        await using var app = BuildApi(
+            sink,
+            [],
+            services => services.PostConfigure<LoggerFilterOptions>(options =>
+                options.Rules.Add(new LoggerFilterRule(null, Category + "*" + Category, LogLevel.Trace, null))));
+
+        var failure = await Should.ThrowAsync<InvalidOperationException>(() => StartNoticeAsync(app));
+
+        failure.Message.ShouldContain("after the request-log floor");
+        failure.Message.ShouldContain(Category);
+    }
+
+    [Fact]
+    public async Task RealApiHost_FloorRulesAreTheLastRules_ForTheConfiguredProviderAndProviderLess()
     {
         var sink = new CapturingLoggerProvider();
         var providerKey = "Logging:" + typeof(CapturingLoggerProvider).FullName + ":LogLevel:Default";
@@ -60,12 +106,17 @@ public sealed class ApiHostRequestLogFloorTests
 
         var rules = app.Services.GetRequiredService<IOptionsMonitor<LoggerFilterOptions>>().CurrentValue.Rules;
 
-        var floor = rules.Where(rule => rule.CategoryName == FloorPattern).ToList();
+        var noticePattern = NoticeCategory + "*" + NoticeCategory;
+        var floor = rules.Where(rule => rule.CategoryName == FloorPattern || rule.CategoryName == noticePattern).ToList();
         floor.ShouldNotBeEmpty("the floor is registered by the host builder");
         floor.ShouldAllBe(rule => rule.LogLevel == LogLevel.Warning);
         rules.Skip(rules.Count - floor.Count).ShouldBe(floor, "no rule follows the floor rules");
-        floor.Select(rule => rule.ProviderName).ShouldContain((string?)null);
-        floor.Select(rule => rule.ProviderName).ShouldContain(typeof(CapturingLoggerProvider).FullName);
+        foreach (var pattern in new[] { FloorPattern, noticePattern })
+        {
+            var providers = floor.Where(rule => rule.CategoryName == pattern).Select(rule => rule.ProviderName).ToList();
+            providers.ShouldContain((string?)null);
+            providers.ShouldContain(typeof(CapturingLoggerProvider).FullName);
+        }
     }
 
     [Fact]
@@ -83,12 +134,29 @@ public sealed class ApiHostRequestLogFloorTests
         sink.Entries.Where(entry => entry.Category == Category).Select(entry => entry.Message).ShouldBe(["warn"]);
     }
 
-    private static WebApplication BuildApi(CapturingLoggerProvider sink, Dictionary<string, string?> logging)
+    private static WebApplication BuildApi(
+        CapturingLoggerProvider sink,
+        Dictionary<string, string?> logging,
+        Action<IServiceCollection>? configure = null,
+        bool isolate = false,
+        Dictionary<string, string?>? ambient = null)
     {
         var builder = ApiHost.CreateBuilder([]);
+        if (ambient is not null)
+        {
+            builder.Configuration.AddInMemoryCollection(ambient);
+        }
+
+        if (isolate)
+        {
+            // Whatever level keys the environment or appsettings carry are raised to Warning, so none can lower the category.
+            var levelKeys = builder.Configuration.AsEnumerable().Where(pair => pair.Value is not null && pair.Key.StartsWith("Logging:", StringComparison.OrdinalIgnoreCase) && pair.Key.Contains(":LogLevel:", StringComparison.OrdinalIgnoreCase)).Select(pair => pair.Key).ToList();
+            builder.Configuration.AddInMemoryCollection(levelKeys.ToDictionary(key => key, _ => (string?)"Warning", StringComparer.OrdinalIgnoreCase));
+        }
+
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
         {
-            ["EVIDGATE:Database:ConnectionString"] = "Host=127.0.0.1;Port=1;Username=evidgate_app;Password=x;Database=evidgate;Timeout=2",
+            ["EVIDGATE:Database:ConnectionString"] = "Host=127.0.0.1;Port=1;Username=evidgate_app;Database=evidgate;Timeout=2",
             ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
             ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
             ["EVIDGATE:Ci:Pepper"] = Convert.ToBase64String(Enumerable.Repeat((byte)1, 32).ToArray()),
@@ -96,6 +164,7 @@ public sealed class ApiHostRequestLogFloorTests
         });
         builder.Configuration.AddInMemoryCollection(logging);
         builder.Logging.AddProvider(sink);
+        configure?.Invoke(builder.Services);
 
         return builder.Build();
     }
