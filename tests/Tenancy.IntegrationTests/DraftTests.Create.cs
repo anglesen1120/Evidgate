@@ -314,7 +314,9 @@ public sealed partial class DraftTests
 
         foreach (var file in files)
         {
-            var path = Math.Min(remaining, 512);
+            // The first four characters carry the index, which is what keeps the paths distinct: widening them would
+            // hand the row duplicate paths and turn the expected 201 into a `duplicate` 422.
+            var path = Math.Min(remaining, 508);
             if (path > 0)
             {
                 file["path"] = Widen(file["path"]!.GetValue<string>(), path);
@@ -330,6 +332,8 @@ public sealed partial class DraftTests
         }
 
         remaining.ShouldBe(0, "the shape has room for the requested widening");
+        files.Select(file => file["path"]!.GetValue<string>()).Distinct(StringComparer.Ordinal).Count()
+            .ShouldBe(files.Length, "the widened fixture keeps every path distinct");
         return Content(files);
     }
 
