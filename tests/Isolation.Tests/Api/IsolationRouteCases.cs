@@ -1047,6 +1047,9 @@ public static partial class IsolationRouteCases
         ArtifactReadCase("GET", "/v1/artifacts/{a}", a => new(HttpMethod.Get, $"/v1/artifacts/{a}")),
         ArtifactReadCase("GET", "/v1/artifacts/{a}/download-url", a => new(HttpMethod.Get, $"/v1/artifacts/{a}/download-url")),
 
+        // 03.6.1: two project-scoped routes and the two un-nested draft routes, which resolve the draft's own project
+        // before the permission is checked.
+        .. DraftCases(),
     ];
 
     // ---------------------------------------------------------------------------------------------------- helpers

@@ -412,7 +412,7 @@
       "action": "write",
       "description": "Create and edit authoring drafts (V2, 03.6.1). A draft is never gate-eligible.",
       "sensitive": false,
-      "reserved": true,
+      "reserved": false,
       "tenant_assignable": true,
       "admin": false
     },
