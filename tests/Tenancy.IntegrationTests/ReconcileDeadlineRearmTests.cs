@@ -10,6 +10,7 @@
 // queued, or one not yet dispatched — because those must keep the sweep off the run.
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.Modules.Orchestrator.Contracts;
+using Evidgate.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
@@ -75,7 +76,7 @@ public sealed partial class ReconcileDeadlineRearmTests
     public async Task Sweep_EveryAttemptDeadLettered_QueuesNothingMore()
     {
         var clock = AlignedClock();
-        var sink = new IngestLogSink();
+        var sink = new CapturingLoggerProvider();
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         await using var world = await StartAsync(clock, database, sink);
         var runId = world.RunId;
@@ -106,7 +107,7 @@ public sealed partial class ReconcileDeadlineRearmTests
             "collecting",
             customMessage: "the sweep queues attempts, it never decides a run itself");
 
-        var warnings = sink.Lines
+        var warnings = sink.Entries.Select(entry => entry.Message)
             .Where(line => line.Contains("overdue run(s) alone", StringComparison.Ordinal))
             .ToList();
         warnings.ShouldHaveSingleItem().ShouldContain(
@@ -164,7 +165,7 @@ public sealed partial class ReconcileDeadlineRearmTests
     public async Task Sweep_AttemptThatFinishedDone_IsReArmedUpToTheBound()
     {
         var clock = AlignedClock();
-        var sink = new IngestLogSink();
+        var sink = new CapturingLoggerProvider();
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         await using var world = await StartAsync(clock, database, sink);
         var runId = world.RunId;
@@ -196,7 +197,7 @@ public sealed partial class ReconcileDeadlineRearmTests
         (await DeadlineRowsAsync(world, runId)).ShouldBe(
             RunReconcileContract.DeadlineMaxAttempts,
             customMessage: "done attempts are bounded too: the run stops at the attempt bound, not at the first done");
-        sink.Lines.ShouldContain(
+        sink.Entries.Select(entry => entry.Message).ShouldContain(
             line => line.Contains("overdue run(s) alone", StringComparison.Ordinal),
             customMessage: "the fire names the run that spent its attempts without a verdict");
     }
@@ -232,7 +233,7 @@ public sealed partial class ReconcileDeadlineRearmTests
     public async Task Sweep_MixedSpentAttempts_StopAtTheBound()
     {
         var clock = AlignedClock();
-        var sink = new IngestLogSink();
+        var sink = new CapturingLoggerProvider();
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         await using var world = await StartAsync(clock, database, sink);
         var runId = world.RunId;
@@ -268,7 +269,7 @@ public sealed partial class ReconcileDeadlineRearmTests
         (await StateAsync(world, runId)).ShouldBe(
             "collecting",
             customMessage: "the sweep queues attempts, it never decides a run itself");
-        sink.Lines.ShouldContain(
+        sink.Entries.Select(entry => entry.Message).ShouldContain(
             line => line.Contains("overdue run(s) alone", StringComparison.Ordinal),
             customMessage: "one warning names the run that spent its attempts");
     }

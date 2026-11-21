@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+using Evidgate.Testing;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -31,9 +31,9 @@ public sealed class EvidgateApiFactory : WebApplicationFactory<Program>
     /// Configuration a test suite needs on the booting host (e.g. a GitHub App's id and key); applied last, so it wins
     /// over the settings this factory writes for every host.
     /// </param>
-    public EvidgateApiFactory(
+    internal EvidgateApiFactory(
         string? connectionString,
-        CaptureLoggerProvider? capture = null,
+        CapturingLoggerProvider? capture = null,
         Action<IServiceCollection>? configureServices = null,
         int? managementPort = null,
         IReadOnlyDictionary<string, string?>? extraConfiguration = null)
@@ -66,7 +66,7 @@ public sealed class EvidgateApiFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>Provider the tests read; added inside the app so redaction proves itself.</summary>
-    public CaptureLoggerProvider? Capture { get; }
+    internal CapturingLoggerProvider? Capture { get; }
 
     /// <inheritdoc />
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -128,62 +128,6 @@ public sealed class EvidgateApiFactory : WebApplicationFactory<Program>
         });
     }
 }
-
-/// <summary>Simple structured-line log capture for the redaction assertions.</summary>
-public sealed class CaptureLoggerProvider : ILoggerProvider
-{
-    private readonly ConcurrentQueue<CapturedLog> _logs = new();
-
-    /// <summary>Captured lines, in order.</summary>
-    public IReadOnlyCollection<CapturedLog> Logs => _logs.ToArray();
-
-    /// <inheritdoc />
-    public ILogger CreateLogger(string categoryName) => new CaptureLogger(categoryName, _logs);
-
-    /// <inheritdoc />
-    public void Dispose()
-    {
-    }
-
-    private sealed class CaptureLogger : ILogger
-    {
-        private readonly string _categoryName;
-        private readonly ConcurrentQueue<CapturedLog> _logs;
-
-        public CaptureLogger(string categoryName, ConcurrentQueue<CapturedLog> logs)
-        {
-            _categoryName = categoryName;
-            _logs = logs;
-        }
-
-        /// <inheritdoc />
-        public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull
-            => null;
-
-        /// <inheritdoc />
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        /// <inheritdoc />
-        public void Log<TState>(
-            LogLevel logLevel,
-            EventId eventId,
-            TState state,
-            Exception? exception,
-            Func<TState, Exception?, string> formatter)
-        {
-            var pairs = state as IReadOnlyList<KeyValuePair<string, object?>>;
-            var text = pairs is null
-                ? formatter(state, exception)
-                : $"{formatter(state, exception)} | {string.Join(" | ", pairs.Select(pair => $"{pair.Key}={pair.Value}"))}";
-
-            _logs.Enqueue(new CapturedLog(_categoryName, logLevel, eventId, text));
-        }
-    }
-}
-
-/// <summary>One captured log line.</summary>
-public sealed record CapturedLog(string Category, LogLevel Level, EventId EventId, string Text);
 
 /// <summary>Reports the management listener's local port for a request that says it arrived there.</summary>
 internal sealed class ListenerPortStartupFilter : IStartupFilter

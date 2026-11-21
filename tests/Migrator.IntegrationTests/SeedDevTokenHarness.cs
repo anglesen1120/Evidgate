@@ -3,7 +3,6 @@ using System.Security.Cryptography;
 using System.Text;
 using Evidgate.BuildingBlocks.SharedKernel.Secrets;
 using Evidgate.Migrator;
-using Microsoft.Extensions.Logging;
 using Npgsql;
 using Shouldly;
 
@@ -154,36 +153,6 @@ internal sealed class SeedDevTokenHarness(PostgresMigratorFixture fixture)
     }
 
     internal sealed record RunResult(int ExitCode, string Output, string Error);
-
-    /// <summary>Captures every formatted log line, so a test can prove what does and does not reach a logger.</summary>
-    internal sealed class CapturingLoggerProvider : ILoggerProvider
-    {
-        private readonly List<string> _messages = [];
-
-        internal IReadOnlyList<string> Messages => _messages;
-
-        public ILogger CreateLogger(string categoryName) => new CapturingLogger(_messages);
-
-        public void Dispose()
-        {
-        }
-
-        private sealed class CapturingLogger(List<string> messages) : ILogger
-        {
-            public IDisposable? BeginScope<TState>(TState state)
-                where TState : notnull => null;
-
-            public bool IsEnabled(LogLevel logLevel) => true;
-
-            public void Log<TState>(
-                LogLevel logLevel,
-                EventId eventId,
-                TState state,
-                Exception? exception,
-                Func<TState, Exception?, string> formatter) =>
-                messages.Add(formatter(state, exception) + (exception is null ? string.Empty : " " + exception));
-        }
-    }
 
     /// <summary>Fails on the one-time secret line and echoes that line, and the pepper, into the exception.</summary>
     internal sealed class SecretEchoingWriter(string pepper) : StringWriter(CultureInfo.InvariantCulture)

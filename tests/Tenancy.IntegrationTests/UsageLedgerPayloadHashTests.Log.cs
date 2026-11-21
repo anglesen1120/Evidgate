@@ -106,8 +106,7 @@ public sealed partial class UsageLedgerPayloadHashTests
     }
 
     /// <summary>
-    /// A log sink that keeps the level as well as the rendered line, so "an Error was logged" is assertable, not only
-    /// "something was logged". The same technique as <see cref="IngestLogSink"/>; the level is the one addition.
+    /// Keeps the level as well as the rendered line, so "an Error was logged" is assertable, not only "something was logged".
     /// </summary>
     private sealed class ConflictLogSink : ILoggerProvider
     {

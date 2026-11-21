@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Observability.Redaction;
+using Evidgate.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -256,67 +257,19 @@ public sealed partial class LogRedactionPipelineTests
         }
     }
 
-    /// <summary>Captures the scope state a provider receives, so scope redaction is proven where it happens.</summary>
-    private sealed class ScopeCapturingProvider : ILoggerProvider
-    {
-        private readonly ConcurrentQueue<string> _scopes = new();
-
-        public string Text() => string.Join("\n", _scopes);
-
-        public ILogger CreateLogger(string categoryName) => new ScopeLogger(categoryName, _scopes);
-
-        public void Dispose()
-        {
-        }
-
-        private sealed class ScopeLogger(string category, ConcurrentQueue<string> scopes) : ILogger
-        {
-            public IDisposable? BeginScope<TState>(TState state)
-                where TState : notnull
-            {
-                if (!string.Equals(category, LogRedactionPipelineTests.ProbeCategory, StringComparison.Ordinal))
-                {
-                    return null;
-                }
-
-                if (state is IEnumerable<KeyValuePair<string, object?>> pairs)
-                {
-                    var pairText = string.Join(", ", pairs.Select(pair => $"{pair.Key}={pair.Value}"));
-                    scopes.Enqueue(pairText);
-                }
-
-                scopes.Enqueue(state.ToString() ?? string.Empty);
-
-                return null;
-            }
-
-            public bool IsEnabled(LogLevel logLevel) => true;
-
-            public void Log<TState>(
-                LogLevel logLevel,
-                EventId eventId,
-                TState state,
-                Exception? exception,
-                Func<TState, Exception?, string> formatter)
-            {
-                // The scope capture is the only interest of this provider.
-            }
-        }
-    }
-
     /// <summary>The started host, the capture it feeds, and the logger factory the deployment built.</summary>
     private sealed class LogPipelineHarness : IAsyncDisposable
     {
         private readonly IHost _host;
         private readonly ILoggerFactory _loggerFactory;
         private readonly CapturingLogProcessor _processor;
-        private readonly ScopeCapturingProvider _scopeProvider;
+        private readonly CapturingLoggerProvider _scopeProvider;
 
         private LogPipelineHarness(
             IHost host,
             ILoggerFactory loggerFactory,
             CapturingLogProcessor processor,
-            ScopeCapturingProvider scopeProvider)
+            CapturingLoggerProvider scopeProvider)
         {
             _host = host;
             _loggerFactory = loggerFactory;
@@ -328,7 +281,12 @@ public sealed partial class LogRedactionPipelineTests
 
         public string AllText() => string.Join("\n", Records.Select(record => record.Text));
 
-        public string ScopeText() => _scopeProvider.Text();
+        /// <summary>Every scope a probe entry carries, flattened the way a sink would see it.</summary>
+        public string ScopeText() => string.Join(
+            "\n",
+            _scopeProvider.Entries
+                .Where(entry => string.Equals(entry.Category, LogRedactionPipelineTests.ProbeCategory, StringComparison.Ordinal))
+                .SelectMany(entry => entry.Scopes));
 
         public ILogger CreateLogger() => _loggerFactory.CreateLogger(LogRedactionPipelineTests.ProbeCategory);
 
@@ -339,7 +297,7 @@ public sealed partial class LogRedactionPipelineTests
             builder.Configuration.AddInMemoryCollection(
                 new Dictionary<string, string?> { ["EVIDGATE:Telemetry:SampleRatio"] = "1" });
 
-            var scopeProvider = new ScopeCapturingProvider();
+            var scopeProvider = new CapturingLoggerProvider();
             builder.Logging.AddProvider(scopeProvider);
 
             builder.AddEvidgateTelemetry("evidgate-test");
