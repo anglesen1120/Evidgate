@@ -1,5 +1,4 @@
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Shouldly;
 using Xunit;
@@ -47,72 +46,94 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
     [Fact]
     public void AuthoringWriteDelegates_AllRegisteredWrites_GuardFirst()
     {
-        var files = SolutionLayout.ProductionSources()
-            .Where(file => file.Path.StartsWith(Endpoints, StringComparison.Ordinal))
-            .ToArray();
+        var universe = SolutionLayout.ProductionSources().ToArray();
+        var files = AuthoringRouteFiles(universe);
 
-        files.Length.ShouldBeGreaterThanOrEqualTo(8, "the scan must read the Authoring endpoint files");
+        files.Count(file => file.Path.StartsWith(Endpoints, StringComparison.Ordinal))
+            .ShouldBeGreaterThanOrEqualTo(8, "the scan must read the Authoring endpoint files");
 
         var found = new List<string>();
-        Scan(files, found).ShouldBeEmpty();
+        Scan(files, found, null, universe).ShouldBeEmpty();
         found.Order(StringComparer.Ordinal).ShouldBe(Expected.Order(StringComparer.Ordinal));
     }
 
     private static string[] Scan(
         (string Path, string Text)[] files,
         List<string> found,
-        (string TypeMethod, string Reason)[]? exemptions = null)
+        (string TypeMethod, string Reason)[]? exemptions = null,
+        (string Path, string Text)[]? universe = null)
     {
         exemptions ??= Exemptions;
-        var errors = new List<string>();
-        foreach (var (path, text) in files)
+        var state = new ScanState(files, universe ?? files);
+        while (state.Queue.Count > 0)
         {
-            var token = TestContext.Current.CancellationToken;
-            var root = CSharpSyntaxTree.ParseText(text, cancellationToken: token).GetRoot(token);
-            var conditional = ConditionalSourceText.FirstLine(root);
-            if (conditional > 0)
-            {
-                errors.Add($"{path}:{conditional}: conditionally compiled text in an endpoint file hides code from the pin");
-            }
-
-            foreach (var call in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
-            {
-                var map = CallName(call);
-                if (map.Length == 0)
-                {
-                    // An invocation whose callee the scanner cannot name is refused rather than assumed to be a read
-                    // route, so a conditional-access or cast registration cannot carry an unguarded write past it.
-                    if (System.Text.RegularExpressions.Regex.IsMatch(call.ToString(), @"\bMap\w*"))
-                    {
-                        errors.Add($"{path}:{Line(call)}: unrecognized Map call shape is refused rather than assumed to be a read route");
-                    }
-
-                    continue;
-                }
-
-                if (!map.StartsWith("Map", StringComparison.Ordinal)
-                    || ReadMaps.Contains(map, StringComparer.Ordinal)
-                    || map.EndsWith("Endpoints", StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                if (map is not ("MapPost" or "MapPut" or "MapPatch" or "MapDelete"))
-                {
-                    errors.Add($"{path}:{Line(call)}: unsupported write-capable {map} call");
-                    continue;
-                }
-
-                ScanWrite(call, path, found, exemptions, errors);
-            }
+            ScanFile(state.Queue.Dequeue(), found, exemptions, state);
         }
 
         foreach (var (name, _) in exemptions.Where(exemption => !found.Contains(exemption.TypeMethod, StringComparer.Ordinal)))
         {
-            errors.Add($"{Endpoints}:1: stale exemption {name} is no longer a write delegate");
+            state.Errors.Add($"{Endpoints}:1: stale exemption {name} is no longer a write delegate");
         }
 
-        return errors.ToArray();
+        return state.Errors.ToArray();
+    }
+
+    private static void ScanFile(
+        (string Path, string Text) file,
+        List<string> found,
+        (string TypeMethod, string Reason)[] exemptions,
+        ScanState state)
+    {
+        var (path, text) = file;
+        var errors = state.Errors;
+        var root = Parse(text);
+        var conditional = ConditionalSourceText.FirstLine(root);
+        if (conditional > 0)
+        {
+            errors.Add($"{path}:{conditional}: conditionally compiled text in an endpoint file hides code from the pin");
+        }
+
+        foreach (var call in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            var map = CallName(call);
+            if (map.Length == 0)
+            {
+                errors.AddRange(UnnamedCallErrors(call, path));
+                continue;
+            }
+
+            if (FilterCalls.Contains(map, StringComparer.Ordinal))
+            {
+                errors.Add($"{path}:{Line(call)}: {map} on an authoring route tree runs before the handler guard");
+                continue;
+            }
+
+            if (map == "MapGroup" || IsComposer(map))
+            {
+                errors.AddRange(ChainErrors(call, path));
+            }
+
+            if (IsComposer(map))
+            {
+                Follow(call, map, path, state);
+            }
+
+            if (!map.StartsWith("Map", StringComparison.Ordinal)
+                || ReadMaps.Contains(map, StringComparer.Ordinal)
+                || map.EndsWith("Endpoints", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (map is not ("MapPost" or "MapPut" or "MapPatch" or "MapDelete"))
+            {
+                errors.Add($"{path}:{Line(call)}: unsupported write-capable {map} call");
+                continue;
+            }
+
+            errors.AddRange(ChainErrors(call, path));
+            ScanWrite(call, path, found, exemptions, errors);
+        }
     }
 
     private static void ScanWrite(
@@ -141,6 +162,7 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         var method = methods[0];
         var name = $"{type.Identifier.ValueText}.{method.Identifier.ValueText}";
         found.Add(name);
+        errors.AddRange(ParameterErrors(method, path, name));
         var guarded = GuardFirst(method);
         var exemption = exemptions.Where(candidate => candidate.TypeMethod == name).ToArray();
         if (exemption.Length != 0)

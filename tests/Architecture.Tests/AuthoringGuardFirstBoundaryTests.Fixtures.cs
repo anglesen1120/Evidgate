@@ -230,10 +230,13 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
     {
         var found = new List<string>();
 
-        Scan([Synthetic(
+        var route = Synthetic(
             Register(method: "MapGet", handler: "Get"),
             "private static void Compose(RouteGroupBuilder authoring) => AuthoringNodeEndpoints.MapAuthoringNodeEndpoints(authoring);",
-            Handler("return Task.CompletedTask;", "Get"))], found).ShouldBeEmpty();
+            Handler("return Task.CompletedTask;", "Get"));
+        var declared = (Endpoints + "AuthoringNodeEndpoints.cs", "namespace N;\nstatic class AuthoringNodeEndpoints\n{\ninternal static void MapAuthoringNodeEndpoints(RouteGroupBuilder authoring) { }\n}\n");
+
+        Scan([route], found, null, [route, declared]).ShouldBeEmpty();
         found.ShouldBeEmpty("a read delegate is not a write delegate");
     }
 
