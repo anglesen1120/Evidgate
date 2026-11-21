@@ -141,11 +141,11 @@ public sealed class RateLimitGateSeamBoundaryTests
     [InlineData("// #if NET10_0\n// RateLimitGate.AcquireAsync(ctx, 0, Admit, \"m\", token);")]
     [InlineData("var x = 1;")]
     [InlineData("#pragma warning disable CS0219\nvar x = 1;\n#pragma warning restore CS0219")]
-    public void Scan_CommentedOutOrPlainText_RaisesNoConditionalFinding(string statement)
+    public void Scan_CommentedOutOrPlainText_IsGreen(string statement)
     {
         var report = Scan([(OtherFile, Wrap(statement))], []);
 
-        report.Violations.ShouldNotContain(finding => finding.Contains("conditionally compiled text", StringComparison.Ordinal));
+        report.Violations.ShouldBeEmpty();
     }
 
     [Theory]
