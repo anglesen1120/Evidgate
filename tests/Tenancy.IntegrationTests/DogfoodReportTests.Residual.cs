@@ -139,7 +139,8 @@ public sealed partial class DogfoodReportTests
             {
                 var target = Path.Combine(outside, "keep.txt");
                 await File.WriteAllTextAsync(target, "outside", TestContext.Current.CancellationToken);
-                foreach (var name in new[] { "old.junit.xml", "manifest.json", ".x.tmp-1", "notes.txt" })
+                string[] stale = ["old.junit.xml", "manifest.json", ".x.tmp-1", "notes.txt"];
+                foreach (var name in stale)
                 {
                     await File.WriteAllTextAsync(Path.Combine(output, name), "old", TestContext.Current.CancellationToken);
                 }
@@ -230,7 +231,7 @@ public sealed partial class DogfoodReportTests
     {
         await WithReports(Report(FakeIdentifier), async (source, output) =>
         {
-            var names = new[] { "old.junit.xml", "manifest.json", ".old.tmp-1", "notes.txt" };
+            string[] names = ["old.junit.xml", "manifest.json", ".old.tmp-1", "notes.txt"];
             foreach (var name in names)
             {
                 await File.WriteAllTextAsync(Path.Combine(output, name), name, TestContext.Current.CancellationToken);
