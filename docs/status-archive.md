@@ -1697,6 +1697,12 @@ Closed by S648 (#1305, `c6c2e27f`): the gallery axe scan is split into per-parti
 
 Closed by S649 (#1304, `df589bf9`): the seven Authoring read handlers return the carried `RequestError` after the project gate (401, 403 permission, 403 `project_scope_mismatch`, then 422; `AuthoringReadGuardFirstTests.ReadRoutes_InvalidQuery_RefuseTheProjectScopeBeforeValidation`, both mutants red on LAN), and `ListManualCasesQueryHandler.Handle` plus `MapAuthoringManualCaseEndpoints` (and the checklist, versions and tree handlers) are split to 60 lines or fewer.
 
+## Moved from status-carried.md by S650 (2026-11-22)
+
+| Unrelated vitest 5 s timeouts under LAN load (S648) | The S648 LAN round 1 vitest run (load_max 31.08) was red on the cold first gallery test (fixed by #1305) and on four specs this lane did not touch: `app.routes.settings-shell.spec`, `onboarding.store.derivation.spec`, `hlm-dialog-footer.spec` and `retention.write-attempt.spec`, each a 5 s default-timeout failure; round 2 on the same web code (load_max 22.44) was green with 6468 tests. Not fixed: no test change, no timeout raise. | receiver: WAVE-GATE vitest, rerun the four specs at load before any change |
+
+Closed by S650 (#1308, `638239d3`): the four specs (settings-shell, onboarding.store.derivation, hlm-dialog-footer, retention.write-attempt) pass on the LAN at load_max 38.72 with no timeout change; the one remaining thin margin is carried in a new row.
+
 ## Moved from status-carried.md by S647 (2026-11-22)
 
 | Authoring pin residual bypass limits (S637) | `AuthoringGuardFirstBoundaryTests` does not catch: a convention applied through a stored builder variable, `FilterFactories` added via `Add` on a group parameter, route registration through helpers not named `Map*`, a handler overload in another partial-class part, a parameter type aliased to a Guid/HttpContext/IMediator/CancellationToken name, or the filters `ApiHost.cs:272` adds to the `MapAuthoringEndpoints()` result. None exists today. | receiver: Authoring lane, extend the pin before a route needs one of these |
