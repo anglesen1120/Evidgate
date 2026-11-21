@@ -37,6 +37,8 @@ public static class RequestLogFloor
     // The notice must outlive the operator's own filters, so it gets the same unbeatable shape for its category.
     internal static readonly string NoticePattern = typeof(RequestLogFloorNotice).FullName + "*" + typeof(RequestLogFloorNotice).FullName;
 
+    private static readonly string[] FloorPatterns = [FloorPattern, NoticePattern];
+
     // Marks the rules this class added, so a configured rule of the same shape is never mistaken for one.
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<LoggerFilterRule, object> Added = new();
 
@@ -58,7 +60,7 @@ public static class RequestLogFloor
                 }
             }
 
-            foreach (var pattern in new[] { FloorPattern, NoticePattern })
+            foreach (var pattern in FloorPatterns)
             {
                 var floor = new LoggerFilterRule(provider, pattern, LogLevel.Warning, null);
                 Added.Add(floor, floor);
@@ -98,7 +100,7 @@ public static class RequestLogFloor
         var providers = rules.Select(rule => rule.ProviderName).Distinct(StringComparer.Ordinal).Append(null).Distinct().ToList();
         foreach (var provider in providers)
         {
-            foreach (var pattern in new[] { FloorPattern, NoticePattern })
+            foreach (var pattern in FloorPatterns)
             {
                 if (!rules.Any(rule => rule.ProviderName == provider && rule.CategoryName == pattern && Added.TryGetValue(rule, out _)))
                 {

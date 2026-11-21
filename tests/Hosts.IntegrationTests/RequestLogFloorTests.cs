@@ -311,6 +311,30 @@ public sealed class RequestLogFloorTests
     }
 
     [Fact]
+    public void AssertFloorIsLast_DuplicateProviderRules_NeedOnePairAndPass()
+    {
+        var options = new LoggerFilterOptions();
+        options.Rules.Add(new LoggerFilterRule("p", null, LogLevel.Trace, null));
+        options.Rules.Add(new LoggerFilterRule("p", "Evidgate", LogLevel.Debug, null));
+        RequestLogFloor.Apply(options);
+
+        Should.NotThrow(() => RequestLogFloor.AssertFloorIsLast(options));
+    }
+
+    [Fact]
+    public void AssertFloorIsLast_ProviderNamesDifferingByCase_EachNeedTheirOwnPair()
+    {
+        var options = new LoggerFilterOptions();
+        options.Rules.Add(new LoggerFilterRule("p", null, LogLevel.Trace, null));
+        options.Rules.Add(new LoggerFilterRule("P", null, LogLevel.Trace, null));
+        RequestLogFloor.Apply(options);
+        Should.NotThrow(() => RequestLogFloor.AssertFloorIsLast(options));
+        options.Rules.Remove(options.Rules.Single(rule => rule.ProviderName == "P" && rule.CategoryName == Category + "*" + Category));
+
+        Should.Throw<InvalidOperationException>(() => RequestLogFloor.AssertFloorIsLast(options)).Message.ShouldContain("provider 'P'");
+    }
+
+    [Fact]
     public void AssertFloorIsLast_NoFloorRegistered_Throws()
     {
         Should.Throw<InvalidOperationException>(() => RequestLogFloor.AssertFloorIsLast(new LoggerFilterOptions())).Message.ShouldContain("not registered");

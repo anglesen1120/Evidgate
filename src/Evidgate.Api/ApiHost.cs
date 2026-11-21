@@ -202,7 +202,17 @@ public static partial class ApiHost
         ArgumentNullException.ThrowIfNull(builder);
 
         var app = builder.Build();
-        RequestLogFloor.AssertFloorIsLast(app.Services.GetRequiredService<IOptionsMonitor<LoggerFilterOptions>>().CurrentValue);
+        try
+        {
+            RequestLogFloor.AssertFloorIsLast(app.Services.GetRequiredService<IOptionsMonitor<LoggerFilterOptions>>().CurrentValue);
+        }
+        catch
+        {
+            // The refused host is never returned, so nobody else can release its providers and subscriptions.
+            ((IDisposable)app).Dispose();
+            throw;
+        }
+
         return app;
     }
 
