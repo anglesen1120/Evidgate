@@ -1477,3 +1477,9 @@ Closed by PR #1235 (merge 1fb1962a): `DraftBody.RenderedLength` counts integer d
 | Draft insert maps the author FK as a missing project (03.6.1-T1, #1214) | `DraftCommands.cs:110-114` catches every `ForeignKeyViolation` as `ProjectNotFound`: a member revoked between the actor lookup (:84) and `SaveChanges` (:108) gets 404 `not_found` instead of 403 `draft_author_required`. Fix: switch on `PostgresException.ConstraintName` (`draft_project_fk`, `draft_author_fk`). Low: one-request race, no data written, no leak. | follow-up Catalog draft lane (T3) |
 
 Closed by PR #1235 (merge 1fb1962a): the insert catch switches on the constraint name (`draft_author_fk` 403 `draft_author_required`, `draft_project_fk` 404, any other foreign key propagates); `DraftTests.ForeignKeyFault` pins all three by fault injection and the constraint-switch-removed LAN mutant was red.
+
+## Moved from status-carried.md by S614 (2026-11-21)
+
+| Authoring metric outcomes without a deterministic test seam (S528) | AI settings stale at SaveAiSettingsCommand.cs:258 (unique-key loss behind the advisory lock) and apply conflict from the flip-count mismatch ApplyAuthoringChangesCommand.cs:112-116 need a race. Mutants: the apply stale Record call has no separate mutant (M7 was masked by M4 on Apply_StaleIfMatch); the AI settings stale call has none at all. | receiver: authoring lane |
+
+Closed by PR #1237 (merge a03b7402): `AuthoringCommitFaultMetricTests.LostWrite.cs` drives the AI settings unique-version loss and the apply flip-count mismatch by test-owned database triggers (no production seam); the stale-Record mutant and the flip-count-check mutant were each red in the new test only.
