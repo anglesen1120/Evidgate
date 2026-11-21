@@ -40,10 +40,16 @@ internal static class TemplateEndpoints
     {
         var query = context.Request.Query;
 
-        // The page size and kind are validated in the handler, after the pipeline's authorization stage: an anonymous
+        // The page size and filters are validated in the handler, after the pipeline's authorization stage: an anonymous
         // caller gets 401 instead of a 422 that describes a bound it may not use.
         return await mediator.Send(
-            new ListTemplatesQuery(Blank(query["kind"]), Blank(query["cursor"]), Blank(query["limit"])),
+            new ListTemplatesQuery(
+                Blank(query["kind"]),
+                Blank(query["platform"]),
+                Blank(query["level"]),
+                Blank(query["purpose"]),
+                Blank(query["cursor"]),
+                Blank(query["limit"])),
             cancellationToken).ConfigureAwait(false);
     }
 

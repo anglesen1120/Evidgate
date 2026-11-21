@@ -1235,6 +1235,9 @@ export type DraftListResponse = {
 export type TemplateDto = {
     id: string;
     kind: 'web' | 'api' | 'unit' | 'mobile';
+    platform: Platform;
+    level: Level;
+    purpose: Purpose;
     name: string;
     version: number;
     body_ref: string;
@@ -1244,6 +1247,9 @@ export type TemplateDto = {
 export type TemplateDetailDto = {
     id: string;
     kind: 'web' | 'api' | 'unit' | 'mobile';
+    platform: Platform;
+    level: Level;
+    purpose: Purpose;
     name: string;
     version: number;
     body_ref: string;
@@ -3828,17 +3834,17 @@ export type SecurityEventTo = string;
 export type Cursor = string;
 
 /**
- * Only suites of this platform (03.1.4 AC3); an unknown value is a 422.
+ * Only rows of this platform (03.1.4 AC3); an unknown value is a 422.
  */
 export type PlatformFilter = Platform;
 
 /**
- * Only suites of this level; an unknown value is a 422.
+ * Only rows of this level (03.1.4 AC3); an unknown value is a 422.
  */
 export type LevelFilter = Level;
 
 /**
- * Only suites of this purpose; an unknown value is a 422.
+ * Only rows of this purpose (03.1.4 AC3); an unknown value is a 422.
  */
 export type PurposeFilter = Purpose;
 
@@ -9865,6 +9871,18 @@ export type ListTemplatesData = {
          */
         kind?: 'web' | 'api' | 'unit' | 'mobile';
         /**
+         * Only rows of this platform (03.1.4 AC3); an unknown value is a 422.
+         */
+        platform?: Platform;
+        /**
+         * Only rows of this level (03.1.4 AC3); an unknown value is a 422.
+         */
+        level?: Level;
+        /**
+         * Only rows of this purpose (03.1.4 AC3); an unknown value is a 422.
+         */
+        purpose?: Purpose;
+        /**
          * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
          */
         cursor?: string;
@@ -10184,15 +10202,15 @@ export type ListSuitesData = {
         cursor?: string;
         limit?: number;
         /**
-         * Only suites of this platform (03.1.4 AC3); an unknown value is a 422.
+         * Only rows of this platform (03.1.4 AC3); an unknown value is a 422.
          */
         platform?: Platform;
         /**
-         * Only suites of this level; an unknown value is a 422.
+         * Only rows of this level (03.1.4 AC3); an unknown value is a 422.
          */
         level?: Level;
         /**
-         * Only suites of this purpose; an unknown value is a 422.
+         * Only rows of this purpose (03.1.4 AC3); an unknown value is a 422.
          */
         purpose?: Purpose;
     };
