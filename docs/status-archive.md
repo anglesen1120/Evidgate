@@ -1329,3 +1329,9 @@ Superseded by S581 (#1177, merged as bb2b2ed1): `ReconcileDeadlineSweepTests.cs`
 | Oversized Tenancy test files (S581) | After S582 (IngestDedupeTests split into 359 / 190 lines), S581 (#1177, ReconcileDeadlineSweepTests split into 387 / 257 lines), S580 (#1174), S579, S578, S577 (#1171), S575 (#1169) and S576 (#1168), 32 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 136c2aed): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
 
 Superseded by S583 (#1179, merged as 02cfd03e): `ReconcileDeadlineRearmTests.cs` was split into 275 / 243 lines; the recount on 0ff047f9 (31 files over 500) is the row 'Oversized Tenancy test files (S583)' in `docs/status-carried.md`.
+
+## Moved from status-carried.md by S585 (2026-11-21)
+
+| Oversized Tenancy test files (S583) | After S583 (#1179, ReconcileDeadlineRearmTests split into 275 / 243 lines), S582, S581 (#1177), S580 (#1174), S579, S578, S577 (#1171), S575 (#1169) and S576 (#1168), 31 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 0ff047f9): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S585 (#1182, merged as 0bc3230c): `ProducerSlotQaTests.cs` was split into 372 / 199 lines; the recount on 692a569a (29 files over 500, after S586 #1183) is the row 'Oversized Tenancy test files (S585)'.
