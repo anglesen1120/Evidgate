@@ -164,7 +164,7 @@ public sealed class CallbackPlumbingTests(DatabaseFixture fixture)
     [Fact]
     public async Task Neither_The_Token_Nor_The_State_Reach_A_Response_A_Log_Or_A_Span()
     {
-        using var logs = new RecordingLoggerProvider();
+        using var logs = new CapturingLoggerProvider();
         using var spans = new SpanCollector();
         var clock = new MutableClock(Now);
         var completion = new FakeLoginCompletion();
@@ -176,7 +176,7 @@ public sealed class CallbackPlumbingTests(DatabaseFixture fixture)
         // Non-vacuity: the provider under test records a line written through it, so "nothing was captured"
         // can never be an artefact of a dead provider.
         ProbeCapture(logs.CreateLogger("capture-probe"), "token-probe", null);
-        logs.Entries.ShouldContain(entry => entry.Contains("token-probe", StringComparison.Ordinal));
+        logs.Entries.ShouldContain(entry => entry.Message.Contains("token-probe", StringComparison.Ordinal));
         logs.Clear();
 
         var (payload, cookieValue) = await BeginAsync(host, client);
@@ -208,8 +208,8 @@ public sealed class CallbackPlumbingTests(DatabaseFixture fixture)
         body.ShouldNotContain(payload.State, Case.Sensitive);
 
         // Logs: nothing the deployment would have written carries the token or the state.
-        logs.Entries.ShouldNotContain(entry => entry.Contains(token, StringComparison.Ordinal));
-        logs.Entries.ShouldNotContain(entry => entry.Contains(payload.State, StringComparison.Ordinal));
+        logs.Entries.ShouldNotContain(entry => entry.Texts.Any(text => text.Contains(token, StringComparison.Ordinal)));
+        logs.Entries.ShouldNotContain(entry => entry.Texts.Any(text => text.Contains(payload.State, StringComparison.Ordinal)));
 
         // Traces: the server span of the callback keeps neither value in any tag.
         var callbackSpans = await spans.WaitForSpansUnderAsync(OidcPath, TestContext.Current.CancellationToken);
@@ -514,50 +514,6 @@ public sealed class CallbackPlumbingTests(DatabaseFixture fixture)
         }
 
         (await LoginTestHost.BodyAsync(response)).ShouldNotContain(token, Case.Sensitive);
-    }
-}
-
-/// <summary>
-/// An <see cref="ILoggerProvider"/> that keeps what the host's own filters let through, so a case asserts on what
-/// the deployment would log (the <c>RequestLogRedactionTests</c> mechanism, on the protocol host).
-/// </summary>
-internal sealed class RecordingLoggerProvider : ILoggerProvider
-{
-    private readonly ConcurrentQueue<string> _entries = new();
-
-    /// <summary>Every captured entry, as <c>level: message</c>.</summary>
-    public IReadOnlyList<string> Entries => [.. _entries];
-
-    /// <summary>Drops what was captured so far, so a case can observe one request at a time.</summary>
-    public void Clear() => _entries.Clear();
-
-    /// <inheritdoc />
-    public ILogger CreateLogger(string categoryName) => new RecordingLogger(_entries);
-
-    /// <inheritdoc />
-    public void Dispose()
-    {
-        // Nothing unmanaged to release: the captured entries belong to the case.
-    }
-
-    private sealed class RecordingLogger(ConcurrentQueue<string> entries) : ILogger
-    {
-        public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(
-            LogLevel logLevel,
-            EventId eventId,
-            TState state,
-            Exception? exception,
-            Func<TState, Exception?, string> formatter)
-        {
-            ArgumentNullException.ThrowIfNull(formatter);
-
-            entries.Enqueue($"{logLevel}: {formatter(state, exception)}");
-        }
     }
 }
 
