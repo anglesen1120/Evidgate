@@ -13,6 +13,16 @@ import type { NavEntry } from './shell/nav/nav.models';
 import { NAV_ENTRIES } from './shell/nav/nav-registry';
 
 describe('Settings shell entry override (09.7.1-T1.1)', () => {
+  // The route table loads these lazily; the first navigation otherwise pays their module graph
+  // transform inside a test body, which is what grows under host load. Same loaders the table uses.
+  beforeAll(async () => {
+    await Promise.all([
+      import('./features/settings/settings-shell.routes'),
+      import('./features/settings/settings.routes'),
+      import('./shell/layout/shell.component'),
+    ]);
+  });
+
   /** The registry row a case names, or a failure naming the missing row. */
   function entryOf(id: string): NavEntry {
     const entry = NAV_ENTRIES.find((candidate) => candidate.id === id);

@@ -52,10 +52,13 @@ describe('RetentionStore write attempt ownership', () => {
     h.org.set({ id: 'o-1' });
     h.projects.set([{ id: 'p-1', name: 'First org project', org_id: 'o-1' }]);
     flush(await h.take('GET'));
-    await vi.waitFor(() => {
-      TestBed.tick();
-      expect(h.store.loading()).toBe(false);
-    });
+    await vi.waitFor(
+      () => {
+        TestBed.tick();
+        expect(h.store.loading()).toBe(false);
+      },
+      { interval: 1 },
+    );
     flush(firstPut, { artifact_days: 30, metadata_days: 90 });
     expect(await first).toBe(true);
     expect(h.store.policy()).toEqual({ artifact_days: 30, metadata_days: 90 });
