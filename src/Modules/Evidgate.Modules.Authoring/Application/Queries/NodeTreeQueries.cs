@@ -117,7 +117,7 @@ internal sealed class GetAuthoringTreeQueryHandler(
     /// The node the page is grouped by: the addressed node itself for <c>node_id</c> (whose live children are listed), or
     /// the parent for <c>parent_id</c>, which also closes that listing's breadcrumb. Null when the request lists roots.
     /// </summary>
-    private static async Task<AuthoringNodeReadSql.NodePageRow?> ReadGroupNodeAsync(
+    private static Task<AuthoringNodeReadSql.NodePageRow?> ReadGroupNodeAsync(
         ITenantDb db,
         Guid orgId,
         GetAuthoringTreeQuery query,
@@ -125,14 +125,14 @@ internal sealed class GetAuthoringTreeQueryHandler(
     {
         if ((query.NodeId ?? query.ParentId) is not { } id)
         {
-            return null;
+            return Task.FromResult<AuthoringNodeReadSql.NodePageRow?>(null);
         }
 
-        // A missing or deleted parent cannot supply a live listing group.
-        return await db.QuerySingleOrDefaultAsync<AuthoringNodeReadSql.NodePageRow>(
+        // A missing or deleted parent cannot supply a live listing group; the task is handed on without a second state machine.
+        return db.QuerySingleOrDefaultAsync<AuthoringNodeReadSql.NodePageRow>(
             AuthoringNodeReadSql.LiveNode,
             new { org_id = orgId, project_id = query.ProjectId, id },
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     private static async Task<Result<AuthoringTreeView>> ReadPageAsync(
