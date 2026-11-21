@@ -179,6 +179,33 @@ public sealed class RequestLogFloorTests
     }
 
     [Fact]
+    public async Task ReloadWithAnOverridingKey_ReportsItAgain()
+    {
+        var source = new ReloadableSource();
+        var log = new Sink("notice-reload");
+        using var host = Host.CreateDefaultBuilder()
+            .ConfigureAppConfiguration(config => config.Add(source))
+            .ConfigureLogging((context, logging) =>
+            {
+                logging.ClearProviders();
+                logging.AddConfiguration(context.Configuration.GetSection("Logging"));
+                logging.AddProvider(new AliasedProvider(log));
+            })
+            .ConfigureServices(services => services
+                .PostConfigure<LoggerFilterOptions>(RequestLogFloor.Apply)
+                .AddHostedService<RequestLogFloorNotice>())
+            .Build();
+        await host.StartAsync(TestContext.Current.CancellationToken);
+        log.Texts("Evidgate.Api.RequestLogFloorNotice").ShouldBeEmpty("nothing overrides the floor at start");
+
+        source.Set("Logging:Alias:LogLevel:Default", "Trace");
+        source.Reload();
+
+        log.Texts("Evidgate.Api.RequestLogFloorNotice").ShouldHaveSingleItem().ShouldContain("Logging:Alias:LogLevel:Default");
+        await host.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
     public void NoOverridingKey_NoNotice()
     {
         var options = new LoggerFilterOptions();
