@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
@@ -245,17 +244,37 @@ internal static class DraftBody
             return null;
         }
 
-        var text = element.GetRawText();
-
-        // A character of the raw text costs at most six bytes (\uXXXX) and at least one once jsonb stores it, so a
-        // value past six times the bound cannot fit; anything closer is decided by the column's own measure.
-        if (Encoding.UTF8.GetByteCount(text) > MaxProvenanceBytes * 6)
+        // The exact byte bound is measured by PostgreSQL after this (insignificant whitespace in the raw text
+        // makes any C# size proxy refuse a value the column accepts); a number whose exponent cannot fit the
+        // bound is refused here because the cast would overflow numeric instead of reporting a size.
+        if (HasUnboundedExponent(element))
         {
             details.Add(new ErrorDetail("provenance", "too_large"));
             return null;
         }
 
+        var text = element.GetRawText();
         return text;
+    }
+
+    /// <summary>True when a number token carries an exponent past what the byte bound could ever hold.</summary>
+    private static bool HasUnboundedExponent(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Number:
+                var token = element.GetRawText();
+                var marker = token.IndexOfAny(['e', 'E']);
+                return marker >= 0
+                    && (!int.TryParse(token.AsSpan(marker + 1), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var exponent)
+                        || Math.Abs(exponent) > MaxProvenanceBytes);
+            case JsonValueKind.Object:
+                return element.EnumerateObject().Any(member => HasUnboundedExponent(member.Value));
+            case JsonValueKind.Array:
+                return element.EnumerateArray().Any(HasUnboundedExponent);
+            default:
+                return false;
+        }
     }
 
     /// <summary>The C# half of <c>draft_base_commit_check</c>: 7–64 lower-case hex characters.</summary>

@@ -204,6 +204,43 @@ public sealed partial class DraftTests
         (await DraftCountAsync(world)).ShouldBe(1);
     }
 
+    [Fact]
+    public async Task Create_ProvenanceWithInsignificantWhitespace_IsMeasuredByItsStoredBytes()
+    {
+        await using var world = await StartAsync();
+        var body = Body();
+        var baseline = await _fixture.ScalarAsync<int>(world.Database, "select octet_length(('{\"t\":\"\"}')::jsonb::text)");
+        var text = new string('a', 4096 - baseline);
+        body["provenance"] = JsonNode.Parse("{\"t\":\"" + text + "\"}")!;
+        var raw = body.ToJsonString().Replace("\"provenance\":{", "\"provenance\":{" + new string(' ', 20_000), StringComparison.Ordinal);
+
+        var created = await world.Client.SendRawAsync(
+            HttpMethod.Post,
+            world.Collection,
+            headers =>
+            {
+                world.Admin(headers);
+                headers.Add("Idempotency-Key", NewKey());
+            },
+            raw);
+
+        created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
+        (await StoredAsync<int>(world, created.Id(), "octet_length(provenance::text)")).ShouldBe(4096);
+    }
+
+    [Theory]
+    [InlineData("{\"n\":1e9999999}")]
+    [InlineData("{\"n\":[1E-9999999]}")]
+    public async Task Create_ProvenanceNumberThatOverflowsNumeric_Is422NotA500(string provenance)
+    {
+        await using var world = await StartAsync();
+        var body = Body();
+        body["provenance"] = JsonNode.Parse(provenance)!;
+
+        ShouldNameField(await CreateAsync(world, body), "provenance", provenance);
+        (await DraftCountAsync(world)).ShouldBe(0);
+    }
+
     /// <summary>
     /// The content bound is reachable, and the column's CHECK counts <c>jsonb::text</c>: the limit itself is stored,
     /// the next byte is a 422 rather than the 23514 a body the app accepted could otherwise raise.
