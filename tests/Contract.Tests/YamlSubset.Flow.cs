@@ -55,7 +55,8 @@ internal sealed partial class YamlSubset
             before--;
         }
 
-        return before < 0 || text[before] is '[' or '{' or ',' or ':';
+        // A colon only separates key from value when a space follows it; 'a:'b' is plain text.
+        return before < 0 || text[before] is '[' or '{' or ',' || (text[before] == ':' && text[before + 1] == ' ');
     }
 
     /// <summary>

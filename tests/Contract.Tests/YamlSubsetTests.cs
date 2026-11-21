@@ -162,4 +162,39 @@ public sealed class YamlSubsetTests
         exception.Message.ShouldContain("line 1");
         exception.Message.ShouldContain("never closed");
     }
+
+    /// <summary>Prettier's layout for a long list: the bracket on its own line under the key, one item per line, trailing comma.</summary>
+    [Fact]
+    public void Parse_PrettierWrappedFlowList_Parses()
+    {
+        var node = YamlSubset.Parse(
+            "schema:\n" +
+            "  required:\n" +
+            "    [\n" +
+            "      id,\n" +
+            "      name,\n" +
+            "    ]\n" +
+            "  type: object\n") as JsonObject;
+
+        node.ShouldNotBeNull();
+        node["schema"]!["required"]!.AsArray().Select(n => n!.GetValue<string>()).ShouldBe(["id", "name"]);
+        node["schema"]!["type"]!.GetValue<string>().ShouldBe("object");
+    }
+
+    /// <summary>Text after a closed quoted scalar is refused, not folded into the value.</summary>
+    [Theory]
+    [InlineData("a: 'x'y'\n")]
+    [InlineData("a: \"x\"y\"\n")]
+    public void Parse_TextAfterQuotedScalar_Refuses(string yaml)
+        => Should.Throw<NotSupportedException>(() => YamlSubset.Parse(yaml)).Message.ShouldContain("line 1");
+
+    /// <summary>A quote glued to a colon inside plain text is literal.</summary>
+    [Fact]
+    public void Parse_QuoteAfterColonInPlainScalar_IsLiteral()
+    {
+        var node = YamlSubset.Parse("summary: prefix:'suffix\n") as JsonObject;
+
+        node.ShouldNotBeNull();
+        node["summary"]!.GetValue<string>().ShouldBe("prefix:'suffix");
+    }
 }
