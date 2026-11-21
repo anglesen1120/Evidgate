@@ -47,9 +47,11 @@ internal sealed record CapturedLog(
 
 /// <summary>
 /// Keeps every call of every logger, at every level, with its structured state, its scopes and the full exception
-/// text, so a test can assert on what a sink would have stored and not only on the rendered message.
+/// text, so a test can assert on what a sink would have stored and not only on the rendered message. A test that must tell
+/// providers apart by type (a provider alias or full-name filter section) derives from this base; the rest use
+/// <see cref="CapturingLoggerProvider"/>.
 /// </summary>
-internal sealed class CapturingLoggerProvider : ILoggerProvider, ISupportExternalScope
+internal abstract class CapturingLoggerProviderBase : ILoggerProvider, ISupportExternalScope
 {
     private readonly ConcurrentQueue<CapturedLog> _entries = new();
     private IExternalScopeProvider _scopes = new LoggerExternalScopeProvider();
@@ -94,7 +96,7 @@ internal sealed class CapturingLoggerProvider : ILoggerProvider, ISupportExterna
         }
     }
 
-    private sealed class Logger(string category, CapturingLoggerProvider owner) : ILogger
+    private sealed class Logger(string category, CapturingLoggerProviderBase owner) : ILogger
     {
         public IDisposable? BeginScope<TState>(TState state)
             where TState : notnull => owner._scopes.Push(state);
@@ -127,3 +129,6 @@ internal sealed class CapturingLoggerProvider : ILoggerProvider, ISupportExterna
         }
     }
 }
+
+/// <summary>The capturing provider for a test that needs one instance and no provider identity of its own.</summary>
+internal sealed class CapturingLoggerProvider : CapturingLoggerProviderBase;

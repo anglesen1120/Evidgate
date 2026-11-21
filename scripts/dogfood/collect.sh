@@ -16,8 +16,9 @@
 # Scrub, on the parsed tree so only UTF-8 (or its ASCII subset) is accepted: a testsuite hostname
 # attribute becomes "host" and this run's checkout path becomes /repo in every attribute value and
 # text node. The residual check reads element names, attribute names and namespace URIs as well as
-# values, text, tail and each element's joined text, and compares the match form
-# NFKC(casefold(NFKC(text))) with default-ignorable (Cf) and combining (Mn, Me) characters removed,
+# values, text, tail and the document's character data joined in order (one pass, so a name split
+# by child elements is still found), and compares the match form: NFKD, casefold, then default-ignorable
+# (Cf) and combining (Mn, Me) characters removed, never recomposed,
 # raw and after one strict percent-decoding; a malformed escape refuses rather than decoding
 # leniently. A report that still names the machine, its host name (socket.gethostname() or
 # $HOSTNAME) or the home directory is refused, never uploaded. Each upload file is written to a
@@ -156,17 +157,20 @@ def refuse(producer, reason):
 
 
 def without_ignorables(text):
-    # NFKC expands or composes what the raw bytes hid; the removed categories render as nothing or
-    # as a mark on the previous character, so dropping them cannot make a name stop matching. No
-    # ASCII character is Cf, Mn or Me, so the per-character scan only runs on non-ASCII text.
-    text = unicodedata.normalize("NFKC", text)
+    # Marks are dropped from the decomposed form and the result stays decomposed: composing again
+    # would fold a base letter and a following mark (or a jamo pair split across elements) into one
+    # character depending on what surrounds the text. The removed categories render as nothing or as
+    # a mark on the previous character, so dropping them cannot make a name stop matching. No ASCII
+    # character is Cf, Mn or Me.
+    text = unicodedata.normalize("NFKD", text)
     if text.isascii():
         return text
     return "".join(char for char in text if unicodedata.category(char) not in IGNORABLE)
 
 
 def match_form(text):
-    return without_ignorables(unicodedata.normalize("NFKC", text).casefold())
+    # Case folding can itself emit a mark (U+0130 becomes i plus U+0307), so it runs before the strip.
+    return without_ignorables(unicodedata.normalize("NFKD", text).casefold())
 
 
 def decode_once(producer, text):
@@ -184,11 +188,30 @@ def decode_once(producer, text):
 def matching_forms(producer, value):
     # A report can spell a name without spelling it: match the raw text and, only when a percent
     # sign survives normalisation, its once-decoded reading.
+    forms = [match_form(value)]
     normalised = unicodedata.normalize("NFKC", value)
-    forms = [without_ignorables(normalised.casefold())]
     if "%" in normalised:
         forms.append(match_form(decode_once(producer, normalised)))
     return list(dict.fromkeys(forms))
+
+
+def text_stream(doc):
+    # All character data in document order, built once and iteratively: every element's joined text
+    # is a contiguous part of it, so one scan replaces a rescan of each subtree per ancestor.
+    pieces = []
+    stack = [doc]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, str):
+            pieces.append(item)
+            continue
+        if item.text:
+            pieces.append(item.text)
+        for child in reversed(item):
+            if child.tail:
+                stack.append(child.tail)
+            stack.append(child)
+    return "".join(pieces)
 
 
 def refuse_residual(producer, doc, values):
@@ -196,16 +219,19 @@ def refuse_residual(producer, doc, values):
     # Names cannot be scrubbed, so a matching element or attribute name refuses too.
     expected = {match_form(secret) for secret in values}
     expected.discard("")
+
+    def names_machine(value):
+        return any(secret in form for form in matching_forms(producer, value) for secret in expected)
+
+    # A child element splits an identifier across text, its own text and a tail.
+    if len(doc) and names_machine(text_stream(doc)):
+        refuse(producer, "report still names this machine")
     for node in walk(doc):
         inspected = [node.text, node.tail, *node.attrib, *node.attrib.values()]
         if isinstance(node.tag, str):
             inspected.append(node.tag)
-        if len(node):
-            # A child element splits an identifier across text, its own text and a tail.
-            inspected.append("".join(node.itertext()))
-        for value in inspected:
-            if value and any(secret in form for form in matching_forms(producer, value) for secret in expected):
-                refuse(producer, "report still names this machine")
+        if any(value and names_machine(value) for value in inspected):
+            refuse(producer, "report still names this machine")
 
 
 def element_counts(doc):
@@ -248,7 +274,7 @@ def stage_atomic(out, name, data, created):
             handle.flush()
             os.fsync(handle.fileno())
         return temp
-    sys.exit(f"collect.sh: {name}: no free temporary name in {out}")
+    raise OSError(f"no free temporary name for {name} in {out}")
 
 
 def publish(out, pending, payload, created):
@@ -260,6 +286,15 @@ def publish(out, pending, payload, created):
     for name, temp in staged:
         os.replace(temp, out / name)
     os.replace(manifest_temp, out / "manifest.json")
+    # Durability of the renames only: a filesystem that cannot fsync a directory must not turn a
+    # published set into a reported failure.
+    directory = os.open(out, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory)
+    except OSError:
+        pass
+    finally:
+        os.close(directory)
 
 
 def remove_stale(out, produced):
@@ -289,6 +324,12 @@ residual = [value for value in checkout if value]
 # replacement, so setting one cannot switch the other off.
 machines = [socket.gethostname(), os.environ.get("HOSTNAME", "")]
 residual.extend(machine for machine in machines if len(machine) >= 4 and machine.casefold() != "host")
+# The first DNS label of a dotted name is refused too (foo.corp.local also refuses "foo"). Under 3
+# characters or all digits (an IPv4 prefix) is too common to name a machine, so it is skipped.
+for machine in machines:
+    label = machine.split(".")[0] if "." in machine else ""
+    if len(match_form(label)) >= 3 and not label.isdigit() and label.casefold() not in ("host", "localhost"):
+        residual.append(label)
 home = os.environ.get("HOME", "")
 if home not in ("", "/"):
     residual.append(home)

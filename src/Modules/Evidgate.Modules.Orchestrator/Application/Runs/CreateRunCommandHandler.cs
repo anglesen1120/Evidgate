@@ -388,7 +388,8 @@ internal sealed partial class CreateRunCommandHandler(
             exception.SqlState == PostgresErrorCodes.UniqueViolation
             && exception.ConstraintName == ExecutionKeyConstraint)
         {
-            // The in-memory check above is the cheap path; the unique index is the backstop under a race.
+            // The in-memory check above is the cheap path. With a fresh run id per create this cannot fire
+            // today; it stays as defence in depth should run ids ever be reused, and a test pins the 422 mapping.
             return Result.Failure<RunCreated>(OrchestratorErrors.ExecutionKeyConflict(
                 [new ErrorDetail("/planned_executions", ApiErrorCode.ExecutionKeyConflict)]));
         }

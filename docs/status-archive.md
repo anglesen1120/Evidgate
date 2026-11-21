@@ -1541,3 +1541,27 @@ Closed by PR #1255 (merge 4ee842aa): `Texts_CoverEveryPart_AndClearEmptiesTheCap
 | ApiHost floor test nits (S619) | QA notes on `tests/Hosts.IntegrationTests/ApiHostRequestLogFloorTests.cs` (PR #1248), nonblocking: the no-lowering-key fixture would fail if ambient Logging configuration ever carried a lowering key for the request-log category; the test name `RealApiHost_FloorRulesAreTheLastRules_ForEveryProviderAndProviderLess` is broader than its two provider-name assertions. | receiver: next lane touching `RequestLogFloor`; owner question: none; recorded owner: Tech Lead |
 
 Closed by PR #1258 (merge 51d5ff24): the notice has its own Warning rule per provider after the operator's rules, `RequestLogFloor.AssertFloorIsLast` refuses start when a rule follows the floor (a test and a mutant prove it), the no-lowering fixture ignores ambient level keys, and the broad test was renamed and now asserts both patterns.
+
+## Moved from status-carried.md by S625 (2026-11-21)
+
+| collect.sh residual check scope (S609) | Left open by #1227: the residual check in `scripts/dogfood/collect.sh` (`refuse_residual`) inspects attribute values, text and tail only, not element names, attribute names or namespace URIs; matching has no Unicode normalisation or percent-decoding; the final writes to `--out` are sequential, not atomic, and a pre-existing `--out` is not cleaned; the real-host-name retention test in `DogfoodReportTests.Residual.cs` is conditional on a host name of 4+ characters. | next dogfood lane |
+
+Closed by PR #1262 (merge 2a39015b): the residual check scans element tags, namespace URIs and attribute names, matches after NFKC and one strict percent-decode, `--out` is written by temp file and rename with stale owned files removed, and the host-name retention test injects `HOSTNAME`; remaining gaps are the S625 rows in status-carried.md.
+
+## Moved from status-carried.md by S627 (2026-11-21)
+
+| Item | Blocker | Owner |
+|---|---|---|
+| Log-capture helpers left unmigrated (S621) | Hand-rolled capture providers still outside the shared one after #1255: `ConflictLogSink` (`tests/Tenancy.IntegrationTests/UsageLedgerPayloadHashTests.Log.cs`; moving it also changes the world record in `UsageLedgerPayloadHashTests.cs`), `CaptureLogs` in `SecretScanConsumerTests.cs`, `SinkProvider` in `RequestLogFloorTests.cs`, and the `ILoggerProvider` in `QaS271WorkerGate.cs`. Migrate each with equal-or-stronger assertions. | receiver: Tech Lead (test infrastructure); recorded owner: Tech Lead |
+
+Closed by PR #1261 (merge fe8b597a): the four providers now use the shared capturing provider; the shared helper gained an abstract base so a test can derive its own provider identity, and mutants of the logged level, message and floor each turned the migrated tests red.
+
+## Moved from status-carried.md by S629 (2026-11-21)
+
+| Item | Blocker | Owner |
+|---|---|---|
+| Imprecise line cite to ProducerSlotQaTests (S585) | `tests/Identity.IntegrationTests/Sessions/Store/SessionIndexPlanTests.cs:100` cites `ProducerSlotQaTests.cs:315-317`, but the quoted `pg_read_all_stats` wording is at `ProducerSlotQaTests.cs:333` (lines 315-317 hold the start of the WaitForBlockedInsertAsync doc comment). Pre-existing, unchanged by the #1182 split; re-point the cite by symbol name | receiver: the next Identity test lane |
+| Execution key conflict: catch unreachable, keep or delete (S608) | The unique-violation catch in `CreateRunCommandHandler.cs` (execution-key constraint) cannot fire today: run id is a fresh `Guid.CreateVersion7()` per create, the constraint is `unique (org_id, run_id, execution_key)` (`migrations/0031_orchestration_run.sql:186`), and the in-memory `HashSet` check (`CreateRunCommandHandler.Derive.cs:144-148`) dedupes the same keys that go to SQL. #1225 pins the 23505 to 422 mapping by fault injection in a dedicated database (`CreateRun_UniqueViolationFromInsert_MapsTo422_NothingWritten`). Open: delete the catch or keep it as defence in depth. | owner decision |
+| SchemaExemption reason names a task id (S616) | The `public.template` reason text in `tests/Persistence.IntegrationTests/SchemaConventionScan.cs` (about line 165) cites `03.5.1-T1` and migration 0118, as the neighbouring `public.report_parser` reason does with `04.4.1-T1`; agent-code-rules forbid plan and task ids in source comments, the code review applied the same rule to two other comments in #1247 (U1). Not changed in #1247 to keep the exemption wording identical to its precedent. | Next lane touching `SchemaConventionScan.cs`: reword both reasons to say why (insert-only registry, written by migration and owner role) without ids. |
+
+Closed by PR #1265 (merge 49353136): the cite names `ProducerSlotQaTests.WaitForBlockedInsertAsync`, the `report_parser`, `template` and `raw_report` exemption reasons carry no plan ids or migration numbers, and the unique-violation catch in `CreateRunCommandHandler.cs` is kept as defence in depth with a why-comment (owner delegated the decision to the coordinator).
