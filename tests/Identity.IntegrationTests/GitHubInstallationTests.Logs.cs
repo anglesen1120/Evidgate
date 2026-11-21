@@ -55,6 +55,8 @@ public sealed partial class GitHubInstallationTests
         run.Failed.Any(entry => entry.EventId.Id == 4401).ShouldBeTrue("a failed exchange logs the failure event");
         run.Endpoint.Calls.ShouldBe(2, "one exchange for the miss, none for the hit, one for the failure");
         run.Jwts.ShouldNotBeEmpty("the App JWT the exchange presented is a needle");
+        run.Endpoint.MintedServed.ShouldBe(1, "the minted token was served once, so its needle names a value that existed");
+        run.Endpoint.RejectedServed.ShouldBe(1, "the token-shaped value in the failure body was served once");
     }
 
     private static bool IsFramework(CapturedLog entry) =>

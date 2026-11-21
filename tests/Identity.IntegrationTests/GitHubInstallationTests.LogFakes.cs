@@ -15,8 +15,16 @@ internal sealed class GitHubTokenEndpointFake(string token, string rejectedBodyT
 {
     private readonly ConcurrentQueue<string> _jwts = new();
     private int _calls;
+    private int _minted;
+    private int _rejected;
 
     public bool Fail { get; set; }
+
+    /// <summary>How many times the minted token was actually put on the wire.</summary>
+    public int MintedServed => Volatile.Read(ref _minted);
+
+    /// <summary>How many times the failure body with the token-shaped value was served.</summary>
+    public int RejectedServed => Volatile.Read(ref _rejected);
 
     public int Calls => Volatile.Read(ref _calls);
 
@@ -30,6 +38,8 @@ internal sealed class GitHubTokenEndpointFake(string token, string rejectedBodyT
         {
             _jwts.Enqueue(jwt);
         }
+
+        Interlocked.Increment(ref Fail ? ref _rejected : ref _minted);
 
         var response = Fail
             ? new HttpResponseMessage(HttpStatusCode.InternalServerError)
