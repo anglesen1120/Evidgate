@@ -59,6 +59,7 @@
     <Compile Include="..\Shared\CapturingLoggerProvider.cs" Link="CapturingLoggerProvider.cs" />
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
     <Compile Include="..\Shared\FixtureLoader.cs" Link="FixtureLoader.cs" />
+    <Compile Include="..\Shared\RepositoryPaths.cs" Link="RepositoryPaths.cs" />
     <Compile Include="..\Shared\ContainerStart.cs" Link="ContainerStart.cs" />
     <Compile Include="..\Shared\ContainerStartReaper.cs" Link="ContainerStartReaper.cs" />
     <Compile Include="..\Shared\ContractSchemaWarmup.cs" Link="ContractSchemaWarmup.cs" />

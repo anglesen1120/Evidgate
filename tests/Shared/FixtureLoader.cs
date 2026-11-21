@@ -84,7 +84,7 @@ public sealed class FixtureShapeException : Exception
 public static class FixtureLoader
 {
     /// <summary>The repository root, located by walking up for <c>Evidgate.slnx</c>.</summary>
-    public static readonly string RepoRoot = LocateRepoRoot();
+    public static readonly string RepoRoot = RepositoryPaths.RepoRoot;
 
     /// <summary>The repository <c>fixtures/</c> directory.</summary>
     public static readonly string FixturesRoot = Path.Combine(RepoRoot, "fixtures");
@@ -431,21 +431,4 @@ public static class FixtureLoader
 
     private static string TrimTrailingSeparator(string path) =>
         path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-
-    private static string LocateRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "Evidgate.slnx")))
-            {
-                return directory.FullName;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new InvalidOperationException(
-            $"Evidgate.slnx not found above '{AppContext.BaseDirectory}'");
-    }
 }

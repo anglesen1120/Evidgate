@@ -38,6 +38,7 @@
     <Compile Include="..\Shared\NoHealingProvider.cs" Link="NoHealingProvider.cs" />
     <Compile Include="..\Shared\ContractSchemaWarmup.cs" Link="ContractSchemaWarmup.cs" />
     <Compile Include="..\Shared\FixtureLoader.cs" Link="Shared/FixtureLoader.cs" />
+    <Compile Include="..\Shared\RepositoryPaths.cs" Link="Shared/RepositoryPaths.cs" />
     <Compile Include="..\Shared\DatabaseFixture.cs" Link="Shared/DatabaseFixture.cs" />
     <Compile Include="..\Shared\RespawnCheckpoint.cs" Link="Shared/RespawnCheckpoint.cs" />
     <Compile Include="..\Shared\TemplateDatabase.cs" Link="Shared/TemplateDatabase.cs" />
