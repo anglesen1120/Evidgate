@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="vitest tests" tests="1" failures="0" errors="0" time="0.001847794">
-    <testsuite name="src/index.test.ts" timestamp="2026-11-21T07:48:21.594Z" hostname="host" tests="1" failures="0" errors="0" skipped="0" time="0.001847794">
-        <testcase classname="src/index.test.ts" name="@evidgate/adapter-junit entry point &gt; loads as an ES module namespace" time="0.000985738">
+<testsuites name="vitest tests" tests="1" failures="0" errors="0" time="0.00578649">
+    <testsuite name="src/index.test.ts" timestamp="2026-11-21T11:05:20.889Z" hostname="host" tests="1" failures="0" errors="0" skipped="0" time="0.00578649">
+        <testcase classname="src/index.test.ts" name="@evidgate/adapter-junit entry point &gt; loads as an ES module namespace" time="0.002732949">
         </testcase>
     </testsuite>
 </testsuites>
