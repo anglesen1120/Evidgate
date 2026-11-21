@@ -125,8 +125,10 @@ internal static class YamlSubset
             "false" => JsonValue.Create(false),
             _ when long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var integer)
                 => JsonValue.Create(integer),
-            _ when double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) && double.IsFinite(number)
-                => JsonValue.Create(number),
+            _ when double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+                => double.IsFinite(number)
+                    ? JsonValue.Create(number)
+                    : throw Refuse(scalar.Start, "a NaN or infinity scalar"),
             _ => JsonValue.Create(value),
         };
     }

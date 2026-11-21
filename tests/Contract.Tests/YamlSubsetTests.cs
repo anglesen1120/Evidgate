@@ -278,7 +278,8 @@ public sealed class YamlSubsetTests
     [Fact]
     public void Parse_NestingAtCap_Parses_AndOneDeeperRefusesWithLine()
     {
-        var node = YamlSubset.Parse(Nested(YamlSubset.MaxDepth));
+        YamlSubset.MaxDepth.ShouldBe(64);
+        var node = YamlSubset.Parse(Nested(64));
         node.ShouldNotBeNull();
 
         var exception = Should.Throw<NotSupportedException>(() => YamlSubset.Parse(Nested(YamlSubset.MaxDepth + 1)));
@@ -320,7 +321,10 @@ public sealed class YamlSubsetTests
     [InlineData("+Infinity")]
     [InlineData("-.inf")]
     [InlineData(".INF")]
+    [InlineData("+.inf")]
+    [InlineData(".NAN")]
     [InlineData("1e999")]
+    [InlineData("-1e999")]
     public void Parse_NonFinitePlainScalar_Refuses(string scalar)
         => Should.Throw<NotSupportedException>(() => YamlSubset.Parse($"a: {scalar}\n")).Message.ShouldContain("NaN or infinity");
 
