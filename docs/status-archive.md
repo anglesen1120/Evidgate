@@ -1664,3 +1664,16 @@ Closed by PR #1293 (b3c912a8): `tests/Contract.Tests/YamlSubset.cs` parses with 
 | Dogfood real host test short names (S639) | `DogfoodReportTests.cs` `Dogfood_Collect_MachineNameInTestcase_IsRefused` now runs for a real host name of 1-3 characters; a host named `out` would make the control's `<system-out>` refuse, and `x` would hit the `xunit` substring exclusion in `RunCollect`. The LAN host name is longer. Fix: pick a control word the name cannot match. Test only. | next dogfood lane |
 
 Closed by PR #1296 (96977a21): `scripts/dogfood/collect.sh` strips host names after folding and never refuses the full name `localhost`, and the real-host test skips `host`/`localhost` and no longer searches short values in the refusal diagnostic; pinned by `DogfoodReportTests.HostEdges.cs` and the trim and localhost mutants.
+
+## Moved from status-carried.md by S644 (2026-11-22)
+
+| Draft summary list: cursor/status tests lack summary assertions (S640) | `DraftTests.Read.cs` cursor-walk and status-filter list tests check ids, order and cursors but not `file_count` or the absent `content`; both page statements share `SummaryColumns`, so the risk is low. Also `jsonb_array_length(d.content -> 'files')` raises on a stored non-array `files` (CHECK only requires an object); `DraftRules` blocks that through the API. Fix: assert on those pages; a CHECK in a later migration. | owner / catalog lane |
+| YamlSubset accepts unbounded nesting, literal << keys and NaN/Infinity plain scalars (S642) | `tests/Contract.Tests/YamlSubset.cs` (PR #1293) has no nesting-depth cap (a stack overflow would kill the test host without a line number), reads a `<<` key as a literal member (a YAML 1.1 tool would merge it), and types plain `NaN`/`Infinity` as double. Low: the input is the repo's own contract spec and each case fails loudly. | contract tooling lane |
+
+Closed by #1298 (b4bfc784): `DraftTests.Read.cs` list tests assert `file_count` and the absent `content`, and `YamlSubset` refuses nesting over 64, `<<` keys and NaN/infinity/overflowing plain scalars, pinned by mutants. The CHECK half stays carried as 'Draft content files CHECK for non-array files (S644)'.
+
+## Moved from status-carried.md by S641 (2026-11-22)
+
+| Authoring read routes validate the query before authentication (S553) | After S553 (#1135) the write delegates guard first, but GET and export routes still parse their query before any 401: `AuthoringNodeEndpoints.cs:89`, `AuthoringVersionEndpoints.cs:65`, `AuthoringImportEndpoints.cs:133` (export), `AuthoringChecklistEndpoints.cs:63`, `AuthoringManualCaseEndpoints.cs:123`, `AuthoringChangeEndpoints.cs:96`, `AiSettingsEndpoints.cs:130`. An anonymous caller with a bad query gets 422, not 401; no body is read and no data leaks. | receiver: Authoring lane, guard first, extend the guard-first pin to read routes |
+
+Closed by PR #1295 (ff308803): the Authoring read and export delegates authenticate first and carry the first validation error to the handler (`RequestError`), so an anonymous caller gets 401 and a caller without the permission 403 before any 422; pinned by `AuthoringGuardFirstBoundaryTests.AuthoringReadDelegates_AllRegisteredReads_GuardFirstAndSendFirst` and `AuthoringReadGuardFirstTests`.
