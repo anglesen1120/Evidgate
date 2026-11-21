@@ -9,11 +9,16 @@ namespace Contract.Tests;
 /// Turns selected subtrees of <c>contracts/openapi.yaml</c> into <see cref="JsonNode"/>s for <see cref="OpenApiSpec"/>.
 /// YamlDotNet's event parser does the YAML; this class only refuses what a contract test must never
 /// read silently: anchors, aliases, tags, block scalars, a duplicate key in one mapping (a last-wins
-/// would let a spec edit drop a required member unnoticed), and anything but one mapping or sequence document.
+/// would let a spec edit drop a required member unnoticed), a <c>&lt;&lt;</c> merge key (a YAML 1.1 tool would merge it,
+/// this reader would keep it as a member), NaN and infinity spellings (never needed by a spec), nesting deeper than
+/// <see cref="MaxDepth"/>, and anything but one mapping or sequence document.
 /// Every refusal is a <see cref="NotSupportedException"/> carrying the line.
 /// </summary>
 internal static class YamlSubset
 {
+    /// <summary>The deepest mapping/sequence nesting accepted; the recursive reader never gets near a stack limit.</summary>
+    internal const int MaxDepth = 64;
+
     /// <summary>Parses one document whose root is a mapping or sequence; null for empty input.</summary>
     /// <exception cref="NotSupportedException">A refused construct, a syntax error, or more than one document.</exception>
     public static JsonNode? Parse(string text)
@@ -30,7 +35,7 @@ internal static class YamlSubset
 
             parser.Consume<DocumentStart>();
             var rootStart = parser.Current!.Start;
-            var root = ReadNode(parser);
+            var root = ReadNode(parser, 0);
             parser.Consume<DocumentEnd>();
             if (!parser.TryConsume<StreamEnd>(out _))
             {
@@ -45,7 +50,7 @@ internal static class YamlSubset
         }
     }
 
-    private static JsonNode? ReadNode(Parser parser)
+    private static JsonNode? ReadNode(Parser parser, int depth)
     {
         if (parser.TryConsume<Scalar>(out var scalar))
         {
@@ -55,16 +60,18 @@ internal static class YamlSubset
         if (parser.TryConsume<MappingStart>(out var mappingStart))
         {
             RefuseDecorations(mappingStart.Anchor, mappingStart.Tag, mappingStart.Start);
-            return ReadMapping(parser);
+            RefuseTooDeep(depth + 1, mappingStart.Start);
+            return ReadMapping(parser, depth + 1);
         }
 
         if (parser.TryConsume<SequenceStart>(out var sequenceStart))
         {
             RefuseDecorations(sequenceStart.Anchor, sequenceStart.Tag, sequenceStart.Start);
+            RefuseTooDeep(depth + 1, sequenceStart.Start);
             var array = new JsonArray();
             while (!parser.TryConsume<SequenceEnd>(out _))
             {
-                array.Add(ReadNode(parser));
+                array.Add(ReadNode(parser, depth + 1));
             }
 
             return array;
@@ -73,7 +80,7 @@ internal static class YamlSubset
         throw Refuse(parser.Current!.Start, parser.Current is AnchorAlias ? "an alias" : "this node");
     }
 
-    private static JsonObject ReadMapping(Parser parser)
+    private static JsonObject ReadMapping(Parser parser, int depth)
     {
         var mapping = new JsonObject();
         while (!parser.TryConsume<MappingEnd>(out _))
@@ -81,7 +88,12 @@ internal static class YamlSubset
             var key = parser.Consume<Scalar>();
             RefuseDecorations(key.Anchor, key.Tag, key.Start);
             RefuseBlockStyle(key);
-            if (!mapping.TryAdd(key.Value, ReadNode(parser)))
+            if (key.Style == ScalarStyle.Plain && key.Value == "<<")
+            {
+                throw Refuse(key.Start, "a merge key");
+            }
+
+            if (!mapping.TryAdd(key.Value, ReadNode(parser, depth)))
             {
                 throw Refuse(key.Start, $"duplicate mapping key '{key.Value}'");
             }
@@ -101,6 +113,11 @@ internal static class YamlSubset
         }
 
         var value = scalar.Value;
+        if (IsNonFinite(value))
+        {
+            throw Refuse(scalar.Start, "a NaN or infinity scalar");
+        }
+
         return value switch
         {
             "" or "null" or "~" => null,
@@ -108,10 +125,27 @@ internal static class YamlSubset
             "false" => JsonValue.Create(false),
             _ when long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var integer)
                 => JsonValue.Create(integer),
-            _ when double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+            _ when double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) && double.IsFinite(number)
                 => JsonValue.Create(number),
             _ => JsonValue.Create(value),
         };
+    }
+
+    private static bool IsNonFinite(string value)
+    {
+        var unsigned = value.Length > 0 && value[0] is '+' or '-' ? value[1..] : value;
+        return unsigned.Equals("nan", StringComparison.OrdinalIgnoreCase)
+            || unsigned.Equals(".nan", StringComparison.OrdinalIgnoreCase)
+            || unsigned.Equals("infinity", StringComparison.OrdinalIgnoreCase)
+            || unsigned.Equals(".inf", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void RefuseTooDeep(int depth, Mark at)
+    {
+        if (depth > MaxDepth)
+        {
+            throw Refuse(at, $"nesting deeper than {MaxDepth} levels");
+        }
     }
 
     private static void RefuseBlockStyle(Scalar scalar)

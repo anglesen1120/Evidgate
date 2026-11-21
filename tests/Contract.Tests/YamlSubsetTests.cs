@@ -273,4 +273,70 @@ public sealed class YamlSubsetTests
         node["g"]!.GetValue<string>().ShouldBe("1");
         node["h"]!.GetValue<string>().ShouldBe("true");
     }
+
+    /// <summary>Nesting at the cap parses; one level deeper is refused with the line of the offending collection.</summary>
+    [Fact]
+    public void Parse_NestingAtCap_Parses_AndOneDeeperRefusesWithLine()
+    {
+        var node = YamlSubset.Parse(Nested(YamlSubset.MaxDepth));
+        node.ShouldNotBeNull();
+
+        var exception = Should.Throw<NotSupportedException>(() => YamlSubset.Parse(Nested(YamlSubset.MaxDepth + 1)));
+
+        exception.Message.ShouldContain($"nesting deeper than {YamlSubset.MaxDepth} levels");
+        exception.Message.ShouldContain($"line {YamlSubset.MaxDepth + 1}:");
+    }
+
+    /// <summary>Sequences count toward the cap like mappings.</summary>
+    [Fact]
+    public void Parse_DeepFlowSequences_Refuse()
+    {
+        var deep = new string('[', YamlSubset.MaxDepth + 1) + new string(']', YamlSubset.MaxDepth + 1);
+
+        Should.Throw<NotSupportedException>(() => YamlSubset.Parse(deep)).Message.ShouldContain("nesting deeper");
+        YamlSubset.Parse(deep[1..^1]).ShouldNotBeNull();
+    }
+
+    /// <summary>A plain <c>&lt;&lt;</c> key is refused whatever its value; a quoted one is an ordinary member.</summary>
+    [Theory]
+    [InlineData("a: 1\n<<: *a\n")]
+    [InlineData("<<: {x: 1}\n")]
+    [InlineData("b:\n  <<: [x]\n")]
+    public void Parse_MergeKey_Refuses(string yaml)
+        => Should.Throw<NotSupportedException>(() => YamlSubset.Parse(yaml)).Message.ShouldContain("a merge key");
+
+    /// <summary>A quoted <c>"&lt;&lt;"</c> key is a literal member.</summary>
+    [Fact]
+    public void Parse_QuotedMergeKey_IsAMember()
+        => (YamlSubset.Parse("'<<': 1\n") as JsonObject)!["<<"]!.GetValue<long>().ShouldBe(1);
+
+    /// <summary>Every plain NaN or infinity spelling is refused, including overflowing numbers.</summary>
+    [Theory]
+    [InlineData("NaN")]
+    [InlineData(".nan")]
+    [InlineData(".NaN")]
+    [InlineData("Infinity")]
+    [InlineData("-Infinity")]
+    [InlineData("+Infinity")]
+    [InlineData("-.inf")]
+    [InlineData(".INF")]
+    [InlineData("1e999")]
+    public void Parse_NonFinitePlainScalar_Refuses(string scalar)
+        => Should.Throw<NotSupportedException>(() => YamlSubset.Parse($"a: {scalar}\n")).Message.ShouldContain("NaN or infinity");
+
+    /// <summary>Quoted spellings stay strings, and ordinary words that merely start like them are untouched.</summary>
+    [Fact]
+    public void Parse_QuotedNonFinite_StaysAString()
+    {
+        var node = YamlSubset.Parse("a: 'NaN'\nb: \"-.inf\"\nc: Nano\n") as JsonObject;
+
+        node.ShouldNotBeNull();
+        node["a"]!.GetValue<string>().ShouldBe("NaN");
+        node["b"]!.GetValue<string>().ShouldBe("-.inf");
+        node["c"]!.GetValue<string>().ShouldBe("Nano");
+    }
+
+    private static string Nested(int levels)
+        => string.Concat(Enumerable.Range(0, levels - 1).Select(level => new string(' ', level) + "k:\n"))
+            + new string(' ', levels - 1) + "k: 1\n";
 }
