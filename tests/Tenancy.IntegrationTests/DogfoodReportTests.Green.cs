@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using Shouldly;
 using Xunit;
 
@@ -34,18 +34,29 @@ public sealed partial class DogfoodReportTests
     [Fact]
     public void Dogfood_ReportWithErrorElement_TripsTheGreenPin()
     {
-        var report = FailingReport.Replace("<failure message=\"boom\">trace</failure>", "<error message=\"boom\">trace</error>", StringComparison.Ordinal);
+        var report = FailingReport
+            .Replace("<failure message=\"boom\">trace</failure>", "<error message=\"boom\">trace</error>", StringComparison.Ordinal)
+            .Replace("failures=\"1\" errors=\"0\"", "failures=\"0\" errors=\"1\"", StringComparison.Ordinal);
 
         Should.Throw<ShouldAssertException>(() => AssertNoFailingCases(report));
     }
 
+    /// <summary>A namespaced or counterless error element still trips the pin, because it is counted by local name and mapped outcome.</summary>
+    [Fact]
+    public void Dogfood_NamespacedErrorWithoutCounters_TripsTheGreenPin()
+    {
+        const string Report = "<testsuites xmlns:j=\"urn:junit\"><testsuite name=\"Suite\"><testcase classname=\"Suite\" name=\"Errors\"><j:error\n message=\"x\"/></testcase></testsuite></testsuites>";
+
+        Should.Throw<ShouldAssertException>(() => AssertNoFailingCases(Report));
+    }
+
     private static void AssertNoFailingCases(string xml)
     {
-        Regex.Count(xml, "<failure[ >/]").ShouldBe(0, "report has a failure element");
-        Regex.Count(xml, "<error[ >/]").ShouldBe(0, "report has an error element");
+        XDocument.Parse(xml).Descendants().Count(e => e.Name.LocalName is "failure" or "error")
+            .ShouldBe(0, "report has a failure or error element");
         var result = PytestJUnitMapperReplay.Map(xml);
         result.Discrepancies.ShouldBeEmpty();
-        result.Cases.Count(c => c.Normalized == "failed").ShouldBe(0);
+        result.Cases.Count(c => c.Normalized is "failed" or "error").ShouldBe(0);
         (result.Declared.Failures ?? 0).ShouldBe(0);
         (result.Declared.Errors ?? 0).ShouldBe(0);
     }
