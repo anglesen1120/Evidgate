@@ -1496,3 +1496,9 @@ Closed by #1239 (833e2a4d): `RequestLogFloor.Apply` (a `PostConfigure<LoggerFilt
 | Five hand-rolled log-capture helpers (S605) | `CapturingLoggerProvider` (Identity.IntegrationTests) is the fifth capture helper next to `CapturingLoggerFactory` (`LogRedactionTests.cs`, Google login) and `ListLogger<T>` (`GitHubTestDoubles.cs`, Catalog) plus two more; the older ones keep message and state only, with weaker capture (no scopes or exception text). Merge them into one shared test-support provider and migrate the callers. | receiver: Tech Lead (test infrastructure); recorded owner: Tech Lead |
 
 Restated for what stays unmigrated by #1241 (af28ed14): the shared provider `tests/Shared/CapturingLoggerProvider.cs` replaced the Identity and Catalog helpers; the remaining helpers are in the carried row "Log-capture helpers left unmigrated (S613)".
+
+## Moved from status-carried.md by S617 (2026-11-21)
+
+| Telemetry partials depend on compile order for the Meter (S524) | Seven EvidgateTelemetry partial files (HealingGateway, Operations, Quota, RawReportEnqueue, Releases, Sessions, Workflow) read the Meter of EvidgateTelemetry.cs in field initialisers, so that file must compile first (true on the LAN: csc lists it first); an order-independent holder is a design change. Recording tests for the AI settings and authoring counters exist since S528 (#1079); the race-only outcomes were pinned by #1237 (archived under S614). | receiver: observability lane |
+
+Closed by PR #1244 (merge 762caa61): `EvidgateMeter` (internal static holder, `src/BuildingBlocks/Observability/EvidgateMeter.cs`) owns the one Meter and every `EvidgateTelemetry` partial creates its instruments from `EvidgateMeter.Instance`, so no partial depends on file order; `TelemetryMeterOrderTests` (Architecture.Tests) and `TelemetryInstrumentBindingTests` (Hosts.IntegrationTests) pin it, and the reintroduced private-field mutant was red on the LAN.

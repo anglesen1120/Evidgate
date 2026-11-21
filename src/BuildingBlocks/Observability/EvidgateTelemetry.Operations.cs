@@ -14,12 +14,12 @@ public static partial class EvidgateTelemetry
     /// <summary>Counter of artifacts a completion or parse verdict refused.</summary>
     public const string ArtifactFailureMetricName = "evidgate_artifact_failure_total";
 
-    private static readonly Counter<long> RunsIncomplete = Meter.CreateCounter<long>(
+    private static readonly Counter<long> RunsIncomplete = EvidgateMeter.Instance.CreateCounter<long>(
         RunIncompleteMetricName,
         unit: "{run}",
         description: "Runs closed by a reconcile as incomplete (a planned shard or required result never arrived). No labels: the rate is per deployment, not per run.");
 
-    private static readonly Counter<long> ArtifactFailures = Meter.CreateCounter<long>(
+    private static readonly Counter<long> ArtifactFailures = EvidgateMeter.Instance.CreateCounter<long>(
         ArtifactFailureMetricName,
         unit: "{artifact}",
         description: "Artifacts a completion or parse verdict refused, by stage (upload, parse) and the bounded failure-code vocabulary. Never labelled with an artifact id, key or object path.");
@@ -47,7 +47,7 @@ public static partial class EvidgateTelemetry
     /// <summary>Counter of units the usage ledger committed, per metered metric.</summary>
     public const string UsageUnitsMetricName = "evidgate_usage_units_total";
 
-    private static readonly Counter<double> UsageUnits = Meter.CreateCounter<double>(
+    private static readonly Counter<double> UsageUnits = EvidgateMeter.Instance.CreateCounter<double>(
         UsageUnitsMetricName,
         unit: "{unit}",
         description: "Billed units committed to the usage ledger, by the closed metric vocabulary of that table (results, artifact_gb_month, …). No money and no tenant: prices are absent by ruling, so a cost view multiplies a published price by this rate.");
@@ -67,7 +67,7 @@ public static partial class EvidgateTelemetry
     /// <summary>Counter of billing keys a ledger batch refused because each already claims another payload.</summary>
     public const string UsageBillingKeyConflictMetricName = "evidgate_usage_billing_key_conflicts_total";
 
-    private static readonly Counter<long> UsageBillingKeyConflicts = Meter.CreateCounter<long>(
+    private static readonly Counter<long> UsageBillingKeyConflicts = EvidgateMeter.Instance.CreateCounter<long>(
         UsageBillingKeyConflictMetricName,
         unit: "{key}",
         description: "Billing keys whose ledger payload conflicted (a stored row with another payload, or a request repeating a key with a different payload). The batch is rolled back and nothing is billed: any sustained rate means a producer reuses a key for new work. No labels: the error log names the key and the digests.");

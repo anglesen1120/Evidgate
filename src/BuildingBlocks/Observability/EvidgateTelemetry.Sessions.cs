@@ -38,27 +38,27 @@ public static partial class EvidgateTelemetry
     /// </summary>
     public const string SessionSlideMetricName = "evidgate_session_slide_total";
 
-    private static readonly Counter<long> LoginAttempts = Meter.CreateCounter<long>(
+    private static readonly Counter<long> LoginAttempts = EvidgateMeter.Instance.CreateCounter<long>(
         LoginAttemptMetricName,
         unit: "{attempt}",
         description: "Federated login attempts by provider and outcome code (02.3.1). Never labelled with an email, a subject, a state, a nonce, a verifier or a code.");
 
-    private static readonly Counter<long> SessionAuthOutcomes = Meter.CreateCounter<long>(
+    private static readonly Counter<long> SessionAuthOutcomes = EvidgateMeter.Instance.CreateCounter<long>(
         SessionAuthOutcomeMetricName,
         unit: "{request}",
         description: "Cookie-authenticated requests by session-auth outcome code (02.3.2). Never labelled with a cookie value, a session id, an address or a user agent.");
 
-    private static readonly Counter<long> SessionRotations = Meter.CreateCounter<long>(
+    private static readonly Counter<long> SessionRotations = EvidgateMeter.Instance.CreateCounter<long>(
         SessionRotatedMetricName,
         unit: "{rotation}",
         description: "Session rotations by trigger (02.3.2). No ids: a rotation is counted, never attributed.");
 
-    private static readonly Counter<long> SessionRevocations = Meter.CreateCounter<long>(
+    private static readonly Counter<long> SessionRevocations = EvidgateMeter.Instance.CreateCounter<long>(
         SessionRevokedMetricName,
         unit: "{session}",
         description: "Sessions revoked, added in the batch each revoke-all call revoked (02.3.2). No labels.");
 
-    private static readonly Counter<long> SessionSlides = Meter.CreateCounter<long>(
+    private static readonly Counter<long> SessionSlides = EvidgateMeter.Instance.CreateCounter<long>(
         SessionSlideMetricName,
         unit: "{request}",
         description: "Session-path writes by whether the idle slide was actually written (02.3.2's 60 s throttle hit rate). No labels beyond written.");

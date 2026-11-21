@@ -74,58 +74,53 @@ public static partial class EvidgateTelemetry
 
     private static readonly ActivitySource Source = new(ActivitySourceName);
 
-    // Every partial's instrument initialiser reads this field, so this file must be compiled before them:
-    // a wrong order leaves it null and fails the whole type's first use. Keep the other parts' file names
-    // sorting after this one.
-    private static readonly Meter Meter = new(MeterName);
-
-    private static readonly Counter<long> ModuleOperations = Meter.CreateCounter<long>(
+    private static readonly Counter<long> ModuleOperations = EvidgateMeter.Instance.CreateCounter<long>(
         ModuleOperationCounterName,
         unit: "{operation}",
         description: "Module operations started, tagged by evidgate.module.");
 
-    private static readonly Counter<long> ManifestRejections = Meter.CreateCounter<long>(
+    private static readonly Counter<long> ManifestRejections = EvidgateMeter.Instance.CreateCounter<long>(
         ManifestRejectedMetricName,
         unit: "{manifest}",
         description: "Manifests refused at upload, by reason (05.1.1). Never labelled with a manifest value, case name or hash.");
 
-    private static readonly Counter<long> AdapterCapabilityRejections = Meter.CreateCounter<long>(
+    private static readonly Counter<long> AdapterCapabilityRejections = EvidgateMeter.Instance.CreateCounter<long>(
         AdapterCapabilityRejectedMetricName,
         unit: "{capability}",
         description: "Adapter capabilities refused at first send, by code and protocol-major bucket (04.7.1). Never labelled with a document value, adapter name or hash.");
 
-    private static readonly Counter<long> IngestBatchRejections = Meter.CreateCounter<long>(
+    private static readonly Counter<long> IngestBatchRejections = EvidgateMeter.Instance.CreateCounter<long>(
         IngestBatchRejectedMetricName,
         unit: "{batch}",
         description: "Event batches refused by a transport or decode cap, by reason (04.1.1). Never labelled with a body, an event id or any request value.");
 
-    private static readonly Counter<long> IngestCapExceeded = Meter.CreateCounter<long>(
+    private static readonly Counter<long> IngestCapExceeded = EvidgateMeter.Instance.CreateCounter<long>(
         IngestCapExceededMetricName,
         unit: "{request}",
         description: "Ingestion requests refused by one published cap, by cap name. Never labelled with a value, an id or a body.");
 
-    private static readonly Counter<long> CaseAttemptsWritten = Meter.CreateCounter<long>(
+    private static readonly Counter<long> CaseAttemptsWritten = EvidgateMeter.Instance.CreateCounter<long>(
         CaseAttemptWrittenMetricName,
         unit: "{attempt}",
         description: "Case attempts written inside a caller's tenant transaction, by normalised status (05.3.3). Never labelled with a raw status, case name or execution key.");
 
-    private static readonly Counter<long> CaseAttemptsBlockedBySetup = Meter.CreateCounter<long>(
+    private static readonly Counter<long> CaseAttemptsBlockedBySetup = EvidgateMeter.Instance.CreateCounter<long>(
         CaseAttemptBlockedBySetupMetricName,
         unit: "{attempt}",
         description: "Dependant case attempts marked blocked because their setup failed (05.3.3-T2.2). No labels.");
 
-    private static readonly Counter<long> FinalizeProducerSlotTaken = Meter.CreateCounter<long>(
+    private static readonly Counter<long> FinalizeProducerSlotTaken = EvidgateMeter.Instance.CreateCounter<long>(
         FinalizeProducerSlotTakenMetricName,
         unit: "{request}",
         description: "Finalize requests refused with producer_slot_taken (05.3.2-T1, T9). No labels: never a token, a producer id or a run id.");
 
-    private static readonly Counter<long> FinalizeDeclarationMismatch = Meter.CreateCounter<long>(
+    private static readonly Counter<long> FinalizeDeclarationMismatch = EvidgateMeter.Instance.CreateCounter<long>(
         FinalizeDeclarationMismatchMetricName,
         unit: "{request}",
         description: "Repeat finalizes whose declared values disagree with the stored declaration (05.3.2-T1, T68/D3). No labels.");
 
 
-    private static readonly Histogram<double> PipelineDurations = Meter.CreateHistogram<double>(
+    private static readonly Histogram<double> PipelineDurations = EvidgateMeter.Instance.CreateHistogram<double>(
         PipelineDurationMetricName,
         unit: "ms",
         description: "C2 pipeline handler duration by message type.");
