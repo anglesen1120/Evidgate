@@ -17,8 +17,8 @@
 # attribute becomes "host" and this run's checkout path becomes /repo in every attribute value and
 # text node. The residual check reads element names, attribute names and namespace URIs as well as
 # values, text, tail and the document's character data joined in order (one pass, so a name split
-# by child elements is still found), and compares the match form: NFKD, casefold, then default-ignorable
-# (Cf) and combining (Mn, Me) characters removed, never recomposed,
+# by child elements is still found), and compares the match form: NFKD, then Cf, Mn, Me and
+# Default_Ignorable_Code_Point characters removed, casefold, removed again, never recomposed,
 # raw and after one strict percent-decoding; a malformed escape refuses rather than decoding
 # leniently. A report that still names the machine, its host name (socket.gethostname() or
 # $HOSTNAME) or the home directory is refused, never uploaded. Each upload file is written to a
@@ -149,6 +149,15 @@ def scrub_tree(doc, prefixes):
 
 MALFORMED_PERCENT = re.compile(rb"%(?![0-9A-Fa-f]{2})")
 IGNORABLE = frozenset(("Cf", "Mn", "Me"))
+SCANNED = [0]  # characters handed to the residual match, printed under EVIDGATE_COLLECT_SCAN_STATS
+# Unicode Default_Ignorable_Code_Point (DerivedCoreProperties.txt, Unicode 16), assigned or not.
+# Python's unicodedata has no such property, so the ranges are listed; Cf, Mn and Me are stripped
+# by category as well, which covers later additions to those categories.
+DEFAULT_IGNORABLE = re.compile(
+    "[\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180f\u200b-\u200f\u202a-\u202e"
+    "\u2060-\u206f\u3164\ufe00-\ufe0f\ufeff\uffa0\ufff0-\ufff8\U0001bca0-\U0001bca3"
+    "\U0001d173-\U0001d17a\U000e0000-\U000e0fff]"
+)
 STALE_PATTERNS = ("*.junit.xml", "manifest.json", ".*.tmp-*")
 
 
@@ -159,18 +168,22 @@ def refuse(producer, reason):
 def without_ignorables(text):
     # Marks are dropped from the decomposed form and the result stays decomposed: composing again
     # would fold a base letter and a following mark (or a jamo pair split across elements) into one
-    # character depending on what surrounds the text. The removed categories render as nothing or as
+    # character depending on what surrounds the text. The removed characters render as nothing or as
     # a mark on the previous character, so dropping them cannot make a name stop matching. No ASCII
-    # character is Cf, Mn or Me.
+    # character is in the strip set.
     text = unicodedata.normalize("NFKD", text)
     if text.isascii():
         return text
-    return "".join(char for char in text if unicodedata.category(char) not in IGNORABLE)
+    return "".join(
+        char for char in DEFAULT_IGNORABLE.sub("", text) if unicodedata.category(char) not in IGNORABLE
+    )
 
 
 def match_form(text):
-    # Case folding can itself emit a mark (U+0130 becomes i plus U+0307), so it runs before the strip.
-    return without_ignorables(unicodedata.normalize("NFKD", text).casefold())
+    # Strip, casefold, strip: casefolding can emit a mark (U+0130 becomes i plus U+0307, U+0345
+    # becomes U+03B9), so a strip before it alone lets a disguised name through, and the strip
+    # after it must not be skipped.
+    return without_ignorables(without_ignorables(text).casefold())
 
 
 def decode_once(producer, text):
@@ -221,6 +234,7 @@ def refuse_residual(producer, doc, values):
     expected.discard("")
 
     def names_machine(value):
+        SCANNED[0] += len(value)
         return any(secret in form for form in matching_forms(producer, value) for secret in expected)
 
     # A child element splits an identifier across text, its own text and a tail.
@@ -286,15 +300,16 @@ def publish(out, pending, payload, created):
     for name, temp in staged:
         os.replace(temp, out / name)
     os.replace(manifest_temp, out / "manifest.json")
-    # Durability of the renames only: a filesystem that cannot fsync a directory must not turn a
-    # published set into a reported failure.
-    directory = os.open(out, os.O_RDONLY | os.O_DIRECTORY)
+    # Durability of the renames only: the set is already published, so a directory that cannot be
+    # opened or fsynced must not turn it into a reported failure.
     try:
-        os.fsync(directory)
+        directory = os.open(out, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
     except OSError:
         pass
-    finally:
-        os.close(directory)
 
 
 def remove_stale(out, produced):
@@ -323,12 +338,13 @@ residual = [value for value in checkout if value]
 # Both the real host name and an injected $HOSTNAME are refused; each is additive, never a
 # replacement, so setting one cannot switch the other off.
 machines = [socket.gethostname(), os.environ.get("HOSTNAME", "")]
-residual.extend(machine for machine in machines if len(machine) >= 4 and machine.casefold() != "host")
+residual.extend(machine for machine in machines if len(match_form(machine)) >= 4 and match_form(machine) != "host")
 # The first DNS label of a dotted name is refused too (foo.corp.local also refuses "foo"). Under 3
 # characters or all digits (an IPv4 prefix) is too common to name a machine, so it is skipped.
 for machine in machines:
     label = machine.split(".")[0] if "." in machine else ""
-    if len(match_form(label)) >= 3 and not label.isdigit() and label.casefold() not in ("host", "localhost"):
+    folded = match_form(label)
+    if len(folded) >= 3 and not folded.isdigit() and folded not in ("host", "localhost"):
         residual.append(label)
 home = os.environ.get("HOME", "")
 if home not in ("", "/"):
@@ -388,6 +404,8 @@ except Exception as error:
             pass
     sys.exit(f"collect.sh: writing the upload set into {out} failed ({error}); refusing to publish a partial set")
 remove_stale(out, {name for name, _ in pending} | {"manifest.json"})
+if os.environ.get("EVIDGATE_COLLECT_SCAN_STATS"):
+    print(f"scanned_chars={SCANNED[0]}", file=sys.stderr)
 print(json.dumps(manifest, indent=2))
 PY
 exit "$PRODUCER_STATUS"
