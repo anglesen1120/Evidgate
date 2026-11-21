@@ -42,10 +42,12 @@ public sealed partial class DraftTests : IClassFixture<TenancyHostPool>
         }
     }
 
-    private async Task<World> StartAsync()
+    private async Task<World> StartAsync(string? ownedDatabase = null)
     {
-        var database = await _fixture.SharedDatabaseAsync();
-        var api = _hosts.RealResolver(database);
+        var database = ownedDatabase ?? await _fixture.SharedDatabaseAsync();
+
+        // A caller-owned database is dropped by its owner, so its host is private (empty configuration), never pooled.
+        var api = ownedDatabase is null ? _hosts.RealResolver(database) : _hosts.RealResolver(database, new Dictionary<string, string?>());
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("draft"));
