@@ -74,6 +74,35 @@ public sealed partial class DogfoodReportTests
         }
     }
 
+    /// <summary>A full host name is refused whatever its length: one under 4 characters as a whole word only (not inside a longer word), and the literal placeholder "host" that the scrub writes never.</summary>
+    [Theory]
+    [InlineData("ci", "run on ci today", true)]
+    [InlineData("ci", "CI", true)]
+    [InlineData("ci", "civil special", false)]
+    [InlineData("ab1", "x ab1", true)]
+    [InlineData("ab1", "ab12 xab1", false)]
+    [InlineData("srv", "srv-01", true)]
+    [InlineData("srv", "ci_srv_log", true)]
+    [InlineData("srv", "observer srvx", false)]
+    [InlineData("host", "host", false)]
+    [InlineData("HOST", "the host", false)]
+    [InlineData("Runner-Zq-Long", "on runner-zq-long", true)]
+    public async Task Dogfood_Collect_ShortFullHostName_IsRefusedAsWholeWord(string hostname, string text, bool refused)
+    {
+        if (refused)
+        {
+            await AssertRefusedAsync(Report(text), hostname: hostname);
+        }
+        else
+        {
+            await WithReports(Report(text), async (source, output) =>
+            {
+                var result = await RunScriptAsync(source, output, hostname: hostname);
+                result.Exit.ShouldBe(0, result.Stderr);
+            });
+        }
+    }
+
     /// <summary>All temp names of a later file taken: the run fails closed and removes the temps it already staged.</summary>
     [Fact]
     public async Task Dogfood_Collect_TempNamesExhausted_FailsClosedAndRemovesOwnTemps()
