@@ -408,14 +408,14 @@ prefixes = [
 ]
 residual = [value for value in checkout if value]
 # Both the real host name and an injected $HOSTNAME are refused; each is additive, never a
-# replacement, so setting one cannot switch the other off. The literal "host" is what the report
-# scrub writes, so it is the one name never refused. A name of 4 or more characters is matched as a
+# replacement, so setting one cannot switch the other off. Surrounding whitespace is dropped first. The
+# literal "host" is what the report scrub writes, and "localhost" names nobody, so neither is refused. A name of 4 or more characters is matched as a
 # substring; a shorter one (ci, srv) as a whole word only, so it does not refuse every longer word.
-machines = [socket.gethostname(), os.environ.get("HOSTNAME", "")]
+machines = [name.strip() for name in (socket.gethostname(), os.environ.get("HOSTNAME", ""))]
 labels = []
 for machine in machines:
     folded = identifier_form(machine)
-    if folded and folded != "host":
+    if folded and folded not in ("host", "localhost"):
         (residual if len(folded) >= 4 else labels).append(machine)
 # The first DNS label of a dotted name is refused too, as a whole word (server.corp.local refuses the
 # word "server" but not "serverless"), and only when distinctive: 5 or more characters, or a digit or

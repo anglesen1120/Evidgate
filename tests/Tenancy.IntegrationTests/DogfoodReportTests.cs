@@ -400,7 +400,10 @@ public sealed partial class DogfoodReportTests
 
     private static async Task AssertResidualRefused(string value, bool inText)
     {
-        const string Control = "<testsuite><testcase name=\"safe\"><system-out>safe</system-out></testcase></testsuite>";
+        // The name case keeps system-out out of the control so a host named "out" cannot refuse it.
+        var Control = inText
+            ? "<testsuite><testcase name=\"safe\"><system-out>safe</system-out></testcase></testsuite>"
+            : "<testsuite><testcase name=\"safe\"/></testsuite>";
         await WithReports(Control, async (source, output) =>
         {
             var (exit, stderr) = await RunCollect(source, output);
