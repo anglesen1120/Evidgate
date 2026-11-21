@@ -1490,3 +1490,9 @@ Closed by PR #1237 (merge a03b7402): `AuthoringCommitFaultMetricTests.LostWrite.
 | Callback log floor fix candidates and tests to flip (S610) | Candidates: `PostConfigure<LoggerFilterOptions>` removing every rule below Warning that matches the category (exact, prefix, wildcard, any provider); or switch the request-start log off at source. Flip on fix: `LogFloor_ProviderSpecificDefaultAtTrace_ExposesCallbackQuery_KnownGap`, `LogFloor_ProviderSpecificHostingCategoryAtTrace_ExposesCallbackQuery_KnownGap`, `LogFloor_ProviderlessTrailingWildcardOnTheHostingCategoryAtTrace_ExposesCallbackQuery_KnownGap`. | receiver: T3 fix lane (Identity/ApiHost) |
 
 Closed by #1239 (833e2a4d): `RequestLogFloor.Apply` (a `PostConfigure<LoggerFilterOptions>` in `ApiHost`) appends a Warning rule `Category*Category` for the provider-less case and every provider named in the rules, outranking every pattern that can match the category; the three `_KnownGap` tests are now `..._DoesNotLowerTheFloor`, with reload, provider-parent and Console-by-alias cases and a Hosts theory over the key shapes; mutants (fix removed, per-provider part dropped) were red.
+
+## Moved from status-carried.md by S613 (2026-11-21)
+
+| Five hand-rolled log-capture helpers (S605) | `CapturingLoggerProvider` (Identity.IntegrationTests) is the fifth capture helper next to `CapturingLoggerFactory` (`LogRedactionTests.cs`, Google login) and `ListLogger<T>` (`GitHubTestDoubles.cs`, Catalog) plus two more; the older ones keep message and state only, with weaker capture (no scopes or exception text). Merge them into one shared test-support provider and migrate the callers. | receiver: Tech Lead (test infrastructure); recorded owner: Tech Lead |
+
+Restated for what stays unmigrated by #1241 (af28ed14): the shared provider `tests/Shared/CapturingLoggerProvider.cs` replaced the Identity and Catalog helpers; the remaining helpers are in the carried row "Log-capture helpers left unmigrated (S613)".
