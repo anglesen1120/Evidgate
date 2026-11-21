@@ -47,11 +47,11 @@ internal static class DraftBody
     internal const int MaxBodyRefLength = 512;
     internal const int MaxProvenanceMembers = 32;
 
-    /// <summary>PostgreSQL <c>numeric</c> stores at most this many digits after the decimal point (18 §8.1).</summary>
-    private const int MaxNumericScale = 16383;
+    /// <summary>Longest provenance number token, in characters.</summary>
+    private const int MaxNumberTokenLength = 64;
 
-    /// <summary>PostgreSQL <c>numeric</c> stores at most this many digits before the decimal point (18 §8.1).</summary>
-    private const int MaxNumericIntegerDigits = 131072;
+    /// <summary>Largest exponent magnitude a provenance number may carry.</summary>
+    private const int MaxNumberExponent = 400;
 
     private static readonly JsonSerializerOptions Strict = new(JsonSerializerDefaults.Web)
     {
@@ -257,71 +257,77 @@ internal static class DraftBody
         }
 
         // The exact byte bound is measured by PostgreSQL after this: insignificant whitespace in the raw text makes any
-        // C# size proxy refuse a value the column accepts. The numeric-range refusal above cannot be left to the cast:
-        // a value outside `numeric`'s range raises 22003 there, which the column's CHECK never sees, so it would answer
-        // 500 instead of naming `provenance`.
+        // C# size proxy refuse a value the column accepts. Numbers are bounded first because the jsonb cast raises
+        // 22003 (a 500) outside numeric's range and renders a tiny exponent as thousands of digits.
         var text = element.GetRawText();
         return text;
     }
 
     /// <summary>
-    /// True when a number token cannot be stored as the column's <c>numeric</c>: more than 16383 fractional digits or
-    /// more than 131072 integer digits (PostgreSQL numeric limits), which the <c>jsonb</c> cast refuses with 22003
-    /// rather than the column's byte CHECK. Tokens whose exponent alone is past either limit are refused without
-    /// parsing the mantissa, since no such value fits.
+    /// True when the numbers in the value are too long, carry an exponent past ±400, or would render (as PostgreSQL
+    /// writes a numeric, never in scientific form) to more than the column's 4096 bytes in total. Bounding the token
+    /// and exponent keeps every later size computation far from overflow and from numeric's own limits.
     /// </summary>
     private static bool ExceedsNumericRange(JsonElement element)
+    {
+        var rendered = 0L;
+        return ExceedsNumericRange(element, ref rendered);
+    }
+
+    private static bool ExceedsNumericRange(JsonElement element, ref long rendered)
     {
         switch (element.ValueKind)
         {
             case JsonValueKind.Number:
-                return ExceedsNumericRange(element.GetRawText());
+                rendered += RenderedLength(element.GetRawText());
+                return rendered < 0 || rendered > MaxProvenanceBytes;
             case JsonValueKind.Object:
-                return element.EnumerateObject().Any(member => ExceedsNumericRange(member.Value));
+                foreach (var member in element.EnumerateObject())
+                {
+                    if (ExceedsNumericRange(member.Value, ref rendered))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
             case JsonValueKind.Array:
-                return element.EnumerateArray().Any(ExceedsNumericRange);
+                foreach (var item in element.EnumerateArray())
+                {
+                    if (ExceedsNumericRange(item, ref rendered))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
             default:
                 return false;
         }
     }
 
-    private static bool ExceedsNumericRange(string token)
+    /// <summary>A lower bound of the digits PostgreSQL writes for the number, or -1 when the token is out of bounds.</summary>
+    private static long RenderedLength(string token)
     {
-        var span = token.AsSpan();
-        if (span.Length > 0 && span[0] is '-' or '+')
+        if (token.Length > MaxNumberTokenLength)
         {
-            span = span[1..];
+            return -1;
         }
 
+        var span = token.AsSpan();
         var marker = span.IndexOfAny('e', 'E');
         var mantissa = marker < 0 ? span : span[..marker];
-        if (mantissa.IndexOfAnyInRange('1', '9') < 0)
-        {
-            // Zero has no weight or scale in numeric, whatever its exponent says.
-            return false;
-        }
-
-        var exponent = 0L;
+        var exponent = 0;
         if (marker >= 0
-            && (!long.TryParse(span[(marker + 1)..], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out exponent)
-                || exponent > MaxNumericIntegerDigits
-                || exponent < -MaxNumericScale))
+            && (!int.TryParse(span[(marker + 1)..], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out exponent)
+                || Math.Abs(exponent) > MaxNumberExponent))
         {
-            return true;
+            return -1;
         }
 
         var point = mantissa.IndexOf('.');
-        var fractionDigits = point < 0 ? 0 : mantissa.Length - point - 1;
-        var integerPart = point < 0 ? mantissa : mantissa[..point];
-        var leadingZeros = 0;
-        while (leadingZeros < integerPart.Length && integerPart[leadingZeros] == '0')
-        {
-            leadingZeros++;
-        }
-
-        var scale = (long)fractionDigits - exponent;
-        var whole = integerPart.Length - leadingZeros + exponent;
-        return scale > MaxNumericScale || whole > MaxNumericIntegerDigits;
+        var fraction = point < 0 ? 0 : mantissa.Length - point - 1;
+        return Math.Max(1, fraction - exponent);
     }
 
     /// <summary>The C# half of <c>draft_base_commit_check</c>: 7–64 lower-case hex characters.</summary>

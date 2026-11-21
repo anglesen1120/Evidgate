@@ -246,20 +246,21 @@ public sealed partial class DraftTests
     }
 
     [Fact]
-    public async Task Create_ProvenanceZeroWithAHugeExponent_IsAccepted()
+    public async Task Create_ProvenanceNumbersWithinTheBounds_AreAccepted()
     {
         await using var world = await StartAsync();
         var body = Body();
-        body["provenance"] = JsonNode.Parse("{\"n\":0e131073}")!;
+        body["provenance"] = JsonNode.Parse("{\"n\":[1e-300,0.5,0e3,12345678901234567890]}")!;
 
-        var created = await CreateAsync(world, body);
-
-        created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
+        (await CreateAsync(world, body)).Status.ShouldBe(HttpStatusCode.Created);
     }
 
     [Theory]
     [InlineData("{\"n\":[1E-9999999]}")]
     [InlineData("{\"n\":0.1e-16384}")]
+    [InlineData("{\"n\":0e-16384}")]
+    [InlineData("{\"n\":0e131073}")]
+    [InlineData("{\"n\":[1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300]}")]
     public async Task Create_ProvenanceNumberOutsideNumericRange_Is422DraftInvalid_NotA500(string provenance)
     {
         await using var world = await StartAsync();

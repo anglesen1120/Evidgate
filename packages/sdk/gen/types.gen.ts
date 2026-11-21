@@ -1192,7 +1192,7 @@ export type DraftDto = {
     version: number;
     content: DraftContentDto;
     /**
-     * Optional provenance object (template, AI run or incident reference); server validation caps its UTF-8 JSON at 4096 bytes.
+     * Optional provenance object (template, AI run or incident reference); server validation caps its UTF-8 JSON at 4096 bytes; a number is at most 64 characters with an exponent of at most 400 in magnitude, otherwise 422 `draft_invalid` naming `provenance`.
      */
     provenance: {
         [key: string]: unknown;
@@ -1216,7 +1216,7 @@ export type CreateDraftRequest = {
     base_commit: string;
     content: DraftContentDto;
     /**
-     * Optional provenance object (template, AI run or incident reference); server validation caps its UTF-8 JSON at 4096 bytes.
+     * Optional provenance object (template, AI run or incident reference); server validation caps its UTF-8 JSON at 4096 bytes; a number is at most 64 characters with an exponent of at most 400 in magnitude, otherwise 422 `draft_invalid` naming `provenance`.
      */
     provenance?: {
         [key: string]: unknown;
