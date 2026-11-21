@@ -52,8 +52,8 @@ public sealed partial class TemplateTests : IClassFixture<TenancyHostPool>
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("template"));
 
-        // The registry ships no seed row and a built-in is visible to every org, so this suite owns the table:
-        // clearing it keeps one test's built-ins out of the next test's page.
+        // A built-in is visible to every org and 0119 seeds one, so this suite clears the table it owns: one
+        // test's rows (and the shipped row) stay out of the next test's page.
         await _fixture.ExecuteAsync(database, "delete from public.template");
 
         return new World(api, client, database, user, org);

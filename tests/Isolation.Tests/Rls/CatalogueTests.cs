@@ -340,8 +340,8 @@ public sealed partial class CatalogueTests : HarnessTest
             [("id", UsagePriceRowId)],
             Token);
 
-        // 03.5.1 (0118): no migration seeds a template row yet, so the probe row is a fixture built-in,
-        // written through the owner seam like the switch and price rows above.
+        // 0118 creates the template registry and 0119 seeds the built-in web template; this suite still probes
+        // with its own fixture row, so the check does not depend on which templates ship.
         await Fixture.SeedAsync(
             """
             insert into public.template (id, org_id, kind, name, version, body_ref, conformance_rules)

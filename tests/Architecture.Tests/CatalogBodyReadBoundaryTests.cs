@@ -63,6 +63,10 @@ public sealed class CatalogBodyReadBoundaryTests
             (["ReadJsonAsync( x1"], "reads the outbound GitHub API response through its own capped reader, not a request body"),
         [ModuleDirectory + "/Domain/SidecarManifestReader.cs"] =
             (["JsonDocument.Parse x1"], "parses a repository sidecar manifest after converting it from YAML"),
+        [ModuleDirectory + "/Domain/TemplateConformance.cs"] =
+            (["JsonDocument.Parse x1"], "parses the packaged conformance rules document, not a request body"),
+        [ModuleDirectory + "/Domain/TemplateRenderer.cs"] =
+            (["JsonDocument.Parse x1"], "parses the packaged template manifest defaults, not a request body"),
         [ModuleDirectory + "/Infrastructure/Persistence/DraftReadSql.cs"] =
             (["JsonDocument.Parse x1"], "decodes the stored draft provenance JSON column"),
         [ModuleDirectory + "/Infrastructure/Persistence/TemplateReadSql.cs"] =
