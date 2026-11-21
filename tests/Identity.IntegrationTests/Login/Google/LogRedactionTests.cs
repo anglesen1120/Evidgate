@@ -79,7 +79,11 @@ public sealed class LogRedactionTests
         nonceMismatch.TokenOverride = () => nonceMismatch.Tokens.Mint((_, claims) => claims["nonce"] = "another-nonce");
         (await nonceMismatch.Provider.CompleteAsync(Callback(), cancellationToken)).Failure.ShouldBe(LoginFailure.TokenInvalid);
 
-        var messages = logs.Entries.Select(entry => entry.Message).ToArray();
+        var messages = logs.Entries.Select(entry =>
+        {
+            entry.Exception.ShouldBeNull("attached exceptions can leak provider details");
+            return entry.Message;
+        }).ToArray();
         messages.ShouldNotBeEmpty("each failure is one line");
 
         foreach (var message in messages)
@@ -183,7 +187,11 @@ public sealed class LogRedactionTests
 
         await harness.Provider.CompleteAsync(Callback(), TestContext.Current.CancellationToken);
 
-        logs.Entries.Select(entry => entry.Message).ToArray().ShouldBe(UnconfiguredMessage);
+        logs.Entries.Select(entry =>
+        {
+            entry.Exception.ShouldBeNull("attached exceptions can leak provider details");
+            return entry.Message;
+        }).ToArray().ShouldBe(UnconfiguredMessage);
     }
 
     private static LoginCallbackRequest Callback() => new(

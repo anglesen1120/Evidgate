@@ -76,7 +76,11 @@ public sealed class GitHubLogRedactionTests
             loggers: loggers);
         (await noVerifiedEmail.Provider.CompleteAsync(GitHubTestHarness.Callback(), cancellationToken)).Failure.ShouldBe(LoginFailure.TokenInvalid);
 
-        var messages = logs.Entries.Select(entry => entry.Message).ToArray();
+        var messages = logs.Entries.Select(entry =>
+        {
+            entry.Exception.ShouldBeNull("attached exceptions can leak provider details");
+            return entry.Message;
+        }).ToArray();
         messages.ShouldNotBeEmpty("each failure is one line");
 
         foreach (var message in messages)
@@ -150,7 +154,11 @@ public sealed class GitHubLogRedactionTests
 
         await harness.Provider.CompleteAsync(GitHubTestHarness.Callback(), TestContext.Current.CancellationToken);
 
-        logs.Entries.Select(entry => entry.Message).ToArray().ShouldBe(new[] { $"{Prefix}unconfigured" });
+        logs.Entries.Select(entry =>
+        {
+            entry.Exception.ShouldBeNull("attached exceptions can leak provider details");
+            return entry.Message;
+        }).ToArray().ShouldBe(new[] { $"{Prefix}unconfigured" });
     }
 
     [Fact]
