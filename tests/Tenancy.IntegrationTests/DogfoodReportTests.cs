@@ -16,7 +16,7 @@ namespace Tenancy.IntegrationTests;
 /// and through the real JUnit mapper, which must report no discrepancy. The streamed document must also use only the
 /// elements of the committed JUnit sample corpus and the system-out a failing Playwright case emits.
 /// </summary>
-public sealed class DogfoodReportTests
+public sealed partial class DogfoodReportTests
 {
     private const long MaxBytes = 8 * 1024 * 1024;
 
@@ -78,7 +78,7 @@ public sealed class DogfoodReportTests
     [Fact]
     public void Dogfood_VitestReport_Parses() => AssertMapsCleanly("vitest");
 
-    /// <summary>Evidgate's own Playwright report (three suites) maps through the real JUnit mapper with no discrepancy; its failing cases map as failed, not hidden.</summary>
+    /// <summary>Evidgate's own Playwright report maps through the real JUnit mapper with no discrepancy; a failing case would map as failed, not hidden.</summary>
     [Fact]
     public void Dogfood_PlaywrightReport_Parses() => AssertMapsCleanly("playwright");
 
