@@ -1532,3 +1532,12 @@ Closed by PR #1252 (merge 06999b01): each plan or doc cite now names the test or
 | Self-test `Texts` fact lacks the state pair (S613) | Low: `CapturingLoggerProviderTests.Texts_CoverEveryPart_AndClearEmptiesTheCapture` (`tests/Catalog.UnitTests/CapturingLoggerProviderTests.cs:92-94`) asserts message, scope and exception text but not that `Texts` yields the state pair; add `texts.ShouldContain("Value=state-marker")`. Dropping state from `Texts` alone would stay green there (the state fact covers `State`, not `Texts`). | receiver: Tech Lead (test infrastructure); recorded owner: Tech Lead |
 
 Closed by PR #1255 (merge 4ee842aa): `Texts_CoverEveryPart_AndClearEmptiesTheCapture` now asserts `Value=state-marker`, and a mutant that drops the state pair from `Texts` turns it red.
+
+## Moved from status-carried.md by S624 (2026-11-21)
+
+| Item | Blocker | Owner |
+|---|---|---|
+| Floor notice can be silenced by the operator's own filter (S615) | `RequestLogFloorNotice` logs its Warning under category `Evidgate.Api.RequestLogFloorNotice`, so `Logging:LogLevel:Default=Error` or a rule on `Evidgate` drops it; the floor itself holds. Also: a later code `PostConfigure<LoggerFilterOptions>` registered after `ApiHost.cs` (`RequestLogFloor.Apply`) could append an 81-char rule after the floor and win the tie; none exists in src or tests. | receiver: next Api logging change (two separate closures: emit the notice outside the operator's filters; assert at start that the floor is the last matching rule) |
+| ApiHost floor test nits (S619) | QA notes on `tests/Hosts.IntegrationTests/ApiHostRequestLogFloorTests.cs` (PR #1248), nonblocking: the no-lowering-key fixture would fail if ambient Logging configuration ever carried a lowering key for the request-log category; the test name `RealApiHost_FloorRulesAreTheLastRules_ForEveryProviderAndProviderLess` is broader than its two provider-name assertions. | receiver: next lane touching `RequestLogFloor`; owner question: none; recorded owner: Tech Lead |
+
+Closed by PR #1258 (merge 51d5ff24): the notice has its own Warning rule per provider after the operator's rules, `RequestLogFloor.AssertFloorIsLast` refuses start when a rule follows the floor (a test and a mutant prove it), the no-lowering fixture ignores ambient level keys, and the broad test was renamed and now asserts both patterns.
