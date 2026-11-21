@@ -34,6 +34,9 @@ public static class RequestLogFloor
 
     internal const string FloorPattern = Category + "*" + Category;
 
+    // Marks the rules this class added, so a configured rule of the same shape is never mistaken for one.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<LoggerFilterRule, object> Added = new();
+
     /// <summary>Appends the floor rules to <paramref name="options"/> (idempotent).</summary>
     /// <param name="options">The filter options being built.</param>
     public static void Apply(LoggerFilterOptions options)
@@ -46,13 +49,15 @@ public static class RequestLogFloor
         {
             for (var index = options.Rules.Count - 1; index >= 0; index--)
             {
-                if (options.Rules[index].CategoryName == FloorPattern && options.Rules[index].ProviderName == provider)
+                if (Added.TryGetValue(options.Rules[index], out _) && options.Rules[index].ProviderName == provider)
                 {
                     options.Rules.RemoveAt(index);
                 }
             }
 
-            options.Rules.Add(new LoggerFilterRule(provider, FloorPattern, LogLevel.Warning, null));
+            var floor = new LoggerFilterRule(provider, FloorPattern, LogLevel.Warning, null);
+            Added.Add(floor, floor);
+            options.Rules.Add(floor);
         }
     }
 
@@ -70,7 +75,7 @@ public static class RequestLogFloor
         {
             var belowWarning = (rule.LogLevel ?? LogLevel.Trace) < LogLevel.Warning;
             var genericDefault = rule.ProviderName is null && rule.CategoryName is null;
-            if (rule.CategoryName == FloorPattern || !belowWarning || genericDefault || !Matches(rule.CategoryName))
+            if (Added.TryGetValue(rule, out _) || !belowWarning || genericDefault || !Matches(rule.CategoryName))
             {
                 continue;
             }
