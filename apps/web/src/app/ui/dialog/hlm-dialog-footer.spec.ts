@@ -65,8 +65,7 @@ describe('HlmDialogFooter responsive action order', () => {
     'keeps $locale $variant DOM, visual and keyboard order at $width px in $theme',
     async ({ theme, locale, cancel, commit, variant, width }) => {
       await page.setViewportSize({ width, height: 900 });
-      try {
-        await page.setContent(`
+      await page.setContent(`
           <!doctype html><html lang="${locale}" data-theme="${theme}">
             <head><style>${css}</style></head>
             <body><footer class="${footerClasses}">
@@ -75,39 +74,36 @@ describe('HlmDialogFooter responsive action order', () => {
             </footer></body>
           </html>
         `);
-        const actions = page.getByRole('button');
-        const domOrder = await actions.allTextContents();
-        const geometry = await actions.evaluateAll((elements) =>
-          elements.map((element) => {
-            const { top, left } = element.getBoundingClientRect();
-            return { label: element.textContent, top, left };
-          }),
-        );
-        const visualOrder = [...geometry]
-          .sort((a, b) => a.top - b.top || a.left - b.left)
-          .map((action) => action.label);
+      const actions = page.getByRole('button');
+      const domOrder = await actions.allTextContents();
+      const geometry = await actions.evaluateAll((elements) =>
+        elements.map((element) => {
+          const { top, left } = element.getBoundingClientRect();
+          return { label: element.textContent, top, left };
+        }),
+      );
+      const visualOrder = [...geometry]
+        .sort((a, b) => a.top - b.top || a.left - b.left)
+        .map((action) => action.label);
 
-        expect(domOrder).toEqual([cancel, commit]);
-        expect(visualOrder).toEqual(domOrder);
-        const direction = await page.locator('footer').evaluate((footer) => {
-          return getComputedStyle(footer).flexDirection;
-        });
-        expect(direction).toBe(width < 640 ? 'column' : 'row');
-        await page.keyboard.press('Tab');
-        expect(await actions.nth(0).evaluate((action) => action === document.activeElement)).toBe(
-          true,
-        );
-        await page.keyboard.press('Tab');
-        expect(await actions.nth(1).evaluate((action) => action === document.activeElement)).toBe(
-          true,
-        );
+      expect(domOrder).toEqual([cancel, commit]);
+      expect(visualOrder).toEqual(domOrder);
+      const direction = await page.locator('footer').evaluate((footer) => {
+        return getComputedStyle(footer).flexDirection;
+      });
+      expect(direction).toBe(width < 640 ? 'column' : 'row');
+      await page.keyboard.press('Tab');
+      expect(await actions.nth(0).evaluate((action) => action === document.activeElement)).toBe(
+        true,
+      );
+      await page.keyboard.press('Tab');
+      expect(await actions.nth(1).evaluate((action) => action === document.activeElement)).toBe(
+        true,
+      );
 
-        await actions.nth(1).evaluate((action) => action.setAttribute('disabled', ''));
-        expect(await actions.nth(1).isDisabled()).toBe(true);
-        expect(await actions.allTextContents()).toEqual(domOrder);
-      } finally {
-        await page.setContent('');
-      }
+      await actions.nth(1).evaluate((action) => action.setAttribute('disabled', ''));
+      expect(await actions.nth(1).isDisabled()).toBe(true);
+      expect(await actions.allTextContents()).toEqual(domOrder);
     },
   );
 });
