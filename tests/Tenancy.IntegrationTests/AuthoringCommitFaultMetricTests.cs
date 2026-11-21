@@ -17,7 +17,7 @@ namespace Tenancy.IntegrationTests;
 /// </remarks>
 [Trait("Category", "Docker")]
 [Collection(ExclusiveTenancySuite.Name)]
-public sealed class AuthoringCommitFaultMetricTests(PostgresTenancyFixture fixture)
+public sealed partial class AuthoringCommitFaultMetricTests(PostgresTenancyFixture fixture)
 {
     [Fact]
     public async Task Save_CommitFails_RecordsCreatedOnlyAfterRetryCommits()
