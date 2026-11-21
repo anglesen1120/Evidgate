@@ -283,6 +283,33 @@ public sealed class RequestLogFloorTests
         Should.Throw<InvalidOperationException>(() => RequestLogFloor.AssertFloorIsLast(options)).Message.ShouldContain("not registered");
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AssertFloorIsLast_ProviderPairMissing_Throws(bool noticeRule)
+    {
+        var options = new LoggerFilterOptions();
+        options.Rules.Add(new LoggerFilterRule("p", null, LogLevel.Trace, null));
+        RequestLogFloor.Apply(options);
+        var notice = typeof(RequestLogFloorNotice).FullName;
+        var pattern = noticeRule ? notice + "*" + notice : Category + "*" + Category;
+        options.Rules.Remove(options.Rules.Single(rule => rule.ProviderName == "p" && rule.CategoryName == pattern));
+
+        var message = Should.Throw<InvalidOperationException>(() => RequestLogFloor.AssertFloorIsLast(options)).Message;
+
+        message.ShouldContain("not registered for provider 'p'");
+    }
+
+    [Fact]
+    public void AssertFloorIsLast_ProviderRuleWithoutAnyFloor_Throws()
+    {
+        var options = new LoggerFilterOptions();
+        RequestLogFloor.Apply(options);
+        options.Rules.Insert(0, new LoggerFilterRule("late", null, LogLevel.Trace, null));
+
+        Should.Throw<InvalidOperationException>(() => RequestLogFloor.AssertFloorIsLast(options)).Message.ShouldContain("provider 'late'");
+    }
+
     [Fact]
     public void AssertFloorIsLast_NoFloorRegistered_Throws()
     {

@@ -190,10 +190,26 @@ public static partial class ApiHost
         return builder;
     }
 
+    /// <summary>
+    /// Builds the host and refuses it when the request-log floor is not the last word on the filter rules. The
+    /// check runs here, before anything can start, so no listener is ever bound by a host that would log the
+    /// login callback's query.
+    /// </summary>
+    /// <param name="builder">The configured builder, every service registration done.</param>
+    /// <exception cref="InvalidOperationException">A rule follows the floor or a floor rule is missing.</exception>
+    public static WebApplication BuildWithLogFloor(WebApplicationBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        var app = builder.Build();
+        RequestLogFloor.AssertFloorIsLast(app.Services.GetRequiredService<IOptionsMonitor<LoggerFilterOptions>>().CurrentValue);
+        return app;
+    }
+
     /// <summary>Builds the application pipeline, module routes and OpenAPI document.</summary>
     public static WebApplication BuildApp(string[] args)
     {
-        var app = CreateBuilder(args).Build();
+        var app = BuildWithLogFloor(CreateBuilder(args));
 
         // First, so every later middleware and endpoint sees the client address, not the proxy's.
         app.UseTrustedForwardedHeaders();

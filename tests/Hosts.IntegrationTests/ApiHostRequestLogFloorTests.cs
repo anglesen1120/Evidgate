@@ -82,19 +82,36 @@ public sealed class ApiHostRequestLogFloorTests
     }
 
     [Fact]
-    public async Task RealApiHost_LaterRuleAfterTheFloor_RefusesToStart()
+    public void RealApiHost_LaterRuleAfterTheFloor_RefusesTheBuildBeforeAnyServiceStarts()
     {
         var sink = new CapturingLoggerProvider();
-        await using var app = BuildApi(
+        var spy = new StartSpy();
+
+        var failure = Should.Throw<InvalidOperationException>(() => BuildApi(
             sink,
             [],
-            services => services.PostConfigure<LoggerFilterOptions>(options =>
-                options.Rules.Add(new LoggerFilterRule(null, Category + "*" + Category, LogLevel.Trace, null))));
-
-        var failure = await Should.ThrowAsync<InvalidOperationException>(() => StartNoticeAsync(app));
+            services =>
+            {
+                services.AddSingleton<IHostedService>(spy);
+                services.PostConfigure<LoggerFilterOptions>(options =>
+                    options.Rules.Add(new LoggerFilterRule(null, Category + "*" + Category, LogLevel.Trace, null)));
+            }));
 
         failure.Message.ShouldContain("after the request-log floor");
         failure.Message.ShouldContain(Category);
+        spy.Started.ShouldBeFalse("no hosted service, and so no listener, is started by a host the floor refused");
+    }
+
+    [Fact]
+    public void RealApiHost_LaterProviderRuleAfterTheFloor_RefusesTheBuild()
+    {
+        var failure = Should.Throw<InvalidOperationException>(() => BuildApi(
+            new CapturingLoggerProvider(),
+            [],
+            services => services.PostConfigure<LoggerFilterOptions>(options =>
+                options.Rules.Add(new LoggerFilterRule(typeof(CapturingLoggerProvider).FullName, null, LogLevel.Trace, null)))));
+
+        failure.Message.ShouldContain("after the request-log floor");
     }
 
     [Fact]
@@ -166,10 +183,23 @@ public sealed class ApiHostRequestLogFloorTests
         builder.Logging.AddProvider(sink);
         configure?.Invoke(builder.Services);
 
-        return builder.Build();
+        return ApiHost.BuildWithLogFloor(builder);
     }
 
     private static Task StartNoticeAsync(WebApplication app) =>
         app.Services.GetServices<IHostedService>().OfType<RequestLogFloorNotice>().ShouldHaveSingleItem()
             .StartAsync(CancellationToken.None);
+
+    private sealed class StartSpy : IHostedService
+    {
+        public bool Started { get; private set; }
+
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            Started = true;
+            return Task.CompletedTask;
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    }
 }
