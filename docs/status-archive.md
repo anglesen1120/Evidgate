@@ -1251,4 +1251,4 @@ Closed by S553 (#1135, merged as 9c616f0d): `RawBodyGuard.RequireAuthenticatedTe
 
 | Oversized Tenancy test files (S198) | 38 Tenancy test files were already over 500 lines on `782e7553` and grew by 1 to 26 lines in S198 (org filters, `Unique.Slug`, dedicated-database scope); no file newly crossed 500 (`EventSchemaTests`, `ReconcileForcedIncompleteTests` were split); splitting a 700 to 2400 line test class is a separate refactor; S364 (#746) changed 5 lines of `TenantGucTests.cs` (843 lines, viewer role id seed) | receiver: next Tenancy test-infra lane |
 
-Superseded by S558 (#1139, merged as 870bc630): `CatalogIdentityTests.cs` was split into four files of at most 448 lines; the recount (55 files over 500 lines) is the new carried row "Oversized Tenancy test files (S558)".
+Superseded by S558 (#1139, merged as 870bc630): `CatalogIdentityTests.cs` was split into four files of at most 448 lines; the recount (54 files over 500 lines) is the new carried row "Oversized Tenancy test files (S558)".
