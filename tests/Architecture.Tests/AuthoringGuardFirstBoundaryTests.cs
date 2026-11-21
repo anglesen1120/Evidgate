@@ -6,8 +6,9 @@ using Xunit;
 namespace Architecture.Tests;
 
 /// <summary>
-/// Every Authoring write delegate authenticates its tenant before inspecting request data.
-/// Route discovery, rather than helper names, keeps new write routes inside the boundary.
+/// Every Authoring write delegate authenticates its tenant before inspecting request data, and every read
+/// delegate authenticates before it may refuse a query: the 403 must come from the pipeline, so no return
+/// may run before the handler's mediator send. Route discovery, not helper names, keeps both inside the boundary.
 /// </summary>
 public sealed partial class AuthoringGuardFirstBoundaryTests
 {
@@ -61,18 +62,26 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         (string Path, string Text)[] files,
         List<string> found,
         (string TypeMethod, string Reason)[]? exemptions = null,
-        (string Path, string Text)[]? universe = null)
+        (string Path, string Text)[]? universe = null,
+        bool reads = false,
+        (string TypeMethod, string Reason)[]? readExemptions = null)
     {
         exemptions ??= Exemptions;
+        readExemptions ??= ReadGuardExemptions;
         var state = new ScanState(files, universe ?? files);
         while (state.Queue.Count > 0)
         {
-            ScanFile(state.Queue.Dequeue(), found, exemptions, state);
+            ScanFile(state.Queue.Dequeue(), found, exemptions, state, reads, readExemptions);
         }
 
-        foreach (var (name, _) in exemptions.Where(exemption => !found.Contains(exemption.TypeMethod, StringComparer.Ordinal)))
+        // Read exemptions are checked by the real-solution fact, which is the only scan with that universe:
+        // a synthetic fixture cannot report a real production delegate as stale.
+        if (!reads)
         {
-            state.Errors.Add($"{Endpoints}:1: stale exemption {name} is no longer a write delegate");
+            foreach (var (name, _) in exemptions.Where(exemption => !found.Contains(exemption.TypeMethod, StringComparer.Ordinal)))
+            {
+                state.Errors.Add($"{Endpoints}:1: stale exemption {name} is no longer a write delegate");
+            }
         }
 
         return state.Errors.ToArray();
@@ -82,7 +91,9 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         (string Path, string Text) file,
         List<string> found,
         (string TypeMethod, string Reason)[] exemptions,
-        ScanState state)
+        ScanState state,
+        bool reads,
+        (string TypeMethod, string Reason)[] readExemptions)
     {
         var (path, text) = file;
         var errors = state.Errors;
@@ -118,6 +129,17 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
                 Follow(call, map, path, state);
             }
 
+            if (reads)
+            {
+                if (map == "MapGet")
+                {
+                    errors.AddRange(ChainErrors(call, path));
+                    ScanRead(call, path, found, errors, readExemptions);
+                }
+
+                continue;
+            }
+
             if (!map.StartsWith("Map", StringComparison.Ordinal)
                 || ReadMaps.Contains(map, StringComparer.Ordinal)
                 || map.EndsWith("Endpoints", StringComparison.Ordinal))
@@ -143,24 +165,12 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         (string TypeMethod, string Reason)[] exemptions,
         List<string> errors)
     {
-        var type = call.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
-        var argument = call.ArgumentList.Arguments.ElementAtOrDefault(1)?.Expression;
-        if (type is null || argument is not IdentifierNameSyntax identifier || IsAlias(call, identifier.Identifier.ValueText))
+        if (ResolveHandler(call, path, "write", errors) is not { } resolved)
         {
-            errors.Add($"{path}:{Line(call)}: write handler must be a plain same-type method group, not a lambda, member or alias");
             return;
         }
 
-        var methods = type.Members.OfType<MethodDeclarationSyntax>()
-            .Where(method => method.Identifier.ValueText == identifier.Identifier.ValueText).ToArray();
-        if (methods.Length != 1)
-        {
-            errors.Add($"{path}:{Line(call)}: {identifier.Identifier.ValueText} resolves to {methods.Length} same-type declarations, expected one");
-            return;
-        }
-
-        var method = methods[0];
-        var name = $"{type.Identifier.ValueText}.{method.Identifier.ValueText}";
+        var (method, name) = resolved;
         found.Add(name);
         errors.AddRange(ParameterErrors(method, path, name));
         var guarded = GuardFirst(method);
@@ -176,6 +186,32 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         {
             errors.Add($"{path}:{Line(method)}: {name} must have RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices) first");
         }
+    }
+
+    private static (MethodDeclarationSyntax Method, string Name)? ResolveHandler(
+        InvocationExpressionSyntax call,
+        string path,
+        string kind,
+        List<string> errors)
+    {
+        var type = call.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
+        var argument = call.ArgumentList.Arguments.ElementAtOrDefault(1)?.Expression;
+        if (type is null || argument is not IdentifierNameSyntax identifier || IsAlias(call, identifier.Identifier.ValueText))
+        {
+            errors.Add($"{path}:{Line(call)}: {kind} handler must be a plain same-type method group, not a lambda, member or alias");
+            return null;
+        }
+
+        var methods = type.Members.OfType<MethodDeclarationSyntax>()
+            .Where(method => method.Identifier.ValueText == identifier.Identifier.ValueText).ToArray();
+        if (methods.Length != 1)
+        {
+            errors.Add($"{path}:{Line(call)}: {identifier.Identifier.ValueText} resolves to {methods.Length} same-type declarations, expected one");
+            return null;
+        }
+
+        var method = methods[0];
+        return (method, $"{type.Identifier.ValueText}.{method.Identifier.ValueText}");
     }
 
     private static bool IsAlias(InvocationExpressionSyntax call, string name)
