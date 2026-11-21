@@ -45,17 +45,13 @@ internal sealed record ListAuthoringVersionsQuery(
     Error? RequestError = null) : IQuery<Result<AuthoringVersionListResponse>>;
 
 /// <summary>
-/// Handler of <see cref="ListAuthoringVersionsQuery"/>: a refusal the edge carried on the query, else the project gate and
-/// <b>two</b> statements in a <b>read-only</b> transaction (the project-liveness probe and one keyset page) whatever the
-/// page size, and a 422 per unsupported filter value — including the combination the statements cannot serve,
-/// <c>entity_id</c> without <c>entity_kind</c>.
+/// The project-scope gate precedes carried binding errors so malformed filters cannot mask a scope refusal.
+/// Successful reads use two statements in a read-only transaction: a project-liveness probe and one keyset page.
+/// Unsupported filters are refused before either statement runs.
 /// </summary>
 /// <remarks>
-/// The filters are answered here, inside the handler, and the page size and the two uuids are bound at the route edge —
-/// the split D-S55-Q3 records for the authoring surface (the delegate detects every <em>shape</em> refusal and carries
-/// it here, and the handler answers it along with every <em>value</em> refusal). The statement is one of three complete
-/// constants chosen by which filters are present (<see cref="AuthoringVersionReadSql"/>), never text assembled from the
-/// request.
+/// The statement is one of three complete constants chosen by the filters (<see cref="AuthoringVersionReadSql"/>),
+/// never text assembled from the request.
 /// </remarks>
 /// <param name="db">The tenant-scoped Dapper seam.</param>
 /// <param name="scopes">The open tenant scope.</param>
@@ -71,13 +67,7 @@ internal sealed class ListAuthoringVersionsQueryHandler(
         ListAuthoringVersionsQuery query,
         CancellationToken cancellationToken)
     {
-        if (query.RequestError is { } requestError)
-        {
-            return Result.Failure<AuthoringVersionListResponse>(requestError);
-        }
-
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(ListAuthoringVersionsQuery));
-
         ArgumentNullException.ThrowIfNull(query);
 
         if (AuthoringRules.Project(query.ProjectId, principals, tenant) is { } scopeError)
@@ -85,56 +75,101 @@ internal sealed class ListAuthoringVersionsQueryHandler(
             return Result.Failure<AuthoringVersionListResponse>(scopeError);
         }
 
+        if (query.RequestError is { } requestError)
+        {
+            return Result.Failure<AuthoringVersionListResponse>(requestError);
+        }
+
         var orgId = scopes.Require().OrgId;
 
-        var entityKind = AuthoringEndpointText.Blank(query.EntityKind);
+        if (ReadEntityFilters(query, out var entityKind, out var source) is { } filterError)
+        {
+            return Result.Failure<AuthoringVersionListResponse>(filterError);
+        }
+
+        if (ReadTimeRange(query, out var from, out var to) is { } rangeError)
+        {
+            return Result.Failure<AuthoringVersionListResponse>(rangeError);
+        }
+
+        return await ReadPageAsync(db, orgId, query, entityKind, source, from, to, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static Error? ReadEntityFilters(
+        ListAuthoringVersionsQuery query,
+        out string? entityKind,
+        out string? source)
+    {
+        source = null;
+        entityKind = AuthoringEndpointText.Blank(query.EntityKind);
 
         if (entityKind is not null && !AuthoringVersionFilters.EntityKinds.Contains(entityKind, StringComparer.Ordinal))
         {
-            return Result.Failure<AuthoringVersionListResponse>(Error.Invalid(
+            return Error.Invalid(
                 "entity_kind is feature_node, checklist_item or manual_test_case (13.1.1 §5 route 22)",
-                [new ErrorDetail("/entity_kind", "value_invalid")]));
+                [new ErrorDetail("/entity_kind", "value_invalid")]);
         }
 
-        // `entity_id` alone is refused: without `entity_kind` the entity key index of AC9
-        // (`org_id, project_id, entity_kind, entity_id, version_no`) cannot serve the filter — `entity_id` would be a
-        // residual predicate — so an unknown or another project's id would scan the whole project timeline. The pair is
-        // also the only shape the statements serve (<see cref="AuthoringVersionStatement.Pick"/>).
+        // Without entity_kind, the entity-key index cannot serve entity_id and the query would scan the project timeline.
+        // The pair is also the only shape the statements serve.
         if (query.EntityId is not null && entityKind is null)
         {
-            return Result.Failure<AuthoringVersionListResponse>(Error.Invalid(
+            return Error.Invalid(
                 "entity_id requires entity_kind (13.1.1 §5 route 22)",
-                [new ErrorDetail("/entity_kind", "required_with_entity_id")]));
+                [new ErrorDetail("/entity_kind", "required_with_entity_id")]);
         }
 
-        var source = AuthoringEndpointText.Blank(query.Source);
+        source = AuthoringEndpointText.Blank(query.Source);
 
         if (source is not null && !AuthoringVersionFilters.Sources.Contains(source, StringComparer.Ordinal))
         {
-            return Result.Failure<AuthoringVersionListResponse>(Error.Invalid(
+            return Error.Invalid(
                 "source is manual, ai or import (13.1.1 §5 route 22)",
-                [new ErrorDetail("/source", "value_invalid")]));
+                [new ErrorDetail("/source", "value_invalid")]);
         }
 
-        if (AuthoringVersionInstant.Read(AuthoringEndpointText.Blank(query.From), "/from", out var from) is { } fromError)
+        return null;
+    }
+
+    private static Error? ReadTimeRange(
+        ListAuthoringVersionsQuery query,
+        out DateTimeOffset? from,
+        out DateTimeOffset? to)
+    {
+        to = null;
+
+        if (AuthoringVersionInstant.Read(AuthoringEndpointText.Blank(query.From), "/from", out from) is { } fromError)
         {
-            return Result.Failure<AuthoringVersionListResponse>(fromError);
+            return fromError;
         }
 
-        if (AuthoringVersionInstant.Read(AuthoringEndpointText.Blank(query.To), "/to", out var to) is { } toError)
+        if (AuthoringVersionInstant.Read(AuthoringEndpointText.Blank(query.To), "/to", out to) is { } toError)
         {
-            return Result.Failure<AuthoringVersionListResponse>(toError);
+            return toError;
         }
 
         if (from is { } lower && to is { } upper && lower > upper)
         {
             // Half-open on purpose (from inclusive, to exclusive), so an empty window is a caller error rather than a
             // silently empty page a client would read as "no history".
-            return Result.Failure<AuthoringVersionListResponse>(Error.Invalid(
+            return Error.Invalid(
                 "from must not be later than to (13.1.1 §5 route 22)",
-                [new ErrorDetail("/from", "invalid_range")]));
+                [new ErrorDetail("/from", "invalid_range")]);
         }
 
+        return null;
+    }
+
+    private static async ValueTask<Result<AuthoringVersionListResponse>> ReadPageAsync(
+        ITenantDb db,
+        Guid orgId,
+        ListAuthoringVersionsQuery query,
+        string? entityKind,
+        string? source,
+        DateTimeOffset? from,
+        DateTimeOffset? to,
+        CancellationToken cancellationToken)
+    {
         var cursorCreatedAt = AuthoringVersionCursor.FirstPageTimestamp;
         var cursorId = AuthoringVersionCursor.FirstPageId;
 
@@ -172,9 +207,14 @@ internal sealed class ListAuthoringVersionsQueryHandler(
                 take: query.Limit + 1),
             cancellationToken).ConfigureAwait(false);
 
+        return Result.Success(CreateResponse(rows, query.Limit));
+    }
+
+    private static AuthoringVersionListResponse CreateResponse(IReadOnlyList<AuthoringVersionRow> rows, int limit)
+    {
         // `limit + 1` rows tell a last page from a full one: the extra row is read and dropped, never returned.
-        var hasMore = rows.Count > query.Limit;
-        var size = hasMore ? query.Limit : rows.Count;
+        var hasMore = rows.Count > limit;
+        var size = hasMore ? limit : rows.Count;
         var items = new List<AuthoringVersionListItemDto>(size);
 
         for (var index = 0; index < size; index++)
@@ -182,8 +222,8 @@ internal sealed class ListAuthoringVersionsQueryHandler(
             items.Add(rows[index].ToListItem());
         }
 
-        return Result.Success(new AuthoringVersionListResponse(
+        return new AuthoringVersionListResponse(
             items,
-            hasMore ? AuthoringVersionCursor.Encode(rows[size - 1].CreatedAt, rows[size - 1].VersionId) : null));
+            hasMore ? AuthoringVersionCursor.Encode(rows[size - 1].CreatedAt, rows[size - 1].VersionId) : null);
     }
 }
