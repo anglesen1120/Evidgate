@@ -1,0 +1,22 @@
+{
+  "pass": {
+    "evidgate-id-present": true,
+    "no-hardcoded-credentials": true,
+    "page-object-shape": true
+  },
+  "missing-evidgate-id": {
+    "evidgate-id-present": false,
+    "no-hardcoded-credentials": true,
+    "page-object-shape": true
+  },
+  "hardcoded-credentials": {
+    "evidgate-id-present": true,
+    "no-hardcoded-credentials": false,
+    "page-object-shape": true
+  },
+  "page-object-shape": {
+    "evidgate-id-present": true,
+    "no-hardcoded-credentials": true,
+    "page-object-shape": false
+  }
+}

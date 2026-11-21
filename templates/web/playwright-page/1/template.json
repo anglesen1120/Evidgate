@@ -1,0 +1,29 @@
+{
+  "name": "playwright-page",
+  "version": 1,
+  "params": {
+    "testName": { "default": "smoke" },
+    "pageName": { "default": "Home" },
+    "url": { "default": "https://example.com" },
+    "rolePreference": { "default": "button" },
+    "namePreference": { "default": "Sign in" }
+  },
+  "conformance_rules": [
+    {
+      "id": "evidgate-id-present",
+      "kind": "evidgate_annotation",
+      "file": "tests/*.spec.ts"
+    },
+    {
+      "id": "no-hardcoded-credentials",
+      "kind": "forbids_secret_literal",
+      "file": "**/*.ts"
+    },
+    {
+      "id": "page-object-shape",
+      "kind": "requires_pattern",
+      "file": "pages/*Page.ts",
+      "pattern": ["export class \\w+Page\\b", "constructor\\([^)]*page[^)]*\\)", "getByRole\\("]
+    }
+  ]
+}
