@@ -102,7 +102,7 @@ public sealed class LogRedactionTests : TenantTest
     [Fact]
     public async Task A_Served_Request_Keeps_The_Credential_Out_Of_Logs_And_Metrics()
     {
-        using var host = SessionTestHost.Start(Fixture, logProvider: new CapturingLogProvider());
+        using var host = SessionTestHost.Start(Fixture, logProvider: new CapturingLoggerProvider());
         var logs = LogsOf(host);
         var metrics = new ConcurrentQueue<Measurement>();
         using var listener = CaptureMetrics(metrics);
@@ -123,7 +123,7 @@ public sealed class LogRedactionTests : TenantTest
     [Fact]
     public async Task An_Expired_Session_Keeps_The_Credential_Out_Of_Logs_And_Metrics()
     {
-        using var host = SessionTestHost.Start(Fixture, logProvider: new CapturingLogProvider());
+        using var host = SessionTestHost.Start(Fixture, logProvider: new CapturingLoggerProvider());
         var logs = LogsOf(host);
         var metrics = new ConcurrentQueue<Measurement>();
         using var listener = CaptureMetrics(metrics);
@@ -147,7 +147,7 @@ public sealed class LogRedactionTests : TenantTest
     [Fact]
     public async Task A_Revoked_Session_Keeps_The_Credential_Out_Of_Logs_And_Metrics()
     {
-        using var host = SessionTestHost.Start(Fixture, logProvider: new CapturingLogProvider());
+        using var host = SessionTestHost.Start(Fixture, logProvider: new CapturingLoggerProvider());
         var logs = LogsOf(host);
         var metrics = new ConcurrentQueue<Measurement>();
         using var listener = CaptureMetrics(metrics);
@@ -174,7 +174,7 @@ public sealed class LogRedactionTests : TenantTest
     {
         const string unknown = "UnknownCookieValueForRedaction_0123456789-abc";
 
-        using var host = SessionTestHost.Start(Fixture, logProvider: new CapturingLogProvider());
+        using var host = SessionTestHost.Start(Fixture, logProvider: new CapturingLoggerProvider());
         var logs = LogsOf(host);
         var metrics = new ConcurrentQueue<Measurement>();
         using var listener = CaptureMetrics(metrics);
@@ -198,7 +198,7 @@ public sealed class LogRedactionTests : TenantTest
     [Fact]
     public async Task A_Disabled_Account_Keeps_The_Credential_Out_Of_Logs_And_Metrics()
     {
-        using var host = SessionTestHost.Start(Fixture, logProvider: new CapturingLogProvider());
+        using var host = SessionTestHost.Start(Fixture, logProvider: new CapturingLoggerProvider());
         var logs = LogsOf(host);
         var metrics = new ConcurrentQueue<Measurement>();
         using var listener = CaptureMetrics(metrics);
@@ -226,7 +226,7 @@ public sealed class LogRedactionTests : TenantTest
     [Fact]
     public async Task A_Rejected_Antiforgery_Pair_Keeps_Its_Tokens_Out_Of_Logs_And_Metrics()
     {
-        using var host = SessionTestHost.Start(Fixture, logProvider: new CapturingLogProvider());
+        using var host = SessionTestHost.Start(Fixture, logProvider: new CapturingLoggerProvider());
         var logs = LogsOf(host);
         var metrics = new ConcurrentQueue<Measurement>();
         using var listener = CaptureMetrics(metrics);
@@ -263,7 +263,7 @@ public sealed class LogRedactionTests : TenantTest
     [Fact]
     public async Task An_Admin_Revoke_Keeps_Its_Credential_And_Its_Audit_Row_Out_Of_Logs_And_Metrics()
     {
-        using var host = SessionTestHost.Start(Fixture, logProvider: new CapturingLogProvider());
+        using var host = SessionTestHost.Start(Fixture, logProvider: new CapturingLoggerProvider());
         var logs = LogsOf(host);
         var metrics = new ConcurrentQueue<Measurement>();
         using var listener = CaptureMetrics(metrics);
@@ -302,7 +302,7 @@ public sealed class LogRedactionTests : TenantTest
     [Fact]
     public async Task A_Faulted_Admin_Revoke_Keeps_Its_Credential_And_Its_Audit_Row_Out_Of_Logs_And_Metrics()
     {
-        using var host = SessionTestHost.Start(Fixture, logProvider: new CapturingLogProvider());
+        using var host = SessionTestHost.Start(Fixture, logProvider: new CapturingLoggerProvider());
         var logs = LogsOf(host);
         var metrics = new ConcurrentQueue<Measurement>();
         using var listener = CaptureMetrics(metrics);
@@ -385,11 +385,10 @@ public sealed class LogRedactionTests : TenantTest
 
     /// <summary>The capture the host was started with.</summary>
     /// <param name="host">The running host.</param>
-    private static CapturingLogProvider LogsOf(SessionTestHost host)
+    private static CapturingLoggerProvider LogsOf(SessionTestHost host)
     {
         ArgumentNullException.ThrowIfNull(host);
-
-        return host.Services.GetServices<ILoggerProvider>().OfType<CapturingLogProvider>().ShouldHaveSingleItem();
+        return host.Services.GetServices<ILoggerProvider>().OfType<CapturingLoggerProvider>().ShouldHaveSingleItem();
     }
 
     /// <summary>One <c>DELETE /v1/auth/sessions/{s}</c> as <paramref name="caller"/>'s browser sends it.</summary>
@@ -532,7 +531,7 @@ public sealed class LogRedactionTests : TenantTest
     /// <param name="extraCanaries">Any other value that must not appear (e.g. a presented unknown value).</param>
     private static async Task AssertNothingLeaksAsync(
         SessionTestHost host,
-        CapturingLogProvider logs,
+        CapturingLoggerProvider logs,
         ConcurrentQueue<Measurement> metrics,
         SignedInMember member,
         string expectedOutcome,
@@ -574,11 +573,11 @@ public sealed class LogRedactionTests : TenantTest
         };
         canaries.AddRange(extraCanaries);
 
-        foreach (var entry in logs.Entries)
+        foreach (var text in logs.Entries.SelectMany(entry => entry.Texts))
         {
             foreach (var canary in canaries)
             {
-                entry.Message.ShouldNotContain(canary, Case.Sensitive, "no credential may reach a log line (D9)");
+                text.ShouldNotContain(canary, Case.Sensitive, "no credential may reach a log line (D9)");
             }
         }
 

@@ -1,8 +1,8 @@
-using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
 using Evidgate.Modules.Identity.Login;
 using Evidgate.Modules.Identity.Login.Google;
+using Evidgate.Testing;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -38,20 +38,22 @@ public sealed class LogRedactionTests
     [Fact]
     public async Task GoogleProvider_HappyPath_LogsNothing()
     {
-        using var loggers = new CapturingLoggerFactory();
+        using var logs = new CapturingLoggerProvider();
+        using var loggers = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddProvider(logs));
         var harness = new RedactionHarness(tokenRespond: null, settings: null, loggers);
         var cancellationToken = TestContext.Current.CancellationToken;
 
         var result = await harness.Provider.CompleteAsync(Callback(), cancellationToken);
 
         result.Identity.ShouldNotBeNull();
-        loggers.Messages.ShouldBeEmpty("a successful login has nothing to say, least of all who logged in");
+        logs.Entries.ShouldBeEmpty("a successful login has nothing to say, least of all who logged in");
     }
 
     [Fact]
     public async Task GoogleProvider_Failures_LogOnlyClosedCategories()
     {
-        using var loggers = new CapturingLoggerFactory();
+        using var logs = new CapturingLoggerProvider();
+        using var loggers = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddProvider(logs));
         var cancellationToken = TestContext.Current.CancellationToken;
 
         var rejected = new RedactionHarness(
@@ -77,7 +79,7 @@ public sealed class LogRedactionTests
         nonceMismatch.TokenOverride = () => nonceMismatch.Tokens.Mint((_, claims) => claims["nonce"] = "another-nonce");
         (await nonceMismatch.Provider.CompleteAsync(Callback(), cancellationToken)).Failure.ShouldBe(LoginFailure.TokenInvalid);
 
-        var messages = loggers.Messages;
+        var messages = logs.Entries.Select(entry => entry.Message).ToArray();
         messages.ShouldNotBeEmpty("each failure is one line");
 
         foreach (var message in messages)
@@ -97,7 +99,8 @@ public sealed class LogRedactionTests
     [Fact]
     public async Task GoogleProvider_NoSecretTokenOrIdentityValueEverReachesALogLine()
     {
-        using var loggers = new CapturingLoggerFactory();
+        using var logs = new CapturingLoggerProvider();
+        using var loggers = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddProvider(logs));
         var cancellationToken = TestContext.Current.CancellationToken;
 
         var failing = new RedactionHarness(
@@ -119,7 +122,7 @@ public sealed class LogRedactionTests
 
         await mismatch.Provider.CompleteAsync(Callback(), cancellationToken);
 
-        var captured = loggers.Messages;
+        var captured = logs.Entries.SelectMany(entry => entry.Texts).ToArray();
         captured.ShouldNotBeEmpty();
 
         foreach (var forbidden in new[]
@@ -171,7 +174,8 @@ public sealed class LogRedactionTests
     [Fact]
     public async Task GoogleProvider_UnconfiguredProvider_LogsTheCategoryOnly()
     {
-        using var loggers = new CapturingLoggerFactory();
+        using var logs = new CapturingLoggerProvider();
+        using var loggers = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddProvider(logs));
         var harness = new RedactionHarness(
             tokenRespond: null,
             settings: GoogleTestHarness.Options(clientId: null, clientSecret: null),
@@ -179,7 +183,7 @@ public sealed class LogRedactionTests
 
         await harness.Provider.CompleteAsync(Callback(), TestContext.Current.CancellationToken);
 
-        loggers.Messages.ToArray().ShouldBe(UnconfiguredMessage);
+        logs.Entries.Select(entry => entry.Message).ToArray().ShouldBe(UnconfiguredMessage);
     }
 
     private static LoginCallbackRequest Callback() => new(
@@ -235,42 +239,5 @@ public sealed class LogRedactionTests
         internal Func<string>? TokenOverride { get; set; }
 
         internal GoogleLoginProvider Provider { get; }
-    }
-}
-
-/// <summary>Collects every formatted log line (and any exception text) the code under test emits.</summary>
-internal sealed class CapturingLoggerFactory : ILoggerFactory, ILoggerProvider
-{
-    private readonly ConcurrentQueue<string> _messages = new();
-
-    internal IReadOnlyList<string> Messages => _messages.ToArray();
-
-
-    public ILogger CreateLogger(string categoryName) => new CapturingLogger(_messages);
-
-    public void AddProvider(ILoggerProvider provider)
-    {
-        ArgumentNullException.ThrowIfNull(provider);
-    }
-
-    public void Dispose()
-    {
-        // Nothing to release: the queue is the only state.
-    }
-
-    private sealed class CapturingLogger(ConcurrentQueue<string> messages) : ILogger
-    {
-        public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-        {
-            ArgumentNullException.ThrowIfNull(formatter);
-
-            var text = formatter(state, exception);
-            messages.Enqueue(exception is null ? text : $"{text} {exception.Message}");
-        }
     }
 }

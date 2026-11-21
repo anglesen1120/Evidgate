@@ -1,7 +1,8 @@
 using System.Net;
 using Evidgate.Modules.Identity.Login;
 using Evidgate.Modules.Identity.Login.GitHub;
-using Identity.IntegrationTests.Login.Google;
+using Evidgate.Testing;
+using Microsoft.Extensions.Logging;
 using Shouldly;
 using Xunit;
 
@@ -14,7 +15,7 @@ namespace Identity.IntegrationTests.Login.GitHub;
 /// </summary>
 /// <remarks>
 /// Pure: every provider answer is a <see cref="GitHubTestHttpHandler"/> stand-in and the logger is the
-/// login suite's capturing <see cref="CapturingLoggerFactory"/>, so the assertion is on the exact strings
+/// login suite's capturing <see cref="CapturingLoggerProvider"/>, so the assertion is on the exact strings
 /// the shipping code would emit.
 /// </remarks>
 // The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
@@ -34,19 +35,21 @@ public sealed class GitHubLogRedactionTests
     [Fact]
     public async Task GitHubProvider_HappyPath_LogsNothing()
     {
-        using var loggers = new CapturingLoggerFactory();
+        using var logs = new CapturingLoggerProvider();
+        using var loggers = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddProvider(logs));
         var harness = new GitHubProviderHarness(loggers: loggers);
 
         var result = await harness.Provider.CompleteAsync(GitHubTestHarness.Callback(), TestContext.Current.CancellationToken);
 
         result.Identity.ShouldNotBeNull();
-        loggers.Messages.ShouldBeEmpty("a successful login has nothing to say, least of all who logged in");
+        logs.Entries.ShouldBeEmpty("a successful login has nothing to say, least of all who logged in");
     }
 
     [Fact]
     public async Task GitHubProvider_Failures_LogOnlyClosedCategories()
     {
-        using var loggers = new CapturingLoggerFactory();
+        using var logs = new CapturingLoggerProvider();
+        using var loggers = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddProvider(logs));
         var cancellationToken = TestContext.Current.CancellationToken;
 
         var rejected = new GitHubProviderHarness(
@@ -73,7 +76,7 @@ public sealed class GitHubLogRedactionTests
             loggers: loggers);
         (await noVerifiedEmail.Provider.CompleteAsync(GitHubTestHarness.Callback(), cancellationToken)).Failure.ShouldBe(LoginFailure.TokenInvalid);
 
-        var messages = loggers.Messages;
+        var messages = logs.Entries.Select(entry => entry.Message).ToArray();
         messages.ShouldNotBeEmpty("each failure is one line");
 
         foreach (var message in messages)
@@ -93,7 +96,8 @@ public sealed class GitHubLogRedactionTests
     [Fact]
     public async Task GitHubProvider_NoSecretTokenOrIdentityValueEverReachesALogLine()
     {
-        using var loggers = new CapturingLoggerFactory();
+        using var logs = new CapturingLoggerProvider();
+        using var loggers = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddProvider(logs));
         var cancellationToken = TestContext.Current.CancellationToken;
 
         var failing = new GitHubProviderHarness(
@@ -112,7 +116,7 @@ public sealed class GitHubLogRedactionTests
 
         await noVerifiedEmail.Provider.CompleteAsync(GitHubTestHarness.Callback(), cancellationToken);
 
-        var captured = loggers.Messages;
+        var captured = logs.Entries.SelectMany(entry => entry.Texts).ToArray();
         captured.ShouldNotBeEmpty();
 
         foreach (var forbidden in new[]
@@ -138,14 +142,15 @@ public sealed class GitHubLogRedactionTests
     [Fact]
     public async Task GitHubProvider_UnconfiguredProvider_LogsTheCategoryOnly()
     {
-        using var loggers = new CapturingLoggerFactory();
+        using var logs = new CapturingLoggerProvider();
+        using var loggers = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddProvider(logs));
         var harness = new GitHubProviderHarness(
             settings: GitHubTestHarness.Options(clientId: null, clientSecret: null),
             loggers: loggers);
 
         await harness.Provider.CompleteAsync(GitHubTestHarness.Callback(), TestContext.Current.CancellationToken);
 
-        loggers.Messages.ToArray().ShouldBe(new[] { $"{Prefix}unconfigured" });
+        logs.Entries.Select(entry => entry.Message).ToArray().ShouldBe(new[] { $"{Prefix}unconfigured" });
     }
 
     [Fact]

@@ -96,13 +96,13 @@ public sealed class RequestLogRedactionTests : CatalogueTestBase
         var informational = logs.Entries.Where(entry => entry.Level <= LogLevel.Information).ToArray();
 
         informational.ShouldNotContain(
-            entry => entry.Message.Contains("code=", StringComparison.Ordinal),
+            entry => entry.Texts.Any(text => text.Contains("code=", StringComparison.Ordinal)),
             "the provider's authorization code query must never be logged");
         informational.ShouldNotContain(
-            entry => entry.Message.Contains("state=", StringComparison.Ordinal),
+            entry => entry.Texts.Any(text => text.Contains("state=", StringComparison.Ordinal)),
             "the one-time state query must never be logged");
         logs.Entries.ShouldNotContain(
-            entry => entry.Message.Contains("authorization-code", StringComparison.Ordinal),
+            entry => entry.Texts.Any(text => text.Contains("authorization-code", StringComparison.Ordinal)),
             "the code value itself must never appear at any level");
     }
 }

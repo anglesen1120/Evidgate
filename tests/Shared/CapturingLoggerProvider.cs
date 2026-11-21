@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 
-namespace Identity.IntegrationTests;
+namespace Evidgate.Testing;
 
 /// <summary>One log call as a sink would see it: the rendered line plus everything structured behind it.</summary>
 /// <param name="Category">Logger category.</param>
@@ -56,6 +56,9 @@ internal sealed class CapturingLoggerProvider : ILoggerProvider, ISupportExterna
 
     /// <summary>Every call captured so far, in order.</summary>
     public IReadOnlyList<CapturedLog> Entries => _entries.ToArray();
+
+    /// <summary>Drops what was captured so far, so a case can observe one request at a time.</summary>
+    public void Clear() => _entries.Clear();
 
     public ILogger CreateLogger(string categoryName) => new Logger(categoryName, this);
 
