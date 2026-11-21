@@ -13,6 +13,8 @@ internal static class CatalogErrors
 
     internal static Error ProjectNotFound => Error.NotFound("no project with that id is visible to this tenant");
 
+    internal static Error TemplateNotFound => Error.NotFound("no template with that id is visible to this tenant");
+
     internal static Error ProjectScopeMismatch => Error.Denied(
         ApiErrorCode.ProjectScopeMismatch,
         "the credential is scoped to a different project");

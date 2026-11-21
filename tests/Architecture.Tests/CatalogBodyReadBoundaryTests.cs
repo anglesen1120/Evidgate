@@ -65,6 +65,8 @@ public sealed class CatalogBodyReadBoundaryTests
             (["JsonDocument.Parse x1"], "parses a repository sidecar manifest after converting it from YAML"),
         [ModuleDirectory + "/Infrastructure/Persistence/DraftReadSql.cs"] =
             (["JsonDocument.Parse x1"], "decodes the stored draft provenance JSON column"),
+        [ModuleDirectory + "/Infrastructure/Persistence/TemplateReadSql.cs"] =
+            (["JsonDocument.Parse x1"], "decodes the stored template conformance rules JSON column"),
     };
 
     // Any member named Body that is not a command or query DTO, the synchronous form, or a request alias.
