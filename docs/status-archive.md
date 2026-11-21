@@ -1412,3 +1412,9 @@ The 31 table rows above represent 32 partial parents (the 10.7.1-T1/T2 row cover
 | 10.1.2-T1 | M | Secret inventory and CI check | yes | no | no | n/a | yes (S250 #516; AC1 runbook anchors closed S407 #820, 68358713) |
 
 The rows above were replaced by the S599 recount (244 / 243.5); the §5 row 10.1.2-T1 is removed because the task is credited as whole.
+
+S599 delta-fix (same recount): §5 rows whose 'credited at the next recount' wording contradicted the recount, verbatim before the edit (08.5.1-T1, 04.1.2-T3, 02.4.3-T2):
+
+| 08.5.1-T1 | XL | Evidgate-provided AI gateway (split before build); unblocked by 12.3.1-T1; partial: T1.1-T1.2 landed by S145 (#306, f8fd2f56; `healing_llm_call`, `healing_llm_budget`, provider seam, migration 0054), T1.3-T1.4 landed by S402 (#814, 009af9ec), T1.5-T1.7 landed by S406 (#822 c0609f31, #828 b66504d0; migration 0107; details in the 08.5.1 plan Notes S406); no remainder is ready, the parent is credited at the next recount | yes | yes (0049+) | no | T1.1-T1.2 ; T1.3-T1.4 ; T1.5-T1.6-T1.7 | yes (dep 12.3.1-T1 merged; `MockHealingLlmProvider` covers tests) |
+| 04.1.2-T3 | M | OpenAPI + integration tests for both stories. Partial: events operation documented (`contracts/openapi.yaml:1009,6848,7182`) and the 04.1.1+04.1.2 suite is on develop; the run-create 409 `producer_slots_conflict` is now documented as a defensive refusal (#811, c932d98c; wire-unreachable while create issues a fresh run id); T3 is complete, credit lands at the next recount. | yes | no | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | no — complete |
+| 02.4.3-T2 | M | `github_installation`, install callback, token minting | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json`; S91: additive endpoint registration | landed S410 (#835, 33cd2497); credited at the next recount | yes |
