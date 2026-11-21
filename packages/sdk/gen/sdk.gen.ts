@@ -1589,7 +1589,7 @@ export const registerGitRepoBinding = <ThrowOnError extends boolean = false>(opt
 /**
  * Cursor page of project drafts
  *
- * Ordered by `(created_at, id)` with an optional status filter. Authentication and authorization precede query validation. An unknown `status` is 422 `draft_invalid` naming the field; a malformed cursor or an out-of-range limit is 422 `request_invalid` with the member named. A missing project and an other-tenant project both answer 404 `not_found`.
+ * Ordered by `(created_at, id)` with an optional status filter. Items are summaries: no `content`, a `file_count` instead; `GET /drafts/{d}` returns the file set. Authentication and authorization precede query validation. An unknown `status` is 422 `draft_invalid` naming the field; a malformed cursor or an out-of-range limit is 422 `request_invalid` with the member named. A missing project and an other-tenant project both answer 404 `not_found`.
  */
 export const listDrafts = <ThrowOnError extends boolean = false>(options: Options<ListDraftsData, ThrowOnError>): RequestResult<ListDraftsResponses, ListDraftsErrors, ThrowOnError> => (options.client ?? client).get<ListDraftsResponses, ListDraftsErrors, ThrowOnError>({
     security: [{

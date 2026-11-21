@@ -229,6 +229,19 @@ public sealed class YamlSubsetTests
         node["b"]!["k"]!.GetValue<string>().ShouldBe("p, q");
     }
 
+    /// <summary>A '#' after a tab starts a comment (YAML 1.2 white space), also inside a wrapped flow list; a '#' glued to text or quoted stays data.</summary>
+    [Fact]
+    public void Parse_CommentAfterTab_IsStripped()
+    {
+        var node = YamlSubset.Parse("a: x\t# note\nb: [p,\n  q,\t# ] note\n  r]\nc: 'u\t# v'\nd: w#z\n") as JsonObject;
+
+        node.ShouldNotBeNull();
+        node["a"]!.GetValue<string>().ShouldBe("x");
+        node["b"]!.AsArray().Select(n => n!.GetValue<string>()).ShouldBe(["p", "q", "r"]);
+        node["c"]!.GetValue<string>().ShouldBe("u\t# v");
+        node["d"]!.GetValue<string>().ShouldBe("w#z");
+    }
+
     /// <summary>
     /// A list left open is joined up to the next bracket, as YAML's multi-line flow rule requires. The reader keeps
     /// the later lines as plain text entries (it does not model implicit pairs), so they are never separate mapping members.

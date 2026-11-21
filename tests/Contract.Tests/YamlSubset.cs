@@ -371,7 +371,7 @@ internal sealed partial class YamlSubset
         return parts;
     }
 
-    /// <summary>Removes a trailing " #"-comment; a '#' inside quotes is never a comment.</summary>
+    /// <summary>Removes a trailing "#"-comment (a '#' at the start or after a space or tab); a '#' inside quotes is never a comment.</summary>
     private static string StripComment(string text, int lineNumber)
     {
         for (var i = 0; i < text.Length; i++)
@@ -383,7 +383,7 @@ internal sealed partial class YamlSubset
                 continue;
             }
 
-            if (c == '#' && (i == 0 || text[i - 1] == ' '))
+            if (c == '#' && (i == 0 || text[i - 1] is ' ' or '\t'))
             {
                 return i == 0 ? string.Empty : text[..i];
             }

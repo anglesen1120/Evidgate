@@ -1211,6 +1211,38 @@ export type DraftDto = {
     updated_at: string;
 };
 
+/**
+ * A draft without its `content`; only `GET /drafts/{d}` returns the file set.
+ */
+export type DraftSummaryDto = {
+    id: string;
+    project_id: string;
+    author_membership_id: string;
+    kind: 'template' | 'ai' | 'regression';
+    base_commit: string;
+    status: 'draft' | 'dry_running' | 'dry_passed' | 'dry_failed' | 'pr_open' | 'merged' | 'closed';
+    version: number;
+    file_count: number;
+    /**
+     * Optional provenance object (template, AI run or incident reference); server validation caps its UTF-8 JSON at 4096 bytes; a number is at most 64 characters with an exponent of at most 400 in magnitude and the numbers' written-out sizes add up to at most 4096, otherwise 422 `draft_invalid` naming `provenance`. A number outside the IEEE 754 double range is 422 `request_invalid`.
+     */
+    provenance: {
+        [key: string]: unknown;
+    } | null;
+    ai_run_id: string | null;
+    dry_run_id: string | null;
+    allow_unverified: boolean;
+    unverified_reason: string | null;
+    pr_branch: string | null;
+    pr_commit_sha: string | null;
+    pr_url: string | null;
+    pr_number: number | null;
+    linked_case_id: string | null;
+    linked_revision_id: string | null;
+    created_at: string;
+    updated_at: string;
+};
+
 export type CreateDraftRequest = {
     kind: 'template' | 'ai' | 'regression';
     base_commit: string;
@@ -1228,7 +1260,7 @@ export type UpdateDraftRequest = {
 };
 
 export type DraftListResponse = {
-    items: Array<DraftDto>;
+    items: Array<DraftSummaryDto>;
     next_cursor: string | null;
 };
 
