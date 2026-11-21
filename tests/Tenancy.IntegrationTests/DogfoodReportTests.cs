@@ -128,6 +128,45 @@ public sealed class DogfoodReportTests
         });
     }
 
+    /// <summary>The runner's machine name never reaches the upload set; the manifest hash describes the scrubbed bytes.</summary>
+    [Fact]
+    public async Task Dogfood_Collect_ReplacesHostnameAttributes()
+    {
+        await WithTempDirectory(async source =>
+        {
+            foreach (var name in ProducerNames)
+            {
+                var xml = await File.ReadAllTextAsync(Path.Combine(TestData, name + ".junit.xml"), TestContext.Current.CancellationToken);
+                xml = System.Text.RegularExpressions.Regex.Replace(xml, "hostname=\"[^\"]*\"", "hostname=\"lan-runner-07\"");
+                xml = xml.Replace("<testsuite ", "<testsuite hostname='lan-runner-08' ", StringComparison.Ordinal);
+                await File.WriteAllTextAsync(Path.Combine(source, name + ".junit.xml"), xml, TestContext.Current.CancellationToken);
+            }
+
+            await WithTempDirectory(async output =>
+            {
+                var (exit, stderr) = await RunCollect(source, output);
+
+                exit.ShouldBe(0, stderr);
+                foreach (var name in ProducerNames)
+                {
+                    var bytes = await File.ReadAllBytesAsync(Path.Combine(output, name + ".junit.xml"), TestContext.Current.CancellationToken);
+                    var text = System.Text.Encoding.UTF8.GetString(bytes);
+                    text.ShouldNotContain("lan-runner");
+                    System.Text.RegularExpressions.Regex.IsMatch(text, "hostname=\"host\"").ShouldBeTrue();
+                }
+
+                using var manifest = JsonDocument.Parse(
+                    await File.ReadAllTextAsync(Path.Combine(output, "manifest.json"), TestContext.Current.CancellationToken));
+                foreach (var entry in manifest.RootElement.GetProperty("producers").EnumerateArray())
+                {
+                    var written = await File.ReadAllBytesAsync(Path.Combine(output, entry.GetProperty("file").GetString()!), TestContext.Current.CancellationToken);
+                    entry.GetProperty("sha256").GetString().ShouldBe(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(written)).ToLowerInvariant());
+                    entry.GetProperty("bytes").GetInt32().ShouldBe(written.Length);
+                }
+            });
+        });
+    }
+
     /// <summary>A DOCTYPE in any encoding is refused: a UTF-16 document hides it from a byte search.</summary>
     [Fact]
     public async Task Dogfood_Collect_RefusesUtf16Doctype()

@@ -60,12 +60,14 @@ if [[ "$PRODUCE" == "1" ]]; then
 fi
 
 python3 - "$SRC" "$OUT" <<'PY'
-import hashlib, json, sys
+import hashlib, json, re, sys
 import xml.etree.ElementTree as ET
 from xml.parsers import expat
 from pathlib import Path
 
 MAX_BYTES = 8 * 1024 * 1024
+# A runner stamps the machine name into every testsuite; the committed set must not carry the CI host's.
+HOSTNAME = re.compile(rb'(\shostname=)(["\'])[^"\']*\2')
 
 
 def refuse_doctype(*_):
@@ -94,6 +96,7 @@ for producer in producers:
         sys.exit(f"collect.sh: {producer}: not well-formed XML ({error})")
     except ET.ParseError as error:
         sys.exit(f"collect.sh: {producer}: not well-formed XML ({error})")
+    data = HOSTNAME.sub(rb'\1"host"', data)
     suites = [root] if root.tag == "testsuite" else root.findall("testsuite")
     cases = root.findall(".//testcase")
     if root.tag not in ("testsuites", "testsuite") or not suites or not cases:
