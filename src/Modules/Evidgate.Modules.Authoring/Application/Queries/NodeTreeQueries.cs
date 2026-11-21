@@ -24,13 +24,15 @@ namespace Evidgate.Modules.Authoring.Application.Queries;
 /// <param name="IncludePath">True when <c>include=path</c> asked for the breadcrumb.</param>
 /// <param name="Cursor">The opaque <c>(position, id)</c> cursor, or null for the first page.</param>
 /// <param name="Limit">The page size, 1..200.</param>
+/// <param name="RequestError">The first query-binding error, answered after authorization.</param>
 internal sealed record GetAuthoringTreeQuery(
     Guid ProjectId,
     Guid? ParentId,
     Guid? NodeId,
     bool IncludePath,
     string? Cursor,
-    int Limit)
+    int Limit,
+    Error? RequestError = null)
     : IQuery<Result<AuthoringTreeView>>;
 
 /// <summary>
@@ -45,12 +47,13 @@ internal sealed record GetAuthoringTreeQuery(
 internal sealed record AuthoringTreeView(AuthoringTreeResponse Body, string OrderHash);
 
 /// <summary>
-/// Handler of <see cref="GetAuthoringTreeQuery"/>: the project gate, then at most <b>six</b> statements in a
-/// <b>read-only</b> transaction — project liveness, the node the page is addressed by (the <c>node_id</c> form, which
-/// also lists that node's children, or the <c>parent_id</c> form, which reads the group's node for its existence and its
-/// breadcrumb), the page, one counts statement for the whole page, the ancestors only when <c>include=path</c> asked for
-/// them, and the order tag that becomes the <c>ETag</c>. A listing that addresses no node spends four of them.
-/// The page itself is one keyset statement over <c>feature_node_tree_idx</c>.
+/// Handler of <see cref="GetAuthoringTreeQuery"/>: a refusal the edge carried on the query, else the project gate and
+/// at most <b>six</b> statements in a <b>read-only</b> transaction — project liveness, the node the page is
+/// addressed by (the <c>node_id</c> form, which also lists that node's children, or the <c>parent_id</c> form,
+/// which reads the group's node for its existence and its breadcrumb), the page, one counts statement for the whole
+/// page, the ancestors only when <c>include=path</c> asked for them, and the order tag that becomes the <c>ETag</c>. A
+/// listing that addresses no node spends four of them. The page itself is one keyset statement over
+/// <c>feature_node_tree_idx</c>.
 /// </summary>
 /// <remarks>
 /// <b>Roots versus children, and why <c>parent_id is null</c> is not written as a parameter</b> (OI-13-112): the two
@@ -68,6 +71,11 @@ internal sealed class GetAuthoringTreeQueryHandler(
     /// <inheritdoc />
     public async ValueTask<Result<AuthoringTreeView>> Handle(GetAuthoringTreeQuery query, CancellationToken cancellationToken)
     {
+        if (query.RequestError is { } requestError)
+        {
+            return Result.Failure<AuthoringTreeView>(requestError);
+        }
+
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(GetAuthoringTreeQuery));
 
         ArgumentNullException.ThrowIfNull(query);

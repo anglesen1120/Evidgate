@@ -6,15 +6,19 @@ using Xunit;
 namespace Architecture.Tests;
 
 /// <summary>
-/// Every Authoring write delegate authenticates its tenant before inspecting request data.
-/// Route discovery, rather than helper names, keeps new write routes inside the boundary.
+/// Every Authoring write delegate authenticates its tenant before inspecting request data, and every read
+/// delegate authenticates before it may refuse a query: the 403 must come from the pipeline, so no return
+/// may run before the handler's mediator send. Route discovery, not helper names, keeps both inside the boundary.
 /// </summary>
 public sealed partial class AuthoringGuardFirstBoundaryTests
 {
     private const string Endpoints = "src/Modules/Evidgate.Modules.Authoring/Endpoints/";
     private static readonly (string TypeMethod, string Reason)[] Exemptions = [];
 
-    private static readonly string[] ReadMaps = ["MapGet", "MapHead", "MapOptions", "MapGroup"];
+    private static readonly string[] ReadRouteMaps = ["MapGet", "MapHead", "MapOptions"];
+
+    // Every route map that never carries a write: the read registrations plus the group composer.
+    private static readonly string[] ReadMaps = [.. ReadRouteMaps, "MapGroup"];
 
     private static readonly string[] Expected =
     [
@@ -61,18 +65,26 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         (string Path, string Text)[] files,
         List<string> found,
         (string TypeMethod, string Reason)[]? exemptions = null,
-        (string Path, string Text)[]? universe = null)
+        (string Path, string Text)[]? universe = null,
+        bool reads = false,
+        (string TypeMethod, string Reason)[]? readExemptions = null)
     {
         exemptions ??= Exemptions;
+        readExemptions ??= ReadGuardExemptions;
         var state = new ScanState(files, universe ?? files);
         while (state.Queue.Count > 0)
         {
-            ScanFile(state.Queue.Dequeue(), found, exemptions, state);
+            ScanFile(state.Queue.Dequeue(), found, exemptions, state, reads, readExemptions);
         }
 
-        foreach (var (name, _) in exemptions.Where(exemption => !found.Contains(exemption.TypeMethod, StringComparer.Ordinal)))
+        // Read exemptions are checked by the real-solution fact, which is the only scan with that universe:
+        // a synthetic fixture cannot report a real production delegate as stale.
+        if (!reads)
         {
-            state.Errors.Add($"{Endpoints}:1: stale exemption {name} is no longer a write delegate");
+            foreach (var (name, _) in exemptions.Where(exemption => !found.Contains(exemption.TypeMethod, StringComparer.Ordinal)))
+            {
+                state.Errors.Add($"{Endpoints}:1: stale exemption {name} is no longer a write delegate");
+            }
         }
 
         return state.Errors.ToArray();
@@ -82,58 +94,106 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         (string Path, string Text) file,
         List<string> found,
         (string TypeMethod, string Reason)[] exemptions,
-        ScanState state)
+        ScanState state,
+        bool reads,
+        (string TypeMethod, string Reason)[] readExemptions)
     {
         var (path, text) = file;
-        var errors = state.Errors;
         var root = Parse(text);
         var conditional = ConditionalSourceText.FirstLine(root);
         if (conditional > 0)
         {
-            errors.Add($"{path}:{conditional}: conditionally compiled text in an endpoint file hides code from the pin");
+            state.Errors.Add($"{path}:{conditional}: conditionally compiled text in an endpoint file hides code from the pin");
         }
 
         foreach (var call in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
-            var map = CallName(call);
-            if (map.Length == 0)
-            {
-                errors.AddRange(UnnamedCallErrors(call, path));
-                continue;
-            }
-
-            if (FilterCalls.Contains(map, StringComparer.Ordinal))
-            {
-                errors.Add($"{path}:{Line(call)}: {map} on an authoring route tree runs before the handler guard");
-                continue;
-            }
-
-            if (map == "MapGroup" || IsComposer(map))
-            {
-                errors.AddRange(ChainErrors(call, path));
-            }
-
-            if (IsComposer(map))
-            {
-                Follow(call, map, path, state);
-            }
-
-            if (!map.StartsWith("Map", StringComparison.Ordinal)
-                || ReadMaps.Contains(map, StringComparer.Ordinal)
-                || map.EndsWith("Endpoints", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            if (map is not ("MapPost" or "MapPut" or "MapPatch" or "MapDelete"))
-            {
-                errors.Add($"{path}:{Line(call)}: unsupported write-capable {map} call");
-                continue;
-            }
-
-            errors.AddRange(ChainErrors(call, path));
-            ScanWrite(call, path, found, exemptions, errors);
+            ScanCall(call, path, found, exemptions, state, reads, readExemptions);
         }
+    }
+
+    private static void ScanCall(
+        InvocationExpressionSyntax call,
+        string path,
+        List<string> found,
+        (string TypeMethod, string Reason)[] exemptions,
+        ScanState state,
+        bool reads,
+        (string TypeMethod, string Reason)[] readExemptions)
+    {
+        var map = CallName(call);
+        if (map.Length == 0)
+        {
+            state.Errors.AddRange(UnnamedCallErrors(call, path));
+            return;
+        }
+
+        if (FilterCalls.Contains(map, StringComparer.Ordinal))
+        {
+            state.Errors.Add($"{path}:{Line(call)}: {map} on an authoring route tree runs before the handler guard");
+            return;
+        }
+
+        if (map == "MapGroup" || IsComposer(map))
+        {
+            state.Errors.AddRange(ChainErrors(call, path));
+        }
+
+        if (IsComposer(map))
+        {
+            Follow(call, map, path, state);
+        }
+
+        if (reads)
+        {
+            ScanReadCall(call, map, path, found, state.Errors, readExemptions);
+            return;
+        }
+
+        ScanWriteCall(call, map, path, found, exemptions, state.Errors);
+    }
+
+    // A read route is any route that cannot write: HEAD and OPTIONS take the guard-first rule beside GET.
+    private static void ScanReadCall(
+        InvocationExpressionSyntax call,
+        string map,
+        string path,
+        List<string> found,
+        List<string> errors,
+        (string TypeMethod, string Reason)[] exemptions)
+    {
+        if (!ReadRouteMaps.Contains(map, StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        errors.AddRange(ChainErrors(call, path));
+        ScanRead(call, path, found, errors, exemptions);
+    }
+
+    private static void ScanWriteCall(
+        InvocationExpressionSyntax call,
+        string map,
+        string path,
+        List<string> found,
+        (string TypeMethod, string Reason)[] exemptions,
+        List<string> errors)
+    {
+        if (!map.StartsWith("Map", StringComparison.Ordinal)
+            || ReadMaps.Contains(map, StringComparer.Ordinal)
+            || map.EndsWith("Endpoints", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (map is not ("MapPost" or "MapPut" or "MapPatch" or "MapDelete"))
+        {
+            errors.Add($"{path}:{Line(call)}: unsupported write-capable {map} call");
+            return;
+        }
+
+        errors.AddRange(ChainErrors(call, path));
+        ScanWrite(call, path, found, exemptions, errors);
     }
 
     private static void ScanWrite(
@@ -143,24 +203,12 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         (string TypeMethod, string Reason)[] exemptions,
         List<string> errors)
     {
-        var type = call.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
-        var argument = call.ArgumentList.Arguments.ElementAtOrDefault(1)?.Expression;
-        if (type is null || argument is not IdentifierNameSyntax identifier || IsAlias(call, identifier.Identifier.ValueText))
+        if (ResolveHandler(call, path, "write", errors) is not { } resolved)
         {
-            errors.Add($"{path}:{Line(call)}: write handler must be a plain same-type method group, not a lambda, member or alias");
             return;
         }
 
-        var methods = type.Members.OfType<MethodDeclarationSyntax>()
-            .Where(method => method.Identifier.ValueText == identifier.Identifier.ValueText).ToArray();
-        if (methods.Length != 1)
-        {
-            errors.Add($"{path}:{Line(call)}: {identifier.Identifier.ValueText} resolves to {methods.Length} same-type declarations, expected one");
-            return;
-        }
-
-        var method = methods[0];
-        var name = $"{type.Identifier.ValueText}.{method.Identifier.ValueText}";
+        var (method, name) = resolved;
         found.Add(name);
         errors.AddRange(ParameterErrors(method, path, name));
         var guarded = GuardFirst(method);
@@ -176,6 +224,32 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         {
             errors.Add($"{path}:{Line(method)}: {name} must have RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices) first");
         }
+    }
+
+    private static (MethodDeclarationSyntax Method, string Name)? ResolveHandler(
+        InvocationExpressionSyntax call,
+        string path,
+        string kind,
+        List<string> errors)
+    {
+        var type = call.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
+        var argument = call.ArgumentList.Arguments.ElementAtOrDefault(1)?.Expression;
+        if (type is null || argument is not IdentifierNameSyntax identifier || IsAlias(call, identifier.Identifier.ValueText))
+        {
+            errors.Add($"{path}:{Line(call)}: {kind} handler must be a plain same-type method group, not a lambda, member or alias");
+            return null;
+        }
+
+        var methods = type.Members.OfType<MethodDeclarationSyntax>()
+            .Where(method => method.Identifier.ValueText == identifier.Identifier.ValueText).ToArray();
+        if (methods.Length != 1)
+        {
+            errors.Add($"{path}:{Line(call)}: {identifier.Identifier.ValueText} resolves to {methods.Length} same-type declarations, expected one");
+            return null;
+        }
+
+        var method = methods[0];
+        return (method, $"{type.Identifier.ValueText}.{method.Identifier.ValueText}");
     }
 
     private static bool IsAlias(InvocationExpressionSyntax call, string name)

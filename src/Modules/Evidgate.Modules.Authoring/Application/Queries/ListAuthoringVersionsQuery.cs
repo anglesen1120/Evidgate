@@ -31,6 +31,7 @@ namespace Evidgate.Modules.Authoring.Application.Queries;
 /// <param name="To">Optional <b>exclusive</b> upper bound, an RFC 3339 instant.</param>
 /// <param name="Cursor">The opaque <c>(created_at, id)</c> cursor, or null for the first page.</param>
 /// <param name="Limit">The page size the route already bounded (1..200).</param>
+/// <param name="RequestError">The first query-binding error, answered after authorization.</param>
 internal sealed record ListAuthoringVersionsQuery(
     Guid ProjectId,
     string? EntityKind,
@@ -40,19 +41,21 @@ internal sealed record ListAuthoringVersionsQuery(
     string? From,
     string? To,
     string? Cursor,
-    int Limit) : IQuery<Result<AuthoringVersionListResponse>>;
+    int Limit,
+    Error? RequestError = null) : IQuery<Result<AuthoringVersionListResponse>>;
 
 /// <summary>
-/// Handler of <see cref="ListAuthoringVersionsQuery"/>: the project gate, then <b>two</b> statements in a
-/// <b>read-only</b> transaction (the project-liveness probe and one keyset page) whatever the page size, and a 422 per
-/// unsupported filter value — including the combination the statements cannot serve, <c>entity_id</c> without
-/// <c>entity_kind</c>.
+/// Handler of <see cref="ListAuthoringVersionsQuery"/>: a refusal the edge carried on the query, else the project gate and
+/// <b>two</b> statements in a <b>read-only</b> transaction (the project-liveness probe and one keyset page) whatever the
+/// page size, and a 422 per unsupported filter value — including the combination the statements cannot serve,
+/// <c>entity_id</c> without <c>entity_kind</c>.
 /// </summary>
 /// <remarks>
-/// The filters are answered here, inside the handler, and the page size and the two uuids at the route edge — the split
-/// D-S55-Q3 records for the authoring surface (the delegate answers every <em>shape</em> refusal, the handler every
-/// <em>value</em> refusal). The statement is one of three complete constants chosen by which filters are present
-/// (<see cref="AuthoringVersionReadSql"/>), never text assembled from the request.
+/// The filters are answered here, inside the handler, and the page size and the two uuids are bound at the route edge —
+/// the split D-S55-Q3 records for the authoring surface (the delegate detects every <em>shape</em> refusal and carries
+/// it here, and the handler answers it along with every <em>value</em> refusal). The statement is one of three complete
+/// constants chosen by which filters are present (<see cref="AuthoringVersionReadSql"/>), never text assembled from the
+/// request.
 /// </remarks>
 /// <param name="db">The tenant-scoped Dapper seam.</param>
 /// <param name="scopes">The open tenant scope.</param>
@@ -68,6 +71,11 @@ internal sealed class ListAuthoringVersionsQueryHandler(
         ListAuthoringVersionsQuery query,
         CancellationToken cancellationToken)
     {
+        if (query.RequestError is { } requestError)
+        {
+            return Result.Failure<AuthoringVersionListResponse>(requestError);
+        }
+
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(ListAuthoringVersionsQuery));
 
         ArgumentNullException.ThrowIfNull(query);

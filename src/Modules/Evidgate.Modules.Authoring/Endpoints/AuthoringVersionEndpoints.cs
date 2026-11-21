@@ -1,4 +1,5 @@
 using System.Globalization;
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Application.Queries;
 using Mediator;
@@ -25,9 +26,10 @@ namespace Evidgate.Modules.Authoring.Endpoints;
 /// </para>
 /// <para>
 /// <b>What the edge answers and what the handler answers</b> (the D-S55-Q3 split): the page size and the two uuid-shaped
-/// filters are read here, so a malformed shape is refused before the mediator runs; the enum vocabularies, the instants,
-/// the <c>from &gt; to</c> range and the cursor are the handler's, which is where the same values are compared against
-/// the stored rows. Neither side ever echoes a caller value into an answer.
+/// filters are read here, and the first malformed shape travels to the handler on the query so the pipeline answers
+/// the caller's authorization before it; the enum vocabularies, the instants, the <c>from &gt; to</c> range and the
+/// cursor are the handler's, which is where the same values are compared against the stored rows. Neither side ever
+/// echoes a caller value into an answer.
 /// </para>
 /// <para>
 /// <b>Route 23's <c>ETag</c></b> is the stored <c>content_hash</c> quoted exactly (<c>"sha256:&lt;hex&gt;"</c>), which is
@@ -61,24 +63,19 @@ internal static class AuthoringVersionEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
-        if (AuthoringEndpointSupport.LimitError(context.Request.Query["limit"], out var limit) is { } limitError)
-        {
-            return Result.Failure<AuthoringVersionListResponse>(limitError);
-        }
+        var requestError = AuthoringEndpointSupport.LimitError(context.Request.Query["limit"], out var limit);
 
-        if (AuthoringEndpointText.OptionalId(context.Request.Query, "entity_id", out var entityId) is { } entityError)
-        {
-            return Result.Failure<AuthoringVersionListResponse>(entityError);
-        }
+        Guid? entityId = null;
+        requestError ??= AuthoringEndpointText.OptionalId(context.Request.Query, "entity_id", out entityId);
 
+        Guid? actor = null;
         // §5 route 22 names the author filter `actor`; AC9 spells it `actor_membership_id`. The route binds the §5
         // spelling (the published contract) and the gap is recorded with the slice's hand-over.
-        if (AuthoringEndpointText.OptionalId(context.Request.Query, "actor", out var actor) is { } actorError)
-        {
-            return Result.Failure<AuthoringVersionListResponse>(actorError);
-        }
+        requestError ??= AuthoringEndpointText.OptionalId(context.Request.Query, "actor", out actor);
 
+        // The pipeline authorizes the caller before the handler answers the query error.
         return await mediator.Send(
             new ListAuthoringVersionsQuery(
                 p,
@@ -89,7 +86,8 @@ internal static class AuthoringVersionEndpoints
                 AuthoringEndpointText.Blank(context.Request.Query["from"]),
                 AuthoringEndpointText.Blank(context.Request.Query["to"]),
                 AuthoringEndpointText.Blank(context.Request.Query["cursor"]),
-                limit),
+                limit,
+                requestError),
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -102,6 +100,7 @@ internal static class AuthoringVersionEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
         var result = await mediator.Send(new GetAuthoringVersionQuery(p, v), cancellationToken).ConfigureAwait(false);
 
