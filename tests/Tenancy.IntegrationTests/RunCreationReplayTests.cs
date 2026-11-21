@@ -2,9 +2,9 @@
 // Request bodies are written inline so each test reads as the request it sends.
 //
 // T5.1 statement: the purpose/replay_grant_id bound CHECKs of migration 0031 are already pinned by
-// RunSchemaTests.Purpose_ReplayWithoutGrant_FailsCheck (run_replay_grant_check, RunSchemaTests.cs:551-562) and
-// RunSchemaTests.Purpose_Unknown_FailsCheck (run_purpose_check, RunSchemaTests.cs:564-575), and the app role's missing
-// UPDATE grant on run by RunSchemaTests.AppRole_CannotUpdateOrDelete_Run (RunSchemaTests.cs:379-388); this file does
+// RunSchemaTests.Purpose_ReplayWithoutGrant_FailsCheck (run_replay_grant_check, RunSchemaTests.Constraints.cs) and
+// RunSchemaTests.Purpose_Unknown_FailsCheck (run_purpose_check, RunSchemaTests.Constraints.cs), and the app role's missing
+// UPDATE grant on run by RunSchemaTests.AppRole_CannotUpdateOrDelete_Run (RunSchemaTests.Migration.cs); this file does
 // not duplicate them.
 #pragma warning disable CA1861
 using System.Net;
