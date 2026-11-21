@@ -222,8 +222,8 @@ public sealed class RequestLogFloorTests
         RequestLogFloor.Apply(options);
 
         options.Rules.Count(rule => rule.ProviderName == "p" && rule.LogLevel == LogLevel.Trace).ShouldBe(1);
-        options.Rules[^2].LogLevel.ShouldBe(LogLevel.Warning);
-        options.Rules[^2].ProviderName.ShouldBe("p");
+        var floor = options.Rules.Single(rule => rule.ProviderName == "p" && rule.LogLevel == LogLevel.Warning && rule.CategoryName == (RequestLogFloor.Category + "*" + RequestLogFloor.Category));
+        options.Rules.IndexOf(floor).ShouldBeGreaterThan(0);
     }
 
     [Fact]
@@ -238,6 +238,45 @@ public sealed class RequestLogFloorTests
 
         options.Rules.Count.ShouldBe(once);
         options.Rules[^1].LogLevel.ShouldBe(LogLevel.Warning);
+    }
+
+    [Fact]
+    public void Apply_AddsTheNoticeRuleForEveryProviderAndProviderLess_AtWarning()
+    {
+        var options = new LoggerFilterOptions();
+        options.Rules.Add(new LoggerFilterRule("p", null, LogLevel.Error, null));
+
+        RequestLogFloor.Apply(options);
+
+        var notice = options.Rules.Where(rule => rule.CategoryName == (typeof(RequestLogFloorNotice).FullName + "*" + typeof(RequestLogFloorNotice).FullName)).ToList();
+        notice.Select(rule => rule.ProviderName).ShouldBe(["p", null], ignoreOrder: true);
+        notice.ShouldAllBe(rule => rule.LogLevel == LogLevel.Warning);
+    }
+
+    [Fact]
+    public void AssertFloorIsLast_AfterApply_Passes()
+    {
+        var options = new LoggerFilterOptions();
+        options.Rules.Add(new LoggerFilterRule("p", null, LogLevel.Trace, null));
+        RequestLogFloor.Apply(options);
+
+        Should.NotThrow(() => RequestLogFloor.AssertFloorIsLast(options));
+    }
+
+    [Fact]
+    public void AssertFloorIsLast_ARuleAfterTheFloor_Throws()
+    {
+        var options = new LoggerFilterOptions();
+        RequestLogFloor.Apply(options);
+        options.Rules.Add(new LoggerFilterRule(null, "Evidgate", LogLevel.None, null));
+
+        Should.Throw<InvalidOperationException>(() => RequestLogFloor.AssertFloorIsLast(options)).Message.ShouldContain("after the request-log floor");
+    }
+
+    [Fact]
+    public void AssertFloorIsLast_NoFloorRegistered_Throws()
+    {
+        Should.Throw<InvalidOperationException>(() => RequestLogFloor.AssertFloorIsLast(new LoggerFilterOptions())).Message.ShouldContain("not registered");
     }
 
     private static IHost Build(Dictionary<string, string?> settings, out Sink aliased, out Sink fullName, out Sink ruleless)
