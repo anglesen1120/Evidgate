@@ -90,11 +90,6 @@ internal sealed class ListAiSettingsVersionsQueryHandler(
         ListAiSettingsVersionsQuery query,
         CancellationToken cancellationToken)
     {
-        if (query.RequestError is { } requestError)
-        {
-            return Result.Failure<AiSettingsVersionListResponse>(requestError);
-        }
-
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(ListAiSettingsVersionsQuery));
 
         ArgumentNullException.ThrowIfNull(query);
@@ -102,6 +97,11 @@ internal sealed class ListAiSettingsVersionsQueryHandler(
         if (AuthoringRules.Project(query.ProjectId, principals, tenant) is { } scopeError)
         {
             return Result.Failure<AiSettingsVersionListResponse>(scopeError);
+        }
+
+        if (query.RequestError is { } requestError)
+        {
+            return Result.Failure<AiSettingsVersionListResponse>(requestError);
         }
 
         var cursorVersionNo = 0;
