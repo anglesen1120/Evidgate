@@ -6,6 +6,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Reflection;
+using System.Reflection.Emit;
 using Shouldly;
 using Xunit;
 
@@ -149,6 +151,49 @@ public sealed class ApiHostRequestLogFloorTests
         logger.Log(LogLevel.Warning, default, "warn", null, static (message, _) => message);
 
         sink.Entries.Where(entry => entry.Category == Category).Select(entry => entry.Message).ShouldBe(["warn"]);
+    }
+
+    // BuildApp cannot take a late rule and a WebApplicationFactory stops at the framework's Build(), before our check,
+    // so the production entry is pinned by what it calls: the checked wrapper, never the bare builder's Build.
+    [Fact]
+    public void ProductionEntryBuildApp_BuildsThroughTheCheckedWrapper_NeverTheBareBuilder()
+    {
+        var entry = typeof(ApiHost).GetMethod(nameof(ApiHost.BuildApp), [typeof(string[])])!;
+
+        var callees = CalledMethods(entry);
+
+        callees.ShouldContain(typeof(ApiHost).GetMethod(nameof(ApiHost.BuildWithLogFloor))!);
+        callees.ShouldNotContain(method => method.DeclaringType == typeof(WebApplicationBuilder) && method.Name == nameof(WebApplicationBuilder.Build));
+    }
+
+    private static List<MethodBase> CalledMethods(MethodInfo method)
+    {
+        var il = method.GetMethodBody()!.GetILAsByteArray()!;
+        var opCodes = typeof(OpCodes).GetFields(BindingFlags.Public | BindingFlags.Static)
+            .Select(field => (OpCode)field.GetValue(null)!)
+            .ToDictionary(code => code.Value);
+        var called = new List<MethodBase>();
+        for (var position = 0; position < il.Length;)
+        {
+            var code = il[position] == 0xFE ? opCodes[(short)(0xFE00 | il[position + 1])] : opCodes[il[position]];
+            position += code.Size;
+            if (code.OperandType == OperandType.InlineMethod)
+            {
+                called.Add(method.Module.ResolveMethod(BitConverter.ToInt32(il, position), method.DeclaringType!.GetGenericArguments(), null)!);
+            }
+
+            position += code.OperandType switch
+            {
+                OperandType.InlineNone => 0,
+                OperandType.ShortInlineBrTarget or OperandType.ShortInlineI or OperandType.ShortInlineVar => 1,
+                OperandType.InlineVar => 2,
+                OperandType.InlineI8 or OperandType.InlineR => 8,
+                OperandType.InlineSwitch => 4 + (4 * BitConverter.ToInt32(il, position)),
+                _ => 4,
+            };
+        }
+
+        return called;
     }
 
     private static WebApplication BuildApi(
