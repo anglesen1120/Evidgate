@@ -37,4 +37,73 @@ internal sealed partial class YamlSubset
 
         return mapping;
     }
+
+    /// <summary>
+    /// True when the quote at <paramref name="i"/> opens a quoted scalar. YAML only opens one at the start of a
+    /// value or flow item; an apostrophe inside a plain scalar (<c>don't</c>) is literal text.
+    /// </summary>
+    private static bool IsQuoteStart(string text, int i)
+    {
+        if (text[i] is not ('\'' or '"'))
+        {
+            return false;
+        }
+
+        var before = i - 1;
+        while (before >= 0 && text[before] == ' ')
+        {
+            before--;
+        }
+
+        // A colon only separates key from value when a space follows it; 'a:'b' is plain text.
+        return before < 0 || text[before] is '[' or '{' or ',' || (text[before] == ':' && text[before + 1] == ' ');
+    }
+
+    /// <summary>
+    /// Joins the following lines onto a flow collection that does not close on its first line (Prettier wraps long
+    /// flow sequences). Comments are dropped per line; a collection still open at end of input is refused.
+    /// </summary>
+    private string JoinFlowLines(string text, int lineNumber)
+    {
+        var value = StripComment(text, lineNumber).Trim();
+        if (value.Length == 0 || value[0] is not ('[' or '{'))
+        {
+            return text;
+        }
+
+        while (FlowDepth(value, lineNumber) > 0)
+        {
+            if (_index >= _lines.Count)
+            {
+                throw new NotSupportedException($"line {lineNumber}: flow collection is never closed: '{value}'");
+            }
+
+            value += " " + StripComment(_lines[_index++], _index).Trim();
+        }
+
+        return value;
+    }
+
+    /// <summary>Open-bracket depth of <paramref name="value"/> after its last character, skipping quoted text.</summary>
+    private static int FlowDepth(string value, int lineNumber)
+    {
+        var depth = 0;
+        for (var i = 0; i < value.Length; i++)
+        {
+            if (IsQuoteStart(value, i))
+            {
+                i = SkipQuoted(value, i, lineNumber);
+            }
+            else if (value[i] is '[' or '{')
+            {
+                depth++;
+            }
+            else if (value[i] is ']' or '}')
+            {
+                depth--;
+            }
+        }
+
+        return depth;
+    }
 }
