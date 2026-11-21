@@ -259,6 +259,8 @@ public sealed partial class TemplateTests
     {
         private const string ReadOnlySql = "select current_setting('transaction_read_only') = 'on'";
 
+        // Principal and tenant resolution read through the same db before the handler runs; only the
+        // template statements are the subject of the probe.
         public List<bool> Reads { get; } = [];
 
         public int Writes { get; private set; }
@@ -272,7 +274,7 @@ public sealed partial class TemplateTests
             object? parameters = null,
             CancellationToken cancellationToken = default)
         {
-            Reads.Add(await inner.ScalarAsync<bool>(ReadOnlySql, cancellationToken: cancellationToken));
+            await RecordAsync(sql, cancellationToken);
             return await inner.QueryAsync<T>(sql, parameters, cancellationToken);
         }
 
@@ -281,8 +283,16 @@ public sealed partial class TemplateTests
             object? parameters = null,
             CancellationToken cancellationToken = default)
         {
-            Reads.Add(await inner.ScalarAsync<bool>(ReadOnlySql, cancellationToken: cancellationToken));
+            await RecordAsync(sql, cancellationToken);
             return await inner.QuerySingleOrDefaultAsync<T>(sql, parameters, cancellationToken);
+        }
+
+        private async Task RecordAsync(string sql, CancellationToken cancellationToken)
+        {
+            if (sql.Contains("public.template", StringComparison.Ordinal))
+            {
+                Reads.Add(await inner.ScalarAsync<bool>(ReadOnlySql, cancellationToken: cancellationToken));
+            }
         }
 
         public Task<int> ExecuteAsync(
@@ -290,7 +300,11 @@ public sealed partial class TemplateTests
             object? parameters = null,
             CancellationToken cancellationToken = default)
         {
-            Writes++;
+            if (sql.Contains("public.template", StringComparison.Ordinal))
+            {
+                Writes++;
+            }
+
             return inner.ExecuteAsync(sql, parameters, cancellationToken);
         }
 
