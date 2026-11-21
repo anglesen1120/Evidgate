@@ -101,6 +101,25 @@ public sealed class WebTemplateLiteralScannerTests
     }
 
     [Theory]
+    [InlineData("myreturn")]
+    [InlineData("returnValue")]
+    [InlineData("$return")]
+    [InlineData("_return")]
+    [InlineData("éreturn")]
+    [InlineData("a\u0301return")]
+    [InlineData("x.return")]
+    [InlineData("x. return")]
+    [InlineData("x.\nreturn")]
+    [InlineData("x?.return")]
+    public void Scan_KeywordInIdentifierOrProperty_KeepsScanning(string operand)
+    {
+        var scan = TemplateLiteralScanner.Scan(operand + " / 2; const name = 'hello';");
+
+        scan.Complete.ShouldBeTrue();
+        scan.Literals.Single().Value.ShouldBe("hello");
+    }
+
+    [Theory]
     [InlineData("\n")]
     [InlineData("\r")]
     [InlineData("\r\n")]

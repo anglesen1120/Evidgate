@@ -84,8 +84,8 @@ internal static class TemplateBodyHasher
     }
 
     /// <summary>
-    /// True for a forward-slash path that a UTF-8 encoder can carry: no control character, no lone surrogate, no drive,
-    /// no backslash and no empty, <c>.</c> or <c>..</c> segment.
+    /// True for a forward-slash path that a UTF-8 encoder can carry: no control, line-separator or bidi-control
+    /// character, no lone surrogate, no drive, no backslash and no empty, <c>.</c> or <c>..</c> segment.
     /// </summary>
     /// <param name="path">A relative path as packaged.</param>
     internal static bool IsSafeRelativePath(string path)
@@ -98,7 +98,7 @@ internal static class TemplateBodyHasher
         for (var index = 0; index < path.Length; index++)
         {
             var character = path[index];
-            if (character < ' ' || character == '\u007f')
+            if (IsUnsafePathCharacter(character))
             {
                 return false;
             }
@@ -130,6 +130,17 @@ internal static class TemplateBodyHasher
 
         return true;
     }
+
+    /// <summary>
+    /// True for a control character (C0, DEL or C1), a line or paragraph separator, or a bidirectional control: each
+    /// can split or reorder the path where it is shown, so the bytes and the displayed path would disagree.
+    /// </summary>
+    private static bool IsUnsafePathCharacter(char character) =>
+        char.IsControl(character)
+        || character is '\u2028' or '\u2029'
+        || character is >= '\u200E' and <= '\u200F'
+        || character is >= '\u202A' and <= '\u202E'
+        || character is >= '\u2066' and <= '\u2069';
 
     private static byte[] Normalise(string relativePath, byte[] bytes)
     {

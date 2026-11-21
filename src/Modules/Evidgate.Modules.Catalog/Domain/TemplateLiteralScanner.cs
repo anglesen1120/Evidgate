@@ -11,14 +11,24 @@ namespace Evidgate.Modules.Catalog.Domain;
 /// </summary>
 /// <remarks>
 /// This is not a TypeScript parser: a <c>/</c> where a regular-expression literal could begin (the start of the input,
-/// or after <c>( , = : [ ! &amp; | ? { } ;</c>) ends the scan as incomplete instead of reading a quote inside it as a
-/// string, while division such as <c>a / b</c> keeps scanning. Rules that must be exact run in the Node CLI over the
-/// compiler's AST.
+/// after <c>( , = : [ ! &amp; | ? { } ;</c>, or after a keyword that ends an expression such as <c>return</c> or
+/// <c>typeof</c>) ends the scan as incomplete instead of reading a quote inside it as a string, while division such as
+/// <c>a / b</c> keeps scanning. Rules that must be exact run in the Node CLI over the compiler's AST.
 /// </remarks>
 internal static class TemplateLiteralScanner
 {
     /// <summary>Largest file scanned; a bigger one is incomplete, never partially read.</summary>
     internal const int MaxChars = TemplateLimits.MaxTextChars;
+
+    /// <summary>
+    /// Keywords after which a <c>/</c> begins a regular expression rather than division, as a JavaScript lexer reads
+    /// them: each ends an expression that still expects a value.
+    /// </summary>
+    private static readonly string[] RegexKeywords =
+    [
+        "return", "typeof", "instanceof", "in", "of", "new", "delete", "void",
+        "throw", "case", "do", "else", "yield", "await",
+    ];
 
     /// <summary>One literal: where it opens in the source, and its text with simple escapes decoded.</summary>
     /// <param name="Offset">
@@ -146,18 +156,69 @@ internal static class TemplateLiteralScanner
     /// <summary>True when a <c>/</c> sits where a regular-expression literal may begin, so the scan cannot tell it from division.</summary>
     private static bool MayStartRegex(string source, int index)
     {
-        for (var previous = index - 1; previous >= 0; previous--)
+        var previous = index - 1;
+        while (previous >= 0 && char.IsWhiteSpace(source[previous]))
         {
-            var character = source[previous];
-            if (char.IsWhiteSpace(character))
-            {
-                continue;
-            }
-
-            return character is '(' or ',' or '=' or ':' or '[' or '!' or '&' or '|' or '?' or '{' or '}' or ';';
+            previous--;
         }
 
-        return true;
+        if (previous < 0)
+        {
+            return true;
+        }
+
+        if (source[previous] is '(' or ',' or '=' or ':' or '[' or '!' or '&' or '|' or '?' or '{' or '}' or ';')
+        {
+            return true;
+        }
+
+        if (!IsIdentifierPart(source[previous]))
+        {
+            return false;
+        }
+
+        var start = previous;
+        while (start > 0 && IsIdentifierPart(source[start - 1]))
+        {
+            start--;
+        }
+
+        return !FollowsMemberAccess(source, start) && IsRegexKeyword(source.AsSpan(start, previous + 1 - start));
+    }
+
+    /// <summary>True for a character that continues a JavaScript identifier, so a keyword has to match the whole run.</summary>
+    private static bool IsIdentifierPart(char character) =>
+        char.IsLetterOrDigit(character)
+        || character is '_' or '$' or '\u200C' or '\u200D'
+        || CharUnicodeInfo.GetUnicodeCategory(character) is
+            UnicodeCategory.LetterNumber or
+            UnicodeCategory.NonSpacingMark or
+            UnicodeCategory.SpacingCombiningMark or
+            UnicodeCategory.ConnectorPunctuation;
+
+    /// <summary>True when the token is a member name after a dot, so it names a property and is not the keyword itself.</summary>
+    private static bool FollowsMemberAccess(string source, int tokenStart)
+    {
+        var previous = tokenStart - 1;
+        while (previous >= 0 && char.IsWhiteSpace(source[previous]))
+        {
+            previous--;
+        }
+
+        return previous >= 0 && source[previous] == '.';
+    }
+
+    private static bool IsRegexKeyword(ReadOnlySpan<char> token)
+    {
+        foreach (var keyword in RegexKeywords)
+        {
+            if (token.SequenceEqual(keyword))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>A line comment ends at any JavaScript line terminator, not only at a line feed.</summary>

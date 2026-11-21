@@ -36,6 +36,38 @@ public sealed partial class WebTemplateTests
     }
 
     [Theory]
+    [InlineData("return")]
+    [InlineData("typeof")]
+    [InlineData("instanceof")]
+    [InlineData("in")]
+    [InlineData("of")]
+    [InlineData("new")]
+    [InlineData("delete")]
+    [InlineData("void")]
+    [InlineData("throw")]
+    [InlineData("case")]
+    [InlineData("do")]
+    [InlineData("else")]
+    [InlineData("yield")]
+    [InlineData("await")]
+    public void WebTemplate_RegexAfterKeyword_FailsClosed(string keyword)
+    {
+        var source = "function f() { " + keyword + " /ghp_abcdefghijklmnopqrstuvwx/; }";
+        TemplateConformance.Evaluate(SecretRules, new Dictionary<string, string> { ["test.ts"] = source }).ShouldBe(["secret"]);
+        TemplateLiteralScanner.Scan(keyword + " /'/;").Complete.ShouldBeFalse();
+        TemplateLiteralScanner.Scan("my" + keyword + " / 2; const name = 'hello';").Complete.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WebTemplate_ReturnRegexBeforePasswordLiteral_ReportsViolation()
+    {
+        const string Source = "function f() { return /'/; } const password = 'hunter2hunter2'; const r = /'/;";
+
+        TemplateLiteralScanner.Scan(Source).Complete.ShouldBeFalse();
+        TemplateConformance.Evaluate(SecretRules, new Dictionary<string, string> { ["test.ts"] = Source }).ShouldBe(["secret"]);
+    }
+
+    [Theory]
     [InlineData("\n")]
     [InlineData("\r")]
     [InlineData("\r\n")]
@@ -56,6 +88,22 @@ public sealed partial class WebTemplateTests
     [InlineData(1)]
     [InlineData(31)]
     [InlineData(127)]
+    [InlineData(0x80)]
+    [InlineData(0x85)]
+    [InlineData(0x9F)]
+    [InlineData(0x2028)]
+    [InlineData(0x2029)]
+    [InlineData(0x202A)]
+    [InlineData(0x202B)]
+    [InlineData(0x202C)]
+    [InlineData(0x202D)]
+    [InlineData(0x202E)]
+    [InlineData(0x2066)]
+    [InlineData(0x2067)]
+    [InlineData(0x2068)]
+    [InlineData(0x2069)]
+    [InlineData(0x200E)]
+    [InlineData(0x200F)]
     [InlineData(0xD800)]
     public void Template_BodyRef_ControlOrMalformedPath_Refused(int code)
     {
