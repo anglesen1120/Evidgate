@@ -1455,3 +1455,15 @@ Closed by #1225 (53fe5538): the race premise did not hold. `CreateRunCommandHand
 | collect.sh residual check hardening (S600) | Three low findings left open by the S600 delta check on `scripts/dogfood/collect.sh` and `DogfoodReportTests.cs`: (1) the machine-name residual comparison is case-sensitive; (2) no test fails if the checkout-path/realpath residual is dropped, and the host-name and HOME tests return early on short names or an empty HOME; (3) a refusal on a later producer leaves a scrubbed earlier file in `--out` with no manifest. For (3), the earlier file is already scrubbed; (1) can miss machine identifiers whose casing differs. | next dogfood lane |
 
 Closed by #1227 (e1813329): the residual comparison ignores case (`refuse_residual` casefold, and the host sentinel check), the checkout-path/realpath residual, a fixed HOME and an additive extra identifier (`EVIDGATE_COLLECT_EXTRA_RESIDUAL`) are pinned by tests that cannot return early (`DogfoodReportTests.Residual.cs`), and a refusal on any producer now leaves `--out` empty (refuse-all, manifest last). What remains is the row 'collect.sh residual check scope (S609)'.
+
+## Moved from status-carried.md by S610 (2026-11-21)
+
+| OAuth callback `code`/`state` stay out of logs only by a code-level floor (S605) | ASP.NET's request line carries the callback query; `ApiHost.cs:76` starts `Microsoft.AspNetCore.Hosting.Diagnostics` at Warning in code, and `GitHubInstallationTests.Logs.cs` fails if that floor is lowered (mutant run red). That config cannot lower it is INFERRED from framework rule order, not run: a provider-specific `Logging:<Provider>:LogLevel` override would beat it. A test booting the host with such an override and scanning the logs would prove it. | receiver: Tech Lead (Identity); recorded owner: Tech Lead |
+
+Closed by #1231 (cd1d3e08): the inference was tested and is false for two key shapes (a provider-specific section and a provider-less trailing wildcard lower the floor); the exact-category, dotted-wildcard and parent keys do not. What remains is the rows 'Callback log floor can be lowered by configuration (S610)' and 'Callback log floor fix candidates and tests to flip (S610)'.
+
+## Moved from status-carried.md by S611 (2026-11-21)
+
+| Sibling architecture scanners accept conditional text (S560) | S560 made the Authoring pin reject any `#if` or disabled text in an endpoint file (security note 1 and code finding closed in 97aef5f0), but `RawBodyGuardBoundaryTests.cs:158-163` and `RateLimitGateSeamBoundaryTests.cs:302-307` still look only for disabled text that mentions their own needle, so a guard or call wrapped in `#if` can hide from them. | receiver: Architecture lane, reuse the fail-closed conditional-text check in both scanners |
+
+Closed by PR #1233 (merge 04c8038b): `ConditionalSourceText.FirstLine` is the one shared check, used by the Authoring pin, `RawBodyGuardBoundaryTests` and `RateLimitGateSeamBoundaryTests`, so any disabled text or `#if`/`#elif` directive refuses the file; fixtures and LAN mutants (old needle-only check restored, new fixtures red) cover both scanners.

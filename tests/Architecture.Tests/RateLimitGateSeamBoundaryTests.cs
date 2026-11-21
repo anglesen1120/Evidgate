@@ -125,13 +125,27 @@ public sealed class RateLimitGateSeamBoundaryTests
     }
 
     [Theory]
+    [InlineData("#if false\nRateLimitGate.AcquireAsync(ctx, 0, Admit, \"m\", token);\n#endif")]
     [InlineData("#if NET10_0\nRateLimitGate.AcquireAsync(ctx, 0, Admit, \"m\", token);\n#endif")]
     [InlineData("#if NET10_0\nR\\u0061teLimitGate.Go(ctx);\n#endif")]
-    public void Scan_CallInsideADisabledPreprocessorRegion_IsRed(string statement)
+    [InlineData("#if NET10_0\nvar x = 1;\n#else\nRateLimitGate.AcquireAsync(ctx, 0, Admit, \"m\", token);\n#endif")]
+    [InlineData("#if true\nvar x = 1;\n#endif")]
+    public void Scan_ConditionalText_IsRed(string statement)
     {
         var report = Scan([(OtherFile, Wrap(statement))], []);
 
-        report.Violations.ShouldContain(finding => finding.Contains("disabled preprocessor region", StringComparison.Ordinal));
+        report.Violations.ShouldContain(finding => finding.Contains("conditionally compiled text", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("// #if NET10_0\n// RateLimitGate.AcquireAsync(ctx, 0, Admit, \"m\", token);")]
+    [InlineData("var x = 1;")]
+    [InlineData("#pragma warning disable CS0219\nvar x = 1;\n#pragma warning restore CS0219")]
+    public void Scan_CommentedOutOrPlainText_IsGreen(string statement)
+    {
+        var report = Scan([(OtherFile, Wrap(statement))], []);
+
+        report.Violations.ShouldBeEmpty();
     }
 
     [Theory]
@@ -280,7 +294,7 @@ public sealed class RateLimitGateSeamBoundaryTests
     private static void ScanFile(string path, string text, bool isAllowed, string[] limiterCallers, ScanState state)
     {
         var tree = CSharpSyntaxTree.ParseText(text);
-        FlagDisabledRegions(path, tree, state);
+        FlagConditionalText(path, tree, state);
 
         if (tree.GetDiagnostics().Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error))
         {
@@ -295,17 +309,12 @@ public sealed class RateLimitGateSeamBoundaryTests
         }
     }
 
-    // Code under a symbol-dependent #if is compiled in production but parsed as disabled text here, so any
-    // disabled region that could hold the call is red instead of being skipped.
-    private static void FlagDisabledRegions(string path, SyntaxTree tree, ScanState state)
+    private static void FlagConditionalText(string path, SyntaxTree tree, ScanState state)
     {
-        foreach (var trivia in tree.GetRoot().DescendantTrivia().Where(trivia => trivia.IsKind(SyntaxKind.DisabledTextTrivia)))
+        var conditional = ConditionalSourceText.FirstLine(tree.GetRoot());
+        if (conditional > 0)
         {
-            var disabled = trivia.ToString();
-            if (disabled.Contains(GateType, StringComparison.Ordinal) || disabled.Contains(MethodName, StringComparison.Ordinal) || disabled.Contains("\\u", StringComparison.Ordinal))
-            {
-                state.Violations.Add($"{path}:{trivia.GetLocation().GetLineSpan().StartLinePosition.Line + 1}: disabled preprocessor region could hold a call to the gate");
-            }
+            state.Violations.Add($"{path}:{conditional}: conditionally compiled text hides a call to the gate from the scan");
         }
     }
 
