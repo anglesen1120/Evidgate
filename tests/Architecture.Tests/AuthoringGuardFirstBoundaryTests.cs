@@ -98,9 +98,9 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         // A protected alias renames a compared type for every file that sees it, so the whole production universe is
         // checked, not only the route files and the host.
         foreach (var file in _universe.Where(file =>
-            !state.Seen.Contains(file.Path) && ProtectedAliasPattern.IsMatch(file.Text)))
+            !state.Seen.Contains(file.Path) && MightDeclareProtectedAlias(file.Text)))
         {
-            state.Errors.AddRange(ProtectedAliasErrors(Parse(file.Text), file.Path));
+            state.Errors.AddRange(ProtectedAliasErrors(RootOf(file), file.Path));
         }
 
         // Read exemptions are checked by the real-solution fact, which is the only scan with that universe:

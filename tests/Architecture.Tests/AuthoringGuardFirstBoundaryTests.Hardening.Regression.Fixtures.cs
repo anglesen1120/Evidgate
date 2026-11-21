@@ -37,6 +37,24 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
     }
 
     [Theory]
+    [InlineData("var r = authoring.MapPost(\"/x\", M).Produces(200); r.RequireAuthorization();")]
+    [InlineData("RouteHandlerBuilder r; r = authoring.MapPost(\"/x\", M).Produces(200); r.RequireAuthorization();")]
+    [InlineData("var r = authoring.MapGroup(\"/g\").WithTags(\"t\"); r.RequireAuthorization();")]
+    [InlineData("var r = (authoring.MapGroup(\"/g\").WithTags(\"t\").WithName(\"n\"))!; r.RequireAuthorization();")]
+    public void Scan_FluentInitialiserOrAssignment_IsRed(string registration)
+    {
+        Scan([Synthetic(RegistrationBody(registration), GuardedHandler())], [])
+            .ShouldContain(error => error.Contains("stored route builder", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Scan_FluentInitialiserWithAnAllowedContinuation_IsGreen()
+    {
+        Scan([Synthetic(RegistrationBody("var r = authoring.MapPost(\"/x\", M).Produces(200); r.Produces(200);"), GuardedHandler())], [])
+            .ShouldBeEmpty();
+    }
+
+    [Theory]
     [InlineData("authoring?.FilterFactories.Add((c, next) => next);")]
     [InlineData("authoring?.Conventions.Add(builder => { });")]
     [InlineData("((RouteGroupBuilder)authoring!).Conventions.Add(builder => { });")]
@@ -140,6 +158,21 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         var host = Host("app.MapAuthoringEndpoints()" + ComposerFilters + ";");
         host.Text = "using TenantResolutionFilter = Evil;\n" + host.Text;
         Scan([route], [], universe: [route, host])
+            .ShouldContain(error => error.Contains("using alias", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("global using /* renamed */ TenantResolutionFilter = CustomType;", false)]
+    [InlineData("global using @TenantResolutionFilter = CustomType;", false)]
+    [InlineData("using /* renamed */ TenantResolutionFilter = CustomType;", true)]
+    [InlineData("using @TenantResolutionFilter = CustomType;", true)]
+    public void Scan_CommentedOrVerbatimAlias_IsRed(string directive, bool inHost)
+    {
+        var route = Synthetic(Register(), GuardedHandler());
+        var host = Host("app.MapAuthoringEndpoints()" + ComposerFilters + ";");
+        host.Text = directive + "\n" + host.Text;
+        (string Path, string Text) other = ("src/Other/GlobalUsings.cs", directive);
+        Scan([route], [], universe: inHost ? [route, host] : [route, other])
             .ShouldContain(error => error.Contains("using alias", StringComparison.Ordinal));
     }
 }

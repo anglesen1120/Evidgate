@@ -58,6 +58,16 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
     private static string? ChainRootName(ExpressionSyntax expression) =>
         ChainRoot(expression) is IdentifierNameSyntax identifier ? identifier.Identifier.ValueText : null;
 
+    // A fluent result still carries the Map result it was built from, and that shape is how the module builds its
+    // groups (`routes.MapGroup("/v1").WithTags("authoring")`), so an allowed continuation is walked down to its
+    // callee instead of being judged on the outer call alone.
+    private static ExpressionSyntax Callee(InvocationExpressionSyntax call) => call.Expression switch
+    {
+        MemberAccessExpressionSyntax access => access.Expression,
+        MemberBindingExpressionSyntax binding when ConditionalOf(binding) is { } conditional => conditional.Expression,
+        _ => call.Expression,
+    };
+
     // A value that holds a builder: a tracked name, either branch of a conditional or coalescing value, or a Map
     // result over a tracked receiver. One carrying branch is enough, because the registration may be handed it.
     private static bool ReceivesBuilder(ExpressionSyntax expression, HashSet<string> builders)
@@ -73,7 +83,8 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
             ConditionalAccessExpressionSyntax conditional =>
                 ReceivesBuilder(conditional.Expression, builders)
                 || (conditional.WhenNotNull is { } when && ReceivesBuilder(when, builders)),
-            InvocationExpressionSyntax call => IsBuilderMapCall(call, builders),
+            InvocationExpressionSyntax call => IsBuilderMapCall(call, builders)
+                || (IsAllowedContinuation(call) && ReceivesBuilder(Callee(call), builders)),
             _ => false,
         };
     }

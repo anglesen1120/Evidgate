@@ -30,9 +30,15 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
     private static readonly string[] ProtectedAliasNames =
         ["Guid", "HttpContext", "IMediator", "CancellationToken", "TenantResolutionFilter", "ResultEndpointFilter"];
 
+    // Only a prefilter, so a file with no such alias is never parsed: a protected name immediately followed by `=`
+    // also covers a comment between `using` and the name, and the verbatim `@Name` form. A false positive costs one
+    // parse, and the structural check below decides.
     private static readonly Regex ProtectedAliasPattern = new(
-        @"\busing\s+(?:global\s+)?(?:Guid|HttpContext|IMediator|CancellationToken|TenantResolutionFilter|ResultEndpointFilter)\s*=",
+        @"@?(?:Guid|HttpContext|IMediator|CancellationToken|TenantResolutionFilter|ResultEndpointFilter)\b\s*=",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static bool MightDeclareProtectedAlias(string text) =>
+        text.Contains("using", StringComparison.Ordinal) && ProtectedAliasPattern.IsMatch(text);
 
     // A Map result stored in a variable leaves the fluent chain, so every later call on it is judged here: the whole
     // continuation chain is walked, not just a call directly on the variable, and parentheses, `!`, casts, conditional
@@ -198,7 +204,11 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
     private static IEnumerable<string> ProtectedAliasErrors(SyntaxNode root, string path) =>
         root.DescendantNodes().OfType<UsingDirectiveSyntax>()
             .Where(directive => directive.Alias is { } alias
-                && ProtectedAliasNames.Contains(alias.Name.ToString(), StringComparer.Ordinal))
+                && ProtectedAliasNames.Contains(AliasName(alias), StringComparer.Ordinal))
             .Select(directive =>
                 $"{path}:{Line(directive)}: a using alias renames {directive.Alias!.Name}, a type the route pin compares by text");
+
+    // The written name is not the compared name: `using @Guid = …` keeps the `@` in the syntax text, so the alias is
+    // compared by its identifier value text.
+    private static string AliasName(NameEqualsSyntax alias) => alias.Name.Identifier.ValueText;
 }
