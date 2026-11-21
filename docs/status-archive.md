@@ -1689,3 +1689,10 @@ Closed by PR #1302 (b128af40): `DraftBody.RenderedLength` measures the raw UTF-8
 | Template vitest load timeouts (S634) | The S634 final `vitest` run (LAN load_max 35, e59b20aa) failed 4 of 6448 by timeout, no assertion failure: fixture-contract-refs-cap.spec "expands a bounded local graph..." (5000 ms) and ui-gallery.a11y.spec x3 (30000 ms). The wave-gate full `vitest` must clear them; a repeat failure there is a real defect. | wave-gate panel |
 
 Closed by S648 (#1305, `c6c2e27f`): the gallery axe scan is split into per-partition tests (slowest 4.1 s on the Mac, LAN round 2 green at load_max 22.44); `fixture-contract-refs-cap.spec` needed no change.
+
+## Moved from status-carried.md by S649 (2026-11-22)
+
+| Authoring read methods over 60 lines (S641) | `ListManualCasesQueryHandler.Handle` was 116 lines before the read guard-first change and is 121 now (five-line `RequestError` guard added), and `MapAuthoringManualCaseEndpoints` is 76 lines (unchanged); neither was split. | receiver: Authoring lane, split by responsibility |
+| Authoring read: project-scope mismatch answers 422 before the scope refusal (S641) | In the seven read handlers the carried `RequestError` returns before `AuthoringRules.Project`, so a caller scoped to another project with a bad query gets 422 instead of 403 `project_scope_mismatch`. Pre-existing (the old delegate validated before the handler); no data is exposed. | receiver: Authoring lane, move the `RequestError` return after the project gate |
+
+Closed by S649 (#1304, `df589bf9`): the seven Authoring read handlers return the carried `RequestError` after the project gate (401, 403 permission, 403 `project_scope_mismatch`, then 422; `AuthoringReadGuardFirstTests.ReadRoutes_InvalidQuery_RefuseTheProjectScopeBeforeValidation`, both mutants red on LAN), and `ListManualCasesQueryHandler.Handle` plus `MapAuthoringManualCaseEndpoints` (and the checklist, versions and tree handlers) are split to 60 lines or fewer.
