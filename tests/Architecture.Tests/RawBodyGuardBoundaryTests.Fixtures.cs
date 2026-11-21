@@ -144,6 +144,14 @@ public sealed partial class RawBodyGuardBoundaryTests
     }
 
     [Fact]
+    public void Scan_PragmaLinesAloneAreNotConditionalText()
+    {
+        var body = "#pragma warning disable CS0219\n" + GuardCall + "\n#pragma warning restore CS0219";
+
+        Scan([(RouteFile, RouteWith(body))], RouteReader).ShouldBeEmpty();
+    }
+
+    [Fact]
     public void Scan_CleanGuardedFileIsGreen()
     {
         Scan([(RouteFile, RouteWith(GuardCall))], RouteReader).ShouldBeEmpty();

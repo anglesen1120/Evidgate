@@ -140,6 +140,7 @@ public sealed class RateLimitGateSeamBoundaryTests
     [Theory]
     [InlineData("// #if NET10_0\n// RateLimitGate.AcquireAsync(ctx, 0, Admit, \"m\", token);")]
     [InlineData("var x = 1;")]
+    [InlineData("#pragma warning disable CS0219\nvar x = 1;\n#pragma warning restore CS0219")]
     public void Scan_CommentedOutOrPlainText_RaisesNoConditionalFinding(string statement)
     {
         var report = Scan([(OtherFile, Wrap(statement))], []);
