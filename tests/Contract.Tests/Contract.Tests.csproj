@@ -49,6 +49,8 @@
          "Microsoft.AspNetCore.Mvc.Testing"). No container packages: the contract
          surface under test answers before any handler reaches PostgreSQL. -->
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <!-- Contract YAML is read with the repository-pinned parser (Directory.Packages.props), not a local reader. -->
+    <PackageReference Include="YamlDotNet" />
   </ItemGroup>
   <!-- No fixture copy: fixtures/contracts/ is read from the repository
        (ContractPaths.Fixtures), like Canonicalization.UnitTests reads
