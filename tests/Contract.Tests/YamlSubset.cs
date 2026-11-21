@@ -13,7 +13,7 @@ namespace Contract.Tests;
 /// <list type="bullet">
 /// <item>block mappings (<c>key:</c> + indented child, or <c>key: value</c>)</item>
 /// <item>block sequences (<c>- item</c>, including <c>- key: value</c> item mappings)</item>
-/// <item>flow sequences (<c>[a, b]</c>) and flow mappings (<c>{a: 1, b: [x]}</c>)</item>
+/// <item>flow sequences (<c>[a, b]</c>, also spanning lines) and flow mappings (<c>{a: 1, b: [x]}</c>)</item>
 /// <item>plain, single- and double-quoted scalars, booleans, integers, floats, null</item>
 /// </list>
 /// Anything else — anchors, aliases, tags, block scalars
@@ -107,7 +107,7 @@ internal sealed partial class YamlSubset
             var entryLine = _index + 1;
             var (key, rest) = SplitEntry(line, entryLine);
             _index++;
-            AddMember(result, key, rest.Length == 0 ? ParseChild(indent) : ParseScalar(rest, _index), entryLine);
+            AddMember(result, key, rest.Length == 0 ? ParseChild(indent) : ParseScalar(JoinFlowLines(rest, entryLine), entryLine), entryLine);
         }
 
         return result;
@@ -143,6 +143,14 @@ internal sealed partial class YamlSubset
 
         if (indent > parentIndent)
         {
+            var first = _lines[_index].TrimStart();
+            if (first[0] is '[' or '{')
+            {
+                // Prettier puts a wrapped flow list on its own line under the key.
+                var lineNumber = ++_index;
+                return ParseScalar(JoinFlowLines(first, lineNumber), lineNumber);
+            }
+
             return ParseBlock(indent);
         }
 
@@ -179,8 +187,8 @@ internal sealed partial class YamlSubset
                 continue;
             }
 
-            result.Add(ParseScalar(item, _index + 1));
-            _index++;
+            var itemLine = ++_index;
+            result.Add(ParseScalar(JoinFlowLines(item, itemLine), itemLine));
         }
 
         return result;
@@ -273,7 +281,7 @@ internal sealed partial class YamlSubset
         for (var i = 0; i < value.Length; i++)
         {
             var c = value[i];
-            if (c is '\'' or '"')
+            if (IsQuoteStart(value, i))
             {
                 i = SkipQuoted(value, i, lineNumber);
                 continue;
@@ -328,7 +336,7 @@ internal sealed partial class YamlSubset
         for (var i = 0; i < inner.Length; i++)
         {
             var c = inner[i];
-            if (c is '\'' or '"')
+            if (IsQuoteStart(inner, i))
             {
                 i = SkipQuoted(inner, i, lineNumber);
                 continue;
@@ -350,6 +358,11 @@ internal sealed partial class YamlSubset
         }
 
         parts.Add(inner[start..]);
+        if (parts.Count > 1 && parts[^1].Trim().Length == 0 && parts[^2].Trim().Length != 0)
+        {
+            parts.RemoveAt(parts.Count - 1); // optional trailing comma
+        }
+
         return parts;
     }
 
@@ -359,7 +372,7 @@ internal sealed partial class YamlSubset
         for (var i = 0; i < text.Length; i++)
         {
             var c = text[i];
-            if (c is '\'' or '"')
+            if (IsQuoteStart(text, i))
             {
                 i = SkipQuoted(text, i, lineNumber);
                 continue;
@@ -403,7 +416,7 @@ internal sealed partial class YamlSubset
         for (var i = 0; i < line.Length; i++)
         {
             var c = line[i];
-            if (c is '\'' or '"')
+            if (IsQuoteStart(line, i))
             {
                 i = SkipQuoted(line, i, lineNumber);
                 continue;
@@ -420,13 +433,13 @@ internal sealed partial class YamlSubset
     }
 
     private static string SingleQuoted(string value, int lineNumber)
-        => value.Length >= 2 && value[^1] == '\''
+        => value.Length >= 2 && value[^1] == '\'' && SkipQuoted(value, 0, lineNumber) == value.Length - 1
             ? value[1..^1].Replace("''", "'", StringComparison.Ordinal)
             : throw new NotSupportedException($"line {lineNumber}: unterminated single-quoted scalar '{value}'");
 
     private static string DoubleQuoted(string value, int lineNumber)
     {
-        if (value.Length < 2 || value[^1] != '"')
+        if (value.Length < 2 || value[^1] != '"' || SkipQuoted(value, 0, lineNumber) != value.Length - 1)
         {
             throw new NotSupportedException($"line {lineNumber}: unterminated double-quoted scalar '{value}'");
         }
