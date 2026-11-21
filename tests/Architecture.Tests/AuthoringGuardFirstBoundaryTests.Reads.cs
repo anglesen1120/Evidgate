@@ -101,6 +101,7 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         var mediator = method.ParameterList.Parameters
             .FirstOrDefault(parameter => parameter.Type?.ToString().EndsWith("IMediator", StringComparison.Ordinal) == true)
             ?.Identifier.ValueText;
+        errors.AddRange(HelperRefusalErrors(method, mediator, path, name));
         if (method.Body is not { } body)
         {
             var expression = method.ExpressionBody?.Expression;

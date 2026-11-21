@@ -77,6 +77,17 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
             ScanFile(state.Queue.Dequeue(), found, exemptions, state, reads, readExemptions);
         }
 
+        var host = state.Universe.Where(file => file.Path == ApiHostPath).ToArray();
+        if (host.Length == 0 && state.Universe.Any(file => file.Path.StartsWith("src/Evidgate.Api/", StringComparison.Ordinal)))
+        {
+            state.Errors.Add($"{ApiHostPath}:1: the host composer file is missing from the scanned universe");
+        }
+
+        foreach (var file in host)
+        {
+            state.Errors.AddRange(ComposerResultFilterErrors(Parse(file.Text), file.Path));
+        }
+
         // Read exemptions are checked by the real-solution fact, which is the only scan with that universe:
         // a synthetic fixture cannot report a real production delegate as stale.
         if (!reads)
@@ -110,6 +121,12 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         {
             ScanCall(call, path, found, exemptions, state, reads, readExemptions);
         }
+
+        state.Errors.AddRange(UsingAliasErrors(root, path)
+            .Concat(ConventionOnStoredBuilderErrors(root, path))
+            .Concat(FilterFactoriesErrors(root, path))
+            .Concat(NonMapRegistrationErrors(root, path))
+            .Concat(PartialOverloadErrors(file, root, state.Universe)));
     }
 
     private static void ScanCall(
