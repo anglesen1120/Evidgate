@@ -1232,6 +1232,35 @@ export type DraftListResponse = {
     next_cursor: string | null;
 };
 
+export type TemplateDto = {
+    id: string;
+    kind: 'web' | 'api' | 'unit' | 'mobile';
+    name: string;
+    version: number;
+    body_ref: string;
+    created_at: string;
+};
+
+export type TemplateDetailDto = {
+    id: string;
+    kind: 'web' | 'api' | 'unit' | 'mobile';
+    name: string;
+    version: number;
+    body_ref: string;
+    /**
+     * The rules a generated project is checked against: a named set (object) or an ordered list (array), stored as at most 64 KiB of JSON.
+     */
+    conformance_rules: {
+        [key: string]: unknown;
+    } | Array<unknown>;
+    created_at: string;
+};
+
+export type TemplateListResponse = {
+    items: Array<TemplateDto>;
+    next_cursor: string | null;
+};
+
 export type FixtureDto = {
     id: string;
     org_id: string;
@@ -3819,6 +3848,11 @@ export type PurposeFilter = Purpose;
 export type DraftStatusFilter = 'draft' | 'dry_running' | 'dry_passed' | 'dry_failed' | 'pr_open' | 'merged' | 'closed';
 
 /**
+ * Only templates of this kind; an unknown value is a 422 `request_invalid`.
+ */
+export type TemplateKindFilter = 'web' | 'api' | 'unit' | 'mobile';
+
+/**
  * Opaque cursor from `next_cursor`; ordering `(revision_no, id)` (07.1.1-T3, 00 §9.1).
  */
 export type PolicyRevisionCursor = string;
@@ -3974,6 +4008,8 @@ export type ExecutionPlanCursor = string;
 export type ExecutionPlanLimit = number;
 
 export type DraftId = string;
+
+export type TemplateId = string;
 
 export type IncidentId = string;
 
@@ -9819,6 +9855,100 @@ export type UpdateDraftResponses = {
 };
 
 export type UpdateDraftResponse = UpdateDraftResponses[keyof UpdateDraftResponses];
+
+export type ListTemplatesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Only templates of this kind; an unknown value is a 422 `request_invalid`.
+         */
+        kind?: 'web' | 'api' | 'unit' | 'mobile';
+        /**
+         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/templates';
+};
+
+export type ListTemplatesErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListTemplatesError = ListTemplatesErrors[keyof ListTemplatesErrors];
+
+export type ListTemplatesResponses = {
+    /**
+     * Page of templates
+     */
+    200: TemplateListResponse;
+};
+
+export type ListTemplatesResponse = ListTemplatesResponses[keyof ListTemplatesResponses];
+
+export type GetTemplateData = {
+    body?: never;
+    path: {
+        t: string;
+    };
+    query?: never;
+    url: '/templates/{t}';
+};
+
+export type GetTemplateErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetTemplateError = GetTemplateErrors[keyof GetTemplateErrors];
+
+export type GetTemplateResponses = {
+    /**
+     * The template
+     */
+    200: TemplateDetailDto;
+};
+
+export type GetTemplateResponse = GetTemplateResponses[keyof GetTemplateResponses];
 
 export type ListFixturesData = {
     body?: never;

@@ -55,6 +55,9 @@ public sealed class CatalogueTests : HarnessTest
     /// <summary>The fixed id of the fixture platform price row this suite seeds for the 0073 surface.</summary>
     private static readonly Guid UsagePriceRowId = Guid.Parse("44444444-4444-7444-8444-444444444444");
 
+    /// <summary>The fixed id of the built-in template row this suite seeds for the template registry.</summary>
+    private static readonly Guid TemplateRowId = Guid.Parse("55555555-5555-7555-8555-555555555555");
+
 
     /// <summary>
     /// The catalogue surfaces AC5 names, with the clause that selects their built-in rows and the
@@ -73,6 +76,8 @@ public sealed class CatalogueTests : HarnessTest
         ("public.usage_price", "org_id is null", "id::text"),
         // 04.4.1 (0075): the seeded pytest parser is the built-in row every tenant resolves.
         ("public.report_parser", "org_id is null", "parser_id || '/' || version"),
+        // 03.5.1 (0118): a built-in template is the platform row every tenant reads; the suite seeds one.
+        ("public.template", "org_id is null", "id::text"),
     ];
 
     private readonly ITestOutputHelper _output;
@@ -168,6 +173,7 @@ public sealed class CatalogueTests : HarnessTest
         await CheckHealingSwitchWritesAsync(failures);
         await CheckUsagePriceWritesAsync(failures);
         await CheckReportParserWritesAsync(failures);
+        await CheckTemplateWritesAsync(failures);
 
         failures.ShouldBeEmpty(
             $"the catalogue is not read-only for the application role:{Environment.NewLine}"
@@ -332,6 +338,17 @@ public sealed class CatalogueTests : HarnessTest
             on conflict do nothing
             """,
             [("id", UsagePriceRowId)],
+            Token);
+
+        // 03.5.1 (0118): no migration seeds a template row yet, so the probe row is a fixture built-in,
+        // written through the owner seam like the switch and price rows above.
+        await Fixture.SeedAsync(
+            """
+            insert into public.template (id, org_id, kind, name, version, body_ref, conformance_rules)
+            values (@id, null, 'web', 'catalogue-probe', 1, @body_ref, '{}'::jsonb)
+            on conflict do nothing
+            """,
+            [("id", TemplateRowId), ("body_ref", "sha256:" + new string('c', 64))],
             Token);
     }
 
@@ -530,6 +547,36 @@ public sealed class CatalogueTests : HarnessTest
         AssertRefused(table, "DELETE of a platform parser row", delete, silentAllowed: true, failures);
 
         var truncate = await RefusalAsync("truncate public.report_parser");
+        AssertRefused(table, "TRUNCATE", truncate, silentAllowed: false, failures);
+
+        await AssertUnchangedAsync(table, "org_id is null", "id::text", before, failures);
+        _output.WriteLine("{0}: insert/update/delete/truncate refused; {1} built-in row(s) unchanged", table, before.Count);
+    }
+
+    /// <summary>
+    /// <c>public.template</c> (03.5.1/0118): the registry is a platform catalogue, so the app role can neither
+    /// insert a template row (the <c>WITH CHECK</c> never matches a NULL org) nor update or delete one (no privilege).
+    /// </summary>
+    private async Task CheckTemplateWritesAsync(List<string> failures)
+    {
+        const string table = "public.template";
+        var before = await ReadKeysAsync(table, "org_id is null", "id::text");
+        before.ShouldNotBeEmpty($"{table}: the built-in template row is missing — the write probe would have nothing to target");
+
+        // A name no row registers, so the only possible refusal is the policy, never the unique key.
+        var insert = await RefusalAsync(
+            "insert into public.template (id, org_id, kind, name, version, body_ref, conformance_rules) values (@key::uuid, null, 'web', 'probe-template', 1, @body_ref, '{}'::jsonb)",
+            ("key", Guid.NewGuid().ToString("D", CultureInfo.InvariantCulture)),
+            ("body_ref", "sha256:" + new string('d', 64)));
+        AssertRefused(table, "INSERT of a platform template row", insert, silentAllowed: false, failures);
+
+        var update = await RefusalAsync("update public.template set name = name where org_id is null");
+        AssertRefused(table, "UPDATE of a platform template row", update, silentAllowed: true, failures);
+
+        var delete = await RefusalAsync("delete from public.template where org_id is null");
+        AssertRefused(table, "DELETE of a platform template row", delete, silentAllowed: true, failures);
+
+        var truncate = await RefusalAsync("truncate public.template");
         AssertRefused(table, "TRUNCATE", truncate, silentAllowed: false, failures);
 
         await AssertUnchangedAsync(table, "org_id is null", "id::text", before, failures);

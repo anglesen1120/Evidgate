@@ -183,6 +183,8 @@ const EXPECTED = [
   ['/drafts/{d}', 'patch', 'draft:write', 'v1'],
   ['/drafts/{d}/dry-run', 'post', 'draft:dry_run', 'v2'],
   ['/drafts/{d}/pull-request', 'post', 'draft:merge_request', 'v2'],
+  ['/templates', 'get', 'case:read', 'v1'],
+  ['/templates/{t}', 'get', 'case:read', 'v1'],
   ['/projects/{p}/incidents', 'get', 'healing:triage', 'v1'],
   ['/incidents/{i}', 'get', 'healing:triage', 'v1'],
   ['/incidents/{i}/label', 'post', 'healing:triage', 'v1'],

@@ -695,6 +695,12 @@ internal static class RouteRequests
         Add("PATCH", "/v1/drafts/{d}", _ => new(HttpMethod.Patch, $"/v1/drafts/{Guid.CreateVersion7()}",
             DraftUpdateBody(), IfMatch: "\"1\""));
 
+        // ---- Template registry (TemplateEndpoints.cs; 03.5.1) -------------------------------------------------
+        // Both routes are org-level and read-only. A fresh template id is a valid probe because authorization
+        // precedes the lookup, so the refusal matrix never depends on a seeded row.
+        Add("GET", "/v1/templates", _ => new(HttpMethod.Get, "/v1/templates"));
+        Add("GET", "/v1/templates/{t}", _ => new(HttpMethod.Get, $"/v1/templates/{Guid.CreateVersion7()}"));
+
         // ---- CI token exchange (pre-tenant) ------------------------------------------------------------------
         Add("POST", "/v1/ci/token", _ => new(HttpMethod.Post, "/v1/ci/token",
             new JsonObject { ["ingest_token"] = "egt_probe" }));

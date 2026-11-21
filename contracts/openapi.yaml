@@ -5574,6 +5574,74 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /templates:
+    get:
+      operationId: listTemplates
+      tags: [catalog]
+      summary: Cursor page of active templates
+      description: >-
+        Active built-ins (`org_id IS NULL`) are visible to every member role, plus the caller's own org rows;
+        an inactive row and another org's row are invisible. Ordered by `(created_at, id)` with an optional
+        kind filter. Authentication and authorization precede query validation: an unknown kind, a malformed
+        cursor or an out-of-range limit is 422 `request_invalid` with the member named.
+      x-permission: case:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/TemplateKindFilter'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of templates
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /templates/{t}:
+    get:
+      operationId: getTemplate
+      tags: [catalog]
+      summary: One active template with its conformance rules
+      description: >-
+        An active built-in or the caller's own org row; an inactive row, another org's row and an unknown id
+        all answer 404 `not_found`, so the id alone never tells a caller whether a row exists.
+      x-permission: case:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/TemplateId'
+      responses:
+        '200':
+          description: The template
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateDetailDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /projects/{p}/fixtures:
     post:
       operationId: createFixture
@@ -9321,6 +9389,14 @@ components:
       schema:
         type: string
         enum: [draft, dry_running, dry_passed, dry_failed, pr_open, merged, closed]
+    TemplateKindFilter:
+      name: kind
+      in: query
+      required: false
+      description: Only templates of this kind; an unknown value is a 422 `request_invalid`.
+      schema:
+        type: string
+        enum: [web, api, unit, mobile]
     PolicyRevisionCursor:
       name: cursor
       in: query
@@ -9714,6 +9790,13 @@ components:
         maximum: 500
     DraftId:
       name: d
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TemplateId:
+      name: t
       in: path
       required: true
       schema:
@@ -12336,6 +12419,40 @@ components:
         items:
           type: array
           items: { $ref: '#/components/schemas/DraftDto' }
+        next_cursor: { type: [string, 'null'] }
+    TemplateDto:
+      type: object
+      required: [id, kind, name, version, body_ref, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [web, api, unit, mobile] }
+        name: { type: string, minLength: 1, maxLength: 64, pattern: '^[a-z][a-z0-9-]*$' }
+        version: { type: integer, minimum: 1 }
+        body_ref: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        created_at: { type: string, format: date-time }
+    TemplateDetailDto:
+      type: object
+      required: [id, kind, name, version, body_ref, conformance_rules, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [web, api, unit, mobile] }
+        name: { type: string, minLength: 1, maxLength: 64, pattern: '^[a-z][a-z0-9-]*$' }
+        version: { type: integer, minimum: 1 }
+        body_ref: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        conformance_rules:
+          type: [object, array]
+          additionalProperties: true
+          description: >-
+            The rules a generated project is checked against: a named set (object) or an ordered list (array),
+            stored as at most 64 KiB of JSON.
+        created_at: { type: string, format: date-time }
+    TemplateListResponse:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/TemplateDto' }
         next_cursor: { type: [string, 'null'] }
     FixtureDto:
       type: object

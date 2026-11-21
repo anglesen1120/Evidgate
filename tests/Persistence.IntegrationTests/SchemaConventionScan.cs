@@ -162,6 +162,10 @@ internal static class SchemaConventionScan
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "A parser registry row is insert-only (04.4.1-T1; migration 0075): the app role holds SELECT only, and the row is written by the migration and the owner role, so a release is a new (parser_id, version) row rather than an edit — the row keeps created_at only, with no updated_at/version and no version trigger. Its tenant key, closed CHECKs and RLS are NOT exempt."),
         new SchemaExemption(
+            "public.template",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "A template registry row is insert-only (03.5.1-T1; migration 0118): the app role holds SELECT only, and rows are written by the migration and the owner role, so a release is a new (kind, name, version) row rather than an edit — the row keeps created_at only, with no updated_at/version and no version trigger. `active` flips only by migration, so a deprecation changes the row without an updated_at. Its nullable tenant key, closed CHECKs, partial unique index and RLS are NOT exempt."),
+        new SchemaExemption(
             "public.release_component",
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "Immutable component rows (05.6.1-T1; migration 0072): the app role holds SELECT + INSERT, UPDATE and DELETE are revoked, and the `release_component_guard` trigger refuses both for every role (it raises `release_component_immutable`) and refuses INSERT once the release is `active`, so a component is written once at create and keeps created_at only — no updated_at/version and no version trigger. Its tenant key, composite FKs (release, environment_revision), same-project guard and RLS are NOT exempt."),
