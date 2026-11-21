@@ -7,8 +7,9 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 // Fault injection: the two refusals only a lost write reaches (the AI settings unique-version loss and the apply flip
-// that moves fewer rows than it was handed) are driven by test-owned triggers. Each trigger counts its firing in a
-// sequence, which a rollback does not undo, so a refusal reached through an earlier branch cannot satisfy the test.
+// that moves fewer rows than it was handed) are driven by test-owned triggers scoped to the world's org. Each trigger
+// counts its firing in a sequence, which a rollback does not undo, so a refusal reached through an earlier branch
+// cannot satisfy the test.
 public sealed partial class AuthoringCommitFaultMetricTests
 {
     private const string CompetitorHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
@@ -33,6 +34,13 @@ public sealed partial class AuthoringCommitFaultMetricTests
             // named (version 1) can only have been the trigger's row, and it rolled back with the request.
             (await AiSettingsCalls.SettingsCountAsync(fixture, world)).ShouldBe(0);
             (await AiSettingsCalls.AuditCountAsync(fixture, world)).ShouldBe(0);
+
+            // Control: the same save lands once the competitor is gone.
+            await DisarmLostWriteFaultsAsync(world);
+            var control = await AiSettingsCalls.SaveAsync(
+                world.Client, world.As, world, AiSettingsCalls.Body(AiSettingsCalls.Document()), "\"0\"");
+            control.Status.ShouldBe(HttpStatusCode.Created, control.ErrorMessage);
+            (await AiSettingsCalls.SettingsCountAsync(fixture, world)).ShouldBe(1);
         }
         finally
         {
@@ -89,7 +97,7 @@ public sealed partial class AuthoringCommitFaultMetricTests
               language plpgsql security definer set search_path = '' as $fault$
             declare competitor public.project_ai_settings;
             begin
-              if pg_trigger_depth() = 1 then
+              if pg_trigger_depth() = 1 and new.org_id = '{world.Org}' then
                 perform nextval('public.fault_fired');
                 competitor := new;
                 competitor.id := gen_random_uuid();
@@ -105,14 +113,14 @@ public sealed partial class AuthoringCommitFaultMetricTests
     // The change rows are locked before the flip, so no real writer can shrink its count; the trigger skips only the
     // pending to applied update, the way a vanished row would.
     private Task ArmSkippedFlipAsync(AiSettingsCalls.World world) =>
-        fixture.ExecuteAsync(world.Database, """
+        fixture.ExecuteAsync(world.Database, $"""
             drop function if exists public.authoring_flip_skip_fn() cascade;
             drop sequence if exists public.fault_fired;
             create sequence public.fault_fired;
             create function public.authoring_flip_skip_fn() returns trigger
               language plpgsql security definer set search_path = '' as $fault$
             begin
-              if old.state = 'pending' and new.state = 'applied' then
+              if old.state = 'pending' and new.state = 'applied' and new.org_id = '{world.Org}' then
                 perform nextval('public.fault_fired');
                 return null;
               end if;
