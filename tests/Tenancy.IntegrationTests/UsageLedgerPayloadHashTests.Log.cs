@@ -107,6 +107,8 @@ public sealed partial class UsageLedgerPayloadHashTests
 
     /// <summary>
     /// Keeps the level as well as the rendered line, so "an Error was logged" is assertable, not only "something was logged".
+    /// Still a separate sink: moving it onto the shared capturing provider also changes the world record in
+    /// <c>UsageLedgerPayloadHashTests.cs</c>, which is tracked as its own carried item.
     /// </summary>
     private sealed class ConflictLogSink : ILoggerProvider
     {
