@@ -53,6 +53,33 @@ public sealed class AuthoringReadGuardFirstTests
         }
     }
 
+    /// <summary>
+    /// A caller narrowed to another project of the same org is refused with 403 <c>project_scope_mismatch</c> even when
+    /// its query is invalid, so a 422 never confirms what the route would accept for a project the caller may not read;
+    /// the same query from an in-scope caller is still the route's own 422.
+    /// </summary>
+    [Fact]
+    public async Task ReadRoutes_InvalidQuery_RefuseTheProjectScopeBeforeValidation()
+    {
+        await using var world = await StartAsync();
+        var sibling = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("read-sibling"));
+        var narrowed = TenancyApiFactory.Caller(org: world.Org, user: world.User, project: sibling);
+        var inScope = TenancyApiFactory.Caller(org: world.Org, user: world.User, project: world.Project);
+
+        foreach (var route in Routes(world.Project))
+        {
+            var mismatch = await AuthoringCalls.SendAsync(
+                world.Client, narrowed, HttpMethod.Get, route.InvalidUrl, withIdempotencyKey: false);
+            mismatch.Status.ShouldBe(HttpStatusCode.Forbidden, $"{route.Label}: a caller narrowed to another project");
+            ErrorCode(mismatch).ShouldBe(ApiErrorCode.ProjectScopeMismatch, $"{route.Label}: the scope refusal wins over the 422");
+
+            var invalid = await AuthoringCalls.SendAsync(
+                world.Client, inScope, HttpMethod.Get, route.InvalidUrl, withIdempotencyKey: false);
+            invalid.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, $"{route.Label}: an in-scope caller, same query");
+            invalid.Paths().ShouldContain(route.ErrorPath, $"{route.Label}: the refusal names the parameter");
+        }
+    }
+
     private static string? ErrorCode(AuthoringCalls.Answer answer) =>
         answer.Member("error").GetProperty("code").GetString();
 

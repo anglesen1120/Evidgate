@@ -69,11 +69,6 @@ internal sealed class ListAuthoringChangesQueryHandler(
         ListAuthoringChangesQuery query,
         CancellationToken cancellationToken)
     {
-        if (query.RequestError is { } requestError)
-        {
-            return Result.Failure<AuthoringChangePageResponse>(requestError);
-        }
-
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(ListAuthoringChangesQuery));
 
         ArgumentNullException.ThrowIfNull(query);
@@ -81,6 +76,11 @@ internal sealed class ListAuthoringChangesQueryHandler(
         if (AuthoringRules.Project(query.ProjectId, principals, tenant) is { } scopeError)
         {
             return Result.Failure<AuthoringChangePageResponse>(scopeError);
+        }
+
+        if (query.RequestError is { } requestError)
+        {
+            return Result.Failure<AuthoringChangePageResponse>(requestError);
         }
 
         if (Filters(query) is { } filterError)

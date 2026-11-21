@@ -64,11 +64,6 @@ internal sealed class ExportAuthoringQueryHandler(
         ExportAuthoringQuery query,
         CancellationToken cancellationToken)
     {
-        if (query.RequestError is { } requestError)
-        {
-            return Result.Failure<IResult>(requestError);
-        }
-
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(ExportAuthoringQuery));
 
         ArgumentNullException.ThrowIfNull(query);
@@ -76,6 +71,11 @@ internal sealed class ExportAuthoringQueryHandler(
         if (AuthoringRules.Project(query.ProjectId, principals, tenant) is { } scopeError)
         {
             return Result.Failure<IResult>(scopeError);
+        }
+
+        if (query.RequestError is { } requestError)
+        {
+            return Result.Failure<IResult>(requestError);
         }
 
         var orgId = scopes.Require().OrgId;
