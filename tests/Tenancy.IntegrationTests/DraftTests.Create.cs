@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -212,7 +213,7 @@ public sealed partial class DraftTests
         var baseline = await _fixture.ScalarAsync<int>(world.Database, "select octet_length(('{\"t\":\"\"}')::jsonb::text)");
         var text = new string('a', 4096 - baseline);
         body["provenance"] = JsonNode.Parse("{\"t\":\"" + text + "\"}")!;
-        var raw = body.ToJsonString().Replace("\"provenance\":{", "\"provenance\":{" + new string(' ', 20_000), StringComparison.Ordinal);
+        var raw = body.ToJsonString().Replace("\"provenance\":{", "\"provenance\":{" + new string(' ', 30_000), StringComparison.Ordinal);
 
         var created = await world.Client.SendRawAsync(
             HttpMethod.Post,
@@ -224,6 +225,8 @@ public sealed partial class DraftTests
             },
             raw);
 
+        // Past six times the bound, so a raw-size proxy would refuse what the column accepts.
+        Encoding.UTF8.GetByteCount(raw).ShouldBeGreaterThan(4096 * 6);
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         (await StoredAsync<int>(world, created.Id(), "octet_length(provenance::text)")).ShouldBe(4096);
     }
@@ -240,6 +243,18 @@ public sealed partial class DraftTests
         refused.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, refused.ErrorMessage);
         refused.ErrorCode.ShouldBe("request_invalid");
         (await DraftCountAsync(world)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Create_ProvenanceZeroWithAHugeExponent_IsAccepted()
+    {
+        await using var world = await StartAsync();
+        var body = Body();
+        body["provenance"] = JsonNode.Parse("{\"n\":0e131073}")!;
+
+        var created = await CreateAsync(world, body);
+
+        created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
     }
 
     [Theory]

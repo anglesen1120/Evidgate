@@ -295,6 +295,12 @@ internal static class DraftBody
 
         var marker = span.IndexOfAny('e', 'E');
         var mantissa = marker < 0 ? span : span[..marker];
+        if (mantissa.IndexOfAnyInRange('1', '9') < 0)
+        {
+            // Zero has no weight or scale in numeric, whatever its exponent says.
+            return false;
+        }
+
         var exponent = 0L;
         if (marker >= 0
             && (!long.TryParse(span[(marker + 1)..], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out exponent)
