@@ -153,7 +153,7 @@ MALFORMED_PERCENT = re.compile(rb"%(?![0-9A-Fa-f]{2})")
 # Cn is stripped by category so a code point assigned after the Unicode data of this interpreter
 # (or after the ranges below) still cannot hide a name; Co (private use) renders as nothing too.
 IGNORABLE = frozenset(("Cf", "Mn", "Me", "Cn", "Co"))
-SCANNED = [0]  # characters handed to match_form for report text, printed under EVIDGATE_COLLECT_SCAN_STATS
+SCANNED = [0]  # report characters counted per normalisation pass (matching and NFKC), printed under EVIDGATE_COLLECT_SCAN_STATS
 if os.environ.get("EVIDGATE_COLLECT_SCAN_STATS"):
     atexit.register(lambda: print(f"peak_normalised_chars={PEAK[0]}", file=sys.stderr))
 PEAK = [0]  # longest normalised piece built so far, printed on exit under the same variable

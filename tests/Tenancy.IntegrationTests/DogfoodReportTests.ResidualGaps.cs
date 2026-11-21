@@ -77,6 +77,10 @@ public sealed partial class DogfoodReportTests
     /// <summary>A full host name is refused whatever its length: one under 4 characters as a whole word only (not inside a longer word), and the literal placeholder "host" that the scrub writes never.</summary>
     [Theory]
     [InlineData("ci", "run on ci today", true)]
+    [InlineData("\uff23\uff29", "run on ci", true)]
+    [InlineData("x", "a x b", true)]
+    [InlineData("x", "xyz box", false)]
+    [InlineData("abcd", "zabcdz", true)]
     [InlineData("ci", "CI", true)]
     [InlineData("ci", "civil special", false)]
     [InlineData("ab1", "x ab1", true)]
