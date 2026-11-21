@@ -14,8 +14,9 @@ namespace Evidgate.Modules.Catalog.Endpoints;
 
 /// <summary>
 /// The draft routes, mapped into the catalog group. A draft body carries a file set and optional provenance, so the
-/// delegate reads it through the shared capped reader and hands the raw element on: the pipeline's authorization stage
-/// answers a refused caller before any member of the body or the <c>If-Match</c> header is read.
+/// delegate reads it through the shared capped reader (400, 413 and unstorable text are answered there, bounded by the
+/// cap) and hands the raw element on: the pipeline's authorization stage answers a refused caller before any member
+/// of the body or the <c>If-Match</c> header is read.
 /// </summary>
 internal static class DraftEndpoints
 {

@@ -145,8 +145,9 @@ un-nested routes evaluate their permission against the draft's own project, so a
 `draft:write` in project A gets no access to a draft of project B in the same org; an unknown id,
 another project's id and another tenant's id all answer the same `404 not_found`. The author is the
 caller's active membership, never a body member (no active membership is `403 draft_author_required`).
-Authentication and authorization run before body validation and before `If-Match` parsing on all four
-routes, so an anonymous or unpermitted caller never learns whether its body or ETag was acceptable.
+Authentication and authorization run before field validation and before `If-Match` parsing on all four
+routes. A body that is not JSON (400), over 256 KiB (413) or carries unstorable text (422) is answered by
+the shared reader before the permission check, so those refusals are visible to an unpermitted caller.
 
 `ETag` is the quoted draft `version`. `PATCH` requires both `If-Match` and `Idempotency-Key`: a missing
 or malformed `If-Match` is `422 request_invalid` with an `If-Match` detail (`required` when absent), a stale
