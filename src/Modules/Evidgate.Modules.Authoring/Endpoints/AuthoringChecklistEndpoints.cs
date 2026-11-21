@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Application.Commands;
@@ -129,6 +130,9 @@ internal static class AuthoringChecklistEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        // Refuse an unresolved caller before the precondition is parsed.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
         if (AuthoringEndpointSupport.IfMatchVersion(context, out var expectedVersion) is { } ifMatchError)
         {
             return AuthoringEndpointSupport.Failure<AuthoringChangeResponse>(ifMatchError);
@@ -171,6 +175,9 @@ internal static class AuthoringChecklistEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        // Refuse an unresolved caller before the precondition is parsed.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
         if (AuthoringEndpointSupport.IfMatchVersion(context, out var expectedVersion) is { } ifMatchError)
         {
             return Result.Failure(ifMatchError);
