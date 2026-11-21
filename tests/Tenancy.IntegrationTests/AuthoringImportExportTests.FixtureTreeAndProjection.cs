@@ -3,7 +3,6 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Shouldly;
-using Xunit;
 using static Tenancy.IntegrationTests.AuthoringImportCalls;
 using static Tenancy.IntegrationTests.RegistryApi;
 
