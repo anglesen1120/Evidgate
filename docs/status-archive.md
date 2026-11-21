@@ -1252,3 +1252,9 @@ Closed by S553 (#1135, merged as 9c616f0d): `RawBodyGuard.RequireAuthenticatedTe
 | Oversized Tenancy test files (S198) | 38 Tenancy test files were already over 500 lines on `782e7553` and grew by 1 to 26 lines in S198 (org filters, `Unique.Slug`, dedicated-database scope); no file newly crossed 500 (`EventSchemaTests`, `ReconcileForcedIncompleteTests` were split); splitting a 700 to 2400 line test class is a separate refactor; S364 (#746) changed 5 lines of `TenantGucTests.cs` (843 lines, viewer role id seed) | receiver: next Tenancy test-infra lane |
 
 Superseded by S558 (#1139, merged as 870bc630): `CatalogIdentityTests.cs` was split into four files of at most 448 lines; the recount (54 files over 500 lines) is the new carried row "Oversized Tenancy test files (S558)".
+
+## Moved from status-carried.md by S562 (2026-11-21)
+
+| Oversized Tenancy test files (S558) | After S558 (#1139, CatalogIdentityTests split into 83 / 448 / 358 / 299 lines) 54 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule: `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S562 (#1144, merged as af0b5ae8): `HealingLlmSchemaTests.cs` was split into four files of at most 351 lines; the recount on e43441b3 (52 files over 500 lines, S561 included) is the new carried row "Oversized Tenancy test files (S562)".
