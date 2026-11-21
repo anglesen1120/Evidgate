@@ -61,6 +61,28 @@ public sealed partial class DogfoodReportTests
     }
 
     [Theory]
+    [InlineData("\u00ad")]
+    [InlineData("\u200b")]
+    [InlineData("\u0301")]
+    [InlineData("\u20dd")]
+    public async Task Dogfood_Collect_IgnorableCharacterInIdentifier_IsRefused(string character)
+    {
+        await AssertAcceptedAsync(Report("safe"), extra: FakeIdentifier);
+        var disguised = FakeIdentifier.Insert(5, character);
+        await AssertRefusedAsync(Report(disguised), extra: FakeIdentifier);
+        await AssertRefusedAsync(Report(FakeIdentifier), extra: disguised);
+    }
+
+    [Fact]
+    public async Task Dogfood_Collect_IdentifierSplitAcrossMixedContent_IsRefused()
+    {
+        const string Control = "<testsuite><testcase><system-out>safe<detail/>text</system-out></testcase></testsuite>";
+        const string Split = "<testsuite><testcase><system-out>Fake-<detail>Build</detail>-Host-Zq</system-out></testcase></testsuite>";
+        await AssertAcceptedAsync(Control, extra: FakeIdentifier);
+        await AssertRefusedAsync(Split, extra: FakeIdentifier);
+    }
+
+    [Theory]
     [InlineData("%zz")]
     [InlineData("trailing%")]
     [InlineData("%FF")]
@@ -179,6 +201,52 @@ public sealed partial class DogfoodReportTests
             File.Exists(Path.Combine(output, "playwright.junit.xml")).ShouldBeFalse();
             File.Exists(Path.Combine(output, "manifest.json")).ShouldBeFalse();
             Directory.GetFileSystemEntries(output).Where(path => path.Contains(".tmp-", StringComparison.Ordinal)).ShouldBeEmpty();
+        });
+    }
+
+    /// <summary>A failed second run must not leave the first run's manifest describing a mixed set.</summary>
+    [Fact]
+    public async Task Dogfood_Collect_ReplacementFailure_RemovesPreviousManifest()
+    {
+        await WithReports(Report("safe"), async (source, output) =>
+        {
+            var first = await RunScriptAsync(source, output);
+            first.Exit.ShouldBe(0, first.Stderr);
+            File.Exists(Path.Combine(output, "manifest.json")).ShouldBeTrue();
+
+            await File.WriteAllTextAsync(Path.Combine(source, "xunit.junit.xml"), Report("changed"), TestContext.Current.CancellationToken);
+            File.Delete(Path.Combine(output, "vitest.junit.xml"));
+            Directory.CreateDirectory(Path.Combine(output, "vitest.junit.xml"));
+
+            var result = await RunScriptAsync(source, output);
+
+            result.Exit.ShouldNotBe(0);
+            File.Exists(Path.Combine(output, "manifest.json")).ShouldBeFalse();
+            Directory.GetFileSystemEntries(output).Where(path => path.Contains(".tmp-", StringComparison.Ordinal)).ShouldBeEmpty();
+        });
+    }
+
+    /// <summary>An --out that resolves to the --src directory is refused before anything is written.</summary>
+    [Fact]
+    public async Task Dogfood_Collect_OutputSymlinkToSourceDirectory_IsRefused()
+    {
+        var expected = Report("safe");
+        await WithReports(expected, async (source, _) =>
+        {
+            await WithTempDirectory(async parent =>
+            {
+                var link = Path.Combine(parent, "out-link");
+                Directory.CreateSymbolicLink(link, source);
+                var before = Directory.GetFiles(source).Select(Path.GetFileName).OrderBy(name => name, StringComparer.Ordinal).ToArray();
+
+                var result = await RunScriptAsync(source, link);
+
+                result.Exit.ShouldBe(2, result.Stderr);
+                result.Stderr.ShouldContain("must differ");
+                Directory.GetFiles(source).Select(Path.GetFileName).OrderBy(name => name, StringComparer.Ordinal).ShouldBe(before);
+                (await File.ReadAllTextAsync(Path.Combine(source, "xunit.junit.xml"), TestContext.Current.CancellationToken)).ShouldBe(expected);
+                File.Exists(Path.Combine(source, "manifest.json")).ShouldBeFalse();
+            });
         });
     }
 
