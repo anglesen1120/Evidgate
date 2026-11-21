@@ -39,6 +39,9 @@ public sealed class RequestLogFloorTests
         { "Logging:Alias:LogLevel:Microsoft.AspNetCore.Hosting.Diagnostic*s", "alias overlapping suffix" },
         { "Logging:Alias:LogLevel:" + Category.ToUpperInvariant(), "alias upper case" },
         { FullNameSection + ":LogLevel:" + Category + "*", "full name trailing wildcard" },
+        { "Logging:LogLevel:" + Category + "*" + Category, "longest legal pattern (whole category as prefix and as suffix), provider-less" },
+        { "Logging:Alias:LogLevel:" + Category + "*" + Category, "longest legal pattern, alias" },
+        { FullNameSection + ":LogLevel:" + Category.ToUpperInvariant() + "*" + Category.ToLowerInvariant(), "longest legal pattern, full name, mixed case" },
     };
 
     [Theory]
