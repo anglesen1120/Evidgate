@@ -55,25 +55,39 @@ describe('UiGalleryComponent axe acceptance', () => {
     else document.documentElement.setAttribute('lang', previousLang);
   });
 
+  // One scan of the whole gallery costs seconds under load, so each scan is its own test with its
+  // own mount instead of three scans in one test that must finish inside a single timeout.
+  async function mountGallery(locale: string, theme: string) {
+    if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    else document.documentElement.removeAttribute('data-theme');
+    document.documentElement.setAttribute('lang', locale);
+    await TestBed.configureTestingModule({
+      imports: [UiGalleryComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        ...(locale === 'vi' ? [{ provide: LOCALE_ID, useValue: 'vi' }] : []),
+      ],
+    }).compileComponents();
+    expect(TestBed.inject(LOCALE_ID)).toBe(locale);
+    const fixture = TestBed.createComponent(UiGalleryComponent);
+    const root = fixture.nativeElement as HTMLElement;
+    document.body.append(root);
+    await fixture.whenStable();
+    return {
+      fixture,
+      root,
+      dispose: () => {
+        fixture.destroy();
+        root.remove();
+      },
+    };
+  }
+
   it.each(cases)(
     'has zero WCAG violations: $locale / $theme',
     async ({ locale, theme }) => {
-      if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-      else document.documentElement.removeAttribute('data-theme');
-      document.documentElement.setAttribute('lang', locale);
-      await TestBed.configureTestingModule({
-        imports: [UiGalleryComponent],
-        providers: [
-          provideZonelessChangeDetection(),
-          ...(locale === 'vi' ? [{ provide: LOCALE_ID, useValue: 'vi' }] : []),
-        ],
-      }).compileComponents();
-      expect(TestBed.inject(LOCALE_ID)).toBe(locale);
-      const fixture = TestBed.createComponent(UiGalleryComponent);
-      const root = fixture.nativeElement as HTMLElement;
-      document.body.append(root);
+      const { root, dispose } = await mountGallery(locale, theme);
       try {
-        await fixture.whenStable();
         expect(document.body.contains(root)).toBe(true);
         // Three fixture specimens plus the column-role specimen in the tables group.
         expect(root.querySelectorAll('app-data-table')).toHaveLength(4);
@@ -94,10 +108,36 @@ describe('UiGalleryComponent axe acceptance', () => {
         }
         const result = await axe.run(root, axeOptions);
         expect(unexceptedLines(result)).toEqual([]);
-        root.querySelector<HTMLButtonElement>('[data-demo="reveal-opener"]')?.click();
+      } finally {
+        dispose();
+      }
+    },
+    30_000,
+  );
+
+  it.each(cases)(
+    'has zero WCAG violations after the reveal opens: $locale / $theme',
+    async ({ locale, theme }) => {
+      const { fixture, root, dispose } = await mountGallery(locale, theme);
+      try {
+        const opener = root.querySelector<HTMLButtonElement>('[data-demo="reveal-opener"]');
+        expect(opener, 'reveal opener').not.toBeNull();
+        opener?.click();
         await fixture.whenStable();
         const revealResult = await axe.run(root, axeOptions);
         expect(unexceptedLines(revealResult)).toEqual([]);
+      } finally {
+        dispose();
+      }
+    },
+    30_000,
+  );
+
+  it.each(cases)(
+    'has zero WCAG violations in the conflict dialog: $locale / $theme',
+    async ({ locale, theme }) => {
+      const { fixture, root, dispose } = await mountGallery(locale, theme);
+      try {
         root.querySelector<HTMLButtonElement>('[data-demo="conflict-opener"]')?.click();
         await fixture.whenStable();
         const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
@@ -107,8 +147,7 @@ describe('UiGalleryComponent axe acceptance', () => {
         const dialogResult = await axe.run(dialog, axeOptions);
         expect(unexceptedLines(dialogResult)).toEqual([]);
       } finally {
-        fixture.destroy();
-        root.remove();
+        dispose();
       }
     },
     30_000,
