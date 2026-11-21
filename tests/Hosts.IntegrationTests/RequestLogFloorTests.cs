@@ -123,10 +123,9 @@ public sealed class RequestLogFloorTests
         var source = new ReloadableSource();
         using var host = Host.CreateDefaultBuilder()
             .ConfigureAppConfiguration(config => config.Add(source))
-            .ConfigureLogging((context, logging) =>
+            .ConfigureLogging((_, logging) =>
             {
                 logging.ClearProviders();
-                logging.AddConfiguration(context.Configuration.GetSection("Logging"));
             })
             .ConfigureServices(services => services.PostConfigure<LoggerFilterOptions>(RequestLogFloor.Apply))
             .Build();
@@ -185,10 +184,9 @@ public sealed class RequestLogFloorTests
         var log = new Sink("notice-reload");
         using var host = Host.CreateDefaultBuilder()
             .ConfigureAppConfiguration(config => config.Add(source))
-            .ConfigureLogging((context, logging) =>
+            .ConfigureLogging((_, logging) =>
             {
                 logging.ClearProviders();
-                logging.AddConfiguration(context.Configuration.GetSection("Logging"));
                 logging.AddProvider(new AliasedProvider(log));
             })
             .ConfigureServices(services => services
@@ -250,10 +248,9 @@ public sealed class RequestLogFloorTests
         var (a, f, r) = (aliased, fullName, ruleless);
         return Host.CreateDefaultBuilder()
             .ConfigureAppConfiguration(config => config.AddInMemoryCollection(settings))
-            .ConfigureLogging((context, logging) =>
+            .ConfigureLogging((_, logging) =>
             {
                 logging.ClearProviders();
-                logging.AddConfiguration(context.Configuration.GetSection("Logging"));
                 logging.AddProvider(new AliasedProvider(a));
                 logging.AddProvider(new FullNameProvider(f));
                 logging.AddProvider(new RulelessProvider(r));
