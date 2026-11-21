@@ -263,6 +263,45 @@ public sealed partial class DraftTests
     }
 
     [Fact]
+    public async Task Create_ProvenanceOfPositiveExponents_IsRefusedBeforeAnyJsonbCast()
+    {
+        await using var world = await StartAsync();
+        var body = Body();
+        body["provenance"] = JsonNode.Parse("{\"n\":[" + string.Join(",", Enumerable.Repeat("1e308", 4096)) + "]}")!;
+        var before = world.Api.Statements.Snapshot().Count;
+
+        // About 25 KB on the wire; PostgreSQL would render every 1e308 as 309 digits (about 1.3 MB) in the measuring cast.
+        ShouldNameField(await CreateAsync(world, body), "provenance", "4096 x 1e308");
+        world.Api.Statements.Snapshot().Skip(before)
+            .Count(statement => statement.Contains("as jsonb", StringComparison.Ordinal))
+            .ShouldBe(0, "the refusal is made in C# before PostgreSQL renders the numbers");
+
+        // Boundary: thirteen 1e308 render 4017 bytes of digits and fit, fourteen do not.
+        body["provenance"] = JsonNode.Parse("{\"n\":[" + string.Join(",", Enumerable.Repeat("1e308", 13)) + "]}")!;
+        (await CreateAsync(world, body)).Status.ShouldBe(HttpStatusCode.Created);
+        body["provenance"] = JsonNode.Parse("{\"n\":[" + string.Join(",", Enumerable.Repeat("1e308", 14)) + "]}")!;
+        ShouldNameField(await CreateAsync(world, body), "provenance", "14 x 1e308");
+    }
+
+    [Fact]
+    public async Task Create_ProvenanceWithManyIntegerDigits_IsCountedByItsDigits()
+    {
+        await using var world = await StartAsync();
+        var body = Body();
+        var sixtyDigits = new string('9', 60);
+        body["provenance"] = JsonNode.Parse("{\"n\":[" + string.Join(",", Enumerable.Repeat(sixtyDigits, 65)) + "]}")!;
+        (await CreateAsync(world, body)).Status.ShouldBe(HttpStatusCode.Created);
+
+        // 69 x 60 digits exceed the summed budget in C#; an undercounting rule would pass them to the jsonb measure.
+        body["provenance"] = JsonNode.Parse("{\"n\":[" + string.Join(",", Enumerable.Repeat(sixtyDigits, 69)) + "]}")!;
+        var before = world.Api.Statements.Snapshot().Count;
+        ShouldNameField(await CreateAsync(world, body), "provenance", "69 x 60 digits");
+        world.Api.Statements.Snapshot().Skip(before)
+            .Count(statement => statement.Contains("as jsonb", StringComparison.Ordinal))
+            .ShouldBe(0, "the refusal is made in C#");
+    }
+
+    [Fact]
     public async Task Create_ProvenanceNumbersWithinTheBounds_AreAccepted()
     {
         await using var world = await StartAsync();
@@ -281,6 +320,8 @@ public sealed partial class DraftTests
     [InlineData("{\"n\":[1,0e2147483648]}")]
     [InlineData("{\"n\":0e-2147483648}")]
     [InlineData("{\"n\":0e131073}")]
+    [InlineData("{\"n\":1e-401}")]
+    [InlineData("{\"n\":1234567890123456789012345678901234567890123456789012345678901234567890}")]
     public async Task Create_ProvenanceNumberOutsideNumericRange_Is422DraftInvalid_NotA500(string provenance)
     {
         await using var world = await StartAsync();

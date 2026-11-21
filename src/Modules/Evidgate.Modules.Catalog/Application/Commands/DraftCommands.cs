@@ -54,6 +54,10 @@ internal sealed class CreateDraftCommandHandler(
     IAuditTrail audit)
     : ICommandHandler<CreateDraftCommand, Result<DraftDto>>
 {
+    private const string DraftProjectForeignKey = "draft_project_fk";
+
+    private const string DraftAuthorForeignKey = "draft_author_fk";
+
     /// <summary>The status of a create, kept local so the application layer names no HTTP type.</summary>
     private const int CreatedStatus = 201;
 
@@ -107,10 +111,17 @@ internal sealed class CreateDraftCommandHandler(
         {
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.ForeignKeyViolation })
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException
         {
-            // The project vanished between the existence probe and the insert: the same 404 the probe would have answered.
-            return Result.Failure<DraftDto>(CatalogErrors.ProjectNotFound);
+            SqlState: PostgresErrorCodes.ForeignKeyViolation,
+            ConstraintName: DraftProjectForeignKey or DraftAuthorForeignKey,
+        } violation)
+        {
+            // The project vanished after the existence probe (404), or the author's membership was removed after the
+            // actor lookup (403). Any other foreign key cannot be set by a create, so it propagates rather than mislabel.
+            return Result.Failure<DraftDto>(violation.ConstraintName == DraftAuthorForeignKey
+                ? DraftErrors.AuthorRequired
+                : CatalogErrors.ProjectNotFound);
         }
 
         return await DraftReader.SavedAsync(db, row.Id, audit, cancellationToken, CreatedStatus).ConfigureAwait(false);

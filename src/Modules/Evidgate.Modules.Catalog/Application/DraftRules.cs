@@ -312,8 +312,8 @@ internal static class DraftBody
         }
     }
 
-    /// <summary>A lower bound of the digits PostgreSQL writes for the number, or -1 when the token is out of bounds.</summary>
-    private static long RenderedLength(string token)
+    /// <summary>An upper bound of the characters PostgreSQL writes for the number (never below the real count), or -1 when the token is out of bounds.</summary>
+    internal static long RenderedLength(string token)
     {
         if (token.Length > MaxNumberTokenLength)
         {
@@ -332,9 +332,15 @@ internal static class DraftBody
             return -1;
         }
 
-        var point = mantissa.IndexOf('.');
-        var fraction = point < 0 ? 0 : mantissa.Length - point - 1;
-        return Math.Max(1, fraction - exponent);
+        // numeric text is never scientific: every integer digit (shifted by the exponent) and max(fraction - exponent, 0)
+        // fraction digits are written. Leading zeros only lower the real count, so this never undercounts.
+        var negative = mantissa.Length > 0 && mantissa[0] == '-';
+        var digits = negative ? mantissa[1..] : mantissa;
+        var point = digits.IndexOf('.');
+        var integer = point < 0 ? digits.Length : point;
+        var fraction = point < 0 ? 0 : digits.Length - point - 1;
+        var fractionRendered = Math.Max(0, fraction - exponent);
+        return Math.Max(1, integer + exponent) + fractionRendered + (fractionRendered > 0 ? 1 : 0) + (negative ? 1 : 0);
     }
 
     /// <summary>The C# half of <c>draft_base_commit_check</c>: 7–64 lower-case hex characters.</summary>
