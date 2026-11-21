@@ -273,58 +273,42 @@ public sealed partial class DraftTests
     }
 
     /// <summary>
-    /// The content bound is reachable, and the column's CHECK counts <c>jsonb::text</c>: the limit itself is stored,
-    /// the next byte is a 422 rather than the 23514 a body the app accepted could otherwise raise.
+    /// The bound a client can meet is the route's 256 KiB body cap, not the column's 262144 CHECK: <c>content</c> is
+    /// re-serialised from the typed request, so its stored <c>jsonb</c> text is the wire text and never the envelope,
+    /// and the widest shape the contract admits — 200 files with both 512-character members — stores 227011 bytes,
+    /// below both caps. The row therefore counts exactly the text the wire carried, and the next byte is refused by
+    /// the member's own bound rather than by a byte CHECK a body the app accepted could otherwise trip.
     /// </summary>
     [Fact]
-    public async Task Create_ContentJsonbByteBoundary_AcceptsLimitAndRefusesTheNextByte()
+    public async Task Create_MaximalContentShape_IsStoredAsItsJsonbText_AndTheNextByteBreaksFieldRules()
     {
         await using var world = await StartAsync();
         var body = Body();
+        var content = MaximalContent();
+        body["content"] = content;
+        var wireContentBytes = Encoding.UTF8.GetByteCount(content.ToJsonString());
 
-        body["content"] = await ContentAtStoredBytesAsync(world, 262_144);
         var created = await CreateRelaxedAsync(world, body);
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
-        (await StoredAsync<int>(world, created.Id(), "octet_length(content::text)")).ShouldBe(262_144);
+        var stored = await StoredAsync<int>(world, created.Id(), "octet_length(content::text)");
+        stored.ShouldBe(wireContentBytes, "the row counts the content's jsonb text, which is the wire text");
+        stored.ShouldBeLessThan(262_144, "the shape stays under the column CHECK the 256 KiB body cap also enforces");
 
-        body["content"] = await ContentAtStoredBytesAsync(world, 262_145);
-        ShouldNameField(await CreateRelaxedAsync(world, body), "content", "262145 stored bytes");
+        var longer = MaximalContent();
+        ((JsonArray)longer["files"]!)[0]!["path"] = new string('a', 513);
+        body["content"] = longer;
+        ShouldNameField(await CreateRelaxedAsync(world, body), "path", "a 513-character path");
         (await DraftCountAsync(world)).ShouldBe(1);
     }
 
-    private async Task<JsonObject> ContentAtStoredBytesAsync(World world, int target)
+    /// <summary>200 files, both string members at their 512-character bound, and so the largest content the shape allows.</summary>
+    private static JsonObject MaximalContent()
     {
         var files = Enumerable.Range(0, 200)
-            .Select(index => File($"{index:D3}/", bodyRef: new string('b', 512)))
+            .Select(index => File($"{index:D3}/".PadRight(512, 'a'), bodyRef: new string('b', 512)))
             .ToArray();
-        var remaining = target - await StoredBytesAsync(world, Content(files.Select(file => file.DeepClone()).ToArray()));
-        remaining.ShouldBeGreaterThan(0, "the shape starts below the requested size");
-
-        // A three-byte code point adds two stored bytes over one ASCII one, a two-byte one adds a single byte, so
-        // any remainder is padded exactly; the request keeps the same characters unescaped.
-        var single = remaining % 2;
-        var triple = remaining / 2;
-        foreach (var file in files)
-        {
-            var take = Math.Min(single, 508);
-            var fill = Math.Min(triple, 508 - take);
-            file["path"] = file["path"]!.GetValue<string>()
-                + new string('\u00e9', take)
-                + new string('\u0800', fill)
-                + new string('a', 508 - take - fill);
-            single -= take;
-            triple -= fill;
-        }
-
-        single.ShouldBe(0);
-        triple.ShouldBe(0);
         return Content(files);
     }
-
-    private Task<int> StoredBytesAsync(World world, JsonObject content) =>
-        _fixture.ScalarAsync<int>(
-            world.Database,
-            $"select octet_length(({SqlLiteral(content.ToJsonString())})::jsonb::text)");
 
     private static Task<ApiAnswer> CreateRelaxedAsync(World world, JsonObject body) =>
         world.Client.SendRawAsync(

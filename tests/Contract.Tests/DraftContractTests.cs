@@ -98,14 +98,16 @@ public sealed class DraftContractTests
         }
 
         var files = spec.Schema("DraftContentDto")["properties"]!["files"]!;
-        files["maxItems"]!.GetValue<int>().ShouldBe(200);
-        files["minItems"]!.GetValue<int>().ShouldBe(1);
+        // YamlSubset stores every integer scalar as Int64 (`JsonValue.Create(long)`), so the contract tests read the
+        // spec's numbers as longs; the served document, parsed by System.Text.Json, is where Int32 applies.
+        files["maxItems"]!.GetValue<long>().ShouldBe(200L);
+        files["minItems"]!.GetValue<long>().ShouldBe(1L);
 
         var file = spec.Schema("DraftFileDto")["properties"]!;
-        file["path"]!["maxLength"]!.GetValue<int>().ShouldBe(512);
-        file["path"]!["minLength"]!.GetValue<int>().ShouldBe(1);
+        file["path"]!["maxLength"]!.GetValue<long>().ShouldBe(512L);
+        file["path"]!["minLength"]!.GetValue<long>().ShouldBe(1L);
         file["body_sha"]!["pattern"]!.GetValue<string>().ShouldBe("^sha256:[0-9a-f]{64}$");
-        file["body_ref"]!["maxLength"]!.GetValue<int>().ShouldBe(512);
+        file["body_ref"]!["maxLength"]!.GetValue<long>().ShouldBe(512L);
 
         var request = spec.Schema("CreateDraftRequest")["properties"]!;
         request["base_commit"]!["pattern"]!.GetValue<string>().ShouldBe("^[0-9a-f]{7,64}$");
