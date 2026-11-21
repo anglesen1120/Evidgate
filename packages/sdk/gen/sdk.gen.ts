@@ -1587,7 +1587,7 @@ export const registerGitRepoBinding = <ThrowOnError extends boolean = false>(opt
 });
 
 /**
- * Cursor page of a project's drafts
+ * Cursor page of project drafts
  *
  * Ordered by `(created_at, id)` with an optional status filter. Authentication and authorization precede query validation. An unknown `status` is 422 `draft_invalid` naming the field; a malformed cursor or an out-of-range limit is 422 `request_invalid` with the member named. A missing project and an other-tenant project both answer 404 `not_found`.
  */
@@ -1636,7 +1636,7 @@ export const getDraft = <ThrowOnError extends boolean = false>(options: Options<
 });
 
 /**
- * Replace an editable draft's content under If-Match
+ * Replace editable draft content under If-Match
  *
  * Permission is evaluated against the draft's own project before body validation or `If-Match` parsing. Unknown and other-tenant ids both answer 404 `not_found`; permission in another project grants no access. Only `draft` status permits content changes; otherwise 409 `draft_state_conflict`. Missing or malformed `If-Match` is 422 `request_invalid` with an `If-Match` detail (`required` when missing); stale is 412 `precondition_failed` with the current `version` in `error.details`. A successful update increments version by one and returns its quoted value as `ETag`. Invalid content is 422 `draft_invalid` naming the field; a body over 256 KiB is 413. Missing or invalid `Idempotency-Key` is 400 `request_invalid`; reusing a key for a different request is 409 `idempotency_conflict`.
  */

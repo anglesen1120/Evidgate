@@ -32,6 +32,9 @@ internal static class DraftEndpoints
             .WithBodyLimit(MaxBodyBytes)
             .Accepts<CreateDraftRequest>("application/json")
             .Produces<DraftDto>(StatusCodes.Status201Created)
+            // Declaring the default status keeps the OpenAPI generator from deriving it from the delegate's
+            // `Result<DraftDto>` and publishing the internal wrapper as a served schema.
+            .Produces(StatusCodes.Status200OK)
             .WithSummary("Create a draft in a project; its ETag is the version (03)");
 
         group.MapPatch("/drafts/{d}", UpdateDraftAsync)
@@ -58,7 +61,9 @@ internal static class DraftEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var (body, readError) = await ReadAuthenticatedJsonAsync(context, principals, MaxBodyBytes, cancellationToken).ConfigureAwait(false);
+        var (body, readError) = await CatalogRequestRules
+            .ReadAuthenticatedJsonAsync(context, principals, MaxBodyBytes, cancellationToken)
+            .ConfigureAwait(false);
         if (readError is not null)
         {
             return Result.Failure<DraftDto>(readError);
@@ -78,7 +83,9 @@ internal static class DraftEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var (body, readError) = await ReadAuthenticatedJsonAsync(context, principals, MaxBodyBytes, cancellationToken).ConfigureAwait(false);
+        var (body, readError) = await CatalogRequestRules
+            .ReadAuthenticatedJsonAsync(context, principals, MaxBodyBytes, cancellationToken)
+            .ConfigureAwait(false);
         if (readError is not null)
         {
             return Result.Failure<DraftDto>(readError);

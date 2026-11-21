@@ -244,37 +244,12 @@ internal static class DraftBody
             return null;
         }
 
-        // The exact byte bound is measured by PostgreSQL after this (insignificant whitespace in the raw text
-        // makes any C# size proxy refuse a value the column accepts); a number whose exponent cannot fit the
-        // bound is refused here because the cast would overflow numeric instead of reporting a size.
-        if (HasUnboundedExponent(element))
-        {
-            details.Add(new ErrorDetail("provenance", "too_large"));
-            return null;
-        }
-
+        // The exact byte bound is measured by PostgreSQL after this: insignificant whitespace in the raw text makes any
+        // C# size proxy refuse a value the column accepts. A number too large for the jsonb cast never reaches the
+        // column: the idempotency stage canonicalizes the body first and answers 422 `request_invalid` when the number
+        // is outside the RFC 8785 range.
         var text = element.GetRawText();
         return text;
-    }
-
-    /// <summary>True when a number token carries an exponent past what the byte bound could ever hold.</summary>
-    private static bool HasUnboundedExponent(JsonElement element)
-    {
-        switch (element.ValueKind)
-        {
-            case JsonValueKind.Number:
-                var token = element.GetRawText();
-                var marker = token.IndexOfAny(['e', 'E']);
-                return marker >= 0
-                    && (!int.TryParse(token.AsSpan(marker + 1), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var exponent)
-                        || Math.Abs(exponent) > MaxProvenanceBytes);
-            case JsonValueKind.Object:
-                return element.EnumerateObject().Any(member => HasUnboundedExponent(member.Value));
-            case JsonValueKind.Array:
-                return element.EnumerateArray().Any(HasUnboundedExponent);
-            default:
-                return false;
-        }
     }
 
     /// <summary>The C# half of <c>draft_base_commit_check</c>: 7–64 lower-case hex characters.</summary>

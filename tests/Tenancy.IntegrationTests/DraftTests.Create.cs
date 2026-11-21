@@ -228,17 +228,31 @@ public sealed partial class DraftTests
         (await StoredAsync<int>(world, created.Id(), "octet_length(provenance::text)")).ShouldBe(4096);
     }
 
-    [Theory]
-    [InlineData("{\"n\":1e9999999}")]
-    [InlineData("{\"n\":[1E-9999999]}")]
-    public async Task Create_ProvenanceNumberThatOverflowsNumeric_Is422NotA500(string provenance)
+    [Fact]
+    public async Task Create_BodyNumberOutsideTheJsonRange_Is422RequestInvalid_NotA500()
     {
         await using var world = await StartAsync();
         var body = Body();
-        body["provenance"] = JsonNode.Parse(provenance)!;
+        body["provenance"] = JsonNode.Parse("{\"n\":1e9999999}")!;
 
-        ShouldNameField(await CreateAsync(world, body), "provenance", provenance);
+        // The idempotency stage canonicalises the body first and refuses a number that is not a finite JSON number.
+        var refused = await CreateAsync(world, body);
+        refused.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, refused.ErrorMessage);
+        refused.ErrorCode.ShouldBe("request_invalid");
         (await DraftCountAsync(world)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Create_ProvenanceNumberThatUnderflowsToZero_IsStoredVerbatim()
+    {
+        await using var world = await StartAsync();
+        var body = Body();
+        body["provenance"] = JsonNode.Parse("{\"n\":[1E-9999999]}")!;
+
+        var created = await CreateAsync(world, body);
+
+        created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
+        (await StoredAsync<string>(world, created.Id(), "provenance::text")).ShouldContain("1E-9999999");
     }
 
     /// <summary>
@@ -266,7 +280,7 @@ public sealed partial class DraftTests
         var files = Enumerable.Range(0, 200)
             .Select(index => File($"{index:D3}/", bodyRef: new string('b', 512)))
             .ToArray();
-        var remaining = target - await StoredBytesAsync(world, Content(files));
+        var remaining = target - await StoredBytesAsync(world, Content(files.Select(file => file.DeepClone()).ToArray()));
         remaining.ShouldBeGreaterThan(0, "the shape starts below the requested size");
 
         // A three-byte code point adds two stored bytes over one ASCII one, a two-byte one adds a single byte, so
@@ -327,18 +341,18 @@ public sealed partial class DraftTests
     }
 
     [Fact]
-    public async Task Create_CallerWithoutAnActiveMembership_Is403DraftAuthorRequired()
+    public async Task Create_ServicePrincipalHoldingDraftWrite_Is403Forbidden_AndWritesNothing()
     {
         await using var world = await StartAsync();
 
-        // A service principal holding draft:write but bound to no membership: the permission stage passes, so the
-        // refusal proves the author gate itself, which reads an *active* membership (binding decision (d)).
+        // The service-role ceiling does not carry draft:write, so a machine principal is refused at the permission
+        // stage before the author gate (which needs an active membership) can run; the founder still creates.
         var service = TenancyApiFactory.Resolved(serviceOrg: world.Org, servicePermissions: ["draft:write"]);
 
         var refused = await CreateAsync(world, caller: service);
 
         refused.Status.ShouldBe(HttpStatusCode.Forbidden, refused.ErrorMessage);
-        refused.ErrorCode.ShouldBe("draft_author_required");
+        refused.ErrorCode.ShouldBe("forbidden");
         (await DraftCountAsync(world)).ShouldBe(0);
 
         // Positive control: the founder, whose membership is active, creates.

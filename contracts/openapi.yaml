@@ -5444,7 +5444,7 @@ paths:
     get:
       operationId: listDrafts
       tags: [catalog]
-      summary: Cursor page of a project's drafts
+      summary: Cursor page of project drafts
       description: >-
         Ordered by `(created_at, id)` with an optional status filter. Authentication and authorization
         precede query validation. An unknown `status` is 422 `draft_invalid` naming the field; a malformed
@@ -5516,7 +5516,7 @@ paths:
     patch:
       operationId: updateDraft
       tags: [catalog]
-      summary: Replace an editable draft's content under If-Match
+      summary: Replace editable draft content under If-Match
       description: >-
         Permission is evaluated against the draft's own project before body validation or `If-Match`
         parsing. Unknown and other-tenant ids both answer 404 `not_found`; permission in another project
@@ -12252,29 +12252,27 @@ components:
     DraftDto:
       type: object
       required:
-        [
-          id,
-          project_id,
-          author_membership_id,
-          kind,
-          base_commit,
-          status,
-          version,
-          content,
-          provenance,
-          ai_run_id,
-          dry_run_id,
-          allow_unverified,
-          unverified_reason,
-          pr_branch,
-          pr_commit_sha,
-          pr_url,
-          pr_number,
-          linked_case_id,
-          linked_revision_id,
-          created_at,
-          updated_at,
-        ]
+        - id
+        - project_id
+        - author_membership_id
+        - kind
+        - base_commit
+        - status
+        - version
+        - content
+        - provenance
+        - ai_run_id
+        - dry_run_id
+        - allow_unverified
+        - unverified_reason
+        - pr_branch
+        - pr_commit_sha
+        - pr_url
+        - pr_number
+        - linked_case_id
+        - linked_revision_id
+        - created_at
+        - updated_at
       properties:
         id: { type: string, format: uuid }
         project_id: { type: string, format: uuid }

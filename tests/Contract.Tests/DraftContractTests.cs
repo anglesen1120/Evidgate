@@ -124,17 +124,18 @@ public sealed class DraftContractTests
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         var paths = document.RootElement.GetProperty("paths");
 
-        (string Path, string Method, string OperationId)[] operations =
+        // The served document carries no operationId (the SDK ids come from the spec file), so the route table is the
+        // served half of this pin: each draft path and method must be present.
+        (string Path, string Method)[] operations =
         [
-            ("/v1/projects/{p}/drafts", "post", "createDraft"),
-            ("/v1/projects/{p}/drafts", "get", "listDrafts"),
-            ("/v1/drafts/{d}", "patch", "updateDraft"),
-            ("/v1/drafts/{d}", "get", "getDraft"),
+            ("/v1/projects/{p}/drafts", "post"),
+            ("/v1/projects/{p}/drafts", "get"),
+            ("/v1/drafts/{d}", "patch"),
+            ("/v1/drafts/{d}", "get"),
         ];
-        foreach (var (path, method, operationId) in operations)
+        foreach (var (path, method) in operations)
         {
-            var operation = paths.GetProperty(path).GetProperty(method);
-            Assert.Equal(operationId, operation.GetProperty("operationId").GetString());
+            paths.GetProperty(path).TryGetProperty(method, out _).ShouldBeTrue($"{method} {path} is served");
         }
 
         var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");

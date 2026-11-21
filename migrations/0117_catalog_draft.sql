@@ -113,3 +113,14 @@ grant select, insert on public.draft to evidgate_app;
 grant update (content, version, updated_at, status, dry_run_id, allow_unverified, unverified_reason,
               pr_branch, pr_commit_sha, pr_url, pr_number, linked_case_id, linked_revision_id)
   on public.draft to evidgate_app;
+
+-- `draft:write` was seeded reserved (0010) while V1 had no handler for it; these routes are its first consumer, so the
+-- flag flips here rather than in 0010: a released migration must not change meaning, and SeedMatrixTests and the
+-- catalogue endpoint compare the stored row against `contracts/permissions.json`, which now tags it reserved: false.
+do $seed$
+begin
+  update public.permission
+     set reserved = false
+   where code = 'draft:write';
+end
+$seed$;
