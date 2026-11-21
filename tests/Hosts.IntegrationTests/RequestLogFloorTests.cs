@@ -1,5 +1,5 @@
-using System.Collections.Concurrent;
 using Evidgate.Api;
+using Evidgate.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -54,8 +54,8 @@ public sealed class RequestLogFloorTests
 
         foreach (var sink in new[] { aliased, fullName, ruleless })
         {
-            sink.Count(Category, below: true).ShouldBe(0, $"{shape}: lines below Warning reaching {sink.Name}");
-            sink.Count(Category, below: false).ShouldBe(1, $"{shape}: the Warning line reaching {sink.Name}");
+            sink.Count(Category, below: true).ShouldBe(0, $"{shape}: lines below Warning reaching {sink.GetType().Name}");
+            sink.Count(Category, below: false).ShouldBe(1, $"{shape}: the Warning line reaching {sink.GetType().Name}");
         }
     }
 
@@ -106,8 +106,8 @@ public sealed class RequestLogFloorTests
     public void ProviderWithoutRulesAndProviderAddedLater_FallUnderTheProviderlessFloor()
     {
         using var host = Build(new() { ["Logging:LogLevel:Default"] = "Trace" }, out _, out _, out var ruleless);
-        var late = new Sink("late");
-        host.Services.GetRequiredService<ILoggerFactory>().AddProvider(new LateProvider(late));
+        var late = new LateProvider();
+        host.Services.GetRequiredService<ILoggerFactory>().AddProvider(late);
 
         Send(host, Category);
         Send(host, OtherCategory);
@@ -129,8 +129,8 @@ public sealed class RequestLogFloorTests
             })
             .ConfigureServices(services => services.PostConfigure<LoggerFilterOptions>(RequestLogFloor.Apply))
             .Build();
-        var sink = new Sink("reload");
-        host.Services.GetRequiredService<ILoggerFactory>().AddProvider(new AliasedProvider(sink));
+        var sink = new AliasedProvider();
+        host.Services.GetRequiredService<ILoggerFactory>().AddProvider(sink);
 
         source.Set("Logging:Alias:LogLevel:Default", "Trace");
         source.Set("Logging:LogLevel:" + Category + "*", "Trace");
@@ -145,12 +145,12 @@ public sealed class RequestLogFloorTests
     [Fact]
     public async Task OverridingKeys_AreReportedAtStartByShape_WithoutTheirValue()
     {
-        var log = new Sink("notice");
+        var log = new AliasedProvider();
         using var host = Host.CreateDefaultBuilder()
             .ConfigureLogging((_, logging) =>
             {
                 logging.ClearProviders();
-                logging.AddProvider(new AliasedProvider(log));
+                logging.AddProvider(log);
             })
             .ConfigureAppConfiguration(config => config.AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -181,13 +181,13 @@ public sealed class RequestLogFloorTests
     public async Task ReloadWithAnOverridingKey_ReportsItAgain()
     {
         var source = new ReloadableSource();
-        var log = new Sink("notice-reload");
+        var log = new AliasedProvider();
         using var host = Host.CreateDefaultBuilder()
             .ConfigureAppConfiguration(config => config.Add(source))
             .ConfigureLogging((_, logging) =>
             {
                 logging.ClearProviders();
-                logging.AddProvider(new AliasedProvider(log));
+                logging.AddProvider(log);
             })
             .ConfigureServices(services => services
                 .PostConfigure<LoggerFilterOptions>(RequestLogFloor.Apply)
@@ -289,20 +289,24 @@ public sealed class RequestLogFloorTests
         Should.Throw<InvalidOperationException>(() => RequestLogFloor.AssertFloorIsLast(new LoggerFilterOptions())).Message.ShouldContain("not registered");
     }
 
-    private static IHost Build(Dictionary<string, string?> settings, out Sink aliased, out Sink fullName, out Sink ruleless)
+    private static IHost Build(
+        Dictionary<string, string?> settings,
+        out CapturingLoggerProviderBase aliased,
+        out CapturingLoggerProviderBase fullName,
+        out CapturingLoggerProviderBase ruleless)
     {
-        aliased = new Sink("aliased");
-        fullName = new Sink("fullName");
-        ruleless = new Sink("ruleless");
+        aliased = new AliasedProvider();
+        fullName = new FullNameProvider();
+        ruleless = new RulelessProvider();
         var (a, f, r) = (aliased, fullName, ruleless);
         return Host.CreateDefaultBuilder()
             .ConfigureAppConfiguration(config => config.AddInMemoryCollection(settings))
             .ConfigureLogging((_, logging) =>
             {
                 logging.ClearProviders();
-                logging.AddProvider(new AliasedProvider(a));
-                logging.AddProvider(new FullNameProvider(f));
-                logging.AddProvider(new RulelessProvider(r));
+                logging.AddProvider(a);
+                logging.AddProvider(f);
+                logging.AddProvider(r);
             })
             .ConfigureServices(services => services.PostConfigure<LoggerFilterOptions>(RequestLogFloor.Apply))
             .Build();
@@ -317,49 +321,14 @@ public sealed class RequestLogFloorTests
         }
     }
 
-    private sealed class Sink(string name)
-    {
-        private readonly ConcurrentQueue<(string Category, LogLevel Level, string Text)> _lines = new();
-
-        public string Name { get; } = name;
-
-        public void Add(string category, LogLevel level, string text) => _lines.Enqueue((category, level, text));
-
-        public int Count(string category, bool below) =>
-            _lines.Count(line => line.Category == category && (line.Level < LogLevel.Warning) == below);
-
-        public List<string> Texts(string category) => _lines.Where(line => line.Category == category).Select(line => line.Text).ToList();
-    }
-
-    private abstract class SinkProvider(Sink sink) : ILoggerProvider
-    {
-        public ILogger CreateLogger(string categoryName) => new SinkLogger(categoryName, sink);
-
-        public void Dispose()
-        {
-            // The sink is the only state.
-        }
-    }
-
     [ProviderAlias("Alias")]
-    private sealed class AliasedProvider(Sink sink) : SinkProvider(sink);
+    private sealed class AliasedProvider : CapturingLoggerProviderBase;
 
-    private sealed class FullNameProvider(Sink sink) : SinkProvider(sink);
+    private sealed class FullNameProvider : CapturingLoggerProviderBase;
 
-    private sealed class RulelessProvider(Sink sink) : SinkProvider(sink);
+    private sealed class RulelessProvider : CapturingLoggerProviderBase;
 
-    private sealed class LateProvider(Sink sink) : SinkProvider(sink);
-
-    private sealed class SinkLogger(string category, Sink sink) : ILogger
-    {
-        public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => logLevel != LogLevel.None;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-            sink.Add(category, logLevel, formatter(state, exception));
-    }
+    private sealed class LateProvider : CapturingLoggerProviderBase;
 
     private sealed class ReloadableSource : ConfigurationProvider, IConfigurationSource
     {
@@ -369,4 +338,14 @@ public sealed class RequestLogFloorTests
 
         public void Reload() => OnReload();
     }
+}
+
+/// <summary>What the floor tests read back from a capturing provider.</summary>
+internal static class CapturedLogReads
+{
+    public static int Count(this CapturingLoggerProviderBase provider, string category, bool below) =>
+        provider.Entries.Count(entry => entry.Category == category && (entry.Level < LogLevel.Warning) == below);
+
+    public static List<string> Texts(this CapturingLoggerProviderBase provider, string category) =>
+        provider.Entries.Where(entry => entry.Category == category).Select(entry => entry.Message).ToList();
 }
