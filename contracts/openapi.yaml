@@ -5447,7 +5447,8 @@ paths:
       tags: [catalog]
       summary: Cursor page of project drafts
       description: >-
-        Ordered by `(created_at, id)` with an optional status filter. Authentication and authorization
+        Ordered by `(created_at, id)` with an optional status filter. Items are summaries: no `content`,
+        a `file_count` instead; `GET /drafts/{d}` returns the file set. Authentication and authorization
         precede query validation. An unknown `status` is 422 `draft_invalid` naming the field; a malformed
         cursor or an out-of-range limit is 422 `request_invalid` with the member named.
         A missing project and an other-tenant project both answer 404 `not_found`.
@@ -12392,6 +12393,63 @@ components:
         linked_revision_id: { type: [string, 'null'], format: uuid }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+    DraftSummaryDto:
+      type: object
+      description: >-
+        A draft without its `content`; only `GET /drafts/{d}` returns the file set.
+      required:
+        - id
+        - project_id
+        - author_membership_id
+        - kind
+        - base_commit
+        - status
+        - version
+        - file_count
+        - provenance
+        - ai_run_id
+        - dry_run_id
+        - allow_unverified
+        - unverified_reason
+        - pr_branch
+        - pr_commit_sha
+        - pr_url
+        - pr_number
+        - linked_case_id
+        - linked_revision_id
+        - created_at
+        - updated_at
+      properties:
+        id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        author_membership_id: { type: string, format: uuid }
+        kind: { type: string, enum: [template, ai, regression] }
+        base_commit: { type: string, pattern: '^[0-9a-f]{7,64}$' }
+        status:
+          type: string
+          enum: [draft, dry_running, dry_passed, dry_failed, pr_open, merged, closed]
+        version: { type: integer, minimum: 1 }
+        file_count: { type: integer, minimum: 0, maximum: 200 }
+        provenance:
+          type: [object, 'null']
+          additionalProperties: true
+          description: >-
+            Optional provenance object (template, AI run or incident reference); server validation caps its
+            UTF-8 JSON at 4096 bytes; a number is at most 64 characters with an exponent of at most 400 in
+            magnitude and the numbers' written-out sizes add up to at most 4096, otherwise 422 `draft_invalid`
+            naming `provenance`. A number outside the IEEE 754 double range is 422 `request_invalid`.
+        ai_run_id: { type: [string, 'null'], format: uuid }
+        dry_run_id: { type: [string, 'null'], format: uuid }
+        allow_unverified: { type: boolean }
+        unverified_reason: { type: [string, 'null'] }
+        pr_branch: { type: [string, 'null'] }
+        pr_commit_sha: { type: [string, 'null'] }
+        pr_url: { type: [string, 'null'] }
+        pr_number: { type: [integer, 'null'] }
+        linked_case_id: { type: [string, 'null'], format: uuid }
+        linked_revision_id: { type: [string, 'null'], format: uuid }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
     CreateDraftRequest:
       type: object
       required: [kind, base_commit, content]
@@ -12422,7 +12480,7 @@ components:
       properties:
         items:
           type: array
-          items: { $ref: '#/components/schemas/DraftDto' }
+          items: { $ref: '#/components/schemas/DraftSummaryDto' }
         next_cursor: { type: [string, 'null'] }
     TemplateDto:
       type: object

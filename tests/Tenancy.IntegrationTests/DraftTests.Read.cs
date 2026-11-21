@@ -139,6 +139,30 @@ public sealed partial class DraftTests
     }
 
     [Fact]
+    public async Task List_ItemsCarryNoContent_AndTheStatementDoesNotSelectIt()
+    {
+        await using var world = await StartAsync();
+        var id = await CreateDraftAsync(world);
+
+        var before = world.Api.Statements.Snapshot().Count;
+        var answer = await world.Client.SendAsync(HttpMethod.Get, world.Collection, world.Admin);
+
+        answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
+        var item = answer.Body.GetProperty("items").EnumerateArray().Single();
+        item.TryGetProperty("content", out _).ShouldBeFalse("the list item is a summary");
+        item.GetProperty("id").GetGuid().ShouldBe(id);
+        item.GetProperty("file_count").GetInt32().ShouldBe(1);
+        item.GetProperty("version").GetInt32().ShouldBe(1);
+
+        var page = world.Api.Statements.Snapshot().Skip(before)
+            .Single(statement => statement.Contains("from public.draft", StringComparison.Ordinal));
+        page.ShouldNotContain("d.content::text", Case.Sensitive, "the page statement never reads the file set");
+
+        var detail = await GetAsync(world, id);
+        detail.Body.GetProperty("content").GetProperty("files").GetArrayLength().ShouldBe(1);
+    }
+
+    [Fact]
     public async Task List_SeesOnlyTheProjectsDrafts()
     {
         await using var world = await StartAsync();

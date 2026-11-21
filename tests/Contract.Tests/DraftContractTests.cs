@@ -23,6 +23,10 @@ public sealed class DraftContractTests
         "pr_commit_sha", "pr_url", "pr_number", "linked_case_id", "linked_revision_id", "created_at", "updated_at",
     ];
 
+    /// <summary>The list item's fields: the view without <c>content</c>, with the file count in its place.</summary>
+    private static readonly string[] SummaryFields =
+        [.. ViewFields.Select(field => field == "content" ? "file_count" : field)];
+
     private static readonly string[] Statuses =
         ["draft", "dry_running", "dry_passed", "dry_failed", "pr_open", "merged", "closed"];
 
@@ -39,7 +43,7 @@ public sealed class DraftContractTests
         foreach (var schema in new[]
                  {
                      "DraftDto", "DraftContentDto", "DraftFileDto", "CreateDraftRequest", "UpdateDraftRequest",
-                     "DraftListResponse",
+                     "DraftListResponse", "DraftSummaryDto",
                  })
         {
             spec.SchemaNames.ShouldContain(schema);
@@ -89,6 +93,11 @@ public sealed class DraftContractTests
 
         view.Select(pair => pair.Key).Order(StringComparer.Ordinal)
             .ShouldBe(ViewFields.Order(StringComparer.Ordinal), "DraftDto carries the twenty-one wire fields");
+        var summary = spec.Schema("DraftSummaryDto")["properties"]!.AsObject();
+        summary.Select(pair => pair.Key).Order(StringComparer.Ordinal)
+            .ShouldBe(SummaryFields.Order(StringComparer.Ordinal), "DraftSummaryDto is the view without content");
+        spec.Schema("DraftListResponse")["properties"]!["items"]!["items"]!["$ref"]!.GetValue<string>()
+            .ShouldEndWith("/DraftSummaryDto", Case.Sensitive);
         view["status"]!["enum"]!.AsArray().Select(entry => entry!.GetValue<string>())
             .ShouldBe(Statuses, "the status set is the machine's seven states");
         foreach (var absent in new[] { "provenance", "ai_run_id", "dry_run_id", "unverified_reason", "pr_url", "pr_number" })
@@ -144,5 +153,8 @@ public sealed class DraftContractTests
         var view = schemas.GetProperty("DraftDto").GetProperty("properties").EnumerateObject()
             .Select(member => member.Name).ToList();
         view.ShouldBe(ViewFields.ToList(), "the served DraftDto carries the same fields, in the same order");
+        schemas.GetProperty("DraftSummaryDto").GetProperty("properties").EnumerateObject()
+            .Select(member => member.Name).ToList()
+            .ShouldBe(SummaryFields.ToList(), "the served DraftSummaryDto carries the summary fields");
     }
 }
