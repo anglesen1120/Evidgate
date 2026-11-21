@@ -55,29 +55,92 @@ describe('UiGalleryComponent axe acceptance', () => {
     else document.documentElement.setAttribute('lang', previousLang);
   });
 
+  // One scan of the whole gallery costs seconds under load, so each scan is its own test with its
+  // own mount instead of three scans in one test that must finish inside a single timeout.
+  async function mountGallery(locale: string, theme: string) {
+    if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    else document.documentElement.removeAttribute('data-theme');
+    document.documentElement.setAttribute('lang', locale);
+    await TestBed.configureTestingModule({
+      imports: [UiGalleryComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        ...(locale === 'vi' ? [{ provide: LOCALE_ID, useValue: 'vi' }] : []),
+      ],
+    }).compileComponents();
+    expect(TestBed.inject(LOCALE_ID)).toBe(locale);
+    const fixture = TestBed.createComponent(UiGalleryComponent);
+    const root = fixture.nativeElement as HTMLElement;
+    document.body.append(root);
+    const dispose = () => {
+      fixture.destroy();
+      root.remove();
+    };
+    try {
+      await fixture.whenStable();
+    } catch (error) {
+      dispose();
+      throw error;
+    }
+    return { fixture, root, dispose };
+  }
+
   it.each(cases)(
-    'has zero WCAG violations: $locale / $theme',
+    'has zero WCAG violations in the conflict dialog: $locale / $theme',
     async ({ locale, theme }) => {
-      if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-      else document.documentElement.removeAttribute('data-theme');
-      document.documentElement.setAttribute('lang', locale);
-      await TestBed.configureTestingModule({
-        imports: [UiGalleryComponent],
-        providers: [
-          provideZonelessChangeDetection(),
-          ...(locale === 'vi' ? [{ provide: LOCALE_ID, useValue: 'vi' }] : []),
-        ],
-      }).compileComponents();
-      expect(TestBed.inject(LOCALE_ID)).toBe(locale);
-      const fixture = TestBed.createComponent(UiGalleryComponent);
-      const root = fixture.nativeElement as HTMLElement;
-      document.body.append(root);
+      const { fixture, root, dispose } = await mountGallery(locale, theme);
       try {
+        expect(document.querySelector('[role="dialog"]'), 'no dialog before the click').toBeNull();
+        const opener = root.querySelector<HTMLButtonElement>('[data-demo="conflict-opener"]');
+        expect(opener, 'conflict opener').not.toBeNull();
+        opener?.click();
         await fixture.whenStable();
+        const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+        if (!dialog) throw new Error('Expected Brain dialog overlay');
+        expect(dialog.getAttribute('aria-modal')).toBe('true');
+        expect(dialog.textContent).toContain('Not compared');
+        const dialogResult = await axe.run(dialog, axeOptions);
+        expect(unexceptedLines(dialogResult)).toEqual([]);
+      } finally {
+        dispose();
+      }
+    },
+    30_000,
+  );
+
+  // The gallery holds ~8.8k elements, ~80% of them in the stacked-records section, and a scan costs
+  // time per element. The root scan is split into three scans whose contexts partition the page:
+  // everything outside the gallery sections, the stacked-records section, and all other sections.
+  const SECTION = 'section[aria-labelledby^="gallery-"]';
+  const STACKED = 'section[aria-labelledby="gallery-stacked-records"]';
+  const OTHERS = `${SECTION}:not([aria-labelledby="gallery-stacked-records"])`;
+  const sections = (root: HTMLElement, selector: string): HTMLElement[] =>
+    Array.from(root.querySelectorAll<HTMLElement>(selector));
+  const partitions: readonly {
+    name: string;
+    context: (root: HTMLElement) => axe.ElementContext;
+  }[] = [
+    {
+      name: 'page outside the sections',
+      context: (root) => ({ include: [root], exclude: sections(root, SECTION) }),
+    },
+    { name: 'stacked records', context: (root) => ({ include: sections(root, STACKED) }) },
+    {
+      name: 'other sections',
+      context: (root) => ({ include: sections(root, OTHERS) }),
+    },
+  ];
+
+  it.each(cases)(
+    'renders every specimen of the gallery: $locale / $theme',
+    async ({ locale, theme }) => {
+      const { root, dispose } = await mountGallery(locale, theme);
+      try {
         expect(document.body.contains(root)).toBe(true);
         // Three fixture specimens plus the column-role specimen in the tables group.
         expect(root.querySelectorAll('app-data-table')).toHaveLength(4);
         expect(root.querySelector('app-waiver-banner time')).not.toBeNull();
+        expect(sections(root, STACKED), 'stacked-records section').toHaveLength(1);
         for (const selector of [
           'app-loading-pattern',
           'app-empty-pattern',
@@ -92,23 +155,50 @@ describe('UiGalleryComponent axe acceptance', () => {
         ]) {
           expect(root.querySelector(selector), selector).not.toBeNull();
         }
-        const result = await axe.run(root, axeOptions);
-        expect(unexceptedLines(result)).toEqual([]);
-        root.querySelector<HTMLButtonElement>('[data-demo="reveal-opener"]')?.click();
-        await fixture.whenStable();
-        const revealResult = await axe.run(root, axeOptions);
-        expect(unexceptedLines(revealResult)).toEqual([]);
-        root.querySelector<HTMLButtonElement>('[data-demo="conflict-opener"]')?.click();
-        await fixture.whenStable();
-        const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
-        if (!dialog) throw new Error('Expected Brain dialog overlay');
-        expect(dialog.getAttribute('aria-modal')).toBe('true');
-        expect(dialog.textContent).toContain('Not compared');
-        const dialogResult = await axe.run(dialog, axeOptions);
-        expect(unexceptedLines(dialogResult)).toEqual([]);
+        expect(
+          sections(root, OTHERS).length,
+          'sections other than stacked records',
+        ).toBeGreaterThan(20);
       } finally {
-        fixture.destroy();
-        root.remove();
+        dispose();
+      }
+    },
+    30_000,
+  );
+
+  describe.each(partitions)('has zero WCAG violations: $name', ({ context }) => {
+    it.each(cases)(
+      '$locale / $theme',
+      async ({ locale, theme }) => {
+        const { root, dispose } = await mountGallery(locale, theme);
+        try {
+          const result = await axe.run(context(root), axeOptions);
+          expect(unexceptedLines(result)).toEqual([]);
+        } finally {
+          dispose();
+        }
+      },
+      30_000,
+    );
+  });
+
+  it.each(cases)(
+    'has zero WCAG violations after the reveal opens: $locale / $theme',
+    async ({ locale, theme }) => {
+      const { fixture, root, dispose } = await mountGallery(locale, theme);
+      try {
+        const opener = root.querySelector<HTMLButtonElement>('[data-demo="reveal-opener"]');
+        expect(opener, 'reveal opener').not.toBeNull();
+        opener?.click();
+        await fixture.whenStable();
+        expect(root.querySelector('app-connect-step-reveal'), 'reveal opened').not.toBeNull();
+        // Opening the reveal replaces only the content of its own section.
+        const revealSection = sections(root, 'section[aria-labelledby="gallery-reveal"]');
+        expect(revealSection).toHaveLength(1);
+        const revealResult = await axe.run({ include: revealSection }, axeOptions);
+        expect(unexceptedLines(revealResult)).toEqual([]);
+      } finally {
+        dispose();
       }
     },
     30_000,
