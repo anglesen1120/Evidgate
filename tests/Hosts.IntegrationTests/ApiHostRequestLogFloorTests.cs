@@ -105,6 +105,26 @@ public sealed class ApiHostRequestLogFloorTests
     }
 
     [Fact]
+    public void RealApiHost_RefusedBuild_DisposesTheBuiltHostBeforeRethrowing()
+    {
+        DisposeSpy? created = null;
+
+        Should.Throw<InvalidOperationException>(() => BuildApi(
+            new CapturingLoggerProvider(),
+            [],
+            services =>
+            {
+                services.AddSingleton(_ => created = new DisposeSpy());
+                // Reading the filter options (the floor check does) resolves the spy from the host's root provider.
+                services.AddOptions<LoggerFilterOptions>().PostConfigure<DisposeSpy>((options, _) =>
+                    options.Rules.Add(new LoggerFilterRule(null, Category + "*" + Category, LogLevel.Trace, null)));
+            }));
+
+        created.ShouldNotBeNull("the check ran against the built host, so the spy was resolved");
+        created.Disposed.ShouldBeTrue("a refused host is never returned, so BuildWithLogFloor must release it");
+    }
+
+    [Fact]
     public void RealApiHost_LaterProviderRuleAfterTheFloor_RefusesTheBuild()
     {
         var failure = Should.Throw<InvalidOperationException>(() => BuildApi(
@@ -246,5 +266,12 @@ public sealed class ApiHostRequestLogFloorTests
         }
 
         public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    private sealed class DisposeSpy : IDisposable
+    {
+        public bool Disposed { get; private set; }
+
+        public void Dispose() => Disposed = true;
     }
 }

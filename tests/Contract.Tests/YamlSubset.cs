@@ -358,9 +358,14 @@ internal sealed partial class YamlSubset
         }
 
         parts.Add(inner[start..]);
-        if (parts.Count > 1 && parts[^1].Trim().Length == 0 && parts[^2].Trim().Length != 0)
+        if (parts.Count > 1 && parts[^1].Trim().Length == 0)
         {
             parts.RemoveAt(parts.Count - 1); // optional trailing comma
+        }
+
+        if (parts.Any(part => part.Trim().Length == 0))
+        {
+            throw new NotSupportedException($"line {lineNumber}: empty entry in flow collection '{inner}'");
         }
 
         return parts;
