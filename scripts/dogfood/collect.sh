@@ -17,7 +17,9 @@
 # attribute becomes "host" and this run's checkout path becomes /repo in every attribute value and
 # text node. The residual check reads element names, attribute names and namespace URIs as well as
 # values, text, tail and the document's character data joined in order (one pass, so a name split
-# by child elements is still found), and compares the match form: NFKD, then Cf, Mn, Me and
+# by child elements is still found), and compares the match form: NFKD (refused when the result is
+# longer than four times the input plus 64, checked after it is built), then Cf, Mn, Me, Cn, DEL,
+# C1 and C0 controls (tab, LF, CR kept), U+2800 and
 # Default_Ignorable_Code_Point characters removed, casefold, removed again, never recomposed,
 # raw and after one strict percent-decoding; a malformed escape refuses rather than decoding
 # leniently. A report that still names the machine, its host name (socket.gethostname() or
@@ -148,17 +150,39 @@ def scrub_tree(doc, prefixes):
 
 
 MALFORMED_PERCENT = re.compile(rb"%(?![0-9A-Fa-f]{2})")
-IGNORABLE = frozenset(("Cf", "Mn", "Me"))
+# Cn is stripped by category so a code point assigned after the Unicode data of this interpreter
+# (or after the ranges below) still cannot hide a name.
+IGNORABLE = frozenset(("Cf", "Mn", "Me", "Cn"))
 SCANNED = [0]  # characters handed to the residual match, printed under EVIDGATE_COLLECT_SCAN_STATS
-# Unicode Default_Ignorable_Code_Point (DerivedCoreProperties.txt, Unicode 16), assigned or not.
-# Python's unicodedata has no such property, so the ranges are listed; Cf, Mn and Me are stripped
-# by category as well, which covers later additions to those categories.
-DEFAULT_IGNORABLE = re.compile(
-    "[\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180f\u200b-\u200f\u202a-\u202e"
-    "\u2060-\u206f\u3164\ufe00-\ufe0f\ufeff\uffa0\ufff0-\ufff8\U0001bca0-\U0001bca3"
-    "\U0001d173-\U0001d17a\U000e0000-\U000e0fff]"
+# Test hook: stop the residual scan once this many characters were handed to it, so a rescan
+# regression fails by count instead of by timeout. Unset in production.
+SCAN_CAP_TEXT = os.environ.get("EVIDGATE_COLLECT_SCAN_CAP", "")
+if SCAN_CAP_TEXT and not SCAN_CAP_TEXT.isdigit():
+    sys.exit("collect.sh: EVIDGATE_COLLECT_SCAN_CAP must be a non-negative integer")
+SCAN_CAP = int(SCAN_CAP_TEXT) if SCAN_CAP_TEXT else None
+CHUNK = 1 << 16
+MAX_EXPANSION = 4  # NFKD/NFKC output longer than this multiple of the input (plus slack) is refused
+EXPANSION_SLACK = 64
+# Unicode Default_Ignorable_Code_Point (DerivedCoreProperties.txt, Unicode 16), assigned or not,
+# plus DEL and the C0/C1 controls (tab, LF and CR stay: they separate words) and the blank braille
+# U+2800. U+3164 and U+FFA0 are absent on purpose: NFKD maps both to U+1160, which is listed.
+IGNORED = re.compile(
+    "[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180f"
+    "\u200b-\u200f\u202a-\u202e\u2060-\u206f\u2800\ufe00-\ufe0f\ufeff\ufff0-\ufff8"
+    "\U0001bca0-\U0001bca3\U0001d173-\U0001d17a\U000e0000-\U000e0fff]"
 )
 STALE_PATTERNS = ("*.junit.xml", "manifest.json", ".*.tmp-*")
+
+
+class ExpansionError(Exception):
+    pass
+
+
+def normalise(form, text):
+    out = unicodedata.normalize(form, text)
+    if len(out) > MAX_EXPANSION * len(text) + EXPANSION_SLACK:
+        raise ExpansionError(form)
+    return out
 
 
 def refuse(producer, reason):
@@ -169,13 +193,15 @@ def without_ignorables(text):
     # Marks are dropped from the decomposed form and the result stays decomposed: composing again
     # would fold a base letter and a following mark (or a jamo pair split across elements) into one
     # character depending on what surrounds the text. The removed characters render as nothing or as
-    # a mark on the previous character, so dropping them cannot make a name stop matching. No ASCII
-    # character is in the strip set.
-    text = unicodedata.normalize("NFKD", text)
+    # a mark on the previous character, so dropping them cannot make a name stop matching. ASCII
+    # text is only stripped of DEL and the C0 controls a parser lets through.
+    text = IGNORED.sub("", normalise("NFKD", text))
     if text.isascii():
         return text
+    # Chunked so the per-character list stays small however long the text is.
     return "".join(
-        char for char in DEFAULT_IGNORABLE.sub("", text) if unicodedata.category(char) not in IGNORABLE
+        "".join(char for char in text[start:start + CHUNK] if unicodedata.category(char) not in IGNORABLE)
+        for start in range(0, len(text), CHUNK)
     )
 
 
@@ -202,7 +228,7 @@ def matching_forms(producer, value):
     # A report can spell a name without spelling it: match the raw text and, only when a percent
     # sign survives normalisation, its once-decoded reading.
     forms = [match_form(value)]
-    normalised = unicodedata.normalize("NFKC", value)
+    normalised = normalise("NFKC", value)
     if "%" in normalised:
         forms.append(match_form(decode_once(producer, normalised)))
     return list(dict.fromkeys(forms))
@@ -227,7 +253,23 @@ def text_stream(doc):
     return "".join(pieces)
 
 
+def identifier_form(value):
+    # The host name and its first label come from the environment, not the report; an absurd one
+    # refuses with a message instead of a traceback.
+    try:
+        return match_form(value)
+    except ExpansionError:
+        sys.exit(f"collect.sh: host name expands more than {MAX_EXPANSION} times under normalisation; refusing to publish")
+
+
 def refuse_residual(producer, doc, values):
+    try:
+        scan_residual(producer, doc, values)
+    except ExpansionError:
+        refuse(producer, f"text expands more than {MAX_EXPANSION} times under normalisation")
+
+
+def scan_residual(producer, doc, values):
     # A report that still names this machine fails the run; a leak never reaches the upload set.
     # Names cannot be scrubbed, so a matching element or attribute name refuses too.
     expected = {match_form(secret) for secret in values}
@@ -235,6 +277,8 @@ def refuse_residual(producer, doc, values):
 
     def names_machine(value):
         SCANNED[0] += len(value)
+        if SCAN_CAP is not None and SCANNED[0] > SCAN_CAP:
+            refuse(producer, "residual scan passed EVIDGATE_COLLECT_SCAN_CAP characters")
         return any(secret in form for form in matching_forms(producer, value) for secret in expected)
 
     # A child element splits an identifier across text, its own text and a tail.
@@ -308,8 +352,9 @@ def publish(out, pending, payload, created):
             os.fsync(directory)
         finally:
             os.close(directory)
-    except OSError:
-        pass
+    except OSError as error:
+        reason = os.strerror(error.errno) if error.errno else "unknown error"  # the message would name the output path
+        print(f"collect.sh: warning: upload set published but the directory fsync failed ({reason})", file=sys.stderr)
 
 
 def remove_stale(out, produced):
@@ -338,12 +383,12 @@ residual = [value for value in checkout if value]
 # Both the real host name and an injected $HOSTNAME are refused; each is additive, never a
 # replacement, so setting one cannot switch the other off.
 machines = [socket.gethostname(), os.environ.get("HOSTNAME", "")]
-residual.extend(machine for machine in machines if len(match_form(machine)) >= 4 and match_form(machine) != "host")
+residual.extend(machine for machine in machines if len(identifier_form(machine)) >= 4 and identifier_form(machine) != "host")
 # The first DNS label of a dotted name is refused too (foo.corp.local also refuses "foo"). Under 3
 # characters or all digits (an IPv4 prefix) is too common to name a machine, so it is skipped.
 for machine in machines:
     label = machine.split(".")[0] if "." in machine else ""
-    folded = match_form(label)
+    folded = identifier_form(label)
     if len(folded) >= 3 and not folded.isdigit() and folded not in ("host", "localhost"):
         residual.append(label)
 home = os.environ.get("HOME", "")
