@@ -51,6 +51,16 @@ public sealed class DraftNumberRenderingTests
     public void RenderedLength_PastTheTokenOrExponentBound_IsRefused(string token) =>
         DraftBody.RenderedLength(Encoding.UTF8.GetBytes(token)).ShouldBe(-1);
 
+    [Theory]
+    [InlineData(61, 64, false)]
+    [InlineData(62, 65, true)]
+    public void RenderedLength_OfAnExponentTokenAtTheByteBound_FollowsTheLength(int digits, int length, bool refused)
+    {
+        var token = new string('7', digits) + "e+0";
+        token.Length.ShouldBe(length);
+        (DraftBody.RenderedLength(Encoding.UTF8.GetBytes(token)) < 0).ShouldBe(refused);
+    }
+
     [Fact]
     public void RenderedLength_OfA64CharacterToken_IsAcceptedAndOf65IsRefused()
     {

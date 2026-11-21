@@ -15,7 +15,8 @@ public sealed partial class DraftTests
     {
         await using var world = await StartAsync();
         var body = Body();
-        body["provenance"] = JsonNode.Parse("{\"n\":" + new string('7', digits) + "}")!;
+        // Finite (a run of 7s past the double range is refused earlier, by the idempotency canonicaliser), same raw length.
+        body["provenance"] = JsonNode.Parse("{\"n\":0." + new string('0', digits - 3) + "7}")!;
 
         ShouldNameField(await CreateAsync(world, body), "provenance", $"{digits} digits");
         (await DraftCountAsync(world)).ShouldBe(0);
