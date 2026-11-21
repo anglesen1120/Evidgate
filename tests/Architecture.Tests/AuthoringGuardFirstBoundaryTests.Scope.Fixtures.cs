@@ -207,6 +207,19 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
     }
 
     [Fact]
+    public void Scan_GenericMapMethodInAFileMentioningAuthoring_IsNotSelected()
+    {
+        var universe = new[]
+        {
+            Other(
+                "private const string Name = \"authoring\";",
+                "private static void Run(List<string> issues) => Map(issues, 1, \"p\", \"r\");"),
+        };
+
+        AuthoringRouteFiles(universe).ShouldBeEmpty();
+    }
+
+    [Fact]
     public void Scan_AuthoringRouteInADisabledRegionInAnotherFolder_IsSelectedAndRefused()
     {
         var universe = new[] { Other("#if NET10_0\n" + AuthoringRoute + "\n#endif", GuardedHandler()) };

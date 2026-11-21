@@ -51,8 +51,9 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
                 || (file.Text.Contains("authoring", StringComparison.OrdinalIgnoreCase) && NamesAuthoringPath(Parse(file.Text))))
             .ToArray();
 
-    // Selection over-approximates: a file with a Map call is read when the call names the path, when any string
-    // in the file does (a constant or local holding the path), or when disabled text could hide a registration.
+    // Selection over-approximates: a file with a route Map call is read when the call names the path, when any string
+    // in the file does (a constant or local holding the path), or when disabled text could hide a registration. A bare
+    // Map or MapFallback call is judged by its own text only, since Map is also a common non-route method name.
     private static bool NamesAuthoringPath(SyntaxNode root)
     {
         var calls = root.DescendantNodes().OfType<InvocationExpressionSyntax>()
@@ -66,8 +67,9 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
 
         // The callee's own name is not evidence: a composer called MapAuthoringEndpoints on a plain builder is not a path.
         return calls.Any(entry => Regex.IsMatch(entry.Call.ToString().Replace(entry.Name, string.Empty, StringComparison.Ordinal), "authoring", RegexOptions.IgnoreCase))
-            || root.DescendantTokens().Any(token => token.IsKind(SyntaxKind.StringLiteralToken)
-                && token.ValueText.Contains("authoring", StringComparison.OrdinalIgnoreCase))
+            || (calls.Any(entry => entry.Name is not ("Map" or "MapFallback"))
+                && root.DescendantTokens().Any(token => token.IsKind(SyntaxKind.StringLiteralToken)
+                    && token.ValueText.Contains("authoring", StringComparison.OrdinalIgnoreCase)))
             || ConditionalSourceText.FirstLine(root) > 0;
     }
 
