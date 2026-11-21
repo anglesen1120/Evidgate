@@ -12,12 +12,16 @@ namespace Tenancy.IntegrationTests;
 /// tenant-less caller with the pipeline's 401 before that header or query is validated, and read no body byte.
 /// </summary>
 /// <remarks>
-/// Thirteen delegates: the nine body routes of the table plus the three restore routes (no body) and the import. The
-/// same request from a caller whose tenant resolves keeps the answer it always had: 422 naming <c>/If-Match</c>
-/// (<c>required</c> or <c>invalid</c>), 422 for a missing or unreadable import <c>format</c> or <c>dry_run</c>. A
-/// well-formed request from that caller is the read-positive control: the counter sees the body, or, on a restore route,
-/// the answer is not the guard's 401. Stale-version (412) and success answers per route stay in the existing
-/// Authoring classes, which are not edited.
+/// Thirteen delegates: the nine body routes of the table plus the three restore routes (no body) and the import. On
+/// those routes a caller whose tenant resolves answers 422 naming <c>/If-Match</c> (<c>required</c> or
+/// <c>invalid</c>), and 422 for a missing or unreadable import <c>format</c> or <c>dry_run</c>. A well-formed request
+/// from that caller is the read-positive control: the counter sees the body, or, on a restore route, the answer is not
+/// the guard's 401. Stale-version (412) and success answers per route stay in the existing Authoring classes, which
+/// are not edited. The three guard-only routes pin only that a resolved caller is not refused with that 401.
+/// Sixteen write rows in all: those thirteen, plus change discard,
+/// manual-case unlink and version restore, which parse no request data. Those three are regression pins — they
+/// answer the pipeline 401 on the base and on this head — while <c>AuthoringGuardFirstBoundaryTests</c> holds the
+/// guard boundary for every registered write route.
 /// </remarks>
 public sealed partial class RawBodyTenantRefusalTests
 {
@@ -88,6 +92,37 @@ public sealed partial class RawBodyTenantRefusalTests
     }
 
     private static string RestoreSource(string key) => RestoreRoutes.Single(restore => restore.Key == key).From;
+
+    /// <summary>
+    /// The three Authoring write routes that parse no request data: change discard, manual-case unlink and version
+    /// restore. Their rows are regression pins, so the guard sweep must leave their answers as they were on the base.
+    /// </summary>
+    private static IEnumerable<RawBodyRoute> GuardOnlyRoutes()
+    {
+        var authoring = RawBodyWriteRoutes.Routes.Single(route => route.Key == "authoring.node-create").Path[..^"/nodes".Length];
+
+        yield return new RawBodyRoute(
+            "authoring.change-discard",
+            HttpMethod.Post,
+            $"{authoring}/changes/{Guid.NewGuid():D}/discard",
+            64 * 1024,
+            RawBodyWriteRoutes.PipelineUnauthenticated,
+            "{}");
+        yield return new RawBodyRoute(
+            "authoring.manual-case-unlink",
+            HttpMethod.Delete,
+            $"{authoring}/manual-cases/{Guid.NewGuid():D}/links/{Guid.NewGuid():D}",
+            64 * 1024,
+            RawBodyWriteRoutes.PipelineUnauthenticated,
+            "{}");
+        yield return new RawBodyRoute(
+            "authoring.version-restore",
+            HttpMethod.Post,
+            $"{authoring}/versions/{Guid.NewGuid():D}/restore",
+            64 * 1024,
+            RawBodyWriteRoutes.PipelineUnauthenticated,
+            "{}");
+    }
 
     [Fact]
     public async Task AuthoringGuardFirst_AnonymousCaller_GetsPipelineUnauthenticatedBeforeIfMatchOrQuery()
@@ -181,6 +216,66 @@ public sealed partial class RawBodyTenantRefusalTests
                 BytesRead(reply.Answer).ShouldBeGreaterThan(0, $"{route.Key}: the counter observes the read once the caller is resolved");
             }
         }
+    }
+
+    [Fact]
+    public async Task AuthoringGuardOnlyWrites_AnonymousCaller_GetsPipelineUnauthenticated()
+    {
+        await using var world = await SeededAsync();
+        var failures = new List<string>();
+
+        foreach (var route in GuardOnlyRoutes())
+        {
+            var reply = await SendAsync(world.Client, route, Json(route.WellFormed), Anonymous, tenantHeader: null);
+            Collect(failures, $"{route.Key} anonymous", () =>
+                AssertAnswer(RawBodyWriteRoutes.PipelineUnauthenticated, route, reply, $"{route.Key} anonymous"));
+        }
+
+        failures.ShouldBeEmpty(string.Join("\n", failures));
+    }
+
+    [Fact]
+    public async Task AuthoringGuardOnlyWrites_PrincipalWithoutTenant_GetsPipelineUnauthenticated()
+    {
+        await using var world = await SeededAsync();
+        var failures = new List<string>();
+        var caller = TenancyApiFactory.Resolved(user: world.User);
+
+        foreach (var route in GuardOnlyRoutes())
+        {
+            var reply = await SendAsync(
+                world.Client,
+                route,
+                Json(route.WellFormed),
+                caller,
+                headers => headers.TryAddWithoutValidation("X-Evidgate-Org", "not-a-uuid"));
+            Collect(failures, $"{route.Key} without tenant", () =>
+                AssertAnswer(RawBodyWriteRoutes.PipelineUnauthenticated, route, reply, $"{route.Key} without tenant"));
+        }
+
+        failures.ShouldBeEmpty(string.Join("\n", failures));
+    }
+
+    /// <summary>
+    /// A resolved caller is not refused by the guard on a write route that parses no request data; no other property
+    /// of that answer is pinned here.
+    /// </summary>
+    [Fact]
+    public async Task AuthoringGuardOnlyWrites_ResolvedCaller_PassesTheGuard()
+    {
+        await using var world = await SeededAsync();
+        var caller = TenancyApiFactory.Resolved(user: world.User);
+        var failures = new List<string>();
+        void Tenant(HttpRequestHeaders headers) => headers.TryAddWithoutValidation("X-Evidgate-Org", world.Org.ToString());
+
+        foreach (var route in GuardOnlyRoutes())
+        {
+            var reply = await SendAsync(world.Client, route, Json(route.WellFormed), caller, Tenant);
+            Collect(failures, $"{route.Key} resolved", () =>
+                reply.Answer.Status.ShouldNotBe(HttpStatusCode.Unauthorized, $"{route.Key}: {reply.Text}"));
+        }
+
+        failures.ShouldBeEmpty(string.Join("\n", failures));
     }
 
     /// <summary>Runs one assertion and records its failure, so a single run reports every route that still answers the old order.</summary>

@@ -96,6 +96,11 @@ internal static class AuthoringChecklistEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(context);
+
+        // Refuse an unresolved caller before anything else reads the request.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
         var (body, readError) = await AuthoringEndpointSupport
             .ReadBodyAsync(context, cancellationToken)
             .ConfigureAwait(false);

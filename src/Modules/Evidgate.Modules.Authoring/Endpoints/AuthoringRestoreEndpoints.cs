@@ -139,8 +139,15 @@ internal static class AuthoringRestoreEndpoints
         Guid v,
         HttpContext context,
         IMediator mediator,
-        CancellationToken cancellationToken) =>
-        await mediator.Send(
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        // Refuse an unresolved caller before anything else reads the request.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
+        return await mediator.Send(
             new RestoreVersionCommand(p, v, AuthoringEndpointSupport.IdempotencyKey(context)),
             cancellationToken).ConfigureAwait(false);
+    }
 }
