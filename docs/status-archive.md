@@ -1650,3 +1650,9 @@ All three rows closed by PR #1286 (e0f1c2ab): `collect.sh` refuses a full host n
 | Draft list returns full content (03.6.1-T1, #1214) | `DraftQueries.cs:62-91` and `DraftReadSql.cs:10-15` return `content` for every item: `limit=200` over drafts of ~230 KB loads ~46 MB per request. Fix is a contract change: cap the page near 20-25 or return a summary item with content only on `GET /v1/drafts/{d}`. Low: needs `draft:write` to create bulk. | owner / 03.6.1 plan |
 
 Closed by PR #1291 (c5c180c7): the draft list returns `DraftSummaryDto` items (no `content`, a `file_count` instead) and its SQL no longer selects `content`; `GET /v1/drafts/{d}` still returns the content.
+
+## Moved from status-carried.md by S642 (2026-11-22)
+
+| Contract.Tests keeps a hand-rolled YAML reader while YamlDotNet is pinned (S630) | YamlDotNet 18.1.0 is pinned in `Directory.Packages.props` and used by Catalog and Hosts.IntegrationTests; `tests/Contract.Tests/YamlSubset.cs` (491 lines) plus `YamlSubset.Flow.cs` is hand-rolled, read by `OpenApiSpec`, `DraftContractTests`, `SecurityEventContractTests`. A switch needs the duplicate-key refusal and the subset checks (no anchors, tags, block scalars) re-implemented on top of the library. | contract tooling lane (owner may choose a switch) |
+
+Closed by PR #1293 (b3c912a8): `tests/Contract.Tests/YamlSubset.cs` parses with the pinned YamlDotNet event parser, the hand-rolled scanner and `YamlSubset.Flow.cs` are deleted, and the duplicate-key, anchor, alias, tag and block-scalar refusals are pinned by `YamlSubsetTests`.
