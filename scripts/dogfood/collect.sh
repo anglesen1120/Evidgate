@@ -180,9 +180,9 @@ def without_ignorables(text):
 
 
 def match_form(text):
-    # Strip, casefold, strip: casefolding can emit a mark (U+0130 becomes i plus U+0307, U+0345
-    # becomes U+03B9), so a strip before it alone lets a disguised name through, and the strip
-    # after it must not be skipped.
+    # Strip, casefold, strip: the first strip keeps a mark such as U+0345 from folding into the
+    # letter U+03B9, and casefolding can emit a mark of its own (U+0130 becomes i plus U+0307),
+    # so the strip after it must not be skipped.
     return without_ignorables(without_ignorables(text).casefold())
 
 

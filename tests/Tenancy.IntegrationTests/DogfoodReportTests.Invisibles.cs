@@ -6,7 +6,7 @@ namespace Tenancy.IntegrationTests;
 
 public sealed partial class DogfoodReportTests
 {
-    /// <summary>U+0345 is a mark that case folding turns into U+03B9; the strip must run again after the fold.</summary>
+    /// <summary>U+0345 is a mark that case folding turns into U+03B9; it must be stripped before the fold.</summary>
     [Fact]
     public async Task Dogfood_Collect_IotaSubscriptMark_IsRefused()
     {
@@ -44,7 +44,7 @@ public sealed partial class DogfoodReportTests
     [Theory]
     [InlineData("HO\u200bST", "a host b", false)]
     [InlineData("Local\u200bhost.corp.local", "http://localhost:4200", false)]
-    [InlineData("ab\u3164c", "abc", false)]
+    [InlineData("ab\u200bc", "abc", false)]
     [InlineData("Run\u3164ner-Zq", "see Runner-Zq", true)]
     public async Task Dogfood_Collect_HostNameChecks_UseTheMatchForm(string hostname, string text, bool refused)
     {
@@ -61,11 +61,12 @@ public sealed partial class DogfoodReportTests
         });
     }
 
-    /// <summary>Deep mixed content is scanned once: characters matched stay a small multiple of the payload, not depth times it.</summary>
+    /// <summary>Deep mixed content is scanned once: characters matched stay a small multiple of the payload, not depth times it. The same file is written for all three producers.</summary>
     [Fact]
     public async Task Dogfood_Collect_DeepNonAsciiReport_ScansEachCharacterAtMostTwice()
     {
         const int Payload = 600_000;
+        const int Producers = 3;
         var xml = "<testsuite>" + string.Concat(Enumerable.Repeat("<a>", 500)) + "<testcase name='c'/>"
             + new string('é', Payload) + string.Concat(Enumerable.Repeat("</a>", 500)) + "</testsuite>";
         await WithReports(xml, async (source, output) =>
@@ -74,8 +75,8 @@ public sealed partial class DogfoodReportTests
             result.Exit.ShouldBe(0, result.Stderr);
             var line = result.Stderr.Split('\n').Single(row => row.StartsWith("scanned_chars=", StringComparison.Ordinal));
             var scanned = long.Parse(line["scanned_chars=".Length..], CultureInfo.InvariantCulture);
-            scanned.ShouldBeGreaterThanOrEqualTo(Payload);
-            scanned.ShouldBeLessThan(2L * Payload + 10_000);
+            scanned.ShouldBeGreaterThanOrEqualTo(Producers * Payload);
+            scanned.ShouldBeLessThan(Producers * (2L * Payload + 10_000));
         });
     }
 }
