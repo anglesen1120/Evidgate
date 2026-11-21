@@ -38,6 +38,25 @@ public sealed partial class TemplateTests
     }
 
     [Fact]
+    public async Task List_InvalidTaxonomyFilters_RequireAuthenticationAndReadPermissionBeforeValidation()
+    {
+        await using var world = await StartAsync();
+        var id = await SeedAsync(world);
+        var member = await AddMemberAsync(_fixture, world.Database, world.Org, roleCode: null);
+        const string query = "?platform=bogus&level=bogus&purpose=bogus&limit=0";
+
+        var accepted = await ListAsync(world, "?platform=web&level=e2e&purpose=regression&limit=1");
+        accepted.Status.ShouldBe(HttpStatusCode.OK, accepted.ErrorMessage);
+        Ids(accepted).ShouldBe([id]);
+        (await ListAsync(world, query)).Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+
+        (await ListAsync(world, query, Anonymous)).Status.ShouldBe(
+            HttpStatusCode.Unauthorized, "authentication precedes taxonomy and pagination validation");
+        (await ListAsync(world, query, world.Caller(member))).Status.ShouldBe(
+            HttpStatusCode.Forbidden, "case:read authorization precedes taxonomy and pagination validation");
+    }
+
+    [Fact]
     public async Task TemplateReads_AnswerAViewer()
     {
         await using var world = await StartAsync();

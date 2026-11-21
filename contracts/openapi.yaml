@@ -5581,13 +5581,17 @@ paths:
       summary: Cursor page of active templates
       description: >-
         Active built-ins (`org_id IS NULL`) are visible to every member role, plus the caller's own org rows;
-        an inactive row and another org's row are invisible. Ordered by `(created_at, id)` with an optional
-        kind filter. Authentication and authorization precede query validation: an unknown kind, a malformed
-        cursor or an out-of-range limit is 422 `request_invalid` with the member named.
+        an inactive row and another org's row are invisible. Ordered by `(created_at, id)` with optional kind,
+        platform, level and purpose filters. Authentication and authorization precede query validation: an unknown
+        kind, an unknown taxonomy value, a malformed cursor or an out-of-range limit is 422 `request_invalid` with the
+        member named.
       x-permission: case:read
       x-version: v1
       parameters:
         - $ref: '#/components/parameters/TemplateKindFilter'
+        - $ref: '#/components/parameters/PlatformFilter'
+        - $ref: '#/components/parameters/LevelFilter'
+        - $ref: '#/components/parameters/PurposeFilter'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
       responses:
@@ -9367,19 +9371,19 @@ components:
       name: platform
       in: query
       required: false
-      description: Only suites of this platform (03.1.4 AC3); an unknown value is a 422.
+      description: Only rows of this platform (03.1.4 AC3); an unknown value is a 422.
       schema: { $ref: './schemas/taxonomy.v1.json#/$defs/platform' }
     LevelFilter:
       name: level
       in: query
       required: false
-      description: Only suites of this level; an unknown value is a 422.
+      description: Only rows of this level (03.1.4 AC3); an unknown value is a 422.
       schema: { $ref: './schemas/taxonomy.v1.json#/$defs/level' }
     PurposeFilter:
       name: purpose
       in: query
       required: false
-      description: Only suites of this purpose; an unknown value is a 422.
+      description: Only rows of this purpose (03.1.4 AC3); an unknown value is a 422.
       schema: { $ref: './schemas/taxonomy.v1.json#/$defs/purpose' }
     DraftStatusFilter:
       name: status
@@ -12422,20 +12426,27 @@ components:
         next_cursor: { type: [string, 'null'] }
     TemplateDto:
       type: object
-      required: [id, kind, name, version, body_ref, created_at]
+      required: [id, kind, platform, level, purpose, name, version, body_ref, created_at]
       properties:
         id: { type: string, format: uuid }
         kind: { type: string, enum: [web, api, unit, mobile] }
+        platform: { $ref: './schemas/taxonomy.v1.json#/$defs/platform' }
+        level: { $ref: './schemas/taxonomy.v1.json#/$defs/level' }
+        purpose: { $ref: './schemas/taxonomy.v1.json#/$defs/purpose' }
         name: { type: string, minLength: 1, maxLength: 64, pattern: '^[a-z][a-z0-9-]*$' }
         version: { type: integer, minimum: 1 }
         body_ref: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
         created_at: { type: string, format: date-time }
     TemplateDetailDto:
       type: object
-      required: [id, kind, name, version, body_ref, conformance_rules, created_at]
+      required:
+        [id, kind, platform, level, purpose, name, version, body_ref, conformance_rules, created_at]
       properties:
         id: { type: string, format: uuid }
         kind: { type: string, enum: [web, api, unit, mobile] }
+        platform: { $ref: './schemas/taxonomy.v1.json#/$defs/platform' }
+        level: { $ref: './schemas/taxonomy.v1.json#/$defs/level' }
+        purpose: { $ref: './schemas/taxonomy.v1.json#/$defs/purpose' }
         name: { type: string, minLength: 1, maxLength: 64, pattern: '^[a-z][a-z0-9-]*$' }
         version: { type: integer, minimum: 1 }
         body_ref: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
