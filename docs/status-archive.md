@@ -1347,3 +1347,9 @@ Superseded by S584 (#1185, merged as eee37028): `AuthoringQaItemsCasesTests.cs` 
 | Oversized Tenancy test files (S584) | After S584 (#1185, AuthoringQaItemsCasesTests split into 381 / 146 lines), S586 (#1183, CatalogUnitTests split into 301 / 277 lines), S585 (#1182, ProducerSlotQaTests split into 372 / 199 lines), S583 (#1179), S582, S581 (#1177), S580 (#1174), S579, S578, S577 (#1171), S575 (#1169) and S576 (#1168), 28 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on eee37028): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
 
 Superseded by S587 (#1187, merged as 384956d6): `AuthoringImportTests.cs` was split into 404 / 278 lines; the recount on 384956d6 (27 files over 500) is the row 'Oversized Tenancy test files (S587)'.
+
+## Moved from status-carried.md by S589 (2026-11-21)
+
+| Oversized Tenancy test files (S587) | After S587 (#1187, AuthoringImportTests split into 404 / 278 lines) and the splits listed in the S584 row's history, 27 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 384956d6): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S589 (#1188, merged as e17d91b0): `AuthoringExporterTests.cs` was split into 469 / 325 lines; the recount on e17d91b0 (26 files over 500) is the row 'Oversized Tenancy test files (S589)'.
