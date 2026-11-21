@@ -35,16 +35,30 @@ public sealed partial class DogfoodReportTests
         await AssertRefusedAsync(Xml, hostname: "Runner\uac00");
     }
 
-    /// <summary>The first DNS label of a dotted host name names the machine too; short and numeric labels are too common.</summary>
+    /// <summary>The first DNS label of a dotted host name names the machine as a whole word when distinctive (5 characters, a digit or a hyphen); short, numeric and substring uses are too common.</summary>
     [Theory]
     [InlineData("Injected-Runner-Zq.corp.local", "see Injected-Runner-Zq here", true)]
     [InlineData("Injected-Runner-Zq.corp.local", "see Injected-Runner-Zy here", false)]
     [InlineData("ab.corp.local", "ab", false)]
     [InlineData("192.168.1.5", "192", false)]
-    [InlineData("abc.corp.local", "abc", true)]
+    [InlineData("abc.corp.local", "abc", false)]
+    [InlineData("app.corp.local", "an app and git", false)]
+    [InlineData("git.corp.local", "git commit", false)]
+    [InlineData("server.corp.local", "the server restarted", true)]
+    [InlineData("server.corp.local", "Server.", true)]
+    [InlineData("server.corp.local", "server-side", true)]
+    [InlineData("server.corp.local", "serverless observer reserved", false)]
+    [InlineData("server.corp.local", "se\u200brver", true)]
+    [InlineData("node1.corp.local", "on node1", true)]
+    [InlineData("node1.corp.local", "node12 mynode1", false)]
+    [InlineData("ab-c.corp.local", "ab-c", true)]
     [InlineData("host.corp.local", "host", false)]
     [InlineData("localhost.localdomain", "http://localhost:4200", false)]
-    public async Task Dogfood_Collect_HostLabelOfDottedName_IsRefusedFromThreeCharacters(string hostname, string text, bool refused)
+    [InlineData("app.corp.local", "x app.corp.local y", true)]
+    [InlineData("buildbox-42.corp.local", "ci_buildbox-42_1", true)]
+    [InlineData("server.corp.local", "ci_server_log", true)]
+    [InlineData("server.corp.local", "ci_serverless", false)]
+    public async Task Dogfood_Collect_HostLabelOfDottedName_IsRefusedAsDistinctiveWholeWord(string hostname, string text, bool refused)
     {
         if (refused)
         {
