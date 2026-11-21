@@ -7,6 +7,7 @@ import type { UsageSummaryDto, UsageSummaryMetricDto, UsageSummaryProjectDto } f
 import { By } from '@angular/platform-browser';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { DataTableComponent } from '../../../shared/ui/data-table/data-table.component';
+import { useLightweightTablePresentation } from '../../../shared/ui/data-table/data-table-volume.testing';
 import { QuotaPanelComponent } from './quota-panel.component';
 import { QuotaStore, type QuotaLoadState } from './quota.store';
 
@@ -259,6 +260,7 @@ describe('QuotaPanelComponent', () => {
     expect(root.querySelector('[data-quota-limit]')?.textContent?.trim()).toBe('987,654,321');
   });
   it('passes every row beyond the 200-row rendering boundary to the shared bounded renderer', async () => {
+    useLightweightTablePresentation();
     const projects = Array.from({ length: 201 }, (_unused, index) =>
       project({ project_id: `project-${index}` }),
     );
