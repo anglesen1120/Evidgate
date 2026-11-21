@@ -1502,3 +1502,9 @@ Restated for what stays unmigrated by #1241 (af28ed14): the shared provider `tes
 | Telemetry partials depend on compile order for the Meter (S524) | Seven EvidgateTelemetry partial files (HealingGateway, Operations, Quota, RawReportEnqueue, Releases, Sessions, Workflow) read the Meter of EvidgateTelemetry.cs in field initialisers, so that file must compile first (true on the LAN: csc lists it first); an order-independent holder is a design change. Recording tests for the AI settings and authoring counters exist since S528 (#1079); the race-only outcomes were pinned by #1237 (archived under S614). | receiver: observability lane |
 
 Closed by PR #1244 (merge 762caa61): `EvidgateMeter` (internal static holder, `src/BuildingBlocks/Observability/EvidgateMeter.cs`) owns the one Meter and every `EvidgateTelemetry` partial creates its instruments from `EvidgateMeter.Instance`, so no partial depends on file order; `TelemetryMeterOrderTests` (Architecture.Tests) and `TelemetryInstrumentBindingTests` (Hosts.IntegrationTests) pin it, and the reintroduced private-field mutant was red on the LAN.
+
+## Moved from status-carried.md by S619 (2026-11-21)
+
+| Floor notice registration has no ApiHost test (S615) | `RequestLogFloorTests` builds its own hosts with `RequestLogFloor.Apply` and `RequestLogFloorNotice`; only the Identity tests run the real `ApiHost.CreateBuilder`, and they do not assert the notice, so deleting `AddHostedService<RequestLogFloorNotice>` in `ApiHost.cs` leaves every test green. | receiver: next Api host test lane |
+
+Closed by PR #1248 (a6723611): `tests/Hosts.IntegrationTests/ApiHostRequestLogFloorTests.cs` builds the real `ApiHost.CreateBuilder` and pins the notice and the floor rules; deleting `ApiHost.cs:187` or `:188` turned two tests red each on the LAN.
