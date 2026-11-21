@@ -242,17 +242,18 @@ public sealed partial class DraftTests
         (await DraftCountAsync(world)).ShouldBe(0);
     }
 
-    [Fact]
-    public async Task Create_ProvenanceNumberThatUnderflowsToZero_IsStoredVerbatim()
+    [Theory]
+    [InlineData("{\"n\":[1E-9999999]}")]
+    [InlineData("{\"n\":0.1e-16384}")]
+    public async Task Create_ProvenanceNumberOutsideNumericRange_Is422DraftInvalid_NotA500(string provenance)
     {
         await using var world = await StartAsync();
         var body = Body();
-        body["provenance"] = JsonNode.Parse("{\"n\":[1E-9999999]}")!;
+        body["provenance"] = JsonNode.Parse(provenance)!;
 
-        var created = await CreateAsync(world, body);
-
-        created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
-        (await StoredAsync<string>(world, created.Id(), "provenance::text")).ShouldContain("1E-9999999");
+        // The canonicaliser accepts these (finite doubles), but the jsonb cast would raise 22003 on them.
+        ShouldNameField(await CreateAsync(world, body), "provenance", provenance);
+        (await DraftCountAsync(world)).ShouldBe(0);
     }
 
     /// <summary>

@@ -47,6 +47,12 @@ internal static class DraftBody
     internal const int MaxBodyRefLength = 512;
     internal const int MaxProvenanceMembers = 32;
 
+    /// <summary>PostgreSQL <c>numeric</c> stores at most this many digits after the decimal point (18 §8.1).</summary>
+    private const int MaxNumericScale = 16383;
+
+    /// <summary>PostgreSQL <c>numeric</c> stores at most this many digits before the decimal point (18 §8.1).</summary>
+    private const int MaxNumericIntegerDigits = 131072;
+
     private static readonly JsonSerializerOptions Strict = new(JsonSerializerDefaults.Web)
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -244,12 +250,72 @@ internal static class DraftBody
             return null;
         }
 
+        if (ExceedsNumericRange(element))
+        {
+            details.Add(new ErrorDetail("provenance", "too_large"));
+            return null;
+        }
+
         // The exact byte bound is measured by PostgreSQL after this: insignificant whitespace in the raw text makes any
-        // C# size proxy refuse a value the column accepts. A number too large for the jsonb cast never reaches the
-        // column: the idempotency stage canonicalizes the body first and answers 422 `request_invalid` when the number
-        // is outside the RFC 8785 range.
+        // C# size proxy refuse a value the column accepts. The numeric-range refusal above cannot be left to the cast:
+        // a value outside `numeric`'s range raises 22003 there, which the column's CHECK never sees, so it would answer
+        // 500 instead of naming `provenance`.
         var text = element.GetRawText();
         return text;
+    }
+
+    /// <summary>
+    /// True when a number token cannot be stored as the column's <c>numeric</c>: more than 16383 fractional digits or
+    /// more than 131072 integer digits (PostgreSQL numeric limits), which the <c>jsonb</c> cast refuses with 22003
+    /// rather than the column's byte CHECK. Tokens whose exponent alone is past either limit are refused without
+    /// parsing the mantissa, since no such value fits.
+    /// </summary>
+    private static bool ExceedsNumericRange(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Number:
+                return ExceedsNumericRange(element.GetRawText());
+            case JsonValueKind.Object:
+                return element.EnumerateObject().Any(member => ExceedsNumericRange(member.Value));
+            case JsonValueKind.Array:
+                return element.EnumerateArray().Any(ExceedsNumericRange);
+            default:
+                return false;
+        }
+    }
+
+    private static bool ExceedsNumericRange(string token)
+    {
+        var span = token.AsSpan();
+        if (span.Length > 0 && span[0] is '-' or '+')
+        {
+            span = span[1..];
+        }
+
+        var marker = span.IndexOfAny('e', 'E');
+        var mantissa = marker < 0 ? span : span[..marker];
+        var exponent = 0L;
+        if (marker >= 0
+            && (!long.TryParse(span[(marker + 1)..], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out exponent)
+                || exponent > MaxNumericIntegerDigits
+                || exponent < -MaxNumericScale))
+        {
+            return true;
+        }
+
+        var point = mantissa.IndexOf('.');
+        var fractionDigits = point < 0 ? 0 : mantissa.Length - point - 1;
+        var integerPart = point < 0 ? mantissa : mantissa[..point];
+        var leadingZeros = 0;
+        while (leadingZeros < integerPart.Length && integerPart[leadingZeros] == '0')
+        {
+            leadingZeros++;
+        }
+
+        var scale = (long)fractionDigits - exponent;
+        var whole = integerPart.Length - leadingZeros + exponent;
+        return scale > MaxNumericScale || whole > MaxNumericIntegerDigits;
     }
 
     /// <summary>The C# half of <c>draft_base_commit_check</c>: 7–64 lower-case hex characters.</summary>
