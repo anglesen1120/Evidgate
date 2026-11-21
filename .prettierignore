@@ -69,3 +69,7 @@ fixtures/threat-model/negative/non-table-line-in-table.md
 # 09.1.1-T1: generated artefacts of `ng test` and `playwright test` under apps/web
 apps/web/test-results
 apps/web/playwright-report
+
+# Byte-asserted conformance fixtures: the rule tests and body_ref compare them, so they are never
+# reformatted.
+fixtures/template-conformance/**
