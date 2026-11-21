@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Canonicalization;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Persistence.Idempotency;
@@ -88,7 +89,20 @@ public sealed class IdempotencyBehaviour<TMessage, TResponse>(
                 [new ErrorDetail(string.Empty, "invalid_value")]));
         }
 
-        var begin = await store.TryBeginAsync(operation, key, requestJson, cancellationToken).ConfigureAwait(false);
+        IdempotencyBeginResult begin;
+        try
+        {
+            begin = await store.TryBeginAsync(operation, key, requestJson, cancellationToken).ConfigureAwait(false);
+        }
+        catch (JsonCanonicalizationException)
+        {
+            // The request document holds a value RFC 8785 cannot canonicalize (a number outside the IEEE 754 double
+            // range, a repeated name, a lone surrogate), so no digest and no claim can exist for it. The body caused
+            // it, so it is refused as invalid; anything else the store throws is a server fault and keeps propagating.
+            return ResultFactory.Failure<TResponse>(Error.Invalid(
+                "the request body carries a value that cannot be processed",
+                [new ErrorDetail(string.Empty, "invalid_value")]));
+        }
 
         switch (begin.Outcome)
         {

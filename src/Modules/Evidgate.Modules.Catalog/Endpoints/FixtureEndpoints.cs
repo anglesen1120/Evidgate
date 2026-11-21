@@ -10,6 +10,7 @@ using Mediator;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using static Evidgate.Modules.Catalog.Endpoints.CatalogRequestRules;
 
 namespace Evidgate.Modules.Catalog.Endpoints;
 
@@ -183,6 +184,4 @@ internal static class FixtureEndpoints
         Error.Invalid(
             "the body does not match the fixture shape",
             [new ErrorDetail(Domain.TextRules.Brief(exception.Path ?? string.Empty, 128), "invalid")]);
-
-    private static string IdempotencyKey(HttpContext context) => context.Request.Headers["Idempotency-Key"].ToString();
 }

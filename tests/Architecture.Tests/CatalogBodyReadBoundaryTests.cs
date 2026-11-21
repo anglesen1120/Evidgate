@@ -23,14 +23,16 @@ public sealed class CatalogBodyReadBoundaryTests
     private const string SyntheticRouteFile = EndpointsDirectory + "/SyntheticRoute.cs";
 
     /// <summary>
-    /// The six raw-body routes by handler, per file (suite revision with its dry run, requirement ref, case update,
-    /// fixture, fixture revision, git binding). Each reads through the shared guard; a route added here must too.
+    /// The eight raw-body routes by handler, per file (suite revision with its dry run, requirement ref, case update,
+    /// fixture, fixture revision, git binding, draft create and draft update). Each reads through the shared guard; a
+    /// route added here must too. The two draft reads take no body, so they are absent.
     /// </summary>
     private static readonly Dictionary<string, string[]> RawBodyRoutes = new()
     {
         [EndpointsDirectory + "/CatalogEndpoints.cs"] = ["SetCaseRequirementRefAsync", "UpdateCaseAsync", "CreateSuiteRevisionAsync"],
         [EndpointsDirectory + "/FixtureEndpoints.cs"] = ["CreateFixtureAsync", "CreateFixtureRevisionAsync"],
         [EndpointsDirectory + "/GitRepoBindingEndpoints.cs"] = ["RegisterAsync"],
+        [EndpointsDirectory + "/DraftEndpoints.cs"] = ["CreateDraftAsync", "UpdateDraftAsync"],
     };
 
     /// <summary>
@@ -61,6 +63,8 @@ public sealed class CatalogBodyReadBoundaryTests
             (["ReadJsonAsync( x1"], "reads the outbound GitHub API response through its own capped reader, not a request body"),
         [ModuleDirectory + "/Domain/SidecarManifestReader.cs"] =
             (["JsonDocument.Parse x1"], "parses a repository sidecar manifest after converting it from YAML"),
+        [ModuleDirectory + "/Infrastructure/Persistence/DraftReadSql.cs"] =
+            (["JsonDocument.Parse x1"], "decodes the stored draft provenance JSON column"),
     };
 
     // Any member named Body that is not a command or query DTO, the synchronous form, or a request alias.
