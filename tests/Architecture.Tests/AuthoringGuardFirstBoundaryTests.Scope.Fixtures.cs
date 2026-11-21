@@ -17,7 +17,7 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
 
     private static string GuardedHandler() => Handler($"{Guard}\nreturn Task.CompletedTask;");
 
-    private static string[] ScanRoot((string Path, string Text)[] universe, List<string>? found = null) =>
+    private string[] ScanRoot((string Path, string Text)[] universe, List<string>? found = null) =>
         Scan(AuthoringRouteFiles(universe), found ?? [], null, universe);
 
     [Fact]

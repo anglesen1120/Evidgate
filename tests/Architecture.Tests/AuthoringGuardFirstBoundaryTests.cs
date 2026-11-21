@@ -15,6 +15,11 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
     private const string Endpoints = "src/Modules/Evidgate.Modules.Authoring/Endpoints/";
     private static readonly (string TypeMethod, string Reason)[] Exemptions = [];
 
+    // Set per Scan: the file universe the residual detectors resolve partial parts against, and the parsed trees they
+    // reuse for it. A test class instance is created per test method, so this state never spans two tests.
+    private (string Path, string Text)[] _universe = [];
+    private readonly Dictionary<string, SyntaxNode> _roots = new(StringComparer.Ordinal);
+
     private static readonly string[] ReadRouteMaps = ["MapGet", "MapHead", "MapOptions"];
 
     // Every route map that never carries a write: the read registrations plus the group composer.
@@ -61,7 +66,7 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         found.Order(StringComparer.Ordinal).ShouldBe(Expected.Order(StringComparer.Ordinal));
     }
 
-    private static string[] Scan(
+    private string[] Scan(
         (string Path, string Text)[] files,
         List<string> found,
         (string TypeMethod, string Reason)[]? exemptions = null,
@@ -71,7 +76,9 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
     {
         exemptions ??= Exemptions;
         readExemptions ??= ReadGuardExemptions;
-        var state = new ScanState(files, universe ?? files);
+        _universe = universe ?? files;
+        _roots.Clear();
+        var state = new ScanState(files, _universe);
         while (state.Queue.Count > 0)
         {
             ScanFile(state.Queue.Dequeue(), found, exemptions, state, reads, readExemptions);
@@ -88,6 +95,14 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
             state.Errors.AddRange(ComposerResultFilterErrors(Parse(file.Text), file.Path));
         }
 
+        // A protected alias renames a compared type for every file that sees it, so the whole production universe is
+        // checked, not only the route files and the host.
+        foreach (var file in _universe.Where(file =>
+            !state.Seen.Contains(file.Path) && ProtectedAliasPattern.IsMatch(file.Text)))
+        {
+            state.Errors.AddRange(ProtectedAliasErrors(Parse(file.Text), file.Path));
+        }
+
         // Read exemptions are checked by the real-solution fact, which is the only scan with that universe:
         // a synthetic fixture cannot report a real production delegate as stale.
         if (!reads)
@@ -101,7 +116,7 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         return state.Errors.ToArray();
     }
 
-    private static void ScanFile(
+    private void ScanFile(
         (string Path, string Text) file,
         List<string> found,
         (string TypeMethod, string Reason)[] exemptions,
@@ -129,7 +144,7 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
             .Concat(PartialOverloadErrors(file, root, state.Universe)));
     }
 
-    private static void ScanCall(
+    private void ScanCall(
         InvocationExpressionSyntax call,
         string path,
         List<string> found,
@@ -171,7 +186,7 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
     }
 
     // A read route is any route that cannot write: HEAD and OPTIONS take the guard-first rule beside GET.
-    private static void ScanReadCall(
+    private void ScanReadCall(
         InvocationExpressionSyntax call,
         string map,
         string path,

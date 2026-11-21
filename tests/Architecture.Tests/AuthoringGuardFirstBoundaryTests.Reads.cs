@@ -53,7 +53,7 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         }
     }
 
-    private static void ScanRead(
+    private void ScanRead(
         InvocationExpressionSyntax call,
         string path,
         List<string> found,
@@ -95,7 +95,7 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
     // The statement that carries the send is no exception: a return beside it is refused unless its own
     // expression reaches a send, a conditional or coalescing expression counts only when every branch does, and
     // a throw before or inside that statement bypasses the pipeline's authorisation before it can answer.
-    private static List<string> EarlyReturnErrors(MethodDeclarationSyntax method, string path, string name)
+    private List<string> EarlyReturnErrors(MethodDeclarationSyntax method, string path, string name)
     {
         var errors = new List<string>();
         var mediator = method.ParameterList.Parameters
