@@ -15,11 +15,23 @@
 #
 # Scrub, on the parsed tree so only UTF-8 (or its ASCII subset) is accepted: a testsuite hostname
 # attribute becomes "host" and this run's checkout path becomes /repo in every attribute value and
-# text node; a report that still names the machine, its host name or the home directory is refused,
-# never uploaded (compared ignoring case). Nothing is written to --out unless all three producers pass.
+# text node. The residual check reads element names, attribute names and namespace URIs as well as
+# values, text, tail and each element's joined text, and compares the match form
+# NFKC(casefold(NFKC(text))) with default-ignorable (Cf) and combining (Mn, Me) characters removed,
+# raw and after one strict percent-decoding; a malformed escape refuses rather than decoding
+# leniently. A report that still names the machine, its host name (socket.gethostname() or
+# $HOSTNAME) or the home directory is refused, never uploaded. Each upload file is written to a
+# sibling temporary created exclusively (a planted link there is skipped, never followed), flushed
+# and fsynced before any of them is renamed into place, manifest last. The previous manifest.json is
+# removed immediately before the first rename, so after any failure in the upload set no manifest
+# describes files from two runs; a failure also removes this run's temporaries. A green run deletes
+# stale *.junit.xml, manifest.json and .*.tmp-* regular files or links directly in --out. Nothing is
+# written to --out unless all three producers pass.
 # Exit 1: a producer's report is missing, is over the 8 MiB cap before or after scrubbing, is not
 # well-formed XML with a testsuite and a testcase, is not UTF-8, or declares a DOCTYPE in any
-# encoding (a runner never emits one).
+# encoding (a runner never emits one), still names this machine, or holds a malformed percent
+# escape; or the upload set cannot be renamed into place, or a stale upload file cannot be removed.
+# Exit 2: --src and --out resolve to the same directory, and unknown arguments.
 # A producer that exits non-zero because tests failed still has its report collected; the script then
 # exits with that producer's status after the manifest is written. The server-side parse of the same bytes is the
 # Evidence parser profile, covered by tests/Tenancy.IntegrationTests (DogfoodReportTests).
@@ -40,10 +52,11 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-# Absolute before any producer changes directory.
+# Absolute, and physical so a symlink alias of --src cannot pass as a different --out, before any
+# producer changes directory.
 mkdir -p "$SRC" "$OUT"
-SRC="$(cd "$SRC" && pwd)"
-OUT="$(cd "$OUT" && pwd)"
+SRC="$(cd "$SRC" && pwd -P)"
+OUT="$(cd "$OUT" && pwd -P)"
 if [[ "$SRC" == "$OUT" ]]; then
   echo "collect.sh: --src and --out must differ" >&2
   exit 2
@@ -66,7 +79,7 @@ if [[ "$PRODUCE" == "1" ]]; then
 fi
 
 python3 - "$SRC" "$OUT" "$ROOT" <<'PY'
-import hashlib, json, os, re, socket, sys
+import fnmatch, hashlib, json, os, re, socket, sys, unicodedata, urllib.parse
 import xml.etree.ElementTree as ET
 from xml.parsers import expat
 from pathlib import Path
@@ -133,14 +146,66 @@ def scrub_tree(doc, prefixes):
         node.tail = scrubbed(node.tail, prefixes)
 
 
+MALFORMED_PERCENT = re.compile(rb"%(?![0-9A-Fa-f]{2})")
+IGNORABLE = frozenset(("Cf", "Mn", "Me"))
+STALE_PATTERNS = ("*.junit.xml", "manifest.json", ".*.tmp-*")
+
+
+def refuse(producer, reason):
+    sys.exit(f"collect.sh: {producer}: {reason}; refusing to publish it")
+
+
+def without_ignorables(text):
+    # NFKC expands or composes what the raw bytes hid; the removed categories render as nothing or
+    # as a mark on the previous character, so dropping them cannot make a name stop matching. No
+    # ASCII character is Cf, Mn or Me, so the per-character scan only runs on non-ASCII text.
+    text = unicodedata.normalize("NFKC", text)
+    if text.isascii():
+        return text
+    return "".join(char for char in text if unicodedata.category(char) not in IGNORABLE)
+
+
+def match_form(text):
+    return without_ignorables(unicodedata.normalize("NFKC", text).casefold())
+
+
+def decode_once(producer, text):
+    # One pass only: unquote_to_bytes leaves a malformed escape literal, and a lenient decoder could
+    # hide a name, so a bad escape or a non-UTF-8 payload refuses.
+    data = text.encode("utf-8")
+    if MALFORMED_PERCENT.search(data):
+        refuse(producer, "report has a malformed percent escape")
+    try:
+        return urllib.parse.unquote_to_bytes(data).decode("utf-8")
+    except UnicodeDecodeError:
+        refuse(producer, "percent escapes do not decode to UTF-8")
+
+
+def matching_forms(producer, value):
+    # A report can spell a name without spelling it: match the raw text and, only when a percent
+    # sign survives normalisation, its once-decoded reading.
+    normalised = unicodedata.normalize("NFKC", value)
+    forms = [without_ignorables(normalised.casefold())]
+    if "%" in normalised:
+        forms.append(match_form(decode_once(producer, normalised)))
+    return list(dict.fromkeys(forms))
+
+
 def refuse_residual(producer, doc, values):
     # A report that still names this machine fails the run; a leak never reaches the upload set.
-    # Case-folded: a runner may upper- or lower-case a host name or path it prints.
-    folded = [secret.casefold() for secret in values]
+    # Names cannot be scrubbed, so a matching element or attribute name refuses too.
+    expected = {match_form(secret) for secret in values}
+    expected.discard("")
     for node in walk(doc):
-        for value in [*node.attrib.values(), node.text, node.tail]:
-            if value and any(secret in value.casefold() for secret in folded):
-                sys.exit(f"collect.sh: {producer}: report still names this machine; refusing to publish it")
+        inspected = [node.text, node.tail, *node.attrib, *node.attrib.values()]
+        if isinstance(node.tag, str):
+            inspected.append(node.tag)
+        if len(node):
+            # A child element splits an identifier across text, its own text and a tail.
+            inspected.append("".join(node.itertext()))
+        for value in inspected:
+            if value and any(secret in form for form in matching_forms(producer, value) for secret in expected):
+                refuse(producer, "report still names this machine")
 
 
 def element_counts(doc):
@@ -167,6 +232,51 @@ def serialise(producer, doc, expected):
     return payload
 
 
+def stage_atomic(out, name, data, created):
+    # A sibling temp keeps the rename atomic, and replacing the target removes a link there instead
+    # of writing through it. Exclusive creation means a planted link at the temp name is skipped,
+    # never followed, and created only lists paths this run owns.
+    for attempt in range(100):
+        temp = out / f".{name}.tmp-{attempt}"
+        try:
+            descriptor = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        except FileExistsError:
+            continue
+        created.append(temp)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        return temp
+    sys.exit(f"collect.sh: {name}: no free temporary name in {out}")
+
+
+def publish(out, pending, payload, created):
+    # Every file is validated and staged before the first rename. The previous manifest goes first,
+    # so a failure after that point cannot leave a manifest describing files from two runs.
+    staged = [(name, stage_atomic(out, name, data, created)) for name, data in pending]
+    manifest_temp = stage_atomic(out, "manifest.json", payload, created)
+    (out / "manifest.json").unlink(missing_ok=True)
+    for name, temp in staged:
+        os.replace(temp, out / name)
+    os.replace(manifest_temp, out / "manifest.json")
+
+
+def remove_stale(out, produced):
+    # Direct children only, and only names this script owns; a directory is left alone. An entry
+    # that vanished is ignored; any other failure stops the run rather than leave a stale file.
+    for entry in out.iterdir():
+        if entry.name in produced or not any(fnmatch.fnmatch(entry.name, pattern) for pattern in STALE_PATTERNS):
+            continue
+        if entry.is_symlink() or entry.is_file():
+            try:
+                entry.unlink()
+            except FileNotFoundError:
+                pass
+            except PermissionError as error:
+                sys.exit(f"collect.sh: cannot remove stale upload file {entry} ({error})")
+
+
 src, out, root = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
 # The runner's checkout path (an absolute path that names a user) becomes the fixed /repo.
 checkout = list(dict.fromkeys([root, os.path.realpath(root)]))
@@ -175,9 +285,10 @@ prefixes = [
     for prefix in sorted(checkout, key=len, reverse=True)
 ]
 residual = [value for value in checkout if value]
-machine = socket.gethostname()
-if len(machine) >= 4 and machine.casefold() != "host":
-    residual.append(machine)
+# Both the real host name and an injected $HOSTNAME are refused; each is additive, never a
+# replacement, so setting one cannot switch the other off.
+machines = [socket.gethostname(), os.environ.get("HOSTNAME", "")]
+residual.extend(machine for machine in machines if len(machine) >= 4 and machine.casefold() != "host")
 home = os.environ.get("HOME", "")
 if home not in ("", "/"):
     residual.append(home)
@@ -219,11 +330,23 @@ for producer in producers:
         "skipped": sum(1 for c in cases if c.find("skipped") is not None),
     })
     pending.append((name, data))
-# Every producer passed: only now does anything reach --out, manifest last, so a refusal leaves it untouched.
-for name, data in pending:
-    (out / name).write_bytes(data)
+# Every producer passed: only now does anything reach --out, manifest last, so a refusal leaves it
+# untouched. A failed rename keeps this run's complete earlier files and publishes no manifest; the
+# previous manifest went before the first rename, so a partial set is never mistaken for a finished
+# one.
 manifest = {"schema": "dogfood-collect/1", "producers": entries}
-(out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+payload = (json.dumps(manifest, indent=2) + "\n").encode("utf-8")
+created = []
+try:
+    publish(out, pending, payload, created)
+except Exception as error:
+    for temp in created:
+        try:
+            temp.unlink()
+        except FileNotFoundError:
+            pass
+    sys.exit(f"collect.sh: writing the upload set into {out} failed ({error}); refusing to publish a partial set")
+remove_stale(out, {name for name, _ in pending} | {"manifest.json"})
 print(json.dumps(manifest, indent=2))
 PY
 exit "$PRODUCER_STATUS"
