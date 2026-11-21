@@ -37,6 +37,8 @@ public static class RequestLogFloor
     // The notice must outlive the operator's own filters, so it gets the same unbeatable shape for its category.
     internal static readonly string NoticePattern = typeof(RequestLogFloorNotice).FullName + "*" + typeof(RequestLogFloorNotice).FullName;
 
+    private static readonly string[] FloorPatterns = [FloorPattern, NoticePattern];
+
     // Marks the rules this class added, so a configured rule of the same shape is never mistaken for one.
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<LoggerFilterRule, object> Added = new();
 
@@ -58,7 +60,7 @@ public static class RequestLogFloor
                 }
             }
 
-            foreach (var pattern in new[] { FloorPattern, NoticePattern })
+            foreach (var pattern in FloorPatterns)
             {
                 var floor = new LoggerFilterRule(provider, pattern, LogLevel.Warning, null);
                 Added.Add(floor, floor);
@@ -72,7 +74,7 @@ public static class RequestLogFloor
     /// tie and lower the level again, so the host refuses to start rather than log the callback query.
     /// </summary>
     /// <param name="options">The filter options as the host will use them.</param>
-    /// <exception cref="InvalidOperationException">A configured rule comes after a floor rule, or a floor rule is missing.</exception>
+    /// <exception cref="InvalidOperationException">A configured rule comes after a floor rule, or a floor rule is missing for a provider.</exception>
     public static void AssertFloorIsLast(LoggerFilterOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -94,11 +96,17 @@ public static class RequestLogFloor
             }
         }
 
-        foreach (var pattern in new[] { FloorPattern, NoticePattern })
+        // Apply adds the pair for every provider named by a rule, so each of them (and the provider-less one) must have it.
+        var providers = rules.Select(rule => rule.ProviderName).Distinct(StringComparer.Ordinal).Append(null).Distinct().ToList();
+        foreach (var provider in providers)
         {
-            if (!rules.Any(rule => rule.ProviderName is null && rule.CategoryName == pattern && Added.TryGetValue(rule, out _)))
+            foreach (var pattern in FloorPatterns)
             {
-                throw new InvalidOperationException($"The request-log floor rule '{pattern}' is not registered in the logger filter options.");
+                if (!rules.Any(rule => rule.ProviderName == provider && rule.CategoryName == pattern && Added.TryGetValue(rule, out _)))
+                {
+                    throw new InvalidOperationException(
+                        $"The request-log floor rule '{pattern}' is not registered for provider '{provider ?? "(any)"}' in the logger filter options.");
+                }
             }
         }
     }
@@ -169,7 +177,6 @@ public sealed class RequestLogFloorNotice(IOptionsMonitor<LoggerFilterOptions> o
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        RequestLogFloor.AssertFloorIsLast(options.CurrentValue);
         Report(options.CurrentValue);
         _subscription = options.OnChange(Report);
         return Task.CompletedTask;
