@@ -38,6 +38,30 @@ public class TelemetryMeterOrderTests
     }
 
     [Fact]
+    public void A_Target_Typed_Meter_Creation_Outside_The_Holder_Is_A_Violation()
+    {
+        var seeded = new List<(string, string)>
+        {
+            (TelemetryMeterRules.HolderPath, Holder),
+            (Part, "partial class EvidgateTelemetry { static void M() { Meter m = new(\"Evidgate\"); } }"),
+        };
+
+        TelemetryMeterRules.Find(seeded).ShouldHaveSingleItem().ShouldContain("creates a Meter outside the holder");
+    }
+
+    [Fact]
+    public void A_Target_Typed_Non_Meter_Creation_Is_Not_A_Violation()
+    {
+        var seeded = new List<(string, string)>
+        {
+            (TelemetryMeterRules.HolderPath, Holder),
+            (Part, "partial class EvidgateTelemetry { static readonly object O = new(); static readonly System.Text.StringBuilder S = new(); }"),
+        };
+
+        TelemetryMeterRules.Find(seeded).ShouldBeEmpty();
+    }
+
+    [Fact]
     public void An_Unqualified_Meter_Read_Is_A_Violation()
     {
         var seeded = new List<(string, string)>

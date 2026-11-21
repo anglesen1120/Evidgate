@@ -65,7 +65,31 @@ internal static class TelemetryMeterRules
     }
 
     private static bool IsMeterCreation(BaseObjectCreationExpressionSyntax node) =>
-        node is ObjectCreationExpressionSyntax { Type: var type } && IsMeterName(type);
+        node switch
+        {
+            ObjectCreationExpressionSyntax { Type: var type } => IsMeterName(type),
+            // Target-typed new(...): the declared type of the field, local or property it initialises decides.
+            ImplicitObjectCreationExpressionSyntax implicitNew => DeclaredTypeOf(implicitNew) is { } declared && IsMeterName(declared),
+            _ => false,
+        };
+
+    private static TypeSyntax? DeclaredTypeOf(SyntaxNode node)
+    {
+        foreach (var ancestor in node.Ancestors())
+        {
+            switch (ancestor)
+            {
+                case VariableDeclarationSyntax declaration:
+                    return declaration.Type;
+                case PropertyDeclarationSyntax property:
+                    return property.Type;
+                case StatementSyntax or MemberDeclarationSyntax:
+                    return null;
+            }
+        }
+
+        return null;
+    }
 
     private static bool IsMeterName(TypeSyntax type) => type switch
     {
