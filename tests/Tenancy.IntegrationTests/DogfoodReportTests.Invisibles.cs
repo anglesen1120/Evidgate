@@ -71,8 +71,11 @@ public sealed partial class DogfoodReportTests
             + new string('é', Payload) + string.Concat(Enumerable.Repeat("</a>", 500)) + "</testsuite>";
         await WithReports(xml, async (source, output) =>
         {
-            var result = await RunScriptAsync(source, output, scanStats: true);
+            var elapsed = System.Diagnostics.Stopwatch.StartNew();
+            var result = await RunScriptAsync(source, output, scanStats: true, scanCap: Producers * (2L * Payload + 10_000));
+            elapsed.Stop();
             result.Exit.ShouldBe(0, result.Stderr);
+            elapsed.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(30));
             var line = result.Stderr.Split('\n').Single(row => row.StartsWith("scanned_chars=", StringComparison.Ordinal));
             var scanned = long.Parse(line["scanned_chars=".Length..], CultureInfo.InvariantCulture);
             scanned.ShouldBeGreaterThanOrEqualTo(Producers * Payload);

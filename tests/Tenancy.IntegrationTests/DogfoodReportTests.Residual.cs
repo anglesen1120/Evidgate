@@ -352,7 +352,7 @@ public sealed partial class DogfoodReportTests
 
     private static async Task<(int Exit, string Stderr)> RunScriptAsync(
         string source, string output, string? home = null, string? extra = null, string? script = null, string? hostname = null,
-        bool scanStats = false)
+        bool scanStats = false, long? scanCap = null)
     {
         var token = TestContext.Current.CancellationToken;
         var info = new ProcessStartInfo("bash")
@@ -365,6 +365,11 @@ public sealed partial class DogfoodReportTests
         info.Environment["HOME"] = home ?? "/nonexistent-home-zq";
         info.Environment["HOSTNAME"] = hostname ?? FakeHostname;
         info.Environment["EVIDGATE_COLLECT_EXTRA_RESIDUAL"] = extra ?? "";
+        if (scanCap is { } cap)
+        {
+            info.Environment["EVIDGATE_COLLECT_SCAN_CAP"] = cap.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
         if (scanStats)
         {
             info.Environment["EVIDGATE_COLLECT_SCAN_STATS"] = "1";
