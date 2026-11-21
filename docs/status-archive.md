@@ -1636,3 +1636,11 @@ Both rows closed by PR #1283 (ccb1699c): the pin scans every production route fi
 | Template migration has no executable no-seed assertion (S616) | The decision that migration 0118 inserts no template row (T1.2 seeds real rows) is recorded in the plan Note but no test enforces it: `TemplateTests.cs:54-57` runs `delete from public.template` before every test, so an accidental `insert` in the migration would be erased before any assertion runs. QA S616Qa2 raised it; not built because a fresh-database row count needs a fixture hook that does not exist. | 03.5.1-T1.2: when the seed migration lands, assert the exact built-in set on a freshly migrated database before the suite's cleanup, which also covers the no-seed state for T1.1. |
 
 Both rows closed by PR #1288 (61162c8b): migration 0121 refuses an org template row that reuses a built-in key (and the reverse) with SQLSTATE 23505 `template_key_reuse`, and `TemplateTests.Template_FreshDatabase_HoldsExactlyTheShippedBuiltInSet` asserts the shipped set on a freshly migrated database before any suite cleanup.
+
+## Moved from status-carried.md by S639 (2026-11-22)
+
+| collect.sh short full host name exemption (S636) | A host name under 4 characters after normalisation, or equal to `host`, is not refused as a full name (`residual` filter in scripts/dogfood/collect.sh); behaviour predates the S636 label change and the report scrub already writes `host` as the testsuite hostname. | next dogfood lane |
+| collect.sh NFKC pass not counted (S636) | `matching_forms` runs `normalise("NFKC", value)` per value without adding to the scan counter, so a regression that repeats that pass per node would not trip `EVIDGATE_COLLECT_SCAN_CAP`. | next dogfood lane |
+| Contract.Tests YAML comment after tab (S635) | `StripComment` in tests/Contract.Tests/YamlSubset.cs treats `#` as a comment only after a space, so `y,<TAB># ] note` inside a wrapped flow list is not stripped and the list fails to close or parses a wrong entry; the shipped spec has no such input. Low. | contract tooling lane |
+
+All three rows closed by PR #1286 (e0f1c2ab): `collect.sh` refuses a full host name under 4 characters as a whole word (the placeholder `host` stays exempt), the NFKC pass is counted by the scan counter, and `YamlSubset.StripComment` treats `#` after a tab as a comment start.
