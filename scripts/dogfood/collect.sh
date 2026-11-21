@@ -17,8 +17,9 @@
 # attribute becomes "host" and this run's checkout path becomes /repo in every attribute value and
 # text node. The residual check reads element names, attribute names and namespace URIs as well as
 # values, text, tail and the document's character data joined in order (one pass, so a name split
-# by child elements is still found), and compares the match form: NFKD (refused when it grows past
-# four times the input), then Cf, Mn, Me, Cn, DEL, C1 and C0 controls (tab, LF, CR kept), U+2800 and
+# by child elements is still found), and compares the match form: NFKD (refused when the result is
+# longer than four times the input plus 64, checked after it is built), then Cf, Mn, Me, Cn, DEL,
+# C1 and C0 controls (tab, LF, CR kept), U+2800 and
 # Default_Ignorable_Code_Point characters removed, casefold, removed again, never recomposed,
 # raw and after one strict percent-decoding; a malformed escape refuses rather than decoding
 # leniently. A report that still names the machine, its host name (socket.gethostname() or
@@ -155,7 +156,10 @@ IGNORABLE = frozenset(("Cf", "Mn", "Me", "Cn"))
 SCANNED = [0]  # characters handed to the residual match, printed under EVIDGATE_COLLECT_SCAN_STATS
 # Test hook: stop the residual scan once this many characters were handed to it, so a rescan
 # regression fails by count instead of by timeout. Unset in production.
-SCAN_CAP = int(os.environ["EVIDGATE_COLLECT_SCAN_CAP"]) if os.environ.get("EVIDGATE_COLLECT_SCAN_CAP") else None
+SCAN_CAP_TEXT = os.environ.get("EVIDGATE_COLLECT_SCAN_CAP", "")
+if SCAN_CAP_TEXT and not SCAN_CAP_TEXT.isdigit():
+    sys.exit("collect.sh: EVIDGATE_COLLECT_SCAN_CAP must be a non-negative integer")
+SCAN_CAP = int(SCAN_CAP_TEXT) if SCAN_CAP_TEXT else None
 CHUNK = 1 << 16
 MAX_EXPANSION = 4  # NFKD/NFKC output longer than this multiple of the input (plus slack) is refused
 EXPANSION_SLACK = 64
@@ -249,6 +253,15 @@ def text_stream(doc):
     return "".join(pieces)
 
 
+def identifier_form(value):
+    # The host name and its first label come from the environment, not the report; an absurd one
+    # refuses with a message instead of a traceback.
+    try:
+        return match_form(value)
+    except ExpansionError:
+        sys.exit(f"collect.sh: host name expands more than {MAX_EXPANSION} times under normalisation; refusing to publish")
+
+
 def refuse_residual(producer, doc, values):
     try:
         scan_residual(producer, doc, values)
@@ -340,7 +353,8 @@ def publish(out, pending, payload, created):
         finally:
             os.close(directory)
     except OSError as error:
-        print(f"collect.sh: warning: upload set published but the directory fsync failed ({error})", file=sys.stderr)
+        reason = os.strerror(error.errno) if error.errno else "unknown error"  # the message would name the output path
+        print(f"collect.sh: warning: upload set published but the directory fsync failed ({reason})", file=sys.stderr)
 
 
 def remove_stale(out, produced):
@@ -369,12 +383,12 @@ residual = [value for value in checkout if value]
 # Both the real host name and an injected $HOSTNAME are refused; each is additive, never a
 # replacement, so setting one cannot switch the other off.
 machines = [socket.gethostname(), os.environ.get("HOSTNAME", "")]
-residual.extend(machine for machine in machines if len(match_form(machine)) >= 4 and match_form(machine) != "host")
+residual.extend(machine for machine in machines if len(identifier_form(machine)) >= 4 and identifier_form(machine) != "host")
 # The first DNS label of a dotted name is refused too (foo.corp.local also refuses "foo"). Under 3
 # characters or all digits (an IPv4 prefix) is too common to name a machine, so it is skipped.
 for machine in machines:
     label = machine.split(".")[0] if "." in machine else ""
-    folded = match_form(label)
+    folded = identifier_form(label)
     if len(folded) >= 3 and not folded.isdigit() and folded not in ("host", "localhost"):
         residual.append(label)
 home = os.environ.get("HOME", "")
