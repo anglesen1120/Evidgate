@@ -1,4 +1,3 @@
-using System.Xml.Linq;
 using Shouldly;
 using Xunit;
 
@@ -52,7 +51,7 @@ public sealed partial class DogfoodReportTests
 
     private static void AssertNoFailingCases(string xml)
     {
-        XDocument.Parse(xml).Descendants().Count(e => e.Name.LocalName is "failure" or "error")
+        CountElements(xml, "failure", "error")
             .ShouldBe(0, "report has a failure or error element");
         var result = PytestJUnitMapperReplay.Map(xml);
         result.Discrepancies.ShouldBeEmpty();
