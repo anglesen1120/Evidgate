@@ -386,7 +386,7 @@ public sealed partial class DogfoodReportTests
     public async Task Dogfood_Collect_MachineNameInTestcase_IsRefused()
     {
         var hostname = System.Net.Dns.GetHostName();
-        if (hostname.Length < 4 || hostname == "host") { return; }
+        if (hostname.Length == 0 || hostname.Equals("host", StringComparison.OrdinalIgnoreCase)) { return; }
         await AssertResidualRefused(hostname, inText: false);
     }
 
