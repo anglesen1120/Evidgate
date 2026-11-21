@@ -24,7 +24,7 @@ namespace Isolation.Tests.Api;
 /// </remarks>
 public sealed class ApiIsolationFixture : IAsyncLifetime
 {
-    private readonly PostgresIsolationFixture _postgres = new();
+    private readonly PostgresIsolationFixture _postgres = new() { PoolConnections = true };
     private string? _database;
     private IsolationApiFactory? _factory;
     private IsolationWorld? _world;

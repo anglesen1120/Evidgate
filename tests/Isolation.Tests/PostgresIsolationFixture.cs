@@ -31,6 +31,13 @@ public sealed class PostgresIsolationFixture : IAsyncLifetime
     /// </summary>
     public const string SuperuserConnectionStringVariable = "EVIDGATE_ISOLATION__SUPERUSERCONNECTIONSTRING";
 
+    /// <summary>
+    /// Every test gets its own database, so a pooled connection string would leave one idle pool per
+    /// role and database behind for the whole assembly and exhaust the server's connection slots.
+    /// Only a fixture with a single long-lived database (the API host) turns pooling on.
+    /// </summary>
+    public bool PoolConnections { get; init; }
+
     private const string DatabaseOwnerRole = "evidgate_owner";
 
     private PostgreSqlContainer? _container;
@@ -225,7 +232,11 @@ public sealed class PostgresIsolationFixture : IAsyncLifetime
     private string SuperuserConnectionString(string database) =>
         _externalSuperuserConnectionString is null
             ? Build("postgres", "postgres", database)
-            : new NpgsqlConnectionStringBuilder(_externalSuperuserConnectionString) { Database = database }.ConnectionString;
+            : new NpgsqlConnectionStringBuilder(_externalSuperuserConnectionString)
+            {
+                Database = database,
+                Pooling = PoolConnections,
+            }.ConnectionString;
 
     private string Build(string username, string password, string database)
     {
@@ -234,6 +245,7 @@ public sealed class PostgresIsolationFixture : IAsyncLifetime
             Database = database,
             Username = username,
             Password = password,
+            Pooling = PoolConnections,
         };
 
         return builder.ConnectionString;
