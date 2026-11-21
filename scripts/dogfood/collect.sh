@@ -9,11 +9,17 @@
 #   --src DIR   directory holding xunit.junit.xml, vitest.junit.xml, playwright.junit.xml
 #               (default artifacts/dogfood/raw; the committed sample is fixtures/reports/own-ci)
 #   --out DIR   upload set to write (default artifacts/dogfood/upload)
-#   --produce   run the three small producers into --src first (needs a built workspace and the
-#               Playwright fixtures bundle prerequisites)
+#   --produce   run the three small producers into --src first (needs `npm ci` and the built
+#               workspace packages, `npx tsc -b tsconfig.json`: the Playwright fixtures build imports
+#               @evidgate/sdk from its dist output and a system Chrome)
 #
-# Exit 1: a producer's report is missing, is larger than the 8 MiB report cap, is not well-formed XML
-# with a testsuite and a testcase, or declares a DOCTYPE in any encoding (a runner never emits one).
+# Scrub, on the parsed tree so only UTF-8 (or its ASCII subset) is accepted: a testsuite hostname
+# attribute becomes "host" and this run's checkout path becomes /repo in every attribute value and
+# text node; a report that still names the machine, its host name or the home directory is refused,
+# never uploaded.
+# Exit 1: a producer's report is missing, is over the 8 MiB cap before or after scrubbing, is not
+# well-formed XML with a testsuite and a testcase, is not UTF-8, or declares a DOCTYPE in any
+# encoding (a runner never emits one).
 # A producer that exits non-zero because tests failed still has its report collected; the script then
 # exits with that producer's status after the manifest is written. The server-side parse of the same bytes is the
 # Evidence parser profile, covered by tests/Tenancy.IntegrationTests (DogfoodReportTests).
@@ -59,21 +65,120 @@ if [[ "$PRODUCE" == "1" ]]; then
     || { s=$?; [[ "$PRODUCER_STATUS" != 0 ]] || PRODUCER_STATUS=$s; }
 fi
 
-python3 - "$SRC" "$OUT" <<'PY'
-import hashlib, json, sys
+python3 - "$SRC" "$OUT" "$ROOT" <<'PY'
+import hashlib, json, os, re, socket, sys
 import xml.etree.ElementTree as ET
 from xml.parsers import expat
 from pathlib import Path
 
 MAX_BYTES = 8 * 1024 * 1024
+DECLARATION = b'<?xml version="1.0" encoding="UTF-8"?>\n'
+XML_ENCODING = re.compile(rb'''\A(?:\xef\xbb\xbf)?\s*<\?xml[^>]*\bencoding\s*=\s*["']([^"']+)["']''', re.I)
+COUNTED_ELEMENTS = ("testsuite", "testcase", "failure", "error", "skipped")
 
 
-def refuse_doctype(*_):
-    # expat reports the declaration whatever the encoding, unlike a byte search.
-    sys.exit("collect.sh: report declares a DOCTYPE")
+def refuse_unsupported_encoding(producer, data):
+    # The tree scrub, residual check and serialisation all assume UTF-8 and its ASCII subset.
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")) or b"\x00" in data:
+        sys.exit(f"collect.sh: {producer}: report is not UTF-8 (BOM or NUL byte)")
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        sys.exit(f"collect.sh: {producer}: report is not valid UTF-8")
+    declared = XML_ENCODING.match(data)
+    if declared is not None and declared.group(1).lower() not in (b"utf-8", b"us-ascii"):
+        sys.exit(f"collect.sh: {producer}: report declares encoding {declared.group(1).decode('ascii', 'replace')}, not UTF-8")
 
 
-src, out = Path(sys.argv[1]), Path(sys.argv[2])
+def parse_report(producer, data):
+    def refuse(*_):
+        # expat reports the declaration whatever the encoding, unlike a byte search.
+        sys.exit(f"collect.sh: {producer}: report declares a DOCTYPE")
+
+    try:
+        scanner = expat.ParserCreate()
+        scanner.StartDoctypeDeclHandler = refuse
+        scanner.Parse(data, True)
+        return ET.fromstring(data)
+    except expat.ExpatError as error:
+        sys.exit(f"collect.sh: {producer}: not well-formed XML ({error})")
+    except ET.ParseError as error:
+        sys.exit(f"collect.sh: {producer}: not well-formed XML ({error})")
+
+
+def walk(doc):
+    # Iterative so a deeply nested report cannot exhaust the interpreter stack.
+    stack = [doc]
+    while stack:
+        node = stack.pop()
+        yield node
+        stack.extend(node)
+
+
+def scrubbed(text, prefixes):
+    if not text:
+        return text
+    for pattern in prefixes:
+        text = pattern.sub("/repo", text)
+    return text
+
+
+def scrub_tree(doc, prefixes):
+    for node in walk(doc):
+        if node.tag == "testsuite" and "hostname" in node.attrib:
+            node.set("hostname", "host")
+        for key in list(node.attrib):
+            node.set(key, scrubbed(node.attrib[key], prefixes))
+        node.text = scrubbed(node.text, prefixes)
+        node.tail = scrubbed(node.tail, prefixes)
+
+
+def refuse_residual(producer, doc, values):
+    # A report that still names this machine fails the run; a leak never reaches the upload set.
+    for node in walk(doc):
+        for value in [*node.attrib.values(), node.text, node.tail]:
+            if value and any(secret in value for secret in values):
+                sys.exit(f"collect.sh: {producer}: report still names this machine; refusing to publish it")
+
+
+def element_counts(doc):
+    counts = dict.fromkeys(COUNTED_ELEMENTS, 0)
+    for node in walk(doc):
+        if node.tag in counts:
+            counts[node.tag] += 1
+    return counts
+
+
+def serialise(producer, doc, expected):
+    # Serialising the tree normalises quoting, CDATA and comments, which the JUnit mapper does not
+    # read; failure message/type, testcase classname/name and system-out text survive as values.
+    try:
+        payload = DECLARATION + ET.tostring(doc, encoding="utf-8", xml_declaration=False)
+    except RecursionError:
+        sys.exit(f"collect.sh: {producer}: report nests too deeply to serialise")
+    try:
+        reparsed = ET.fromstring(payload)
+    except ET.ParseError as error:
+        sys.exit(f"collect.sh: {producer}: serialised report is not well-formed XML ({error})")
+    if element_counts(reparsed) != expected:
+        sys.exit(f"collect.sh: {producer}: serialised report changed the element counts")
+    return payload
+
+
+src, out, root = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
+# The runner's checkout path (an absolute path that names a user) becomes the fixed /repo.
+checkout = list(dict.fromkeys([root, os.path.realpath(root)]))
+prefixes = [
+    re.compile(r"(?<![\w.-])" + re.escape(prefix) + r"(?![\w.-])")
+    for prefix in sorted(checkout, key=len, reverse=True)
+]
+residual = [value for value in checkout if value]
+machine = socket.gethostname()
+if len(machine) >= 4 and machine != "host":
+    residual.append(machine)
+home = os.environ.get("HOME", "")
+if home not in ("", "/"):
+    residual.append(home)
 producers = ["xunit", "vitest", "playwright"]
 entries = []
 for producer in producers:
@@ -85,19 +190,18 @@ for producer in producers:
         data = handle.read(MAX_BYTES + 1)
     if len(data) > MAX_BYTES:
         sys.exit(f"collect.sh: {producer}: report exceeds {MAX_BYTES} bytes")
-    try:
-        scanner = expat.ParserCreate()
-        scanner.StartDoctypeDeclHandler = refuse_doctype
-        scanner.Parse(data, True)
-        root = ET.fromstring(data)
-    except expat.ExpatError as error:
-        sys.exit(f"collect.sh: {producer}: not well-formed XML ({error})")
-    except ET.ParseError as error:
-        sys.exit(f"collect.sh: {producer}: not well-formed XML ({error})")
-    suites = [root] if root.tag == "testsuite" else root.findall("testsuite")
-    cases = root.findall(".//testcase")
-    if root.tag not in ("testsuites", "testsuite") or not suites or not cases:
+    doc = parse_report(producer, data)
+    refuse_unsupported_encoding(producer, data)
+    suites = [doc] if doc.tag == "testsuite" else doc.findall("testsuite")
+    cases = doc.findall(".//testcase")
+    if doc.tag not in ("testsuites", "testsuite") or not suites or not cases:
         sys.exit(f"collect.sh: {producer}: no testsuite/testcase in the report")
+    expected = element_counts(doc)
+    scrub_tree(doc, prefixes)
+    refuse_residual(producer, doc, residual)
+    data = serialise(producer, doc, expected)
+    if len(data) > MAX_BYTES:
+        sys.exit(f"collect.sh: {producer}: report exceeds {MAX_BYTES} bytes")
     entries.append({
         "producer": producer,
         "file": name,
