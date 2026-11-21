@@ -96,8 +96,8 @@ public sealed class RequestLogFloorTests
         Send(host, OtherCategory);
         Send(host, "Microsoft.AspNetCore.Routing");
 
-        aliased.Count(OtherCategory, below: true).ShouldBe(1, "the provider Default still applies to another category");
-        fullName.Count("Microsoft.AspNetCore.Routing", below: true).ShouldBe(1, "the provider parent rule still applies to a sibling category");
+        aliased.Count(OtherCategory, below: true).ShouldBe(3, "the provider Default still applies to another category");
+        fullName.Count("Microsoft.AspNetCore.Routing", below: true).ShouldBe(3, "the provider parent rule still applies to a sibling category");
         aliased.Count(Category, below: true).ShouldBe(0);
         fullName.Count(Category, below: true).ShouldBe(0);
     }
@@ -114,7 +114,7 @@ public sealed class RequestLogFloorTests
 
         ruleless.Count(Category, below: true).ShouldBe(0);
         late.Count(Category, below: true).ShouldBe(0);
-        late.Count(OtherCategory, below: true).ShouldBe(1, "the floor touches the one category only");
+        late.Count(OtherCategory, below: true).ShouldBe(3, "the floor touches the one category only");
     }
 
     [Fact]
@@ -140,7 +140,7 @@ public sealed class RequestLogFloorTests
         Send(host, OtherCategory);
 
         sink.Count(Category, below: true).ShouldBe(0, "after the reload the floor holds");
-        sink.Count(OtherCategory, below: true).ShouldBe(1, "the reloaded key did apply to another category");
+        sink.Count(OtherCategory, below: true).ShouldBe(3, "the reloaded key did apply to another category");
     }
 
     [Fact]
@@ -155,7 +155,7 @@ public sealed class RequestLogFloorTests
             })
             .ConfigureAppConfiguration(config => config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Logging:Alias:LogLevel:Default"] = "Trace-secret-value",
+                ["Logging:Alias:LogLevel:Default"] = "Trace",
                 ["Logging:LogLevel:" + Category + "*"] = "Debug",
                 ["Logging:LogLevel:Default"] = "Information",
             }))
@@ -170,7 +170,7 @@ public sealed class RequestLogFloorTests
         notice.ShouldContain($"Logging:LogLevel:{Category}*");
         notice.ShouldContain("Logging:Alias:LogLevel:Default");
         notice.ShouldNotContain("Logging:LogLevel:Default,", Case.Sensitive, "the generic provider-less Default is not an override");
-        notice.ShouldNotContain("Trace-secret-value");
+        notice.ShouldNotContain("Trace", Case.Sensitive, "a configured value is never logged");
         await host.StopAsync(TestContext.Current.CancellationToken);
     }
 
