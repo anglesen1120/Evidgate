@@ -1683,3 +1683,9 @@ Closed by PR #1295 (ff308803): the Authoring read and export delegates authentic
 | Draft provenance number scan allocates before the token bound (03.6.1-T1, S612) | Security review Low: `DraftRules.cs` calls `GetRawText()` per number before the 64-character check, so one oversized token costs a string of about twice the 256 KiB body cap (bounded, once per request). Fix idea: `JsonMarshal.GetRawUtf8Value` and check the span length first. Also: the S612 f3 mutant ran before `ForeignKeyRefusal` was extracted; the final-head FK tests were green but not mutated. | receiver: follow-up Catalog draft lane |
 
 Closed by PR #1302 (b128af40): `DraftBody.RenderedLength` measures the raw UTF-8 span before any string is built; pinned by `DraftNumberRenderingTests.ExceedsNumericRange_OfA200KiBNumberToken_AllocatesNoStringForIt` and `DraftTests.Create_ProvenanceNumberTokenOverTheBound_Is422OnProvenance`; `ForeignKeyRefusal` mutated on the final head (both foreign-key tests red).
+
+## Moved from status-carried.md by S648 (2026-11-22)
+
+| Template vitest load timeouts (S634) | The S634 final `vitest` run (LAN load_max 35, e59b20aa) failed 4 of 6448 by timeout, no assertion failure: fixture-contract-refs-cap.spec "expands a bounded local graph..." (5000 ms) and ui-gallery.a11y.spec x3 (30000 ms). The wave-gate full `vitest` must clear them; a repeat failure there is a real defect. | wave-gate panel |
+
+Closed by S648 (#1305, `c6c2e27f`): the gallery axe scan is split into per-partition tests (slowest 4.1 s on the Mac, LAN round 2 green at load_max 22.44); `fixture-contract-refs-cap.spec` needed no change.
