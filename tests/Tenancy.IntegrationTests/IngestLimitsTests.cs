@@ -12,6 +12,7 @@ using System.Text;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.Modules.Ingestion.Application;
 using Evidgate.Modules.Ingestion.Contracts;
+using Evidgate.Testing;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
@@ -215,7 +216,7 @@ public sealed class IngestLimitsTests
     public async Task rejection_emits_one_counter_and_one_log_line_with_the_request_id()
     {
         await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), planned: 5);
-        var sink = new IngestLogSink();
+        var sink = new CapturingLoggerProvider();
         await using var host = world.Host.WithWebHostBuilder(
             builder => builder.ConfigureTestServices(services => services.AddLogging(logging => logging.AddProvider(sink))));
         using var client = host.CreateClient();
@@ -231,11 +232,18 @@ public sealed class IngestLimitsTests
         answer.Status.ShouldBe(HttpStatusCode.RequestEntityTooLarge, answer.ErrorMessage);
         reasons.ShouldHaveSingleItem().ShouldBe(IngestBatchRejection.EventCount);
 
-        var rejection = sink.Lines.Where(line => line.Contains("event batch rejected", StringComparison.Ordinal)).ToList();
+        var rejection = sink.Entries.Where(entry => entry.Message.Contains("event batch rejected", StringComparison.Ordinal)).ToList();
         rejection.ShouldHaveSingleItem();
-        rejection[0].ShouldContain("req-count-1");
-        rejection[0].ShouldContain(IngestBatchRejection.EventCount);
-        rejection[0].ShouldNotContain("\"events\"");
+
+        // Presence stays on what the old rendering covered (category, message and state pairs), so a value can only
+        // satisfy it when the rejection itself carries it. Absence covers every string a sink could persist.
+        var rendered = string.Join(
+            " | ",
+            rejection[0].State.Prepend(rejection[0].Message).Prepend(rejection[0].Category));
+        rendered.ShouldContain("req-count-1");
+        rendered.ShouldContain(IngestBatchRejection.EventCount);
+        rejection[0].Texts.Prepend(rejection[0].Category)
+            .ShouldAllBe(text => !text.Contains("\"events\"", StringComparison.Ordinal));
         (await EventRowsAsync(world)).ShouldBe(0);
     }
 

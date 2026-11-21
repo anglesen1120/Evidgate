@@ -1526,3 +1526,9 @@ Closed by PR #1250 (merge 664600b5): `DogfoodReportTests.Counting.cs` holds one 
 | Wrong test name cited in plan 08.5.1 (S591) | `plans/features/08-healing-learning/08.5.1-llm-gateway.md:137` cites `InvokeHealingLlm_ConcurrentCalls`; no test of that name exists (searched `git grep` over `tests/` on 81e43293; `InvokeHealingLlm_BudgetExceeded` is in HealingLlmTwoPhaseBudgetTests.cs:34). Pre-existing; correct the cite or add the test | receiver: next 08.5.1 plan lane |
 
 Closed by PR #1252 (merge 06999b01): each plan or doc cite now names the test or range that exists on the wave; the 13.6.1 security_invoker claim is recorded as a new open row.
+
+## Moved from status-carried.md by S621 (2026-11-21)
+
+| Self-test `Texts` fact lacks the state pair (S613) | Low: `CapturingLoggerProviderTests.Texts_CoverEveryPart_AndClearEmptiesTheCapture` (`tests/Catalog.UnitTests/CapturingLoggerProviderTests.cs:92-94`) asserts message, scope and exception text but not that `Texts` yields the state pair; add `texts.ShouldContain("Value=state-marker")`. Dropping state from `Texts` alone would stay green there (the state fact covers `State`, not `Texts`). | receiver: Tech Lead (test infrastructure); recorded owner: Tech Lead |
+
+Closed by PR #1255 (merge 4ee842aa): `Texts_CoverEveryPart_AndClearEmptiesTheCapture` now asserts `Value=state-marker`, and a mutant that drops the state pair from `Texts` turns it red.

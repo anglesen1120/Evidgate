@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using Evidgate.Testing;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -26,10 +27,10 @@ public sealed class EnvelopeLoggingTests
     [Fact]
     public async Task Malformed_Json_Body_Is_A_400_Without_An_Error_Log()
     {
-        var capture = new CaptureLoggerProvider();
+        var capture = new CapturingLoggerProvider();
         await using var factory = NewFactory(capture);
         using var client = factory.CreateClient();
-        var boot = capture.Logs.Count;
+        var boot = capture.Entries.Count;
 
         using var response = await client.PostAsync(
             Evidgate.Testing.TransportProbeStartupFilter.Path,
@@ -38,16 +39,16 @@ public sealed class EnvelopeLoggingTests
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Empty(Problems(capture, boot));
-        Assert.DoesNotContain(capture.Logs, log => log.Text.Contains(BodyCanary, StringComparison.Ordinal));
+        Assert.DoesNotContain(capture.Entries.SelectMany(log => log.Texts), text => text.Contains(BodyCanary, StringComparison.Ordinal));
     }
 
     [Fact]
     public async Task Binding_Failure_Of_A_Minimal_Api_Route_Is_A_400_Without_An_Error_Log()
     {
-        var capture = new CaptureLoggerProvider();
+        var capture = new CapturingLoggerProvider();
         await using var factory = NewFactory(capture);
         using var client = factory.CreateClient();
-        var boot = capture.Logs.Count;
+        var boot = capture.Entries.Count;
 
         using var response = await client.PostAsync(
             BoundRoute,
@@ -56,7 +57,7 @@ public sealed class EnvelopeLoggingTests
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Empty(Problems(capture, boot));
-        Assert.DoesNotContain(capture.Logs, log => log.Text.Contains(BodyCanary, StringComparison.Ordinal));
+        Assert.DoesNotContain(capture.Entries.SelectMany(log => log.Texts), text => text.Contains(BodyCanary, StringComparison.Ordinal));
     }
 
     [Theory]
@@ -64,10 +65,10 @@ public sealed class EnvelopeLoggingTests
     [InlineData(BoomRoute)]
     public async Task Unhandled_Server_Failure_Is_A_500_And_Exactly_One_Error_Log(string route)
     {
-        var capture = new CaptureLoggerProvider();
+        var capture = new CapturingLoggerProvider();
         await using var factory = NewFactory(capture);
         using var client = factory.CreateClient();
-        var boot = capture.Logs.Count;
+        var boot = capture.Entries.Count;
 
         using var response = await client.GetAsync(route, TestContext.Current.CancellationToken);
 
@@ -84,29 +85,30 @@ public sealed class EnvelopeLoggingTests
     [Fact]
     public async Task Explicit_Bad_Request_Keeps_Its_Status_And_Logs_Only_The_Status_At_Debug()
     {
-        var capture = new CaptureLoggerProvider();
+        var capture = new CapturingLoggerProvider();
         await using var factory = NewFactory(capture);
         using var client = factory.CreateClient();
-        var boot = capture.Logs.Count;
+        var boot = capture.Entries.Count;
 
         using var response = await client.GetAsync(TooLargeRoute, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
         Assert.Empty(Problems(capture, boot));
-        var line = Assert.Single(capture.Logs.Skip(boot), log => log.EventId.Id == 1202);
+        var line = Assert.Single(capture.Entries.Skip(boot), log => log.EventId.Id == 1202);
         Assert.Equal(LogLevel.Debug, line.Level);
-        Assert.Contains("413", line.Text, StringComparison.Ordinal);
-        Assert.DoesNotContain(BodyCanary, line.Text, StringComparison.Ordinal);
+        Assert.Contains("413", line.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(line.Texts, text => text.Contains(BodyCanary, StringComparison.Ordinal));
+        Assert.Null(line.Exception);
     }
 
     [Fact]
     public async Task A_Cancelled_Request_Is_Not_Logged_As_An_Error()
     {
-        var capture = new CaptureLoggerProvider();
+        var capture = new CapturingLoggerProvider();
         var signals = new HangSignals();
         await using var factory = NewFactory(capture, signals);
         using var client = factory.CreateClient();
-        var boot = capture.Logs.Count;
+        var boot = capture.Entries.Count;
 
         using var cancel = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var call = Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.GetAsync(HangRoute, cancel.Token));
@@ -121,8 +123,8 @@ public sealed class EnvelopeLoggingTests
     }
 
     /// <summary>Warning-and-above entries written after the host booted (boot itself warns about the disabled isolation check).</summary>
-    private static CapturedLog[] Problems(CaptureLoggerProvider capture, int boot) =>
-        capture.Logs.Skip(boot).Where(log => log.Level >= LogLevel.Warning).ToArray();
+    private static CapturedLog[] Problems(CapturingLoggerProvider capture, int boot) =>
+        capture.Entries.Skip(boot).Where(log => log.Level >= LogLevel.Warning).ToArray();
 
     private sealed class HangSignals
     {
@@ -137,7 +139,7 @@ public sealed class EnvelopeLoggingTests
     private const string BoundRoute = "/v1/test/bound";
     private const string TooLargeRoute = "/v1/test/too-large";
 
-    private static EvidgateApiFactory NewFactory(CaptureLoggerProvider capture, HangSignals? signals = null) =>
+    private static EvidgateApiFactory NewFactory(CapturingLoggerProvider capture, HangSignals? signals = null) =>
         new(
             DeadConnectionString,
             capture,

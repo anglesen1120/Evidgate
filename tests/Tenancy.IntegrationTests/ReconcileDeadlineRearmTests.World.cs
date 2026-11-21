@@ -2,6 +2,7 @@ using System.Text.Json;
 using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.Modules.Orchestrator.Contracts;
+using Evidgate.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -21,7 +22,7 @@ public sealed partial class ReconcileDeadlineRearmTests
     /// production queue mechanism and a <see cref="FakeTimeProvider"/> so a case drives the schedule instead of
     /// waiting. Each case owns its database: the sweeps, the dispatcher and the consumer work through the whole queue.
     /// </summary>
-    private async Task<IngestTestWorld> StartAsync(FakeTimeProvider clock, string database, IngestLogSink? sink = null)
+    private async Task<IngestTestWorld> StartAsync(FakeTimeProvider clock, string database, CapturingLoggerProvider? sink = null)
     {
         var name = new DatabaseNameHolder { Name = database };
 
