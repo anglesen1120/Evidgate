@@ -108,8 +108,31 @@ describe('UiGalleryComponent axe acceptance', () => {
     30_000,
   );
 
+  // The gallery holds ~8.8k elements, ~80% of them in the stacked-records section, and a scan costs
+  // time per element. The root scan is split into three scans whose contexts partition the page:
+  // everything outside the gallery sections, the stacked-records section, and all other sections.
+  const SECTION = 'section[aria-labelledby^="gallery-"]';
+  const STACKED = 'section[aria-labelledby="gallery-stacked-records"]';
+  const OTHERS = `${SECTION}:not([aria-labelledby="gallery-stacked-records"])`;
+  const sections = (root: HTMLElement, selector: string): HTMLElement[] =>
+    Array.from(root.querySelectorAll<HTMLElement>(selector));
+  const partitions: readonly {
+    name: string;
+    context: (root: HTMLElement) => axe.ElementContext;
+  }[] = [
+    {
+      name: 'page outside the sections',
+      context: (root) => ({ include: [root], exclude: sections(root, SECTION) }),
+    },
+    { name: 'stacked records', context: (root) => ({ include: sections(root, STACKED) }) },
+    {
+      name: 'other sections',
+      context: (root) => ({ include: sections(root, OTHERS) }),
+    },
+  ];
+
   it.each(cases)(
-    'has zero WCAG violations: $locale / $theme',
+    'renders every specimen of the gallery: $locale / $theme',
     async ({ locale, theme }) => {
       const { root, dispose } = await mountGallery(locale, theme);
       try {
@@ -117,6 +140,7 @@ describe('UiGalleryComponent axe acceptance', () => {
         // Three fixture specimens plus the column-role specimen in the tables group.
         expect(root.querySelectorAll('app-data-table')).toHaveLength(4);
         expect(root.querySelector('app-waiver-banner time')).not.toBeNull();
+        expect(sections(root, STACKED), 'stacked-records section').toHaveLength(1);
         for (const selector of [
           'app-loading-pattern',
           'app-empty-pattern',
@@ -131,14 +155,32 @@ describe('UiGalleryComponent axe acceptance', () => {
         ]) {
           expect(root.querySelector(selector), selector).not.toBeNull();
         }
-        const result = await axe.run(root, axeOptions);
-        expect(unexceptedLines(result)).toEqual([]);
+        expect(
+          sections(root, OTHERS).length,
+          'sections other than stacked records',
+        ).toBeGreaterThan(20);
       } finally {
         dispose();
       }
     },
     30_000,
   );
+
+  describe.each(partitions)('has zero WCAG violations: $name', ({ context }) => {
+    it.each(cases)(
+      '$locale / $theme',
+      async ({ locale, theme }) => {
+        const { root, dispose } = await mountGallery(locale, theme);
+        try {
+          const result = await axe.run(context(root), axeOptions);
+          expect(unexceptedLines(result)).toEqual([]);
+        } finally {
+          dispose();
+        }
+      },
+      30_000,
+    );
+  });
 
   it.each(cases)(
     'has zero WCAG violations after the reveal opens: $locale / $theme',
@@ -150,7 +192,10 @@ describe('UiGalleryComponent axe acceptance', () => {
         opener?.click();
         await fixture.whenStable();
         expect(root.querySelector('app-connect-step-reveal'), 'reveal opened').not.toBeNull();
-        const revealResult = await axe.run(root, axeOptions);
+        // Opening the reveal replaces only the content of its own section.
+        const revealSection = sections(root, 'section[aria-labelledby="gallery-reveal"]');
+        expect(revealSection).toHaveLength(1);
+        const revealResult = await axe.run({ include: revealSection }, axeOptions);
         expect(unexceptedLines(revealResult)).toEqual([]);
       } finally {
         dispose();
