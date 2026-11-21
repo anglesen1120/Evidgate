@@ -1,94 +1,367 @@
-<testsuites id="" name="" tests="44" failures="0" skipped="0" errors="0" time="50.406319">
-<testsuite name="settings-policy.spec.ts" timestamp="2026-11-05T05:06:42.186Z" hostname="host" tests="32" failures="0" skipped="0" time="43.295" errors="0">
-<testcase name="revision form keeps its field beside the action on desktop (en)" classname="settings-policy.spec.ts" time="1.338">
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites id="" name="" tests="56" failures="6" skipped="0" errors="0" time="74.94065499999999">
+<testsuite name="settings-policy.layout.spec.ts" timestamp="2026-11-21T07:48:32.253Z" hostname="host" tests="12" failures="4" skipped="0" time="21.131" errors="0">
+<testcase name="UUID lookup is bounded at 1024px (en)" classname="settings-policy.layout.spec.ts" time="1.858">
+<system-out>
+
+[[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1024px-en--chrome/test-failed-1.png]]
+
+[[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1024px-en--chrome/error-context.md]]
+
+[[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1024px-en--chrome/trace.zip]]
+
+</system-out>
+<failure message="expect(received).toBe(expected) // Object.is equality" type="expect.toBe">
+  [chrome] › settings-policy.layout.spec.ts:34:9 › UUID lookup is bounded at 1024px (en) ───────────
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      43 |       expect(field.x + field.width).toBeLessThan(action.x);
+      44 |       expect(field.y + field.height).toBeCloseTo(action.y + action.height, 0);
+    &gt; 45 |       expect(await input.evaluate((element) =&gt; element.scrollWidth &lt;= element.clientWidth)).toBe(
+         |                                                                                             ^
+      46 |         true,
+      47 |       );
+      48 |     });
+        at /repo/apps/web/e2e/shell/settings-policy.layout.spec.ts:45:93
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1024px-en--chrome/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1024px-en--chrome/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1024px-en--chrome/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1024px-en--chrome/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+</failure>
 </testcase>
-<testcase name="revision list, head marking, mode chip and diff state (en)" classname="settings-policy.spec.ts" time="1.28">
+<testcase name="UUID lookup is bounded at 1280px (en)" classname="settings-policy.layout.spec.ts" time="1.819">
+<system-out>
+
+[[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1280px-en--chrome/test-failed-1.png]]
+
+[[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1280px-en--chrome/error-context.md]]
+
+[[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1280px-en--chrome/trace.zip]]
+
+</system-out>
+<failure message="expect(received).toBe(expected) // Object.is equality" type="expect.toBe">
+  [chrome] › settings-policy.layout.spec.ts:34:9 › UUID lookup is bounded at 1280px (en) ───────────
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      43 |       expect(field.x + field.width).toBeLessThan(action.x);
+      44 |       expect(field.y + field.height).toBeCloseTo(action.y + action.height, 0);
+    &gt; 45 |       expect(await input.evaluate((element) =&gt; element.scrollWidth &lt;= element.clientWidth)).toBe(
+         |                                                                                             ^
+      46 |         true,
+      47 |       );
+      48 |     });
+        at /repo/apps/web/e2e/shell/settings-policy.layout.spec.ts:45:93
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1280px-en--chrome/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1280px-en--chrome/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1280px-en--chrome/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1280px-en--chrome/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+</failure>
 </testcase>
-<testcase name="two revisions diff in the panel and in the 412 dialog (en)" classname="settings-policy.spec.ts" time="1.68">
+<testcase name="policy labels and lookup fit 320px (en, light)" classname="settings-policy.layout.spec.ts" time="1.894">
 </testcase>
-<testcase name="a revision id that is not a UUID requests nothing (en)" classname="settings-policy.spec.ts" time="1.003">
+<testcase name="policy labels and lookup fit 390px (en, light)" classname="settings-policy.layout.spec.ts" time="1.739">
 </testcase>
-<testcase name="read-only grant offers no publish control (en)" classname="settings-policy.spec.ts" time="0.818">
+<testcase name="policy labels and lookup fit 320px (en, dark)" classname="settings-policy.layout.spec.ts" time="1.823">
 </testcase>
-<testcase name="publish 201: seeded body, confirmation and the reloaded head (en)" classname="settings-policy.spec.ts" time="1.296">
+<testcase name="policy labels and lookup fit 390px (en, dark)" classname="settings-policy.layout.spec.ts" time="1.725">
 </testcase>
-<testcase name="publish 200 unchanged: confirmation without a new revision (en)" classname="settings-policy.spec.ts" time="1.095">
+<testcase name="UUID lookup is bounded at 1024px (vi)" classname="settings-policy.layout.spec.ts" time="1.592">
+<system-out>
+
+[[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1024px-vi--chrome/test-failed-1.png]]
+
+[[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1024px-vi--chrome/error-context.md]]
+
+[[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1024px-vi--chrome/trace.zip]]
+
+</system-out>
+<failure message="expect(received).toBe(expected) // Object.is equality" type="expect.toBe">
+  [chrome] › settings-policy.layout.spec.ts:34:9 › UUID lookup is bounded at 1024px (vi) ───────────
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      43 |       expect(field.x + field.width).toBeLessThan(action.x);
+      44 |       expect(field.y + field.height).toBeCloseTo(action.y + action.height, 0);
+    &gt; 45 |       expect(await input.evaluate((element) =&gt; element.scrollWidth &lt;= element.clientWidth)).toBe(
+         |                                                                                             ^
+      46 |         true,
+      47 |       );
+      48 |     });
+        at /repo/apps/web/e2e/shell/settings-policy.layout.spec.ts:45:93
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1024px-vi--chrome/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1024px-vi--chrome/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1024px-vi--chrome/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1024px-vi--chrome/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+</failure>
 </testcase>
-<testcase name="publish 412: conflict diff, explicit reload, no retry (en)" classname="settings-policy.spec.ts" time="2.245">
+<testcase name="UUID lookup is bounded at 1280px (vi)" classname="settings-policy.layout.spec.ts" time="1.995">
+<system-out>
+
+[[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1280px-vi--chrome/test-failed-1.png]]
+
+[[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1280px-vi--chrome/error-context.md]]
+
+[[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1280px-vi--chrome/trace.zip]]
+
+</system-out>
+<failure message="expect(received).toBe(expected) // Object.is equality" type="expect.toBe">
+  [chrome] › settings-policy.layout.spec.ts:34:9 › UUID lookup is bounded at 1280px (vi) ───────────
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      43 |       expect(field.x + field.width).toBeLessThan(action.x);
+      44 |       expect(field.y + field.height).toBeCloseTo(action.y + action.height, 0);
+    &gt; 45 |       expect(await input.evaluate((element) =&gt; element.scrollWidth &lt;= element.clientWidth)).toBe(
+         |                                                                                             ^
+      46 |         true,
+      47 |       );
+      48 |     });
+        at /repo/apps/web/e2e/shell/settings-policy.layout.spec.ts:45:93
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1280px-vi--chrome/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1280px-vi--chrome/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1280px-vi--chrome/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1280px-vi--chrome/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+</failure>
 </testcase>
-<testcase name="publish 422 unknown field is verbatim (en)" classname="settings-policy.spec.ts" time="0.867">
+<testcase name="policy labels and lookup fit 320px (vi, light)" classname="settings-policy.layout.spec.ts" time="1.812">
 </testcase>
-<testcase name="publish 422 critical case is verbatim (en)" classname="settings-policy.spec.ts" time="0.883">
+<testcase name="policy labels and lookup fit 390px (vi, light)" classname="settings-policy.layout.spec.ts" time="1.687">
 </testcase>
-<testcase name="local refusals send nothing and keep the editor open (en)" classname="settings-policy.spec.ts" time="1.185">
+<testcase name="policy labels and lookup fit 320px (vi, dark)" classname="settings-policy.layout.spec.ts" time="1.597">
 </testcase>
-<testcase name="360px is inspection-only (en)" classname="settings-policy.spec.ts" time="0.789">
-</testcase>
-<testcase name="keyboard publish: Enter opens, trap holds, Escape restores focus (en)" classname="settings-policy.spec.ts" time="0.713">
-</testcase>
-<testcase name="review route refuses missing read grant and foreign org (en)" classname="settings-policy.spec.ts" time="0.877">
-</testcase>
-<testcase name="axe has no violations on list/diff, publish and conflict (en, light)" classname="settings-policy.spec.ts" time="3.485">
-</testcase>
-<testcase name="axe has no violations on list/diff, publish and conflict (en, dark)" classname="settings-policy.spec.ts" time="2.998">
-</testcase>
-<testcase name="revision form keeps its field beside the action on desktop (vi)" classname="settings-policy.spec.ts" time="0.981">
-</testcase>
-<testcase name="revision list, head marking, mode chip and diff state (vi)" classname="settings-policy.spec.ts" time="1.445">
-</testcase>
-<testcase name="two revisions diff in the panel and in the 412 dialog (vi)" classname="settings-policy.spec.ts" time="1.603">
-</testcase>
-<testcase name="a revision id that is not a UUID requests nothing (vi)" classname="settings-policy.spec.ts" time="1.171">
-</testcase>
-<testcase name="read-only grant offers no publish control (vi)" classname="settings-policy.spec.ts" time="1.158">
-</testcase>
-<testcase name="publish 201: seeded body, confirmation and the reloaded head (vi)" classname="settings-policy.spec.ts" time="1.409">
-</testcase>
-<testcase name="publish 200 unchanged: confirmation without a new revision (vi)" classname="settings-policy.spec.ts" time="1.027">
-</testcase>
-<testcase name="publish 412: conflict diff, explicit reload, no retry (vi)" classname="settings-policy.spec.ts" time="2.286">
-</testcase>
-<testcase name="publish 422 unknown field is verbatim (vi)" classname="settings-policy.spec.ts" time="1.133">
-</testcase>
-<testcase name="publish 422 critical case is verbatim (vi)" classname="settings-policy.spec.ts" time="0.9">
-</testcase>
-<testcase name="local refusals send nothing and keep the editor open (vi)" classname="settings-policy.spec.ts" time="1.163">
-</testcase>
-<testcase name="360px is inspection-only (vi)" classname="settings-policy.spec.ts" time="0.747">
-</testcase>
-<testcase name="keyboard publish: Enter opens, trap holds, Escape restores focus (vi)" classname="settings-policy.spec.ts" time="0.781">
-</testcase>
-<testcase name="review route refuses missing read grant and foreign org (vi)" classname="settings-policy.spec.ts" time="0.491">
-</testcase>
-<testcase name="axe has no violations on list/diff, publish and conflict (vi, light)" classname="settings-policy.spec.ts" time="2.209">
-</testcase>
-<testcase name="axe has no violations on list/diff, publish and conflict (vi, dark)" classname="settings-policy.spec.ts" time="2.239">
+<testcase name="policy labels and lookup fit 390px (vi, dark)" classname="settings-policy.layout.spec.ts" time="1.59">
 </testcase>
 </testsuite>
-<testsuite name="settings-policy.summary.spec.ts" timestamp="2026-11-05T05:06:42.186Z" hostname="host" tests="12" failures="0" skipped="0" time="9.268" errors="0">
-<testcase name="policy summary renders the mode and both revisions (en)" classname="settings-policy.summary.spec.ts" time="1.646">
+<testsuite name="settings-policy.spec.ts" timestamp="2026-11-21T07:48:32.253Z" hostname="host" tests="32" failures="2" skipped="0" time="62.742" errors="0">
+<testcase name="revision form keeps its field beside the action on desktop (en)" classname="settings-policy.spec.ts" time="1.861">
+<system-out>
+
+[[ATTACHMENT|test-results/settings-policy-revision-f-72e0f-e-the-action-on-desktop-en--chrome/test-failed-1.png]]
+
+[[ATTACHMENT|test-results/settings-policy-revision-f-72e0f-e-the-action-on-desktop-en--chrome/error-context.md]]
+
+[[ATTACHMENT|test-results/settings-policy-revision-f-72e0f-e-the-action-on-desktop-en--chrome/trace.zip]]
+
+</system-out>
+<failure message="expect(received).toBe(expected) // Object.is equality" type="expect.toBe">
+  [chrome] › settings-policy.spec.ts:73:7 › revision form keeps its field beside the action on desktop (en) 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      89 |         .locator('#policy-revision-id')
+      90 |         .evaluate((input) =&gt; input.scrollWidth &lt;= input.clientWidth),
+    &gt; 91 |     ).toBe(true);
+         |       ^
+      92 |   });
+      93 |   // AC3: the served list, its head marking, the mode chip and the diff panel's own state.
+      94 |   test(`revision list, head marking, mode chip and diff state (${locale})`, async ({ page }) =&gt; {
+        at /repo/apps/web/e2e/shell/settings-policy.spec.ts:91:7
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/settings-policy-revision-f-72e0f-e-the-action-on-desktop-en--chrome/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/settings-policy-revision-f-72e0f-e-the-action-on-desktop-en--chrome/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/settings-policy-revision-f-72e0f-e-the-action-on-desktop-en--chrome/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/settings-policy-revision-f-72e0f-e-the-action-on-desktop-en--chrome/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+</failure>
 </testcase>
-<testcase name="an enforcing activation renders the gating chip (en)" classname="settings-policy.summary.spec.ts" time="1.103">
+<testcase name="revision list, head marking, mode chip and diff state (en)" classname="settings-policy.spec.ts" time="2.417">
 </testcase>
-<testcase name="no activation shows the empty state and keeps the list (en)" classname="settings-policy.summary.spec.ts" time="0.707">
+<testcase name="two revisions diff in the panel and in the 412 dialog (en)" classname="settings-policy.spec.ts" time="2.406">
 </testcase>
-<testcase name="an activation the caller may not read is forbidden, not retryable (en)" classname="settings-policy.summary.spec.ts" time="0.564">
+<testcase name="a revision id that is not a UUID requests nothing (en)" classname="settings-policy.spec.ts" time="1.122">
 </testcase>
-<testcase name="a throttled activation read keeps its retry closed until the wait ends (en)" classname="settings-policy.summary.spec.ts" time="0.791">
+<testcase name="read-only grant offers no publish control (en)" classname="settings-policy.spec.ts" time="1.519">
 </testcase>
-<testcase name="a project with no head revision shows the empty head state (en)" classname="settings-policy.summary.spec.ts" time="0.521">
+<testcase name="publish 201: seeded body, confirmation and the reloaded head (en)" classname="settings-policy.spec.ts" time="2.369">
 </testcase>
-<testcase name="policy summary renders the mode and both revisions (vi)" classname="settings-policy.summary.spec.ts" time="0.813">
+<testcase name="publish 200 unchanged: confirmation without a new revision (en)" classname="settings-policy.spec.ts" time="1.905">
 </testcase>
-<testcase name="an enforcing activation renders the gating chip (vi)" classname="settings-policy.summary.spec.ts" time="0.59">
+<testcase name="publish 412: conflict diff, explicit reload, no retry (en)" classname="settings-policy.spec.ts" time="2.955">
 </testcase>
-<testcase name="no activation shows the empty state and keeps the list (vi)" classname="settings-policy.summary.spec.ts" time="0.73">
+<testcase name="publish 422 unknown field is verbatim (en)" classname="settings-policy.spec.ts" time="1.864">
 </testcase>
-<testcase name="an activation the caller may not read is forbidden, not retryable (vi)" classname="settings-policy.summary.spec.ts" time="0.586">
+<testcase name="publish 422 critical case is verbatim (en)" classname="settings-policy.spec.ts" time="1.653">
 </testcase>
-<testcase name="a throttled activation read keeps its retry closed until the wait ends (vi)" classname="settings-policy.summary.spec.ts" time="0.623">
+<testcase name="local refusals send nothing and keep the editor open (en)" classname="settings-policy.spec.ts" time="1.642">
 </testcase>
-<testcase name="a project with no head revision shows the empty head state (vi)" classname="settings-policy.summary.spec.ts" time="0.594">
+<testcase name="360px is inspection-only (en)" classname="settings-policy.spec.ts" time="1.64">
+</testcase>
+<testcase name="keyboard publish: Enter opens, trap holds, Escape restores focus (en)" classname="settings-policy.spec.ts" time="1.499">
+</testcase>
+<testcase name="review route refuses missing read grant and foreign org (en)" classname="settings-policy.spec.ts" time="0.574">
+</testcase>
+<testcase name="axe has no violations on list/diff, publish and conflict (en, light)" classname="settings-policy.spec.ts" time="3.799">
+</testcase>
+<testcase name="axe has no violations on list/diff, publish and conflict (en, dark)" classname="settings-policy.spec.ts" time="3.844">
+</testcase>
+<testcase name="revision form keeps its field beside the action on desktop (vi)" classname="settings-policy.spec.ts" time="1.3">
+<system-out>
+
+[[ATTACHMENT|test-results/settings-policy-revision-f-a13a7-e-the-action-on-desktop-vi--chrome/test-failed-1.png]]
+
+[[ATTACHMENT|test-results/settings-policy-revision-f-a13a7-e-the-action-on-desktop-vi--chrome/error-context.md]]
+
+[[ATTACHMENT|test-results/settings-policy-revision-f-a13a7-e-the-action-on-desktop-vi--chrome/trace.zip]]
+
+</system-out>
+<failure message="expect(received).toBe(expected) // Object.is equality" type="expect.toBe">
+  [chrome] › settings-policy.spec.ts:73:7 › revision form keeps its field beside the action on desktop (vi) 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      89 |         .locator('#policy-revision-id')
+      90 |         .evaluate((input) =&gt; input.scrollWidth &lt;= input.clientWidth),
+    &gt; 91 |     ).toBe(true);
+         |       ^
+      92 |   });
+      93 |   // AC3: the served list, its head marking, the mode chip and the diff panel's own state.
+      94 |   test(`revision list, head marking, mode chip and diff state (${locale})`, async ({ page }) =&gt; {
+        at /repo/apps/web/e2e/shell/settings-policy.spec.ts:91:7
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/settings-policy-revision-f-a13a7-e-the-action-on-desktop-vi--chrome/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/settings-policy-revision-f-a13a7-e-the-action-on-desktop-vi--chrome/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/settings-policy-revision-f-a13a7-e-the-action-on-desktop-vi--chrome/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/settings-policy-revision-f-a13a7-e-the-action-on-desktop-vi--chrome/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+</failure>
+</testcase>
+<testcase name="revision list, head marking, mode chip and diff state (vi)" classname="settings-policy.spec.ts" time="1.902">
+</testcase>
+<testcase name="two revisions diff in the panel and in the 412 dialog (vi)" classname="settings-policy.spec.ts" time="2.026">
+</testcase>
+<testcase name="a revision id that is not a UUID requests nothing (vi)" classname="settings-policy.spec.ts" time="1.019">
+</testcase>
+<testcase name="read-only grant offers no publish control (vi)" classname="settings-policy.spec.ts" time="1.082">
+</testcase>
+<testcase name="publish 201: seeded body, confirmation and the reloaded head (vi)" classname="settings-policy.spec.ts" time="2.041">
+</testcase>
+<testcase name="publish 200 unchanged: confirmation without a new revision (vi)" classname="settings-policy.spec.ts" time="1.628">
+</testcase>
+<testcase name="publish 412: conflict diff, explicit reload, no retry (vi)" classname="settings-policy.spec.ts" time="2.701">
+</testcase>
+<testcase name="publish 422 unknown field is verbatim (vi)" classname="settings-policy.spec.ts" time="1.55">
+</testcase>
+<testcase name="publish 422 critical case is verbatim (vi)" classname="settings-policy.spec.ts" time="1.477">
+</testcase>
+<testcase name="local refusals send nothing and keep the editor open (vi)" classname="settings-policy.spec.ts" time="1.607">
+</testcase>
+<testcase name="360px is inspection-only (vi)" classname="settings-policy.spec.ts" time="1.551">
+</testcase>
+<testcase name="keyboard publish: Enter opens, trap holds, Escape restores focus (vi)" classname="settings-policy.spec.ts" time="1.531">
+</testcase>
+<testcase name="review route refuses missing read grant and foreign org (vi)" classname="settings-policy.spec.ts" time="0.541">
+</testcase>
+<testcase name="axe has no violations on list/diff, publish and conflict (vi, light)" classname="settings-policy.spec.ts" time="3.886">
+</testcase>
+<testcase name="axe has no violations on list/diff, publish and conflict (vi, dark)" classname="settings-policy.spec.ts" time="3.831">
+</testcase>
+</testsuite>
+<testsuite name="settings-policy.summary.spec.ts" timestamp="2026-11-21T07:48:32.253Z" hostname="host" tests="12" failures="0" skipped="0" time="19.591" errors="0">
+<testcase name="policy summary renders the mode and both revisions (en)" classname="settings-policy.summary.spec.ts" time="2.373">
+</testcase>
+<testcase name="an enforcing activation renders the gating chip (en)" classname="settings-policy.summary.spec.ts" time="1.644">
+</testcase>
+<testcase name="no activation shows the empty state and keeps the list (en)" classname="settings-policy.summary.spec.ts" time="1.51">
+</testcase>
+<testcase name="an activation the caller may not read is forbidden, not retryable (en)" classname="settings-policy.summary.spec.ts" time="1.489">
+</testcase>
+<testcase name="a throttled activation read keeps its retry closed until the wait ends (en)" classname="settings-policy.summary.spec.ts" time="1.579">
+</testcase>
+<testcase name="a project with no head revision shows the empty head state (en)" classname="settings-policy.summary.spec.ts" time="1.462">
+</testcase>
+<testcase name="policy summary renders the mode and both revisions (vi)" classname="settings-policy.summary.spec.ts" time="2.052">
+</testcase>
+<testcase name="an enforcing activation renders the gating chip (vi)" classname="settings-policy.summary.spec.ts" time="1.539">
+</testcase>
+<testcase name="no activation shows the empty state and keeps the list (vi)" classname="settings-policy.summary.spec.ts" time="1.532">
+</testcase>
+<testcase name="an activation the caller may not read is forbidden, not retryable (vi)" classname="settings-policy.summary.spec.ts" time="1.405">
+</testcase>
+<testcase name="a throttled activation read keeps its retry closed until the wait ends (vi)" classname="settings-policy.summary.spec.ts" time="1.539">
+</testcase>
+<testcase name="a project with no head revision shows the empty head state (vi)" classname="settings-policy.summary.spec.ts" time="1.467">
 </testcase>
 </testsuite>
 </testsuites>
