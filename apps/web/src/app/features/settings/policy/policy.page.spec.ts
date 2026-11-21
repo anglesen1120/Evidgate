@@ -165,7 +165,9 @@ describe('PolicyPage', () => {
       expect(input?.classList.contains('font-mono')).toBe(true);
       const field = input?.parentElement;
       expect(field?.classList.contains('w-full')).toBe(true);
-      expect(field?.classList.contains('md:w-[40ch]')).toBe(true);
+      expect(field?.classList.contains('md:w-[40ch]')).toBe(false);
+      expect(input?.classList.contains('md:w-[44ch]')).toBe(true);
+      expect(input?.classList.contains('max-w-full')).toBe(true);
       expect(field?.classList.contains('md:max-w-full')).toBe(true);
       expect(field?.classList.contains('flex-1')).toBe(false);
       expect(field?.classList.contains('max-w-[40ch]')).toBe(false);
