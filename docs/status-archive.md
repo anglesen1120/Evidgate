@@ -1437,3 +1437,9 @@ Superseded by S602 (#1215, merged as e285d443): the UUID field is now sized in i
 | Dogfood own-CI reports partial: 6 Playwright cases fail (S600) | 01.10.1-T1: #1210 (S600, a5d1c3cd) refreshed `fixtures/reports/own-ci` from one LAN run (xunit 86/0 failed, vitest 1/0, playwright 56 tests/6 failed) and `DogfoodReportTests` maps all three with zero discrepancies, so the mapper half and the manifest listing three producers are met. T1.1 and T1.2 remain unmarked; six producer cases still fail, separately from the successful mapper/manifest checks. Plan sub-rows are not marked delivered. | next dogfood lane |
 
 Closed by S606 (#1220, merged as 0127a4ae): one `collect.sh --produce` run on the LAN refreshed all three own-CI reports (xunit 86, vitest 1, playwright 72 testcases, 0 failures each; the fourth Playwright suite is `settings-policy.fallback-font.spec.ts`), `DogfoodReportTests` passed 19 of 19 on the LAN, and the 01.10.1-T1 Note records T1.1 and T1.2 as delivered. Remaining test hardening is the row 'Dogfood report test has no count pins (S606)'.
+
+## Moved from status-carried.md by S607 (2026-11-21)
+
+| Dogfood report test has no count pins (S606) | The report-mapping tests built on `AssertMapsCleanly` in `DogfoodReportTests` compare the mapped counts with the XML itself and pin none, so a committed own-CI report that holds failing cases still passes them (the S600 report did, with 6 failures). The doc comment at `DogfoodReportTests.cs:81` also still says the Playwright report has three suites; it has four since #1220. Open: decide whether the own-CI reports must have zero failures, and fix the comment. | next dogfood lane |
+
+Closed by #1223: the committed own-CI reports are pinned to zero failure/error elements and zero failed or errored mapper cases (`Dogfood_OwnCiReport_HasNoFailingCases`, with built-in negative reports), and the stale suite-count comment is fixed; no testcase totals are pinned.
