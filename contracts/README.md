@@ -149,6 +149,11 @@ Authentication and authorization run before field validation and before `If-Matc
 routes. A body that is not JSON (400), over 256 KiB (413) or carries unstorable text (422) is answered by
 the shared reader before the permission check, so those refusals are visible to an unpermitted caller.
 
+The template registry (03.5.1) is read-only: `GET /v1/templates` is a keyset page on `(created_at, id)`
+with an optional `kind` filter, and `GET /v1/templates/{t}` answers one row with its `conformance_rules`.
+Both require `case:read`. Active built-ins (`org_id IS NULL`) are visible to every member role, plus the
+caller's own org rows; an inactive row, another org's row and an unknown id all answer the same `404 not_found`.
+
 `ETag` is the quoted draft `version`. `PATCH` requires both `If-Match` and `Idempotency-Key`: a missing
 or malformed `If-Match` is `422 request_invalid` with an `If-Match` detail (`required` when absent), a stale
 one is `412 precondition_failed` with the current `version` in `error.details`, and a successful write

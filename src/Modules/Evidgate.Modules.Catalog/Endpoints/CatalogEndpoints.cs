@@ -98,6 +98,8 @@ public static class CatalogEndpoints
 
         group.MapDraftEndpoints();
 
+        group.MapTemplateEndpoints();
+
         group.MapGitRepoBindingEndpoints();
 
         return group;

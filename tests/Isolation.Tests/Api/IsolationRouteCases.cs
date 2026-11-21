@@ -1050,6 +1050,9 @@ public static partial class IsolationRouteCases
         // 03.6.1: two project-scoped routes and the two un-nested draft routes, which resolve the draft's own project
         // before the permission is checked.
         .. DraftCases(),
+
+        // 03.5.1: the two org-level template reads; tenant resolution decides the org, RLS decides the rows.
+        .. TemplateCases(),
     ];
 
     // ---------------------------------------------------------------------------------------------------- helpers
