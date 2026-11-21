@@ -39,6 +39,15 @@ internal static class AuthoringManualCaseEndpoints
     {
         ArgumentNullException.ThrowIfNull(authoring);
 
+        MapManualCaseListRoutes(authoring);
+        MapManualCaseDetailRoute(authoring);
+        MapManualCaseMutationRoutes(authoring);
+        MapManualCaseLinkRoutes(authoring);
+    }
+
+    /// <summary>Routes 12 and 13: the page of cases and the create that allocates a code.</summary>
+    private static void MapManualCaseListRoutes(RouteGroupBuilder authoring)
+    {
         authoring.MapGet("/manual-cases", ListAsync)
             .Produces<ManualCaseListResponse>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status422UnprocessableEntity)
@@ -55,12 +64,20 @@ internal static class AuthoringManualCaseEndpoints
             .Produces(StatusCodes.Status422UnprocessableEntity)
             .Produces(StatusCodes.Status503ServiceUnavailable)
             .WithSummary("Create a manual test case; the code is allocated per 13.1.1 §4 (route 13)");
+    }
 
+    /// <summary>Route 14: one case with its steps.</summary>
+    private static void MapManualCaseDetailRoute(RouteGroupBuilder authoring)
+    {
         authoring.MapGet("/manual-cases/{m}", GetAsync)
             .Produces<ManualCaseDetailDto>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status404NotFound)
             .WithSummary("One manual test case with its steps and an ETag (route 14)");
+    }
 
+    /// <summary>Routes 15-17 and 19: the changes to one case's content, state and parent item.</summary>
+    private static void MapManualCaseMutationRoutes(RouteGroupBuilder authoring)
+    {
         authoring.MapPatch("/manual-cases/{m}", PatchAsync)
             .Accepts<UpdateManualCaseRequest>("application/json")
             .Produces<AuthoringChangeResponse>(StatusCodes.Status200OK)
@@ -92,7 +109,11 @@ internal static class AuthoringManualCaseEndpoints
             .Produces(StatusCodes.Status412PreconditionFailed)
             .Produces(StatusCodes.Status422UnprocessableEntity)
             .WithSummary("Re-parent a manual test case to another item of the project (route 19, AC22)");
+    }
 
+    /// <summary>Routes 20 and 21: the links to live catalog test cases.</summary>
+    private static void MapManualCaseLinkRoutes(RouteGroupBuilder authoring)
+    {
         authoring.MapPost("/manual-cases/{m}/links", LinkAsync)
             .Accepts<LinkManualCaseRequest>("application/json")
             .Produces<LinkManualCaseResponse>(StatusCodes.Status201Created)
