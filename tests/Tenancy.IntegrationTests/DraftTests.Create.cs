@@ -273,42 +273,74 @@ public sealed partial class DraftTests
     }
 
     /// <summary>
-    /// The bound a client can meet is the route's 256 KiB body cap, not the column's 262144 CHECK: <c>content</c> is
-    /// re-serialised from the typed request, so its stored <c>jsonb</c> text is the wire text and never the envelope,
-    /// and the widest shape the contract admits — 200 files with both 512-character members — stores 227011 bytes,
-    /// below both caps. The row therefore counts exactly the text the wire carried, and the next byte is refused by
-    /// the member's own bound rather than by a byte CHECK a body the app accepted could otherwise trip.
+    /// The content bound is reachable, and the column's CHECK counts <c>jsonb::text</c>: the limit itself is stored,
+    /// the next byte is a 422 rather than the 23514 a body the app accepted could otherwise raise.
     /// </summary>
     [Fact]
-    public async Task Create_MaximalContentShape_IsStoredAsItsJsonbText_AndTheNextByteBreaksFieldRules()
+    public async Task Create_ContentJsonbByteBoundary_AcceptsLimitAndRefusesTheNextByte()
     {
         await using var world = await StartAsync();
         var body = Body();
-        var content = MaximalContent();
-        body["content"] = content;
-        var wireContentBytes = Encoding.UTF8.GetByteCount(content.ToJsonString());
+
+        body["content"] = await ContentAtStoredBytesAsync(world, 262_144);
+        Encoding.UTF8
+            .GetByteCount(body.ToJsonString(new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
+            .ShouldBeLessThanOrEqualTo(262_144, "the stored bound is reachable only while the wire body stays under the cap");
 
         var created = await CreateRelaxedAsync(world, body);
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
-        var stored = await StoredAsync<int>(world, created.Id(), "octet_length(content::text)");
-        stored.ShouldBe(wireContentBytes, "the row counts the content's jsonb text, which is the wire text");
-        stored.ShouldBeLessThan(262_144, "the shape stays under the column CHECK the 256 KiB body cap also enforces");
+        (await StoredAsync<int>(world, created.Id(), "octet_length(content::text)")).ShouldBe(262_144);
 
-        var longer = MaximalContent();
-        ((JsonArray)longer["files"]!)[0]!["path"] = new string('a', 513);
-        body["content"] = longer;
-        ShouldNameField(await CreateRelaxedAsync(world, body), "path", "a 513-character path");
+        body["content"] = await ContentAtStoredBytesAsync(world, 262_145);
+        ShouldNameField(await CreateRelaxedAsync(world, body), "content", "262145 stored bytes");
         (await DraftCountAsync(world)).ShouldBe(1);
     }
 
-    /// <summary>200 files, both string members at their 512-character bound, and so the largest content the shape allows.</summary>
-    private static JsonObject MaximalContent()
+    /// <summary>A content whose stored <c>jsonb</c> text is exactly <paramref name="target"/> bytes.</summary>
+    /// <remarks>
+    /// The shape starts at its widest in <em>characters</em> — 200 files, a 512-character path and a 512-character body
+    /// reference — and is then widened, never lengthened: replacing one ASCII character with a two-byte one adds
+    /// exactly one stored byte and one wire byte. The baseline is measured, not assumed: <c>jsonb::text</c> is longer
+    /// than the compact wire text (a space after every <c>:</c> and <c>,</c>, 1200 bytes for this shape), and that is
+    /// the difference between the column's octets and the route's 256 KiB cap.
+    /// </remarks>
+    private async Task<JsonObject> ContentAtStoredBytesAsync(World world, int target)
     {
         var files = Enumerable.Range(0, 200)
             .Select(index => File($"{index:D3}/".PadRight(512, 'a'), bodyRef: new string('b', 512)))
             .ToArray();
+        var remaining = target - await StoredBytesAsync(world, Content(files.Select(file => file.DeepClone()).ToArray()));
+        remaining.ShouldBeGreaterThanOrEqualTo(0, "the widest shape is the baseline the boundary is reached from");
+
+        foreach (var file in files)
+        {
+            var path = Math.Min(remaining, 512);
+            if (path > 0)
+            {
+                file["path"] = Widen(file["path"]!.GetValue<string>(), path);
+                remaining -= path;
+            }
+
+            var bodyRef = Math.Min(remaining, 512);
+            if (bodyRef > 0)
+            {
+                file["body_ref"] = Widen(file["body_ref"]!.GetValue<string>(), bodyRef);
+                remaining -= bodyRef;
+            }
+        }
+
+        remaining.ShouldBe(0, "the shape has room for the requested widening");
         return Content(files);
     }
+
+    /// <summary>Replaces the last <paramref name="take"/> ASCII characters with two-byte ones, keeping the length.</summary>
+    private static string Widen(string value, int take) =>
+        value[..(value.Length - take)] + new string('\u00e9', take);
+
+    private Task<int> StoredBytesAsync(World world, JsonObject content) =>
+        _fixture.ScalarAsync<int>(
+            world.Database,
+            $"select octet_length(({SqlLiteral(content.ToJsonString())})::jsonb::text)");
 
     private static Task<ApiAnswer> CreateRelaxedAsync(World world, JsonObject body) =>
         world.Client.SendRawAsync(
