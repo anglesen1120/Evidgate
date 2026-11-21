@@ -105,4 +105,61 @@ public sealed class YamlSubsetTests
         a["type"]!.GetValue<string>().ShouldBe("object");
         b["type"]!.GetValue<string>().ShouldBe("string");
     }
+
+    /// <summary>An apostrophe inside a plain scalar is literal text, in a mapping value, a flow item and a sequence item.</summary>
+    [Fact]
+    public void Parse_ApostropheInPlainScalar_IsLiteral()
+    {
+        var node = YamlSubset.Parse(
+            "summary: Returns the caller's runs # note\n" +
+            "tags: [don't, 'it''s']\n" +
+            "items:\n" +
+            "  - it's fine\n") as JsonObject;
+
+        node.ShouldNotBeNull();
+        node["summary"]!.GetValue<string>().ShouldBe("Returns the caller's runs");
+        node["tags"]![0]!.GetValue<string>().ShouldBe("don't");
+        node["tags"]![1]!.GetValue<string>().ShouldBe("it's");
+        node["items"]![0]!.GetValue<string>().ShouldBe("it's fine");
+    }
+
+    /// <summary>A quote at the start of a value still opens a quoted scalar; left open it is refused.</summary>
+    [Fact]
+    public void Parse_QuoteOpenedScalarLeftOpen_Refuses()
+    {
+        var exception = Should.Throw<NotSupportedException>(() => YamlSubset.Parse("a: 1\nsummary: 'unterminated\n"));
+
+        exception.Message.ShouldContain("line 2");
+    }
+
+    /// <summary>A flow sequence wrapped over several lines (Prettier output) reads like the single-line form, as a mapping value and a sequence item.</summary>
+    [Fact]
+    public void Parse_MultiLineFlowSequence_Parses()
+    {
+        var node = YamlSubset.Parse(
+            "required: [id,\n" +
+            "  'name', # why\n" +
+            "\n" +
+            "  status]\n" +
+            "list:\n" +
+            "  - [a,\n" +
+            "    b]\n" +
+            "after: 1\n") as JsonObject;
+
+        node.ShouldNotBeNull();
+        node["required"]!.AsArray().Select(n => n!.GetValue<string>()).ShouldBe(["id", "name", "status"]);
+        node["list"]![0]!.AsArray().Count.ShouldBe(2);
+        node["after"]!.GetValue<long>().ShouldBe(1);
+    }
+
+    /// <summary>A flow list that never closes is refused with the line it opened on, not parsed to end of input.</summary>
+    [Fact]
+    public void Parse_UnterminatedMultiLineFlowSequence_Refuses()
+    {
+        var exception = Should.Throw<NotSupportedException>(
+            () => YamlSubset.Parse("required: [a,\n  b\nnext: 1\n"));
+
+        exception.Message.ShouldContain("line 1");
+        exception.Message.ShouldContain("never closed");
+    }
 }
