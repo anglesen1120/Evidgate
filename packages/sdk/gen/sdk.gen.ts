@@ -1657,7 +1657,7 @@ export const updateDraft = <ThrowOnError extends boolean = false>(options: Optio
 /**
  * Cursor page of active templates
  *
- * Active built-ins (`org_id IS NULL`) are visible to every member role, plus the caller's own org rows; an inactive row and another org's row are invisible. Ordered by `(created_at, id)` with an optional kind filter. Authentication and authorization precede query validation: an unknown kind, a malformed cursor or an out-of-range limit is 422 `request_invalid` with the member named.
+ * Active built-ins (`org_id IS NULL`) are visible to every member role, plus the caller's own org rows; an inactive row and another org's row are invisible. Ordered by `(created_at, id)` with optional kind, platform, level and purpose filters. Authentication and authorization precede query validation: an unknown kind, an unknown taxonomy value, a malformed cursor or an out-of-range limit is 422 `request_invalid` with the member named.
  */
 export const listTemplates = <ThrowOnError extends boolean = false>(options?: Options<ListTemplatesData, ThrowOnError>): RequestResult<ListTemplatesResponses, ListTemplatesErrors, ThrowOnError> => (options?.client ?? client).get<ListTemplatesResponses, ListTemplatesErrors, ThrowOnError>({
     security: [{

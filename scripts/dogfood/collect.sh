@@ -17,9 +17,9 @@
 # attribute becomes "host" and this run's checkout path becomes /repo in every attribute value and
 # text node. The residual check reads element names, attribute names and namespace URIs as well as
 # values, text, tail and the document's character data joined in order (one pass, so a name split
-# by child elements is still found), and compares the match form: NFKD (refused when the result is
-# longer than four times the input plus 64, checked after it is built), then Cf, Mn, Me, Cn, DEL,
-# C1 and C0 controls (tab, LF, CR kept), U+2800 and
+# by child elements is still found), and compares the match form: NFKD (refused when a 64 Ki-character
+# chunk of the result is longer than four times the chunk plus 64, checked as each chunk is built),
+# then Cf, Mn, Me, Cn, Co, DEL, C1 and C0 controls (tab, LF, CR kept), U+2800 and
 # Default_Ignorable_Code_Point characters removed, casefold, removed again, never recomposed,
 # raw and after one strict percent-decoding; a malformed escape refuses rather than decoding
 # leniently. A report that still names the machine, its host name (socket.gethostname() or
@@ -82,7 +82,7 @@ if [[ "$PRODUCE" == "1" ]]; then
 fi
 
 python3 - "$SRC" "$OUT" "$ROOT" <<'PY'
-import fnmatch, hashlib, json, os, re, socket, sys, unicodedata, urllib.parse
+import atexit, fnmatch, hashlib, json, os, re, socket, sys, unicodedata, urllib.parse
 import xml.etree.ElementTree as ET
 from xml.parsers import expat
 from pathlib import Path
@@ -151,14 +151,18 @@ def scrub_tree(doc, prefixes):
 
 MALFORMED_PERCENT = re.compile(rb"%(?![0-9A-Fa-f]{2})")
 # Cn is stripped by category so a code point assigned after the Unicode data of this interpreter
-# (or after the ranges below) still cannot hide a name.
-IGNORABLE = frozenset(("Cf", "Mn", "Me", "Cn"))
-SCANNED = [0]  # characters handed to the residual match, printed under EVIDGATE_COLLECT_SCAN_STATS
+# (or after the ranges below) still cannot hide a name; Co (private use) renders as nothing too.
+IGNORABLE = frozenset(("Cf", "Mn", "Me", "Cn", "Co"))
+SCANNED = [0]  # characters handed to match_form for report text, printed under EVIDGATE_COLLECT_SCAN_STATS
+if os.environ.get("EVIDGATE_COLLECT_SCAN_STATS"):
+    atexit.register(lambda: print(f"peak_normalised_chars={PEAK[0]}", file=sys.stderr))
+PEAK = [0]  # longest normalised piece built so far, printed on exit under the same variable
 # Test hook: stop the residual scan once this many characters were handed to it, so a rescan
-# regression fails by count instead of by timeout. Unset in production.
+# regression fails by count instead of by timeout. Unset in production. ASCII digits only (str.isdigit
+# also accepts digits int() rejects), at most 12 of them.
 SCAN_CAP_TEXT = os.environ.get("EVIDGATE_COLLECT_SCAN_CAP", "")
-if SCAN_CAP_TEXT and not SCAN_CAP_TEXT.isdigit():
-    sys.exit("collect.sh: EVIDGATE_COLLECT_SCAN_CAP must be a non-negative integer")
+if SCAN_CAP_TEXT and not re.fullmatch("[0-9]{1,12}", SCAN_CAP_TEXT):
+    sys.exit("collect.sh: EVIDGATE_COLLECT_SCAN_CAP must be 1 to 12 ASCII digits")
 SCAN_CAP = int(SCAN_CAP_TEXT) if SCAN_CAP_TEXT else None
 CHUNK = 1 << 16
 MAX_EXPANSION = 4  # NFKD/NFKC output longer than this multiple of the input (plus slack) is refused
@@ -179,10 +183,17 @@ class ExpansionError(Exception):
 
 
 def normalise(form, text):
-    out = unicodedata.normalize(form, text)
-    if len(out) > MAX_EXPANSION * len(text) + EXPANSION_SLACK:
-        raise ExpansionError(form)
-    return out
+    # Chunked, each piece checked as soon as it is built: the allocation before a refusal is
+    # bounded by the chunk (at most 18 characters per input character), not by the whole report.
+    pieces = []
+    for start in range(0, len(text), CHUNK):
+        chunk = text[start:start + CHUNK]
+        piece = unicodedata.normalize(form, chunk)
+        PEAK[0] = max(PEAK[0], len(piece))
+        if len(piece) > MAX_EXPANSION * len(chunk) + EXPANSION_SLACK:
+            raise ExpansionError(form)
+        pieces.append(piece)
+    return "".join(pieces)
 
 
 def refuse(producer, reason):
@@ -224,13 +235,22 @@ def decode_once(producer, text):
         refuse(producer, "percent escapes do not decode to UTF-8")
 
 
+def report_form(producer, text):
+    # Every report text that reaches match_form is counted here, so a repeated call per value shows
+    # in the count and the cap, not only in the run time.
+    SCANNED[0] += len(text)
+    if SCAN_CAP is not None and SCANNED[0] > SCAN_CAP:
+        refuse(producer, "residual scan passed EVIDGATE_COLLECT_SCAN_CAP characters")
+    return match_form(text)
+
+
 def matching_forms(producer, value):
     # A report can spell a name without spelling it: match the raw text and, only when a percent
     # sign survives normalisation, its once-decoded reading.
-    forms = [match_form(value)]
+    forms = [report_form(producer, value)]
     normalised = normalise("NFKC", value)
     if "%" in normalised:
-        forms.append(match_form(decode_once(producer, normalised)))
+        forms.append(report_form(producer, decode_once(producer, normalised)))
     return list(dict.fromkeys(forms))
 
 
@@ -262,24 +282,26 @@ def identifier_form(value):
         sys.exit(f"collect.sh: host name expands more than {MAX_EXPANSION} times under normalisation; refusing to publish")
 
 
-def refuse_residual(producer, doc, values):
+def refuse_residual(producer, doc, values, labels):
     try:
-        scan_residual(producer, doc, values)
+        scan_residual(producer, doc, values, labels)
     except ExpansionError:
         refuse(producer, f"text expands more than {MAX_EXPANSION} times under normalisation")
 
 
-def scan_residual(producer, doc, values):
+def scan_residual(producer, doc, values, labels):
     # A report that still names this machine fails the run; a leak never reaches the upload set.
-    # Names cannot be scrubbed, so a matching element or attribute name refuses too.
+    # Names cannot be scrubbed, so a matching element or attribute name refuses too. A host label is
+    # matched as a whole word only: it is a fragment of the name, common as a substring of other text.
     expected = {match_form(secret) for secret in values}
     expected.discard("")
+    # A word edge is any neighbour that is not a letter or digit, so an underscore separates words.
+    words = [re.compile(r"(?<![^\W_])" + re.escape(match_form(label)) + r"(?![^\W_])") for label in labels]
 
     def names_machine(value):
-        SCANNED[0] += len(value)
-        if SCAN_CAP is not None and SCANNED[0] > SCAN_CAP:
-            refuse(producer, "residual scan passed EVIDGATE_COLLECT_SCAN_CAP characters")
-        return any(secret in form for form in matching_forms(producer, value) for secret in expected)
+        forms = matching_forms(producer, value)
+        return any(secret in form for form in forms for secret in expected) or any(
+            word.search(form) for form in forms for word in words)
 
     # A child element splits an identifier across text, its own text and a tail.
     if len(doc) and names_machine(text_stream(doc)):
@@ -384,13 +406,16 @@ residual = [value for value in checkout if value]
 # replacement, so setting one cannot switch the other off.
 machines = [socket.gethostname(), os.environ.get("HOSTNAME", "")]
 residual.extend(machine for machine in machines if len(identifier_form(machine)) >= 4 and identifier_form(machine) != "host")
-# The first DNS label of a dotted name is refused too (foo.corp.local also refuses "foo"). Under 3
-# characters or all digits (an IPv4 prefix) is too common to name a machine, so it is skipped.
+# The first DNS label of a dotted name is refused too, as a whole word (server.corp.local refuses the
+# word "server" but not "serverless"), and only when distinctive: 5 or more characters, or a digit or
+# a hyphen in it. Shorter plain labels (app, git) and all-digit ones (an IPv4 prefix) are too common.
+labels = []
 for machine in machines:
     label = machine.split(".")[0] if "." in machine else ""
     folded = identifier_form(label)
-    if len(folded) >= 3 and not folded.isdigit() and folded not in ("host", "localhost"):
-        residual.append(label)
+    distinctive = len(folded) >= 5 or any(char.isdigit() or char == "-" for char in folded)
+    if distinctive and not folded.isdigit() and folded not in ("host", "localhost"):
+        labels.append(label)
 home = os.environ.get("HOME", "")
 if home not in ("", "/"):
     residual.append(home)
@@ -418,7 +443,7 @@ for producer in producers:
         sys.exit(f"collect.sh: {producer}: no testsuite/testcase in the report")
     expected = element_counts(doc)
     scrub_tree(doc, prefixes)
-    refuse_residual(producer, doc, residual)
+    refuse_residual(producer, doc, residual, labels)
     data = serialise(producer, doc, expected)
     if len(data) > MAX_BYTES:
         sys.exit(f"collect.sh: {producer}: report exceeds {MAX_BYTES} bytes")

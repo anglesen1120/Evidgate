@@ -15,7 +15,8 @@ public sealed class TemplateContractTests
     private const string ObjectPath = "/templates/{t}";
 
     /// <summary>The summary view's wire fields, in the DTO's declaration order.</summary>
-    private static readonly string[] SummaryFields = ["id", "kind", "name", "version", "body_ref", "created_at"];
+    private static readonly string[] SummaryFields =
+        ["id", "kind", "platform", "level", "purpose", "name", "version", "body_ref", "created_at"];
 
     [Fact]
     public void Spec_DeclaresTheTwoTemplateReadsAndTheirSchemas()
@@ -41,6 +42,9 @@ public sealed class TemplateContractTests
         spec.Operation(CollectionPath, "get")["x-version"]!.GetValue<string>().ShouldBe("v1");
 
         spec.ParameterRefs(CollectionPath, "get").ShouldContain("TemplateKindFilter");
+        spec.ParameterRefs(CollectionPath, "get").ShouldContain("PlatformFilter");
+        spec.ParameterRefs(CollectionPath, "get").ShouldContain("LevelFilter");
+        spec.ParameterRefs(CollectionPath, "get").ShouldContain("PurposeFilter");
         spec.ParameterRefs(CollectionPath, "get").ShouldContain("Cursor");
         spec.ParameterRefs(CollectionPath, "get").ShouldContain("Limit");
         spec.ParameterRefs(ObjectPath, "get").ShouldContain("TemplateId");
@@ -60,7 +64,7 @@ public sealed class TemplateContractTests
         var spec = OpenApiSpec.Load();
         var summary = spec.Schema("TemplateDto")["properties"]!.AsObject();
         summary.Select(pair => pair.Key).Order(StringComparer.Ordinal)
-            .ShouldBe(SummaryFields.Order(StringComparer.Ordinal), "TemplateDto carries the six summary fields");
+            .ShouldBe(SummaryFields.Order(StringComparer.Ordinal), "TemplateDto carries the summary fields");
         summary["body_ref"]!["pattern"]!.GetValue<string>().ShouldBe("^sha256:[0-9a-f]{64}$");
         summary["name"]!["maxLength"]!.GetValue<long>().ShouldBe(64L);
 

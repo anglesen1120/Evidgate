@@ -8,6 +8,9 @@ namespace Evidgate.Modules.Catalog.Contracts;
 /// </summary>
 /// <param name="Id">Template id.</param>
 /// <param name="Kind"><c>web</c>, <c>api</c>, <c>unit</c> or <c>mobile</c>.</param>
+/// <param name="Platform">What executes a project made from the template: <c>web</c>, <c>api</c>, <c>unit</c> or <c>mobile</c>.</param>
+/// <param name="Level">How much of the system a run covers: <c>unit</c>, <c>integration</c>, <c>e2e</c> or <c>smoke</c>.</param>
+/// <param name="Purpose">Why the template's suites exist: <c>regression</c>, <c>smoke</c>, <c>release_gate</c> or <c>exploratory</c>.</param>
 /// <param name="Name">Registry name inside the kind, e.g. <c>playwright-ts</c>.</param>
 /// <param name="Version">Template release; a newer release is a new row.</param>
 /// <param name="BodyRef"><c>sha256:</c> plus 64 lower-case hex characters addressing the packaged body.</param>
@@ -15,6 +18,9 @@ namespace Evidgate.Modules.Catalog.Contracts;
 public sealed record TemplateDto(
     Guid Id,
     string Kind,
+    string Platform,
+    string Level,
+    string Purpose,
     string Name,
     int Version,
     string BodyRef,
@@ -26,6 +32,9 @@ public sealed record TemplateDto(
 /// </summary>
 /// <param name="Id">Template id.</param>
 /// <param name="Kind"><c>web</c>, <c>api</c>, <c>unit</c> or <c>mobile</c>.</param>
+/// <param name="Platform">What executes a project made from the template.</param>
+/// <param name="Level">How much of the system a run covers.</param>
+/// <param name="Purpose">Why the template's suites exist.</param>
 /// <param name="Name">Registry name inside the kind.</param>
 /// <param name="Version">Template release.</param>
 /// <param name="BodyRef">Content reference of the packaged body.</param>
@@ -34,6 +43,9 @@ public sealed record TemplateDto(
 public sealed record TemplateDetailDto(
     Guid Id,
     string Kind,
+    string Platform,
+    string Level,
+    string Purpose,
     string Name,
     int Version,
     string BodyRef,

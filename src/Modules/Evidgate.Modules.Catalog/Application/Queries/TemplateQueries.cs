@@ -13,9 +13,18 @@ namespace Evidgate.Modules.Catalog.Application.Queries;
 
 /// <summary>Keyset page of the active templates (<c>GET /v1/templates</c>).</summary>
 /// <param name="Kind">Optional kind filter: <c>web</c>, <c>api</c>, <c>unit</c> or <c>mobile</c>.</param>
+/// <param name="Platform">Optional platform filter, canonicalised against the taxonomy catalogue.</param>
+/// <param name="Level">Optional level filter, canonicalised against the taxonomy catalogue.</param>
+/// <param name="Purpose">Optional purpose filter, canonicalised against the taxonomy catalogue.</param>
 /// <param name="Cursor">The opaque cursor of the previous page, or null.</param>
 /// <param name="Limit">The raw <c>limit</c> query value, parsed here so an unauthorized caller never learns its bound.</param>
-internal sealed record ListTemplatesQuery(string? Kind, string? Cursor, string? Limit)
+internal sealed record ListTemplatesQuery(
+    string? Kind,
+    string? Platform,
+    string? Level,
+    string? Purpose,
+    string? Cursor,
+    string? Limit)
     : IQuery<Result<TemplateListResponse>>;
 
 /// <summary>
@@ -34,7 +43,7 @@ internal sealed class ListTemplatesQueryHandler(ITenantDb db)
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Catalog, nameof(ListTemplatesQuery));
 
-        if (InvalidFilter(query, out var limit) is { } filterError)
+        if (InvalidFilter(query, out var limit, out var platform, out var level, out var purpose) is { } filterError)
         {
             return Result.Failure<TemplateListResponse>(filterError);
         }
@@ -44,7 +53,7 @@ internal sealed class ListTemplatesQueryHandler(ITenantDb db)
         {
             rows = await db.QueryAsync<TemplateRow>(
                 TemplateReadSql.TemplatesFirstPage,
-                new { kind = query.Kind, limit = limit + 1 },
+                new { kind = query.Kind, platform, level, purpose, limit = limit + 1 },
                 cancellationToken).ConfigureAwait(false);
         }
         else
@@ -61,6 +70,9 @@ internal sealed class ListTemplatesQueryHandler(ITenantDb db)
                 new
                 {
                     kind = query.Kind,
+                    platform,
+                    level,
+                    purpose,
                     cursor_created_at = cursorCreatedAt,
                     cursor_id = cursorId,
                     limit = limit + 1,
@@ -78,22 +90,39 @@ internal sealed class ListTemplatesQueryHandler(ITenantDb db)
 
     /// <summary>
     /// The query members a caller can fix, validated inside the handler so the pipeline's authorization stage answers
-    /// first: an unknown kind and an out-of-range page size are both the 422 the contract documents.
+    /// first: an unknown kind, an unknown taxonomy value and an out-of-range page size are all the 422 the contract documents.
     /// </summary>
     /// <param name="query">The list query.</param>
     /// <param name="limit">The page size, the default when absent.</param>
-    private static Error? InvalidFilter(ListTemplatesQuery query, out int limit)
+    /// <param name="platform">The canonical platform filter, or null.</param>
+    /// <param name="level">The canonical level filter, or null.</param>
+    /// <param name="purpose">The canonical purpose filter, or null.</param>
+    private static Error? InvalidFilter(
+        ListTemplatesQuery query,
+        out int limit,
+        out string? platform,
+        out string? level,
+        out string? purpose)
     {
         if (CatalogPreconditions.Limit(query.Limit, CatalogPreconditions.DefaultListLimit, CatalogPreconditions.MaxListLimit, out limit) is { } limitError)
         {
+            platform = null;
+            level = null;
+            purpose = null;
             return limitError;
         }
 
-        return query.Kind is not null && !Kinds.Contains(query.Kind, StringComparer.Ordinal)
-            ? Error.Invalid(
+        if (query.Kind is not null && !Kinds.Contains(query.Kind, StringComparer.Ordinal))
+        {
+            platform = null;
+            level = null;
+            purpose = null;
+            return Error.Invalid(
                 "kind must be one of web, api, unit, mobile",
-                [new ErrorDetail("kind", "invalid")])
-            : null;
+                [new ErrorDetail("kind", "invalid")]);
+        }
+
+        return CatalogPreconditions.TaxonomyFilters(query.Platform, query.Level, query.Purpose, out platform, out level, out purpose);
     }
 }
 

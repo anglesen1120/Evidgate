@@ -7,15 +7,18 @@ namespace Evidgate.Modules.Catalog.Infrastructure.Persistence;
 internal static class TemplateReadSql
 {
     private const string TemplateColumns = """
-               t.id, t.kind, t.name, t.version, t.body_ref, t.created_at
+               t.id, t.kind, t.platform, t.level, t.purpose, t.name, t.version, t.body_ref, t.created_at
         """;
 
-    /// <summary>First page of the active templates; a null kind is every kind.</summary>
+    /// <summary>First page of the active templates; a null filter is every value.</summary>
     internal const string TemplatesFirstPage = $"""
         select {TemplateColumns}
           from public.template t
          where t.active
            and (@kind::text is null or t.kind = @kind)
+           and (@platform::text is null or t.platform = @platform)
+           and (@level::text is null or t.level = @level)
+           and (@purpose::text is null or t.purpose = @purpose)
          order by t.created_at,
                   t.id
          limit @limit
@@ -26,6 +29,9 @@ internal static class TemplateReadSql
           from public.template t
          where t.active
            and (@kind::text is null or t.kind = @kind)
+           and (@platform::text is null or t.platform = @platform)
+           and (@level::text is null or t.level = @level)
+           and (@purpose::text is null or t.purpose = @purpose)
            and (t.created_at, t.id) > (@cursor_created_at::timestamptz, @cursor_id::uuid)
          order by t.created_at,
                   t.id
@@ -37,7 +43,7 @@ internal static class TemplateReadSql
     /// row, so all three answer the same 404.
     /// </summary>
     internal const string TemplateById = """
-        select t.id, t.kind, t.name, t.version, t.body_ref,
+        select t.id, t.kind, t.platform, t.level, t.purpose, t.name, t.version, t.body_ref,
                t.conformance_rules::text as conformance_rules, t.created_at
           from public.template t
          where t.id = @template_id
@@ -49,19 +55,25 @@ internal static class TemplateReadSql
 internal sealed record TemplateRow(
     Guid Id,
     string Kind,
+    string Platform,
+    string Level,
+    string Purpose,
     string Name,
     int Version,
     string BodyRef,
     DateTimeOffset CreatedAt)
 {
     /// <summary>The wire shape of the row.</summary>
-    internal TemplateDto ToDto() => new(Id, Kind, Name, Version, BodyRef, CreatedAt);
+    internal TemplateDto ToDto() => new(Id, Kind, Platform, Level, Purpose, Name, Version, BodyRef, CreatedAt);
 }
 
 /// <summary>One detail row: the summary plus the stored rules document as text.</summary>
 internal sealed record TemplateDetailRow(
     Guid Id,
     string Kind,
+    string Platform,
+    string Level,
+    string Purpose,
     string Name,
     int Version,
     string BodyRef,
@@ -69,7 +81,8 @@ internal sealed record TemplateDetailRow(
     DateTimeOffset CreatedAt)
 {
     /// <summary>The wire shape of the row, with the rules decoded once into an element.</summary>
-    internal TemplateDetailDto ToDto() => new(Id, Kind, Name, Version, BodyRef, ReadRules(ConformanceRules), CreatedAt);
+    internal TemplateDetailDto ToDto() =>
+        new(Id, Kind, Platform, Level, Purpose, Name, Version, BodyRef, ReadRules(ConformanceRules), CreatedAt);
 
     /// <summary>
     /// The CHECK limits nesting to 32 levels, well under the parser's 64-level limit.
