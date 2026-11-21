@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
@@ -9,6 +8,7 @@ using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.Modules.Evidence.Domain;
+using Evidgate.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -141,8 +141,8 @@ public sealed class SecretScanConsumerTests(
         var rows = await fixture.ScalarAsync<string>(world.Database,
             $"select string_agg(row_to_json(e)::text, ',') from public.masking_event e where artifact_id='{artifact:D}'");
         rows.ShouldNotContain(PlantedKey);
-        world.Logs.Messages.ShouldNotBeEmpty();
-        string.Join('\n', world.Logs.Messages).ShouldNotContain(PlantedKey);
+        world.Logs.Entries.ShouldNotBeEmpty();
+        world.Logs.Entries.SelectMany(entry => entry.Texts).ShouldAllBe(text => !text.Contains(PlantedKey, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -220,7 +220,7 @@ public sealed class SecretScanConsumerTests(
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(setup, user, Unique.Slug("scan"));
         var project = await CreateProjectAsync(setup, user, org, Unique.Slug("scan"));
-        var logs = new CaptureLogs();
+        var logs = new CapturingLoggerProvider();
         // Unpooled: the log sink and the task consumer wiring are this test's own.
         var host = TenancyApiFactory.WithPrincipal(fixture.AppConnectionString(database), org, project,
             RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: "scan-test"),
@@ -281,23 +281,8 @@ public sealed class SecretScanConsumerTests(
     private Task<long> EventCountAsync(World world, Guid artifact) => fixture.ScalarAsync<long>(world.Database,
         $"select count(*) from public.masking_event where artifact_id='{artifact:D}'");
 
-    private sealed record World(TenancyApiFactory Host, string Database, Guid Org, Guid Project, Guid Run, CaptureLogs Logs) : IAsyncDisposable
+    private sealed record World(TenancyApiFactory Host, string Database, Guid Org, Guid Project, Guid Run, CapturingLoggerProvider Logs) : IAsyncDisposable
     {
         public ValueTask DisposeAsync() => Host.DisposeAsync();
-    }
-
-    private sealed class CaptureLogs : ILoggerProvider
-    {
-        public ConcurrentQueue<string> Messages { get; } = new();
-        public ILogger CreateLogger(string categoryName) => new CaptureLogger(Messages);
-        public void Dispose() { }
-    }
-
-    private sealed class CaptureLogger(ConcurrentQueue<string> messages) : ILogger
-    {
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-        public bool IsEnabled(LogLevel logLevel) => true;
-        public void Log<TState>(LogLevel level, EventId id, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-            messages.Enqueue(formatter(state, exception));
     }
 }

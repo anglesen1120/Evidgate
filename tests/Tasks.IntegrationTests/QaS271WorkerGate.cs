@@ -1,7 +1,7 @@
-using System.Collections.Concurrent;
 using System.Globalization;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Usage.Contracts;
+using Evidgate.Testing;
 using Evidgate.Worker;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -30,7 +30,7 @@ public sealed class QaS271WorkerGate(PostgresTasksFixture fixture)
             insert into public.quota_counter (id, org_id, project_id, period, metric, used, quota_limit)
             values (uuidv7(), @org, @project, to_char(now() at time zone 'UTC', 'YYYY-MM'), 'results', 1, 1)
             """, ("org", org), ("project", project));
-        var logger = new NoticeProvider();
+        var logger = new CapturingLoggerProvider();
         var builder = WorkerHost.CreateBuilder(
         [
             $"--EVIDGATE:Database:ConnectionString={fixture.AppConnectionString(database)}",
@@ -44,10 +44,11 @@ public sealed class QaS271WorkerGate(PostgresTasksFixture fixture)
         var notice = host.Services.GetServices<IHostedService>().Single(service =>
             service.GetType().Name == "QuotaGateStartupNotice");
         await notice.StartAsync(TestContext.Current.CancellationToken);
-        var entry = logger.Entries.ShouldHaveSingleItem();
+        var notices = logger.Entries.Where(line => line.EventId.Id is 2475 or 2476).ToList();
+        var entry = notices.ShouldHaveSingleItem();
         entry.Level.ShouldBe(enabled ? LogLevel.Information : LogLevel.Warning);
-        entry.Id.ShouldBe(enabled ? 2475 : 2476);
-        logger.Entries.Count(line => line.Level == LogLevel.Warning).ShouldBe(enabled ? 0 : 1);
+        entry.EventId.Id.ShouldBe(enabled ? 2475 : 2476);
+        notices.Count(line => line.Level == LogLevel.Warning).ShouldBe(enabled ? 0 : 1);
         if (!enabled)
         {
             entry.Message.ShouldContain("Api");
@@ -66,34 +67,6 @@ public sealed class QaS271WorkerGate(PostgresTasksFixture fixture)
         if (enabled)
         {
             answer.Period.ShouldNotBeNull("the gate names the month it decided in");
-        }
-    }
-
-    private sealed class NoticeProvider : ILoggerProvider
-    {
-        internal ConcurrentQueue<(LogLevel Level, int Id, string Message)> Entries { get; } = new();
-
-        public ILogger CreateLogger(string categoryName) => new NoticeLogger(Entries);
-
-        public void Dispose()
-        {
-        }
-    }
-
-    private sealed class NoticeLogger(ConcurrentQueue<(LogLevel Level, int Id, string Message)> entries) : ILogger
-    {
-        public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
-            Func<TState, Exception?, string> formatter)
-        {
-            if (eventId.Id is 2475 or 2476)
-            {
-                entries.Enqueue((logLevel, eventId.Id, formatter(state, exception)));
-            }
         }
     }
 }

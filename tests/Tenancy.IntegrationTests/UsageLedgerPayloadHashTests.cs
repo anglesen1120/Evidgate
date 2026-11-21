@@ -9,6 +9,7 @@ using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Usage.Contracts;
 using Evidgate.Modules.Usage.Domain;
+using Evidgate.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shouldly;
@@ -50,7 +51,7 @@ public sealed partial class UsageLedgerPayloadHashTests : IClassFixture<TenancyH
         TenancyApiFactory Api,
         HttpClient Client,
         TenancyApiFactory Commands,
-        ConflictLogSink Log,
+        CapturingLoggerProvider Log,
         string Database,
         Guid User,
         Guid Org,
@@ -77,7 +78,7 @@ public sealed partial class UsageLedgerPayloadHashTests : IClassFixture<TenancyH
 
         // The write path's host, with a sink so a conflict's log line and level can be read back.
         // Unpooled: the sink is per test, so the host that carries it cannot be shared.
-        var log = new ConflictLogSink();
+        var log = new CapturingLoggerProvider();
         var commands = TenancyApiFactory.GrantAll(
             connectionString,
             services => services.AddSingleton<ILoggerProvider>(log));
