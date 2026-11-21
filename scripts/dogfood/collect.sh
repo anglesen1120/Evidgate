@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Assembles Evidgate's own CI test reports in the shape a customer uploads: one JUnit XML file per
 # producer (xUnit v3, Vitest, Playwright) plus manifest.json listing each file with its sha256 and
-# counts. Nothing is produced unless --produce is passed, so the gate's output and timings are
+# counts. No producer runs unless --produce is passed, so the gate's output and timings are
 # unchanged; the producers' reporter switches below are the same ones the runners already document.
 #
 #   scripts/dogfood/collect.sh [--produce] [--src DIR] [--out DIR]
@@ -176,7 +176,7 @@ prefixes = [
 ]
 residual = [value for value in checkout if value]
 machine = socket.gethostname()
-if len(machine) >= 4 and machine != "host":
+if len(machine) >= 4 and machine.casefold() != "host":
     residual.append(machine)
 home = os.environ.get("HOME", "")
 if home not in ("", "/"):
