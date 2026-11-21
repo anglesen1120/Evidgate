@@ -75,10 +75,37 @@ public sealed partial class TemplateTests
         await SeedAsync(world, builtIn: true, name: "playwright-ts");
         var orgRow = await SeedAsync(world, org: world.Org, name: "mine");
 
-        var error = await OwnerErrorAsync(
-            world, "update public.template set name = 'playwright-ts' where id = @id", ("id", orgRow));
+        const string Rename = "update public.template set name = @name where id = @id";
+
+        (await OwnerErrorAsync(world, Rename, ("id", orgRow), ("name", "mine-renamed")))
+            .ShouldBeNull("a rename onto an unused key is accepted");
+
+        var error = await OwnerErrorAsync(world, Rename, ("id", orgRow), ("name", "playwright-ts"));
         error.ShouldNotBeNull("a rename onto a built-in key is the same reuse as an insert");
-        error!.ConstraintName.ShouldBe("template_key_reuse");
+        error!.SqlState.ShouldBe("23505");
+        error.ConstraintName.ShouldBe("template_key_reuse");
+        (await _fixture.ScalarAsync<string>(world.Database, $"select name from public.template where id = '{orgRow}'"))
+            .ShouldBe("mine-renamed", "the refused update leaves the row as it was");
+    }
+
+    [Fact]
+    public async Task Template_ChangingAKeyColumnOrTheOwner_IsCheckedAgainstTheOtherSide()
+    {
+        await using var world = await StartAsync();
+        await SeedAsync(world, builtIn: true, name: "taken");
+        var sole = await SeedAsync(world, org: world.Org, name: "promote-me");
+        var otherKind = await SeedAsync(world, org: world.Org, name: "taken", kind: "api");
+
+        (await OwnerErrorAsync(world, "update public.template set org_id = null where id = @id", ("id", sole)))
+            .ShouldBeNull("promoting the only row for a key leaves no second row with it");
+
+        var kindOnly = await OwnerErrorAsync(world, "update public.template set kind = 'web' where id = @id", ("id", otherKind));
+        kindOnly.ShouldNotBeNull("a kind change onto a built-in key is refused");
+        kindOnly!.ConstraintName.ShouldBe("template_key_reuse");
+
+        var versionOnly = await OwnerErrorAsync(
+            world, "update public.template set version = 2 where id = @id", ("id", otherKind));
+        versionOnly.ShouldBeNull("a version change onto an unused key is accepted");
     }
 
     [Fact]
