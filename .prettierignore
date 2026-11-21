@@ -70,6 +70,6 @@ fixtures/threat-model/negative/non-table-line-in-table.md
 apps/web/test-results
 apps/web/playwright-report
 
-# Byte-asserted conformance fixtures: the rule tests and body_ref compare them, so they are never
-# reformatted.
+# Byte-asserted conformance fixtures: the conformance rule tests read these bytes and assert
+# verdicts, so they are never reformatted.
 fixtures/template-conformance/**
