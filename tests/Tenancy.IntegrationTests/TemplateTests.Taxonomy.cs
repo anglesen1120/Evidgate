@@ -31,6 +31,25 @@ public sealed partial class TemplateTests
         error.ConstraintName.ShouldBe($"template_{field}_check");
     }
 
+    [Theory]
+    [InlineData("platform", "web")]
+    [InlineData("level", "e2e")]
+    [InlineData("purpose", "regression")]
+    public async Task Template_NullTaxonomy_IsRefusedByDatabase(string field, string valid)
+    {
+        await using var world = await StartAsync();
+        (await TaxonomyErrorAsync(world, field, valid))
+            .ShouldBeNull("the same insert with a catalogue value succeeds");
+
+        var error = await OwnerErrorAsync(world, TaxonomyInsertSql,
+            ("platform", field == "platform" ? null : "web"),
+            ("level", field == "level" ? null : "e2e"),
+            ("purpose", field == "purpose" ? null : "regression"));
+        error.ShouldNotBeNull();
+        error.SqlState.ShouldBe("23502");
+        error.ColumnName.ShouldBe(field);
+    }
+
     [Fact]
     public async Task Template_TaxonomyDefaults_AreReturnedByListAndDetail()
     {

@@ -16,16 +16,16 @@
 -- owner role's `template_owner_backfill` policy allows the update (`for all ... using (true)`); `evidgate_app` keeps
 -- SELECT only, its grants are unchanged, and it can never rewrite a template row.
 --
--- INDEX: none added. The registry is a small catalogue (built-ins plus an org's own rows) and the list already narrows
--- on `kind` with `template_kind_active`; three extra equality predicates over a short table do not justify another
--- index. Revisit only if the row count or the filtered list becomes a measured hotspot (00 §5.7 P4).
+-- INDEX: `template_taxonomy_idx` serves the list's `(platform, level, purpose)` equality filters. Neither existing
+-- index carries those columns (`template_kind_active` is `(kind, active)`, `template_created_id_idx` is
+-- `(created_at, id)`), so neither can narrow a taxonomy-filtered page.
 --
 -- LOCKS: one DDL pass over an existing catalogue table; `lock_timeout` bounds its wait. Deploy before a client sends
 -- the filters or reads the new members. Rollback: drop the three constraints and columns; no row loses data the
 -- catalogue cannot re-derive from the version it lands on.
 --
 -- Idempotent in the shape the README's file contract allows: `add column if not exists`, `drop constraint if exists`
--- before every `add constraint`, and a backfill of one fixed id.
+-- before every `add constraint`, `create index if not exists`, and a backfill of one fixed id.
 
 set local lock_timeout = '5s';
 
@@ -52,6 +52,8 @@ alter table public.template
   drop constraint if exists template_purpose_check;
 alter table public.template
   add constraint template_purpose_check check (purpose in ('regression', 'smoke', 'release_gate', 'exploratory'));
+
+create index if not exists template_taxonomy_idx on public.template (platform, level, purpose);
 
 update public.template
    set platform = 'web',
