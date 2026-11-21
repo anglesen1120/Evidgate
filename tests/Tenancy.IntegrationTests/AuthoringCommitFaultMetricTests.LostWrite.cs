@@ -7,8 +7,8 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 // Fault injection: the two refusals only a lost write reaches (the AI settings unique-version loss and the apply flip
-// that moves fewer rows than it was handed) are driven by test-owned triggers in the world's own database. Each
-// trigger counts its firing, so a refusal reached through an earlier branch cannot satisfy the test.
+// that moves fewer rows than it was handed) are driven by test-owned triggers. Each trigger counts its firing in a
+// sequence, which a rollback does not undo, so a refusal reached through an earlier branch cannot satisfy the test.
 public sealed partial class AuthoringCommitFaultMetricTests
 {
     private const string CompetitorHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
@@ -27,12 +27,11 @@ public sealed partial class AuthoringCommitFaultMetricTests
             refused.Status.ShouldBe(HttpStatusCode.PreconditionFailed, refused.ErrorMessage);
             AiSettingsCalls.Details(refused).ShouldBe([("version", "1")]);
             capture.Taken.ShouldBe([$"{EvidgateTelemetry.AiSettingsWriteMetricName}|1|outcome=stale"]);
-            (await fixture.ScalarAsync<long>(world.Database, "select count(*) from public.fault_fired")).ShouldBe(1);
+            (await fixture.ScalarAsync<long>(world.Database, "select case when is_called then last_value else 0 end from public.fault_fired")).ShouldBe(1);
 
-            // The trigger's competitor is the only row for version 1; the request's own content is not stored.
-            (await CountAsync(world, "project_ai_settings", "version_no = 1")).ShouldBe(1);
-            (await CountAsync(world, "project_ai_settings", $"version_no = 1 and content_hash = '{CompetitorHash}'")).ShouldBe(1);
-            (await AiSettingsCalls.SettingsCountAsync(fixture, world)).ShouldBe(1);
+            // The competitor's row lived in the refused transaction, so nothing at all is stored: the head the 412
+            // named (version 1) can only have been the trigger's row, and it rolled back with the request.
+            (await AiSettingsCalls.SettingsCountAsync(fixture, world)).ShouldBe(0);
             (await AiSettingsCalls.AuditCountAsync(fixture, world)).ShouldBe(0);
         }
         finally
@@ -59,13 +58,19 @@ public sealed partial class AuthoringCommitFaultMetricTests
             refused.ErrorCode.ShouldBe("invalid_transition");
             AiSettingsCalls.Details(refused).ShouldBe([("/change_ids", "change_not_pending")]);
             capture.Taken.ShouldBe([$"{EvidgateTelemetry.AuthoringChangeApplyMetricName}|1|outcome=conflict"]);
-            (await fixture.ScalarAsync<long>(world.Database, "select count(*) from public.fault_fired")).ShouldBe(1);
+            (await fixture.ScalarAsync<long>(world.Database, "select case when is_called then last_value else 0 end from public.fault_fired")).ShouldBe(1);
 
             // Every change is still pending and the version append of the same request rolled back.
             (await CountAsync(world, "authoring_change", "state <> 'pending' or applied_batch_id is not null")).ShouldBe(0);
             (await CountAsync(world, "authoring_change", $"id = '{change}' and state = 'pending'")).ShouldBe(1);
             (await CountAsync(world, "authoring_version", VersionPredicate(item, 2))).ShouldBe(0);
             (await CountAsync(world, "checklist_item", $"id = '{item}' and deleted_at is null and version = 1")).ShouldBe(1);
+
+            // Control: the same selection applies once the flip is no longer skipped.
+            await DisarmLostWriteFaultsAsync(world);
+            var control = await ApplyAsync(world, item, change, NewKey());
+            control.Status.ShouldBe(HttpStatusCode.OK, control.ErrorMessage);
+            (await CountAsync(world, "authoring_change", $"id = '{change}' and state = 'applied'")).ShouldBe(1);
         }
         finally
         {
@@ -78,14 +83,14 @@ public sealed partial class AuthoringCommitFaultMetricTests
     private Task ArmCompetingInsertAsync(AiSettingsCalls.World world) =>
         fixture.ExecuteAsync(world.Database, $"""
             drop function if exists public.ai_settings_lost_write_fn() cascade;
-            drop table if exists public.fault_fired;
-            create table public.fault_fired (n int not null);
+            drop sequence if exists public.fault_fired;
+            create sequence public.fault_fired;
             create function public.ai_settings_lost_write_fn() returns trigger
               language plpgsql security definer set search_path = '' as $fault$
             declare competitor public.project_ai_settings;
             begin
               if pg_trigger_depth() = 1 then
-                insert into public.fault_fired values (1);
+                perform nextval('public.fault_fired');
                 competitor := new;
                 competitor.id := gen_random_uuid();
                 competitor.content_hash := '{CompetitorHash}';
@@ -102,13 +107,13 @@ public sealed partial class AuthoringCommitFaultMetricTests
     private Task ArmSkippedFlipAsync(AiSettingsCalls.World world) =>
         fixture.ExecuteAsync(world.Database, """
             drop function if exists public.authoring_flip_skip_fn() cascade;
-            drop table if exists public.fault_fired;
-            create table public.fault_fired (n int not null);
+            drop sequence if exists public.fault_fired;
+            create sequence public.fault_fired;
             create function public.authoring_flip_skip_fn() returns trigger
               language plpgsql security definer set search_path = '' as $fault$
             begin
               if old.state = 'pending' and new.state = 'applied' then
-                insert into public.fault_fired values (1);
+                perform nextval('public.fault_fired');
                 return null;
               end if;
               return new;
@@ -121,6 +126,6 @@ public sealed partial class AuthoringCommitFaultMetricTests
         fixture.ExecuteAsync(world.Database, """
             drop function if exists public.ai_settings_lost_write_fn() cascade;
             drop function if exists public.authoring_flip_skip_fn() cascade;
-            drop table if exists public.fault_fired;
+            drop sequence if exists public.fault_fired;
             """);
 }
