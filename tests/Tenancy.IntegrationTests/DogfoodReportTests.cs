@@ -82,23 +82,6 @@ public sealed partial class DogfoodReportTests
     [Fact]
     public void Dogfood_PlaywrightReport_Parses() => AssertMapsCleanly("playwright");
 
-    private static void AssertMapsCleanly(string producer)
-    {
-        var xml = File.ReadAllText(Path.Combine(TestData, producer + ".junit.xml"));
-        var expected = System.Text.RegularExpressions.Regex.Count(xml, "<testcase[ >]");
-
-        var result = PytestJUnitMapperReplay.Map(xml);
-
-        result.Discrepancies.ShouldBeEmpty();
-        result.Cases.Count.ShouldBe(expected);
-        result.Cases.Count.ShouldBeGreaterThan(0);
-        result.Declared.Tests.ShouldBe(expected);
-        var failing = System.Text.RegularExpressions.Regex.Count(xml, "<failure[ >]");
-        result.Declared.Failures.ShouldBe(failing);
-        result.Cases.Count(c => c.Normalized == "failed").ShouldBe(failing);
-        result.Cases.Count(c => c.Normalized == "passed").ShouldBe(expected - failing);
-    }
-
     /// <summary>A truncated report ends as the profile's documented refusal, never an exception.</summary>
     [Fact]
     public void Dogfood_TruncatedReport_IsRefusedAsMalformed()
