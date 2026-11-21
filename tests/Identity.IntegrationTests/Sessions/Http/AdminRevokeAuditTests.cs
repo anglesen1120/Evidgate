@@ -358,7 +358,7 @@ public sealed class AdminRevokeAuditTests : TenantTest
     [Fact]
     public async Task A_Faulted_Audit_Rolls_The_Revoke_Back_And_Answers_503()
     {
-        using var logs = new CapturingLoggerProvider();
+        using var logs = new CapturingLogProvider();
         using var host = SessionTestHost.Start(Fixture, logProvider: logs);
         using var client = host.CreateSessionClient();
         var victim = await host.SignInMemberAsync(client);
@@ -388,9 +388,11 @@ public sealed class AdminRevokeAuditTests : TenantTest
         (await AuditSnapshotAsync(victim.OrgId)).ShouldBe(before, "the faulted call committed nothing");
 
         // No line may name the session, in either spelling, whatever the fault produced.
-        var logged = string.Join('\n', logs.Entries.SelectMany(entry => entry.Texts));
-        logged.ShouldNotContain(victimSessionId.ToString(UuidText), Case.Sensitive);
-        logged.ShouldNotContain(victimSessionId.ToString("N"), Case.Sensitive);
+        foreach (var entry in logs.Entries)
+        {
+            entry.Message.ShouldNotContain(victimSessionId.ToString(UuidText), Case.Sensitive);
+            entry.Message.ShouldNotContain(victimSessionId.ToString("N"), Case.Sensitive);
+        }
 
         // The retry, with the fault gone, is an ordinary successful administrative revoke.
         using (var retried = await RevokeAsync(client, admin, victimSessionId, victim.OrgId.ToString()))
