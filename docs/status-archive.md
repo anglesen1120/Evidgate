@@ -1323,3 +1323,9 @@ Superseded by S580 (#1174, merged as 503d35ad): `QuarantineSchemaTests.cs` was s
 | file-size debt in the reconcile slice (S165) | `ReconcileAsync` is about 105 lines (pre-existing) and `ReconcileDeadlineSweepTests.cs` / `ReconcileForcedIncompleteTests.cs` are at or over the 500-line limit (PR #348) | receiver: next 05.3.2 task |
 
 Superseded by S581 (#1177, merged as bb2b2ed1): `ReconcileDeadlineSweepTests.cs` was split into 387 / 257 lines; the recount on 136c2aed (32 files over 500, after S582 as well) is the row 'Oversized Tenancy test files (S581)' in `docs/status-carried.md`. The row 'file-size debt in the reconcile slice (S165)' keeps only the `ReconcileAsync` method-length item (both test files are under 500 lines).
+
+## Moved from status-carried.md by S583 (2026-11-21)
+
+| Oversized Tenancy test files (S581) | After S582 (IngestDedupeTests split into 359 / 190 lines), S581 (#1177, ReconcileDeadlineSweepTests split into 387 / 257 lines), S580 (#1174), S579, S578, S577 (#1171), S575 (#1169) and S576 (#1168), 32 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 136c2aed): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S583 (#1179, merged as 02cfd03e): `ReconcileDeadlineRearmTests.cs` was split into 275 / 243 lines; the recount on 0ff047f9 (31 files over 500) is the row 'Oversized Tenancy test files (S583)' in `docs/status-carried.md`.
