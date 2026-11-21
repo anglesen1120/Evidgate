@@ -1541,3 +1541,9 @@ Closed by PR #1255 (merge 4ee842aa): `Texts_CoverEveryPart_AndClearEmptiesTheCap
 | ApiHost floor test nits (S619) | QA notes on `tests/Hosts.IntegrationTests/ApiHostRequestLogFloorTests.cs` (PR #1248), nonblocking: the no-lowering-key fixture would fail if ambient Logging configuration ever carried a lowering key for the request-log category; the test name `RealApiHost_FloorRulesAreTheLastRules_ForEveryProviderAndProviderLess` is broader than its two provider-name assertions. | receiver: next lane touching `RequestLogFloor`; owner question: none; recorded owner: Tech Lead |
 
 Closed by PR #1258 (merge 51d5ff24): the notice has its own Warning rule per provider after the operator's rules, `RequestLogFloor.AssertFloorIsLast` refuses start when a rule follows the floor (a test and a mutant prove it), the no-lowering fixture ignores ambient level keys, and the broad test was renamed and now asserts both patterns.
+
+## Moved from status-carried.md by S625 (2026-11-21)
+
+| collect.sh residual check scope (S609) | Left open by #1227: the residual check in `scripts/dogfood/collect.sh` (`refuse_residual`) inspects attribute values, text and tail only, not element names, attribute names or namespace URIs; matching has no Unicode normalisation or percent-decoding; the final writes to `--out` are sequential, not atomic, and a pre-existing `--out` is not cleaned; the real-host-name retention test in `DogfoodReportTests.Residual.cs` is conditional on a host name of 4+ characters. | next dogfood lane |
+
+Closed by PR #1262 (merge 2a39015b): the residual check scans element tags, namespace URIs and attribute names, matches after NFKC and one strict percent-decode, `--out` is written by temp file and rename with stale owned files removed, and the host-name retention test injects `HOSTNAME`; remaining gaps are the S625 rows in status-carried.md.
