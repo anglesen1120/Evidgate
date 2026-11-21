@@ -55,6 +55,9 @@ public sealed partial class DogfoodReportTests
     [InlineData("host.corp.local", "host", false)]
     [InlineData("localhost.localdomain", "http://localhost:4200", false)]
     [InlineData("app.corp.local", "x app.corp.local y", true)]
+    [InlineData("buildbox-42.corp.local", "ci_buildbox-42_1", true)]
+    [InlineData("server.corp.local", "ci_server_log", true)]
+    [InlineData("server.corp.local", "ci_serverless", false)]
     public async Task Dogfood_Collect_HostLabelOfDottedName_IsRefusedAsDistinctiveWholeWord(string hostname, string text, bool refused)
     {
         if (refused)

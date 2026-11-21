@@ -55,6 +55,17 @@ public sealed partial class DogfoodReportTests
         });
     }
 
+    /// <summary>A name that straddles the 64 Ki-character normalisation piece edge is still matched, because matching runs on the joined result.</summary>
+    [Theory]
+    [InlineData(65_533)]
+    [InlineData(65_536)]
+    public async Task Dogfood_Collect_NameAcrossNormalisationPieceEdge_IsRefused(int padding)
+    {
+        var pad = new string('a', padding);
+        await AssertAcceptedAsync(Report(pad + FakeIdentifier.Replace("Zq", "Zy", StringComparison.Ordinal)), extra: FakeIdentifier);
+        await AssertRefusedAsync(Report(pad + FakeIdentifier), extra: FakeIdentifier);
+    }
+
     /// <summary>Private-use code points (Co) render as nothing or as a font glyph and must not hide a name.</summary>
     [Theory]
     [InlineData("\ue000")]

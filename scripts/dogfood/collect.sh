@@ -183,7 +183,7 @@ class ExpansionError(Exception):
 
 
 def normalise(form, text):
-    # Chunked, each piece checked as soon as it is built: the peak allocation before a refusal is
+    # Chunked, each piece checked as soon as it is built: the allocation before a refusal is
     # bounded by the chunk (at most 18 characters per input character), not by the whole report.
     pieces = []
     for start in range(0, len(text), CHUNK):
@@ -295,7 +295,8 @@ def scan_residual(producer, doc, values, labels):
     # matched as a whole word only: it is a fragment of the name, common as a substring of other text.
     expected = {match_form(secret) for secret in values}
     expected.discard("")
-    words = [re.compile(r"(?<!\w)" + re.escape(match_form(label)) + r"(?!\w)") for label in labels]
+    # A word edge is any neighbour that is not a letter or digit, so an underscore separates words.
+    words = [re.compile(r"(?<![^\W_])" + re.escape(match_form(label)) + r"(?![^\W_])") for label in labels]
 
     def names_machine(value):
         forms = matching_forms(producer, value)
@@ -405,9 +406,9 @@ residual = [value for value in checkout if value]
 # replacement, so setting one cannot switch the other off.
 machines = [socket.gethostname(), os.environ.get("HOSTNAME", "")]
 residual.extend(machine for machine in machines if len(identifier_form(machine)) >= 4 and identifier_form(machine) != "host")
-# The first DNS label of a dotted name is refused too, as a whole word (foo.corp.local refuses the
-# word "foo" but not "foobar"), and only when distinctive: 5 or more characters, or a digit or a
-# hyphen in it. Shorter plain labels (app, git) and all-digit ones (an IPv4 prefix) are too common.
+# The first DNS label of a dotted name is refused too, as a whole word (server.corp.local refuses the
+# word "server" but not "serverless"), and only when distinctive: 5 or more characters, or a digit or
+# a hyphen in it. Shorter plain labels (app, git) and all-digit ones (an IPv4 prefix) are too common.
 labels = []
 for machine in machines:
     label = machine.split(".")[0] if "." in machine else ""
