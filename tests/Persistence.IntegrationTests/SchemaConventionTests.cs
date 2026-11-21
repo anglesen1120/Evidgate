@@ -496,4 +496,3 @@ public sealed class SchemaConventionTests
           for each row execute function public.set_updated_at_and_version();
         """;
 }
-
