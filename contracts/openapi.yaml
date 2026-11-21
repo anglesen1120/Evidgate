@@ -5394,7 +5394,8 @@ paths:
       description: >-
         Creates an editable draft at version 1; `ETag` is the quoted version. The author is the caller's
         active membership, never a body member; no active membership is 403 `draft_author_required`.
-        Authentication and authorization precede body validation. Invalid fields are 422 `draft_invalid`
+        Authentication and authorization precede field validation (a body that is not JSON is
+        400 before the permission check). Invalid fields are 422 `draft_invalid`
         with the field named in `error.details`; a body over 256 KiB is 413. A missing project and an
         other-tenant project both answer 404 `not_found`. Missing or invalid `Idempotency-Key` is
         400 `request_invalid`; reusing a key for a different request is 409 `idempotency_conflict`.
@@ -5518,8 +5519,8 @@ paths:
       tags: [catalog]
       summary: Replace editable draft content under If-Match
       description: >-
-        Permission is evaluated against the draft's own project before body validation or `If-Match`
-        parsing. Unknown and other-tenant ids both answer 404 `not_found`; permission in another project
+        Permission is evaluated against the draft's own project before field validation or `If-Match`
+        parsing (a body that is not JSON is 400 first). Unknown and other-tenant ids both answer 404 `not_found`; permission in another project
         grants no access. Only `draft` status permits content changes; otherwise 409 `draft_state_conflict`.
         Missing or malformed `If-Match` is 422 `request_invalid` with an `If-Match` detail (`required` when
         missing); stale is 412 `precondition_failed` with the current `version` in `error.details`.
