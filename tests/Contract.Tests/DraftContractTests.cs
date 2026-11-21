@@ -96,6 +96,11 @@ public sealed class DraftContractTests
         var summary = spec.Schema("DraftSummaryDto")["properties"]!.AsObject();
         summary.Select(pair => pair.Key).Order(StringComparer.Ordinal)
             .ShouldBe(SummaryFields.Order(StringComparer.Ordinal), "DraftSummaryDto is the view without content");
+        summary["file_count"]!["type"]!.GetValue<string>().ShouldBe("integer");
+        summary["file_count"]!["minimum"]!.GetValue<long>().ShouldBe(0L);
+        summary["file_count"]!["maximum"]!.GetValue<long>().ShouldBe(200L);
+        spec.Schema("DraftSummaryDto")["required"]!.AsArray().Select(entry => entry!.GetValue<string>())
+            .ShouldBe(SummaryFields, "every summary field is required, in the DTO's order");
         spec.Schema("DraftListResponse")["properties"]!["items"]!["items"]!["$ref"]!.GetValue<string>()
             .ShouldEndWith("/DraftSummaryDto", Case.Sensitive);
         view["status"]!["enum"]!.AsArray().Select(entry => entry!.GetValue<string>())
