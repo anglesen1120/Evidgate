@@ -1371,3 +1371,9 @@ Superseded by S591 (#1194, merged as 81e43293): `HealingLlmGatewayTests.cs` was 
 | Oversized Tenancy test files (S591) | After S591 (#1194, HealingLlmGatewayTests split into 444 / 236 lines), S590 (#1193, AuthoringImportExportTests split) and the earlier splits (S584-S589), 23 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 472c4c9d): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
 
 Superseded by S592 (#1195, merged as 145301e7): `AuthoringXlsxFormatTests.cs` was split into 429 / 237 / 238 lines; the recount on 655ac566 gave 22 files, see the '(S592)' row in docs/status-carried.md.
+
+## Moved from status-carried.md by S593 (2026-11-21)
+
+| Oversized Tenancy test files (S592) | After S592 (#1195, AuthoringXlsxFormatTests split into 429 / 237 / 238 lines), S591, S590 and the earlier splits (S584-S589), 22 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 655ac566): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S593 (#1199, merged as 4cc2729a): `EvidenceFreezeGuardTests.cs` was split into 487 / 327 lines; the recount on 4cc2729a gave 21 files, see the '(S593)' row in docs/status-carried.md.
