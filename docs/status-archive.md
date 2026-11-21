@@ -1210,3 +1210,9 @@ Replaced by S550 (#1122): AuthoringContent.cs (702 lines) was split into two fil
 | Methods over 60 lines missing from the S538 list (S550 finds, authoring content) | AuthoringContent (#1122): Parse 82 (AuthoringContent.cs), Steps 92 (AuthoringContent.Steps.cs); signature through closing brace, awk count. Not cut: the split was a pure move. | receiver: backend lanes |
 
 Replaced by S551 (#1124): ArtifactCompletionVerifier.cs (541 lines) was split into two files (322/228); the recounts are the carried rows 'Source files over 500 lines (S551 count)' and the three 'Methods over 60 lines missing from the S538 list (S551 finds...)' rows.
+
+## Moved from status-carried.md by S552 (2026-11-21)
+
+| Isolation test files over 500 lines (S512) | `tests/Isolation.Tests/Rls/RlsIsolationTests.cs` (946 lines) and `tests/Isolation.Tests/TenantRowFactory.cs` (943 lines) were already over the 500-line rule and grew by 16 and 20 lines in the support-grant slice; the slice's own files stay under 500. | receiver: next Isolation.Tests task (split by responsibility) |
+
+Replaced by S552 (#1126): RlsIsolationTests.cs (946 lines) was split into three files (408/336/221); the recount is the carried row 'Isolation test files over 500 lines (S512, S552 count)' (TenantRowFactory.cs half kept), plus the new row 'Plan 13.6.1 cites of RlsIsolationTests name the wrong lines (S552)'.
