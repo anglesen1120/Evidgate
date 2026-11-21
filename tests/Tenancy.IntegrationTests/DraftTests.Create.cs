@@ -259,6 +259,8 @@ public sealed partial class DraftTests
     [InlineData("{\"n\":[1E-9999999]}")]
     [InlineData("{\"n\":0.1e-16384}")]
     [InlineData("{\"n\":0e-16384}")]
+    [InlineData("{\"n\":1e-2147483648}")]
+    [InlineData("{\"n\":[1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e999999999]}")]
     [InlineData("{\"n\":0e131073}")]
     [InlineData("{\"n\":[1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300]}")]
     public async Task Create_ProvenanceNumberOutsideNumericRange_Is422DraftInvalid_NotA500(string provenance)

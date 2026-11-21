@@ -279,8 +279,14 @@ internal static class DraftBody
         switch (element.ValueKind)
         {
             case JsonValueKind.Number:
-                rendered += RenderedLength(element.GetRawText());
-                return rendered < 0 || rendered > MaxProvenanceBytes;
+                var length = RenderedLength(element.GetRawText());
+                if (length < 0)
+                {
+                    return true;
+                }
+
+                rendered += length;
+                return rendered > MaxProvenanceBytes;
             case JsonValueKind.Object:
                 foreach (var member in element.EnumerateObject())
                 {
@@ -320,7 +326,8 @@ internal static class DraftBody
         var exponent = 0;
         if (marker >= 0
             && (!int.TryParse(span[(marker + 1)..], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out exponent)
-                || Math.Abs(exponent) > MaxNumberExponent))
+                || exponent > MaxNumberExponent
+                || exponent < -MaxNumberExponent))
         {
             return -1;
         }
