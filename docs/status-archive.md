@@ -1671,3 +1671,9 @@ Closed by PR #1296 (96977a21): `scripts/dogfood/collect.sh` strips host names af
 | YamlSubset accepts unbounded nesting, literal << keys and NaN/Infinity plain scalars (S642) | `tests/Contract.Tests/YamlSubset.cs` (PR #1293) has no nesting-depth cap (a stack overflow would kill the test host without a line number), reads a `<<` key as a literal member (a YAML 1.1 tool would merge it), and types plain `NaN`/`Infinity` as double. Low: the input is the repo's own contract spec and each case fails loudly. | contract tooling lane |
 
 Closed by #1298 (b4bfc784): `DraftTests.Read.cs` list tests assert `file_count` and the absent `content`, and `YamlSubset` refuses nesting over 64, `<<` keys and NaN/infinity/overflowing plain scalars, pinned by mutants. The CHECK half stays carried as 'Draft content files CHECK for non-array files (S644)'.
+
+## Moved from status-carried.md by S641 (2026-11-22)
+
+| Authoring read routes validate the query before authentication (S553) | After S553 (#1135) the write delegates guard first, but GET and export routes still parse their query before any 401: `AuthoringNodeEndpoints.cs:89`, `AuthoringVersionEndpoints.cs:65`, `AuthoringImportEndpoints.cs:133` (export), `AuthoringChecklistEndpoints.cs:63`, `AuthoringManualCaseEndpoints.cs:123`, `AuthoringChangeEndpoints.cs:96`, `AiSettingsEndpoints.cs:130`. An anonymous caller with a bad query gets 422, not 401; no body is read and no data leaks. | receiver: Authoring lane, guard first, extend the guard-first pin to read routes |
+
+Closed by PR #1295 (ff308803): the Authoring read and export delegates authenticate first and carry the first validation error to the handler (`RequestError`), so an anonymous caller gets 401 and a caller without the permission 403 before any 422; pinned by `AuthoringGuardFirstBoundaryTests.AuthoringReadDelegates_AllRegisteredReads_GuardFirstAndSendFirst` and `AuthoringReadGuardFirstTests`.
