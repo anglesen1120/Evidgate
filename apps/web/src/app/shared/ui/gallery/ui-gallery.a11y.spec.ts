@@ -72,15 +72,17 @@ describe('UiGalleryComponent axe acceptance', () => {
     const fixture = TestBed.createComponent(UiGalleryComponent);
     const root = fixture.nativeElement as HTMLElement;
     document.body.append(root);
-    await fixture.whenStable();
-    return {
-      fixture,
-      root,
-      dispose: () => {
-        fixture.destroy();
-        root.remove();
-      },
+    const dispose = () => {
+      fixture.destroy();
+      root.remove();
     };
+    try {
+      await fixture.whenStable();
+    } catch (error) {
+      dispose();
+      throw error;
+    }
+    return { fixture, root, dispose };
   }
 
   it.each(cases)(
@@ -124,6 +126,7 @@ describe('UiGalleryComponent axe acceptance', () => {
         expect(opener, 'reveal opener').not.toBeNull();
         opener?.click();
         await fixture.whenStable();
+        expect(root.querySelector('app-connect-step-reveal'), 'reveal opened').not.toBeNull();
         const revealResult = await axe.run(root, axeOptions);
         expect(unexceptedLines(revealResult)).toEqual([]);
       } finally {
@@ -138,7 +141,10 @@ describe('UiGalleryComponent axe acceptance', () => {
     async ({ locale, theme }) => {
       const { fixture, root, dispose } = await mountGallery(locale, theme);
       try {
-        root.querySelector<HTMLButtonElement>('[data-demo="conflict-opener"]')?.click();
+        expect(document.querySelector('[role="dialog"]'), 'no dialog before the click').toBeNull();
+        const opener = root.querySelector<HTMLButtonElement>('[data-demo="conflict-opener"]');
+        expect(opener, 'conflict opener').not.toBeNull();
+        opener?.click();
         await fixture.whenStable();
         const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
         if (!dialog) throw new Error('Expected Brain dialog overlay');
