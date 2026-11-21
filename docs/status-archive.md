@@ -1279,3 +1279,9 @@ Superseded by S560 (#1150, merged as 70c17040): `DiscardAsync`, `UnlinkAsync` an
 | Oversized Tenancy test files (S564) | After S564 (#1148, RunSchemaTests split into 243 / 232 / 320 lines) and S563 (ReconcileComparerUnitTests split), 50 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule: `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
 
 Superseded by S567 (#1154, merged as f0766633): `EvidenceUploadUrlTests.cs` was split into three files of at most 270 lines; the recount on f0766633 (47 files over 500, S565 and S566 included) is the row 'Oversized Tenancy test files (S567)' in `docs/status-carried.md`.
+
+## Moved from status-carried.md by S568 (2026-11-21)
+
+| Oversized Tenancy test files (S567) | After S567 (#1154, EvidenceUploadUrlTests split into 222 / 270 / 203 lines), S565 (PolicyEndpointTests) and S566 (CaseAttemptWriterTests), 47 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on f0766633): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S568 (#1156, merged as 19c14a02): `ProducerSlotTests.cs` was split into three files of at most 283 lines; the recount on 19c14a02 (46 files over 500) is the row 'Oversized Tenancy test files (S568)' in `docs/status-carried.md`.
