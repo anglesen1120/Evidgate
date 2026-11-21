@@ -108,11 +108,12 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
                 continue;
             }
 
-            if (map == "MapGroup")
+            if (map == "MapGroup" || IsComposer(map))
             {
                 errors.AddRange(ChainErrors(call, path));
             }
-            else if (map.StartsWith("Map", StringComparison.Ordinal) && map.EndsWith("Endpoints", StringComparison.Ordinal))
+
+            if (IsComposer(map))
             {
                 Follow(call, map, path, state);
             }

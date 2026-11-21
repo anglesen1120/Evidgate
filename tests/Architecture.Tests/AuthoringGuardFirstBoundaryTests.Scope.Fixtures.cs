@@ -137,6 +137,9 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
     [InlineData("authoring.MapPost(\"/x\", M); authoring.AddEndpointFilter<Filter>();")]
     [InlineData("var tree = authoring.MapGroup(\"/more\").WithMetadata(new Marker()); tree.MapPost(\"/x\", M);")]
     [InlineData("var tree = authoring.MapGroup(\"/more\").AddEndpointFilter<Filter>(); tree.MapPost(\"/x\", M);")]
+    [InlineData("(authoring.MapPost(\"/x\", M)).WithMetadata(new Marker());")]
+    [InlineData("((authoring.MapPost(\"/x\", M))).Add(builder => { });")]
+    [InlineData("authoring.MapPost(\"/x\", M).ValidateContractBody(\"x\");")]
     public void Scan_FilterOrMetadataChainOnTheRouteTree_IsRed(string registration)
     {
         var errors = Scan([Synthetic(
@@ -154,5 +157,63 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
             + ".Accepts<Body>(\"application/json\").Produces<Reply>(201).Produces(200).WithSummary(\"s\")\n"
             + ".WithBodyLimit(10, handlerRefusesFirst: true).WithMetadata(new AcceptsMetadata([\"a\"], \"b\"));",
             GuardedHandler())], []).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Scan_ConventionChainOnAComposerResult_IsRed()
+    {
+        var composer = Synthetic("private static void Compose(RouteGroupBuilder authoring) => Other.MapOtherEndpoints(authoring).WithMetadata(new Marker());");
+        var declared = Other(
+            "internal static RouteGroupBuilder MapOtherEndpoints(RouteGroupBuilder group) { group.MapPost(\"/y\", M); return group; }",
+            GuardedHandler());
+
+        Scan([composer], [], null, [composer, declared]).Length.ShouldBe(1);
+    }
+
+    [Fact]
+    public void Scan_ComposerDeclaredWithSpaceBeforeTheParameterList_IsFollowed()
+    {
+        var composer = Synthetic("private static void Compose(RouteGroupBuilder authoring) => Other.MapOtherEndpoints(authoring);");
+        var declared = Other(
+            "internal static void MapOtherEndpoints /* spaced */ (RouteGroupBuilder group) => group.MapPost(\"/y\", M);",
+            Handler("return Task.CompletedTask;"));
+
+        Scan([composer], [], null, [composer, declared]).Length.ShouldBe(1);
+    }
+
+    [Fact]
+    public void Scan_UnsupportedMapCallUnderTheAuthoringPathInAnotherFolder_IsRefused()
+    {
+        var universe = new[] { Other("private static void Register(RouteGroupBuilder routes) => routes.Map(\"/v1/projects/{p}/authoring/x\", M);", GuardedHandler()) };
+
+        var errors = ScanRoot(universe);
+
+        errors.Length.ShouldBe(1);
+        errors[0].ShouldContain("unsupported write-capable Map call", Case.Sensitive);
+    }
+
+    [Fact]
+    public void Scan_AuthoringPathHeldInAConstantInAnotherFolder_IsSelectedAndRefused()
+    {
+        var universe = new[]
+        {
+            Other(
+                "private const string Base = \"/v1/projects/{p}/authoring\";",
+                "private static void Register(RouteGroupBuilder routes) => routes.MapGroup(Base).MapPost(\"/x\", M);",
+                Handler("return Task.CompletedTask;")),
+        };
+
+        ScanRoot(universe).Length.ShouldBe(1);
+    }
+
+    [Fact]
+    public void Scan_AuthoringRouteInADisabledRegionInAnotherFolder_IsSelectedAndRefused()
+    {
+        var universe = new[] { Other("#if NET10_0\n" + AuthoringRoute + "\n#endif", GuardedHandler()) };
+
+        var errors = ScanRoot(universe);
+
+        errors.Length.ShouldBe(1);
+        errors[0].ShouldContain("conditionally compiled text", Case.Sensitive);
     }
 }

@@ -14,11 +14,12 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
 {
     // Endpoint filters and builder conventions run before the delegate, so none may sit on an authoring route tree.
     private static readonly string[] FilterCalls = ["AddEndpointFilter", "AddEndpointFilterFactory"];
-    private static readonly string[] ChainCalls = ["WithMetadata", "Add", "Finally"];
+    private static readonly string[] AllowedChainCalls =
+        ["Produces", "ProducesProblem", "ProducesValidationProblem", "Accepts", "WithSummary", "WithDescription", "WithName", "WithTags", "WithBodyLimit"];
     private static readonly string[] AllowedParameterTypes = ["Guid", "HttpContext", "IMediator", "CancellationToken"];
 
     private static readonly string[] PathMaps =
-        ["MapPost", "MapPut", "MapPatch", "MapDelete", "MapMethods", "MapGet", "MapHead", "MapOptions", "MapGroup"];
+        ["Map", "MapFallback", "MapPost", "MapPut", "MapPatch", "MapDelete", "MapMethods", "MapGet", "MapHead", "MapOptions", "MapGroup"];
 
     private sealed class ScanState
     {
@@ -44,24 +45,31 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         return CSharpSyntaxTree.ParseText(text, cancellationToken: token).GetRoot(token);
     }
 
-    /// <summary>Every Authoring endpoint file plus any other production file that registers a route under the authoring path.</summary>
+    /// <summary>Every Authoring endpoint file plus any other production file that may register a route under the authoring path.</summary>
     private static (string Path, string Text)[] AuthoringRouteFiles((string Path, string Text)[] universe) =>
         universe.Where(file => file.Path.StartsWith(Endpoints, StringComparison.Ordinal)
                 || (file.Text.Contains("authoring", StringComparison.OrdinalIgnoreCase) && NamesAuthoringPath(Parse(file.Text))))
             .ToArray();
 
-    private static bool NamesAuthoringPath(SyntaxNode root) =>
-        root.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(call =>
+    // Selection over-approximates: a file with a Map call is read when the call names the path, when any string
+    // in the file does (a constant or local holding the path), or when disabled text could hide a registration.
+    private static bool NamesAuthoringPath(SyntaxNode root)
+    {
+        var calls = root.DescendantNodes().OfType<InvocationExpressionSyntax>()
+            .Select(call => (Call: call, Name: CallName(call)))
+            .Where(entry => PathMaps.Contains(entry.Name, StringComparer.Ordinal) || IsComposer(entry.Name))
+            .ToArray();
+        if (calls.Length == 0)
         {
-            var name = CallName(call);
-            if (!PathMaps.Contains(name, StringComparer.Ordinal) && !IsComposer(name))
-            {
-                return false;
-            }
+            return ConditionalSourceText.FirstLine(root) > 0;
+        }
 
-            // The callee's own name is not evidence: a composer called MapAuthoringEndpoints on a plain builder is not a path.
-            return Regex.IsMatch(call.ToString().Replace(name, string.Empty, StringComparison.Ordinal), "authoring", RegexOptions.IgnoreCase);
-        });
+        // The callee's own name is not evidence: a composer called MapAuthoringEndpoints on a plain builder is not a path.
+        return calls.Any(entry => Regex.IsMatch(entry.Call.ToString().Replace(entry.Name, string.Empty, StringComparison.Ordinal), "authoring", RegexOptions.IgnoreCase))
+            || root.DescendantTokens().Any(token => token.IsKind(SyntaxKind.StringLiteralToken)
+                && token.ValueText.Contains("authoring", StringComparison.OrdinalIgnoreCase))
+            || ConditionalSourceText.FirstLine(root) > 0;
+    }
 
     private static bool IsComposer(string name) =>
         name.StartsWith("Map", StringComparison.Ordinal) && name.EndsWith("Endpoints", StringComparison.Ordinal);
@@ -70,7 +78,7 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
     private static void Follow(InvocationExpressionSyntax call, string name, string path, ScanState state)
     {
         var declaring = state.Universe
-            .Where(file => file.Text.Contains(name + "(", StringComparison.Ordinal)
+            .Where(file => file.Text.Contains(name, StringComparison.Ordinal)
                 && Parse(file.Text).DescendantNodes().OfType<MethodDeclarationSyntax>().Any(method => method.Identifier.ValueText == name))
             .ToArray();
         if (declaring.Length == 0)
@@ -111,20 +119,33 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
     {
         var errors = new List<string>();
         SyntaxNode node = call;
-        while (node.Parent is MemberAccessExpressionSyntax access
-            && access.Parent is InvocationExpressionSyntax outer
-            && outer.Expression == access)
+        while (true)
         {
+            // Parentheses are transparent: (route).Add(...) is the same chain as route.Add(...).
+            while (node.Parent is ParenthesizedExpressionSyntax)
+            {
+                node = node.Parent;
+            }
+
+            if (node.Parent is not MemberAccessExpressionSyntax access
+                || access.Parent is not InvocationExpressionSyntax outer
+                || outer.Expression != access)
+            {
+                return errors;
+            }
+
             var name = access.Name.Identifier.ValueText;
-            if (ChainCalls.Contains(name, StringComparer.Ordinal) && !IsAcceptsMetadata(name, outer))
+            var allowed = AllowedChainCalls.Contains(name, StringComparer.Ordinal)
+                || FilterCalls.Contains(name, StringComparer.Ordinal)
+                || name.StartsWith("Map", StringComparison.Ordinal)
+                || IsAcceptsMetadata(name, outer);
+            if (!allowed)
             {
                 errors.Add($"{path}:{Line(outer)}: {name} on an authoring route chain can add behaviour before the handler guard");
             }
 
             node = outer;
         }
-
-        return errors;
     }
 
     private static bool IsAcceptsMetadata(string name, InvocationExpressionSyntax call) =>
