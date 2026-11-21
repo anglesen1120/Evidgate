@@ -106,12 +106,17 @@ public sealed class ApiHostRequestLogFloorTests
 
         var rules = app.Services.GetRequiredService<IOptionsMonitor<LoggerFilterOptions>>().CurrentValue.Rules;
 
-        var floor = rules.Where(rule => rule.CategoryName == FloorPattern).ToList();
+        var noticePattern = NoticeCategory + "*" + NoticeCategory;
+        var floor = rules.Where(rule => rule.CategoryName == FloorPattern || rule.CategoryName == noticePattern).ToList();
         floor.ShouldNotBeEmpty("the floor is registered by the host builder");
         floor.ShouldAllBe(rule => rule.LogLevel == LogLevel.Warning);
         rules.Skip(rules.Count - floor.Count).ShouldBe(floor, "no rule follows the floor rules");
-        floor.Select(rule => rule.ProviderName).ShouldContain((string?)null);
-        floor.Select(rule => rule.ProviderName).ShouldContain(typeof(CapturingLoggerProvider).FullName);
+        foreach (var pattern in new[] { FloorPattern, noticePattern })
+        {
+            var providers = floor.Where(rule => rule.CategoryName == pattern).Select(rule => rule.ProviderName).ToList();
+            providers.ShouldContain((string?)null);
+            providers.ShouldContain(typeof(CapturingLoggerProvider).FullName);
+        }
     }
 
     [Fact]

@@ -274,6 +274,16 @@ public sealed class RequestLogFloorTests
     }
 
     [Fact]
+    public void AssertFloorIsLast_ProviderLessNoticeRuleMissing_Throws()
+    {
+        var options = new LoggerFilterOptions();
+        RequestLogFloor.Apply(options);
+        options.Rules.Remove(options.Rules.Single(rule => rule.ProviderName is null && rule.CategoryName!.StartsWith("Evidgate.", StringComparison.Ordinal)));
+
+        Should.Throw<InvalidOperationException>(() => RequestLogFloor.AssertFloorIsLast(options)).Message.ShouldContain("not registered");
+    }
+
+    [Fact]
     public void AssertFloorIsLast_NoFloorRegistered_Throws()
     {
         Should.Throw<InvalidOperationException>(() => RequestLogFloor.AssertFloorIsLast(new LoggerFilterOptions())).Message.ShouldContain("not registered");

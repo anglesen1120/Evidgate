@@ -94,9 +94,12 @@ public static class RequestLogFloor
             }
         }
 
-        if (firstFloor < 0)
+        foreach (var pattern in new[] { FloorPattern, NoticePattern })
         {
-            throw new InvalidOperationException($"The request-log floor for '{Category}' is not registered in the logger filter options.");
+            if (!rules.Any(rule => rule.ProviderName is null && rule.CategoryName == pattern && Added.TryGetValue(rule, out _)))
+            {
+                throw new InvalidOperationException($"The request-log floor rule '{pattern}' is not registered in the logger filter options.");
+            }
         }
     }
 
