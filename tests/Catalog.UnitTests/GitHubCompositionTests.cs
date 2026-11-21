@@ -2,9 +2,11 @@ using System.Net;
 using Evidgate.BuildingBlocks.SharedKernel.GitHub;
 using Evidgate.BuildingBlocks.SharedKernel.Secrets;
 using Evidgate.Modules.Catalog.Infrastructure.GitHub;
+using Evidgate.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Shouldly;
@@ -159,7 +161,9 @@ public sealed class GitHubCompositionTests
     {
         var options = provider.GetRequiredService<IOptions<GitHubOptions>>();
         var time = new FakeTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
-        var appTokens = new GitHubAppTokenSource(options, time, new ListLogger<GitHubAppTokenSource>());
+        var logs = new CapturingLoggerProvider();
+        var loggerFactory = new LoggerFactory([logs], new LoggerFilterOptions { MinLevel = LogLevel.Trace });
+        var appTokens = new GitHubAppTokenSource(options, time, loggerFactory.CreateLogger<GitHubAppTokenSource>());
         var plain = new HttpClient(stub) { BaseAddress = new Uri("https://api.github.com") };
         var tokens = new GitHubInstallationTokenSource(
             GitHubTestBench.Meters,
@@ -167,7 +171,7 @@ public sealed class GitHubCompositionTests
             appTokens,
             options,
             time,
-            new ListLogger<GitHubInstallationTokenSource>(),
+            loggerFactory.CreateLogger<GitHubInstallationTokenSource>(),
             new StubInstallationResolver());
 
         return new GitHubClient(
@@ -176,7 +180,7 @@ public sealed class GitHubCompositionTests
             appTokens,
             options,
             time,
-            new ListLogger<GitHubClient>());
+            loggerFactory.CreateLogger<GitHubClient>());
     }
 
     private static SocketsHttpHandler PrimaryHandler(HttpMessageHandler handler)
