@@ -12,12 +12,13 @@ namespace Tenancy.IntegrationTests;
 /// tenant-less caller with the pipeline's 401 before that header or query is validated, and read no body byte.
 /// </summary>
 /// <remarks>
-/// Thirteen delegates: the nine body routes of the table plus the three restore routes (no body) and the import. The
-/// same request from a caller whose tenant resolves keeps the answer it always had: 422 naming <c>/If-Match</c>
-/// (<c>required</c> or <c>invalid</c>), 422 for a missing or unreadable import <c>format</c> or <c>dry_run</c>. A
-/// well-formed request from that caller is the read-positive control: the counter sees the body, or, on a restore route,
-/// the answer is not the guard's 401. Stale-version (412) and success answers per route stay in the existing
-/// Authoring classes, which are not edited. Sixteen write rows in all: those thirteen, plus change discard,
+/// Thirteen delegates: the nine body routes of the table plus the three restore routes (no body) and the import. On
+/// those routes a caller whose tenant resolves answers 422 naming <c>/If-Match</c> (<c>required</c> or
+/// <c>invalid</c>), and 422 for a missing or unreadable import <c>format</c> or <c>dry_run</c>. A well-formed request
+/// from that caller is the read-positive control: the counter sees the body, or, on a restore route, the answer is not
+/// the guard's 401. Stale-version (412) and success answers per route stay in the existing Authoring classes, which
+/// are not edited. The three guard-only routes pin only that a resolved caller is not refused with that 401.
+/// Sixteen write rows in all: those thirteen, plus change discard,
 /// manual-case unlink and version restore, which parse no request data. Those three are regression pins — they
 /// answer the pipeline 401 on the base and on this head — while <c>AuthoringGuardFirstBoundaryTests</c> holds the
 /// guard boundary for every registered write route.
@@ -255,8 +256,12 @@ public sealed partial class RawBodyTenantRefusalTests
         failures.ShouldBeEmpty(string.Join("\n", failures));
     }
 
+    /// <summary>
+    /// A resolved caller is not refused by the guard on a write route that parses no request data; no other property
+    /// of that answer is pinned here.
+    /// </summary>
     [Fact]
-    public async Task AuthoringGuardOnlyWrites_ResolvedCaller_KeepsTheAnswerItHad()
+    public async Task AuthoringGuardOnlyWrites_ResolvedCaller_PassesTheGuard()
     {
         await using var world = await SeededAsync();
         var caller = TenancyApiFactory.Resolved(user: world.User);

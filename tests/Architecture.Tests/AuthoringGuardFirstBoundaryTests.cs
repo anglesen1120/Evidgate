@@ -69,13 +69,10 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         {
             var token = TestContext.Current.CancellationToken;
             var root = CSharpSyntaxTree.ParseText(text, cancellationToken: token).GetRoot(token);
-            foreach (var trivia in root.DescendantTrivia().Where(trivia => trivia.IsKind(SyntaxKind.DisabledTextTrivia)))
+            var conditional = ConditionalLine(root);
+            if (conditional > 0)
             {
-                if (System.Text.RegularExpressions.Regex.IsMatch(trivia.ToString(), @"\bMap\w*\s*(?:<[^>]+>)?\s*\("))
-                {
-                    var line = trivia.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
-                    errors.Add($"{path}:{line}: disabled preprocessor region could hide a Map call");
-                }
+                errors.Add($"{path}:{conditional}: conditionally compiled text in an endpoint file hides code from the pin");
             }
 
             foreach (var call in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
@@ -161,11 +158,41 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
 
     private static bool IsAlias(InvocationExpressionSyntax call, string name)
     {
-        var scope = call.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
-        return scope is not null && (scope.ParameterList.Parameters.Any(parameter => parameter.Identifier.ValueText == name)
-            || scope.DescendantNodes().OfType<VariableDeclaratorSyntax>().Any(variable => variable.Identifier.ValueText == name)
-            || scope.DescendantNodes().OfType<LocalFunctionStatementSyntax>().Any(local => local.Identifier.ValueText == name));
+        foreach (var ancestor in call.Ancestors())
+        {
+            switch (ancestor)
+            {
+                case SimpleLambdaExpressionSyntax or ParenthesizedLambdaExpressionSyntax or AnonymousMethodExpressionSyntax:
+                    if (HasParameter(ancestor, name))
+                    {
+                        return true;
+                    }
+
+                    break;
+                case LocalFunctionStatementSyntax local:
+                    if (local.ParameterList.Parameters.Any(parameter => parameter.Identifier.ValueText == name))
+                    {
+                        return true;
+                    }
+
+                    break;
+                case MethodDeclarationSyntax method:
+                    return method.ParameterList.Parameters.Any(parameter => parameter.Identifier.ValueText == name)
+                        || method.DescendantNodes().OfType<VariableDeclaratorSyntax>().Any(variable => variable.Identifier.ValueText == name)
+                        || method.DescendantNodes().OfType<LocalFunctionStatementSyntax>().Any(localFunction => localFunction.Identifier.ValueText == name);
+            }
+        }
+
+        return false;
     }
+
+    private static bool HasParameter(SyntaxNode function, string name) => function switch
+    {
+        SimpleLambdaExpressionSyntax simple => simple.Parameter.Identifier.ValueText == name,
+        ParenthesizedLambdaExpressionSyntax parenthesized => parenthesized.ParameterList.Parameters.Any(parameter => parameter.Identifier.ValueText == name),
+        AnonymousMethodExpressionSyntax { ParameterList: { } list } => list.Parameters.Any(parameter => parameter.Identifier.ValueText == name),
+        _ => false,
+    };
 
     private static string CallName(InvocationExpressionSyntax call) => ExpressionName(call.Expression);
 
@@ -220,5 +247,30 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         },
     } && target.Identifier.ValueText == context;
 
+    /// <summary>
+    /// The first hidden text or conditional directive in the file, so any conditionally compiled endpoint text fails the
+    /// pin rather than only text that happens to look like a registration or a precondition read.
+    /// </summary>
+    private static int ConditionalLine(SyntaxNode root)
+    {
+        var directive = 0;
+        foreach (var trivia in root.DescendantTrivia(descendIntoTrivia: true))
+        {
+            if (trivia.IsKind(SyntaxKind.DisabledTextTrivia))
+            {
+                return Line(trivia);
+            }
+
+            if (directive == 0 && (trivia.IsKind(SyntaxKind.IfDirectiveTrivia) || trivia.IsKind(SyntaxKind.ElifDirectiveTrivia)))
+            {
+                directive = Line(trivia);
+            }
+        }
+
+        return directive;
+    }
+
     private static int Line(SyntaxNode node) => node.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+
+    private static int Line(SyntaxTrivia trivia) => trivia.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
 }

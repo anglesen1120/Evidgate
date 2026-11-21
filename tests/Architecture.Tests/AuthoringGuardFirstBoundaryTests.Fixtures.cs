@@ -6,8 +6,8 @@ namespace Architecture.Tests;
 /// <summary>
 /// Synthetic route maps pin every refusal shape of the Authoring write-route scan, so each shape still fails when
 /// the scanner is changed: a removed, late, nested or wrong-argument guard, an alias, a lambda, an expression-bodied
-/// delegate, an unresolvable or overloaded method group, an unsupported <c>Map*</c> write call, a write route that
-/// arrives without a guard, and a stale or invalid exemption.
+/// delegate, an unresolvable or overloaded method group, an unsupported <c>Map*</c> write call, conditionally compiled
+/// text, a write route that arrives without a guard, and a stale or invalid exemption.
 /// </summary>
 public sealed partial class AuthoringGuardFirstBoundaryTests
 {
@@ -75,6 +75,22 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
             Handler($"{Guard}\nreturn Task.CompletedTask;"))], []).Length.ShouldBe(1);
     }
 
+    [Theory]
+    [InlineData("Action<RequestDelegate> register = SaveAsync => authoring.MapPut(string.Empty, SaveAsync);", "SaveAsync")]
+    [InlineData("Action<RequestDelegate> register = x => authoring.MapPost(\"/x\", x);", "x")]
+    [InlineData("Action<RequestDelegate> register = (SaveAsync) => authoring.MapPut(string.Empty, SaveAsync);", "SaveAsync")]
+    [InlineData("Action<RequestDelegate> register = delegate(RequestDelegate SaveAsync) { authoring.MapPut(string.Empty, SaveAsync); };", "SaveAsync")]
+    [InlineData("void RegisterWrite(RequestDelegate SaveAsync) => authoring.MapPut(string.Empty, SaveAsync);", "SaveAsync")]
+    public void Scan_EnclosingFunctionParameterShadowsGuardedMethod_IsRed(string registration, string name)
+    {
+        var errors = Scan([Synthetic(
+            "private static void Register(RouteGroupBuilder authoring)\n{\n" + registration + "\n}",
+            Handler($"{Guard}\nreturn Task.CompletedTask;", name))], []);
+
+        errors.Length.ShouldBe(1);
+        errors[0].ShouldContain("not a lambda, member or alias", Case.Sensitive);
+    }
+
     [Fact]
     public void Scan_LambdaDelegate_IsRed()
     {
@@ -137,7 +153,43 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         var errors = Scan([Synthetic("#if NET10_0\n" + Register() + "\n#endif", Handler($"{Guard}\nreturn Task.CompletedTask;"))], []);
 
         errors.Length.ShouldBe(1);
-        errors[0].ShouldContain("disabled preprocessor region", Case.Sensitive);
+        errors[0].ShouldContain("conditionally compiled text in an endpoint file hides code from the pin", Case.Sensitive);
+    }
+
+    [Fact]
+    public void Scan_PreconditionInsideADisabledRegionBeforeGuard_IsRed()
+    {
+        var errors = Scan([Synthetic(
+            Register(),
+            Handler($"#if NET10_0\nSupport.IfMatchVersion(context, out var v);\n#endif\n{Guard}\nreturn Task.CompletedTask;"))], []);
+
+        errors.Length.ShouldBe(1);
+        errors[0].ShouldStartWith(Endpoints + "SyntheticRoute.cs:", Case.Sensitive, "the error names its file and line");
+        errors[0].ShouldContain(": conditionally compiled text in an endpoint file hides code from the pin", Case.Sensitive);
+    }
+
+    [Fact]
+    public void Scan_CommentedRegistrationInsideADisabledRegion_IsRed()
+    {
+        var errors = Scan([Synthetic(
+            "private static void Register(RouteGroupBuilder authoring)\n{\n#if NET10_0\nauthoring.MapPost /* registration */ (\"/unguarded\", UnsafeAsync);\n#endif\n}",
+            Handler("return Task.CompletedTask;", "UnsafeAsync"))], []);
+
+        errors.Length.ShouldBe(1);
+        errors[0].ShouldStartWith(Endpoints + "SyntheticRoute.cs:", Case.Sensitive, "the error names its file and line");
+        errors[0].ShouldContain(": conditionally compiled text in an endpoint file hides code from the pin", Case.Sensitive);
+    }
+
+    [Theory]
+    [InlineData("#if NET10_0\nconst int value = 1;\n#endif")]
+    [InlineData("#if true\nconst int value = 1;\n#endif")]
+    [InlineData("#if false\n#elif true\nconst int value = 1;\n#endif")]
+    public void Scan_ConditionalTextUnrelatedToRegistrations_IsRed(string conditional)
+    {
+        var errors = Scan([Synthetic(Register(), Handler($"{Guard}\n{conditional}\nreturn Task.CompletedTask;"))], []);
+
+        errors.Length.ShouldBe(1);
+        errors[0].ShouldContain("conditionally compiled text in an endpoint file hides code from the pin", Case.Sensitive);
     }
 
     [Fact]
