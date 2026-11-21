@@ -16,7 +16,7 @@
 # Scrub, on the parsed tree so only UTF-8 (or its ASCII subset) is accepted: a testsuite hostname
 # attribute becomes "host" and this run's checkout path becomes /repo in every attribute value and
 # text node; a report that still names the machine, its host name or the home directory is refused,
-# never uploaded.
+# never uploaded (compared ignoring case). Nothing is written to --out unless all three producers pass.
 # Exit 1: a producer's report is missing, is over the 8 MiB cap before or after scrubbing, is not
 # well-formed XML with a testsuite and a testcase, is not UTF-8, or declares a DOCTYPE in any
 # encoding (a runner never emits one).
@@ -135,9 +135,11 @@ def scrub_tree(doc, prefixes):
 
 def refuse_residual(producer, doc, values):
     # A report that still names this machine fails the run; a leak never reaches the upload set.
+    # Case-folded: a runner may upper- or lower-case a host name or path it prints.
+    folded = [secret.casefold() for secret in values]
     for node in walk(doc):
         for value in [*node.attrib.values(), node.text, node.tail]:
-            if value and any(secret in value for secret in values):
+            if value and any(secret in value.casefold() for secret in folded):
                 sys.exit(f"collect.sh: {producer}: report still names this machine; refusing to publish it")
 
 
@@ -179,8 +181,13 @@ if len(machine) >= 4 and machine != "host":
 home = os.environ.get("HOME", "")
 if home not in ("", "/"):
     residual.append(home)
+# EVIDGATE_COLLECT_EXTRA_RESIDUAL (comma separated) adds identifiers that are refused as well. It is
+# additive only on purpose: it never replaces the real host name, HOME or checkout path, so a caller
+# cannot use it to switch the guard off; unset or empty changes nothing.
+residual.extend(item.strip() for item in os.environ.get("EVIDGATE_COLLECT_EXTRA_RESIDUAL", "").split(",") if item.strip())
 producers = ["xunit", "vitest", "playwright"]
 entries = []
+pending = []
 for producer in producers:
     name = f"{producer}.junit.xml"
     path = src / name
@@ -211,6 +218,9 @@ for producer in producers:
         "failed": sum(1 for c in cases if c.find("failure") is not None or c.find("error") is not None),
         "skipped": sum(1 for c in cases if c.find("skipped") is not None),
     })
+    pending.append((name, data))
+# Every producer passed: only now does anything reach --out, manifest last, so a refusal leaves it untouched.
+for name, data in pending:
     (out / name).write_bytes(data)
 manifest = {"schema": "dogfood-collect/1", "producers": entries}
 (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
