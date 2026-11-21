@@ -77,7 +77,7 @@ public sealed class DogfoodReportTests
     [Fact]
     public void Dogfood_VitestReport_Parses() => AssertMapsCleanly("vitest");
 
-    /// <summary>Evidgate's own Playwright report (two suites) maps through the real JUnit mapper with no discrepancy; its failing cases map as failed, not hidden.</summary>
+    /// <summary>Evidgate's own Playwright report (three suites) maps through the real JUnit mapper with no discrepancy; its failing cases map as failed, not hidden.</summary>
     [Fact]
     public void Dogfood_PlaywrightReport_Parses() => AssertMapsCleanly("playwright");
 
@@ -145,7 +145,8 @@ public sealed class DogfoodReportTests
                 hostile = System.Text.RegularExpressions.Regex.Replace(
                     hostile,
                     "(<testsuite )([^>]*>)",
-                    "$1note=\"" + root + "/apps/web/e2e/a.spec.ts\" $2<system-out>at " + root + "/apps/web/e2e/a.spec.ts:45:93</system-out>",
+                    match => match.Groups[1].Value + "note=\"" + root + "/apps/web/e2e/a.spec.ts\" " + match.Groups[2].Value
+                        + "<system-out>at " + root + "/apps/web/e2e/a.spec.ts:45:93</system-out>",
                     System.Text.RegularExpressions.RegexOptions.None);
                 await File.WriteAllTextAsync(Path.Combine(source, name + ".junit.xml"), hostile, TestContext.Current.CancellationToken);
                 expected[name] = System.Text.RegularExpressions.Regex.Replace(xml, "hostname=\"[^\"]*\"", "hostname=\"host\"");
@@ -203,6 +204,145 @@ public sealed class DogfoodReportTests
 
                 exit.ShouldBe(1);
                 stderr.ShouldContain("DOCTYPE");
+            });
+        });
+    }
+
+    [Fact]
+    public async Task Dogfood_Collect_ScrubsOnlyTestsuiteHostnameAttributes()
+    {
+        const string Xml = """
+            <testsuites><testsuite name="check hostname='x'" hostname = 'lan'>
+            <testcase name="check hostname='x'" hostname="case"><system-out><![CDATA[<testsuite hostname="cdata">]]></system-out></testcase>
+            <!-- <testsuite hostname="comment"> -->
+            </testsuite></testsuites>
+            """;
+        await WithTempDirectory(async source =>
+        {
+            foreach (var name in ProducerNames)
+            {
+                await File.WriteAllTextAsync(Path.Combine(source, name + ".junit.xml"), Xml, TestContext.Current.CancellationToken);
+            }
+
+            await WithTempDirectory(async output =>
+            {
+                var (exit, stderr) = await RunCollect(source, output);
+
+                exit.ShouldBe(0, stderr);
+                var text = await File.ReadAllTextAsync(Path.Combine(output, "xunit.junit.xml"), TestContext.Current.CancellationToken);
+                var doc = System.Xml.Linq.XDocument.Parse(text);
+                doc.Descendants("testsuite").Single().Attribute("hostname")!.Value.ShouldBe("host");
+                doc.Descendants("testcase").Single().Attribute("name")!.Value.ShouldBe("check hostname='x'");
+                text.ShouldBe(Xml.Replace("hostname = 'lan'", "hostname = \"host\"", StringComparison.Ordinal));
+            });
+        });
+    }
+
+    [Fact]
+    public async Task Dogfood_Collect_RefusesUtf16Report()
+    {
+        const string Xml = "<testsuite hostname=\"lan\"><testcase name=\"case\"/></testsuite>";
+        await WithTempDirectory(async source =>
+        {
+            foreach (var name in ProducerNames)
+            {
+                await File.WriteAllTextAsync(Path.Combine(source, name + ".junit.xml"), Xml, TestContext.Current.CancellationToken);
+            }
+
+            await WithTempDirectory(async output =>
+            {
+                var (exit, stderr) = await RunCollect(source, output);
+                exit.ShouldBe(0, stderr);
+            });
+            await File.WriteAllBytesAsync(
+                Path.Combine(source, "xunit.junit.xml"),
+                [.. System.Text.Encoding.Unicode.GetPreamble(), .. System.Text.Encoding.Unicode.GetBytes(Xml)],
+                TestContext.Current.CancellationToken);
+
+            await WithTempDirectory(async output =>
+            {
+                var (exit, stderr) = await RunCollect(source, output);
+
+                exit.ShouldBe(1);
+                stderr.ShouldContain("xunit");
+                stderr.ShouldContain("UTF-8");
+                Directory.GetFiles(output).ShouldBeEmpty();
+            });
+        });
+    }
+
+    [Fact]
+    public async Task Dogfood_Collect_RefusesReportThatExceedsCapAfterScrubbing()
+    {
+        const string Xml = "<testsuite hostname=\"x\"><testcase name=\"case\"/></testsuite>";
+        const string CommentStart = "<!--";
+        const string CommentEnd = "-->";
+        var paddingLength = checked((int)MaxBytes) - Xml.Length - CommentStart.Length - CommentEnd.Length;
+        await WithTempDirectory(async source =>
+        {
+            foreach (var name in ProducerNames)
+            {
+                File.Copy(Path.Combine(TestData, name + ".junit.xml"), Path.Combine(source, name + ".junit.xml"));
+            }
+
+            var path = Path.Combine(source, "xunit.junit.xml");
+            await File.WriteAllTextAsync(path, CommentStart + new string('p', paddingLength - 3) + CommentEnd + Xml, TestContext.Current.CancellationToken);
+            await WithTempDirectory(async output =>
+            {
+                var (exit, stderr) = await RunCollect(source, output);
+                exit.ShouldBe(0, stderr);
+                new FileInfo(Path.Combine(output, "xunit.junit.xml")).Length.ShouldBe(MaxBytes);
+            });
+            await File.WriteAllTextAsync(path, CommentStart + new string('p', paddingLength) + CommentEnd + Xml, TestContext.Current.CancellationToken);
+            new FileInfo(path).Length.ShouldBe(MaxBytes);
+
+            await WithTempDirectory(async output =>
+            {
+                var (exit, stderr) = await RunCollect(source, output);
+
+                exit.ShouldBe(1);
+                stderr.ShouldContain("xunit");
+                stderr.ShouldContain("exceeds");
+                Directory.GetFiles(output).ShouldBeEmpty();
+            });
+        });
+    }
+
+    [Fact]
+    public async Task Dogfood_Collect_RefusesForeignEncodingDeclaration()
+    {
+        const string Declaration = "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>";
+        const string Control = "<?xml version=\"1.0\" encoding=\"US-ASCII\"?>";
+        const string Body = "<testsuite hostname=\"x\"><testcase name=\"case\"/></testsuite>";
+        var bom = System.Text.Encoding.UTF8.GetPreamble();
+        await WithTempDirectory(async source =>
+        {
+            foreach (var name in ProducerNames)
+            {
+                await File.WriteAllBytesAsync(
+                    Path.Combine(source, name + ".junit.xml"),
+                    [.. bom, .. System.Text.Encoding.UTF8.GetBytes(Control + Body)],
+                    TestContext.Current.CancellationToken);
+            }
+
+            await WithTempDirectory(async output =>
+            {
+                var (exit, stderr) = await RunCollect(source, output);
+                exit.ShouldBe(0, stderr);
+            });
+            await File.WriteAllBytesAsync(
+                Path.Combine(source, "xunit.junit.xml"),
+                [.. bom, .. System.Text.Encoding.UTF8.GetBytes(Declaration + Body)],
+                TestContext.Current.CancellationToken);
+
+            await WithTempDirectory(async output =>
+            {
+                var (exit, stderr) = await RunCollect(source, output);
+
+                exit.ShouldBe(1);
+                stderr.ShouldContain("xunit");
+                stderr.ShouldContain("UTF-8");
+                Directory.GetFiles(output).ShouldBeEmpty();
             });
         });
     }
