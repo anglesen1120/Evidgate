@@ -49,12 +49,14 @@ create table if not exists public.template (
     char_length(name) between 1 and 64 and name ~ '^[a-z][a-z0-9-]*$'),
   constraint template_version_check check (version >= 1),
   constraint template_body_ref_check check (body_ref ~ '^sha256:[0-9a-f]{64}$'),
-  -- Strict recursive descent counts both object members and array elements from root level zero.
-  -- Rejecting level 33 keeps stored rules within the reader's JSON parser depth limit.
+  -- Strict recursive descent counts object members and array elements from root level zero, so a container at
+  -- level 32 is the 33rd nested container. Refusing containers there (not just values below them, which an
+  -- empty container lacks) caps nesting at 32 levels, well inside the reader's JSON parser depth limit.
   constraint template_conformance_rules_check check (
     jsonb_typeof(conformance_rules) in ('array', 'object')
     and octet_length(conformance_rules::text) <= 65536
-    and not jsonb_path_exists(conformance_rules, 'strict $.**{33 to last}'))
+    and not jsonb_path_exists(
+      conformance_rules, 'strict $.**{32 to last} ? (@.type() == "array" || @.type() == "object")'))
 );
 
 -- The real uniqueness of a built-in: rows whose `org_id` is NULL have distinct composite keys, so the composite
@@ -66,7 +68,7 @@ create unique index if not exists template_builtin_kind_name_version_key
 -- The list query's filter: kind and `active`, in that order.
 create index if not exists template_kind_active on public.template (kind, active);
 
--- The list query's keyset order (00 §9.1).
+-- The list query's keyset order.
 create index if not exists template_created_id_idx on public.template (created_at, id);
 
 alter table public.template enable row level security;

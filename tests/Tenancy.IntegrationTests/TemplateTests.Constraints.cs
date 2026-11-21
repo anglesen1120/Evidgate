@@ -1,3 +1,4 @@
+using System.Text;
 using Npgsql;
 using Shouldly;
 using Xunit;
@@ -82,12 +83,52 @@ public sealed partial class TemplateTests
         await using var world = await StartAsync();
 
         (await OwnerErrorAsync(world, InsertSql, ("rules", NestedRules(32))))
-            .ShouldBeNull("level 32 is inside the reader's parser depth");
+            .ShouldBeNull("32 nested containers around a scalar are inside the limit");
 
         var tooDeep = await OwnerErrorAsync(world, InsertSql, ("rules", NestedRules(33)));
-        tooDeep.ShouldNotBeNull("level 33 is refused");
+        tooDeep.ShouldNotBeNull("33 nested containers around a scalar are refused");
         tooDeep!.SqlState.ShouldBe("23514");
         tooDeep.ConstraintName.ShouldBe("template_conformance_rules_check");
+    }
+
+    [Theory]
+    [InlineData("arrays", 32, true)]
+    [InlineData("arrays", 33, false)]
+    [InlineData("objects", 32, true)]
+    [InlineData("objects", 33, false)]
+    [InlineData("mixed", 32, true)]
+    [InlineData("mixed", 33, false)]
+    public async Task Template_RulesNesting_CountsEmptyContainersToo(string shape, int containers, bool accepted)
+    {
+        await using var world = await StartAsync();
+
+        var error = await OwnerErrorAsync(world, InsertSql, ("rules", EmptyNesting(shape, containers)));
+
+        if (accepted)
+        {
+            error.ShouldBeNull($"{containers} nested empty {shape} are inside the limit");
+            return;
+        }
+
+        error.ShouldNotBeNull($"{containers} nested empty {shape} are refused");
+        error!.SqlState.ShouldBe("23514");
+        error.ConstraintName.ShouldBe("template_conformance_rules_check");
+    }
+
+    /// <summary>Nested containers with no scalar inside; an object level wraps the next level under key "k".</summary>
+    private static string EmptyNesting(string shape, int containers)
+    {
+        var open = new StringBuilder();
+        var close = new StringBuilder();
+        for (var level = 0; level < containers; level++)
+        {
+            var asObject = shape == "objects" || (shape == "mixed" && level % 2 == 0);
+            var last = level == containers - 1;
+            open.Append(asObject ? (last ? "{" : "{\"k\":") : "[");
+            close.Insert(0, asObject ? "}" : "]");
+        }
+
+        return open.ToString() + close;
     }
 
     /// <summary>A rules document of <paramref name="depth"/> nested single-element arrays around a scalar.</summary>

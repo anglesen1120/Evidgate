@@ -6,7 +6,7 @@ using Xunit;
 namespace Contract.Tests;
 
 /// <summary>
-/// The template registry of 03.5.1: two read operations, their view schemas and the one closed filter they accept.
+/// The template registry: two read operations, their view schemas and the one closed filter they accept.
 /// The served document is read as well, so the spec and the host cannot drift apart without failing here.
 /// </summary>
 public sealed class TemplateContractTests

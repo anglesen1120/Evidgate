@@ -205,6 +205,35 @@ public sealed partial class TemplateTests
     }
 
     [Fact]
+    public async Task List_PageSize_DefaultsToFiftyAndNeverExceedsTwoHundred()
+    {
+        await using var world = await StartAsync();
+        await _fixture.ExecuteAsync(
+            world.Database,
+            $"""
+            insert into public.template (id, org_id, kind, name, version, body_ref, conformance_rules, created_at)
+            select gen_random_uuid(), null, 'web', 'bulk-' || n, 1, '{BodyRef}', jsonb_build_object(),
+                   timestamptz '2026-05-01' + n * interval '1 second'
+            from generate_series(1, 201) as n
+            """);
+
+        var defaultPage = await ListAsync(world);
+        defaultPage.Status.ShouldBe(HttpStatusCode.OK, defaultPage.ErrorMessage);
+        Ids(defaultPage).Count.ShouldBe(50, "an omitted limit returns fifty rows");
+        defaultPage.Body.GetProperty("next_cursor").ValueKind.ShouldBe(JsonValueKind.String);
+
+        var widest = await ListAsync(world, "?limit=200");
+        widest.Status.ShouldBe(HttpStatusCode.OK, widest.ErrorMessage);
+        Ids(widest).Count.ShouldBe(200, "the widest page returns two hundred of the 201 rows");
+        var cursor = widest.Body.GetProperty("next_cursor").GetString();
+        cursor.ShouldNotBeNullOrWhiteSpace("one row remains");
+
+        var rest = await ListAsync(world, $"?limit=200&cursor={Uri.EscapeDataString(cursor!)}");
+        Ids(rest).Count.ShouldBe(1, "the last row follows on the next page");
+        rest.Body.GetProperty("next_cursor").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
     public async Task Get_ReturnsTheStoredRulesAndBodyReference()
     {
         await using var world = await StartAsync();
