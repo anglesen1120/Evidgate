@@ -24,9 +24,9 @@ namespace Tenancy.IntegrationTests;
 /// is the positive control: only the tenant changes, and the counter sees the read.
 /// <para>
 /// The authoring writes whose delegate reads <c>If-Match</c> before its body carry a well-formed tag in both the
-/// anonymous and the tenant-less request, so the refusal under test is the body guard and not the precondition. The
-/// guard sits inside the shared reader, after that tag: without a tag those routes answer 422 <c>/If-Match</c> first,
-/// and no byte is read in that case either.
+/// anonymous and the tenant-less request here, so the refusal under test is the body guard and not the precondition.
+/// Those delegates and the import also guard first, before the tag or the query is parsed: the same refusals without
+/// a tag, with a malformed one, or without the import query live in <c>RawBodyTenantRefusalTests.AuthoringGuardFirst.cs</c>.
 /// </para>
 /// <para>
 /// The AI settings save guards before its own <c>If-Match</c>, so it is also exercised with no tag at all: an
@@ -34,7 +34,7 @@ namespace Tenancy.IntegrationTests;
 /// </para>
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class RawBodyTenantRefusalTests(
+public sealed partial class RawBodyTenantRefusalTests(
     PostgresTenancyFixture fixture,
     TenancyHostPool hosts) : IClassFixture<TenancyHostPool>
 {
