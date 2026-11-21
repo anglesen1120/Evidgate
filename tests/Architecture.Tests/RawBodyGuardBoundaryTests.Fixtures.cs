@@ -103,15 +103,24 @@ public sealed partial class RawBodyGuardBoundaryTests
             .ShouldContain(finding => finding.Contains("unlisted reader", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public void Scan_GuardInsideDisabledPreprocessorRegionIsRed()
-    {
-        var source = Source("Route",
-            "static async Task M(HttpContext context)\n{\n#if NET10_0\nRawBodyGuard.RequireResolvedTenant(context.RequestServices);\n#endif\nawait ReadBodyAsync(context, token);\n}",
-            "static async Task ReadBodyAsync(HttpContext context, CancellationToken token)\n{\nawait context.Request.Body.ReadAsync(new byte[1], token);\n}");
+    private const string ReadBodyMember =
+        "static async Task ReadBodyAsync(HttpContext context, CancellationToken token)\n{\nawait context.Request.Body.ReadAsync(new byte[1], token);\n}";
 
-        Scan([(RouteFile, source)], RouteReader)
-            .ShouldContain(finding => finding.Contains("disabled preprocessor region", StringComparison.Ordinal));
+    private const string GuardCall = "RawBodyGuard.RequireResolvedTenant(context.RequestServices);";
+
+    private static string RouteWith(string body) =>
+        Source("Route", "static async Task M(HttpContext context)\n{\n" + body + "\nawait ReadBodyAsync(context, token);\n}", ReadBodyMember);
+
+    [Theory]
+    [InlineData("#if false\n" + GuardCall + "\n#endif")]
+    [InlineData("#if NET10_0\n" + GuardCall + "\n#endif")]
+    [InlineData("#if NET10_0\nvar x = 1;\n#else\n" + GuardCall + "\n#endif")]
+    [InlineData("#if NET10_0\n" + GuardCall + "\n#else\nvar x = 1;\n#endif")]
+    [InlineData("#if true\nvar x = 1;\n#endif\n" + GuardCall)]
+    public void Scan_ConditionalTextAroundTheGuardIsRed(string body)
+    {
+        Scan([(RouteFile, RouteWith(body))], RouteReader)
+            .ShouldContain(finding => finding.Contains("conditionally compiled text", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -119,10 +128,33 @@ public sealed partial class RawBodyGuardBoundaryTests
     {
         var source = Source("Route",
             "static async Task M(HttpContext context)\n{\n#if NET10_0\nawait ReadBodyAsync(context, token);\n#endif\n}",
-            "static async Task ReadBodyAsync(HttpContext context, CancellationToken token)\n{\nawait context.Request.Body.ReadAsync(new byte[1], token);\n}");
+            ReadBodyMember);
 
         Scan([(RouteFile, source)], RouteReader)
-            .ShouldContain(finding => finding.Contains("disabled preprocessor region", StringComparison.Ordinal));
+            .ShouldContain(finding => finding.Contains("conditionally compiled text", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Scan_CommentedOutGuardIsNotCountedAndNotConditional()
+    {
+        var errors = Scan([(RouteFile, RouteWith("// #if NET10_0\n// " + GuardCall))], RouteReader);
+
+        errors.ShouldNotContain(finding => finding.Contains("conditionally compiled text", StringComparison.Ordinal));
+        errors.ShouldContain(finding => finding.Contains("invoked before the shared guard", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Scan_PragmaLinesAloneAreNotConditionalText()
+    {
+        var body = "#pragma warning disable CS0219\n" + GuardCall + "\n#pragma warning restore CS0219";
+
+        Scan([(RouteFile, RouteWith(body))], RouteReader).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Scan_CleanGuardedFileIsGreen()
+    {
+        Scan([(RouteFile, RouteWith(GuardCall))], RouteReader).ShouldBeEmpty();
     }
 
     [Fact]

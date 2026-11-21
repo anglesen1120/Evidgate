@@ -69,7 +69,7 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         {
             var token = TestContext.Current.CancellationToken;
             var root = CSharpSyntaxTree.ParseText(text, cancellationToken: token).GetRoot(token);
-            var conditional = ConditionalLine(root);
+            var conditional = ConditionalSourceText.FirstLine(root);
             if (conditional > 0)
             {
                 errors.Add($"{path}:{conditional}: conditionally compiled text in an endpoint file hides code from the pin");
@@ -247,30 +247,5 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         },
     } && target.Identifier.ValueText == context;
 
-    /// <summary>
-    /// The first hidden text or conditional directive in the file, so any conditionally compiled endpoint text fails the
-    /// pin rather than only text that happens to look like a registration or a precondition read.
-    /// </summary>
-    private static int ConditionalLine(SyntaxNode root)
-    {
-        var directive = 0;
-        foreach (var trivia in root.DescendantTrivia(descendIntoTrivia: true))
-        {
-            if (trivia.IsKind(SyntaxKind.DisabledTextTrivia))
-            {
-                return Line(trivia);
-            }
-
-            if (directive == 0 && (trivia.IsKind(SyntaxKind.IfDirectiveTrivia) || trivia.IsKind(SyntaxKind.ElifDirectiveTrivia)))
-            {
-                directive = Line(trivia);
-            }
-        }
-
-        return directive;
-    }
-
     private static int Line(SyntaxNode node) => node.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
-
-    private static int Line(SyntaxTrivia trivia) => trivia.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
 }
