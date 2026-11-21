@@ -14,8 +14,8 @@ using Xunit;
 namespace Identity.IntegrationTests;
 
 /// <summary>
-/// The log half of "no installation token and no private key in any log line": one real host with a sink that keeps
-/// every call at Trace, driven through start, callback, a token mint (miss, hit, failure) and disconnect.
+/// The log half of "no installation token and no private key in any log line": one real host whose sink keeps
+/// every call with the deployed framework log filters and Evidgate's own categories at Trace, driven through start, callback, a token mint (miss, hit, failure) and disconnect.
 /// </summary>
 public sealed partial class GitHubInstallationTests
 {
