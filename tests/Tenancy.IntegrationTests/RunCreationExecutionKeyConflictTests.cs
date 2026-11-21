@@ -36,10 +36,8 @@ public sealed class RunCreationExecutionKeyConflictTests(PostgresTenancyFixture 
     }
 
     /// <summary>
-    /// Fault-injection pin, not a race test: a run id is fresh per create and the constraint is scoped to it, so no
-    /// input gets past the in-memory check and then collides. A trigger made in this test's own database raises the
-    /// unique violation the index would, so the catch around the planned-execution insert is the only thing that can
-    /// answer, and it must answer the same 422 as the in-memory refusal and roll the whole create back.
+    /// Fault-injection pin, not a race test: run ids are fresh per create, so only a trigger in this test's own database
+    /// (never the shared one) can raise the unique violation the catch answers. The same request then succeeds.
     /// </summary>
     [Fact]
     public async Task CreateRun_UniqueViolationFromInsert_MapsTo422_NothingWritten()
@@ -54,7 +52,10 @@ public sealed class RunCreationExecutionKeyConflictTests(PostgresTenancyFixture 
             + "create trigger fault_execution_key before insert on public.planned_execution "
             + "for each row execute function public.fault_execution_key()");
 
-        var answer = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
+        var key = NewKey();
+        var body = RunCreationTests.RunBody(world.ManifestId);
+
+        var answer = await RunCreationTests.CreateRunAsync(world, body, idempotencyKey: key);
 
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, answer.ErrorMessage);
         answer.ErrorCode.ShouldBe("execution_key_conflict", "the catch maps the violation of the execution-key index");
@@ -62,6 +63,10 @@ public sealed class RunCreationExecutionKeyConflictTests(PostgresTenancyFixture 
         detail.GetProperty("path").GetString().ShouldBe("/planned_executions");
         detail.GetProperty("reason").GetString().ShouldBe("execution_key_conflict");
         await RunCreationTests.AssertNoRunRowsAsync(_fixture, world);
+
+        await _fixture.ExecuteAsync(world.Database, "drop trigger fault_execution_key on public.planned_execution");
+        var retry = await RunCreationTests.CreateRunAsync(world, body, idempotencyKey: key);
+        retry.Status.ShouldBe(HttpStatusCode.Created, "the same request and key succeed once the fault is gone: nothing was claimed or left behind");
     }
 
     [Fact]
