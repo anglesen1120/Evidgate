@@ -19,9 +19,17 @@ public sealed partial class DraftTests
     {
         await using var world = await StartAsync();
         var created = new List<Guid>();
-        foreach (var path in new[] { "one.ts", "two.ts", "three.ts", "four.ts", "five.ts" })
+        for (var count = 1; count <= 5; count++)
         {
-            created.Add(await CreateDraftAsync(world, "tests/" + path));
+            // A different file count per draft, so a summary that reports a constant cannot pass.
+            var made = await CreateAsync(world, new JsonObject
+            {
+                ["kind"] = "template",
+                ["base_commit"] = "abcdef1234567",
+                ["content"] = Content([.. Enumerable.Range(0, count).Select(index => File($"tests/walk-{count}-{index}.ts"))]),
+            });
+            made.Status.ShouldBe(HttpStatusCode.Created, made.ErrorMessage);
+            created.Add(made.Id());
         }
 
         // The page order is the database's own keyset order, so a tie on created_at cannot make this expectation guess.
@@ -45,6 +53,7 @@ public sealed partial class DraftTests
             var items = answer.Body.GetProperty("items").EnumerateArray().ToList();
             items.Count.ShouldBe(page < 2 ? 2 : 1);
             seen.AddRange(items.Select(item => item.GetProperty("id").GetGuid().ToString("D")));
+            await ShouldBeSummariesAsync(world, items);
 
             var next = answer.Body.GetProperty("next_cursor");
             if (page < 2)
@@ -98,6 +107,7 @@ public sealed partial class DraftTests
             var items = answer.Body.GetProperty("items").EnumerateArray().ToList();
             items.Count.ShouldBe(page < 2 ? 2 : 1);
             seen.AddRange(items.Select(item => item.GetProperty("id").GetGuid().ToString("D")));
+            await ShouldBeSummariesAsync(world, items);
 
             var next = answer.Body.GetProperty("next_cursor");
             if (page < 2)
@@ -281,6 +291,7 @@ public sealed partial class DraftTests
             .Select(item => item.GetProperty("id").GetGuid()).ToList();
         ids.ShouldBe([passed]);
         ids.ShouldNotContain(draft);
+        await ShouldBeSummariesAsync(world, answer.Body.GetProperty("items").EnumerateArray().ToList());
 
         var unknown = await world.Client.SendAsync(HttpMethod.Get, $"{world.Collection}?status=nonsense", world.Admin);
         unknown.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, unknown.ErrorMessage);
@@ -302,6 +313,26 @@ public sealed partial class DraftTests
             Details(refused).ShouldContain(
                 detail => detail.Path == "limit",
                 $"?limit={limit} names the member: {string.Join(", ", Details(refused))}");
+        }
+    }
+
+    /// <summary>Every list item carries the stored file count and never the file set itself.</summary>
+    private async Task ShouldBeSummariesAsync(World world, IReadOnlyList<JsonElement> items)
+    {
+        var stored = await _fixture.ColumnAsync<string>(
+            world.Database,
+            $"""
+             select id::text || ':' || jsonb_array_length(content -> 'files') from public.draft
+              where org_id = '{world.Org}' and project_id = '{world.Project}'
+             """);
+        var counts = stored.Select(row => row.Split(':')).ToDictionary(parts => parts[0], parts => int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture), StringComparer.Ordinal);
+
+        items.ShouldNotBeEmpty();
+        foreach (var item in items)
+        {
+            var id = item.GetProperty("id").GetGuid().ToString("D");
+            item.GetProperty("file_count").GetInt32().ShouldBe(counts[id], "file_count matches the stored files of " + id);
+            item.TryGetProperty("content", out _).ShouldBeFalse("a list item never carries content: " + id);
         }
     }
 }
