@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Catalog.Contracts;
 
 namespace Evidgate.Modules.Catalog.Infrastructure.Persistence;
@@ -54,6 +55,13 @@ internal static class DraftReadSql
          order by m.id
          limit 1
         """;
+
+    /// <summary>
+    /// The bytes a <c>jsonb</c> column stores for one JSON text, computed by PostgreSQL itself: <c>jsonb::text</c>
+    /// pads each colon and comma and re-renders numbers, so a C# byte count of the request differs from the column's
+    /// own CHECK. Measuring the same value through the same cast keeps a validated body from failing the insert.
+    /// </summary>
+    internal const string JsonbTextBytes = "select octet_length(cast(cast(@json as text) as jsonb)::text)";
 }
 
 /// <summary>One row of <see cref="DraftReadSql"/>: the draft with its JSON columns still as text.</summary>
@@ -103,6 +111,20 @@ internal sealed record DraftRow(
         LinkedRevisionId,
         CreatedAt,
         UpdatedAt);
+}
+
+/// <summary>Measures a draft's JSON text the way its column's CHECK does, in the request's own transaction.</summary>
+internal static class DraftSizes
+{
+    /// <summary>The bytes the column would hold for this text.</summary>
+    /// <param name="db">The tenant-scoped Dapper seam of the request transaction.</param>
+    /// <param name="json">The JSON text the handler is about to store.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    internal static async Task<int> BytesAsync(ITenantDb db, string json, CancellationToken cancellationToken)
+    {
+        return await db.ScalarAsync<int>(DraftReadSql.JsonbTextBytes, new { json }, cancellationToken)
+            .ConfigureAwait(false);
+    }
 }
 
 /// <summary>The one serialiser shape of a draft's JSON columns, shared by the write path and the read projection.</summary>

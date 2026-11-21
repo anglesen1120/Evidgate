@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Shouldly;
@@ -130,6 +131,145 @@ public sealed partial class DraftTests
         // Positive control: the same shape with every member inside its bound is accepted.
         (await CreateAsync(world)).Status.ShouldBe(HttpStatusCode.Created);
     }
+
+    [Theory]
+    [InlineData("missing content", """{"kind":"template","base_commit":"abcdef1234567"}""", "content")]
+    [InlineData("null content", """{"kind":"template","base_commit":"abcdef1234567","content":null}""", "content")]
+    [InlineData("null files", """{"kind":"template","base_commit":"abcdef1234567","content":{"files":null}}""", "files")]
+    [InlineData("null file", """{"kind":"template","base_commit":"abcdef1234567","content":{"files":[null]}}""", "files")]
+    public async Task Create_NullContentShape_Is422DraftInvalid(string scenario, string json, string field)
+    {
+        await using var world = await StartAsync();
+        var body = JsonNode.Parse(json)!.AsObject();
+
+        ShouldNameField(await CreateAsync(world, body), field, scenario);
+        (await DraftCountAsync(world)).ShouldBe(0);
+        (await CreateAsync(world)).Status.ShouldBe(HttpStatusCode.Created);
+    }
+
+    [Theory]
+    [InlineData("tests/./checkout.ts")]
+    [InlineData("tests//checkout.ts")]
+    [InlineData("tests/checkout.ts/")]
+    public async Task Create_NonCanonicalPath_Is422DraftInvalid(string path)
+    {
+        await using var world = await StartAsync();
+        ShouldNameField(await CreateAsync(world, Body(path)), "path", path);
+        (await DraftCountAsync(world)).ShouldBe(0);
+        (await CreateAsync(world)).Status.ShouldBe(HttpStatusCode.Created);
+    }
+
+    [Theory]
+    [InlineData("../body.ts")]
+    [InlineData("drafts/./body.ts")]
+    [InlineData("drafts//body.ts")]
+    [InlineData("drafts/body.ts/")]
+    [InlineData("drafts/body name.ts")]
+    public async Task Create_InvalidBodyPointer_Is422DraftInvalid(string bodyRef)
+    {
+        await using var world = await StartAsync();
+        ShouldNameField(await CreateAsync(world, Body(bodyRef: bodyRef)), "body_ref", bodyRef);
+        (await DraftCountAsync(world)).ShouldBe(0);
+        (await CreateAsync(world)).Status.ShouldBe(HttpStatusCode.Created);
+    }
+
+    /// <summary>
+    /// The 4096-byte provenance bound is the one byte bound a request can reach, and the column's CHECK counts
+    /// <c>jsonb::text</c>, not the request: punctuation spaces and a re-rendered number make the stored value longer.
+    /// Each seed pins one of those differences; the exact limit is accepted and the next byte is a 422, never a 500.
+    /// </summary>
+    [Theory]
+    [InlineData("", "{}")]
+    [InlineData("é", "{}")]
+    [InlineData("", "{\"number\":1e5}")]
+    public async Task Create_ProvenanceJsonbByteBoundary_AcceptsLimitAndRefusesTheNextByte(string prefix, string seed)
+    {
+        await using var world = await StartAsync();
+        var body = Body();
+        var provenance = JsonNode.Parse(seed)!.AsObject();
+        provenance["text"] = prefix;
+        var baseline = await _fixture.ScalarAsync<int>(
+            world.Database, $"select octet_length(({SqlLiteral(provenance.ToJsonString())})::jsonb::text)");
+        baseline.ShouldBeLessThan(4096, "the seed is far smaller than the bound");
+
+        provenance["text"] = prefix + new string('a', 4096 - baseline);
+        body["provenance"] = provenance;
+
+        var created = await CreateAsync(world, body);
+        created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
+        (await StoredAsync<int>(world, created.Id(), "octet_length(provenance::text)")).ShouldBe(4096);
+
+        provenance["text"] = prefix + new string('a', 4097 - baseline);
+        ShouldNameField(await CreateAsync(world, body), "provenance", "4097 stored bytes");
+        (await DraftCountAsync(world)).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// The content bound is reachable, and the column's CHECK counts <c>jsonb::text</c>: the limit itself is stored,
+    /// the next byte is a 422 rather than the 23514 a body the app accepted could otherwise raise.
+    /// </summary>
+    [Fact]
+    public async Task Create_ContentJsonbByteBoundary_AcceptsLimitAndRefusesTheNextByte()
+    {
+        await using var world = await StartAsync();
+        var body = Body();
+
+        body["content"] = await ContentAtStoredBytesAsync(world, 262_144);
+        var created = await CreateRelaxedAsync(world, body);
+        created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
+        (await StoredAsync<int>(world, created.Id(), "octet_length(content::text)")).ShouldBe(262_144);
+
+        body["content"] = await ContentAtStoredBytesAsync(world, 262_145);
+        ShouldNameField(await CreateRelaxedAsync(world, body), "content", "262145 stored bytes");
+        (await DraftCountAsync(world)).ShouldBe(1);
+    }
+
+    private async Task<JsonObject> ContentAtStoredBytesAsync(World world, int target)
+    {
+        var files = Enumerable.Range(0, 200)
+            .Select(index => File($"{index:D3}/", bodyRef: new string('b', 512)))
+            .ToArray();
+        var remaining = target - await StoredBytesAsync(world, Content(files));
+        remaining.ShouldBeGreaterThan(0, "the shape starts below the requested size");
+
+        // A three-byte code point adds two stored bytes over one ASCII one, a two-byte one adds a single byte, so
+        // any remainder is padded exactly; the request keeps the same characters unescaped.
+        var single = remaining % 2;
+        var triple = remaining / 2;
+        foreach (var file in files)
+        {
+            var take = Math.Min(single, 508);
+            var fill = Math.Min(triple, 508 - take);
+            file["path"] = file["path"]!.GetValue<string>()
+                + new string('\u00e9', take)
+                + new string('\u0800', fill)
+                + new string('a', 508 - take - fill);
+            single -= take;
+            triple -= fill;
+        }
+
+        single.ShouldBe(0);
+        triple.ShouldBe(0);
+        return Content(files);
+    }
+
+    private Task<int> StoredBytesAsync(World world, JsonObject content) =>
+        _fixture.ScalarAsync<int>(
+            world.Database,
+            $"select octet_length(({SqlLiteral(content.ToJsonString())})::jsonb::text)");
+
+    private static Task<ApiAnswer> CreateRelaxedAsync(World world, JsonObject body) =>
+        world.Client.SendRawAsync(
+            HttpMethod.Post,
+            world.Collection,
+            headers =>
+            {
+                world.Admin(headers);
+                headers.Add("Idempotency-Key", NewKey());
+            },
+            body.ToJsonString(new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
+
+    private static string SqlLiteral(string text) => "'" + text.Replace("'", "''", StringComparison.Ordinal) + "'";
 
     [Fact]
     public async Task Create_BodyOver256KiB_Is413PayloadTooLarge_AndWritesNothing()

@@ -10,7 +10,7 @@ namespace Tenancy.IntegrationTests;
 
 /// <summary>
 /// The draft routes against the real host and PostgreSQL: an ETag over <c>version</c>, a state machine the database
-/// enforces, idempotent creates and the author gate. Every assertion reads the committed row or the audit trail.
+/// enforces, idempotent writes and the author gate. Every assertion reads the committed row or the audit trail.
 /// </summary>
 [Trait("Category", "Docker")]
 public sealed partial class DraftTests : IClassFixture<TenancyHostPool>
@@ -112,18 +112,19 @@ public sealed partial class DraftTests : IClassFixture<TenancyHostPool>
             .Select(detail => (detail.GetProperty("path").GetString(), detail.GetProperty("reason").GetString()!)),
     ];
 
-    /// <summary>
-    /// A 412 over the draft's version: the status the contract fixes, and the current version in <c>details</c> so a
-    /// client can re-read and retry. The error code is pinned to the catalog's stale spelling, with the short
-    /// <c>conflict</c> alias accepted while the two modules name the same refusal.
-    /// </summary>
-    private static void ShouldBeStale(ApiAnswer answer, string scenario)
+    /// <summary>The version detail lets the caller re-read the actual head before retrying.</summary>
+    private static void ShouldBeStale(ApiAnswer answer, int currentVersion, string scenario)
     {
         answer.Status.ShouldBe(HttpStatusCode.PreconditionFailed, scenario + ": " + answer.ErrorMessage);
         answer.ErrorCode.ShouldBe("precondition_failed", scenario);
-        Details(answer).ShouldContain(
-            detail => detail.Path == "version",
-            $"{scenario}: the 412 carries the draft's current version: {string.Join(", ", Details(answer))}");
+
+        var versions = Details(answer)
+            .Where(detail => detail.Path == "version")
+            .Select(detail => detail.Reason)
+            .ToList();
+        versions.ShouldHaveSingleItem(scenario).ShouldBe(
+            currentVersion.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            $"{scenario}: details.version must be the current version");
     }
 
     private static void ShouldNameField(ApiAnswer answer, string field, string scenario)
@@ -159,22 +160,38 @@ public sealed partial class DraftTests : IClassFixture<TenancyHostPool>
              """);
 
     /// <summary>
-    /// Files one draft as the owner because the test needs a state the create route cannot reach (the states after
-    /// <c>draft</c> are the dry-run and PR tasks' to write). The row is asserted to exist before a test relies on it.
+    /// Seeds a draft as the owner and walks it to <paramref name="status"/> through the guard's legal transitions:
+    /// the create route cannot reach those states, and a direct insert would skip the state machine. Each transition
+    /// bumps <c>version</c>, so a test that patches reads the seeded head back instead of assuming 1.
     /// </summary>
-    private async Task<Guid> SeedAsync(World world, string status = "draft", Guid? project = null)
+    private async Task<Guid> SeedAsync(World world, string status = "draft", Guid? project = null, DateTimeOffset? createdAt = null)
     {
         var id = Guid.CreateVersion7();
         var content = $"{{\"files\":[{{\"path\":\"test.ts\",\"body_sha\":\"{Sha}\",\"body_ref\":\"drafts/test.ts\"}}]}}";
+        var timestamp = createdAt is { } value ? $"'{value:O}'::timestamptz" : "now()";
 
         await _fixture.ExecuteAsync(
             world.Database,
             $"""
-             insert into public.draft (id, org_id, project_id, author_membership_id, kind, base_commit, status, content)
-             select '{id}', '{world.Org}', '{project ?? world.Project}', m.id, 'template', 'abcdef1234567', '{status}', '{content}'::jsonb
+             insert into public.draft (id, org_id, project_id, author_membership_id, kind, base_commit, content, created_at)
+             select '{id}', '{world.Org}', '{project ?? world.Project}', m.id, 'template', 'abcdef1234567', '{content}'::jsonb, {timestamp}
                from public.membership m
               where m.org_id = '{world.Org}' and m.user_id = '{world.User}' and m.status = 'active';
              """);
+
+        string[] transitions = status switch
+        {
+            "draft" => [],
+            "dry_running" => ["dry_running"],
+            "dry_passed" or "dry_failed" => ["dry_running", status],
+            "pr_open" => ["dry_running", "dry_passed", "pr_open"],
+            "merged" or "closed" => ["dry_running", "dry_passed", "pr_open", status],
+            _ => throw new ArgumentOutOfRangeException(nameof(status)),
+        };
+        foreach (var next in transitions)
+        {
+            await _fixture.ExecuteAsync(world.Database, $"update public.draft set status = '{next}' where id = '{id}'");
+        }
 
         (await StoredAsync<string>(world, id, "status")).ShouldBe(status);
         return id;

@@ -52,7 +52,8 @@ internal static class DraftStatus
 /// <summary>
 /// The write-model row of <c>public.draft</c> (migration 0117). Identity columns are assigned once and the
 /// <c>draft_guard</c> trigger refuses any later change to them, as it refuses a content edit outside
-/// <see cref="DraftStatus.Draft"/> and a transition outside the state machine.
+/// <see cref="DraftStatus.Draft"/>, a transition outside the state machine, and an insert that does not start
+/// at <see cref="DraftStatus.Draft"/> version 1.
 /// </summary>
 internal sealed class Draft
 {

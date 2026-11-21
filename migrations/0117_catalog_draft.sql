@@ -44,7 +44,10 @@ create table if not exists public.draft (
 );
 
 create index if not exists draft_project_list on public.draft (org_id, project_id, created_at, id);
-create index if not exists draft_status on public.draft (org_id, project_id, status);
+-- A status-filtered page reads (project, status) in created_at, id order; the trailing columns keep the sort
+-- inside the index, so the list never sorts a filtered page in memory.
+drop index if exists public.draft_status;
+create index if not exists draft_status on public.draft (org_id, project_id, status, created_at, id);
 create index if not exists draft_author on public.draft (org_id, author_membership_id);
 create index if not exists draft_linked_case on public.draft (org_id, linked_case_id);
 create index if not exists draft_linked_revision on public.draft (org_id, linked_revision_id);
@@ -54,6 +57,16 @@ create or replace function public.draft_guard() returns trigger
   set search_path = ''
 as $$
 begin
+  -- The update guard cannot see an insert, so a caller that skips the create route must not be able to file a
+  -- draft past its initial state or version: the state machine starts at draft/1 and only the guard's update
+  -- edges move it. This runs before the CHECKs, so a bad insert answers this message rather than a constraint.
+  if tg_op = 'INSERT' then
+    if new.status <> 'draft' or new.version <> 1 then
+      raise exception 'draft must start in draft state at version 1' using errcode = '23514';
+    end if;
+    return new;
+  end if;
+
   if (new.id, new.org_id, new.project_id, new.author_membership_id, new.kind, new.base_commit, new.created_at)
      is distinct from
      (old.id, old.org_id, old.project_id, old.author_membership_id, old.kind, old.base_commit, old.created_at) then
@@ -79,7 +92,7 @@ $$;
 
 revoke all on function public.draft_guard() from public;
 drop trigger if exists draft_guard on public.draft;
-create trigger draft_guard before update on public.draft
+create trigger draft_guard before insert or update on public.draft
   for each row execute function public.draft_guard();
 drop trigger if exists draft_set_updated_at_and_version on public.draft;
 create trigger draft_set_updated_at_and_version before update on public.draft

@@ -7,9 +7,9 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// The two read routes: a keyset page over <c>(created_at, id)</c> that runs one statement, and one draft whose ETag
-/// is its version. The tenant and the project are both part of the read, so a foreign id and an unknown one answer
-/// identically.
+/// The two read routes: a keyset page over <c>(created_at, id)</c> that answers in one statement over the draft table
+/// after one project-existence probe, and one draft whose ETag is its version. The tenant and the project are both
+/// part of the read, so a foreign id and an unknown one answer identically.
 /// </summary>
 public sealed partial class DraftTests
 {
@@ -62,6 +62,59 @@ public sealed partial class DraftTests
     }
 
     [Fact]
+    public async Task List_TiedCreatedAt_WalksTheTieByDraftIdWithoutGapsOrDuplicates()
+    {
+        await using var world = await StartAsync();
+        var tied = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        for (var index = 0; index < 5; index++)
+        {
+            await SeedAsync(world, createdAt: tied);
+        }
+
+        // An identical created_at on every row is the case where only the id tie-break can order the page.
+        (await _fixture.ScalarAsync<long>(
+                world.Database,
+                $"select count(distinct created_at) from public.draft where org_id = '{world.Org}' and project_id = '{world.Project}'"))
+            .ShouldBe(1, "every seeded row shares one instant");
+
+        var expected = await _fixture.ColumnAsync<string>(
+            world.Database,
+            $"""
+             select id::text from public.draft
+              where org_id = '{world.Org}' and project_id = '{world.Project}'
+              order by created_at, id
+             """);
+        expected.Count.ShouldBe(5);
+
+        var seen = new List<string>();
+        string? cursor = null;
+        for (var page = 0; page < 3; page++)
+        {
+            var url = $"{world.Collection}?limit=2" + (cursor is null ? string.Empty : $"&cursor={Uri.EscapeDataString(cursor)}");
+            var answer = await world.Client.SendAsync(HttpMethod.Get, url, world.Admin);
+
+            answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
+            var items = answer.Body.GetProperty("items").EnumerateArray().ToList();
+            items.Count.ShouldBe(page < 2 ? 2 : 1);
+            seen.AddRange(items.Select(item => item.GetProperty("id").GetGuid().ToString("D")));
+
+            var next = answer.Body.GetProperty("next_cursor");
+            if (page < 2)
+            {
+                next.ValueKind.ShouldBe(JsonValueKind.String, "a page that is not the last carries a cursor");
+                cursor = next.GetString();
+            }
+            else
+            {
+                next.ValueKind.ShouldBe(JsonValueKind.Null, "the last page carries no cursor");
+            }
+        }
+
+        seen.ShouldBe(expected, "the tie walks in id order, once per row");
+        seen.Distinct(StringComparer.Ordinal).Count().ShouldBe(5, "no row is served twice across the tie");
+    }
+
+    [Fact]
     public async Task List_RunsOneStatementOverTheDraftTable()
     {
         await using var world = await StartAsync();
@@ -73,10 +126,16 @@ public sealed partial class DraftTests
         var answer = await world.Client.SendAsync(HttpMethod.Get, world.Collection, world.Admin);
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
-        var statements = world.Api.Statements.Snapshot();
+        var statements = world.Api.Statements.Snapshot().Skip(before).ToList();
         statements.Count(statement => statement.Contains("from public.draft", StringComparison.Ordinal))
             .ShouldBe(1, "the page is one Dapper statement, as the index plan assumes");
-        statements.Count.ShouldBeGreaterThan(before, "the counter observed the request");
+
+        // The handler runs a project-existence probe before the page; tenant resolution may add one more project read.
+        var probes = statements.Count(statement =>
+            statement.Contains("from public.project", StringComparison.Ordinal)
+            && !statement.Contains("from public.draft", StringComparison.Ordinal));
+        probes.ShouldBeGreaterThanOrEqualTo(1, "the handler's own ProjectExists probe");
+        probes.ShouldBeLessThanOrEqualTo(2, "and at most one more from the request's project resolution");
     }
 
     [Fact]
@@ -119,12 +178,18 @@ public sealed partial class DraftTests
         await using var world = await StartAsync();
         var (otherOrg, otherProject, otherUser) = await OtherTenantAsync(world);
         var sibling = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("sibling"));
+        var foreignProject = await SeedAsync(world, project: sibling);
+
+        // A credential scoped to one project cannot read another project's draft: the handler answers the same 404
+        // as a missing id. The unrestricted member's read is the positive control that the row is really there.
+        var narrowed = TenancyApiFactory.Caller(org: world.Org, user: world.User, project: world.Project);
+        (await GetAsync(world, foreignProject)).Status.ShouldBe(HttpStatusCode.OK);
 
         var answers = new[]
         {
-            await GetAsync(world, Guid.CreateVersion7()),
-            await GetAsync(world, await SeedAsync(world, project: sibling)),
-            await GetAsync(world, await SeedForAsync(world, otherOrg, otherProject, otherUser)),
+            await GetAsync(world, Guid.CreateVersion7(), narrowed),
+            await GetAsync(world, foreignProject, narrowed),
+            await GetAsync(world, await SeedForAsync(world, otherOrg, otherProject, otherUser), narrowed),
         };
 
         foreach (var answer in answers)
@@ -139,20 +204,26 @@ public sealed partial class DraftTests
     }
 
     [Fact]
-    public async Task DraftOfAnotherProject_ForANarrowedMember_Is403ProjectScopeMismatch()
+    public async Task DraftOfAnotherProject_ForAProjectScopedCaller_Is404_AndListIs403()
     {
         await using var world = await StartAsync();
         var id = await CreateDraftAsync(world);
         var sibling = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("sibling"));
+        var siblingDraft = await SeedAsync(world, project: sibling);
         var narrowed = TenancyApiFactory.Caller(org: world.Org, user: world.User, project: sibling);
 
+        // Un-nested routes answer a draft outside the credential's project as 404, so the id cannot be probed;
+        // the list route is project-addressed and names the scope refusal instead.
+        (await GetAsync(world, siblingDraft, narrowed)).Status.ShouldBe(
+            HttpStatusCode.OK, "the credential reads inside its own project");
+
         var read = await GetAsync(world, id, narrowed);
-        read.Status.ShouldBe(HttpStatusCode.Forbidden, read.ErrorMessage);
-        read.ErrorCode.ShouldBe("project_scope_mismatch");
+        read.Status.ShouldBe(HttpStatusCode.NotFound, read.ErrorMessage);
+        read.ErrorCode.ShouldBe("not_found");
 
         var patch = await PatchAsync(world, id, "\"1\"", caller: narrowed);
-        patch.Status.ShouldBe(HttpStatusCode.Forbidden, patch.ErrorMessage);
-        patch.ErrorCode.ShouldBe("project_scope_mismatch");
+        patch.Status.ShouldBe(HttpStatusCode.NotFound, patch.ErrorMessage);
+        patch.ErrorCode.ShouldBe("not_found");
 
         var list = await world.Client.SendAsync(HttpMethod.Get, world.Collection, narrowed);
         list.Status.ShouldBe(HttpStatusCode.Forbidden, list.ErrorMessage);
@@ -178,7 +249,8 @@ public sealed partial class DraftTests
 
         var unknown = await world.Client.SendAsync(HttpMethod.Get, $"{world.Collection}?status=nonsense", world.Admin);
         unknown.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, unknown.ErrorMessage);
-        unknown.ErrorCode.ShouldBe("request_invalid");
+        unknown.ErrorCode.ShouldBe("draft_invalid");
+        Details(unknown).ShouldContain(detail => detail.Path == "status");
     }
 
     [Fact]

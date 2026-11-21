@@ -61,8 +61,13 @@ internal static class DraftBody
     internal sealed record CreateBody(CreateDraftRequest Request, string ContentJson, string? ProvenanceJson);
 
     /// <summary>The create body, or the 422 that names the first field it breaks.</summary>
+    /// <param name="db">The tenant-scoped seam of the request transaction, used only to measure both JSON columns.</param>
     /// <param name="body">The raw request body.</param>
-    internal static (CreateBody? Parsed, Error? Error) ReadCreate(JsonElement body)
+    /// <param name="cancellationToken">Cancellation.</param>
+    internal static async Task<(CreateBody? Parsed, Error? Error)> ReadCreateAsync(
+        ITenantDb db,
+        JsonElement body,
+        CancellationToken cancellationToken)
     {
         var (request, readError) = Read<CreateDraftRequest>(body, "a draft");
         if (readError is not null || request is null)
@@ -85,14 +90,24 @@ internal static class DraftBody
         var contentJson = Content(request.Content, details);
         var provenanceJson = Provenance(request.Provenance, details);
 
+        if (details.Count == 0)
+        {
+            await MeasureAsync(db, contentJson, provenanceJson, details, cancellationToken).ConfigureAwait(false);
+        }
+
         return details.Count > 0
             ? (null, DraftErrors.Invalid("the draft body does not match the contract", details))
             : (new CreateBody(request, contentJson, provenanceJson), null);
     }
 
     /// <summary>The patch body (the replacement content set only), or the 422 naming the first member it breaks.</summary>
+    /// <param name="db">The tenant-scoped seam of the request transaction, used only to measure the content column.</param>
     /// <param name="body">The raw request body.</param>
-    internal static (string? ContentJson, Error? Error) ReadUpdate(JsonElement body)
+    /// <param name="cancellationToken">Cancellation.</param>
+    internal static async Task<(string? ContentJson, Error? Error)> ReadUpdateAsync(
+        ITenantDb db,
+        JsonElement body,
+        CancellationToken cancellationToken)
     {
         var (request, readError) = Read<UpdateDraftRequest>(body, "a draft");
         if (readError is not null || request is null)
@@ -103,9 +118,37 @@ internal static class DraftBody
         var details = new List<ErrorDetail>();
         var contentJson = Content(request.Content, details);
 
+        if (details.Count == 0)
+        {
+            await MeasureAsync(db, contentJson, null, details, cancellationToken).ConfigureAwait(false);
+        }
+
         return details.Count > 0
             ? (null, DraftErrors.Invalid("the draft body does not match the contract", details))
             : (contentJson, null);
+    }
+
+    /// <summary>
+    /// Refuses a member the column's own CHECK would refuse: only PostgreSQL knows the bytes <c>jsonb::text</c> holds,
+    /// so the exact bound is measured there, after the cheap shape and raw-size checks above have passed.
+    /// </summary>
+    private static async Task MeasureAsync(
+        ITenantDb db,
+        string contentJson,
+        string? provenanceJson,
+        List<ErrorDetail> details,
+        CancellationToken cancellationToken)
+    {
+        if (await DraftSizes.BytesAsync(db, contentJson, cancellationToken).ConfigureAwait(false) > MaxContentBytes)
+        {
+            details.Add(new ErrorDetail("content", "too_large"));
+        }
+
+        if (provenanceJson is not null
+            && await DraftSizes.BytesAsync(db, provenanceJson, cancellationToken).ConfigureAwait(false) > MaxProvenanceBytes)
+        {
+            details.Add(new ErrorDetail("provenance", "too_large"));
+        }
     }
 
     /// <summary>
@@ -128,17 +171,17 @@ internal static class DraftBody
         }
         catch (JsonException exception)
         {
-            var path = exception.Path?.TrimStart('$', '.') ?? string.Empty;
+            var path = exception.Path is { } reported ? TextRules.Brief(reported.TrimStart('$', '.')) : string.Empty;
             return (null, DraftErrors.Invalid(
                 $"the body does not match {resource}",
                 [new ErrorDetail(path.Length == 0 ? string.Empty : path, "invalid")]));
         }
     }
 
-    private static string Content(DraftContentDto content, List<ErrorDetail> details)
+    private static string Content(DraftContentDto? content, List<ErrorDetail> details)
     {
-        var files = content.Files;
-        if (files is null || files.Count < 1 || files.Count > MaxFiles || files.Any(file => file is null))
+        var files = content?.Files;
+        if (files is null || files.Count < 1 || files.Count > MaxFiles)
         {
             details.Add(new ErrorDetail("content.files", "out_of_range"));
             return "{}";
@@ -149,6 +192,12 @@ internal static class DraftBody
         {
             var file = files[index];
             var prefix = string.Create(CultureInfo.InvariantCulture, $"content.files[{index}]");
+
+            if (file is null)
+            {
+                details.Add(new ErrorDetail(prefix, "invalid_type"));
+                continue;
+            }
 
             if (!IsPath(file.Path))
             {
@@ -170,7 +219,11 @@ internal static class DraftBody
             }
         }
 
-        return JsonSerializer.Serialize(content, DraftJson.Options);
+        var serialized = JsonSerializer.Serialize(content, DraftJson.Options);
+
+        // No byte gate on this text: the serialiser escapes non-ASCII, so a C# count is not the jsonb length. The
+        // route's 256 KiB raw-body cap and the shape bounds above bound the work; the column's cast measures exactly.
+        return serialized;
     }
 
     private static string? Provenance(JsonElement? provenance, List<ErrorDetail> details)
@@ -193,7 +246,10 @@ internal static class DraftBody
         }
 
         var text = element.GetRawText();
-        if (Encoding.UTF8.GetByteCount(text) > MaxProvenanceBytes)
+
+        // A character of the raw text costs at most six bytes (\uXXXX) and at least one once jsonb stores it, so a
+        // value past six times the bound cannot fit; anything closer is decided by the column's own measure.
+        if (Encoding.UTF8.GetByteCount(text) > MaxProvenanceBytes * 6)
         {
             details.Add(new ErrorDetail("provenance", "too_large"));
             return null;
@@ -224,17 +280,19 @@ internal static class DraftBody
         return value.Length > 0;
     }
 
-    /// <summary>A repository-relative path: clean text, no leading slash, no backslash and no <c>..</c> segment.</summary>
+    /// <summary>
+    /// A repository-relative path under the draft's own 512-character bound: the segment rules are <see cref="RepoPath"/>'s
+    /// (no empty, <c>.</c> or <c>..</c> segment, no leading or trailing slash, clean text), never a second copy.
+    /// </summary>
     internal static bool IsPath(string? value) =>
-        value is { Length: >= 1 and <= MaxPathLength }
-        && TextRules.IsClean(value)
-        && value[0] != '/'
-        && !value.Contains('\\', StringComparison.Ordinal)
-        && !value.Split('/').Any(segment => segment == "..");
+        value is { Length: >= 1 and <= MaxPathLength } && RepoPath.IsValid(value);
 
-    /// <summary>A body reference: clean text of 1–512 characters; it is a pointer, never the body.</summary>
+    /// <summary>
+    /// A body pointer: <see cref="FixtureRules.IsValidBodyRef"/>'s shape (a repository path or an artifact id, no
+    /// whitespace) under the draft's own 512-character bound, so a pointer is never inline body text.
+    /// </summary>
     internal static bool IsBodyRef(string? value) =>
-        value is { Length: >= 1 and <= MaxBodyRefLength } && TextRules.IsClean(value);
+        value is { Length: >= 1 and <= MaxBodyRefLength } && FixtureRules.IsValidBodyRef(value);
 }
 
 /// <summary>The caller's active membership of the tenant: the author of a new draft.</summary>

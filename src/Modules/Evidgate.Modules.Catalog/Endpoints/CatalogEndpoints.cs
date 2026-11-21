@@ -23,8 +23,8 @@ namespace Evidgate.Modules.Catalog.Endpoints;
 /// </summary>
 public static class CatalogEndpoints
 {
-    internal const int DefaultLimit = 50;
-    internal const int MaxLimit = 200;
+    internal const int DefaultLimit = CatalogPreconditions.DefaultListLimit;
+    internal const int MaxLimit = CatalogPreconditions.MaxListLimit;
 
     /// <summary>The members <c>PATCH /v1/cases/{c}</c> accepts; the identity members are named for a precise 422.</summary>
     private static readonly string[] Mutable = ["name", "owner_membership_id", "status", "labels"];

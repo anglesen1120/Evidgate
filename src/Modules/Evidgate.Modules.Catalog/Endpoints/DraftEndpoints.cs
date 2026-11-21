@@ -97,15 +97,12 @@ internal static class DraftEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        if (Limit(context.Request.Query["limit"], CatalogEndpoints.DefaultLimit, CatalogEndpoints.MaxLimit, out var limit) is { } error)
-        {
-            return Result.Failure<DraftListResponse>(error);
-        }
-
         var query = context.Request.Query;
 
+        // The page size is validated in the handler, after the pipeline's authorization stage: an anonymous caller
+        // gets 401 instead of a 422 that describes a bound it may not use.
         return await mediator.Send(
-            new ListDraftsQuery(p, Blank(query["status"]), Blank(query["cursor"]), limit),
+            new ListDraftsQuery(p, Blank(query["status"]), Blank(query["cursor"]), Blank(query["limit"])),
             cancellationToken).ConfigureAwait(false);
     }
 

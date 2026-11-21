@@ -74,7 +74,7 @@ internal sealed class CreateDraftCommandHandler(
             return Result.Failure<DraftDto>(CatalogErrors.ProjectNotFound);
         }
 
-        var (parsed, bodyError) = DraftBody.ReadCreate(command.Body);
+        var (parsed, bodyError) = await DraftBody.ReadCreateAsync(db, command.Body, cancellationToken).ConfigureAwait(false);
         if (bodyError is not null || parsed is null)
         {
             return Result.Failure<DraftDto>(bodyError!);
@@ -163,7 +163,7 @@ internal sealed class UpdateDraftCommandHandler(
             return Result.Failure<DraftDto>(DraftErrors.StateConflict(row.Status));
         }
 
-        var (contentJson, bodyError) = DraftBody.ReadUpdate(command.Body);
+        var (contentJson, bodyError) = await DraftBody.ReadUpdateAsync(db, command.Body, cancellationToken).ConfigureAwait(false);
         if (bodyError is not null || contentJson is null)
         {
             return Result.Failure<DraftDto>(bodyError!);

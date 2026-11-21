@@ -22,6 +22,8 @@ public sealed partial class DraftTests
 
         var answers = new[]
         {
+            // An unreadable body, an out-of-range limit and a valid route all answer 401: authentication comes
+            // before the body cap, the query rules and the handler.
             await world.Client.SendRawAsync(HttpMethod.Post, world.Collection, anonymous, "{ not json"),
             await world.Client.SendRawAsync(HttpMethod.Patch, World.Draft(id), anonymous, "{ not json"),
             await world.Client.SendAsync(HttpMethod.Get, $"{world.Collection}?limit=9999", anonymous),
@@ -44,13 +46,13 @@ public sealed partial class DraftTests
         var id = await CreateDraftAsync(world);
         var viewer = await MemberAsync(world, roleCode: "viewer");
 
-        // The refusals come before the body and the If-Match are read: both are garbage here, and a 422/400 would
-        // mean the parser ran for a caller who may not write.
-        var create = await world.Client.SendRawAsync(HttpMethod.Post, world.Collection, viewer, "{ not json");
+        // The refusals come before the body and the If-Match are read: both bodies are well-formed JSON that the
+        // contract refuses anyway, so a 422/400 would mean the parser ran for a caller who may not write.
+        var create = await world.Client.SendRawAsync(HttpMethod.Post, world.Collection, viewer, "{}");
         create.Status.ShouldBe(HttpStatusCode.Forbidden, create.ErrorMessage);
         create.ErrorCode.ShouldBe("forbidden");
 
-        var patch = await world.Client.SendRawAsync(HttpMethod.Patch, World.Draft(id), viewer, "{ not json");
+        var patch = await world.Client.SendRawAsync(HttpMethod.Patch, World.Draft(id), viewer, "{}");
         patch.Status.ShouldBe(HttpStatusCode.Forbidden, patch.ErrorMessage);
         patch.ErrorCode.ShouldBe("forbidden");
 

@@ -17,8 +17,8 @@ namespace Evidgate.Modules.Catalog.Application.Queries;
 /// <param name="ProjectId">The project from the route.</param>
 /// <param name="Status">Optional state filter.</param>
 /// <param name="Cursor">The opaque cursor of the previous page, or null.</param>
-/// <param name="Limit">Page size, 1–200.</param>
-internal sealed record ListDraftsQuery(Guid ProjectId, string? Status, string? Cursor, int Limit)
+/// <param name="Limit">The raw <c>limit</c> query value, parsed here so an unauthorized caller never learns its bound.</param>
+internal sealed record ListDraftsQuery(Guid ProjectId, string? Status, string? Cursor, string? Limit)
     : IQuery<Result<DraftListResponse>>;
 
 /// <summary>
@@ -43,11 +43,9 @@ internal sealed class ListDraftsQueryHandler(
             return Result.Failure<DraftListResponse>(mismatch);
         }
 
-        if (query.Status is not null && !DraftStatus.All.Contains(query.Status, StringComparer.Ordinal))
+        if (InvalidFilter(query, out var limit) is { } filterError)
         {
-            return Result.Failure<DraftListResponse>(Error.Invalid(
-                "status must be one of draft, dry_running, dry_passed, dry_failed, pr_open, merged, closed",
-                [new ErrorDetail("status", "invalid")]));
+            return Result.Failure<DraftListResponse>(filterError);
         }
 
         var orgId = scopes.Require().OrgId;
@@ -63,7 +61,7 @@ internal sealed class ListDraftsQueryHandler(
         {
             rows = await db.QueryAsync<DraftRow>(
                 DraftReadSql.DraftsFirstPage,
-                new { org_id = orgId, project_id = query.ProjectId, status = query.Status, limit = query.Limit + 1 },
+                new { org_id = orgId, project_id = query.ProjectId, status = query.Status, limit = limit + 1 },
                 cancellationToken).ConfigureAwait(false);
         }
         else
@@ -84,17 +82,37 @@ internal sealed class ListDraftsQueryHandler(
                     status = query.Status,
                     cursor_created_at = cursorCreatedAt,
                     cursor_id = cursorId,
-                    limit = query.Limit + 1,
+                    limit = limit + 1,
                 },
                 cancellationToken).ConfigureAwait(false);
         }
 
-        var hasMore = rows.Count > query.Limit;
-        var page = (hasMore ? rows.Take(query.Limit) : rows).Select(row => row.ToDto()).ToList();
+        var hasMore = rows.Count > limit;
+        var page = (hasMore ? rows.Take(limit) : rows).Select(row => row.ToDto()).ToList();
 
         return Result.Success(new DraftListResponse(
             page,
             hasMore ? KeysetCursor.Encode(page[^1].CreatedAt, page[^1].Id) : null));
+    }
+
+    /// <summary>
+    /// The query members a caller can fix, validated inside the handler so the pipeline's authorization stage answers
+    /// first: an unknown status and an out-of-range page size are both the 422 the contract documents.
+    /// </summary>
+    /// <param name="query">The list query.</param>
+    /// <param name="limit">The page size, the default when absent.</param>
+    private static Error? InvalidFilter(ListDraftsQuery query, out int limit)
+    {
+        if (CatalogPreconditions.Limit(query.Limit, CatalogPreconditions.DefaultListLimit, CatalogPreconditions.MaxListLimit, out limit) is { } limitError)
+        {
+            return limitError;
+        }
+
+        return query.Status is not null && !DraftStatus.All.Contains(query.Status, StringComparer.Ordinal)
+            ? DraftErrors.Invalid(
+                "status must be one of draft, dry_running, dry_passed, dry_failed, pr_open, merged, closed",
+                [new ErrorDetail("status", "invalid")])
+            : null;
     }
 }
 

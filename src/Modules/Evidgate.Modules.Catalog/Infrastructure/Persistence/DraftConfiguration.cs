@@ -17,7 +17,7 @@ internal sealed class DraftConfiguration : IEntityTypeConfiguration<Draft>
         builder.HasKey(row => row.Id).HasName("draft_pkey");
         builder.HasAlternateKey(row => new { row.OrgId, row.Id }).HasName("draft_org_id_key");
         builder.HasIndex(row => new { row.OrgId, row.ProjectId, row.CreatedAt, row.Id }).HasDatabaseName("draft_project_list");
-        builder.HasIndex(row => new { row.OrgId, row.ProjectId, row.Status }).HasDatabaseName("draft_status");
+        builder.HasIndex(row => new { row.OrgId, row.ProjectId, row.Status, row.CreatedAt, row.Id }).HasDatabaseName("draft_status");
 
         builder.Property(row => row.Id).HasColumnName("id");
         builder.Property(row => row.OrgId).HasColumnName("org_id").IsRequired();

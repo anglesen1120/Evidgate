@@ -76,9 +76,9 @@ public sealed class DraftContractTests
         // The refusal vocabulary a client reads is pinned beside the statuses; the module suite proves the handlers
         // produce it. The 412's version detail is the one number a retry loop needs.
         spec.DocumentedText("createDraft").ShouldContain("draft_invalid", Case.Sensitive);
+        spec.DocumentedText("createDraft").ShouldContain("draft_author_required", Case.Sensitive);
         spec.DocumentedText("createDraft").ShouldContain("409 `idempotency_conflict`", Case.Sensitive);
         spec.DocumentedText("updateDraft").ShouldContain("409 `draft_state_conflict`", Case.Sensitive);
-        spec.DocumentedText("updateDraft").ShouldContain("draft_author_required", Case.Sensitive);
     }
 
     [Fact]

@@ -141,26 +141,8 @@ internal static class CatalogRequestRules
     /// <param name="defaultLimit">The size when absent.</param>
     /// <param name="maxLimit">The largest accepted size.</param>
     /// <param name="limit">The parsed size.</param>
-    public static Error? Limit(string? raw, int defaultLimit, int maxLimit, out int limit)
-    {
-        limit = defaultLimit;
-
-        if (string.IsNullOrEmpty(raw))
-        {
-            return null;
-        }
-
-        if (!int.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) || parsed < 1 || parsed > maxLimit)
-        {
-            return Error.Invalid(
-                string.Create(CultureInfo.InvariantCulture, $"limit must be an integer between 1 and {maxLimit} (00 §9.1)"),
-                [new ErrorDetail("limit", "out_of_range")]);
-        }
-
-        limit = parsed;
-
-        return null;
-    }
+    public static Error? Limit(string? raw, int defaultLimit, int maxLimit, out int limit) =>
+        CatalogPreconditions.Limit(raw, defaultLimit, maxLimit, out limit);
 
     /// <summary>
     /// The <c>limit</c> of a route whose contract separates the two failures: a value that is not the canonical decimal
