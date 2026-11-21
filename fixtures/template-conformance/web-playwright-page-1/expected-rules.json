@@ -18,5 +18,15 @@
     "evidgate-id-present": true,
     "no-hardcoded-credentials": true,
     "page-object-shape": false
+  },
+  "quoted-key-credential": {
+    "evidgate-id-present": true,
+    "no-hardcoded-credentials": false,
+    "page-object-shape": true
+  },
+  "typed-declaration-credential": {
+    "evidgate-id-present": true,
+    "no-hardcoded-credentials": false,
+    "page-object-shape": true
   }
 }

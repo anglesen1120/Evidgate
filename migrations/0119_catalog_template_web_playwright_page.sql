@@ -10,14 +10,17 @@
 -- `template_owner_backfill` already allows; `evidgate_app` keeps SELECT only and no policy moves.
 --
 -- BODY FENCE: for each file, in UTF-8 path order, the hash covers the path, a NUL, the decimal byte length of the
--- normalised content, a NUL, that content (UTF-8, CRLF folded to LF) and a line feed. The recomputation test reads the
--- directory, so an edited template file without a new migration fails the suite instead of shipping a stale address.
+-- normalised content, a NUL, that content (UTF-8, CRLF folded to LF) and a line feed. The drift test recomputes that
+-- address from the directory and compares it with the literal below, so an edited template file without a new
+-- migration fails the suite instead of shipping a stale address.
 --
 -- LOCKS and ORDER: one insert on an existing catalogue table; `lock_timeout` bounds its wait. Deploy before anything
 -- serves `evidgate init`. Rollback: delete the row by id; the packaged files stay in the repository, unreferenced.
 --
--- Idempotent in the shape the README's file contract allows: the fixed id and the partial unique index on built-ins make
--- a re-run or a database reset converge on the same row.
+-- ON CONFLICT: the fixed id and the partial unique index on built-ins make a re-run or a database reset insert nothing
+-- new. A database that already holds a different built-in row for this (kind, name, version) keeps that row: this
+-- migration never overwrites it and does not claim convergence, so only the drift test (shipped literal against the
+-- packaged files) proves the address this migration was written for.
 
 set local lock_timeout = '5s';
 
@@ -28,7 +31,7 @@ values (
   'web',
   'playwright-page',
   1,
-  'sha256:487aad9a70c04887b556f1be350f74149c80eb4cade5976528e3bf40171e4779',
+  'sha256:2c5bfe93f4b2e05c4ccd7c2414f2f140ae4338441afe624d6e34775c1ac5bffe',
   $rules$[{"id":"evidgate-id-present","kind":"evidgate_annotation","file":"tests/*.spec.ts"},{"id":"no-hardcoded-credentials","kind":"forbids_secret_literal","file":"**/*.ts"},{"id":"page-object-shape","kind":"requires_pattern","file":"pages/*Page.ts","pattern":["export class \\w+Page\\b","constructor\\([^)]*page[^)]*\\)","getByRole\\("]}]$rules$::jsonb
 )
 on conflict (kind, name, version) where org_id is null do nothing;

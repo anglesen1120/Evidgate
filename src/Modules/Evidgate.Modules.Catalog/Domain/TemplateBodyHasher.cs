@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Unicode;
 
 namespace Evidgate.Modules.Catalog.Domain;
 
@@ -14,9 +15,13 @@ namespace Evidgate.Modules.Catalog.Domain;
 /// packaged file was written by a tool this hash cannot reproduce, so it is an error, never a silent normalisation.
 /// The caller reads the directory; the domain does no IO.
 /// </remarks>
-public static class TemplateBodyHasher
+internal static class TemplateBodyHasher
 {
-    private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+    /// <summary>Largest number of packaged files hashed.</summary>
+    internal const int MaxFiles = 256;
+
+    /// <summary>Largest total number of content bytes hashed.</summary>
+    internal const long MaxTotalBytes = 8L * 1024 * 1024;
 
     private static readonly UTF8Encoding PathUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
@@ -32,14 +37,26 @@ public static class TemplateBodyHasher
 
         var packed = new List<(byte[] Path, byte[] Content)>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
+        long total = 0;
 
         foreach (var (relativePath, bytes) in files)
         {
             ArgumentNullException.ThrowIfNull(bytes);
 
+            if (packed.Count >= MaxFiles)
+            {
+                throw new ArgumentException($"A template version carries at most {MaxFiles} files.", nameof(files));
+            }
+
             if (!IsSafeRelativePath(relativePath))
             {
                 throw new ArgumentException($"'{relativePath}' is not a canonical relative path.", nameof(files));
+            }
+
+            total += bytes.Length;
+            if (total > MaxTotalBytes)
+            {
+                throw new ArgumentException($"A template version carries more than {MaxTotalBytes} bytes.", nameof(files));
             }
 
             if (!seen.Add(relativePath))
@@ -66,13 +83,41 @@ public static class TemplateBodyHasher
         return "sha256:" + Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
-    /// <summary>True for a forward-slash path with no drive, no backslash and no empty, <c>.</c> or <c>..</c> segment.</summary>
+    /// <summary>
+    /// True for a forward-slash path that a UTF-8 encoder can carry: no control character, no lone surrogate, no drive,
+    /// no backslash and no empty, <c>.</c> or <c>..</c> segment.
+    /// </summary>
     /// <param name="path">A relative path as packaged.</param>
     internal static bool IsSafeRelativePath(string path)
     {
         if (string.IsNullOrEmpty(path) || path.Length > 512 || path[0] == '/' || path.Contains('\\', StringComparison.Ordinal))
         {
             return false;
+        }
+
+        for (var index = 0; index < path.Length; index++)
+        {
+            var character = path[index];
+            if (character < ' ' || character == '\u007f')
+            {
+                return false;
+            }
+
+            if (char.IsHighSurrogate(character))
+            {
+                if (index + 1 >= path.Length || !char.IsLowSurrogate(path[index + 1]))
+                {
+                    return false;
+                }
+
+                index++;
+                continue;
+            }
+
+            if (char.IsLowSurrogate(character))
+            {
+                return false;
+            }
         }
 
         foreach (var segment in path.Split('/'))
@@ -98,35 +143,47 @@ public static class TemplateBodyHasher
             throw new ArgumentException($"'{relativePath}' starts with a byte-order mark.", nameof(bytes));
         }
 
-        string text;
-        try
+        if (!Utf8.IsValid(bytes))
         {
-            text = StrictUtf8.GetString(bytes);
-        }
-        catch (DecoderFallbackException exception)
-        {
-            throw new ArgumentException($"'{relativePath}' is not valid UTF-8.", nameof(bytes), exception);
+            throw new ArgumentException($"'{relativePath}' is not valid UTF-8.", nameof(bytes));
         }
 
-        var normalised = new StringBuilder(text.Length);
-        for (var index = 0; index < text.Length; index++)
+        // A file without a carriage return needs no copy: the validated bytes are the normalised bytes.
+        var carriageReturns = 0;
+        for (var index = 0; index < bytes.Length; index++)
         {
-            var character = text[index];
-            if (character != '\r')
+            if (bytes[index] != '\r')
             {
-                normalised.Append(character);
                 continue;
             }
 
-            if (index + 1 >= text.Length || text[index + 1] != '\n')
+            if (index + 1 >= bytes.Length || bytes[index + 1] != '\n')
             {
                 throw new ArgumentException($"'{relativePath}' holds a lone carriage return at {index}.", nameof(bytes));
             }
 
-            normalised.Append('\n');
-            index++;
+            carriageReturns++;
         }
 
-        return StrictUtf8.GetBytes(normalised.ToString());
+        if (carriageReturns == 0)
+        {
+            return bytes;
+        }
+
+        var folded = new byte[bytes.Length - carriageReturns];
+        var written = 0;
+        for (var index = 0; index < bytes.Length; index++)
+        {
+            var value = bytes[index];
+            if (value == '\r')
+            {
+                index++;
+                value = (byte)'\n';
+            }
+
+            folded[written++] = value;
+        }
+
+        return folded;
     }
 }

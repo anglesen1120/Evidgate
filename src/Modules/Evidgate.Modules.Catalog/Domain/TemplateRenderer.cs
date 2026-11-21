@@ -13,13 +13,20 @@ namespace Evidgate.Modules.Catalog.Domain;
 /// is inventing a value the template never expected, and the safe answer is an error. Every placeholder must be a
 /// declared parameter or <c>evidgateId</c>, so a typo cannot silently ship as <c>{{typo}}</c>.
 /// </remarks>
-public static class TemplateRenderer
+internal static class TemplateRenderer
 {
     /// <summary>Largest manifest parsed.</summary>
-    internal const int MaxManifestChars = 65536;
+    internal const int MaxManifestChars = TemplateLimits.MaxTextChars;
 
     /// <summary>Largest number of packaged files rendered.</summary>
     internal const int MaxFiles = 256;
+
+    /// <summary>The Playwright ARIA role names a template may ask for, so a rendered page object still locates something.</summary>
+    private static readonly HashSet<string> PlaywrightRoles = new(StringComparer.Ordinal)
+    {
+        "button", "link", "textbox", "checkbox", "radio", "combobox", "heading", "listitem",
+        "menuitem", "tab", "dialog", "img", "searchbox", "switch",
+    };
 
     /// <summary>Renders every packaged file of a template version.</summary>
     /// <param name="manifestJson">The template's <c>template.json</c>.</param>
@@ -61,10 +68,20 @@ public static class TemplateRenderer
         var rendered = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var (path, content) in files)
         {
+            if (content.Length > TemplateLimits.MaxTextChars)
+            {
+                throw new ArgumentException($"'{path}' is too large for a template file.", nameof(files));
+            }
+
             var target = Substitute(path, values);
             if (target.EndsWith(".tmpl", StringComparison.Ordinal))
             {
                 target = target[..^".tmpl".Length];
+            }
+
+            if (!TemplateBodyHasher.IsSafeRelativePath(target))
+            {
+                throw new ArgumentException($"'{target}' is not a canonical relative path.", nameof(files));
             }
 
             if (!rendered.TryAdd(target, Substitute(content, values)))
@@ -130,8 +147,10 @@ public static class TemplateRenderer
 
         if (name.Equals("url", StringComparison.OrdinalIgnoreCase) || name.EndsWith("Url", StringComparison.Ordinal))
         {
-            if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            if (!value.All(character => character is >= ' ' and <= '~')
+                || !Uri.TryCreate(value, UriKind.Absolute, out var uri)
                 || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+                || uri.UserInfo.Length != 0
                 || value.Contains('\'') || value.Contains('`')
                 || value.Any(char.IsWhiteSpace))
             {
@@ -139,6 +158,11 @@ public static class TemplateRenderer
             }
 
             return;
+        }
+
+        if (name.Equals("rolePreference", StringComparison.Ordinal) && !PlaywrightRoles.Contains(value))
+        {
+            throw new ArgumentException($"Parameter '{name}' is not a Playwright ARIA role.");
         }
 
         // `pageName` names a TypeScript class, so a value that only satisfies the character set below

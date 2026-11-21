@@ -6,11 +6,7 @@ import { HomePage } from '../pages/HomePage';
 const username = process.env.EVIDGATE_USERNAME ?? '';
 const password = process.env.EVIDGATE_PASSWORD ?? '';
 
-test('smoke', async ({ page }) => {
-  test
-    .info()
-    .annotations.push({ type: 'evidgate.id', description: '0199a3c1-2b3d-7e4f-8a9b-0c1d2e3f4a5b' });
-
+test('smoke', { annotation: { type: 'evidgate.id', description: '0199a3c1-2b3d-7e4f-8a9b-0c1d2e3f4a5b' } }, async ({ page }) => {
   const screen = new HomePage(page);
   await screen.open();
   await screen.signIn(username, password);

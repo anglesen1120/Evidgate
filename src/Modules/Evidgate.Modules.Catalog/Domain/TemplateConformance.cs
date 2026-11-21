@@ -15,16 +15,22 @@ namespace Evidgate.Modules.Catalog.Domain;
 /// delegates to <see cref="AnnotationParser"/> and the secret kind to <see cref="SecretShape"/>, so the check is the
 /// same one the ingest and variant paths use.
 /// </remarks>
-public static class TemplateConformance
+internal static class TemplateConformance
 {
     /// <summary>The id reported when the rules document itself is unusable.</summary>
     internal const string InvalidRulesId = "invalid-conformance-rules";
 
     /// <summary>Largest rules document parsed.</summary>
-    internal const int MaxRulesChars = 65536;
+    internal const int MaxRulesChars = TemplateLimits.MaxTextChars;
 
     /// <summary>Largest rendered file a rule scans.</summary>
-    internal const int MaxFileChars = 65536;
+    internal const int MaxFileChars = TemplateLimits.MaxTextChars;
+
+    /// <summary>Largest number of rules one document may hold; a bigger document is unusable, never partly applied.</summary>
+    internal const int MaxRuleCount = 32;
+
+    /// <summary>Largest number of compiled patterns across all rules.</summary>
+    internal const int MaxPatternCount = 64;
 
     private static readonly TimeSpan Timeout = TimeSpan.FromMilliseconds(250);
 
@@ -124,7 +130,13 @@ public static class TemplateConformance
 
             if (SecretShape.IsReference(literal.Value.AsSpan()))
             {
-                continue;
+                var name = literal.Value["secret:".Length..];
+                if (!SecretShape.SecretNameLooksLikeValue(name) && !SecretShape.ValueLooksSecret(name))
+                {
+                    continue;
+                }
+
+                return false;
             }
 
             if (FollowsSecretKey(content, literal.Offset))
@@ -136,38 +148,106 @@ public static class TemplateConformance
         return true;
     }
 
-    /// <summary>True when a literal at <paramref name="offset"/> follows <c>key: '…'</c> or <c>key = '…'</c> and the key names a secret.</summary>
+    /// <summary>
+    /// True when the literal at <paramref name="offset"/> is the value of a secret-named key: <c>key: '…'</c>,
+    /// <c>'key': '…'</c>, <c>key = '…'</c>, a typed declaration (<c>key: string = '…'</c>) or an <c>??</c>/<c>||</c>
+    /// fallback of an env read of a secret-named key.
+    /// </summary>
     private static bool FollowsSecretKey(string content, int offset)
     {
-        var index = offset - 1;
+        var index = SkipBack(content, offset - 1);
+        if (index < 0)
+        {
+            return false;
+        }
+
+        if (content[index] is ':' or '=')
+        {
+            if (content[index] == '=' && index > 0 && content[index - 1] is '=' or '!' or '<' or '>')
+            {
+                return false;
+            }
+
+            return KeyBeforeAssignment(content, index - 1);
+        }
+
+        return content[index] is '?' or '|' && FallbackNamesSecretKey(content, index);
+    }
+
+    private static int SkipBack(string content, int index)
+    {
         while (index >= 0 && char.IsWhiteSpace(content[index]))
         {
             index--;
         }
 
-        if (index < 0 || (content[index] != ':' && content[index] != '='))
+        return index;
+    }
+
+    private static string ReadKeyToken(string content, int end)
+    {
+        var start = end;
+        while (start >= 0 && (char.IsLetterOrDigit(content[start]) || content[start] is '_' or '$'))
+        {
+            start--;
+        }
+
+        return start == end ? string.Empty : content[(start + 1)..(end + 1)];
+    }
+
+    private static bool KeyBeforeAssignment(string content, int index)
+    {
+        var keyEnd = SkipBack(content, index);
+        if (keyEnd < 0)
         {
             return false;
         }
 
-        if (content[index] == '=' && index > 0 && content[index - 1] is '=' or '!' or '<' or '>')
+        if (content[keyEnd] is '\'' or '"')
+        {
+            return QuotedKeyLooksSecret(content, keyEnd);
+        }
+
+        var token = ReadKeyToken(content, keyEnd);
+        if (token.Length > 0 && SecretShape.KeyLooksSecret(token))
+        {
+            return true;
+        }
+
+        // A typed declaration puts a type between the key and `=`: `const password: string = '…'`.
+        var colon = SkipBack(content, keyEnd - token.Length);
+        if (token.Length == 0 || colon < 0 || content[colon] != ':')
         {
             return false;
         }
 
-        index--;
-        while (index >= 0 && char.IsWhiteSpace(content[index]))
+        var typedKey = ReadKeyToken(content, SkipBack(content, colon - 1));
+        return typedKey.Length > 0 && SecretShape.KeyLooksSecret(typedKey);
+    }
+
+    private static bool QuotedKeyLooksSecret(string content, int closeQuote)
+    {
+        var quote = content[closeQuote];
+        var cursor = closeQuote - 1;
+        while (cursor >= 0 && content[cursor] != quote && content[cursor] is not ('\n' or '\r'))
         {
-            index--;
+            cursor--;
         }
 
-        var end = index + 1;
-        while (index >= 0 && (char.IsLetterOrDigit(content[index]) || content[index] is '_' or '$'))
+        return cursor >= 0 && content[cursor] == quote
+            && SecretShape.KeyLooksSecret(content[(cursor + 1)..closeQuote]);
+    }
+
+    private static bool FallbackNamesSecretKey(string content, int operatorIndex)
+    {
+        // Only a long-circuit operator `??` or `||` is a fallback; a lone `?` is a ternary.
+        if (operatorIndex == 0 || content[operatorIndex - 1] != content[operatorIndex])
         {
-            index--;
+            return false;
         }
 
-        return end > index + 1 && SecretShape.KeyLooksSecret(content[(index + 1)..end]);
+        var name = ReadKeyToken(content, SkipBack(content, operatorIndex - 2));
+        return name.Length > 0 && SecretShape.KeyLooksSecret(name);
     }
 
     private static List<Rule>? ParseRules(string rulesJson)
@@ -189,16 +269,24 @@ public static class TemplateConformance
 
         using (document)
         {
-            if (document.RootElement.ValueKind != JsonValueKind.Array || document.RootElement.GetArrayLength() == 0)
+            if (document.RootElement.ValueKind != JsonValueKind.Array
+                || document.RootElement.GetArrayLength() is 0 or > MaxRuleCount)
             {
                 return null;
             }
 
             var rules = new List<Rule>();
+            var patternCount = 0;
             foreach (var element in document.RootElement.EnumerateArray())
             {
                 var rule = ReadRule(element);
                 if (rule is null)
+                {
+                    return null;
+                }
+
+                patternCount += rule.Patterns?.Count ?? 0;
+                if (patternCount > MaxPatternCount)
                 {
                     return null;
                 }

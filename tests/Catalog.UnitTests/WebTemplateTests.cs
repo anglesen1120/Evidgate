@@ -130,11 +130,11 @@ public sealed partial class WebTemplateTests
     }
 
     [Theory]
-    [InlineData("[{\"id\":\"unknown\",\"kind\":\"new_kind\",\"file\":\"*.ts\"}]", "unknown")]
+    [InlineData("[{\"id\":\"unknown\",\"kind\":\"new_kind\",\"file\":\"**/*.ts\"}]", "unknown")]
     [InlineData("{", "invalid-conformance-rules")]
     [InlineData("{}", "invalid-conformance-rules")]
     [InlineData("[]", "invalid-conformance-rules")]
-    [InlineData("[{\"id\":\"broken\",\"kind\":\"requires_pattern\",\"file\":\"*.ts\",\"pattern\":\"(\"}]", "broken")]
+    [InlineData("[{\"id\":\"broken\",\"kind\":\"requires_pattern\",\"file\":\"**/*.ts\",\"pattern\":\"(\"}]", "broken")]
     [InlineData("[{\"id\":\"broken\",\"kind\":\"requires_pattern\"}]", "broken")]
     public void WebTemplate_InvalidRules_FailClosed(string rules, string expected) =>
         TemplateConformance.Evaluate(rules, Render()).ShouldContain(expected);
@@ -155,7 +155,7 @@ public sealed partial class WebTemplateTests
         var directory = Path.Combine(Root, "fixtures/template-conformance/web-playwright-page-1");
         using var expected = JsonDocument.Parse(File.ReadAllText(Path.Combine(directory, "expected-rules.json")));
         var cases = expected.RootElement.EnumerateObject().ToArray();
-        cases.Length.ShouldBe(4);
+        cases.Length.ShouldBe(6);
         var ids = JsonNode.Parse(Rules)!.AsArray().Select(r => r!["id"]!.GetValue<string>()).Distinct().ToArray();
         foreach (var item in cases)
         {

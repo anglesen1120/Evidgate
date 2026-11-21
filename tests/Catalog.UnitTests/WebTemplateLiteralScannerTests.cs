@@ -72,6 +72,62 @@ public sealed class WebTemplateLiteralScannerTests
     public void Scan_OversizedInput_IsIncomplete() =>
         TemplateLiteralScanner.Scan(new string('a', TemplateLiteralScanner.MaxChars + 1)).Complete.ShouldBeFalse();
 
+    [Fact]
+    public void Scan_TemplateSegment_CarriesTheOpeningBacktick()
+    {
+        const string Source = "const password = `x${y}z`;";
+
+        var scan = TemplateLiteralScanner.Scan(Source);
+
+        scan.Complete.ShouldBeTrue();
+        scan.Literals.Select(literal => literal.Value).ShouldBe(["x", "z"]);
+        scan.Literals.Select(literal => literal.Offset).Distinct().ShouldBe([Source.IndexOf('`', StringComparison.Ordinal)]);
+    }
+
+    [Theory]
+    [InlineData("/\\/\\//;")]
+    [InlineData("/'/;")]
+    [InlineData("const value = /'/;")]
+    public void Scan_PossibleRegexStart_IsIncomplete(string source) =>
+        TemplateLiteralScanner.Scan(source).Complete.ShouldBeFalse();
+
+    [Fact]
+    public void Scan_Division_KeepsScanning()
+    {
+        var scan = TemplateLiteralScanner.Scan("const value = a / b; const name = 'hello';");
+
+        scan.Complete.ShouldBeTrue();
+        scan.Literals.Single().Value.ShouldBe("hello");
+    }
+
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r")]
+    [InlineData("\r\n")]
+    [InlineData("\u2028")]
+    [InlineData("\u2029")]
+    public void Scan_LineContinuation_IsDropped(string terminator)
+    {
+        var scan = TemplateLiteralScanner.Scan("const value = 'ghp_abcdefgh\\" + terminator + "ijklmnopqrstuvwx';");
+
+        scan.Complete.ShouldBeTrue();
+        scan.Literals.Single().Value.ShouldBe("ghp_abcdefghijklmnopqrstuvwx");
+    }
+
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r")]
+    [InlineData("\r\n")]
+    [InlineData("\u2028")]
+    [InlineData("\u2029")]
+    public void Scan_LineComment_EndsAtEveryJavaScriptTerminator(string terminator)
+    {
+        var scan = TemplateLiteralScanner.Scan("// don't read this" + terminator + "const value = 'x';");
+
+        scan.Complete.ShouldBeTrue();
+        scan.Literals.Select(literal => literal.Value).ShouldBe(["x"]);
+    }
+
     private static TemplateLiteralScanner.Literal Single(string source)
     {
         var scan = TemplateLiteralScanner.Scan(source);
