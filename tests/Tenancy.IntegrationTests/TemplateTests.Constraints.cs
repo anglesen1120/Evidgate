@@ -5,8 +5,8 @@ using Xunit;
 
 namespace Tenancy.IntegrationTests;
 
-/// <summary>The database's own guards on the registry: a built-in cannot be duplicated, an org row may reuse a
-/// built-in's key, and the closed CHECKs refuse a kind, name, version, body reference or rules document outside
+/// <summary>The database's own guards on the registry: a built-in cannot be duplicated, an org row cannot reuse a
+/// built-in's key (and the reverse), and the closed CHECKs refuse a kind, name, version, body reference or rules document outside
 /// their domains.</summary>
 public sealed partial class TemplateTests
 {
@@ -20,13 +20,92 @@ public sealed partial class TemplateTests
         var duplicate = await OwnerErrorAsync(world, InsertSql, ("org", null), ("kind", "web"), ("name", "playwright-ts"));
         duplicate.ShouldNotBeNull("the partial unique index refuses a duplicate built-in");
         duplicate!.SqlState.ShouldBe("23505");
+    }
 
-        // The same key is free inside an org and inside another org: the composite key, not the partial index, governs.
-        (await OwnerErrorAsync(world, InsertSql, ("kind", "web"), ("name", "playwright-ts"), ("org", world.Org)))
-            .ShouldBeNull("an org row may carry the key of a built-in");
+    [Fact]
+    public async Task Template_OrgRowWithABuiltInKey_IsRefused()
+    {
+        await using var world = await StartAsync();
+        await SeedAsync(world, builtIn: true, name: "playwright-ts");
+
+        var reuse = await OwnerErrorAsync(world, InsertSql, ("kind", "web"), ("name", "playwright-ts"), ("org", world.Org));
+        reuse.ShouldNotBeNull("an org row may not carry the key of a built-in");
+        reuse!.SqlState.ShouldBe("23505");
+        reuse.ConstraintName.ShouldBe("template_key_reuse");
+
+        // Each key column is part of the key: a new version, name or kind is a new key.
+        (await OwnerErrorAsync(world, InsertSql, ("name", "playwright-ts"), ("version", 2), ("org", world.Org)))
+            .ShouldBeNull("a new version is a new key");
+        (await OwnerErrorAsync(world, InsertSql, ("name", "playwright-ts-2"), ("org", world.Org)))
+            .ShouldBeNull("a new name is a new key");
+        (await OwnerErrorAsync(world, InsertSql, ("kind", "api"), ("name", "playwright-ts"), ("org", world.Org)))
+            .ShouldBeNull("a new kind is a new key");
+    }
+
+    [Fact]
+    public async Task Template_OrgRowsMayShareAKeyAcrossOrgs()
+    {
+        await using var world = await StartAsync();
         var (_, otherOrg) = await AddOrgAsync(world);
-        (await OwnerErrorAsync(world, InsertSql, ("kind", "web"), ("name", "playwright-ts"), ("org", otherOrg)))
-            .ShouldBeNull("a second org may carry the same key");
+
+        (await OwnerErrorAsync(world, InsertSql, ("name", "shared-key"), ("org", world.Org))).ShouldBeNull();
+        (await OwnerErrorAsync(world, InsertSql, ("name", "shared-key"), ("org", otherOrg)))
+            .ShouldBeNull("the composite key, not the built-in rule, governs two orgs");
+    }
+
+    [Fact]
+    public async Task Template_BuiltInOverAnOrgKey_IsRefused()
+    {
+        await using var world = await StartAsync();
+        (await OwnerErrorAsync(world, InsertSql, ("name", "org-first"), ("org", world.Org))).ShouldBeNull();
+
+        var reuse = await OwnerErrorAsync(world, InsertSql, ("name", "org-first"), ("org", null));
+        reuse.ShouldNotBeNull("a built-in may not take the key an org row already holds");
+        reuse!.SqlState.ShouldBe("23505");
+        reuse.ConstraintName.ShouldBe("template_key_reuse");
+
+        (await OwnerErrorAsync(world, InsertSql, ("name", "org-first-free"), ("org", null)))
+            .ShouldBeNull("a built-in with an unused key is accepted");
+    }
+
+    [Fact]
+    public async Task Template_UpdatingAKeyColumnOntoABuiltInKey_IsRefused()
+    {
+        await using var world = await StartAsync();
+        await SeedAsync(world, builtIn: true, name: "playwright-ts");
+        var orgRow = await SeedAsync(world, org: world.Org, name: "mine");
+
+        const string Rename = "update public.template set name = @name where id = @id";
+
+        (await OwnerErrorAsync(world, Rename, ("id", orgRow), ("name", "mine-renamed")))
+            .ShouldBeNull("a rename onto an unused key is accepted");
+
+        var error = await OwnerErrorAsync(world, Rename, ("id", orgRow), ("name", "playwright-ts"));
+        error.ShouldNotBeNull("a rename onto a built-in key is the same reuse as an insert");
+        error!.SqlState.ShouldBe("23505");
+        error.ConstraintName.ShouldBe("template_key_reuse");
+        (await _fixture.ScalarAsync<string>(world.Database, $"select name from public.template where id = '{orgRow}'"))
+            .ShouldBe("mine-renamed", "the refused update leaves the row as it was");
+    }
+
+    [Fact]
+    public async Task Template_ChangingAKeyColumnOrTheOwner_IsCheckedAgainstTheOtherSide()
+    {
+        await using var world = await StartAsync();
+        await SeedAsync(world, builtIn: true, name: "taken");
+        var sole = await SeedAsync(world, org: world.Org, name: "promote-me");
+        var otherKind = await SeedAsync(world, org: world.Org, name: "taken", kind: "api");
+
+        (await OwnerErrorAsync(world, "update public.template set org_id = null where id = @id", ("id", sole)))
+            .ShouldBeNull("promoting the only row for a key leaves no second row with it");
+
+        var kindOnly = await OwnerErrorAsync(world, "update public.template set kind = 'web' where id = @id", ("id", otherKind));
+        kindOnly.ShouldNotBeNull("a kind change onto a built-in key is refused");
+        kindOnly!.ConstraintName.ShouldBe("template_key_reuse");
+
+        var versionOnly = await OwnerErrorAsync(
+            world, "update public.template set version = 2 where id = @id", ("id", otherKind));
+        versionOnly.ShouldBeNull("a version change onto an unused key is accepted");
     }
 
     [Fact]
