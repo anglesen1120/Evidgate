@@ -1508,3 +1508,9 @@ Closed by PR #1244 (merge 762caa61): `EvidgateMeter` (internal static holder, `s
 | Floor notice registration has no ApiHost test (S615) | `RequestLogFloorTests` builds its own hosts with `RequestLogFloor.Apply` and `RequestLogFloorNotice`; only the Identity tests run the real `ApiHost.CreateBuilder`, and they do not assert the notice, so deleting `AddHostedService<RequestLogFloorNotice>` in `ApiHost.cs` leaves every test green. | receiver: next Api host test lane |
 
 Closed by PR #1248 (a6723611): `tests/Hosts.IntegrationTests/ApiHostRequestLogFloorTests.cs` builds the real `ApiHost.CreateBuilder` and pins the notice and the floor rules; deleting `ApiHost.cs:187` or `:188` turned two tests red each on the LAN.
+
+## Moved from status-carried.md by S620 (2026-11-21)
+
+| Dogfood report counting helpers duplicated (S607) | `AssertMapsCleanly` in `DogfoodReportTests.cs` (499 lines, no headroom) and `AssertNoFailingCases` in `DogfoodReportTests.Green.cs` each count failure elements; the first uses a regex on the text, the second counts XML elements by local name. Open: when the main file is next split, move `AssertMapsCleanly` into the partial and share one counter. | next dogfood lane |
+
+Closed by PR #1250 (merge 664600b5): `DogfoodReportTests.Counting.cs` holds one XML `CountElements` (local names, DTD prohibited) used by `AssertMapsCleanly` and `AssertNoFailingCases`; the regex is gone.
