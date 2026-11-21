@@ -73,6 +73,8 @@ internal sealed partial class TenantRowFactory
             ("public.redaction_rule", "kind") => "trace",
             ("public.redaction_rule", "rule_type") => "header",
             ("public.producer_slot", "shard_index") => 1,
+            // draft.base_commit is a git sha: a 7 to 64 char lowercase hex run.
+            ("public.draft", "base_commit") => "abcdef1",
             ("public.feature_node", "kind") => "module",
             ("public.feature_node", "position") or ("public.checklist_item", "position") =>
                 Interlocked.Increment(ref _authoringPosition),
