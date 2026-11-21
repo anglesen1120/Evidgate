@@ -14,6 +14,15 @@ internal static class DraftReadSql
                d.linked_case_id, d.linked_revision_id, d.created_at, d.updated_at
         """;
 
+    /// <summary>The list's columns: the same row without <c>content</c>, which never leaves the table for a page.</summary>
+    private const string SummaryColumns = """
+               d.id, d.project_id, d.author_membership_id, d.kind, d.base_commit, d.status, d.version,
+               jsonb_array_length(d.content -> 'files') as file_count,
+               d.provenance::text as provenance, d.ai_run_id, d.dry_run_id,
+               d.allow_unverified, d.unverified_reason, d.pr_branch, d.pr_commit_sha, d.pr_url, d.pr_number,
+               d.linked_case_id, d.linked_revision_id, d.created_at, d.updated_at
+        """;
+
     /// <summary>One draft by id; another tenant's id matches no row, so it answers the same 404 as a missing one.</summary>
     internal const string DraftById = $"""
         select {DraftColumns}
@@ -23,7 +32,7 @@ internal static class DraftReadSql
 
     /// <summary>First page of a project's drafts on <c>draft_project_list</c>; an optional status filter is the second index.</summary>
     internal const string DraftsFirstPage = $"""
-        select {DraftColumns}
+        select {SummaryColumns}
           from public.draft d
          where d.org_id = @org_id
            and d.project_id = @project_id
@@ -34,7 +43,7 @@ internal static class DraftReadSql
         """;
 
     internal const string DraftsNextPage = $"""
-        select {DraftColumns}
+        select {SummaryColumns}
           from public.draft d
          where d.org_id = @org_id
            and d.project_id = @project_id
@@ -98,6 +107,55 @@ internal sealed record DraftRow(
         Status,
         Version,
         DraftJson.ReadContent(Content),
+        DraftJson.ReadObject(Provenance),
+        AiRunId,
+        DryRunId,
+        AllowUnverified,
+        UnverifiedReason,
+        PrBranch,
+        PrCommitSha,
+        PrUrl,
+        PrNumber,
+        LinkedCaseId,
+        LinkedRevisionId,
+        CreatedAt,
+        UpdatedAt);
+}
+
+/// <summary>One row of the list statements: <see cref="DraftRow"/> without the content set.</summary>
+internal sealed record DraftSummaryRow(
+    Guid Id,
+    Guid ProjectId,
+    Guid AuthorMembershipId,
+    string Kind,
+    string BaseCommit,
+    string Status,
+    int Version,
+    int FileCount,
+    string? Provenance,
+    Guid? AiRunId,
+    Guid? DryRunId,
+    bool AllowUnverified,
+    string? UnverifiedReason,
+    string? PrBranch,
+    string? PrCommitSha,
+    string? PrUrl,
+    int? PrNumber,
+    Guid? LinkedCaseId,
+    Guid? LinkedRevisionId,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt)
+{
+    /// <summary>The wire shape of the row.</summary>
+    internal DraftSummaryDto ToDto() => new(
+        Id,
+        ProjectId,
+        AuthorMembershipId,
+        Kind,
+        BaseCommit,
+        Status,
+        Version,
+        FileCount,
         DraftJson.ReadObject(Provenance),
         AiRunId,
         DryRunId,
