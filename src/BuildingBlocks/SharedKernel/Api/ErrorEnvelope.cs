@@ -189,6 +189,15 @@ public static class ApiErrorCode
     /// <summary>409: a fixture of this project already holds the key; a fixture's identity never changes (03.3.1 §5).</summary>
     public const string FixtureKeyTaken = "fixture_key_taken";
 
+    /// <summary>422: a draft body breaks the draft contract — an unknown kind, a bad commit, a file set outside its bounds; <c>details</c> names the field (03.6.1).</summary>
+    public const string DraftInvalid = "draft_invalid";
+
+    /// <summary>403: the caller holds no active membership of the organization, so it cannot author a draft (03.6.1).</summary>
+    public const string DraftAuthorRequired = "draft_author_required";
+
+    /// <summary>409: the draft left <c>draft</c> state, so its content is no longer editable (03.6.1).</summary>
+    public const string DraftStateConflict = "draft_state_conflict";
+
     /// <summary>422: an environment revision carries a secret value or a malformed member (05.1.2 AC3).</summary>
     public const string EnvironmentRevisionInvalid = "environment_revision_invalid";
 

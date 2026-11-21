@@ -6,6 +6,7 @@ using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.BuildingBlocks.SharedKernel.Serialization;
+using Evidgate.Modules.Catalog.Application;
 using Evidgate.Modules.Catalog.Domain;
 using Microsoft.AspNetCore.Http;
 
@@ -202,4 +203,34 @@ internal static class CatalogRequestRules
 
         return null;
     }
+
+    /// <summary>The client's <c>Idempotency-Key</c> header, verbatim; the idempotency stage refuses a missing or over-long one.</summary>
+    /// <param name="context">The request.</param>
+    public static string IdempotencyKey(HttpContext context) => context.Request.Headers["Idempotency-Key"].ToString();
+
+    /// <summary>An absent or empty query member as null, so a filter is never an empty-string predicate.</summary>
+    /// <param name="value">The raw query value.</param>
+    public static string? Blank(string? value) => string.IsNullOrEmpty(value) ? null : value;
+
+    /// <summary>Echoes the version of a successful write as the response's <c>ETag</c>, so the next write can send it back.</summary>
+    /// <param name="context">The request.</param>
+    /// <param name="result">The handler's answer.</param>
+    /// <param name="version">The version the row now carries.</param>
+    public static Result<T> WithETag<T>(HttpContext context, Result<T> result, Func<T, int> version)
+    {
+        if (result.IsSuccess && result.SuccessValue is T value)
+        {
+            context.Response.Headers.ETag = string.Create(CultureInfo.InvariantCulture, $"\"{version(value)}\"");
+        }
+
+        return result;
+    }
+
+    /// <summary>The <c>If-Match</c> precondition of a route that parses it at the edge, or the 422 to answer. A draft route
+    /// parses it on the command side instead, because it must not read the header before authorization runs.</summary>
+    /// <param name="context">The request.</param>
+    /// <param name="what">What the ETag belongs to, for the message.</param>
+    /// <param name="version">The version the header names.</param>
+    public static Error? IfMatchError(HttpContext context, string what, out int version) =>
+        CatalogPreconditions.IfMatch(context.Request.Headers.IfMatch.ToString(), what, out version);
 }

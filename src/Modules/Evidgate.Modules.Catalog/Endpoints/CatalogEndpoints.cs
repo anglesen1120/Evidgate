@@ -12,6 +12,7 @@ using Mediator;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using static Evidgate.Modules.Catalog.Endpoints.CatalogRequestRules;
 
 namespace Evidgate.Modules.Catalog.Endpoints;
 
@@ -94,6 +95,8 @@ public static class CatalogEndpoints
         group.MapExecutionPlanEndpoints();
 
         group.MapFixtureEndpoints();
+
+        group.MapDraftEndpoints();
 
         group.MapGitRepoBindingEndpoints();
 
@@ -441,42 +444,5 @@ public static class CatalogEndpoints
         }
 
         return null;
-    }
-
-    private static string? Blank(string? value) => string.IsNullOrEmpty(value) ? null : value;
-
-    private static string IdempotencyKey(HttpContext context) => context.Request.Headers["Idempotency-Key"].ToString();
-
-    private static Result<T> WithETag<T>(HttpContext context, Result<T> result, Func<T, int> version)
-    {
-        if (result.IsSuccess && result.SuccessValue is T value)
-        {
-            context.Response.Headers.ETag = string.Create(CultureInfo.InvariantCulture, $"\"{version(value)}\"");
-        }
-
-        return result;
-    }
-
-    private static Error? IfMatchError(HttpContext context, string what, out int version)
-    {
-        version = 0;
-        var raw = context.Request.Headers.IfMatch.ToString();
-
-        if (string.IsNullOrEmpty(raw))
-        {
-            return Error.Invalid($"If-Match is required: send the ETag of the {what} you read (00 §9.1)", [new ErrorDetail("If-Match", "required")]);
-        }
-
-        var value = raw.Trim();
-        if (value.StartsWith("W/", StringComparison.OrdinalIgnoreCase))
-        {
-            value = value[2..];
-        }
-
-        value = value.Trim('"');
-
-        return int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out version) && version >= 1
-            ? null
-            : Error.Invalid($"If-Match must be the ETag this endpoint issued: the {what}'s version (00 §9.1)", [new ErrorDetail("If-Match", "invalid")]);
     }
 }
