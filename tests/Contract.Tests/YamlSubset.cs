@@ -80,6 +80,7 @@ internal static class YamlSubset
         {
             var key = parser.Consume<Scalar>();
             RefuseDecorations(key.Anchor, key.Tag, key.Start);
+            RefuseBlockStyle(key);
             if (!mapping.TryAdd(key.Value, ReadNode(parser)))
             {
                 throw Refuse(key.Start, $"duplicate mapping key '{key.Value}'");
@@ -92,10 +93,7 @@ internal static class YamlSubset
     private static JsonValue? ReadScalar(Scalar scalar)
     {
         RefuseDecorations(scalar.Anchor, scalar.Tag, scalar.Start);
-        if (scalar.Style is ScalarStyle.Literal or ScalarStyle.Folded)
-        {
-            throw Refuse(scalar.Start, "a block scalar");
-        }
+        RefuseBlockStyle(scalar);
 
         if (scalar.Style != ScalarStyle.Plain)
         {
@@ -114,6 +112,14 @@ internal static class YamlSubset
                 => JsonValue.Create(number),
             _ => JsonValue.Create(value),
         };
+    }
+
+    private static void RefuseBlockStyle(Scalar scalar)
+    {
+        if (scalar.Style is ScalarStyle.Literal or ScalarStyle.Folded)
+        {
+            throw Refuse(scalar.Start, "a block scalar");
+        }
     }
 
     private static void RefuseDecorations(AnchorName anchor, TagName tag, Mark at)

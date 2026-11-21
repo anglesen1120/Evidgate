@@ -238,6 +238,7 @@ public sealed class YamlSubsetTests
     [Theory]
     [InlineData("a: |\n  text\n")]
     [InlineData("a: >\n  text\n")]
+    [InlineData("? |-\n  type\n: object\n")]
     public void Parse_BlockScalar_Refuses(string yaml)
         => Should.Throw<NotSupportedException>(() => YamlSubset.Parse(yaml)).Message.ShouldContain("a block scalar");
 
@@ -254,7 +255,7 @@ public sealed class YamlSubsetTests
     /// <summary>A syntax error surfaces as the reader's own exception type, with a line.</summary>
     [Fact]
     public void Parse_SyntaxError_IsNotSupported()
-        => Should.Throw<NotSupportedException>(() => YamlSubset.Parse("a: [1,\nb: 2\n")).Message.ShouldStartWith("line ");
+        => Should.Throw<NotSupportedException>(() => YamlSubset.Parse("a: b: c\n")).Message.ShouldStartWith("line ");
 
     /// <summary>Plain scalars become JSON null, booleans, integers (long), doubles; quoted ones stay strings.</summary>
     [Fact]
