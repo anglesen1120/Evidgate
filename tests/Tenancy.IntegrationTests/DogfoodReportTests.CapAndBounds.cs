@@ -91,6 +91,27 @@ public sealed partial class DogfoodReportTests
         (await escaped).ShouldBeGreaterThanOrEqualTo(await plain + 2L * Units * 3);
     }
 
+    /// <summary>The NFKC pass is a second normalisation of report text and is counted like the matching pass: each character is counted twice per visit (3 producers, 2 visits), and a cap set between the two counts trips.</summary>
+    [Fact]
+    public async Task Dogfood_Collect_NfkcPass_IsCountedByTheScanCounter()
+    {
+        const int Units = 30_000;
+        var small = await ScannedFor(new string('A', Units));
+        var large = await ScannedFor(new string('A', 2 * Units));
+
+        (large - small).ShouldBe(3L * 2 * 2 * Units);
+
+        // Without the NFKC count the total would be 12 * Units lower, so this cap sits between the two.
+        var cap = large - 6L * Units;
+        var xml = "<testsuite><testcase name='c'>" + new string('A', 2 * Units) + "</testcase></testsuite>";
+        await WithReports(xml, async (source, output) =>
+        {
+            var result = await RunScriptAsync(source, output, scanCap: cap);
+            result.Exit.ShouldBe(1, result.Stderr);
+            result.Stderr.ShouldContain("EVIDGATE_COLLECT_SCAN_CAP");
+        });
+    }
+
     private static async Task<long> ScannedFor(string text)
     {
         long scanned = 0;

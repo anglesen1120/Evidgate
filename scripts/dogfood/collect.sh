@@ -153,7 +153,7 @@ MALFORMED_PERCENT = re.compile(rb"%(?![0-9A-Fa-f]{2})")
 # Cn is stripped by category so a code point assigned after the Unicode data of this interpreter
 # (or after the ranges below) still cannot hide a name; Co (private use) renders as nothing too.
 IGNORABLE = frozenset(("Cf", "Mn", "Me", "Cn", "Co"))
-SCANNED = [0]  # characters handed to match_form for report text, printed under EVIDGATE_COLLECT_SCAN_STATS
+SCANNED = [0]  # report characters counted per normalisation pass (matching and NFKC), printed under EVIDGATE_COLLECT_SCAN_STATS
 if os.environ.get("EVIDGATE_COLLECT_SCAN_STATS"):
     atexit.register(lambda: print(f"peak_normalised_chars={PEAK[0]}", file=sys.stderr))
 PEAK = [0]  # longest normalised piece built so far, printed on exit under the same variable
@@ -235,12 +235,16 @@ def decode_once(producer, text):
         refuse(producer, "percent escapes do not decode to UTF-8")
 
 
-def report_form(producer, text):
-    # Every report text that reaches match_form is counted here, so a repeated call per value shows
-    # in the count and the cap, not only in the run time.
+def count_scanned(producer, text):
+    # Every report text that reaches a normalisation pass is counted here, so a repeated call per
+    # value shows in the count and the cap, not only in the run time.
     SCANNED[0] += len(text)
     if SCAN_CAP is not None and SCANNED[0] > SCAN_CAP:
         refuse(producer, "residual scan passed EVIDGATE_COLLECT_SCAN_CAP characters")
+
+
+def report_form(producer, text):
+    count_scanned(producer, text)
     return match_form(text)
 
 
@@ -248,6 +252,7 @@ def matching_forms(producer, value):
     # A report can spell a name without spelling it: match the raw text and, only when a percent
     # sign survives normalisation, its once-decoded reading.
     forms = [report_form(producer, value)]
+    count_scanned(producer, value)
     normalised = normalise("NFKC", value)
     if "%" in normalised:
         forms.append(report_form(producer, decode_once(producer, normalised)))
@@ -403,13 +408,18 @@ prefixes = [
 ]
 residual = [value for value in checkout if value]
 # Both the real host name and an injected $HOSTNAME are refused; each is additive, never a
-# replacement, so setting one cannot switch the other off.
+# replacement, so setting one cannot switch the other off. The literal "host" is what the report
+# scrub writes, so it is the one name never refused. A name of 4 or more characters is matched as a
+# substring; a shorter one (ci, srv) as a whole word only, so it does not refuse every longer word.
 machines = [socket.gethostname(), os.environ.get("HOSTNAME", "")]
-residual.extend(machine for machine in machines if len(identifier_form(machine)) >= 4 and identifier_form(machine) != "host")
+labels = []
+for machine in machines:
+    folded = identifier_form(machine)
+    if folded and folded != "host":
+        (residual if len(folded) >= 4 else labels).append(machine)
 # The first DNS label of a dotted name is refused too, as a whole word (server.corp.local refuses the
 # word "server" but not "serverless"), and only when distinctive: 5 or more characters, or a digit or
 # a hyphen in it. Shorter plain labels (app, git) and all-digit ones (an IPv4 prefix) are too common.
-labels = []
 for machine in machines:
     label = machine.split(".")[0] if "." in machine else ""
     folded = identifier_form(label)

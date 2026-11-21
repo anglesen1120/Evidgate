@@ -40,11 +40,11 @@ public sealed partial class DogfoodReportTests
         await AssertAcceptedAsync(Report(FakeIdentifier.Insert(4, "\u3164").Replace("Zq", "Zy", StringComparison.Ordinal)), extra: FakeIdentifier);
     }
 
-    /// <summary>The host-name length test and the "host" skip use the match form, so an invisible cannot defeat either.</summary>
+    /// <summary>The host-name length test (whole word under 4 characters) and the "host" skip use the match form, so an invisible cannot defeat either.</summary>
     [Theory]
     [InlineData("HO\u200bST", "a host b", false)]
     [InlineData("Local\u200bhost.corp.local", "http://localhost:4200", false)]
-    [InlineData("ab\u200bc", "abc", false)]
+    [InlineData("ab\u200bc", "abc", true)]
     [InlineData("Run\u3164ner-Zq", "see Runner-Zq", true)]
     public async Task Dogfood_Collect_HostNameChecks_UseTheMatchForm(string hostname, string text, bool refused)
     {
@@ -61,9 +61,9 @@ public sealed partial class DogfoodReportTests
         });
     }
 
-    /// <summary>Deep mixed content is scanned once: characters matched stay a small multiple of the payload, not depth times it. The same file is written for all three producers.</summary>
+    /// <summary>Deep mixed content is scanned once per pass: characters counted stay a small multiple of the payload (matching and NFKC pass, two visits), not depth times it. The same file is written for all three producers.</summary>
     [Fact]
-    public async Task Dogfood_Collect_DeepNonAsciiReport_ScansEachCharacterAtMostTwice()
+    public async Task Dogfood_Collect_DeepNonAsciiReport_ScansEachCharacterOncePerPassAndVisit()
     {
         const int Payload = 600_000;
         const int Producers = 3;
@@ -72,14 +72,14 @@ public sealed partial class DogfoodReportTests
         await WithReports(xml, async (source, output) =>
         {
             var elapsed = System.Diagnostics.Stopwatch.StartNew();
-            var result = await RunScriptAsync(source, output, scanStats: true, scanCap: Producers * (2L * Payload + 10_000));
+            var result = await RunScriptAsync(source, output, scanStats: true, scanCap: Producers * (4L * Payload + 10_000));
             elapsed.Stop();
             result.Exit.ShouldBe(0, result.Stderr);
             elapsed.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(30));
             var line = result.Stderr.Split('\n').Single(row => row.StartsWith("scanned_chars=", StringComparison.Ordinal));
             var scanned = long.Parse(line["scanned_chars=".Length..], CultureInfo.InvariantCulture);
             scanned.ShouldBeGreaterThanOrEqualTo(Producers * Payload);
-            scanned.ShouldBeLessThan(Producers * (2L * Payload + 10_000));
+            scanned.ShouldBeLessThan(Producers * (4L * Payload + 10_000));
         });
     }
 }

@@ -33,6 +33,25 @@ public sealed partial class TemplateTests
     }
 
     [Fact]
+    public async Task Template_FreshDatabase_HoldsExactlyTheShippedBuiltInSet()
+    {
+        // The suite's cleanup deletes every template row, so only a dedicated database shows what the migrations
+        // alone leave behind: an accidental insert in any migration changes this set.
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+
+        var rows = await _fixture.ScalarAsync<string>(
+            database,
+            """
+            select coalesce(string_agg(
+              concat_ws('/', id, coalesce(org_id::text, 'builtin'), kind, name, version, platform, level, purpose),
+              ';' order by id), '')
+            from public.template
+            """);
+
+        rows.ShouldBe($"{ShippedTemplateId}/builtin/web/playwright-page/1/web/e2e/regression");
+    }
+
+    [Fact]
     public async Task Template_ShippedBuiltIn_CarriesTheDefaultTaxonomyOnTheDatabaseAndTheRoute()
     {
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
