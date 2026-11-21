@@ -50,13 +50,14 @@ internal sealed partial class YamlSubset
         }
 
         var before = i - 1;
-        while (before >= 0 && text[before] == ' ')
+        while (before >= 0 && text[before] is ' ' or '\t')
         {
             before--;
         }
 
-        // A colon only separates key from value when a space follows it; 'a:'b' is plain text.
-        return before < 0 || text[before] is '[' or '{' or ',' || (text[before] == ':' && text[before + 1] == ' ');
+        // A colon only separates key from value when blank space follows it; 'a:'b' is plain text.
+        return before < 0 || text[before] is '[' or '{' or ','
+            || (text[before] == ':' && text[before + 1] is ' ' or '\t');
     }
 
     /// <summary>
@@ -71,24 +72,35 @@ internal sealed partial class YamlSubset
             return text;
         }
 
-        while (FlowDepth(value, lineNumber) > 0)
+        var joined = new System.Text.StringBuilder(value);
+        var depth = FlowDepth(value, 0, lineNumber);
+        while (depth > 0)
         {
             if (_index >= _lines.Count)
             {
-                throw new NotSupportedException($"line {lineNumber}: flow collection is never closed: '{value}'");
+                throw new NotSupportedException($"line {lineNumber}: flow collection is never closed: '{joined}'");
             }
 
-            value += " " + StripComment(_lines[_index++], _index).Trim();
+            // Scan only the appended line; the last significant character stands in for the look-back IsQuoteStart needs.
+            var line = StripComment(_lines[_index++], _index).Trim();
+            if (line.Length == 0)
+            {
+                continue;
+            }
+
+            var tail = joined[^1] + " " + line;
+            depth += FlowDepth(tail, 1, lineNumber);
+            joined.Append(tail, 1, tail.Length - 1);
         }
 
-        return value;
+        return joined.ToString();
     }
 
     /// <summary>Open-bracket depth of <paramref name="value"/> after its last character, skipping quoted text.</summary>
-    private static int FlowDepth(string value, int lineNumber)
+    private static int FlowDepth(string value, int from, int lineNumber)
     {
         var depth = 0;
-        for (var i = 0; i < value.Length; i++)
+        for (var i = from; i < value.Length; i++)
         {
             if (IsQuoteStart(value, i))
             {

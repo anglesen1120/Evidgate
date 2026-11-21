@@ -197,4 +197,63 @@ public sealed class YamlSubsetTests
         node.ShouldNotBeNull();
         node["summary"]!.GetValue<string>().ShouldBe("prefix:'suffix");
     }
+
+    /// <summary>YAML 1.2 forbids an empty flow entry; only one trailing comma is optional, in a sequence and in a mapping.</summary>
+    [Theory]
+    [InlineData("a: [a,,]\n")]
+    [InlineData("a: [,a]\n")]
+    [InlineData("a: [a,,b]\n")]
+    [InlineData("a: {x: 1,,}\n")]
+    public void Parse_EmptyFlowEntry_Refuses(string yaml)
+        => Should.Throw<NotSupportedException>(() => YamlSubset.Parse(yaml)).Message.ShouldContain("empty entry");
+
+    /// <summary>One trailing comma in a flow mapping is dropped, like in a flow sequence.</summary>
+    [Fact]
+    public void Parse_FlowMappingTrailingComma_Parses()
+    {
+        var node = YamlSubset.Parse("a: {x: 1, y: two,}\n") as JsonObject;
+
+        node.ShouldNotBeNull();
+        node["a"]!.AsObject().Count.ShouldBe(2);
+        node["a"]!["y"]!.GetValue<string>().ShouldBe("two");
+    }
+
+    /// <summary>A tab between a flow indicator and a quote still opens the quoted scalar, so a comma inside it is data.</summary>
+    [Fact]
+    public void Parse_TabBeforeQuote_OpensQuotedScalar()
+    {
+        var node = YamlSubset.Parse("a: [\t'x, y',\t\"z, w\"]\nb: {k:\t'p, q'}\n") as JsonObject;
+
+        node.ShouldNotBeNull();
+        node["a"]!.AsArray().Select(n => n!.GetValue<string>()).ShouldBe(["x, y", "z, w"]);
+        node["b"]!["k"]!.GetValue<string>().ShouldBe("p, q");
+    }
+
+    /// <summary>
+    /// A list left open is joined up to the next bracket, as YAML's multi-line flow rule requires. The reader keeps
+    /// the later lines as plain text entries (it does not model implicit pairs), so they are never separate mapping members.
+    /// </summary>
+    [Fact]
+    public void Parse_UnterminatedListFollowedByLaterBracket_JoinsUpToThatBracket()
+    {
+        var node = YamlSubset.Parse("a: [x,\nb: y\nc: z]\n") as JsonObject;
+
+        node.ShouldNotBeNull();
+        node.Count.ShouldBe(1);
+        node["a"]!.AsArray().Select(n => n!.GetValue<string>()).ShouldBe(["x", "b: y c: z"]);
+    }
+
+    /// <summary>A very long wrapped list parses to every item (guards the incremental depth scan against dropping or double-counting lines).</summary>
+    [Fact]
+    public void Parse_LongWrappedFlowList_KeepsEveryItem()
+    {
+        var lines = string.Join(",\n", Enumerable.Range(0, 5000).Select(n => "  'it'" + "'" + "s " + n + "'"));
+        var node = YamlSubset.Parse("a: [\n" + lines + ",\n]\nafter: 1\n") as JsonObject;
+
+        node.ShouldNotBeNull();
+        node["a"]!.AsArray().Count.ShouldBe(5000);
+        node["a"]![0]!.GetValue<string>().ShouldBe("it's 0");
+        node["a"]![4999]!.GetValue<string>().ShouldBe("it's 4999");
+        node["after"]!.GetValue<long>().ShouldBe(1);
+    }
 }
