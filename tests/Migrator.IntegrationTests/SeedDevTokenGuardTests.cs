@@ -1,5 +1,6 @@
 using System.Globalization;
 using Evidgate.Migrator;
+using Evidgate.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -33,7 +34,7 @@ public sealed partial class SeedDevTokenGuardTests
 
         // Positive control first: the seam hands a provider to the real composition, so an empty capture means silence
         // rather than a sink that was never registered — at Information and, because the sink sets Trace, at Debug.
-        var control = new SeedDevTokenHarness.CapturingLoggerProvider();
+        var control = new CapturingLoggerProvider();
         using (var probe = DevSeedServices.Compose(variables, SeedDevTokenHarness.ContractsDirectory(), control))
         {
             var logger = probe.GetRequiredService<ILoggerFactory>().CreateLogger("seed-dev-probe");
@@ -41,11 +42,14 @@ public sealed partial class SeedDevTokenGuardTests
             Log.DebugControl(logger, "wired at debug");
         }
 
-        control.Messages.ShouldContain(message => message.Contains("capture control wired", StringComparison.Ordinal));
-        control.Messages.ShouldContain(
-            message => message.Contains("capture control wired at debug", StringComparison.Ordinal));
+        // Exact wording and level, not a substring: "capture control wired at debug" would otherwise satisfy the
+        // Information check, so a lost Information entry would stay green.
+        control.Entries.ShouldContain(entry =>
+            entry.Level == LogLevel.Information && entry.Message == "capture control wired");
+        control.Entries.ShouldContain(entry =>
+            entry.Level == LogLevel.Debug && entry.Message == "capture control wired at debug");
 
-        var capture = new SeedDevTokenHarness.CapturingLoggerProvider();
+        var capture = new CapturingLoggerProvider();
         var output = new StringWriter(CultureInfo.InvariantCulture);
         var error = new StringWriter(CultureInfo.InvariantCulture);
 
@@ -53,8 +57,14 @@ public sealed partial class SeedDevTokenGuardTests
 
         code.ShouldBe(MigratorExitCodes.Success, error.ToString());
         var token = SeedDevTokenHarness.TokenOf(output.ToString());
-        capture.Messages.ShouldNotContain(message => message.Contains(token, StringComparison.Ordinal));
-        capture.Messages.ShouldNotContain(message => message.Contains("egt_", StringComparison.Ordinal));
+        // Every persisted string of every entry, not just the formatted message: a secret in structured state or a
+        // scope would reach the same sink.
+        capture.Entries
+            .SelectMany(entry => entry.Texts)
+            .ShouldNotContain(text => text.Contains(token, StringComparison.Ordinal));
+        capture.Entries
+            .SelectMany(entry => entry.Texts)
+            .ShouldNotContain(text => text.Contains("egt_", StringComparison.Ordinal));
         error.ToString().ShouldNotContain(token);
     }
 

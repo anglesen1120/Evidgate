@@ -90,6 +90,7 @@ public sealed class CapturingLoggerProviderTests
 
         var texts = provider.Entries.Single().Texts.ToList();
         texts.Any(text => text.Contains("rendered state-marker", StringComparison.Ordinal)).ShouldBeTrue();
+        texts.ShouldContain("Value=state-marker");
         texts.Any(text => text.Contains("scope-marker", StringComparison.Ordinal)).ShouldBeTrue();
         texts.Any(text => text.Contains("exception-marker", StringComparison.Ordinal)).ShouldBeTrue();
 

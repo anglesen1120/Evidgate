@@ -5,6 +5,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using Evidgate.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -833,7 +834,7 @@ public sealed class IngestEventBatchTests : IClassFixture<TenancyHostPool>
     public async Task log_has_no_payload()
     {
         await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
-        var sink = new IngestLogSink();
+        var sink = new CapturingLoggerProvider();
         await using var host = world.Host.WithWebHostBuilder(
             builder => builder.ConfigureTestServices(services => services.AddLogging(logging => logging.AddProvider(sink))));
         using var client = host.CreateClient();
@@ -850,7 +851,8 @@ public sealed class IngestEventBatchTests : IClassFixture<TenancyHostPool>
             client: client);
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
-        sink.Lines.ShouldAllBe(line => !line.Contains(sentinel, StringComparison.Ordinal));
+        sink.Entries.SelectMany(entry => entry.Texts.Prepend(entry.Category))
+            .ShouldAllBe(text => !text.Contains(sentinel, StringComparison.Ordinal));
     }
 
     // ------------------------------------------------------------------ the statement budget

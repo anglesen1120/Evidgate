@@ -1,4 +1,5 @@
 using System.Globalization;
+using Evidgate.Testing;
 using Npgsql;
 using Evidgate.Worker;
 using Microsoft.Extensions.Configuration;
@@ -19,7 +20,7 @@ internal static class WorkerHostFactory
     public static HostApplicationBuilder Create(
         string connectionString,
         int healthPort,
-        CaptureLoggerProvider? capture = null,
+        CapturingLoggerProvider? capture = null,
         string? workerConnectionString = null)
     {
         var builder = WorkerHost.CreateBuilder([]);
@@ -72,7 +73,7 @@ internal sealed class RunningWorker : IAsyncDisposable
     public static async Task<RunningWorker> StartAsync(
         string connectionString,
         int healthPort,
-        CaptureLoggerProvider? capture = null,
+        CapturingLoggerProvider? capture = null,
         string? workerConnectionString = null,
         CancellationToken cancellationToken = default)
     {
