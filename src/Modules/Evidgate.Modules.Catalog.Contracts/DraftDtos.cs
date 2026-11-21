@@ -75,7 +75,55 @@ public sealed record CreateDraftRequest(
 /// <param name="Content">The replacement file set, 1–200 files.</param>
 public sealed record UpdateDraftRequest(DraftContentDto Content);
 
+/// <summary>
+/// One item of the draft list: every <see cref="DraftDto"/> member except the file set, which only
+/// <c>GET /v1/drafts/{d}</c> returns, so a page never carries the content.
+/// </summary>
+/// <param name="Id">Draft id.</param>
+/// <param name="ProjectId">The project the draft belongs to.</param>
+/// <param name="AuthorMembershipId">The membership that created the draft.</param>
+/// <param name="Kind"><c>template</c>, <c>ai</c> or <c>regression</c>.</param>
+/// <param name="BaseCommit">The commit the draft is cut from.</param>
+/// <param name="Status">The draft's state.</param>
+/// <param name="Version">Monotonic version.</param>
+/// <param name="FileCount">How many files the content set holds.</param>
+/// <param name="Provenance">Free-form origin metadata, or null.</param>
+/// <param name="AiRunId">The AI run that authored the draft, when one did.</param>
+/// <param name="DryRunId">The newest dry run of the draft, when one ran.</param>
+/// <param name="AllowUnverified">Whether a dry-failed draft may be opened as a PR after a recorded reason.</param>
+/// <param name="UnverifiedReason">The reason recorded with <paramref name="AllowUnverified"/>.</param>
+/// <param name="PrBranch">The branch a PR was opened from, when one was.</param>
+/// <param name="PrCommitSha">The commit the PR holds.</param>
+/// <param name="PrUrl">The PR's URL.</param>
+/// <param name="PrNumber">The PR's provider number.</param>
+/// <param name="LinkedCaseId">The catalog case a merged PR created or updated.</param>
+/// <param name="LinkedRevisionId">The revision that merge produced.</param>
+/// <param name="CreatedAt">Creation, UTC.</param>
+/// <param name="UpdatedAt">The last write, UTC.</param>
+public sealed record DraftSummaryDto(
+    Guid Id,
+    Guid ProjectId,
+    Guid AuthorMembershipId,
+    string Kind,
+    string BaseCommit,
+    string Status,
+    int Version,
+    int FileCount,
+    JsonElement? Provenance,
+    Guid? AiRunId,
+    Guid? DryRunId,
+    bool AllowUnverified,
+    string? UnverifiedReason,
+    string? PrBranch,
+    string? PrCommitSha,
+    string? PrUrl,
+    int? PrNumber,
+    Guid? LinkedCaseId,
+    Guid? LinkedRevisionId,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
 /// <summary>Cursor page of <c>GET /v1/projects/{p}/drafts</c>, oldest first on <c>(created_at, id)</c>.</summary>
 /// <param name="Items">The page.</param>
 /// <param name="NextCursor">Opaque cursor, or null on the last page.</param>
-public sealed record DraftListResponse(IReadOnlyList<DraftDto> Items, string? NextCursor);
+public sealed record DraftListResponse(IReadOnlyList<DraftSummaryDto> Items, string? NextCursor);

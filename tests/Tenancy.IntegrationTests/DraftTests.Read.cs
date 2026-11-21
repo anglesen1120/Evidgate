@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -136,6 +137,40 @@ public sealed partial class DraftTests
             && !statement.Contains("from public.draft", StringComparison.Ordinal));
         probes.ShouldBeGreaterThanOrEqualTo(1, "the handler's own ProjectExists probe");
         probes.ShouldBeLessThanOrEqualTo(2, "and at most one more from the request's project resolution");
+    }
+
+    [Fact]
+    public async Task List_ItemsCarryNoContent_AndTheStatementDoesNotSelectIt()
+    {
+        await using var world = await StartAsync();
+        var created = await CreateAsync(world, new JsonObject
+        {
+            ["kind"] = "template",
+            ["base_commit"] = "abcdef1234567",
+            ["content"] = Content(File("tests/a.ts"), File("tests/b.ts"), File("tests/c.ts")),
+        });
+        created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
+        var id = created.Id();
+
+        var before = world.Api.Statements.Snapshot().Count;
+        var answer = await world.Client.SendAsync(HttpMethod.Get, world.Collection, world.Admin);
+
+        answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
+        var item = answer.Body.GetProperty("items").EnumerateArray().Single();
+        item.TryGetProperty("content", out _).ShouldBeFalse("the list item is a summary");
+        item.GetProperty("id").GetGuid().ShouldBe(id);
+        item.GetProperty("file_count").GetInt32().ShouldBe(3);
+        item.GetProperty("version").GetInt32().ShouldBe(1);
+
+        var page = world.Api.Statements.Snapshot().Skip(before)
+            .Single(statement => statement.Contains("from public.draft", StringComparison.Ordinal));
+        page.ShouldNotContain("d.content::text", Case.Sensitive, "the page statement never reads the file set");
+        page.Replace("jsonb_array_length(d.content -> 'files')", string.Empty, StringComparison.Ordinal)
+            .ShouldNotContain("d.content", Case.Sensitive, "content appears only inside the file count");
+        page.ShouldNotContain("d.*", Case.Sensitive);
+
+        var detail = await GetAsync(world, id);
+        detail.Body.GetProperty("content").GetProperty("files").GetArrayLength().ShouldBe(3);
     }
 
     [Fact]

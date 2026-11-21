@@ -56,10 +56,10 @@ internal sealed class ListDraftsQueryHandler(
             return Result.Failure<DraftListResponse>(CatalogErrors.ProjectNotFound);
         }
 
-        IReadOnlyList<DraftRow> rows;
+        IReadOnlyList<DraftSummaryRow> rows;
         if (query.Cursor is null)
         {
-            rows = await db.QueryAsync<DraftRow>(
+            rows = await db.QueryAsync<DraftSummaryRow>(
                 DraftReadSql.DraftsFirstPage,
                 new { org_id = orgId, project_id = query.ProjectId, status = query.Status, limit = limit + 1 },
                 cancellationToken).ConfigureAwait(false);
@@ -73,7 +73,7 @@ internal sealed class ListDraftsQueryHandler(
                     [new ErrorDetail("cursor", "malformed")]));
             }
 
-            rows = await db.QueryAsync<DraftRow>(
+            rows = await db.QueryAsync<DraftSummaryRow>(
                 DraftReadSql.DraftsNextPage,
                 new
                 {
