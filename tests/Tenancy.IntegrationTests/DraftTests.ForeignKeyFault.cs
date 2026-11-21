@@ -45,6 +45,10 @@ public sealed partial class DraftTests
 
         answer.Status.ShouldBe(HttpStatusCode.InternalServerError, answer.ErrorMessage);
         (await DraftCountAsync(world)).ShouldBe(0);
+
+        // Positive control: without the fault the same caller creates, so the 500 came from the unexpected constraint.
+        await _fixture.ExecuteAsync(world.Database, $"drop trigger {FaultTrigger} on public.draft");
+        (await CreateAsync(world)).Status.ShouldBe(HttpStatusCode.Created);
     }
 
     private Task InjectForeignKeyFaultAsync(World world, string constraint) =>

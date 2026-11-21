@@ -111,21 +111,24 @@ internal sealed class CreateDraftCommandHandler(
         {
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (DbUpdateException exception) when (exception.InnerException is PostgresException
+        catch (DbUpdateException exception) when (ForeignKeyRefusal(exception) is { } refusal)
         {
-            SqlState: PostgresErrorCodes.ForeignKeyViolation,
-            ConstraintName: DraftProjectForeignKey or DraftAuthorForeignKey,
-        } violation)
-        {
-            // The project vanished after the existence probe (404), or the author's membership was removed after the
-            // actor lookup (403). Any other foreign key cannot be set by a create, so it propagates rather than mislabel.
-            return Result.Failure<DraftDto>(violation.ConstraintName == DraftAuthorForeignKey
-                ? DraftErrors.AuthorRequired
-                : CatalogErrors.ProjectNotFound);
+            return Result.Failure<DraftDto>(refusal);
         }
 
         return await DraftReader.SavedAsync(db, row.Id, audit, cancellationToken, CreatedStatus).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// The project vanished after the existence probe (404), or the author's membership was removed after the actor
+    /// lookup (403). Any other foreign key cannot be set by a create, so it is null and the exception propagates.
+    /// </summary>
+    private static Error? ForeignKeyRefusal(DbUpdateException exception) => exception.InnerException switch
+    {
+        PostgresException { SqlState: PostgresErrorCodes.ForeignKeyViolation, ConstraintName: DraftAuthorForeignKey } => DraftErrors.AuthorRequired,
+        PostgresException { SqlState: PostgresErrorCodes.ForeignKeyViolation, ConstraintName: DraftProjectForeignKey } => CatalogErrors.ProjectNotFound,
+        _ => null,
+    };
 }
 
 /// <summary>

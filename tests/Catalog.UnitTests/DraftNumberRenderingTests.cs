@@ -27,6 +27,9 @@ public sealed class DraftNumberRenderingTests
     [InlineData("1E-300", 302)]
     [InlineData("1e308", 309)]
     [InlineData("-1e308", 310)]
+    [InlineData("1e400", 401)]
+    [InlineData("1e-400", 402)]
+    [InlineData("1234567890123456789012345678901234567890123456789012345678901234", 64)]
     public void RenderedLength_ForTheNormalForms_IsExact(string token, long rendered) =>
         DraftBody.RenderedLength(token).ShouldBe(rendered);
 
