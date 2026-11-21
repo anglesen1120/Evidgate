@@ -2,7 +2,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
-import { chromium, type Browser } from '@playwright/test';
+import { chromium, type Browser, type Page } from '@playwright/test';
 import postcss from 'postcss';
 import { compile } from 'tailwindcss';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -41,6 +41,7 @@ const scenarios = ['light', 'dark'].flatMap((theme) =>
 // This isolated CSS specimen needs no application build, backend or shared fixture server.
 describe('HlmDialogFooter responsive action order', () => {
   let browser: Browser;
+  let page: Page;
   let css: string;
 
   beforeAll(async () => {
@@ -50,16 +51,20 @@ describe('HlmDialogFooter responsive action order', () => {
     const compiler = await compile(`${theme}\n${footerRules.join('\n')}\n@tailwind utilities;`);
     css = compiler.build(footerClasses.split(/\s+/u));
     browser = await chromium.launch({ channel: 'chrome' });
+    // One page for the file: a page per scenario cost ~100 ms each; each case still replaces the
+    // whole document and sets its own viewport.
+    page = await browser.newPage();
   });
 
   afterAll(async () => {
+    await page?.close();
     await browser?.close();
   });
 
   it.each(scenarios)(
     'keeps $locale $variant DOM, visual and keyboard order at $width px in $theme',
     async ({ theme, locale, cancel, commit, variant, width }) => {
-      const page = await browser.newPage({ viewport: { width, height: 900 } });
+      await page.setViewportSize({ width, height: 900 });
       try {
         await page.setContent(`
           <!doctype html><html lang="${locale}" data-theme="${theme}">
@@ -101,7 +106,7 @@ describe('HlmDialogFooter responsive action order', () => {
         expect(await actions.nth(1).isDisabled()).toBe(true);
         expect(await actions.allTextContents()).toEqual(domOrder);
       } finally {
-        await page.close();
+        await page.setContent('');
       }
     },
   );

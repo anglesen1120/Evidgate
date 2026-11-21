@@ -103,6 +103,9 @@ export function mountRetention(codes = ['project:read', 'project:write']) {
   const store = fixture.debugElement.injector.get(RetentionStore);
   const http = TestBed.inject(HttpTestingController);
   fixture.detectChanges();
+  // vitest polls every 50 ms by default, which dominates a test that waits a dozen times; the
+  // condition is cheap, so poll fast. The deadline is unchanged.
+  const POLL = { interval: 1 };
   const take = async (method: string, project = 'p-1'): Promise<TestRequest> => {
     let found: TestRequest | undefined;
     await vi.waitFor(() => {
@@ -113,7 +116,7 @@ export function mountRetention(codes = ['project:read', 'project:write']) {
       );
       found = matches[0];
       expect(found).toBeDefined();
-    });
+    }, POLL);
     if (!found) throw new Error('No retention request');
     return found;
   };
@@ -124,7 +127,7 @@ export function mountRetention(codes = ['project:read', 'project:write']) {
     await vi.waitFor(() => {
       TestBed.tick();
       expect(store.saving() || store.loading()).toBe(false);
-    });
+    }, POLL);
     TestBed.tick();
     fixture.detectChanges();
     await fixture.whenStable();
