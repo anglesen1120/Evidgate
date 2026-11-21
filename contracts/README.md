@@ -138,6 +138,29 @@ answers that same retryable `503 unavailable` (with `Retry-After`) when the
 organization's audit chain is busy.
 `POST /v1/support-grants` (request) stays declared but unserved in this scope.
 
+The draft surface (03.6.1) is the editable file set a dry run and a pull request are made from:
+`POST /v1/projects/{p}/drafts` and `GET /v1/projects/{p}/drafts` (`draft:write`, `case:read`),
+plus `GET /v1/drafts/{d}` and `PATCH /v1/drafts/{d}` (`case:read`, `draft:write`). The two
+un-nested routes evaluate their permission against the draft's own project, so a caller holding
+`draft:write` in project A gets no access to a draft of project B in the same org; an unknown id,
+another project's id and another tenant's id all answer the same `404 not_found`. The author is the
+caller's active membership, never a body member (no active membership is `403 draft_author_required`).
+Authentication and authorization run before body validation and before `If-Match` parsing on all four
+routes, so an anonymous or unpermitted caller never learns whether its body or ETag was acceptable.
+
+`ETag` is the quoted draft `version`. `PATCH` requires both `If-Match` and `Idempotency-Key`: a missing
+or malformed `If-Match` is `422 request_invalid` with an `If-Match` detail (`required` when absent), a stale
+one is `412 precondition_failed` with the current `version` in `error.details`, and a successful write
+increments `version` by exactly one and returns its quoted value. Content changes are refused with `409
+draft_state_conflict` unless the draft is in `draft`; the state machine is 00 §8.10. Invalid content is
+`422 draft_invalid` with the field named in `error.details`; an unknown `status` filter is the same code,
+while a malformed cursor or an out-of-range limit is `422 request_invalid`. Both request bodies are capped
+at 256 KiB (`x-max-bytes`, answered as `413 payload_too_large` before the body is read): 1–200 files, `path`
+and `body_ref` 1–512 characters, `path` relative with no backslash, parent segment or control character,
+unique paths, `body_sha` `sha256:<64 hex>`, `base_commit` `^[0-9a-f]{7,64}$`, and a `provenance` object of
+at most 4096 UTF-8 bytes. The list is a keyset page on `(created_at, id)` (`cursor`/`limit`, default 50, max
+200) with an optional `status` filter.
+
 `Idempotency-Key` exemptions (00-grounded, enforced by the spectral
 `evg-mutation-idempotency` rule — keep this list, the function's
 `IDEMPOTENCY_EXEMPT` map and the helper's `IDEM_EXEMPT` in sync):

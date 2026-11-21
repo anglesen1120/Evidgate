@@ -174,6 +174,13 @@ const EXPECTED = [
   ['/fixtures/{f}', 'get', 'suite:read', 'v1'],
   ['/fixtures/{f}/revisions', 'post', 'fixture:write', 'v1'],
   ['/webhooks/github', 'post', 'none', 'v1'],
+  // The draft read/write pair is v1; its dry-run and PR operations are the v2 rows below. A draft's
+  // un-nested routes evaluate the permission against the draft's own project, and another project's
+  // draft and an unknown id both answer the same 404 (03.6.1 §8).
+  ['/projects/{p}/drafts', 'post', 'draft:write', 'v1'],
+  ['/projects/{p}/drafts', 'get', 'case:read', 'v1'],
+  ['/drafts/{d}', 'get', 'case:read', 'v1'],
+  ['/drafts/{d}', 'patch', 'draft:write', 'v1'],
   ['/drafts/{d}/dry-run', 'post', 'draft:dry_run', 'v2'],
   ['/drafts/{d}/pull-request', 'post', 'draft:merge_request', 'v2'],
   ['/projects/{p}/incidents', 'get', 'healing:triage', 'v1'],
