@@ -55,15 +55,6 @@ public sealed partial class RawBodyGuardBoundaryTests
         "ReadBodyAsync", "ReadOptionalBodyAsync", "ReadJsonAsync", "ReadFileAsync", "ReadAuthenticatedJsonAsync",
     ];
 
-    /// <summary>A disabled region may compile under another target, so any mention of a guard or a reader is red.</summary>
-    private static readonly string[] SuspiciousDisabledText =
-    [
-        "RawBodyGuard", "RequireAuthenticatedTenant", "RequireResolvedTenant", "IRequestTenantContextAccessor",
-        "Request.Body", "BodyReader", "ReadFromJsonAsync", "ReadFormAsync", ".Request",
-        .. ReaderMethodNames,
-        "\\u", "\\U",
-    ];
-
     [Fact]
     public void ModuleEndpoints_RawBodyReaders_GuardBeforeRead()
     {
@@ -155,13 +146,10 @@ public sealed partial class RawBodyGuardBoundaryTests
             errors.Add($"{path}: source does not parse");
         }
 
-        foreach (var trivia in root.DescendantTrivia().Where(trivia => trivia.IsKind(SyntaxKind.DisabledTextTrivia)))
+        var conditional = ConditionalSourceText.FirstLine(root);
+        if (conditional > 0)
         {
-            var disabled = trivia.ToString();
-            if (SuspiciousDisabledText.Any(needle => disabled.Contains(needle, StringComparison.Ordinal)))
-            {
-                errors.Add($"{path}: disabled preprocessor region could hide a guard or a body read");
-            }
+            errors.Add($"{path}:{conditional}: conditionally compiled text hides a guard or a body read from the scan");
         }
 
         foreach (var directive in root.DescendantNodes().OfType<UsingDirectiveSyntax>())
