@@ -1377,3 +1377,9 @@ Superseded by S592 (#1195, merged as 145301e7): `AuthoringXlsxFormatTests.cs` wa
 | Oversized Tenancy test files (S592) | After S592 (#1195, AuthoringXlsxFormatTests split into 429 / 237 / 238 lines), S591, S590 and the earlier splits (S584-S589), 22 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 655ac566): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
 
 Superseded by S593 (#1199, merged as 4cc2729a): `EvidenceFreezeGuardTests.cs` was split into 487 / 327 lines; the recount on 4cc2729a gave 21 files, see the '(S593)' row in docs/status-carried.md.
+
+## Moved from status-carried.md by S595 (2026-11-21)
+
+| Oversized Tenancy test files (S593) | After S593 (#1199, EvidenceFreezeGuardTests split into 487 / 327 lines), S592, S591, S590 and the earlier splits (S584-S589), 21 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 4cc2729a): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S595 (#1201, merged as 70d4a479): `EvidenceRevisionSchemaTests.cs` was split into 259 / 355 / 300 lines; the recount on 70d4a479 gave 20 files, see the '(S595)' row in docs/status-carried.md.
