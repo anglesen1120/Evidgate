@@ -97,7 +97,7 @@ select id, org_id, queue, task_type, idempotency_key, attempts, max_attempts, la
  limit 50;
 ```
 
-Served by `task_dead_org_idx` (`org_id, created_at, id`, defined in `0104_platform_worker_role`) — the org-first index the definer page is written for, not the cross-org `task_dead_idx`; `task_state_check` pins the state literals. The table, columns and `task_dead_idx` are defined by `0008_platform_task_queue`.
+Q1 reads every org and orders by `(created_at, id)` with no `org_id` predicate, so the cross-org `task_dead_idx` (defined with the table by `0008_platform_task_queue`) is the index that matches its shape; whether the planner uses it needs a live plan, not a desk check. `task_dead_org_idx` (`org_id, created_at, id`, defined in `0104_platform_worker_role`) is the org-first index for the tenant-scoped list definer, not for Q1. `task_state_check` pins the state literals.
 
 Q2 — dead-letter depth by queue and type, to see whether the row is an incident or a singleton:
 
@@ -362,3 +362,5 @@ Each SQL identifier this runbook uses, and where the schema defines it.
 | `run_overdue_idx` (`where state in ('queued', 'running', 'collecting')`, replaced `run_collecting_idx`) | partial index | `0058_reconcile_overdue_running` (`run_overdue_idx`; `run_collecting_idx` dropped) |
 | `evidgate.reconcile_overdue_runs` (signature `uuid, uuid, integer`; selects `state in ('queued', 'running', 'collecting')` past the DB clock) | function | `0058_reconcile_overdue_running` (`evidgate.reconcile_overdue_runs`) |
 | `evidgate_worker_sched` is the only role with EXECUTE on `evidgate.reconcile_overdue_runs` | grant | `0058_reconcile_overdue_running` (the EXECUTE revoke/grant for `evidgate.reconcile_overdue_runs`) |
+
+Desk check: 2026-11-21, wave fd69e03b; not checkable without a live environment: staging drill by a non-author (AC2/AC3), log-backend retention of events 2306/2320/2350, the deployed operator gate and credential provisioning, replay behaviour of a concrete handler, pager routing, and real dead-letter depth.
