@@ -1,6 +1,7 @@
 using Evidgate.BuildingBlocks.Contracts.Validation;
 using System.Globalization;
 using System.Text.Json;
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Application;
@@ -136,6 +137,9 @@ internal static class AuthoringChangeEndpoints
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        // Refuse an unresolved caller before anything else reads the request.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
         var (body, bodyError) = await AuthoringEndpointSupport
             .ReadBodyAsync(context, QueueBodyCap, cancellationToken)
             .ConfigureAwait(false);
@@ -190,6 +194,9 @@ internal static class AuthoringChangeEndpoints
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        // Refuse an unresolved caller before anything else reads the request.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
         return await mediator.Send(
             new DiscardAuthoringChangeCommand(p, c, AuthoringEndpointSupport.IdempotencyKey(context)),
             cancellationToken).ConfigureAwait(false);
@@ -203,6 +210,9 @@ internal static class AuthoringChangeEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        // Refuse an unresolved caller before anything else reads the request.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
         var (body, bodyError) = await AuthoringEndpointSupport.ReadBodyAsync(context, cancellationToken).ConfigureAwait(false);
 

@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Application;
 using Evidgate.Modules.Authoring.Application.Commands;
@@ -92,6 +93,9 @@ internal static class AiSettingsEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        // Refuse an unresolved caller before anything else reads the request.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
         var (request, payloadError) = await AiSettingsPayload.ReadAsync(context, cancellationToken).ConfigureAwait(false);
         if (payloadError is not null || request is null)

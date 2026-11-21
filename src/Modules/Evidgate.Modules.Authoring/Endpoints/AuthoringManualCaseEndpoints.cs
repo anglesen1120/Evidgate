@@ -166,6 +166,9 @@ internal static class AuthoringManualCaseEndpoints
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        // Refuse an unresolved caller before anything else reads the request.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
         var (body, bodyError) = await AuthoringEndpointSupport.ReadBodyAsync(context, cancellationToken).ConfigureAwait(false);
 
         if (bodyError is not null)
@@ -393,6 +396,9 @@ internal static class AuthoringManualCaseEndpoints
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        // Refuse an unresolved caller before anything else reads the request.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
         var (body, bodyError) = await AuthoringEndpointSupport.ReadBodyAsync(context, cancellationToken).ConfigureAwait(false);
 
         if (bodyError is not null)
@@ -420,6 +426,9 @@ internal static class AuthoringManualCaseEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        // Refuse an unresolved caller before anything else reads the request.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
         return await mediator.Send(
             new UnlinkManualCaseCommand(p, m, c, AuthoringEndpointSupport.IdempotencyKey(context)),
