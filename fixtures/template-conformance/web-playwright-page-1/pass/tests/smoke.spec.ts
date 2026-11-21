@@ -6,7 +6,7 @@ import { HomePage } from '../pages/HomePage';
 const username = process.env.EVIDGATE_USERNAME ?? '';
 const password = process.env.EVIDGATE_PASSWORD ?? '';
 const config = { 'password': 'secret:PASSWORD' };
-const clientSecret: string = 'secret:CLIENT_SECRET';
+const clientSecret: string = 'secret:LOGIN_PASSWORD';
 
 test('smoke', { annotation: { type: 'evidgate.id', description: '0199a3c1-2b3d-7e4f-8a9b-0c1d2e3f4a5b' } }, async ({ page }) => {
   const screen = new HomePage(page);
