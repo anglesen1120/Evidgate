@@ -102,6 +102,13 @@ public sealed class AuthoringGuardFirstBoundaryTests
     }
 
     [Fact]
+    public void Scan_PreconditionCheckInsideADisabledRegion_IsRed()
+    {
+        Scan([Synthetic("static async Task M(HttpContext context)\n{\n#if NET10_0\nSupport.IfMatchVersion(context, out var v);\n#endif\nRawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);\n}")], [])
+            .ShouldContain(error => error.Contains("disabled preprocessor region", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Scan_TheNamedReadRouteExemption_StaysDeclaredAndOnlyForExport()
     {
         var source = File.ReadAllText(Path.Combine(SolutionLayout.RepoRoot, ImportFile));
@@ -121,7 +128,16 @@ public sealed class AuthoringGuardFirstBoundaryTests
         var errors = new List<string>();
         foreach (var (path, text) in files)
         {
-            foreach (var method in CSharpSyntaxTree.ParseText(text).GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
+            var root = CSharpSyntaxTree.ParseText(text).GetRoot();
+            foreach (var trivia in root.DescendantTrivia().Where(trivia => trivia.IsKind(SyntaxKind.DisabledTextTrivia)))
+            {
+                if (Preconditions.Any(helper => trivia.ToString().Contains(helper, StringComparison.Ordinal)))
+                {
+                    errors.Add($"{path}: disabled preprocessor region could hide a precondition check before the guard");
+                }
+            }
+
+            foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
                 var name = $"{method.Ancestors().OfType<TypeDeclarationSyntax>().First().Identifier.ValueText}.{method.Identifier.ValueText}";
                 if (name == Export && path == ImportFile || !Preconditions.Any(helper => Calls(method, helper)))

@@ -93,21 +93,26 @@ public sealed partial class RawBodyTenantRefusalTests
     public async Task AuthoringGuardFirst_AnonymousCaller_GetsPipelineUnauthenticatedBeforeIfMatchOrQuery()
     {
         await using var world = await SeededAsync();
+        var failures = new List<string>();
 
         foreach (var route in GuardFirstRoutes())
         {
             foreach (var (name, variant) in Variants(route))
             {
                 var reply = await SendAsync(world.Client, variant, Json(route.WellFormed), Anonymous, tenantHeader: null);
-                AssertAnswer(RawBodyWriteRoutes.PipelineUnauthenticated, variant, reply, $"{route.Key} anonymous with {name}");
+                Collect(failures, $"{route.Key} anonymous with {name}", () =>
+                    AssertAnswer(RawBodyWriteRoutes.PipelineUnauthenticated, variant, reply, $"{route.Key} anonymous with {name}"));
             }
         }
+
+        failures.ShouldBeEmpty(string.Join("\n", failures));
     }
 
     [Fact]
     public async Task AuthoringGuardFirst_PrincipalWithoutTenant_GetsPipelineUnauthenticatedBeforeIfMatchOrQuery()
     {
         await using var world = await SeededAsync();
+        var failures = new List<string>();
         var caller = TenancyApiFactory.Resolved(user: world.User);
 
         foreach (var route in GuardFirstRoutes())
@@ -120,9 +125,12 @@ public sealed partial class RawBodyTenantRefusalTests
                     Json(route.WellFormed),
                     caller,
                     headers => headers.TryAddWithoutValidation("X-Evidgate-Org", "not-a-uuid"));
-                AssertAnswer(RawBodyWriteRoutes.PipelineUnauthenticated, variant, reply, $"{route.Key} without tenant, {name}");
+                Collect(failures, $"{route.Key} without tenant, {name}", () =>
+                    AssertAnswer(RawBodyWriteRoutes.PipelineUnauthenticated, variant, reply, $"{route.Key} without tenant, {name}"));
             }
         }
+
+        failures.ShouldBeEmpty(string.Join("\n", failures));
     }
 
     [Fact]
@@ -146,6 +154,10 @@ public sealed partial class RawBodyTenantRefusalTests
         {
             var reply = await SendAsync(world.Client, variant, Json(import.WellFormed), caller, Tenant);
             reply.Answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, $"import with {name}: {reply.Text}");
+            reply.Answer.ErrorCode.ShouldBe("request_invalid", $"import with {name}");
+            var member = name == "a bad dry_run" ? "/dry_run" : "/format";
+            reply.Answer.Body.GetProperty("error").GetProperty("details").EnumerateArray()
+                .ShouldContain(detail => detail.GetProperty("path").GetString() == member, $"import with {name}: the 422 names {member}");
             BytesRead(reply.Answer).ShouldBe(0, $"import with {name}: the query is refused before the file is read");
         }
     }
@@ -168,6 +180,19 @@ public sealed partial class RawBodyTenantRefusalTests
             {
                 BytesRead(reply.Answer).ShouldBeGreaterThan(0, $"{route.Key}: the counter observes the read once the caller is resolved");
             }
+        }
+    }
+
+    /// <summary>Runs one assertion and records its failure, so a single run reports every route that still answers the old order.</summary>
+    private static void Collect(List<string> failures, string label, Action assertion)
+    {
+        try
+        {
+            assertion();
+        }
+        catch (ShouldAssertException exception)
+        {
+            failures.Add($"{label}: {exception.Message.ReplaceLineEndings(" ")}");
         }
     }
 
