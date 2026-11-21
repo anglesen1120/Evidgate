@@ -408,24 +408,24 @@ prefixes = [
 ]
 residual = [value for value in checkout if value]
 # Both the real host name and an injected $HOSTNAME are refused; each is additive, never a
-# replacement, so setting one cannot switch the other off. Surrounding whitespace is dropped first. The
-# literal "host" is what the report scrub writes, and "localhost" names nobody, so neither is refused. A name of 4 or more characters is matched as a
-# substring; a shorter one (ci, srv) as a whole word only, so it does not refuse every longer word.
+# replacement, so setting one cannot switch the other off. Whitespace is dropped after folding, so an
+# ignorable character cannot hide it. "host" (the scrub's own word) and "localhost" are never refused.
+# A name of 4 or more characters is a substring match; a shorter one (ci) a whole word only.
 machines = [name.strip() for name in (socket.gethostname(), os.environ.get("HOSTNAME", ""))]
 labels = []
 for machine in machines:
-    folded = identifier_form(machine)
+    folded = identifier_form(machine).strip()
     if folded and folded not in ("host", "localhost"):
-        (residual if len(folded) >= 4 else labels).append(machine)
+        (residual if len(folded) >= 4 else labels).append(folded)
 # The first DNS label of a dotted name is refused too, as a whole word (server.corp.local refuses the
 # word "server" but not "serverless"), and only when distinctive: 5 or more characters, or a digit or
 # a hyphen in it. Shorter plain labels (app, git) and all-digit ones (an IPv4 prefix) are too common.
 for machine in machines:
     label = machine.split(".")[0] if "." in machine else ""
-    folded = identifier_form(label)
+    folded = identifier_form(label).strip()
     distinctive = len(folded) >= 5 or any(char.isdigit() or char == "-" for char in folded)
     if distinctive and not folded.isdigit() and folded not in ("host", "localhost"):
-        labels.append(label)
+        labels.append(folded)
 home = os.environ.get("HOME", "")
 if home not in ("", "/"):
     residual.append(home)

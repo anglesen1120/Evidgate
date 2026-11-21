@@ -14,13 +14,33 @@ public sealed partial class DogfoodReportTests
     public async Task Dogfood_Collect_HostNameWithSurroundingWhitespace_IsRefusedLikeTheTrimmedName(string hostname, string text) =>
         await AssertRefusedAsync(Report(text), hostname: hostname);
 
-    /// <summary>An all-whitespace host name falls back like an empty one: it refuses nothing.</summary>
+    /// <summary>The same names do not refuse a report that lacks them, so only the trimmed name explains the refusals above.</summary>
+    [Theory]
+    [InlineData("  Runner-Zq", "see Runner Zq")]
+    [InlineData("\t build-box \t", "see build box")]
+    public async Task Dogfood_Collect_HostNameWithWhitespace_DoesNotRefuseOtherText(string hostname, string text) =>
+        await AssertAcceptedHostAsync(hostname, text);
+
+    /// <summary>An all-whitespace host name falls back like an empty one: it refuses nothing, not even padding.</summary>
     [Theory]
     [InlineData("   ")]
     [InlineData("\t\r\n")]
     [InlineData("")]
+    [InlineData("\u200b ")]
     public async Task Dogfood_Collect_AllWhitespaceHostName_BehavesAsEmpty(string hostname) =>
-        await AssertAcceptedHostAsync(hostname, "a b whitespace c");
+        await AssertAcceptedHostAsync(hostname, "a     b - c");
+
+    /// <summary>An ignorable character cannot keep whitespace in the name after folding.</summary>
+    [Fact]
+    public async Task Dogfood_Collect_IgnorableCharacterBesideWhitespace_StillRefusesTheName() =>
+        await AssertRefusedAsync(Report("runner-zq"), hostname: "\u200b runner-zq");
+
+    /// <summary>Only the exact name localhost is exempt; a longer name that starts with it refuses itself.</summary>
+    [Theory]
+    [InlineData("localhost.corp.local", "see localhost.corp.local")]
+    [InlineData("localhost1", "see localhost1")]
+    public async Task Dogfood_Collect_NameBeyondLocalhost_StillRefusesItself(string hostname, string text) =>
+        await AssertRefusedAsync(Report(text), hostname: hostname);
 
     /// <summary>The full name localhost identifies nobody: localhost URLs pass, whatever its case or padding.</summary>
     [Theory]
