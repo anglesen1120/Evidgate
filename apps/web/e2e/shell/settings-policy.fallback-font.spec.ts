@@ -34,6 +34,8 @@ for (const locale of LOCALES) {
         const action = await page.locator('[data-policy-open]').boundingBox();
         if (!field || !action) throw new Error('Expected the policy lookup controls');
         expect(field.width).toBeLessThanOrEqual(420);
+        expect(field.x + field.width).toBeLessThan(action.x);
+        expect(field.y + field.height).toBeCloseTo(action.y + action.height, 0);
       });
     }
   }
