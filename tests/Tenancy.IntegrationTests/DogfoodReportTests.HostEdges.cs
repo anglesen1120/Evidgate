@@ -26,7 +26,7 @@ public sealed partial class DogfoodReportTests
     [InlineData("   ")]
     [InlineData("\t\r\n")]
     [InlineData("")]
-    [InlineData("\u200b ")]
+    [InlineData("\u200b \u200b")]
     public async Task Dogfood_Collect_AllWhitespaceHostName_BehavesAsEmpty(string hostname) =>
         await AssertAcceptedHostAsync(hostname, "a     b - c");
 
