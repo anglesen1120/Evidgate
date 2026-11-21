@@ -414,7 +414,7 @@ internal sealed partial class YamlSubset
         return (key, line[(end + 1)..].Trim());
     }
 
-    /// <summary>True when the text starts with a mapping entry (key followed by ':' + space/EOL).</summary>
+    /// <summary>True when the text starts with a mapping entry (key followed by ':' + blank/EOL).</summary>
     private static bool TryFindKeyEnd(string line, int lineNumber, out int end)
     {
         end = -1;
@@ -427,7 +427,7 @@ internal sealed partial class YamlSubset
                 continue;
             }
 
-            if (c == ':' && (i + 1 == line.Length || line[i + 1] == ' '))
+            if (c == ':' && (i + 1 == line.Length || line[i + 1] is ' ' or '\t'))
             {
                 end = i;
                 return true;
