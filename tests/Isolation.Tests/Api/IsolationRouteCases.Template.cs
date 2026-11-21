@@ -9,8 +9,8 @@ public static partial class IsolationRouteCases
 {
     private static IEnumerable<RouteCase> TemplateCases()
     {
-        // This world seeds no template row, so the own-org control is the empty page, not a walked set; the
-        // registry's own pagination is Tenancy.IntegrationTests' subject.
+        // 0119 ships one built-in web template, so the own-org control is a page that may carry it, never an
+        // assertion about the registry's own pagination; that is Tenancy.IntegrationTests' subject.
         yield return HeaderCase("GET", "/v1/templates", _ => new(HttpMethod.Get, "/v1/templates?limit=1"),
             ownOrg: (route, w) => OwnObject(route, "own org answers 200", OrgBAdmin(w),
                 new(HttpMethod.Get, "/v1/templates?limit=1")));
