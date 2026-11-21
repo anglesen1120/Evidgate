@@ -35,6 +35,35 @@ public sealed class RunCreationExecutionKeyConflictTests(PostgresTenancyFixture 
         await RunCreationTests.AssertNoRunRowsAsync(_fixture, world);
     }
 
+    /// <summary>
+    /// Fault-injection pin, not a race test: a run id is fresh per create and the constraint is scoped to it, so no
+    /// input gets past the in-memory check and then collides. A trigger made in this test's own database raises the
+    /// unique violation the index would, so the catch around the planned-execution insert is the only thing that can
+    /// answer, and it must answer the same 422 as the in-memory refusal and roll the whole create back.
+    /// </summary>
+    [Fact]
+    public async Task CreateRun_UniqueViolationFromInsert_MapsTo422_NothingWritten()
+    {
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await RunCreationTests.StartAsync(_fixture, cases: 1, database: owned.Name);
+        await _fixture.ExecuteAsync(
+            world.Database,
+            "create function public.fault_execution_key() returns trigger language plpgsql as $$ begin "
+            + "raise exception 'injected' using errcode = '23505', constraint = 'planned_execution_run_execution_key'; "
+            + "end $$; "
+            + "create trigger fault_execution_key before insert on public.planned_execution "
+            + "for each row execute function public.fault_execution_key()");
+
+        var answer = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, answer.ErrorMessage);
+        answer.ErrorCode.ShouldBe("execution_key_conflict", "the catch maps the violation of the execution-key index");
+        var detail = answer.Body.GetProperty("error").GetProperty("details").EnumerateArray().Single();
+        detail.GetProperty("path").GetString().ShouldBe("/planned_executions");
+        detail.GetProperty("reason").GetString().ShouldBe("execution_key_conflict");
+        await RunCreationTests.AssertNoRunRowsAsync(_fixture, world);
+    }
+
     [Fact]
     public async Task CreateRun_DistinctCases_SameVariant_NoConflict()
     {
