@@ -9,7 +9,8 @@ namespace Tenancy.IntegrationTests;
 // Fault injection: the two refusals only a lost write reaches (the AI settings unique-version loss and the apply flip
 // that moves fewer rows than it was handed) are driven by test-owned triggers scoped to the world's org. Each trigger
 // counts its firing in a sequence, which a rollback does not undo, so a refusal reached through an earlier branch
-// cannot satisfy the test.
+// cannot satisfy the test. The injected competitor row lives in the refused transaction and does not survive it; its
+// presence is proven by the 412 naming its version.
 public sealed partial class AuthoringCommitFaultMetricTests
 {
     private const string CompetitorHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
