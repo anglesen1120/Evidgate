@@ -1234,3 +1234,9 @@ Closed by S554 (#1131): the two unused usings are dropped from ImportPlanner.cs 
 | Stale AuthoringContent line cites (S550) | Plan 13.1.1 lines 430, 524, 578 and open-items 05 line 24 cite `AuthoringContent.cs:376-427` (NormaliseLeaves, now AuthoringContent.Steps.cs); migrations/0039_authoring_tree.sql:537 cites `:78`. Both stale; the migration is immutable. `:76` and `:196-200` (13.1.1 lines 525, 538, 579; open-items 05 line 25) are still true. | receiver: plan owner (13.1.1) |
 
 Closed by S554 (#1131): the `AuthoringContent.cs:376-427` cites on 13.1.1 lines 430, 524, 578 and open-items 05 line 24 name `AuthoringContent.Steps.cs` (`NormaliseLeaves`); the migration cite stays as the carried row 'Remaining stale cites after S554'.
+
+## Moved from status-carried.md by S555 (2026-11-21)
+
+| Isolation test files over 500 lines (S512, S552 count) | `tests/Isolation.Tests/TenantRowFactory.cs` is still 943 lines (over the 500-line rule; it grew by 20 lines in the support-grant slice, whose own files stay under 500). `RlsIsolationTests` is now three files, 408 / 336 / 221 lines (`wc -l tests/Isolation.Tests/Rls/RlsIsolationTests*.cs`, #1126). Method over 60 lines in that class, not cut (pure move): ForcedRls_And_NoBypassRls 244 (RlsIsolationTests.Hardening.cs, signature through closing brace). | receiver: next Isolation.Tests task (split TenantRowFactory by responsibility) |
+
+Replaced by S555 (#1130): TenantRowFactory.cs (943 lines) was split into three files (324/353/277); the recount and the method list are the carried row 'Isolation test methods over 60 lines (S555)'.
