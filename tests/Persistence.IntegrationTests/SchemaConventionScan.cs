@@ -160,11 +160,11 @@ internal static class SchemaConventionScan
         new SchemaExemption(
             "public.report_parser",
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
-            "A parser registry row is insert-only (04.4.1-T1; migration 0075): the app role holds SELECT only, and the row is written by the migration and the owner role, so a release is a new (parser_id, version) row rather than an edit — the row keeps created_at only, with no updated_at/version and no version trigger. Its tenant key, closed CHECKs and RLS are NOT exempt."),
+            "A parser registry row is insert-only: the app role holds SELECT only, and the row is written by the migration and the owner role, so a release is a new (parser_id, version) row rather than an edit — the row keeps created_at only, with no updated_at/version and no version trigger. Its tenant key, closed CHECKs and RLS are NOT exempt."),
         new SchemaExemption(
             "public.template",
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
-            "A template registry row is insert-only (03.5.1-T1; migration 0118): the app role holds SELECT only, and rows are written by the migration and the owner role, so a release is a new (kind, name, version) row rather than an edit — the row keeps created_at only, with no updated_at/version and no version trigger. `active` flips only by migration, so a deprecation changes the row without an updated_at. Its nullable tenant key, closed CHECKs, partial unique index and RLS are NOT exempt."),
+            "A template registry row is insert-only: the app role holds SELECT only, and rows are written by the migration and the owner role, so a release is a new (kind, name, version) row rather than an edit — the row keeps created_at only, with no updated_at/version and no version trigger. `active` flips only by migration, so a deprecation changes the row without an updated_at. Its nullable tenant key, closed CHECKs, partial unique index and RLS are NOT exempt."),
         new SchemaExemption(
             "public.release_component",
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
@@ -184,7 +184,7 @@ internal static class SchemaConventionScan
         new SchemaExemption(
             "public.raw_report",
             SchemaRule.CompositeForeignKey | SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
-            "Append-only parse records (04.4.1-T4.1; migration 0078): the app role holds SELECT + INSERT, UPDATE/DELETE/TRUNCATE are revoked and `raw_report_immutable` raises 23514 for every role, so a parse is written once and keeps created_at only — no updated_at/version and no version trigger. Its reference to `report_parser` is deliberately `(parser_id, parser_version) -> (parser_id, version)`: a built-in parser row carries `org_id IS NULL`, so the composite tenant key could never match one, and the registry is written only by the migration and the owner role (0075), so no tenant can register a release a row names. Its tenant key, its composite run and artifact FKs and RLS are NOT exempt."),
+            "Append-only parse records: the app role holds SELECT + INSERT, UPDATE/DELETE/TRUNCATE are revoked and `raw_report_immutable` raises 23514 for every role, so a parse is written once and keeps created_at only — no updated_at/version and no version trigger. Its reference to `report_parser` is deliberately `(parser_id, parser_version) -> (parser_id, version)`: a built-in parser row carries `org_id IS NULL`, so the composite tenant key could never match one, and the registry is written only by the migration and the owner role, so no tenant can register a release a row names. Its tenant key, its composite run and artifact FKs and RLS are NOT exempt."),
         new SchemaExemption(
             "public.raw_report_reprocess",
             SchemaRule.CompositeForeignKey | SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
