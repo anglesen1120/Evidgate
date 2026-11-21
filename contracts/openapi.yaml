@@ -12445,7 +12445,7 @@ components:
             - { type: array, items: {} }
           description: >-
             The rules a generated project is checked against: a named set (object) or an ordered list (array),
-            stored as at most 64 KiB of JSON.
+            stored as at most 64 KiB of JSON and nested at most 32 levels deep.
         created_at: { type: string, format: date-time }
     TemplateListResponse:
       type: object

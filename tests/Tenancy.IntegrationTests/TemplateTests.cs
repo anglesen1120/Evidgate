@@ -83,7 +83,7 @@ public sealed partial class TemplateTests : IClassFixture<TenancyHostPool>
         command.Parameters.AddWithValue("id", id);
         command.Parameters.AddWithValue("org", (object?)org ?? (builtIn ? DBNull.Value : world.Org));
         command.Parameters.AddWithValue("kind", kind);
-        command.Parameters.AddWithValue("name", name ?? "t-" + id.ToString("N")[..12]);
+        command.Parameters.AddWithValue("name", name ?? "t-" + id.ToString("N"));
         command.Parameters.AddWithValue("body_ref", BodyRef);
         command.Parameters.AddWithValue("rules", rules);
         command.Parameters.AddWithValue("active", active);

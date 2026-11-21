@@ -1248,7 +1248,7 @@ export type TemplateDetailDto = {
     version: number;
     body_ref: string;
     /**
-     * The rules a generated project is checked against: a named set (object) or an ordered list (array), stored as at most 64 KiB of JSON.
+     * The rules a generated project is checked against: a named set (object) or an ordered list (array), stored as at most 64 KiB of JSON and nested at most 32 levels deep.
      */
     conformance_rules: {
         [key: string]: unknown;

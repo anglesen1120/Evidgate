@@ -32,7 +32,8 @@ public sealed partial class TemplateTests
         var id = await SeedAsync(world);
         var member = await AddMemberAsync(_fixture, world.Database, world.Org, roleCode: null);
 
-        (await ListAsync(world, caller: world.Caller(member))).Status.ShouldBe(HttpStatusCode.Forbidden);
+        (await ListAsync(world, "?kind=desktop&limit=0&cursor=x", world.Caller(member)))
+            .Status.ShouldBe(HttpStatusCode.Forbidden, "authorization precedes query validation");
         (await GetAsync(world, id, world.Caller(member))).Status.ShouldBe(HttpStatusCode.Forbidden);
     }
 

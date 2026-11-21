@@ -49,10 +49,12 @@ create table if not exists public.template (
     char_length(name) between 1 and 64 and name ~ '^[a-z][a-z0-9-]*$'),
   constraint template_version_check check (version >= 1),
   constraint template_body_ref_check check (body_ref ~ '^sha256:[0-9a-f]{64}$'),
-  -- Rules are either a named set (object) or an ordered list (array) of entries, bounded like other jsonb columns.
+  -- Strict recursive descent counts both object members and array elements from root level zero.
+  -- Rejecting level 33 keeps stored rules within the reader's JSON parser depth limit.
   constraint template_conformance_rules_check check (
     jsonb_typeof(conformance_rules) in ('array', 'object')
-    and octet_length(conformance_rules::text) <= 65536)
+    and octet_length(conformance_rules::text) <= 65536
+    and not jsonb_path_exists(conformance_rules, 'strict $.**{33 to last}'))
 );
 
 -- The real uniqueness of a built-in: rows whose `org_id` is NULL have distinct composite keys, so the composite

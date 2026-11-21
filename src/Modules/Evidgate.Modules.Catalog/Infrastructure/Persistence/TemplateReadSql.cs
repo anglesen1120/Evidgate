@@ -36,9 +36,9 @@ internal static class TemplateReadSql
     /// One active template by id. An inactive row, another tenant's row (RLS hides it) and a missing id match no
     /// row, so all three answer the same 404.
     /// </summary>
-    internal const string TemplateById = $"""
-        select {TemplateColumns},
-               t.conformance_rules::text as conformance_rules
+    internal const string TemplateById = """
+        select t.id, t.kind, t.name, t.version, t.body_ref,
+               t.conformance_rules::text as conformance_rules, t.created_at
           from public.template t
          where t.id = @template_id
            and t.active
@@ -71,7 +71,9 @@ internal sealed record TemplateDetailRow(
     /// <summary>The wire shape of the row, with the rules decoded once into an element.</summary>
     internal TemplateDetailDto ToDto() => new(Id, Kind, Name, Version, BodyRef, ReadRules(ConformanceRules), CreatedAt);
 
-    /// <summary>A stored rules document. The column's CHECK bounds it, so a row this module serves always parses.</summary>
+    /// <summary>
+    /// The CHECK limits nesting to 32 levels, well under the parser's 64-level limit.
+    /// </summary>
     private static JsonElement ReadRules(string json)
     {
         using var document = JsonDocument.Parse(json);

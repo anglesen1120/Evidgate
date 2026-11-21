@@ -20,6 +20,7 @@ public static partial class IsolationRouteCases
                 route,
                 "own org, unknown template id answers 404",
                 OrgBAdmin(w),
-                new(HttpMethod.Get, $"/v1/templates/{Guid.CreateVersion7()}"))));
+                new(HttpMethod.Get, $"/v1/templates/{Guid.CreateVersion7()}"),
+                allowed: [404])));
     }
 }

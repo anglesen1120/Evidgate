@@ -76,6 +76,23 @@ public sealed partial class TemplateTests
             .ShouldBeTrue();
     }
 
+    [Fact]
+    public async Task Template_RulesNesting_IsLimitedToTheDepthLimit()
+    {
+        await using var world = await StartAsync();
+
+        (await OwnerErrorAsync(world, InsertSql, ("rules", NestedRules(32))))
+            .ShouldBeNull("level 32 is inside the reader's parser depth");
+
+        var tooDeep = await OwnerErrorAsync(world, InsertSql, ("rules", NestedRules(33)));
+        tooDeep.ShouldNotBeNull("level 33 is refused");
+        tooDeep!.SqlState.ShouldBe("23514");
+        tooDeep.ConstraintName.ShouldBe("template_conformance_rules_check");
+    }
+
+    /// <summary>A rules document of <paramref name="depth"/> nested single-element arrays around a scalar.</summary>
+    private static string NestedRules(int depth) => new string('[', depth) + "\"leaf\"" + new string(']', depth);
+
     /// <summary>An insert of one org row whose members a test overrides; the defaults satisfy every CHECK.</summary>
     private const string InsertSql =
         """
