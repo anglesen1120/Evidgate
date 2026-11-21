@@ -86,6 +86,29 @@ describe('UiGalleryComponent axe acceptance', () => {
   }
 
   it.each(cases)(
+    'has zero WCAG violations in the conflict dialog: $locale / $theme',
+    async ({ locale, theme }) => {
+      const { fixture, root, dispose } = await mountGallery(locale, theme);
+      try {
+        expect(document.querySelector('[role="dialog"]'), 'no dialog before the click').toBeNull();
+        const opener = root.querySelector<HTMLButtonElement>('[data-demo="conflict-opener"]');
+        expect(opener, 'conflict opener').not.toBeNull();
+        opener?.click();
+        await fixture.whenStable();
+        const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+        if (!dialog) throw new Error('Expected Brain dialog overlay');
+        expect(dialog.getAttribute('aria-modal')).toBe('true');
+        expect(dialog.textContent).toContain('Not compared');
+        const dialogResult = await axe.run(dialog, axeOptions);
+        expect(unexceptedLines(dialogResult)).toEqual([]);
+      } finally {
+        dispose();
+      }
+    },
+    30_000,
+  );
+
+  it.each(cases)(
     'has zero WCAG violations: $locale / $theme',
     async ({ locale, theme }) => {
       const { root, dispose } = await mountGallery(locale, theme);
@@ -129,29 +152,6 @@ describe('UiGalleryComponent axe acceptance', () => {
         expect(root.querySelector('app-connect-step-reveal'), 'reveal opened').not.toBeNull();
         const revealResult = await axe.run(root, axeOptions);
         expect(unexceptedLines(revealResult)).toEqual([]);
-      } finally {
-        dispose();
-      }
-    },
-    30_000,
-  );
-
-  it.each(cases)(
-    'has zero WCAG violations in the conflict dialog: $locale / $theme',
-    async ({ locale, theme }) => {
-      const { fixture, root, dispose } = await mountGallery(locale, theme);
-      try {
-        expect(document.querySelector('[role="dialog"]'), 'no dialog before the click').toBeNull();
-        const opener = root.querySelector<HTMLButtonElement>('[data-demo="conflict-opener"]');
-        expect(opener, 'conflict opener').not.toBeNull();
-        opener?.click();
-        await fixture.whenStable();
-        const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
-        if (!dialog) throw new Error('Expected Brain dialog overlay');
-        expect(dialog.getAttribute('aria-modal')).toBe('true');
-        expect(dialog.textContent).toContain('Not compared');
-        const dialogResult = await axe.run(dialog, axeOptions);
-        expect(unexceptedLines(dialogResult)).toEqual([]);
       } finally {
         dispose();
       }
