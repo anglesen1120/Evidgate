@@ -33,6 +33,7 @@ namespace Evidgate.Modules.Authoring.Application.Queries;
 /// <param name="Q">Optional case-insensitive title substring, at most 200 code points.</param>
 /// <param name="Cursor">The opaque cursor of the previous page, or null for the first page.</param>
 /// <param name="Limit">The page size the route already bounded.</param>
+/// <param name="RequestError">The first edge validation error, answered after authorization.</param>
 internal sealed record ListManualCasesQuery(
     Guid ProjectId,
     Guid? NodeId,
@@ -42,7 +43,8 @@ internal sealed record ListManualCasesQuery(
     bool? Covered,
     string? Q,
     string? Cursor,
-    int Limit) : IQuery<Result<ManualCaseListResponse>>;
+    int Limit,
+    Error? RequestError = null) : IQuery<Result<ManualCaseListResponse>>;
 
 /// <summary>
 /// Handler of <see cref="ListManualCasesQuery"/>: four statements (the project probe, the project's linked catalog
@@ -77,6 +79,11 @@ internal sealed class ListManualCasesQueryHandler(
         ListManualCasesQuery query,
         CancellationToken cancellationToken)
     {
+        if (query.RequestError is { } requestError)
+        {
+            return Result.Failure<ManualCaseListResponse>(requestError);
+        }
+
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(ListManualCasesQuery));
 
         ArgumentNullException.ThrowIfNull(query);

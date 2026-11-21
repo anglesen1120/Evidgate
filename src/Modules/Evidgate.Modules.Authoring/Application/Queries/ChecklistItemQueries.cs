@@ -23,18 +23,20 @@ namespace Evidgate.Modules.Authoring.Application.Queries;
 /// <param name="Priority">Optional priority filter.</param>
 /// <param name="Cursor">The opaque cursor of the previous page, or null.</param>
 /// <param name="Limit">Page size, 1..200 (validated at the edge).</param>
+/// <param name="RequestError">The first query-binding error, answered after authorization.</param>
 internal sealed record ListChecklistItemsQuery(
     Guid ProjectId,
     Guid? NodeId,
     string? State,
     string? Priority,
     string? Cursor,
-    int Limit)
+    int Limit,
+    Error? RequestError = null)
     : IQuery<Result<ChecklistItemListResponse>>;
 
 /// <summary>
-/// Handler of <see cref="ListChecklistItemsQuery"/>: one liveness probe for the addressed project (AC10: an unknown
-/// project is 404, not an empty page) and then one statement per page (P3) over
+/// Handler of <see cref="ListChecklistItemsQuery"/>: a refusal the edge carried on the query, else one liveness probe for
+/// the addressed project (AC10: an unknown project is 404, not an empty page) and then one statement per page (P3) over
 /// <c>checklist_item_list_idx</c> (P4), one row more than asked to decide whether a next page exists, so no count
 /// runs. A filter outside the stored vocabulary is a 422 naming the query member instead of an empty page.
 /// </summary>
@@ -51,6 +53,11 @@ internal sealed class ListChecklistItemsQueryHandler(
         ListChecklistItemsQuery query,
         CancellationToken cancellationToken)
     {
+        if (query.RequestError is { } requestError)
+        {
+            return Result.Failure<ChecklistItemListResponse>(requestError);
+        }
+
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(ListChecklistItemsQuery));
 
         if (AuthoringRules.Project(query.ProjectId, principals, tenant) is { } scopeError)

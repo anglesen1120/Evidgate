@@ -120,29 +120,20 @@ internal static class AuthoringManualCaseEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
-        if (AuthoringEndpointSupport.LimitError(context.Request.Query["limit"], out var limit) is { } limitError)
-        {
-            return Result.Failure<ManualCaseListResponse>(limitError);
-        }
-
-        if (AuthoringEndpointText.OptionalId(context.Request.Query, "node_id", out var nodeId) is { } nodeError)
-        {
-            return Result.Failure<ManualCaseListResponse>(nodeError);
-        }
-
-        if (AuthoringEndpointText.OptionalId(context.Request.Query, "item_id", out var itemId) is { } itemError)
-        {
-            return Result.Failure<ManualCaseListResponse>(itemError);
-        }
+        Guid? nodeId = null;
+        Guid? itemId = null;
+        bool? covered = null;
+        var requestError = AuthoringEndpointSupport.LimitError(context.Request.Query["limit"], out var limit);
+        requestError ??= AuthoringEndpointText.OptionalId(context.Request.Query, "node_id", out nodeId);
+        requestError ??= AuthoringEndpointText.OptionalId(context.Request.Query, "item_id", out itemId);
 
         // AC12: authoring coverage, not the execution coverage of another module's report. An unfiltered page is the
         // default; an explicit value narrows to linked (true) or unlinked (false) cases.
-        if (AuthoringEndpointText.OptionalBoolean(context.Request.Query, "covered", out var covered) is { } coveredError)
-        {
-            return Result.Failure<ManualCaseListResponse>(coveredError);
-        }
+        requestError ??= AuthoringEndpointText.OptionalBoolean(context.Request.Query, "covered", out covered);
 
+        // The pipeline authorizes the caller before the handler answers the query error.
         return await mediator.Send(
             new ListManualCasesQuery(
                 p,
@@ -153,7 +144,8 @@ internal static class AuthoringManualCaseEndpoints
                 covered,
                 AuthoringEndpointText.Blank(context.Request.Query["q"]),
                 AuthoringEndpointText.Blank(context.Request.Query["cursor"]),
-                limit),
+                limit,
+                requestError),
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -202,6 +194,7 @@ internal static class AuthoringManualCaseEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
         var result = await mediator.Send(new GetManualCaseQuery(p, m), cancellationToken).ConfigureAwait(false);
 

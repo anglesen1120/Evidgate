@@ -93,22 +93,15 @@ internal static class AuthoringChangeEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
-        if (AuthoringEndpointSupport.LimitError(context.Request.Query["limit"], out var limit) is { } limitError)
-        {
-            return Result.Failure<AuthoringChangePageResponse>(limitError);
-        }
+        Guid? targetId = null;
+        IReadOnlyList<Guid>? ids = null;
+        var requestError = AuthoringEndpointSupport.LimitError(context.Request.Query["limit"], out var limit);
+        requestError ??= AuthoringEndpointText.OptionalId(context.Request.Query, "target_id", out targetId);
+        requestError ??= OptionalIds(context.Request.Query, out ids);
 
-        if (AuthoringEndpointText.OptionalId(context.Request.Query, "target_id", out var targetId) is { } targetError)
-        {
-            return Result.Failure<AuthoringChangePageResponse>(targetError);
-        }
-
-        if (OptionalIds(context.Request.Query, out var ids) is { } idsError)
-        {
-            return Result.Failure<AuthoringChangePageResponse>(idsError);
-        }
-
+        // The pipeline authorizes the caller before the handler answers the query error.
         var result = await mediator.Send(
             new ListAuthoringChangesQuery(
                 p,
@@ -117,7 +110,8 @@ internal static class AuthoringChangeEndpoints
                 targetId,
                 ids,
                 AuthoringEndpointText.Blank(context.Request.Query["cursor"]),
-                limit),
+                limit,
+                requestError),
             cancellationToken).ConfigureAwait(false);
 
         if (result.IsSuccess)
@@ -173,6 +167,7 @@ internal static class AuthoringChangeEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
         var result = await mediator.Send(new GetAuthoringChangeQuery(p, c), cancellationToken).ConfigureAwait(false);
 

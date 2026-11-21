@@ -16,7 +16,7 @@ namespace Evidgate.Modules.Authoring.Endpoints;
 /// <summary>
 /// Routes 1-5 of 13.1.1 §5 — the feature tree and the node writes — mapped on the shared
 /// <c>/v1/projects/{p}/authoring</c> group (<see cref="AuthoringEndpoints"/>). The delegates bind 00 §9.1's parameters,
-/// refuse a malformed request through <see cref="AuthoringEndpointSupport"/> and answer in <see cref="Result"/> terms:
+/// detect a malformed request through <see cref="AuthoringEndpointSupport"/> and answer in <see cref="Result"/> terms:
 /// authorization is the C2 pipeline (the <c>[Permission]</c> of each handler class), the tenant is the request's, and the
 /// 00 §9.2 envelope is the host's <c>ResultEndpointFilter</c>.
 /// </summary>
@@ -87,59 +87,11 @@ internal static class AuthoringNodeEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        if (AuthoringEndpointSupport.LimitError(context.Request.Query["limit"], out var limit) is { } limitError)
-        {
-            return Result.Failure<AuthoringTreeResponse>(limitError);
-        }
-
-        Guid? parentId = null;
-        if (AuthoringEndpointSupport.Blank(context.Request.Query["parent_id"]) is { } rawParent)
-        {
-            if (!AuthoringEndpointSupport.TryParseGuid(rawParent, out var parsedParent))
-            {
-                return Result.Failure<AuthoringTreeResponse>(
-                    Error.Invalid("parent_id must be the id of a node", [new ErrorDetail("/parent_id", "invalid")]));
-            }
-
-            parentId = parsedParent;
-        }
-
-        Guid? nodeId = null;
-        if (AuthoringEndpointSupport.Blank(context.Request.Query["node_id"]) is { } rawNode)
-        {
-            if (!AuthoringEndpointSupport.TryParseGuid(rawNode, out var parsedNode))
-            {
-                return Result.Failure<AuthoringTreeResponse>(
-                    Error.Invalid("node_id must be the id of a node", [new ErrorDetail("/node_id", "invalid")]));
-            }
-
-            nodeId = parsedNode;
-        }
-
-        if (parentId is not null && nodeId is not null)
-        {
-            // Two addresses, one page: route 1's members are alternatives (`node_id` answers one node plus its children,
-            // `parent_id` a group's children), so an ambiguous request is refused instead of silently preferring one.
-            return Result.Failure<AuthoringTreeResponse>(Error.Invalid(
-                "node_id and parent_id address different pages and cannot be combined",
-                [new ErrorDetail("/node_id", "conflict")]));
-        }
-
-        var (includePath, includeError) = ReadInclude(context.Request.Query["include"]);
-        if (includeError is not null)
-        {
-            return Result.Failure<AuthoringTreeResponse>(includeError);
-        }
+        ArgumentNullException.ThrowIfNull(context);
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
         var result = await mediator.Send(
-            new GetAuthoringTreeQuery(
-                p,
-                parentId,
-                nodeId,
-                includePath,
-                AuthoringEndpointSupport.Blank(context.Request.Query["cursor"]),
-                limit),
-            cancellationToken).ConfigureAwait(false);
+            ReadTreeQuery(p, context.Request.Query), cancellationToken).ConfigureAwait(false);
 
         if (!result.IsSuccess)
         {
@@ -149,6 +101,68 @@ internal static class AuthoringNodeEndpoints
         context.Response.Headers.ETag = $"\"{result.Value.OrderHash}\"";
 
         return Result.Success(result.Value.Body);
+    }
+
+    /// <summary>
+    /// Binds route 1's query and carries its first refusal on the query, so the pipeline answers the caller's
+    /// authorization before the handler answers the refusal.
+    /// </summary>
+    private static GetAuthoringTreeQuery ReadTreeQuery(Guid projectId, IQueryCollection query)
+    {
+        var requestError = AuthoringEndpointSupport.LimitError(query["limit"], out var limit);
+
+        Guid? parentId = null;
+        if (requestError is null && AuthoringEndpointSupport.Blank(query["parent_id"]) is { } rawParent)
+        {
+            if (AuthoringEndpointSupport.TryParseGuid(rawParent, out var parsedParent))
+            {
+                parentId = parsedParent;
+            }
+            else
+            {
+                requestError = Error.Invalid(
+                    "parent_id must be the id of a node", [new ErrorDetail("/parent_id", "invalid")]);
+            }
+        }
+
+        Guid? nodeId = null;
+        if (requestError is null && AuthoringEndpointSupport.Blank(query["node_id"]) is { } rawNode)
+        {
+            if (AuthoringEndpointSupport.TryParseGuid(rawNode, out var parsedNode))
+            {
+                nodeId = parsedNode;
+            }
+            else
+            {
+                requestError = Error.Invalid(
+                    "node_id must be the id of a node", [new ErrorDetail("/node_id", "invalid")]);
+            }
+        }
+
+        if (requestError is null && parentId is not null && nodeId is not null)
+        {
+            // Route 1's members are alternatives (`node_id` answers one node plus its children, `parent_id` a group's
+            // children), so an ambiguous request is refused instead of silently preferring one.
+            requestError = Error.Invalid(
+                "node_id and parent_id address different pages and cannot be combined",
+                [new ErrorDetail("/node_id", "conflict")]);
+        }
+
+        var includePath = false;
+        if (requestError is null)
+        {
+            (includePath, requestError) = ReadInclude(query["include"]);
+        }
+
+        // The pipeline authorizes the caller before the handler answers the query error.
+        return new GetAuthoringTreeQuery(
+            projectId,
+            parentId,
+            nodeId,
+            includePath,
+            AuthoringEndpointSupport.Blank(query["cursor"]),
+            limit,
+            requestError);
     }
 
     /// <summary>Route 2: <c>Idempotency-Key</c> only (AC18); a create answers 201 with the new id and version.</summary>

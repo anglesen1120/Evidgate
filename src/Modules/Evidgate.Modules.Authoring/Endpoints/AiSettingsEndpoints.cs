@@ -74,6 +74,7 @@ internal static class AiSettingsEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
         var result = await mediator.Send(new GetAiSettingsQuery(p), cancellationToken).ConfigureAwait(false);
 
@@ -130,14 +131,17 @@ internal static class AiSettingsEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
-        if (AuthoringEndpointSupport.LimitError(context.Request.Query["limit"], out var limit) is { } limitError)
-        {
-            return Result.Failure<AiSettingsVersionListResponse>(limitError);
-        }
+        var requestError = AuthoringEndpointSupport.LimitError(context.Request.Query["limit"], out var limit);
 
+        // The pipeline authorizes the caller before the handler answers the query error.
         return await mediator.Send(
-            new ListAiSettingsVersionsQuery(p, AuthoringEndpointText.Blank(context.Request.Query["cursor"]), limit),
+            new ListAiSettingsVersionsQuery(
+                p,
+                AuthoringEndpointText.Blank(context.Request.Query["cursor"]),
+                limit,
+                requestError),
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -154,6 +158,7 @@ internal static class AiSettingsEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
         var result = await mediator
             .Send(new GetAiSettingsVersionQuery(p, version_no), cancellationToken)

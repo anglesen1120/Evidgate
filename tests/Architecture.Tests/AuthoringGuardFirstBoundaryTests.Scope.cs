@@ -7,8 +7,8 @@ using Xunit;
 namespace Architecture.Tests;
 
 /// <summary>
-/// Scope of the Authoring write-route pin: which files are read, which composers are followed, and the checks on
-/// delegate parameters and route filter chains that run before the guard-first rule.
+/// Scope of the Authoring route pin: which files are read, which composers are followed, and the checks on
+/// delegate parameters and route filter chains that run before the guard-first rule, for writes and reads.
 /// </summary>
 public sealed partial class AuthoringGuardFirstBoundaryTests
 {
@@ -102,15 +102,17 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
             ? [$"{path}:{Line(call)}: unrecognized Map call shape is refused rather than assumed to be a read route"]
             : [];
 
-    private static List<string> ParameterErrors(MethodDeclarationSyntax method, string path, string name)
+    private static List<string> ParameterErrors(MethodDeclarationSyntax method, string path, string name, string? readRoute = null)
     {
         var errors = new List<string>();
         foreach (var parameter in method.ParameterList.Parameters)
         {
             var type = parameter.Type?.ToString() ?? string.Empty;
-            if (parameter.AttributeLists.Count > 0 || !AllowedParameterTypes.Contains(type, StringComparer.Ordinal))
+            var routeInteger = type == "int"
+                && readRoute?.Contains($"{{{parameter.Identifier.ValueText}:int}}", StringComparison.Ordinal) == true;
+            if (parameter.AttributeLists.Count > 0 || (!AllowedParameterTypes.Contains(type, StringComparer.Ordinal) && !routeInteger))
             {
-                errors.Add($"{path}:{Line(parameter)}: {name} parameter '{parameter}' can bind request data before the guard; only route ids, HttpContext, IMediator and CancellationToken are allowed");
+                errors.Add($"{path}:{Line(parameter)}: {name} parameter '{parameter}' can bind request data before the guard; only route ids, a route-bound int from its route template, HttpContext, IMediator and CancellationToken are allowed");
             }
         }
 
