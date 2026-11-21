@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # AC5 (01.1.1): the working tree must match the repository layout contract of
 # plans/00-overview.md §5.2 exactly:
-#   top-level dirs  = contracts apps docs fixtures infra migrations packages scripts src tests
+#   top-level dirs  = contracts apps docs fixtures infra migrations packages scripts src templates tests
 #                     (+ the documented planning exception `plans`)
 #   root files      = allow-list below (required files must exist, the rest may exist)
 #   dot entries     = explicit allow-list of top-level dot files/dirs
@@ -33,6 +33,7 @@ packages
 plans
 scripts
 src
+templates
 tests
 EOF
 
