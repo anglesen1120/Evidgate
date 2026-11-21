@@ -7,49 +7,48 @@ using Xunit;
 namespace Architecture.Tests;
 
 /// <summary>
-/// An Authoring write delegate that validates a precondition (<c>If-Match</c>) or the import query refuses an
-/// unauthenticated or tenant-less caller first: <c>RawBodyGuard</c> is its first statement, so the pipeline's own 401
-/// is answered before any request header, query value or body byte is parsed.
+/// Every Authoring write delegate authenticates its tenant before inspecting request data.
+/// Route discovery, rather than helper names, keeps new write routes inside the boundary.
 /// </summary>
-/// <remarks>
-/// The rule keys on the precondition helpers (<c>IfMatchVersion</c>, <c>IfMatchOrder</c>) and the import query
-/// readers (<c>ReadFormat</c>, <c>DryRun</c>) called from a delegate in an Authoring endpoint file, so a new route that
-/// uses one cannot skip the guard. Only a leading <c>ArgumentNullException.ThrowIfNull</c> may precede it. The read
-/// routes (list, get, export) validate their query before authentication and are outside this rule: carried row
-/// "Authoring read routes validate the query before authentication"; the export delegate is exempted by name below and
-/// the exemption is itself checked for staleness. Body readers are pinned by <see cref="RawBodyGuardBoundaryTests"/>.
-/// </remarks>
-public sealed class AuthoringGuardFirstBoundaryTests
+public sealed partial class AuthoringGuardFirstBoundaryTests
 {
     private const string Endpoints = "src/Modules/Evidgate.Modules.Authoring/Endpoints/";
-    private const string ImportFile = Endpoints + "AuthoringImportEndpoints.cs";
-    private const string Export = "AuthoringImportEndpoints.ExportAsync";
+    private static readonly (string TypeMethod, string Reason)[] Exemptions = [];
 
-    private static readonly string[] Preconditions = ["IfMatchVersion", "IfMatchOrder", "ReadFormat", "DryRun"];
+    private static readonly string[] ReadMaps = ["MapGet", "MapHead", "MapOptions", "MapGroup"];
 
     private static readonly string[] Expected =
     [
+        "AiSettingsEndpoints.SaveAsync",
+        "AuthoringChangeEndpoints.QueueAsync",
+        "AuthoringChangeEndpoints.DiscardAsync",
+        "AuthoringChangeEndpoints.ApplyAsync",
+        "AuthoringChecklistEndpoints.CreateAsync",
         "AuthoringChecklistEndpoints.UpdateAsync",
         "AuthoringChecklistEndpoints.DeleteAsync",
+        "AuthoringManualCaseEndpoints.CreateAsync",
         "AuthoringManualCaseEndpoints.PatchAsync",
         "AuthoringManualCaseEndpoints.DeleteAsync",
         "AuthoringManualCaseEndpoints.SetStateAsync",
         "AuthoringManualCaseEndpoints.MoveAsync",
+        "AuthoringManualCaseEndpoints.LinkAsync",
+        "AuthoringManualCaseEndpoints.UnlinkAsync",
+        "AuthoringNodeEndpoints.CreateNodeAsync",
         "AuthoringNodeEndpoints.UpdateNodeAsync",
         "AuthoringNodeEndpoints.ReorderNodesAsync",
         "AuthoringNodeEndpoints.DeleteNodeAsync",
         "AuthoringRestoreEndpoints.RestoreNodeAsync",
         "AuthoringRestoreEndpoints.RestoreChecklistItemAsync",
         "AuthoringRestoreEndpoints.RestoreManualCaseAsync",
+        "AuthoringRestoreEndpoints.RestoreVersionAsync",
         "AuthoringImportEndpoints.ImportAsync",
     ];
 
     [Fact]
-    public void AuthoringWriteDelegates_ValidatingAPrecondition_GuardFirst()
+    public void AuthoringWriteDelegates_AllRegisteredWrites_GuardFirst()
     {
         var files = SolutionLayout.ProductionSources()
-            .Where(file => file.Path.StartsWith(Endpoints, StringComparison.Ordinal)
-                && !file.Path.EndsWith("AuthoringEndpointSupport.cs", StringComparison.Ordinal))
+            .Where(file => file.Path.StartsWith(Endpoints, StringComparison.Ordinal))
             .ToArray();
 
         files.Length.ShouldBeGreaterThanOrEqualTo(8, "the scan must read the Authoring endpoint files");
@@ -59,121 +58,138 @@ public sealed class AuthoringGuardFirstBoundaryTests
         found.Order(StringComparer.Ordinal).ShouldBe(Expected.Order(StringComparer.Ordinal));
     }
 
-    [Fact]
-    public void Scan_GuardFirstAfterTheNullCheck_IsGreen()
+    private static string[] Scan(
+        (string Path, string Text)[] files,
+        List<string> found,
+        (string TypeMethod, string Reason)[]? exemptions = null)
     {
-        var found = new List<string>();
-
-        Scan([Synthetic("static async Task M(HttpContext context)\n{\nArgumentNullException.ThrowIfNull(context);\nRawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);\nSupport.IfMatchVersion(context, out var v);\n}")], found)
-            .ShouldBeEmpty();
-        found.ShouldBe(["Route.M"]);
-    }
-
-    [Fact]
-    public void Scan_GuardRemoved_IsRed()
-    {
-        Scan([Synthetic("static async Task M(HttpContext context)\n{\nSupport.IfMatchVersion(context, out var v);\n}")], []).Length.ShouldBe(1);
-    }
-
-    [Fact]
-    public void Scan_GuardAfterTheHelper_IsRed()
-    {
-        Scan([Synthetic("static async Task M(HttpContext context)\n{\nSupport.IfMatchOrder(context, out var v);\nRawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);\n}")], []).Length.ShouldBe(1);
-    }
-
-    [Fact]
-    public void Scan_GuardAfterAnotherStatement_IsRed()
-    {
-        Scan([Synthetic("static async Task M(HttpContext context)\n{\nvar q = context.Request.Query[\"format\"];\nRawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);\nImportFormats.ReadFormat(q);\n}")], []).Length.ShouldBe(1);
-    }
-
-    [Fact]
-    public void Scan_GuardNestedOrWrongArgument_IsRed()
-    {
-        Scan([Synthetic("static async Task M(HttpContext context)\n{\nif (context is not null) { RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices); }\nSupport.IfMatchVersion(context, out var v);\n}")], []).Length.ShouldBe(1);
-        Scan([Synthetic("static async Task M(HttpContext context)\n{\nRawBodyGuard.RequireAuthenticatedTenant(other.RequestServices);\nImportFormats.DryRun(\"\", out var d);\n}")], []).Length.ShouldBe(1);
-    }
-
-    [Fact]
-    public void Scan_ImportQueryReadersWithoutGuard_AreRed()
-    {
-        Scan([Synthetic("static async Task M(HttpContext context)\n{\nImportFormats.DryRun(\"\", out var d);\n}")], []).Length.ShouldBe(1);
-        Scan([Synthetic("static async Task M(HttpContext context)\n{\nImportFormats.ReadFormat(\"csv\");\n}")], []).Length.ShouldBe(1);
-    }
-
-    [Fact]
-    public void Scan_PreconditionCheckInsideADisabledRegion_IsRed()
-    {
-        Scan([Synthetic("static async Task M(HttpContext context)\n{\n#if NET10_0\nSupport.IfMatchVersion(context, out var v);\n#endif\nRawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);\n}")], [])
-            .ShouldContain(error => error.Contains("disabled preprocessor region", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void Scan_TheNamedReadRouteExemption_StaysDeclaredAndOnlyForExport()
-    {
-        var source = File.ReadAllText(Path.Combine(SolutionLayout.RepoRoot, ImportFile));
-        var methods = CSharpSyntaxTree.ParseText(source, cancellationToken: TestContext.Current.CancellationToken).GetRoot(TestContext.Current.CancellationToken).DescendantNodes().OfType<MethodDeclarationSyntax>();
-
-        methods.Any(method => method.Identifier.ValueText == "ExportAsync" && Calls(method, "ReadFormat")).ShouldBeTrue(
-            "the exemption names a delegate that still validates its query before authentication");
-        Scan([Synthetic("static async Task ExportAsync(HttpContext context)\n{\nImportFormats.ReadFormat(\"csv\");\n}")], []).Length
-            .ShouldBe(1, "the exemption is by type and method name, not by method name alone");
-    }
-
-    private static (string Path, string Text) Synthetic(string method) =>
-        (Endpoints + "SyntheticRoute.cs", "namespace N;\nstatic class Route\n{\n" + method + "\n}\n");
-
-    private static string[] Scan((string Path, string Text)[] files, List<string> found)
-    {
+        exemptions ??= Exemptions;
         var errors = new List<string>();
         foreach (var (path, text) in files)
         {
-            var root = CSharpSyntaxTree.ParseText(text).GetRoot();
+            var token = TestContext.Current.CancellationToken;
+            var root = CSharpSyntaxTree.ParseText(text, cancellationToken: token).GetRoot(token);
             foreach (var trivia in root.DescendantTrivia().Where(trivia => trivia.IsKind(SyntaxKind.DisabledTextTrivia)))
             {
-                if (Preconditions.Any(helper => trivia.ToString().Contains(helper, StringComparison.Ordinal)))
+                if (System.Text.RegularExpressions.Regex.IsMatch(trivia.ToString(), @"\bMap\w*\s*(?:<[^>]+>)?\s*\("))
                 {
-                    errors.Add($"{path}: disabled preprocessor region could hide a precondition check before the guard");
+                    var line = trivia.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                    errors.Add($"{path}:{line}: disabled preprocessor region could hide a Map call");
                 }
             }
 
-            foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+            foreach (var call in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
-                var name = $"{method.Ancestors().OfType<TypeDeclarationSyntax>().First().Identifier.ValueText}.{method.Identifier.ValueText}";
-                if (name == Export && path == ImportFile || !Preconditions.Any(helper => Calls(method, helper)))
+                var map = CallName(call);
+                if (map.Length == 0)
+                {
+                    // An invocation whose callee the scanner cannot name is refused rather than assumed to be a read
+                    // route, so a conditional-access or cast registration cannot carry an unguarded write past it.
+                    if (System.Text.RegularExpressions.Regex.IsMatch(call.ToString(), @"\bMap\w*"))
+                    {
+                        errors.Add($"{path}:{Line(call)}: unrecognized Map call shape is refused rather than assumed to be a read route");
+                    }
+
+                    continue;
+                }
+
+                if (!map.StartsWith("Map", StringComparison.Ordinal)
+                    || ReadMaps.Contains(map, StringComparer.Ordinal)
+                    || map.EndsWith("Endpoints", StringComparison.Ordinal))
                 {
                     continue;
                 }
 
-                found.Add(name);
-                if (!GuardFirst(method))
+                if (map is not ("MapPost" or "MapPut" or "MapPatch" or "MapDelete"))
                 {
-                    errors.Add($"{path}:{Line(method)}: {name} validates a precondition or the import query before RawBodyGuard is its first statement");
+                    errors.Add($"{path}:{Line(call)}: unsupported write-capable {map} call");
+                    continue;
                 }
+
+                ScanWrite(call, path, found, exemptions, errors);
             }
+        }
+
+        foreach (var (name, _) in exemptions.Where(exemption => !found.Contains(exemption.TypeMethod, StringComparer.Ordinal)))
+        {
+            errors.Add($"{Endpoints}:1: stale exemption {name} is no longer a write delegate");
         }
 
         return errors.ToArray();
     }
 
-    private static string[] Scan((string Path, string Text) file, List<string> found) => Scan([file], found);
-
-    private static bool Calls(MethodDeclarationSyntax method, string helper) => method.DescendantNodes()
-        .OfType<InvocationExpressionSyntax>()
-        .Any(call => call.Expression switch
+    private static void ScanWrite(
+        InvocationExpressionSyntax call,
+        string path,
+        List<string> found,
+        (string TypeMethod, string Reason)[] exemptions,
+        List<string> errors)
+    {
+        var type = call.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
+        var argument = call.ArgumentList.Arguments.ElementAtOrDefault(1)?.Expression;
+        if (type is null || argument is not IdentifierNameSyntax identifier || IsAlias(call, identifier.Identifier.ValueText))
         {
-            MemberAccessExpressionSyntax access => access.Name.Identifier.ValueText == helper,
-            IdentifierNameSyntax identifier => identifier.Identifier.ValueText == helper,
-            _ => false,
-        });
+            errors.Add($"{path}:{Line(call)}: write handler must be a plain same-type method group, not a lambda, member or alias");
+            return;
+        }
+
+        var methods = type.Members.OfType<MethodDeclarationSyntax>()
+            .Where(method => method.Identifier.ValueText == identifier.Identifier.ValueText).ToArray();
+        if (methods.Length != 1)
+        {
+            errors.Add($"{path}:{Line(call)}: {identifier.Identifier.ValueText} resolves to {methods.Length} same-type declarations, expected one");
+            return;
+        }
+
+        var method = methods[0];
+        var name = $"{type.Identifier.ValueText}.{method.Identifier.ValueText}";
+        found.Add(name);
+        var guarded = GuardFirst(method);
+        var exemption = exemptions.Where(candidate => candidate.TypeMethod == name).ToArray();
+        if (exemption.Length != 0)
+        {
+            if (guarded || exemption.Length != 1 || string.IsNullOrWhiteSpace(exemption[0].Reason))
+            {
+                errors.Add($"{path}:{Line(method)}: stale or invalid exemption {name}");
+            }
+        }
+        else if (!guarded)
+        {
+            errors.Add($"{path}:{Line(method)}: {name} must have RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices) first");
+        }
+    }
+
+    private static bool IsAlias(InvocationExpressionSyntax call, string name)
+    {
+        var scope = call.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+        return scope is not null && (scope.ParameterList.Parameters.Any(parameter => parameter.Identifier.ValueText == name)
+            || scope.DescendantNodes().OfType<VariableDeclaratorSyntax>().Any(variable => variable.Identifier.ValueText == name)
+            || scope.DescendantNodes().OfType<LocalFunctionStatementSyntax>().Any(local => local.Identifier.ValueText == name));
+    }
+
+    private static string CallName(InvocationExpressionSyntax call) => ExpressionName(call.Expression);
+
+    private static string ExpressionName(ExpressionSyntax expression) => expression switch
+    {
+        MemberAccessExpressionSyntax access => access.Name.Identifier.ValueText,
+        MemberBindingExpressionSyntax binding => binding.Name.Identifier.ValueText,
+        IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+        GenericNameSyntax generic => generic.Identifier.ValueText,
+        ParenthesizedExpressionSyntax parenthesized => ExpressionName(parenthesized.Expression),
+        _ => string.Empty,
+    };
 
     private static bool GuardFirst(MethodDeclarationSyntax method)
     {
         var context = method.ParameterList.Parameters
             .FirstOrDefault(parameter => parameter.Type?.ToString().EndsWith("HttpContext", StringComparison.Ordinal) == true)
             ?.Identifier.ValueText;
-        var first = method.Body?.Statements
-            .FirstOrDefault(statement => !IsNullCheck(statement, context));
+        var statements = method.Body?.Statements;
+        var first = statements?.FirstOrDefault();
+        if (first is not null && IsNullCheck(first, context))
+        {
+            first = statements?.ElementAtOrDefault(1);
+        }
 
         if (context is null
             || first is not ExpressionStatementSyntax { Expression: InvocationExpressionSyntax call }
