@@ -15,7 +15,10 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
     private const string Endpoints = "src/Modules/Evidgate.Modules.Authoring/Endpoints/";
     private static readonly (string TypeMethod, string Reason)[] Exemptions = [];
 
-    private static readonly string[] ReadMaps = ["MapGet", "MapHead", "MapOptions", "MapGroup"];
+    private static readonly string[] ReadRouteMaps = ["MapGet", "MapHead", "MapOptions"];
+
+    // Every route map that never carries a write: the read registrations plus the group composer.
+    private static readonly string[] ReadMaps = [.. ReadRouteMaps, "MapGroup"];
 
     private static readonly string[] Expected =
     [
@@ -96,66 +99,101 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
         (string TypeMethod, string Reason)[] readExemptions)
     {
         var (path, text) = file;
-        var errors = state.Errors;
         var root = Parse(text);
         var conditional = ConditionalSourceText.FirstLine(root);
         if (conditional > 0)
         {
-            errors.Add($"{path}:{conditional}: conditionally compiled text in an endpoint file hides code from the pin");
+            state.Errors.Add($"{path}:{conditional}: conditionally compiled text in an endpoint file hides code from the pin");
         }
 
         foreach (var call in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
-            var map = CallName(call);
-            if (map.Length == 0)
-            {
-                errors.AddRange(UnnamedCallErrors(call, path));
-                continue;
-            }
-
-            if (FilterCalls.Contains(map, StringComparer.Ordinal))
-            {
-                errors.Add($"{path}:{Line(call)}: {map} on an authoring route tree runs before the handler guard");
-                continue;
-            }
-
-            if (map == "MapGroup" || IsComposer(map))
-            {
-                errors.AddRange(ChainErrors(call, path));
-            }
-
-            if (IsComposer(map))
-            {
-                Follow(call, map, path, state);
-            }
-
-            if (reads)
-            {
-                if (map == "MapGet")
-                {
-                    errors.AddRange(ChainErrors(call, path));
-                    ScanRead(call, path, found, errors, readExemptions);
-                }
-
-                continue;
-            }
-
-            if (!map.StartsWith("Map", StringComparison.Ordinal)
-                || ReadMaps.Contains(map, StringComparer.Ordinal)
-                || map.EndsWith("Endpoints", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            if (map is not ("MapPost" or "MapPut" or "MapPatch" or "MapDelete"))
-            {
-                errors.Add($"{path}:{Line(call)}: unsupported write-capable {map} call");
-                continue;
-            }
-
-            errors.AddRange(ChainErrors(call, path));
-            ScanWrite(call, path, found, exemptions, errors);
+            ScanCall(call, path, found, exemptions, state, reads, readExemptions);
         }
+    }
+
+    private static void ScanCall(
+        InvocationExpressionSyntax call,
+        string path,
+        List<string> found,
+        (string TypeMethod, string Reason)[] exemptions,
+        ScanState state,
+        bool reads,
+        (string TypeMethod, string Reason)[] readExemptions)
+    {
+        var map = CallName(call);
+        if (map.Length == 0)
+        {
+            state.Errors.AddRange(UnnamedCallErrors(call, path));
+            return;
+        }
+
+        if (FilterCalls.Contains(map, StringComparer.Ordinal))
+        {
+            state.Errors.Add($"{path}:{Line(call)}: {map} on an authoring route tree runs before the handler guard");
+            return;
+        }
+
+        if (map == "MapGroup" || IsComposer(map))
+        {
+            state.Errors.AddRange(ChainErrors(call, path));
+        }
+
+        if (IsComposer(map))
+        {
+            Follow(call, map, path, state);
+        }
+
+        if (reads)
+        {
+            ScanReadCall(call, map, path, found, state.Errors, readExemptions);
+            return;
+        }
+
+        ScanWriteCall(call, map, path, found, exemptions, state.Errors);
+    }
+
+    // A read route is any route that cannot write: HEAD and OPTIONS take the guard-first rule beside GET.
+    private static void ScanReadCall(
+        InvocationExpressionSyntax call,
+        string map,
+        string path,
+        List<string> found,
+        List<string> errors,
+        (string TypeMethod, string Reason)[] exemptions)
+    {
+        if (!ReadRouteMaps.Contains(map, StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        errors.AddRange(ChainErrors(call, path));
+        ScanRead(call, path, found, errors, exemptions);
+    }
+
+    private static void ScanWriteCall(
+        InvocationExpressionSyntax call,
+        string map,
+        string path,
+        List<string> found,
+        (string TypeMethod, string Reason)[] exemptions,
+        List<string> errors)
+    {
+        if (!map.StartsWith("Map", StringComparison.Ordinal)
+            || ReadMaps.Contains(map, StringComparer.Ordinal)
+            || map.EndsWith("Endpoints", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (map is not ("MapPost" or "MapPut" or "MapPatch" or "MapDelete"))
+        {
+            errors.Add($"{path}:{Line(call)}: unsupported write-capable {map} call");
+            return;
+        }
+
+        errors.AddRange(ChainErrors(call, path));
+        ScanWrite(call, path, found, exemptions, errors);
     }
 
     private static void ScanWrite(

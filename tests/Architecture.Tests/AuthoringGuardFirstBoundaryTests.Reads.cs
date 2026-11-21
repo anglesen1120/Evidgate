@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Shouldly;
 using Xunit;
@@ -6,9 +7,9 @@ using Xunit;
 namespace Architecture.Tests;
 
 /// <summary>
-/// Every Authoring <c>MapGet</c> delegate starts with the tenant guard and reaches its first
-/// <c>mediator.Send</c> before any return. A delegate that refuses its own query would answer 400/422 to an
-/// unauthorised caller; only the pipeline's authorisation behaviour may produce the 401/403.
+/// Every Authoring read route (<c>MapGet</c>, <c>MapHead</c>, <c>MapOptions</c>) starts with the tenant guard and
+/// reaches its first <c>mediator.Send</c> before any return. A delegate that refuses its own query would answer
+/// 400/422 to an unauthorised caller; only the pipeline's authorisation behaviour may produce the 401/403.
 /// </summary>
 public sealed partial class AuthoringGuardFirstBoundaryTests
 {
@@ -91,6 +92,9 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
 
     // A read delegate may shape its query after the guard, but it must not answer a validation failure itself:
     // the mediator send is what runs the authorisation behaviour, so a return before it hides the caller's 403.
+    // The statement that carries the send is no exception: a return beside it is refused unless its own
+    // expression reaches a send, a conditional or coalescing expression counts only when every branch does, and
+    // a throw before or inside that statement bypasses the pipeline's authorisation before it can answer.
     private static List<string> EarlyReturnErrors(MethodDeclarationSyntax method, string path, string name)
     {
         var errors = new List<string>();
@@ -99,10 +103,14 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
             ?.Identifier.ValueText;
         if (method.Body is not { } body)
         {
-            if (method.ExpressionBody?.Expression is not { } expression
-                || !OwnedNodes(expression).OfType<InvocationExpressionSyntax>().Any(call => IsSend(call, mediator)))
+            var expression = method.ExpressionBody?.Expression;
+            if (expression is null || !YieldsSend(expression, mediator))
             {
                 errors.Add($"{path}:{Line(method)}: {name} must send its query through mediator.Send so authorisation runs");
+            }
+            else
+            {
+                errors.AddRange(ThrowErrors(expression, path, name));
             }
 
             return errors;
@@ -115,13 +123,48 @@ public sealed partial class AuthoringGuardFirstBoundaryTests
             return errors;
         }
 
-        foreach (var returnStatement in body.Statements.TakeWhile(statement => statement != send).SelectMany(OwnedReturns))
+        foreach (var statement in body.Statements.TakeWhile(statement => statement != send))
         {
-            errors.Add($"{path}:{Line(returnStatement)}: {name} returns before mediator.Send, so a refusal would answer before authorisation");
+            errors.AddRange(ThrowErrors(statement, path, name));
+            foreach (var returnStatement in OwnedReturns(statement))
+            {
+                errors.Add($"{path}:{Line(returnStatement)}: {name} returns before mediator.Send, so a refusal would answer before authorisation");
+            }
+        }
+
+        errors.AddRange(ThrowErrors(send, path, name));
+        foreach (var returnStatement in OwnedReturns(send).Where(statement => !YieldsSend(statement.Expression, mediator)))
+        {
+            errors.Add($"{path}:{Line(returnStatement)}: {name} returns without mediator.Send in its own branch, so a refusal would answer before authorisation");
         }
 
         return errors;
     }
+
+    // Fail closed: await, casts, parentheses and the ConfigureAwait/AsTask wrappers are unwrapped, and a
+    // conditional or coalescing value is allowed only when every branch reaches a send. Any other wrapper
+    // (Results.Json, a switch expression, && / ||, WaitAsync, ...) is unproven and refused, so a refusal branch
+    // can never ride beside the send inside one value; a send nested in an argument never counts on its own.
+    private static bool YieldsSend(ExpressionSyntax? expression, string? mediator) => expression switch
+    {
+        null => false,
+        AwaitExpressionSyntax awaitExpression => YieldsSend(awaitExpression.Expression, mediator),
+        ParenthesizedExpressionSyntax parenthesized => YieldsSend(parenthesized.Expression, mediator),
+        CastExpressionSyntax cast => YieldsSend(cast.Expression, mediator),
+        InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Expression: { } receiver } } wrapper
+            when CallName(wrapper) is "ConfigureAwait" or "AsTask" => YieldsSend(receiver, mediator),
+        ConditionalExpressionSyntax conditional =>
+            YieldsSend(conditional.WhenTrue, mediator) && YieldsSend(conditional.WhenFalse, mediator),
+        BinaryExpressionSyntax binary when binary.IsKind(SyntaxKind.CoalesceExpression) =>
+            YieldsSend(binary.Left, mediator) && YieldsSend(binary.Right, mediator),
+        InvocationExpressionSyntax call => IsSend(call, mediator),
+        _ => false,
+    };
+
+    private static IEnumerable<string> ThrowErrors(SyntaxNode node, string path, string name) =>
+        OwnedNodes(node)
+            .Where(child => child is ThrowStatementSyntax or ThrowExpressionSyntax)
+            .Select(child => $"{path}:{Line(child)}: {name} throws before mediator.Send, so the caller sees a failure that bypasses authorisation");
 
     private static bool ContainsSend(StatementSyntax statement, string? mediator) =>
         OwnedNodes(statement).OfType<InvocationExpressionSyntax>().Any(call => IsSend(call, mediator));
