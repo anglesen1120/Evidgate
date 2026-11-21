@@ -161,6 +161,12 @@ public sealed class IsolationProject
     public required Guid AuthoringChangeId { get; init; }
 
     /// <summary>
+    /// The project's drafts (<c>{d}</c> of <c>/v1/drafts/{d}</c>), in seeding order: at least two, so the project
+    /// list pages at limit 1 (03.6.1), and the object routes name a real row instead of a random id alone.
+    /// </summary>
+    public required IReadOnlyList<Guid> DraftIds { get; init; }
+
+    /// <summary>
     /// A soft-deleted leaf <c>sub_category</c> node under <see cref="AuthoringChildNodeId"/> — the tombstone route 6
     /// restores (13.1.1-T3).
     /// </summary>
@@ -1005,6 +1011,37 @@ public sealed class IsolationWorld
                 },
                 HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("change_id").GetGuid();
 
+            // Two drafts per project through the create route (03.6.1), so the project list pages at limit 1 and the
+            // un-nested object routes name a real row of the victim tenant rather than a random id alone.
+            var drafts = new List<Guid>();
+            foreach (var draftPath in new[] { "tests/isolation-a.ts", "tests/isolation-b.ts" })
+            {
+                var draft = await SendAsync(
+                    HttpMethod.Post,
+                    $"/v1/projects/{project}/drafts",
+                    admin,
+                    org,
+                    new
+                    {
+                        kind = "template",
+                        base_commit = "abcdef1",
+                        content = new
+                        {
+                            files = new[]
+                            {
+                                new
+                                {
+                                    path = draftPath,
+                                    body_sha = "sha256:" + new string('a', 64),
+                                    body_ref = "drafts/isolation.ts",
+                                },
+                            },
+                        },
+                    },
+                    HttpStatusCode.Created).ConfigureAwait(false);
+                drafts.Add(draft.GetProperty("id").GetGuid());
+            }
+
             return new IsolationProject
             {
                 Id = project,
@@ -1042,6 +1079,7 @@ public sealed class IsolationWorld
                 AuthoringSecondManualCaseId = authoringSecondCase,
                 AuthoringVersionId = authoringVersion,
                 AuthoringChangeId = authoringChange,
+                DraftIds = drafts,
                 AuthoringDeletedNodeId = authoringRestorableNode,
                 AuthoringDeletedNodeVersion = authoringRestorableNodeVersion,
                 AuthoringDeletedItemId = authoringRestorableItem,

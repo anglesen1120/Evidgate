@@ -684,6 +684,17 @@ internal static class RouteRequests
             new(HttpMethod.Post, $"/v1/support-grants/{Guid.CreateVersion7()}/revoke", IdempotencyKey: Key()));
         Add("GET", "/v1/orgs/{o}/support-grants", ctx => new(HttpMethod.Get, $"/v1/orgs/{ctx.OrgId}/support-grants"));
 
+        // ---- Drafts (DraftEndpoints.cs; 03.6.1) ---------------------------------------------------------------
+        // The collection is project-scoped; the two object routes resolve the draft's own project. A fresh draft id is
+        // a valid probe because the viewer's refusal is decided before the lookup (and an authorized 404 is not the
+        // 403 this matrix asserts).
+        Add("POST", "/v1/projects/{p}/drafts", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/drafts",
+            DraftBody(), IdempotencyKey: Key()));
+        Add("GET", "/v1/projects/{p}/drafts", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/drafts"));
+        Add("GET", "/v1/drafts/{d}", _ => new(HttpMethod.Get, $"/v1/drafts/{Guid.CreateVersion7()}"));
+        Add("PATCH", "/v1/drafts/{d}", _ => new(HttpMethod.Patch, $"/v1/drafts/{Guid.CreateVersion7()}",
+            DraftUpdateBody(), IfMatch: "\"1\""));
+
         // ---- CI token exchange (pre-tenant) ------------------------------------------------------------------
         Add("POST", "/v1/ci/token", _ => new(HttpMethod.Post, "/v1/ci/token",
             new JsonObject { ["ingest_token"] = "egt_probe" }));
@@ -1101,6 +1112,41 @@ internal static class RouteRequests
     }
 
     private static string Key() => Guid.NewGuid().ToString("N");
+
+    /// <summary>The draft body the create route accepts (03.6.1): one file inside every content bound.</summary>
+    private static JsonObject DraftBody() => new()
+    {
+        ["kind"] = "template",
+        ["base_commit"] = "abcdef1",
+        ["content"] = new JsonObject
+        {
+            ["files"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["path"] = "tests/probe.ts",
+                    ["body_sha"] = "sha256:" + new string('a', 64),
+                    ["body_ref"] = "drafts/probe.ts",
+                },
+            },
+        },
+    };
+
+    private static JsonObject DraftUpdateBody() => new()
+    {
+        ["content"] = new JsonObject
+        {
+            ["files"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["path"] = "tests/probe-updated.ts",
+                    ["body_sha"] = "sha256:" + new string('a', 64),
+                    ["body_ref"] = "drafts/probe-updated.ts",
+                },
+            },
+        },
+    };
 
     private static JsonObject Binding() => new()
     {

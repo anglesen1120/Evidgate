@@ -38,7 +38,7 @@ public sealed class PermissionCatalogueTests
     private static readonly string[] Reserved =
     [
         "agent_pool:read", "agent_pool:write", "ai_draft:request", "draft:dry_run",
-        "draft:merge_request", "draft:write", "healing:approve", "healing:revoke",
+        "draft:merge_request", "healing:approve", "healing:revoke",
         "job:claim", "job:cleanup", "job:execute", "service_identity:read",
         "service_identity:write", "sso:read", "sso:write",
     ];

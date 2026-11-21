@@ -19,4 +19,7 @@ internal sealed class CatalogDbContext(DbContextOptions<CatalogDbContext> option
 
     /// <summary>The moves of each case (append-only).</summary>
     public DbSet<CaseRenameHistory> CaseRenames => Set<CaseRenameHistory>();
+
+    /// <summary>The tenant's authoring drafts.</summary>
+    public DbSet<Draft> Drafts => Set<Draft>();
 }
