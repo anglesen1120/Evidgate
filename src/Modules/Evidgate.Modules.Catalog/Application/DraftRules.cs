@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
@@ -268,7 +269,7 @@ internal static class DraftBody
     /// writes a numeric, never in scientific form) to more than the column's 4096 bytes in total. Bounding the token
     /// and exponent keeps every later size computation far from overflow and from numeric's own limits.
     /// </summary>
-    private static bool ExceedsNumericRange(JsonElement element)
+    internal static bool ExceedsNumericRange(JsonElement element)
     {
         var rendered = 0L;
         return ExceedsNumericRange(element, ref rendered);
@@ -279,7 +280,7 @@ internal static class DraftBody
         switch (element.ValueKind)
         {
             case JsonValueKind.Number:
-                var length = RenderedLength(element.GetRawText());
+                var length = RenderedLength(JsonMarshal.GetRawUtf8Value(element));
                 if (length < 0)
                 {
                     return true;
@@ -312,15 +313,20 @@ internal static class DraftBody
         }
     }
 
-    /// <summary>An upper bound of the characters PostgreSQL writes for the number (never below the real count), or -1 when the token is out of bounds.</summary>
-    internal static long RenderedLength(string token)
+    /// <summary>
+    /// An upper bound of the characters PostgreSQL writes for the number (never below the real count), or -1 when the token
+    /// is out of bounds. The token is measured as raw UTF-8 (a JSON number is ASCII) so an oversized one is refused before
+    /// any string is built; only a token within the bound is widened, on the stack.
+    /// </summary>
+    internal static long RenderedLength(ReadOnlySpan<byte> utf8)
     {
-        if (token.Length > MaxNumberTokenLength)
+        if (utf8.Length > MaxNumberTokenLength)
         {
             return -1;
         }
 
-        var span = token.AsSpan();
+        Span<char> buffer = stackalloc char[MaxNumberTokenLength];
+        var span = buffer[..System.Text.Encoding.UTF8.GetChars(utf8, buffer)];
         var marker = span.IndexOfAny('e', 'E');
         var mantissa = marker < 0 ? span : span[..marker];
         var exponent = 0;
