@@ -156,7 +156,7 @@ public sealed class ApiHostRequestLogFloorTests
 
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
         {
-            ["EVIDGATE:Database:ConnectionString"] = "Host=127.0.0.1;Port=1;Username=evidgate_app;Password=x;Database=evidgate;Timeout=2",
+            ["EVIDGATE:Database:ConnectionString"] = "Host=127.0.0.1;Port=1;Username=evidgate_app;Database=evidgate;Timeout=2",
             ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
             ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
             ["EVIDGATE:Ci:Pepper"] = Convert.ToBase64String(Enumerable.Repeat((byte)1, 32).ToArray()),
