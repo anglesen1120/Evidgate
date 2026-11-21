@@ -12440,8 +12440,9 @@ components:
         version: { type: integer, minimum: 1 }
         body_ref: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
         conformance_rules:
-          type: [object, array]
-          additionalProperties: true
+          oneOf:
+            - { type: object, additionalProperties: true }
+            - { type: array, items: {} }
           description: >-
             The rules a generated project is checked against: a named set (object) or an ordered list (array),
             stored as at most 64 KiB of JSON.
