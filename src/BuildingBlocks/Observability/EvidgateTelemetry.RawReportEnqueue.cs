@@ -15,7 +15,7 @@ public static partial class EvidgateTelemetry
     /// <summary>Tag carrying the producer lookup's outcome, one of <c>resolved</c> and its three issue codes.</summary>
     public const string RawReportProducerIssueTag = "issue";
 
-    private static readonly Counter<long> RawReportEnqueued = Meter.CreateCounter<long>(
+    private static readonly Counter<long> RawReportEnqueued = EvidgateMeter.Instance.CreateCounter<long>(
         RawReportEnqueuedMetricName,
         unit: "{artifact}",
         description: "Completed raw_report artifacts scheduled for parsing, tagged by the producer lookup's issue code. Never labelled with a hint value, a run id or an artifact id.");

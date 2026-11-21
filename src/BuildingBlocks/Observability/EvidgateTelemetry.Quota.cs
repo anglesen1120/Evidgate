@@ -17,7 +17,7 @@ public static partial class EvidgateTelemetry
     /// </summary>
     public const string IngestQuotaDeniedMetricName = "evidgate_ingest_quota_denied_total";
 
-    private static readonly Counter<long> IngestQuotaDenied = Meter.CreateCounter<long>(
+    private static readonly Counter<long> IngestQuotaDenied = EvidgateMeter.Instance.CreateCounter<long>(
         IngestQuotaDeniedMetricName,
         unit: "{batch}",
         description: "Event batches refused because the project's billing-period quota is used up, by kind. Never labelled with an org or project id, a counter value or any request value.");

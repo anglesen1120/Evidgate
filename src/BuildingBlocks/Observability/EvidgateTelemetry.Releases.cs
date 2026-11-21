@@ -11,7 +11,7 @@ public static partial class EvidgateTelemetry
     /// <summary>Counter of release components a bind could not match, added per applied bind. No labels: never a key or a digest.</summary>
     public const string ReleaseBindMismatchMetricName = "evidgate_release_bind_mismatch_total";
 
-    private static readonly Counter<long> ReleaseBindMismatch = Meter.CreateCounter<long>(
+    private static readonly Counter<long> ReleaseBindMismatch = EvidgateMeter.Instance.CreateCounter<long>(
         ReleaseBindMismatchMetricName,
         unit: "{component}",
         description: "Release components a bind could not match. No labels: never a component key, a digest or an id.");

@@ -14,7 +14,7 @@ public static partial class EvidgateTelemetry
     /// <summary>Counter of project AI settings saves, tagged by outcome.</summary>
     public const string AiSettingsWriteMetricName = "evidgate_authoring_ai_settings_write_total";
 
-    private static readonly Counter<long> AiSettingsWrites = Meter.CreateCounter<long>(
+    private static readonly Counter<long> AiSettingsWrites = EvidgateMeter.Instance.CreateCounter<long>(
         AiSettingsWriteMetricName,
         unit: "{save}",
         description: "Project AI settings saves by outcome (created, noop, stale, invalid). No labels beyond the closed outcome vocabulary: never a settings value, a URL or a hash.");
@@ -31,7 +31,7 @@ public static partial class EvidgateTelemetry
     /// <summary>Counter of runs created, tagged by trigger event, fork flag and unverified-ref flag.</summary>
     public const string RunsCreatedMetricName = "evidgate_runs_created_total";
 
-    private static readonly Counter<long> RunsCreated = Meter.CreateCounter<long>(
+    private static readonly Counter<long> RunsCreated = EvidgateMeter.Instance.CreateCounter<long>(
         RunsCreatedMetricName,
         unit: "{run}",
         description: "Runs created, by trigger_event (closed vocabulary or none), is_fork and unverified_ref. Never a ref name, a sha or an id, so the series count stays bounded.");
@@ -53,7 +53,7 @@ public static partial class EvidgateTelemetry
     /// <summary>Counter of queued authoring changes, tagged by the closed change-type vocabulary.</summary>
     public const string AuthoringChangeQueuedMetricName = "evidgate_authoring_change_queued_total";
 
-    private static readonly Counter<long> AuthoringChangesQueued = Meter.CreateCounter<long>(
+    private static readonly Counter<long> AuthoringChangesQueued = EvidgateMeter.Instance.CreateCounter<long>(
         AuthoringChangeQueuedMetricName,
         unit: "{change}",
         description: "Authoring changes queued, by change type (comment, delete, merge, split). Never a title, a comment body or an id: only the closed type vocabulary, so the tag stays low-cardinality.");
@@ -69,7 +69,7 @@ public static partial class EvidgateTelemetry
     /// <summary>Counter of batched applies, tagged by the closed outcome vocabulary.</summary>
     public const string AuthoringChangeApplyMetricName = "evidgate_authoring_apply_total";
 
-    private static readonly Counter<long> AuthoringChangesApplied = Meter.CreateCounter<long>(
+    private static readonly Counter<long> AuthoringChangesApplied = EvidgateMeter.Instance.CreateCounter<long>(
         AuthoringChangeApplyMetricName,
         unit: "{apply}",
         description: "Batched authoring applies by outcome (applied, stale, conflict). Never an ids list or a count: only the closed vocabulary, so the tag stays low-cardinality.");
@@ -95,7 +95,7 @@ public static partial class EvidgateTelemetry
     /// never sees a measurement of an instrument typed <see cref="int"/>. Keeping the instrument int64 and letting
     /// the call site pass an <see cref="int"/> costs nothing, because the conversion is implicit.
     /// </remarks>
-    private static readonly Histogram<long> AuthoringChangeApplyBatchSizes = Meter.CreateHistogram<long>(
+    private static readonly Histogram<long> AuthoringChangeApplyBatchSizes = EvidgateMeter.Instance.CreateHistogram<long>(
         AuthoringChangeApplyBatchSizeMetricName,
         unit: "{change}",
         description: "Changes carried by one committed apply. No labels: batches are compared as a distribution, which answers \"do maintainers batch\" without storing a selection.",
@@ -109,7 +109,7 @@ public static partial class EvidgateTelemetry
     public static void RecordAuthoringApplyBatchSize(int changeCount) =>
         AuthoringChangeApplyBatchSizes.Record(changeCount);
 
-    private static readonly Histogram<double> EvaluationDecisionLatencies = Meter.CreateHistogram<double>(
+    private static readonly Histogram<double> EvaluationDecisionLatencies = EvidgateMeter.Instance.CreateHistogram<double>(
         EvaluationDecisionLatencyMetricName,
         unit: "s",
         description: "Seconds between a frozen evidence revision and the evaluation row that decided it. No labels: a run id or a decision token would be unbounded, and the SLI is read as a distribution.",
