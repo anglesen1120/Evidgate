@@ -1644,3 +1644,9 @@ Both rows closed by PR #1288 (61162c8b): migration 0121 refuses an org template 
 | Contract.Tests YAML comment after tab (S635) | `StripComment` in tests/Contract.Tests/YamlSubset.cs treats `#` as a comment only after a space, so `y,<TAB># ] note` inside a wrapped flow list is not stripped and the list fails to close or parses a wrong entry; the shipped spec has no such input. Low. | contract tooling lane |
 
 All three rows closed by PR #1286 (e0f1c2ab): `collect.sh` refuses a full host name under 4 characters as a whole word (the placeholder `host` stays exempt), the NFKC pass is counted by the scan counter, and `YamlSubset.StripComment` treats `#` after a tab as a comment start.
+
+## Moved from status-carried.md by S640 (2026-11-22)
+
+| Draft list returns full content (03.6.1-T1, #1214) | `DraftQueries.cs:62-91` and `DraftReadSql.cs:10-15` return `content` for every item: `limit=200` over drafts of ~230 KB loads ~46 MB per request. Fix is a contract change: cap the page near 20-25 or return a summary item with content only on `GET /v1/drafts/{d}`. Low: needs `draft:write` to create bulk. | owner / 03.6.1 plan |
+
+Closed by PR #1291 (c5c180c7): the draft list returns `DraftSummaryDto` items (no `content`, a `file_count` instead) and its SQL no longer selects `content`; `GET /v1/drafts/{d}` still returns the content.
