@@ -87,7 +87,7 @@ public static class RequestLogFloor
         return shapes;
     }
 
-    /// <summary>The selector's category test: one optional wildcard, case-insensitive prefix and suffix.</summary>
+    /// <summary>The selector's category test: a pattern without wildcard is a case-insensitive prefix, one wildcard splits prefix and suffix.</summary>
     private static bool Matches(string? pattern)
     {
         if (pattern is null)
@@ -98,7 +98,7 @@ public static class RequestLogFloor
         var wildcard = pattern.IndexOf('*', StringComparison.Ordinal);
         if (wildcard < 0)
         {
-            return Category.Equals(pattern, StringComparison.OrdinalIgnoreCase);
+            return Category.StartsWith(pattern, StringComparison.OrdinalIgnoreCase);
         }
 
         if (pattern.IndexOf('*', wildcard + 1) >= 0)

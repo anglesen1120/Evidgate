@@ -158,6 +158,7 @@ public sealed class RequestLogFloorTests
                 ["Logging:Alias:LogLevel:Default"] = "Trace",
                 ["Logging:LogLevel:" + Category + "*"] = "Debug",
                 ["Logging:LogLevel:Default"] = "Information",
+                ["Logging:Console:LogLevel:Microsoft.AspNetCore"] = "Trace",
             }))
             .ConfigureServices(services => services
                 .PostConfigure<LoggerFilterOptions>(RequestLogFloor.Apply)
@@ -169,6 +170,7 @@ public sealed class RequestLogFloorTests
         var notice = log.Texts("Evidgate.Api.RequestLogFloorNotice").ShouldHaveSingleItem();
         notice.ShouldContain($"Logging:LogLevel:{Category}*");
         notice.ShouldContain("Logging:Alias:LogLevel:Default");
+        notice.ShouldContain("Logging:Console:LogLevel:Microsoft.AspNetCore", Case.Sensitive, "a parent category is a prefix rule the selector applies to the category");
         notice.ShouldNotContain("Logging:LogLevel:Default,", Case.Sensitive, "the generic provider-less Default is not an override");
         notice.ShouldNotContain("Trace", Case.Sensitive, "a configured value is never logged");
         await host.StopAsync(TestContext.Current.CancellationToken);
