@@ -1467,3 +1467,13 @@ Closed by #1231 (cd1d3e08): the inference was tested and is false for two key sh
 | Sibling architecture scanners accept conditional text (S560) | S560 made the Authoring pin reject any `#if` or disabled text in an endpoint file (security note 1 and code finding closed in 97aef5f0), but `RawBodyGuardBoundaryTests.cs:158-163` and `RateLimitGateSeamBoundaryTests.cs:302-307` still look only for disabled text that mentions their own needle, so a guard or call wrapped in `#if` can hide from them. | receiver: Architecture lane, reuse the fail-closed conditional-text check in both scanners |
 
 Closed by PR #1233 (merge 04c8038b): `ConditionalSourceText.FirstLine` is the one shared check, used by the Authoring pin, `RawBodyGuardBoundaryTests` and `RateLimitGateSeamBoundaryTests`, so any disabled text or `#if`/`#elif` directive refuses the file; fixtures and LAN mutants (old needle-only check restored, new fixtures red) cover both scanners.
+
+## Moved from status-carried.md by S612 (2026-11-21)
+
+| Draft provenance budget undercounts positive exponents (03.6.1-T1, #1214) | `DraftRules.cs:337` (`Math.Max(1, fraction - exponent)`) counts 1 for a positive exponent or many integer digits: 4096 numbers `1e308` (~25 KB) pass the 4096 summed budget, then PostgreSQL renders ~1.3 MB in the measuring cast before 422 `too_large`. Fix: count integer digits + exponent, cap the exponent at 308, add a test asserting no `as jsonb` statement runs. Low: one bounded query, authenticated `draft:write`, nothing stored. | follow-up Catalog draft lane (T3) |
+
+Closed by PR #1235 (merge 1fb1962a): `DraftBody.RenderedLength` counts integer digits shifted by the exponent, fraction digits, the point and the sign, so `1e308` counts 309 and 4096 of them are refused in C# before any jsonb cast; unit rows and the zero-`as jsonb` pins cover it, and the old-formula LAN mutant was red.
+
+| Draft insert maps the author FK as a missing project (03.6.1-T1, #1214) | `DraftCommands.cs:110-114` catches every `ForeignKeyViolation` as `ProjectNotFound`: a member revoked between the actor lookup (:84) and `SaveChanges` (:108) gets 404 `not_found` instead of 403 `draft_author_required`. Fix: switch on `PostgresException.ConstraintName` (`draft_project_fk`, `draft_author_fk`). Low: one-request race, no data written, no leak. | follow-up Catalog draft lane (T3) |
+
+Closed by PR #1235 (merge 1fb1962a): the insert catch switches on the constraint name (`draft_author_fk` 403 `draft_author_required`, `draft_project_fk` 404, any other foreign key propagates); `DraftTests.ForeignKeyFault` pins all three by fault injection and the constraint-switch-removed LAN mutant was red.
