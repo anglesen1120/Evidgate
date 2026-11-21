@@ -158,8 +158,7 @@ while a malformed cursor or an out-of-range limit is `422 request_invalid`. Both
 at 256 KiB (`x-max-bytes`, answered as `413 payload_too_large` before the body is read): 1–200 files, `path`
 and `body_ref` 1–512 characters, `path` relative with no backslash, parent segment or control character,
 unique paths, `body_sha` `sha256:<64 hex>`, `base_commit` `^[0-9a-f]{7,64}$`, and a `provenance` object of
-at most 4096 UTF-8 bytes. The list is a keyset page on `(created_at, id)` (`cursor`/`limit`, default 50, max
-200) with an optional `status` filter.
+at most 4096 UTF-8 bytes. The list is a keyset page on `(created_at, id)` (`cursor`/`limit`, default 50, max 200) with an optional `status` filter.
 
 `Idempotency-Key` exemptions (00-grounded, enforced by the spectral
 `evg-mutation-idempotency` rule — keep this list, the function's
