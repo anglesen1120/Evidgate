@@ -13,9 +13,10 @@
 #               workspace packages, `npx tsc -b tsconfig.json`: the Playwright fixtures build imports
 #               @evidgate/sdk from its dist output and a system Chrome)
 #
-# Scrub, byte-regex based so only UTF-8 (or its ASCII subset) is accepted: a testsuite hostname
-# attribute becomes "host" and this run's checkout path becomes /repo; a report that still names the
-# machine, its host name or the home directory is refused, never uploaded.
+# Scrub, on the parsed tree so only UTF-8 (or its ASCII subset) is accepted: a testsuite hostname
+# attribute becomes "host" and this run's checkout path becomes /repo in every attribute value and
+# text node; a report that still names the machine, its host name or the home directory is refused,
+# never uploaded.
 # Exit 1: a producer's report is missing, is over the 8 MiB cap before or after scrubbing, is not
 # well-formed XML with a testsuite and a testcase, is not UTF-8, or declares a DOCTYPE in any
 # encoding (a runner never emits one).
@@ -71,20 +72,13 @@ from xml.parsers import expat
 from pathlib import Path
 
 MAX_BYTES = 8 * 1024 * 1024
-# A runner stamps the machine name into every testsuite. Only a real testsuite start tag is rewritten
-# and only at attribute positions, so quoted text, CDATA and testcase attributes stay as they are.
-TESTSUITE_TAG = re.compile(rb'<testsuite(?=[\s/>])(?:"[^"]*"|\'[^\']*\'|[^>"\'])*>')
-HOSTNAME_ATTR = re.compile(rb'''(\s+)([\w:.-]+)(\s*=\s*)("[^"]*"|'[^']*')''')
+DECLARATION = b'<?xml version="1.0" encoding="UTF-8"?>\n'
 XML_ENCODING = re.compile(rb'''\A(?:\xef\xbb\xbf)?\s*<\?xml[^>]*\bencoding\s*=\s*["']([^"']+)["']''', re.I)
-
-
-def refuse_doctype(*_):
-    # expat reports the declaration whatever the encoding, unlike a byte search.
-    sys.exit("collect.sh: report declares a DOCTYPE")
+COUNTED_ELEMENTS = ("testsuite", "testcase", "failure", "error", "skipped")
 
 
 def refuse_unsupported_encoding(producer, data):
-    # The scrub is byte regex based, so anything but UTF-8 and its ASCII subset has no safe rewrite.
+    # The tree scrub, residual check and serialisation all assume UTF-8 and its ASCII subset.
     if data.startswith((b"\xff\xfe", b"\xfe\xff")) or b"\x00" in data:
         sys.exit(f"collect.sh: {producer}: report is not UTF-8 (BOM or NUL byte)")
     try:
@@ -96,71 +90,95 @@ def refuse_unsupported_encoding(producer, data):
         sys.exit(f"collect.sh: {producer}: report declares encoding {declared.group(1).decode('ascii', 'replace')}, not UTF-8")
 
 
-def markup_end(data, start):
-    for opener, closer in ((b"<!--", b"-->"), (b"<![CDATA[", b"]]>"), (b"<?", b"?>")):
-        if data.startswith(opener, start):
-            end = data.find(closer, start + len(opener))
-            return len(data) if end < 0 else end + len(closer)
-    quote, index = 0, start + 1
-    while index < len(data):
-        byte = data[index]
-        if quote:
-            if byte == quote:
-                quote = 0
-        elif byte in (0x22, 0x27):
-            quote = byte
-        elif byte == 0x3E:
-            return index + 1
-        index += 1
-    return len(data)
+def parse_report(producer, data):
+    def refuse(*_):
+        # expat reports the declaration whatever the encoding, unlike a byte search.
+        sys.exit(f"collect.sh: {producer}: report declares a DOCTYPE")
+
+    try:
+        scanner = expat.ParserCreate()
+        scanner.StartDoctypeDeclHandler = refuse
+        scanner.Parse(data, True)
+        return ET.fromstring(data)
+    except expat.ExpatError as error:
+        sys.exit(f"collect.sh: {producer}: not well-formed XML ({error})")
+    except ET.ParseError as error:
+        sys.exit(f"collect.sh: {producer}: not well-formed XML ({error})")
 
 
-def rewrite_hostname(match):
-    if match.group(2) != b"hostname":
-        return match.group(0)
-    return match.group(1) + b"hostname" + match.group(3) + b'"host"'
+def walk(doc):
+    # Iterative so a deeply nested report cannot exhaust the interpreter stack.
+    stack = [doc]
+    while stack:
+        node = stack.pop()
+        yield node
+        stack.extend(node)
 
 
-def scrub_hostnames(data):
-    # Walk markup so a <testsuite ..> inside a comment, CDATA or another tag's value is never matched.
-    result, position = bytearray(), 0
-    while position < len(data):
-        start = data.find(b"<", position)
-        if start < 0:
-            result += data[position:]
-            break
-        result += data[position:start]
-        tag = TESTSUITE_TAG.match(data, start)
-        if tag is not None:
-            result += HOSTNAME_ATTR.sub(rewrite_hostname, tag.group(0))
-            position = tag.end()
-        else:
-            end = markup_end(data, start)
-            result += data[start:end]
-            position = end
-    return bytes(result)
+def scrubbed(text, prefixes):
+    if not text:
+        return text
+    for pattern in prefixes:
+        text = pattern.sub("/repo", text)
+    return text
 
 
-def refuse_residual(producer, data):
+def scrub_tree(doc, prefixes):
+    for node in walk(doc):
+        if node.tag == "testsuite" and "hostname" in node.attrib:
+            node.set("hostname", "host")
+        for key in list(node.attrib):
+            node.set(key, scrubbed(node.attrib[key], prefixes))
+        node.text = scrubbed(node.text, prefixes)
+        node.tail = scrubbed(node.tail, prefixes)
+
+
+def refuse_residual(producer, doc, values):
     # A report that still names this machine fails the run; a leak never reaches the upload set.
-    values = [root, os.path.realpath(root)]
-    machine = socket.gethostname()
-    if len(machine) >= 4 and machine != "host":
-        values.append(machine)
-    home = os.environ.get("HOME", "")
-    if home not in ("", "/"):
-        values.append(home)
-    for value in values:
-        if value and os.fsencode(value) in data:
-            sys.exit(f"collect.sh: {producer}: report still names this machine; refusing to publish it")
+    for node in walk(doc):
+        for value in [*node.attrib.values(), node.text, node.tail]:
+            if value and any(secret in value for secret in values):
+                sys.exit(f"collect.sh: {producer}: report still names this machine; refusing to publish it")
+
+
+def element_counts(doc):
+    counts = dict.fromkeys(COUNTED_ELEMENTS, 0)
+    for node in walk(doc):
+        if node.tag in counts:
+            counts[node.tag] += 1
+    return counts
+
+
+def serialise(producer, doc, expected):
+    # Serialising the tree normalises quoting, CDATA and comments, which the JUnit mapper does not
+    # read; failure message/type, testcase classname/name and system-out text survive as values.
+    try:
+        payload = DECLARATION + ET.tostring(doc, encoding="utf-8", xml_declaration=False)
+    except RecursionError:
+        sys.exit(f"collect.sh: {producer}: report nests too deeply to serialise")
+    try:
+        reparsed = ET.fromstring(payload)
+    except ET.ParseError as error:
+        sys.exit(f"collect.sh: {producer}: serialised report is not well-formed XML ({error})")
+    if element_counts(reparsed) != expected:
+        sys.exit(f"collect.sh: {producer}: serialised report changed the element counts")
+    return payload
 
 
 src, out, root = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
 # The runner's checkout path (an absolute path that names a user) becomes the fixed /repo.
-PATH_PREFIXES = [
-    re.compile(rb"(?<![\w.-])" + re.escape(os.fsencode(path)) + rb"(?![\w.-])")
-    for path in dict.fromkeys([root, os.path.realpath(root)])
+checkout = list(dict.fromkeys([root, os.path.realpath(root)]))
+prefixes = [
+    re.compile(r"(?<![\w.-])" + re.escape(prefix) + r"(?![\w.-])")
+    for prefix in sorted(checkout, key=len, reverse=True)
 ]
+residual = [value for value in checkout if value]
+machine = socket.gethostname()
+if len(machine) >= 4 and machine != "host":
+    residual.append(machine)
+home = os.environ.get("HOME", "")
+if home not in ("", "/"):
+    residual.append(home)
 producers = ["xunit", "vitest", "playwright"]
 entries = []
 for producer in producers:
@@ -172,26 +190,18 @@ for producer in producers:
         data = handle.read(MAX_BYTES + 1)
     if len(data) > MAX_BYTES:
         sys.exit(f"collect.sh: {producer}: report exceeds {MAX_BYTES} bytes")
-    try:
-        scanner = expat.ParserCreate()
-        scanner.StartDoctypeDeclHandler = refuse_doctype
-        scanner.Parse(data, True)
-        doc = ET.fromstring(data)
-    except expat.ExpatError as error:
-        sys.exit(f"collect.sh: {producer}: not well-formed XML ({error})")
-    except ET.ParseError as error:
-        sys.exit(f"collect.sh: {producer}: not well-formed XML ({error})")
+    doc = parse_report(producer, data)
     refuse_unsupported_encoding(producer, data)
     suites = [doc] if doc.tag == "testsuite" else doc.findall("testsuite")
     cases = doc.findall(".//testcase")
     if doc.tag not in ("testsuites", "testsuite") or not suites or not cases:
         sys.exit(f"collect.sh: {producer}: no testsuite/testcase in the report")
-    data = scrub_hostnames(data)
-    for prefix in PATH_PREFIXES:
-        data = prefix.sub(b"/repo", data)
+    expected = element_counts(doc)
+    scrub_tree(doc, prefixes)
+    refuse_residual(producer, doc, residual)
+    data = serialise(producer, doc, expected)
     if len(data) > MAX_BYTES:
         sys.exit(f"collect.sh: {producer}: report exceeds {MAX_BYTES} bytes")
-    refuse_residual(producer, data)
     entries.append({
         "producer": producer,
         "file": name,

@@ -1,17 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <testsuites id="" name="" tests="56" failures="6" skipped="0" errors="0" time="74.94065499999999">
 <testsuite name="settings-policy.layout.spec.ts" timestamp="2026-11-21T07:48:32.253Z" hostname="host" tests="12" failures="4" skipped="0" time="21.131" errors="0">
 <testcase name="UUID lookup is bounded at 1024px (en)" classname="settings-policy.layout.spec.ts" time="1.858">
 <system-out>
-<![CDATA[
+
 [[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1024px-en--chrome/test-failed-1.png]]
 
 [[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1024px-en--chrome/error-context.md]]
 
 [[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1024px-en--chrome/trace.zip]]
-]]>
+
 </system-out>
 <failure message="expect(received).toBe(expected) // Object.is equality" type="expect.toBe">
-<![CDATA[  [chrome] › settings-policy.layout.spec.ts:34:9 › UUID lookup is bounded at 1024px (en) ───────────
+  [chrome] › settings-policy.layout.spec.ts:34:9 › UUID lookup is bounded at 1024px (en) ───────────
 
     Error: expect(received).toBe(expected) // Object.is equality
 
@@ -20,7 +21,7 @@
 
       43 |       expect(field.x + field.width).toBeLessThan(action.x);
       44 |       expect(field.y + field.height).toBeCloseTo(action.y + action.height, 0);
-    > 45 |       expect(await input.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+    &gt; 45 |       expect(await input.evaluate((element) =&gt; element.scrollWidth &lt;= element.clientWidth)).toBe(
          |                                                                                             ^
       46 |         true,
       47 |       );
@@ -40,21 +41,21 @@
         npx playwright show-trace ../../test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1024px-en--chrome/trace.zip
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
-]]>
+
 </failure>
 </testcase>
 <testcase name="UUID lookup is bounded at 1280px (en)" classname="settings-policy.layout.spec.ts" time="1.819">
 <system-out>
-<![CDATA[
+
 [[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1280px-en--chrome/test-failed-1.png]]
 
 [[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1280px-en--chrome/error-context.md]]
 
 [[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1280px-en--chrome/trace.zip]]
-]]>
+
 </system-out>
 <failure message="expect(received).toBe(expected) // Object.is equality" type="expect.toBe">
-<![CDATA[  [chrome] › settings-policy.layout.spec.ts:34:9 › UUID lookup is bounded at 1280px (en) ───────────
+  [chrome] › settings-policy.layout.spec.ts:34:9 › UUID lookup is bounded at 1280px (en) ───────────
 
     Error: expect(received).toBe(expected) // Object.is equality
 
@@ -63,7 +64,7 @@
 
       43 |       expect(field.x + field.width).toBeLessThan(action.x);
       44 |       expect(field.y + field.height).toBeCloseTo(action.y + action.height, 0);
-    > 45 |       expect(await input.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+    &gt; 45 |       expect(await input.evaluate((element) =&gt; element.scrollWidth &lt;= element.clientWidth)).toBe(
          |                                                                                             ^
       46 |         true,
       47 |       );
@@ -83,7 +84,7 @@
         npx playwright show-trace ../../test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1280px-en--chrome/trace.zip
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
-]]>
+
 </failure>
 </testcase>
 <testcase name="policy labels and lookup fit 320px (en, light)" classname="settings-policy.layout.spec.ts" time="1.894">
@@ -96,16 +97,16 @@
 </testcase>
 <testcase name="UUID lookup is bounded at 1024px (vi)" classname="settings-policy.layout.spec.ts" time="1.592">
 <system-out>
-<![CDATA[
+
 [[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1024px-vi--chrome/test-failed-1.png]]
 
 [[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1024px-vi--chrome/error-context.md]]
 
 [[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1024px-vi--chrome/trace.zip]]
-]]>
+
 </system-out>
 <failure message="expect(received).toBe(expected) // Object.is equality" type="expect.toBe">
-<![CDATA[  [chrome] › settings-policy.layout.spec.ts:34:9 › UUID lookup is bounded at 1024px (vi) ───────────
+  [chrome] › settings-policy.layout.spec.ts:34:9 › UUID lookup is bounded at 1024px (vi) ───────────
 
     Error: expect(received).toBe(expected) // Object.is equality
 
@@ -114,7 +115,7 @@
 
       43 |       expect(field.x + field.width).toBeLessThan(action.x);
       44 |       expect(field.y + field.height).toBeCloseTo(action.y + action.height, 0);
-    > 45 |       expect(await input.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+    &gt; 45 |       expect(await input.evaluate((element) =&gt; element.scrollWidth &lt;= element.clientWidth)).toBe(
          |                                                                                             ^
       46 |         true,
       47 |       );
@@ -134,21 +135,21 @@
         npx playwright show-trace ../../test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1024px-vi--chrome/trace.zip
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
-]]>
+
 </failure>
 </testcase>
 <testcase name="UUID lookup is bounded at 1280px (vi)" classname="settings-policy.layout.spec.ts" time="1.995">
 <system-out>
-<![CDATA[
+
 [[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1280px-vi--chrome/test-failed-1.png]]
 
 [[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1280px-vi--chrome/error-context.md]]
 
 [[ATTACHMENT|test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1280px-vi--chrome/trace.zip]]
-]]>
+
 </system-out>
 <failure message="expect(received).toBe(expected) // Object.is equality" type="expect.toBe">
-<![CDATA[  [chrome] › settings-policy.layout.spec.ts:34:9 › UUID lookup is bounded at 1280px (vi) ───────────
+  [chrome] › settings-policy.layout.spec.ts:34:9 › UUID lookup is bounded at 1280px (vi) ───────────
 
     Error: expect(received).toBe(expected) // Object.is equality
 
@@ -157,7 +158,7 @@
 
       43 |       expect(field.x + field.width).toBeLessThan(action.x);
       44 |       expect(field.y + field.height).toBeCloseTo(action.y + action.height, 0);
-    > 45 |       expect(await input.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+    &gt; 45 |       expect(await input.evaluate((element) =&gt; element.scrollWidth &lt;= element.clientWidth)).toBe(
          |                                                                                             ^
       46 |         true,
       47 |       );
@@ -177,7 +178,7 @@
         npx playwright show-trace ../../test-results/settings-policy.layout-UUID-lookup-is-bounded-at-1280px-vi--chrome/trace.zip
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
-]]>
+
 </failure>
 </testcase>
 <testcase name="policy labels and lookup fit 320px (vi, light)" classname="settings-policy.layout.spec.ts" time="1.812">
@@ -192,16 +193,16 @@
 <testsuite name="settings-policy.spec.ts" timestamp="2026-11-21T07:48:32.253Z" hostname="host" tests="32" failures="2" skipped="0" time="62.742" errors="0">
 <testcase name="revision form keeps its field beside the action on desktop (en)" classname="settings-policy.spec.ts" time="1.861">
 <system-out>
-<![CDATA[
+
 [[ATTACHMENT|test-results/settings-policy-revision-f-72e0f-e-the-action-on-desktop-en--chrome/test-failed-1.png]]
 
 [[ATTACHMENT|test-results/settings-policy-revision-f-72e0f-e-the-action-on-desktop-en--chrome/error-context.md]]
 
 [[ATTACHMENT|test-results/settings-policy-revision-f-72e0f-e-the-action-on-desktop-en--chrome/trace.zip]]
-]]>
+
 </system-out>
 <failure message="expect(received).toBe(expected) // Object.is equality" type="expect.toBe">
-<![CDATA[  [chrome] › settings-policy.spec.ts:73:7 › revision form keeps its field beside the action on desktop (en) 
+  [chrome] › settings-policy.spec.ts:73:7 › revision form keeps its field beside the action on desktop (en) 
 
     Error: expect(received).toBe(expected) // Object.is equality
 
@@ -209,12 +210,12 @@
     Received: false
 
       89 |         .locator('#policy-revision-id')
-      90 |         .evaluate((input) => input.scrollWidth <= input.clientWidth),
-    > 91 |     ).toBe(true);
+      90 |         .evaluate((input) =&gt; input.scrollWidth &lt;= input.clientWidth),
+    &gt; 91 |     ).toBe(true);
          |       ^
       92 |   });
       93 |   // AC3: the served list, its head marking, the mode chip and the diff panel's own state.
-      94 |   test(`revision list, head marking, mode chip and diff state (${locale})`, async ({ page }) => {
+      94 |   test(`revision list, head marking, mode chip and diff state (${locale})`, async ({ page }) =&gt; {
         at /repo/apps/web/e2e/shell/settings-policy.spec.ts:91:7
 
     attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
@@ -230,7 +231,7 @@
         npx playwright show-trace ../../test-results/settings-policy-revision-f-72e0f-e-the-action-on-desktop-en--chrome/trace.zip
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
-]]>
+
 </failure>
 </testcase>
 <testcase name="revision list, head marking, mode chip and diff state (en)" classname="settings-policy.spec.ts" time="2.417">
@@ -265,16 +266,16 @@
 </testcase>
 <testcase name="revision form keeps its field beside the action on desktop (vi)" classname="settings-policy.spec.ts" time="1.3">
 <system-out>
-<![CDATA[
+
 [[ATTACHMENT|test-results/settings-policy-revision-f-a13a7-e-the-action-on-desktop-vi--chrome/test-failed-1.png]]
 
 [[ATTACHMENT|test-results/settings-policy-revision-f-a13a7-e-the-action-on-desktop-vi--chrome/error-context.md]]
 
 [[ATTACHMENT|test-results/settings-policy-revision-f-a13a7-e-the-action-on-desktop-vi--chrome/trace.zip]]
-]]>
+
 </system-out>
 <failure message="expect(received).toBe(expected) // Object.is equality" type="expect.toBe">
-<![CDATA[  [chrome] › settings-policy.spec.ts:73:7 › revision form keeps its field beside the action on desktop (vi) 
+  [chrome] › settings-policy.spec.ts:73:7 › revision form keeps its field beside the action on desktop (vi) 
 
     Error: expect(received).toBe(expected) // Object.is equality
 
@@ -282,12 +283,12 @@
     Received: false
 
       89 |         .locator('#policy-revision-id')
-      90 |         .evaluate((input) => input.scrollWidth <= input.clientWidth),
-    > 91 |     ).toBe(true);
+      90 |         .evaluate((input) =&gt; input.scrollWidth &lt;= input.clientWidth),
+    &gt; 91 |     ).toBe(true);
          |       ^
       92 |   });
       93 |   // AC3: the served list, its head marking, the mode chip and the diff panel's own state.
-      94 |   test(`revision list, head marking, mode chip and diff state (${locale})`, async ({ page }) => {
+      94 |   test(`revision list, head marking, mode chip and diff state (${locale})`, async ({ page }) =&gt; {
         at /repo/apps/web/e2e/shell/settings-policy.spec.ts:91:7
 
     attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
@@ -303,7 +304,7 @@
         npx playwright show-trace ../../test-results/settings-policy-revision-f-a13a7-e-the-action-on-desktop-vi--chrome/trace.zip
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
-]]>
+
 </failure>
 </testcase>
 <testcase name="revision list, head marking, mode chip and diff state (vi)" classname="settings-policy.spec.ts" time="1.902">

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Xml;
+using System.Xml.Linq;
 using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
@@ -10,8 +11,8 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// Evidgate's own CI reports (xUnit v3, Vitest, Playwright; committed under fixtures/reports/own-ci exactly as the
-/// runners emitted them) go through the parser profile customers' XML takes, <see cref="IParsing.ParseXmlReport"/>,
+/// Evidgate's own CI reports (xUnit v3, Vitest, Playwright; scrubbed and serialised under
+/// fixtures/reports/own-ci) go through the parser profile customers' XML takes, <see cref="IParsing.ParseXmlReport"/>,
 /// and through the real JUnit mapper, which must report no discrepancy. The streamed document must also use only the
 /// elements of the committed JUnit sample corpus and the system-out a failing Playwright case emits.
 /// </summary>
@@ -130,7 +131,7 @@ public sealed class DogfoodReportTests
         });
     }
 
-    /// <summary>The runner's machine name and checkout path never reach the upload set; nothing else is rewritten.</summary>
+    /// <summary>The runner's machine name and checkout path never reach the upload set; mapped values are preserved.</summary>
     [Fact]
     public async Task Dogfood_Collect_ScrubsHostnameAndCheckoutPath()
     {
@@ -166,7 +167,7 @@ public sealed class DogfoodReportTests
                     text.ShouldContain("at /repo/apps/web/e2e/a.spec.ts:45:93");
                     var stripped = text.Replace("note=\"/repo/apps/web/e2e/a.spec.ts\" ", string.Empty, StringComparison.Ordinal)
                         .Replace("<system-out>at /repo/apps/web/e2e/a.spec.ts:45:93</system-out>", string.Empty, StringComparison.Ordinal);
-                    stripped.ShouldBe(expected[name]);
+                    XNode.DeepEquals(XDocument.Parse(stripped), XDocument.Parse(expected[name])).ShouldBeTrue();
                 }
 
                 using var manifest = JsonDocument.Parse(
@@ -233,7 +234,11 @@ public sealed class DogfoodReportTests
                 var doc = System.Xml.Linq.XDocument.Parse(text);
                 doc.Descendants("testsuite").Single().Attribute("hostname")!.Value.ShouldBe("host");
                 doc.Descendants("testcase").Single().Attribute("name")!.Value.ShouldBe("check hostname='x'");
-                text.ShouldBe(Xml.Replace("hostname = 'lan'", "hostname = \"host\"", StringComparison.Ordinal));
+                var expected = XDocument.Parse(Xml);
+                expected.Descendants("testsuite").Single().SetAttributeValue("hostname", "host");
+                expected.DescendantNodes().OfType<XComment>().Remove();
+                expected.Descendants("system-out").Single().ReplaceNodes("<testsuite hostname=\"cdata\">");
+                XNode.DeepEquals(doc, expected).ShouldBeTrue();
             });
         });
     }
@@ -272,38 +277,37 @@ public sealed class DogfoodReportTests
     }
 
     [Fact]
-    public async Task Dogfood_Collect_RefusesReportThatExceedsCapAfterScrubbing()
+    public async Task Dogfood_Collect_RefusesInputOrSerialisedOutputOverCap()
     {
-        const string Xml = "<testsuite hostname=\"x\"><testcase name=\"case\"/></testsuite>";
-        const string CommentStart = "<!--";
-        const string CommentEnd = "-->";
-        var paddingLength = checked((int)MaxBytes) - Xml.Length - CommentStart.Length - CommentEnd.Length;
-        await WithTempDirectory(async source =>
+        const string Start = "<testsuite hostname=\"x\"><testcase name=\"case\"><system-out>";
+        const string End = "</system-out></testcase></testsuite>";
+        var padding = checked((int)MaxBytes) - Start.Length - End.Length;
+        await WithReports(Start + new string('p', padding - 128) + End, async (source, output) =>
         {
-            foreach (var name in ProducerNames)
-            {
-                File.Copy(Path.Combine(TestData, name + ".junit.xml"), Path.Combine(source, name + ".junit.xml"));
-            }
-
             var path = Path.Combine(source, "xunit.junit.xml");
-            await File.WriteAllTextAsync(path, CommentStart + new string('p', paddingLength - 3) + CommentEnd + Xml, TestContext.Current.CancellationToken);
-            await WithTempDirectory(async output =>
+            var (exit, stderr) = await RunCollect(source, output);
+            exit.ShouldBe(0, stderr);
+            // Serialisation adds the XML declaration and the scrubbed hostname, so an input under
+            // the cap can still overflow it.
+            await File.WriteAllTextAsync(path, Start + new string('p', padding - 32) + End, TestContext.Current.CancellationToken);
+            new FileInfo(path).Length.ShouldBe(MaxBytes - 32);
+            await WithTempDirectory(async refused =>
             {
-                var (exit, stderr) = await RunCollect(source, output);
-                exit.ShouldBe(0, stderr);
-                new FileInfo(Path.Combine(output, "xunit.junit.xml")).Length.ShouldBe(MaxBytes);
+                var result = await RunCollect(source, refused);
+                result.Exit.ShouldBe(1);
+                result.Stderr.ShouldContain("xunit");
+                result.Stderr.ShouldContain("exceeds");
+                Directory.GetFiles(refused).ShouldBeEmpty();
             });
-            await File.WriteAllTextAsync(path, CommentStart + new string('p', paddingLength) + CommentEnd + Xml, TestContext.Current.CancellationToken);
-            new FileInfo(path).Length.ShouldBe(MaxBytes);
-
-            await WithTempDirectory(async output =>
+            await File.WriteAllTextAsync(path, Start + new string('p', padding + 1) + End, TestContext.Current.CancellationToken);
+            new FileInfo(path).Length.ShouldBe(MaxBytes + 1);
+            await WithTempDirectory(async refused =>
             {
-                var (exit, stderr) = await RunCollect(source, output);
-
-                exit.ShouldBe(1);
-                stderr.ShouldContain("xunit");
-                stderr.ShouldContain("exceeds");
-                Directory.GetFiles(output).ShouldBeEmpty();
+                var result = await RunCollect(source, refused);
+                result.Exit.ShouldBe(1);
+                result.Stderr.ShouldContain("xunit");
+                result.Stderr.ShouldContain("exceeds");
+                Directory.GetFiles(refused).ShouldBeEmpty();
             });
         });
     }
@@ -347,6 +351,103 @@ public sealed class DogfoodReportTests
         });
     }
 
+    [Fact]
+    public async Task Dogfood_Collect_MegabyteWhitespaceTag_FinishesWithinTwentySeconds()
+    {
+        var xml = "<testsuite" + new string(' ', 1024 * 1024) + "hostname='x'><testcase name='c'/></testsuite>";
+        await WithReports(xml, async (source, output) =>
+        {
+            var elapsed = Stopwatch.StartNew();
+            var (exit, stderr) = await RunCollect(source, output);
+            elapsed.Stop();
+            exit.ShouldBe(0, stderr);
+            elapsed.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(20));
+        });
+    }
+
+    [Fact]
+    public async Task Dogfood_Collect_NonAsciiAttribute_PreservesParsedValue()
+    {
+        const string Xml = "<testsuite é=\"1 hostname='lan'\" hostname=\"x\"><testcase name=\"c\"/></testsuite>";
+        await WithReports(Xml, async (source, output) =>
+        {
+            var (exit, stderr) = await RunCollect(source, output);
+            exit.ShouldBe(0, stderr);
+            var doc = XDocument.Load(Path.Combine(output, "xunit.junit.xml"));
+            doc.Root!.Attribute("é")!.Value.ShouldBe("1 hostname='lan'");
+            doc.Root.Attribute("hostname")!.Value.ShouldBe("host");
+        });
+    }
+
+    [Fact]
+    public async Task Dogfood_Collect_CharacterReferenceCheckoutPath_NeverPublishesPath()
+    {
+        var root = RlsExceptionFile.RepositoryRoot;
+        var encoded = string.Concat(root.Select(c => "&#" + ((int)c).ToString(System.Globalization.CultureInfo.InvariantCulture) + ";"));
+        await WithReports("<testsuite><testcase name=\"" + encoded + "/case\"/></testsuite>", async (source, output) =>
+        {
+            var (exit, stderr) = await RunCollect(source, output, root);
+            if (exit == 0)
+            {
+                XDocument.Load(Path.Combine(output, "xunit.junit.xml")).Root!.ToString().ShouldNotContain(root);
+            }
+            else
+            {
+                exit.ShouldBe(1, stderr);
+                Directory.GetFiles(output).ShouldBeEmpty();
+            }
+        });
+    }
+
+    [Fact]
+    public async Task Dogfood_Collect_MachineNameInTestcase_IsRefused()
+    {
+        var hostname = System.Net.Dns.GetHostName();
+        if (hostname.Length < 4 || hostname == "host") { return; }
+        await AssertResidualRefused(hostname, inText: false);
+    }
+
+    [Fact]
+    public async Task Dogfood_Collect_HomeDirectoryInText_IsRefused()
+    {
+        var home = Environment.GetEnvironmentVariable("HOME");
+        if (string.IsNullOrEmpty(home) || home == "/") { return; }
+        await AssertResidualRefused(home, inText: true);
+    }
+
+    private static async Task AssertResidualRefused(string value, bool inText)
+    {
+        const string Control = "<testsuite><testcase name=\"safe\"><system-out>safe</system-out></testcase></testsuite>";
+        await WithReports(Control, async (source, output) =>
+        {
+            var (exit, stderr) = await RunCollect(source, output);
+            exit.ShouldBe(0, stderr);
+            var doc = XDocument.Parse(Control);
+            if (inText) { doc.Descendants("system-out").Single().Value = value; }
+            else { doc.Descendants("testcase").Single().SetAttributeValue("name", value); }
+            await File.WriteAllTextAsync(Path.Combine(source, "xunit.junit.xml"), doc.ToString(), TestContext.Current.CancellationToken);
+            await WithTempDirectory(async refused =>
+            {
+                var result = await RunCollect(source, refused, value);
+                result.Exit.ShouldBe(1);
+                result.Stderr.ShouldContain("xunit");
+                result.Stderr.ShouldContain("refusing");
+                Directory.GetFiles(refused).ShouldBeEmpty();
+            });
+        });
+    }
+
+    private static Task WithReports(string xml, Func<string, string, Task> body) =>
+        WithTempDirectory(async source =>
+        {
+            foreach (var name in ProducerNames)
+            {
+                await File.WriteAllBytesAsync(Path.Combine(source, name + ".junit.xml"),
+                    System.Text.Encoding.UTF8.GetBytes(xml), TestContext.Current.CancellationToken);
+            }
+            await WithTempDirectory(output => body(source, output));
+        });
+
     private static async Task WithTempDirectory(Func<string, Task> body)
     {
         var path = Path.Combine(Path.GetTempPath(), "dogfood-collect-" + Guid.NewGuid().ToString("N"));
@@ -361,7 +462,7 @@ public sealed class DogfoodReportTests
         }
     }
 
-    private static async Task<(int Exit, string Stderr)> RunCollect(string source, string output)
+    private static async Task<(int Exit, string Stderr)> RunCollect(string source, string output, string? forbiddenValue = null)
     {
         var token = TestContext.Current.CancellationToken;
         using var process = Process.Start(new ProcessStartInfo("bash")
@@ -375,9 +476,19 @@ public sealed class DogfoodReportTests
         try
         {
             var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
-            _ = await process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var stdout = await process.StandardOutput.ReadToEndAsync(timeout.Token);
             await process.WaitForExitAsync(timeout.Token);
-            return (process.ExitCode, await stderr);
+            var error = await stderr;
+            if (forbiddenValue is not null)
+            {
+                stdout.ShouldNotContain(forbiddenValue);
+                error.ShouldNotContain(forbiddenValue);
+            }
+            if (process.ExitCode == 0)
+            {
+                foreach (var file in Directory.GetFiles(output, "*.xml")) { XDocument.Load(file); }
+            }
+            return (process.ExitCode, error);
         }
         catch (OperationCanceledException)
         {
