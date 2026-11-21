@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Application.Commands;
@@ -219,6 +220,9 @@ internal static class AuthoringManualCaseEndpoints
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        // Refuse an unresolved caller before the precondition is parsed.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
         if (AuthoringEndpointSupport.IfMatchVersion(context, out var version) is { } ifMatchError)
         {
             return Result.Failure<AuthoringChangeResponse>(ifMatchError);
@@ -257,6 +261,9 @@ internal static class AuthoringManualCaseEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        // Refuse an unresolved caller before the precondition is parsed.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
         if (AuthoringEndpointSupport.IfMatchVersion(context, out var version) is { } ifMatchError)
         {
@@ -302,6 +309,9 @@ internal static class AuthoringManualCaseEndpoints
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        // Refuse an unresolved caller before the precondition is parsed.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
         if (AuthoringEndpointSupport.IfMatchVersion(context, out var version) is { } ifMatchError)
         {
             return Result.Failure<SetManualCaseStateResponse>(ifMatchError);
@@ -340,6 +350,9 @@ internal static class AuthoringManualCaseEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        // Refuse an unresolved caller before the precondition is parsed.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
         if (AuthoringEndpointSupport.IfMatchVersion(context, out var version) is { } ifMatchError)
         {

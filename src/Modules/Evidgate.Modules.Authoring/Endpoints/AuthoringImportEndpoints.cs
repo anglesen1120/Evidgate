@@ -93,6 +93,9 @@ internal static class AuthoringImportEndpoints
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        // Refuse an unresolved caller before the query is validated.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
         if (ImportFormats.ReadFormat(context.Request.Query["format"].ToString()) is not { } format)
         {
             return Result.Failure<ImportResponse>(ImportFormats.Unsupported());
