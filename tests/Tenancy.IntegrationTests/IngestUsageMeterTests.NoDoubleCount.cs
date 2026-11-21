@@ -29,7 +29,7 @@ public sealed partial class IngestUsageMeterTests
             database,
             "insert into public.outbox (id, org_id, aggregate_type, aggregate_id, task_type, payload, idempotency_key) "
             + "select gen_random_uuid(), org_id, aggregate_type, aggregate_id, task_type, payload, "
-            + $"idempotency_key || ':{suffix}' from public.outbox "
+            + $"idempotency_key || '{suffix}' from public.outbox "
             + $"where org_id = '{org:D}' and task_type = '{MeteringTask}' and idempotency_key not like '%:redelivery%'");
 
     private async Task RunRedeliveryAsync(IngestTestWorld world, string suffix)
@@ -72,6 +72,31 @@ public sealed partial class IngestUsageMeterTests
         (await LedgerCountAsync(world.Database, world.Org)).ShouldBe(1);
         (await LedgerColumnAsync(world.Database, world.Org, batchId, "quantity::text")).ShouldBe("2");
         (await DuplicateAttemptsAsync(world.Database, world.Org, batchId)).ShouldBe(0, "a resend never reaches the ledger");
+
+        // The resend is recorded as a receipt of its own that accepted nothing; only usage emission needs accepted > 0.
+        (await world.CountAsync("event_batch", $"org_id = '{world.Org:D}' and accepted = 0")).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task NoDoubleCount_RedispatchOfTheSameOutboxRow_QueuesNothingAndBillsOnce()
+    {
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(owned.Name);
+        var batchId = await PostBatchAsync(world, events: 2);
+
+        await DispatchAndRunAsync(world);
+
+        // The dispatcher's task key derives from the outbox row, so dispatching the same row again is absorbed by the queue.
+        await _fixture.ExecuteAsync(
+            world.Database,
+            $"update public.outbox set dispatched_at = null where org_id = '{world.Org:D}' and task_type = '{MeteringTask}'");
+
+        (await Dispatcher(world).DispatchBatchAsync(Token)).Enqueued.ShouldBe(0);
+        (await Consumer(world).PollOnceAsync(Queue, Token)).ShouldBe(0);
+
+        (await world.CountAsync("task", $"org_id = '{world.Org:D}' and task_type = '{MeteringTask}'")).ShouldBe(1);
+        (await LedgerCountAsync(world.Database, world.Org)).ShouldBe(1);
+        (await DuplicateAttemptsAsync(world.Database, world.Org, batchId)).ShouldBe(0);
     }
 
     // ------------------------------------------------------------------ reprocess / redelivery
@@ -133,7 +158,8 @@ public sealed partial class IngestUsageMeterTests
                 services.AddScoped<UsageContracts>();
                 services.AddScoped<IUsageLedger>(provider => new WriteThenThrowLedger(
                     provider.GetRequiredService<UsageContracts>(), failures));
-            });
+            },
+            visibilitySeconds: 60);
 
         var first = await PostBatchAsync(world, events: 1);
         var second = await PostBatchAsync(world, events: 2, sequenceFrom: 3);
@@ -157,5 +183,11 @@ public sealed partial class IngestUsageMeterTests
             $"select sum(quantity)::text from public.usage_ledger_entry where org_id = '{world.Org:D}'"))
             .ShouldBe("3", "the accepted events are billed once in total");
         (await PendingTaskRowsAsync(world.Database)).ShouldBe(0);
+
+        // Only the settled batch's rerun is a duplicate; the failed attempt's tally rolled back with its row.
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select coalesce(sum(attempts), 0) from public.usage_duplicate_attempt where org_id = '{world.Org:D}'"))
+            .ShouldBe(1);
     }
 }

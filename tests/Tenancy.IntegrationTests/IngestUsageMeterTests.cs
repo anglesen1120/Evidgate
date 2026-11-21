@@ -45,11 +45,12 @@ public sealed partial class IngestUsageMeterTests
     /// </summary>
     private async Task<IngestTestWorld> StartAsync(
         string database,
-        Action<IServiceCollection>? services = null)
+        Action<IServiceCollection>? services = null,
+        int visibilitySeconds = 1)
     {
         var settings = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
-            ["EVIDGATE:Tasks:VisibilityTimeoutSeconds"] = "1",
+            ["EVIDGATE:Tasks:VisibilityTimeoutSeconds"] = visibilitySeconds.ToString(CultureInfo.InvariantCulture),
             ["EVIDGATE:Tasks:BackoffBaseSeconds"] = "1",
             ["EVIDGATE:Tasks:BackoffMaxSeconds"] = "1",
         };
