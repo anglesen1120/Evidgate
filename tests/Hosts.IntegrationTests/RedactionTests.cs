@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.Observability.Redaction;
+using Evidgate.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
@@ -19,7 +20,7 @@ public sealed class RedactionTests
     [Fact]
     public async Task ConnectionString_Never_Logged()
     {
-        var capture = new CaptureLoggerProvider();
+        var capture = new CapturingLoggerProvider();
         var connectionString =
             $"Host=db.internal;Port=5432;Username=evidgate_app;Password={Secret};Database=evidgate;Timeout=2";
 
@@ -32,12 +33,13 @@ public sealed class RedactionTests
             response.EnsureSuccessStatusCode();
         }
 
-        var logs = capture.Logs;
+        var logs = capture.Entries;
         Assert.NotEmpty(logs);
-        Assert.DoesNotContain(logs, log => log.Text.Contains(Secret, StringComparison.Ordinal));
+        var texts = logs.SelectMany(log => log.Texts).ToArray();
+        Assert.DoesNotContain(texts, text => text.Contains(Secret, StringComparison.Ordinal));
 
-        Assert.DoesNotContain(logs, log => log.Text.Contains("db.internal", StringComparison.Ordinal));
-        Assert.DoesNotContain(logs, log => log.Text.Contains("Password=", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(texts, text => text.Contains("db.internal", StringComparison.Ordinal));
+        Assert.DoesNotContain(texts, text => text.Contains("Password=", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -46,7 +48,7 @@ public sealed class RedactionTests
         // Npgsql accepts and re-renders a password containing ';' in double quotes;
         // an unquoted-only pattern would mask up to the first ';' and log the tail.
         const string tail = "Secret-P4ss";
-        var capture = new CaptureLoggerProvider();
+        var capture = new CapturingLoggerProvider();
         var connectionString =
             $"Host=db.internal;Port=5432;Username=evidgate_app;Password=\"Sup3r;{tail}\";Database=evidgate;Timeout=2";
 
@@ -58,12 +60,13 @@ public sealed class RedactionTests
             response.EnsureSuccessStatusCode();
         }
 
-        var logs = capture.Logs;
+        var logs = capture.Entries;
         Assert.NotEmpty(logs);
-        Assert.DoesNotContain(logs, log => log.Text.Contains(tail, StringComparison.Ordinal));
-        Assert.DoesNotContain(logs, log => log.Text.Contains("Sup3r;", StringComparison.Ordinal));
+        var texts = logs.SelectMany(log => log.Texts).ToArray();
+        Assert.DoesNotContain(texts, text => text.Contains(tail, StringComparison.Ordinal));
+        Assert.DoesNotContain(texts, text => text.Contains("Sup3r;", StringComparison.Ordinal));
 
-        Assert.DoesNotContain(logs, log => log.Text.Contains("db.internal", StringComparison.Ordinal));
+        Assert.DoesNotContain(texts, text => text.Contains("db.internal", StringComparison.Ordinal));
     }
 }
 
