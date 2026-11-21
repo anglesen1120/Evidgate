@@ -1216,3 +1216,21 @@ Replaced by S551 (#1124): ArtifactCompletionVerifier.cs (541 lines) was split in
 | Isolation test files over 500 lines (S512) | `tests/Isolation.Tests/Rls/RlsIsolationTests.cs` (946 lines) and `tests/Isolation.Tests/TenantRowFactory.cs` (943 lines) were already over the 500-line rule and grew by 16 and 20 lines in the support-grant slice; the slice's own files stay under 500. | receiver: next Isolation.Tests task (split by responsibility) |
 
 Replaced by S552 (#1126): RlsIsolationTests.cs (946 lines) was split into three files (408/336/221); the recount is the carried row 'Isolation test files over 500 lines (S512, S552 count)' (TenantRowFactory.cs half kept), plus the new row 'Plan 13.6.1 cites of RlsIsolationTests name the wrong lines (S552)'.
+
+## Moved from status-carried.md by S554 (2026-11-21)
+
+| Stale line cites after file splits (S535) | Row 'Route 22 from/to' cites AuthoringVersionQueries.cs:635 (now the TryParse call at AuthoringVersionInstant.cs:88); row 'Unpaired-surrogate detector has copies in Policy, Ingestion and Authoring (S492)' cites ProducerRegistry.cs:443-474 (code now in ProducerSlotArguments.cs, IsStorableText 32-58); other rows name ProducerSlotSql.ReadByProducer (S51 finalize lookups) by symbol only and stay valid. Not edited in place | receiver: backend lanes, re-point when next touched |
+
+Closed by S554 (#1131): the cites of 13.1.1 and open-items 05 to the S535 split files are re-pointed by symbol (13.1.1 line 559 included) except the migration; the remainder is the carried row 'Remaining stale cites after S554'.
+
+| Unused usings kept in XlsxReader.cs (S543) | The main file keeps five unused usings (System.Buffers, System.Globalization, System.Runtime.InteropServices, System.Text, System.Text.Json) so ReadArchive stays at lines 150-168 and the cite XlsxReader.cs:157 in plans/features/13-product-phases/13.1.1-feature-tree-and-manual-test-cases.md:559 stays true. Remove them when that cite is re-pointed by symbol. | receiver: the lane that next edits 13.1.1 |
+
+Closed by S554 (#1131): the five unused usings are dropped from XlsxReader.cs and the 13.1.1 line 559 cite names `ReadArchive`.
+
+| Unused usings kept in ImportPlanner.cs (S544) | ImportPlanner.cs keeps two unused using directives (lines 2 and 4) because plans/features/13-product-phases/13.1.1-feature-tree-and-manual-test-cases.md:559 cites ImportPlanner.cs:293 and a drop would move that line. Remove them with a re-point of the cite by symbol (NodeLimits.MaximumSiblingsPerGroup in Nodes) in one change. | receiver: the next lane that edits 13.1.1 or ImportPlanner.cs |
+
+Closed by S554 (#1131): the two unused usings are dropped from ImportPlanner.cs and the cite names `NodeLimits.MaximumSiblingsPerGroup` in `Nodes`.
+
+| Stale AuthoringContent line cites (S550) | Plan 13.1.1 lines 430, 524, 578 and open-items 05 line 24 cite `AuthoringContent.cs:376-427` (NormaliseLeaves, now AuthoringContent.Steps.cs); migrations/0039_authoring_tree.sql:537 cites `:78`. Both stale; the migration is immutable. `:76` and `:196-200` (13.1.1 lines 525, 538, 579; open-items 05 line 25) are still true. | receiver: plan owner (13.1.1) |
+
+Closed by S554 (#1131): the `AuthoringContent.cs:376-427` cites on 13.1.1 lines 430, 524, 578 and open-items 05 line 24 name `AuthoringContent.Steps.cs` (`NormaliseLeaves`); the migration cite stays as the carried row 'Remaining stale cites after S554'.
