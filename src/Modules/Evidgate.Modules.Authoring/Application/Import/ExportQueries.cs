@@ -34,8 +34,13 @@ namespace Evidgate.Modules.Authoring.Application.Import;
 /// <param name="Format">The normalized format token: <c>csv</c>, <c>json</c> or <c>xlsx</c>.</param>
 /// <param name="NodeId">The subtree root, or null for the whole project.</param>
 /// <param name="Include">The kinds of row to emit (default all three).</param>
-internal sealed record ExportAuthoringQuery(Guid ProjectId, string Format, Guid? NodeId, ImportInclude Include)
-    : IQuery<Result<IResult>>;
+/// <param name="RequestError">The first edge validation error, answered after authorization.</param>
+internal sealed record ExportAuthoringQuery(
+    Guid ProjectId,
+    string Format,
+    Guid? NodeId,
+    ImportInclude Include,
+    Error? RequestError = null) : IQuery<Result<IResult>>;
 
 /// <summary>Handler of <see cref="ExportAuthoringQuery"/>: read the rows, then serialise them in the requested format.</summary>
 /// <param name="scopes">The open (read-only) tenant scope.</param>
@@ -59,6 +64,11 @@ internal sealed class ExportAuthoringQueryHandler(
         ExportAuthoringQuery query,
         CancellationToken cancellationToken)
     {
+        if (query.RequestError is { } requestError)
+        {
+            return Result.Failure<IResult>(requestError);
+        }
+
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(ExportAuthoringQuery));
 
         ArgumentNullException.ThrowIfNull(query);
