@@ -17,8 +17,8 @@
 # attribute becomes "host" and this run's checkout path becomes /repo in every attribute value and
 # text node. The residual check reads element names, attribute names and namespace URIs as well as
 # values, text, tail and the document's character data joined in order (one pass, so a name split
-# by child elements is still found), and compares the match form: NFKD, casefold, default-ignorable
-# (Cf) and combining (Mn, Me) characters removed before any composition, then NFKC,
+# by child elements is still found), and compares the match form: NFKD, casefold, then default-ignorable
+# (Cf) and combining (Mn, Me) characters removed, never recomposed,
 # raw and after one strict percent-decoding; a malformed escape refuses rather than decoding
 # leniently. A report that still names the machine, its host name (socket.gethostname() or
 # $HOSTNAME) or the home directory is refused, never uploaded. Each upload file is written to a
@@ -157,15 +157,15 @@ def refuse(producer, reason):
 
 
 def without_ignorables(text):
-    # Marks are dropped from the decomposed form, before any composition: NFKC would otherwise fold
-    # a base letter and a following mark into one precomposed letter that no mark filter can see.
-    # The removed categories render as nothing or as a mark on the previous character, so dropping
-    # them cannot make a name stop matching. No ASCII character is Cf, Mn or Me.
+    # Marks are dropped from the decomposed form and the result stays decomposed: composing again
+    # would fold a base letter and a following mark (or a jamo pair split across elements) into one
+    # character depending on what surrounds the text. The removed categories render as nothing or as
+    # a mark on the previous character, so dropping them cannot make a name stop matching. No ASCII
+    # character is Cf, Mn or Me.
     text = unicodedata.normalize("NFKD", text)
     if text.isascii():
         return text
-    text = "".join(char for char in text if unicodedata.category(char) not in IGNORABLE)
-    return unicodedata.normalize("NFKC", text)
+    return "".join(char for char in text if unicodedata.category(char) not in IGNORABLE)
 
 
 def match_form(text):
@@ -286,10 +286,13 @@ def publish(out, pending, payload, created):
     for name, temp in staged:
         os.replace(temp, out / name)
     os.replace(manifest_temp, out / "manifest.json")
-    # Durability of the renames; a platform without directory descriptors cannot reach this line.
+    # Durability of the renames only: a filesystem that cannot fsync a directory must not turn a
+    # published set into a reported failure.
     directory = os.open(out, os.O_RDONLY | os.O_DIRECTORY)
     try:
         os.fsync(directory)
+    except OSError:
+        pass
     finally:
         os.close(directory)
 
@@ -325,7 +328,7 @@ residual.extend(machine for machine in machines if len(machine) >= 4 and machine
 # characters or all digits (an IPv4 prefix) is too common to name a machine, so it is skipped.
 for machine in machines:
     label = machine.split(".")[0] if "." in machine else ""
-    if len(label) >= 3 and not label.isdigit() and label.casefold() != "host":
+    if len(match_form(label)) >= 3 and not label.isdigit() and label.casefold() not in ("host", "localhost"):
         residual.append(label)
 home = os.environ.get("HOME", "")
 if home not in ("", "/"):

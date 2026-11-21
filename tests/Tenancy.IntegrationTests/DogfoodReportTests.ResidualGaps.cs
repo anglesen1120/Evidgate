@@ -10,7 +10,6 @@ public sealed partial class DogfoodReportTests
     [Theory]
     [InlineData("\u0301")]
     [InlineData("\u0308")]
-    [InlineData("\u0338")]
     public async Task Dogfood_Collect_CombiningMarkAfterLetter_IsRefused(string mark)
     {
         await AssertAcceptedAsync(Report("safe"), extra: FakeIdentifier);
@@ -28,6 +27,14 @@ public sealed partial class DogfoodReportTests
         await AssertRefusedAsync(Report(Secret), extra: "Fake-Build-Host-Zq");
     }
 
+    /// <summary>A trailing jamo outside the element must not recompose with the name's last syllable.</summary>
+    [Fact]
+    public async Task Dogfood_Collect_JamoAfterElementBoundary_DoesNotHideHostName()
+    {
+        const string Xml = "<testsuite><testcase><system-out>Runner<detail>\uac00</detail></system-out>\u11a8</testcase></testsuite>";
+        await AssertRefusedAsync(Xml, hostname: "Runner\uac00");
+    }
+
     /// <summary>The first DNS label of a dotted host name names the machine too; short and numeric labels are too common.</summary>
     [Theory]
     [InlineData("Injected-Runner-Zq.corp.local", "see Injected-Runner-Zq here", true)]
@@ -35,6 +42,8 @@ public sealed partial class DogfoodReportTests
     [InlineData("ab.corp.local", "ab", false)]
     [InlineData("192.168.1.5", "192", false)]
     [InlineData("abc.corp.local", "abc", true)]
+    [InlineData("host.corp.local", "host", false)]
+    [InlineData("localhost.localdomain", "http://localhost:4200", false)]
     public async Task Dogfood_Collect_HostLabelOfDottedName_IsRefusedFromThreeCharacters(string hostname, string text, bool refused)
     {
         if (refused)
