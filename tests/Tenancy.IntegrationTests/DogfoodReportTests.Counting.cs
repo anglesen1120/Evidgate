@@ -50,6 +50,7 @@ public sealed partial class DogfoodReportTests
         CountElements(Report, "testcase").ShouldBe(2);
         CountElements(Report, "failure", "testcase").ShouldBe(3);
         CountElements(Report, "error").ShouldBe(0);
+        CountElements("<testcase><error/></testcase>", "error").ShouldBe(1);
     }
 
     /// <summary>The counter counts the failing case of an in-memory report and refuses a DTD instead of expanding it.</summary>
@@ -58,6 +59,7 @@ public sealed partial class DogfoodReportTests
     {
         CountElements(FailingReport, "failure").ShouldBe(1);
         CountElements(FailingReport, "testcase").ShouldBe(2);
-        Should.Throw<XmlException>(() => CountElements("<!DOCTYPE r [<!ENTITY e \"x\">]><r>&e;</r>", "r"));
+        CountElements("<r/>", "r").ShouldBe(1);
+        Should.Throw<XmlException>(() => CountElements("<!DOCTYPE r><r/>", "r"));
     }
 }
