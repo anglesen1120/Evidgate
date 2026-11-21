@@ -1547,3 +1547,11 @@ Closed by PR #1258 (merge 51d5ff24): the notice has its own Warning rule per pro
 | collect.sh residual check scope (S609) | Left open by #1227: the residual check in `scripts/dogfood/collect.sh` (`refuse_residual`) inspects attribute values, text and tail only, not element names, attribute names or namespace URIs; matching has no Unicode normalisation or percent-decoding; the final writes to `--out` are sequential, not atomic, and a pre-existing `--out` is not cleaned; the real-host-name retention test in `DogfoodReportTests.Residual.cs` is conditional on a host name of 4+ characters. | next dogfood lane |
 
 Closed by PR #1262 (merge 2a39015b): the residual check scans element tags, namespace URIs and attribute names, matches after NFKC and one strict percent-decode, `--out` is written by temp file and rename with stale owned files removed, and the host-name retention test injects `HOSTNAME`; remaining gaps are the S625 rows in status-carried.md.
+
+## Moved from status-carried.md by S627 (2026-11-21)
+
+| Item | Blocker | Owner |
+|---|---|---|
+| Log-capture helpers left unmigrated (S621) | Hand-rolled capture providers still outside the shared one after #1255: `ConflictLogSink` (`tests/Tenancy.IntegrationTests/UsageLedgerPayloadHashTests.Log.cs`; moving it also changes the world record in `UsageLedgerPayloadHashTests.cs`), `CaptureLogs` in `SecretScanConsumerTests.cs`, `SinkProvider` in `RequestLogFloorTests.cs`, and the `ILoggerProvider` in `QaS271WorkerGate.cs`. Migrate each with equal-or-stronger assertions. | receiver: Tech Lead (test infrastructure); recorded owner: Tech Lead |
+
+Closed by PR #1261 (merge fe8b597a): the four providers now use the shared capturing provider; the shared helper gained an abstract base so a test can derive its own provider identity, and mutants of the logged level, message and floor each turned the migrated tests red.
