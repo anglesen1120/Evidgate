@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Net;
-using System.Net.Http.Headers;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Shouldly;
