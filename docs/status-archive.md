@@ -1576,3 +1576,18 @@ Closed by PR #1265 (merge 49353136): the cite names `ProducerSlotQaTests.WaitFor
 | collect.sh host label and dir fsync (S625) | Only the full host name is matched: with HOSTNAME `foo.corp.local` a report that says `foo` is accepted (the FQDN short label is unmatched); names under 4 characters are skipped. The upload directory is not fsynced after the renames, so a crash can lose a rename (durability only). | Coordinator follow-up lane (next): decide whether to match the short label (risk: a common word such as `test` refuses every report) and whether to fsync the directory. |
 
 Closed by PR #1266 (merge 8bcd99ef): the residual check strips marks on the decomposed form and never recomposes, matches the first DNS label of a dotted host name, fails closed and removes its own temps when all temp names exist, scans the document's character data in one linear pass and fsyncs the upload directory; one mutant per gap turned the tests red. Remaining findings are carried as the four S628 rows.
+
+## Moved from status-carried.md by S630 (2026-11-22)
+
+| Contract.Tests cannot run on the Mac and its YAML reader rejects Prettier output (S521) | `tests/Contract.Tests` runs only on the LAN host, so S521 found two reds only in LAN round 1 and one in round 2. `YamlSubset` rejects apostrophes in plain scalars (round 1) and multi-line flow lists (round 2), both of which Prettier writes, so a contract edit can pass `prettier --check` and still break the reader. S521 worked around it (reworded summary, block-sequence `required`). | receiver: contract tooling lane (make the reader accept both forms, or make Prettier produce what it accepts) |
+
+Narrowed in place by PR #1269 (merge be9897ea): the reader accepts apostrophes in plain scalars and multi-line flow lists, with a mutant per form turning the tests red; the Mac-run half stays carried and two S630 rows record the rest.
+
+
+## Moved from status-carried.md by S631 (2026-11-22)
+
+| collect.sh U+0345 casefold bypass (S628) | `match_form` casefolds before it strips, and U+0345 (Mn) casefolds to U+03B9, so `Fake-Bu` + U+0345 + `ild-Host-Zq` is not matched (found by the S628 delta; present before #1266). | Strip, casefold, strip again in `scripts/dogfood/collect.sh` and add `\u0345` to `Dogfood_Collect_CombiningMarkAfterLetter_IsRefused`. Receiver: next dogfood lane. |
+| collect.sh unstripped invisibles (S628) | The strip set is Cf, Mn, Me only: Hangul fillers U+115F, U+1160, U+3164, U+FFA0 (Lo) and default-ignorable Cn code points (U+2065, U+FFF0-FFF8, tag-block ranges) are not removed, so `build` + U+3164 + `-box` evades a match (present before #1266; the header comment says "default-ignorable"). | Add the fillers and Cn default-ignorables to the strip, or narrow the comment and pin the choice with a test. Receiver: next dogfood lane. |
+| collect.sh residual nits (S628) | The directory `os.open` after the renames is outside its `try` (an unreadable `--out` reports failure after publishing); the full host-name length test and the `host` label skip use raw text, not the match form. Mutant D (per-node `itertext` re-added) is caught only by the 10 s wall bound test `DeepNonAsciiReport_FinishesWithinTenSeconds`; a count assertion would be the stable form. | Move the open into the `try`, measure lengths on the match form, and replace the timing bound with a scanned-character count. Receiver: next dogfood lane. |
+
+Closed by PR #1273 (merge f205b394): the match form strips, casefolds and strips again, the strip set adds the Default_Ignorable_Code_Point ranges, the host checks use the match form and the directory open sits inside the try; mutants for casefold order, U+115F and the Cn ranges turn the tests red. New residual items are carried as the S631 rows.

@@ -351,7 +351,8 @@ public sealed partial class DogfoodReportTests
     }
 
     private static async Task<(int Exit, string Stderr)> RunScriptAsync(
-        string source, string output, string? home = null, string? extra = null, string? script = null, string? hostname = null)
+        string source, string output, string? home = null, string? extra = null, string? script = null, string? hostname = null,
+        bool scanStats = false)
     {
         var token = TestContext.Current.CancellationToken;
         var info = new ProcessStartInfo("bash")
@@ -364,6 +365,10 @@ public sealed partial class DogfoodReportTests
         info.Environment["HOME"] = home ?? "/nonexistent-home-zq";
         info.Environment["HOSTNAME"] = hostname ?? FakeHostname;
         info.Environment["EVIDGATE_COLLECT_EXTRA_RESIDUAL"] = extra ?? "";
+        if (scanStats)
+        {
+            info.Environment["EVIDGATE_COLLECT_SCAN_STATS"] = "1";
+        }
         using var process = Process.Start(info)!;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
         timeout.CancelAfter(TimeSpan.FromSeconds(60));
