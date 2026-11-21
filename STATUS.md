@@ -9,7 +9,7 @@ Updated 2026-11-21. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 - Open PRs: dependabot PRs plus none from S385 (merged); S390 merged as #791 (b286d2f3); S387 merged as #786 (36a1c832); S385 merged as #781 (396004a8); S384 as #780 (df2998e5); S380 merged as #778 (392048eb); S383 as #776 (c11b8731); S379 as #774 (f3e7f9a4); S378 as #772 (2de254d4); S377 as #768 (4335f4e0); S375 as #769 (c70c3d94); S376 as #766 (6f0fda6a); S373 as #763 (57591934).
 - Wave layout (owner 2026-10-26): 1 backend + 2 web-only panels; a lane whose diff `python3 scripts/gate_scope.py` classifies `docs` or `no-dotnet` runs phase 1 (that tier's stages) + `npm run e2e -w apps/web` when `apps/web` changed, and never takes the Docker gate lock; a `full` tier needs phase 2 and the lock (`.omp/coordinator/PROJECT.md §Gate`).
 - Lanes in flight (2026-11-12): S389 (gate-LAN lane; the owner pauses the wave after it, none follows); merged: S390 REVIEW-INFRA-LAN #791 (b286d2f3), S388 PROJECT-FK #787 (2e5a144b), S387 RYUK-RETRY #786 (36a1c832), S386 GATE-STAGE-TIME #783 (f5d058ff), S385 PARSER-NO-EGRESS #781 (396004a8), S384 ORG-REVOKE #780 (df2998e5), S380 #778 (392048eb), S383 #776 (c11b8731), S379 #774 (f3e7f9a4), S378 #772, S377 #768, S375 #769, S376 #766, S373 #763, S374 #761, S371 #759; earlier lanes are merged and closed out (every STATUS.md line is <= 768 chars, history in `docs/status-archive.md`).
-- Fully landed on develop (recount S599 through #1206, `7d196b99`): 244/660 tasks (≈37.0 %); 243.5/706.75 raw person-days (≈34.5 %); remaining 416 tasks / 463.25 d. Via merged PRs: 217 tasks / 218.5 d; the other 27 tasks / 25.0 d are direct commits on develop. 50 parents are partial and carry no credit (§2); the pre-recount figure of 37 (STATUS.md and AGENTS.md on 7d196b99) was right: 36 at S369 plus 03.4.1-T1, which has no table row. 03.6.1-T1 (S597) is not landed. (archive: S599 item 1)
+- Fully landed on `wave/2026-11-20b` (recount S599 through #1206, `7d196b99`; not yet merged to develop, which is at #1050): 244/660 tasks (≈37.0 %); 243.5/706.75 raw person-days (≈34.5 %); remaining 416 tasks / 463.25 d. Via merged PRs: 217 tasks / 218.5 d; the other 27 tasks / 25.0 d are direct commits on develop. 50 parents are partial and carry no credit (§2); the pre-recount figure of 37 (STATUS.md and AGENTS.md on 7d196b99) was right: 36 at S369 plus 03.4.1-T1, which has no table row. 03.6.1-T1 (S597) is not landed. (archive: S599 item 1)
 - Landed by phase (done tasks / raw d): G1 154 / 161.25; G2 73 / 66.0; G3 5 / 4.5; G4 12 / 11.75. (archive: S599 item 2)
 - Plan totals: 660 tasks / 706.75 raw / 848.1 buffered person-days (`plan_graph.py` on `41edd414`: errors 0, 205 stories; 04.2.2-T3 manifest generator added in S186, M; the S93 canonical figures were 655 / 702.75 / 843.3). `check_features.py` exits 0 since S370 (#755: 205 of 205 feature files, errors 0, warnings 0).
 - CI: `ci.yml` runs `verify.sh` stages; recent delivery records report CI refused for billing (owner treats as pass), not CI green.
@@ -25,7 +25,7 @@ Counted by expanding task ranges in merged PR bodies, close-out rows and plan No
 
 | Delivery scope | Tasks | Raw person-days |
 |---|---|---|
-| Fully landed on develop | 244 | 243.5 |
+| Fully landed on the wave branch (S599) | 244 | 243.5 |
 | Via merged PRs | 217 | 218.5 |
 | Direct commits on develop, no PR | 27 | 25.0 |
 | Remaining | 416 | 463.25 |
