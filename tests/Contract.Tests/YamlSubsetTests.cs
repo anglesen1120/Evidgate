@@ -230,8 +230,8 @@ public sealed class YamlSubsetTests
     }
 
     /// <summary>
-    /// YAML reads a list left open as one multi-line flow sequence up to the next bracket (<c>b: y</c> is then a
-    /// single-pair entry, kept as text), so the later keys are not separate mapping members.
+    /// A list left open is joined up to the next bracket, as YAML's multi-line flow rule requires. The reader keeps
+    /// the later lines as plain text entries (it does not model implicit pairs), so they are never separate mapping members.
     /// </summary>
     [Fact]
     public void Parse_UnterminatedListFollowedByLaterBracket_JoinsUpToThatBracket()
@@ -252,6 +252,8 @@ public sealed class YamlSubsetTests
 
         node.ShouldNotBeNull();
         node["a"]!.AsArray().Count.ShouldBe(5000);
+        node["a"]![0]!.GetValue<string>().ShouldBe("it's 0");
+        node["a"]![4999]!.GetValue<string>().ShouldBe("it's 4999");
         node["after"]!.GetValue<long>().ShouldBe(1);
     }
 }
