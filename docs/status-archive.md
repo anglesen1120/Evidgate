@@ -1273,3 +1273,9 @@ Superseded by S564 (#1148, merged as c942cd17): `RunSchemaTests.cs` was split in
 Superseded by S560 (#1150, merged as 70c17040): `AuthoringGuardFirstBoundaryTests` now enumerates the 23 write routes from the `MapPost`/`MapPut`/`MapPatch`/`MapDelete` calls, resolves each method group, and fails closed on a wrapper name, method-group alias, lambda, lambda-parameter alias, unresolved or overloaded delegate, other `Map*` call and conditional text; fixtures cover each shape. Closed in full (the wrapper and alias fixtures named in the receiver are in `AuthoringGuardFirstBoundaryTests.Fixtures.cs`).
 
 Superseded by S560 (#1150, merged as 70c17040): `DiscardAsync`, `UnlinkAsync` and `RestoreVersionAsync` now call `RawBodyGuard.RequireAuthenticatedTenant` first, as do the other seven delegates that relied on a body reader, so a validator added to any write command can no longer answer 422 before the 401. Closed in full; what stays open (guard removal caught only by the pin, pin scope, typed bodies and filters, sibling scanners) is in the four S560 rows of `docs/status-carried.md`.
+
+## Moved from status-carried.md by S567 (2026-11-21)
+
+| Oversized Tenancy test files (S564) | After S564 (#1148, RunSchemaTests split into 243 / 232 / 320 lines) and S563 (ReconcileComparerUnitTests split), 50 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule: `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S567 (#1154, merged as f0766633): `EvidenceUploadUrlTests.cs` was split into three files of at most 270 lines; the recount on f0766633 (47 files over 500, S565 and S566 included) is the row 'Oversized Tenancy test files (S567)' in `docs/status-carried.md`.
