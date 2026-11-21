@@ -39,14 +39,14 @@ internal static class AuthoringManualCaseEndpoints
     {
         ArgumentNullException.ThrowIfNull(authoring);
 
-        MapManualCaseListRoutes(authoring);
-        MapManualCaseDetailRoute(authoring);
-        MapManualCaseMutationRoutes(authoring);
-        MapManualCaseLinkRoutes(authoring);
+        MapManualCaseListEndpoints(authoring);
+        MapManualCaseDetailEndpoints(authoring);
+        MapManualCaseMutationEndpoints(authoring);
+        MapManualCaseLinkEndpoints(authoring);
     }
 
     /// <summary>Routes 12 and 13: the page of cases and the create that allocates a code.</summary>
-    private static void MapManualCaseListRoutes(RouteGroupBuilder authoring)
+    private static void MapManualCaseListEndpoints(RouteGroupBuilder authoring)
     {
         authoring.MapGet("/manual-cases", ListAsync)
             .Produces<ManualCaseListResponse>(StatusCodes.Status200OK)
@@ -67,7 +67,7 @@ internal static class AuthoringManualCaseEndpoints
     }
 
     /// <summary>Route 14: one case with its steps.</summary>
-    private static void MapManualCaseDetailRoute(RouteGroupBuilder authoring)
+    private static void MapManualCaseDetailEndpoints(RouteGroupBuilder authoring)
     {
         authoring.MapGet("/manual-cases/{m}", GetAsync)
             .Produces<ManualCaseDetailDto>(StatusCodes.Status200OK)
@@ -76,7 +76,7 @@ internal static class AuthoringManualCaseEndpoints
     }
 
     /// <summary>Routes 15-17 and 19: the changes to one case's content, state and parent item.</summary>
-    private static void MapManualCaseMutationRoutes(RouteGroupBuilder authoring)
+    private static void MapManualCaseMutationEndpoints(RouteGroupBuilder authoring)
     {
         authoring.MapPatch("/manual-cases/{m}", PatchAsync)
             .Accepts<UpdateManualCaseRequest>("application/json")
@@ -112,7 +112,7 @@ internal static class AuthoringManualCaseEndpoints
     }
 
     /// <summary>Routes 20 and 21: the links to live catalog test cases.</summary>
-    private static void MapManualCaseLinkRoutes(RouteGroupBuilder authoring)
+    private static void MapManualCaseLinkEndpoints(RouteGroupBuilder authoring)
     {
         authoring.MapPost("/manual-cases/{m}/links", LinkAsync)
             .Accepts<LinkManualCaseRequest>("application/json")
