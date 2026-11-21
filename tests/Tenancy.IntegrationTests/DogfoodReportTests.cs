@@ -13,14 +13,14 @@ namespace Tenancy.IntegrationTests;
 /// Evidgate's own CI reports (xUnit v3, Vitest, Playwright; committed under fixtures/reports/own-ci exactly as the
 /// runners emitted them) go through the parser profile customers' XML takes, <see cref="IParsing.ParseXmlReport"/>,
 /// and through the real JUnit mapper, which must report no discrepancy. The streamed document must also use only the
-/// elements of the committed JUnit sample corpus.
+/// elements of the committed JUnit sample corpus and the system-out a failing Playwright case emits.
 /// </summary>
 public sealed class DogfoodReportTests
 {
     private const long MaxBytes = 8 * 1024 * 1024;
 
-    /// <summary>The elements the committed fixtures/reports/junit/sample document uses.</summary>
-    private static readonly HashSet<string> SampleElements = ["testsuites", "testsuite", "testcase", "failure", "skipped"];
+    /// <summary>The elements the committed fixtures/reports/junit/sample document uses, plus the system-out a failing Playwright case emits for its attachments.</summary>
+    private static readonly HashSet<string> SampleElements = ["testsuites", "testsuite", "testcase", "failure", "skipped", "system-out"];
 
     private static readonly string TestData = Path.Combine(RlsExceptionFile.RepositoryRoot, "fixtures", "reports", "own-ci");
 
@@ -77,7 +77,7 @@ public sealed class DogfoodReportTests
     [Fact]
     public void Dogfood_VitestReport_Parses() => AssertMapsCleanly("vitest");
 
-    /// <summary>Evidgate's own Playwright report (two suites) maps through the real JUnit mapper with no discrepancy.</summary>
+    /// <summary>Evidgate's own Playwright report (two suites) maps through the real JUnit mapper with no discrepancy; its failing cases map as failed, not hidden.</summary>
     [Fact]
     public void Dogfood_PlaywrightReport_Parses() => AssertMapsCleanly("playwright");
 
@@ -92,8 +92,10 @@ public sealed class DogfoodReportTests
         result.Cases.Count.ShouldBe(expected);
         result.Cases.Count.ShouldBeGreaterThan(0);
         result.Declared.Tests.ShouldBe(expected);
-        result.Declared.Failures.ShouldBe(0);
-        result.Cases.All(c => c.Normalized == "passed").ShouldBeTrue();
+        var failing = System.Text.RegularExpressions.Regex.Count(xml, "<failure[ >]");
+        result.Declared.Failures.ShouldBe(failing);
+        result.Cases.Count(c => c.Normalized == "failed").ShouldBe(failing);
+        result.Cases.Count(c => c.Normalized == "passed").ShouldBe(expected - failing);
     }
 
     /// <summary>A truncated report ends as the profile's documented refusal, never an exception.</summary>
@@ -128,18 +130,25 @@ public sealed class DogfoodReportTests
         });
     }
 
-    /// <summary>The runner's machine name never reaches the upload set; the manifest hash describes the scrubbed bytes.</summary>
+    /// <summary>The runner's machine name and checkout path never reach the upload set; nothing else is rewritten.</summary>
     [Fact]
-    public async Task Dogfood_Collect_ReplacesHostnameAttributes()
+    public async Task Dogfood_Collect_ScrubsHostnameAndCheckoutPath()
     {
+        var root = RlsExceptionFile.RepositoryRoot;
         await WithTempDirectory(async source =>
         {
+            var expected = new Dictionary<string, string>();
             foreach (var name in ProducerNames)
             {
                 var xml = await File.ReadAllTextAsync(Path.Combine(TestData, name + ".junit.xml"), TestContext.Current.CancellationToken);
-                xml = System.Text.RegularExpressions.Regex.Replace(xml, "hostname=\"[^\"]*\"", "hostname=\"lan-runner-07\"");
-                xml = xml.Replace("<testsuite ", "<testsuite hostname='lan-runner-08' ", StringComparison.Ordinal);
-                await File.WriteAllTextAsync(Path.Combine(source, name + ".junit.xml"), xml, TestContext.Current.CancellationToken);
+                var hostile = System.Text.RegularExpressions.Regex.Replace(xml, "hostname=\"[^\"]*\"", "hostname=\"lan-runner-07\"");
+                hostile = System.Text.RegularExpressions.Regex.Replace(
+                    hostile,
+                    "(<testsuite )([^>]*>)",
+                    "$1note=\"" + root + "/apps/web/e2e/a.spec.ts\" $2<system-out>at " + root + "/apps/web/e2e/a.spec.ts:45:93</system-out>",
+                    System.Text.RegularExpressions.RegexOptions.None);
+                await File.WriteAllTextAsync(Path.Combine(source, name + ".junit.xml"), hostile, TestContext.Current.CancellationToken);
+                expected[name] = System.Text.RegularExpressions.Regex.Replace(xml, "hostname=\"[^\"]*\"", "hostname=\"host\"");
             }
 
             await WithTempDirectory(async output =>
@@ -149,10 +158,14 @@ public sealed class DogfoodReportTests
                 exit.ShouldBe(0, stderr);
                 foreach (var name in ProducerNames)
                 {
-                    var bytes = await File.ReadAllBytesAsync(Path.Combine(output, name + ".junit.xml"), TestContext.Current.CancellationToken);
-                    var text = System.Text.Encoding.UTF8.GetString(bytes);
+                    var text = await File.ReadAllTextAsync(Path.Combine(output, name + ".junit.xml"), TestContext.Current.CancellationToken);
                     text.ShouldNotContain("lan-runner");
-                    System.Text.RegularExpressions.Regex.IsMatch(text, "hostname=\"host\"").ShouldBeTrue();
+                    text.ShouldNotContain(root);
+                    text.ShouldContain("note=\"/repo/apps/web/e2e/a.spec.ts\"");
+                    text.ShouldContain("at /repo/apps/web/e2e/a.spec.ts:45:93");
+                    var stripped = text.Replace("note=\"/repo/apps/web/e2e/a.spec.ts\" ", string.Empty, StringComparison.Ordinal)
+                        .Replace("<system-out>at /repo/apps/web/e2e/a.spec.ts:45:93</system-out>", string.Empty, StringComparison.Ordinal);
+                    stripped.ShouldBe(expected[name]);
                 }
 
                 using var manifest = JsonDocument.Parse(

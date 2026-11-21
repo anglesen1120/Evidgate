@@ -9,9 +9,12 @@
 #   --src DIR   directory holding xunit.junit.xml, vitest.junit.xml, playwright.junit.xml
 #               (default artifacts/dogfood/raw; the committed sample is fixtures/reports/own-ci)
 #   --out DIR   upload set to write (default artifacts/dogfood/upload)
-#   --produce   run the three small producers into --src first (needs a built workspace and the
-#               Playwright fixtures bundle prerequisites)
+#   --produce   run the three small producers into --src first (needs `npm ci` and the built
+#               workspace packages, `npx tsc -b tsconfig.json`: the Playwright fixtures build imports
+#               @evidgate/sdk from its dist output and a system Chrome)
 #
+# Scrub: every testsuite hostname attribute becomes "host" and the checkout path of this run becomes
+# /repo, so no machine or user name reaches the upload set; nothing else is rewritten.
 # Exit 1: a producer's report is missing, is larger than the 8 MiB report cap, is not well-formed XML
 # with a testsuite and a testcase, or declares a DOCTYPE in any encoding (a runner never emits one).
 # A producer that exits non-zero because tests failed still has its report collected; the script then
@@ -59,7 +62,7 @@ if [[ "$PRODUCE" == "1" ]]; then
     || { s=$?; [[ "$PRODUCER_STATUS" != 0 ]] || PRODUCER_STATUS=$s; }
 fi
 
-python3 - "$SRC" "$OUT" <<'PY'
+python3 - "$SRC" "$OUT" "$ROOT" <<'PY'
 import hashlib, json, re, sys
 import xml.etree.ElementTree as ET
 from xml.parsers import expat
@@ -75,7 +78,9 @@ def refuse_doctype(*_):
     sys.exit("collect.sh: report declares a DOCTYPE")
 
 
-src, out = Path(sys.argv[1]), Path(sys.argv[2])
+src, out, root = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
+# The runner's checkout path (an absolute path that names a user) becomes the fixed /repo.
+ROOT_PREFIX = re.compile(re.escape(root.encode()) + rb"(?![\w.-])")
 producers = ["xunit", "vitest", "playwright"]
 entries = []
 for producer in producers:
@@ -96,7 +101,7 @@ for producer in producers:
         sys.exit(f"collect.sh: {producer}: not well-formed XML ({error})")
     except ET.ParseError as error:
         sys.exit(f"collect.sh: {producer}: not well-formed XML ({error})")
-    data = HOSTNAME.sub(rb'\1"host"', data)
+    data = ROOT_PREFIX.sub(b"/repo", HOSTNAME.sub(rb'\1"host"', data))
     suites = [root] if root.tag == "testsuite" else root.findall("testsuite")
     cases = root.findall(".//testcase")
     if root.tag not in ("testsuites", "testsuite") or not suites or not cases:
