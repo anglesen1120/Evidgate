@@ -66,7 +66,8 @@ public sealed partial class GitHubInstallationTests
         Guid user,
         FakeGitHubOAuth oauth,
         FakeGitHubAppInstallations app,
-        bool productionEvaluator = false) =>
+        bool productionEvaluator = false,
+        Action<IServiceCollection>? configure = null) =>
         IdentityApiFactory.Start(
             Fixture,
             new IdentityHostSetup(
@@ -84,6 +85,7 @@ public sealed partial class GitHubInstallationTests
                     }));
                     services.AddSingleton<IGitHubOAuthClient>(oauth);
                     services.AddSingleton<IGitHubAppInstallations>(app);
+                    configure?.Invoke(services);
                 }));
 
     private static Task<HttpResponseMessage> SendAsync(
