@@ -246,6 +246,23 @@ public sealed partial class DraftTests
     }
 
     [Fact]
+    public async Task Create_ProvenanceNumbersWhoseRenderedSizeAddsUp_AreRefusedBeforeAnyJsonbCast()
+    {
+        await using var world = await StartAsync();
+        var body = Body();
+        body["provenance"] = JsonNode.Parse("{\"n\":[" + string.Join(",", Enumerable.Repeat("1e-300", 14)) + "]}")!;
+        var before = world.Api.Statements.Snapshot().Count;
+
+        ShouldNameField(await CreateAsync(world, body), "provenance", "fourteen 1e-300 render past 4096 bytes");
+
+        // Without the summed budget the same 422 comes from the jsonb measure, which first renders every number.
+        world.Api.Statements.Snapshot().Skip(before)
+            .Count(statement => statement.Contains("as jsonb", StringComparison.Ordinal))
+            .ShouldBe(0, "the refusal is made in C# before PostgreSQL renders the numbers");
+        (await DraftCountAsync(world)).ShouldBe(0);
+    }
+
+    [Fact]
     public async Task Create_ProvenanceNumbersWithinTheBounds_AreAccepted()
     {
         await using var world = await StartAsync();
@@ -264,7 +281,6 @@ public sealed partial class DraftTests
     [InlineData("{\"n\":[1,0e2147483648]}")]
     [InlineData("{\"n\":0e-2147483648}")]
     [InlineData("{\"n\":0e131073}")]
-    [InlineData("{\"n\":[1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300,1e-300]}")]
     public async Task Create_ProvenanceNumberOutsideNumericRange_Is422DraftInvalid_NotA500(string provenance)
     {
         await using var world = await StartAsync();
