@@ -1,6 +1,6 @@
 # Evidgate — delivery status
 
-Updated 2026-11-21. Source of truth for tasks: `plans/01`–`13` and `plans/features/`; this file tracks execution only. Task ids and sizes come from `scripts/plan_graph.py`.
+Updated 2026-11-22. Source of truth for tasks: `plans/01`–`13` and `plans/features/`; this file tracks execution only. Task ids and sizes come from `scripts/plan_graph.py`.
 
 ## 1. Snapshot
 
@@ -434,7 +434,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 | Task | Size | Note | Lock | Migration lane | Shares file with running lane | Split (L/XL) | Buildable |
 |---|---|---|---|---|---|---|---|
 | 02.3.3-T1 | XL | SAML 2.0 SSO (metadata, SP-initiated login, assertion mapping, JIT membership policy) | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json` (`sso:read`/`sso:write`) | T1.1+T1.2 \| T1.3+T1.4 \| T1.5+T1.6 | yes |
-| 03.5.1-T1 | M | `template` registry + web template. Partial: T1.1 landed by S616 (#1247, 5d9a86b8, migration 0118: `public.template`, `GET /v1/templates`, `GET /v1/templates/{t}`, no seed rows); T1.2 onward open, no parent credit. | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | yes |
+| 03.5.1-T1 | M | `template` registry + web template. Partial: T1.1 landed by S616 (#1247, 5d9a86b8, migration 0118: `public.template`, `GET /v1/templates`, `GET /v1/templates/{t}`, no seed rows); T1.2 landed by S626 (#1270, ca9f8837, migration 0119: the built-in `web/playwright-page` v1 row, `templates/web/playwright-page/1/`, `TemplateBodyHasher`, `TemplateConformance`, `TemplateLiteralScanner`, `TemplateRenderer`, golden fixture `fixtures/template-conformance/web-playwright-page-1/`); both defined sub-rows are landed, so the parent counts at the next recount (not counted in the S599 figures above). | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | yes |
 | 05.7.3-T1 | M | Capability matching + pool model | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json` (`agent_pool:*`) | n/a | yes |
 | 07.8.1-T1 | M | `deploy_target` and CRUD | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json` | n/a | yes |
 | 11.7.1-T2 | M | SAST/DAST baseline | yes | no | no (`.github/workflows` CodeQL, `Directory.Build.props` analyzers) | n/a | partial (SAST half buildable; DAST needs staging) |
