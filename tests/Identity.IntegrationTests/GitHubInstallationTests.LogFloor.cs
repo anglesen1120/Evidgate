@@ -4,16 +4,16 @@ using Evidgate.Modules.Identity.Infrastructure.GitHub;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Shouldly;
 using Xunit;
 
 namespace Identity.IntegrationTests;
 
 /// <summary>
-/// Which Logging configuration can lower the code-level floor of <c>Microsoft.AspNetCore.Hosting.Diagnostics</c>
-/// that keeps the callback's <c>code</c> and <c>state</c> out of the request-start line. Each case boots the real host
-/// with one override, drives the callback, and records what the capture provider saw. The cases state what is
-/// observed, so a known gap reads as a gap and turns red on the day production closes it.
+/// Which Logging configuration can lower the code-level floor of the request-start log category, which keeps the
+/// callback's code and state out of that line. Each case states what was observed, so a known gap turns red the day
+/// production closes it. Failure messages carry counts only: a captured request line holds the callback query.
 /// </summary>
 public sealed partial class GitHubInstallationTests
 {
@@ -32,7 +32,8 @@ public sealed partial class GitHubInstallationTests
         });
 
         run.ProbeCaptured.ShouldBeTrue("the Logging section reached the sink's rules: a Trace line of the probe category is captured");
-        run.HostingBelowWarning.ShouldBeEmpty("the code rule of the same category added after the configuration wins the tie");
+        run.HasRule(null, HostingCategory, LogLevel.Trace).ShouldBeTrue("the override is among the filter rules the host built");
+        run.HostingBelowWarningCount.ShouldBe(0, "the code rule of the same category added after the configuration wins the tie");
         run.CarriesSecret.ShouldBeFalse("no captured line carries the callback code or state");
     }
 
@@ -46,9 +47,10 @@ public sealed partial class GitHubInstallationTests
         });
 
         run.ProbeCaptured.ShouldBeTrue("the configuration was applied");
+        run.HasRule(null, HostingCategory + ".*", LogLevel.Trace).ShouldBeTrue("the override is among the filter rules the host built");
         run.Entries.Any(entry => entry.Category.StartsWith(HostingCategory + ".", StringComparison.Ordinal))
             .ShouldBeFalse("the request flow logs under no category longer than the floor's, so a longer provider-less rule has nothing to match");
-        run.HostingBelowWarning.ShouldBeEmpty("the floor still holds");
+        run.HostingBelowWarningCount.ShouldBe(0, "the floor still holds");
         run.CarriesSecret.ShouldBeFalse("no captured line carries the callback code or state");
     }
 
@@ -62,7 +64,8 @@ public sealed partial class GitHubInstallationTests
         });
 
         run.ProbeCaptured.ShouldBeTrue("the configuration was applied");
-        run.HostingBelowWarning.ShouldBeEmpty("the longer category of the code rule beats the shorter configured one");
+        run.HasRule(null, "Microsoft.AspNetCore", LogLevel.Trace).ShouldBeTrue("the override is among the filter rules the host built");
+        run.HostingBelowWarningCount.ShouldBe(0, "the longer category of the code rule beats the shorter configured one");
         run.CarriesSecretIn(entry => entry.Category == HostingCategory).ShouldBeFalse("no Hosting.Diagnostics line carries the callback code or state");
     }
 
@@ -75,7 +78,7 @@ public sealed partial class GitHubInstallationTests
         });
 
         run.ProbeCaptured.ShouldBeTrue("the provider section bound to the capture provider by its full type name");
-        run.HostingBelowWarning.ShouldNotBeEmpty("a provider-specific rule beats the provider-less code rule of the floor");
+        run.HostingBelowWarningCount.ShouldBeGreaterThan(0, "a provider-specific rule beats the provider-less code rule of the floor");
         run.CarriesSecretIn(entry => entry.Category == HostingCategory)
             .ShouldBeTrue("known gap: the request-start line, with the callback query, reaches a provider whose own section lowers the level");
     }
@@ -90,9 +93,25 @@ public sealed partial class GitHubInstallationTests
         });
 
         run.ProbeCaptured.ShouldBeTrue("the provider section bound to the capture provider by its full type name");
-        run.HostingBelowWarning.ShouldNotBeEmpty("the provider-specific category rule beats the code rule");
+        run.HostingBelowWarningCount.ShouldBeGreaterThan(0, "the provider-specific category rule beats the code rule");
         run.CarriesSecretIn(entry => entry.Category == HostingCategory)
             .ShouldBeTrue("known gap: the request-start line, with the callback query, reaches the provider");
+    }
+
+    [Fact]
+    public async Task LogFloor_ProviderlessTrailingWildcardOnTheHostingCategoryAtTrace_ExposesCallbackQuery_KnownGap()
+    {
+        var run = await RunCallbackWithConfigAsync(new Dictionary<string, string?>
+        {
+            [$"Logging:LogLevel:{HostingCategory}*"] = "Trace",
+            [$"Logging:LogLevel:{FloorProbeCategory}"] = "Trace",
+        });
+
+        run.ProbeCaptured.ShouldBeTrue("the configuration was applied");
+        run.HasRule(null, HostingCategory + "*", LogLevel.Trace).ShouldBeTrue("the override is among the filter rules the host built");
+        run.HostingBelowWarningCount.ShouldBeGreaterThan(0, "a wildcard pattern is longer than the exact category of the code rule, so it wins");
+        run.CarriesSecretIn(entry => entry.Category == HostingCategory)
+            .ShouldBeTrue("known gap: a provider-less key with a trailing wildcard lowers the floor for every provider");
     }
 
     private async Task<FloorRun> RunCallbackWithConfigAsync(Dictionary<string, string?> settings)
@@ -118,15 +137,22 @@ public sealed partial class GitHubInstallationTests
         host.Services.GetRequiredService<ILoggerFactory>().CreateLogger(FloorProbeCategory)
             .Log(LogLevel.Trace, default, "floor-probe", null, static (message, _) => message);
 
-        return new FloorRun(sink.Entries, state);
+        var rules = host.Services.GetRequiredService<IOptionsMonitor<LoggerFilterOptions>>().CurrentValue.Rules
+            .Select(rule => (rule.ProviderName, rule.CategoryName, rule.LogLevel))
+            .ToList();
+
+        return new FloorRun(sink.Entries, state, rules);
     }
 
-    private sealed record FloorRun(IReadOnlyList<CapturedLog> Entries, string State)
+    private sealed record FloorRun(IReadOnlyList<CapturedLog> Entries, string State, List<(string? Provider, string? Category, LogLevel? Level)> Rules)
     {
         public bool ProbeCaptured => Entries.Any(entry => entry.Category == FloorProbeCategory && entry.Level == LogLevel.Trace);
 
-        public IReadOnlyList<CapturedLog> HostingBelowWarning =>
-            Entries.Where(entry => entry.Category == HostingCategory && entry.Level < LogLevel.Warning).ToList();
+        public int HostingBelowWarningCount =>
+            Entries.Count(entry => entry.Category == HostingCategory && entry.Level < LogLevel.Warning);
+
+        public bool HasRule(string? provider, string category, LogLevel level) =>
+            Rules.Contains((provider, category, (LogLevel?)level));
 
         public bool CarriesSecret => CarriesSecretIn(_ => true);
 
