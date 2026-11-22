@@ -26881,6 +26881,27 @@
           <context context-type="linenumber">8</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="review.gallery.framework" datatype="html">
+        <source>Framework</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">7</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.table-caption" datatype="html">
+        <source>Studio templates</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">6</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.header-facts" datatype="html">
+        <source><x id="COUNT" equiv-text="count"/> templates · Historical Studio reference · Sandbox only</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">5</context>
+        </context-group>
+      </trans-unit>
 </body>
   </file>
 </xliff>
