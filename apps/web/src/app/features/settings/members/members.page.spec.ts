@@ -3,13 +3,14 @@ import { provideZonelessChangeDetection, signal, type WritableSignal } from '@an
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute } from '@angular/router';
 import { SessionStore } from '../../../core/session/session.store';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { MembersPage } from './members.page';
 import { MembersStore } from './members.store';
 import { FakeMembersStore, MEMBERS_DESKTOP, lastAdmin, role } from './members-page.test-fixtures';
 import { routes } from './members.routes';
 import { activeMemberMenuTrigger, button } from './member-actions.test-helpers';
-
 describe('Members page (09.7.1-T2)', () => {
+  provideLayoutTestStubs();
   let store: FakeMembersStore;
   let granted: WritableSignal<boolean>;
   beforeEach(() => {
@@ -45,7 +46,6 @@ describe('Members page (09.7.1-T2)', () => {
     await fixture.whenStable();
     return { fixture, root: document.body };
   }
-
   it('marks the standalone members route as the page-heading owner', () => {
     expect(
       routes.find((route) => route.component === MembersPage)?.data?.['pageHeadingLevel'],
@@ -65,7 +65,7 @@ describe('Members page (09.7.1-T2)', () => {
     const { root } = await render();
     expect(root.querySelectorAll('[data-members-row]')).toHaveLength(3);
     expect(root.textContent).toContain('owner@example.test');
-    expect(root.textContent).toContain('Invited');
+    expect(root.textContent).toContain('Invitation pending');
     expect(root.textContent).toContain(role.name);
     const matrix = root.querySelector('table[data-members-matrix]');
     expect(matrix?.querySelector('caption')?.textContent?.trim()).toBe(

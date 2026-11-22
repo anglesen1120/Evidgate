@@ -1,27 +1,38 @@
-<header class="mb-(--eg-space-4) flex min-w-0 items-start gap-(--eg-space-4) md:items-center">
+<header class="mb-1 flex min-w-0 items-start gap-3 md:items-center">
   <span
-    class="grid size-(--eg-space-9) shrink-0 place-items-center rounded-(--eg-radius-md) border border-solid border-border bg-(--eg-accent-soft) text-(--eg-accent) md:size-(--eg-space-10)"
+    class="grid size-12 shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent)"
   >
     <app-shell-icon class="size-(--eg-space-7)" [name]="'sliders'" />
   </span>
   <app-page-header
+    class="min-w-0"
     [title]="canRead() ? heading : copy.title"
-    [description]="canRead() && store.resolution() ? introduction : copy.description"
+    [description]="canRead() && store.resolution() ? scopeContext() : introduction"
   />
 </header>
 
 @if (!canRead()) {
-  <p role="status" class="m-0 text-sm" data-healing-forbidden>{{ copy.forbidden }}</p>
+  <section
+    hlmCard
+    role="status"
+    data-healing-forbidden
+    class="min-w-0 items-start gap-2 rounded-lg bg-(--eg-surface-raised) p-5"
+  >
+    <hlm-icon [name]="'lucideOctagonX'" class="size-6 text-muted-foreground" />
+    <h2 hlmCardTitle [size]="sectionHeadingSize" i18n="@@shared.states.forbidden.heading">
+      Not authorized
+    </h2>
+    <p class="m-0 text-sm">{{ copy.forbidden }}</p>
+  </section>
 } @else if (!session.currentProject()) {
-  <p role="status" class="m-0 text-sm" data-healing-no-project>{{ copy.noProject }}</p>
+  <app-empty-pattern data-healing-no-project role="status" [title]="copy.noProject" />
 } @else if (store.notFound()) {
   <app-not-found-pattern data-healing-not-found />
 } @else if (store.loading()) {
-  <p role="status" [attr.aria-busy]="true" class="m-0 min-h-(--eg-control-touch) text-sm">
-    {{ copy.loading }}
-  </p>
+  <app-loading-pattern [label]="copy.loading" [layout]="'cards'" />
 } @else if (store.readFailed()) {
-  <div class="grid gap-3" data-healing-read-error>
+  <div hlmCard class="min-w-0 items-start gap-3 rounded-lg p-5" data-healing-read-error>
+    <hlm-icon [name]="'lucideTriangleAlert'" class="size-6 text-destructive" />
     <p role="alert" class="m-0 text-sm text-destructive">
       {{ store.readError()?.message || copy.readFailed }}
     </p>
@@ -37,9 +48,12 @@
     </button>
   </div>
 } @else if (store.resolution(); as resolution) {
-  <p class="m-0 font-mono text-xs text-muted-foreground">
-    <bdi>{{ scopeContext() }}</bdi>
-  </p>
+  @if (!store.canConfigure()) {
+    <section hlmCard class="min-w-0 gap-2 rounded-xl px-5 py-4">
+      <strong class="text-sm" i18n="@@settings.scope-label">Organization settings</strong>
+      <p class="m-0 text-muted-foreground">{{ copy.readOnly }}</p>
+    </section>
+  }
 
   <div
     class="grid min-w-0 items-start gap-(--eg-space-4) md:grid-cols-[minmax(0,1fr)_minmax(0,1.08fr)] lg:grid-cols-[minmax(0,1.04fr)_minmax(0,1fr)] lg:gap-(--eg-space-5)"
@@ -68,7 +82,8 @@
       </header>
       <div
         hlmCardContent
-        class="grid min-w-0 gap-(--eg-space-4) px-(--eg-space-6) py-(--eg-space-5)"
+        class="grid min-w-0 gap-3 px-5 py-4"
+        [attr.data-healing-resolved]="resolution.resolved === 'unavailable' ? null : ''"
       >
         @let decidingScope = store.decidingScope();
         @if (resolution.resolved === 'unavailable') {
@@ -77,19 +92,22 @@
           </p>
           <p class="m-0 text-muted-foreground">{{ copy.unavailableExplanation }}</p>
         } @else {
-          <div class="grid min-w-0 gap-(--eg-space-2)" data-healing-resolved>
-            <p class="m-0 grid">
-              <span class="text-xs text-muted-foreground">{{ copy.resolvedPrefix }}</span>
-              <strong class="eg-type-page-title" data-healing-resolved-mode>{{
-                modeLabel(resolution.resolved)
-              }}</strong>
-            </p>
-            <p class="m-0 text-muted-foreground">{{ deciderCopy(decidingScope) }}</p>
-          </div>
+          <p class="m-0">
+            <span class="sr-only">{{ copy.resolvedPrefix }}</span>
+            <strong class="eg-type-page-title" data-healing-resolved-mode>{{
+              modeLabel(resolution.resolved)
+            }}</strong>
+          </p>
         }
         <dl
           class="m-0 grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-(--eg-space-4)"
         >
+          @if (resolution.resolved !== 'unavailable') {
+            <div>
+              <dt class="text-xs text-muted-foreground">{{ copy.scope }}</dt>
+              <dd class="m-0 font-semibold">{{ deciderCopy(decidingScope) }}</dd>
+            </div>
+          }
           <div>
             <dt class="text-xs text-muted-foreground" i18n="@@healingswitch.project-setting">
               Project setting
@@ -101,22 +119,22 @@
           @if (decidingScope && resolution[decidingScope]; as stored) {
             <div>
               <dt class="text-xs text-muted-foreground">{{ copy.setBy }}</dt>
-              <dd class="m-0 font-semibold" data-snapshot-actor>
-                <bdi>{{
+              <dd class="m-0 font-semibold">
+                <bdi data-snapshot-actor>{{
                   stored.set_by !== null
                     ? displayIdentifier(stored.set_by)
                     : decidingScope === 'system'
                       ? copy.redacted
                       : copy.notProvided
                 }}</bdi>
+                <span class="mt-1 block text-xs font-normal text-muted-foreground">
+                  {{ copy.changedAt }}: <app-absolute-time [value]="stored.at" />
+                </span>
               </dd>
-            </div>
-            <div>
-              <dt class="text-xs text-muted-foreground">{{ copy.changedAt }}</dt>
-              <dd class="m-0"><app-absolute-time [value]="stored.at" /></dd>
             </div>
           }
         </dl>
+        <p class="m-0 text-muted-foreground">{{ copy.hierarchyDescription }}</p>
       </div>
     </section>
     <section
@@ -144,7 +162,7 @@
         <span
           hlmBadge
           [variant]="'secondary'"
-          class="w-fit max-w-full gap-1 bg-(--eg-neutral-bg) text-(--eg-neutral-fg)"
+          class="w-full max-w-full! justify-start gap-1 bg-(--eg-neutral-bg) text-(--eg-neutral-fg)"
         >
           <hlm-icon [name]="'lucideInfo'" class="size-4" />
           <span i18n="@@healingswitch.auto-apply-off">Auto-apply off</span>
@@ -279,7 +297,5 @@
     </p>
   </section>
 } @else {
-  <p role="status" [attr.aria-busy]="true" class="m-0 min-h-(--eg-control-touch) text-sm">
-    {{ copy.loading }}
-  </p>
+  <app-loading-pattern [label]="copy.loading" [layout]="'cards'" />
 }

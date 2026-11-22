@@ -2,6 +2,7 @@ import { InteractivityChecker } from '@angular/cdk/a11y';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { SessionStore } from '../../../core/session/session.store';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { MembersPage } from './members.page';
 import { MembersStore } from './members.store';
 import { FakeMembersStore, MEMBERS_DESKTOP } from './members-page.test-fixtures';
@@ -22,6 +23,7 @@ function required<T extends Element>(selector: string): T {
 }
 
 describe('Members dialog accessibility', () => {
+  provideLayoutTestStubs();
   let store: FakeMembersStore;
 
   beforeEach(() => {

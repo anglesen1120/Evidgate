@@ -148,21 +148,23 @@ import { PolicyStore } from './policy.store';
                         [attr.data-diff-path]="row.path"
                       >
                         <th hlmTh scope="row" class="py-(--eg-space-3) align-top">
-                          <code class="mb-(--eg-space-2) block font-mono wrap-anywhere">{{
+                          <code class="block font-mono wrap-anywhere">{{
                             pathLabel(row.path)
                           }}</code>
-                          <app-status-pill
-                            [tone]="kindTone(row.kind)"
-                            [label]="kindLabel(row.kind)"
-                          />
                         </th>
                         <td hlmTd>
                           <pre>{{ row.before ?? copy.absent }}</pre>
                         </td>
                         <td hlmTd>
-                          <pre class="font-semibold text-(--eg-accent)">{{
-                            row.after ?? copy.absent
-                          }}</pre>
+                          <div class="flex min-w-0 flex-wrap items-start gap-(--eg-space-2)">
+                            <pre class="min-w-0 font-semibold text-(--eg-accent)">{{
+                              row.after ?? copy.absent
+                            }}</pre>
+                            <app-status-pill
+                              [tone]="kindTone(row.kind)"
+                              [label]="kindLabel(row.kind)"
+                            />
+                          </div>
                         </td>
                       </tr>
                     }

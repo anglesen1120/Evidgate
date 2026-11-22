@@ -3,6 +3,7 @@ import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { MembershipView, RoleView } from '@evidgate/sdk';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { activeMemberMenuTrigger, memberAction } from './member-actions.test-helpers';
 import { MemberListComponent } from './member-list.component';
@@ -39,6 +40,7 @@ class MemberActionsHarness extends ComponentHarness {
 }
 
 describe('MemberListComponent', () => {
+  provideLayoutTestStubs();
   let fixture: ComponentFixture<MemberListComponent>;
   let root: HTMLElement;
 
@@ -62,14 +64,14 @@ describe('MemberListComponent', () => {
   }
 
   it.each([
-    ['pending', 'Invited'],
+    ['pending', 'Invitation pending'],
     ['active', 'Active'],
     ['removed', 'Removed'],
     ['revoked', 'Revoked'],
     ['expired', 'Expired'],
   ])('labels a %s membership from the closed status lookup', async (status, expected) => {
     await render([member(status)]);
-    expect(root.querySelector('.status-pill__label')?.textContent?.trim()).toBe(expected);
+    expect(root.querySelector('[data-members-row]')?.textContent?.trim()).toBe(expected);
   });
 
   it.each(['suspended', 'constructor', '__proto__', '<img src=x onerror=alert(1)>'])(
@@ -87,6 +89,9 @@ describe('MemberListComponent', () => {
   it('omits the entire mutation column without membership:write', async () => {
     await render([member('active')]);
     expect(root.querySelectorAll('thead th')).toHaveLength(3);
+    expect(
+      Array.from(root.querySelectorAll('thead th'), (cell) => cell.textContent.trim()),
+    ).toEqual(['Member', 'Organization roles', 'Status']);
     expect(root.querySelector('[data-members-actions]')).toBeNull();
     expect(root.querySelector('app-data-table')).not.toBeNull();
     expect(root.querySelector('app-data-table')?.textContent).toContain('Members and invitations');
@@ -118,7 +123,9 @@ describe('MemberListComponent', () => {
     const trigger = root.querySelector<HTMLButtonElement>('[data-members-actions]');
     expect(trigger?.hasAttribute('aria-label')).toBe(false);
     expect(trigger?.textContent).toContain('Actions');
-    expect(trigger?.querySelector('.sr-only')?.textContent?.trim()).toBe('pending@example.test');
+    expect(trigger?.querySelector('.sr-only')?.textContent?.trim()).toBe(
+      'Actions pending@example.test',
+    );
     expect(root.querySelector('[data-members-edit-open]')).toBeNull();
     expect(root.textContent).toContain('No roles assigned');
     memberAction(root, '[data-members-edit-open]');
@@ -157,7 +164,7 @@ describe('MemberListComponent', () => {
       expect(records).not.toBeNull();
       expect(root.querySelector('table')).toBeNull();
       expect(records?.textContent).toContain(membership.invited_email);
-      expect(records?.textContent).toContain('Invited');
+      expect(records?.textContent).toContain('Invitation pending');
       expect(records?.textContent).toContain('A long assigned organization role');
       expect(
         [...root.querySelectorAll('.eg-table-fact dt')].map((label) => label.textContent),
