@@ -1,0 +1,195 @@
+<app-page-header [title]="c.history" [description]="c.intro">
+  <a appPageHeaderActions hlmBtn [variant]="'outline'" [routerLink]="inbox()">{{ c.inbox }}</a>
+  @if (
+    valid() &&
+    id() === r.id &&
+    !['401', '403', '404', 'empty', 'retention', 'error', 'loading', '429'].includes(state())
+  ) {
+    <a appPageHeaderActions hlmBtn [routerLink]="detail()" [queryParams]="{ id: r.incident }">{{
+      text.originalLink
+    }}</a>
+  }
+</app-page-header>
+<p class="text-xs text-muted-foreground">
+  {{ text.snapshot }}
+</p>
+@switch (state()) {
+  @case ('loading') {
+    <app-loading-pattern [label]="c.loading" />
+  }
+  @case ('401') {
+    <app-empty-pattern [title]="c.expired" [description]="c.expiredBody" />
+  }
+  @case ('404') {
+    <app-not-found-pattern />
+  }
+  @case ('429') {
+    <app-retry-after [retryAfterSeconds]="60" [requestId]="'req-901'" />
+  }
+  @case ('error') {
+    <app-inline-feedback
+      [tone]="'destructive'"
+      [title]="c.error"
+      [description]="'req-901'"
+      [actionLabel]="c.retry"
+      (action)="reload()"
+    />
+  }
+  @case ('empty') {
+    <app-empty-pattern [title]="c.empty" [description]="c.emptyBody" />
+  }
+  @case ('403') {
+    <app-inline-feedback [tone]="'destructive'" [title]="c.forbidden" [description]="c.access" />
+  }
+  @case ('412') {
+    <app-inline-feedback
+      [tone]="'destructive'"
+      [title]="c.conflict"
+      [description]="c.conflictBody"
+      [actionLabel]="c.retry"
+      (action)="reload()"
+    />
+  }
+  @case ('nomatch') {
+    <app-empty-pattern [title]="c.nomatch" [actionLabel]="c.clear" (action)="reload()" />
+  }
+  @case ('retention') {
+    <app-empty-pattern [title]="c.retention" [description]="c.retentionBody" />
+  }
+  @default {
+    @if (!valid()) {
+      <app-empty-pattern [title]="c.missingId" [description]="id() + ' · ' + revision()" />
+    } @else if (id() === a.id) {
+      <section hlmCard class="grid gap-3 p-(--eg-space-6)">
+        <h2 hlmCardTitle [size]="'section'">{{ text.addressHeading }}</h2>
+        <p>{{ text.addressContext }}</p>
+        <app-status-pill [tone]="'danger'" [label]="c.failed" /><strong>{{ c.address }}</strong
+        ><code>{{ a.classification }}</code>
+        <p>{{ c.addressOnly }}</p>
+        <a
+          hlmBtn
+          class="justify-self-start"
+          [routerLink]="detail()"
+          [queryParams]="{ id: a.incident }"
+          >{{ text.addressLink }}</a
+        >
+      </section>
+    } @else if (id() === 'case-search-4') {
+      <app-empty-pattern [title]="id() + ' · ' + c.search" [description]="c.noAttempts" />
+    } @else {
+      <div class="grid min-w-0 gap-(--eg-space-4) sm:grid-cols-2 xl:grid-cols-4">
+        @for (tile of tiles(); track tile.label) {
+          <section hlmCard class="min-w-0 gap-(--eg-space-3) p-(--eg-space-5)">
+            <h2 class="flex items-center gap-2 font-semibold">
+              <hlm-icon class="size-4" [name]="tile.icon" />{{ tile.label }}
+            </h2>
+            <strong class="font-(family-name:--eg-font-display) text-2xl">{{ tile.value }}</strong>
+            <p class="text-xs text-muted-foreground">{{ tile.hint }}</p>
+          </section>
+        }
+      </div>
+      <section hlmCard class="grid min-w-0 gap-(--eg-space-3) p-(--eg-space-6)">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p class="text-xs text-muted-foreground">
+              {{ text.attemptPath }}
+            </p>
+            <h2 hlmCardTitle [size]="'section'">{{ c.original }}</h2>
+          </div>
+          <app-status-pill [tone]="'danger'" [label]="c.failed" />
+        </div>
+        <app-inline-feedback
+          [tone]="'destructive'"
+          [announcement]="'off'"
+          [title]="c.checkout"
+          [description]="text.storedContext"
+        />
+        <details>
+          <summary class="cursor-pointer font-semibold">{{ c.stored }}</summary>
+          <p>{{ text.raw }}</p>
+          <p>{{ text.build }}</p>
+        </details>
+      </section>
+      <div
+        class="grid min-w-0 items-start gap-(--eg-space-5) lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]"
+      >
+        <div class="grid min-w-0 gap-(--eg-space-4)">
+          <app-history-comparison
+            [state]="state()"
+            [revision]="revision()"
+            [artifactPath]="artifact()"
+            (revisionChange)="select($event)"
+          />
+          <section hlmCard>
+            <header hlmCardHeader class="border-b">
+              <h2 hlmCardTitle [size]="'section'">{{ c.attempts }}</h2>
+            </header>
+            <ol hlmCardContent class="grid gap-3">
+              <li>
+                <code>{{ text.firstAttempt }}</code>
+                <app-status-pill [tone]="'danger'" [label]="c.failed" />
+              </li>
+              <li>
+                <code>{{ text.retryAttempt }}</code>
+                <app-status-pill [tone]="'success'" [label]="c.passed" />
+              </li>
+            </ol>
+          </section>
+          @if (state() !== 'one') {
+            <section hlmCard>
+              <header hlmCardHeader class="border-b">
+                <h2 hlmCardTitle [size]="'section'">{{ c.rerun }}</h2>
+              </header>
+              <div hlmCardContent class="grid gap-2">
+                <p>
+                  <strong>{{ c.parent }}</strong> {{ text.parentResult }}
+                </p>
+                <p>
+                  <strong>{{ c.subset }}</strong> {{ text.rerunResult }}
+                </p>
+                <p>{{ c.subsetBody }}</p>
+              </div>
+            </section>
+          }
+        </div>
+        <aside class="grid min-w-0 gap-(--eg-space-4)">
+          <section hlmCard>
+            <header hlmCardHeader class="border-b">
+              <h2 hlmCardTitle [size]="'section'">{{ c.timeline }}</h2>
+            </header>
+            <ol hlmCardContent class="grid gap-3">
+              @for (event of events(); track event.revision) {
+                <li class="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2">
+                  <strong>{{ event.revision }}</strong
+                  ><time class="text-xs">{{ event.time }}</time>
+                  <p class="col-span-2 text-muted-foreground">{{ event.description }}</p>
+                </li>
+              }
+            </ol>
+          </section>
+          <section hlmCard>
+            <header hlmCardHeader class="border-b">
+              <h2 hlmCardTitle [size]="'section'">{{ c.identity }}</h2>
+            </header>
+            <div hlmCardContent class="grid gap-2">
+              <strong>{{ r.id }}</strong>
+              <p>{{ text.authored }}</p>
+              <code>{{ r.key }}</code>
+              <p>{{ text.priorCase }}</p>
+              <p>{{ text.currentCase }}</p>
+              <p>{{ text.base }}</p>
+              <a
+                hlmBtn
+                [variant]="'outline'"
+                class="justify-self-start"
+                [routerLink]="detail()"
+                [queryParams]="{ id: r.incident }"
+                >{{ text.checkoutLink }}</a
+              >
+            </div>
+          </section>
+        </aside>
+      </div>
+    }
+  }
+}

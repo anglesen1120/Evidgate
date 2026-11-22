@@ -1,5 +1,7 @@
-<div class="grid min-w-0 gap-(--eg-space-3)">
-  <label hlmLabel for="evidence-revision-select">{{ copy.revisionLabel }}</label>
+<div
+  class="flex min-w-0 flex-wrap items-center gap-(--eg-space-3) rounded-(--eg-radius-md) bg-(--eg-surface-raised) p-(--eg-space-4)"
+>
+  <label hlmLabel class="basis-full" for="evidence-revision-select">{{ copy.revisionLabel }}</label>
   <hlm-select
     class="block w-full min-w-0 max-w-full min-[768px]:w-fit"
     [value]="selectedValue()"
@@ -41,7 +43,6 @@
       }
     </hlm-select-content>
   </hlm-select>
-  <p class="m-0 text-(--eg-text-muted)" id="evidence-pin-help">{{ copy.pinHelp }}</p>
   @if (hasMore()) {
     <button
       hlmBtn
@@ -55,4 +56,10 @@
       {{ loadingMore() ? copy.loadingOlder : copy.loadOlder }}
     </button>
   }
+  <p
+    class="m-0 basis-full text-xs leading-(--eg-leading-xs) text-muted-foreground"
+    id="evidence-pin-help"
+  >
+    {{ copy.pinHelp }}
+  </p>
 </div>

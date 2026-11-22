@@ -17,6 +17,28 @@ import { RUN_DETAIL_NOT_PROVIDED } from '../run-value-label';
   imports: [AbsoluteTimeComponent, StatusPillComponent, HlmCard, HlmCardTitle, HlmAlert],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './run-timeline.component.html',
+  styles: `
+    li::after {
+      content: '';
+      position: absolute;
+      inset-inline-start: 0;
+      inset-block-start: var(--eg-space-4);
+      inline-size: var(--eg-space-3);
+      block-size: var(--eg-space-3);
+      border-radius: var(--eg-radius-pill);
+      background: var(--eg-border-control);
+    }
+    li:not(:last-child)::before {
+      content: '';
+      position: absolute;
+      inset-inline-start: var(--eg-space-2);
+      inset-block: var(--eg-space-4) calc(-1 * var(--eg-space-4));
+      border-inline-start: var(--eg-border-width) solid var(--eg-border-control);
+    }
+    li[aria-current='step']::after {
+      background: var(--eg-accent);
+    }
+  `,
   host: { class: 'block min-w-0 text-foreground wrap-anywhere' },
 })
 export class RunTimelineComponent {

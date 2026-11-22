@@ -1,0 +1,144 @@
+@let row = record();
+<article hlmCard class="min-w-0 gap-0 py-0 wrap-anywhere" aria-labelledby="inbox-preview-title">
+  <header class="grid gap-2 p-4">
+    <small class="text-xs font-semibold text-muted-foreground"
+      >{{ c.selected }} / {{ row.id }}</small
+    >
+    <h2 id="inbox-preview-title" class="m-0 text-xl font-bold">{{ row.title }}</h2>
+    <div
+      class="grid gap-1 rounded-sm border-s-4 bg-(--eg-danger-bg) p-3 text-xs text-(--eg-danger-fg)"
+    >
+      <strong class="inline-flex items-center gap-1"
+        ><hlm-icon name="lucideOctagonX" />{{ c.original }}</strong
+      >
+      @if (row.id === 'inc-91') {
+        <span>{{ original }}</span>
+      }
+      <span>{{ c.raw }} · {{ row.revision }}</span>
+    </div>
+  </header>
+  <section class="grid gap-2 border-t border-border p-4">
+    <h3 class="m-0 text-base font-bold">{{ c.classification }}</h3>
+    <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+      <code>{{ row.label }}</code>
+      @if (row.source === 'rule') {
+        <span class="text-muted-foreground">{{ c.ruleNote }}</span>
+      }
+    </div>
+    <dl
+      class="m-0 grid gap-1 text-xs [&>div]:grid [&>div]:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] [&>div]:gap-2 [&>div]:border-b [&>div]:border-dotted [&>div]:border-border [&>div]:py-1 [&_dd]:m-0 [&_dd]:font-semibold"
+    >
+      <div>
+        <dt>{{ c.drift }}</dt>
+        <dd>{{ c[row.drift] }}</dd>
+      </div>
+      <div>
+        <dt>{{ c.source }}</dt>
+        <dd>
+          @if (row.source === 'pending') {
+            <span hlmBadge [variant]="'secondary'" [class]="pendingClasses" data-comparison-pending
+              ><hlm-icon name="lucideClock" />{{ c.pending }}</span
+            >
+          } @else {
+            {{ c[row.source] }}
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>{{ c.revision }}</dt>
+        <dd>{{ row.revision }}</dd>
+      </div>
+      <div>
+        <dt>{{ c.context }}</dt>
+        <dd>{{ c[row.context] }}</dd>
+      </div>
+      <div>
+        <dt>{{ c.flaky }}</dt>
+        <dd>{{ c[row.flaky] }}</dd>
+      </div>
+      <div>
+        <dt>{{ c.count }}</dt>
+        <dd>{{ row.id === 'inc-92' ? candidate : c.absent }}</dd>
+      </div>
+      <div>
+        <dt>{{ c.firstSeen }}</dt>
+        <dd>
+          @if (row.captured) {
+            <app-absolute-time [value]="row.captured" />
+          } @else {
+            {{ c.absent }}
+          }
+        </dd>
+      </div>
+      @if (row.caseRef) {
+        <div>
+          <dt>{{ c.case }}</dt>
+          <dd>{{ row.caseRef }}</dd>
+        </div>
+      }
+    </dl>
+  </section>
+  <section class="grid gap-1 border-t border-border p-4">
+    <h3 class="m-0 text-sm font-bold">{{ c.why }}</h3>
+    <p class="m-0">{{ row.reason }}</p>
+  </section>
+  <section class="grid gap-1 border-t border-border p-4">
+    <h3 class="m-0 text-sm font-bold">{{ c.action }}</h3>
+    <p class="m-0">{{ row.next }}</p>
+    @if (row.id === 'inc-93') {
+      <p class="m-0 text-xs">{{ c.executed }}: {{ row.caseRef }} · {{ c.approved }}</p>
+    }
+  </section>
+  <footer class="flex flex-wrap gap-2 border-t border-border p-3">
+    <a
+      hlmBtn
+      [variant]="'outline'"
+      [routerLink]="store.path('failure-detail')"
+      [queryParams]="{ id: row.id }"
+      >{{ c.openDetail }}</a
+    >
+    @if (row.id === 'inc-92') {
+      <a
+        hlmBtn
+        [variant]="'outline'"
+        [routerLink]="store.path('shadow-detail')"
+        [queryParams]="{ id: 'cand-73' }"
+        >{{ c.candidate }}</a
+      >
+      <a
+        hlmBtn
+        [variant]="'outline'"
+        [routerLink]="store.path('investigation-history')"
+        [queryParams]="{ id: 'case-address-8' }"
+        >{{ c.history }}</a
+      >
+    }
+    <button
+      hlmBtn
+      *appDesktopMutation
+      type="button"
+      [variant]="'outline'"
+      [disabled]="store.state() === 'submitting'"
+      (click)="review.emit([row.id])"
+    >
+      {{ c.assign }}
+    </button>
+  </footer>
+  @if (row.id === 'inc-91' || row.id === 'inc-92') {
+    <details class="border-t border-border p-3 text-xs">
+      <summary class="cursor-pointer font-semibold">
+        {{ row.id === 'inc-91' ? c.openRun : c.producer }}
+      </summary>
+      <div class="mt-2 grid gap-1">
+        <code>{{ run.binding }}</code>
+        <span>{{ run.completeness }}</span>
+        <span
+          >{{ run.outcomeLabel }} <code>{{ run.outcome }}</code></span
+        >
+        <span
+          >{{ run.decisionLabel }} <code>{{ run.decision }}</code></span
+        >
+      </div>
+    </details>
+  }
+</article>

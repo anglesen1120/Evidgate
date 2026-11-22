@@ -1,6 +1,6 @@
 <section
   hlmCard
-  class="min-w-0 gap-(--eg-space-5) p-(--eg-space-5) text-(length:--eg-text-sm) leading-(--eg-leading-sm) wrap-anywhere min-[1280px]:p-(--eg-space-7)"
+  class="min-w-0 gap-(--eg-space-5) p-(--eg-space-5) text-(length:--eg-text-sm) leading-(--eg-leading-sm) wrap-anywhere"
   id="decision-panel"
   aria-labelledby="decision-title"
   [attr.aria-busy]="loading() || updating() ? 'true' : null"
@@ -9,7 +9,7 @@
     hlmCardTitle
     [size]="sectionSize"
     id="decision-title"
-    class="m-0"
+    class="m-0 border-b border-(--eg-border) pb-(--eg-space-4)"
     [textContent]="copy.title"
   ></h2>
 
@@ -81,11 +81,6 @@
       <p class="m-0 text-(--eg-text-muted)" data-decision-pending>{{ copy.pending }}</p>
     }
     @if (evaluated(); as decision) {
-      <p class="m-0 flex flex-wrap gap-(--eg-space-3)" data-decision-summary>
-        <app-decision-chip [decision]="decision.decision" />
-        <app-outcome-pill [outcome]="decision.outcome" />
-      </p>
-
       @if (revisionMismatch(); as mismatch) {
         <div
           hlmAlert
@@ -107,6 +102,23 @@
           </button>
         </div>
       }
+      <dl
+        class="m-0 grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-(--eg-space-5) rounded-(--eg-radius-md) bg-(--eg-surface-raised) p-(--eg-space-4) [&>div]:min-w-0 [&_dt]:text-xs [&_dt]:leading-(--eg-leading-xs) [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:mt-(--eg-space-3)"
+        data-decision-summary
+      >
+        <div>
+          <dt>{{ copy.completeness }}</dt>
+          <dd><app-evidence-badge [completeness]="decision.completeness" [compact]="true" /></dd>
+        </div>
+        <div>
+          <dt>{{ copy.outcome }}</dt>
+          <dd><app-outcome-pill [outcome]="decision.outcome" [compact]="true" /></dd>
+        </div>
+        <div>
+          <dt>{{ copy.decision }}</dt>
+          <dd><app-decision-chip [decision]="decision.decision" [compact]="true" /></dd>
+        </div>
+      </dl>
 
       <div class="grid min-w-0 gap-(--eg-space-3)">
         <h3 hlmCardTitle [size]="subsectionSize" class="m-0" id="decision-reasons-title">
@@ -116,13 +128,11 @@
           <p class="m-0 text-(--eg-text-muted)" data-decision-no-reasons>{{ copy.noReasons }}</p>
         } @else {
           <ol
-            class="decision-reason-list m-0 grid list-none gap-(--eg-space-3) p-0"
+            class="decision-reason-list m-0 grid list-none divide-y divide-(--eg-border) p-0"
             aria-labelledby="decision-reasons-title"
           >
             @for (reason of decision.reasons; track $index) {
-              <li
-                class="grid gap-(--eg-space-2) rounded-(--eg-radius-sm) border border-solid border-(--eg-border) bg-(--eg-surface-raised) p-(--eg-space-4)"
-              >
+              <li class="grid gap-(--eg-space-1) py-(--eg-space-3)">
                 <bdi class="font-(family-name:--eg-font-mono)">{{ reason }}</bdi>
                 @if (reasonExplanation(reason); as explanation) {
                   <p class="m-0">{{ explanation }}</p>
@@ -134,7 +144,7 @@
       </div>
 
       <dl
-        class="m-0 grid min-w-0 gap-(--eg-space-4) min-[768px]:grid-cols-2 [&>div]:min-w-0 [&_dt]:text-(length:--eg-text-xs) [&_dt]:leading-(--eg-leading-xs) [&_dt]:text-(--eg-text-muted) [&_dd]:m-0 [&_dd]:mt-(--eg-space-2) [&_dd]:wrap-anywhere [&_code]:font-(family-name:--eg-font-mono)"
+        class="m-0 grid min-w-0 gap-(--eg-space-4) border-t border-(--eg-border) pt-(--eg-space-4) sm:grid-cols-2 [&>div]:min-w-0 [&_dt]:text-(length:--eg-text-xs) [&_dt]:leading-(--eg-leading-xs) [&_dt]:text-(--eg-text-muted) [&_dd]:m-0 [&_dd]:mt-(--eg-space-2) [&_dd]:wrap-anywhere [&_code]:font-(family-name:--eg-font-mono)"
         data-decision-provenance
       >
         <div class="col-span-full" data-decision-revision>

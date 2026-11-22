@@ -4,10 +4,12 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import type { EvidenceRevision } from '@evidgate/sdk';
 import { HlmAlertImports } from '@evidgate/ui/alert';
+import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { map, startWith } from 'rxjs';
 import type { ApiError } from '../../../../core/http/api-error';
+import { AbsoluteTimeComponent } from '../../../../shared/time/absolute-time.component';
 import {
   MissingReasonList,
   type MissingReason,
@@ -16,6 +18,7 @@ import { RetryAfterComponent } from '../../../../shared/ui/conflict';
 import { ErrorPatternComponent } from '../../../../shared/ui/states/error-pattern.component';
 import { LoadingPatternComponent } from '../../../../shared/ui/states/loading-pattern.component';
 import { CopyValueButtonComponent } from '../../../../shared/ui/values/copy-value-button.component';
+import { NumberValueComponent } from '../../../../shared/ui/values/number-value.component';
 import { EvidenceBadgeComponent } from '../../../../shared/ui/verdict/evidence-badge.component';
 import type { Completeness } from '../../../../shared/ui/verdict/verdict-values';
 import type { DecisionViewModel } from '../decision/decision-view-model';
@@ -38,6 +41,7 @@ import { resolveEvidenceAnchor } from './run-evidence-anchors';
   selector: 'app-evidence-panel',
   imports: [
     HlmAlertImports,
+    HlmBadge,
     HlmButton,
     HlmCardImports,
     EvidenceBadgeComponent,
@@ -47,6 +51,8 @@ import { resolveEvidenceAnchor } from './run-evidence-anchors';
     RetryAfterComponent,
     MissingReasonList,
     CopyValueButtonComponent,
+    AbsoluteTimeComponent,
+    NumberValueComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0', '(click)': 'onReasonLinkClick($event)' },

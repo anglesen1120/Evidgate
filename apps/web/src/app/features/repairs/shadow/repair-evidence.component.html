@@ -1,0 +1,231 @@
+@let ctx = context();
+<section hlmCard [size]="'sm'">
+  <header hlmCardHeader class="flex flex-wrap items-center justify-between gap-2">
+    <h2 hlmCardTitle [size]="'section'">{{ copy[panel()] }}</h2>
+    @if (panel() === 'original') {
+      <app-status-pill [tone]="'danger'" [label]="copy.failed" />
+    }
+  </header>
+  <div hlmCardContent>
+    @switch (panel()) {
+      @case ('original') {
+        <app-inline-feedback
+          [tone]="'destructive'"
+          [announcement]="'off'"
+          [title]="copy.timeout"
+          [description]="copy.beforeAssertion"
+        />
+        <dl class="facts">
+          <div>
+            <dt>{{ copy.completeness }}</dt>
+            <dd>
+              <app-evidence-badge [completeness]="record.completeness" [compact]="true" />
+              <span>{{ copy.missingShard }}</span>
+            </dd>
+          </div>
+          <div>
+            <dt>{{ copy.outcome }}</dt>
+            <dd>
+              <app-outcome-pill [outcome]="record.outcome" [compact]="true" />
+              <code>{{ record.outcome }}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>{{ copy.decision }}</dt>
+            <dd>
+              <app-decision-chip [decision]="record.decision" [compact]="true" />
+              <code>{{ record.evidence }}</code>
+            </dd>
+          </div>
+        </dl>
+        <code>{{ record.before }}</code>
+        <dl class="facts">
+          <div>
+            <dt>{{ copy.source }}</dt>
+            <dd>
+              <code>{{ record.incident }} · {{ record.classification }}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>{{ copy.run }}</dt>
+            <dd>
+              <code>{{ record.run }} · {{ record.evidence }}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>{{ copy.raw }}</dt>
+            <dd>
+              <code>{{ record.raw }}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>{{ copy.captured }}</dt>
+            <dd>
+              <code>{{ record.captured }}</code>
+            </dd>
+          </div>
+        </dl>
+        <a
+          hlmBtn
+          [variant]="'outline'"
+          class="w-fit min-h-11"
+          [routerLink]="ctx.link('failure-detail')"
+          [queryParams]="{ id: record.incident }"
+          >{{ copy.originalLink }}</a
+        >
+      }
+      @case ('diff') {
+        @if (ctx.revision().revision === 7) {
+          <dl class="compare">
+            <div>
+              <dt>{{ copy.before }}</dt>
+              <dd>
+                <code>{{ record.before }}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>{{ copy.after }}</dt>
+              <dd>
+                <code>{{ record.after }}</code>
+              </dd>
+            </div>
+          </dl>
+          <p>{{ copy.unchanged }}</p>
+          <code>{{ record.assertion }}</code>
+          <dl class="facts">
+            <div>
+              <dt>{{ copy.assertion }}</dt>
+              <dd>
+                <code>{{ record.assertionHash }} → {{ record.assertionHash }}</code>
+              </dd>
+            </div>
+          </dl>
+        } @else {
+          <p>{{ copy.selectRevision }}</p>
+        }
+      }
+      @case ('result') {
+        @if (ctx.validation(); as validation) {
+          <div class="flex flex-wrap items-center gap-2">
+            <app-status-pill [tone]="'success'" [label]="copy.passed" /><strong
+              >{{ validation.sample }} · {{ copy.sandbox }}</strong
+            >
+          </div>
+          <dl class="facts">
+            <div>
+              <dt>{{ copy.shadowRun }}</dt>
+              <dd>
+                <code>{{ validation.shadowRun }}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>{{ copy.hash }}</dt>
+              <dd>
+                <code>{{ ctx.revision().hash }}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>{{ copy.samples }}</dt>
+              <dd>
+                <code>{{ validation.sample }}</code>
+              </dd>
+            </div>
+          </dl>
+        } @else {
+          <app-inline-feedback [title]="validationNote()" />
+        }
+        <p class="text-muted-foreground">{{ copy.qualify }}</p>
+      }
+      @case ('validation') {
+        @if (ctx.state() === 'filtered') {
+          <p>{{ copy.filtered }}</p>
+        } @else if (ctx.validation()) {
+          <div
+            hlmTableContainer
+            tabindex="0"
+            role="region"
+            [attr.aria-label]="copy.validation"
+            class="max-w-full overflow-x-auto"
+          >
+            <table hlmTable>
+              <thead hlmTHead>
+                <tr hlmTr>
+                  <th hlmTh scope="col">{{ copy.check }}</th>
+                  <th hlmTh scope="col">{{ copy.evidence }}</th>
+                  <th hlmTh scope="col">{{ copy.checkResult }}</th>
+                </tr>
+              </thead>
+              <tbody hlmTBody>
+                @for (row of checks; track row[0]) {
+                  <tr hlmTr>
+                    <th hlmTh scope="row">{{ row[0] }}</th>
+                    <td hlmTd>{{ row[1] }}</td>
+                    <td hlmTd>
+                      @if (row[2] === copy.passed) {
+                        <app-status-pill [tone]="'success'" [label]="row[2]" />
+                      } @else {
+                        {{ row[2] }}
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <p>{{ validationNote() }}</p>
+        }
+      }
+      @case ('provenance') {
+        @if (ctx.state() === 'nolineage') {
+          <app-inline-feedback [title]="copy.nolineage" />
+        } @else {
+          <p>
+            <code
+              >{{ record.incident }} → {{ record.id }}
+              @if (ctx.revision().revision === 7) {
+                → {{ record.knowledge }}
+              }
+            </code>
+          </p>
+          <dl class="facts">
+            <div>
+              <dt>{{ copy.manual }}</dt>
+              <dd>
+                <code>{{ record.caseId }} · {{ record.manual }}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>{{ copy.manifest }}</dt>
+              <dd>
+                <code>{{ record.manifest }}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>{{ copy.build }}</dt>
+              <dd>
+                <code>{{ record.build }}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>{{ copy.base }}</dt>
+              <dd>
+                <code>{{ record.base }}</code>
+              </dd>
+            </div>
+          </dl>
+          @if (ctx.revision().revision === 7) {
+            <a
+              hlmBtn
+              [variant]="'outline'"
+              class="w-fit min-h-11"
+              [routerLink]="ctx.link('knowledge-lineage')"
+              [queryParams]="{ id: record.knowledge }"
+              >{{ copy.lineageLink }}</a
+            >
+          }
+        }
+      }
+    }
+  </div>
+</section>

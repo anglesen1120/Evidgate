@@ -1,30 +1,36 @@
-<p class="eg-type-caption m-0 mb-(--eg-space-3)" data-run-evidence-hint>{{ copy.evidenceHint }}</p>
 <app-data-table
   [columns]="columns()"
   [rows]="rows()"
   [rowId]="rowId"
   [caption]="copy.caption"
+  [rowHeight]="'compact'"
   [fitToContainer]="true"
 />
+<p
+  class="eg-type-caption px-(--eg-space-5) py-(--eg-space-3) text-muted-foreground wrap-anywhere"
+  data-run-evidence-hint
+>
+  {{ copy.evidenceHint }}
+</p>
 
 <ng-template #identityCell let-row let-stacked="stacked">
   @let visibleId = stacked ? row.run_id : preview(row.run_id, identifierPreviewLength);
   <div
-    class="identifier grid gap-(--eg-space-2)"
+    class="identifier grid justify-items-start gap-(--eg-space-1)"
     [class.min-w-max]="!stacked"
     [class.min-w-0]="stacked"
     data-run-row
     [attr.data-run-id]="row.run_id"
   >
     <a
-      class="inline-flex min-h-(--eg-control-touch) min-w-0 items-center font-mono text-primary underline underline-offset-(--eg-space-1) hover:text-foreground active:text-foreground focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+      class="inline-flex min-h-(--eg-control-touch) min-w-0 items-center font-mono text-primary font-(weight:--eg-weight-bold) underline underline-offset-(--eg-space-1) hover:text-foreground active:text-foreground focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
       [routerLink]="[row.run_id]"
       [queryParamsHandling]="'preserve'"
       [class.whitespace-nowrap]="!stacked"
       [attr.aria-label]="stacked ? visibleId : visibleId + ' (' + row.run_id + ')'"
       >{{ visibleId }}</a
     >
-    <app-copy-value-button [value]="row.run_id" [label]="copy.id" />
+    <app-copy-value-button [value]="row.run_id" [label]="copy.id" [iconOnly]="true" />
   </div>
 </ng-template>
 <ng-template #stateCell let-row>
@@ -45,7 +51,7 @@
 </ng-template>
 <ng-template #refCell let-row let-stacked="stacked">
   <div class="ref-cell grid min-w-0 justify-items-start gap-(--eg-space-2)">
-    <bdi class="block min-w-0 w-full"
+    <bdi class="block min-w-0 w-full font-mono"
       ><app-data-table-value
         [value]="row.ref.name === null ? copy.unavailableRef : displayRef(row.ref.name)"
         [truncate]="!stacked"
