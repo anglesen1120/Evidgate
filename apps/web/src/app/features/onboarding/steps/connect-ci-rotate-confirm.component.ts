@@ -67,7 +67,7 @@ export interface RotateScope {
           replacement there; rotation does not update CI for you.
         </p>
         <dl
-          class="m-0 grid min-w-0 gap-(--eg-space-4) [&_dd]:m-0 [&_dd]:wrap-anywhere [&_dt]:text-muted-foreground"
+          class="m-0 grid min-w-0 gap-(--eg-space-4) rounded-(--eg-radius-md) bg-muted p-(--eg-space-4) text-sm sm:grid-cols-2 [&>div]:min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:mt-(--eg-space-1) [&_dd]:font-semibold [&_dd]:wrap-anywhere"
         >
           <div>
             <dt i18n="@@onboarding.connect.token-title">Ingest token</dt>

@@ -80,14 +80,20 @@ let nextQuickstartId = 0;
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { 'data-testid': 'cli-quickstart', class: 'block min-w-0' },
   template: `
-    <section hlmCard class="gap-(--eg-space-4) p-(--eg-space-6)" [attr.aria-labelledby]="headingId">
-      <h3 hlmCardTitle [size]="subsectionHeadingSize" class="m-0" [id]="headingId">
-        {{ heading }}
-      </h3>
-      <p hlmCardDescription class="m-0" [id]="hintId">{{ hint }}</p>
+    <section
+      hlmCard
+      class="min-w-0 gap-(--eg-space-4) p-(--eg-space-4) md:p-(--eg-space-5)"
+      [attr.aria-labelledby]="headingId"
+    >
+      <header class="grid min-w-0 gap-(--eg-space-2) border-b border-border pb-(--eg-space-4)">
+        <h3 hlmCardTitle [size]="subsectionHeadingSize" class="m-0" [id]="headingId">
+          {{ heading }}
+        </h3>
+        <p hlmCardDescription class="m-0 text-sm" [id]="hintId">{{ hint }}</p>
+      </header>
       <pre
         #snippetControl
-        class="m-0 min-w-0 max-w-full whitespace-pre-wrap rounded-md border border-border bg-muted p-(--eg-space-4) font-mono text-xs [overflow-wrap:anywhere] focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+        class="m-0 min-w-0 max-w-full rounded-(--eg-radius-md) border border-border bg-muted p-(--eg-space-4) font-mono text-xs whitespace-pre-wrap wrap-anywhere text-foreground focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
         tabindex="0"
         [attr.aria-labelledby]="headingId"
         [attr.aria-describedby]="hintId"
