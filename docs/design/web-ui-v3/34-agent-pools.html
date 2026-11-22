@@ -175,7 +175,7 @@ document.addEventListener('click', async e=>{
  if(button.hasAttribute('data-set-state')){state(button.dataset.setState);controls.focus()}
  if(button.dataset.recordKey){selected=button.dataset.recordKey;loginTarget()}
  if(button.dataset.dialogOpen){document.getElementById(button.dataset.dialogOpen)?.querySelector('form')?.reset()}
- 
+
  if(button.hasAttribute('data-copy')){const node=button.closest('dialog')?.querySelector('[data-form-status]')||$('#feedback');
  try{await navigator.clipboard.writeText(button.dataset.copy);say('Copied the displayed text.','Đã sao chép nội dung hiển thị.',node)}catch{say('Copy unavailable. Select the displayed text to copy it.','Không thể sao chép. Chọn văn bản đang hiển thị để sao chép.',node)}}
 });

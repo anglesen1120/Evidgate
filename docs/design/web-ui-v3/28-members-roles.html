@@ -313,7 +313,7 @@ function openRow(trigger){
  if(trigger.dataset.record){selected=trigger.dataset.record;rowTrigger=trigger;syncPreviewLink();}
  const a=current(); if(!a||$('live').hidden)return;
  if(id==='view'){prepareView(a);return;}
- 
+
  if(!frozen() && id==='edit' && a[0]!=='ha' && ['active','accepted'].includes(a[4]))action('edit');
 }
 document.addEventListener('click',e=>{const b=e.target.closest('[data-dialog-open][data-record]');if(b)openRow(b);});
@@ -324,7 +324,7 @@ if(modalKey && !$('live').hidden){
  if(modalKey==='role-removal' && !frozen() && (!requestedObject||requestedObject==='linh')){
  selected='linh';draft={id:selected,roles:['test_maintainer','viewer']};openForm('role-removal','Remove assigned roles?|Thu hồi vai trò đã cấp?',facts([['Member|Thành viên',w(current()[2])],['Roles to remove|Vai trò sẽ thu hồi',code('qa_engineer')],['Remaining roles|Vai trò sau thay đổi',code(draft.roles.join(', '))]])+note('Review fixture only. Project assignments are unchanged.|Chỉ là tình huống mẫu. Phân quyền dự án không đổi.'),'Confirm role change|Xác nhận thay đổi vai trò',true);
  }else if(modalKey==='view')prepareView(current());
- 
+
  else {const verb={edit:'edit',decline:'remove',invite:'invite'}[modalKey];if(verb){
   let target=current();
   if(!requestedObject && ['edit','remove'].includes(verb))target=rows.find(a=>a[0]==='linh');
