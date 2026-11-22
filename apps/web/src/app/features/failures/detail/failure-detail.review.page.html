@@ -1,0 +1,136 @@
+<app-page-header [title]="c.title" [description]="c.intro">
+  <a appPageHeaderActions hlmBtn [variant]="'outline'" [routerLink]="inbox()">{{ c.inbox }}</a>
+  @if (record(); as r) {
+    <a
+      appPageHeaderActions
+      hlmBtn
+      [variant]="'outline'"
+      [routerLink]="history()"
+      [queryParams]="{ id: r.caseId }"
+      >{{ c.history }}</a
+    >
+  }
+</app-page-header>
+<p class="text-xs text-muted-foreground">
+  {{ text.snapshot }}
+</p>
+@switch (state()) {
+  @case ('loading') {
+    <app-loading-pattern [label]="c.loading" />
+  }
+  @case ('401') {
+    <app-empty-pattern [title]="c.expired" [description]="c.expiredBody" />
+  }
+  @case ('404') {
+    <app-not-found-pattern />
+  }
+  @case ('429') {
+    <app-retry-after [retryAfterSeconds]="60" [requestId]="'req-901'" />
+  }
+  @case ('error') {
+    <app-inline-feedback
+      [tone]="'destructive'"
+      [title]="c.error"
+      [description]="'req-901'"
+      [actionLabel]="c.retry"
+      (action)="reload()"
+    />
+  }
+  @case ('empty') {
+    <app-empty-pattern [title]="c.empty" [description]="c.emptyBody" />
+  }
+  @default {
+    @if (record(); as r) {
+      <div class="grid min-w-0 gap-(--eg-space-4) sm:grid-cols-2 xl:grid-cols-4">
+        @for (tile of tiles(); track tile.label) {
+          <section hlmCard class="min-w-0 gap-(--eg-space-3) p-(--eg-space-5)">
+            <h2 class="flex items-center gap-2 font-semibold">
+              <hlm-icon class="size-4" [name]="tile.icon" />{{ tile.label }}
+            </h2>
+            <strong class="font-(family-name:--eg-font-display) text-2xl">{{ tile.value }}</strong>
+            <p class="text-xs text-muted-foreground">{{ tile.hint }}</p>
+          </section>
+        }
+      </div>
+      @if (r.id === 'inc-91') {
+        <div
+          class="grid min-w-0 items-start gap-(--eg-space-5) lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]"
+        >
+          <app-failure-evidence
+            [state]="state()"
+            [artifactPath]="artifact()"
+            [historyPath]="history()"
+            (clearFilter)="reload()"
+          />
+          <aside class="grid min-w-0 gap-(--eg-space-4)">
+            @if (notice(); as n) {
+              @if (state() !== 'nomatch' && state() !== 'infra') {
+                <app-inline-feedback
+                  [title]="n[0]"
+                  [description]="n[1]"
+                  [tone]="
+                    ['success', 'closed'].includes(state())
+                      ? 'info'
+                      : ['403', '409', '412', '422'].includes(state())
+                        ? 'destructive'
+                        : 'info'
+                  "
+                  [actionLabel]="state() === '412' ? c.retry : undefined"
+                  (action)="reload('latest')"
+                />
+              }
+            }
+            <app-triage-review [state]="state()" [classification]="r.classification" />
+            @if (state() !== 'v1') {
+              <button
+                hlmBtn
+                [variant]="'outline'"
+                disabled
+                [attr.aria-describedby]="'not-eligible'"
+              >
+                {{ c.propose }}
+              </button>
+              <p id="not-eligible" class="text-xs text-muted-foreground">{{ c.notEligible }}</p>
+            }
+          </aside>
+        </div>
+      } @else {
+        <section hlmCard class="grid gap-3 p-(--eg-space-6)">
+          <h2 hlmCardTitle [size]="'section'">{{ c.original }}</h2>
+          <code>{{ text.addressContext }}</code>
+          <app-status-pill [tone]="'danger'" [label]="c.failed" />
+          <strong>{{ r.message }}</strong
+          ><time datetime="2026-10-13T09:43:10Z">{{ text.addressTime }}</time>
+          <p>{{ text.classification }}</p>
+        </section>
+        <section hlmCard class="grid gap-3 p-(--eg-space-6)">
+          <h2 hlmCardTitle [size]="'section'">{{ c.eligible }}</h2>
+          <p>{{ text.candidateSnapshot }}</p>
+          <div class="flex flex-wrap gap-2">
+            <app-status-pill [tone]="'success'" [label]="c.validated" /><app-status-pill
+              [tone]="'neutral'"
+              [label]="c.awaiting"
+            />
+          </div>
+          <p>{{ text.validation }}</p>
+          <a
+            hlmBtn
+            class="justify-self-start"
+            [routerLink]="shadow()"
+            [queryParams]="{ id: 'cand-73' }"
+            >{{ text.candidateLink }}</a
+          >
+        </section>
+      }
+    } @else if (id() === 'inc-93') {
+      <section hlmCard class="grid gap-3 p-(--eg-space-6)">
+        <h2 hlmCardTitle [size]="'section'">{{ c.discount }}</h2>
+        <p>{{ text.discountContext }}</p>
+        <p>{{ c.discountBody }}</p>
+        <p>{{ text.discountOwner }}</p>
+      </section>
+    } @else {
+      <app-empty-pattern [title]="c.missingId" [description]="id()" />
+    }
+  }
+}

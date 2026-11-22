@@ -1,0 +1,130 @@
+@let row = record();
+<article hlmCard class="panel gap-0" aria-labelledby="queue-detail-heading">
+  <header class="section">
+    <p class="eyeline">
+      <hlm-icon name="lucideInfo" />{{ c.detail }} · <bdi>{{ row.id }}</bdi>
+    </p>
+    <h2 id="queue-detail-heading">{{ row.title }}</h2>
+    <p class="identity">{{ row.id === 'cand-73' ? context.addressIdentity : row.hash }}</p>
+    <div class="failure">
+      <strong
+        ><hlm-icon name="lucideOctagonX" /> {{ c.original }} ·
+        <bdi>{{ row.failureRef }}</bdi></strong
+      >
+      <p>{{ row.failure }}</p>
+    </div>
+    <div class="actions">
+      @if (row.validated) {
+        <app-queue-status [kind]="'validated'" />
+      }
+      <app-queue-status [kind]="'pending'" />
+    </div>
+  </header>
+  @if (row.id === 'cand-73') {
+    <section class="section divider">
+      <h3>{{ c.change }}</h3>
+      <dl class="locator-diff">
+        <dt>− {{ c.before }}</dt>
+        <dd>
+          <code>{{ before }}</code>
+        </dd>
+        <dt>+ {{ c.after }}</dt>
+        <dd>
+          <code>{{ after }}</code>
+        </dd>
+      </dl>
+      <dl class="facts">
+        <div>
+          <dt>{{ c.evidence }}</dt>
+          <dd>
+            <hlm-icon name="lucideInfo" /> {{ c.incomplete }}<span>{{ c.missing }}</span>
+          </dd>
+        </div>
+        <div>
+          <dt>{{ c.outcome }}</dt>
+          <dd>
+            <code>{{ context.outcome }}</code>
+          </dd>
+        </div>
+        <div>
+          <dt>{{ c.decision }}</dt>
+          <dd>
+            <app-decision-chip [decision]="context.decision" [compact]="true" />
+            {{ context.decisionRevision }}
+          </dd>
+        </div>
+      </dl>
+    </section>
+  }
+  <section class="section divider">
+    <h3><hlm-icon name="lucideActivity" /> {{ c.shadow }}</h3>
+    @if (row.samples !== null) {
+      <p class="actions">
+        <strong>{{ row.samples.passed }}/{{ row.samples.total }}</strong
+        ><app-queue-status [kind]="'sandbox'" />
+      </p>
+      @if (row.id === 'cand-73') {
+        <figure class="batches">
+          <ol>
+            @for (count of batches; track $index) {
+              <li>
+                <svg
+                  viewBox="0 0 10 7"
+                  [attr.preserveAspectRatio]="'none'"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <rect x="1" [attr.y]="7 - count" width="8" [attr.height]="count" />
+                </svg>
+                <span
+                  ><span class="sr-only">{{ c.batch }} </span>{{ $index + 1 }} · {{ count }}</span
+                >
+              </li>
+            }
+          </ol>
+          <figcaption>{{ c.samples }}</figcaption>
+        </figure>
+      }
+    } @else {
+      <p>{{ c.unsampled }} · {{ c.noRate }}. {{ c.noApproval }}.</p>
+    }
+    <p class="muted">{{ c.notCI }}</p>
+  </section>
+  @if (row.id === 'cand-73') {
+    <section class="section divider">
+      <h3>{{ c.safety }}</h3>
+      <p>
+        <hlm-icon name="lucideCheck" /> {{ c.preserved }} · <bdi>{{ context.incident }}</bdi>
+      </p>
+      <h3>{{ c.history }}</h3>
+      <dl class="timeline">
+        <dt>{{ c.original }}</dt>
+        <dd><app-absolute-time [value]="context.failureAt" /></dd>
+        <dt>{{ c.chronology }}</dt>
+        <dd><app-absolute-time [value]="row.createdAt" /></dd>
+        <dt>{{ c.validatedAt }}</dt>
+        <dd><app-absolute-time [value]="context.validatedAt" /></dd>
+        <dt>{{ c.author }}</dt>
+        <dd>{{ context.author }}</dd>
+        <dt>{{ c.reviewer }}</dt>
+        <dd>{{ context.reviewer }}</dd>
+      </dl>
+    </section>
+  }
+  <footer class="actions section divider">
+    <a hlmBtn [variant]="'outline'" [routerLink]="shadowRoute()" [queryParams]="{ id: row.id }">{{
+      c.inspect
+    }}</a>
+    @if (canReview(row)) {
+      <a
+        hlmBtn
+        [variant]="'outline'"
+        [routerLink]="approvalRoute()"
+        [queryParams]="{ id: row.id }"
+        >{{ c.approval }}</a
+      >
+    } @else {
+      <button hlmBtn [variant]="'outline'" type="button" disabled>{{ c.approval }}</button>
+    }
+  </footer>
+</article>

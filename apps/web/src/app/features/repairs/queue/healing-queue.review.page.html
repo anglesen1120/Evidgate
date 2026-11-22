@@ -1,0 +1,335 @@
+<div class="queue-page">
+  <app-page-header [title]="c.title" [description]="c.subtitle">
+    @if (populated()) {
+      <div appPageHeaderActions class="actions">
+        <button hlmBtn type="button" [variant]="'outline'" (click)="store.open('switch')">
+          {{ c.switch }}
+        </button>
+        <button hlmBtn type="button" [variant]="'outline'" (click)="store.open('rules')">
+          {{ c.rules }}
+        </button>
+        <button
+          hlmBtn
+          type="button"
+          data-review-selected
+          [disabled]="!checked().length"
+          (click)="store.open('bulk')"
+        >
+          <hlm-icon name="lucideCheck" />{{ c.bulk }} ({{ checked().length }})
+        </button>
+        @if (!checked().length) {
+          <small>{{ c.unselected }}</small>
+        }
+      </div>
+    }
+  </app-page-header>
+  @if (populated()) {
+    <div class="meta">
+      <p>{{ c.asOf }} <app-absolute-time [value]="instant()" /></p>
+      <p class="identity">{{ context.project }}</p>
+    </div>
+    @if (state() === 'over-sla') {
+      <p role="status">{{ c.dated }}</p>
+    }
+    @if (store.confirmed() || state() === 'success') {
+      <p class="notice" role="status"><hlm-icon name="lucideCheck" /> {{ c.success }}</p>
+    }
+    <div class="kpis">
+      <section hlmCard class="metric">
+        <h2><hlm-icon name="lucideClock" />{{ c.waiting }}</h2>
+        <strong>{{ totals().all }}</strong
+        ><small>{{ c.readyCount }}: {{ eligible().length }}</small>
+      </section>
+      <section hlmCard class="metric">
+        <h2><hlm-icon name="lucideClock" />{{ c.median }}</h2>
+        <strong>—</strong><small>{{ c.noDecisions }}</small>
+      </section>
+      <section hlmCard class="metric">
+        <h2><hlm-icon name="lucideActivity" />{{ c.rate }}</h2>
+        <strong>{{
+          totals().samples ? (totals().passed / totals().samples | percent) : c.noRate
+        }}</strong
+        ><small>{{ c.observed }}: {{ totals().passed }}/{{ totals().samples }}</small>
+      </section>
+      <section hlmCard class="metric">
+        <h2><hlm-icon name="lucideClock" />{{ c.sla }}</h2>
+        <strong>{{ totals().sla }}</strong
+        ><small>{{ c.slaNote }}</small>
+      </section>
+    </div>
+    <div class="workspace">
+      <section hlmCard class="panel" aria-labelledby="candidate-queue-title">
+        <header class="section">
+          <div class="heading-line">
+            <h2 id="candidate-queue-title">
+              {{ c.queue }} <small>{{ totals().all }}</small>
+            </h2>
+            <button
+              hlmBtn
+              [variant]="'outline'"
+              type="button"
+              [attr.aria-label]="c.sort + ': ' + (store.oldest() ? c.old : c.new)"
+              (click)="store.flipSort()"
+            >
+              {{ store.oldest() ? c.old : c.new }} <hlm-icon name="lucideChevronDown" />
+            </button>
+          </div>
+          <div class="actions" role="group" [attr.aria-label]="c.filter">
+            @for (filter of filters; track filter) {
+              <button
+                hlmBtn
+                type="button"
+                [size]="'sm'"
+                data-filter
+                [variant]="filter === store.filter() ? 'secondary' : 'outline'"
+                [attr.aria-pressed]="filter === store.filter()"
+                (click)="store.setFilter(filter)"
+              >
+                {{ c[filter] }} {{ totals()[filter] }}
+              </button>
+            }
+          </div>
+        </header>
+        <div class="section divider">
+          <label hlmLabel for="queue-find">{{ c.search }}</label
+          ><input
+            hlmInput
+            #find
+            id="queue-find"
+            type="search"
+            [value]="store.search()"
+            (input)="store.find(find.value)"
+          />
+        </div>
+        <ul class="record-list">
+          @for (row of visible(); track row.id) {
+            <li
+              hlmCard
+              [attr.data-record]="row.id"
+              [class.inspected]="visibleDetail()?.id === row.id"
+            >
+              <div class="record-title">
+                <hlm-checkbox
+                  [checked]="store.checkedIds().includes(row.id)"
+                  [disabled]="!canReview(row)"
+                  [aria-label]="c.choose + ': ' + row.id"
+                  (checkedChange)="store.select(row, $event)"
+                />
+                <div>
+                  <a
+                    class="record-link"
+                    [routerLink]="[]"
+                    [queryParams]="{ id: row.id }"
+                    [queryParamsHandling]="'merge'"
+                    [attr.aria-current]="visibleDetail()?.id === row.id ? 'true' : null"
+                    [attr.aria-label]="c.focus + ': ' + row.title + ' · ' + row.id"
+                    >{{ row.title }}</a
+                  >
+                  <p class="identity">{{ row.id }} · {{ c[row.kind] }}</p>
+                </div>
+              </div>
+              <p class="origin-line">
+                <strong>{{ c.original }}</strong> · <bdi>{{ row.failureRef }}</bdi>
+              </p>
+              <div class="actions">
+                <app-queue-status [kind]="'pending'" />
+                @let minutes = age(row);
+                @if (minutes !== null) {
+                  <span>
+                    @if (minutes >= 60) {
+                      {{ (minutes - (minutes % 60)) / 60 }} {{ c.hours }}
+                    }
+                    {{ minutes % 60 }} {{ c.minutes }}</span
+                  >
+                } @else {
+                  <span>{{ c.noAge }}</span>
+                }
+                @if (matches(row, 'sla')) {
+                  <app-queue-status [kind]="'overdue'" />
+                }
+              </div>
+              @if (row.samples !== null) {
+                <div class="actions">
+                  <strong>{{ row.samples.passed }}/{{ row.samples.total }}</strong
+                  ><app-queue-status [kind]="'sandbox'" />
+                  @if (row.validated) {
+                    <app-queue-status [kind]="'validated'" />
+                  }
+                </div>
+              } @else {
+                <p>{{ c.unsampled }} · {{ c.noRate }}. {{ c.noApproval }}.</p>
+              }
+              <div class="actions">
+                <a
+                  hlmBtn
+                  [variant]="'link'"
+                  data-shadow
+                  [routerLink]="shadowRoute()"
+                  [queryParams]="{ id: row.id }"
+                  >{{ c.inspect }} <hlm-icon name="lucideChevronRight"
+                /></a>
+                @if (canReview(row)) {
+                  <a
+                    hlmBtn
+                    [variant]="'outline'"
+                    [routerLink]="approvalRoute()"
+                    [queryParams]="{ id: row.id }"
+                    >{{ c.approval }}</a
+                  >
+                } @else {
+                  <button hlmBtn type="button" [variant]="'outline'" disabled>
+                    {{ c.approval }}
+                  </button>
+                }
+              </div>
+            </li>
+          }
+        </ul>
+        @if (!visible().length) {
+          <app-empty-pattern
+            [bare]="true"
+            [title]="c.filtered"
+            [description]="c.filteredNote"
+            [actionLabel]="c.clear"
+            (action)="store.clearFilters()"
+          />
+        }
+      </section>
+      @if (visibleDetail(); as row) {
+        <app-queue-detail
+          [record]="row"
+          [shadowRoute]="shadowRoute()"
+          [approvalRoute]="approvalRoute()"
+        />
+      }
+    </div>
+  } @else {
+    @switch (state()) {
+      @case ('loading') {
+        <app-loading-pattern [layout]="'cards'" [label]="c.loading" />
+      }
+      @case ('empty') {
+        <app-empty-pattern [title]="c.empty" [description]="c.emptyNote" />
+      }
+      @case ('filtered') {
+        <app-empty-pattern
+          [title]="c.filtered"
+          [description]="c.filteredNote"
+          [actionLabel]="c.clear"
+          (action)="store.clearFilters(); go('default')"
+        />
+      }
+      @case ('403') {
+        <app-forbidden-pattern />
+      }
+      @case ('error') {
+        <app-error-pattern (retry)="go('default')" />
+      }
+      @case ('disabled') {
+        <app-empty-pattern [title]="c.disabled" [description]="c.disabledNote" />
+      }
+      @case ('unavailable') {
+        <app-empty-pattern
+          [title]="c.unavailable"
+          [description]="c.unavailableNote"
+          [actionLabel]="c.retry"
+          (action)="go('default')"
+        />
+      }
+      @case ('412') {
+        <app-empty-pattern
+          [title]="c.conflict"
+          [description]="c.conflictNote"
+          [actionLabel]="c.reload"
+          (action)="go('reloaded')"
+        />
+      }
+      @case ('reloaded') {
+        <app-empty-pattern [title]="c.reloaded" [description]="c.reloadedNote" />
+        <p class="identity">{{ context.replacementIdentity }}</p>
+      }
+      @default {
+        <app-not-found-pattern />
+      }
+    }
+    @if (state() === '412' || state() === 'reloaded') {
+      <p>{{ c.retained }}</p>
+    }
+    @if (
+      state() === '412' ||
+      state() === 'reloaded' ||
+      state() === 'disabled' ||
+      state() === 'unavailable'
+    ) {
+      <aside hlmCard class="section">
+        <h2>{{ c.recorded }}</h2>
+        <p class="failure">
+          <strong>{{ c.original }} · {{ address.failureRef }}</strong
+          ><br />{{ address.failure }}
+        </p>
+        <dl class="facts">
+          <div>
+            <dt>{{ c.evidence }}</dt>
+            <dd>{{ c.incomplete }} · {{ c.missing }}</dd>
+          </div>
+          <div>
+            <dt>{{ c.outcome }}</dt>
+            <dd>{{ context.outcome }}</dd>
+          </div>
+          <div>
+            <dt>{{ c.decision }}</dt>
+            <dd>{{ context.storedDecision }}</dd>
+          </div>
+        </dl>
+        @if (state() !== 'reloaded') {
+          <p>{{ context.recordedShadow }} <app-queue-status [kind]="'sandbox'" /></p>
+        }
+      </aside>
+    }
+  }
+  @if (dialog(); as kind) {
+    <hlm-dialog
+      [state]="'open'"
+      [aria-label]="c[kind]"
+      [autoFocus]="'[data-cancel]'"
+      [restoreFocus]="true"
+      (closed)="closeDialog()"
+    >
+      <hlm-dialog-content
+        *hlmDialogPortal
+        [showCloseButton]="false"
+        class="max-h-[90dvh] overflow-y-auto wrap-anywhere"
+      >
+        <header hlmDialogHeader>
+          <h2 hlmDialogTitle>{{ c[kind] }}</h2>
+          <p hlmDialogDescription>
+            {{ kind === 'bulk' ? c.preview : kind === 'rules' ? c.rulesNote : c.switchNote }}
+          </p>
+        </header>
+        @if (kind === 'bulk') {
+          <ul>
+            @for (row of checked(); track row.id) {
+              <li class="identity">{{ row.id }} · {{ row.hash }}</li>
+            }
+          </ul>
+        }
+        <footer hlmDialogFooter>
+          <button hlmBtn [variant]="'outline'" type="button" data-cancel (click)="closeDialog()">
+            {{ kind === 'bulk' ? c.cancel : c.close }}
+          </button>
+          @if (kind === 'bulk') {
+            <button
+              hlmBtn
+              type="button"
+              data-confirm
+              [disabled]="!checked().length"
+              (click)="confirm()"
+            >
+              {{ c.confirm }}
+            </button>
+          }
+        </footer>
+      </hlm-dialog-content>
+    </hlm-dialog>
+  }
+</div>

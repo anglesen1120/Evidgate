@@ -1,0 +1,183 @@
+@let s = snapshot().state;
+<app-page-header
+  [title]="isStudio() ? c.sandbox : c.title"
+  [description]="isStudio() ? c.notCi : c.intro"
+/>
+@if (isStudio()) {
+  <section hlmCard>
+    <div hlmCardContent class="grid gap-3">
+      <app-status-pill [tone]="'neutral'" [label]="c.sandboxOnly" /><code
+        >{{ studio.id }} · {{ studio.run }} · {{ studio.case }}</code
+      ><app-inline-feedback [title]="c.sandboxMissing" />
+    </div>
+  </section>
+} @else if (s === '404') {
+  <app-not-found-pattern />
+} @else if (s === 'loading') {
+  <app-loading-pattern [label]="c.loading" />
+} @else if (s === 'empty') {
+  <app-empty-pattern [title]="c.empty" [description]="c.noOutcome" />
+} @else if (s === '401') {
+  <app-inline-feedback [title]="c.expired" [description]="c.closed" />
+} @else if (snapshot().record; as record) {
+  @switch (s) {
+    @case ('filtered') {
+      <app-empty-pattern [title]="c.filtered" /><a
+        hlmBtn
+        [variant]="'outline'"
+        [routerLink]="[]"
+        [queryParams]="{ id: record.id }"
+        >{{ c.clear }}</a
+      >
+    }
+    @case ('error') {
+      <app-inline-feedback [tone]="'destructive'" [title]="c.error" [description]="c.retained"
+        ><a
+          feedbackAction
+          hlmBtn
+          [variant]="'outline'"
+          [routerLink]="[]"
+          [queryParams]="{ id: record.id }"
+          >{{ c.retryPreview }}</a
+        ></app-inline-feedback
+      >
+    }
+    @case ('403') {
+      <app-inline-feedback [title]="c.forbidden" [description]="c.noAccess" />
+    }
+    @case ('429') {
+      <app-inline-feedback [title]="c.limited" [description]="c.wait" />
+    }
+    @case ('412') {
+      <app-inline-feedback [title]="c.conflict" [description]="c.draft"
+        ><a
+          feedbackAction
+          hlmBtn
+          [variant]="'outline'"
+          [routerLink]="[]"
+          [queryParams]="{ id: record.id, state: 'reloaded' }"
+          >{{ c.reload }}</a
+        ></app-inline-feedback
+      >
+    }
+    @case ('reloaded') {
+      <app-inline-feedback [title]="c.reloaded" [description]="c.draft" />
+    }
+  }
+  <section hlmCard [size]="'sm'">
+    <header hlmCardHeader>
+      <h2 hlmCardTitle>{{ c.pinned }}</h2>
+      <app-status-pill hlmCardAction [tone]="'info'" [label]="c.source" />
+    </header>
+    <dl hlmCardContent class="m-0 grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))]">
+      <div>
+        <dt>{{ c.run }}</dt>
+        <dd>
+          <code>{{ official.run }} · {{ official.evidence }}</code>
+        </dd>
+      </div>
+      <div>
+        <dt>{{ c.completeness }}</dt>
+        <dd>{{ c.incomplete }}</dd>
+      </div>
+      <div>
+        <dt>{{ c.outcome }}</dt>
+        <dd>
+          <code>{{ official.outcome }}</code>
+        </dd>
+      </div>
+      <div>
+        <dt>{{ c.decision }}</dt>
+        <dd><app-decision-chip [decision]="official.decision" [compact]="true" /></dd>
+      </div>
+      <div>
+        <dt>{{ c.attempt }}</dt>
+        <dd>
+          <code>{{ official.attempt }} · {{ official.case }}</code>
+        </dd>
+      </div>
+      <div>
+        <dt>{{ c.history }}</dt>
+        <dd>{{ c.retry }}</dd>
+      </div>
+    </dl>
+  </section>
+  <div class="grid min-w-0 items-start gap-4 lg:grid-cols-2">
+    @for (key of [s + record.id]; track key) {
+      <app-artifact-preview [record]="record" [state]="s" />
+    }
+    <div class="grid min-w-0 gap-3">
+      <section hlmCard [size]="'sm'">
+        <header hlmCardHeader>
+          <h2 hlmCardTitle>{{ c.meta }}</h2>
+        </header>
+        <dl hlmCardContent class="m-0 grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))]">
+          <div>
+            <dt>{{ c.artifact }}</dt>
+            <dd>
+              <code>{{ record.id }}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>{{ c.type }}</dt>
+            <dd>
+              <code>{{ record.kind }}</code>
+            </dd>
+          </div>
+          @if (record.digest) {
+            <div>
+              <dt>{{ c.checksum }}</dt>
+              <dd>
+                <code>{{ record.digest }}</code>
+              </dd>
+            </div>
+          }
+          <div>
+            <dt>{{ c.sensitivity }}</dt>
+            <dd>{{ record.sensitivity }}</dd>
+          </div>
+          @if (record.captured) {
+            <div>
+              <dt>{{ c.captured }}</dt>
+              <dd><app-absolute-time [value]="record.captured" /></dd>
+            </div>
+          }
+        </dl>
+      </section>
+      @if (s !== 'filtered' && s !== '403') {
+        <section hlmCard [size]="'sm'">
+          <header hlmCardHeader>
+            <h2 hlmCardTitle>{{ c.related }}</h2>
+          </header>
+          <ul hlmCardContent class="m-0 grid list-none gap-3">
+            @for (item of related; track item.id) {
+              <li class="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <code>{{ item.id }}</code>
+                  <div class="text-sm text-muted-foreground">{{ item.description }}</div>
+                </div>
+                <a
+                  hlmBtn
+                  [variant]="'outline'"
+                  [routerLink]="[]"
+                  [queryParams]="{ id: item.id }"
+                  [attr.aria-label]="c.metadata + ' · ' + item.id"
+                  >{{ c.metadata }}</a
+                >
+              </li>
+            }
+          </ul>
+        </section>
+      }
+    </div>
+  </div>
+  <footer>
+    <a
+      hlmBtn
+      [variant]="'outline'"
+      [routerLink]="path('failure-detail')"
+      [queryParams]="{ id: official.incident }"
+      >{{ c.original }}</a
+    >
+  </footer>
+}

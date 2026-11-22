@@ -42,14 +42,83 @@
 // (`revisions/:revisionId`), so `/dev/suite-composition/orgs/:orgId/projects/:projectId/suites/
 // revisions/:revisionId` mounts it under the identical guard chain with only the phase gate omitted.
 
-import type { Routes } from '@angular/router';
+import type { Type } from '@angular/core';
+import type { Route, Routes } from '@angular/router';
 
 import { authGuard, orgScopeGuard, permissionGuard, projectScopeGuard } from '../guards';
 import { ShellComponent } from '../../shell/layout/shell.component';
 
+/**
+ * A review-only screen of the learn-and-repair area (no contract or behaviour task yet): the
+ * normal shell, the same org/project scope guards and the `healing:triage` grant the product
+ * entries carry, fed by a feature-local fixture.
+ */
+function healingReviewRoute(path: string, load: () => Promise<Type<unknown>>): Route {
+  return {
+    path,
+    component: ShellComponent,
+    children: [
+      {
+        path: 'orgs/:orgId',
+        canMatch: [authGuard, orgScopeGuard],
+        children: [
+          {
+            path: 'projects/:projectId',
+            canMatch: [projectScopeGuard, permissionGuard('healing:triage')],
+            data: { pageHeadingLevel: 1 },
+            loadComponent: load,
+          },
+        ],
+      },
+    ],
+  };
+}
+
 /** The review-only routes, mounted first so a product path can never shadow one. */
 export function devRoutes(): Routes {
   return [
+    /* eslint-disable evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph; fixture-fed screens with no product route. */
+    healingReviewRoute('dev/failure-inbox', () =>
+      import('../../features/failures/inbox/failure-inbox.review.page').then(
+        (m) => m.FailureInboxReviewPage,
+      ),
+    ),
+    healingReviewRoute('dev/failure-detail', () =>
+      import('../../features/failures/detail/failure-detail.review.page').then(
+        (m) => m.FailureDetailReviewPage,
+      ),
+    ),
+    healingReviewRoute('dev/investigation-history', () =>
+      import('../../features/failures/history/investigation-history.review.page').then(
+        (m) => m.InvestigationHistoryReviewPage,
+      ),
+    ),
+    healingReviewRoute('dev/artifact-viewer', () =>
+      import('../../features/failures/artifact/artifact-viewer.review.page').then(
+        (m) => m.ArtifactViewerReviewPage,
+      ),
+    ),
+    healingReviewRoute('dev/healing-queue', () =>
+      import('../../features/repairs/queue/healing-queue.review.page').then(
+        (m) => m.HealingQueueReviewPage,
+      ),
+    ),
+    healingReviewRoute('dev/shadow-detail', () =>
+      import('../../features/repairs/shadow/shadow-detail.review.page').then(
+        (m) => m.ShadowDetailReviewPage,
+      ),
+    ),
+    healingReviewRoute('dev/healing-approval', () =>
+      import('../../features/repairs/approval/healing-approval.review.page').then(
+        (m) => m.HealingApprovalReviewPage,
+      ),
+    ),
+    healingReviewRoute('dev/knowledge-lineage', () =>
+      import('../../features/knowledge/lineage/knowledge-lineage.review.page').then(
+        (m) => m.KnowledgeLineageReviewPage,
+      ),
+    ),
+    /* eslint-enable evidgate/no-feature-cross-import */
     {
       path: 'dev/ui-gallery',
       loadComponent: () => import('../../shared/ui/gallery').then((m) => m.UiGalleryComponent),
