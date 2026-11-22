@@ -38,10 +38,6 @@
         <source>VI</source>
         <target>VI</target>
       </trans-unit>
-<trans-unit id="auth.login.introduction" datatype="html">
-        <source>Return to your workspace to review evidence and make informed release decisions.</source>
-        <target>Quay lại không gian làm việc để xem xét bằng chứng và đưa ra quyết định phát hành có cơ sở.</target>
-      </trans-unit>
 <trans-unit id="auth.login.welcome" datatype="html">
         <source>Welcome back</source>
         <target>Chào mừng trở lại</target>
@@ -70,14 +66,6 @@
           <context context-type="linenumber">68</context>
         </context-group>
       </trans-unit>
-<trans-unit id="auth.login.explanation" datatype="html">
-        <source>Choose your provider to continue.</source>
-        <target>Chọn nhà cung cấp để tiếp tục.</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/auth/login/login.page.ts</context>
-          <context context-type="linenumber">69</context>
-        </context-group>
-      </trans-unit>
 <trans-unit id="auth.login.google" datatype="html">
         <source>Continue with Google</source>
         <target>Tiếp tục với Google</target>
@@ -92,14 +80,6 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/auth/login/login.page.ts</context>
           <context context-type="linenumber">71</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="auth.login.credential-note" datatype="html">
-        <source>Your provider account is your only sign-in credential. Evidgate does not ask for a separate email or password.</source>
-        <target>Bạn chỉ cần tài khoản của nhà cung cấp để đăng nhập. Evidgate không yêu cầu email hoặc mật khẩu riêng.</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/auth/login/login.page.ts</context>
-          <context context-type="linenumber">72</context>
         </context-group>
       </trans-unit>
 <trans-unit id="auth.login.redirecting" datatype="html">
@@ -1477,22 +1457,6 @@
           <context context-type="linenumber">48,52</context>
         </context-group>
       </trans-unit>
-<trans-unit id="shell.layout.organization" datatype="html">
-        <source>Organization</source>
-        <target>Tổ chức</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/layout/shell.component.html</context>
-          <context context-type="linenumber">52,54</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.layout.project" datatype="html">
-        <source>Project</source>
-        <target>Dự án</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/layout/shell.component.html</context>
-          <context context-type="linenumber">54,58</context>
-        </context-group>
-      </trans-unit>
 <trans-unit id="shell.layout.workspace" datatype="html">
         <source>Evidgate workspace</source>
         <target>Không gian làm việc Evidgate</target>
@@ -1541,46 +1505,6 @@
           <context context-type="linenumber">61</context>
         </context-group>
       </trans-unit>
-<trans-unit id="shell.nav.group.design" datatype="html">
-        <source>Test design</source>
-        <target>Thiết kế kiểm thử</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">48</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.nav.group.runs" datatype="html">
-        <source>Scripts &amp; runs</source>
-        <target>Kịch bản và lượt chạy</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">49</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.nav.group.learn" datatype="html">
-        <source>Learn &amp; repair</source>
-        <target>Học và đề xuất sửa</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">50</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.nav.group.release" datatype="html">
-        <source>Release</source>
-        <target>Phát hành</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">51</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.nav.group.settings" datatype="html">
-        <source>Settings</source>
-        <target>Cài đặt</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">52</context>
-        </context-group>
-      </trans-unit>
 <trans-unit id="shell.nav.authoring" datatype="html">
         <source>Feature tree</source>
         <target>Cây chức năng</target>
@@ -1613,22 +1537,6 @@
           <context context-type="linenumber">108</context>
         </context-group>
       </trans-unit>
-<trans-unit id="shell.nav.onboarding" datatype="html">
-        <source>Onboarding</source>
-        <target>Bắt đầu</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">120</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.nav.scripts" datatype="html">
-        <source>Generated scripts</source>
-        <target>Kịch bản đã tạo</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">134</context>
-        </context-group>
-      </trans-unit>
 <trans-unit id="shell.nav.catalog" datatype="html">
         <source>Test catalog</source>
         <target>Danh mục kiểm thử</target>
@@ -1637,132 +1545,12 @@
           <context context-type="linenumber">146</context>
         </context-group>
       </trans-unit>
-<trans-unit id="shell.nav.mapping" datatype="html">
-        <source>Mapping resolution</source>
-        <target>Ánh xạ kết quả</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">158</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.nav.runs" datatype="html">
-        <source>Runs</source>
-        <target>Lượt chạy</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">170</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.nav.failures" datatype="html">
-        <source>Failure Inbox</source>
-        <target>Hộp thư lỗi</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">184</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.nav.repairs" datatype="html">
-        <source>Repair proposals</source>
-        <target>Đề xuất sửa</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">196</context>
-        </context-group>
-      </trans-unit>
 <trans-unit id="shell.nav.knowledge" datatype="html">
         <source>Knowledge lineage</source>
         <target>Nguồn gốc tri thức</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
           <context context-type="linenumber">208</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.nav.availability" datatype="html">
-        <source>Availability</source>
-        <target>Tính sẵn sàng</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">220</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.nav.studio" datatype="html">
-        <source>Test Studio</source>
-        <target>Test Studio</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">234</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.nav.suites" datatype="html">
-        <source>Suite composition</source>
-        <target>Thành phần bộ kiểm thử</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">246</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.nav.quality" datatype="html">
-        <source>Quality</source>
-        <target>Chất lượng</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">258</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.nav.releases" datatype="html">
-        <source>Releases</source>
-        <target>Bản phát hành</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">270</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.nav.policies" datatype="html">
-        <source>Release policies</source>
-        <target>Chính sách phát hành</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">282</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.nav.deploy" datatype="html">
-        <source>Deploy targets</source>
-        <target>Mục tiêu triển khai</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">294</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.nav.settings" datatype="html">
-        <source>General</source>
-        <target>Chung</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">308</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.nav.ai-settings" datatype="html">
-        <source>AI settings</source>
-        <target>Cài đặt AI</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">320</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.nav.members" datatype="html">
-        <source>Members &amp; roles</source>
-        <target>Thành viên và vai trò</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">332</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.nav.quota" datatype="html">
-        <source>Usage &amp; credits</source>
-        <target>Mức sử dụng và tín dụng AI</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">344</context>
         </context-group>
       </trans-unit>
 <trans-unit id="shell.nav.audit" datatype="html">
@@ -1795,22 +1583,6 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
           <context context-type="linenumber">392</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.nav.agents" datatype="html">
-        <source>Agent pools</source>
-        <target>Nhóm agent</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">404</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="shell.nav.integrations" datatype="html">
-        <source>Integrations &amp; webhooks</source>
-        <target>Tích hợp và webhook</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
-          <context context-type="linenumber">416</context>
         </context-group>
       </trans-unit>
 <trans-unit id="shell.nav.tokens" datatype="html">
@@ -3558,7 +3330,7 @@
       <trans-unit id="runs.detail.release.digest-for" datatype="html"><source>Digest for component <x id="key" equiv-text="componentKey"/></source><target>Mã băm của thành phần <x id="key" equiv-text="componentKey"/></target></trans-unit>
       <trans-unit id="settings.policy.tab.compare" datatype="html"><source>Compare</source><target>So sánh</target></trans-unit>
       <trans-unit id="settings.policy.tab.values" datatype="html"><source>Values</source><target>Giá trị</target></trans-unit>
-      <trans-unit id="shell.nav.quota-short" datatype="html"><source>Usage &amp; credits</source><target>Sử dụng và tín dụng AI</target></trans-unit>
+      <trans-unit id="shell.nav.quota-short" datatype="html"><source>AI credits</source><target>Tín dụng AI</target></trans-unit>
       <trans-unit id="settings.security.type-auth" datatype="html"><source>Authentication failure</source><target>Lỗi xác thực</target></trans-unit>
       <trans-unit id="settings.security.type-cross-tenant" datatype="html"><source>Cross-tenant access probe</source><target>Thử truy cập chéo tổ chức</target></trans-unit>
       <trans-unit id="settings.security.type-scanner" datatype="html"><source>Secret scanner alert</source><target>Cảnh báo quét bí mật</target></trans-unit>
@@ -4633,6 +4405,334 @@
       <trans-unit id="shared.gallery.live-status.clear" datatype="html"><source>Clear the message</source><target>Xóa nội dung thông báo</target></trans-unit>
       <trans-unit id="shared.gallery.live-status.first" datatype="html"><source>Showing the loaded cases. Refine the filters to find a specific case.</source><target>Đang hiển thị các ca đã tải. Thu hẹp bộ lọc để tìm một ca cụ thể.</target></trans-unit>
       <trans-unit id="shared.gallery.live-status.changed" datatype="html"><source>The filters changed. Showing the matching loaded cases.</source><target>Bộ lọc đã thay đổi. Đang hiển thị các ca đã tải phù hợp.</target></trans-unit>
+<trans-unit id="auth.login.organization-sign-in" datatype="html">
+        <source>Organization sign-in</source>
+        <target>Đăng nhập tổ chức</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/auth/login/login.page.ts</context>
+          <context context-type="linenumber">127</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="auth.login.organization-account" datatype="html">
+        <source>Use your organization account. Your workspace membership is checked after sign-in.</source>
+        <target>Dùng tài khoản tổ chức của bạn. Quyền thành viên được kiểm tra sau khi đăng nhập.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/auth/login/login.page.ts</context>
+          <context context-type="linenumber">135</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="auth.login.organization-access" datatype="html">
+        <source>Access is managed by your organization. No local password is required.</source>
+        <target>Tổ chức của bạn quản lý quyền truy cập. Không cần mật khẩu cục bộ.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/auth/login/login.page.ts</context>
+          <context context-type="linenumber">138</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.account.menu" datatype="html">
+        <source>Account menu</source>
+        <target>Menu tài khoản</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/shell-account.component.ts</context>
+          <context context-type="linenumber">19,22</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.account.label" datatype="html">
+        <source>Account</source>
+        <target>Tài khoản</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/shell-account.component.ts</context>
+          <context context-type="linenumber">25,29</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.account.sign-out" datatype="html">
+        <source>Sign out of this tab</source>
+        <target>Đăng xuất khỏi thẻ này</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/shell-account.component.ts</context>
+          <context context-type="linenumber">29,34</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.breadcrumb.label" datatype="html">
+        <source>Breadcrumb</source>
+        <target>Đường dẫn</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/shell-breadcrumbs.component.ts</context>
+          <context context-type="linenumber">13,14</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.search.title" datatype="html">
+        <source>Find a screen</source>
+        <target>Tìm màn hình</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/shell-search.component.html</context>
+          <context context-type="linenumber">15,17</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.search.field" datatype="html">
+        <source>Screen name</source>
+        <target>Tên màn hình</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/shell-search.component.html</context>
+          <context context-type="linenumber">17,22</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.search.matches" datatype="html">
+        <source>Matching screens</source>
+        <target>Màn hình phù hợp</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/shell-search.component.html</context>
+          <context context-type="linenumber">39,42</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.search.empty" datatype="html">
+        <source>No matching screens.</source>
+        <target>Không có màn hình phù hợp.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/shell-search.component.html</context>
+          <context context-type="linenumber">59,63</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.search.trigger" datatype="html">
+        <source>Search</source>
+        <target>Tìm kiếm</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/shell-search.component.ts</context>
+          <context context-type="linenumber">29</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.brand.subtitle" datatype="html">
+        <source>Quality workspace</source>
+        <target>Không gian chất lượng</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/shell.component.html</context>
+          <context context-type="linenumber">66,71</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.nav.group.workspace" datatype="html">
+        <source>Workspace</source>
+        <target>Không gian làm việc</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">6</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.nav.group.quality" datatype="html">
+        <source>Quality</source>
+        <target>Chất lượng</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">7</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.nav.group.healing" datatype="html">
+        <source>Healing</source>
+        <target>Sửa kiểm thử</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">8</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.nav.group.authoring" datatype="html">
+        <source>Authoring</source>
+        <target>Biên soạn</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">9</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.nav.group.administration" datatype="html">
+        <source>Administration</source>
+        <target>Quản trị</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">10</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.screen.onboarding" datatype="html">
+        <source>Project onboarding</source>
+        <target>Thiết lập dự án</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">44</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.screen.mapping" datatype="html">
+        <source>Mapping resolution</source>
+        <target>Xử lý ánh xạ</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">72</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.screen.run-detail" datatype="html">
+        <source>Run detail</source>
+        <target>Chi tiết lượt chạy</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">77</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.screen.runs" datatype="html">
+        <source>Test runs</source>
+        <target>Lượt kiểm thử</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">86</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.screen.failures" datatype="html">
+        <source>Failure inbox</source>
+        <target>Hộp thư lỗi</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">99</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.screen.releases" datatype="html">
+        <source>Release gates</source>
+        <target>Cổng phát hành</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">112</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.screen.quality" datatype="html">
+        <source>Quality overview</source>
+        <target>Tổng quan chất lượng</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">125</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.screen.repairs" datatype="html">
+        <source>Review queue</source>
+        <target>Hàng chờ duyệt</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">138</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.screen.availability" datatype="html">
+        <source>Healing availability</source>
+        <target>Trạng thái sửa cơ chế kiểm thử</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">165</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.screen.case-editor" datatype="html">
+        <source>Test case editor</source>
+        <target>Trình soạn ca kiểm thử</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">171</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.screen.import-export" datatype="html">
+        <source>Import and export</source>
+        <target>Nhập và xuất</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">172</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.screen.scripts" datatype="html">
+        <source>Generated scripts</source>
+        <target>Kịch bản được tạo</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">208</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.screen.studio" datatype="html">
+        <source>Template gallery</source>
+        <target>Thư viện mẫu</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">236</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.screen.suites" datatype="html">
+        <source>Suite composition</source>
+        <target>Cấu hình bộ kiểm thử</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">250</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.screen.members" datatype="html">
+        <source>Members</source>
+        <target>Thành viên</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">264</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.screen.settings" datatype="html">
+        <source>Settings</source>
+        <target>Cài đặt</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">277</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.screen.policies" datatype="html">
+        <source>Release policy</source>
+        <target>Chính sách phát hành</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">307</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.screen.quota" datatype="html">
+        <source>Usage and AI credits</source>
+        <target>Mức sử dụng và tín dụng AI</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">322</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.screen.agents" datatype="html">
+        <source>Agent pools</source>
+        <target>Nhóm tác nhân</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">368</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.screen.integrations" datatype="html">
+        <source>Webhook integrations</source>
+        <target>Tích hợp webhook</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">383</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.screen.deploy" datatype="html">
+        <source>Deploy targets</source>
+        <target>Đích triển khai</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">426</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.screen.ai-settings" datatype="html">
+        <source>Project AI settings</source>
+        <target>Cài đặt AI của dự án</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
+          <context context-type="linenumber">440</context>
+        </context-group>
+      </trans-unit>
+<trans-unit id="shell.layout.brand-link" datatype="html">
+        <source>Evidgate Quality workspace</source>
+        <target>Evidgate Không gian chất lượng</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/shell.component.ts</context>
+          <context context-type="linenumber">97</context>
+        </context-group>
+      </trans-unit>
 <trans-unit id="failures.artifact.title" datatype="html">
         <source>Evidence viewer</source>
         <target>Trình xem bằng chứng</target>

@@ -9,7 +9,7 @@
 // refuses. Two states are reachable:
 //
 //   - DEFAULT (`permissions-list`, 16 catalogue codes): `authoring:read`, `authoring:generate`,
-//     `authoring:write`, `audit:read` and the non-G1 codes → the design group's three entry rows
+//     `authoring:write`, `audit:read` and the non-G1 codes → the authoring group's three entry rows
 //     plus the audit log;
 //   - LIMITED (`permissions-list-limited`): `audit:read`, `authoring:read`, `membership:read`,
 //     `project:read`, `role:read` → `authoring` plus the rows those five codes gate.
@@ -32,7 +32,7 @@ import {
 /** `/orgs/:orgId/projects/:projectId/authoring` — reachable under BOTH corpus grant sets. */
 const PROJECT_AUTHORING_PATH = `/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}/authoring`;
 
-/** The default corpus session: the design group's three rows, AI settings and the audit log. */
+/** The default corpus session: the authoring group's three rows, AI settings and the audit log. */
 const DEFAULT_SESSION_SEGMENTS = [
   'ai-settings',
   'audit',
@@ -72,6 +72,36 @@ const LATER_PHASE_SEGMENTS = [
 ];
 
 test.describe('sidebar visibility (AC4)', () => {
+  test('screen search opens by keyboard and navigates only to a visible destination', async ({
+    page,
+  }) => {
+    await page.goto(
+      withVariant(
+        localePath('en', `/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}/overview`),
+        LIMITED_GRANTS,
+      ),
+    );
+    const open = page.getByRole('button', { name: 'Search', exact: true });
+    await open.focus();
+    await page.keyboard.press('Enter');
+    const picker = page.getByRole('dialog', { name: 'Find a screen' });
+    const query = picker.getByRole('combobox', { name: 'Screen name' });
+    await expect(query).toBeFocused();
+    await query.fill('pending');
+    await expect(picker.getByRole('option')).toHaveCount(0);
+    await expect(picker.getByRole('status')).toHaveText('No matching screens.');
+    await page.keyboard.press('Escape');
+    await expect(open).toBeFocused();
+    await page.keyboard.press('Enter');
+    await query.fill('feature');
+    await expect(picker.getByRole('option')).toHaveCount(1);
+    await query.press('ArrowDown');
+    await expect(picker.getByRole('option', { selected: true })).toHaveText('Feature tree');
+    await query.press('Enter');
+    await expect.poll(() => new URL(page.url()).pathname).toBe(`/en${PROJECT_AUTHORING_PATH}`);
+    await expect(page.locator('#main-content')).toBeFocused();
+  });
+
   test('the default catalogue session shows exactly the rows its codes grant', async ({ page }) => {
     await page.goto(localePath('en', PROJECT_AUTHORING_PATH));
     await expect(page.locator('app-shell-nav nav a').first()).toBeVisible();

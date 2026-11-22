@@ -1,12 +1,21 @@
-// State sheet: docs/design/web/state-sheet.md#shared-accessibility-and-themes
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
+import { APP_BASE_HREF } from '@angular/common';
 import { provideZonelessChangeDetection, signal, type WritableSignal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { vi, type Mock } from 'vitest';
 
+import { SessionStore } from '../../../core/session/session.store';
 import { AuthFlow, LOCATION_NAVIGATE, type LoginProvider, type LoginReason } from '../auth-flow';
 import { LoginPage } from './login.page';
 import { LOGIN_EXTENSION_LOADER } from './login-extension';
+
+class LoginPageHarness extends ComponentHarness {
+  static hostSelector = 'app-login-page';
+  readonly providers = this.locatorForAll('.login-providers button');
+  readonly primaryProvider = this.locatorFor('.primary-provider');
+}
 
 describe('LoginPage', () => {
   let fixture: ComponentFixture<LoginPage>;
@@ -61,27 +70,21 @@ describe('LoginPage', () => {
     vi.restoreAllMocks();
   });
 
-  it('separates branded preferences, introduction, provider card and private destination context', () => {
+  it('groups identity, provider choices and private return context in a single card', () => {
     expect(heading().getAttribute('data-title-size')).toBe('page');
     expect(root.querySelector('#provider-heading')?.getAttribute('data-title-size')).toBe(
       'subsection',
     );
-    expect(root.querySelector('#destination-heading')?.getAttribute('data-title-size')).toBe(
-      'subsection',
-    );
+    const card = root.querySelector('main > article[data-slot="card"]');
     expect(root.querySelector('.login-topbar .login-brand')?.textContent).toContain('Evidgate');
-    expect(root.querySelector('.login-intro h1')).toBe(heading());
-    expect(root.querySelector('.login-card')?.getAttribute('aria-labelledby')).toBe(
-      'provider-heading',
-    );
-    expect(root.querySelector('.login-card .primary-provider')).toBe(buttons()[0]);
-    expect(root.querySelector('.login-destination')?.textContent).toContain(
+    expect(card?.getAttribute('aria-labelledby')).toBe('login-heading');
+    expect(card?.querySelector('.login-intro h1')).toBe(heading());
+    expect(card?.querySelector('.login-providers .primary-provider')).toBe(buttons()[0]);
+    expect(card?.querySelector('.login-destination')?.textContent).toContain(
       fixture.componentInstance.savedDestination,
     );
-    expect(root.querySelector('main')?.children[0]?.classList.contains('login-intro')).toBe(true);
-    expect(root.querySelector('main')?.children[1]?.getAttribute('data-slot')).toBe('card');
-    expect(root.querySelector('main')?.children[2]?.classList.contains('login-destination')).toBe(
-      true,
+    expect(card?.querySelector('footer')?.textContent).toContain(
+      fixture.componentInstance.credentialNote,
     );
     flow.returnUrl.set('/');
     fixture.detectChanges();
@@ -229,9 +232,9 @@ describe('LoginPage', () => {
     expect(document.activeElement).not.toBe(google);
   });
 
-  it('active: delegates each provider activation to AuthFlow and nothing else', () => {
-    buttons()[0]?.click();
-    buttons()[1]?.click();
+  it('active: delegates each provider activation to AuthFlow and nothing else', async () => {
+    const login = await TestbedHarnessEnvironment.harnessForFixture(fixture, LoginPageHarness);
+    for (const provider of await login.providers()) await provider.click();
     expect(flow.start.mock.calls).toEqual([['google'], ['github']]);
     expect(flow.reason()).toBe('none');
     expect(flow.returnUrl()).toBe('/private-target?secret=never-render');
@@ -305,6 +308,17 @@ describe('LoginPage', () => {
     expect(buttons().every((button) => !button.disabled)).toBe(true);
   });
 
+  it.each(['expired', 'signed-out', 'unavailable', 'failed'] as const)(
+    'presents %s with a decorative icon and visible text inside one polite announcement',
+    (reason) => {
+      flow.reason.set(reason);
+      fixture.detectChanges();
+      expect(notice().querySelector('hlm-icon[aria-hidden="true"] svg')).not.toBeNull();
+      expect(notice().textContent?.trim()).toBeTruthy();
+      expect(notice().querySelector('[role="status"], [role="alert"]')).toBeNull();
+    },
+  );
+
   it('clears a previous notice and busy state when AuthFlow returns to idle', () => {
     flow.reason.set('unavailable');
     flow.redirecting.set(true);
@@ -315,5 +329,38 @@ describe('LoginPage', () => {
     expect(notice().textContent?.trim()).toBe('');
     expect(root.querySelector('[aria-busy="true"]')).toBeNull();
     expect(buttons().every((button) => !button.disabled)).toBe(true);
+  });
+});
+
+describe('Shell_ReturnTo_AllowListOnly', () => {
+  it.each([
+    { input: '/%2Fevil.example', expected: '/' },
+    { input: '/orgs/o1/projects/p1/runs?x=1', expected: '/orgs/o1/projects/p1/runs?x=1' },
+  ])('sends the validated target $expected in the callback', async ({ input, expected }) => {
+    const navigate = vi.fn<(url: string) => void>();
+    await TestBed.configureTestingModule({
+      imports: [LoginPage],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideRouter([]),
+        { provide: APP_BASE_HREF, useValue: '/en/' },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap({ returnUrl: input }) } },
+        },
+        { provide: SessionStore, useValue: { signedOut: signal(false), reauth: vi.fn() } },
+        { provide: LOCATION_NAVIGATE, useValue: navigate },
+        { provide: LOGIN_EXTENSION_LOADER, useValue: () => Promise.resolve(null) },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(LoginPage);
+    const login = await TestbedHarnessEnvironment.harnessForFixture(fixture, LoginPageHarness);
+    await (await login.primaryProvider()).click();
+    expect(navigate).toHaveBeenCalledOnce();
+    const start = new URL(navigate.mock.calls[0]?.[0] ?? '', document.baseURI);
+    expect(start.pathname).toBe('/v1/auth/oidc/google/start');
+    expect(start.searchParams.get('returnUrl')).toBe(
+      `/en/auth/callback?returnUrl=${encodeURIComponent(expected)}`,
+    );
   });
 });

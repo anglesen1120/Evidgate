@@ -27,16 +27,19 @@ const A11Y_EXCEPTIONS: readonly A11yException[] = exceptionsDocument.exceptions;
 
 const cases = [
   { locale: 'en', theme: 'light' },
+  { locale: 'en', theme: 'dark' },
   { locale: 'vi', theme: 'light' },
   { locale: 'vi', theme: 'dark' },
 ] as const;
 
 describe('LoginPage axe acceptance', () => {
   let previousTheme: string | null;
+  let previousStoredTheme: string | null;
   let previousLang: string | null;
 
   beforeEach(() => {
     previousTheme = document.documentElement.getAttribute('data-theme');
+    previousStoredTheme = localStorage.getItem('evidgate-theme');
     previousLang = document.documentElement.getAttribute('lang');
   });
 
@@ -45,15 +48,15 @@ describe('LoginPage axe acceptance', () => {
     else document.documentElement.setAttribute('data-theme', previousTheme);
     if (previousLang === null) document.documentElement.removeAttribute('lang');
     else document.documentElement.setAttribute('lang', previousLang);
-    localStorage.removeItem('evidgate-theme');
+    if (previousStoredTheme === null) localStorage.removeItem('evidgate-theme');
+    else localStorage.setItem('evidgate-theme', previousStoredTheme);
     vi.restoreAllMocks();
   });
 
   it.each(cases)(
     'has zero WCAG violations: $locale / $theme',
     async ({ locale, theme }) => {
-      if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-      else document.documentElement.removeAttribute('data-theme');
+      localStorage.setItem('evidgate-theme', theme);
       document.documentElement.setAttribute('lang', locale);
       // A localized base href is what renders the language switcher, so the scan covers it.
       vi.spyOn(document, 'baseURI', 'get').mockReturnValue(`https://evidgate.test/${locale}/`);
@@ -84,6 +87,7 @@ describe('LoginPage axe acceptance', () => {
       try {
         await fixture.whenStable();
         expect(TestBed.inject(LOCALE_ID)).toBe(locale);
+        expect(document.documentElement.getAttribute('data-theme')).toBe(theme);
         expect(root.querySelector('#login-heading')?.textContent?.trim()).not.toBe('');
         expect(root.querySelectorAll('.login-providers button')).toHaveLength(2);
         expect(root.querySelector('main')?.getAttribute('aria-labelledby')).toBe('login-heading');

@@ -68,34 +68,54 @@ function areaRoutePath(area: string): string {
 describe('NAV_GROUPS (09.1.1-T4.1)', () => {
   it('holds the five journey groups in order, with unique ids', () => {
     expect(NAV_GROUPS.map((group) => group.id)).toEqual([
-      'design',
-      'runs',
-      'learn',
-      'release',
-      'settings',
+      'workspace',
+      'quality',
+      'healing',
+      'authoring',
+      'administration',
     ]);
   });
 
-  it('labels every group (CR-D-2: the v2 group labels)', () => {
+  it('labels every group for the sidebar', () => {
     for (const group of NAV_GROUPS) {
       expect(group.label.length).toBeGreaterThan(0);
       expect(group.label).toMatch(/[A-Za-z]/);
     }
     expect(NAV_GROUPS.map((group) => group.label)).toEqual([
-      'Test design',
-      'Scripts & runs',
-      'Learn & repair',
-      'Release',
-      'Settings',
+      'Workspace',
+      'Quality',
+      'Healing',
+      'Authoring',
+      'Administration',
     ]);
   });
 });
 
 describe('NAV_ENTRIES (09.1.1-T4.1)', () => {
-  it('lists every sidebar entry of the v2 mockup once', () => {
-    // `docs/design/web-ui/output/assets/evidgate.js` ROUTES has 30 rows with `sidebar: true`.
+  it('retains every mounted registry entry once', () => {
     expect(NAV_ENTRIES).toHaveLength(30);
     expect(new Set(NAV_ENTRIES.map((entry) => entry.id)).size).toBe(30);
+  });
+
+  it('Shell_SidebarOrder_FromManifest', () => {
+    const screensByGroup = NAV_GROUPS.map(({ id }) =>
+      NAV_ENTRIES.filter((entry) => entry.group === id)
+        .sort((a, b) => a.order - b.order)
+        .map((entry) => entry.screenId),
+    );
+    expect(screensByGroup).toEqual([
+      ['01', '23', '25', '26'],
+      ['03', '08', '21', '22'],
+      ['12', '15', '16'],
+      ['40', '42', '46', '43', '17', '20'],
+      ['28', '27', '29', '30', '31', '32', '33', '34', '35', '36', '37', '38', '44'],
+    ]);
+    for (const entry of NAV_ENTRIES) {
+      if (entry.parentId) {
+        expect(entry.parentId).not.toBe(entry.id);
+        expect(NAV_ENTRIES.some((parent) => parent.id === entry.parentId)).toBe(true);
+      }
+    }
   });
 
   it('uses unique ids and unique URL segments', () => {
@@ -174,18 +194,22 @@ describe('NAV_ENTRIES (09.1.1-T4.1)', () => {
 
     expect(ACTIVE_PHASE).toBe('G1');
     expect(visible).toHaveLength(10);
-    expect([...new Set(visible.map((entry) => entry.group))]).toEqual(['design', 'settings']);
-    expect(visible.map((entry) => entry.id)).toEqual([
+    expect([...new Set(visible.map((entry) => entry.group))]).toEqual([
+      'workspace',
       'authoring',
-      'generation',
-      'pending-changes',
+      'administration',
+    ]);
+    expect(visible.map((entry) => entry.id)).toEqual([
       'overview',
       'onboarding',
-      'settings',
-      'ai-settings',
+      'authoring',
+      'pending-changes',
+      'generation',
       'members',
+      'settings',
       'quota',
       'audit',
+      'ai-settings',
     ]);
   });
 });

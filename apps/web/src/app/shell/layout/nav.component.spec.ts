@@ -8,11 +8,11 @@ import { stubScopeBrowserApis } from './scope.fixture';
 
 const groups: readonly NavGroupView[] = [
   {
-    id: 'design',
-    label: 'Test design',
+    id: 'workspace',
+    label: 'Workspace',
     items: [{ id: 'overview', label: 'Overview', icon: 'home', link: ['/overview'] }],
   },
-  { id: 'settings', label: 'Settings', items: [] },
+  { id: 'administration', label: 'Administration', items: [] },
 ];
 
 describe('NavComponent', () => {
@@ -51,10 +51,10 @@ describe('NavComponent', () => {
     expect(root.querySelectorAll('section')).toHaveLength(0);
     expect(root.querySelectorAll('[role="group"]')).toHaveLength(1);
     const renderedGroup = root.querySelector('[role="group"]');
-    expect(renderedGroup?.getAttribute('aria-labelledby')).toBe('nav-group-design');
-    expect(renderedGroup?.querySelector('h2')?.getAttribute('id')).toBe('nav-group-design');
-    expect(root.textContent).toContain('Test design');
-    expect(root.textContent).not.toContain('Settings');
+    expect(renderedGroup?.getAttribute('aria-labelledby')).toBe('nav-group-workspace');
+    expect(renderedGroup?.querySelector('h2')?.getAttribute('id')).toBe('nav-group-workspace');
+    expect(root.textContent).toContain('Workspace');
+    expect(root.textContent).not.toContain('Administration');
     expect(root.querySelectorAll('a')).toHaveLength(1);
   });
 
@@ -124,8 +124,8 @@ describe('NavComponent', () => {
       const fixture = TestBed.createComponent(NavComponent);
       fixture.componentRef.setInput('groups', [
         {
-          id: 'settings',
-          label: 'Settings',
+          id: 'administration',
+          label: 'Administration',
           items: [
             {
               id: 'quota',

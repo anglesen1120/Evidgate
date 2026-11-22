@@ -74,34 +74,27 @@ describe('ShellComponent scope, locale and drawer context', () => {
   }
 
   it('shows the organization alone on an org route and the project pair only when selected', async () => {
-    const scope = root.querySelector('.nav-scope')!;
-    expect(scope.querySelectorAll('strong')).toHaveLength(2);
+    const scope = root.querySelector('header nav[aria-label="Breadcrumb"]')!;
+    expect(scope.textContent).toContain(SCOPE_ORGANIZATIONS[0].name);
     expect(scope.textContent).toContain(SCOPE_PROJECTS[0].name);
     project.set(null);
     await fixture.whenStable();
-    expect(scope.querySelectorAll('strong')).toHaveLength(1);
+    expect(scope.textContent).not.toContain(SCOPE_PROJECTS[0].name);
     expect(scope.textContent).toContain(SCOPE_ORGANIZATIONS[0].name);
     expect(scope.textContent).not.toContain('Project');
     project.set(SCOPE_PROJECTS[1]);
     await fixture.whenStable();
-    expect(scope.querySelectorAll('strong')).toHaveLength(2);
     expect(scope.textContent).toContain(SCOPE_PROJECTS[1].name);
   });
 
   it('lets both tablet scope states grow within the remaining toolbar budget', async () => {
     await resize(768);
-    const expectFlexibleScope = (element: Element | null) => {
-      expect(element?.classList.contains('min-w-0')).toBe(true);
-      expect(element?.classList.contains('flex-1')).toBe(true);
-      expect(element?.classList.contains('basis-0')).toBe(true);
-      expect(element?.classList.contains('max-w-[calc(1.5*var(--eg-rail-width))]')).toBe(true);
-    };
-    expectFlexibleScope(root.querySelector('header .topbar-scope'));
+    expect(root.querySelector('header .topbar-scope[aria-hidden="true"]')).not.toBeNull();
     const scopeBlocks = await fixture.getDeferBlocks();
     expect(scopeBlocks).toHaveLength(1);
     await scopeBlocks[0]!.render(DeferBlockState.Complete);
     await fixture.whenStable();
-    expectFlexibleScope(root.querySelector('header app-scope-switcher'));
+    expect(root.querySelector('header app-scope-switcher')).not.toBeNull();
     expect(root.querySelectorAll('header [role="combobox"]')).toHaveLength(2);
     expect(root.querySelector('header .locale-toggle')).not.toBeNull();
     expect(root.querySelector('header .theme-toggle')).not.toBeNull();

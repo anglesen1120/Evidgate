@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import type { NavIconName } from '../nav/nav.models';
 
-/** Static SVG geometry copied from v2 assets/evidgate.js ICONS; never inserts HTML strings. */
+/** Compile fixed glyphs into the template; the manifest never supplies SVG markup. */
 @Component({
   selector: 'app-shell-icon',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -18,6 +18,44 @@ import type { NavIconName } from '../nav/nav.models';
       focusable="false"
     >
       @switch (name()) {
+        @case ('logo') {
+          <path [attr.d]="'M3 5l9-4 9 4-9 4z M3 10l9 4 9-4 M3 15l9 4 9-4'" />
+        }
+        @case ('account') {
+          <path [attr.d]="'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M4 21v-2a8 8 0 0 1 16 0v2'" />
+        }
+        @case ('search') {
+          <path [attr.d]="'M16 10a6 6 0 1 1-12 0 6 6 0 0 1 12 0 M15 15l6 6'" />
+        }
+        @case ('grid') {
+          <path [attr.d]="'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z'" />
+        }
+        @case ('run') {
+          <path [attr.d]="'M5 3h14v18H5z M10 8l5 4-5 4z'" />
+        }
+        @case ('inbox') {
+          <path [attr.d]="'M3 15l3-10h12l3 10v4H3z M3 15h5l2 2h4l2-2h5'" />
+        }
+        @case ('shield') {
+          <path [attr.d]="'M12 2l8 3v6c0 5-4 9-8 11-4-2-8-6-8-11V5z M8 12l3 3 5-6'" />
+        }
+        @case ('queue') {
+          <path [attr.d]="'M4 6h13M4 12h10M4 18h7m6-5 3 3-3 3m-4-3h7'" />
+        }
+        @case ('file') {
+          <path [attr.d]="'M6 3h8l4 4v14H6z M14 3v5h4 M9 12h6m-6 4h5'" />
+        }
+        @case ('folder') {
+          <path [attr.d]="'M3 6h6l2 2h10v12H3z'" />
+        }
+        @case ('code') {
+          <path [attr.d]="'m8 7-5 5 5 5m8-10 5 5-5 5m-3-14-2 18'" />
+        }
+        @case ('people') {
+          <path
+            [attr.d]="'M3 20v-2a5 5 0 0 1 10 0v2 M16 14a5 5 0 0 1 5 5 M11 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0 M15 4a3 3 0 0 1 0 6'"
+          />
+        }
         @case ('tree') {
           <path [attr.d]="'M12 3v5'" />
           <rect x="8.5" y="8" width="7" height="4" rx="1" />
@@ -93,10 +131,7 @@ import type { NavIconName } from '../nav/nav.models';
           <path [attr.d]="'M7 7h.01M7 17h.01'" />
         }
         @case ('settings') {
-          <circle cx="12" cy="12" r="3" />
-          <path
-            [attr.d]="'M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4'"
-          />
+          <path [attr.d]="'M4 7h10m4 0h2M4 17h2m4 0h10 M14 4v6M8 14v6'" />
         }
         @case ('users') {
           <circle cx="9" cy="9" r="3" />
@@ -162,6 +197,6 @@ import type { NavIconName } from '../nav/nav.models';
 })
 export class ShellIconComponent {
   readonly name = input.required<
-    NavIconName | 'menu' | 'close' | 'sun' | 'moon' | 'chevron-down'
+    NavIconName | 'logo' | 'account' | 'search' | 'menu' | 'close' | 'sun' | 'moon' | 'chevron-down'
   >();
 }
