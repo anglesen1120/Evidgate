@@ -26463,7 +26463,16 @@
           <context context-type="linenumber">210</context>
         </context-group>
       </trans-unit>
-          <trans-unit id="healingswitch.availability" datatype="html"><source>Healing availability</source></trans-unit>
+      <trans-unit id="suites.composition.description" datatype="html">
+        <source>Inspect pinned case revisions, their variants and the inputs used to plan execution.</source>
+      </trans-unit>
+      <trans-unit id="suites.composition.identity" datatype="html">
+        <source>Composition identity</source>
+      </trans-unit>
+      <trans-unit id="suites.composition.suite" datatype="html">
+        <source>Suite</source>
+      </trans-unit>
+              <trans-unit id="healingswitch.availability" datatype="html"><source>Healing availability</source></trans-unit>
       <trans-unit id="healingswitch.inspect-scopes" datatype="html"><source>Inspect the most restrictive scope before changing a healing setting.</source></trans-unit>
       <trans-unit id="healingswitch.effective-state" datatype="html"><source>Effective state</source></trans-unit>
       <trans-unit id="healingswitch.server-snapshot" datatype="html"><source>Server snapshot</source></trans-unit>

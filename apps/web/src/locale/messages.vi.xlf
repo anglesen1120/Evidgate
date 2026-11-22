@@ -21951,7 +21951,10 @@
           <context context-type="linenumber">210</context>
         </context-group>
       </trans-unit>
-    <trans-unit id="settings.shell-intro" datatype="html"><source>Open a section to manage settings for your organization or project.</source><target>Chọn một mục để quản lý cài đặt của tổ chức hoặc dự án.</target></trans-unit>
+<trans-unit id="suites.composition.description" datatype="html"><source>Inspect pinned case revisions, their variants and the inputs used to plan execution.</source><target>Xem các phiên bản ca kiểm thử đã ghim, các biến thể tương ứng và dữ liệu đầu vào dùng để lập kế hoạch thực thi.</target></trans-unit>
+<trans-unit id="suites.composition.identity" datatype="html"><source>Composition identity</source><target>Thông tin cấu hình</target></trans-unit>
+<trans-unit id="suites.composition.suite" datatype="html"><source>Suite</source><target>Bộ kiểm thử</target></trans-unit>
+        <trans-unit id="settings.shell-intro" datatype="html"><source>Open a section to manage settings for your organization or project.</source><target>Chọn một mục để quản lý cài đặt của tổ chức hoặc dự án.</target></trans-unit>
 <trans-unit id="settings.shell-sections" datatype="html"><source>Sections</source><target>Các mục</target></trans-unit>
 <trans-unit id="settings.read-only" datatype="html"><source>Read-only. You don’t have permission to make changes here.</source><target>Chỉ đọc. Bạn không có quyền thay đổi cài đặt ở đây.</target></trans-unit>
 <trans-unit id="settings.count-on-page" datatype="html"><source>On this page</source><target>Trên trang này</target></trans-unit>

@@ -73,7 +73,7 @@ describe('SuiteCompositionComponent', () => {
       [...root.querySelectorAll('h2[hlmCardTitle]')].map((heading) =>
         heading.getAttribute('data-title-size'),
       ),
-    ).toEqual(['section', 'section', 'section', 'section']);
+    ).toEqual(['section', 'section', 'section', 'section', 'section']);
   });
 
   it('renders fixture members at their case revision and variant intersections', async () => {
@@ -112,7 +112,11 @@ describe('SuiteCompositionComponent', () => {
       String(revision.revision_no),
     );
     expect(root.querySelector('[data-revision-status] bdi')?.textContent).toBe(revision.status);
-    expect(root.querySelector('header .identifier')?.textContent).toBe(revision.revision_hash);
+    const identity = root.querySelector('[aria-labelledby="suite-identity-heading"]');
+    expect(identity?.querySelector('[data-suite-id]')?.textContent).toBe(revision.suite_id);
+    expect(identity?.querySelector('[data-revision-hash]')?.textContent).toBe(
+      revision.revision_hash,
+    );
     const strategy = root.querySelector('[data-testid="suite-strategy"]');
     expect(strategy?.textContent).toContain('Shard count');
     expect(strategy?.querySelector('dd')?.textContent).toBe('2');
