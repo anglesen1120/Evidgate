@@ -1,0 +1,142 @@
+<section class="grid gap-2">
+  <h3 class="m-0 text-sm font-semibold">{{ l.previewHeading }}</h3>
+  <p class="m-0 text-sm text-muted-foreground">{{ l.createHint }}</p>
+  <div class="flex flex-wrap gap-2">
+    <button hlmBtn [variant]="'outline'" type="button" (click)="open('create')">
+      {{ l.create }}
+    </button>
+    @if (endpointId() === 'wh-19' && rotationAllowed()) {
+      <button hlmBtn [variant]="'outline'" type="button" (click)="open('rotate')">
+        {{ l.rotate }}
+      </button>
+    }
+    @if (failedDelivery()) {
+      <button hlmBtn [variant]="'outline'" type="button" (click)="open('redeliver')">
+        {{ l.redeliver }}
+      </button>
+    }
+  </div>
+</section>
+<hlm-dialog
+  [state]="intent() ? 'open' : 'closed'"
+  [role]="intent() === 'create' ? 'dialog' : 'alertdialog'"
+  [autoFocus]="'[data-preview-cancel]'"
+  [aria-label]="intent() === 'create' ? l.create : intent() === 'rotate' ? l.rotate : l.redeliver"
+  (stateChanged)="$event === 'closed' && intent.set(null)"
+>
+  <hlm-dialog-content
+    *hlmDialogPortal
+    [showCloseButton]="false"
+    class="max-h-[85dvh] min-w-0 overflow-y-auto wrap-anywhere"
+    ><header hlmDialogHeader>
+      <h2 hlmDialogTitle>
+        {{ intent() === 'create' ? l.create : intent() === 'rotate' ? l.rotate : l.redeliver }}
+      </h2>
+      <p hlmDialogDescription>
+        {{
+          intent() === 'create'
+            ? l.createHint
+            : intent() === 'rotate'
+              ? l.rotateHint
+              : l.redeliverHint
+        }}
+      </p>
+    </header>
+    @switch (intent()) {
+      @case ('create') {
+        <div class="grid min-w-0 gap-2">
+          <label hlmLabel for="new-endpoint-name">{{ l.name }}</label
+          ><input
+            hlmInput
+            #nm
+            id="new-endpoint-name"
+            maxlength="100"
+            required
+            [value]="name()"
+            (input)="name.set(nm.value)"
+          /><label hlmLabel for="new-endpoint-url">{{ l.url }}</label
+          ><input
+            hlmInput
+            type="url"
+            #destination
+            id="new-endpoint-url"
+            required
+            [aria-describedby]="'url-hint'"
+            [value]="url()"
+            (input)="url.set(destination.value)"
+          />
+          <p id="url-hint" class="m-0 text-sm text-muted-foreground">{{ l.invalid }}</p>
+          <fieldset>
+            <legend>{{ l.events }}</legend>
+            <div class="flex min-h-11 items-center gap-2">
+              <hlm-checkbox
+                [inputId]="'local-run-event'"
+                [checked]="runEvent()"
+                (checkedChange)="runEvent.set($event)"
+              /><label hlmLabel for="local-run-event">{{ eventNames[0] }}</label>
+            </div>
+            <div class="flex min-h-11 items-center gap-2">
+              <hlm-checkbox
+                [inputId]="'local-eval-event'"
+                [checked]="evalEvent()"
+                (checkedChange)="evalEvent.set($event)"
+              /><label hlmLabel for="local-eval-event">{{ eventNames[1] }}</label>
+            </div>
+          </fieldset>
+        </div>
+      }
+      @case ('rotate') {
+        <p>
+          {{ l.endpoint }}: <code>{{ endpointId() }}</code>
+        </p>
+        <p>{{ l.redacted }}</p>
+        <div class="flex items-center gap-2">
+          <code>{{ redaction }}</code
+          ><app-copy-value-button [value]="redaction" [label]="l.placeholder" />
+        </div>
+      }
+      @case ('redeliver') {
+        @if (failedDelivery(); as delivery) {
+          <dl>
+            <dt>{{ l.deliveryId }}</dt>
+            <dd>
+              <code>{{ delivery.id }}</code>
+            </dd>
+            <dt>{{ l.attempts }}</dt>
+            <dd>{{ delivery.attempts }}</dd>
+            <dt>{{ l.next }}</dt>
+            <dd><app-absolute-time [value]="delivery.next" /></dd>
+          </dl>
+        }
+      }
+    }
+    @if (intent() && intent() !== 'create') {
+      <div class="flex min-h-11 items-center gap-2">
+        <hlm-checkbox
+          [inputId]="'confirm-local-webhook'"
+          [checked]="ack()"
+          (checkedChange)="ack.set($event)"
+        /><label hlmLabel for="confirm-local-webhook">{{ l.confirm }}</label>
+      </div>
+    }
+    <footer hlmDialogFooter>
+      <button hlmBtn [variant]="'outline'" hlmDialogClose type="button" data-preview-cancel>
+        {{ l.cancel }}</button
+      ><button
+        hlmBtn
+        type="button"
+        data-preview-confirm
+        [disabled]="intent() === 'create' ? !validCreate() : !ack()"
+        (click)="confirm()"
+      >
+        {{
+          intent() === 'create'
+            ? l.confirmCreate
+            : intent() === 'rotate'
+              ? l.confirmRotate
+              : l.confirmRedeliver
+        }}
+      </button>
+    </footer></hlm-dialog-content
+  ></hlm-dialog
+>

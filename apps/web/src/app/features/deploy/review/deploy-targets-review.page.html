@@ -1,0 +1,365 @@
+<article class="grid min-w-0 gap-4 wrap-anywhere" [attr.aria-label]="copy.title">
+  <div class="flex items-start gap-3">
+    <span
+      class="flex size-12 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground"
+      ><hlm-icon name="lucideActivity" class="size-6" /></span
+    ><app-page-header [title]="copy.title" [description]="copy.intro" />
+  </div>
+  @if (visible()) {
+    <section
+      hlmCard
+      class="flex flex-wrap items-center justify-between gap-4 flex-row p-4"
+      [attr.aria-label]="copy.context"
+    >
+      <div class="grid gap-1">
+        <span class="text-xs text-muted-foreground">{{ copy.context }}</span
+        ><strong
+          >{{ viewModel().project }} · {{ viewModel().code }} · {{ viewModel().projectRef }}</strong
+        ><span class="text-xs text-muted-foreground"
+          >{{ copy.asOf }} <app-absolute-time [value]="viewModel().asOf"
+        /></span>
+      </div>
+      <div>
+        <span class="block text-xs text-muted-foreground">{{ copy.section }}</span
+        ><strong>{{ copy.title }}</strong>
+      </div>
+    </section>
+  }
+  @switch (state()) {
+    @case ('loading') {
+      <app-loading-pattern [label]="copy.loading" [layout]="'cards'" />
+    }
+    @case ('empty') {
+      <app-empty-pattern [title]="copy.empty" [description]="copy.emptyHint" />
+    }
+    @case ('denied') {
+      <app-forbidden-pattern />
+    }
+    @case ('404') {
+      <app-not-found-pattern />
+    }
+  }
+  @if (notice(); as note) {
+    <app-inline-feedback
+      [title]="note.title"
+      [description]="note.description"
+      [tone]="
+        state() === 'error' || state() === 'validation'
+          ? 'destructive'
+          : state() === 'success'
+            ? 'success'
+            : 'info'
+      "
+      [actionLabel]="['error', '412', 'stale'].includes(state()) ? copy.reload : undefined"
+      (action)="state.set('ready')"
+    />
+  }
+  @if (visible()) {
+    <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      @for (metric of metrics(); track metric.title) {
+        <section hlmCard class="min-w-0 gap-2 p-4">
+          <h2 class="m-0 flex items-center gap-2 text-sm font-semibold">
+            <hlm-icon [name]="metric.icon" class="size-6 rounded bg-muted p-1" />{{ metric.title }}
+          </h2>
+          <strong class="text-2xl tabular-nums">{{
+            metric.value === null ? copy.unavailableValue : metric.value.toString().padStart(2, '0')
+          }}</strong
+          ><span class="text-xs text-muted-foreground">{{ metric.hint }}</span>
+        </section>
+      }
+    </div>
+    <div class="grid min-w-0 items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,3fr)]">
+      <section hlmCard class="min-w-0 gap-0 p-0">
+        <header class="flex items-center justify-between gap-3 border-b border-border p-4">
+          <h2 hlmCardTitle id="target-sequence">{{ copy.sequence }}</h2>
+          <span class="text-xs tabular-nums">{{ viewModel().targets.length }}</span>
+        </header>
+        <fieldset aria-labelledby="target-sequence" class="m-0 grid min-w-0 gap-2 border-0 p-3">
+          @for (t of viewModel().targets; track t.key; let idx = $index) {
+            <label
+              class="flex min-w-0 cursor-pointer items-start gap-3 rounded-md border border-border p-3 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-primary"
+              [class.bg-accent]="key() === t.key"
+              ><input
+                type="radio"
+                name="review-deploy-target"
+                [attr.data-second-record]="idx === 1 ? '' : null"
+                [value]="t.key"
+                [checked]="key() === t.key"
+                (change)="key.set(t.key)" /><span class="grid min-w-0 gap-1"
+                ><strong>{{ t.name }}</strong
+                ><span class="text-xs text-muted-foreground"
+                  >{{ t.order.toString().padStart(2, '0') }} · {{ t.policy ?? t.revision }}
+                  @if (t.policyHash) {
+                    · {{ t.policyHash }}
+                  }</span
+                ><app-status-pill
+                  [label]="t.policy ? copy.pinned : copy.current"
+                  [tone]="t.policy ? 'info' : 'neutral'" /></span
+            ></label>
+          }
+        </fieldset>
+        <p class="m-0 border-t border-border p-3 text-xs text-muted-foreground">
+          {{ copy.sequencePage }}
+        </p>
+      </section>
+      <div class="grid min-w-0 gap-3">
+        @if (target(); as t) {
+          <section hlmCard data-record-detail class="min-w-0 gap-0 p-0">
+            <header
+              class="flex flex-wrap items-start justify-between gap-3 border-b border-border p-4"
+            >
+              <div>
+                <h2 hlmCardTitle>{{ t.name }}</h2>
+                <p class="m-0 text-xs text-muted-foreground">
+                  {{ copy.detail }} ·
+                  <bdi class="font-mono">{{ displayKey() }}</bdi>
+                </p>
+              </div>
+              <app-status-pill
+                [tone]="t.policy ? 'info' : 'neutral'"
+                [label]="t.policy ? copy.immutable : copy.readonly"
+              />
+              @if (preview() && key() === 'production') {
+                <button
+                  hlmBtn
+                  type="button"
+                  [variant]="'outline'"
+                  [disabled]="!canEdit()"
+                  (click)="open()"
+                >
+                  {{ copy.edit }}
+                </button>
+              }
+            </header>
+            <dl class="m-0 grid gap-4 p-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
+              <div class="min-w-0">
+                <dt class="text-xs text-muted-foreground">{{ copy.order }}</dt>
+                <dd class="m-0 mt-1 font-semibold wrap-anywhere">{{ t.order }}</dd>
+              </div>
+              <div class="min-w-0">
+                <dt class="text-xs text-muted-foreground">{{ copy.pin }}</dt>
+                <dd class="m-0 mt-1 font-semibold wrap-anywhere">
+                  @if (
+                    t.policy &&
+                    t.policyHash &&
+                    state() !== 'no-policy-read' &&
+                    state() !== 'unavailable'
+                  ) {
+                    <details>
+                      <summary class="cursor-pointer font-mono text-primary">
+                        {{ t.policy }}
+                      </summary>
+                      <bdi class="font-mono">{{ t.policyHash }}</bdi>
+                    </details>
+                  } @else {
+                    <bdi>{{ t.policy ?? copy.activePolicy }}</bdi>
+                    @if (t.policyHash) {
+                      · <bdi>{{ t.policyHash }}</bdi>
+                    }
+                  }
+                </dd>
+              </div>
+              <div class="min-w-0">
+                <dt class="text-xs text-muted-foreground">{{ copy.project }}</dt>
+                <dd class="m-0 mt-1 font-semibold wrap-anywhere">{{ viewModel().project }}</dd>
+              </div>
+              <div class="min-w-0">
+                <dt class="text-xs text-muted-foreground">{{ copy.revision }}</dt>
+                <dd class="m-0 mt-1 font-semibold wrap-anywhere">
+                  <bdi class="font-mono">{{ t.revision }}</bdi>
+                </dd>
+              </div>
+            </dl>
+          </section>
+          <section hlmCard class="min-w-0 gap-0 p-0">
+            <h2 hlmCardTitle class="m-0 border-b border-border p-4">{{ copy.history }}</h2>
+            @if (state() !== 'error') {
+              @if (!history().length) {
+                <app-empty-pattern
+                  [bare]="true"
+                  [title]="copy.emptyHistory"
+                  [description]="copy.emptyHistoryHint"
+                />
+              } @else {
+                <div class="flex flex-wrap items-start justify-between gap-3 p-4">
+                  <p class="m-0 text-sm">{{ copy.historyHint }}</p>
+                  <div class="grid min-w-0 content-end gap-1">
+                    <label hlmLabel for="release-filter">{{ copy.filter }}</label>
+                    <hlm-select
+                      [value]="release()"
+                      [itemToString]="releaseLabel"
+                      (valueChange)="setRelease($event)"
+                    >
+                      <hlm-select-trigger [buttonId]="'release-filter'" class="w-full"
+                        ><hlm-select-value [placeholder]="copy.all"
+                      /></hlm-select-trigger>
+                      <hlm-select-content *hlmSelectPortal [aria-label]="copy.filter"
+                        ><hlm-select-item value="all">{{ copy.all }}</hlm-select-item>
+                        @for (r of viewModel().releases; track r) {
+                          <hlm-select-item [value]="r">{{ r }}</hlm-select-item>
+                        }
+                      </hlm-select-content></hlm-select
+                    >
+                  </div>
+                </div>
+                @if (visibleChecks().length) {
+                  <div hlmTableContainer class="min-w-0">
+                    <table hlmTable class="w-full" [attr.aria-label]="copy.history">
+                      <thead hlmTHead>
+                        <tr hlmTr>
+                          @for (
+                            label of [
+                              copy.check,
+                              copy.release,
+                              copy.result,
+                              copy.decision,
+                              copy.policy,
+                              copy.reasons,
+                            ];
+                            track label
+                          ) {
+                            <th hlmTh scope="col" class="whitespace-normal">{{ label }}</th>
+                          }
+                        </tr>
+                      </thead>
+                      <tbody hlmTBody>
+                        @for (check of visibleChecks(); track check.ref) {
+                          <tr hlmTr>
+                            <td hlmTd class="whitespace-normal">
+                              <bdi class="font-mono">{{ check.ref }}</bdi>
+                              @if (check.checkedAt) {
+                                <div class="text-xs text-muted-foreground">
+                                  <app-absolute-time [value]="check.checkedAt" />
+                                </div>
+                              }
+                            </td>
+                            <td hlmTd class="whitespace-normal">
+                              <bdi>{{ check.release }}</bdi>
+                            </td>
+                            <td
+                              hlmTd
+                              [attr.data-inspect-status]="check.result === 'pending' ? '' : null"
+                            >
+                              <app-status-pill
+                                [tone]="tones[check.result]"
+                                [label]="copy[check.result]"
+                              /><span class="block font-mono text-xs text-muted-foreground">{{
+                                check.result
+                              }}</span>
+                            </td>
+                            <td hlmTd class="whitespace-normal">
+                              {{ check.decisionRef ?? copy.noDecision }}
+                            </td>
+                            <td hlmTd class="whitespace-normal">{{ check.policy }}</td>
+                            <td hlmTd class="whitespace-normal">{{ check.reason }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                } @else {
+                  <app-empty-pattern
+                    [bare]="true"
+                    [title]="copy.noMatch"
+                    [description]="copy.noMatchHint"
+                    [actionLabel]="copy.clear"
+                    (action)="release.set('all')"
+                  />
+                }
+                <p class="m-0 border-t border-border p-4 text-xs text-muted-foreground">
+                  {{ copy.historyPage }}
+                </p>
+              }
+            }
+          </section>
+        }
+      </div>
+    </div>
+    <aside class="grid gap-1 border-t border-border pt-4 text-sm text-muted-foreground">
+      <strong class="text-foreground">{{ copy.phase }}</strong>
+      <p class="m-0">{{ copy.phaseHint }}</p>
+      <p class="m-0">{{ copy.reference }}</p>
+    </aside>
+    <footer class="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+      <span>{{ copy.demo }}</span
+      ><button
+        hlmBtn
+        [variant]="'outline'"
+        type="button"
+        [attr.aria-pressed]="preview()"
+        (click)="preview.set(!preview())"
+      >
+        {{ preview() ? copy.exitPreview : copy.admin }}
+      </button>
+    </footer>
+  }
+  <hlm-dialog
+    [state]="editing() ? 'open' : 'closed'"
+    [aria-label]="copy.edit"
+    [autoFocus]="'#draft-cancel'"
+    (closed)="editing.set(false)"
+    ><hlm-dialog-content
+      *hlmDialogPortal
+      [showCloseButton]="false"
+      class="max-h-[85dvh] overflow-y-auto"
+      ><header hlmDialogHeader>
+        <h2 hlmDialogTitle>{{ copy.edit }}</h2>
+        <p hlmDialogDescription>{{ copy.draftHint }}</p>
+      </header>
+      <p>{{ target()?.name }} · {{ target()?.revision }}</p>
+      <label hlmLabel for="target-order">{{ copy.order }}</label
+      ><input
+        hlmInput
+        type="number"
+        id="target-order"
+        #orderInput
+        min="1"
+        max="20"
+        required
+        [attr.inputmode]="'numeric'"
+        [value]="order() ?? ''"
+        [attr.aria-invalid]="!validOrder()"
+        [attr.aria-describedby]="!validOrder() ? 'draft-order-feedback' : null"
+        (input)="order.set(orderInput.valueAsNumber)"
+      />
+      @if (!validOrder()) {
+        <p id="draft-order-feedback">{{ validationHint }}</p>
+      }
+      <label hlmLabel for="target-pin">{{ copy.pin }}</label
+      ><input
+        hlmInput
+        id="target-pin"
+        #pinInput
+        required
+        maxlength="64"
+        [value]="pin()"
+        (input)="pin.set(pinInput.value)"
+      />
+      <div class="flex items-start gap-2">
+        <hlm-checkbox
+          [inputId]="'draft-ack'"
+          [checked]="acknowledged()"
+          (checkedChange)="acknowledged.set($event)"
+        /><label hlmLabel for="draft-ack">{{ copy.ack }}</label>
+      </div>
+      <footer hlmDialogFooter>
+        <button
+          hlmBtn
+          type="button"
+          id="draft-cancel"
+          [variant]="'outline'"
+          (click)="editing.set(false)"
+        >
+          {{ copy.cancel }}</button
+        ><button
+          hlmBtn
+          type="button"
+          [disabled]="!canEdit() || !validOrder() || !pin().trim() || !acknowledged()"
+          (click)="confirm()"
+        >
+          {{ copy.review }}
+        </button>
+      </footer></hlm-dialog-content
+    ></hlm-dialog
+  >
+</article>
