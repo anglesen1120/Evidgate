@@ -3,6 +3,8 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmCard, HlmCardContent, HlmCardHeader, HlmCardTitle } from '@evidgate/ui/card';
+import { HlmIcon } from '@evidgate/ui/icon';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { PageHeaderImports } from '../../../shared/ui/page-header';
 import { EmptyPatternComponent } from '../../../shared/ui/states/empty-pattern.component';
 import { InlineFeedbackComponent } from '../../../shared/ui/states/inline-feedback.component';
@@ -21,6 +23,8 @@ import { mergeReviewView } from './studio-review-merge.fixture';
   imports: [
     PageHeaderImports,
     HlmBadge,
+    HlmIcon,
+    ShellIconComponent,
     HlmCard,
     HlmCardHeader,
     HlmCardTitle,

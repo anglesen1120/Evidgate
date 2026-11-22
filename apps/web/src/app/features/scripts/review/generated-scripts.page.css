@@ -1,0 +1,21 @@
+.script-details {
+  inline-size: min(560px, calc(100vw - var(--eg-space-8)));
+  max-inline-size: 100vw;
+  max-block-size: calc(100dvh - var(--eg-space-8));
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+@media (width < 600px) {
+  .script-details {
+    inline-size: 100vw;
+    block-size: 100dvh;
+    max-block-size: 100dvh;
+    border: 0;
+    border-radius: 0;
+    padding-block: max(var(--eg-space-4), env(safe-area-inset-top))
+      max(var(--eg-space-4), env(safe-area-inset-bottom));
+    padding-inline: max(var(--eg-space-4), env(safe-area-inset-left))
+      max(var(--eg-space-4), env(safe-area-inset-right));
+  }
+}

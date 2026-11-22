@@ -54,6 +54,21 @@ describe('StudioDraftEditorReviewPage', () => {
     }
   });
 
+  it('keeps definition, validation, sandbox and history in one workspace', async () => {
+    const { page } = await render();
+    for (const region of [
+      'app-editor-definition',
+      'app-editor-validation',
+      'app-editor-sandbox',
+      'app-editor-versions',
+    ]) {
+      expect(await page.all(region)).toHaveLength(1);
+    }
+    const counts = await page.all('[data-editor-metrics] dd');
+    expect(await Promise.all(counts.map((value) => value.text()))).toEqual(['2', '3', '4']);
+    expect(await page.all('[role="tablist"], [role="dialog"]')).toHaveLength(0);
+  });
+
   it('reacts to a query change without remounting the page and never enables workflow actions', async () => {
     const { page, params } = await render();
     for (const id of ['save', 'discard', 'submit']) {

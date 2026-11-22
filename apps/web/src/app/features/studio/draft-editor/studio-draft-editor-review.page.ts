@@ -4,6 +4,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { PageHeaderImports } from '../../../shared/ui/page-header';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { DesktopRequiredNoticeComponent } from '../../../shared/ui/narrow/desktop-required-notice.component';
 import {
@@ -42,6 +43,7 @@ const notices: Partial<Record<EditorScene, string>> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     PageHeaderImports,
+    ShellIconComponent,
     HlmButton,
     HlmCardImports,
     StatusPillComponent,
@@ -55,7 +57,10 @@ const notices: Partial<Record<EditorScene, string>> = {
     EditorSandboxComponent,
     EditorVersionsComponent,
   ],
-  host: { class: 'mx-auto grid w-full min-w-0 max-w-[1440px] gap-3 text-foreground wrap-anywhere' },
+  host: {
+    class:
+      'mx-auto grid w-full min-w-0 max-w-[1440px] gap-(--eg-space-5) text-foreground wrap-anywhere',
+  },
   templateUrl: './studio-draft-editor-review.page.html',
 })
 export class StudioDraftEditorReviewPage {

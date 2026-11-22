@@ -1,10 +1,16 @@
 @let v = viewModel();
-<app-page-header [title]="c.title" [description]="c.intro"
-  ><div appPageHeaderActions class="text-xs text-muted-foreground">
-    <span>{{ c.asOf }} <app-absolute-time [value]="viewModel().asOf" /></span
-    ><code class="block">{{ viewModel().project }}</code>
-  </div></app-page-header
->
+<div class="flex min-w-0 items-start gap-3">
+  <span
+    class="grid size-12 shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent)"
+  >
+    <hlm-icon name="lucideActivity" class="size-6" />
+  </span>
+  <app-page-header class="min-w-0 flex-1" [title]="c.title" [description]="v.project">
+    <div appPageHeaderActions class="text-xs text-muted-foreground">
+      <span>{{ c.asOf }} <app-absolute-time [value]="v.asOf" /></span>
+    </div>
+  </app-page-header>
+</div>
 @if (notice(); as n) {
   @switch (state()) {
     @case ('loading') {
@@ -41,9 +47,9 @@
   @if (policy.narrow()) {
     <p class="text-sm text-muted-foreground">{{ c.narrow }}</p>
   }
-  <div class="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+  <div class="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-4">
     @for (m of viewModel().metrics; track m.title) {
-      <section hlmCard [size]="'sm'" class="min-w-0 gap-3 p-4">
+      <section hlmCard [size]="'sm'" class="min-w-0 gap-3 p-4 wrap-anywhere">
         <h2 class="flex items-center gap-2 text-sm font-semibold">
           <span
             class="flex size-8 shrink-0 items-center justify-center rounded-md bg-(--eg-accent-soft) text-(--eg-accent)"
@@ -51,14 +57,20 @@
           >{{ m.title }}
         </h2>
         <div>
-          <p class="m-0 text-2xl font-bold tabular-nums">{{ m.value }}</p>
+          <p
+            class="m-0 font-(family-name:--eg-font-display) text-2xl font-bold tracking-tight tabular-nums"
+          >
+            {{ m.value }}
+          </p>
           <p class="m-0 text-xs text-muted-foreground">{{ m.detail }}</p>
         </div>
       </section>
     }
   </div>
-  <div class="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,0.77fr)_minmax(0,1.23fr)]">
-    <div class="grid min-w-0 gap-4">
+  <div class="grid min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,0.77fr)_minmax(0,1.23fr)]">
+    <div
+      class="grid min-w-0 gap-5 lg:[@media(min-height:721px)]:sticky lg:[@media(min-height:721px)]:top-4"
+    >
       <section hlmCard class="min-w-0 gap-0">
         <header hlmCardHeader class="border-b border-(--eg-border)">
           <div class="flex flex-wrap items-start justify-between gap-2">
@@ -133,9 +145,7 @@
       </section>
       <section hlmCard class="min-w-0 gap-0">
         <header hlmCardHeader class="border-b border-(--eg-border)">
-          <div class="flex flex-wrap items-start justify-between gap-2">
-            <h2 hlmCardTitle>{{ c.item }}</h2>
-          </div>
+          <h2 hlmCardTitle>{{ c.item }}</h2>
         </header>
         <div hlmCardContent class="grid min-w-0 gap-3 pt-4">
           <div class="flex flex-wrap items-center justify-between gap-2">
@@ -162,7 +172,7 @@
         </div>
       </section>
     </div>
-    <div class="grid min-w-0 gap-4">
+    <div class="grid min-w-0 gap-5">
       <section hlmCard class="min-w-0 gap-0">
         <header hlmCardHeader class="border-b border-(--eg-border)">
           <div class="flex flex-wrap items-start justify-between gap-2">
@@ -219,8 +229,17 @@
                   [showCloseButton]="false"
                   class="max-h-[90dvh] min-w-0 overflow-y-auto"
                   ><header hlmDialogHeader>
-                    <h2 hlmDialogTitle>{{ c.reject }}</h2>
-                    <p hlmDialogDescription>{{ c.rejectHelp }}</p>
+                    <h2 hlmDialogTitle class="flex items-center gap-2">
+                      <hlm-icon
+                        name="lucideTriangleAlert"
+                        class="size-5 shrink-0 text-(--eg-danger-fg)"
+                      />
+                      {{ c.reject }}
+                    </h2>
+                    <p hlmDialogDescription>
+                      <bdi>{{ v.id }}</bdi> · <bdi>{{ v.manualCase }}</bdi> · {{ v.baseVersion }}
+                    </p>
+                    <p class="text-sm text-muted-foreground">{{ c.rejectHelp }}</p>
                   </header>
                   <label hlmLabel for="rejection-reason">{{ c.rejectReason }}</label
                   ><textarea
@@ -272,8 +291,14 @@
                   [showCloseButton]="false"
                   class="max-h-[90dvh] min-w-0 overflow-y-auto"
                   ><header hlmDialogHeader>
-                    <h2 hlmDialogTitle>{{ c.queue }}</h2>
-                    <p hlmDialogDescription>{{ c.queueHelp }}</p>
+                    <h2 hlmDialogTitle class="flex items-center gap-2">
+                      <hlm-icon name="lucideClock" class="size-5 shrink-0 text-muted-foreground" />
+                      {{ c.queue }}
+                    </h2>
+                    <p hlmDialogDescription>
+                      <bdi>{{ v.id }}</bdi> · <bdi>{{ v.manualCase }}</bdi> · {{ v.baseVersion }}
+                    </p>
+                    <p class="text-sm text-muted-foreground">{{ c.queueHelp }}</p>
                   </header>
                   <dl
                     class="m-0 grid min-w-0 text-sm [&>div]:grid [&>div]:items-baseline [&>div]:gap-x-3 [&>div]:gap-y-1 [&>div]:border-b [&>div]:border-(--eg-border) [&>div]:py-2 sm:[&>div]:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:wrap-anywhere [&_dd]:font-semibold"
@@ -317,9 +342,7 @@
       </section>
       <section hlmCard class="min-w-0 gap-0">
         <header hlmCardHeader class="border-b border-(--eg-border)">
-          <div class="flex flex-wrap items-start justify-between gap-2">
-            <h2 hlmCardTitle>{{ c.compare }}</h2>
-          </div>
+          <h2 hlmCardTitle>{{ c.compare }}</h2>
         </header>
         <div hlmCardContent class="grid min-w-0 gap-3 pt-4">
           @if (state() === 'comparison') {
@@ -327,6 +350,11 @@
           } @else {
             <div hlmTableContainer class="min-w-0 max-w-full overflow-x-auto">
               <table hlmTable data-comparison>
+                <caption class="sr-only">
+                  {{
+                    c.compare
+                  }}
+                </caption>
                 <thead hlmTHead>
                   <tr hlmTr>
                     <th hlmTh scope="col">{{ c.step }}</th>
@@ -338,8 +366,8 @@
                   @for (row of v.comparison; track row.field) {
                     <tr hlmTr>
                       <th hlmTh scope="row">{{ row.field }}</th>
-                      <td hlmTd class="whitespace-normal">{{ row.approved }}</td>
-                      <td hlmTd class="whitespace-normal bg-(--eg-accent-soft)">
+                      <td hlmTd class="whitespace-normal wrap-anywhere">{{ row.approved }}</td>
+                      <td hlmTd class="whitespace-normal wrap-anywhere bg-(--eg-accent-soft)">
                         {{ row.proposed }}
                       </td>
                     </tr>
@@ -356,9 +384,7 @@
       </section>
       <section hlmCard class="min-w-0 gap-0">
         <header hlmCardHeader class="border-b border-(--eg-border)">
-          <div class="flex flex-wrap items-start justify-between gap-2">
-            <h2 hlmCardTitle>{{ c.provenance }}</h2>
-          </div>
+          <h2 hlmCardTitle>{{ c.provenance }}</h2>
         </header>
         <div hlmCardContent class="grid min-w-0 gap-3 pt-4">
           <dl
@@ -388,9 +414,7 @@
       </section>
       <section hlmCard class="min-w-0 gap-0">
         <header hlmCardHeader class="border-b border-(--eg-border)">
-          <div class="flex flex-wrap items-start justify-between gap-2">
-            <h2 hlmCardTitle>{{ c.reviewDecision }}</h2>
-          </div>
+          <h2 hlmCardTitle>{{ c.reviewDecision }}</h2>
         </header>
         <div hlmCardContent class="grid min-w-0 gap-3 pt-4">
           <p class="max-w-prose">{{ c.queueOnly }}</p>

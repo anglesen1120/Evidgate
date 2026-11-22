@@ -1,33 +1,37 @@
-<app-page-header [title]="copy.title" [description]="copy.description">
-  <div pageHeaderContext class="context flex flex-wrap items-center gap-2">
-    <span hlmBadge [variant]="'secondary'"
-      ><hlm-icon name="lucideInfo" />{{ copy.historical }}</span
-    >
-    <code>{{ viewModel().scope }}</code>
-  </div>
-  @if (showGallery() && !policy.narrow()) {
-    <button
-      appPageHeaderActions
-      hlmBtn
-      type="button"
-      data-gallery-create
-      [disabled]="locked()"
-      (click)="openDraft()"
-    >
-      {{ copy.create }}
-    </button>
-  }
-</app-page-header>
+<div class="context flex flex-wrap items-center gap-2">
+  <span hlmBadge [variant]="'secondary'"><hlm-icon name="lucideInfo" />{{ copy.historical }}</span>
+</div>
+<div class="flex min-w-0 items-start gap-(--eg-space-4)">
+  <span
+    class="grid size-(--eg-space-9) shrink-0 place-items-center rounded-(--eg-radius-md) border border-border bg-(--eg-accent-soft) text-primary md:size-(--eg-space-10)"
+  >
+    <app-shell-icon [name]="'grid'" />
+  </span>
+  <app-page-header
+    class="min-w-0 flex-1 [&_h1]:text-(length:--eg-leading-md)"
+    [title]="copy.title"
+    [description]="viewModel().scope"
+  >
+    @if (showGallery() && !policy.narrow()) {
+      <button
+        appPageHeaderActions
+        hlmBtn
+        type="button"
+        #createButton
+        data-gallery-create
+        [disabled]="locked()"
+        (click)="openDraft()"
+      >
+        {{ copy.create }}
+      </button>
+    }
+  </app-page-header>
+</div>
+<p class="m-0 text-sm text-muted-foreground">{{ copy.description }}</p>
 @if (policy.narrow()) {
   <app-desktop-required-notice />
 }
 @switch (state()) {
-  @case ('loading') {
-    <app-loading-pattern [layout]="'cards'" [label]="copy.loading" />
-  }
-  @case ('empty') {
-    <app-empty-pattern [title]="copy.empty" />
-  }
   @case ('404') {
     <app-empty-pattern [title]="copy.missing" />
   }
@@ -98,8 +102,29 @@
 }
 @if (showGallery()) {
   <section hlmCard class="filters" role="search" [attr.aria-label]="copy.find">
+    <div class="field min-w-0">
+      <span class="text-sm font-semibold" id="gallery-source-label">{{ copy.source }}</span>
+      <div class="sources" role="group" aria-labelledby="gallery-source-label">
+        @for (source of sources(); track source.id) {
+          <button
+            hlmBtn
+            type="button"
+            [variant]="'ghost'"
+            class="source"
+            [attr.data-gallery-source]="source.id"
+            [attr.aria-pressed]="store.source() === source.id"
+            (click)="store.changeSource(source.id)"
+          >
+            <span><app-shell-icon [name]="source.icon" />{{ source.label }}</span>
+            <strong>{{ source.count }}</strong>
+          </button>
+        }
+      </div>
+    </div>
     <div class="field query-field">
-      <label hlmLabel for="gallery-search">{{ copy.find }}</label>
+      <label hlmLabel for="gallery-search"
+        ><app-shell-icon [name]="'search'" />{{ copy.find }}</label
+      >
       <input
         hlmInput
         type="search"
@@ -109,78 +134,40 @@
         (input)="store.search(queryBox.value)"
       />
     </div>
-    <div class="field">
-      <label hlmLabel for="gallery-source">{{ copy.source }}</label>
-      <hlm-select
-        [ngModel]="store.source()"
-        (ngModelChange)="store.changeSource($event)"
-        [itemToString]="sourceLabel"
-      >
-        <hlm-select-trigger [buttonId]="'gallery-source'"><hlm-select-value /></hlm-select-trigger>
-        <hlm-select-content *hlmSelectPortal [aria-label]="copy.source">
-          @for (s of sources; track s.id) {
-            <hlm-select-item [value]="s.id">{{ s.label }}</hlm-select-item>
-          }
-        </hlm-select-content>
-      </hlm-select>
-    </div>
   </section>
-  @if (picked(); as selected) {
-    <div class="templates grid min-w-0">
-      @for (template of visible(); track template.id) {
-        <app-gallery-template-card
-          [item]="template"
-          [selected]="selected.id === template.id"
-          (picked)="previewTemplate($event)"
-        />
-      }
-    </div>
-    <section
-      hlmCard
-      #preview
-      id="gallery-preview"
-      tabindex="-1"
-      aria-labelledby="gallery-preview-label"
-      class="preview"
-    >
-      <header>
-        <h2 hlmCardTitle id="gallery-preview-label">{{ copy.preview }}</h2>
-      </header>
-      <div class="preview-body">
-        <h3>{{ selected.title }}</h3>
-        <dl class="facts flex flex-wrap gap-4">
-          <div>
-            <dt>{{ copy.precondition }}</dt>
-            <dd>{{ selected.precondition }}</dd>
-          </div>
-          <div>
-            <dt>{{ copy.action }}</dt>
-            <dd>{{ selected.action }}</dd>
-          </div>
-          <div>
-            <dt>{{ copy.assertions }}</dt>
-            <dd>{{ selected.assertion }}</dd>
-          </div>
-          <div>
-            <dt>{{ copy.cleanup }}</dt>
-            <dd>{{ selected.cleanup }}</dd>
-          </div>
-        </dl>
-      </div>
-    </section>
+}
+@if (showGallery() || state() === 'empty' || state() === 'loading') {
+  <app-gallery-template-table
+    [rows]="showGallery() ? visible() : []"
+    [selected]="picked()?.id"
+    [attr.aria-busy]="state() === 'loading'"
+    (picked)="previewTemplate($event)"
+  />
+  @if (state() === 'loading') {
+    <app-loading-pattern [label]="copy.loading" />
+  } @else if (state() === 'empty' || !viewModel().templates.length) {
+    <app-empty-pattern [title]="copy.empty" />
+  } @else if (!picked()) {
+    <app-empty-pattern [title]="copy.noMatch" [actionLabel]="copy.clear" (action)="clear()" />
+  }
+  @if (showGallery() && viewModel().templates.length) {
+    <p role="status" class="m-0 text-xs tabular-nums text-muted-foreground">{{ shown() }}</p>
+  }
+}
+@if (showGallery()) {
+  @if (viewed(); as item) {
+    <app-gallery-template-view [item]="item" (dismissed)="viewed.set(null)" />
+  } @else if (picked(); as selected) {
     @if (dialog(); as mode) {
       <app-gallery-draft-dialog
         [initial]="selected"
         [templates]="viewModel().templates"
         [mode]="mode"
+        [readOnly]="policy.narrow()"
         (dismissed)="closeDraft()"
         (historical)="dialog.set(null); state.set('success')"
       />
     }
-  } @else if (!viewModel().templates.length) {
-    <app-empty-pattern [title]="copy.empty" />
-  } @else {
-    <app-empty-pattern [title]="copy.noMatch" [actionLabel]="copy.clear" (action)="clear()" />
   }
 }
 <footer>{{ copy.footer }}</footer>

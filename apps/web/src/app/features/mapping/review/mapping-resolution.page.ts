@@ -28,7 +28,7 @@ import {
 } from '@evidgate/ui/select';
 import { StatusPillComponent } from '../../../shared/ui/chips';
 import { DesktopRequiredNoticeComponent, NarrowMutationPolicy } from '../../../shared/ui/narrow';
-import { PageHeaderComponent } from '../../../shared/ui/page-header';
+import { HeaderActionsDirective, PageHeaderComponent } from '../../../shared/ui/page-header';
 import {
   EmptyPatternComponent,
   ErrorPatternComponent,
@@ -41,8 +41,11 @@ import {
   EvidenceBadgeComponent,
   OutcomePillComponent,
 } from '../../../shared/ui/verdict';
+import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
 import type { ApiError } from '../../../core/http/api-error';
 import { MappingDecisionComponent } from './mapping-decision.component';
+import { MappingQueueTableComponent } from './mapping-queue-table.component';
+import { MappingRecordViewComponent } from './mapping-record-view.component';
 import { mappingCopy } from './mapping-resolution.copy';
 import { mappingResolutionFixture } from './mapping-resolution.fixture';
 import { mappingStates } from './mapping-review-states';
@@ -128,6 +131,7 @@ function requestedRecord(
     HlmSelectValue,
     StatusPillComponent,
     DesktopRequiredNoticeComponent,
+    HeaderActionsDirective,
     PageHeaderComponent,
     EmptyPatternComponent,
     ErrorPatternComponent,
@@ -138,6 +142,8 @@ function requestedRecord(
     EvidenceBadgeComponent,
     OutcomePillComponent,
     MappingDecisionComponent,
+    MappingQueueTableComponent,
+    MappingRecordViewComponent,
   ],
   host: { class: 'block min-w-0' },
   templateUrl: './mapping-resolution.page.html',
@@ -148,8 +154,11 @@ export class MappingResolutionPage {
   protected readonly policy = inject(NarrowMutationPolicy);
   private readonly injector = inject(Injector);
   private readonly stateHeading = viewChild<ElementRef<HTMLElement>>('stateHeading');
+  private readonly queueTable = viewChild(MappingQueueTableComponent);
+  private readonly queueHeading = viewChild<ElementRef<HTMLElement>>('queueHeading');
   readonly viewModel = input<MappingResolutionViewModel>(mappingResolutionFixture);
   protected readonly copy = mappingCopy;
+  protected readonly display = escapeFormatChars;
   protected readonly states = mappingStates;
   protected readonly filters = filters;
   private readonly query = toSignal(this.route.queryParamMap);
@@ -191,7 +200,31 @@ export class MappingResolutionPage {
         (this.filter() === 'all' ? row.state !== 'resolved' : row.state === this.filter()),
     ),
   );
+  protected readonly subtitle = computed(() => {
+    if (!this.visibleQueue() || this.exact() === 'unavailable') return undefined;
+    const vm = this.viewModel();
+    return [vm.project, vm.producer, vm.report].map(escapeFormatChars).join(' · ');
+  });
+  protected readonly counts = computed(() => {
+    const counts = { all: 0, unmapped: 0, conflicted: 0, resolved: 0 };
+    for (const row of this.viewModel().rows) counts[row.state]++;
+    counts.all = counts.unmapped + counts.conflicted;
+    return counts;
+  });
+  protected readonly loadedSummary = computed(() => {
+    const shown = this.records().length;
+    const total = this.viewModel().rows.length;
+    return $localize`:@@review.mapping.showing-loaded:Loaded records · Showing ${shown}:shown: of ${total}:total:`;
+  });
   protected readonly selected = linkedSignal(() => this.records().at(0));
+  // Revoke the read-only overlay when its loaded records, route scope or access state change.
+  protected readonly viewOpener = linkedSignal((): HTMLButtonElement | null => {
+    this.records();
+    this.ancestors();
+    this.query();
+    this.state();
+    return null;
+  });
   protected readonly mode = linkedSignal((): MappingPreview['mode'] | null => {
     this.selected();
     this.state();
@@ -207,8 +240,6 @@ export class MappingResolutionPage {
   );
   protected readonly stateLabel = (value: unknown) =>
     this.states.find((item) => item.key === value)?.label ?? '';
-  protected readonly filterLabel = (value: unknown) =>
-    filters.find((item) => item.key === value)?.label ?? '';
   protected readonly error = computed<ApiError>(() => ({
     kind: 'unexpected',
     status: 500,
@@ -221,13 +252,13 @@ export class MappingResolutionPage {
   }));
   protected readonly metrics = computed(() => {
     const vm = this.viewModel();
-    const unresolved = vm.rows.filter((row) => row.state !== 'resolved');
+    const counts = this.counts();
     return [
       {
         key: 'queue',
         label: $localize`:@@review.mapping.unresolved:Unresolved`,
-        value: unresolved.length,
-        detail: $localize`:@@review.mapping.queue-counts:1 unmapped · 1 conflicted`,
+        value: counts.all,
+        detail: `${this.copy.unmapped}: ${counts.unmapped} · ${this.copy.conflicted}: ${counts.conflicted}`,
         icon: 'lucideClock',
       },
       {
@@ -241,7 +272,7 @@ export class MappingResolutionPage {
         key: 'report',
         label: this.copy.report,
         value: vm.report,
-        detail: vm.run + ' · GitHub Actions',
+        detail: vm.run,
         icon: 'lucideCopy',
       },
       {
@@ -252,17 +283,6 @@ export class MappingResolutionPage {
         icon: 'lucideCircleCheck',
       },
     ] as const;
-  });
-  protected readonly facts = computed(() => {
-    const vm = this.viewModel();
-    return [
-      [this.copy.producerSuite, vm.producer + ' / ' + vm.suite],
-      [this.copy.original, this.copy.attempt],
-      [this.copy.suggestion, this.selected()?.suggestion],
-      [this.copy.frozen, vm.evidence],
-      [this.copy.runReport, vm.run + ' / ' + vm.report],
-      [this.copy.digest, vm.digest],
-    ];
   });
 
   protected changeFilter(key: unknown): void {
@@ -291,6 +311,23 @@ export class MappingResolutionPage {
       queryParamsHandling: 'merge',
       replaceUrl: true,
     });
+  }
+
+  protected openView(row: MappingRowViewModel, opener: HTMLButtonElement): void {
+    this.selected.set(row);
+    this.viewOpener.set(opener);
+  }
+
+  protected closeView(id: string, opener: HTMLButtonElement): void {
+    this.viewOpener.set(null);
+    if (!opener.isConnected) {
+      afterNextRender(
+        () => {
+          if (!this.queueTable()?.focusView(id)) this.queueHeading()?.nativeElement.focus();
+        },
+        { injector: this.injector },
+      );
+    }
   }
 
   protected openDecision(mode: MappingPreview['mode']): void {

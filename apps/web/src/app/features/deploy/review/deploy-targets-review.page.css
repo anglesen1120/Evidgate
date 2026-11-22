@@ -1,0 +1,114 @@
+.record-dialog {
+  --record-width: 560px;
+  width: min(var(--record-width), calc(100vw - 2 * var(--eg-space-5)));
+  max-width: none;
+  max-height: calc(100dvh - 2 * var(--eg-space-5));
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  gap: 0;
+  padding: 0;
+}
+
+.record-edit {
+  --record-width: 760px;
+}
+
+.record-dialog > header,
+.record-body,
+.record-dialog > footer {
+  padding: var(--eg-space-5);
+}
+
+.record-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.record-facts > div {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  align-items: baseline;
+  gap: var(--eg-space-4);
+}
+
+.record-facts dd {
+  margin: 0;
+}
+
+.target-directory th[scope='row'] {
+  color: var(--eg-text);
+}
+
+@media (width >= 768px) {
+  .target-directory tbody tr {
+    height: var(--eg-space-11);
+  }
+}
+
+@media (width < 768px) {
+  .target-directory thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .target-directory tbody,
+  .target-directory tr,
+  .target-directory th[scope='row'] {
+    display: block;
+  }
+
+  .target-directory tbody tr {
+    padding: var(--eg-space-4);
+  }
+
+  .target-directory th[scope='row'],
+  .target-directory td[data-label] {
+    height: auto;
+    padding: var(--eg-space-2) 0;
+  }
+
+  .target-directory td[data-label] {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    align-items: baseline;
+    gap: var(--eg-space-3);
+    text-align: start;
+  }
+
+  .target-directory td[data-label]::before {
+    content: attr(data-label) / '';
+    color: var(--eg-text-muted);
+    font-size: var(--eg-text-xs);
+  }
+}
+
+@media (width < 600px) {
+  .record-dialog {
+    width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    border: none;
+    border-radius: 0;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+      env(safe-area-inset-left);
+  }
+}
+
+@media (width < 400px) {
+  .record-facts > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--eg-space-1);
+  }
+}
+
+@media (pointer: coarse) {
+  .record-dialog button[hlmBtn],
+  .target-directory button[hlmBtn] {
+    min-inline-size: var(--eg-control-touch);
+    min-block-size: var(--eg-control-touch);
+  }
+}

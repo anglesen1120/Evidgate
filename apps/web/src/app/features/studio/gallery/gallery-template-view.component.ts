@@ -1,0 +1,81 @@
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { HlmBadge } from '@evidgate/ui/badge';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmDialogImports } from '@evidgate/ui/dialog';
+import { HlmIcon } from '@evidgate/ui/icon';
+import { galleryCopy } from './studio-gallery.copy';
+import type { GalleryTemplateViewModel } from './studio-gallery.fixture';
+
+@Component({
+  selector: 'app-gallery-template-view',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [HlmBadge, HlmButton, HlmDialogImports, HlmIcon],
+  styleUrl: './gallery-record-dialog.css',
+  template: `
+    <hlm-dialog
+      [state]="'open'"
+      [autoFocus]="'[data-gallery-view-title]'"
+      [restoreFocus]="false"
+      (closed)="dismissed.emit()"
+    >
+      <hlm-dialog-content *hlmDialogPortal class="record-dialog">
+        <header hlmDialogHeader>
+          <h2 hlmDialogTitle tabindex="-1" data-gallery-view-title>
+            <bdi>{{ item().title }}</bdi>
+          </h2>
+          <div class="flex flex-wrap items-center gap-2">
+            <code hlmBadge [variant]="'outline'"
+              ><bdi>{{ item().id }}</bdi></code
+            >
+            <span hlmBadge [variant]="'secondary'"
+              ><hlm-icon name="lucideInfo" />{{
+                item().source === 'built' ? copy.builtBadge : copy.teamBadge
+              }}</span
+            >
+          </div>
+        </header>
+        <dl class="record-body facts">
+          <div>
+            <dt>{{ copy.engineVariant }}</dt>
+            <dd>
+              <span class="block">{{ item().engine }}</span
+              ><code
+                ><bdi>{{ item().variant }}</bdi></code
+              >
+            </dd>
+          </div>
+          <div>
+            <dt>{{ copy.intent }}</dt>
+            <dd>{{ item().intent }}</dd>
+          </div>
+          <div>
+            <dt>{{ copy.precondition }}</dt>
+            <dd>{{ item().precondition }}</dd>
+          </div>
+          <div>
+            <dt>{{ copy.action }}</dt>
+            <dd>{{ item().action }}</dd>
+          </div>
+          <div>
+            <dt>{{ copy.assertions }}</dt>
+            <dd>{{ item().assertion }}</dd>
+          </div>
+          <div>
+            <dt>{{ copy.cleanup }}</dt>
+            <dd>{{ item().cleanup }}</dd>
+          </div>
+        </dl>
+        <footer hlmDialogFooter>
+          <button hlmBtn [variant]="'outline'" type="button" hlmDialogClose>
+            {{ copy.close }}
+          </button>
+        </footer>
+      </hlm-dialog-content>
+    </hlm-dialog>
+  `,
+})
+export class GalleryTemplateViewComponent {
+  readonly item = input.required<GalleryTemplateViewModel>();
+  readonly dismissed = output<void>();
+  protected readonly copy = galleryCopy;
+}

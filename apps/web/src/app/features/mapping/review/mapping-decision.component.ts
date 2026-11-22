@@ -17,9 +17,11 @@ import {
   HlmDialogPortal,
   HlmDialogTitle,
 } from '@evidgate/ui/dialog';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow';
+import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
 import { mappingCopy } from './mapping-resolution.copy';
 import type { MappingPreview, MappingRowViewModel } from './mapping-resolution.view-model';
 
@@ -35,6 +37,7 @@ import type { MappingPreview, MappingRowViewModel } from './mapping-resolution.v
     HlmDialogHeader,
     HlmDialogPortal,
     HlmDialogTitle,
+    HlmIcon,
     HlmInput,
     HlmLabel,
   ],
@@ -48,6 +51,7 @@ export class MappingDecisionComponent {
   readonly confirmed = output<MappingPreview>();
   readonly cancelled = output<void>();
   protected readonly copy = mappingCopy;
+  protected readonly display = escapeFormatChars;
   protected readonly finished = signal(false);
   protected readonly search = signal('');
   protected readonly candidate = signal<string | null>(null);

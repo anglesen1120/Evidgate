@@ -1,23 +1,31 @@
-<app-page-header [title]="c.title" [description]="hasDraft() ? c.summary : undefined">
-  <div pageHeaderContext class="flex flex-wrap items-center gap-2">
-    <app-status-pill [tone]="'neutral'" [label]="c.history" />
+<div class="flex flex-wrap items-center gap-2">
+  <app-status-pill [tone]="'neutral'" [label]="c.history" />
+</div>
+<div class="flex min-w-0 items-start gap-(--eg-space-4)">
+  <span
+    class="grid size-(--eg-space-9) shrink-0 place-items-center rounded-(--eg-radius-md) border border-border bg-(--eg-accent-soft) text-primary md:size-(--eg-space-10)"
+  >
+    <app-shell-icon [name]="'folder'" />
+  </span>
+  <app-page-header
+    class="min-w-0 flex-1 [&_h1]:text-(length:--eg-leading-md)"
+    [title]="c.title"
+    [description]="hasDraft() ? model().project + ' · ' + model().stableCase : undefined"
+  >
     @if (hasDraft()) {
-      <code>{{ model().project }}</code>
+      <button
+        hlmBtn
+        appPageHeaderActions
+        type="button"
+        id="editor-save"
+        disabled
+        [attr.aria-describedby]="'editor-preview'"
+      >
+        {{ c.save }}
+      </button>
     }
-  </div>
-  @if (hasDraft()) {
-    <button
-      hlmBtn
-      appPageHeaderActions
-      type="button"
-      id="editor-save"
-      disabled
-      [attr.aria-describedby]="'editor-preview'"
-    >
-      {{ c.save }}
-    </button>
-  }
-</app-page-header>
+  </app-page-header>
+</div>
 @switch (state()) {
   @case ('loading') {
     <app-loading-pattern [layout]="'form'" [label]="c.loading" />
@@ -45,7 +53,9 @@
     />
   }
   @default {
-    <p id="editor-preview" class="m-0 text-sm text-muted-foreground">{{ c.preview }}</p>
+    <p id="editor-preview" class="m-0 text-sm text-muted-foreground">
+      {{ c.summary }} {{ c.preview }}
+    </p>
     <app-desktop-required-notice />
     @if (notice(); as message) {
       <app-inline-feedback
@@ -57,7 +67,7 @@
       />
     }
     <section hlmCard>
-      <header hlmCardHeader>
+      <header hlmCardHeader class="border-b border-border">
         <h2 hlmCardTitle>{{ c.identity }}</h2>
       </header>
       <dl
@@ -91,6 +101,24 @@
           <dd>
             <code>{{ state() === 'passed' ? model().reviewed.hash : model().hash }}</code>
           </dd>
+        </div>
+      </dl>
+      <dl
+        hlmCardFooter
+        data-editor-metrics
+        class="m-0 grid grid-cols-1 gap-(--eg-space-4) border-t border-border sm:grid-cols-3 [&_dd]:m-0 [&_dd]:text-2xl [&_dd]:font-semibold [&_dd]:tabular-nums [&_dt]:flex [&_dt]:items-center [&_dt]:gap-2 [&_dt]:text-sm [&_dt]:text-muted-foreground sm:[&>div+div]:border-s sm:[&>div+div]:border-border sm:[&>div+div]:ps-(--eg-space-4)"
+      >
+        <div>
+          <dt><app-shell-icon [name]="'layers'" />{{ c.variants }}</dt>
+          <dd>{{ model().variants.length }}</dd>
+        </div>
+        <div>
+          <dt><app-shell-icon [name]="'code'" />{{ c.lint }}</dt>
+          <dd>{{ model().lint.length }}</dd>
+        </div>
+        <div>
+          <dt><app-shell-icon [name]="'scroll'" />{{ c.versions }}</dt>
+          <dd>{{ model().revisions.length }}</dd>
         </div>
       </dl>
     </section>

@@ -1,11 +1,17 @@
+import { Dialog } from '@angular/cdk/dialog';
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   inject,
+  Injector,
   input,
   linkedSignal,
   signal,
+  viewChild,
+  viewChildren,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
@@ -15,11 +21,12 @@ import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
-import { HlmSelectImports } from '@evidgate/ui/select';
 import { HlmTableImports } from '@evidgate/ui/table';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
+import { DesktopRequiredNoticeComponent } from '../../../shared/ui/narrow/desktop-required-notice.component';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
+import { HeaderActionsDirective } from '../../../shared/ui/page-header/header-actions.directive';
 import { PageHeaderComponent } from '../../../shared/ui/page-header/page-header.component';
 import {
   EmptyPatternComponent,
@@ -29,6 +36,7 @@ import {
   NotFoundPatternComponent,
 } from '../../../shared/ui/states';
 import { HlmCheckbox } from '@evidgate/ui/checkbox';
+import { DeployPromotionHistoryComponent } from './deploy-promotion-history.component';
 import { copy, notices } from './deploy-targets-review.copy';
 import {
   deployTargetsFixture,
@@ -36,6 +44,9 @@ import {
   type DeployState,
   type DeployTargetsViewModel,
 } from './deploy-targets-review.fixture';
+
+type RecordMode = 'view' | 'edit' | 'discard';
+
 // This review-only page uses a snapshot so it cannot change workspace records.
 // The behavior implementation will replace the fixture with its scoped data service.
 @Component({
@@ -48,10 +59,12 @@ import {
     HlmIcon,
     HlmInput,
     HlmLabel,
-    HlmSelectImports,
+    DesktopRequiredNoticeComponent,
+    DeployPromotionHistoryComponent,
     HlmTableImports,
     AbsoluteTimeComponent,
     StatusPillComponent,
+    HeaderActionsDirective,
     PageHeaderComponent,
     EmptyPatternComponent,
     ForbiddenPatternComponent,
@@ -63,13 +76,20 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   templateUrl: './deploy-targets-review.page.html',
+  styleUrl: './deploy-targets-review.page.css',
 })
 export class DeployTargetsReviewPage {
   private readonly route = inject(ActivatedRoute);
+  private readonly dialogs = inject(Dialog);
+  private readonly injector = inject(Injector);
   protected readonly viewport = inject(NarrowMutationPolicy);
   readonly viewModel = input<DeployTargetsViewModel>(deployTargetsFixture);
   private readonly query = toSignal(this.route.queryParamMap);
   protected readonly copy = copy;
+  private readonly viewButtons = viewChildren<ElementRef<HTMLButtonElement>>('viewButton');
+  private readonly pageHeader = viewChild(PageHeaderComponent);
+  private opener: HTMLButtonElement | null = null;
+  private previousField = 'target-order';
   protected readonly validationHint = notices.validation.title;
   protected readonly displayKey = computed(() =>
     this.state() === 'long' && this.key() === 'production'
@@ -96,6 +116,11 @@ export class DeployTargetsReviewPage {
   protected readonly visible = computed(
     () => !['loading', 'empty', 'denied', '401', '404', '429'].includes(this.state()),
   );
+  protected readonly subtitle = computed(() =>
+    this.visible()
+      ? `${this.viewModel().project} · ${copy.ordered}: ${this.viewModel().targets.length}`
+      : copy.intro,
+  );
   protected readonly preview = linkedSignal(() => this.query()?.get('section') === 'admin-preview');
   protected readonly key = linkedSignal(
     () => this.query()?.get('target') ?? this.viewModel().selectedKey,
@@ -109,15 +134,10 @@ export class DeployTargetsReviewPage {
   protected readonly release = linkedSignal(() =>
     this.state() === 'no-match' ? 'rel-2026.10.11' : (this.query()?.get('release') ?? 'all'),
   );
-  protected readonly releaseLabel = (v: unknown) =>
-    typeof v === 'string' && this.viewModel().releases.includes(v) ? v : copy.all;
   protected readonly history = computed(() =>
     this.state() === 'empty-history'
       ? []
       : this.viewModel().checks.filter((c) => c.targetKey === this.key()),
-  );
-  protected readonly visibleChecks = computed(() =>
-    this.history().filter((c) => this.release() === 'all' || c.release === this.release()),
   );
   protected readonly metrics = computed(() => {
     const { targets, checks, project } = this.viewModel();
@@ -145,48 +165,148 @@ export class DeployTargetsReviewPage {
       },
     ] as const;
   });
-  protected readonly tones = { blocked: 'danger', pending: 'neutral', allowed: 'success' } as const;
-  protected readonly canEdit = computed(
+  protected readonly editAllowed = computed(
     () =>
       this.preview() &&
       this.viewport.canMutate() &&
-      this.key() === 'production' &&
       ['ready', 'validation', 'success'].includes(this.state()),
   );
-  protected readonly editing = linkedSignal({
-    source: () => ({ target: this.key(), state: this.state(), editable: this.canEdit() }),
-    computation: () => false,
+  protected readonly canEdit = computed(() => this.editAllowed() && this.key() === 'production');
+  private readonly recordScope = computed(() => ({
+    model: this.viewModel(),
+    query: this.query(),
+    state: this.state(),
+    key: this.key(),
+  }));
+  protected readonly mode = linkedSignal({
+    source: () => ({ record: this.recordScope(), editable: this.canEdit() }),
+    computation: (current, previous): RecordMode | null => {
+      // A resize can revoke editing but should not dismiss a readable View.
+      return previous?.source.record === current.record && previous.value === 'view'
+        ? 'view'
+        : null;
+    },
   });
   protected readonly order = signal<number | null>(null);
   protected readonly pin = signal('');
   protected readonly acknowledged = signal(false);
-  protected open() {
+  private readonly initialOrder = computed(() =>
+    this.state() === 'validation' ? 0 : (this.target()?.order ?? null),
+  );
+  protected readonly dirty = computed(
+    () =>
+      this.order() !== this.initialOrder() ||
+      this.pin() !== (this.target()?.policy ?? '') ||
+      this.acknowledged(),
+  );
+
+  protected openRecord(key: string, mode: 'view' | 'edit', opener: HTMLButtonElement): void {
+    if (this.mode()) {
+      this.requestClose();
+      return;
+    }
+    if (
+      !this.visible() ||
+      (mode === 'edit' &&
+        (key !== 'production' || !this.editAllowed() || !this.viewport.allowsMutation()))
+    )
+      return;
+    this.key.set(key);
+    this.opener = opener;
+    if (mode === 'edit') this.beginEdit();
+    else this.mode.set('view');
+  }
+
+  protected beginEdit(): void {
     if (!this.canEdit() || !this.viewport.allowsMutation()) return;
-    this.order.set(this.state() === 'validation' ? 0 : (this.target()?.order ?? null));
+    const fromView = this.mode() === 'view';
+    this.order.set(this.initialOrder());
     this.pin.set(this.target()?.policy ?? '');
     this.acknowledged.set(false);
-    this.editing.set(true);
+    this.previousField = 'target-order';
+    this.mode.set('edit');
+    if (fromView) this.focusField('target-order');
+  }
+
+  protected registerBackdrop(state: string): void {
+    if (state !== 'open') return;
+    // Brain's implicit dismissal cannot inspect the local draft. Use its own backdrop;
+    // the CDK stream completes when this dialog closes.
+    this.dialogs.getDialogById('deploy-target-record')?.backdropClick.subscribe(() => {
+      this.requestClose();
+    });
+  }
+
+  protected rememberField(event: FocusEvent): void {
+    const field = event.target;
+    if (field instanceof HTMLElement && field.id) this.previousField = field.id;
+  }
+
+  protected requestClose(event?: Event): void {
+    // The release picker owns Escape while its listbox is open.
+    if (
+      event?.defaultPrevented ||
+      (event?.target instanceof Element &&
+        event.target.closest('[aria-expanded="true"][aria-haspopup="listbox"]'))
+    )
+      return;
+    event?.preventDefault();
+    if (this.mode() === 'discard') {
+      this.keepEditing();
+    } else if (this.mode() === 'edit' && this.dirty()) {
+      this.mode.set('discard');
+      this.focusField('draft-keep');
+    } else {
+      this.mode.set(null);
+    }
+  }
+
+  protected keepEditing(): void {
+    this.mode.set('edit');
+    this.focusField(this.previousField);
+  }
+
+  private focusField(id: string): void {
+    afterNextRender(
+      () => {
+        this.dialogs
+          .getDialogById('deploy-target-record')
+          ?.overlayRef.overlayElement.ownerDocument.getElementById(id)
+          ?.focus();
+      },
+      { injector: this.injector },
+    );
+  }
+
+  protected closed(): void {
+    this.mode.set(null);
+    this.order.set(null);
+    this.pin.set('');
+    this.acknowledged.set(false);
+    const views = this.viewButtons();
+    const next = this.opener?.isConnected
+      ? this.opener
+      : (views.find((button) => button.nativeElement.dataset['view'] === this.key()) ?? views[0])
+          ?.nativeElement;
+    if (next) next.focus();
+    else this.pageHeader()?.focusTitle();
+    this.opener = null;
   }
   protected readonly validOrder = computed(() => {
     const n = this.order();
     return n !== null && Number.isInteger(n) && n >= 1 && n <= 20;
   });
+  protected readonly readyToPreview = computed(
+    () =>
+      this.canEdit() &&
+      this.validOrder() &&
+      !!this.pin().trim() &&
+      this.acknowledged() &&
+      (this.order() !== this.target()?.order || this.pin() !== (this.target()?.policy ?? '')),
+  );
   protected confirm() {
-    if (
-      !this.canEdit() ||
-      !this.viewport.allowsMutation() ||
-      !this.editing() ||
-      !this.validOrder() ||
-      !this.pin().trim() ||
-      !this.acknowledged()
-    )
-      return;
-    this.editing.set(false);
+    if (this.mode() !== 'edit' || !this.viewport.allowsMutation() || !this.readyToPreview()) return;
+    this.mode.set(null);
     this.state.set('success');
-  }
-  protected setRelease(value: unknown) {
-    this.release.set(
-      typeof value === 'string' && this.viewModel().releases.includes(value) ? value : 'all',
-    );
   }
 }
