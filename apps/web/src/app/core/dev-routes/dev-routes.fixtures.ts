@@ -315,19 +315,19 @@ export function devRoutes(): Routes {
         (m) => m.ReleaseDecisionReviewPage,
       ),
     ),
-    reviewScreen('dev/studio-gallery', 'draft:write', () =>
+    reviewScreen('dev/studio-gallery', 'run:read', () =>
       // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph.
       import('../../features/studio/gallery/studio-gallery-review.page').then(
         (m) => m.StudioGalleryReviewPage,
       ),
     ),
-    reviewScreen('dev/studio-draft-editor', 'draft:write', () =>
+    reviewScreen('dev/studio-draft-editor', 'run:read', () =>
       // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph.
       import('../../features/studio/draft-editor/studio-draft-editor-review.page').then(
         (m) => m.StudioDraftEditorReviewPage,
       ),
     ),
-    reviewScreen('dev/studio-review-merge', 'draft:write', () =>
+    reviewScreen('dev/studio-review-merge', 'run:read', () =>
       // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph.
       import('../../features/studio/review-merge/studio-review-merge-review.page').then(
         (m) => m.StudioReviewMergeReviewPage,
