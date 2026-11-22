@@ -53,7 +53,7 @@ async function selectSupported(page: Page): Promise<void> {
 }
 for (const locale of LOCALES) {
   for (const theme of THEMES) {
-    for (const width of [360, 1280]) {
+    for (const width of [360, 900, 1280]) {
       test(`pending queue is readable and confirm-only (${locale}, ${theme}, ${width})`, async ({
         page,
       }) => {
@@ -71,6 +71,12 @@ for (const locale of LOCALES) {
         await expect(page.locator('[data-pending-preview-content]')).toContainText(
           'Please confirm the refund wording with support.',
         );
+        const view = page.getByRole('dialog');
+        await expect(view.locator('[data-pending-view-title]')).toBeFocused();
+        await expectNoA11yViolations(page, `change details ${locale} ${theme} ${width}`);
+        await page.keyboard.press('Escape');
+        await expect(view).toHaveCount(0);
+        await expect(preview).toBeFocused();
         if (width === 360) {
           await expect(page.locator('[data-pending-apply]')).toHaveCount(0);
           await expect(page.locator('[data-pending-discard]')).toHaveCount(0);

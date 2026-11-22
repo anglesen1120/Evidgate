@@ -13,6 +13,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import type { ManualCaseListItemDto } from '@evidgate/sdk';
 import type { ListRange } from '@angular/cdk/collections';
 import { HlmButton } from '@evidgate/ui/button';
@@ -27,6 +28,7 @@ import type {
 import { DataTableValueComponent } from '../../shared/ui/data-table/data-table-value.component';
 import { CopyableIdentifierComponent } from '../../shared/ui/values/copyable-identifier.component';
 import { NarrowMutationPolicy } from '../../shared/ui/narrow/narrow-mutation-policy';
+import { escapeFormatChars } from '../../shared/ui/values/ref-name-display';
 import { CASE_TABLE_COPY } from './authoring-case-table.copy';
 
 type CaseCell = TemplateRef<DataTableCellContext<ManualCaseListItemDto>>;
@@ -34,6 +36,7 @@ type CaseCell = TemplateRef<DataTableCellContext<ManualCaseListItemDto>>;
   selector: 'app-authoring-case-rows',
   imports: [
     DecimalPipe,
+    RouterLink,
     HlmButton,
     HlmCheckbox,
     DataTableComponent,
@@ -51,6 +54,7 @@ export class AuthoringCaseRowsComponent {
   private readonly viewport = inject(NarrowMutationPolicy);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly rows = input.required<readonly ManualCaseListItemDto[]>();
+  readonly editorScope = input<readonly string[] | null>(null);
   protected readonly copy = CASE_TABLE_COPY;
   protected readonly desktop = this.viewport.canMutate;
   private readonly table = viewChild(DataTableComponent<ManualCaseListItemDto>);
@@ -60,13 +64,10 @@ export class AuthoringCaseRowsComponent {
   private readonly selectionCell = viewChild.required<CaseCell>('selectionCell');
   private readonly codeCell = viewChild.required<CaseCell>('codeCell');
   private readonly idCell = viewChild.required<CaseCell>('idCell');
-  private readonly titleCell = viewChild.required<CaseCell>('titleCell');
   private readonly parentCell = viewChild.required<CaseCell>('parentCell');
   private readonly priorityCell = viewChild.required<CaseCell>('priorityCell');
-  private readonly stateCell = viewChild.required<CaseCell>('stateCell');
   private readonly coverageCell = viewChild.required<CaseCell>('coverageCell');
-  private readonly versionCell = viewChild.required<CaseCell>('versionCell');
-  private readonly pendingCell = viewChild.required<CaseCell>('pendingCell');
+  private readonly viewCell = viewChild.required<CaseCell>('viewCell');
   private readonly focusId = linkedSignal(() => {
     this.rows();
     return null as string | null;
@@ -104,6 +105,8 @@ export class AuthoringCaseRowsComponent {
   protected readonly rowId = (row: ManualCaseListItemDto) => row.case_id;
   protected readonly selectName = (row: ManualCaseListItemDto) =>
     $localize`:@@authoring.case-table.select-case:Select case ${row.code}:code:`;
+  protected readonly viewName = (row: ManualCaseListItemDto) =>
+    $localize`:@@authoring.case-table.view-name:View ${escapeFormatChars(row.title)}:name:`;
   protected readonly priorityLabel = (row: ManualCaseListItemDto) => this.copy[row.priority];
   protected readonly stateLabel = (row: ManualCaseListItemDto) => this.copy[row.state];
   protected readonly columns = computed<readonly DataTableColumn<ManualCaseListItemDto>[]>(() => [
@@ -123,22 +126,12 @@ export class AuthoringCaseRowsComponent {
       : []),
     {
       id: 'code',
-      header: this.copy.code,
+      header: this.copy.manualCase,
       cell: (row) => row.code,
       role: 'identity',
       priority: 'primary',
-      // Own column, so the shared primary-identity budget (flexing subject) sizes the code
-      // instead of sharing one cell with a 36-character UUID.
       virtualWidth: 'calc(16ch + var(--eg-space-4) * 2)',
       cellTemplate: this.codeCell(),
-    },
-    {
-      id: 'title',
-      header: this.copy.title,
-      cell: (row) => row.title,
-      role: 'text',
-      priority: 'primary',
-      cellTemplate: this.titleCell(),
     },
     {
       id: 'item',
@@ -149,40 +142,17 @@ export class AuthoringCaseRowsComponent {
     },
     {
       id: 'priority',
-      header: this.copy.priority,
+      header: this.copy.priorityState,
       cell: (row) => this.copy[row.priority],
       role: 'status',
       cellTemplate: this.priorityCell(),
     },
-    {
-      id: 'state',
-      header: this.copy.state,
-      cell: (row) => this.copy[row.state],
-      role: 'status',
-      cellTemplate: this.stateCell(),
-    },
-    { id: 'source', header: this.copy.source, cell: () => this.copy.unavailable, role: 'text' },
     {
       id: 'coverage',
       header: this.copy.coverage,
       cell: (row) => (row.linked_live_count > 0 ? this.copy.covered : this.copy.uncovered),
       role: 'status',
       cellTemplate: this.coverageCell(),
-    },
-    { id: 'owner', header: this.copy.owner, cell: () => this.copy.unavailable, role: 'text' },
-    {
-      id: 'version',
-      header: this.copy.version,
-      cell: (row) => row.version,
-      role: 'identity',
-      cellTemplate: this.versionCell(),
-    },
-    {
-      id: 'pending',
-      header: this.copy.pending,
-      cell: () => '—',
-      role: 'number',
-      cellTemplate: this.pendingCell(),
     },
     {
       id: 'id',
@@ -193,6 +163,14 @@ export class AuthoringCaseRowsComponent {
       priority: 'secondary',
       virtualWidth: 'calc(28ch + var(--eg-space-4) * 2)',
       cellTemplate: this.idCell(),
+    },
+    {
+      id: 'actions',
+      header: this.copy.actions,
+      cell: () => this.copy.view,
+      role: 'actions',
+      priority: 'primary',
+      cellTemplate: this.viewCell(),
     },
   ]);
 

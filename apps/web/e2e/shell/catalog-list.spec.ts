@@ -73,7 +73,7 @@ for (const locale of LOCALES) {
   });
 
   for (const theme of THEMES)
-    for (const width of [360, 1280]) {
+    for (const width of [360, 900, 1280, 1440]) {
       test(`catalog reflows, keeps keyboard controls and passes axe (${locale}, ${theme}, ${width})`, async ({
         page,
       }) => {
@@ -85,7 +85,7 @@ for (const locale of LOCALES) {
           'ready',
         );
         await expect(page.locator(ROWS)).toHaveCount(2);
-        if (width === 1280) {
+        if (width >= 900) {
           const [status, framework, search] = await Promise.all(
             ['#catalog-status', '#catalog-framework', '#catalog-search'].map((selector) =>
               page.locator(selector).boundingBox(),

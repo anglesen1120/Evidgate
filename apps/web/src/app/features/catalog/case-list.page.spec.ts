@@ -115,6 +115,8 @@ describe('CaseListPage', () => {
       'Framework',
       'Status',
       'Owner',
+      'Labels',
+      'Actions',
     ]);
     const text = await harness.text();
     expect(await (await harness.status()).text()).toContain('Active and missing');
@@ -245,11 +247,13 @@ describe('CaseListPage', () => {
     const pending = new Subject<CaseDto>();
     update.mockReturnValueOnce(firstValueFrom(pending));
     const { fixture, harness } = await render();
+    // Let the dialog and select portals render; only the pending write needs manual detection.
+    await harness.draftOwner(firstCase.id, nextOwner.invited_email);
     await manualChangeDetection(async () => {
-      await harness.chooseOwner(firstCase.id, nextOwner.invited_email);
+      await (await harness.save()).click();
       fixture.detectChanges();
       TestBed.tick();
-      expect(await (await harness.ownerTrigger(firstCase.id)).text()).toContain(
+      expect(await (await harness.ownerValue(firstCase.id)).text()).toContain(
         nextOwner.invited_email,
       );
       expect(await harness.ownerPending()).not.toBeNull();
@@ -262,7 +266,7 @@ describe('CaseListPage', () => {
     await fixture.whenStable();
     expect(await harness.ownerPending()).toBeNull();
     expect(await harness.ownerFailure()).toBeNull();
-    expect(await (await harness.ownerTrigger(firstCase.id)).text()).toContain(
+    expect(await (await harness.ownerValue(firstCase.id)).text()).toContain(
       nextOwner.invited_email,
     );
     expect(update).toHaveBeenCalledWith(
@@ -302,7 +306,7 @@ describe('CaseListPage', () => {
       );
       const { harness } = await render();
       await harness.chooseOwner(firstCase.id, nextOwner.invited_email);
-      expect(await (await harness.ownerTrigger(firstCase.id)).text()).toContain(
+      expect(await (await harness.ownerValue(firstCase.id)).text()).toContain(
         'current.owner@example.test',
       );
       const error = await harness.ownerFailure();
@@ -315,7 +319,7 @@ describe('CaseListPage', () => {
   it('disables owner assignment with a visible reason without case write permission', async () => {
     canWrite.set(false);
     const { harness } = await render();
-    expect(await (await harness.ownerTrigger(firstCase.id)).getProperty('disabled')).toBe(true);
+    expect(await harness.edit(firstCase.id)).toBeNull();
     expect(await harness.text()).toContain('case:write is required to assign an owner.');
     expect(update).not.toHaveBeenCalled();
   });
@@ -323,7 +327,7 @@ describe('CaseListPage', () => {
   it('keeps owner details readable but disables mutation below the desktop breakpoint', async () => {
     wide.set(false);
     const { harness } = await render();
-    expect(await (await harness.ownerTrigger(firstCase.id)).getProperty('disabled')).toBe(true);
+    expect(await harness.edit(firstCase.id)).toBeNull();
     expect(await harness.text()).toContain('at least 768 pixels wide');
     expect(await harness.text()).toContain('current.owner@example.test');
     expect(update).not.toHaveBeenCalled();
@@ -332,7 +336,7 @@ describe('CaseListPage', () => {
   it('keeps existing ownership readable while member choices load or fail', async () => {
     membersStatus.set('loading');
     const { fixture, harness } = await render();
-    expect(await (await harness.ownerTrigger(firstCase.id)).getProperty('disabled')).toBe(true);
+    expect(await harness.edit(firstCase.id)).toBeNull();
     expect(await harness.text()).toContain('Loading owner choices');
     expect(await harness.text()).toContain('current.owner@example.test');
     membersStatus.set('error');
@@ -347,9 +351,10 @@ describe('CaseListPage', () => {
   it('does not offer an unassign action when active member choices are empty', async () => {
     memberships.set(new Map());
     const { harness } = await render();
-    const picker = await harness.ownerTrigger(firstCase.id);
-    expect(await picker.getProperty('disabled')).toBe(true);
-    expect(await picker.text()).toContain('Member details unavailable');
+    expect(await harness.edit(firstCase.id)).toBeNull();
+    expect(await (await harness.ownerValue(firstCase.id)).text()).toContain(
+      'Member details unavailable',
+    );
     expect(await harness.text()).toContain('No active members are available to assign');
     expect(update).not.toHaveBeenCalled();
   });

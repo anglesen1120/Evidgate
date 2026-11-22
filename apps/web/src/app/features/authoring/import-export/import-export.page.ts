@@ -1,8 +1,7 @@
-import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmIcon } from '@evidgate/ui/icon';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { HlmTabsImports } from '@evidgate/ui/tabs';
 import { SessionStore } from '../../../core/session/session.store';
 import { PageHeaderComponent } from '../../../shared/ui/page-header/page-header.component';
@@ -20,8 +19,7 @@ import { AUTHORING_READ, IMPEX_COPY } from './import-export.copy';
   providers: [ImportExportDataService, ImportStore, ExportStore],
   imports: [
     RouterLink,
-    NgTemplateOutlet,
-    HlmIcon,
+    ShellIconComponent,
     HlmButton,
     HlmTabsImports,
     PageHeaderComponent,
@@ -35,9 +33,10 @@ import { AUTHORING_READ, IMPEX_COPY } from './import-export.copy';
     <header class="flex min-w-0 flex-wrap items-start justify-between gap-(--eg-space-5)">
       <div class="flex min-w-0 flex-1 items-start gap-(--eg-space-4)">
         <span
-          class="grid size-(--eg-control-touch) shrink-0 place-items-center rounded-(--eg-radius-md) bg-(--eg-accent-soft) text-(--eg-accent)"
+          aria-hidden="true"
+          class="grid size-(--eg-space-9) shrink-0 place-items-center rounded-(--eg-radius-md) border border-border bg-(--eg-accent-soft) text-primary md:size-(--eg-space-10)"
         >
-          <hlm-icon [name]="'lucideCopy'" class="size-(--eg-space-6)" />
+          <app-shell-icon [name]="'folder'" class="size-(--eg-space-6)" />
         </span>
         @if (ownsPageHeading) {
           <app-page-header class="min-w-0" [title]="copy.title" [description]="copy.description" />
@@ -51,33 +50,33 @@ import { AUTHORING_READ, IMPEX_COPY } from './import-export.copy';
       </div>
       @if (session.currentProject(); as project) {
         <dl
-          class="m-0 grid w-full min-w-0 gap-(--eg-space-1) text-sm md:w-auto md:max-w-1/3"
+          class="m-0 flex w-full min-w-0 flex-wrap items-baseline gap-x-(--eg-space-2) text-sm md:w-auto md:max-w-1/3"
           [attr.aria-label]="copy.context"
         >
           <div class="flex flex-wrap items-baseline gap-x-(--eg-space-3)">
-            <dt class="text-xs text-muted-foreground">{{ copy.project }}</dt>
+            <dt class="sr-only">{{ copy.project }}</dt>
             <dd class="m-0 font-medium wrap-anywhere">
               <bdi>{{ project.name }}</bdi>
             </dd>
           </div>
           <div class="flex flex-wrap items-baseline gap-x-(--eg-space-3)">
-            <dt class="text-xs text-muted-foreground">{{ copy.prefix }}</dt>
+            <dt>
+              <span aria-hidden="true">·</span><span class="sr-only">{{ copy.prefix }}</span>
+            </dt>
             <dd class="m-0 font-mono wrap-anywhere" data-import-prefix>
               <bdi>{{ project.case_prefix }}</bdi>
             </dd>
           </div>
         </dl>
       }
-    </header>
-    <ng-template #backLink>
       <a
         hlmBtn
-        [variant]="'link'"
+        [variant]="'outline'"
         [routerLink]="['../']"
         class="min-h-(--eg-control-touch) w-fit whitespace-normal"
         >{{ copy.back }}</a
       >
-    </ng-template>
+    </header>
     @if (session.has(readPermission)) {
       <div
         hlmTabs
@@ -85,31 +84,28 @@ import { AUTHORING_READ, IMPEX_COPY } from './import-export.copy';
         (tabActivated)="tab.set($event)"
         class="min-w-0 gap-(--eg-space-5)"
       >
-        <div class="flex min-w-0 flex-wrap items-center justify-between gap-(--eg-space-3)">
-          <div
-            hlmTabsList
-            [variant]="'line'"
-            [attr.aria-label]="copy.title"
-            class="h-auto w-fit max-w-full justify-start"
+        <div
+          hlmTabsList
+          [variant]="'line'"
+          [attr.aria-label]="copy.title"
+          class="h-auto w-fit min-w-0 max-w-full flex-nowrap justify-start overflow-x-auto overscroll-x-contain p-(--eg-space-2)"
+        >
+          <button
+            type="button"
+            [hlmTabsTrigger]="'import'"
+            class="min-h-(--eg-control-touch) flex-none whitespace-nowrap"
+            data-impex-import-tab
           >
-            <button
-              type="button"
-              [hlmTabsTrigger]="'import'"
-              class="min-h-(--eg-control-touch) whitespace-nowrap"
-              data-impex-import-tab
-            >
-              {{ copy.importTab }}
-            </button>
-            <button
-              type="button"
-              [hlmTabsTrigger]="'export'"
-              class="min-h-(--eg-control-touch) whitespace-nowrap"
-              data-impex-export-tab
-            >
-              {{ copy.exportTab }}
-            </button>
-          </div>
-          <ng-container [ngTemplateOutlet]="backLink" />
+            {{ copy.importTab }}
+          </button>
+          <button
+            type="button"
+            [hlmTabsTrigger]="'export'"
+            class="min-h-(--eg-control-touch) flex-none whitespace-nowrap"
+            data-impex-export-tab
+          >
+            {{ copy.exportTab }}
+          </button>
         </div>
         <div
           [hlmTabsContent]="'import'"
@@ -127,7 +123,6 @@ import { AUTHORING_READ, IMPEX_COPY } from './import-export.copy';
         </div>
       </div>
     } @else {
-      <ng-container [ngTemplateOutlet]="backLink" />
       <app-inline-feedback [title]="copy.denied" [tone]="'warning'" />
     }
   `,

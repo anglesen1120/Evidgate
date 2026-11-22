@@ -53,6 +53,20 @@
         View one version before choosing a second version to compare.
       </p>
     }
+    <ng-template #versionCell let-row>
+      @if (virtualRows()) {
+        {{ row.version_no }}
+      } @else {
+        <h3
+          class="m-0 text-sm font-semibold tabular-nums"
+          tabindex="-1"
+          [attr.data-version-heading]="row.version_no"
+          i18n="@@authoring.editor.version-number"
+        >
+          Version {{ row.version_no }}
+        </h3>
+      }
+    </ng-template>
     <ng-template #metadata let-row let-stacked="stacked">
       @if (virtualRows()) {
         <div class="flex min-w-0 items-center gap-(--eg-space-2)">
@@ -137,45 +151,14 @@
       [retryEligible]="true"
       (retry)="store.history.reload()"
     >
-      @if (rows().length > 200) {
-        <app-data-table
-          [rows]="rows()"
-          [columns]="columns()"
-          [rowId]="rowId"
-          [caption]="historyTitle"
-          [fixedHeightCells]="true"
-        />
-      } @else {
-        <ol
-          class="m-0 grid min-w-0 list-none gap-(--eg-space-4) border-s border-border ps-(--eg-space-4)"
-        >
-          @for (row of rows(); track row.version_id) {
-            <li
-              class="grid min-w-0 items-start gap-(--eg-space-4) rounded-(--eg-radius-md) bg-muted p-(--eg-space-5) @min-[50rem]/history:grid-cols-[minmax(0,1fr)_auto]"
-              [attr.data-version-row]="row.version_id"
-            >
-              <h3
-                class="col-span-full"
-                hlmCardTitle
-                [size]="'subsection'"
-                tabindex="-1"
-                [attr.data-version-heading]="row.version_no"
-                i18n="@@authoring.editor.version-number"
-              >
-                Version {{ row.version_no }}
-              </h3>
-              <ng-container
-                [ngTemplateOutlet]="metadata"
-                [ngTemplateOutletContext]="{ $implicit: row }"
-              />
-              <ng-container
-                [ngTemplateOutlet]="actions"
-                [ngTemplateOutletContext]="{ $implicit: row }"
-              />
-            </li>
-          }
-        </ol>
-      }
+      <app-data-table
+        [rows]="rows()"
+        [columns]="columns()"
+        [rowId]="rowId"
+        [caption]="historyTitle"
+        [fixedHeightCells]="true"
+        [fitToContainer]="true"
+      />
     </app-request-state>
     @if (historyStatus() === 'ready') {
       <div

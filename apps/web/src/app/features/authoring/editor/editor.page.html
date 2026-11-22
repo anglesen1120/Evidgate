@@ -1,4 +1,4 @@
-<div class="grid min-w-0 gap-(--eg-space-6)">
+<div class="grid min-w-0 gap-(--eg-space-7)">
   @if (pageHeadingLevel === 1) {
     <div class="flex min-w-0 items-start gap-(--eg-space-4)">
       <span
@@ -8,12 +8,45 @@
       <app-page-header
         class="min-w-0 flex-1 wrap-anywhere"
         [title]="title()"
-        [description]="intro"
-      />
+        [description]="intro()"
+        ><ng-container ngProjectAs="[appPageHeaderActions]" [ngTemplateOutlet]="saveAction"
+      /></app-page-header>
     </div>
   } @else {
-    <h2 hlmCardTitle [size]="'section'">{{ title() }}</h2>
+    <div class="flex min-w-0 flex-wrap items-start justify-between gap-(--eg-space-4)">
+      <div class="min-w-0">
+        <h2 hlmCardTitle [size]="'section'">{{ title() }}</h2>
+        <p class="m-0 text-sm text-muted-foreground">{{ intro() }}</p>
+      </div>
+      <ng-container [ngTemplateOutlet]="saveAction" />
+    </div>
   }
+  <ng-template #saveAction>
+    @if (tab() === 'editor' && viewport.canMutate() && status() === 'ready' && store.draft()) {
+      @if (store.base(); as base) {
+        <button
+          hlmBtn
+          type="submit"
+          [attr.form]="'manual-case-edit-form'"
+          class="min-h-(--eg-control-touch) whitespace-normal"
+          data-editor-save
+          [disabled]="blocked() && !store.saving() && !store.conflictOpen()"
+          [attr.aria-disabled]="blocked()"
+          [attr.data-disabled]="blocked() ? '' : null"
+          [attr.aria-describedby]="
+            !store.canWrite()
+              ? 'case-write-reason'
+              : base.view.state === 'retired'
+                ? 'case-retired-reason'
+                : null
+          "
+          i18n="@@authoring.editor.save"
+        >
+          Save new version
+        </button>
+      }
+    }
+  </ng-template>
   <app-desktop-required-notice />
   <app-request-state
     class="grid gap-(--eg-space-5)"
@@ -47,29 +80,6 @@
           Unsaved changes are kept in this tab only.
         </p>
       }
-      @if (viewport.narrow()) {
-        <label hlmLabel for="case-panel-select" i18n="@@authoring.editor.choose-panel"
-          >Choose a section</label
-        >
-        <hlm-select [value]="tab()" (valueChange)="selectTab($event)" [itemToString]="panelLabel">
-          <hlm-select-trigger
-            [buttonId]="'case-panel-select'"
-            class="min-h-(--eg-control-touch) w-full whitespace-normal"
-            ><hlm-select-value
-          /></hlm-select-trigger>
-          <hlm-select-content *hlmSelectPortal [aria-label]="panelSelectLabel">
-            <hlm-select-item [value]="'editor'" i18n="@@authoring.editor.editor-tab"
-              >Editor</hlm-select-item
-            >
-            <hlm-select-item [value]="'review'" i18n="@@authoring.editor.review-select-option"
-              >Checklist review</hlm-select-item
-            >
-            <hlm-select-item [value]="'timeline'" i18n="@@authoring.editor.timeline-tab"
-              >Timeline</hlm-select-item
-            >
-          </hlm-select-content>
-        </hlm-select>
-      }
       <hlm-tabs
         [tab]="tab()"
         (tabActivated)="selectTab($event)"
@@ -77,8 +87,9 @@
       >
         <div
           hlmTabsList
-          [variant]="'line'"
-          [style.display]="viewport.narrow() ? 'none' : null"
+          #tabStrip
+          class="flex max-w-full min-w-0 flex-nowrap overflow-x-auto bg-transparent p-(--eg-space-2) [scrollbar-color:var(--eg-border-control)_transparent] [&>button]:max-w-none [&>button]:flex-none [&>button]:whitespace-nowrap"
+          (focusin)="revealTab(tabStrip, $event.target)"
           aria-label="Case sections"
           i18n-aria-label="@@authoring.editor.panels"
         >
@@ -106,15 +117,21 @@
             @if (store.draft(); as draft) {
               <section hlmCard class="min-w-0 gap-0 py-0" aria-labelledby="case-content-heading">
                 @if (viewport.canMutate()) {
-                  <h2
-                    hlmCardTitle
-                    id="case-content-heading"
-                    [size]="'subsection'"
-                    class="border-b border-border px-(--eg-space-6) py-(--eg-space-5)"
+                  <header
+                    class="grid gap-(--eg-space-2) border-b border-border px-(--eg-space-6) py-(--eg-space-5)"
                   >
-                    {{ contentTitle }}
-                  </h2>
+                    <h2 hlmCardTitle id="case-content-heading" [size]="'subsection'">
+                      {{ contentTitle }}
+                    </h2>
+                    <p
+                      class="m-0 text-sm text-muted-foreground"
+                      i18n="@@authoring.editor.content-hint"
+                    >
+                      Expected results change only through explicit manual edits.
+                    </p>
+                  </header>
                   <form
+                    id="manual-case-edit-form"
                     class="grid min-w-0 gap-(--eg-space-5) p-(--eg-space-5) md:p-(--eg-space-6)"
                     (ngSubmit)="save()"
                     [attr.aria-busy]="store.locked()"
@@ -354,27 +371,6 @@
                         />
                       }
                     }
-                    <div class="flex flex-wrap gap-3 border-t border-border pt-(--eg-space-5)">
-                      <button
-                        hlmBtn
-                        type="submit"
-                        class="min-h-(--eg-control-touch) whitespace-normal"
-                        data-editor-save
-                        [disabled]="blocked() && !store.saving() && !store.conflictOpen()"
-                        [attr.aria-disabled]="blocked()"
-                        [attr.data-disabled]="blocked() ? '' : null"
-                        [attr.aria-describedby]="
-                          !store.canWrite()
-                            ? 'case-write-reason'
-                            : base.view.state === 'retired'
-                              ? 'case-retired-reason'
-                              : null
-                        "
-                        i18n="@@authoring.editor.save"
-                      >
-                        Save new version
-                      </button>
-                    </div>
                   </form>
                 } @else {
                   <div class="grid min-w-0 gap-(--eg-space-4) p-(--eg-space-5)">

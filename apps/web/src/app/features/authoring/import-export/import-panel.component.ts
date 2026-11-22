@@ -20,8 +20,7 @@ import { createFormFeedback } from '../../../shared/forms/form-feedback';
 import { DesktopMutationDirective } from '../../../shared/ui/narrow/desktop-mutation.directive';
 import { DesktopRequiredNoticeComponent } from '../../../shared/ui/narrow/desktop-required-notice.component';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
-import { RevisionChipComponent } from '../../../shared/ui/chips/revision-chip.component';
-import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
+import { ImportHistoryTableComponent } from './import-history-table.component';
 import { SessionStore } from '../../../core/session/session.store';
 import { SectionHeaderComponent } from '../../../shared/ui/page-header/section-header.component';
 import { InlineFeedbackComponent } from '../../../shared/ui/states/inline-feedback.component';
@@ -46,8 +45,7 @@ import { ImportStore } from './import.store';
     HlmCard,
     HlmCardContent,
     HlmCardHeader,
-    RevisionChipComponent,
-    AbsoluteTimeComponent,
+    ImportHistoryTableComponent,
     HlmInput,
     HlmLabel,
     HlmSelectImports,

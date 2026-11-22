@@ -18,7 +18,24 @@ export class CatalogPageHarness extends ComponentHarness {
   readonly summary = this.locatorFor('[data-catalog-summary]');
   readonly status = this.locatorFor('#catalog-status');
   readonly search = this.locatorFor('#catalog-search');
-  readonly reloadOwner = this.locatorFor('[data-catalog-owner] button[data-catalog-owner-reload]');
+  readonly reloadOwner = this.documentRootLocatorFactory().locatorFor(
+    '#catalog-record-error button',
+  );
+  readonly dialog = this.documentRootLocatorFactory().locatorForOptional('[role="dialog"]');
+  readonly dialogTitle = this.documentRootLocatorFactory().locatorFor('#catalog-record-title');
+  readonly keep = this.documentRootLocatorFactory().locatorFor('[data-catalog-keep]');
+  readonly discard = this.documentRootLocatorFactory().locatorFor('[data-catalog-discard]');
+  readonly cancel = this.documentRootLocatorFactory().locatorFor('[data-catalog-cancel]');
+  readonly save = this.documentRootLocatorFactory().locatorFor('[data-catalog-save]');
+  view(caseId: string) {
+    return this.locatorFor(`[data-row-id="${caseId}"] [data-catalog-view]`)();
+  }
+  edit(caseId: string) {
+    return this.locatorForOptional(`[data-row-id="${caseId}"] [data-catalog-edit]`)();
+  }
+  ownerValue(caseId: string) {
+    return this.locatorFor(`[data-catalog-owner="${caseId}"]`)();
+  }
   async text() {
     return (await this.host()).text();
   }
@@ -26,19 +43,25 @@ export class CatalogPageHarness extends ComponentHarness {
     return Promise.all((await this.headings()).map((heading) => heading.text()));
   }
   async chooseOwner(caseId: string, email: string) {
-    const trigger = await this.ownerTrigger(caseId);
-    await trigger.click();
+    await this.draftOwner(caseId, email);
+    await (await this.save()).click();
+  }
+  async draftOwner(caseId: string, email: string) {
+    const edit = await this.edit(caseId);
+    if (!edit) throw new Error('Edit owner not available');
+    await edit.click();
+    await this.forceStabilize();
+    await (await this.documentRootLocatorFactory().locatorFor('#catalog-record-owner')()).click();
+    await this.forceStabilize();
     const options = await this.documentRootLocatorFactory().locatorForAll('[role="option"]')();
     for (const option of options) {
       if ((await option.text()).includes(email)) {
         await option.click();
+        await this.forceStabilize();
         return;
       }
     }
     throw new Error(`Owner option ${email} is missing`);
-  }
-  ownerTrigger(caseId: string) {
-    return this.locatorFor(`[data-catalog-owner="${caseId}"] hlm-select-trigger button`)();
   }
   async choosePageSize(size: number) {
     await (await this.locatorFor('#catalog-page-size')()).click();

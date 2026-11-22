@@ -1,0 +1,160 @@
+<hlm-dialog
+  [state]="'open'"
+  [disableClose]="true"
+  [closeOnOutsidePointerEvents]="false"
+  [restoreFocus]="false"
+  [aria-modal]="true"
+  [aria-labelledby]="'catalog-record-title'"
+  [autoFocus]="editing() ? '#catalog-record-owner' : '#catalog-record-title'"
+>
+  <hlm-dialog-content
+    *hlmDialogPortal
+    [showCloseButton]="false"
+    class="catalog-dialog"
+    [class.editing]="editing()"
+    (keydown.escape)="escape($event)"
+    [attr.aria-busy]="busy() || saving()"
+  >
+    <header hlmDialogHeader class="relative pe-(--eg-control-touch)">
+      <h2 hlmDialogTitle>
+        <span id="catalog-record-title" tabindex="-1">{{
+          confirming() ? copy.discardTitle : editing() ? copy.edit : copy.viewTitle
+        }}</span>
+      </h2>
+      <p hlmDialogDescription>
+        <bdi>{{ display(row().name || row().id) }}</bdi>
+      </p>
+      @if (!confirming()) {
+        <div class="flex min-w-0 flex-wrap items-center gap-(--eg-space-3)">
+          <code class="text-xs wrap-anywhere"
+            ><bdi>{{ display(row().annotation_id || row().id) }}</bdi></code
+          >
+          <app-status-pill
+            [label]="copy[row().status]"
+            [tone]="row().status === 'missing' ? 'warning' : 'neutral'"
+          />
+        </div>
+        <button
+          hlmBtn
+          [variant]="'ghost'"
+          [size]="'icon-sm'"
+          type="button"
+          class="absolute end-0 top-0 pointer-coarse:size-(--eg-control-touch)"
+          [attr.aria-label]="copy.close"
+          [disabled]="saving() || busy()"
+          (click)="requestLeave()"
+        >
+          <hlm-icon name="lucideX" />
+        </button>
+      }
+    </header>
+    <div class="body">
+      @if (confirming()) {
+        <p>{{ copy.discardDescription }}</p>
+      } @else if (editing()) {
+        <p class="mb-(--eg-space-4)">
+          <bdi>{{ display(row().org_id) }}</bdi> / <bdi>{{ display(row().project_id) }}</bdi>
+        </p>
+        <label hlmLabel for="catalog-record-owner">{{ copy.owner }}</label>
+        <hlm-select
+          [ngModel]="draft()"
+          (ngModelChange)="choose($event)"
+          [itemToString]="choiceLabel"
+          [disabled]="saving() || busy()"
+        >
+          <hlm-select-trigger
+            [buttonId]="'catalog-record-owner'"
+            class="mt-(--eg-space-2) w-full min-w-0"
+            [aria-describedby]="'catalog-record-help'"
+          >
+            <hlm-select-value [placeholder]="copy.unassigned" />
+          </hlm-select-trigger>
+          <hlm-select-content *hlmSelectPortal [aria-label]="copy.owner">
+            @if (row().owner_membership_id; as current) {
+              @if (members().get(current)?.status !== 'active') {
+                <hlm-select-item [value]="current" [disabled]="true">{{
+                  choiceLabel(current)
+                }}</hlm-select-item>
+              }
+            }
+            @for (member of choices(); track member.id) {
+              <hlm-select-item [value]="member.id" class="whitespace-normal wrap-anywhere"
+                ><bdi>{{ display(member.invited_email) }}</bdi></hlm-select-item
+              >
+            }
+          </hlm-select-content>
+        </hlm-select>
+        <p id="catalog-record-help" class="eg-type-caption mt-(--eg-space-3) text-muted-foreground">
+          {{ ownerHelp() }}
+        </p>
+      } @else {
+        <app-case-record-facts [row]="row()" [ownerName]="ownerName()" />
+        @if (!eligible()) {
+          <p class="mt-(--eg-space-4) text-muted-foreground">{{ ownerHelp() }}</p>
+        }
+      }
+      @if (failure(); as message) {
+        <div class="mt-(--eg-space-4)" id="catalog-record-error" tabindex="-1" role="alert">
+          <p>{{ message }}</p>
+          @if (reloadOwner()) {
+            <button
+              hlmBtn
+              [variant]="'outline'"
+              type="button"
+              (click)="reload()"
+              [disabled]="busy() || saving()"
+              i18n="@@catalog.owner-reload"
+            >
+              Reload to retry
+            </button>
+          }
+        </div>
+      }
+      @if (saving() || busy()) {
+        <p role="status" i18n="@@catalog.owner-saving">Saving owner…</p>
+      }
+    </div>
+    <footer hlmDialogFooter>
+      @if (confirming()) {
+        <button
+          hlmBtn
+          type="button"
+          id="catalog-record-keep"
+          data-catalog-keep
+          (click)="keepEditing()"
+        >
+          {{ copy.keep }}
+        </button>
+        <button hlmBtn [variant]="'outline'" type="button" data-catalog-discard (click)="discard()">
+          {{ copy.discard }}
+        </button>
+      } @else if (editing()) {
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          type="button"
+          data-catalog-cancel
+          [disabled]="busy() || saving()"
+          (click)="requestLeave()"
+        >
+          {{ copy.cancel }}
+        </button>
+        <button hlmBtn type="button" data-catalog-save [disabled]="!canSave()" (click)="save()">
+          {{ copy.save }}
+        </button>
+      } @else {
+        <button
+          hlmBtn
+          [variant]="eligible() ? 'outline' : 'default'"
+          type="button"
+          (click)="requestLeave()"
+        >
+          {{ copy.close }}
+        </button>
+        @if (eligible()) {
+          <button hlmBtn type="button" (click)="startEdit()">{{ copy.edit }}</button>
+        }
+      }
+    </footer>
+  </hlm-dialog-content>
+</hlm-dialog>

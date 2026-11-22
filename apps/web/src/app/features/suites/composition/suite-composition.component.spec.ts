@@ -81,6 +81,11 @@ describe('SuiteCompositionComponent', () => {
     expect(getRevision).toHaveBeenCalledExactlyOnceWith(revision.id);
     const table = root.querySelector('table[data-testid="suite-matrix"]');
     expect(table?.querySelector('caption')?.textContent).toContain('Case revisions by variant');
+    const region = table?.closest('[role="region"]');
+    expect(region?.getAttribute('aria-label')).toBe('Composition matrix');
+    expect(region?.classList.contains('overflow-x-auto')).toBe(true);
+    expect(region?.getAttribute('tabindex')).toBe('0');
+    expect(root.querySelector('[role="tablist"], [aria-haspopup="dialog"]')).toBeNull();
     const columns = [...(table?.querySelectorAll('thead th[scope="col"] bdi.identifier') ?? [])];
     const rows = [...(table?.querySelectorAll('tbody tr') ?? [])];
     expect(columns).toHaveLength(3);

@@ -1,4 +1,4 @@
-import { manualChangeDetection } from '@angular/cdk/testing';
+import { manualChangeDetection, TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
@@ -120,20 +120,60 @@ describe('Catalog permission and asynchronous interaction boundaries', () => {
     expect(await harness.text()).toContain(owner.id);
     expect(await harness.text()).toContain('No active members are available to assign');
     expect(await harness.text()).not.toContain('Retry owner choices');
-    expect(await (await harness.ownerTrigger(ownedCase.id)).getProperty('disabled')).toBe(true);
+    expect(await harness.edit(ownedCase.id)).toBeNull();
   });
 
   it('clears member details when read permission is revoked without a route change', async () => {
     const { fixture, harness } = await render();
     expect(memberInit).toHaveBeenCalledWith('org');
-    expect(await (await harness.ownerTrigger(ownedCase.id)).getProperty('disabled')).toBe(false);
+    expect(await harness.edit(ownedCase.id)).not.toBeNull();
     canRead.set(false);
     fixture.detectChanges();
     await fixture.whenStable();
     expect(memberClear).toHaveBeenCalled();
     expect(await harness.text()).not.toContain(owner.invited_email);
     expect(await harness.text()).toContain(owner.id);
-    expect(await (await harness.ownerTrigger(ownedCase.id)).getProperty('disabled')).toBe(true);
+    expect(await harness.edit(ownedCase.id)).toBeNull();
+  });
+
+  it('opens a labelled read-only dialog, focuses its title, and restores the exact View opener on Escape', async () => {
+    const { harness } = await render();
+    const opener = await harness.view(ownedCase.id);
+    expect(await opener.getAttribute('aria-label')).toContain(ownedCase.name);
+    await opener.click();
+    const dialog = await harness.dialog();
+    expect(await dialog?.getAttribute('aria-labelledby')).toBe('catalog-record-title');
+    expect(await (await harness.dialogTitle()).isFocused()).toBe(true);
+    for (const fact of [
+      ownedCase.id,
+      ownedCase.org_id,
+      ownedCase.project_id,
+      ownedCase.annotation_id,
+      ownedCase.first_seen_commit,
+    ]) {
+      expect(await dialog?.text()).toContain(fact);
+    }
+    await (await harness.dialogTitle()).sendKeys(TestKey.ESCAPE);
+    expect(await harness.dialog()).toBeNull();
+    expect(await opener.isFocused()).toBe(true);
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('keeps a changed draft on Escape and discards only on explicit confirmation', async () => {
+    const { harness } = await render();
+    const opener = await harness.edit(ownedCase.id);
+    await harness.draftOwner(ownedCase.id, nextOwner.invited_email);
+    await (await harness.cancel()).sendKeys(TestKey.ESCAPE);
+    expect(await (await harness.keep()).isFocused()).toBe(true);
+    await (await harness.keep()).click();
+    expect(await (await harness.save()).getProperty('disabled')).toBe(false);
+    await (await harness.cancel()).click();
+    await (await harness.discard()).click();
+    expect(await harness.dialog()).toBeNull();
+    expect(await opener?.isFocused()).toBe(true);
+    expect(await (await harness.ownerValue(ownedCase.id)).text()).toContain(owner.invited_email);
+    expect(update).not.toHaveBeenCalled();
   });
 
   it('clears and cancels the member reader when the page is destroyed', async () => {

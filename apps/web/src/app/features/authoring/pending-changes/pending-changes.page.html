@@ -1,23 +1,33 @@
 <div class="flex min-w-0 items-start gap-(--eg-space-4)">
   <span class="heading-tile"><hlm-icon [name]="'lucideClock'" class="size-5" /></span>
   @if (ownsPageHeading()) {
-    <app-page-header class="min-w-0 flex-1" [title]="copy.title" [description]="copy.description">
+    <app-page-header class="min-w-0 flex-1" [title]="copy.title" [description]="description()">
       <ng-container ngProjectAs="[appPageHeaderActions]" [ngTemplateOutlet]="treeLink" />
     </app-page-header>
   } @else {
-    <app-section-header
-      class="min-w-0 flex-1"
-      [title]="copy.title"
-      [description]="copy.description"
-    >
+    <app-section-header class="min-w-0 flex-1" [title]="copy.title" [description]="description()">
       <ng-container ngProjectAs="[appSectionHeaderActions]" [ngTemplateOutlet]="treeLink" />
     </app-section-header>
   }
 </div>
 <ng-template #treeLink>
-  <a hlmBtn [variant]="'outline'" [routerLink]="['../']" class="eg-header-action">{{
-    copy.back
-  }}</a>
+  <a hlmBtn [variant]="'outline'" [routerLink]="['../']" class="eg-header-action"
+    ><hlm-icon [name]="'lucideChevronLeft'" />{{ copy.back }}</a
+  >
+  @if (store.canRead() && !store.forbidden() && status() === 'ready' && !store.empty()) {
+    <button
+      *appDesktopMutation
+      hlmBtn
+      type="button"
+      data-pending-apply
+      class="eg-header-action"
+      [disabled]="blocked()"
+      [attr.aria-describedby]="store.applyBlockedReason() ? 'pending-apply-explanation' : null"
+      (click)="openApply()"
+    >
+      {{ store.applying() ? copy.applying : copy.applyAction }}
+    </button>
+  }
 </ng-template>
 <app-desktop-required-notice />
 @if (!store.canRead() || store.forbidden()) {
@@ -29,7 +39,7 @@
       class="region inspection"
       tabindex="-1"
       [attr.aria-label]="copy.emptyTitle"
-      data-pending-preview-content
+      data-pending-empty
     ></section>
   }
   <app-request-state
@@ -55,6 +65,10 @@
         <div hlmCard [size]="'sm'">
           <dt><hlm-icon [name]="'lucideCopy'" />{{ copy.selectionSummary }}</dt>
           <dd data-pending-selected-count><app-number-value [value]="store.selectedCount()" /></dd>
+        </div>
+        <div hlmCard [size]="'sm'">
+          <dt><hlm-icon [name]="'lucideTriangleAlert'" />{{ ui.blockedCount }}</dt>
+          <dd><app-number-value [value]="blockedCount()" /></dd>
         </div>
       </dl>
       <app-inline-feedback
@@ -126,8 +140,8 @@
       >
         <app-section-header
           [title]="copy.queueTitle"
-          description="Open an operation to preview it. Use the checkboxes to select changes for the batch."
-          i18n-description="@@authoring.pending-changes.queue-instructions"
+          description="View a change to inspect its details. Use the checkboxes to select the changes to apply."
+          i18n-description="@@authoring.pending-changes.view-instructions"
         />
         <div class="actions">
           <button
@@ -150,13 +164,11 @@
             {{ copy.clearSelection }}
           </button>
         </div>
-        <app-data-table
+        <app-pending-change-table
           [rows]="store.rows()"
-          [columns]="columns()"
-          [rowId]="rowId"
           [caption]="copy.queueScope"
-          [fixedHeightCells]="true"
-          [fitToContainer]="true"
+          [selection]="selectionCell"
+          [more]="moreCell"
         />
         @if (store.nextCursor()) {
           <button
@@ -172,200 +184,86 @@
           </button>
         }
       </section>
-      <div class="detail-stack">
-        <section
-          #inspection
-          hlmCard
-          class="region inspection"
-          tabindex="-1"
-          [attr.aria-label]="copy.previewTitle"
-          data-pending-preview-content
-        >
-          <app-section-header [title]="copy.previewTitle" />
-          @if (store.preview(); as preview) {
-            <div class="flex min-w-0 flex-wrap items-center justify-between gap-(--eg-space-3)">
-              <app-copyable-identifier [value]="preview.targetId" [label]="copy.targetLabel" />
-              @if (store.previewRow(); as row) {
-                <span data-pending-preview-state>
-                  <ng-container
-                    [ngTemplateOutlet]="stateCell"
-                    [ngTemplateOutletContext]="{ $implicit: row }"
-                  />
-                </span>
-              }
-            </div>
-            <h3 class="preview-heading">{{ preview.kindLabel }}</h3>
-            @if (store.targetTitles()[preview.targetId]; as title) {
-              <p class="full-text font-semibold">{{ title }}</p>
-            }
-            @for (line of preview.lines; track line) {
-              <p class="full-text preview-note">{{ line }}</p>
-            }
-            @for (line of preview.lineage; track line) {
-              <p class="full-text">{{ line }}</p>
-            }
-            @if (store.previewRow(); as row) {
-              @if (row.change_type === 'split') {
-                <p class="full-text">{{ copy.lineageLabel }}: {{ row.target_id }}</p>
-              }
-              <dl class="facts">
-                <div>
-                  <dt>{{ ui.changeId }}</dt>
-                  <dd><app-copyable-identifier [value]="row.change_id" [label]="ui.changeId" /></dd>
-                </div>
-                <div>
-                  <dt>{{ copy.authorLabel }}</dt>
-                  <dd>
-                    <app-copyable-identifier
-                      [value]="row.author_membership_id"
-                      [label]="copy.authorLabel"
-                    />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{{ copy.sourceLabelQueued }}</dt>
-                  <dd>{{ sourceLabel(row.source) }}</dd>
-                </div>
-                <div>
-                  <dt>{{ ui.baseVersion }}</dt>
-                  <dd><app-revision-chip [revision]="row.base_version" /></dd>
-                </div>
-                <div>
-                  <dt>{{ ui.queuedAt }}</dt>
-                  <dd><app-absolute-time [value]="row.created_at" /></dd>
-                </div>
-                <div>
-                  <dt>{{ copy.reasonLabel }}</dt>
-                  <dd class="full-text">{{ row.reason ?? copy.reasonUnset }}</dd>
-                </div>
-              </dl>
-              @if (isStructural(row)) {
-                <app-inline-feedback
-                  [tone]="'warning'"
-                  [title]="ui.structural"
-                  [description]="copy.blockedStructural"
-                  [announcement]="'off'"
-                />
-              } @else if (preview.unavailable) {
-                <p class="full-text text-muted-foreground">{{ preview.unavailable }}</p>
-              }
-              <div *appDesktopMutation class="actions" data-pending-mutation>
-                <button
-                  hlmBtn
-                  [variant]="'outline'"
-                  type="button"
-                  data-pending-discard
-                  [disabled]="
-                    store.discardBlocked() || busy() || deniedWrite() || !store.retryReady()
-                  "
-                  [attr.aria-describedby]="
-                    !store.canWrite() || deniedWrite() ? 'pending-write-explanation' : null
-                  "
-                  (click)="openDiscard(row.change_id)"
-                >
-                  {{ copy.discardAction }}
-                </button>
-              </div>
-            }
-          } @else {
-            <p class="m-0">{{ copy.previewNone }}</p>
-          }
-        </section>
-        <section
-          hlmCard
-          class="region"
-          [attr.aria-busy]="store.applying()"
-          [attr.aria-label]="ui.batchSummary"
-        >
-          <app-section-header [title]="ui.batchSummary" />
-          <p class="m-0 text-sm font-semibold">
-            {{ copy.selectionSummary }}: <app-number-value [value]="store.selectedCount()" />
-          </p>
-          @if (store.applyBlockedReason(); as reason) {
-            <p id="pending-apply-explanation" class="full-text preview-note">{{ reason }}</p>
-            @if (store.applyRequest() && !store.queueStale()) {
-              <button
-                hlmBtn
-                [variant]="'outline'"
-                type="button"
-                data-pending-replay-reload
-                [disabled]="!store.retryReady() || busy() || readBusy()"
-                (click)="store.reload()"
-              >
-                {{ copy.conflictReload }}
-              </button>
-            }
-          }
-          @if (!store.canWrite() || deniedWrite()) {
-            <p id="pending-write-explanation" class="full-text">{{ copy.readOnly }}</p>
-          }
-          @for (entry of store.rowsWithBlocks(); track entry.row.change_id) {
-            @if (entry.blockedReason && store.selectedIdSet().has(entry.row.change_id)) {
-              <div class="blocked-item">
-                <app-copyable-identifier [value]="entry.row.change_id" [label]="ui.changeId" />
-                <p class="full-text">{{ entry.blockedReason }}</p>
-              </div>
-            }
-          }
-          <div *appDesktopMutation class="field" data-pending-mutation>
-            <label hlmLabel for="pending-local-reason">{{ copy.reasonLabel }}</label>
-            <textarea
-              hlmInput
-              id="pending-local-reason"
-              rows="3"
-              [ngModel]="store.localReason()"
-              (ngModelChange)="store.setReason($event)"
-              [readOnly]="busy() || !store.canWrite() || deniedWrite()"
-              [aria-describedby]="'pending-reason-hint'"
-              class="resize-y"
-            ></textarea>
-          </div>
-          @if (!policy.canMutate()) {
-            <dl class="facts">
-              <div>
-                <dt>{{ copy.reasonLabel }}</dt>
-                <dd class="full-text">{{ store.localReason() || copy.reasonUnset }}</dd>
-              </div>
-            </dl>
-          }
-          <p id="pending-reason-hint" class="full-text text-sm text-muted-foreground">
-            {{ copy.reasonHint }}
-          </p>
-          <div *appDesktopMutation class="actions" data-pending-mutation>
+      <section
+        hlmCard
+        class="region"
+        [attr.aria-busy]="store.applying()"
+        [attr.aria-label]="ui.batchSummary"
+      >
+        <app-section-header [title]="ui.batchSummary" />
+        <p class="m-0 text-sm font-semibold">
+          {{ copy.selectionSummary }}: <app-number-value [value]="store.selectedCount()" />
+        </p>
+        @if (store.applyBlockedReason(); as reason) {
+          <p id="pending-apply-explanation" class="full-text preview-note">{{ reason }}</p>
+          @if (store.applyRequest() && !store.queueStale()) {
             <button
               hlmBtn
+              [variant]="'outline'"
               type="button"
-              data-pending-apply
-              [disabled]="blocked()"
-              [attr.aria-describedby]="
-                store.applyBlockedReason() ? 'pending-apply-explanation' : null
-              "
-              (click)="openApply()"
+              data-pending-replay-reload
+              [disabled]="!store.retryReady() || busy() || readBusy()"
+              (click)="store.reload()"
             >
-              {{ store.applying() ? copy.applying : copy.applyAction }}
+              {{ copy.conflictReload }}
             </button>
-          </div>
-          <p class="m-0 min-h-(--eg-leading-sm)" role="status">
-            {{ store.applying() ? copy.applying : '' }}
-          </p>
-          <details>
-            <summary>{{ ui.metadata }}</summary>
-            <dl class="facts">
-              <div>
-                <dt>{{ ui.batchEtag }}</dt>
-                <dd>
-                  @if (store.batchEtag(); as etag) {
-                    <app-copyable-identifier [value]="etag" [label]="ui.batchEtag" />
-                  } @else {
-                    <p class="full-text">{{ ui.etagNotRead }}</p>
-                  }
-                </dd>
-              </div>
-            </dl>
-            <p class="full-text">{{ ui.idempotency }}</p>
-          </details>
-        </section>
-      </div>
+          }
+        }
+        @if (!store.canWrite() || deniedWrite()) {
+          <p id="pending-write-explanation" class="full-text">{{ copy.readOnly }}</p>
+        }
+        @for (entry of store.rowsWithBlocks(); track entry.row.change_id) {
+          @if (entry.blockedReason && store.selectedIdSet().has(entry.row.change_id)) {
+            <div class="blocked-item">
+              <app-copyable-identifier [value]="entry.row.change_id" [label]="ui.changeId" />
+              <p class="full-text">{{ entry.blockedReason }}</p>
+            </div>
+          }
+        }
+        <div *appDesktopMutation class="field" data-pending-mutation>
+          <label hlmLabel for="pending-local-reason">{{ copy.reasonLabel }}</label>
+          <textarea
+            hlmInput
+            id="pending-local-reason"
+            rows="3"
+            [ngModel]="store.localReason()"
+            (ngModelChange)="store.setReason($event)"
+            [readOnly]="busy() || !store.canWrite() || deniedWrite()"
+            [aria-describedby]="'pending-reason-hint'"
+            class="resize-y"
+          ></textarea>
+        </div>
+        @if (!policy.canMutate()) {
+          <dl class="facts">
+            <div>
+              <dt>{{ copy.reasonLabel }}</dt>
+              <dd class="full-text">{{ store.localReason() || copy.reasonUnset }}</dd>
+            </div>
+          </dl>
+        }
+        <p id="pending-reason-hint" class="full-text text-sm text-muted-foreground">
+          {{ copy.reasonHint }}
+        </p>
+        <p class="m-0 min-h-(--eg-leading-sm)" role="status">
+          {{ store.applying() ? copy.applying : '' }}
+        </p>
+        <details>
+          <summary>{{ ui.metadata }}</summary>
+          <dl class="facts">
+            <div>
+              <dt>{{ ui.batchEtag }}</dt>
+              <dd>
+                @if (store.batchEtag(); as etag) {
+                  <app-copyable-identifier [value]="etag" [label]="ui.batchEtag" />
+                } @else {
+                  <p class="full-text">{{ ui.etagNotRead }}</p>
+                }
+              </dd>
+            </div>
+          </dl>
+          <p class="full-text">{{ ui.idempotency }}</p>
+        </details>
+      </section>
     </div>
   </app-request-state>
   @if (store.receipt(); as receipt) {
@@ -468,28 +366,31 @@
     >{{ ui.select }} {{ row.change_id }}</span
   >
 </ng-template>
-<ng-template #operationCell let-row>
-  <button
-    hlmBtn
-    [variant]="'link'"
-    type="button"
-    data-pending-preview
-    [attr.data-pending-change-id]="row.change_id"
-    [attr.aria-label]="ui.preview + ': ' + operationLabel(row.change_type) + ' ' + row.change_id"
-    [attr.aria-pressed]="store.previewId() === row.change_id"
-    (click)="store.setPreview(row.change_id)"
-    class="preview-trigger min-h-(--eg-control-touch) max-w-full truncate"
-  >
-    {{ operationLabel(row.change_type) }}
-  </button>
-</ng-template>
-<ng-template #targetCell let-row>
-  <app-copyable-identifier [value]="row.target_id" [label]="copy.targetLabel" [compact]="true" />
-</ng-template>
-<ng-template #stateCell let-row>
-  <app-status-pill
-    [tone]="isStale(row) || isStructural(row) ? 'warning' : 'neutral'"
-    [label]="isStale(row) ? ui.stale : isStructural(row) ? ui.unavailable : ui.pending"
-    [fullValue]="isStructural(row) ? ui.structural : rowBlockedReason(row)"
-  />
+<ng-template #moreCell let-row>
+  @if (policy.canMutate() && store.canWrite() && !deniedWrite()) {
+    <button
+      #moreButton
+      hlmBtn
+      [variant]="'ghost'"
+      type="button"
+      [hlmDropdownMenuTrigger]="menu"
+      data-pending-more
+      [attr.aria-label]="moreLabel + ': ' + operationLabel(row.change_type) + ' ' + row.change_id"
+    >
+      <span aria-hidden="true">⋯</span>
+    </button>
+    <ng-template #menu>
+      <div hlmDropdownMenu>
+        <button
+          hlmDropdownMenuItem
+          type="button"
+          data-pending-discard
+          [disabled]="store.discardBlocked() || busy() || !store.retryReady()"
+          (triggered)="openDiscard(row.change_id, moreButton)"
+        >
+          {{ copy.discardAction }}
+        </button>
+      </div>
+    </ng-template>
+  }
 </ng-template>

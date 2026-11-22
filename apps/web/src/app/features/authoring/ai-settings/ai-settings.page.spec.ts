@@ -1,4 +1,4 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import { ComponentHarness, TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { signal, provideZonelessChangeDetection, type WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
@@ -23,6 +23,11 @@ class SettingsHarness extends ComponentHarness {
   static hostSelector = 'app-ai-settings-page';
   readonly saveButton = this.locatorFor('[data-ai-save]');
   readonly retryButton = this.locatorFor('app-retry-after button');
+  readonly dialog = this.documentRootLocatorFactory().locatorForOptional('[role="dialog"]');
+  readonly dialogTitle = this.documentRootLocatorFactory().locatorFor('[role="dialog"] h2');
+  readonly view = this.locatorFor('[data-ai-version-view]');
+  readonly settingsTab = this.locatorFor('[role="tab"]:first-child');
+  readonly historyTab = this.locatorFor('[data-ai-history-tab]');
   async attribute(selector: string, name: string) {
     return (await this.locatorFor(selector)()).getAttribute(name);
   }
@@ -172,6 +177,67 @@ describe('AiSettingsPage', () => {
     await harness.click('[data-ai-inspect]');
     expect(await harness.text()).toContain(version.settings.writing_style);
     expect(data.version).toHaveBeenCalledWith('p1', 1, expect.any(AbortSignal));
+  });
+  it('opens the loaded snapshot without selecting a comparison or retrieving its document', async () => {
+    const { harness } = await mount();
+    await harness.click('[data-ai-history-tab]');
+    const opener = await harness.view();
+    expect(await opener.getAttribute('aria-label')).toBe('View version 1');
+    await opener.focus();
+    await opener.click();
+    const title = await harness.dialogTitle();
+    const dialog = await harness.dialog();
+    expect(await dialog?.getAttribute('aria-labelledby')).toBe(await title.getAttribute('id'));
+    expect(await dialog?.text()).toContain('general-en');
+    expect(await dialog?.text()).toContain(version.reason);
+    await vi.waitFor(async () => expect(await title.isFocused()).toBe(true));
+    await title.sendKeys(TestKey.ESCAPE);
+    await vi.waitFor(async () => expect(await harness.dialog()).toBeNull());
+    expect(await opener.isFocused()).toBe(true);
+    expect(data.version).not.toHaveBeenCalled();
+    expect(data.save).not.toHaveBeenCalled();
+  });
+  it('shows fetched guidance only for the matching history record', async () => {
+    data.versions.mockResolvedValue({
+      items: [
+        version,
+        { ...version, version_no: 2, content_hash: 'b'.repeat(64), reason: 'Other reason' },
+      ],
+      next_cursor: null,
+    });
+    const { harness } = await mount();
+    await harness.click('[data-ai-history-tab]');
+    await harness.click('[data-ai-inspect]');
+    await harness.click('[data-ai-version-view="1"]');
+    expect(await (await harness.dialog())?.text()).toContain(version.settings.writing_style);
+    await (await harness.dialogTitle()).sendKeys(TestKey.ESCAPE);
+    await vi.waitFor(async () => expect(await harness.dialog()).toBeNull());
+    await harness.click('[data-ai-version-view="2"]');
+    const second = await harness.dialog();
+    expect(await second?.text()).toContain('Other reason');
+    expect(await second?.text()).not.toContain(version.settings.writing_style);
+    expect(data.version).toHaveBeenCalledTimes(1);
+    await (await harness.dialogTitle()).sendKeys(TestKey.ESCAPE);
+    await vi.waitFor(async () => expect(await harness.dialog()).toBeNull());
+  });
+  it('moves between labelled panels on one horizontal tab stop without discarding the draft', async () => {
+    const { harness } = await mount();
+    await harness.fill('writing_style', 'Retained text');
+    const settings = await harness.settingsTab();
+    const history = await harness.historyTab();
+    expect(await harness.attribute('[role="tablist"]', 'aria-orientation')).toBe('horizontal');
+    await settings.focus();
+    await settings.sendKeys(TestKey.RIGHT_ARROW);
+    expect(await history.isFocused()).toBe(true);
+    expect(await history.getAttribute('aria-selected')).toBe('true');
+    expect(await settings.getAttribute('tabindex')).toBe('-1');
+    const panel = await history.getAttribute('aria-controls');
+    expect(await harness.attribute('#' + panel, 'aria-labelledby')).toBe(
+      await history.getAttribute('id'),
+    );
+    await history.sendKeys(TestKey.HOME);
+    expect(await settings.isFocused()).toBe(true);
+    expect(await harness.value('writing_style')).toBe('Retained text');
   });
   it('maps 422 pointers to associated form errors and retains input', async () => {
     data.save.mockRejectedValue(

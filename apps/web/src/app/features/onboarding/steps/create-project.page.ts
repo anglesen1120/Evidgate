@@ -67,6 +67,7 @@ import {
   template: `
     <p
       class="m-0 min-h-(--eg-leading-sm) text-sm focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
+      [class.sr-only]="!busy()"
       role="status"
       tabindex="-1"
       #busyStatus

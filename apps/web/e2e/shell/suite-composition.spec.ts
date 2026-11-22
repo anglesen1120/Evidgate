@@ -247,6 +247,25 @@ for (const locale of LOCALES) {
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       ).toBe(true);
       await expectNoA11yViolations(page, `suite composition ${locale}/${theme}/360px`);
+      await page.setViewportSize({ width: 900, height: 900 });
+      const matrix = page.locator(MATRIX);
+      const region = page
+        .getByRole('region')
+        .filter({ has: matrix })
+        .and(page.locator('[tabindex="0"]'));
+      await expect(matrix).toBeVisible();
+      const heading = await page.locator('#suite-matrix-heading').innerText();
+      await expect(region).toHaveAccessibleName(heading);
+      await expect(region).toHaveCSS('overflow-x', 'auto');
+      await expect(
+        page.locator(
+          'app-suite-composition [role="tablist"], app-suite-composition [aria-haspopup="dialog"]',
+        ),
+      ).toHaveCount(0);
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      ).toBe(true);
+      await expectNoA11yViolations(page, `suite composition ${locale}/${theme}/900px`);
       await page.setViewportSize({ width: 1440, height: 900 });
       await expect(page.locator(MATRIX)).toBeVisible();
       await expect(mobileMembers).toBeHidden();

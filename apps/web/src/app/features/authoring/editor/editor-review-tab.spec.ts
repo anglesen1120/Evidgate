@@ -67,18 +67,6 @@ class EditorReviewHarness extends ComponentHarness {
     await review.sendKeys(TestKey.ENTER);
     return movedToReview;
   }
-
-  async choosePanel(label: string) {
-    await this.click('#case-panel-select');
-    const options = await this.documentRootLocatorFactory().locatorForAll('[role="option"]')();
-    for (const option of options) {
-      if ((await option.text()).trim() === label) {
-        await option.click();
-        return;
-      }
-    }
-    throw new Error('Panel option not found: ' + label);
-  }
 }
 
 const CASE: ManualCaseDetailDto = {
@@ -171,10 +159,12 @@ describe('EditorPage checklist review mount', () => {
     await fixture.whenStable();
     expect(await ui.selectedTab()).toBe(REVIEW);
     expect(await ui.count('[data-review-change]')).toBe(1);
-    expect(await ui.textAt('app-checklist-review-tab')).toContain('Parent checklist comment');
-    expect(await ui.textAt('app-checklist-review-tab')).not.toContain(
-      'An unrelated case-id target',
-    );
+    await ui.click('[data-review-change]');
+    const detail = document.querySelector<HTMLElement>('[role="dialog"]');
+    expect(detail?.textContent).toContain('Parent checklist comment');
+    expect(detail?.textContent).not.toContain('An unrelated case-id target');
+    detail?.querySelector<HTMLButtonElement>('[data-pending-view-close]')?.click();
+    await fixture.whenStable();
     expect(listPending).toHaveBeenCalledWith(PROJECT, expect.any(AbortSignal), undefined, ITEM);
     expect(versions).not.toHaveBeenCalled();
     expect(queue).not.toHaveBeenCalled();
@@ -222,13 +212,13 @@ describe('EditorPage checklist review mount', () => {
     expect(queue).not.toHaveBeenCalled();
   });
 
-  it('offers the same review panel in the narrow select and retains its label across resize', async () => {
+  it('retains the selected review tab and its permission state across resize', async () => {
     narrow.set(true);
     const { ui, fixture } = await mount();
     expect(await ui.count('app-checklist-review-tab')).toBe(0);
-    await ui.choosePanel(REVIEW);
+    await ui.click('[data-editor-review-tab]');
     await fixture.whenStable();
-    expect(await ui.textAt('#case-panel-select')).toContain(REVIEW);
+    expect(await ui.selectedTab()).toBe(REVIEW);
     expect(await ui.count('[data-review-change]')).toBe(1);
     expect(await ui.count('#review-comment')).toBe(0);
     narrow.set(false);

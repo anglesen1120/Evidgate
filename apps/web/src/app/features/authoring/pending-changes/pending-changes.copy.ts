@@ -7,8 +7,6 @@ export const PENDING_COPY = {
   back: $localize`:@@authoring.pending-changes.back:Back to feature tree`,
   queueTitle: $localize`:@@authoring.pending-changes.queue-title:Queued changes`,
   queueScope: $localize`:@@authoring.pending-changes.queue-scope:Loaded pending changes`,
-  previewTitle: $localize`:@@authoring.pending-changes.preview-title:Selected change`,
-  previewNone: $localize`:@@authoring.pending-changes.preview-none:Choose a queued change to read its preview.`,
   selectAll: $localize`:@@authoring.pending-changes.select-all:Select every loaded change`,
   clearSelection: $localize`:@@authoring.pending-changes.clear-selection:Clear the selection`,
   selectionSummary: $localize`:@@authoring.pending-changes.selection-summary:Selected changes`,

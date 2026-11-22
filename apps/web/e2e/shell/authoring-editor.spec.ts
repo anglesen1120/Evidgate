@@ -43,9 +43,9 @@ async function writes(page: Page) {
   );
 }
 async function timelineRows(page: Page) {
-  return page.locator('[data-version-row]').evaluateAll((rows) =>
+  return page.locator('app-editor-timeline [data-row-id]').evaluateAll((rows) =>
     rows.map((row) => ({
-      id: row.getAttribute('data-version-row'),
+      id: row.getAttribute('data-row-id'),
       text: row.textContent,
     })),
   );
@@ -182,7 +182,7 @@ for (const locale of LOCALES) {
     }) => {
       await page.goto(path(locale));
       await page.locator('[data-editor-timeline-tab]').click();
-      await expect(page.locator('[data-version-row]').first()).toBeVisible();
+      await expect(page.locator('app-editor-timeline [data-row-id]').first()).toBeVisible();
       const before = await timelineRows(page);
       expect(before.length).toBeGreaterThan(1);
       await page.locator('[data-inspect-version="' + FIRST_VERSION + '"]').click();
@@ -227,15 +227,14 @@ for (const locale of LOCALES) {
             await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
           ).toBe(true);
           await expectNoA11yViolations(page, 'authoring-editor-narrow-' + locale + '-' + theme);
-          await page.locator('#case-panel-select').click();
           await page
-            .getByRole('option', {
+            .getByRole('tab', {
               name: locale === 'vi' ? 'Dòng thời gian' : 'Timeline',
               exact: true,
             })
             .click();
-          await expect(page.locator('hlm-select-content')).toBeHidden();
-          await expect(page.locator('[data-version-row]').first()).toBeVisible();
+          await expect(page.locator('#case-panel-select')).toHaveCount(0);
+          await expect(page.locator('app-editor-timeline [data-row-id]').first()).toBeVisible();
           await page.locator('[data-inspect-version]').first().click();
           await expect(page.locator('[data-restore-open]')).toBeDisabled();
           await expectNoA11yViolations(page, 'authoring-timeline-narrow-' + locale + '-' + theme);

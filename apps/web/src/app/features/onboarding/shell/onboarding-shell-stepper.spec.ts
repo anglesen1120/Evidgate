@@ -36,6 +36,22 @@ class NavigatorHarness extends ComponentHarness {
 }
 
 describe('the onboarding step navigator', () => {
+  it.each([390, 900])(
+    'keeps all five steps in one locally scrollable row at %ipx',
+    async (width) => {
+      const viewport = new OnboardingViewport();
+      viewport.setWidth(width);
+      const { fixture, root } = await mountShell({ viewport });
+      const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, NavigatorHarness);
+      if (width < 768) await (await harness.toggle()).click();
+      const list = await harness.list();
+      expect(await list.hasClass('flex-nowrap')).toBe(true);
+      expect(await list.hasClass('overflow-x-auto')).toBe(true);
+      expect(currentSteps(root)).toEqual(['onboarding-select-step-1']);
+      expect(root.querySelector('[role="tablist"]')).toBeNull();
+    },
+  );
+
   it('provides one ordered navigator and a full-width body with one meaningful heading', async () => {
     const { root } = await mountShell();
     expect(root.querySelectorAll('nav')).toHaveLength(1);

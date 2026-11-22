@@ -4,7 +4,7 @@ import { expectNoA11yViolations } from '../a11y/axe-scan';
 import { expectCurrentStep, onboardingUrl, shell, stepItem } from './onboarding-support';
 import { LOCALES, seedStoredTheme, THEMES } from './support';
 
-const WIDTHS = [390, 768, 1024, 1280, 1440] as const;
+const WIDTHS = [390, 768, 900, 1024, 1280, 1440] as const;
 
 /** The `data-testid` of the focused element, or its tag name: what a handoff actually reached. */
 async function focusedTestId(page: Page): Promise<string> {
@@ -36,6 +36,9 @@ async function expectNavigatorGeometry(page: Page, width: number): Promise<void>
     return {
       cardWidth: card.getBoundingClientRect().width,
       bodyWidth: body.getBoundingClientRect().width,
+      localOverflow: getComputedStyle(list).overflowX,
+      scrollWidth: list.scrollWidth,
+      clientWidth: list.clientWidth,
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       steps: Array.from(list.querySelectorAll('button')).map((button) => {
         const label = button.querySelector('[data-step-label]');
@@ -62,6 +65,8 @@ async function expectNavigatorGeometry(page: Page, width: number): Promise<void>
   });
   expect(layout.steps).toHaveLength(5);
   expect(layout.overflow).toBeLessThanOrEqual(1);
+  expect(layout.localOverflow).toBe('auto');
+  if (width <= 900) expect(layout.scrollWidth).toBeGreaterThan(layout.clientWidth);
   expect(Math.abs(layout.cardWidth - layout.bodyWidth)).toBeLessThanOrEqual(1);
   const first = layout.steps[0];
   if (!first) throw new Error('Empty step navigator');
@@ -69,8 +74,8 @@ async function expectNavigatorGeometry(page: Page, width: number): Promise<void>
     expect(step.width).toBeGreaterThanOrEqual(44);
     expect(step.height).toBeGreaterThanOrEqual(44);
     expect(step.textFits).toBe(true);
-    expect(Math.abs(width >= 768 ? step.y - first.y : step.x - first.x)).toBeLessThanOrEqual(1);
-    if (width >= 768) expect(Math.abs(step.labelY - first.labelY)).toBeLessThanOrEqual(1);
+    expect(Math.abs(step.y - first.y)).toBeLessThanOrEqual(1);
+    expect(Math.abs(step.labelY - first.labelY)).toBeLessThanOrEqual(1);
   }
 }
 

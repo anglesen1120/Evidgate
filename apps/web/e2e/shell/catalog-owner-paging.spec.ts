@@ -32,8 +32,11 @@ async function moveHome(page: Page, trigger: Locator): Promise<void> {
   );
 }
 
-async function chooseOwnerWithKeyboard(page: Page, picker: Locator): Promise<string> {
-  await tabTo(page, picker);
+async function chooseOwnerWithKeyboard(page: Page, edit: Locator): Promise<string> {
+  await tabTo(page, edit);
+  await page.keyboard.press('Enter');
+  const picker = page.locator('#catalog-record-owner');
+  await expect(picker).toBeFocused();
   await page.keyboard.press('Enter');
   const email = 'qa@acme.test';
   const options = page.getByRole('option', { disabled: false });
@@ -46,6 +49,8 @@ async function chooseOwnerWithKeyboard(page: Page, picker: Locator): Promise<str
   await page.keyboard.press('Enter');
   // Brain animates the overlay out; scanning mid-fade reads the option's blended colour.
   await expect(page.getByRole('listbox')).toHaveCount(0);
+  await tabTo(page, page.locator('[data-catalog-save]'));
+  await page.keyboard.press('Enter');
   return email;
 }
 
@@ -84,14 +89,16 @@ for (const locale of LOCALES) {
         await page.setViewportSize({ width, height: 900 });
         await page.goto(base);
         await expect(page.locator(ROWS)).toHaveCount(2);
-        const picker = page.locator(ROWS).first().locator('hlm-select-trigger button');
+        const row = page.locator(ROWS).first();
+        const edit = row.locator('[data-catalog-edit]');
         if (width === 360) {
-          await expect(picker).toBeDisabled();
+          await expect(edit).toHaveCount(0);
           await expect(page.locator('#catalog-owner-help')).toContainText(labels.narrow);
         } else {
-          await expect(picker).toBeEnabled();
-          const email = await chooseOwnerWithKeyboard(page, picker);
-          await expect(picker).toContainText(email);
+          await expect(edit).toBeEnabled();
+          const email = await chooseOwnerWithKeyboard(page, edit);
+          await expect(page.getByRole('dialog')).toHaveCount(0);
+          await expect(row.locator('[data-catalog-owner]')).toContainText(email);
           await expect(page.locator('[data-catalog-owner-pending]')).toHaveCount(0);
           await expect(page.locator('[data-catalog-owner-error]')).toHaveCount(0);
         }
@@ -114,16 +121,71 @@ for (const locale of LOCALES) {
     test(`catalog restores the owner after ${refusal} (${locale})`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 900 });
       await page.goto(withVariants(base, [`?fixture.variant.updateCase=${refusal}`]));
-      const picker = page.locator(ROWS).first().locator('hlm-select-trigger button');
-      await expect(picker).toBeEnabled();
-      const previous = (await picker.innerText()).trim();
-      await chooseOwnerWithKeyboard(page, picker);
+      const row = page.locator(ROWS).first();
+      const edit = row.locator('[data-catalog-edit]');
+      const value = row.locator('[data-catalog-owner] app-data-table-value').first();
+      await expect(edit).toBeEnabled();
+      const previous = (await value.innerText()).trim();
+      await chooseOwnerWithKeyboard(page, edit);
       await expect(page.locator('[data-catalog-owner-error]')).toBeVisible();
-      await expect(picker).toContainText(previous);
-      await expect(page.getByRole('button', { name: labels.retry, exact: true })).toBeVisible();
+      await expect(value).toContainText(previous);
+      const dialog = page.getByRole('dialog');
+      await expect(dialog.getByRole('button', { name: labels.retry, exact: true })).toBeVisible();
+      await expectNoA11yViolations(page, '[role="dialog"]');
+      await dialog.locator('[data-catalog-cancel]').click();
+      await dialog.locator('[data-catalog-discard]').click();
       await expectNoA11yViolations(page, 'app-case-list-page');
     });
   }
+
+  test(
+    'record View preserves list query, Back, Forward and deep-link close (' + locale + ')',
+    async ({ page }) => {
+      await page.goto(withVariants(base, ['?limit=25']));
+      const row = page.locator(ROWS).first();
+      const opener = row.locator('[data-catalog-view]');
+      await opener.click();
+      const dialog = page.getByRole('dialog');
+      await expect(dialog.locator('#catalog-record-title')).toBeFocused();
+      await expect(page).toHaveURL(/mode=view/);
+      const recordUrl = page.url();
+      expect(new URL(recordUrl).searchParams.get('limit')).toBe('25');
+      await page.goBack();
+      await expect(dialog).toHaveCount(0);
+      await expect(opener).toBeFocused();
+      await page.goForward();
+      await expect(dialog).toBeVisible();
+      await page.goto(recordUrl);
+      await expect(dialog).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(dialog).toHaveCount(0);
+      await expect(page).not.toHaveURL(/record=/);
+      expect(new URL(page.url()).searchParams.get('limit')).toBe('25');
+    },
+  );
+
+  test(
+    'Back cannot discard a changed owner without confirmation (' + locale + ')',
+    async ({ page }) => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto(base);
+      const row = page.locator(ROWS).first();
+      await row.locator('[data-catalog-edit]').click();
+      const dialog = page.getByRole('dialog');
+      await dialog.locator('#catalog-record-owner').click();
+      await page.getByRole('option', { name: 'qa@acme.test', exact: true }).click();
+      await page.goBack();
+      await expect(dialog.locator('[data-catalog-keep]')).toBeFocused();
+      await dialog.locator('[data-catalog-keep]').click();
+      await expect(dialog.locator('#catalog-record-owner')).toContainText('qa@acme.test');
+      await expect(page).toHaveURL(/mode=edit/);
+      await page.goBack();
+      await dialog.locator('[data-catalog-discard]').click();
+      await expect(dialog).toHaveCount(0);
+      await expect(page).not.toHaveURL(/record=/);
+      await expect(row.locator('[data-catalog-edit]')).toBeFocused();
+    },
+  );
 
   test(`catalog page size stays in the URL and resets the cursor (${locale})`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });

@@ -85,9 +85,9 @@ app-inline-feedback {
 button {
   scroll-margin-block-start: calc(var(--eg-space-12) + var(--eg-space-7));
 }
-@media (min-width: 768px) {
+@media (min-width: 1200px) {
   .panes {
-    grid-template-columns: minmax(13rem, 0.8fr) minmax(0, 2.2fr);
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 2.2fr);
   }
 }
 @media (max-width: 767px) {

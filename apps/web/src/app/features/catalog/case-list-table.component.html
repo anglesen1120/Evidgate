@@ -1,0 +1,168 @@
+<div
+  role="region"
+  tabindex="0"
+  [attr.aria-label]="copy.caption"
+  class="min-w-0 max-w-full overflow-x-auto focus-visible:outline-ring"
+>
+  <app-data-table
+    class="min-[900px]:min-w-[768px] [--eg-table-row:calc(var(--eg-row-default)_+_var(--eg-space-3))]!"
+    [columns]="columns()"
+    [rows]="rows()"
+    [rowId]="rowId"
+    [caption]="copy.caption"
+    [fixedHeightCells]="true"
+    [flow]="'page'"
+  />
+</div>
+<ng-template #identity let-row let-stacked="stacked">
+  <div
+    class="min-w-0 gap-(--eg-space-2)"
+    [class.grid]="!virtualRows()"
+    [class.flex]="virtualRows()"
+    [class.items-center]="virtualRows()"
+    data-catalog-identity
+  >
+    <bdi class="min-w-0 flex-1 font-semibold"
+      ><app-data-table-value
+        [value]="display(row.name)"
+        [truncate]="!stacked"
+        [fixedRow]="virtualRows()"
+    /></bdi>
+    <div class="flex min-w-0 flex-1 items-center gap-(--eg-space-2) text-xs text-muted-foreground">
+      <app-copyable-identifier
+        class="min-w-0 flex-1"
+        [value]="row.annotation_id"
+        [label]="copy.stableId"
+        [truncate]="!stacked"
+        [compact]="virtualRows()"
+        [copySize]="'lg'"
+      />
+      <app-copyable-identifier
+        class="min-w-0 flex-1"
+        [value]="row.id"
+        [label]="copy.id"
+        [truncate]="!stacked"
+        [compact]="virtualRows()"
+        [copySize]="'lg'"
+      />
+    </div>
+  </div>
+</ng-template>
+<ng-template #framework let-row let-stacked="stacked"
+  ><bdi
+    ><app-data-table-value
+      [value]="display(row.framework)"
+      [truncate]="!stacked"
+      [fixedRow]="virtualRows()" /></bdi
+></ng-template>
+<ng-template #status let-row
+  ><app-status-pill
+    [label]="statusLabel(row.status)"
+    [tone]="row.status === 'missing' ? 'warning' : 'neutral'"
+/></ng-template>
+<ng-template #owner let-row let-stacked="stacked">
+  <div
+    class="min-w-0"
+    [class.flex]="virtualRows()"
+    [class.items-center]="virtualRows()"
+    [attr.data-catalog-owner]="row.id"
+    [attr.aria-busy]="ownerPending()(row.id)"
+  >
+    <app-data-table-value
+      [value]="memberLabel(row.owner_membership_id)"
+      [truncate]="!stacked"
+      [fixedRow]="virtualRows()"
+    />
+    @if (row.owner_membership_id && !members().has(row.owner_membership_id)) {
+      <app-copyable-identifier
+        [value]="row.owner_membership_id"
+        [label]="copy.owner"
+        [truncate]="!stacked"
+        [compact]="virtualRows()"
+        [copySize]="'lg'"
+      />
+    }
+    @if (ownerPending()(row.id)) {
+      <span class="text-muted-foreground" role="status" data-catalog-owner-pending>{{
+        copy.saving
+      }}</span>
+    }
+    @if (ownerFailure()(row.id); as failure) {
+      <div class="min-w-0 text-destructive" role="alert" data-catalog-owner-error>
+        <app-data-table-value
+          [value]="ownerFailureText(failure)"
+          [truncate]="virtualRows()"
+          [fixedRow]="virtualRows()"
+        />
+      </div>
+      @if (reloadOwner(); as reload) {
+        <button
+          hlmBtn
+          type="button"
+          [variant]="'outline'"
+          (click)="reload(row.id)"
+          data-catalog-owner-reload
+        >
+          {{ copy.reload }}
+        </button>
+      }
+    }
+  </div>
+</ng-template>
+<ng-template #labels let-value="value" let-stacked="stacked"
+  ><bdi
+    ><app-data-table-value [value]="value" [truncate]="!stacked" [fixedRow]="virtualRows()" /></bdi
+></ng-template>
+<ng-template #actions let-row>
+  <div
+    class="flex min-w-0 items-center justify-end gap-(--eg-space-2)"
+    [class.flex-wrap]="!virtualRows()"
+  >
+    <button
+      #view
+      hlmBtn
+      [variant]="'outline'"
+      [size]="'sm'"
+      type="button"
+      [attr.aria-haspopup]="'dialog'"
+      data-catalog-view
+      [attr.aria-label]="viewName(row)"
+      class="pointer-coarse:min-h-(--eg-control-touch)"
+      (click)="open(row, 'view', view)"
+    >
+      {{ recordCopy.view }}
+    </button>
+    @if (eligible() && !ownerPending()(row.id)) {
+      <button
+        #edit
+        hlmBtn
+        [variant]="'ghost'"
+        [size]="'sm'"
+        type="button"
+        [attr.aria-haspopup]="'dialog'"
+        data-catalog-edit
+        [attr.aria-label]="editName(row)"
+        class="pointer-coarse:min-h-(--eg-control-touch)"
+        (click)="open(row, 'edit', edit)"
+      >
+        {{ recordCopy.edit }}
+      </button>
+    }
+  </div>
+</ng-template>
+@if (selectedRow(); as row) {
+  <app-case-record-dialog
+    [row]="row"
+    [mode]="selection()?.mode ?? 'view'"
+    [eligible]="eligible()"
+    [choices]="activeMembers()"
+    [members]="members()"
+    [ownerHelp]="ownerHelp()"
+    [busy]="ownerPending()(row.id)"
+    [failure]="failureText()"
+    [saveOwner]="saveOwner()"
+    [reloadOwner]="reloadOwner()"
+    (closeRecord)="close()"
+    (editRecord)="switchToEdit(row.id)"
+  />
+}

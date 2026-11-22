@@ -13,6 +13,7 @@ import {
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
 import { HlmAlert } from '@evidgate/ui/alert';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCard, HlmCardContent, HlmCardHeader, HlmCardTitle } from '@evidgate/ui/card';
@@ -22,12 +23,18 @@ import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { LIST_CHUNK } from './suite-composition.model';
 import { SuiteCompositionStore } from './suite-composition.store';
 import { SuiteWarningListComponent } from './suite-warning-list.component';
+import {
+  PINNED_MEMBERS,
+  SuiteCompositionMetricsComponent,
+} from './suite-composition-metrics.component';
 
 @Component({
   selector: 'app-suite-composition',
   imports: [
     SuiteWarningListComponent,
+    SuiteCompositionMetricsComponent,
     HlmAlert,
+    HlmIcon,
     HlmBadge,
     HlmButton,
     HlmCard,
@@ -56,9 +63,9 @@ export class SuiteCompositionComponent {
   protected readonly sectionHeadingSize = 'section' as const;
   private readonly stateHeading = viewChild<ElementRef<HTMLHeadingElement>>('stateHeading');
   protected readonly copy = {
+    members: PINNED_MEMBERS,
     variantHash: $localize`:@@suites.composition.variant-hash:Variant hash`,
     title: $localize`:@@suites.composition.suite-composition:Suite composition`,
-    description: $localize`:@@suites.composition.description:Inspect pinned case revisions, their variants and the inputs used to plan execution.`,
     identity: $localize`:@@suites.composition.identity:Composition identity`,
     suite: $localize`:@@suites.composition.suite:Suite`,
     revision: $localize`:@@suites.composition.revision:Revision`,

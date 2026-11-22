@@ -14,14 +14,21 @@ ul.indented {
   padding-inline-start: var(--eg-space-2);
 }
 .tree-help {
-  margin: 0 0 var(--eg-space-3);
+  margin: var(--eg-space-3) 0 0;
   color: var(--eg-text-muted);
   font-size: var(--eg-text-xs);
   line-height: var(--eg-leading-xs);
   overflow-wrap: anywhere;
 }
 .hierarchy {
-  margin-block-start: var(--eg-space-4);
+  margin-block-end: var(--eg-space-4);
+}
+@media (768px <= width < 1200px) {
+  .hierarchy {
+    max-block-size: calc(var(--eg-control-touch) * 4);
+    overflow-y: auto;
+    padding: var(--eg-space-1);
+  }
 }
 .node-row {
   padding: var(--eg-space-2);
@@ -78,7 +85,7 @@ ul.indented {
   flex-wrap: wrap;
   gap: var(--eg-space-2) var(--eg-space-3);
   margin: 0 0 var(--eg-space-2);
-  padding-inline-start: var(--eg-space-3);
+  padding-inline-start: calc(var(--eg-control-sm) + var(--eg-space-2));
   font-size: var(--eg-text-xs);
   line-height: var(--eg-leading-xs);
   color: var(--eg-text-muted);

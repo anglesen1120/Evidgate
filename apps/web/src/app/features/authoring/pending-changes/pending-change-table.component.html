@@ -1,0 +1,250 @@
+<app-data-table
+  class="[--eg-row-default:var(--eg-space-11)]"
+  [rows]="rows()"
+  [columns]="columns()"
+  [rowId]="rowId"
+  [caption]="caption()"
+  [fixedHeightCells]="true"
+/>
+<p class="mt-(--eg-space-3) text-sm tabular-nums text-muted-foreground">{{ footer() }}</p>
+<ng-template #identity let-row>
+  <strong class="block truncate">{{ operationLabel(row.change_type) }}</strong>
+  <bdi class="block truncate text-xs text-muted-foreground" [title]="row.change_id">{{
+    row.change_id
+  }}</bdi>
+</ng-template>
+<ng-template #target let-row>
+  @if (store.targetTitles()[row.target_id]; as title) {
+    <bdi class="block truncate font-semibold" [title]="title">{{ title }}</bdi>
+  } @else {
+    <app-copyable-identifier [value]="row.target_id" [label]="copy.targetLabel" [compact]="true" />
+  }
+</ng-template>
+<ng-template #state let-row>
+  <app-status-pill
+    [tone]="rowBlockedReason(row) ? 'warning' : 'neutral'"
+    [label]="stateLabel(row)"
+    [fullValue]="rowBlockedReason(row)"
+  />
+</ng-template>
+<ng-template #actions let-row>
+  <div class="flex items-center gap-(--eg-space-2)">
+    <button
+      #opener
+      hlmBtn
+      [variant]="'outline'"
+      type="button"
+      [hlmDialogTriggerFor]="viewDialog"
+      data-pending-preview
+      [attr.data-review-change]="selection() ? null : ''"
+      [attr.data-pending-change-id]="row.change_id"
+      [attr.aria-label]="ui.view + ' ' + operationLabel(row.change_type) + ' · ' + row.change_id"
+      (click)="inspect(row, opener)"
+    >
+      {{ ui.view }}
+    </button>
+    @if (more(); as menu) {
+      <ng-container
+        [ngTemplateOutlet]="menu"
+        [ngTemplateOutletContext]="{ $implicit: row, value: '', stacked: false }"
+      />
+    }
+  </div>
+</ng-template>
+<hlm-dialog
+  #viewDialog
+  [state]="active() ? 'open' : 'closed'"
+  [aria-modal]="true"
+  [restoreFocus]="false"
+  [autoFocus]="'[data-pending-view-title]'"
+  (closed)="restoreOpener()"
+>
+  <hlm-dialog-content *hlmDialogPortal class="change-view" data-pending-preview-content>
+    @if (active(); as row) {
+      <header hlmDialogHeader>
+        <h2
+          hlmDialogTitle
+          tabindex="-1"
+          data-pending-view-title
+          i18n="@@authoring.pending-changes.view-title"
+        >
+          Change details
+        </h2>
+        <p hlmDialogDescription>{{ operationLabel(row.change_type) }}</p>
+        <span data-pending-preview-state
+          ><ng-container [ngTemplateOutlet]="state" [ngTemplateOutletContext]="{ $implicit: row }"
+        /></span>
+      </header>
+      <div class="view-body">
+        <h3 class="m-0 text-base font-semibold" i18n="@@authoring.pending-changes.summary-heading">
+          Summary
+        </h3>
+        <div class="grid gap-(--eg-space-2)">
+          <p class="m-0 text-sm font-semibold">{{ copy.targetLabel }}</p>
+          @if (store.targetTitles()[row.target_id]; as title) {
+            <bdi>{{ title }}</bdi>
+          }
+          <app-copyable-identifier [value]="row.target_id" [label]="copy.targetLabel" />
+        </div>
+        <dl class="facts">
+          <div [attr.data-review-fact]="'change-id'">
+            <dt i18n="@@authoring.pending-changes.change-id">Change id</dt>
+            <dd>
+              <app-copyable-identifier [value]="row.change_id" [label]="ui.changeId" />
+            </dd>
+          </div>
+        </dl>
+        <h3
+          class="m-0 border-t border-border pt-(--eg-space-4) text-base font-semibold"
+          i18n="@@authoring.pending-changes.history-heading"
+        >
+          History
+        </h3>
+        <dl class="facts">
+          <div [attr.data-review-fact]="'author-id'">
+            <dt i18n="@@authoring.review-context.author-id">Author membership id</dt>
+            <dd>
+              <app-copyable-identifier
+                [value]="row.author_membership_id"
+                label="Author membership id"
+                i18n-label="@@authoring.review-context.author-id"
+              />
+            </dd>
+          </div>
+          <div [attr.data-review-fact]="'author-name'">
+            <dt i18n="@@authoring.review-context.author-name">Author display name</dt>
+            <dd i18n="@@authoring.review-context.not-provided">Not provided</dd>
+          </div>
+          <div [attr.data-review-fact]="'source'">
+            <dt i18n="@@authoring.review-context.source">Source</dt>
+            <dd>
+              @switch (row.source) {
+                @case ('manual') {
+                  <app-status-pill
+                    [tone]="'neutral'"
+                    label="Manual"
+                    i18n-label="@@authoring.pending-changes.manual-source"
+                    [detail]="row.source"
+                  />
+                }
+                @case ('ai') {
+                  <app-status-pill
+                    [tone]="'neutral'"
+                    label="AI"
+                    i18n-label="@@authoring.pending-changes.ai-source"
+                    [detail]="row.source"
+                  />
+                }
+                @case ('import') {
+                  <app-status-pill
+                    [tone]="'neutral'"
+                    label="Import"
+                    i18n-label="@@authoring.pending-changes.import-source"
+                    [detail]="row.source"
+                  />
+                }
+                @default {
+                  <!-- An unlisted value stays visible rather than leaving the fact blank. -->
+                  {{ row.source }}
+                }
+              }
+            </dd>
+          </div>
+          <div [attr.data-review-fact]="'state'">
+            <dt i18n="@@authoring.review-context.state">Change state</dt>
+            <dd>
+              @switch (row.state) {
+                @case ('pending') {
+                  <app-status-pill
+                    [tone]="'neutral'"
+                    label="Queued"
+                    i18n-label="@@authoring.pending-changes.pending-state"
+                    [detail]="row.state"
+                  />
+                }
+                @case ('applied') {
+                  <app-status-pill
+                    [tone]="'neutral'"
+                    label="Applied"
+                    i18n-label="@@authoring.review-context.applied"
+                    [detail]="row.state"
+                  />
+                }
+                @case ('discarded') {
+                  <app-status-pill
+                    [tone]="'neutral'"
+                    label="Discarded"
+                    i18n-label="@@authoring.review-context.discarded"
+                    [detail]="row.state"
+                  />
+                }
+                @default {
+                  <!-- An unlisted value stays visible rather than leaving the fact blank. -->
+                  {{ row.state }}
+                }
+              }
+            </dd>
+          </div>
+          <div [attr.data-review-fact]="'base-version'">
+            <dt i18n="@@authoring.pending-changes.base-version">Target base version</dt>
+            <dd><app-number-value [value]="row.base_version" /></dd>
+          </div>
+          <div [attr.data-review-fact]="'created-at'">
+            <dt i18n="@@authoring.pending-changes.queued-at">Queued at (UTC)</dt>
+            <dd><app-absolute-time [value]="row.created_at" /></dd>
+          </div>
+          <div [attr.data-review-fact]="'reason'">
+            <dt i18n="@@authoring.review-context.reason">Change reason</dt>
+            <dd class="full-text">
+              @if (row.reason !== null && row.reason !== undefined) {
+                {{ row.reason }}
+              } @else {
+                <span i18n="@@authoring.pending-changes.reason-unset">Not set</span>
+              }
+            </dd>
+          </div>
+        </dl>
+        @if (rowBlockedReason(row); as blocked) {
+          <section class="grid gap-(--eg-space-2)">
+            <h3 class="m-0 text-base font-semibold" i18n="@@authoring.pending-changes.apply-checks">
+              Apply checks
+            </h3>
+            <p class="warning-note">{{ blocked }}</p>
+          </section>
+        }
+        @if (store.preview(); as preview) {
+          <section class="grid gap-(--eg-space-3)">
+            <h3
+              class="m-0 text-base font-semibold"
+              i18n="@@authoring.pending-changes.payload-preview"
+            >
+              Change preview
+            </h3>
+            @for (line of preview.lines; track $index) {
+              <p
+                class="preview-note"
+                [attr.data-review-comment-body]="row.change_type === 'comment' ? '' : null"
+              >
+                {{ line }}
+              </p>
+            }
+            @for (line of preview.lineage; track line) {
+              <p class="m-0">{{ line }}</p>
+            }
+            @if (row.change_type === 'split') {
+              <p class="m-0">
+                {{ copy.lineageLabel }}: <bdi>{{ row.target_id }}</bdi>
+              </p>
+            }
+            <p class="m-0 text-muted-foreground">{{ copy.impactUnavailable }}</p>
+          </section>
+        }
+      </div>
+      <footer hlmDialogFooter>
+        <button hlmBtn hlmDialogClose [variant]="'outline'" type="button" data-pending-view-close>
+          {{ copy.conflictClose }}
+        </button>
+      </footer>
+    }
+  </hlm-dialog-content>
+</hlm-dialog>
