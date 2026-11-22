@@ -15,6 +15,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard } from '@evidgate/ui/card';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { SessionStore } from '../../../core/session/session.store';
@@ -46,6 +47,7 @@ import { PendingConfirmComponent } from './pending-confirm.component';
     FormsModule,
     RouterLink,
     HlmButton,
+    HlmCard,
     HlmInput,
     HlmLabel,
     SectionHeaderComponent,

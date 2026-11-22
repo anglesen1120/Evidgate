@@ -3,8 +3,8 @@
   @if (!store.canRead()) {
     <app-forbidden-pattern />
   } @else {
-    <dl class="facts">
-      <div [attr.data-review-context]="'parent-item'">
+    <dl class="context-facts">
+      <div hlmCard [size]="'sm'" [attr.data-review-context]="'parent-item'">
         <dt i18n="@@authoring.review-context.parent-item">Parent checklist item</dt>
         <dd>
           <app-copyable-identifier
@@ -14,11 +14,11 @@
           />
         </dd>
       </div>
-      <div [attr.data-review-context]="'priority'">
+      <div hlmCard [size]="'sm'" [attr.data-review-context]="'priority'">
         <dt i18n="@@authoring.review-context.priority">Parent item priority</dt>
         <dd i18n="@@authoring.review-context.not-provided">Not provided</dd>
       </div>
-      <div [attr.data-review-context]="'related-cases'">
+      <div hlmCard [size]="'sm'" [attr.data-review-context]="'related-cases'">
         <dt i18n="@@authoring.review-context.related-cases">Related cases</dt>
         <dd i18n="@@authoring.review-context.not-provided">Not provided</dd>
       </div>
@@ -34,8 +34,8 @@
         <p class="full-text">{{ ui.itemEmpty }}</p>
       }
       @for (row of rows(); track row.change_id) {
-        <section data-review-change class="region">
-          <h3 class="m-0 text-lg font-semibold">{{ operationLabel(row.change_type) }}</h3>
+        <section hlmCard data-review-change class="region review-panel">
+          <h3 class="operation-title">{{ operationLabel(row.change_type) }}</h3>
           <dl class="facts">
             <div [attr.data-review-fact]="'change-id'">
               <dt i18n="@@authoring.pending-changes.change-id">Change id</dt>
@@ -147,7 +147,7 @@
             </div>
           </dl>
           @if (row.change_type === 'comment') {
-            <p data-review-comment-body class="full-text">{{ row.payload['body'] }}</p>
+            <p data-review-comment-body class="full-text review-note">{{ row.payload['body'] }}</p>
           }
         </section>
       }
@@ -191,7 +191,8 @@
       }
       <form
         *appDesktopMutation
-        class="region"
+        hlmCard
+        class="region review-panel"
         [attr.aria-busy]="store.queueing()"
         (ngSubmit)="queueComment()"
       >
