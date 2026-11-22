@@ -1,16 +1,33 @@
 @let vm = viewModel();
 <header class="mb-5 flex min-w-0 items-start gap-3">
   <span
-    class="grid size-(--eg-control-touch) shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent-fg)"
+    class="grid size-(--eg-control-touch) shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent)"
     ><hlm-icon name="lucideActivity" class="size-5"
   /></span>
-  <app-page-header [title]="copy.title" [description]="copy.description" />
+  <app-page-header
+    class="min-w-0 flex-1 [&_h1]:text-[length:calc(var(--eg-text-md)*1.5)]"
+    [title]="copy.title"
+    [description]="subtitle()"
+  >
+    <div appPageHeaderActions>
+      @if (visibleQueue() && selected() && !imported() && catalog(); as path) {
+        <a hlmBtn [variant]="'outline'" [routerLink]="path">
+          <hlm-icon name="lucideCopy" class="size-4" />{{ copy.catalog }}
+        </a>
+      }
+    </div>
+  </app-page-header>
 </header>
 @if (state() === 'denied') {
   <app-forbidden-pattern />
 } @else if (exact() === 'unavailable') {
   <app-empty-pattern [title]="copy.unavailable" [description]="copy.noDecision" />
 } @else if (!visibleQueue()) {
+  @if (
+    state() === 'loading' || state() === 'empty' || state() === 'filtered' || state() === 'error'
+  ) {
+    <app-mapping-queue-table [rows]="[]" [attr.aria-busy]="state() === 'loading'" />
+  }
   @switch (state()) {
     @case ('loading') {
       <app-loading-pattern [layout]="'cards'" [label]="sheet().description" />
@@ -47,10 +64,10 @@
             <app-status-pill [tone]="'neutral'" [label]="copy.pending" />
             @if (preview(); as decision) {
               <p role="status">
-                <bdi>{{ decision.mapping }}</bdi> ·
+                <bdi>{{ display(decision.mapping) }}</bdi> ·
                 {{ decision.mode === 'bind' ? copy.bindSelected : copy.dismiss }}
                 @if (decision.candidate) {
-                  → <bdi>{{ decision.candidate }}</bdi>
+                  → <bdi>{{ display(decision.candidate) }}</bdi>
                 }
               </p>
             }
@@ -100,13 +117,15 @@
     aria-labelledby="mapping-import-title"
   >
     <div class="flex flex-wrap items-center gap-2">
-      <app-status-pill [tone]="'info'" [label]="copy.filteredImport" /><bdi>{{ item.id }}</bdi
+      <app-status-pill [tone]="'info'" [label]="copy.filteredImport" /><bdi>{{
+        display(item.id)
+      }}</bdi
       ><button hlmBtn [variant]="'outline'" type="button" (click)="changeFilter('all')">
         {{ copy.fullQueue }}
       </button>
     </div>
     <h2 hlmCardTitle id="mapping-import-title">
-      <bdi>{{ item.name }}</bdi>
+      <bdi>{{ display(item.name) }}</bdi>
     </h2>
     <dl class="grid gap-4 text-sm sm:grid-cols-2">
       @for (
@@ -122,7 +141,7 @@
         <div>
           <dt class="text-muted-foreground">{{ fact[0] }}</dt>
           <dd class="font-semibold">
-            <bdi>{{ fact[1] }}</bdi>
+            <bdi>{{ display(fact[1] ?? '') }}</bdi>
           </dd>
         </div>
       }
@@ -141,7 +160,7 @@
         <div>
           <dt class="text-muted-foreground">{{ fact[0] }}</dt>
           <dd>
-            <bdi>{{ fact[1] }}</bdi>
+            <bdi>{{ display(fact[1] ?? '') }}</bdi>
           </dd>
         </div>
       }
@@ -150,42 +169,56 @@
   </section>
 } @else {
   <app-desktop-required-notice />
-  <div class="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+  <div
+    hlmCard
+    class="grid min-w-0 grid-cols-1 gap-px overflow-hidden bg-border p-0 sm:grid-cols-2 md:grid-cols-4"
+  >
     @for (metric of metrics(); track metric.key) {
-      <article hlmCard class="grid min-w-0 content-start gap-1 p-4 wrap-anywhere">
-        <h2 class="mb-2 flex items-center gap-2 text-sm font-semibold">
+      <article class="grid min-w-0 content-start gap-1 bg-card p-4">
+        <h2 class="mb-2 flex items-center gap-2 text-sm font-semibold wrap-normal break-normal">
           <span
-            class="grid size-7 place-items-center rounded-md bg-(--eg-accent-soft) text-(--eg-accent-fg)"
+            class="grid size-7 shrink-0 place-items-center rounded-md"
+            [class]="
+              metric.key === 'queue'
+                ? 'bg-(--eg-accent-soft) text-(--eg-accent)'
+                : 'bg-(--eg-info-bg) text-(--eg-info-fg)'
+            "
             ><hlm-icon [name]="metric.icon" class="size-4" /></span
           >{{ metric.label }}
         </h2>
         <p class="font-(family-name:--eg-font-display) text-2xl font-bold tabular-nums">
-          {{ metric.value }}
+          <bdi>{{ display('' + metric.value) }}</bdi>
         </p>
-        <p class="text-xs text-muted-foreground">{{ metric.detail }}</p>
+        <p class="text-xs text-muted-foreground">
+          <bdi>{{ display(metric.detail) }}</bdi>
+        </p>
       </article>
     }
   </div>
-  <div class="mt-8 grid min-w-0 items-start gap-4 lg:grid-cols-2">
+  <div class="mt-(--eg-space-7) grid min-w-0 gap-(--eg-space-7)">
     <section hlmCard data-queue aria-labelledby="mapping-queue-title" class="min-w-0 gap-0 py-0">
-      <header class="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
-        <h2 hlmCardTitle id="mapping-queue-title">{{ copy.queue }}</h2>
-        <div class="grid gap-1">
-          <label hlmLabel for="mapping-filter">{{ copy.state }}</label>
-          <hlm-select
-            [value]="filter()"
-            (valueChange)="changeFilter($event)"
-            [itemToString]="filterLabel"
-          >
-            <hlm-select-trigger [buttonId]="'mapping-filter'"
-              ><hlm-select-value
-            /></hlm-select-trigger>
-            <hlm-select-content *hlmSelectPortal [aria-label]="copy.state">
-              @for (item of filters; track item.key) {
-                <hlm-select-item [value]="item.key">{{ item.label }}</hlm-select-item>
-              }
-            </hlm-select-content>
-          </hlm-select>
+      <header class="grid min-w-0 gap-3 border-b border-border p-4">
+        <h2 hlmCardTitle #queueHeading tabindex="-1" id="mapping-queue-title">{{ copy.queue }}</h2>
+        <div
+          role="group"
+          [attr.aria-label]="copy.state"
+          class="flex min-w-0 flex-nowrap gap-2 overflow-x-auto p-1"
+        >
+          @for (item of filters; track item.key) {
+            <button
+              hlmBtn
+              type="button"
+              [variant]="'ghost'"
+              [size]="'sm'"
+              class="shrink-0 whitespace-nowrap aria-pressed:bg-(--eg-accent-soft) aria-pressed:text-(--eg-accent)"
+              [attr.data-mapping-filter]="item.key"
+              [attr.aria-pressed]="filter() === item.key"
+              (click)="changeFilter(item.key)"
+            >
+              {{ item.label }}
+              <span class="tabular-nums text-muted-foreground">{{ counts()[item.key] }}</span>
+            </button>
+          }
         </div>
       </header>
       @if (exact()) {
@@ -196,36 +229,23 @@
           </button>
         </div>
       }
-      <ul class="m-0 grid list-none gap-2 p-3">
-        @for (row of records(); track row.id) {
-          <li>
-            <button
-              hlmBtn
-              type="button"
-              [variant]="'outline'"
-              [attr.data-row]="row.id"
-              [attr.aria-pressed]="selected()?.id === row.id"
-              (click)="selected.set(row)"
-              class="grid h-auto! w-full min-w-0 justify-stretch gap-3 rounded-lg p-3 text-start whitespace-normal wrap-anywhere aria-pressed:border-(--eg-accent) aria-pressed:border-s-4 aria-pressed:bg-(--eg-accent-soft)"
-            >
-              <span class="flex flex-wrap items-center justify-between gap-2"
-                ><bdi class="font-mono text-xs">{{ row.id }}</bdi
-                ><app-status-pill [tone]="'neutral'" [label]="copy[row.state]"
-              /></span>
-              <strong
-                ><bdi>{{ row.name }}</bdi></strong
-              ><span class="text-xs text-muted-foreground">{{ vm.producer }} · {{ vm.suite }}</span>
-              <span class="rounded-md bg-muted p-2 text-xs text-foreground"
-                ><bdi>{{ row.suggestion }}</bdi></span
-              >
-            </button>
-          </li>
-        } @empty {
-          <li><app-empty-pattern [bare]="true" [title]="copy.noChoice" /></li>
+      <div
+        class="min-w-0 py-3 [&_.spartan-table-container]:rounded-none [&_.spartan-table-container]:border-0"
+      >
+        <app-mapping-queue-table
+          [rows]="records()"
+          [selectedId]="selected()?.id"
+          (view)="openView($event.row, $event.opener)"
+        />
+        @if (!records().length) {
+          <app-empty-pattern
+            [bare]="true"
+            [title]="filter() === 'all' ? copy.emptyQueue : copy.noMatches"
+          />
         }
-      </ul>
+      </div>
       <footer class="flex flex-wrap items-center justify-between gap-3 border-t border-border p-3">
-        <span class="text-xs text-muted-foreground">{{ copy.noCursor }}</span>
+        <span class="text-xs text-muted-foreground tabular-nums">{{ loadedSummary() }}</span>
         <div class="flex gap-2">
           <button hlmBtn type="button" [variant]="'outline'" disabled>{{ copy.previous }}</button
           ><button hlmBtn type="button" [variant]="'outline'" disabled>{{ copy.next }}</button>
@@ -233,6 +253,15 @@
       </footer>
     </section>
     @if (selected(); as row) {
+      @if (viewOpener(); as opener) {
+        <app-mapping-record-view
+          [row]="row"
+          [context]="vm"
+          [opener]="opener"
+          [readOnly]="state() === 'readonly'"
+          (dismissed)="closeView(row.id, opener)"
+        />
+      }
       <section
         hlmCard
         aria-labelledby="mapping-selection-title"
@@ -241,23 +270,17 @@
         <header class="grid gap-1 border-b border-border p-5">
           <p class="text-xs font-semibold text-muted-foreground">{{ copy.selected }}</p>
           <h2 hlmCardTitle id="mapping-selection-title">
-            <bdi>{{ row.name }}</bdi>
+            <bdi>{{ display(row.name) }}</bdi>
           </h2>
           <div class="flex flex-wrap items-center gap-2">
-            <bdi class="font-mono text-xs">{{ row.id }}</bdi
+            <bdi class="font-mono text-xs">{{ display(row.id) }}</bdi
             ><app-status-pill [tone]="'neutral'" [label]="copy[row.state]" />
           </div>
         </header>
         <div class="grid min-w-0 gap-4 p-5">
-          <dl class="grid gap-4 text-sm sm:grid-cols-2 xl:grid-cols-3">
-            @for (fact of facts(); track fact[0]) {
-              <div>
-                <dt class="text-xs text-muted-foreground">{{ fact[0] }}</dt>
-                <dd class="font-semibold">
-                  <bdi>{{ fact[1] }}</bdi>
-                </dd>
-              </div>
-            }
+          <dl class="m-0 flex flex-wrap items-baseline gap-2 text-sm">
+            <dt class="text-muted-foreground">{{ copy.original }}</dt>
+            <dd class="m-0 font-semibold">{{ copy.attempt }}</dd>
           </dl>
           <p
             class="rounded-sm border-s-4 border-(--eg-danger-fg) bg-(--eg-danger-bg) p-3 text-sm text-(--eg-danger-fg)"
@@ -278,11 +301,6 @@
               <dd><app-decision-chip [decision]="vm.decision" [compact]="true" /></dd>
             </div>
           </dl>
-          @if (catalog(); as path) {
-            <a hlmBtn [variant]="'outline'" class="justify-self-start" [routerLink]="path">{{
-              copy.catalog
-            }}</a>
-          }
         </div>
         @if (row.state === 'resolved') {
           <p class="border-t border-border p-4">

@@ -1,0 +1,103 @@
+<h3 class="m-0 text-base font-semibold">{{ copy.history }}</h3>
+@if (readError()) {
+  <app-inline-feedback
+    [title]="error.title"
+    [description]="error.description"
+    [tone]="'destructive'"
+  />
+} @else if (!checks().length) {
+  <app-empty-pattern
+    [bare]="true"
+    [title]="copy.emptyHistory"
+    [description]="copy.emptyHistoryHint"
+  />
+} @else {
+  <p class="m-0 text-sm">{{ copy.historyHint }}</p>
+  <div class="grid min-w-0 gap-1">
+    <label hlmLabel for="release-filter">{{ copy.filter }}</label>
+    <hlm-select
+      [value]="release()"
+      [itemToString]="releaseLabel"
+      (valueChange)="setRelease($event)"
+    >
+      <hlm-select-trigger [buttonId]="'release-filter'"
+        ><hlm-select-value [placeholder]="copy.all"
+      /></hlm-select-trigger>
+      <hlm-select-content *hlmSelectPortal [aria-label]="copy.filter">
+        <hlm-select-item value="all">{{ copy.all }}</hlm-select-item>
+        @for (r of releases(); track r) {
+          <hlm-select-item [value]="r">{{ r }}</hlm-select-item>
+        }
+      </hlm-select-content>
+    </hlm-select>
+  </div>
+  <div
+    hlmTableContainer
+    class="min-w-0"
+    role="region"
+    tabindex="0"
+    [attr.aria-label]="copy.history"
+  >
+    <table hlmTable class="eg-table-layout promotion-history">
+      <caption hlmCaption class="sr-only">
+        {{
+          copy.history
+        }}
+      </caption>
+      <thead hlmTHead>
+        <tr hlmTr>
+          @for (label of columns; track label) {
+            <th hlmTh scope="col" class="whitespace-normal break-normal">{{ label }}</th>
+          }
+        </tr>
+      </thead>
+      <tbody hlmTBody>
+        @for (check of visibleChecks(); track check.ref) {
+          <tr hlmTr>
+            <th hlmTh scope="row" class="whitespace-normal" [attr.data-label]="copy.check">
+              <bdi class="font-mono">{{ check.ref }}</bdi>
+              @if (check.checkedAt) {
+                <div class="text-xs font-normal text-muted-foreground">
+                  <app-absolute-time [value]="check.checkedAt" />
+                </div>
+              }
+            </th>
+            <td hlmTd class="whitespace-normal" [attr.data-label]="copy.release">
+              <bdi>{{ check.release }}</bdi>
+            </td>
+            <td
+              hlmTd
+              [attr.data-label]="copy.result"
+              [attr.data-inspect-status]="check.result === 'pending' ? '' : null"
+            >
+              <app-status-pill [tone]="tones[check.result]" [label]="copy[check.result]" />
+              <span class="block font-mono text-xs text-muted-foreground">{{ check.result }}</span>
+            </td>
+            <td hlmTd class="whitespace-normal" [attr.data-label]="copy.decision">
+              {{ check.decisionRef ?? copy.noDecision }}
+            </td>
+            <td hlmTd class="whitespace-normal" [attr.data-label]="copy.policy">
+              <bdi>{{ check.policy }}</bdi>
+            </td>
+            <td hlmTd class="whitespace-normal" [attr.data-label]="copy.reasons">
+              {{ check.reason }}
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  @if (!visibleChecks().length) {
+    <app-empty-pattern
+      [bare]="true"
+      [title]="copy.noMatch"
+      [description]="copy.noMatchHint"
+      [actionLabel]="copy.clear"
+      (action)="release.set('all')"
+    />
+  }
+  <p class="m-0 text-xs tabular-nums text-muted-foreground">
+    {{ copy.recordsShown }}: {{ visibleChecks().length }} / {{ checks().length }} ·
+    {{ copy.historyPage }}
+  </p>
+}

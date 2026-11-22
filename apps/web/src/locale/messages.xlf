@@ -19938,13 +19938,6 @@
           <context context-type="linenumber">26</context>
         </context-group>
       </trans-unit>
-<trans-unit id="review.gallery.pick" datatype="html">
-        <source>Preview template</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
-          <context context-type="linenumber">27</context>
-        </context-group>
-      </trans-unit>
 <trans-unit id="review.gallery.api-title" datatype="html">
         <source>API order authorization</source>
         <context-group purpose="location">
@@ -21303,13 +21296,6 @@
           <context context-type="linenumber">34</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="review.deploy-targets.history-hint" datatype="html">
-        <source>Production · newest first. Each check is an immutable record.</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
-          <context context-type="linenumber">35</context>
-        </context-group>
-      </trans-unit>
       <trans-unit id="review.deploy-targets.filter" datatype="html">
         <source>Release filter</source>
         <context-group purpose="location">
@@ -21497,13 +21483,6 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
           <context context-type="linenumber">62</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="review.deploy-targets.review" datatype="html">
-        <source>Review draft</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
-          <context context-type="linenumber">63</context>
         </context-group>
       </trans-unit>
       <trans-unit id="review.deploy-targets.readonly" datatype="html">
@@ -21709,13 +21688,6 @@
           <context context-type="linenumber">2</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="review.mapping.description" datatype="html">
-        <source>Review imported identities before binding them to a stable case in storefront-web.</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.copy.ts</context>
-          <context context-type="linenumber">3</context>
-        </context-group>
-      </trans-unit>
       <trans-unit id="review.mapping.unavailable" datatype="html">
         <source>Requested record unavailable</source>
         <context-group purpose="location">
@@ -21791,13 +21763,6 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.copy.ts</context>
           <context context-type="linenumber">14</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="review.mapping.no-cursor" datatype="html">
-        <source>storefront-web · no further cursor</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.copy.ts</context>
-          <context context-type="linenumber">15</context>
         </context-group>
       </trans-unit>
       <trans-unit id="review.mapping.previous" datatype="html">
@@ -22225,13 +22190,6 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.page.ts</context>
           <context context-type="linenumber">228</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="review.mapping.queue-counts" datatype="html">
-        <source>1 unmapped · 1 conflicted</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.page.ts</context>
-          <context context-type="linenumber">230</context>
         </context-group>
       </trans-unit>
       <trans-unit id="review.mapping.frozen-evidence" datatype="html">
@@ -26720,6 +26678,265 @@
 <trans-unit id="runs.list.labeled-reruns" datatype="html"><source>Labeled reruns</source></trans-unit>
 <trans-unit id="runs.list.showing" datatype="html"><source>Showing <x id="shown" equiv-text="shown"/></source></trans-unit>
 <trans-unit id="runs.list.of-loaded" datatype="html"><source>Of <x id="count" equiv-text="count"/> loaded runs</source></trans-unit>
+      <trans-unit id="review.deploy-targets.actions" datatype="html">
+        <source>Actions</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">24</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.deploy-targets.discard" datatype="html">
+        <source>Discard changes</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">71</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.deploy-targets.discard-hint" datatype="html">
+        <source>Closing this preview will discard your local changes to this target.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">69</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.deploy-targets.discard-title" datatype="html">
+        <source>Discard preview changes?</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">68</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.deploy-targets.edit-preview" datatype="html">
+        <source>Preview target changes</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">66</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.deploy-targets.history-order" datatype="html">
+        <source>Newest first. Each check is an immutable record.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">40</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.deploy-targets.keep-editing" datatype="html">
+        <source>Keep editing</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">70</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.deploy-targets.preview" datatype="html">
+        <source>Preview</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">67</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.deploy-targets.preview-draft" datatype="html">
+        <source>Preview draft</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">74</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.deploy-targets.records-shown" datatype="html">
+        <source>Records shown</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">25</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.deploy-targets.target" datatype="html">
+        <source>Target</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">23</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.deploy-targets.view" datatype="html">
+        <source>View</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">26</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.actions" datatype="html">
+        <source>Actions</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">30</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.discard" datatype="html">
+        <source>Discard changes</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">35</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.discard-notice" datatype="html">
+        <source>Your changes to this preview will be lost. No draft will be saved.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">37</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.discard-title" datatype="html">
+        <source>Discard unsaved changes?</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">34</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.engine-variant" datatype="html">
+        <source>Engine / variant</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">29</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.framework" datatype="html">
+        <source>Framework</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">7</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.header-facts" datatype="html">
+        <source><x id="COUNT" equiv-text="count"/> templates · Historical Studio reference · Sandbox only</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">5</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.keep-editing" datatype="html">
+        <source>Keep editing</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">36</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.selected" datatype="html">
+        <source>Selected</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">28</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.showing" datatype="html">
+        <source>Showing <x id="SHOWN" equiv-text="visible"/> of <x id="TOTAL" equiv-text="total"/> templates</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">32</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.table-caption" datatype="html">
+        <source>Studio templates</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">6</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.view" datatype="html">
+        <source>View</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">27</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.generated-scripts.actions" datatype="html">
+        <source>Actions</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/scripts/review/generated-scripts.copy.ts</context>
+          <context context-type="linenumber">15</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.generated-scripts.details" datatype="html">
+        <source>Script details</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/scripts/review/generated-scripts.copy.ts</context>
+          <context context-type="linenumber">17</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.generated-scripts.showing" datatype="html">
+        <source>Showing</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/scripts/review/generated-scripts.copy.ts</context>
+          <context context-type="linenumber">18</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.generated-scripts.sorted-by" datatype="html">
+        <source>Sorted by</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/scripts/review/generated-scripts.copy.ts</context>
+          <context context-type="linenumber">19</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.generated-scripts.view" datatype="html">
+        <source>View</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/scripts/review/generated-scripts.copy.ts</context>
+          <context context-type="linenumber">16</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.mapping.actions" datatype="html">
+        <source>Actions</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.copy.ts</context>
+          <context context-type="linenumber">7</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.mapping.candidate-cases" datatype="html">
+        <source>Candidate cases</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.copy.ts</context>
+          <context context-type="linenumber">6</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.mapping.confirm-dismiss" datatype="html">
+        <source>Confirm dismissal preview</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.copy.ts</context>
+          <context context-type="linenumber">12</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.mapping.details" datatype="html">
+        <source>Mapping details</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.copy.ts</context>
+          <context context-type="linenumber">9</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.mapping.no-candidates" datatype="html">
+        <source>No candidate cases supplied.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.copy.ts</context>
+          <context context-type="linenumber">10</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.mapping.records" datatype="html">
+        <source>Mapping records</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.copy.ts</context>
+          <context context-type="linenumber">5</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.mapping.showing-loaded" datatype="html">
+        <source>Loaded records · Showing <x id="shown" equiv-text="shown"/> of <x id="total" equiv-text="total"/></source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.page.ts</context>
+          <context context-type="linenumber">217</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.mapping.view" datatype="html">
+        <source>View</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.copy.ts</context>
+          <context context-type="linenumber">8</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="settings.members.view" datatype="html"><source>View member</source></trans-unit>
       <trans-unit id="settings.members.created" datatype="html"><source>Created</source></trans-unit>
       <trans-unit id="settings.row.view" datatype="html"><source>View</source></trans-unit>

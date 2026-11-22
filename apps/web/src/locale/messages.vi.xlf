@@ -14547,14 +14547,6 @@
           <context context-type="linenumber">26</context>
         </context-group>
       </trans-unit>
-<trans-unit id="review.gallery.pick" datatype="html">
-        <source>Preview template</source>
-        <target>Xem trước mẫu</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
-          <context context-type="linenumber">27</context>
-        </context-group>
-      </trans-unit>
 <trans-unit id="review.gallery.api-title" datatype="html">
         <source>API order authorization</source>
         <target>Phân quyền đơn hàng qua API</target>
@@ -16107,14 +16099,6 @@
           <context context-type="linenumber">34</context>
         </context-group>
       </trans-unit>
-<trans-unit id="review.deploy-targets.history-hint" datatype="html">
-        <source>Production · newest first. Each check is an immutable record.</source>
-        <target>Sản xuất · mới nhất trước. Mỗi lần kiểm tra là một bản ghi bất biến.</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
-          <context context-type="linenumber">35</context>
-        </context-group>
-      </trans-unit>
 <trans-unit id="review.deploy-targets.filter" datatype="html">
         <source>Release filter</source>
         <target>Lọc theo bản phát hành</target>
@@ -16329,14 +16313,6 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
           <context context-type="linenumber">62</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="review.deploy-targets.review" datatype="html">
-        <source>Review draft</source>
-        <target>Xem lại bản nháp</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
-          <context context-type="linenumber">63</context>
         </context-group>
       </trans-unit>
 <trans-unit id="review.deploy-targets.readonly" datatype="html">
@@ -16571,14 +16547,6 @@
           <context context-type="linenumber">2</context>
         </context-group>
       </trans-unit>
-<trans-unit id="review.mapping.description" datatype="html">
-        <source>Review imported identities before binding them to a stable case in storefront-web.</source>
-        <target>Kiểm tra định danh đã nhập trước khi gắn với ca kiểm thử ổn định trong storefront-web.</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.copy.ts</context>
-          <context context-type="linenumber">3</context>
-        </context-group>
-      </trans-unit>
 <trans-unit id="review.mapping.unavailable" datatype="html">
         <source>Requested record unavailable</source>
         <target>Bản ghi được yêu cầu không khả dụng</target>
@@ -16665,14 +16633,6 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.copy.ts</context>
           <context context-type="linenumber">14</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="review.mapping.no-cursor" datatype="html">
-        <source>storefront-web · no further cursor</source>
-        <target>storefront-web · không còn con trỏ tiếp theo</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.copy.ts</context>
-          <context context-type="linenumber">15</context>
         </context-group>
       </trans-unit>
 <trans-unit id="review.mapping.previous" datatype="html">
@@ -17161,14 +17121,6 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.page.ts</context>
           <context context-type="linenumber">228</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="review.mapping.queue-counts" datatype="html">
-        <source>1 unmapped · 1 conflicted</source>
-        <target>1 chưa ánh xạ · 1 xung đột</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.page.ts</context>
-          <context context-type="linenumber">230</context>
         </context-group>
       </trans-unit>
 <trans-unit id="review.mapping.frozen-evidence" datatype="html">
@@ -22286,6 +22238,302 @@
 <trans-unit id="runs.list.labeled-reruns" datatype="html"><source>Labeled reruns</source><target>Lượt chạy lại có nhãn</target></trans-unit>
 <trans-unit id="runs.list.showing" datatype="html"><source>Showing <x id="shown" equiv-text="shown"/></source><target>Đang hiển thị <x id="shown" equiv-text="shown"/></target></trans-unit>
 <trans-unit id="runs.list.of-loaded" datatype="html"><source>Of <x id="count" equiv-text="count"/> loaded runs</source><target>Trong số <x id="count" equiv-text="count"/> lượt chạy đã tải</target></trans-unit>
+      <trans-unit id="review.deploy-targets.actions" datatype="html">
+        <source>Actions</source>
+        <target>Thao tác</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">24</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.deploy-targets.discard" datatype="html">
+        <source>Discard changes</source>
+        <target>Bỏ thay đổi</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">71</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.deploy-targets.discard-hint" datatype="html">
+        <source>Closing this preview will discard your local changes to this target.</source>
+        <target>Đóng bản xem trước này sẽ bỏ các thay đổi cục bộ đối với đích triển khai này.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">69</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.deploy-targets.discard-title" datatype="html">
+        <source>Discard preview changes?</source>
+        <target>Bỏ thay đổi trong bản xem trước?</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">68</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.deploy-targets.edit-preview" datatype="html">
+        <source>Preview target changes</source>
+        <target>Xem trước thay đổi của đích triển khai</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">66</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.deploy-targets.history-order" datatype="html">
+        <source>Newest first. Each check is an immutable record.</source>
+        <target>Mới nhất trước. Mỗi lần kiểm tra là một bản ghi không thể thay đổi.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">40</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.deploy-targets.keep-editing" datatype="html">
+        <source>Keep editing</source>
+        <target>Tiếp tục chỉnh sửa</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">70</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.deploy-targets.preview" datatype="html">
+        <source>Preview</source>
+        <target>Xem trước</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">67</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.deploy-targets.preview-draft" datatype="html">
+        <source>Preview draft</source>
+        <target>Xem trước bản nháp</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">74</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.deploy-targets.records-shown" datatype="html">
+        <source>Records shown</source>
+        <target>Số bản ghi hiển thị</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">25</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.deploy-targets.target" datatype="html">
+        <source>Target</source>
+        <target>Đích triển khai</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">23</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.deploy-targets.view" datatype="html">
+        <source>View</source>
+        <target>Xem</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/deploy/review/deploy-targets-review.copy.ts</context>
+          <context context-type="linenumber">26</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.actions" datatype="html">
+        <source>Actions</source>
+        <target>Thao tác</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">30</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.discard" datatype="html">
+        <source>Discard changes</source>
+        <target>Bỏ thay đổi</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">35</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.discard-notice" datatype="html">
+        <source>Your changes to this preview will be lost. No draft will be saved.</source>
+        <target>Các thay đổi trong bản xem trước này sẽ bị mất. Sẽ không có bản nháp nào được lưu.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">37</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.discard-title" datatype="html">
+        <source>Discard unsaved changes?</source>
+        <target>Bỏ các thay đổi chưa lưu?</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">34</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.engine-variant" datatype="html">
+        <source>Engine / variant</source>
+        <target>Công cụ / biến thể</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">29</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.framework" datatype="html">
+        <source>Framework</source>
+        <target>Khung kiểm thử</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">7</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.header-facts" datatype="html">
+        <source><x id="COUNT" equiv-text="count"/> templates · Historical Studio reference · Sandbox only</source>
+        <target><x id="COUNT" equiv-text="count"/> mẫu · Tư liệu Studio · Chỉ trong môi trường mô phỏng</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">5</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.keep-editing" datatype="html">
+        <source>Keep editing</source>
+        <target>Tiếp tục chỉnh sửa</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">36</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.selected" datatype="html">
+        <source>Selected</source>
+        <target>Đã chọn</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">28</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.showing" datatype="html">
+        <source>Showing <x id="SHOWN" equiv-text="visible"/> of <x id="TOTAL" equiv-text="total"/> templates</source>
+        <target>Đang hiển thị <x id="SHOWN" equiv-text="visible"/> trong số <x id="TOTAL" equiv-text="total"/> mẫu</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">32</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.table-caption" datatype="html">
+        <source>Studio templates</source>
+        <target>Mẫu Studio</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">6</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.gallery.view" datatype="html">
+        <source>View</source>
+        <target>Xem</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/studio/gallery/studio-gallery.copy.ts</context>
+          <context context-type="linenumber">27</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.generated-scripts.actions" datatype="html">
+        <source>Actions</source>
+        <target>Thao tác</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/scripts/review/generated-scripts.copy.ts</context>
+          <context context-type="linenumber">15</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.generated-scripts.details" datatype="html">
+        <source>Script details</source>
+        <target>Chi tiết kịch bản</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/scripts/review/generated-scripts.copy.ts</context>
+          <context context-type="linenumber">17</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.generated-scripts.showing" datatype="html">
+        <source>Showing</source>
+        <target>Đang hiển thị</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/scripts/review/generated-scripts.copy.ts</context>
+          <context context-type="linenumber">18</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.generated-scripts.sorted-by" datatype="html">
+        <source>Sorted by</source>
+        <target>Sắp xếp theo</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/scripts/review/generated-scripts.copy.ts</context>
+          <context context-type="linenumber">19</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.generated-scripts.view" datatype="html">
+        <source>View</source>
+        <target>Xem</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/scripts/review/generated-scripts.copy.ts</context>
+          <context context-type="linenumber">16</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.mapping.actions" datatype="html">
+        <source>Actions</source>
+        <target>Thao tác</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.copy.ts</context>
+          <context context-type="linenumber">7</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.mapping.candidate-cases" datatype="html">
+        <source>Candidate cases</source>
+        <target>Ca kiểm thử ứng viên</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.copy.ts</context>
+          <context context-type="linenumber">6</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.mapping.confirm-dismiss" datatype="html">
+        <source>Confirm dismissal preview</source>
+        <target>Xác nhận xem trước việc bỏ qua</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.copy.ts</context>
+          <context context-type="linenumber">12</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.mapping.details" datatype="html">
+        <source>Mapping details</source>
+        <target>Chi tiết ánh xạ</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.copy.ts</context>
+          <context context-type="linenumber">9</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.mapping.no-candidates" datatype="html">
+        <source>No candidate cases supplied.</source>
+        <target>Không có ca kiểm thử ứng viên nào được cung cấp.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.copy.ts</context>
+          <context context-type="linenumber">10</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.mapping.records" datatype="html">
+        <source>Mapping records</source>
+        <target>Bản ghi ánh xạ</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.copy.ts</context>
+          <context context-type="linenumber">5</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.mapping.showing-loaded" datatype="html">
+        <source>Loaded records · Showing <x id="shown" equiv-text="shown"/> of <x id="total" equiv-text="total"/></source>
+        <target>Bản ghi đã tải · Đang hiển thị <x id="shown" equiv-text="shown"/> trong số <x id="total" equiv-text="total"/></target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.page.ts</context>
+          <context context-type="linenumber">217</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="review.mapping.view" datatype="html">
+        <source>View</source>
+        <target>Xem</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/mapping/review/mapping-resolution.copy.ts</context>
+          <context context-type="linenumber">8</context>
+        </context-group>
+      </trans-unit>
 <trans-unit id="settings.members.view" datatype="html"><source>View member</source><target>Xem thành viên</target></trans-unit>
 <trans-unit id="settings.members.created" datatype="html"><source>Created</source><target>Ngày tạo</target></trans-unit>
 <trans-unit id="settings.row.view" datatype="html"><source>View</source><target>Xem</target></trans-unit>

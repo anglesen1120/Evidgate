@@ -1,10 +1,3 @@
-.draft-dialog {
-  box-sizing: border-box;
-  max-inline-size: min(100%, 36rem);
-  max-block-size: calc(100dvh - var(--eg-space-8));
-  overflow-y: auto;
-  overflow-wrap: anywhere;
-}
 .fields,
 .field {
   display: grid;

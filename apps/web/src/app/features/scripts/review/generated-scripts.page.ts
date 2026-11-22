@@ -1,15 +1,20 @@
 import {
+  afterRenderEffect,
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   inject,
   input,
   linkedSignal,
   signal,
+  viewChild,
+  viewChildren,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
@@ -24,6 +29,7 @@ import { PageHeaderComponent, HeaderActionsDirective } from '../../../shared/ui/
 import { EmptyPatternComponent } from '../../../shared/ui/states/empty-pattern.component';
 import { LoadingPatternComponent } from '../../../shared/ui/states/loading-pattern.component';
 import { InlineFeedbackComponent } from '../../../shared/ui/states/inline-feedback.component';
+import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
 import {
   generatedScriptsFixture,
   type GeneratedScriptsViewModel,
@@ -34,6 +40,12 @@ import { scriptNotices, type GeneratedScriptsState } from './generated-scripts.s
 import { injectReviewReturnUrl, isNoticeKey, matchesReviewRecord } from './scripts-review-state';
 
 type SortColumn = 'id' | 'manualCase' | 'status' | 'stability' | 'pr';
+type ScriptSelection = { id: string | undefined; viewing: boolean };
+type SelectionScope = {
+  rows: readonly ScriptRowViewModel[];
+  requested: string | undefined;
+  readable: boolean;
+};
 // Review-only until script inspection lands. The real data service will replace the fixture.
 @Component({
   selector: 'app-generated-scripts-review',
@@ -41,6 +53,7 @@ type SortColumn = 'id' | 'manualCase' | 'status' | 'stability' | 'pr';
   imports: [
     FormsModule,
     RouterLink,
+    HlmBadge,
     HlmButton,
     HlmCardImports,
     HlmDialogImports,
@@ -59,12 +72,16 @@ type SortColumn = 'id' | 'manualCase' | 'status' | 'stability' | 'pr';
   ],
   host: { class: 'grid min-w-0 gap-4' },
   templateUrl: './generated-scripts.page.html',
+  styleUrl: './generated-scripts.page.css',
 })
 export class GeneratedScriptsPage {
   private readonly route = inject(ActivatedRoute);
   protected readonly returnUrl = injectReviewReturnUrl();
   readonly viewModel = input<GeneratedScriptsViewModel>(generatedScriptsFixture);
   private readonly params = toSignal(this.route.queryParamMap);
+  private readonly rowButtons = viewChildren<ElementRef<HTMLButtonElement>>('opener');
+  private readonly inventoryHeading = viewChild<ElementRef<HTMLElement>>('inventoryHeading');
+  private readonly pageHeading = viewChild.required(PageHeaderComponent);
   private readonly requested = computed(() => {
     const params = this.params();
     const id = params?.get('generated');
@@ -97,6 +114,7 @@ export class GeneratedScriptsPage {
     return isNoticeKey(key, scriptNotices) ? key : '404';
   });
   protected readonly c = scriptCopy;
+  protected readonly escapeFormatChars = escapeFormatChars;
   protected readonly notice = computed(() => {
     const k = this.state();
     return k === 'ready' ? null : scriptNotices[k];
@@ -109,12 +127,6 @@ export class GeneratedScriptsPage {
     column: 'id',
     ascending: true,
   });
-  protected readonly selectedId = linkedSignal(
-    () => this.requested()?.id ?? this.viewModel().scripts[0]?.id ?? '',
-  );
-  protected readonly selected = computed(() =>
-    this.viewModel().scripts.find((r) => r.id === this.selectedId()),
-  );
   private readonly inventory = computed(() => {
     const scripts = this.viewModel().scripts;
     return this.state() === 'mixed'
@@ -125,9 +137,43 @@ export class GeneratedScriptsPage {
         )
       : scripts;
   });
-  protected readonly statuses = computed(() => [
-    ...new Set(this.inventory().map((row) => row.status)),
-  ]);
+  protected readonly selection = linkedSignal<SelectionScope, ScriptSelection>({
+    source: () => ({
+      rows: this.inventory(),
+      requested: this.requested()?.id,
+      readable: !this.notice()?.replace,
+    }),
+    computation: (scope, previous) => {
+      if (!scope.readable) return { id: undefined, viewing: false };
+      if (!previous?.source.readable || scope.requested !== previous.source.requested) {
+        return { id: scope.requested ?? scope.rows[0]?.id, viewing: !!scope.requested };
+      }
+      if (previous?.value.id && scope.rows.some((row) => row.id === previous.value.id))
+        return previous.value;
+      return { id: scope.rows[0]?.id, viewing: false };
+    },
+  });
+  protected readonly viewed = computed(() => {
+    const selection = this.selection();
+    return selection.viewing ? this.inventory().find((row) => row.id === selection.id) : undefined;
+  });
+  protected viewScript(id: string, opener: HTMLButtonElement): void {
+    // A pointer press does not focus a button in every browser. Give the CDK a return target.
+    opener.focus();
+    this.selection.set({ id, viewing: true });
+  }
+  protected closeView(): void {
+    this.selection.update(({ id }) => ({ id, viewing: false }));
+  }
+  protected readonly statusOptions = computed(() => {
+    const rows = this.inventory();
+    const counts = new Map<string, number>();
+    for (const row of rows) counts.set(row.status, (counts.get(row.status) ?? 0) + 1);
+    return [
+      { value: '', label: this.c.allStatuses, count: rows.length },
+      ...Array.from(counts, ([value, count]) => ({ value, label: value, count })),
+    ];
+  });
   protected readonly prs = [this.c.merged, this.c.notCreated, this.c.open, this.c.closed];
   protected readonly columns = [
     { label: this.c.script, key: 'id' },
@@ -137,6 +183,9 @@ export class GeneratedScriptsPage {
     { label: this.c.stability, key: 'stability' },
     { label: this.c.pr, key: 'pr' },
   ] as const;
+  protected readonly sortedBy = computed(
+    () => this.columns.find(({ key }) => key === this.sort().column)?.label,
+  );
   private readonly sortedRows = computed(() => {
     const rows = this.inventory();
     const { column, ascending } = this.sort();
@@ -163,6 +212,28 @@ export class GeneratedScriptsPage {
           )),
     );
   });
+  constructor() {
+    let returnTo: { id: string; index: number } | undefined;
+    afterRenderEffect(() => {
+      const id = this.viewed()?.id;
+      if (id !== undefined) {
+        if (returnTo?.id !== id)
+          returnTo = { id, index: this.rows().findIndex((row) => row.id === id) };
+        return;
+      }
+      if (!returnTo) return;
+      // Linked entries have no opener, and live updates can remove the opening row.
+      const anchors = this.rowButtons();
+      const key = returnTo.id;
+      const current = this.rows().findIndex((row) => row.id === key);
+      const nearest = Math.max(0, Math.min(returnTo.index, anchors.length - 1));
+      const target = anchors[current] ?? anchors[nearest];
+      returnTo = undefined;
+      if (target) target.nativeElement.focus();
+      else if (this.inventoryHeading()) this.inventoryHeading()?.nativeElement.focus();
+      else this.pageHeading().focusTitle();
+    });
+  }
   protected order(column: SortColumn): void {
     this.sort.update((s) => ({ column, ascending: s.column !== column || !s.ascending }));
   }

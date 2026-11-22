@@ -83,6 +83,8 @@ describe('Mapping decision preview', () => {
 
   it('dismisses only the named mapping and never chooses a case', async () => {
     const { dialog, confirmed } = await open('dismiss');
+    expect(await (await dialog.submit()).text()).toBe('Confirm dismissal preview');
+    expect(await dialog.text()).toContain('AddressLabel.spec.ts › formats postcode');
     expect(await dialog.candidates()).toHaveLength(0);
     await (await dialog.submit()).click();
     expect(confirmed).toHaveBeenCalledExactlyOnceWith({
