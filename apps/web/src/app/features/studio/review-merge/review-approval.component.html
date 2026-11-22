@@ -1,0 +1,86 @@
+<section hlmCard>
+  <header hlmCardHeader class="border-b border-border">
+    <h2 hlmCardTitle>{{ copy.independent }}</h2>
+  </header>
+  <div hlmCardContent class="grid min-w-0 gap-3">
+    <div class="flex items-center gap-2">
+      <span
+        aria-hidden="true"
+        class="grid size-(--eg-control-md) shrink-0 place-items-center rounded-full bg-(--eg-accent-soft) font-semibold text-(--eg-accent)"
+        >{{ view().references.reviewerInitials }}</span
+      >
+      <div class="min-w-0">
+        <strong>{{ view().reviewer }}</strong>
+        <p class="m-0 text-sm text-muted-foreground">{{ copy.assignment }}</p>
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <app-status-pill
+        [tone]="view().validated ? 'info' : 'neutral'"
+        [label]="view().validated ? copy.validated : copy.notValidated"
+      />
+      <app-status-pill
+        [tone]="view().decision ? 'success' : 'neutral'"
+        [label]="view().decision ? copy.approved : copy.awaiting"
+      />
+    </div>
+    @if (view().validated) {
+      <small class="text-xs text-muted-foreground">{{ copy.sandboxOnly }}</small>
+    }
+    <p class="m-0 text-sm">
+      {{ view().record === 'studio' ? copy.authorRule : copy.independentRule }}
+    </p>
+    @if (view().decision; as decision) {
+      <section data-recorded-decision class="grid gap-2 rounded-sm bg-muted p-3">
+        <h3 class="m-0 text-sm font-semibold">{{ copy.recorded }}</h3>
+        <dl class="m-0 grid gap-2 text-sm [&_dd]:m-0 [&_dt]:text-muted-foreground">
+          <div>
+            <dt>{{ copy.approvedBy }}</dt>
+            <dd>{{ decision.reviewer }}</dd>
+          </div>
+          <div>
+            <dt>{{ copy.when }}</dt>
+            <dd>
+              @if (decision.at; as at) {
+                <app-absolute-time [value]="at" />
+                <details>
+                  <summary
+                    class="min-h-(--eg-control-touch) cursor-pointer content-center focus-visible:outline-2 focus-visible:outline-(--eg-focus)"
+                  >
+                    {{ copy.timeRaw }}
+                  </summary>
+                  <code>{{ at }}</code>
+                </details>
+              } @else {
+                {{ copy.unknownTime }}
+              }
+            </dd>
+          </div>
+          <div>
+            <dt>{{ copy.hash }}</dt>
+            <dd>
+              <code>{{ decision.hash }}</code>
+            </dd>
+          </div>
+        </dl>
+      </section>
+    }
+    @if (view().record === 'studio') {
+      <dl class="m-0 text-sm">
+        <dt class="text-muted-foreground">{{ copy.scope }}</dt>
+        <dd class="m-0">
+          <code>{{ view().references.reviewScope }}</code>
+        </dd>
+      </dl>
+    }
+    @if (view().inspectActions) {
+      <div class="flex min-w-0 flex-wrap gap-2">
+        <app-review-action-preview [kind]="'approve'" [view]="view()" />
+        <app-review-action-preview [kind]="'changes'" [view]="view()" />
+      </div>
+      <p class="m-0 text-xs text-muted-foreground">{{ copy.previewReason }}</p>
+    } @else if (!view().decision) {
+      <p class="m-0 text-sm text-muted-foreground">{{ copy.blocked }}</p>
+    }
+  </div>
+</section>
