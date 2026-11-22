@@ -26708,19 +26708,19 @@
       <trans-unit id="catalog.case-view.discard" datatype="html"><source>Discard changes</source></trans-unit>
       <trans-unit id="catalog.case-view.owner-id" datatype="html"><source>Owner membership ID</source></trans-unit>
       <trans-unit id="catalog.case-view.unavailable" datatype="html"><source>Record not available in this list.</source></trans-unit>
-      <trans-unit id="catalog.case-view.view-name" datatype="html"><source>View {$name}</source></trans-unit>
-      <trans-unit id="catalog.case-view.edit-name" datatype="html"><source>Edit owner for {$name}</source></trans-unit>
+      <trans-unit id="catalog.case-view.view-name" datatype="html"><source>View <x id="name"/></source></trans-unit>
+      <trans-unit id="catalog.case-view.edit-name" datatype="html"><source>Edit owner for <x id="name"/></source></trans-unit>
       <trans-unit id="authoring.case-table.manual-case" datatype="html"><source>Manual case</source></trans-unit>
       <trans-unit id="authoring.case-table.priority-state" datatype="html"><source>Priority / lifecycle</source></trans-unit>
       <trans-unit id="authoring.case-table.view" datatype="html"><source>View</source></trans-unit>
       <trans-unit id="authoring.case-table.actions" datatype="html"><source>Actions</source></trans-unit>
       <trans-unit id="authoring.case-table.editor-unavailable" datatype="html"><source>Project scope unavailable</source></trans-unit>
-      <trans-unit id="authoring.case-table.view-name" datatype="html"><source>View {$name}</source></trans-unit>
-      <trans-unit id="catalog.case-view.loaded-count" datatype="html"><source>Loaded identities: {$count}</source></trans-unit>
+      <trans-unit id="authoring.case-table.view-name" datatype="html"><source>View <x id="name"/></source></trans-unit>
+      <trans-unit id="catalog.case-view.loaded-count" datatype="html"><source>Loaded identities: <x id="count"/></source></trans-unit>
       <trans-unit id="catalog.case-view.loaded-status" datatype="html"><source>Status in loaded identities</source></trans-unit>
       <trans-unit id="catalog.case-view.summary" datatype="html"><source>Summary</source></trans-unit>
       <trans-unit id="catalog.case-view.history" datatype="html"><source>Recorded history</source></trans-unit>
-      <trans-unit id="authoring.tree.loaded-roots" datatype="html"><source>Loaded roots: {$count}</source></trans-unit>
+      <trans-unit id="authoring.tree.loaded-roots" datatype="html"><source>Loaded roots: <x id="count"/></source></trans-unit>
       <trans-unit id="authoring.case-table.live-links" datatype="html"><source>Live links</source></trans-unit>
       <trans-unit id="authoring.case-table.loaded-states" datatype="html"><source>Lifecycle of loaded cases</source></trans-unit>
       <trans-unit id="authoring.history.view" datatype="html"><source>View</source></trans-unit>
@@ -26729,23 +26729,23 @@
       <trans-unit id="authoring.import-export.version-time" datatype="html"><source>Created at (UTC)</source></trans-unit>
       <trans-unit id="authoring.import-export.ai-run" datatype="html"><source>AI run</source></trans-unit>
       <trans-unit id="authoring.import-export.version-actions" datatype="html"><source>Actions</source></trans-unit>
-      <trans-unit id="authoring.import-export.view-version" datatype="html"><source>View version {$VERSION} of {$ENTITY}</source></trans-unit>
+      <trans-unit id="authoring.import-export.view-version" datatype="html"><source>View version <x id="VERSION"/> of <x id="ENTITY"/></source></trans-unit>
       <trans-unit id="authoring.import-export.version-details" datatype="html"><source>Authoring version details</source></trans-unit>
       <trans-unit id="authoring.import-export.version-readonly" datatype="html"><source>This historical version is read-only.</source></trans-unit>
       <trans-unit id="authoring.import-export.version-id" datatype="html"><source>Version ID</source></trans-unit>
       <trans-unit id="authoring.import-export.field-name" datatype="html"><source>Field name</source></trans-unit>
       <trans-unit id="authoring.import-export.meaning" datatype="html"><source>Meaning</source></trans-unit>
-      <trans-unit id="authoring.import-export.loaded-versions" datatype="html"><source>Versions on this page: {$INTERPOLATION}</source></trans-unit>
+      <trans-unit id="authoring.import-export.loaded-versions" datatype="html"><source>Versions on this page: <x id="INTERPOLATION"/></source></trans-unit>
       <trans-unit id="authoring.ai-settings.select-first" datatype="html"><source>Select a first version, then choose another version to compare.</source></trans-unit>
-      <trans-unit id="authoring.ai-settings.select-baseline" datatype="html"><source>Select version {$INTERPOLATION}</source></trans-unit>
+      <trans-unit id="authoring.ai-settings.select-baseline" datatype="html"><source>Select version <x id="INTERPOLATION"/></source></trans-unit>
       <trans-unit id="authoring.ai-settings.snapshot-title" datatype="html"><source>Settings version details</source></trans-unit>
       <trans-unit id="authoring.ai-settings.template-source" datatype="html"><source>Source template</source></trans-unit>
       <trans-unit id="authoring.ai-settings.comparison" datatype="html"><source>Comparison</source></trans-unit>
-      <trans-unit id="authoring.ai-settings.view-version" datatype="html"><source>View version {$VERSION}</source></trans-unit>
+      <trans-unit id="authoring.ai-settings.view-version" datatype="html"><source>View version <x id="VERSION"/></source></trans-unit>
       <trans-unit id="authoring.ai-settings.configured-languages" datatype="html"><source>Configured output languages</source></trans-unit>
       <trans-unit id="authoring.ai-settings.loaded-templates" datatype="html"><source>Loaded templates</source></trans-unit>
       <trans-unit id="authoring.ai-settings.versions-on-page" datatype="html"><source>Versions on this page</source></trans-unit>
-      <trans-unit id="authoring.ai-settings.visible-versions" datatype="html"><source>Showing {$INTERPOLATION} of {$INTERPOLATION_1} loaded versions</source></trans-unit>
+      <trans-unit id="authoring.ai-settings.visible-versions" datatype="html"><source>Showing <x id="INTERPOLATION"/> of <x id="INTERPOLATION_1"/> loaded versions</source></trans-unit>
       <trans-unit id="onboarding.record.actions" datatype="html"><source>Actions</source></trans-unit>
       <trans-unit id="onboarding.record.binding" datatype="html"><source>CI binding details</source></trans-unit>
       <trans-unit id="onboarding.record.token" datatype="html"><source>Ingest token details</source></trans-unit>
@@ -26755,12 +26755,12 @@
       <trans-unit id="onboarding.record.source" datatype="html"><source>Source</source></trans-unit>
       <trans-unit id="onboarding.record.credential" datatype="html"><source>Credential</source></trans-unit>
       <trans-unit id="onboarding.record.view" datatype="html"><source>View</source></trans-unit>
-      <trans-unit id="onboarding.record.view-named" datatype="html"><source>View {$SUBJECT}</source></trans-unit>
+      <trans-unit id="onboarding.record.view-named" datatype="html"><source>View <x id="SUBJECT"/></source></trans-unit>
       <trans-unit id="onboarding.record.summary" datatype="html"><source>Summary</source></trans-unit>
       <trans-unit id="onboarding.record.history" datatype="html"><source>History</source></trans-unit>
-      <trans-unit id="onboarding.record.range-partial" datatype="html"><source>Showing {$COUNT} records · more records are available</source></trans-unit>
+      <trans-unit id="onboarding.record.range-partial" datatype="html"><source>Showing <x id="COUNT"/> records · more records are available</source></trans-unit>
       <trans-unit id="onboarding.record.no-rows" datatype="html"><source>0 records</source></trans-unit>
-      <trans-unit id="onboarding.record.range" datatype="html"><source>Showing 1–{$LAST} of {$TOTAL}</source></trans-unit>
+      <trans-unit id="onboarding.record.range" datatype="html"><source>Showing 1–<x id="LAST"/> of <x id="TOTAL"/></source></trans-unit>
       <trans-unit id="onboarding.record.health-caption" datatype="html"><source>Credential health</source></trans-unit>
       <trans-unit id="onboarding.record.binding-kind" datatype="html"><source>CI binding</source></trans-unit>
       <trans-unit id="onboarding.record.resource-kind" datatype="html"><source>Resource</source></trans-unit>
@@ -26783,6 +26783,11 @@
       <trans-unit id="authoring.pending-changes.history-heading" datatype="html"><source>History</source></trans-unit>
       <trans-unit id="authoring.pending-changes.apply-checks" datatype="html"><source>Apply checks</source></trans-unit>
       <trans-unit id="shared.list.count-unverified" datatype="html"><source>Count unavailable with the current filter</source></trans-unit>
+      <trans-unit id="authoring.case-table.filter-guidance" datatype="html"><source>Filter availability and help</source></trans-unit>
+      <trans-unit id="authoring.pending-changes.select-column" datatype="html"><source>Select</source></trans-unit>
+      <trans-unit id="authoring.import-export.choose-file" datatype="html"><source>Choose file</source></trans-unit>
+      <trans-unit id="authoring.import-export.no-file-hint" datatype="html"><source>No rows have been validated or imported.</source></trans-unit>
+      <trans-unit id="authoring.import-export.showing-range" datatype="html"><source>Showing 1–<x id="end"/> of <x id="loaded"/> loaded versions</source></trans-unit>
 </body>
   </file>
 </xliff>

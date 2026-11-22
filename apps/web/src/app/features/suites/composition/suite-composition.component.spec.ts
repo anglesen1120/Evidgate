@@ -1,3 +1,4 @@
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
@@ -11,6 +12,7 @@ import unavailable from '../../../../../../../fixtures/web-api/suite-revision-un
 import { SuitesDataService } from '../../../core/data/suites-data.service';
 import { ApiRequestError } from '../../../core/http/api-error';
 import { mapApiError } from '../../../core/http/error-mapper';
+import { CopyableIdentifierHarness } from '../../../shared/ui/values/values.harness';
 import { routes } from '../suites.routes';
 import { SuiteCompositionComponent } from './suite-composition.component';
 import {
@@ -85,8 +87,12 @@ describe('SuiteCompositionComponent', () => {
     expect(region?.getAttribute('aria-label')).toBe('Composition matrix');
     expect(region?.classList.contains('overflow-x-auto')).toBe(true);
     expect(region?.getAttribute('tabindex')).toBe('0');
-    expect(root.querySelector('[role="tablist"], [aria-haspopup="dialog"]')).toBeNull();
-    const columns = [...(table?.querySelectorAll('thead th[scope="col"] bdi.identifier') ?? [])];
+    expect(root.querySelector('[role="tablist"], tbody [aria-haspopup="dialog"]')).toBeNull();
+    const columns = [
+      ...(table?.querySelectorAll(
+        'thead th[scope="col"] app-copyable-identifier .identifier-accessible',
+      ) ?? []),
+    ];
     const rows = [...(table?.querySelectorAll('tbody tr') ?? [])];
     expect(columns).toHaveLength(3);
     expect(rows).toHaveLength(3);
@@ -96,7 +102,7 @@ describe('SuiteCompositionComponent', () => {
           candidate.querySelector('th[scope="row"] bdi')?.textContent === member.case_revision_id,
       );
       const column = columns.findIndex(
-        (candidate) => candidate.textContent === member.variant_hash,
+        (candidate) => candidate.textContent?.trim() === `Variant hash: ${member.variant_hash}`,
       );
       expect(column).toBeGreaterThanOrEqual(0);
       const cell = row?.querySelectorAll('td').item(column);
@@ -109,6 +115,21 @@ describe('SuiteCompositionComponent', () => {
     expect(table?.textContent).toContain('No parameters');
     const firstRow = rows.at(0);
     expect(firstRow?.querySelectorAll('td').item(1)?.textContent?.trim()).toBe('No member');
+  });
+
+  it('shows a short matrix header and discloses its exact variant hash', async () => {
+    const { harness } = await open();
+    const [column] = await TestbedHarnessEnvironment.loader(harness.fixture).getAllHarnesses(
+      CopyableIdentifierHarness,
+    );
+    if (!column) throw new Error('Missing matrix header identifier');
+    const full = (await column.accessibleValue()).replace('Variant hash: ', '');
+    expect(revision.members.some((member) => member.variant_hash === full)).toBe(true);
+    expect(await column.previewText()).toContain('…');
+    expect(await column.previewText()).not.toContain(full);
+    await column.showFull();
+    expect(await column.fullText()).toBe(full);
+    await column.closeFull();
   });
 
   it('renders the revision identity, strategy and dependency direction from the fixture', async () => {
@@ -140,7 +161,15 @@ describe('SuiteCompositionComponent', () => {
   ] as const)('keeps the %s revision and strategy entirely read-only', async (status, body) => {
     getRevision.mockResolvedValue(body);
     const { root } = await open(body.id);
-    expect(root.querySelector(editAffordances)).toBeNull();
+    const controls = [...root.querySelectorAll(editAffordances)];
+    expect(controls.length).toBeGreaterThan(0);
+    for (const control of controls) {
+      expect(
+        control.matches(
+          'thead app-copyable-identifier button[aria-haspopup="dialog"], thead app-copyable-identifier app-copy-value-button button',
+        ),
+      ).toBe(true);
+    }
     expect(root.querySelector('a')).toBeNull();
     expect(root.querySelector('[data-testid="suite-strategy"]')?.textContent).toContain(
       'read-only',

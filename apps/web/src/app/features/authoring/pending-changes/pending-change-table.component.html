@@ -4,21 +4,20 @@
   [columns]="columns()"
   [rowId]="rowId"
   [caption]="caption()"
+  [flow]="'page'"
   [fixedHeightCells]="true"
 />
-<p class="mt-(--eg-space-3) text-sm tabular-nums text-muted-foreground">{{ footer() }}</p>
+<p class="m-0 px-(--eg-space-4) py-(--eg-space-3) text-xs tabular-nums text-muted-foreground">
+  {{ footer() }}
+</p>
 <ng-template #identity let-row>
   <strong class="block truncate">{{ operationLabel(row.change_type) }}</strong>
-  <bdi class="block truncate text-xs text-muted-foreground" [title]="row.change_id">{{
-    row.change_id
-  }}</bdi>
-</ng-template>
-<ng-template #target let-row>
-  @if (store.targetTitles()[row.target_id]; as title) {
-    <bdi class="block truncate font-semibold" [title]="title">{{ title }}</bdi>
-  } @else {
-    <app-copyable-identifier [value]="row.target_id" [label]="copy.targetLabel" [compact]="true" />
-  }
+  @let target = store.targetTitles()[row.target_id] ?? row.target_id;
+  <bdi
+    class="block truncate text-xs text-muted-foreground [contain:inline-size]"
+    [title]="target"
+    >{{ target }}</bdi
+  >
 </ng-template>
 <ng-template #state let-row>
   <app-status-pill
@@ -28,7 +27,7 @@
   />
 </ng-template>
 <ng-template #actions let-row>
-  <div class="flex items-center gap-(--eg-space-2)">
+  <div class="flex flex-nowrap items-center justify-end gap-(--eg-space-2) whitespace-nowrap">
     <button
       #opener
       hlmBtn

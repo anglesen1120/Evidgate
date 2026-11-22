@@ -29,7 +29,9 @@
     </button>
   }
 </ng-template>
-<app-desktop-required-notice />
+@if (policy.narrow()) {
+  <app-desktop-required-notice />
+}
 @if (!store.canRead() || store.forbidden()) {
   <app-forbidden-pattern />
 } @else {
@@ -55,29 +57,21 @@
     @if (readBusy()) {
       <p class="m-0" role="status">{{ copy.refreshing }}</p>
     }
-    <div class="scope-strip">
-      <dl class="scope-counts">
-        <div hlmCard [size]="'sm'">
-          <dt><hlm-icon [name]="'lucideClock'" />{{ copy.queueScope }}</dt>
-          <dd data-pending-loaded-count><app-number-value [value]="store.rows().length" /></dd>
-          <dd class="scope-hint">{{ copy.loadedScope }}</dd>
-        </div>
-        <div hlmCard [size]="'sm'">
-          <dt><hlm-icon [name]="'lucideCopy'" />{{ copy.selectionSummary }}</dt>
-          <dd data-pending-selected-count><app-number-value [value]="store.selectedCount()" /></dd>
-        </div>
-        <div hlmCard [size]="'sm'">
-          <dt><hlm-icon [name]="'lucideTriangleAlert'" />{{ ui.blockedCount }}</dt>
-          <dd><app-number-value [value]="blockedCount()" /></dd>
-        </div>
-      </dl>
-      <app-inline-feedback
-        [tone]="'info'"
-        [title]="ui.atomic"
-        [description]="ui.atomicBody"
-        [announcement]="'off'"
-      />
-    </div>
+    <dl hlmCard class="scope-counts">
+      <div>
+        <dt><hlm-icon [name]="'lucideClock'" />{{ copy.queueScope }}</dt>
+        <dd data-pending-loaded-count><app-number-value [value]="store.rows().length" /></dd>
+        <dd class="scope-hint">{{ copy.loadedScope }}</dd>
+      </div>
+      <div>
+        <dt><hlm-icon [name]="'lucideCopy'" />{{ copy.selectionSummary }}</dt>
+        <dd data-pending-selected-count><app-number-value [value]="store.selectedCount()" /></dd>
+      </div>
+      <div>
+        <dt><hlm-icon [name]="'lucideTriangleAlert'" />{{ ui.blockedCount }}</dt>
+        <dd><app-number-value [value]="blockedCount()" /></dd>
+      </div>
+    </dl>
     @if (!store.canWrite() || deniedWrite()) {
       <app-inline-feedback
         [tone]="'warning'"
@@ -134,7 +128,7 @@
     <div class="review-workspace">
       <section
         hlmCard
-        class="region"
+        class="region queue-panel"
         [attr.aria-label]="copy.queueTitle"
         [attr.aria-busy]="store.applying() || readBusy()"
       >
@@ -142,28 +136,29 @@
           [title]="copy.queueTitle"
           description="View a change to inspect its details. Use the checkboxes to select the changes to apply."
           i18n-description="@@authoring.pending-changes.view-instructions"
-        />
-        <div class="actions">
-          <button
-            hlmBtn
-            [variant]="'outline'"
-            type="button"
-            [disabled]="busy()"
-            (click)="store.selectAll()"
-          >
-            {{ copy.selectAll }}
-          </button>
-          <button
-            hlmBtn
-            [variant]="'ghost'"
-            type="button"
-            data-pending-clear-selection
-            [disabled]="busy()"
-            (click)="store.clearSelection()"
-          >
-            {{ copy.clearSelection }}
-          </button>
-        </div>
+        >
+          <div appSectionHeaderActions class="actions">
+            <button
+              hlmBtn
+              [variant]="'outline'"
+              type="button"
+              [disabled]="busy()"
+              (click)="store.selectAll()"
+            >
+              {{ copy.selectAll }}
+            </button>
+            <button
+              hlmBtn
+              [variant]="'ghost'"
+              type="button"
+              data-pending-clear-selection
+              [disabled]="busy()"
+              (click)="store.clearSelection()"
+            >
+              {{ copy.clearSelection }}
+            </button>
+          </div>
+        </app-section-header>
         <app-pending-change-table
           [rows]="store.rows()"
           [caption]="copy.queueScope"
@@ -191,6 +186,12 @@
         [attr.aria-label]="ui.batchSummary"
       >
         <app-section-header [title]="ui.batchSummary" />
+        <app-inline-feedback
+          [tone]="'info'"
+          [title]="ui.atomic"
+          [description]="ui.atomicBody"
+          [announcement]="'off'"
+        />
         <p class="m-0 text-sm font-semibold">
           {{ copy.selectionSummary }}: <app-number-value [value]="store.selectedCount()" />
         </p>

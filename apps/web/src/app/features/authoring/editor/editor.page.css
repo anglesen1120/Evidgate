@@ -10,3 +10,11 @@
     linear-gradient(to left, var(--eg-border-control), transparent) right center / var(--eg-space-3)
       100% scroll no-repeat;
 }
+
+.field-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  column-gap: var(--eg-space-2);
+}

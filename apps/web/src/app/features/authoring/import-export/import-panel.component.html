@@ -11,10 +11,44 @@
         hlmCardHeader
         class="border-b border-border"
         [titleId]="'import-intake-title'"
-        [title]="copy.intake"
+        [title]="copy.file"
         [size]="'subsection'"
       />
-      <div hlmCardContent class="grid min-w-0 gap-(--eg-space-4)">
+      <div
+        hlmCardContent
+        class="grid min-w-0 items-start gap-(--eg-space-4) sm:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"
+      >
+        @if (store.work().file; as file) {
+          <section
+            #snapshot
+            tabindex="-1"
+            [attr.aria-label]="copy.snapshot"
+            class="grid min-w-0 gap-(--eg-space-3) rounded-(--eg-radius-md) bg-muted p-(--eg-space-4) text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+            data-import-snapshot
+          >
+            <app-section-header [title]="copy.snapshot" [headingLevel]="3" [size]="'subsection'" />
+            <dl
+              class="m-0 grid min-w-0 gap-(--eg-space-3) sm:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"
+            >
+              <div class="min-w-0">
+                <dt class="text-sm text-muted-foreground">{{ copy.file }}</dt>
+                <dd class="m-0 font-mono text-sm wrap-anywhere" data-import-filename>
+                  <bdi>{{ file.name }}</bdi>
+                </dd>
+              </div>
+              <div>
+                <dt class="text-sm text-muted-foreground">{{ copy.format }}</dt>
+                <dd class="m-0">{{ store.work().format.toUpperCase() }}</dd>
+              </div>
+            </dl>
+          </section>
+        } @else {
+          <app-inline-feedback
+            [title]="copy.noFile"
+            [description]="copy.noFileHint"
+            [announcement]="'off'"
+          />
+        }
         @if (store.canWrite()) {
           <form
             *appDesktopMutation
@@ -22,13 +56,13 @@
             (submit)="submit($event)"
             data-import-mutation
           >
-            <div
-              class="grid min-w-0 items-start gap-(--eg-space-4) md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"
-            >
-              <div class="grid min-w-0 gap-(--eg-space-2)">
+            <div class="grid min-w-0 items-start gap-(--eg-space-3)">
+              <div class="sr-only">
                 <label hlmLabel for="authoring-import-file">{{ copy.file }}</label>
                 <input
                   hlmInput
+                  #filePicker
+                  tabindex="-1"
                   id="authoring-import-file"
                   type="file"
                   [accept]="'.csv,.json,.xlsx,text/csv,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'"
@@ -72,69 +106,47 @@
                   />
                 }
               </div>
-              <div class="flex flex-wrap items-center gap-(--eg-space-3) md:col-span-2">
-                <button
-                  hlmBtn
-                  [variant]="store.canConfirm() ? 'outline' : 'default'"
-                  type="submit"
-                  class="min-h-(--eg-control-touch) whitespace-normal"
-                  data-import-preview
-                  [disabled]="
-                    !store.work().file ||
-                    store.work().pending ||
-                    !store.retryReady() ||
-                    store.work().stage === 'confirm'
-                  "
-                >
-                  {{ copy.preview }}
-                </button>
-                @if (store.work().pending && store.work().stage === 'preview') {
+              @if (store.work().file) {
+                <div class="flex min-w-0 flex-wrap items-center gap-(--eg-space-3)">
                   <button
                     hlmBtn
-                    [variant]="'ghost'"
-                    type="button"
+                    [variant]="store.canConfirm() ? 'outline' : 'default'"
+                    type="submit"
                     class="min-h-(--eg-control-touch) whitespace-normal"
-                    (click)="store.cancel()"
+                    data-import-preview
+                    [disabled]="
+                      !store.work().file ||
+                      store.work().pending ||
+                      !store.retryReady() ||
+                      store.work().stage === 'confirm'
+                    "
                   >
-                    {{ copy.cancelPreview }}
+                    {{ copy.preview }}
                   </button>
-                }
-              </div>
+                  @if (store.work().pending && store.work().stage === 'preview') {
+                    <button
+                      hlmBtn
+                      [variant]="'ghost'"
+                      type="button"
+                      class="min-h-(--eg-control-touch) whitespace-normal"
+                      (click)="store.cancel()"
+                    >
+                      {{ copy.cancelPreview }}
+                    </button>
+                  }
+                </div>
+              }
             </div>
           </form>
         } @else {
           <app-inline-feedback [title]="copy.denied" [tone]="'warning'" />
         }
-        <p id="import-file-hint" class="m-0 text-sm text-muted-foreground wrap-anywhere">
+        <p
+          id="import-file-hint"
+          class="col-span-full m-0 text-sm text-muted-foreground wrap-anywhere"
+        >
           {{ copy.limits }}
         </p>
-        @if (store.work().file; as file) {
-          <section
-            #snapshot
-            tabindex="-1"
-            [attr.aria-label]="copy.snapshot"
-            class="grid min-w-0 gap-(--eg-space-3) rounded-(--eg-radius-md) bg-muted p-(--eg-space-4) text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-            data-import-snapshot
-          >
-            <app-section-header [title]="copy.snapshot" [headingLevel]="3" [size]="'subsection'" />
-            <dl
-              class="m-0 grid min-w-0 gap-(--eg-space-3) sm:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"
-            >
-              <div class="min-w-0">
-                <dt class="text-sm text-muted-foreground">{{ copy.file }}</dt>
-                <dd class="m-0 font-mono text-sm wrap-anywhere" data-import-filename>
-                  <bdi>{{ file.name }}</bdi>
-                </dd>
-              </div>
-              <div>
-                <dt class="text-sm text-muted-foreground">{{ copy.format }}</dt>
-                <dd class="m-0">{{ store.work().format.toUpperCase() }}</dd>
-              </div>
-            </dl>
-          </section>
-        } @else {
-          <app-request-state [status]="'ready'" [empty]="true" [emptyTitle]="copy.noFile" />
-        }
       </div>
     </section>
     @if (store.work().error; as error) {
@@ -390,40 +402,47 @@
         } @else if (store.history.error()) {
           <app-inline-feedback [title]="copy.historyFailed" [tone]="'warning'" />
         }
-        @if (history()?.page; as page) {
-          <p
-            class="m-0 text-sm text-muted-foreground tabular-nums"
-            i18n="@@authoring.import-export.loaded-versions"
-          >
-            Versions on this page: {{ page.items.length }}
-          </p>
-          @if (!page.items.length) {
-            <app-request-state [status]="'ready'" [empty]="true" [emptyTitle]="copy.historyEmpty" />
-          }
-          @if (page.next_cursor) {
-            <button
-              hlmBtn
-              [variant]="'outline'"
-              type="button"
-              class="min-h-(--eg-control-touch) w-fit whitespace-normal"
-              [disabled]="store.history.isLoading() || !store.historyRetryReady()"
-              (click)="store.olderHistory()"
-            >
-              {{ copy.historyOlder }}
-            </button>
-          }
-        }
-        <button
-          hlmBtn
-          [variant]="'outline'"
-          type="button"
-          class="min-h-(--eg-control-touch) w-fit whitespace-normal"
-          data-history-refresh
-          [disabled]="store.history.isLoading() || !store.historyRetryReady()"
-          (click)="store.refreshHistory()"
+        <footer
+          class="flex min-w-0 flex-wrap items-center gap-(--eg-space-3) border-t border-border pt-(--eg-space-3)"
         >
-          {{ store.historyCursor() ? copy.historyLatest : copy.historyRefresh }}
-        </button>
+          @if (history()?.page; as page) {
+            @if (page.items.length) {
+              <span data-history-range class="me-auto text-sm text-muted-foreground tabular-nums">{{
+                historyRange()
+              }}</span>
+            }
+            @if (!page.items.length) {
+              <app-request-state
+                [status]="'ready'"
+                [empty]="true"
+                [emptyTitle]="copy.historyEmpty"
+              />
+            }
+            @if (page.next_cursor) {
+              <button
+                hlmBtn
+                [variant]="'outline'"
+                type="button"
+                class="min-h-(--eg-control-touch) w-fit whitespace-normal"
+                [disabled]="store.history.isLoading() || !store.historyRetryReady()"
+                (click)="store.olderHistory()"
+              >
+                {{ copy.historyOlder }}
+              </button>
+            }
+          }
+          <button
+            hlmBtn
+            [variant]="'outline'"
+            type="button"
+            class="min-h-(--eg-control-touch) w-fit whitespace-normal"
+            data-history-refresh
+            [disabled]="store.history.isLoading() || !store.historyRetryReady()"
+            (click)="store.refreshHistory()"
+          >
+            {{ store.historyCursor() ? copy.historyLatest : copy.historyRefresh }}
+          </button>
+        </footer>
       </div>
     </section>
   }

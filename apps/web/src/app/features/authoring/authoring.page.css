@@ -14,6 +14,12 @@
 .case-pane {
   min-inline-size: 0;
 }
+.case-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--eg-space-2) var(--eg-space-4);
+}
 .breadcrumb ol {
   list-style: none;
   display: flex;
@@ -88,6 +94,14 @@ button {
 @media (min-width: 1200px) {
   .panes {
     grid-template-columns: minmax(0, 0.8fr) minmax(0, 2.2fr);
+  }
+}
+@media (768px <= width < 1200px) {
+  .tree-pane {
+    max-block-size: calc(var(--eg-control-touch) * 4);
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scroll-padding-block: var(--eg-space-2);
   }
 }
 @media (max-width: 767px) {

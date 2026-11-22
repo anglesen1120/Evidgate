@@ -154,6 +154,7 @@ export class CaseListTableComponent {
       role: 'status',
       priority: 'primary',
       overflow: 'truncate',
+      width: { min: 'calc(14ch + var(--eg-space-4) * 2)', preferred: '1%' },
       cellTemplate: this.status(),
     },
     {
@@ -163,7 +164,8 @@ export class CaseListTableComponent {
       role: 'identity',
       kind: 'email',
       priority: 'secondary',
-      overflow: 'truncate',
+      overflow: 'wrap',
+      width: { min: 'calc(20ch + var(--eg-space-4) * 2)', preferred: '20%' },
       cellTemplate: this.owner(),
     },
     {
@@ -172,7 +174,8 @@ export class CaseListTableComponent {
       cell: (row) => this.display(row.labels.join(', ')) || this.recordCopy.missingValue,
       role: 'text',
       priority: 'secondary',
-      overflow: 'truncate',
+      overflow: 'wrap',
+      width: { min: 'calc(13ch + var(--eg-space-4) * 2)', preferred: '14%' },
       cellTemplate: this.labels(),
     },
     {

@@ -145,6 +145,18 @@ describe('ImportExportPage presentation and route heading contract', () => {
     expect(await harness.has('[data-import-confirm-region]')).toBe(false);
     expect(await harness.has('[data-import-confirm]')).toBe(false);
     expect(await harness.text()).toContain('No file has been selected');
+    expect(await harness.attr('header [data-choose-import-file]', 'aria-controls')).toBe(
+      'authoring-import-file',
+    );
+    expect(await harness.has('[data-import-preview]')).toBe(false);
+    const openingPicker = vi.spyOn(HTMLInputElement.prototype, 'click');
+    try {
+      await harness.click('header [data-choose-import-file]');
+      expect(openingPicker).toHaveBeenCalledOnce();
+      expect(upload).not.toHaveBeenCalled();
+    } finally {
+      openingPicker.mockRestore();
+    }
   });
 
   it('links a single horizontal tab stop to its panel and keeps Back outside the strip', async () => {
@@ -169,6 +181,7 @@ describe('ImportExportPage presentation and route heading contract', () => {
     const { harness } = await setup(file());
     const opener = '[data-import-version-view]';
     expect(await harness.textAt('[data-import-history] .caption')).toBe(IMPEX_COPY.history);
+    expect(await harness.textAt('[data-history-range]')).toBe('Showing 1–1 of 1 loaded versions');
     expect(await harness.attr(opener, 'aria-label')).toContain(
       'View version 3 of ' + history.items[0]?.entity_id,
     );
@@ -356,7 +369,7 @@ describe('ImportExportPage presentation and route heading contract', () => {
 
   it('hands removed mutation focus to the desktop-required notice when no file is selected', async () => {
     const { fixture, harness } = await setup();
-    await harness.focus('[data-import-file]');
+    await harness.focus('header [data-choose-import-file]');
     desktop.set(false);
     await settle(fixture);
     expect(await harness.has('[data-import-file]')).toBe(false);

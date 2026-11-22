@@ -111,6 +111,8 @@ import {
         [summaryId]="'onboarding-project-errors'"
         [feedback]="feedback"
       />
+      <!-- Keep requiredness native, like pattern: the feedback model owns when an untouched
+           field becomes visibly/semantically invalid, not NgModel's eager required validator. -->
       <div class="grid min-w-0 gap-(--eg-space-3)">
         <label hlmLabel for="onboarding-project-name">{{ nameLabel }}</label>
         <input
@@ -121,7 +123,7 @@ import {
           name="name"
           type="text"
           autocomplete="off"
-          required
+          [attr.required]="''"
           [attr.pattern]="nonBlankPattern"
           [(ngModel)]="name"
           (input)="dismissServerReason('name')"
@@ -144,7 +146,7 @@ import {
           autocomplete="off"
           [attr.autocapitalize]="'none'"
           spellcheck="false"
-          required
+          [attr.required]="''"
           [attr.pattern]="nonBlankPattern"
           [(ngModel)]="slug"
           (input)="dismissServerReason('slug')"

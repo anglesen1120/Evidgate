@@ -67,7 +67,6 @@ export class PendingChangeTableComponent {
   });
   private readonly state = viewChild<ChangeCell>('state');
   private readonly identity = viewChild<ChangeCell>('identity');
-  private readonly target = viewChild<ChangeCell>('target');
   private readonly actions = viewChild<ChangeCell>('actions');
   private readonly table = viewChild(DataTableComponent<AuthoringChangeListItem>);
   protected readonly footer = computed(() => {
@@ -82,16 +81,15 @@ export class PendingChangeTableComponent {
   protected readonly columns = computed<readonly DataTableColumn<AuthoringChangeListItem>[]>(() => {
     const selection = this.selection();
     const identity = this.identity(),
-      target = this.target(),
       state = this.state(),
       actions = this.actions();
-    if (!identity || !target || !state || !actions) return [];
+    if (!identity || !state || !actions) return [];
     return [
       ...(selection
         ? [
             {
               id: 'selection',
-              header: this.ui.select,
+              header: $localize`:@@authoring.pending-changes.select-column:Select`,
               cell: () => '',
               role: 'actions' as const,
               cellTemplate: selection,
@@ -105,30 +103,20 @@ export class PendingChangeTableComponent {
         role: 'identity',
         cellTemplate: identity,
       },
-      ...(selection
-        ? [
-            {
-              id: 'target',
-              header: this.copy.targetLabel,
-              cell: (row: AuthoringChangeListItem) =>
-                this.store.targetTitles()[row.target_id] ?? row.target_id,
-              cellTemplate: target,
-              role: 'text' as const,
-            },
-          ]
-        : []),
-      {
-        id: 'reason',
-        header: $localize`:@@authoring.review-context.reason:Change reason`,
-        cell: (row) => row.reason ?? this.copy.reasonUnset,
-        overflow: 'truncate',
-      },
       {
         id: 'state',
         header: this.ui.state,
         role: 'status',
         cell: (row) => this.stateLabel(row),
         cellTemplate: state,
+      },
+      {
+        id: 'reason',
+        header: $localize`:@@authoring.review-context.reason:Change reason`,
+        cell: (row) => row.reason ?? this.copy.reasonUnset,
+        role: 'text',
+        priority: 'primary',
+        overflow: 'truncate',
       },
       {
         id: 'actions',

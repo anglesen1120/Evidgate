@@ -55,8 +55,11 @@ for (const locale of LOCALES) {
     test('keyboard edit saves once with the loaded ETag and exposes immutable history', async ({
       page,
     }) => {
+      await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto(path(locale));
       await expect(page.locator('#case-title')).toBeVisible();
+      await expect(page.locator('#case-step-0-action')).toBeInViewport();
+      await expect(page.locator('#case-step-0-expected')).toBeInViewport();
       await page.locator('#case-title').fill('Updated manual case title');
       await page.locator('[data-editor-save]').focus();
       await page.keyboard.press('Enter');

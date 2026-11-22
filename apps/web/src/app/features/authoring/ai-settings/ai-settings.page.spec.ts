@@ -135,6 +135,14 @@ describe('AiSettingsPage', () => {
       );
     }
     expect(await harness.count('#ai-languages')).toBe(1);
+    expect(await harness.count('[data-guidance-counts] dt')).toBe(3);
+    expect(await harness.count('app-ai-settings-version-card .identifier.compact')).toBe(1);
+  });
+  it('labels a missing author without inventing a name or a copyable identifier', async () => {
+    data.read.mockResolvedValue({ view: { ...head, author: null }, etag: '"2"' });
+    const { harness } = await mount();
+    expect(await harness.count('app-ai-settings-version-card app-copyable-identifier')).toBe(0);
+    expect(await harness.text()).toContain('Not supplied');
   });
   it('keeps a single unavailable consent status when inspecting another settings version', async () => {
     const { harness } = await mount();

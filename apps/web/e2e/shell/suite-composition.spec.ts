@@ -108,7 +108,7 @@ for (const locale of LOCALES) {
     const surface = page.getByTestId('suite-composition');
     await expect(
       surface.locator(
-        'button, [role="button"], input, select, textarea, [contenteditable]:not([contenteditable="false"])',
+        'button:not(thead app-copyable-identifier button[aria-haspopup="dialog"], thead app-copyable-identifier app-copy-value-button button), [role="button"], input, select, textarea, [contenteditable]:not([contenteditable="false"])',
       ),
     ).toHaveCount(0);
     // The read-only notice is the one block only this revision renders, so the scan covers it.
@@ -212,8 +212,9 @@ for (const locale of LOCALES) {
     await composition(page, 'ready');
     // The screen moves focus to its own state heading, so the route's region is announced first.
     await expect(page.getByTestId('suite-composition-state')).toBeFocused();
+    await expect(page.getByTestId('suite-composition-state')).toHaveCSS('outline-style', 'none');
     await page.keyboard.press('Tab');
-    // The matrix scroll region is the only stop between the heading and the end of the route.
+    // The matrix region precedes the copy and show-full controls in its column headers.
     const region = page
       .locator('[role="region"][tabindex="0"]')
       .filter({ has: page.locator(MATRIX) });
@@ -259,7 +260,7 @@ for (const locale of LOCALES) {
       await expect(region).toHaveCSS('overflow-x', 'auto');
       await expect(
         page.locator(
-          'app-suite-composition [role="tablist"], app-suite-composition [aria-haspopup="dialog"]',
+          'app-suite-composition [role="tablist"], app-suite-composition [aria-haspopup="dialog"]:not(thead app-copyable-identifier button)',
         ),
       ).toHaveCount(0);
       expect(

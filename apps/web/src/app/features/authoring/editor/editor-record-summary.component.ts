@@ -61,16 +61,19 @@ import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-
       </aside>
     } @else {
       <dl
-        class="m-0 grid min-w-0 gap-(--eg-space-4) @min-[30rem]:grid-cols-2 @min-[55rem]:grid-cols-4 [&>div]:min-w-0 [&>div]:gap-(--eg-space-4) [&>div]:p-(--eg-space-5) [&_dt]:flex [&_dt]:items-center [&_dt]:gap-(--eg-space-3) [&_dt]:text-sm [&_dt]:font-semibold [&_dd]:m-0 [&_dd]:min-w-0 [&_app-shell-icon]:box-content [&_app-shell-icon]:rounded-(--eg-radius-md) [&_app-shell-icon]:p-(--eg-space-2)"
+        hlmCard
+        class="m-0 grid min-w-0 gap-px overflow-hidden bg-border py-0 @min-[30rem]:grid-cols-2 @min-[45rem]:grid-cols-4 [&>div]:grid [&>div]:min-w-0 [&>div]:content-start [&>div]:gap-(--eg-space-2) [&>div]:bg-card [&>div]:p-(--eg-space-4) [&_dt]:flex [&_dt]:items-center [&_dt]:gap-(--eg-space-3) [&_dt]:text-sm [&_dt]:font-semibold [&_dd]:m-0 [&_dd]:min-w-0 [&_app-shell-icon]:box-content [&_app-shell-icon]:rounded-(--eg-radius-md) [&_app-shell-icon]:p-(--eg-space-2)"
       >
-        <div hlmCard>
+        <div>
           <dt>
             <app-shell-icon [name]="'book'" class="bg-(--eg-info-bg) text-(--eg-info-fg)" />
             <span i18n="@@authoring.editor.manual-case">Manual case</span>
           </dt>
-          <dd><app-copyable-identifier [value]="view().code" [label]="codeLabel" /></dd>
+          <dd>
+            <app-copyable-identifier [value]="view().code" [label]="codeLabel" [compact]="true" />
+          </dd>
         </div>
-        <div hlmCard>
+        <div>
           <dt>
             <app-shell-icon [name]="'layers'" class="bg-(--eg-accent-soft) text-primary" />
             <span i18n="@@authoring.editor.revision">Revision</span>
@@ -85,7 +88,7 @@ import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-
             Only approved revisions are used for runs and generated scripts.
           </dd>
         </div>
-        <div hlmCard>
+        <div>
           <dt>
             <app-shell-icon [name]="'list'" class="bg-(--eg-neutral-bg) text-(--eg-neutral-fg)" />
             <span i18n="@@authoring.editor.authoring-status">Authoring status</span>
@@ -101,7 +104,7 @@ import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-
             Not an execution result
           </dd>
         </div>
-        <div hlmCard>
+        <div>
           <dt>
             <app-shell-icon [name]="'tree'" class="bg-(--eg-accent-soft) text-primary" />
             {{ parentLabel }}

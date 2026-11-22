@@ -329,6 +329,7 @@ for (const locale of LOCALES) {
     await expect(page.locator('[data-selection-summary]')).toContainText(/1.*2/);
     await expect(page.locator('[data-export-selection]')).toHaveAttribute('aria-disabled', 'true');
     await expect(page.locator('#authoring-export-help')).toBeVisible();
+    await page.locator('[data-case-filter-help] summary').click();
     await expect(page.locator('#authoring-case-source')).toBeDisabled();
     await expect(page.locator('#authoring-case-owner')).toBeDisabled();
     await expect(page.locator('#authoring-source-help')).toBeVisible();
@@ -379,7 +380,7 @@ for (const locale of LOCALES) {
   });
 
   for (const theme of THEMES)
-    for (const width of [360, 1280]) {
+    for (const width of [360, 900, 1280, 1440]) {
       test(`case table long titles reflow with keyboard inspection and axe (${locale}, ${theme}, ${width})`, async ({
         page,
       }) => {
@@ -388,6 +389,13 @@ for (const locale of LOCALES) {
         await page.goto(base);
         await expect(page.locator(CASE_ROWS)).toContainText('Tuỳ chọn giao hàng');
         await expect(page.locator(CASE_ROWS)).toContainText('018f0000-0000-7000-8000-000000000777');
+        if (width === 1440) {
+          await expect(page.locator(`${CASE_ROWS} [data-row-id]`).first()).toBeInViewport();
+        }
+        if (width === 900) {
+          const treeScroll = page.locator('[aria-labelledby="authoring-hierarchy-title"]');
+          expect(await treeScroll.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+        }
         await expect(page.locator('#authoring-case-pending-help')).toBeVisible();
         if (width < 768) {
           await expect(page.locator('[data-case-select]')).toHaveCount(0);

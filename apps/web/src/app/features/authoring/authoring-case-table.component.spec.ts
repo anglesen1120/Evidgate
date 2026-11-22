@@ -30,6 +30,8 @@ class TableHarness extends ComponentHarness {
   readonly itemError = this.locatorFor('#authoring-case-item-error');
   readonly searchError = this.locatorFor('#authoring-case-search-error');
   readonly apply = this.locatorFor('[data-case-apply]');
+  readonly filterHelp = this.locatorFor('[data-case-filter-help]');
+  readonly toggleHelp = this.locatorFor('[data-case-filter-help] summary');
   readonly source = this.locatorFor('#authoring-case-source');
   readonly owner = this.locatorFor('#authoring-case-owner');
   readonly loadMore = this.locatorFor('[data-case-load-more]');
@@ -191,6 +193,9 @@ describe('AuthoringCaseTableComponent', () => {
 
   it('disables unsupported source and owner controls with persistent announced reasons', async () => {
     const harness = await mount();
+    expect(await (await harness.filterHelp()).getProperty<boolean>('open')).toBe(false);
+    await (await harness.toggleHelp()).click();
+    expect(await (await harness.filterHelp()).getProperty<boolean>('open')).toBe(true);
     expect(await (await harness.source()).getAttribute('disabled')).not.toBeNull();
     expect(await (await harness.owner()).getAttribute('disabled')).not.toBeNull();
     expect(await (await harness.source()).getAttribute('aria-describedby')).toBe(

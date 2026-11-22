@@ -259,7 +259,11 @@
                   <th hlmTh scope="col">{{ copy.caseRevision }}</th>
                   @for (column of view.columns; track column.variantHash) {
                     <th hlmTh scope="col">
-                      <bdi class="identifier">{{ column.variantHash }}</bdi>
+                      <app-copyable-identifier
+                        [value]="column.variantHash"
+                        [label]="copy.variantHash"
+                        [compact]="true"
+                      />
                       @if (column.params.length === 0) {
                         <p>{{ copy.noParameters }}</p>
                       } @else {

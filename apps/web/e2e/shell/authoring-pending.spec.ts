@@ -53,7 +53,7 @@ async function selectSupported(page: Page): Promise<void> {
 }
 for (const locale of LOCALES) {
   for (const theme of THEMES) {
-    for (const width of [360, 900, 1280]) {
+    for (const width of [360, 900, 1280, 1440]) {
       test(`pending queue is readable and confirm-only (${locale}, ${theme}, ${width})`, async ({
         page,
       }) => {
@@ -65,6 +65,16 @@ for (const locale of LOCALES) {
         const beforeIds = await queuedIds(page);
         expect(beforeIds).toEqual([COMMENT, DELETE, MERGE, SPLIT]);
         expect(await calls(page)).toEqual([]);
+        if (width >= 900) {
+          const rows = page.locator('app-pending-change-table tr[data-row-id]');
+          await expect(rows).toHaveCount(4);
+          const heights = await rows.evaluateAll((items) =>
+            items.map((row) => row.getBoundingClientRect().height),
+          );
+          expect(heights.every((height) => height >= 56 && height <= 64)).toBe(true);
+          await expect(rows.first().locator('[data-pending-preview]')).toBeInViewport({ ratio: 1 });
+          if (width === 1440) await expect(rows.last()).toBeInViewport({ ratio: 1 });
+        }
         const preview = page.locator('[data-pending-preview]').first();
         await keyboardTo(page, preview);
         await page.keyboard.press('Enter');

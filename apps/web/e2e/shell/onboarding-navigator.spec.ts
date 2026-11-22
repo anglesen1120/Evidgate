@@ -35,6 +35,7 @@ async function expectNavigatorGeometry(page: Page, width: number): Promise<void>
     if (!card || !body) throw new Error('Missing onboarding regions');
     return {
       cardWidth: card.getBoundingClientRect().width,
+      progressAndStepperHeight: body.getBoundingClientRect().top - card.getBoundingClientRect().top,
       bodyWidth: body.getBoundingClientRect().width,
       localOverflow: getComputedStyle(list).overflowX,
       scrollWidth: list.scrollWidth,
@@ -68,6 +69,7 @@ async function expectNavigatorGeometry(page: Page, width: number): Promise<void>
   expect(layout.localOverflow).toBe('auto');
   if (width <= 900) expect(layout.scrollWidth).toBeGreaterThan(layout.clientWidth);
   expect(Math.abs(layout.cardWidth - layout.bodyWidth)).toBeLessThanOrEqual(1);
+  if (width === 1440) expect(layout.progressAndStepperHeight).toBeLessThanOrEqual(180);
   const first = layout.steps[0];
   if (!first) throw new Error('Empty step navigator');
   for (const step of layout.steps) {

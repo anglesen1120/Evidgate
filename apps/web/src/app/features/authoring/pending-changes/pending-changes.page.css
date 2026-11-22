@@ -1,13 +1,12 @@
 :host {
   display: grid;
   min-inline-size: 0;
-  gap: var(--eg-space-7);
+  gap: var(--eg-space-5);
   container-type: inline-size;
   color: var(--eg-text);
 }
 app-request-state,
 .review-workspace,
-.scope-strip,
 .scope-counts {
   display: grid;
   min-inline-size: 0;
@@ -28,13 +27,19 @@ app-request-state,
 }
 .scope-counts {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
-  gap: var(--eg-space-4);
+  gap: var(--eg-border-width);
+  overflow: hidden;
+  padding: 0;
+  background: var(--eg-border);
   margin: 0;
 }
 .scope-counts > div {
+  display: grid;
+  align-content: start;
   min-inline-size: 0;
-  gap: var(--eg-space-3);
-  padding: var(--eg-space-5);
+  gap: var(--eg-space-2);
+  padding: var(--eg-space-4) var(--eg-space-5);
+  background: var(--eg-surface);
 }
 .scope-counts dt {
   display: flex;
@@ -44,9 +49,9 @@ app-request-state,
   font-weight: var(--eg-weight-semibold);
 }
 .scope-counts hlm-icon {
-  inline-size: var(--eg-control-sm);
-  block-size: var(--eg-control-sm);
-  padding: var(--eg-space-3);
+  inline-size: var(--eg-space-7);
+  block-size: var(--eg-space-7);
+  padding: var(--eg-space-2);
   border-radius: var(--eg-radius-sm);
   color: var(--eg-pending-fg);
   background: var(--eg-pending-bg);
@@ -65,11 +70,6 @@ app-request-state,
   font: var(--eg-weight-regular) var(--eg-text-xs) / var(--eg-leading-xs) var(--eg-font-body);
   color: var(--eg-text-muted);
 }
-@media (min-width: 1280px) {
-  .review-workspace {
-    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-  }
-}
 .region {
   display: grid;
   min-inline-size: 0;
@@ -81,6 +81,16 @@ app-request-state,
 .region > app-section-header {
   padding-block-end: var(--eg-space-4);
   border-block-end: var(--eg-border-width) solid var(--eg-border);
+}
+.region.queue-panel {
+  padding: 0;
+  gap: 0;
+}
+.queue-panel > app-section-header {
+  padding: var(--eg-space-4) var(--eg-space-5);
+}
+.queue-panel > button {
+  margin: var(--eg-space-3) var(--eg-space-4);
 }
 .preview-note {
   padding: var(--eg-space-4);

@@ -1,9 +1,10 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal, viewChild } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
 import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { HlmTabsImports } from '@evidgate/ui/tabs';
 import { SessionStore } from '../../../core/session/session.store';
+import { DesktopMutationDirective } from '../../../shared/ui/narrow/desktop-mutation.directive';
 import { PageHeaderComponent } from '../../../shared/ui/page-header/page-header.component';
 import { SectionHeaderComponent } from '../../../shared/ui/page-header/section-header.component';
 import { InlineFeedbackComponent } from '../../../shared/ui/states/inline-feedback.component';
@@ -20,6 +21,7 @@ import { AUTHORING_READ, IMPEX_COPY } from './import-export.copy';
   imports: [
     RouterLink,
     ShellIconComponent,
+    DesktopMutationDirective,
     HlmButton,
     HlmTabsImports,
     PageHeaderComponent,
@@ -38,44 +40,70 @@ import { AUTHORING_READ, IMPEX_COPY } from './import-export.copy';
         >
           <app-shell-icon [name]="'folder'" class="size-(--eg-space-6)" />
         </span>
-        @if (ownsPageHeading) {
-          <app-page-header class="min-w-0" [title]="copy.title" [description]="copy.description" />
-        } @else {
-          <app-section-header
-            class="min-w-0"
-            [title]="copy.title"
-            [description]="copy.description"
-          />
+        <div class="grid min-w-0 gap-(--eg-space-1)">
+          @if (ownsPageHeading) {
+            <app-page-header
+              class="min-w-0"
+              [title]="copy.title"
+              [description]="copy.description"
+            />
+          } @else {
+            <app-section-header
+              class="min-w-0"
+              [title]="copy.title"
+              [description]="copy.description"
+            />
+          }
+          @if (session.currentProject(); as project) {
+            <dl
+              class="m-0 flex min-w-0 flex-wrap items-baseline gap-x-(--eg-space-2) text-xs text-muted-foreground"
+              [attr.aria-label]="copy.context"
+            >
+              <div class="flex flex-wrap items-baseline gap-x-(--eg-space-3)">
+                <dt class="sr-only">{{ copy.project }}</dt>
+                <dd class="m-0 font-medium wrap-anywhere">
+                  <bdi>{{ project.name }}</bdi>
+                </dd>
+              </div>
+              <div class="flex flex-wrap items-baseline gap-x-(--eg-space-3)">
+                <dt>
+                  <span aria-hidden="true">·</span><span class="sr-only">{{ copy.prefix }}</span>
+                </dt>
+                <dd class="m-0 font-mono wrap-anywhere" data-import-prefix>
+                  <bdi>{{ project.case_prefix }}</bdi>
+                </dd>
+              </div>
+            </dl>
+          }
+        </div>
+      </div>
+      <div class="flex min-w-0 flex-wrap items-center gap-(--eg-space-2)">
+        <a
+          hlmBtn
+          [variant]="'outline'"
+          [routerLink]="['../']"
+          class="min-h-(--eg-control-touch) w-fit whitespace-normal"
+          >{{ copy.back }}</a
+        >
+        @if (tab() === 'import' && session.has(readPermission) && imports.canWrite()) {
+          <button
+            *appDesktopMutation
+            hlmBtn
+            type="button"
+            data-import-mutation
+            data-choose-import-file
+            [variant]="imports.work().file ? 'outline' : 'default'"
+            [attr.aria-controls]="'authoring-import-file'"
+            class="min-h-(--eg-control-touch) whitespace-normal"
+            [disabled]="imports.work().pending"
+            (focusin)="panel()?.rememberFocus($event)"
+            (click)="panel()?.chooseFile()"
+            i18n="@@authoring.import-export.choose-file"
+          >
+            Choose file
+          </button>
         }
       </div>
-      @if (session.currentProject(); as project) {
-        <dl
-          class="m-0 flex w-full min-w-0 flex-wrap items-baseline gap-x-(--eg-space-2) text-sm md:w-auto md:max-w-1/3"
-          [attr.aria-label]="copy.context"
-        >
-          <div class="flex flex-wrap items-baseline gap-x-(--eg-space-3)">
-            <dt class="sr-only">{{ copy.project }}</dt>
-            <dd class="m-0 font-medium wrap-anywhere">
-              <bdi>{{ project.name }}</bdi>
-            </dd>
-          </div>
-          <div class="flex flex-wrap items-baseline gap-x-(--eg-space-3)">
-            <dt>
-              <span aria-hidden="true">·</span><span class="sr-only">{{ copy.prefix }}</span>
-            </dt>
-            <dd class="m-0 font-mono wrap-anywhere" data-import-prefix>
-              <bdi>{{ project.case_prefix }}</bdi>
-            </dd>
-          </div>
-        </dl>
-      }
-      <a
-        hlmBtn
-        [variant]="'outline'"
-        [routerLink]="['../']"
-        class="min-h-(--eg-control-touch) w-fit whitespace-normal"
-        >{{ copy.back }}</a
-      >
     </header>
     @if (session.has(readPermission)) {
       <div
@@ -130,8 +158,10 @@ import { AUTHORING_READ, IMPEX_COPY } from './import-export.copy';
 })
 export class ImportExportPage {
   protected readonly session = inject(SessionStore);
+  protected readonly imports = inject(ImportStore);
   protected readonly ownsPageHeading =
     inject(ActivatedRoute).snapshot.data['pageHeadingLevel'] === 1;
+  protected readonly panel = viewChild(ImportPanelComponent);
   protected readonly readPermission = AUTHORING_READ;
   protected readonly copy = IMPEX_COPY;
   protected readonly tab = signal('import');

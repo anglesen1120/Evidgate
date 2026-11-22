@@ -89,6 +89,7 @@ export class ImportPanelComponent {
     }
   });
   private readonly previewRows = viewChild(ImportPreviewComponent);
+  private readonly filePicker = viewChild<ElementRef<HTMLInputElement>>('filePicker');
   private readonly snapshot = viewChild<ElementRef<HTMLElement>>('snapshot');
   private readonly desktopNotice = viewChild(DesktopRequiredNoticeComponent, { read: ElementRef });
   private focused: HTMLElement | null = null;
@@ -104,6 +105,10 @@ export class ImportPanelComponent {
   protected readonly history = computed(() =>
     this.store.history.hasValue() ? this.store.history.value() : null,
   );
+  protected readonly historyRange = computed(() => {
+    const count = this.history()?.page?.items.length ?? 0;
+    return $localize`:@@authoring.import-export.showing-range:Showing 1–${count}:end: of ${count}:loaded: loaded versions`;
+  });
   protected readonly report = computed(
     () => this.store.work().committed ?? this.store.work().report,
   );
@@ -121,10 +126,16 @@ export class ImportPanelComponent {
     });
   }
 
-  protected rememberFocus(event: FocusEvent): void {
+  rememberFocus(event: FocusEvent): void {
     const target = event.target;
     this.focused =
       target instanceof HTMLElement && target.closest('[data-import-mutation]') ? target : null;
+  }
+
+  chooseFile(): void {
+    if (this.store.canWrite() && this.policy.allowsMutation() && !this.store.work().pending) {
+      this.filePicker()?.nativeElement.click();
+    }
   }
 
   protected readonly formatLabel = (format: string): string => format.toUpperCase();

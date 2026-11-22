@@ -23,13 +23,6 @@ ul.indented {
 .hierarchy {
   margin-block-end: var(--eg-space-4);
 }
-@media (768px <= width < 1200px) {
-  .hierarchy {
-    max-block-size: calc(var(--eg-control-touch) * 4);
-    overflow-y: auto;
-    padding: var(--eg-space-1);
-  }
-}
 .node-row {
   padding: var(--eg-space-2);
   min-inline-size: 0;

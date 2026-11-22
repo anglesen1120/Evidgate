@@ -34,7 +34,7 @@
         [value]="row.annotation_id"
         [label]="copy.stableId"
         [truncate]="!stacked"
-        [compact]="virtualRows()"
+        [compact]="!stacked"
         [copySize]="'lg'"
       />
       <app-copyable-identifier
@@ -42,7 +42,7 @@
         [value]="row.id"
         [label]="copy.id"
         [truncate]="!stacked"
-        [compact]="virtualRows()"
+        [compact]="!stacked"
         [copySize]="'lg'"
       />
     </div>
@@ -70,7 +70,8 @@
   >
     <app-data-table-value
       [value]="memberLabel(row.owner_membership_id)"
-      [truncate]="!stacked"
+      [class]="!stacked && !virtualRows() ? '[&_.value]:line-clamp-2' : ''"
+      [truncate]="virtualRows()"
       [fixedRow]="virtualRows()"
     />
     @if (row.owner_membership_id && !members().has(row.owner_membership_id)) {
@@ -111,12 +112,15 @@
 </ng-template>
 <ng-template #labels let-value="value" let-stacked="stacked"
   ><bdi
-    ><app-data-table-value [value]="value" [truncate]="!stacked" [fixedRow]="virtualRows()" /></bdi
+    ><app-data-table-value
+      [value]="value"
+      [class]="!stacked && !virtualRows() ? '[&_.value]:line-clamp-2' : ''"
+      [truncate]="virtualRows()"
+      [fixedRow]="virtualRows()" /></bdi
 ></ng-template>
 <ng-template #actions let-row>
   <div
-    class="flex min-w-0 items-center justify-end gap-(--eg-space-2)"
-    [class.flex-wrap]="!virtualRows()"
+    class="ms-auto flex w-max flex-nowrap items-center justify-end gap-(--eg-space-2) [&_button]:min-w-max [&_button]:shrink-0 [&_button]:whitespace-nowrap"
   >
     <button
       #view

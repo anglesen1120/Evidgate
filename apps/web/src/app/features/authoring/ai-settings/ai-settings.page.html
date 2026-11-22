@@ -1,4 +1,4 @@
-<div class="grid min-w-0 gap-(--eg-space-6)">
+<div class="grid min-w-0 gap-(--eg-space-4)">
   <div class="flex min-w-0 flex-wrap items-start gap-(--eg-space-4)">
     <span
       aria-hidden="true"
@@ -27,7 +27,7 @@
       </div>
     }
   </div>
-  <app-desktop-required-notice />
+  <app-desktop-required-notice class="empty:hidden" />
   @if (!store.scope()) {
     <app-forbidden-pattern />
   } @else {
@@ -49,60 +49,72 @@
             (retry)="store.head.reload()"
           />
         }
-        <dl
-          class="m-0 grid min-w-0 gap-px overflow-hidden rounded-(--eg-radius-md) border border-border bg-border sm:grid-flow-col sm:auto-cols-fr [&>div]:grid [&>div]:min-w-0 [&>div]:gap-(--eg-space-2) [&>div]:bg-card [&>div]:p-(--eg-space-4) [&_dt]:text-sm [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:text-2xl [&_dd]:font-semibold [&_dd]:tabular-nums"
-        >
-          <div>
-            <dt i18n="@@authoring.ai-settings.configured-languages">Configured output languages</dt>
-            <dd>{{ base.view.settings.languages.length }}</dd>
-          </div>
-          @if (store.templatePage(); as templates) {
-            <div>
-              <dt i18n="@@authoring.ai-settings.loaded-templates">Loaded templates</dt>
-              <dd>{{ templates.items.length }}</dd>
-            </div>
-          }
-          @if (store.historyPage(); as history) {
-            <div>
-              <dt i18n="@@authoring.ai-settings.versions-on-page">Versions on this page</dt>
-              <dd>{{ history.items.length }}</dd>
-            </div>
-          }
-        </dl>
         <hlm-tabs [tab]="tab()" (tabActivated)="tab.set($event)" class="block min-w-0">
-          <div
-            hlmTabsList
-            [variant]="'line'"
-            aria-label="AI guidance panels"
-            i18n-aria-label="@@authoring.ai-settings.panels"
-            class="h-auto w-fit min-w-0 max-w-full flex-nowrap justify-start overflow-x-auto overscroll-x-contain p-(--eg-space-2) [&>button]:flex-none [&>button]:whitespace-nowrap"
-          >
-            <button [hlmTabsTrigger]="'settings'" i18n="@@authoring.ai-settings.settings-tab">
-              Settings
-            </button>
-            <button
-              [hlmTabsTrigger]="'history'"
-              data-ai-history-tab
-              i18n="@@authoring.ai-settings.history-tab"
+          <div class="flex min-w-0 flex-wrap items-center justify-between gap-(--eg-space-2)">
+            <div
+              hlmTabsList
+              [variant]="'line'"
+              aria-label="AI guidance panels"
+              i18n-aria-label="@@authoring.ai-settings.panels"
+              class="h-auto w-fit min-w-0 max-w-full flex-nowrap justify-start overflow-x-auto overscroll-x-contain p-(--eg-space-2) [&>button]:flex-none [&>button]:whitespace-nowrap"
             >
-              Version history
-            </button>
+              <button [hlmTabsTrigger]="'settings'" i18n="@@authoring.ai-settings.settings-tab">
+                Settings
+              </button>
+              <button
+                [hlmTabsTrigger]="'history'"
+                data-ai-history-tab
+                i18n="@@authoring.ai-settings.history-tab"
+              >
+                Version history
+              </button>
+            </div>
+            <dl
+              data-guidance-counts
+              class="m-0 flex min-w-0 flex-wrap items-baseline gap-y-(--eg-space-1) text-xs [&>div]:flex [&>div]:items-baseline [&>div]:gap-(--eg-space-2) [&>div]:px-(--eg-space-3) [&>div+div]:border-s [&>div+div]:border-border [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:font-semibold [&_dd]:tabular-nums"
+            >
+              <div>
+                <dt i18n="@@authoring.ai-settings.configured-languages">
+                  Configured output languages
+                </dt>
+                <dd>{{ base.view.settings.languages.length }}</dd>
+              </div>
+              @if (store.templatePage(); as templates) {
+                <div>
+                  <dt i18n="@@authoring.ai-settings.loaded-templates">Loaded templates</dt>
+                  <dd>{{ templates.items.length }}</dd>
+                </div>
+              }
+              @if (store.historyPage(); as history) {
+                <div>
+                  <dt i18n="@@authoring.ai-settings.versions-on-page">Versions on this page</dt>
+                  <dd>{{ history.items.length }}</dd>
+                </div>
+              }
+            </dl>
           </div>
           <div
-            class="mt-(--eg-space-5) grid min-w-0 items-start gap-(--eg-space-5) min-[1051px]:grid-cols-[minmax(0,1.8fr)_minmax(0,.85fr)]"
+            class="mt-(--eg-space-3) grid min-w-0 items-start gap-(--eg-space-4) min-[1051px]:grid-cols-[minmax(0,1.8fr)_minmax(0,.85fr)]"
           >
             <div class="min-w-0" [class.col-span-full]="tab() === 'history'">
               <div [hlmTabsContent]="'settings'" class="min-w-0 space-y-(--eg-space-5)">
                 @if (viewport.canMutate()) {
                   <form
-                    class="grid min-w-0 gap-(--eg-space-5)"
+                    class="grid min-w-0 gap-(--eg-space-4)"
                     (ngSubmit)="save()"
                     [attr.aria-busy]="store.saving()"
                   >
-                    <app-form-error-summary [summaryId]="'ai-errors'" [feedback]="feedback" />
+                    <app-form-error-summary
+                      class="empty:hidden"
+                      [summaryId]="'ai-errors'"
+                      [feedback]="feedback"
+                    />
                     @for (group of sections; track group.key) {
                       <article hlmCard [attr.aria-labelledby]="'ai-group-' + group.key">
-                        <header hlmCardHeader class="border-b border-border">
+                        <header
+                          hlmCardHeader
+                          class="gap-(--eg-space-1) border-b border-border py-(--eg-space-3)"
+                        >
                           <h2 hlmCardTitle [size]="'subsection'" [id]="'ai-group-' + group.key">
                             {{ group.title }}
                           </h2>
@@ -117,23 +129,23 @@
                             </p>
                           }
                         </header>
-                        <div hlmCardContent class="grid gap-(--eg-space-5)">
+                        <div hlmCardContent class="grid gap-(--eg-space-3) py-(--eg-space-3)">
                           <div
-                            class="grid min-w-0 items-start gap-(--eg-space-5)"
+                            class="grid min-w-0 items-start gap-(--eg-space-3)"
                             [class.md:grid-cols-2]="
                               group.key === 'guidance' || group.key === 'priority'
                             "
                           >
                             @for (field of group.fields; track field.key) {
                               @let entry = feedback.fields[field.index];
-                              <div class="grid min-w-0 gap-(--eg-space-2)">
+                              <div class="grid min-w-0 gap-(--eg-space-1)">
                                 <label hlmLabel [for]="'ai-' + field.key">{{ field.label }}</label>
                                 <textarea
                                   hlmInput
                                   [rows]="
                                     field.key === 'environment_url' || field.key === 'reason'
                                       ? 1
-                                      : 3
+                                      : 2
                                   "
                                   class="h-auto w-full min-w-0 resize-y"
                                   [id]="'ai-' + field.key"
@@ -179,7 +191,7 @@
                               <div class="flex flex-wrap gap-x-(--eg-space-5) gap-y-(--eg-space-3)">
                                 @for (locale of languages; track locale) {
                                   <label
-                                    class="flex min-h-[var(--eg-control-touch)] items-center gap-3"
+                                    class="flex min-h-(--eg-control-sm) items-center gap-(--eg-space-2) pointer-coarse:min-h-(--eg-control-touch)"
                                     [for]="'ai-language-' + locale"
                                   >
                                     <hlm-checkbox
