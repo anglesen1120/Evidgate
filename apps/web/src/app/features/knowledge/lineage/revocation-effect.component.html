@@ -1,5 +1,5 @@
 <section hlmCard [size]="'sm'">
-  <header hlmCardHeader>
+  <header hlmCardHeader class="border-b border-border pb-4">
     <h2 hlmCardTitle>{{ c.effect }}</h2>
   </header>
   <div hlmCardContent class="grid min-w-0 gap-3">
@@ -41,6 +41,7 @@
       <app-desktop-required-notice />
       @if (policy.canMutate()) {
         <button hlmBtn type="button" data-revoke class="justify-self-start" (click)="store.open()">
+          <hlm-icon name="lucideOctagonX" class="size-4" />
           {{ c.revoke }}
         </button>
         <hlm-dialog
@@ -55,11 +56,18 @@
           <hlm-dialog-content
             *hlmDialogPortal
             [showCloseButton]="false"
-            class="max-h-[85dvh] overflow-y-auto wrap-anywhere"
+            class="max-h-[85dvh] overflow-y-auto wrap-anywhere sm:max-w-[35rem]"
           >
             <header hlmDialogHeader>
-              <h2 hlmDialogTitle>{{ c.revoke }}</h2>
-              <p hlmDialogDescription>{{ c.consequences }}</p>
+              <h2 hlmDialogTitle class="flex items-center gap-2">
+                <hlm-icon name="lucideOctagonX" class="size-5 text-(--eg-danger-fg)" />{{
+                  c.revoke
+                }}
+              </h2>
+              <p hlmDialogDescription>
+                {{ record.revision }} · {{ record.candidate }} · {{ record.hash }}
+              </p>
+              <p class="text-sm text-muted-foreground">{{ c.consequences }}</p>
             </header>
             <dl class="grid gap-2 sm:grid-cols-2">
               <div>
@@ -74,10 +82,10 @@
                   <code>{{ record.chain }}</code>
                 </dd>
               </div>
-              <div>
+              <div class="col-span-full">
                 <dt>{{ c.hash }}</dt>
                 <dd>
-                  <code>{{ record.fullHash }}</code>
+                  <code class="select-all">{{ record.fullHash }}</code>
                 </dd>
               </div>
               <div>
@@ -109,7 +117,7 @@
             @if (blank()) {
               <p role="alert" id="lineage-error">{{ c.blank }}</p>
             }
-            <footer hlmDialogFooter>
+            <footer hlmDialogFooter class="sticky bottom-0 border-t border-border bg-card py-3">
               <button
                 hlmBtn
                 [variant]="'outline'"

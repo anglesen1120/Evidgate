@@ -1,33 +1,44 @@
 <div class="queue-page">
-  <app-page-header [title]="c.title" [description]="c.subtitle">
-    @if (populated()) {
-      <div appPageHeaderActions class="actions">
-        <button hlmBtn type="button" [variant]="'outline'" (click)="store.open('switch')">
-          {{ c.switch }}
-        </button>
-        <button hlmBtn type="button" [variant]="'outline'" (click)="store.open('rules')">
-          {{ c.rules }}
-        </button>
-        <button
-          hlmBtn
-          type="button"
-          data-review-selected
-          [disabled]="!checked().length"
-          (click)="store.open('bulk')"
-        >
-          <hlm-icon name="lucideCheck" />{{ c.bulk }} ({{ checked().length }})
-        </button>
-        @if (!checked().length) {
-          <small>{{ c.unselected }}</small>
-        }
-      </div>
-    }
-  </app-page-header>
+  <header class="flex min-w-0 items-start gap-3">
+    <span
+      class="grid size-11 shrink-0 place-items-center rounded-md bg-(--eg-accent-soft) text-(--eg-accent-fg)"
+    >
+      <hlm-icon name="lucideActivity" />
+    </span>
+    <app-page-header
+      class="min-w-0 flex-1 [--eg-text-2xl:var(--eg-space-7)]"
+      [title]="c.title"
+      [description]="
+        populated() ? context.project + ' · ' + c.waiting + ': ' + totals().all : c.subtitle
+      "
+    >
+      @if (populated()) {
+        <div appPageHeaderActions class="actions">
+          <button hlmBtn type="button" [variant]="'outline'" (click)="store.open('switch')">
+            <hlm-icon name="lucideInfo" />
+            {{ c.switch }}
+          </button>
+          <button hlmBtn type="button" [variant]="'outline'" (click)="store.open('rules')">
+            <hlm-icon name="lucideCircleCheck" />
+            {{ c.rules }}
+          </button>
+          <button
+            hlmBtn
+            type="button"
+            data-review-selected
+            [disabled]="!checked().length"
+            (click)="store.open('bulk')"
+          >
+            <hlm-icon name="lucideCheck" />{{ c.bulk }} ({{ checked().length }})
+          </button>
+          @if (!checked().length) {
+            <small>{{ c.unselected }}</small>
+          }
+        </div>
+      }
+    </app-page-header>
+  </header>
   @if (populated()) {
-    <div class="meta">
-      <p>{{ c.asOf }} <app-absolute-time [value]="instant()" /></p>
-      <p class="identity">{{ context.project }}</p>
-    </div>
     @if (state() === 'over-sla') {
       <p role="status">{{ c.dated }}</p>
     }
@@ -37,12 +48,16 @@
     <div class="kpis">
       <section hlmCard class="metric">
         <h2><hlm-icon name="lucideClock" />{{ c.waiting }}</h2>
-        <strong>{{ totals().all }}</strong
-        ><small>{{ c.readyCount }}: {{ eligible().length }}</small>
+        <strong>{{ totals().all }}</strong>
+        <small>{{ c.median }}: {{ c.noDecisions }}</small>
       </section>
       <section hlmCard class="metric">
-        <h2><hlm-icon name="lucideClock" />{{ c.median }}</h2>
-        <strong>—</strong><small>{{ c.noDecisions }}</small>
+        <h2><hlm-icon name="lucideCircleCheck" />{{ c.readyCount }}</h2>
+        <strong>{{ eligible().length }}</strong>
+        <small>{{ c.validated }} · {{ c.sandbox }}</small>
+        @if (totals().all) {
+          <meter aria-hidden="true" [value]="eligible().length" [max]="totals().all"></meter>
+        }
       </section>
       <section hlmCard class="metric">
         <h2><hlm-icon name="lucideActivity" />{{ c.rate }}</h2>
@@ -50,6 +65,9 @@
           totals().samples ? (totals().passed / totals().samples | percent) : c.noRate
         }}</strong
         ><small>{{ c.observed }}: {{ totals().passed }}/{{ totals().samples }}</small>
+        @if (totals().samples) {
+          <meter aria-hidden="true" [value]="totals().passed" [max]="totals().samples"></meter>
+        }
       </section>
       <section hlmCard class="metric">
         <h2><hlm-icon name="lucideClock" />{{ c.sla }}</h2>
@@ -74,40 +92,43 @@
               {{ store.oldest() ? c.old : c.new }} <hlm-icon name="lucideChevronDown" />
             </button>
           </div>
-          <div class="actions" role="group" [attr.aria-label]="c.filter">
-            @for (filter of filters; track filter) {
-              <button
-                hlmBtn
-                type="button"
-                [size]="'sm'"
-                data-filter
-                [variant]="filter === store.filter() ? 'secondary' : 'outline'"
-                [attr.aria-pressed]="filter === store.filter()"
-                (click)="store.setFilter(filter)"
-              >
-                {{ c[filter] }} {{ totals()[filter] }}
-              </button>
-            }
+          <div class="queue-toolbar">
+            <div class="filter-strip" role="group" [attr.aria-label]="c.filter">
+              @for (filter of filters; track filter) {
+                <button
+                  hlmBtn
+                  type="button"
+                  [size]="'sm'"
+                  data-filter
+                  [variant]="filter === store.filter() ? 'secondary' : 'outline'"
+                  [attr.aria-pressed]="filter === store.filter()"
+                  (click)="store.setFilter(filter)"
+                >
+                  {{ c[filter] }} <span class="tabular-nums">{{ totals()[filter] }}</span>
+                </button>
+              }
+            </div>
+            <div class="grid min-w-0 gap-1">
+              <label hlmLabel for="queue-find">{{ c.search }}</label>
+              <input
+                hlmInput
+                #find
+                id="queue-find"
+                type="search"
+                [value]="store.search()"
+                (input)="store.find(find.value)"
+              />
+            </div>
           </div>
         </header>
-        <div class="section divider">
-          <label hlmLabel for="queue-find">{{ c.search }}</label
-          ><input
-            hlmInput
-            #find
-            id="queue-find"
-            type="search"
-            [value]="store.search()"
-            (input)="store.find(find.value)"
-          />
-        </div>
         <app-data-table
+          class="[&_.caption]:sr-only [&_th.cdk-column-select]:whitespace-nowrap"
           [rows]="visible()"
           [rowId]="rowId"
           [columns]="columns()"
           [caption]="c.queue"
           [fitToContainer]="true"
-          flow="page"
+          [flow]="'page'"
         />
         @if (!visible().length) {
           <app-empty-pattern
@@ -118,6 +139,13 @@
             (action)="store.clearFilters()"
           />
         }
+        <footer class="queue-footer">
+          <span role="status"
+            >{{ showing(visible().length, totals().all) }} ·
+            {{ store.oldest() ? c.old : c.new }}</span
+          >
+          <span>{{ c.asOf }} <app-absolute-time [value]="instant()" /></span>
+        </footer>
       </section>
       @if (visibleDetail(); as row) {
         <app-queue-detail
@@ -233,7 +261,7 @@
         @if (kind === 'bulk') {
           <ul>
             @for (row of checked(); track row.id) {
-              <li class="identity">{{ row.id }} · {{ row.hash }}</li>
+              <li class="identity border-b border-border py-2">{{ row.id }} · {{ row.hash }}</li>
             }
           </ul>
         }
@@ -249,7 +277,7 @@
               [disabled]="!checked().length"
               (click)="confirm()"
             >
-              {{ c.confirm }}
+              {{ c.confirm }} ({{ checked().length }})
             </button>
           }
         </footer>
@@ -269,42 +297,63 @@
 <ng-template #subjectCell let-row let-kind="value">
   @let current = visibleDetail()?.id === row.id;
   <div class="candidate-subject" [class.inspected]="current">
+    <hlm-icon
+      class="float-start me-2"
+      [name]="row.kind === 'wait' ? 'lucideClock' : 'lucideMaximize2'"
+    />
     <a
       class="record-link"
       [routerLink]="[]"
       [queryParams]="{ id: row.id }"
-      queryParamsHandling="merge"
+      [queryParamsHandling]="'merge'"
       [attr.aria-current]="current ? 'true' : null"
       [attr.aria-label]="c.focus + ': ' + row.title + ' · ' + row.id"
       >{{ row.title }}</a
     >
-    <p class="identity"><bdi>{{ row.id }}</bdi> · {{ kind }}</p>
+    <p class="identity">
+      <bdi>{{ row.id }}</bdi> · {{ kind }}
+    </p>
+    @if (!row.linkable) {
+      <small [id]="'queue-detail-note-' + row.id">{{ c.detailUnavailable }}</small>
+    }
   </div>
 </ng-template>
 <ng-template #statusCell let-row>
-  <app-queue-status kind="pending" />
+  <app-queue-status [kind]="'pending'" />
   @let minutes = age(row);
   @if (minutes !== null) {
-    <p>
+    <p class="text-xs text-muted-foreground tabular-nums">
       @if (minutes >= 60) {
         {{ (minutes - (minutes % 60)) / 60 }} {{ c.hours }}
       }
       {{ minutes % 60 }} {{ c.minutes }}
     </p>
   } @else {
-    <p>{{ c.noAge }}</p>
+    <p class="text-xs text-muted-foreground">{{ c.noAge }}</p>
   }
   @if (matches(row, 'sla')) {
-    <app-queue-status kind="overdue" />
+    <app-queue-status [kind]="'overdue'" />
+  }
+  @if (row.linkable && canReview(row)) {
+    <a
+      hlmBtn
+      [variant]="'link'"
+      [size]="'sm'"
+      [routerLink]="approvalRoute()"
+      [queryParams]="{ id: row.id }"
+      >{{ c.approval }}</a
+    >
+  } @else {
+    <button hlmBtn type="button" [variant]="'link'" [size]="'sm'" disabled>{{ c.approval }}</button>
   }
 </ng-template>
 <ng-template #shadowCell let-row>
   @if (row.samples !== null) {
-    <div class="actions">
-      <strong>{{ row.samples.passed }}/{{ row.samples.total }}</strong>
-      <app-queue-status kind="sandbox" />
+    <div class="grid justify-items-end gap-1 text-end">
+      <strong class="tabular-nums">{{ row.samples.passed }}/{{ row.samples.total }}</strong>
+      <app-queue-status [kind]="'sandbox'" />
       @if (row.validated) {
-        <app-queue-status kind="validated" />
+        <app-queue-status [kind]="'validated'" />
       }
     </div>
   } @else {
@@ -316,7 +365,7 @@
     @if (row.linkable) {
       <a
         hlmBtn
-        variant="outline"
+        [variant]="'outline'"
         data-shadow
         [routerLink]="shadowRoute()"
         [queryParams]="{ id: row.id }"
@@ -326,24 +375,16 @@
     } @else {
       <a
         hlmBtn
-        variant="outline"
+        [variant]="'outline'"
         data-summary
         [routerLink]="[]"
         [queryParams]="{ id: row.id }"
-        queryParamsHandling="merge"
+        [queryParamsHandling]="'merge'"
         [attr.aria-current]="visibleDetail()?.id === row.id ? 'true' : null"
         [attr.aria-label]="summaryLabel(row.title)"
         [attr.aria-describedby]="'queue-detail-note-' + row.id"
         >{{ c.viewSummary }}</a
       >
-      <small [id]="'queue-detail-note-' + row.id">{{ c.detailUnavailable }}</small>
-    }
-    @if (row.linkable && canReview(row)) {
-      <a hlmBtn variant="link" [routerLink]="approvalRoute()" [queryParams]="{ id: row.id }">{{
-        c.approval
-      }}</a>
-    } @else {
-      <button hlmBtn type="button" variant="link" disabled>{{ c.approval }}</button>
     }
   </div>
 </ng-template>

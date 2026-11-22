@@ -4,12 +4,30 @@
       class="mt-1 hidden size-12 shrink-0 items-center justify-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent-fg) sm:flex"
       ><hlm-icon name="lucideActivity"
     /></span>
-    <app-page-header class="min-w-0 flex-1" [title]="c.title" [description]="c.description">
+    <app-page-header
+      class="min-w-0 flex-1 [&_h1]:text-2xl"
+      [title]="c.title"
+      [description]="
+        store.showQueue()
+          ? c.incidents +
+            ': ' +
+            counts().all +
+            ' · ' +
+            c.open +
+            ': ' +
+            counts().open +
+            ' · ' +
+            c.triaged +
+            ': ' +
+            counts().triaged
+          : c.description
+      "
+    >
       <div appPageHeaderActions class="flex flex-wrap gap-2">
         @if (store.showQueue()) {
-          <a hlmBtn [variant]="'outline'" [routerLink]="store.path('healing-queue')">{{
-            c.proposals
-          }}</a>
+          <a hlmBtn [variant]="'outline'" [routerLink]="store.path('healing-queue')">
+            <hlm-icon name="lucideActivity" />{{ c.proposals }}
+          </a>
           @if (nextIncident(); as id) {
             <a hlmBtn [routerLink]="store.path('failure-detail')" [queryParams]="{ id }">{{
               c.nextIncident
@@ -33,13 +51,11 @@
         [attr.aria-label]="c.incidents"
         class="grid grid-cols-1 gap-3 min-[390px]:grid-cols-2 md:grid-cols-4"
       >
-        @for (kpi of kpis; track kpi.label) {
-          <article hlmCard class="min-w-0 gap-2 p-4">
-            <h2 class="m-0 flex items-center gap-2 text-sm font-semibold">
-              <hlm-icon [name]="kpi.icon" />{{ kpi.label }}
-            </h2>
-            <strong class="text-2xl tabular-nums">{{ kpi.value }}</strong
-            ><span class="text-xs text-muted-foreground">{{ kpi.hint }}</span>
+        @for (kpi of kpis(); track kpi.label) {
+          <article hlmCard class="eg-kpi-card min-w-0">
+            <h2 hlmCardTitle><hlm-icon [name]="kpi.icon" />{{ kpi.label }}</h2>
+            <strong hlmCardContent>{{ kpi.value }}</strong>
+            <span class="text-xs text-muted-foreground">{{ kpi.hint }}</span>
           </article>
         }
       </section>
@@ -51,7 +67,7 @@
       }
       <app-inbox-review-dialog class="contents" #dialog />
       <div class="grid min-w-0 items-start gap-4">
-        <app-inbox-queue (review)="dialog.open($event)" />
+        <app-inbox-queue [counts]="counts()" (review)="dialog.open($event)" />
         @if (store.active(); as row) {
           <app-inbox-preview [record]="row" (review)="dialog.open($event)" />
         }

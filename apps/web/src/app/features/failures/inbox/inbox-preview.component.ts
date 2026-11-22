@@ -9,7 +9,6 @@ import { BADGE_CLASSES, BADGE_TONE_CLASSES } from '../../../shared/ui/chips/badg
 import { DesktopMutationDirective } from '../../../shared/ui/narrow';
 import { INBOX_COPY } from './failure-inbox.copy';
 import {
-  CANDIDATE,
   ORIGINAL,
   RUN_EVIDENCE,
   type IncidentId,
@@ -38,7 +37,6 @@ export class InboxPreviewComponent {
   readonly review = output<readonly IncidentId[]>();
   protected readonly c = INBOX_COPY;
   protected readonly original = ORIGINAL;
-  protected readonly candidate = CANDIDATE;
   protected readonly run = RUN_EVIDENCE;
   protected readonly pendingClasses = `${BADGE_CLASSES} ${BADGE_TONE_CLASSES.pending}`;
 }

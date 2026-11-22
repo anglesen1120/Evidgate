@@ -1,5 +1,12 @@
 import { PercentPipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, inject, TemplateRef, viewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  TemplateRef,
+  viewChild,
+} from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
@@ -11,7 +18,10 @@ import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { DataTableComponent } from '../../../shared/ui/data-table/data-table.component';
-import type { DataTableCellContext, DataTableColumn } from '../../../shared/ui/data-table/data-table-column';
+import type {
+  DataTableCellContext,
+  DataTableColumn,
+} from '../../../shared/ui/data-table/data-table-column';
 import { PageHeaderImports } from '../../../shared/ui/page-header';
 import {
   EmptyPatternComponent,
@@ -20,7 +30,12 @@ import {
   LoadingPatternComponent,
   NotFoundPatternComponent,
 } from '../../../shared/ui/states';
-import { QUEUE_COPY as c, viewCandidate, viewCandidateSummary } from './healing-queue.copy';
+import {
+  QUEUE_COPY as c,
+  showingCandidates,
+  viewCandidate,
+  viewCandidateSummary,
+} from './healing-queue.copy';
 import {
   ADDRESS,
   ageMinutes,
@@ -80,13 +95,58 @@ export class HealingQueueReviewPage {
   protected readonly rowId = (row: QueueCandidateViewModel) => row.id;
   protected readonly viewLabel = viewCandidate;
   protected readonly summaryLabel = viewCandidateSummary;
+  protected readonly showing = showingCandidates;
   protected readonly columns = computed<readonly DataTableColumn<QueueCandidateViewModel>[]>(() => [
-    { id: 'select', header: c.choose, role: 'actions', cell: this.rowId, cellTemplate: this.selectCell() },
-    { id: 'candidate', header: c.candidate, role: 'identity', overflow: 'wrap', cell: (row) => c[row.kind], cellTemplate: this.subjectCell() },
-    { id: 'original', header: c.original, priority: 'primary', cell: (row) => row.failureRef },
-    { id: 'status', header: c.status, role: 'status', overflow: 'wrap', cell: () => c.pending, cellTemplate: this.statusCell() },
-    { id: 'shadow', header: c.shadow, priority: 'primary', cell: () => c.shadow, cellTemplate: this.shadowCell() },
-    { id: 'view', header: c.view, role: 'actions', cell: () => c.view, cellTemplate: this.actionCell() },
+    {
+      id: 'select',
+      header: c.choose,
+      role: 'actions',
+      width: { min: 'max-content', preferred: '1%' },
+      cell: this.rowId,
+      cellTemplate: this.selectCell(),
+    },
+    {
+      id: 'candidate',
+      header: c.candidate,
+      role: 'identity',
+      overflow: 'wrap',
+      cell: (row) => c[row.kind],
+      cellTemplate: this.subjectCell(),
+    },
+    {
+      id: 'original',
+      header: c.original,
+      priority: 'primary',
+      width: { min: '12ch' },
+      cell: (row) => row.failureRef,
+    },
+    {
+      id: 'status',
+      header: c.status,
+      role: 'status',
+      overflow: 'wrap',
+      width: { min: 'calc(16ch + var(--eg-space-4) * 2)' },
+      cell: () => c.pending,
+      cellTemplate: this.statusCell(),
+    },
+    {
+      id: 'shadow',
+      header: c.shadow,
+      priority: 'primary',
+      role: 'text',
+      align: 'end',
+      width: { min: 'calc(14ch + var(--eg-space-4) * 2)' },
+      cell: () => c.shadow,
+      cellTemplate: this.shadowCell(),
+    },
+    {
+      id: 'view',
+      header: c.view,
+      role: 'actions',
+      width: { min: 'calc(14ch + var(--eg-space-4) * 2)', preferred: '1%' },
+      cell: () => c.view,
+      cellTemplate: this.actionCell(),
+    },
   ]);
   private readonly params = toSignal(this.route.paramMap);
   private readonly query = toSignal(this.route.queryParamMap);

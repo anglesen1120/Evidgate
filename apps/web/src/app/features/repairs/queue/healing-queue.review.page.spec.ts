@@ -20,6 +20,8 @@ class QueueHarness extends ComponentHarness {
   readonly pending = this.locatorFor('[data-row-id="cand-73"] .pending');
   readonly headers = this.locatorForAll('app-data-table [role="columnheader"]');
   readonly detail = this.locatorFor('app-queue-detail');
+  readonly batchValues = this.locatorForAll('app-queue-detail figure tbody td');
+  readonly metricValues = this.locatorForAll('.kpis .metric > strong');
   readonly bytes = this.locatorForAll('app-data-table [data-row-id]');
   readonly bulk = this.locatorFor('button[data-review-selected]');
   readonly cartChoice = this.locatorFor('[data-row-id="cand-77"] [role="checkbox"]');
@@ -84,6 +86,20 @@ describe('HealingQueueReviewPage', () => {
   it('keeps original evidence before the sandbox result and never turns it into a release decision', async () => {
     const { queue } = await mount();
     expect(await queue.bytes()).toHaveLength(4);
+    expect(await Promise.all((await queue.metricValues()).map((metric) => metric.text()))).toEqual([
+      '4',
+      '2',
+      '100%',
+      '0',
+    ]);
+    expect(await Promise.all((await queue.batchValues()).map((cell) => cell.text()))).toEqual([
+      '2',
+      '4',
+      '3',
+      '6',
+      '4',
+      '5',
+    ]);
     const detail = await (await queue.detail()).text();
     expect(detail).toContain('inc-92');
     expect(detail.indexOf('Required delivery address field not found')).toBeLessThan(
@@ -105,16 +121,25 @@ describe('HealingQueueReviewPage', () => {
       'Required delivery address',
     );
     expect(await Promise.all((await queue.headers()).map((header) => header.text()))).toEqual([
-      'Select for review', 'Candidate', 'Original failure', 'Review status', 'Shadow evidence', 'View',
+      'Select for review',
+      'Candidate',
+      'Original failure',
+      'Review status',
+      'Shadow evidence',
+      'View',
     ]);
   });
 
   it('opens only the loaded summary for an unlinkable candidate and retains the queue query', async () => {
     TestBed.configureTestingModule({
-      providers: [provideRouter([{
-        path: 'dev/healing-queue/orgs/:orgId/projects/:projectId',
-        component: HealingQueueReviewPage,
-      }])],
+      providers: [
+        provideRouter([
+          {
+            path: 'dev/healing-queue/orgs/:orgId/projects/:projectId',
+            component: HealingQueueReviewPage,
+          },
+        ]),
+      ],
     });
     const path = '/dev/healing-queue/orgs/org-a/projects/proj-b';
     const router = await RouterTestingHarness.create();
@@ -163,6 +188,7 @@ describe('HealingQueueReviewPage', () => {
       expect(record).toContain('Approval not enabled');
       expect(await (await queue.disabledReview(id)).getProperty('disabled')).toBe(true);
       expect(await (await queue.detail()).text()).not.toMatch(/24\/24|8\/8|\bPASS\b/);
+      expect(await queue.batchValues()).toHaveLength(0);
     },
   );
 
@@ -171,11 +197,13 @@ describe('HealingQueueReviewPage', () => {
     const wait = (await queue.filters()).at(-1);
     await wait?.click();
     expect(await queue.bytes()).toHaveLength(1);
+    expect(await queue.text()).toContain('Showing 1 of 4');
     expect(await (await queue.record('cand-77')).text()).toContain('8/8');
     const field = await queue.search();
     await field.setInputValue('cand-73');
     await field.dispatchEvent('input');
     expect(await queue.bytes()).toHaveLength(0);
+    expect(await queue.text()).toContain('Showing 0 of 4');
     expect(await queue.text()).toContain('No filter matches');
   });
 

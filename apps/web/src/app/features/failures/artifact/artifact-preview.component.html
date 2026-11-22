@@ -1,5 +1,5 @@
 <section hlmCard [size]="'sm'" class="min-w-0">
-  <header hlmCardHeader>
+  <header hlmCardHeader class="border-b border-border">
     <h2 hlmCardTitle>{{ c.viewer }}</h2>
     <app-status-pill hlmCardAction [tone]="'neutral'" [label]="c.readOnly" />
   </header>
@@ -75,8 +75,8 @@
   </div>
 </section>
 <ng-template #capture>
-  <figure class="m-0 grid gap-3 rounded-md border bg-muted p-4">
-    <strong>{{ c.storefront }}</strong>
+  <figure class="m-0 grid gap-3 rounded-md border border-border bg-muted p-4">
+    <strong class="border-b border-border pb-2">{{ c.storefront }}</strong>
     <div class="grid gap-3 border bg-card p-4">
       <strong>{{ c.order }}</strong>
       @for (field of fields; track field) {

@@ -144,3 +144,6 @@ export const INBOX_COPY = {
 
 export const viewIncident = (title: string): string =>
   $localize`:@@failures.inbox.view-incident:View ${title}:subject:`;
+
+export const incidentRange = (start: number, end: number, total: number): string =>
+  $localize`:@@failures.inbox.showing-range:Showing ${start}:start:–${end}:end: of ${total}:total:`;

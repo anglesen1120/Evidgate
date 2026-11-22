@@ -16,6 +16,7 @@ class PageHarness extends ComponentHarness {
     return (await this.host()).text();
   }
   readonly links = this.locatorForAll('a');
+  readonly subtitle = this.locatorFor('app-page-header p');
 }
 
 async function mount(query = '') {
@@ -49,7 +50,12 @@ describe('InvestigationHistoryReviewPage', () => {
     ['missing', 'Screenshot unavailable'],
     ['partial', 'Context is partial'],
   ])('renders the %s snapshot', async (state, text) => {
-    expect(await (await mount('state=' + state)).text()).toContain(text);
+    const page = await mount('state=' + state);
+    expect(await page.text()).toContain(text);
+    if (state === 'default')
+      expect(await (await page.subtitle()).text()).toContain('storefront-web · SHOP');
+    if (state === '403')
+      expect(await (await page.subtitle()).text()).not.toContain('storefront-web');
   });
   it('never substitutes checkout attempts for the address case', async () => {
     const page = await mount('id=case-address-8');

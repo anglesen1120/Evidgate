@@ -37,9 +37,15 @@ describe('DecisionExceptions', () => {
     expect(await (await h.find(`[id="${caption}"]`)).text()).toBe('Exception queue');
     const headers = await h.all('[role=columnheader]');
     expect(await Promise.all(headers.map((header) => header.text()))).toEqual([
-      'Exception reference', 'Kind', 'Status', 'Case / owner', 'Expires · UTC', 'Actions',
+      'Exception reference',
+      'Status',
+      'Case / owner',
+      'Expires · UTC',
+      'Actions',
     ]);
     expect(await h.all('[data-view]')).toHaveLength(3);
+    expect(await (await h.find('footer')).text()).toContain('Showing 3');
+    expect(await (await h.find('[data-row-id="w-28"]')).text()).toContain('Waiver');
     expect(await loader.getAllHarnesses(DecisionDialogHarness)).toHaveLength(0);
     for (const id of ['q-19', 'checkout-vi-chromium', 'w-28']) {
       const opener = await h.find(`[data-view="${id}"]`);
@@ -59,7 +65,16 @@ describe('DecisionExceptions', () => {
       expect(detail).not.toMatch(/\bPASS\b/);
       expect(await dialog.all('app-waiver-banner')).toHaveLength(id === 'w-28' ? 1 : 0);
       if (id === 'w-28') {
-        for (const fact of ['Waiver', 'Approved', 'shipping-estimate', 'An Phạm', 'INC-204', '2026-10-15T00:00Z', 'Linh Nguyễn', 'pr-12']) {
+        for (const fact of [
+          'Waiver',
+          'Approved',
+          'shipping-estimate',
+          'An Phạm',
+          'INC-204',
+          '2026-10-15T00:00Z',
+          'Linh Nguyễn',
+          'pr-12',
+        ]) {
           expect(detail).toContain(fact);
         }
       }

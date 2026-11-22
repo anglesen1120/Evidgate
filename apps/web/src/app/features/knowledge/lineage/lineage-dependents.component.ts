@@ -17,7 +17,7 @@ import {
   host: { class: 'block min-w-0' },
   template: `
     <section hlmCard [size]="'sm'">
-      <header hlmCardHeader>
+      <header hlmCardHeader class="border-b border-border pb-4">
         <h2 hlmCardTitle id="lineage-dependents">{{ c.dependentList }}</h2>
       </header>
       <div hlmCardContent>
@@ -53,9 +53,14 @@ import {
                 <tbody hlmTBody>
                   @for (row of rows; track row.id) {
                     <tr hlmTr>
-                      <td hlmTd>
-                        <code>{{ row.id }} · {{ row.hash }}</code>
-                      </td>
+                      <th hlmTh scope="row">
+                        <strong class="block text-sm font-semibold"
+                          ><bdi>{{ row.id }}</bdi></strong
+                        >
+                        <code class="text-xs font-normal text-muted-foreground">{{
+                          row.hash
+                        }}</code>
+                      </th>
                       <td hlmTd>{{ row.case }}</td>
                       <td hlmTd>{{ row.context }}</td>
                       <td hlmTd>

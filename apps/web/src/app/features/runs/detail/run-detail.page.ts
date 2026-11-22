@@ -1,4 +1,4 @@
-import { DOCUMENT } from '@angular/common';
+import { DOCUMENT, formatNumber } from '@angular/common';
 import {
   afterNextRender,
   afterRenderEffect,
@@ -10,6 +10,7 @@ import {
   inject,
   Injector,
   linkedSignal,
+  LOCALE_ID,
   signal,
   type Signal,
   viewChild,
@@ -24,6 +25,7 @@ import { combineLatest } from 'rxjs';
 import type { ApiError } from '../../../core/http/api-error';
 import { PageHeaderImports } from '../../../shared/ui/page-header';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { CancelRunActionComponent } from '../actions/cancel/cancel-run-action.component';
 import { AttemptsTableComponent } from './attempts/attempts-table.component';
 import { DecisionViewComponent } from './decision/decision-view.component';
@@ -38,6 +40,7 @@ import { parsePinnedRevision } from './revision-pin';
 import { RunHeaderComponent } from './run-header.component';
 import { RunDetailStore } from './run-detail.store';
 import { RunTimelineComponent } from './timeline/run-timeline.component';
+import { runValueLabel } from './run-value-label';
 
 @Component({
   selector: 'app-run-detail-page',
@@ -56,6 +59,7 @@ import { RunTimelineComponent } from './timeline/run-timeline.component';
     HlmButton,
     HlmIcon,
     HlmTabsImports,
+    ShellIconComponent,
     PageHeaderImports,
   ],
   providers: [RunDetailStore],
@@ -79,6 +83,7 @@ export class RunDetailPage {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   private readonly injector = inject(Injector);
+  private readonly locale = inject(LOCALE_ID);
 
   protected readonly detailTab = signal('evidence');
   private readonly tabStrip = viewChild<ElementRef<HTMLElement>>('tabStrip');
@@ -154,6 +159,16 @@ export class RunDetailPage {
       : status === 'ready'
         ? 'ready'
         : 'error';
+  });
+  protected readonly subtitle = computed(() => {
+    const run = this.store.run();
+    if (this.requestStatus() !== 'ready' || !run) return undefined;
+    const version = formatNumber(run.version, this.locale);
+    return `${runValueLabel('purpose', run.purpose)} · ${$localize`:@@runs.detail.header-version:Version ${version}:version:`}`;
+  });
+  protected readonly latestSnapshot = computed(() => {
+    const latest = this.store.latestRevisionNo();
+    return this.store.revisions()?.find((revision) => revision.revision_no === latest) ?? null;
   });
   protected readonly attemptsStatus = computed<'loading' | 'ready' | 'error'>(() => {
     const status = this.store.attemptsStatus();

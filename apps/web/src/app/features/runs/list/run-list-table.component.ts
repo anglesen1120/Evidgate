@@ -9,6 +9,7 @@ import {
 import { RouterLink } from '@angular/router';
 import type { RunSummary } from '@evidgate/sdk';
 import { HlmBadge } from '@evidgate/ui/badge';
+import { HlmButton } from '@evidgate/ui/button';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { RunStatePillComponent } from '../../../shared/ui/chips/run-state-pill.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
@@ -30,6 +31,7 @@ type RunCell = TemplateRef<DataTableCellContext<RunSummary>>;
   imports: [
     RouterLink,
     HlmBadge,
+    HlmButton,
     AbsoluteTimeComponent,
     RunStatePillComponent,
     StatusPillComponent,
@@ -55,7 +57,6 @@ export class RunListTableComponent {
   private readonly decisionCell = viewChild.required<RunCell>('decisionCell');
   private readonly refCell = viewChild.required<RunCell>('refCell');
   private readonly scopeCell = viewChild.required<RunCell>('scopeCell');
-  private readonly createdCell = viewChild.required<RunCell>('createdCell');
   private readonly viewCell = viewChild.required<RunCell>('viewCell');
   protected viewLabel(id: string): string {
     return $localize`:@@runs.list.view-run:View ${id}:runId:`;
@@ -90,7 +91,9 @@ export class RunListTableComponent {
       kind: 'identifier',
       priority: 'primary',
       overflow: 'truncate',
-      width: { min: `calc(${this.identifierPreviewLength}ch + var(--eg-space-4) * 2)` },
+      width: {
+        min: `calc(${this.identifierPreviewLength}ch + var(--eg-control-touch) + var(--eg-space-4) * 2 + var(--eg-space-2))`,
+      },
       cellTemplate: this.identityCell(),
     },
     {
@@ -143,20 +146,11 @@ export class RunListTableComponent {
       cellTemplate: this.scopeCell(),
     },
     {
-      id: 'created',
-      header: this.copy.created,
-      cell: (row) => row.created_at,
-      role: 'date',
-      priority: 'secondary',
-      overflow: 'wrap',
-      width: { min: '18ch' },
-      cellTemplate: this.createdCell(),
-    },
-    {
       id: 'actions',
       header: this.copy.actions,
       cell: () => this.copy.view,
       role: 'actions',
+      width: { min: 'calc(9ch + var(--eg-space-4) * 2)', preferred: '1%' },
       cellTemplate: this.viewCell(),
     },
   ]);

@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmCard } from '@evidgate/ui/card';
+import { HlmCard, HlmCardContent, HlmCardTitle } from '@evidgate/ui/card';
 import { HlmIcon } from '@evidgate/ui/icon';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { DesktopRequiredNoticeComponent } from '../../../shared/ui/narrow';
@@ -25,6 +25,8 @@ import { InboxSummaryComponent } from './inbox-summary.component';
     DesktopRequiredNoticeComponent,
     HlmButton,
     HlmCard,
+    HlmCardContent,
+    HlmCardTitle,
     HlmIcon,
     InboxPreviewComponent,
     InboxQueueComponent,
@@ -47,10 +49,28 @@ export class FailureInboxReviewPage {
     () =>
       this.store.matches().find((row) => row.status === 'open')?.id ?? this.store.matches()[0]?.id,
   );
-  protected readonly kpis = [
-    { label: c.incidents, value: 6, hint: c.labelsCount, icon: 'lucideActivity' },
-    { label: c.open, value: 4, hint: c.awaiting, icon: 'lucideClock' },
-    { label: c.triaged, value: 2, hint: c.reviewed, icon: 'lucideCheck' },
-    { label: c.candidates, value: 1, hint: c.locatorOnly, icon: 'lucideInfo' },
-  ] as const;
+  protected readonly counts = computed(() => {
+    const records = this.store.records();
+    const triaged = records.filter((row) => row.status === 'triaged').length;
+    return { all: records.length, open: records.length - triaged, triaged };
+  });
+  protected readonly kpis = computed(
+    () =>
+      [
+        {
+          label: c.incidents,
+          value: this.counts().all,
+          hint: c.labelsCount,
+          icon: 'lucideActivity',
+        },
+        { label: c.open, value: this.counts().open, hint: c.awaiting, icon: 'lucideClock' },
+        { label: c.triaged, value: this.counts().triaged, hint: c.reviewed, icon: 'lucideCheck' },
+        {
+          label: c.candidates,
+          value: this.store.records().filter((row) => row.candidateId !== undefined).length,
+          hint: c.locatorOnly,
+          icon: 'lucideInfo',
+        },
+      ] as const,
+  );
 }

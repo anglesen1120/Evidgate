@@ -2,7 +2,7 @@
   <header hlmCardHeader class="border-b">
     <h2 hlmCardTitle [size]="'section'">{{ c.compare }}</h2>
   </header>
-  <div hlmCardContent class="grid min-w-0 gap-(--eg-space-4)">
+  <div hlmCardContent class="grid min-w-0 gap-3 [&_p]:m-0">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <code>{{ classification() }}</code>
       <app-status-pill
@@ -11,7 +11,9 @@
       />
     </div>
     <p>{{ c.productReason }}</p>
-    <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs">
+    <dl
+      class="m-0 grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-x-3 gap-y-1 text-xs [&_dd]:m-0 [&_dd]:font-medium [&_dt]:text-muted-foreground"
+    >
       <dt>{{ c.drift }}</dt>
       <dd>{{ c.na }}</dd>
       <dt>{{ c.remediation }}</dt>
@@ -23,7 +25,7 @@
       <strong>{{ c.related }}</strong> {{ text.issue }}
       <p class="text-muted-foreground">{{ c.noTracker }}</p>
     </div>
-    <h3 class="mt-3 font-semibold">{{ c.human }}</h3>
+    <h3 class="m-0 border-t border-border pt-3 font-semibold">{{ c.human }}</h3>
     <p>{{ c.humanBody }}</p>
     <app-desktop-required-notice />
     <div *appDesktopMutation class="flex flex-wrap gap-2">

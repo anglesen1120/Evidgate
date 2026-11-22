@@ -104,3 +104,6 @@ export const viewCandidate = (title: string): string =>
 
 export const viewCandidateSummary = (title: string): string =>
   $localize`:@@repairs.queue.view-candidate-summary:View summary for ${title}:subject:`;
+
+export const showingCandidates = (visible: number, total: number): string =>
+  $localize`:@@repairs.queue.showing:Showing ${visible}:visible: of ${total}:total:`;

@@ -23,6 +23,8 @@ import {
   type DataTableColumn,
 } from '../../../shared/ui/data-table';
 import { DesktopMutationDirective } from '../../../shared/ui/narrow';
+import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { DecisionPreview } from './decision-preview.component';
 import { decisionCopy } from './decision-review.copy';
 import {
@@ -48,6 +50,8 @@ type Cell = TemplateRef<DataTableCellContext<ExceptionRecord>>;
   imports: [
     DatePipe,
     DataTableComponent,
+    CopyableIdentifierComponent,
+    ShellIconComponent,
     HlmDialogImports,
     HlmButton,
     HlmCard,
@@ -92,27 +96,47 @@ export class DecisionExceptions {
   protected readonly dateFormat = shortDateFormat(this.locale, true);
   protected readonly rowId = (record: ExceptionRecord) => record.id;
   private readonly dialog = viewChild.required(HlmDialog);
+  private readonly recordCell = viewChild.required<Cell>('recordCell');
   private readonly statusCell = viewChild.required<Cell>('statusCell');
   private readonly scopeCell = viewChild.required<Cell>('scopeCell');
   private readonly expiryCell = viewChild.required<Cell>('expiryCell');
   private readonly viewCell = viewChild.required<Cell>('viewCell');
   protected readonly columns = computed<readonly DataTableColumn<ExceptionRecord>[]>(() => [
-    { id: 'ref', header: this.copy.reference, role: 'identity', kind: 'identifier', cell: this.rowId },
-    { id: 'kind', header: this.copy.kind, cell: (r) => r.kind },
     {
-      id: 'status', header: this.copy.status, role: 'status', cell: (r) => r.status,
+      id: 'ref',
+      header: this.copy.reference,
+      role: 'identity',
+      overflow: 'wrap',
+      cell: this.rowId,
+      cellTemplate: this.recordCell(),
+    },
+    {
+      id: 'status',
+      header: this.copy.status,
+      role: 'status',
+      cell: (r) => r.status,
       cellTemplate: this.statusCell(),
     },
     {
-      id: 'scope', header: this.copy.scopeOwner, cell: (r) => r.scope,
+      id: 'scope',
+      header: this.copy.scopeOwner,
+      priority: 'primary',
+      cell: (r) => r.scope,
       cellTemplate: this.scopeCell(),
     },
     {
-      id: 'expiry', header: this.copy.expires, role: 'date', cell: (r) => r.expiry,
+      id: 'expiry',
+      header: this.copy.expires,
+      role: 'date',
+      cell: (r) => r.expiry,
       cellTemplate: this.expiryCell(),
     },
     {
-      id: 'view', header: this.copy.actions, role: 'actions', cell: () => this.copy.view,
+      id: 'view',
+      header: this.copy.actions,
+      role: 'actions',
+      width: { min: 'max(10ch, calc(var(--eg-control-touch) + 4 * var(--eg-space-4)))' },
+      cell: () => this.copy.view,
       cellTemplate: this.viewCell(),
     },
   ]);

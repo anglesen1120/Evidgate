@@ -14,6 +14,7 @@ class InboxHarness extends ComponentHarness {
   static hostSelector = 'app-failure-inbox-review';
   readonly preview = this.locatorFor('article[aria-labelledby="inbox-preview-title"]');
   readonly rows = this.locatorForAll('app-inbox-queue [data-row-id]');
+  readonly range = this.locatorFor('app-inbox-queue footer span');
   readonly links = this.locatorForAll('app-inbox-queue [data-row-id] a[data-view]');
   readonly status = this.locatorFor('app-inbox-queue [data-row-id] app-status-pill');
   readonly icon = this.locatorFor('app-inbox-queue [data-row-id] app-status-pill hlm-icon');
@@ -102,7 +103,12 @@ describe('Failure inbox review', () => {
     const inbox = await mount();
     expect(await inbox.rows()).toHaveLength(3);
     expect(await Promise.all((await inbox.headers()).map((header) => header.text()))).toEqual([
-      'Select incident', 'Incident', 'Incident status', 'Severity', 'Failure label', 'View',
+      'Select incident',
+      'Incident',
+      'Incident status',
+      'Severity',
+      'Failure label',
+      'View',
     ]);
     const links = await inbox.links();
     expect(await Promise.all(links.map((link) => link.getAttribute('href')))).toEqual(
@@ -180,12 +186,21 @@ describe('Failure inbox review', () => {
     const rows = await inbox.rows();
     expect(rows).toHaveLength(1);
     expect(await rows[0]?.text()).toContain('inc-96');
+    expect(await (await inbox.range()).text()).toBe('Showing 1–1 of 1');
     expect(await (await inbox.next()).getProperty('disabled')).toBe(true);
+  });
+
+  it('reports zero matches without inventing a first row', async () => {
+    const inbox = await mount('?q=no-such-incident');
+    expect(await inbox.rows()).toHaveLength(0);
+    expect(await (await inbox.range()).text()).toBe('0 matching incidents');
   });
 
   it('opens the next page with its own preview, not the previous page’s incident', async () => {
     const inbox = await mount();
+    expect(await (await inbox.range()).text()).toBe('Showing 1–3 of 6');
     await (await inbox.next()).click();
+    expect(await (await inbox.range()).text()).toBe('Showing 4–6 of 6');
     expect(await (await inbox.preview()).text()).toContain('inc-94');
     expect(await (await inbox.preview()).text()).not.toContain('att-1842-01');
   });
