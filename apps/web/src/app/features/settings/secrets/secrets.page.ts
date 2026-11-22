@@ -17,12 +17,13 @@ import { HlmAlert } from '@evidgate/ui/alert';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmSelectImports } from '@evidgate/ui/select';
 import { HlmCardImports } from '@evidgate/ui/card';
-import { HlmIcon } from '@evidgate/ui/icon';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { HlmLabel } from '@evidgate/ui/label';
 import { SessionStore } from '../../../core/session/session.store';
 import { RetryAfterComponent } from '../../../shared/ui/conflict/retry-after.component';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
+import { NumberValueComponent } from '../../../shared/ui/values/number-value.component';
 import { SecretReferenceListComponent } from './secret-reference-list.component';
 import { SECRETS_COPY } from './secrets.copy';
 import { RotateConfirmDialogComponent } from './rotate-confirm-dialog.component';
@@ -51,7 +52,8 @@ type RotationTarget = {
     HlmButton,
     HlmSelectImports,
     HlmCardImports,
-    HlmIcon,
+    ShellIconComponent,
+    NumberValueComponent,
     RotateConfirmDialogComponent,
     DesktopRequiredNoticeComponent,
     HlmLabel,

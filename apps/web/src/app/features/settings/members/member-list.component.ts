@@ -1,18 +1,26 @@
+import { DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
   computed,
   inject,
   input,
+  LOCALE_ID,
   output,
   type TemplateRef,
   viewChild,
 } from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmBadge } from '@evidgate/ui/badge';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmDropdownMenuImports } from '@evidgate/ui/dropdown-menu';
 import type { MembershipView } from '@evidgate/sdk';
+import {
+  BADGE_CLASSES,
+  BADGE_ICON_NAMES,
+  BADGE_TONE_CLASSES,
+} from '../../../shared/ui/chips/badge-classes';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import {
@@ -20,6 +28,9 @@ import {
   type DataTableColumn,
 } from '../../../shared/ui/data-table/data-table.component';
 import type { DataTableCellContext } from '../../../shared/ui/data-table/data-table-column';
+import { shortDateFormat } from '../../../shared/time/short-date-format';
+import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 
 export const MEMBERS_COPY = {
   title: $localize`:@@settings.members.title:Members and roles`,
@@ -28,7 +39,7 @@ export const MEMBERS_COPY = {
   pendingInvitations: $localize`:@@settings.members-pending-count:Pending invitations`,
   organizationAdmins: $localize`:@@settings.members-admin-count:Organization admins`,
   loading: $localize`:@@settings.members.loading:Loading members…`,
-  description: $localize`:@@settings.members.description:Manage organization membership. The server decides actual access.`,
+  description: $localize`:@@settings.members.description:Review organization roles and invitations before changing membership.`,
   member: $localize`:@@settings.members.member:Member`,
   status: $localize`:@@settings.members.status:Status`,
   roles: $localize`:@@settings.members.roles:Organization roles`,
@@ -94,7 +105,7 @@ export const MEMBERS_COPY = {
   saved: $localize`:@@settings.members.saved:Membership updated.`,
   loadMoreFailed: $localize`:@@settings.members.load-more-failed:The next members page could not be loaded. The members already shown are unchanged.`,
   narrow: $localize`:@@settings.members.narrow:Use a wider screen to invite, edit or remove members.`,
-  pending: $localize`:@@settings.members.pending:Invited`,
+  pending: $localize`:@@settings.members.pending:Invitation pending`,
   active: $localize`:@@settings.members.active:Active`,
   removed: $localize`:@@settings.members.removed:Removed`,
   revoked: $localize`:@@settings.members.revoked:Revoked`,
@@ -106,24 +117,56 @@ export const MEMBERS_COPY = {
   imports: [
     StatusPillComponent,
     DataTableComponent,
+    DatePipe,
+    DataTableValueComponent,
+    ShellIconComponent,
     HlmButton,
     HlmBadge,
+    HlmIcon,
     HlmDialogImports,
     HlmDropdownMenuImports,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
+    <ng-template #identityCell let-member let-stacked="stacked">
+      <div class="flex min-w-0 items-center gap-3">
+        <span
+          class="grid size-8 shrink-0 place-items-center rounded-full bg-secondary text-muted-foreground"
+        >
+          <app-shell-icon [name]="member.status === 'pending' ? 'inbox' : 'account'" />
+        </span>
+        <div class="grid min-w-0 flex-1 gap-1">
+          <app-data-table-value
+            class="font-semibold"
+            [value]="member.invited_email"
+            [truncate]="!stacked"
+          />
+          <small class="text-xs text-muted-foreground">
+            <span i18n="@@settings.members.created-date"
+              >Created {{ member.created_at | date: calendarFormat : 'UTC' }} UTC</span
+            >
+          </small>
+        </div>
+      </div>
+    </ng-template>
     <ng-template #statusCell let-member>
       <span
         data-members-row
         [attr.data-membership-id]="member.id"
         [attr.data-members-status]="member.status"
       >
-        <app-status-pill
-          [tone]="member.status === 'active' ? 'success' : 'neutral'"
-          [label]="statusLabel(member.status)"
-        />
+        @if (member.status === 'pending') {
+          <span hlmBadge [variant]="'secondary'" [class]="pendingBadge">
+            <hlm-icon [name]="pendingIcon" />
+            <span>{{ copy.pending }}</span>
+          </span>
+        } @else {
+          <app-status-pill
+            [tone]="member.status === 'active' ? 'info' : 'neutral'"
+            [label]="statusLabel(member.status)"
+          />
+        }
       </span>
     </ng-template>
     <ng-template #rolesCell let-member let-stacked="stacked">
@@ -173,13 +216,15 @@ export const MEMBERS_COPY = {
           #actionsButton
           [variant]="'ghost'"
           type="button"
-          class="mutation min-h-[var(--eg-control-touch)] min-w-max whitespace-nowrap"
+          [size]="'icon-sm'"
+          class="mutation min-h-(--eg-control-sm) min-w-max whitespace-nowrap pointer-coarse:min-h-(--eg-control-touch)"
           [hlmDropdownMenuTrigger]="actionsMenu"
           data-members-actions
           [attr.data-members-status]="member.status"
           [attr.data-membership-id]="member.id"
         >
-          {{ copy.actions }}<span class="sr-only"> {{ member.invited_email }}</span>
+          <span aria-hidden="true" class="text-lg leading-none">⋯</span>
+          <span class="sr-only">{{ copy.actions }} {{ member.invited_email }}</span>
         </button>
         <ng-template #actionsMenu>
           <hlm-dropdown-menu
@@ -227,7 +272,8 @@ export const MEMBERS_COPY = {
       }
     </ng-template>
     <app-data-table
-      class="[&_[data-column-role=actions]]:whitespace-nowrap [&_[data-column-role=actions]]:wrap-normal"
+      class="[&_tbody_td]:align-middle [&_[data-column-role=actions]]:whitespace-nowrap [&_[data-column-role=actions]]:wrap-normal"
+      [flow]="'page'"
       [columns]="columns()"
       [rows]="members()"
       [rowId]="rowId"
@@ -237,6 +283,7 @@ export const MEMBERS_COPY = {
 })
 export class MemberListComponent {
   protected readonly viewport = inject(NarrowMutationPolicy);
+  protected readonly calendarFormat = shortDateFormat(inject(LOCALE_ID));
 
   readonly members = input.required<readonly MembershipView[]>();
   readonly canWrite = input(false);
@@ -245,6 +292,10 @@ export class MemberListComponent {
   readonly resend = output<{ member: MembershipView; opener: HTMLElement }>();
   readonly cancelInvite = output<{ member: MembershipView; opener: HTMLElement }>();
   protected readonly copy = MEMBERS_COPY;
+  protected readonly pendingBadge = `${BADGE_CLASSES} ${BADGE_TONE_CLASSES.pending}`;
+  protected readonly pendingIcon = BADGE_ICON_NAMES.pending;
+  private readonly identityCell =
+    viewChild<TemplateRef<DataTableCellContext<MembershipView>>>('identityCell');
   private readonly statusCell =
     viewChild<TemplateRef<DataTableCellContext<MembershipView>>>('statusCell');
   private readonly rolesCell =
@@ -253,10 +304,11 @@ export class MemberListComponent {
     viewChild<TemplateRef<DataTableCellContext<MembershipView>>>('actionsCell');
   protected readonly rowId = (member: MembershipView): string => member.id;
   protected readonly columns = computed<readonly DataTableColumn<MembershipView>[]>(() => {
+    const identity = this.identityCell();
     const status = this.statusCell();
     const roles = this.rolesCell();
     const actions = this.actionsCell();
-    if (!status || !roles || !actions) return [];
+    if (!identity || !status || !roles || !actions) return [];
     const columns: DataTableColumn<MembershipView>[] = [
       {
         id: 'member',
@@ -266,13 +318,7 @@ export class MemberListComponent {
         priority: 'primary',
         overflow: 'truncate',
         cell: (member) => member.invited_email,
-      },
-      {
-        id: 'status',
-        header: this.copy.status,
-        role: 'status',
-        cell: (member) => this.statusLabel(member.status),
-        cellTemplate: status,
+        cellTemplate: identity,
       },
       {
         id: 'roles',
@@ -281,6 +327,13 @@ export class MemberListComponent {
         overflow: 'truncate',
         cell: () => this.copy.roles,
         cellTemplate: roles,
+      },
+      {
+        id: 'status',
+        header: this.copy.status,
+        role: 'status',
+        cell: (member) => this.statusLabel(member.status),
+        cellTemplate: status,
       },
     ];
     if (this.canWrite()) {

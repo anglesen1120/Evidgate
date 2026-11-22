@@ -1,8 +1,8 @@
-<header class="page-header flex min-w-0 flex-wrap items-start gap-3">
+<header class="page-header flex min-w-0 flex-wrap items-center gap-3">
   <span
-    class="grid size-12 shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent)"
+    class="grid size-12 shrink-0 place-items-center rounded-lg border border-border bg-(--eg-accent-soft) text-(--eg-accent)"
   >
-    <app-shell-icon [name]="'users'" />
+    <app-shell-icon [name]="'people'" class="size-6" />
   </span>
   <div class="min-w-0 flex-1 wrap-anywhere">
     @if (ownsPageHeading) {
@@ -10,20 +10,29 @@
         {{ copy.title }}
       </h1>
     } @else {
-      <h2 hlmCardTitle [size]="sectionHeadingSize" class="m-0" #heading tabindex="-1">
+      <h2 hlmCardTitle [size]="'section'" class="m-0" #heading tabindex="-1">
         {{ copy.title }}
       </h2>
     }
-    <p class="m-0 mt-1 text-muted-foreground">{{ copy.description }}</p>
+    @if (status() === 'ready') {
+      <p class="m-0 mt-1 text-muted-foreground tabular-nums" i18n="@@settings.members.header-facts">
+        On this page: {{ counts().active | number }} active ·
+        {{ counts().pending | number }} pending
+      </p>
+    } @else {
+      <p class="m-0 mt-1 max-w-prose text-muted-foreground">{{ copy.description }}</p>
+    }
   </div>
   @if (canWrite()) {
     <button
       hlmBtn
-      class="primary mutation hidden min-h-[var(--eg-control-touch)] md:inline-flex"
+      [size]="'sm'"
+      class="primary mutation hidden pointer-coarse:min-h-(--eg-control-touch) md:inline-flex"
       type="button"
       data-members-invite-open
       (click)="openInvite($event)"
     >
+      <app-shell-icon [name]="'people'" />
       {{ copy.invite }}
     </button>
   }
@@ -52,6 +61,7 @@
   }
 </p>
 <app-request-state
+  class="mt-6 [&_.state-panel]:min-h-88"
   [status]="status()"
   [loadingLabel]="copy.loading"
   [error]="store.loadError()"
@@ -62,7 +72,7 @@
   (retry)="reload()"
 >
   <app-settings-page-counts
-    class="my-6"
+    class="mb-6"
     [attr.data-members-page-count]="''"
     [metrics]="pageCounts()"
   />
@@ -73,6 +83,10 @@
       } @else {
         <h3 hlmCardTitle [size]="'subsection'" class="m-0">{{ copy.directory }}</h3>
       }
+      <div hlmCardAction class="flex items-center gap-2 text-xs text-muted-foreground">
+        <span i18n="@@settings.count-on-page">On this page</span>
+        <span class="font-semibold tabular-nums">{{ visibleMembers().length | number }}</span>
+      </div>
     </div>
     <app-member-list
       class="[&_.caption]:sr-only [&_.scroll]:rounded-none [&_.scroll]:border-0"
@@ -101,29 +115,53 @@
       class="pagination flex flex-wrap items-center justify-end gap-2 border-t border-border px-4 py-3"
       [attr.aria-label]="copy.directory"
     >
-      <button
-        hlmBtn
-        [variant]="'outline'"
-        class="min-h-[var(--eg-control-touch)]"
-        type="button"
-        [disabled]="offset() === 0 || paging()"
-        (click)="previous()"
-      >
-        {{ copy.previous }}
-      </button>
-      <button
-        hlmBtn
-        [variant]="'outline'"
-        class="min-h-[var(--eg-control-touch)]"
-        type="button"
-        [disabled]="!more() || paging()"
-        (click)="next()"
-      >
-        {{ copy.next }}
-      </button>
+      @if (store.hasMore()) {
+        <span
+          class="me-auto text-xs text-muted-foreground tabular-nums"
+          i18n="@@settings.members.visible-range"
+          >Showing {{ offset() + 1 | number }}–{{
+            offset() + visibleMembers().length | number
+          }}</span
+        >
+      } @else {
+        <span
+          class="me-auto text-xs text-muted-foreground tabular-nums"
+          i18n="@@settings.members.complete-range"
+          >Showing {{ offset() + 1 | number }}–{{ offset() + visibleMembers().length | number }} of
+          {{ store.members().length | number }}</span
+        >
+      }
+      <div class="ms-auto flex max-w-full flex-wrap justify-end gap-2">
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          [size]="'sm'"
+          class="pointer-coarse:min-h-(--eg-control-touch)"
+          type="button"
+          [disabled]="offset() === 0 || paging()"
+          (click)="previous()"
+        >
+          {{ copy.previous }}
+        </button>
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          [size]="'sm'"
+          class="pointer-coarse:min-h-(--eg-control-touch)"
+          type="button"
+          [disabled]="!more() || paging()"
+          (click)="next()"
+        >
+          {{ copy.next }}
+        </button>
+      </div>
     </nav>
   </section>
-  <app-role-matrix class="mt-6" [matrix]="visibleMatrix()" />
+  <app-role-matrix
+    class="mt-6"
+    [headingLevel]="ownsPageHeading ? 2 : 3"
+    [matrix]="visibleMatrix()"
+  />
 </app-request-state>
 @if (canWrite()) {
   <app-invite-dialog (completed)="completed()" />

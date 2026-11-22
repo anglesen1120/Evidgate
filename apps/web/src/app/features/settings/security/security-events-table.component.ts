@@ -36,8 +36,17 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
   host: { class: 'block min-w-0' },
   template: `
     <ng-template #eventCell let-row let-stacked="stacked">
-      <div class="grid min-w-0 gap-2">
-        <app-data-table-value [value]="typeLabel(row.type)" [truncate]="!stacked" />
+      <div class="grid min-w-0">
+        <app-data-table-value
+          class="font-semibold"
+          [value]="typeLabel(row.type)"
+          [truncate]="!stacked"
+        />
+        <app-data-table-value
+          class="font-mono text-xs text-muted-foreground"
+          [value]="row.id"
+          [truncate]="!stacked"
+        />
         @if (row.type === 'support_access') {
           <app-status-pill [tone]="'warning'" [label]="copy.support" />
         }
@@ -46,13 +55,24 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
     <ng-template #severityCell let-row>
       <app-status-pill [tone]="severityTone(row.severity)" [label]="severityLabel(row.severity)" />
     </ng-template>
-    <ng-template #timeCell let-row let-stacked="stacked">
-      <app-absolute-time [value]="row.created_at" [class.whitespace-nowrap]="!stacked" />
+    <ng-template #timeCell let-row>
+      <app-absolute-time class="text-xs tabular-nums whitespace-normal" [value]="row.created_at" />
+    </ng-template>
+    <ng-template #requestCell let-row let-stacked="stacked">
+      @if (row.request_id) {
+        <app-data-table-value
+          class="max-w-[12ch] font-mono text-xs"
+          [value]="row.request_id"
+          [truncate]="!stacked"
+        />
+      } @else {
+        <span class="text-xs text-muted-foreground">{{ copy.unavailable }}</span>
+      }
     </ng-template>
     <ng-template #actorCell let-row let-stacked="stacked">
-      <div class="grid min-w-0 gap-1">
+      <div class="grid min-w-0">
         @if (row.actor.kind) {
-          <app-data-table-value [value]="row.actor.kind" [truncate]="!stacked" />
+          <app-data-table-value class="text-xs" [value]="row.actor.kind" [truncate]="!stacked" />
         }
         @if (row.actor.id) {
           <app-copyable-identifier
@@ -132,6 +152,8 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
       </details>
     </ng-template>
     <app-data-table
+      class="[&>.caption]:sr-only [&>.scroll]:rounded-none [&>.scroll]:border-0"
+      [rowHeight]="'compact'"
       [columns]="columns()"
       [rows]="rows()"
       [rowId]="rowId"
@@ -167,6 +189,8 @@ export class SecurityEventsTableComponent {
     viewChild<TemplateRef<DataTableCellContext<SecurityEventRow>>>('severityCell');
   private readonly timeCell =
     viewChild<TemplateRef<DataTableCellContext<SecurityEventRow>>>('timeCell');
+  private readonly requestCell =
+    viewChild<TemplateRef<DataTableCellContext<SecurityEventRow>>>('requestCell');
   private readonly actorCell =
     viewChild<TemplateRef<DataTableCellContext<SecurityEventRow>>>('actorCell');
   private readonly detailsCell =
@@ -175,24 +199,16 @@ export class SecurityEventsTableComponent {
     const event = this.eventCell(),
       severity = this.severityCell(),
       time = this.timeCell(),
+      request = this.requestCell(),
       actor = this.actorCell(),
       details = this.detailsCell();
-    if (!event || !severity || !time || !actor || !details) return [];
+    if (!event || !severity || !time || !actor || !request || !details) return [];
     return [
-      {
-        id: 'time',
-        header: this.copy.time,
-        role: 'date',
-        width: { min: '18ch', preferred: '1%', max: '26ch' },
-        cell: (row) => row.created_at,
-        cellTemplate: time,
-      },
       {
         id: 'event',
         header: this.copy.type,
         role: 'identity',
-        priority: 'primary',
-        width: { min: '20ch', preferred: 'auto', max: '36ch' },
+        width: { min: '14ch', preferred: 'auto', max: '36ch' },
         cell: (row) => securityTypeLabel(row.type),
         cellTemplate: event,
       },
@@ -200,7 +216,7 @@ export class SecurityEventsTableComponent {
         id: 'severity',
         header: this.copy.severity,
         role: 'status',
-        width: { min: '12ch', preferred: '1%', max: '24ch' },
+        width: { min: '9ch', preferred: '1%', max: '24ch' },
         cell: (row) => row.severity,
         cellTemplate: severity,
       },
@@ -209,15 +225,31 @@ export class SecurityEventsTableComponent {
         header: this.copy.actor,
         role: 'identity',
         kind: 'identifier',
-        width: { min: '12ch', preferred: 'auto', max: '28ch' },
+        width: { min: '10ch', preferred: 'auto', max: '26ch' },
         cell: (row) => row.actor.id ?? '',
         cellTemplate: actor,
+      },
+      {
+        id: 'time',
+        header: this.copy.time,
+        role: 'date',
+        width: { min: '13ch', preferred: '16%', max: '26ch' },
+        cell: (row) => row.created_at,
+        cellTemplate: time,
+      },
+      {
+        id: 'request',
+        header: this.copy.request,
+        role: 'text',
+        width: { min: '8ch', preferred: '10%', max: '14ch' },
+        cell: (row) => row.request_id ?? this.copy.unavailable,
+        cellTemplate: request,
       },
       {
         id: 'details',
         header: this.copy.details,
         role: 'actions',
-        width: { min: '16ch', preferred: '1%', max: '24ch' },
+        width: { min: '15ch', preferred: '1%', max: '24ch' },
         cell: () => this.copy.details,
         cellTemplate: details,
       },

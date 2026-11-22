@@ -24,7 +24,7 @@ class SecurityPageHarness extends ComponentHarness {
   static hostSelector = 'app-security-events-page';
   readonly content = async () => (await this.host()).text();
   readonly rows = this.locatorForAll('[data-row-id]');
-  readonly summaryValues = this.locatorForAll('[data-security-summary] dd');
+  readonly summaryValues = this.locatorForAll('[data-security-summary] dd strong');
   readonly images = this.locatorForAll('img');
   readonly details = this.locatorFor('summary');
   readonly project = this.locatorFor('#security-project');

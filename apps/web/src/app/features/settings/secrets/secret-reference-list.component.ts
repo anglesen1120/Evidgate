@@ -1,3 +1,4 @@
+import { DecimalPipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -10,11 +11,10 @@ import {
 import type { IngestTokenView } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
-import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
-import { HlmSelectImports } from '@evidgate/ui/select';
 import { HlmTableImports } from '@evidgate/ui/table';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
 import { DesktopMutationDirective } from '../../../shared/ui/narrow/desktop-mutation.directive';
@@ -33,12 +33,12 @@ import { SECRETS_COPY, secretStatusLabel } from './secrets.copy';
     RotationReminderChipComponent,
     HlmButton,
     HlmCardImports,
-    HlmIcon,
     HlmTableImports,
     NumberValueComponent,
     HlmInput,
     HlmLabel,
-    HlmSelectImports,
+    ShellIconComponent,
+    DecimalPipe,
     DataTableValueComponent,
     DesktopMutationDirective,
     SecretReferenceFactsComponent,
@@ -63,10 +63,25 @@ export class SecretReferenceListComponent {
   protected readonly states = ['active', 'rotated', 'revoked', 'expired'] as const;
   protected readonly query = signal('');
   protected readonly state = signal('');
-  protected readonly stateLabel = (value: unknown): string =>
-    typeof value === 'string' && value
-      ? secretStatusLabel(value as IngestTokenView['status'])
-      : this.copy.allStates;
+  protected readonly searchMatches = computed(() => {
+    const query = this.query().trim().toLocaleLowerCase();
+    return query
+      ? this.rows().filter((row) => `${row.name} ${row.prefix}`.toLocaleLowerCase().includes(query))
+      : this.rows();
+  });
+  protected readonly filters = computed(() => {
+    const rows = this.searchMatches();
+    const counts = new Map<string, number>();
+    for (const row of rows) counts.set(row.status, (counts.get(row.status) ?? 0) + 1);
+    return [
+      { key: '', label: this.copy.allStates, count: rows.length },
+      ...this.states.map((key) => ({
+        key,
+        label: secretStatusLabel(key),
+        count: counts.get(key) ?? 0,
+      })),
+    ];
+  });
   protected readonly selectedId = signal<string | null>(null);
   protected readonly pageCounts = computed(() => {
     const rows = this.rows();
@@ -81,29 +96,47 @@ export class SecretReferenceListComponent {
       if (row.status === 'expired' || reminder === 'expired') expired++;
     }
     return [
-      { key: 'references', icon: 'lucideCopy', label: this.copy.title, value: rows.length },
-      { key: 'active', icon: 'lucideActivity', label: secretStatusLabel('active'), value: active },
-      { key: 'soon', icon: 'lucideClock', label: this.copy.expiresSoon, value: soon },
-      { key: 'expired', icon: 'lucideCircle', label: this.copy.expired, value: expired },
+      {
+        key: 'references',
+        icon: 'folder',
+        label: this.copy.references,
+        hint: this.copy.pageSummary,
+        value: rows.length,
+      },
+      {
+        key: 'active',
+        icon: 'tree',
+        label: secretStatusLabel('active'),
+        hint: this.copy.activeHint,
+        value: active,
+      },
+      {
+        key: 'soon',
+        icon: 'audit',
+        label: this.copy.expiresSoon,
+        hint: this.copy.soonHint,
+        value: soon,
+      },
+      {
+        key: 'expired',
+        icon: 'inbox',
+        label: this.copy.expired,
+        hint: this.copy.expiredHint,
+        value: expired,
+      },
     ] as const;
   });
   protected readonly filtered = computed(() => {
-    const query = this.query().trim().toLocaleLowerCase();
-    return this.rows().filter(
-      (row) =>
-        (!this.state() || row.status === this.state()) &&
-        `${row.name} ${row.prefix}`.toLocaleLowerCase().includes(query),
-    );
+    const state = this.state();
+    return state
+      ? this.searchMatches().filter((row) => row.status === state)
+      : this.searchMatches();
   });
   protected readonly selected = computed(
     () => this.filtered().find((row) => row.id === this.selectedId()) ?? this.filtered()[0] ?? null,
   );
   protected search(event: Event): void {
     if (event.target instanceof HTMLInputElement) this.query.set(event.target.value);
-  }
-  protected filterState(value: unknown): void {
-    if (typeof value === 'string' && (!value || this.states.some((state) => state === value)))
-      this.state.set(value);
   }
   protected clearFilters(): void {
     this.query.set('');

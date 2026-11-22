@@ -90,6 +90,7 @@ describe('QuotaPanelComponent', () => {
     expect(row).toBeDefined();
     expect(await row?.text()).toContain('Unavailable');
     expect(await row?.text()).not.toContain('0');
+    expect(root.querySelector('[data-quota-meter]')).toBeNull();
     expect(root.querySelector('[data-quota-reason]')?.textContent?.trim()).toBe(
       'Not measured yet.',
     );
@@ -123,6 +124,7 @@ describe('QuotaPanelComponent', () => {
     const { root } = await render();
     expect(root.querySelector('[data-quota-used]')?.textContent?.trim()).toBe('0');
     expect(root.querySelector('[data-quota-limit]')?.textContent?.trim()).toBe('100');
+    expect(root.querySelector<HTMLElement>('[data-quota-meter] > div')?.style.width).toBe('0%');
     expect(load).toHaveBeenCalledOnce();
     expect(root.querySelector('[data-quota-reason]')).toBeNull();
   });
@@ -144,6 +146,7 @@ describe('QuotaPanelComponent', () => {
     });
     const { root } = await render();
     expect(root.textContent).toContain(severity === 'blocked' ? 'Limit reached' : 'Near limit');
+    expect(root.querySelector<HTMLElement>('[data-quota-meter] > div')?.style.width).toBe('80%');
     expect(root.querySelector('time')?.textContent).toContain('UTC');
     expect(root.querySelector('time')?.getAttribute('datetime')).toBe('2026-11-01T00:00:00Z');
   });

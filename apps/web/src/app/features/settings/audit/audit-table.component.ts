@@ -27,18 +27,18 @@ import { AUDIT_ACTOR_TYPE_LABELS } from './actor-type-labels';
 import { supportAccessOf } from './support-access';
 
 const IDENTIFIER_WIDTH: DataTableColumnWidth = {
-  min: 'calc(28ch + var(--eg-space-4) * 2)',
+  min: 'calc(13ch + var(--eg-space-4) * 2)',
   preferred: 'auto',
-  max: 'calc(40ch + var(--eg-space-4) * 2)',
+  max: 'calc(28ch + var(--eg-space-4) * 2)',
 };
-const ACTION_WIDTH: DataTableColumnWidth = { min: '12ch', preferred: '1%', max: '20ch' };
+const ACTION_WIDTH: DataTableColumnWidth = { min: '12ch', preferred: 'auto', max: '24ch' };
 const TIME_WIDTH: DataTableColumnWidth = {
   min: 'calc(24ch + var(--eg-space-4) * 2)',
   preferred: '1%',
   max: 'calc(28ch + var(--eg-space-4) * 2)',
 };
 const DETAILS_WIDTH: DataTableColumnWidth = {
-  min: 'calc(18ch + var(--eg-space-4) * 2)',
+  min: 'calc(14ch + var(--eg-space-4) * 2)',
   preferred: '1%',
   max: 'calc(22ch + var(--eg-space-4) * 2)',
 };
@@ -62,11 +62,11 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
     </ng-template>
     <ng-template #actorCell let-row let-stacked="stacked">
       <div
-        class="grid min-w-0 gap-1"
+        class="grid min-w-0"
         data-audit-row
         [attr.data-audit-support]="supportOf(row) !== null ? 'true' : 'false'"
       >
-        <div class="flex min-w-0 items-center gap-1">
+        <div class="flex min-w-0 flex-wrap items-center gap-1">
           <app-status-pill [tone]="'neutral'" [label]="actorLabel(row.actor_type)" />
           @if (supportOf(row)) {
             <app-status-pill [tone]="'warning'" [label]="copy.support" />
@@ -74,6 +74,7 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
         </div>
         @if (row.actor_id) {
           <app-copyable-identifier
+            class="text-xs text-muted-foreground"
             [value]="row.actor_id"
             [label]="copy.actorId"
             [truncate]="!stacked"
@@ -83,12 +84,17 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
       </div>
     </ng-template>
     <ng-template #objectCell let-row let-stacked="stacked">
-      <div class="grid min-w-0 gap-1">
+      <div class="grid min-w-0">
         @if (row.object_type) {
-          <app-data-table-value [value]="row.object_type" [truncate]="!stacked" />
+          <app-data-table-value
+            class="font-semibold"
+            [value]="row.object_type"
+            [truncate]="!stacked"
+          />
         }
         @if (row.object_id) {
           <app-copyable-identifier
+            class="text-xs text-muted-foreground"
             [value]="row.object_id"
             [label]="copy.objectId"
             [truncate]="!stacked"
@@ -158,6 +164,7 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
       }
     </ng-template>
     <app-data-table
+      class="[&_td]:py-(--eg-space-1)! [&_td.cdk-column-action]:font-mono [&_td.cdk-column-action]:font-semibold"
       [columns]="columns()"
       [rows]="rows()"
       [rowId]="rowId"
