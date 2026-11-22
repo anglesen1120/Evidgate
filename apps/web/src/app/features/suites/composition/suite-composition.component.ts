@@ -13,10 +13,12 @@ import {
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
 import { HlmAlert } from '@evidgate/ui/alert';
+import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
-import { HlmSkeleton } from '@evidgate/ui/skeleton';
+import { HlmCard, HlmCardContent, HlmCardHeader, HlmCardTitle } from '@evidgate/ui/card';
 import { HlmTableImports } from '@evidgate/ui/table';
+import { LoadingPatternComponent } from '../../../shared/ui/states/loading-pattern.component';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { LIST_CHUNK } from './suite-composition.model';
 import { SuiteCompositionStore } from './suite-composition.store';
 import { SuiteWarningListComponent } from './suite-warning-list.component';
@@ -26,10 +28,14 @@ import { SuiteWarningListComponent } from './suite-warning-list.component';
   imports: [
     SuiteWarningListComponent,
     HlmAlert,
+    HlmBadge,
     HlmButton,
     HlmCard,
+    HlmCardContent,
+    HlmCardHeader,
     HlmCardTitle,
-    HlmSkeleton,
+    LoadingPatternComponent,
+    ShellIconComponent,
     HlmTableImports,
   ],
   providers: [SuiteCompositionStore],
@@ -38,7 +44,7 @@ import { SuiteWarningListComponent } from './suite-warning-list.component';
   host: {
     '[attr.data-suite-composition-status]': 'store.status()',
     class:
-      'block min-w-0 font-sans text-sm text-foreground wrap-anywhere [&_dl]:m-0 [&_dd]:m-0 [&_dd]:min-w-0 [&_dt]:text-muted-foreground [&_p]:m-0',
+      'block min-w-0 font-[family-name:var(--eg-font-body)] text-sm leading-[var(--eg-leading-sm)] text-foreground wrap-anywhere [&_dl]:m-0 [&_dd]:m-0 [&_dd]:min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_p]:m-0',
   },
 })
 export class SuiteCompositionComponent {
@@ -52,6 +58,9 @@ export class SuiteCompositionComponent {
   protected readonly copy = {
     variantHash: $localize`:@@suites.composition.variant-hash:Variant hash`,
     title: $localize`:@@suites.composition.suite-composition:Suite composition`,
+    description: $localize`:@@suites.composition.description:Inspect pinned case revisions, their variants and the inputs used to plan execution.`,
+    identity: $localize`:@@suites.composition.identity:Composition identity`,
+    suite: $localize`:@@suites.composition.suite:Suite`,
     revision: $localize`:@@suites.composition.revision:Revision`,
     status: $localize`:@@suites.composition.status:Status`,
     hash: $localize`:@@suites.composition.revision-hash:Revision hash`,

@@ -1,10 +1,10 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { HlmAlert } from '@evidgate/ui/alert';
-import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
+import { HlmCard, HlmCardContent, HlmCardHeader, HlmCardTitle } from '@evidgate/ui/card';
 
 @Component({
   selector: 'app-suite-warning-list',
-  imports: [HlmAlert, HlmCard, HlmCardTitle],
+  imports: [HlmAlert, HlmCard, HlmCardContent, HlmCardHeader, HlmCardTitle],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './suite-warning-list.component.html',
   host: { class: 'block min-w-0' },
