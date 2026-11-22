@@ -3,7 +3,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import readyFixture from '../../../../fixtures/web-api/run-detail/input.json';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
-import { activeElement, LOCALES, type ShellLocale } from './support';
+import { LOCALES, type ShellLocale } from './support';
 import { runDetailPath, type RunStateVariant } from './run-detail.support';
 
 /** The two slots the unmodified `run-detail` document declares, in shard-index order. */
@@ -178,22 +178,26 @@ for (const locale of LOCALES) {
     expect(
       await scroller.evaluate((element) => element.scrollHeight <= element.clientHeight + 1),
     ).toBe(true);
+    // The producer table precedes the evidence tabs in the page flow.
     const producerCopies = producers.locator('app-copy-value-button button');
     await expect(producerCopies).toHaveCount(50);
-    for (const copy of await producerCopies.all()) {
-      await page.keyboard.press('Tab');
+    await producerCopies.first().focus();
+    for (const [index, copy] of (await producerCopies.all()).entries()) {
+      if (index > 0) await page.keyboard.press('Tab');
       await expect(copy).toBeFocused();
       await expect(copy).toHaveAccessibleName(/^(Copy|Sao chép) /);
     }
     await page.keyboard.press('Tab');
-    expect((await activeElement(page)).tag).toBe('body');
-    for (const copy of (await producerCopies.all()).reverse()) {
-      await page.keyboard.press('Shift+Tab');
-      await expect(copy).toBeFocused();
-    }
-    // Page flow deliberately has no inner scrolling-region stop in either direction.
+    await expect(page.getByRole('tab', { name: /^(Evidence|Bằng chứng)/ })).toBeFocused();
     await page.keyboard.press('Shift+Tab');
-    await expect(manifestCopies.last()).toBeFocused();
+    for (const copy of (await producerCopies.all()).reverse()) {
+      await expect(copy).toBeFocused();
+      await page.keyboard.press('Shift+Tab');
+    }
+    // Page flow deliberately has no inner scrolling-region stop: the stop before the first producer
+    // copy is the attempts table, not the producer scroller.
+    await expect(scroller).not.toBeFocused();
+    await expect(page.locator('app-attempts-table :focus')).toHaveCount(1);
 
     // `#producer-<slot>` is the documented anchor: a deep link lands on, and focuses, that row.
     await page.goto(`${runDetailPath({ locale, run: 'many-producers' })}#producer-shard-42`);

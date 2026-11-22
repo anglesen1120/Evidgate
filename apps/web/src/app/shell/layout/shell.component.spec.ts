@@ -83,7 +83,7 @@ describe('ShellComponent', () => {
 
   it('provides the skip target, main landmark, named nav and router outlet', () => {
     expect(root.querySelector('a.skip-link')?.getAttribute('href')).toBe('#main-content');
-    expect(root.querySelector('a.skip-link')?.classList.contains('transition-none')).toBe(true);
+    expect(root.querySelector('a.skip-link')?.classList.contains('transition-none!')).toBe(true);
     expect(root.querySelector('main#main-content')?.getAttribute('tabindex')).toBe('-1');
     expect(root.querySelector('nav[aria-label="Primary navigation"]')).not.toBeNull();
     expect(root.querySelector('router-outlet')).not.toBeNull();
