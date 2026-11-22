@@ -1,5 +1,5 @@
 import { InteractivityChecker } from '@angular/cdk/a11y';
-import { ComponentHarness } from '@angular/cdk/testing';
+import { ComponentHarness, TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
@@ -129,7 +129,7 @@ describe('Mapping resolution review', () => {
           (await (await page.footerClose()).isFocused()),
       ).toBe(true);
     }
-    await (await page.footerClose()).dispatchEvent('keydown', { key: 'Escape', keyCode: 27 });
+    await (await page.footerClose()).sendKeys(TestKey.ESCAPE);
     expect(await page.modal()).toBeNull();
     expect(await trigger.isFocused()).toBe(true);
     expect(TestBed.inject(Router).url).toBe(url);

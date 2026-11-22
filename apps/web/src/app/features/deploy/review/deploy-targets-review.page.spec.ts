@@ -32,6 +32,12 @@ class RecordHarness extends ComponentHarness {
   readonly keep = this.locatorFor('#draft-keep');
   readonly discard = this.locatorFor('#draft-discard');
   readonly order = this.locatorFor('#target-order');
+  async changeOrder(value: string): Promise<void> {
+    const order = await this.order();
+    // Testbed's setInputValue sets the DOM property, not the native input event.
+    await order.setInputValue(value);
+    await order.dispatchEvent('input');
+  }
   readonly acknowledge = this.locatorFor('hlm-checkbox button');
   readonly submit = this.locatorFor('[data-preview-draft]');
   readonly filter = this.locatorFor('#release-filter');
@@ -220,7 +226,7 @@ describe('DeployTargetsReviewPage', () => {
       expect(await heading.text()).toContain('Preview');
       const order = await dialog.order();
       expect(await order.isFocused()).toBe(true);
-      await order.setInputValue('4');
+      await dialog.changeOrder('4');
       if (exit === 'escape') await order.sendKeys(TestKey.ESCAPE);
       if (exit === 'cancel') await (await dialog.cancel()).click();
       if (exit === 'close') await (await dialog.close()).click();
@@ -252,7 +258,7 @@ describe('DeployTargetsReviewPage', () => {
     expect(await (await dialog.submit()).getProperty('disabled')).toBe(true);
     await (await dialog.acknowledge()).click();
     expect(await (await dialog.submit()).getProperty('disabled')).toBe(true);
-    await (await dialog.order()).setInputValue('4');
+    await dialog.changeOrder('4');
     await (await dialog.submit()).click();
     expect(await hasRecord()).toBe(false);
     expect(await opener.isFocused()).toBe(true);
@@ -287,7 +293,7 @@ describe('DeployTargetsReviewPage', () => {
   it('drops an edit on losing desktop eligibility and returns to the readable target', async () => {
     const { page, record, hasRecord, desktop } = await render('ready', true);
     await (await page.edit()).click();
-    await (await (await record()).order()).setInputValue('4');
+    await (await record()).changeOrder('4');
     desktop.set(false);
     expect(await hasRecord()).toBe(false);
     const view = await page.view();
