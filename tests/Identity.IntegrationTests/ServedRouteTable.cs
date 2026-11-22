@@ -675,6 +675,32 @@ internal static class RouteRequests
         Add("GET", "/v1/projects/{p}/api-tokens", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/api-tokens"));
         Add("DELETE", "/v1/api-tokens/{t}", ctx => new(HttpMethod.Delete, $"/v1/api-tokens/{ctx.ApiTokenId}"));
 
+        // ---- Support grants (SupportGrantEndpoints.cs; 02.8.1 §5) ---------------------------------------------
+        // The tenant's approve, revoke and list. The openapi /support-grants request route is the operator's and is not
+        // mapped, and a fresh grant id is a valid probe because authorization precedes the lookup.
+        Add("POST", "/v1/support-grants/{g}/approve", _ =>
+            new(HttpMethod.Post, $"/v1/support-grants/{Guid.CreateVersion7()}/approve", IdempotencyKey: Key()));
+        Add("POST", "/v1/support-grants/{g}/revoke", _ =>
+            new(HttpMethod.Post, $"/v1/support-grants/{Guid.CreateVersion7()}/revoke", IdempotencyKey: Key()));
+        Add("GET", "/v1/orgs/{o}/support-grants", ctx => new(HttpMethod.Get, $"/v1/orgs/{ctx.OrgId}/support-grants"));
+
+        // ---- Drafts (DraftEndpoints.cs; 03.6.1) ---------------------------------------------------------------
+        // The collection is project-scoped; the two object routes resolve the draft's own project. A fresh draft id is
+        // a valid probe because the viewer's refusal is decided before the lookup (and an authorized 404 is not the
+        // 403 this matrix asserts).
+        Add("POST", "/v1/projects/{p}/drafts", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/drafts",
+            DraftBody(), IdempotencyKey: Key()));
+        Add("GET", "/v1/projects/{p}/drafts", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/drafts"));
+        Add("GET", "/v1/drafts/{d}", _ => new(HttpMethod.Get, $"/v1/drafts/{Guid.CreateVersion7()}"));
+        Add("PATCH", "/v1/drafts/{d}", _ => new(HttpMethod.Patch, $"/v1/drafts/{Guid.CreateVersion7()}",
+            DraftUpdateBody(), IfMatch: "\"1\""));
+
+        // ---- Template registry (TemplateEndpoints.cs; 03.5.1) -------------------------------------------------
+        // Both routes are org-level and read-only. A fresh template id is a valid probe because authorization
+        // precedes the lookup, so the refusal matrix never depends on a seeded row.
+        Add("GET", "/v1/templates", _ => new(HttpMethod.Get, "/v1/templates"));
+        Add("GET", "/v1/templates/{t}", _ => new(HttpMethod.Get, $"/v1/templates/{Guid.CreateVersion7()}"));
+
         // ---- CI token exchange (pre-tenant) ------------------------------------------------------------------
         Add("POST", "/v1/ci/token", _ => new(HttpMethod.Post, "/v1/ci/token",
             new JsonObject { ["ingest_token"] = "egt_probe" }));
@@ -1092,6 +1118,41 @@ internal static class RouteRequests
     }
 
     private static string Key() => Guid.NewGuid().ToString("N");
+
+    /// <summary>The draft body the create route accepts (03.6.1): one file inside every content bound.</summary>
+    private static JsonObject DraftBody() => new()
+    {
+        ["kind"] = "template",
+        ["base_commit"] = "abcdef1",
+        ["content"] = new JsonObject
+        {
+            ["files"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["path"] = "tests/probe.ts",
+                    ["body_sha"] = "sha256:" + new string('a', 64),
+                    ["body_ref"] = "drafts/probe.ts",
+                },
+            },
+        },
+    };
+
+    private static JsonObject DraftUpdateBody() => new()
+    {
+        ["content"] = new JsonObject
+        {
+            ["files"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["path"] = "tests/probe-updated.ts",
+                    ["body_sha"] = "sha256:" + new string('a', 64),
+                    ["body_ref"] = "drafts/probe-updated.ts",
+                },
+            },
+        },
+    };
 
     private static JsonObject Binding() => new()
     {

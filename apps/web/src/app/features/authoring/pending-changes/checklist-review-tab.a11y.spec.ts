@@ -98,15 +98,16 @@ describe('ChecklistReviewTabComponent accessibility', () => {
     });
     const { ui } = await setup();
     expect(await ui.count('[data-review-change]')).toBe(1);
-    const rendered = await ui.textAt('[data-review-change]');
+    await ui.click('[data-review-change]');
+    const rendered = await ui.overlayText('[data-pending-preview-content]');
     expect(rendered).toContain('<img src=x onerror="globalThis.pwned=1">');
     expect(rendered).toContain('<script>globalThis.pwned=1</script>');
     expect(rendered).toContain('A'.repeat(140));
     expect(rendered).toContain('\u202e');
     expect(rendered).toContain('\u200b');
-    expect(await ui.count('[data-review-change] img')).toBe(0);
-    expect(await ui.count('[data-review-change] script')).toBe(0);
-    expect(document.querySelector('[data-review-change] [onerror]')).toBeNull();
+    expect(await ui.overlayCount('[data-pending-preview-content] img')).toBe(0);
+    expect(await ui.overlayCount('[data-pending-preview-content] script')).toBe(0);
+    expect(document.querySelector('[data-pending-preview-content] [onerror]')).toBeNull();
     expect(Object.hasOwn(globalThis, 'pwned')).toBe(false);
   });
   it('keeps hostile queued text inert after a successful comment queue', async () => {
@@ -132,13 +133,14 @@ describe('ChecklistReviewTabComponent accessibility', () => {
     expect(await ui.value('#review-comment')).toBe('');
     expect(await ui.count('[data-review-success]')).toBe(1);
     expect(await ui.count('[data-review-change]')).toBe(1);
-    const rendered = await ui.textAt('[data-review-change]');
+    await ui.click('[data-review-change]');
+    const rendered = await ui.overlayText('[data-pending-preview-content]');
     expect(rendered).toContain('<img src=x onerror="globalThis.pwned=1">');
     expect(rendered).toContain('<script>globalThis.pwned=1</script>');
     expect(rendered).toContain('A'.repeat(140));
-    expect(await ui.count('[data-review-change] img')).toBe(0);
-    expect(await ui.count('[data-review-change] script')).toBe(0);
-    expect(document.querySelector('[data-review-change] [onerror]')).toBeNull();
+    expect(await ui.overlayCount('[data-pending-preview-content] img')).toBe(0);
+    expect(await ui.overlayCount('[data-pending-preview-content] script')).toBe(0);
+    expect(document.querySelector('[data-pending-preview-content] [onerror]')).toBeNull();
     expect(Object.hasOwn(globalThis, 'pwned')).toBe(false);
   });
   it('delete consent is a modal trap and Escape restores its opener', async () => {

@@ -115,6 +115,58 @@ error responses reference
 value where it has one (`EVIDGATE__LOGIN__RETRYAFTERSECONDS` on the pre-tenant auth routes),
 otherwise the envelope filter's default `60` (00 §9.2).
 
+The support-grant surface (02.8.1) is the one place a tenant admin reads and decides
+operator access: `GET /v1/orgs/{o}/support-grants` (`support:read`) is a keyset page
+whose `state` is derived as `requested`, `approved`, `revoked` or `expired`; an
+authenticated caller who is not an active member of `{o}` is refused at tenant resolution
+with `403 forbidden` (the same body for an unknown org, so the answer never discloses
+which org ids exist), and `404 not_found` is answered only for a resolved tenant that
+differs from `{o}`.
+`POST /v1/support-grants/{g}/approve` and `/revoke` (`support:approve`) answer a bodyless
+`200`. Approval takes its approver from the authenticated principal only — never from a
+body or header — and refuses a principal who is not an active `tenant_admin` of the
+grant's org with `403 approver_not_tenant_admin`, a grant that is no longer requested
+with `409 grant_not_requested`, and self-approval with `422 approver_must_differ`; revoke
+refuses an already revoked grant with `409 grant_already_revoked`. Both mutations keep
+`Idempotency-Key`, so neither appears in the exemption list below: a missing or over-long
+key is `400 request_invalid` and writes nothing, a key already used for a different grant
+is `409 idempotency_conflict`, and a replay of the same request answers the stored `200`
+with no second audit row. A decision that lost a race to a concurrent change is
+`412 precondition_failed` and wrote nothing. On approval, a lock wait that deadlocked
+or was cut short is the retryable `503 unavailable`, nothing written; either route also
+answers that same retryable `503 unavailable` (with `Retry-After`) when the
+organization's audit chain is busy.
+`POST /v1/support-grants` (request) stays declared but unserved in this scope.
+
+The draft surface (03.6.1) is the editable file set a dry run and a pull request are made from:
+`POST /v1/projects/{p}/drafts` and `GET /v1/projects/{p}/drafts` (`draft:write`, `case:read`),
+plus `GET /v1/drafts/{d}` and `PATCH /v1/drafts/{d}` (`case:read`, `draft:write`). The two
+un-nested routes evaluate their permission against the draft's own project, so a caller holding
+`draft:write` in project A gets no access to a draft of project B in the same org; an unknown id,
+another project's id and another tenant's id all answer the same `404 not_found`. The author is the
+caller's active membership, never a body member (no active membership is `403 draft_author_required`).
+Authentication and authorization run before field validation and before `If-Match` parsing on all four
+routes. A body that is not JSON (400), over 256 KiB (413) or carries unstorable text (422) is answered by
+the shared reader before the permission check, so those refusals are visible to an unpermitted caller.
+
+The template registry (03.5.1) is read-only: `GET /v1/templates` is a keyset page on `(created_at, id)`
+with optional `kind`, `platform`, `level` and `purpose` filters (03.1.4 AC3: a value outside the closed
+catalogue is `422 request_invalid` naming the member), and `GET /v1/templates/{t}` answers one row with its
+`conformance_rules`. Both require `case:read`. Active built-ins (`org_id IS NULL`) are visible to every member role, plus the
+caller's own org rows; an inactive row, another org's row and an unknown id all answer the same `404 not_found`.
+
+`ETag` is the quoted draft `version`. `PATCH` requires both `If-Match` and `Idempotency-Key`: a missing
+or malformed `If-Match` is `422 request_invalid` with an `If-Match` detail (`required` when absent), a stale
+one is `412 precondition_failed` with the current `version` in `error.details`, and a successful write
+increments `version` by exactly one and returns its quoted value. Content changes are refused with `409
+draft_state_conflict` unless the draft is in `draft`; the state machine is 00 §8.10. Invalid content is
+`422 draft_invalid` with the field named in `error.details`; an unknown `status` filter is the same code,
+while a malformed cursor or an out-of-range limit is `422 request_invalid`. Both request bodies are capped
+at 256 KiB (`x-max-bytes`, answered as `413 payload_too_large` before the body is read): 1–200 files, `path`
+and `body_ref` 1–512 characters, `path` relative with no backslash, parent segment or control character,
+unique paths, `body_sha` `sha256:<64 hex>`, `base_commit` `^[0-9a-f]{7,64}$`, and a `provenance` object of
+at most 4096 UTF-8 bytes. The list is a keyset page on `(created_at, id)` (`cursor`/`limit`, default 50, max 200) with an optional `status` filter.
+
 `Idempotency-Key` exemptions (00-grounded, enforced by the spectral
 `evg-mutation-idempotency` rule — keep this list, the function's
 `IDEMPOTENCY_EXEMPT` map and the helper's `IDEM_EXEMPT` in sync):

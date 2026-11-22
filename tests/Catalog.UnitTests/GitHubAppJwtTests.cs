@@ -95,7 +95,7 @@ public sealed class GitHubAppJwtTests
 
         result.IsSuccess.ShouldBeFalse();
         result.Error!.Code.ShouldBe(GitHubErrorCodes.NotConfigured);
-        bench.AppTokenLogs.Lines.ShouldContain(line => line.Contains("CryptographicException", StringComparison.Ordinal));
+        bench.AppTokenLogs.Entries.ShouldContain(entry => entry.Message.Contains("CryptographicException", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -122,8 +122,8 @@ public sealed class GitHubAppJwtTests
         result.IsSuccess.ShouldBeFalse(result.Error?.Message);
         result.Error!.Code.ShouldBe(GitHubErrorCodes.NotConfigured);
         result.Error.Message.ShouldNotContain("not-base64", Case.Insensitive);
-        bench.AppTokenLogs.Lines.Count.ShouldBe(1);
-        foreach (var line in bench.AppTokenLogs.Lines)
+        bench.AppTokenLogs.Entries.Count.ShouldBe(1);
+        foreach (var line in bench.AppTokenLogs.Entries.SelectMany(entry => entry.Texts))
         {
             line.ShouldNotContain("BEGIN", Case.Insensitive);
             line.ShouldNotContain(lines[1], Case.Sensitive);
@@ -156,10 +156,10 @@ public sealed class GitHubAppJwtTests
         bench.AppTokens.Create();
         bench.AppTokens.Create();
 
-        bench.AppTokenLogs.Lines.Count(line => line.Contains("cannot sign", StringComparison.Ordinal)).ShouldBe(1);
-        bench.AppTokenLogs.Lines.Count.ShouldBe(1);
+        bench.AppTokenLogs.Entries.Count(entry => entry.Message.Contains("cannot sign", StringComparison.Ordinal)).ShouldBe(1);
+        bench.AppTokenLogs.Entries.Count.ShouldBe(1);
         var keyBody = rsa.ExportSubjectPublicKeyInfoPem().Split('\n', StringSplitOptions.RemoveEmptyEntries)[1];
-        foreach (var line in bench.AppTokenLogs.Lines)
+        foreach (var line in bench.AppTokenLogs.Entries.SelectMany(entry => entry.Texts))
         {
             line.ShouldNotContain("BEGIN", Case.Insensitive);
             line.ShouldNotContain(keyBody, Case.Sensitive);

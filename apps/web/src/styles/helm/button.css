@@ -1,61 +1,141 @@
 @layer components {
   .spartan-button {
-    @apply focus-visible:border-ring focus-visible:ring-ring data-[matches-spartan-invalid=true]:ring-destructive/20 dark:data-[matches-spartan-invalid=true]:ring-destructive/40 data-[matches-spartan-invalid=true]:border-destructive dark:data-[matches-spartan-invalid=true]:border-destructive/50 rounded-sm border border-transparent bg-clip-padding text-sm font-medium focus-visible:ring-2 active:not-aria-[haspopup]:translate-y-px data-[matches-spartan-invalid=true]:ring-3 [&_hlm-icon:not([class*='text-'])]:text-[length:--spacing(4)];
+    min-inline-size: var(--eg-space-7);
+    max-inline-size: 100%;
+    gap: var(--eg-space-3);
+    padding: var(--eg-space-2) var(--eg-space-4);
+    border: var(--eg-border-width) solid transparent;
+    border-radius: var(--eg-radius-md);
+    font: var(--eg-weight-semibold) var(--eg-text-sm) / var(--eg-leading-sm) var(--eg-font-body);
+    text-align: center;
+    overflow-wrap: anywhere;
+    transition: background-color var(--eg-duration-fast) var(--eg-ease);
   }
 
   .spartan-button-variant-default {
-    @apply bg-primary text-primary-foreground hover:underline;
+    background: var(--eg-accent);
+    color: var(--eg-on-accent);
+    border-color: var(--eg-accent);
   }
 
-  .spartan-button-variant-outline {
-    @apply border-input bg-background text-foreground hover:bg-muted hover:text-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 aria-expanded:bg-muted aria-expanded:text-foreground shadow-xs;
-  }
-
+  .spartan-button-variant-outline,
   .spartan-button-variant-secondary {
-    @apply bg-secondary text-secondary-foreground aria-expanded:bg-secondary aria-expanded:text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)];
+    background: var(--eg-surface);
+    color: var(--eg-text);
+    border-color: var(--eg-border-control);
+  }
+
+  .spartan-button-variant-outline:hover,
+  .spartan-button-variant-secondary:hover,
+  .spartan-button-variant-outline[aria-expanded='true'],
+  .spartan-button-variant-secondary[aria-expanded='true'] {
+    background: var(--eg-surface-raised);
   }
 
   .spartan-button-variant-ghost {
-    @apply hover:bg-muted hover:text-foreground dark:hover:bg-muted/50 aria-expanded:bg-muted aria-expanded:text-foreground;
+    background: transparent;
+    color: var(--eg-text);
+  }
+
+  .spartan-button-variant-ghost:hover,
+  .spartan-button-variant-ghost[aria-expanded='true'] {
+    background: var(--eg-neutral-bg);
   }
 
   .spartan-button-variant-destructive {
-    @apply bg-destructive/10 hover:bg-destructive/20 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/20 text-destructive focus-visible:border-destructive/40 dark:hover:bg-destructive/30;
+    background: var(--eg-danger-fg);
+    color: var(--eg-danger-bg);
+    border-color: var(--eg-danger-fg);
   }
 
   .spartan-button-variant-link {
-    @apply text-primary underline-offset-4 hover:underline;
+    color: var(--eg-accent);
+    background: transparent;
+  }
+
+  .spartan-button-variant-default:hover,
+  .spartan-button-variant-destructive:hover,
+  .spartan-button-variant-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+
+  .spartan-button:active {
+    box-shadow: inset 0 0 0 var(--eg-border-width) currentColor;
+  }
+
+  .spartan-button:is(
+    :disabled,
+    [aria-disabled='true'],
+    [data-disabled]:not([data-disabled='false'])
+  ) {
+    background: var(--eg-neutral-bg);
+    color: var(--eg-text-muted);
+    border-color: var(--eg-border-control);
+    box-shadow: none;
+    text-decoration: none;
+    cursor: not-allowed;
+  }
+
+  .spartan-button[aria-busy='true'] {
+    border-style: dashed;
+    border-color: currentColor;
+    cursor: progress;
   }
 
   .spartan-button-size-xs {
-    @apply h-6 gap-1 rounded-sm px-2 text-xs in-data-[slot=button-group]:rounded-sm has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_hlm-icon:not([class*='text-'])]:text-[length:--spacing(3)];
+    min-block-size: var(--eg-space-7);
+    gap: var(--eg-space-2);
+    padding: var(--eg-space-1) var(--eg-space-3);
+    font-size: var(--eg-text-xs);
+    line-height: var(--eg-leading-xs);
   }
 
   .spartan-button-size-sm {
-    @apply h-8 gap-1 rounded-sm px-2.5 in-data-[slot=button-group]:rounded-sm has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5;
+    min-block-size: var(--eg-control-sm);
+    gap: var(--eg-space-2);
+    padding-inline: var(--eg-space-3);
+    font-size: var(--eg-text-xs);
   }
 
   .spartan-button-size-default {
-    @apply h-9 gap-1.5 px-2.5 in-data-[slot=button-group]:rounded-sm has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2;
+    min-block-size: var(--eg-control-md);
   }
 
   .spartan-button-size-lg {
-    @apply h-10 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2;
+    min-block-size: var(--eg-control-lg);
+    padding-inline: var(--eg-space-5);
   }
 
   .spartan-button-size-icon-xs {
-    @apply size-6 rounded-sm in-data-[slot=button-group]:rounded-sm [&_hlm-icon:not([class*='text-'])]:text-[length:--spacing(3)];
+    inline-size: var(--eg-space-7);
+    block-size: var(--eg-space-7);
   }
 
   .spartan-button-size-icon-sm {
-    @apply size-8 rounded-sm in-data-[slot=button-group]:rounded-sm;
+    inline-size: var(--eg-control-sm);
+    block-size: var(--eg-control-sm);
   }
 
   .spartan-button-size-icon {
-    @apply size-9;
+    inline-size: var(--eg-control-md);
+    block-size: var(--eg-control-md);
   }
 
   .spartan-button-size-icon-lg {
-    @apply size-10;
+    inline-size: var(--eg-control-lg);
+    block-size: var(--eg-control-lg);
+  }
+
+  .spartan-button[class*='spartan-button-size-icon'] {
+    padding: 0;
+    flex: none;
+  }
+
+  @media (max-width: 767px), (pointer: coarse) {
+    .spartan-button {
+      min-inline-size: var(--eg-control-touch);
+      min-block-size: var(--eg-control-touch);
+    }
   }
 }

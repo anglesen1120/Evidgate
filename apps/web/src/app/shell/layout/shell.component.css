@@ -1,0 +1,54 @@
+.topbar {
+  /* Leave the breadcrumb a readable measure even when a quota warning joins the tools. */
+  grid-template-columns: auto minmax(0, 1fr) fit-content(75%);
+  gap: var(--eg-space-3);
+  padding: var(--eg-space-4) var(--eg-space-7);
+}
+
+.topbar-scope {
+  width: min(20vw, var(--eg-rail-width));
+}
+
+app-quota-badge {
+  max-inline-size: min(100%, var(--eg-nav-width));
+}
+
+.brand:focus-visible {
+  outline: var(--eg-focus-width) solid var(--eg-focus);
+  outline-offset: calc(-1 * var(--eg-focus-offset));
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .topbar {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding-inline: var(--eg-space-6);
+  }
+
+  .topbar-tools {
+    grid-column: 1 / -1;
+    justify-content: start;
+  }
+
+  .topbar-scope {
+    flex: 1 1 var(--eg-rail-width);
+    max-width: var(--eg-rail-width);
+  }
+}
+
+@media (max-width: 767px) {
+  .topbar {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--eg-space-2) var(--eg-space-3);
+    padding: var(--eg-space-3) var(--eg-space-4);
+  }
+
+  app-shell-breadcrumbs {
+    grid-row: 2;
+    grid-column: 1 / -1;
+  }
+
+  .topbar-tools {
+    grid-row: 1;
+    grid-column: 2;
+  }
+}

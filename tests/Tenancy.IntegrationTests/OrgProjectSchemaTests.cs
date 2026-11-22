@@ -6,11 +6,8 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// AC1 / AC7 and 02.1.1-T1.1/T1.2: <c>organization</c> (migration 0004) and
-/// <c>project</c> (migration 0005) carry the keys, the covering index, ENABLE +
-/// FORCE row level security and the app-tenant + owner policies exactly as this
-/// task declares them (00 §5.4, §7, DECISIONS F5). The `TO evidgate_operator`
-/// policy is absent by design: it is 02.8.1's grant-gated policy (TL T76).
+/// The organization and project schema keeps its tenant keys, covering indexes and forced row security.
+/// App reads are tenant-scoped; operator reads additionally require an active support grant.
 /// </summary>
 [Trait("Category", "Docker")]
 public sealed class OrgProjectSchemaTests
@@ -74,11 +71,11 @@ public sealed class OrgProjectSchemaTests
         rls.Enabled.ShouldBeTrue();
         rls.Forced.ShouldBeTrue();
 
-        // T4: the tenant predicate compares the row's own id, through the NULL-safe helper.
-        // No `TO evidgate_operator` policy (TL T76): the grant-gated operator policy is 02.8.1's.
+        // The tenant predicate compares the row's own id; operator reads require a valid support grant.
         (await _fixture.PoliciesAsync(database, "organization")).ShouldBe(
         [
             "organization_app_tenant:evidgate_app:*:(id = evidgate.current_org_id()):(id = evidgate.current_org_id())",
+            "organization_operator_grant_read:evidgate_operator:r:((id = ( SELECT evidgate.operator_grant_org() AS operator_grant_org)) AND evidgate.operator_grant_ok(id, NULL::uuid, 'read'::text)):-",
             "organization_owner_backfill:evidgate_owner:*:true:true",
         ]);
 
@@ -152,6 +149,7 @@ public sealed class OrgProjectSchemaTests
         (await _fixture.PoliciesAsync(database, "project")).ShouldBe(
         [
             "project_app_tenant:evidgate_app:*:(org_id = evidgate.current_org_id()):(org_id = evidgate.current_org_id())",
+            "project_operator_grant_read:evidgate_operator:r:((org_id = ( SELECT evidgate.operator_grant_org() AS operator_grant_org)) AND (id = ANY (( SELECT evidgate.operator_grant_read_projects() AS operator_grant_read_projects)::uuid[]))):-",
             "project_owner_backfill:evidgate_owner:*:true:true",
         ]);
 

@@ -1,0 +1,50 @@
+.plot {
+  display: grid;
+  grid-template-columns: var(--eg-space-9) minmax(0, 1fr);
+  gap: var(--eg-space-2);
+  height: 10rem;
+}
+.points {
+  margin-inline-start: calc(var(--eg-space-9) + var(--eg-space-2));
+}
+.gridline {
+  stroke: var(--eg-border);
+}
+.missing {
+  stroke: var(--eg-text-muted);
+  stroke-dasharray: 3 5;
+}
+.area {
+  fill: var(--eg-accent-soft);
+}
+.series,
+.sample {
+  stroke: var(--eg-accent);
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+.series {
+  fill: none;
+}
+.sample {
+  fill: var(--eg-surface);
+}
+.pipeline {
+  display: flex;
+  overflow: hidden;
+  height: var(--eg-space-3);
+  border-radius: var(--eg-radius-sm);
+}
+.passed {
+  background: var(--eg-accent);
+}
+.failed {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--eg-danger-fg) 0 3px,
+    var(--eg-danger-bg) 3px 5px
+  );
+}
+.other {
+  background: var(--eg-neutral-fg);
+}

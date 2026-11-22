@@ -33,7 +33,8 @@ async function settle(page: Page): Promise<void> {
 }
 
 /** Desktop stops in document and visual order. */
-type TopbarStop = 'navigation' | 'theme' | 'organization' | 'project' | 'locale';
+type TopbarStop =
+  'navigation' | 'theme' | 'organization' | 'project' | 'locale' | 'search' | 'account';
 
 /** Walk from the document start without synthetic focus moves. */
 async function walkTopbar(
@@ -59,8 +60,10 @@ async function walkTopbar(
     ['navigation', page.locator('button.nav-toggle')],
     ['organization', page.getByRole('combobox', { name: 'Organization' })],
     ['project', page.getByRole('combobox', { name: 'Project' })],
-    ['locale', page.locator('header.topbar button.locale-toggle')],
+    ['search', page.locator('.screen-search')],
     ['theme', page.locator('button.theme-toggle')],
+    ['locale', page.locator('header.topbar button.locale-toggle')],
+    ['account', page.locator('app-shell-account button')],
   ];
   const last = stops.findIndex(([name]) => name === stop);
   if (last < 0) throw new Error(`${stop} is not a topbar stop`);
@@ -133,7 +136,7 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
     await page.keyboard.press('Tab');
     const brand = page.locator('a.brand');
     await expectFocusVisible(page, brand);
-    await expect(brand).toHaveAccessibleName('Evidgate workspace');
+    await expect(brand).toHaveAccessibleName('Evidgate Quality workspace');
     // The desktop sidebar is not inert, so its rows really are the next stops.
     await expect(page.locator('#shell-navigation')).not.toHaveAttribute('inert', '');
 
@@ -151,7 +154,10 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
     });
     await expect(primaryNavigation).toHaveCount(1);
     await expect(primaryNavigation).toHaveAccessibleName('Primary navigation');
-    await expect(page.getByRole('navigation', { name: 'Next steps', exact: true })).toHaveCount(1);
+    // The limited session holds one next step, which the overview promotes to the header action;
+    // only a second permitted step renders the named "Next steps" landmark.
+    await expect(page.locator('app-page-header a.eg-header-action')).toHaveCount(1);
+    await expect(page.getByRole('navigation', { name: 'Next steps', exact: true })).toHaveCount(0);
 
     // The scope controls precede the trailing theme action in both paint and Tab order.
     const navToggle = page.locator('button.nav-toggle');
@@ -171,16 +177,20 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
     await page.keyboard.press('Tab');
     await expectFocusVisible(page, projectSelect);
     await expectScopeValue(projectSelect, PROJECT_STOREFRONT);
+    await page.keyboard.press('Tab');
+    await expectFocusVisible(page, page.locator('.screen-search'));
+    const themeToggle = page.locator('button.theme-toggle');
+    await page.keyboard.press('Tab');
+    await expectFocusVisible(page, themeToggle);
+    await expect(themeToggle).toHaveAttribute('aria-pressed', /^(true|false)$/);
     const localeToggle = page.locator('header.topbar button.locale-toggle');
     await page.keyboard.press('Tab');
     await expectFocusVisible(page, localeToggle);
     await expect(localeToggle).toHaveAccessibleName(
       'EN / VI: Switch language between English and Vietnamese',
     );
-    const themeToggle = page.locator('button.theme-toggle');
     await page.keyboard.press('Tab');
-    await expectFocusVisible(page, themeToggle);
-    await expect(themeToggle).toHaveAttribute('aria-pressed', /^(true|false)$/);
+    await expectFocusVisible(page, page.locator('app-shell-account button'));
 
     // Traversing the switcher is not a commitment; only activating an option navigates.
     expect(new URL(page.url()).pathname).toBe(startPath);
@@ -196,7 +206,7 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
     expect(themeBox.x, 'theme follows the project selector').toBeGreaterThan(projectBox.x);
     expect(orgBox.x, 'scope follows navigation').toBeGreaterThan(navBox.x);
     expect(localeBox.x, 'language follows the project selector').toBeGreaterThan(projectBox.x);
-    expect(themeBox.x, 'theme follows language').toBeGreaterThan(localeBox.x);
+    expect(localeBox.x, 'language follows theme').toBeGreaterThan(themeBox.x);
     expect(
       projectBox.x,
       'the project select is painted right of the organization select',
@@ -209,7 +219,7 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
     ] as const) {
       expectSameRow(navBox, box, `${label} shares the toggle's row`);
     }
-    // The theme action is the last stop in the header.
+    // The account menu is the last stop in the header.
     await page.keyboard.press('Tab');
     await expect(themeToggle).not.toBeFocused();
     expect(await focusInsideTopbar(page)).toBe(false);
@@ -289,8 +299,10 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
       page.locator('button.nav-toggle'),
       scopeControl(page, 0),
       scopeControl(page, 1),
-      page.locator('header.topbar button.locale-toggle'),
+      page.locator('.screen-search'),
       page.locator('button.theme-toggle'),
+      page.locator('header.topbar button.locale-toggle'),
+      page.locator('app-shell-account button'),
     ];
     for (const stop of stops) {
       await page.keyboard.press('Tab');
@@ -307,7 +319,9 @@ for (const width of [360, 390]) {
   test.describe(`scope flow at ${width}px`, () => {
     test.use({ viewport: { width, height: 900 } });
 
-    test('keeps one compact topbar row and leaves scope in the closed drawer', async ({ page }) => {
+    test('keeps utilities together above the breadcrumb and scope in the closed drawer', async ({
+      page,
+    }) => {
       await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
       await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
       await expect(page.locator('#shell-navigation')).toHaveAttribute('inert', '');
@@ -316,6 +330,8 @@ for (const width of [360, 390]) {
       await walkTopbar(page, 'navigation', 'compact');
       const navToggle = page.locator('button.nav-toggle');
       const themeToggle = page.locator('button.theme-toggle');
+      await page.keyboard.press('Tab');
+      await expectFocusVisible(page, page.locator('.screen-search'));
       await page.keyboard.press('Tab');
       await expectFocusVisible(page, themeToggle);
       const [navBox, themeBox, topbarBox] = await Promise.all([
@@ -326,10 +342,14 @@ for (const width of [360, 390]) {
       expectSameRow(navBox, themeBox, 'both controls share a single row');
       expect(themeBox.x).toBeGreaterThan(navBox.x);
       expect(topbarBox.height).toBeGreaterThanOrEqual(64);
-      expect(topbarBox.height).toBeLessThan(80);
+      const crumb = await boxOf(page.locator('app-shell-breadcrumbs'));
+      expect(crumb.y).toBeGreaterThanOrEqual(themeBox.y + themeBox.height);
+      expect(crumb.y + crumb.height).toBeLessThanOrEqual(topbarBox.y + topbarBox.height);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
       );
+      await page.keyboard.press('Tab');
+      await expectFocusVisible(page, page.locator('app-shell-account button'));
       await page.keyboard.press('Tab');
       expect(await focusInsideTopbar(page)).toBe(false);
     });
@@ -381,7 +401,7 @@ for (const width of [360, 390]) {
       await expect(aside).toHaveAttribute('inert', '');
       await expect(navToggle).toBeFocused();
       await page.keyboard.press('Tab');
-      await expect(page.locator('button.theme-toggle')).toBeFocused();
+      await expect(page.locator('.screen-search')).toBeFocused();
     });
   });
 }

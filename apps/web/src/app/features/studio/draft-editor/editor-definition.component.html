@@ -1,0 +1,93 @@
+<section hlmCard [attr.aria-busy]="state() === 'busy'">
+  <header hlmCardHeader class="border-b border-border">
+    <h2 hlmCardTitle>{{ c.definition }}</h2>
+  </header>
+  <div hlmCardContent class="grid min-w-0 gap-3">
+    <p role="status" class="m-0 text-xs text-muted-foreground">{{ status() }}</p>
+    <div class="grid min-w-0 gap-3 lg:grid-cols-2">
+      @for (field of fields(); track field.id) {
+        <div class="grid min-w-0 content-start gap-1">
+          <label hlmLabel [for]="'editor-' + field.id">{{ field.label }}</label>
+          @if (field.id === 'intent' || field.id === 'assertion') {
+            @let invalid = field.id === 'assertion' && !field.value.trim();
+            <textarea
+              hlmInput
+              rows="2"
+              class="h-auto min-w-0 w-full resize-y"
+              [id]="'editor-' + field.id"
+              [ngModel]="field.value"
+              [readOnly]="locked()"
+              [required]="field.id === 'assertion'"
+              [pattern]="field.id === 'assertion' ? nonBlank : ''"
+              [forceInvalid]="invalid"
+              [aria-describedby]="invalid ? 'editor-assertion-error' : null"
+              (input)="change(field.id, field.original, $event)"
+            ></textarea>
+            @if (invalid) {
+              <p
+                id="editor-assertion-error"
+                role="status"
+                class="m-0 text-sm text-(--eg-danger-fg)"
+              >
+                {{ c.invalid }}
+              </p>
+            }
+          } @else {
+            <input
+              hlmInput
+              type="text"
+              class="min-w-0 w-full"
+              [id]="'editor-' + field.id"
+              [value]="field.value"
+              [readOnly]="locked()"
+              (input)="change(field.id, field.original, $event)"
+            />
+          }
+        </div>
+      }
+    </div>
+    <p class="m-0 text-xs text-muted-foreground">{{ locked() ? c.locked : c.localOnly }}</p>
+  </div>
+</section>
+<section hlmCard>
+  <header hlmCardHeader class="border-b border-border">
+    <h2 hlmCardTitle>{{ c.variants }}</h2>
+  </header>
+  <div hlmCardContent class="grid min-w-0 gap-2">
+    @for (variant of model().variants; track variant) {
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <code>{{ variant }}</code>
+        <div class="flex flex-wrap gap-2">
+          <button
+            hlmBtn
+            type="button"
+            [variant]="'outline'"
+            disabled
+            [attr.aria-describedby]="'variant-preview'"
+          >
+            {{ c.rename }}
+          </button>
+          <button
+            hlmBtn
+            type="button"
+            [variant]="'outline'"
+            disabled
+            [attr.aria-describedby]="'variant-preview'"
+          >
+            {{ c.remove }}
+          </button>
+        </div>
+      </div>
+    }
+    <button
+      hlmBtn
+      type="button"
+      [variant]="'outline'"
+      disabled
+      [attr.aria-describedby]="'variant-preview'"
+    >
+      {{ c.addVariant }}
+    </button>
+    <p id="variant-preview" class="m-0 text-xs text-muted-foreground">{{ c.previewAction }}</p>
+  </div>
+</section>

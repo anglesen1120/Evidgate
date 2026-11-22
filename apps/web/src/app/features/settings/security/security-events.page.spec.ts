@@ -24,8 +24,8 @@ class SecurityPageHarness extends ComponentHarness {
   static hostSelector = 'app-security-events-page';
   readonly content = async () => (await this.host()).text();
   readonly rows = this.locatorForAll('[data-row-id]');
-  readonly images = this.locatorForAll('img');
-  readonly details = this.locatorFor('summary');
+  readonly summaryValues = this.locatorForAll('[data-security-summary] dd strong');
+  readonly details = this.locatorFor('[data-security-view]');
   readonly project = this.locatorFor('#security-project');
   readonly apply = this.locatorFor('[data-security-apply]');
   readonly clear = this.locatorFor('[data-security-clear]');
@@ -66,18 +66,38 @@ describe('SecurityEventsPage', () => {
     const { harness } = await render();
     expect(await harness.rows()).toHaveLength(1);
     expect(await harness.content()).toContain('Support access');
-    await (await harness.details()).click();
-    expect(await harness.content()).toContain('grant1');
-    expect(await harness.content()).toContain('<img src=x onerror=alert(1)>');
-    expect(await harness.images()).toHaveLength(0);
+    const trigger = await harness.details();
+    await trigger.focus();
+    await trigger.click();
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+    expect(dialog?.textContent).toContain('grant1');
+    expect(dialog?.textContent).toContain('actor1');
+    expect(dialog?.textContent).toContain('<img src=x onerror=alert(1)>');
+    expect(dialog?.querySelector('img')).toBeNull();
+    dialog?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }),
+    );
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+    expect(await trigger.isFocused()).toBe(true);
   });
   it('hides injection_attempt under V1 while preserving unknown future types verbatim', async () => {
-    const future: SecurityEventRow = { ...event, id: 'future', type: 'future_alert' };
+    const future: SecurityEventRow = {
+      ...event,
+      id: 'future',
+      type: 'future_alert',
+      severity: 'warning',
+    };
     const injection: SecurityEventRow = { ...event, id: 'injection', type: 'injection_attempt' };
     list.mockResolvedValue({ items: [event, future, injection], next_cursor: null });
     const { harness } = await render();
     expect(await harness.rows()).toHaveLength(2);
     expect(await harness.content()).toContain('future_alert');
+    expect(await Promise.all((await harness.summaryValues()).map((cell) => cell.text()))).toEqual([
+      '2',
+      '1',
+      '1',
+      'V1',
+    ]);
     expect(await harness.content()).not.toContain('injection_attempt');
     expect(securityEventVisible(injection.type, 'V2')).toBe(true);
     expect(securityTypeLabel('future_alert')).toBe('future_alert');
@@ -118,6 +138,7 @@ describe('SecurityEventsPage', () => {
     list.mockRejectedValue(new ApiRequestError(error));
     const { harness } = await render();
     expect(await harness.rows()).toHaveLength(0);
+    expect(await harness.summaryValues()).toHaveLength(0);
     expect(await harness.content()).not.toContain('No security events recorded');
     if (status === 403) expect(await harness.forbidden()).not.toBeNull();
     else expect(await harness.content()).toContain(error.message);
@@ -140,6 +161,7 @@ describe('SecurityEventsPage', () => {
         SecurityPageHarness,
       );
       expect(await harness.loading()).not.toBeNull();
+      expect(await harness.summaryValues()).toHaveLength(0);
       finish({ items: [event], next_cursor: null });
     });
     await fixture.whenStable();

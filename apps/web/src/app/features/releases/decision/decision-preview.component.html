@@ -1,0 +1,86 @@
+<hlm-dialog #dialog [aria-label]="title()">
+  <button
+    hlmBtn
+    hlmDialogTrigger
+    type="button"
+    class="h-auto min-h-11 max-w-full whitespace-normal"
+    [variant]="action() === 'request' ? 'default' : 'outline'"
+    [attr.data-action]="action()"
+    [disabled]="!!disabledReason()"
+    [attr.aria-describedby]="disabledReason() ? 'preview-disabled-' + action() : null"
+    (click)="status.finish(false)"
+  >
+    {{ title() }}
+  </button>
+  @if (disabledReason(); as reason) {
+    <p [id]="'preview-disabled-' + action()" class="mt-1 text-xs text-muted-foreground">
+      {{ reason }}
+    </p>
+  }
+  <hlm-dialog-content
+    *hlmDialogPortal
+    [showCloseButton]="false"
+    class="max-h-[90dvh] min-w-0 overflow-y-auto wrap-anywhere"
+  >
+    <header hlmDialogHeader>
+      <div class="flex min-w-0 items-center gap-2">
+        <app-shell-icon [name]="destructive() ? 'shield-alert' : 'shield-check'" />
+        <h2 hlmDialogTitle>{{ title() }}</h2>
+      </div>
+      <p hlmDialogDescription>{{ description() }}</p>
+    </header>
+    <form #form class="grid min-w-0 gap-4" (submit)="finish($event, form, dialog)">
+      @if (action() === 'request') {
+        <fieldset class="flex flex-wrap gap-3">
+          <legend class="font-semibold">{{ copy.requestCase }}</legend>
+          @for (scope of [facts.shipping, facts.address]; track scope) {
+            <label class="inline-flex min-h-11 items-center gap-2"
+              ><input
+                type="radio"
+                name="scope"
+                [value]="scope"
+                [checked]="scope === facts.shipping"
+              />{{ scope }}</label
+            >
+          }
+        </fieldset>
+      }
+      @if (withExpiry()) {
+        <label class="grid gap-1"
+          ><span>{{ copy.expiry }}</span
+          ><input type="date" hlmInput name="expiry" min="2026-10-14" required
+        /></label>
+      }
+      @if (withReason()) {
+        <label class="grid gap-1"
+          ><span>{{ copy.requiredReason }}</span
+          ><textarea
+            #reason
+            hlmInput
+            name="reason"
+            rows="3"
+            required
+            (input)="reason.setCustomValidity('')"
+          ></textarea>
+        </label>
+      }
+      <div class="rounded-md bg-muted p-3 text-sm">
+        <p>{{ copy.previewNote }}</p>
+        <p>{{ copy.unchanged }}</p>
+      </div>
+      <footer hlmDialogFooter>
+        <button hlmBtn hlmDialogClose data-cancel type="button" [variant]="'outline'">
+          {{ copy.cancel }}
+        </button>
+        <button hlmBtn type="submit" [variant]="destructive() ? 'destructive' : 'default'">
+          {{ copy.previewApply }}
+        </button>
+      </footer>
+    </form>
+  </hlm-dialog-content>
+</hlm-dialog>
+<p role="status" class="text-sm">
+  @if (status.finished()) {
+    {{ copy.previewComplete }}
+  }
+</p>

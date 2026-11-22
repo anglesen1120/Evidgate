@@ -11,7 +11,8 @@ import {
   everyDeclarationForms,
   shadowedCleanSources,
 } from './requestCapScan.limits.fixtures.testing.js';
-import { type Finding, scanSource } from './requestCapScan.testing.js';
+import { type Finding } from './requestCapScan.context.testing.js';
+import { scanSource } from './requestCapScan.testing.js';
 
 const fixtureRoutes = new Map([
   ['postWidgets', 'POST /widgets'],

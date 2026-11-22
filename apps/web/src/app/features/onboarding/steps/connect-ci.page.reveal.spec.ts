@@ -1,9 +1,10 @@
-import type { ComponentFixture } from '@angular/core/testing';
+import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { IngestTokenCreatedResponse, IngestTokenView } from '@evidgate/sdk';
 
 import { ApiRequestError } from '../../../core/http/api-error';
 import type { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
 import { CONNECT_LIST_LIMIT } from '../data/onboarding-progress.service';
+import { OnboardingRecordDialogComponent } from '../onboarding-record-view.component';
 import type { ConnectCiPage } from './connect-ci.page';
 import {
   BINDING,
@@ -14,6 +15,7 @@ import {
   createConnectionPageContext,
   failure,
 } from './connect-ci.page.test-support';
+import { requiredElement } from './step-controls.testing';
 
 describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
   const context = createConnectionPageContext();
@@ -100,16 +102,32 @@ describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
     bindings.set([BINDING]);
     tokens.set([TOKEN]);
     await fixture.whenStable();
-    for (const value of [
-      'acme/web',
-      'Build upload',
-      'egt_prefix',
-      'event:write',
-      'Expires (UTC)',
-      'Last used (UTC)',
-    ]) {
-      expect(root.textContent).toContain(value);
-    }
+    expect(requiredElement(root, '[data-testid="connect-binding-row"]').textContent).toContain(
+      BINDING.repository_full_name,
+    );
+    const row = requiredElement<HTMLTableRowElement>(root, '[data-testid="connect-token-row"]');
+    expect(row.textContent).toContain(TOKEN.name);
+    expect(row.textContent).toContain(TOKEN.prefix);
+
+    // This unit mounts the step directly. Wire its View output to the same dialog the shell owns.
+    const viewer = TestBed.createComponent(OnboardingRecordDialogComponent);
+    viewer.componentRef.setInput('scope', `org-1:${TOKEN.project_id}`);
+    viewer.componentRef.setInput('progress', null);
+    viewer.componentRef.setInput('step', 2);
+    fixture.componentInstance.viewRecord.subscribe((record) =>
+      viewer.componentInstance.open(record),
+    );
+    await viewer.whenStable();
+    requiredElement<HTMLButtonElement>(row, `button[aria-label="View ${TOKEN.name}"]`).click();
+    await viewer.whenStable();
+    const modal = requiredElement(document.body, '[role="dialog"]');
+    expect(modal.textContent).toContain(TOKEN.name);
+    for (const scope of TOKEN.scopes) expect(modal.textContent).toContain(scope);
+    expect(modal.textContent).toContain('Expires (UTC)');
+    expect(modal.textContent).toContain('Last used (UTC)');
+    expect(modal.outerHTML).not.toContain(SECRET);
+    expect(modal.outerHTML).not.toContain(CHALLENGE);
+    expect(refresh).not.toHaveBeenCalled();
     expect(slot.current()).toBeNull();
     expect(root.outerHTML).not.toContain(SECRET);
     expect(root.outerHTML).not.toContain(CHALLENGE);

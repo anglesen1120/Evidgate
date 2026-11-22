@@ -112,69 +112,79 @@ export function fetchKind(node: ts.Expression, refs: FetchRefs): 'exact' | 'name
   return undefined;
 }
 
+type AliasState = { names: Set<string>; properties: Set<string>; changed: boolean };
+
+function addName(state: AliasState, name: string): void {
+  if (state.names.has(name)) return;
+  state.names.add(name);
+  state.changed = true;
+}
+
+function addProperty(state: AliasState, name: string): void {
+  if (state.properties.has(name)) return;
+  state.properties.add(name);
+  state.changed = true;
+}
+
+/** `const f = fetch`, a parameter default holding a fetch. */
+function aliasFromDeclaration(node: ts.Node, state: AliasState): void {
+  if (!(ts.isVariableDeclaration(node) || ts.isParameter(node)) || !ts.isIdentifier(node.name)) {
+    return;
+  }
+  const init = node.initializer;
+  if (init !== undefined && fetchKind(init, state) !== undefined) addName(state, node.name.text);
+}
+
+/** `f = fetch`, `o.send = fetch`. */
+function aliasFromAssignment(node: ts.Node, state: AliasState): void {
+  if (
+    !ts.isBinaryExpression(node) ||
+    node.operatorToken.kind !== ts.SyntaxKind.EqualsToken ||
+    fetchKind(node.right, state) === undefined
+  ) {
+    return;
+  }
+  if (ts.isIdentifier(node.left)) addName(state, node.left.text);
+  const property = memberName(node.left);
+  if (property !== undefined) addProperty(state, property);
+}
+
+/** `class C { send = fetch }`, `{ send: fetch }`. */
+function aliasFromProperty(node: ts.Node, state: AliasState): void {
+  if (!(ts.isPropertyDeclaration(node) || ts.isPropertyAssignment(node)) || !node.initializer) {
+    return;
+  }
+  const property = propertyName(node.name);
+  if (property !== undefined && fetchKind(node.initializer, state) !== undefined) {
+    addProperty(state, property);
+  }
+}
+
+/** `const { fetch: send } = deps`: a destructured key named like a fetch. */
+function aliasFromBindingPattern(node: ts.Node, state: AliasState): void {
+  if (!ts.isObjectBindingPattern(node)) return;
+  for (const element of node.elements) {
+    const source = element.propertyName ?? element.name;
+    const key = ts.isIdentifier(source) || ts.isStringLiteralLike(source) ? source.text : undefined;
+    if (key !== undefined && fetchLikeName(key) && ts.isIdentifier(element.name)) {
+      addName(state, element.name.text);
+    }
+  }
+}
+
 /** Fetch aliases and property names holding one, collected in source order to a fixpoint. */
 export function fetchAliases(sf: ts.SourceFile): { names: Set<string>; properties: Set<string> } {
-  const names = new Set<string>();
-  const properties = new Set<string>();
-  let changed = true;
+  const state: AliasState = { names: new Set(), properties: new Set(), changed: true };
   const walk = (node: ts.Node): void => {
-    const refs: FetchRefs = { names, properties };
-    if ((ts.isVariableDeclaration(node) || ts.isParameter(node)) && ts.isIdentifier(node.name)) {
-      const name = node.name.text;
-      const init = node.initializer;
-      if (init !== undefined && !names.has(name) && fetchKind(init, refs) !== undefined) {
-        names.add(name);
-        changed = true;
-      }
-    }
-    if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-      fetchKind(node.right, refs) !== undefined
-    ) {
-      const property = memberName(node.left);
-      if (ts.isIdentifier(node.left) && !names.has(node.left.text)) {
-        names.add(node.left.text);
-        changed = true;
-      }
-      if (property !== undefined && !properties.has(property)) {
-        properties.add(property);
-        changed = true;
-      }
-    }
-    if ((ts.isPropertyDeclaration(node) || ts.isPropertyAssignment(node)) && node.initializer) {
-      const property = propertyName(node.name);
-      const init = node.initializer;
-      if (
-        property !== undefined &&
-        !properties.has(property) &&
-        fetchKind(init, refs) !== undefined
-      ) {
-        properties.add(property);
-        changed = true;
-      }
-    }
-    if (ts.isObjectBindingPattern(node)) {
-      for (const element of node.elements) {
-        const source = element.propertyName ?? element.name;
-        const key =
-          ts.isIdentifier(source) || ts.isStringLiteralLike(source) ? source.text : undefined;
-        if (
-          key !== undefined &&
-          fetchLikeName(key) &&
-          ts.isIdentifier(element.name) &&
-          !names.has(element.name.text)
-        ) {
-          names.add(element.name.text);
-          changed = true;
-        }
-      }
-    }
+    aliasFromDeclaration(node, state);
+    aliasFromAssignment(node, state);
+    aliasFromProperty(node, state);
+    aliasFromBindingPattern(node, state);
     ts.forEachChild(node, walk);
   };
-  while (changed) {
-    changed = false;
+  while (state.changed) {
+    state.changed = false;
     walk(sf);
   }
-  return { names, properties };
+  return { names: state.names, properties: state.properties };
 }

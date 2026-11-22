@@ -16,6 +16,8 @@ import { ActivatedRoute } from '@angular/router';
 import { HlmAlertImports } from '@evidgate/ui/alert';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
+import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSkeleton } from '@evidgate/ui/skeleton';
@@ -27,6 +29,9 @@ import {
 } from '../../../shared/ui/narrow';
 import type { PublishedRevision } from '../../../core/data/policy-data.service';
 import { SessionStore } from '../../../core/session/session.store';
+import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
+import { NumberValueComponent } from '../../../shared/ui/values/number-value.component';
+import { PolicyModeChipComponent } from './policy-mode-chip.component';
 import { PolicyProjectReads } from './policy-reads';
 import { PolicyStore } from './policy.store';
 import { PolicySummaryComponent } from './policy-summary.component';
@@ -41,7 +46,12 @@ import { RevisionDetailComponent } from './revision-detail.component';
     HlmAlertImports,
     HlmButton,
     HlmCardImports,
+    ShellIconComponent,
+    CopyableIdentifierComponent,
+    NumberValueComponent,
+    PolicyModeChipComponent,
     HlmInput,
+    HlmDialogImports,
     HlmLabel,
     HlmSkeleton,
     HlmTabsImports,
@@ -73,8 +83,7 @@ export class PolicyPage {
   protected readonly mutationPolicy = inject(NarrowMutationPolicy);
 
   protected readonly canWrite = computed(() => this.session.has('policy:write'));
-  protected readonly sectionSize = 'section' as const;
-  protected readonly valuesTab = 'values' as const;
+  protected readonly viewed = signal<{ id: string; trigger: HTMLButtonElement } | null>(null);
   protected readonly compareTab = 'compare' as const;
   protected readonly activationTab = 'activation' as const;
   protected readonly revisionId = signal(this.route.snapshot.queryParamMap.get('revision') ?? '');
@@ -89,11 +98,19 @@ export class PolicyPage {
     const head = rows.find((row) => row.id === this.store.headRevisionId());
     return head?.id ?? rows.at(-1)?.id ?? null;
   });
+  protected readonly activeRevisionNo = computed(() => {
+    const id = this.store.reads.activation().value?.policy_revision_id;
+    return this.store.revisions().find((revision) => revision.id === id)?.revision_no;
+  });
   protected readonly paging = signal(false);
   private readonly dialog = viewChild(PublishDialogComponent);
   private readonly heading = viewChild.required<ElementRef<HTMLHeadingElement>>('heading');
   protected readonly copy = {
-    title: $localize`:@@settings.policy.title:Policy`,
+    title: $localize`:@@settings.policy.release-title:Release policy`,
+    activeRevision: $localize`:@@settings.policy.active-revision:Active revision`,
+    head: $localize`:@@settings.policy.head-revision:Head revision`,
+    loaded: $localize`:@@settings.policy.loaded-revisions:Loaded revisions`,
+    mode: $localize`:@@settings.policy.activation-mode:Activation mode`,
     description: $localize`:@@settings.policy.description:Inspect policy revisions and compare their fields. Open a revision using its identifier.`,
     revisionId: $localize`:@@settings.policy.revision-id:Revision ID`,
     open: $localize`:@@settings.policy.open:Open revision`,
@@ -107,9 +124,8 @@ export class PolicyPage {
     created: $localize`:@@settings.policy.published-new:New revision published.`,
     unchanged: $localize`:@@settings.policy.published-unchanged:Policy unchanged. Existing revision returned.`,
     revision: $localize`:@@settings.policy.revision:Revision`,
-    values: $localize`:@@settings.policy.values-title:Policy values`,
+    headBadge: $localize`:@@settings.policy.head:Head`,
     compare: $localize`:@@settings.policy.diff-title:Compare revisions`,
-    valuesTab: $localize`:@@settings.policy.tab.values:Values`,
     compareTab: $localize`:@@settings.policy.tab.compare:Compare`,
     activation: $localize`:@@settings.policy.activation:Activation`,
     detailTabs: $localize`:@@settings.policy.detail-tabs:Selected revision details`,
@@ -133,6 +149,7 @@ export class PolicyPage {
       ) {
         untracked(() => {
           this.dialog()?.close();
+          this.viewed.set(null);
           this.published.set(null);
           this.targetId.set(null);
           this.revisionId.set('');
@@ -165,6 +182,11 @@ export class PolicyPage {
   protected onPublished(result: PublishedRevision): void {
     this.published.set(result);
     this.targetId.set(result.revision.id);
+  }
+  protected viewRevision(selection: { id: string; trigger: HTMLButtonElement }): void {
+    if (this.store.publishing() || this.store.phase() === 'loading') return;
+    this.selectRevision(selection.id);
+    this.viewed.set(selection);
   }
   protected selectRevision(id: string | null): void {
     if (this.store.publishing() || this.store.phase() === 'loading') return;

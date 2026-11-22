@@ -1,5 +1,7 @@
 // Keep the store isolated so these checks cover presentation, not project loading.
 
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
@@ -49,8 +51,14 @@ const NEXT_STEPS: readonly NavItemView[] = [
   },
 ];
 
+class OverviewHarness extends ComponentHarness {
+  static hostSelector = 'app-project-overview';
+  readonly emptyTitle = this.locatorForOptional('app-empty-pattern h2');
+  readonly emptyActions = this.locatorForAll('app-empty-pattern a, app-empty-pattern button');
+}
+
 /** Mount the page against a store whose current project is `project`. */
-function renderWith(project: ProjectDto | null, steps = NEXT_STEPS): HTMLElement {
+function mountWith(project: ProjectDto | null, steps = NEXT_STEPS) {
   TestBed.configureTestingModule({
     imports: [ProjectOverviewPage],
     providers: [
@@ -65,10 +73,26 @@ function renderWith(project: ProjectDto | null, steps = NEXT_STEPS): HTMLElement
   });
   const fixture = TestBed.createComponent(ProjectOverviewPage);
   fixture.detectChanges();
-  return fixture.nativeElement as HTMLElement;
+  return fixture;
+}
+
+function renderWith(project: ProjectDto | null, steps = NEXT_STEPS): HTMLElement {
+  return mountWith(project, steps).nativeElement as HTMLElement;
 }
 
 describe('ProjectOverviewPage', () => {
+  it.each([
+    { project: null, steps: NEXT_STEPS, title: 'No project selected' },
+    { project: PROJECT, steps: [], title: 'No shortcuts available for this project' },
+    { project: PROJECT, steps: NEXT_STEPS.slice(-1), title: null },
+  ])('distinguishes an absent project from an empty shortcut list: $title', async (example) => {
+    const fixture = mountWith(example.project, example.steps);
+    const overview = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+    const title = await overview.emptyTitle();
+    expect(title ? await title.text() : null).toBe(example.title);
+    expect(await overview.emptyActions()).toHaveLength(0);
+  });
+
   it('shows the current project name and slug exactly as the server sent them', () => {
     const root = renderWith(PROJECT);
 
@@ -77,12 +101,16 @@ describe('ProjectOverviewPage', () => {
       'section',
     );
     expect(root.querySelector('h1')?.textContent?.trim()).toBe(PROJECT.name);
-    expect(root.querySelector('.slug')?.textContent?.trim()).toBe(PROJECT.slug);
+    expect(root.querySelector('app-page-header p')?.textContent?.trim()).toBe(
+      `${PROJECT.slug} · Case prefix: ${PROJECT.case_prefix}`,
+    );
   });
 
   it('links to the existing permitted next steps without development-status prose or invented metrics', () => {
     const root = renderWith(PROJECT);
-    const links = Array.from(root.querySelectorAll<HTMLAnchorElement>('nav a'));
+    const links = Array.from(root.querySelectorAll<HTMLAnchorElement>('a'));
+    expect(root.querySelector('app-page-header a')).toBe(links[0]);
+    expect(Array.from(root.querySelectorAll('nav a'))).toEqual(links.slice(1));
     expect(links.map((link) => link.textContent?.trim())).toEqual([
       'Runs',
       'Onboarding',
@@ -103,8 +131,9 @@ describe('ProjectOverviewPage', () => {
       PROJECT,
       NEXT_STEPS.filter((item) => item.id === 'runs'),
     );
-    expect(root.querySelectorAll('nav a')).toHaveLength(1);
-    expect(root.querySelector('nav a')?.textContent?.trim()).toBe('Runs');
+    expect(root.querySelectorAll('a')).toHaveLength(1);
+    expect(root.querySelector('app-page-header a')?.textContent?.trim()).toBe('Runs');
+    expect(root.querySelector('nav')).toBeNull();
     expect(root.textContent).not.toContain('Onboarding');
     expect(root.textContent).not.toContain('Feature tree');
   });
@@ -114,7 +143,7 @@ describe('ProjectOverviewPage', () => {
       PROJECT,
       NEXT_STEPS.filter((item) => item.id !== 'runs'),
     );
-    const links = Array.from(root.querySelectorAll<HTMLAnchorElement>('nav a'));
+    const links = Array.from(root.querySelectorAll<HTMLAnchorElement>('a'));
     expect(links.map((link) => link.textContent?.trim())).toEqual(['Onboarding', 'Feature tree']);
     expect(links[0]?.classList.contains('spartan-button-variant-default')).toBe(true);
     expect(root.querySelectorAll('.spartan-button-variant-default')).toHaveLength(1);
@@ -127,12 +156,12 @@ describe('ProjectOverviewPage', () => {
     expect(root.textContent).not.toContain('Next steps');
   });
 
-  it.each([PROJECT, null])('labels the card section with its h1 for project %j', (project) => {
+  it.each([PROJECT, null])('labels the overview section with its h1 for project %j', (project) => {
     const root = renderWith(project);
     const section = root.querySelector('section');
     const heading = root.querySelector('h1');
 
-    expect(section?.getAttribute('data-slot')).toBe('card');
+    expect(section?.querySelector('app-page-header h1')).toBe(heading);
     expect(heading?.getAttribute('data-slot')).toBe('card-title');
     expect(heading?.tagName).toBe('H1');
     expect(heading?.id).toBeTruthy();
@@ -163,7 +192,7 @@ describe('ProjectOverviewPage', () => {
 
     expect(root.querySelector('h1')?.textContent?.trim()).not.toBe('');
     expect(root.querySelector('h1')?.textContent).not.toContain(PROJECT.name);
-    expect(root.querySelector('.slug')).toBeNull();
+    expect(root.querySelector('app-page-header p')).toBeNull();
     expect(root.querySelector('nav')).toBeNull();
   });
 });

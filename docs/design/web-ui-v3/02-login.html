@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title data-en="Sign in · Evidgate" data-vi="Đăng nhập · Evidgate">Sign in · Evidgate</title>
+<link rel="stylesheet" href="assets/tokens-v3.css">
+<link rel="stylesheet" href="assets/components-v3.css">
+<script defer="" src="assets/manifest-v3.js"></script><script defer="" src="assets/shell.js"></script>
+<style>
+[hidden]{display:none!important}
+[data-pane] .v3-actions:empty{display:none}
+.v3-mobile-note{display:none}
+@media(max-width:767px){.v3-mutate{display:none!important}.v3-mobile-note{display:block;margin-block:var(--eg-space-4)}}
+.v3-auth{min-height:100dvh;display:grid;grid-template-rows:auto 1fr}
+.v3-auth__bar{display:flex;align-items:center;justify-content:space-between;padding-inline:var(--eg-space-7);border-bottom:1px solid var(--eg-border);background:var(--eg-surface)}
+.v3-auth__bar .v3-brand{padding-inline:0}
+.v3-auth main{width:min(100%,34rem);margin:auto;padding-block:var(--eg-space-8)}
+.v3-auth__identity{display:flex;align-items:center;gap:var(--eg-space-4);padding:var(--eg-space-7);border-bottom:1px solid var(--eg-border)}
+.v3-auth__body{padding:var(--eg-space-7);min-height:16rem;align-content:center;gap:var(--eg-space-5)}
+.v3-auth__body .v3-btn{min-height:var(--eg-control-touch)}
+.v3-auth__foot{display:flex;gap:var(--eg-space-3);padding:var(--eg-space-4) var(--eg-space-7);border-top:1px solid var(--eg-border);color:var(--eg-text-muted);font-size:var(--eg-text-xs)}
+.v3-auth__caption{margin-block-start:var(--eg-space-4)}
+.v3-auth [role=alert] h2{color:var(--eg-danger-fg)}
+</style>
+</head>
+<body data-page="02">
+<a class="v3-skip" href="#main"><span data-en="Skip to content" data-vi="Đến nội dung">Skip to content</span></a><noscript><nav><a href="01-app-shell.html">Overview / Tổng quan</a> · <a href="03-run-list.html">Test runs / Lượt kiểm thử</a></nav></noscript><svg class="v3-sprites" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+<symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 5l9-4 9 4-9 4z M3 10l9 4 9-4 M3 15l9 4 9-4"></path></symbol>
+
+
+
+
+
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-4 9-8 11-4-2-8-6-8-11V5z M8 12l3 3 5-6"></path></symbol>
+
+<symbol id="i-people" viewBox="0 0 24 24"><path d="M3 20v-2a5 5 0 0 1 10 0v2 M16 14a5 5 0 0 1 5 5 M11 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0 M15 4a3 3 0 0 1 0 6"></path></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 15A9 9 0 0 1 9 4a9 9 0 1 0 11 11"></path></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0 M3 12h18 M12 3a16 16 0 0 1 0 18 16 16 0 0 1 0-18"></path></symbol>
+
+
+
+
+
+</svg><div class="v3-auth"><header class="v3-auth__bar"><div class="v3-brand"><span class="v3-logo"><svg class="v3-icon" aria-hidden="true"><use href="#i-logo"></use></svg></span>Evidgate</div><div class="v3-actions"><button class="v3-btn v3-btn--icon v3-btn--ghost" id="theme" aria-pressed="false"><svg class="v3-icon" aria-hidden="true" focusable="false"><use href="#i-moon"></use></svg><span class="v3-sr-only"><span data-en="Dark theme" data-vi="Giao diện tối">Dark theme</span></span></button>
+<button class="v3-btn" id="lang" aria-label="Tiếng Việt" title="Tiếng Việt" lang="vi"><svg class="v3-icon" aria-hidden="true" focusable="false"><use href="#i-globe"></use></svg><b>VI</b></button></div></header>
+<main id="main" tabindex="-1"><article class="v3-panel v3-auth__card"><div class="v3-auth__identity"><span class="v3-page-header__icon"><svg class="v3-icon" aria-hidden="true"><use href="#i-shield"></use></svg></span><div><small><span data-en="Organization sign-in" data-vi="Đăng nhập tổ chức">Organization sign-in</span></small><h1><span data-en="Sign in to Evidgate" data-vi="Đăng nhập Evidgate">Sign in to Evidgate</span></h1></div></div><div class="v3-auth__body v3-stack">
+<div class="v3-stack" data-pane="default generic" role="status"><h2><span data-en="Welcome back" data-vi="Chào mừng trở lại">Welcome back</span></h2><p class="v3-muted"><span data-en="Use your organization account. Your workspace membership is checked after sign-in." data-vi="Dùng tài khoản tổ chức của bạn. Quyền thành viên được kiểm tra sau khi đăng nhập.">Use your organization account. Your workspace membership is checked after sign-in.</span></p><button type="button" class="v3-btn v3-btn--primary" data-start=""><span data-en="Continue with organization sign-in" data-vi="Tiếp tục bằng đăng nhập của tổ chức">Continue with organization sign-in</span></button></div>
+<div class="v3-stack" data-pane="loading" hidden="" role="status"><h2><span data-en="Authenticating" data-vi="Đang xác thực">Authenticating</span></h2><p class="v3-muted"><span data-en="Waiting for your organization’s identity provider. Keep this tab open." data-vi="Đang chờ nhà cung cấp danh tính của tổ chức. Giữ thẻ này mở.">Waiting for your organization’s identity provider. Keep this tab open.</span></p><button type="button" class="v3-btn " disabled="" aria-busy="true"><span data-en="Signing in…" data-vi="Đang đăng nhập…">Signing in…</span></button></div>
+<div class="v3-stack" data-pane="callback" hidden="" role="status"><h2><span data-en="Completing sign-in" data-vi="Đang hoàn tất đăng nhập">Completing sign-in</span></h2><p class="v3-muted"><span data-en="Checking your session and workspace membership." data-vi="Đang kiểm tra phiên và tư cách thành viên của bạn.">Checking your session and workspace membership.</span></p><span class="v3-skeleton" aria-hidden="true"><i></i><i></i></span></div>
+<div class="v3-stack" data-pane="success" hidden="" role="status"><h2><span data-en="Authenticated" data-vi="Đã xác thực">Authenticated</span></h2><p class="v3-muted"><span data-en="The example session has access. Continue to your saved route." data-vi="Phiên minh họa có quyền truy cập. Tiếp tục đến đích đã lưu.">The example session has access. Continue to your saved route.</span></p><a class="v3-btn v3-btn--primary" data-return="" href="01-app-shell.html"><span data-en="Continue to workspace" data-vi="Tiếp tục đến không gian làm việc">Continue to workspace</span></a></div>
+<div class="v3-stack" data-pane="401" hidden="" role="status"><h2><span data-en="Your session expired" data-vi="Phiên đăng nhập đã hết hạn">Your session expired</span></h2><p class="v3-muted"><span data-en="Sign in to continue. Only the safe return destination was kept." data-vi="Đăng nhập để tiếp tục. Chỉ đích trở về an toàn được giữ lại.">Sign in to continue. Only the safe return destination was kept.</span></p><button type="button" class="v3-btn v3-btn--primary" data-start=""><span data-en="Continue with organization sign-in" data-vi="Tiếp tục bằng đăng nhập của tổ chức">Continue with organization sign-in</span></button></div>
+<div class="v3-stack" data-pane="revoked" hidden="" role="status"><h2><span data-en="Signed out" data-vi="Đã đăng xuất">Signed out</span></h2><p class="v3-muted"><span data-en="Your session has ended. No protected data is displayed." data-vi="Phiên đăng nhập đã kết thúc. Không hiển thị dữ liệu được bảo vệ.">Your session has ended. No protected data is displayed.</span></p><button type="button" class="v3-btn v3-btn--primary" data-start=""><span data-en="Continue with organization sign-in" data-vi="Tiếp tục bằng đăng nhập của tổ chức">Continue with organization sign-in</span></button></div>
+<div class="v3-stack" data-pane="idp" hidden="" role="alert"><h2><span data-en="Identity service unavailable" data-vi="Dịch vụ danh tính không khả dụng">Identity service unavailable</span></h2><p class="v3-muted"><span data-en="Your organization’s identity provider did not respond. Try again or contact your administrator." data-vi="Nhà cung cấp danh tính không phản hồi. Thử lại hoặc liên hệ quản trị viên.">Your organization’s identity provider did not respond. Try again or contact your administrator.</span></p><button type="button" class="v3-btn " data-start=""><span data-en="Retry" data-vi="Thử lại">Retry</span></button></div>
+<div class="v3-stack" data-pane="canceled" hidden="" role="status"><h2><span data-en="Sign-in canceled" data-vi="Đã hủy đăng nhập">Sign-in canceled</span></h2><p class="v3-muted"><span data-en="Nothing changed. Start again when you are ready." data-vi="Không có thay đổi. Bắt đầu lại khi bạn sẵn sàng.">Nothing changed. Start again when you are ready.</span></p><button type="button" class="v3-btn " data-start=""><span data-en="Start again" data-vi="Bắt đầu lại">Start again</span></button></div>
+<div class="v3-stack" data-pane="error" hidden="" role="alert"><h2><span data-en="Could not complete sign-in" data-vi="Không thể hoàn tất đăng nhập">Could not complete sign-in</span></h2><p class="v3-muted"><span data-en="The callback expired or was invalid. Start a new sign-in." data-vi="Callback đã hết hạn hoặc không hợp lệ. Bắt đầu đăng nhập lại.">The callback expired or was invalid. Start a new sign-in.</span></p><code>auth-req-28</code><button type="button" class="v3-btn " data-start=""><span data-en="Retry" data-vi="Thử lại">Retry</span></button></div>
+<div class="v3-stack" data-pane="empty" hidden="" role="status"><h2><span data-en="No workspace access yet" data-vi="Bạn chưa có quyền truy cập không gian làm việc">No workspace access yet</span></h2><p class="v3-muted"><span data-en="You signed in, but no workspace membership was granted. Ask your administrator for access." data-vi="Bạn đã đăng nhập nhưng chưa được cấp tư cách thành viên. Liên hệ quản trị viên để yêu cầu quyền truy cập.">You signed in, but no workspace membership was granted. Ask your administrator for access.</span></p></div>
+<div class="v3-stack" data-pane="403" hidden="" role="alert"><h2><span data-en="Not authorized" data-vi="Bạn không có quyền truy cập">Not authorized</span></h2><p class="v3-muted"><span data-en="Your membership does not grant access to this destination. Contact the workspace owner." data-vi="Tư cách thành viên không cấp quyền truy cập đích này. Liên hệ chủ không gian làm việc.">Your membership does not grant access to this destination. Contact the workspace owner.</span></p></div>
+<div class="v3-stack" data-pane="404" hidden="" role="status"><h2><span data-en="Not found" data-vi="Không tìm thấy">Not found</span></h2><p class="v3-muted"><span data-en="This workspace is unavailable." data-vi="Không gian làm việc này không khả dụng.">This workspace is unavailable.</span></p></div>
+<div class="v3-stack" data-pane="429" hidden="" role="alert"><h2><span data-en="Too many requests" data-vi="Quá nhiều yêu cầu">Too many requests</span></h2><p class="v3-muted"><span data-en="Server Retry-After: 30 s. Wait before starting a new sign-in." data-vi="Máy chủ yêu cầu chờ 30 giây. Hãy đợi trước khi đăng nhập lại.">Server Retry-After: 30 s. Wait before starting a new sign-in.</span></p><button type="button" class="v3-btn " data-start=""><span data-en="Retry" data-vi="Thử lại">Retry</span></button></div>
+<div class="v3-stack" data-pane="412" hidden="" role="status"><h2><span data-en="Edit conflict example" data-vi="Ví dụ xung đột chỉnh sửa">Edit conflict example</span></h2><p class="v3-muted"><span data-en="This is a linked editing example, not an OIDC callback response." data-vi="Đây là minh họa chỉnh sửa liên kết, không phải phản hồi callback OIDC.">This is a linked editing example, not an OIDC callback response.</span></p><button type="button" class="v3-btn " data-open="conflict"><span data-en="Review conflict" data-vi="Xem xung đột">Review conflict</span></button></div>
+<div class="v3-note" data-return-box=""><small data-en="Return destination" data-vi="Đích trở về">Return destination</small><p><b id="return-screen"></b></p><code id="return-record"></code><p data-en="No saved destination. Continue to Overview." data-vi="Không có đích đã lưu. Tiếp tục đến Tổng quan." id="neutral-return">No saved destination. Continue to Overview.</p></div></div><footer class="v3-auth__foot"><svg class="v3-icon" aria-hidden="true"><use href="#i-people"></use></svg><span data-en="Access is managed by your organization. No local password is required." data-vi="Tổ chức của bạn quản lý quyền truy cập. Không cần mật khẩu cục bộ.">Access is managed by your organization. No local password is required.</span></footer></article>
+<p class="v3-note v3-mobile-note"><span data-en="You can sign in on this device. Workspace changes require a desktop." data-vi="Bạn có thể đăng nhập trên thiết bị này. Sử dụng máy tính để thay đổi dữ liệu.">You can sign in on this device. Workspace changes require a desktop.</span></p>
+<p class="v3-caption v3-auth__caption"><span data-en="Illustrative sign-in flow · no connection to an identity provider." data-vi="Luồng đăng nhập minh họa · không kết nối nhà cung cấp danh tính.">Illustrative sign-in flow · no connection to an identity provider.</span></p><dialog id="conflict" class="v3-dialog" aria-labelledby="conflict-title"><header class="v3-dialog__header"><h2 id="conflict-title"><span data-en="Someone else changed this — reload" data-vi="Người khác đã thay đổi dữ liệu — tải lại">Someone else changed this — reload</span></h2></header><div class="v3-body"><p><span data-en="Linked edit example, not a response from this page." data-vi="Minh họa thao tác chỉnh sửa liên kết, không phải phản hồi của trang này.">Linked edit example, not a response from this page.</span></p><dl class="v3-stack"><div><dt><span data-en="Unsaved draft" data-vi="Bản nháp chưa lưu">Unsaved draft</span></dt><dd><code>requirement-r17 · evidenceChecklist: 12</code></dd></div><div><dt><span data-en="Current revision" data-vi="Phiên bản hiện tại">Current revision</span></dt><dd><code>requirement-r18 · evidenceChecklist: 14</code></dd></div></dl><p><span data-en="Reload to discard the draft. Nothing is merged or resubmitted." data-vi="Tải lại để bỏ bản nháp. Dữ liệu không được hợp nhất hay gửi lại tự động.">Reload to discard the draft. Nothing is merged or resubmitted.</span></p></div><footer class="v3-form__footer"><button type="button" class="v3-btn " data-close=""><span data-en="Keep draft" data-vi="Giữ bản nháp">Keep draft</span></button><button type="button" class="v3-btn " data-go="default"><span data-en="Reload" data-vi="Tải lại">Reload</span></button></footer></dialog><details class="v3-review-controls"><summary><span data-en="Design review controls" data-vi="Trạng thái bản mẫu">Design review controls</span></summary><div class="v3-review-controls__body"><label class="v3-field"><span data-en="Prototype state" data-vi="Trạng thái bản mẫu">Prototype state</span><select id="scenario"><option value="default" data-en="Anonymous · supplied destination" data-vi="Ẩn danh · đích được cung cấp">Anonymous · supplied destination</option>
+<option value="generic" data-en="Anonymous · no saved return" data-vi="Ẩn danh · chưa lưu đích">Anonymous · no saved return</option>
+<option value="loading" data-en="Authenticating" data-vi="Đang xác thực">Authenticating</option>
+<option value="callback" data-en="Completing sign-in" data-vi="Đang hoàn tất đăng nhập">Completing sign-in</option>
+<option value="success" data-en="Authenticated" data-vi="Đã xác thực">Authenticated</option>
+<option value="401" data-en="401 · Expired session" data-vi="401 · Phiên hết hạn">401 · Expired session</option>
+<option value="revoked" data-en="Revoked or signed out" data-vi="Đã thu hồi hoặc đăng xuất">Revoked or signed out</option>
+<option value="idp" data-en="Identity service unavailable" data-vi="Dịch vụ danh tính không khả dụng">Identity service unavailable</option>
+<option value="canceled" data-en="User canceled" data-vi="Người dùng đã hủy">User canceled</option>
+<option value="error" data-en="Callback error" data-vi="Lỗi callback">Callback error</option>
+<option value="empty" data-en="No memberships" data-vi="Chưa có tư cách thành viên">No memberships</option>
+<option value="403" data-en="403 · Known permission denied" data-vi="403 · Không có quyền">403 · Known permission denied</option>
+<option value="404" data-en="404 · Not found" data-vi="404 · Không tìm thấy">404 · Not found</option>
+<option value="429" data-en="429 · Rate limited" data-vi="429 · Quá nhiều yêu cầu">429 · Rate limited</option>
+<option value="412" data-en="412 · Linked edit example" data-vi="412 · Ví dụ xung đột chỉnh sửa">412 · Linked edit example</option></select></label></div></details></main></div>
+<script>document.addEventListener('DOMContentLoaded',()=>{
+
+const $=id=>document.getElementById(id);
+function show(s){$('scenario').value=s; const value=$('scenario').value||'default'; for(const p of document.querySelectorAll('[data-pane]'))p.hidden=!p.dataset.pane.split(' ').includes(value); document.body.dataset.preview=value; document.querySelectorAll('dialog[open]').forEach(d=>d.close()); if(value==='412')$('conflict').showModal(); update(value);}
+$('scenario').addEventListener('change',e=>show(e.target.value));
+document.addEventListener('click',e=>{const t=e.target.closest('button');if(!t)return;if(t.dataset.go)show(t.dataset.go);if(t.dataset.open)$(t.dataset.open).showModal();if(t.hasAttribute('data-close'))t.closest('dialog').close();});
+const target=EvidgateV3.returnTarget(new URLSearchParams(location.search).get('returnTo'));
+const fallback=EvidgateV3.byId.get('01');let saved=Boolean(target),timer;
+function dest(){return saved&&target?target.href:fallback.file}
+function update(s){clearTimeout(timer);if(s==='generic'||s==='revoked')saved=false;else if(['default','401'].includes(s))saved=Boolean(target);
+  const screen=saved&&target?target.screen:fallback, name=$('return-screen');name.dataset.en=screen.en;name.dataset.vi=screen.vi;name.textContent=name.dataset[document.documentElement.lang==='vi'?'vi':'en'];
+  $('return-record').textContent=saved&&target?[...target.params].map(([k,v])=>k+' = '+v).concat(target.href.includes('#')?target.href.slice(target.href.indexOf('#')):[]).join(' · '):'';
+  document.querySelector('[data-return-box]').hidden=!['default','generic','401','success','loading','callback'].includes(s);$('neutral-return').hidden=saved&&Boolean(target);document.querySelector('[data-return]').href=dest();
+}
+document.addEventListener('click',e=>{if(!e.target.closest('[data-start]'))return;show('loading');timer=setTimeout(()=>{show('callback');timer=setTimeout(()=>{show('success');timer=setTimeout(()=>location.assign(dest()),1400)},850)},850)});
+show('default');
+});</script>
+
+</body></html>

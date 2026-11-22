@@ -1,4 +1,4 @@
-import { DOCUMENT } from '@angular/common';
+import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
 import {
   afterRenderEffect,
   ChangeDetectionStrategy,
@@ -9,7 +9,6 @@ import {
   linkedSignal,
   resource,
   signal,
-  TemplateRef,
   viewChild,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -17,19 +16,16 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import type { AuthoringChangeListItem } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard } from '@evidgate/ui/card';
 import { HlmCheckbox } from '@evidgate/ui/checkbox';
+import { HlmDropdownMenuImports } from '@evidgate/ui/dropdown-menu';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { SessionStore } from '../../../core/session/session.store';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { PageHeaderComponent } from '../../../shared/ui/page-header/page-header.component';
 import { SectionHeaderComponent } from '../../../shared/ui/page-header/section-header.component';
-import {
-  DataTableComponent,
-  type DataTableColumn,
-} from '../../../shared/ui/data-table/data-table.component';
-import type { DataTableCellContext } from '../../../shared/ui/data-table/data-table-column';
-import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { RevisionChipComponent } from '../../../shared/ui/chips/revision-chip.component';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
 import { ForbiddenPatternComponent } from '../../../shared/ui/states/forbidden-pattern.component';
@@ -42,8 +38,9 @@ import { DesktopMutationDirective } from '../../../shared/ui/narrow/desktop-muta
 import { DesktopRequiredNoticeComponent } from '../../../shared/ui/narrow/desktop-required-notice.component';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { PendingChangesStore } from './pending-changes.store';
-import { PENDING_COPY, isStale, isStructural, rowBlockedReason } from './pending-changes.copy';
-import { PENDING_UI, operationLabel, sourceLabel } from './pending-changes.ui-copy';
+import { PENDING_COPY } from './pending-changes.copy';
+import { PENDING_UI, operationLabel } from './pending-changes.ui-copy';
+import { PendingChangeTableComponent } from './pending-change-table.component';
 import { PendingConfirmComponent } from './pending-confirm.component';
 
 interface Consent {
@@ -63,13 +60,16 @@ interface Consent {
     RouterLink,
     FormsModule,
     HlmButton,
+    HlmCard,
+    HlmIcon,
+    NgTemplateOutlet,
     HlmCheckbox,
     HlmInput,
     HlmLabel,
     PageHeaderComponent,
     SectionHeaderComponent,
-    DataTableComponent,
-    StatusPillComponent,
+    PendingChangeTableComponent,
+    HlmDropdownMenuImports,
     RevisionChipComponent,
     RequestStateComponent,
     ForbiddenPatternComponent,
@@ -93,6 +93,7 @@ export class PendingChangesPage {
   private readonly session = inject(SessionStore);
   private readonly route = inject(ActivatedRoute);
   private readonly document = inject(DOCUMENT);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly copy = PENDING_COPY;
   protected readonly ui = PENDING_UI;
   private readonly routeData = toSignal(this.route.data);
@@ -111,6 +112,14 @@ export class PendingChangesPage {
       : this.store.queueStatus() === 'error'
         ? 'error'
         : 'loading',
+  );
+  protected readonly blockedCount = computed(
+    () => this.store.rowsWithBlocks().filter((entry) => entry.blockedReason !== null).length,
+  );
+  protected readonly description = computed(() =>
+    this.status() === 'ready' && this.store.canRead() && !this.store.forbidden()
+      ? `${this.ui.loaded}: ${this.store.rows().length} · ${this.copy.selectionSummary}: ${this.store.selectedCount()}`
+      : this.copy.description,
   );
   protected readonly deniedWrite = computed(() =>
     [this.store.applyError(), this.store.discardError()].some(
@@ -165,75 +174,12 @@ export class PendingChangesPage {
     const error = this.writeError() ?? this.store.queueError();
     return error?.kind === 'rate_limited' || error?.kind === 'unavailable' ? error : null;
   });
-  private readonly selectionCell =
-    viewChild.required<TemplateRef<DataTableCellContext<AuthoringChangeListItem>>>('selectionCell');
-  private readonly operationCell =
-    viewChild.required<TemplateRef<DataTableCellContext<AuthoringChangeListItem>>>('operationCell');
-  private readonly targetCell =
-    viewChild.required<TemplateRef<DataTableCellContext<AuthoringChangeListItem>>>('targetCell');
-  private readonly stateCell =
-    viewChild.required<TemplateRef<DataTableCellContext<AuthoringChangeListItem>>>('stateCell');
   private readonly inspection = viewChild<ElementRef<HTMLElement>>('inspection');
   private focused: HTMLElement | null = null;
   /** A mutation removed or disabled the control that opened its confirmation. */
   private restoreFocus = false;
-  protected readonly rowId = (row: AuthoringChangeListItem) => row.change_id;
   protected readonly operationLabel = operationLabel;
-  protected readonly isStructural = isStructural;
-  protected readonly isStale = isStale;
-  protected readonly rowBlockedReason = rowBlockedReason;
-  protected readonly sourceLabel = sourceLabel;
-  protected readonly columns = computed<readonly DataTableColumn<AuthoringChangeListItem>[]>(() => [
-    {
-      id: 'selection',
-      header: this.ui.select,
-      cell: () => '',
-      role: 'actions',
-      cellTemplate: this.selectionCell(),
-    },
-    {
-      id: 'operation',
-      header: this.ui.operation,
-      cell: (row) => operationLabel(row.change_type),
-      role: 'text',
-      priority: 'primary',
-      cellTemplate: this.operationCell(),
-    },
-    {
-      id: 'target',
-      header: this.copy.targetLabel,
-      cell: (row) => this.store.targetTitles()[row.target_id] ?? row.target_id,
-      role: 'identity',
-      cellTemplate: this.targetCell(),
-    },
-    {
-      id: 'author',
-      header: this.copy.authorLabel,
-      cell: (row) => row.author_membership_id,
-      kind: 'identifier',
-      overflow: 'truncate',
-    },
-    {
-      id: 'source',
-      header: this.copy.sourceLabelQueued,
-      cell: (row) => sourceLabel(row.source),
-      overflow: 'truncate',
-    },
-    {
-      id: 'reason',
-      header: this.copy.reasonLabel,
-      cell: (row) => row.reason ?? this.copy.reasonUnset,
-      overflow: 'truncate',
-    },
-    {
-      id: 'state',
-      header: this.ui.state,
-      cell: (row) =>
-        isStale(row) ? this.ui.stale : isStructural(row) ? this.ui.unavailable : this.ui.pending,
-      role: 'status',
-      cellTemplate: this.stateCell(),
-    },
-  ]);
+  protected readonly moreLabel = $localize`:@@authoring.pending-changes.more-actions:More actions`;
 
   constructor() {
     afterRenderEffect(() => {
@@ -246,12 +192,23 @@ export class PendingChangesPage {
       if (remembered === null) return;
       if (restore) {
         if (!empty && remembered.isConnected) remembered.focus();
-        if (this.document.activeElement !== remembered) this.inspection()?.nativeElement.focus();
+        if (
+          this.document.activeElement !== remembered ||
+          !remembered.isConnected ||
+          remembered.matches(':disabled')
+        )
+          this.focusRemaining();
         return;
       }
       if (!remembered.isConnected && this.document.activeElement === this.document.body)
-        this.inspection()?.nativeElement.focus();
+        this.focusRemaining();
     });
+  }
+  private focusRemaining(): void {
+    (
+      this.host.nativeElement.querySelector<HTMLElement>('[data-pending-preview]') ??
+      this.inspection()?.nativeElement
+    )?.focus();
   }
   protected rememberFocus(event: FocusEvent): void {
     const target = event.target;
@@ -274,7 +231,7 @@ export class PendingChangesPage {
       destructive: changes.some((row) => row.change_type === 'delete'),
     });
   }
-  protected openDiscard(id: string): void {
+  protected openDiscard(id: string, opener: HTMLButtonElement): void {
     if (
       !this.policy.allowsMutation() ||
       this.store.discardBlocked() ||
@@ -283,6 +240,7 @@ export class PendingChangesPage {
       !this.store.retryReady()
     )
       return;
+    opener.focus();
     this.consent.set({
       kind: 'discard',
       project: this.store.projectId(),

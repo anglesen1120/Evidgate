@@ -1,0 +1,76 @@
+<section hlmCard class="min-w-0">
+  <header hlmCardHeader class="border-b">
+    <h2 hlmCardTitle [size]="'section'" id="history-compare">{{ c.compare }}</h2>
+  </header>
+  <div hlmCardContent class="grid min-w-0 gap-(--eg-space-4)">
+    @if (notice(); as n) {
+      <app-inline-feedback [title]="n[0]" [description]="n[1]" />
+    }
+    @if (!['one', 'equal', 'changed'].includes(state())) {
+      <label for="history-revision" id="history-revision-label" class="font-semibold">{{
+        c.selection
+      }}</label>
+      <hlm-select [value]="revision()" (valueChange)="choose($event)">
+        <hlm-select-trigger
+          [buttonId]="'history-revision'"
+          class="w-full min-h-(--eg-control-touch)"
+        >
+          @for (option of options; track option[0]) {
+            @if (option[0] === revision()) {
+              {{ option[1] }}
+            }
+          }
+        </hlm-select-trigger>
+        <hlm-select-content *hlmSelectPortal aria-labelledby="history-revision-label">
+          @for (option of options; track option[0]) {
+            <hlm-select-item [value]="option[0]">{{ option[1] }}</hlm-select-item>
+          }
+        </hlm-select-content>
+      </hlm-select>
+    }
+    @if (!['one', 'equal'].includes(state())) {
+      @if (state() === 'changed' || revision() === 'ev-3') {
+        <div
+          hlmTableContainer
+          class="max-w-full overflow-x-auto"
+          tabindex="0"
+          role="region"
+          aria-labelledby="history-compare"
+        >
+          <table hlmTable class="w-full min-w-[32rem] table-fixed text-xs">
+            <thead hlmTHead>
+              <tr hlmTr>
+                <th hlmTh scope="col" class="w-1/4">{{ c.field }}</th>
+                <th hlmTh scope="col">{{ c.before }}</th>
+                <th hlmTh scope="col">{{ c.after }}</th>
+              </tr>
+            </thead>
+            <tbody hlmTBody>
+              @for (row of rows(); track row[0]) {
+                <tr hlmTr>
+                  <th hlmTh scope="row" class="whitespace-normal">{{ row[0] }}</th>
+                  <td hlmTd class="whitespace-normal">{{ row[1] }}</td>
+                  <td hlmTd class="whitespace-normal">{{ row[2] }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        @if (state() !== 'missing' && state() !== 'changed') {
+          <a
+            hlmBtn
+            [variant]="'outline'"
+            class="justify-self-start"
+            [routerLink]="artifactPath()"
+            [queryParams]="{ id: r.artifact }"
+            >{{ c.artifact }} · {{ r.artifact }}</a
+          >
+        }
+      } @else if (revision() === 'ev-2') {
+        <app-inline-feedback [title]="c.newer" [description]="c.newerBody" />
+      } @else {
+        <app-inline-feedback [title]="c.reprocessed" [description]="c.reprocessedBody" />
+      }
+    }
+  </div>
+</section>

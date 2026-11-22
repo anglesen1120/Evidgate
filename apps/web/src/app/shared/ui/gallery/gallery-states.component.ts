@@ -171,9 +171,13 @@ import { LiveStatusComponent } from '../states/live-status.component';
         Field feedback and narrow notices
       </h2>
       <app-form-required-note [convention]="'mostly-optional'" />
-      <form class="grid min-w-0 max-w-md gap-3" novalidate (submit)="submitSpecimen($event)">
+      <form
+        class="grid min-w-0 max-w-md gap-(--eg-space-4)"
+        novalidate
+        (submit)="submitSpecimen($event)"
+      >
         <app-form-error-summary [summaryId]="'gallery-form-errors'" [feedback]="feedback" />
-        <div class="grid min-w-0 gap-2">
+        <div class="grid min-w-0 gap-(--eg-space-3)">
           <label hlmLabel [for]="field.id">
             {{ field.label }} <app-field-requirement [required]="true" />
           </label>

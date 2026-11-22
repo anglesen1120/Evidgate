@@ -70,7 +70,7 @@ interface PreviewRow {
             @if (row.errors.get(field); as error) {
               <p
                 [id]="'import-row-' + row.index + '-' + field + '-error'"
-                class="m-0 whitespace-pre-wrap wrap-anywhere"
+                class="m-0 text-sm font-medium whitespace-pre-wrap text-(--eg-danger-fg) wrap-anywhere"
               >
                 {{ error }}
               </p>

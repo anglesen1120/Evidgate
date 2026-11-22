@@ -1,17 +1,102 @@
 :host {
   display: grid;
   min-inline-size: 0;
-  gap: var(--eg-space-7);
+  gap: var(--eg-space-5);
+  container-type: inline-size;
   color: var(--eg-text);
 }
-app-request-state {
+app-request-state,
+.review-workspace,
+.scope-counts {
   display: grid;
-  gap: var(--eg-space-7);
+  min-inline-size: 0;
+  gap: var(--eg-space-5);
+}
+.review-workspace {
+  align-items: start;
+}
+.heading-tile {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: var(--eg-space-10);
+  block-size: var(--eg-space-10);
+  border-radius: var(--eg-radius-md);
+  background: var(--eg-accent-soft);
+  color: var(--eg-accent-fg);
+}
+.scope-counts {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: var(--eg-border-width);
+  overflow: hidden;
+  padding: 0;
+  background: var(--eg-border);
+  margin: 0;
+}
+.scope-counts > div {
+  display: grid;
+  align-content: start;
+  min-inline-size: 0;
+  gap: var(--eg-space-2);
+  padding: var(--eg-space-4) var(--eg-space-5);
+  background: var(--eg-surface);
+}
+.scope-counts dt {
+  display: flex;
+  align-items: center;
+  gap: var(--eg-space-3);
+  font-size: var(--eg-text-sm);
+  font-weight: var(--eg-weight-semibold);
+}
+.scope-counts hlm-icon {
+  inline-size: var(--eg-space-7);
+  block-size: var(--eg-space-7);
+  padding: var(--eg-space-2);
+  border-radius: var(--eg-radius-sm);
+  color: var(--eg-pending-fg);
+  background: var(--eg-pending-bg);
+}
+.scope-counts dd {
+  margin: 0;
+  font-family: var(--eg-font-display);
+  font-weight: var(--eg-weight-bold);
+}
+.scope-counts dd {
+  font-size: var(--eg-text-2xl);
+  line-height: var(--eg-leading-2xl);
+  font-variant-numeric: tabular-nums;
+}
+.scope-counts .scope-hint {
+  font: var(--eg-weight-regular) var(--eg-text-xs) / var(--eg-leading-xs) var(--eg-font-body);
+  color: var(--eg-text-muted);
 }
 .region {
   display: grid;
   min-inline-size: 0;
   gap: var(--eg-space-4);
+}
+.region[hlmCard] {
+  padding: var(--eg-space-5);
+}
+.region > app-section-header {
+  padding-block-end: var(--eg-space-4);
+  border-block-end: var(--eg-border-width) solid var(--eg-border);
+}
+.region.queue-panel {
+  padding: 0;
+  gap: 0;
+}
+.queue-panel > app-section-header {
+  padding: var(--eg-space-4) var(--eg-space-5);
+}
+.queue-panel > button {
+  margin: var(--eg-space-3) var(--eg-space-4);
+}
+.preview-note {
+  padding: var(--eg-space-4);
+  border-radius: var(--eg-radius-md);
+  background: var(--eg-surface-raised);
+  color: var(--eg-text);
 }
 .actions {
   display: flex;
@@ -56,9 +141,8 @@ app-request-state {
   margin: 0;
   min-inline-size: 0;
 }
-.inspection {
-  border-block: var(--eg-border-width) solid var(--eg-border);
-  padding-block: var(--eg-space-7);
+.inspection:empty {
+  min-block-size: var(--eg-control-touch);
 }
 .blocked-item {
   display: grid;

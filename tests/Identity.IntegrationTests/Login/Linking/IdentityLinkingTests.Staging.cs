@@ -100,7 +100,7 @@ public sealed partial class IdentityLinkingTests : TenantTest
     [Fact]
     public async Task CookieValues_NeverReachLogsOrLocationHeaders()
     {
-        var logs = new LinkTestHost.CapturingLoggerProvider();
+        var logs = new CapturingLoggerProvider();
 
         using var host = LinkTestHost.StartWithLogs(
             Fixture,
@@ -173,20 +173,20 @@ public sealed partial class IdentityLinkingTests : TenantTest
         // The callback's query is the real leak vector: neither the code nor the state parameter may be logged, and
         // the authorization code value this host sends must not appear at any level either.
         logs.Entries.ShouldNotContain(
-            entry => entry.Message.Contains("code=", StringComparison.Ordinal),
+            entry => entry.Texts.Any(text => text.Contains("code=", StringComparison.Ordinal)),
             "the provider's authorization code must never be logged");
         logs.Entries.ShouldNotContain(
-            entry => entry.Message.Contains("state=", StringComparison.Ordinal),
+            entry => entry.Texts.Any(text => text.Contains("state=", StringComparison.Ordinal)),
             "the one-time state query must never be logged");
         logs.Entries.ShouldNotContain(
-            entry => entry.Message.Contains("authorization-code", StringComparison.Ordinal),
+            entry => entry.Texts.Any(text => text.Contains("authorization-code", StringComparison.Ordinal)),
             "the code value itself must never appear at any level");
 
-        foreach (var entry in logs.Entries)
+        foreach (var text in logs.Entries.SelectMany(entry => entry.Texts))
         {
             foreach (var value in sensitive)
             {
-                entry.Message.ShouldNotContain(value, Case.Insensitive);
+                text.ShouldNotContain(value, Case.Insensitive);
             }
         }
     }

@@ -14,7 +14,7 @@ namespace Tenancy.IntegrationTests;
 /// are proven visible under a set tenant so the zero cannot come from an empty table.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class TenantGucTests
+public sealed partial class TenantGucTests
 {
     private readonly PostgresTenancyFixture _fixture;
 
@@ -41,6 +41,8 @@ public sealed class TenantGucTests
         tenantTables.ShouldContain("public.project");
         tenantTables.ShouldContain("public.rls_probe");
         tenantTables.ShouldContain("public.idempotency_record");
+        tenantTables.ShouldContain("public.draft");
+        tenantTables.ShouldContain("public.support_grant");
 
         // What the migration owner sees with no tenant setting: the permissive
         // `TO evidgate_owner` policies (0003-0007) make this the whole table, so a
@@ -294,6 +296,8 @@ public sealed class TenantGucTests
             insert into public.membership (id, org_id, user_id, invited_email, status)
             values ('{aiMembership}', '{orgId}', '{aiAuthor}', 'author-{aiAuthor:N}@example.test', 'active')
             """);
+        await SeedDraftAsync(scope, orgId, projectId, aiMembership);
+        await SeedSupportGrantAsync(scope, orgId, projectId, aiAuthor);
         await scope.ExecuteAsync(
             """
             insert into public.project_ai_settings

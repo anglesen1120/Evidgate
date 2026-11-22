@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Application.Commands;
@@ -38,6 +39,15 @@ internal static class AuthoringManualCaseEndpoints
     {
         ArgumentNullException.ThrowIfNull(authoring);
 
+        MapManualCaseListEndpoints(authoring);
+        MapManualCaseDetailEndpoints(authoring);
+        MapManualCaseMutationEndpoints(authoring);
+        MapManualCaseLinkEndpoints(authoring);
+    }
+
+    /// <summary>Routes 12 and 13: the page of cases and the create that allocates a code.</summary>
+    private static void MapManualCaseListEndpoints(RouteGroupBuilder authoring)
+    {
         authoring.MapGet("/manual-cases", ListAsync)
             .Produces<ManualCaseListResponse>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status422UnprocessableEntity)
@@ -54,12 +64,20 @@ internal static class AuthoringManualCaseEndpoints
             .Produces(StatusCodes.Status422UnprocessableEntity)
             .Produces(StatusCodes.Status503ServiceUnavailable)
             .WithSummary("Create a manual test case; the code is allocated per 13.1.1 §4 (route 13)");
+    }
 
+    /// <summary>Route 14: one case with its steps.</summary>
+    private static void MapManualCaseDetailEndpoints(RouteGroupBuilder authoring)
+    {
         authoring.MapGet("/manual-cases/{m}", GetAsync)
             .Produces<ManualCaseDetailDto>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status404NotFound)
             .WithSummary("One manual test case with its steps and an ETag (route 14)");
+    }
 
+    /// <summary>Routes 15-17 and 19: the changes to one case's content, state and parent item.</summary>
+    private static void MapManualCaseMutationEndpoints(RouteGroupBuilder authoring)
+    {
         authoring.MapPatch("/manual-cases/{m}", PatchAsync)
             .Accepts<UpdateManualCaseRequest>("application/json")
             .Produces<AuthoringChangeResponse>(StatusCodes.Status200OK)
@@ -91,7 +109,11 @@ internal static class AuthoringManualCaseEndpoints
             .Produces(StatusCodes.Status412PreconditionFailed)
             .Produces(StatusCodes.Status422UnprocessableEntity)
             .WithSummary("Re-parent a manual test case to another item of the project (route 19, AC22)");
+    }
 
+    /// <summary>Routes 20 and 21: the links to live catalog test cases.</summary>
+    private static void MapManualCaseLinkEndpoints(RouteGroupBuilder authoring)
+    {
         authoring.MapPost("/manual-cases/{m}/links", LinkAsync)
             .Accepts<LinkManualCaseRequest>("application/json")
             .Produces<LinkManualCaseResponse>(StatusCodes.Status201Created)
@@ -119,29 +141,20 @@ internal static class AuthoringManualCaseEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
-        if (AuthoringEndpointSupport.LimitError(context.Request.Query["limit"], out var limit) is { } limitError)
-        {
-            return Result.Failure<ManualCaseListResponse>(limitError);
-        }
-
-        if (AuthoringEndpointText.OptionalId(context.Request.Query, "node_id", out var nodeId) is { } nodeError)
-        {
-            return Result.Failure<ManualCaseListResponse>(nodeError);
-        }
-
-        if (AuthoringEndpointText.OptionalId(context.Request.Query, "item_id", out var itemId) is { } itemError)
-        {
-            return Result.Failure<ManualCaseListResponse>(itemError);
-        }
+        Guid? nodeId = null;
+        Guid? itemId = null;
+        bool? covered = null;
+        var requestError = AuthoringEndpointSupport.LimitError(context.Request.Query["limit"], out var limit);
+        requestError ??= AuthoringEndpointText.OptionalId(context.Request.Query, "node_id", out nodeId);
+        requestError ??= AuthoringEndpointText.OptionalId(context.Request.Query, "item_id", out itemId);
 
         // AC12: authoring coverage, not the execution coverage of another module's report. An unfiltered page is the
         // default; an explicit value narrows to linked (true) or unlinked (false) cases.
-        if (AuthoringEndpointText.OptionalBoolean(context.Request.Query, "covered", out var covered) is { } coveredError)
-        {
-            return Result.Failure<ManualCaseListResponse>(coveredError);
-        }
+        requestError ??= AuthoringEndpointText.OptionalBoolean(context.Request.Query, "covered", out covered);
 
+        // The pipeline authorizes the caller before the handler answers the query error.
         return await mediator.Send(
             new ListManualCasesQuery(
                 p,
@@ -152,7 +165,8 @@ internal static class AuthoringManualCaseEndpoints
                 covered,
                 AuthoringEndpointText.Blank(context.Request.Query["q"]),
                 AuthoringEndpointText.Blank(context.Request.Query["cursor"]),
-                limit),
+                limit,
+                requestError),
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -164,6 +178,9 @@ internal static class AuthoringManualCaseEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        // Refuse an unresolved caller before anything else reads the request.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
         var (body, bodyError) = await AuthoringEndpointSupport.ReadBodyAsync(context, cancellationToken).ConfigureAwait(false);
 
@@ -198,6 +215,7 @@ internal static class AuthoringManualCaseEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
         var result = await mediator.Send(new GetManualCaseQuery(p, m), cancellationToken).ConfigureAwait(false);
 
@@ -218,6 +236,9 @@ internal static class AuthoringManualCaseEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        // Refuse an unresolved caller before the precondition is parsed.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
         if (AuthoringEndpointSupport.IfMatchVersion(context, out var version) is { } ifMatchError)
         {
@@ -257,6 +278,9 @@ internal static class AuthoringManualCaseEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        // Refuse an unresolved caller before the precondition is parsed.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
         if (AuthoringEndpointSupport.IfMatchVersion(context, out var version) is { } ifMatchError)
         {
@@ -302,6 +326,9 @@ internal static class AuthoringManualCaseEndpoints
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        // Refuse an unresolved caller before the precondition is parsed.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
         if (AuthoringEndpointSupport.IfMatchVersion(context, out var version) is { } ifMatchError)
         {
             return Result.Failure<SetManualCaseStateResponse>(ifMatchError);
@@ -340,6 +367,9 @@ internal static class AuthoringManualCaseEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        // Refuse an unresolved caller before the precondition is parsed.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
         if (AuthoringEndpointSupport.IfMatchVersion(context, out var version) is { } ifMatchError)
         {
@@ -380,6 +410,9 @@ internal static class AuthoringManualCaseEndpoints
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        // Refuse an unresolved caller before anything else reads the request.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
         var (body, bodyError) = await AuthoringEndpointSupport.ReadBodyAsync(context, cancellationToken).ConfigureAwait(false);
 
         if (bodyError is not null)
@@ -407,6 +440,9 @@ internal static class AuthoringManualCaseEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        // Refuse an unresolved caller before anything else reads the request.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
         return await mediator.Send(
             new UnlinkManualCaseCommand(p, m, c, AuthoringEndpointSupport.IdempotencyKey(context)),

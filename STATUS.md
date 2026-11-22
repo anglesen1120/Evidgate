@@ -1,16 +1,23 @@
 # Evidgate — delivery status
 
-Updated 2026-11-11. Source of truth for tasks: `plans/01`–`13` and `plans/features/`; this file tracks execution only. Task ids and sizes come from `scripts/plan_graph.py`.
+Updated 2026-11-22. Source of truth for tasks: `plans/01`–`13` and `plans/features/`; this file tracks execution only. Task ids and sizes come from `scripts/plan_graph.py`.
 
 ## 1. Snapshot
 
 ### Resume here
-- Develop: `2aa4f110` (#798, S395; before it `881cbfa4`, #794, S391; before it `b286d2f3`, #791, S390; before it `2e5a144b`, #787, S388; before it `36a1c832`, #786, S387; before it `f5d058ff`, #783, S386; before it `396004a8`, #781, S385; before that `df2998e5`, #780, S384). Migrations `0001`–`0102` are contiguous; highest is `0102_run_project_fk.sql`, next free `0103` (S388 used `0102`, #787; S384 used `0101`, #780; S377 used `0100`, #768; S374 used `0099`, #761); 08.5.1-T1.1/T1.2 merged (#306), T1 stays partial (T1.3–T1.7 open). Closed owner-review rows live in `docs/phase-review-archive.md` (a row moves there verbatim in the commit that closes it).
+- Develop: `2aa4f110` (#798, S395; before it `881cbfa4`, #794, S391; before it `b286d2f3`, #791, S390; before it `2e5a144b`, #787, S388; before it `36a1c832`, #786, S387; before it `f5d058ff`, #783, S386; before it `396004a8`, #781, S385; before that `df2998e5`, #780, S384). Migrations `0001`–`0121` are contiguous on the wave branch; highest is `0121_catalog_template_key_reuse_guard.sql`, next free `0122` (S638 used `0121`, #1288; S634 `0120`, #1282; S626 `0119`, #1270; S616 `0118`, #1247; S388 `0102`, #787; S384 `0101`, #780; S377 `0100`, #768); 08.5.1-T1.1/T1.2 merged (#306), T1 stays partial (T1.3–T1.7 open). Closed owner-review rows live in `docs/phase-review-archive.md` (a row moves there verbatim in the commit that closes it).
 - Open PRs: dependabot PRs plus none from S385 (merged); S390 merged as #791 (b286d2f3); S387 merged as #786 (36a1c832); S385 merged as #781 (396004a8); S384 as #780 (df2998e5); S380 merged as #778 (392048eb); S383 as #776 (c11b8731); S379 as #774 (f3e7f9a4); S378 as #772 (2de254d4); S377 as #768 (4335f4e0); S375 as #769 (c70c3d94); S376 as #766 (6f0fda6a); S373 as #763 (57591934).
 - Wave layout (owner 2026-10-26): 1 backend + 2 web-only panels; a lane whose diff `python3 scripts/gate_scope.py` classifies `docs` or `no-dotnet` runs phase 1 (that tier's stages) + `npm run e2e -w apps/web` when `apps/web` changed, and never takes the Docker gate lock; a `full` tier needs phase 2 and the lock (`.omp/coordinator/PROJECT.md §Gate`).
 - Lanes in flight (2026-11-12): S389 (gate-LAN lane; the owner pauses the wave after it, none follows); merged: S390 REVIEW-INFRA-LAN #791 (b286d2f3), S388 PROJECT-FK #787 (2e5a144b), S387 RYUK-RETRY #786 (36a1c832), S386 GATE-STAGE-TIME #783 (f5d058ff), S385 PARSER-NO-EGRESS #781 (396004a8), S384 ORG-REVOKE #780 (df2998e5), S380 #778 (392048eb), S383 #776 (c11b8731), S379 #774 (f3e7f9a4), S378 #772, S377 #768, S375 #769, S376 #766, S373 #763, S374 #761, S371 #759; earlier lanes are merged and closed out (every STATUS.md line is <= 768 chars, history in `docs/status-archive.md`).
-- Fully landed on develop (recount S369 through #751, `41edd414`): 240/660 tasks (≈36.4 %); 240.0/706.75 raw person-days (≈34.0 %); remaining 420 tasks / 466.75 d. Via merged PRs: 213 tasks / 215.0 d; the other 27 tasks / 25.0 d are direct commits on develop. 37 parents are partial and carry no credit (§2). (archive: S372 item 2)
-- Landed by phase (done tasks / raw d): G1 153 / 160.25; G2 70 / 63.5; G3 5 / 4.5; G4 12 / 11.75.
+- Fully landed on `wave/2026-11-20b` (recount S655 through #1315, `4750af76`; not yet merged to develop, which is at #1050): 248/660 tasks (≈37.6 %); 246.5/706.75 raw person-days (≈34.9 %); remaining 412 tasks / 460.25 d. Via merged PRs: 221 tasks / 221.5 d; the other 27 tasks / 25.0 d are direct commits on develop. 49 parents are partial and carry no credit (§2, recounted from scratch in S655; 13.2.2-T1 withdrawn after the merge, its Done-when test does not exist). S655 credits 03.1.4-T2, 03.5.1-T1, 03.6.1-T1, 02.4.3-T2 and 07.5.1-T2; 04.8.1-T2 (AC3 open) and 05.2.1-T3 (run.log key borrowing open) stay partial. (archive: S655 item 1)
+- Landed by phase (done tasks / raw d): G1 154 / 160.75; G2 76 / 68.5; G3 5 / 4.5; G4 13 / 12.75. (archive: S655 item 2)
+- UI wave `wave/2026-11-22-ui`: 09.10.1-T1 (design tokens, self-hosted fonts, theme switch, M) landed on the wave in #1319 (`7110064f`); counted as landed-on-wave only, no recount credit until the wave reaches develop, and 09.10.1 stays a partial parent (T2, T3 open).
+- UI wave, S658: 09.10.1-T3 (shared components restyle, L) landed on the wave in #1323 (`d7196c0f`); counted as landed-on-wave only, no recount credit until the wave reaches develop; 09.10.1 stays a partial parent. Owner-review items (sonner region label English upstream, 14 px table body, gallery layout vs mockup 00) are carried rows in `docs/status-carried.md`.
+- UI wave, S662: 09.10.1-T4 (re-skin of overview, run list, run detail and evidence panel, L) landed on the wave in #1326 (`3b0b42a3`); counted as landed-on-wave only, no recount credit until the wave reaches develop; 09.10.1 stays a partial parent. Mockup 07 has no production screen. Open items are carried rows 'Cancel action native disabled (S662)', 'Inspect evidence retry-focus spec (S662)' and the WAVE-GATE row 'axe/contrast, +40% copy, 200% reflow (S662)'.
+- UI wave, S665: re-skin of the suite composition screen (mockup 20; the only production suite screen) landed on the wave in #1332 (`969a647a`); no task credit claimed and no recount; 09.10.1 stays a partial parent. Unbuilt mockup elements: carried row 'Mockup 20 elements without behaviour (S665)'.
+- UI wave, S663: re-skin of settings and availability screens (mockups 27-33, 37, 16; 09.10.1-T11 and the existing-screen parts of T12 and T7) landed on the wave in #1334 (`86a08601`); no task credit claimed and no recount; screen 16 has no browser capture yet (carried row 'Availability browser capture (S663)').
+- UI wave, S657: 09.10.1-T2 (app shell from the typed navigation registry and sign-in, L) landed on the wave in #1321 (`81717ad5`); counted as landed-on-wave only, no recount credit until the wave reaches develop; 09.10.1 stays a partial parent. The account menu sign-out is labelled "Sign out of this tab" because it is client-only; that is covered by the existing carried row "Logout server half landed in 02.3.2-T2; the web `SessionEnder` swap stays open (09.1.1-T5, S98, #213, D-S98-Q1)". Two new carried rows are in `docs/status-carried.md`.
+- UI wave, S664: re-skin of the existing onboarding, project overview, catalog, feature tree, case editor, pending changes, AI settings and import/export screens (mockups 23-25, 40-42, 44, 45; 09.10.1-T9 existing parts and T10; mockup 43 has no production screen) landed on the wave in #1337 (`ad6df101`); no task credit claimed and no recount; 09.10.1 stays a partial parent.
 - Plan totals: 660 tasks / 706.75 raw / 848.1 buffered person-days (`plan_graph.py` on `41edd414`: errors 0, 205 stories; 04.2.2-T3 manifest generator added in S186, M; the S93 canonical figures were 655 / 702.75 / 843.3). `check_features.py` exits 0 since S370 (#755: 205 of 205 feature files, errors 0, warnings 0).
 - CI: `ci.yml` runs `verify.sh` stages; recent delivery records report CI refused for billing (owner treats as pass), not CI green.
 - Owner decisions: O1 (engine), O4, O8 and O10 decided; O3 deferred. O2 decided 2026-10-02 (one-person team; reviews by people or AI sessions against a standard plan and spec, DECISIONS §8). Open: O5, O6, O7, O9, O11, O12. B2 flow approval and product questions stay in §6.
@@ -21,15 +28,31 @@ Updated 2026-11-11. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 
 ## 2. Done
 
-Counted by expanding task ranges in merged PR bodies, close-out rows and plan Notes against plan_graph task ids (S369 recount through #751, `41edd414`, method unchanged from S189; the S337 recount covered #689, the S317 recount #648 and the S299 recount #612); a parent task counts only when every defined sub-row has landed on develop; sizes XS .25 S .5 M 1 L 2 XL 3. detail: carried rows 'STATUS §2 count log S112-S128' (S144 F61), 'STATUS §2 count log S299', 'STATUS §2 count log S317' and 'STATUS §2 count log S369'.
+Counted by expanding task ranges in merged PR bodies, close-out rows and plan Notes against plan_graph task ids (S655 recount through #1315, `4750af76`, method unchanged from S189; the S599 recount covered #1206, S369 #751, S337 #689, the S317 recount #648 and the S299 recount #612); a parent task counts only when every defined sub-row has landed on develop; sizes XS .25 S .5 M 1 L 2 XL 3. detail: carried rows 'STATUS §2 count log S112-S128' (S144 F61), 'STATUS §2 count log S299', 'STATUS §2 count log S317' and 'STATUS §2 count log S369'.
 
 | Delivery scope | Tasks | Raw person-days |
 |---|---|---|
-| Fully landed on develop | 240 | 240.0 |
-| Via merged PRs | 213 | 215.0 |
+| Fully landed on the wave branch (S655) | 248 | 246.5 |
+| Via merged PRs | 221 | 221.5 |
 | Direct commits on develop, no PR | 27 | 25.0 |
-| Remaining | 420 | 466.75 |
+| Remaining | 412 | 460.25 |
 | Plan total | 660 | 706.75 |
+
+The S655 recount (base 244 / 243.5 at `7d196b99`, through #1315) adds the five tasks in the table below for 249 / 247.5; G1 +1 / +0.5, G2 +3 / +2.5, G4 +1 / +1.0; areas 02 +1, 03 +3, 07 +1. Its partial-parent list was rebuilt from the plan sub-rows, the carried rows and the 2026-11-22 plan Notes, not carried forward by delta: 03.1.4-T2, 02.4.3-T2 and 07.5.1-T2 leave it, 04.8.1-T2 joins, 48 remain. The other PRs after #1206 (#1207–#1315 other than those below: file splits, test hardening, gate and docs) add no task credit. A carried row that only records wording, a hand-over or test hygiene does not withhold credit; a row naming an acceptance criterion or Done-when does.
+
+| Task | Size | Days | Phase | PR (merge sha) | Whole / partial and evidence |
+|---|---|---|---|---|---|
+| 03.1.4-T2 | S | 0.5 | G1 | #458 (suite half), #1282 (`3dd49402`, template half) | Whole: T2.1 and T2.2 landed; `TemplateTests.Taxonomy.cs`, migration `0120`; the stale carried row 'template taxonomy (T2 template half)' is closed by #1282 |
+| 03.5.1-T1 | M | 1.0 | G4 | #1247 (`5d9a86b8`, T1.1), #1270 (`ca9f8837`, T1.2) | Whole: both defined sub-rows landed (`TemplateTests.Catalogue.cs` `Template_CatalogueRls`, `TemplateTests.Reads.cs` `ListTemplates_RunsInAReadOnlyTransaction`, `WebTemplateTests.cs` `WebTemplate_SecretLiteral_FailsConformance`, `Template_BodyRef_Deterministic`); the carried rows are scanner, index and seed notes |
+| 03.6.1-T1 | M | 1.0 | G2 | #1214 (`33f55a00`) | Whole: T1.1 (migration `0117`) and T1.2 (four routes) landed; AC1 proven by `DraftTests.Update.cs:16` (412 names the current version), `:42` (200, version +1) and AC6 by `:70`; carried row 'Draft AC1 wording and author-only edit' is wording (plan 03.6.1:207) plus an author check AC1 does not require |
+| 02.4.3-T2 | M | 1.0 | G2 | #835 (T2.1–T2.3), #1222 (`ac278c2c`, AC4 log scan) | Whole: AC4 log-sink scan `LogScan_EvidgateCategories_NeverCarryATokenAKeyOrAFlowSecret` and `LogScan_FrameworkCategories_...` (plan 02.4.3:96, :130); the S410 refusal-audit and deleted-row items are hand-overs |
+| 07.5.1-T2 | S | 0.5 | G2 | #1211 (`d3d1dfbe`, T2.1); T2.2 earlier | Whole: `ReconcileRunTests.ReleaseConsumedDecision_ByteIdentical_AfterN1`, TRUNCATE denied and route scan; the row 'Consumed decision test: re-point at the real release-decision pointer (S601)' is test hygiene for 07.5.3 |
+
+Arithmetic: base 244 + 5 = 249 tasks; 243.5 + (0.5 + 1.0 + 1.0 + 1.0 + 0.5 = 4.0) = 247.5 d. Phases: G1 154 + 1 = 155 and 161.25 + 0.5 = 161.75; G2 73 + 3 = 76 and 66.0 + 2.5 = 68.5; G3 5 and 4.5; G4 12 + 1 = 13 and 11.75 + 1.0 = 12.75; 155 + 76 + 5 + 13 = 249 and 161.75 + 68.5 + 4.5 + 12.75 = 247.5. Areas (tasks / d): 01 49 / 55.0, 02 34 / 31.5, 03 13 / 11.5, 04 30 / 29.0, 05 27 / 29.5, 06 16 / 13.0, 07 14 / 10.75, 08 1 / 1.0, 09 33 / 34.0, 10 7 / 7.0, 11 13 / 10.25, 12 5 / 6.5, 13 7 / 8.5 sum to 249 / 247.5. Via PRs 217 + 5 = 222 and 218.5 + 4.0 = 222.5; 222 + 27 = 249; 222.5 + 25.0 = 247.5; remaining 660 − 249 = 411 and 706.75 − 247.5 = 459.25.
+
+S655 close-out correction (owner-delegated strict reading): 13.2.2-T1 (M, G1, area 13, 1.0 d, via PR #199) loses its credit, so the landed figures are 248 / 660 tasks (≈37.6 %) and 246.5 / 706.75 d (≈34.9 %); remaining 412 / 460.25 d; via PRs 221 / 221.5; G1 154 / 160.75 (G2, G3, G4 unchanged); area 13 6 / 7.5; size mix XS 4, S 75, M 131, L 37, XL 1 (248); 154 + 76 + 5 + 13 = 248 and 160.75 + 68.5 + 4.5 + 12.75 = 246.5.
+
+The S599 recount (base 240 / 240.0 at `41edd414`, through #1206) adds 05.2.2-T3 (G2, M, #528, #837, #854), 05.3.2-T3 (G2, M, #330, #344, #348, #1002), 09.7.1-T9 (G2, S, #896, #906) and 10.1.2-T1 (G1, M, #516, #820, #821) for 244 / 243.5; G1 +1 / +1.0, G2 +3 / +2.5; areas 05 +2, 09 +1, 10 +1.
 
 (archive: S372 item 3) The S369 recount adds 04.1.2-T2 (G2, S, #736), 06.1.3-T1 (G2, S, #729), 09.3.1-T6 (G2, M, #568, #642, #703, #715) and 10.3.1-T3 (G1, M, #732) for 240 / 240.0. 10.3.1-T2 (#722), 10.3.2-T1 (#465, #713) and 11.2.1-T2 (#726) are not credited: their plan Done-whens record an open part (see §1 Resume). The per-phase and per-area splits below add the four tasks to the S317 tables (G1 +1 / +1.0, G2 +3 / +2.0; areas 04, 06, 09, 10 +1 each). (archive: S372 item 4) Parents credited by the S299 recount:
 
@@ -49,23 +72,21 @@ Counted by expanding task ranges in merged PR bodies, close-out rows and plan No
 |---|---|---|
 | 01.10.1-T1 | T1.2 | #510 |
 | 01.7.1-T3 | T3.1 | #11 (T3.2) |
-| 03.1.4-T2 | T2.2 | #458 |
-| 04.1.2-T3 | T3.1 | none (T3.1 landed #811 c932d98c; T3 complete, leaves this list at the next recount) |
+| 04.8.1-T2 | T2.1 AC3 reprocess end-to-end ledger assertion (carried row '04.8.1-T2.1 AC3 reprocess end-to-end ledger assertion') | #1312 |
+| 04.1.2-T3 | AC7 rejection counter: expired-credential, bad-org-header and unhandled-exception refusals bypass it (ingest counter carried rows) | #811 c932d98c (T3.1) |
 | 04.1.3-T1 | T1.2 | #520 |
 | 04.4.2-T1 | T1.3 | #556, #601, #609 |
 | 04.6.1-T1 | T1.4 | #523, #525 |
-| 05.2.1-T3 | none open (T3.1 remainder landed #846, 12e9a9db; the parent is credited at the next roll-up recount) | #846 |
-| 05.3.2-T3 | T3.1, T3.2 | none |
+| 05.2.1-T3 | T3.2 Done-when: no test names the `execution_key_conflict` refusal before any row; run.log key borrowing open | #846 12e9a9db (T3.1 golden vectors) |
 | 05.3.2-T4 | T4.2 | #953 (crash/retry proof landed; mutation evidence open, carried row '05.3.2-T4.2 mutation evidence') |
 | 06.2.2-T1 | T1.2 | #503 |
 | 06.3.6-T1 | T1.4 | #243, #250, #262 |
 | 07.2.2-T2 | T2.2 | #385 |
-| 08.5.1-T1 | none open (T1.1-T1.7 landed; the parent is credited at the next roll-up recount) | #306, #814, #822, #828 |
+| 08.5.1-T1 | T1.1 composite FKs for incident/candidate tables still owed to the future table creators (feature plan 08.5.1 T1.1 row) | #306, #814, #822, #828 |
 | 09.1.1-T6 | T6.2 | #139 |
 | 09.6.1-T6 | T6.2 | #346, #364 |
 | 09.8.1-T3 | T3.2, T3.4 | #561, #637 (T3.3 landed: blocking CI e2e job and browser a11y stage; T3.2 failure triage and evidence viewer specs stay open) |
 | 10.1.1-T3 | T3.4 | #558, #815 (T3.3 landed: per-environment secret placeholder generator, fresh `up.sh` boot proven on the LAN) |
-| 10.1.2-T1 | T1.1 | none (T1 complete: remaining AC1 anchors landed #820 68358713; leaves this list at the next recount) |
 | 10.2.1-T1 | T1.4 | #12 |
 | 10.3.1-T2 | Done-when: public browser traces intake and forced-sampling cap (dev profile only; plan 10.3.1 T2 notes) | #722; withheld by S369; receiver: the web-vitals intake work in 10.2.1-T1.4 and a later 10.3.1-T2 slice |
 | 10.3.2-T1 | Done-when: T1.2 AC2/AC3 proof (retention expiry, size ceiling, Worker export) | #465, #713; withheld by S369; receiver: carried rows titled `(S348)` |
@@ -78,37 +99,54 @@ Counted by expanding task ranges in merged PR bodies, close-out rows and plan No
 | 12.4.1-T2 | T2.2 | #547 |
 | 12.4.1-T3 | T3.2 | #551 |
 | 13.2.1-T1 | T1.2 | #435 |
+| 02.8.1-T1 | T1.2b request route, MyGrants, 72 h 422 and notification | #1060, #1082 |
+| 03.4.1-T1 | T1.1 Done-when: Metadata stays unverified until the registration UI is read | #824, #860 |
+| 04.1.3-T2 | T2.2c batch write half (open) and T2.2b AC5 O(1) counts | #961, #989, #993 |
+| 04.1.3-T3 | AC6/AC8 reconcile peak-memory proof; 100k walk and p95 proof | #979, #1004 |
+| 04.2.2-T3 | T3.2 Pilot-0 hand-builder removal and sidecar parity | #963, #970, #982, #987 |
+| 07.5.1-T1 | T1.2 operator route blocked on platform-operator auth (02.8.1) | #996, #1002 |
+| 09.2.1-T6 | T6.1 revision/platform/level/purpose/rename-history columns | #897, #902 |
+| 09.3.1-T7 | T7.3 rerun and T7.4 reprocess with the AC5 e2e | #903 |
+| 10.3.1-T5 | ruleset, routing and staging-every-rule drill | #1044, #1059, #1061 |
+| 13.4.1-T1 | T1.3 Done-when: WCAG criterion lines not all verified | #898 |
+| 13.4.1-T2 | AC3 source and owner filters (not served server-side) | #911, #914 |
+| 13.4.1-T3 | T3.3 Apply for merge/split selections blocked | #915, #917 |
+| 13.4.1-T5 | T5.2 AC10 restore asks for a reason | #910, #915 |
+| 13.4.1-T7 | T7.2 org AI-credit balance and usage region | #908 |
+| 13.2.2-T1 | Done-when test `RolePromptResearchReviewTests.MemoAndLicenceLedgerComplete` is not built (S655 close-out) | #199 |
 
-The 31 table rows above represent 32 partial parents (the 10.7.1-T1/T2 row covers two); with 09.5.2-T3 (T3.2 open; T3.1 landed in #684), 10.7.1-T3 (drill open, #698), 10.7.1-T5 (T5.2 open; T5.1 landed in #696) and 10.7.1-T6 (T6.2 open; T6.1 landed in #696) and 03.4.1-T1 (counted as partial at S372; T1.4 landed in #860 after this count, so the parent is complete and the next recount moves it to done) make 37 (the table rows 10.3.1-T2, 10.3.2-T1 and 11.2.1-T2 are the parents withheld by S369; 10.7.1-T1 and 10.7.1-T2 share one row); they are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5. those four have no row in the table above because a row insert would shift every STATUS.md:N cite below. (archive: S372 item 5)
+The 44 table rows above (13.2.2-T1 is the one added after the S655 merge) represent 45 partial parents (the 10.7.1-T1/T2 row covers two); with 09.5.2-T3 (T3.2 open; T3.1 landed in #684), 10.7.1-T3 (drill open, #698), 10.7.1-T5 (T5.2 open; T5.1 landed in #696) and 10.7.1-T6 (T6.2 open; T6.1 landed in #696) they make 49 (S655: 03.1.4-T2, 02.4.3-T2 and 07.5.1-T2 left the table, 04.8.1-T2 joined). Rows 10.3.1-T2, 10.3.2-T1 and 11.2.1-T2 were withheld by S369; 03.4.1-T1 was counted partial at S372 and stays so (S599). They are excluded from done counts and dependency satisfaction; landed subrows and remainders are in the delivery table and §5.
+
+13.2.2-T1 (M, G1, #199) was credited from S189 to S655; its Done-when test `RolePromptResearchReviewTests.MemoAndLicenceLedgerComplete` does not exist (rg and graph find it only in plans), so the post-merge strict reading withdraws the credit (carried row 'Role-prompt memo check'); the roster is the table rows, not an audit of every credited task.
 
 ### Done by area
 
 | Group | Tasks | XS | S | M | L | XL | Person-days |
 |---|---|---|---|---|---|---|---|
 | 01 | 49 | 2 | 11 | 24 | 11 | 1 | 55.0 |
-| 02 | 33 | 0 | 11 | 19 | 3 | 0 | 30.5 |
-| 03 | 10 | 0 | 4 | 5 | 1 | 0 | 9 |
+| 02 | 34 | 0 | 11 | 20 | 3 | 0 | 31.5 |
+| 03 | 13 | 0 | 5 | 7 | 1 | 0 | 11.5 |
 | 04 | 30 | 0 | 10 | 16 | 4 | 0 | 29.0 |
-| 05 | 25 | 0 | 7 | 12 | 6 | 0 | 27.5 |
+| 05 | 27 | 0 | 7 | 14 | 6 | 0 | 29.5 |
 | 06 | 16 | 0 | 6 | 10 | 0 | 0 | 13.0 |
-| 07 | 13 | 1 | 4 | 8 | 0 | 0 | 10.25 |
+| 07 | 14 | 1 | 5 | 8 | 0 | 0 | 10.75 |
 | 08 | 1 | 0 | 0 | 1 | 0 | 0 | 1 |
-| 09 | 32 | 0 | 9 | 17 | 6 | 0 | 33.5 |
-| 10 | 6 | 0 | 2 | 3 | 1 | 0 | 6.0 |
+| 09 | 33 | 0 | 10 | 17 | 6 | 0 | 34.0 |
+| 10 | 7 | 0 | 2 | 4 | 1 | 0 | 7.0 |
 | 11 | 13 | 1 | 6 | 5 | 1 | 0 | 10.25 |
 | 12 | 5 | 0 | 1 | 2 | 2 | 0 | 6.5 |
-| 13 | 7 | 0 | 1 | 4 | 2 | 0 | 8.5 |
-| TOTAL | 240 | 4 | 72 | 126 | 37 | 1 | 240.0 |
+| 13 | 6 | 0 | 1 | 3 | 2 | 0 | 7.5 |
+| TOTAL | 248 | 4 | 75 | 131 | 37 | 1 | 246.5 |
 
 ### Done by phase
 
 | Group | Tasks | XS | S | M | L | XL | Person-days |
 |---|---|---|---|---|---|---|---|
-| G1 | 153 | 3 | 41 | 80 | 28 | 1 | 160.25 |
-| G2 | 70 | 0 | 25 | 39 | 6 | 0 | 63.5 |
+| G1 | 154 | 3 | 42 | 80 | 28 | 1 | 160.75 |
+| G2 | 76 | 0 | 27 | 43 | 6 | 0 | 68.5 |
 | G3 | 5 | 0 | 3 | 1 | 1 | 0 | 4.5 |
-| G4 | 12 | 1 | 3 | 6 | 2 | 0 | 11.75 |
-| TOTAL | 240 | 4 | 72 | 126 | 37 | 1 | 240.0 |
+| G4 | 13 | 1 | 3 | 7 | 2 | 0 | 12.75 |
+| TOTAL | 248 | 4 | 75 | 131 | 37 | 1 | 246.5 |
 
 ### Landed task groups
 
@@ -304,16 +342,15 @@ Stricter variant that also requires every dependency task's whole story to be me
 | 02.3.1-T3 | S | `GET /v1/me` profile + `PATCH /v1/me {preferred_locale}`; LANDED by S204 (bd2bb0c9, migration 0061) | yes | yes (0049+) | S97: `contracts/openapi.yaml`, generated SDK, isolation route cases | n/a | yes |
 | 02.1.2-T3 | S | Membership lifecycle; LANDED by S207 (#430, a542d4cf; its Landed task groups row and the §5 totals are updated at a later close-out because an insert or delete shifts STATUS.md:N cites): removal and disable revoke every session in the same transaction, last-admin guard tests, 409 `member_removed`; remainders in the carried rows tagged (S207) | yes | no | no | n/a | no — landed |
 | 03.1.4-T1 | S | Decision + contract: optional `requirement_ref`. Landed in #458 (migration 0068): D-A6 format (trimmed, 1..128 of `A-Za-z0-9._:/#-`), sidecar `requirement` key, `PATCH /v1/projects/{p}/cases/{c}`, 00 §7/§15. | yes | yes (0049+) | no | n/a | yes |
-| 03.1.4-T2 | S | `platform`, `level`, `purpose` on suite/template. Partial, #458 (migration 0068): suite half landed (create/list/read, filters, revision hash input v2, diff); template half open until a template table exists (03.5.1). | yes | yes (0049+) | S97: Catalog suite create/list endpoint code + tests; `contracts/openapi.yaml`, generated SDK | n/a | yes |
+| 03.1.4-T2 | S | `platform`, `level`, `purpose` on suite/template. Both halves landed: suite half #458 (migration 0068: create/list/read, filters, revision hash input v2, diff); template half #1282 (migration 0120: columns, CHECKs, 0119 row backfill, index, list filters and fields; no template hash, a change is a new version). The task is credited whole by the S655 recount. | yes | yes (0049+) | S97: Catalog suite create/list endpoint code + tests; `contracts/openapi.yaml`, generated SDK | n/a | yes |
 | 03.4.1-T1 | L | GitHub App registration + installation binding + `git_repo_binding`; typed `HttpClient` + RS256 app JWT | yes | yes (0049+) | S97: `contracts/openapi.yaml`, generated SDK, isolation route cases | T1.1-T1.4 landed (S404 #824; S416 #860, merge 0170950e) | yes (App registration itself needs GitHub org/admin credentials) |
 | 04.1.2-T1 | S | Quota half only (rate half merged #427): wire `IQuotaGate` into the ingest handler once 12.3.1-T4 registers it; `quota_exceeded` + `Retry-After`, `ingest_quota_denied{kind}`. LANDED by S260 (#537, 34581fa3); open items are carried rows titled `(S260)` | yes | no | S91: `src/BuildingBlocks/Observability/EvidgateTelemetry.cs` (`ingest_*` counters on the batch span) | n/a | yes — landed |
 | 04.4.1-T1 | L | Per-producer mapping registry + pytest mapping. LANDED by S255 (#525, 207d0e16), PARTIAL: `report_parser` registry (0075), pytest mapper, `ParseRawReport` handler parsing in the resource-limited child; the enqueuer was wired by S261 (#538); later sub-tasks LANDED: 04.4.1-T5 #541, 04.4.1-T3 #545, 04.4.1-T6 #549 (per-case discrepancies PARTIAL), 04.4.2-T1 T1.1/T1.2 #556 (migration 0081, next free 0082; T1.3 open); carried rows `(S255)`, `(S266)`, `(S267)` (archive: S372 item 10) | yes | yes (0049+) | no | T1.1-T1.2 ; T1.3-T1.4 | yes |
 | 04.8.1-T1 | M | Emit `results` usage rows through `IUsageLedger.RecordAsync` in the accepted-batch transaction; unblocked by 12.3.1-T1 (04.1.1-T2 merged). Earlier T1.1 shipped the `usage.batch_accepted` outbox row (`IngestEventBatch.cs:590`, `IngestEventBatchTests.cs:186`). LANDED by S212 (#440, 4925b0f4): the `usage.batch_accepted` handler, fail-closed duplicate key compare (`IUsageLedger.FindAsync`) and the Architecture rules; AC3 reprocess test open until 04.4.2 exists (see carried rows 'Usage meter'). | yes | yes (0049+) | no | n/a | yes |
 | 06.2.2-T1 | M | Adapter capability + per-project options (disable kinds, allowlisted redaction rules) with 04; PARTIAL (S241, #503, 0071): capture-options read `GET /v1/projects/{p}/artifact-kind-policy`, `redaction_rule` table + allowlist, `ICaptureOptionsReader` landed, AC2 earlier (S220); AC4 run-create config document and AC5 next-run-only remain (carried row "Capture options not delivered to runs (S241)") | yes | yes (0049+) | no | n/a | yes |
 | 06.2.3-T1 | M | Async secret-scan `task` handler (outbox row written by `complete`): scan the object, set `scan_state`, write `masking_event`, enforce `reject_on_secret`; LANDED by S214 (#450, 4d2b26ae, migration 0066; AC4 stays with 06.2.1, residuals in the carried rows) | yes | yes (0049+) | no | n/a | yes |
-| 08.5.1-T1 | XL | Evidgate-provided AI gateway (split before build); unblocked by 12.3.1-T1; partial: T1.1-T1.2 landed by S145 (#306, f8fd2f56; `healing_llm_call`, `healing_llm_budget`, provider seam, migration 0054), T1.3-T1.4 landed by S402 (#814, 009af9ec), T1.5-T1.7 landed by S406 (#822 c0609f31, #828 b66504d0; migration 0107; details in the 08.5.1 plan Notes S406); no remainder is ready, the parent is credited at the next recount | yes | yes (0049+) | no | T1.1-T1.2 ; T1.3-T1.4 ; T1.5-T1.6-T1.7 | yes (dep 12.3.1-T1 merged; `MockHealingLlmProvider` covers tests) |
+| 08.5.1-T1 | XL | Evidgate-provided AI gateway (split before build); unblocked by 12.3.1-T1; partial: T1.1-T1.2 landed by S145 (#306, f8fd2f56; `healing_llm_call`, `healing_llm_budget`, provider seam, migration 0054), T1.3-T1.4 landed by S402 (#814, 009af9ec), T1.5-T1.7 landed by S406 (#822 c0609f31, #828 b66504d0; migration 0107; details in the 08.5.1 plan Notes S406); no remainder is ready; the parent stays partial (S599: T1.1 composite FKs owed) | yes | yes (0049+) | no | T1.1-T1.2 ; T1.3-T1.4 ; T1.5-T1.6-T1.7 | yes (dep 12.3.1-T1 merged; `MockHealingLlmProvider` covers tests) |
 | 10.1.1-T3 | L | Environment bootstrap automation | yes | no | no | T3.1-T3.2 ; T3.3-T3.4 | yes for the scripts; AC5 needs a live instance. Landed in #558 (18de5766): T3.1 database bootstrap and T3.2 bucket bootstrap; T3.3 landed in #815 (564a2742, `scripts/env/secret-placeholders.mjs`); T3.4 open; AC5 verifies the four evidgate_* roles of migration 0001, not the three the plan names (D-S270-Q1) |
-| 10.1.2-T1 | M | Secret inventory and CI check | yes | no | no | n/a | yes (S250 #516; AC1 runbook anchors closed S407 #820, 68358713) |
 | 10.1.2-T2 | XS | Repository secret scanning and push protection | yes | no | no | n/a | yes (needs repo-admin token; ⚠️ plan feature availability) |
 | 10.2.1-T1 | L (rem T1.4) | Partial: T1.1–T1.3 images/SBOM shipped; T1.4 web bundle hosting and edge CSP/CORS deploy remain. | yes | no | S91: `infra/config-matrix.json` (telemetry endpoint/connect-src keys) | n/a — rem is T1.4 alone (S) | yes for edge config/checks; live publish needs a hosting target (vendor still undecided, 10.8.1) |
 | 11.2.1-T2 | M | Fork-PR credential-reachability test; LANDED by S356 (#726, e45fb9eb): `fixtures/fork-pr-repo/`, `ForkContextCredentialReachabilityTests`, evidence `docs/security/evidence/fork-pr-fixture-outputs.md`; AC3 is 401, `auth_failure` row open (carried row "Security event emitters missing (11.5.1-T3.2)") | yes | no | no | n/a | yes |
@@ -349,14 +386,14 @@ Stricter variant that also requires every dependency task's whole story to be me
 | Task | Size | Note | Lock | Migration lane | Shares file with running lane | Split (L/XL) | Buildable |
 |---|---|---|---|---|---|---|---|
 | 01.10.1-T1 | M | Emit own CI results in ingest format; partial (S245, #510; S400, #806): T1.2 collect.sh + parse tests; mapper half landed in #806, fixtures not yet refreshed from a new run | yes | no | no | n/a | yes |
-| 02.4.3-T2 | M | `github_installation`, install callback, token minting | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json`; S91: additive endpoint registration | landed S410 (#835, 33cd2497); credited at the next recount | yes |
+| 02.4.3-T2 | M | `github_installation`, install callback, token minting | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json`; S91: additive endpoint registration | landed S410 (#835, 33cd2497); AC4 log-sink scan landed #1222 (ac278c2c); credited whole by the S655 recount | yes |
 | 02.4.4-T1 | M | `api_token` table, create/list/revoke API. LANDED by S284 (#587, cac22336, migration 0083): `api_token` (FORCE RLS, membership-keyed creator), `evidgate_resolve.resolve_api_token`, `POST\|GET /v1/projects/{p}/api-tokens`, `DELETE /v1/projects/{p}/api-tokens/{t}`, mandatory expiry (max `EVIDGATE:ApiToken:MaxLifetimeDays`, 365), show-once secret, self-escalation refusal, deny set generated from `permissions.json` (`admin` flag, `token_denied`); use-side (bearer) behaviours stay with 02.4.4-T2; highest migration is `0083_identity_api_token.sql`, next free `0084`; open items are carried rows titled `(S284)` and `Merge debt (#587)` | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json` | n/a | yes |
 | 02.8.1-T1 | M | `support_grant` model and request/approve/revoke flow | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json` | n/a | yes |
 | 03.3.1-T1 | M | `fixture_revision` schema + suite reference + seed versioning + cleanup policy fields. LANDED by S253 (#526, 3f36265d): `fixture` + `fixture_revision` (migration 0074), create/append/list/get API, same-project suite reference check; AC3-AC6 stay with T2/T3; open items in carried rows titled `(S253)` | yes | yes (0049+) | no — same Catalog module as S97, new types only | n/a | yes |
-| 03.6.1-T1 | M | Suite draft tables + `ETag`/`If-Match` on the draft routes | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | yes |
+| 03.6.1-T1 | M | Suite draft tables + `ETag`/`If-Match` on the draft routes | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | yes (S655: credited whole; AC1 proven by `DraftTests.Update.cs:16/:42/:70`; carried row 'Draft AC1 wording and author-only edit' stays open as wording and hardening) |
 | 03.7.1-T3 | S | Evaluate Playwright planner/generator agents | yes | no | no | n/a | yes |
 | 04.1.2-T2 | S | LANDED (S360, #736, merge 7e610275, no migration, no contract change): the batch insert marks `stale = true` when `event.epoch` differs from `run.ci_run_ref` `run_attempt` (V1, D-S360-Q1), `stale_epoch` once per closed shard in reconciler `missing[]`; V2 lease-epoch seam in the plan Notes; counted by the S369 recount | yes | no | no | n/a | yes |
-| 04.1.2-T3 | M | OpenAPI + integration tests for both stories. Partial: events operation documented (`contracts/openapi.yaml:1009,6848,7182`) and the 04.1.1+04.1.2 suite is on develop; the run-create 409 `producer_slots_conflict` is now documented as a defensive refusal (#811, c932d98c; wire-unreachable while create issues a fresh run id); T3 is complete, credit lands at the next recount. | yes | no | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | no — complete |
+| 04.1.2-T3 | M | OpenAPI + integration tests for both stories. Partial: events operation documented (`contracts/openapi.yaml:1009,6848,7182`) and the 04.1.1+04.1.2 suite is on develop; the run-create 409 `producer_slots_conflict` is now documented as a defensive refusal (#811, c932d98c; wire-unreachable while create issues a fresh run id); T3 stays partial (S599: AC7 rejection counter open). | yes | no | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | no — AC7 rejection counter open |
 | 04.1.3-T1 | S | Manifest and report caps, page shape. PARTIAL: caps half landed (#520, 413 `payload_too_large` + 422 `cap_exceeded`, configurable caps, OpenAPI limits); cursor page shape landed in part (#830: AC4 run-bound cursor, AC5 shape); AC5 O(1)/100k and AC6/AC7 remain, see carried row `Cursor page remainder (04.1.3-T1, S411)` | yes | no | S91: `src/BuildingBlocks/Observability/EvidgateTelemetry.cs` (`ingest_cap_exceeded_total{cap}` counter) and `infra/config-matrix.json` (new cap rows); S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | yes |
 | 04.1.3-T2 | M | Streaming reconciler and parsers. PARTIAL: T2.1 landed (#961, S468): reconciler aggregate read pinned by tests and an index EXPLAIN, plan amended (no page loop, no `reconcile_progress`, no migration); T2.2b landed (#989, S480, migration 0113: ready-artifact covering index + EXPLAIN/page-walk tests); T2.2a parser streaming landed (#993, S481); T2.2c write-half batching open (carried row); T3.2 budget test landed (#1004, S486: parse/reconcile/walk budget in `expected.json`, AC8 buffering-mutant proof open, carried row), no parent credit | yes | no | S468: `tests/Tenancy.IntegrationTests/ReconcileAggregateStabilityTests.cs`; S480: `tests/Tenancy.IntegrationTests/ListRunAttemptsTests.IndexPlan.cs` | n/a | yes |
 | 04.4.1-T4 | S | Raw report persistence + `raw_report`/`report_parser` rows. T4.1 landed in #531 (migration 0078, 8421ae50): immutable `raw_report` row per parse (mapped, partial, malformed, unsupported), written by the ParseRawReport handler in the events' transaction (refusals in their own short scope), run/artifact pairing key on `artifact`; AC2/AC4 persistence halves and the T4.1 done-when met, AC7 PARTIAL (new-release row untested); the enqueuer is not wired (S255 rows; wired by S261, #538, 332c443a); open items are carried rows titled `(S258)`; S299 recount credits the parent (T4.1 is its only sub-row, AC7 stays carried) | yes | yes (0049+) | no | n/a | no (credited, S299; carried rows only) |
@@ -391,7 +428,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 | 09.3.1-T4 | M | Attempts table: raw vs normalised status, retry chain, duration, pre-healing failure always visible. Delivered: UI component S111 (PR #232); wire swap + wire fixtures S146 (PR #302, fbb2fe91); healing marker stays unavailable until 08.3.1 (§6 row "Run detail web remainders (S146)") | no | no | no | n/a | yes |
 | 09.3.1-T6 | M | Producer/shard view: finalize status, `last_sequence`, count vs expected, stale epochs, late events. Credited by the S369 recount (T6.1 and T6.2 delivered). S276 #568 96b4a263: `ProducerStatusTable` (one row per declared slot, 200 rows per page), informational stale/after-cancel badges that never touch completeness, run-level `after_cancel_events` on the timeline; per-slot facts are served and wired (#703, 9b0738c8); an open slot shows its count (#715, 741a548e); a fact the server omits renders unavailable | no | no | no — consumes the 03.2.1 suite-composition/slot API that S97 is building (dependency, not a shared file) | n/a | yes |
 | 10.7.1-T1 | M | Dead-letter runbook; partial: T1.1 landed by S161 (#341, 44f2bef2; `docs/runbooks/dead-letter.md`), T1.2 non-author staging drill, alert links and T3-T6 runbooks open | no | no | no (docs/runbooks) | n/a | no |
-| 13.7.1-T1 | M | [OPEN] no feature plan exists yet (STATUS §6 row "Feature plans missing for planned stories"); dependency-ready only, not buildable as written | no | no | no | n/a | no |
+| 13.7.1-T1 | M | [OPEN] feature plan exists (`plans/features/13-product-phases/13.7.1-mobile-spike.md`, #708); dependency-ready; owner answers to OI-13-560..564 pending; not buildable as written | no | no | no | n/a | no |
 
 ### G3: 6 tasks / 9 d (backend lane 4 / 6 d = 3 code + 1 web writing `.github/`, web-only 2 / 3 d, docs-only 0 / 0 d) Newly ready after S124: 09.5.2-T3 (M, web-only; its only dependency 08.6.3-T1 landed), counted in this header; its row is still not added, and neither is its §2 partial-table row (a row insert would shift every STATUS.md:N cite below). S333: 09.5.2-T3.1 landed (#684, web-only: healing availability page with per-scope switch controls); T3.2 remains, so T3 stays partial and carries no credit; the switch page lives in `features/availability`, so T3.2 must reconcile it with the `features/healing-review` root in plan 09.
 
@@ -419,7 +456,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 | Task | Size | Note | Lock | Migration lane | Shares file with running lane | Split (L/XL) | Buildable |
 |---|---|---|---|---|---|---|---|
 | 02.3.3-T1 | XL | SAML 2.0 SSO (metadata, SP-initiated login, assertion mapping, JIT membership policy) | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json` (`sso:read`/`sso:write`) | T1.1+T1.2 \| T1.3+T1.4 \| T1.5+T1.6 | yes |
-| 03.5.1-T1 | M | `template` registry + web template | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | yes |
+| 03.5.1-T1 | M | `template` registry + web template. Landed: T1.1 landed by S616 (#1247, 5d9a86b8, migration 0118: `public.template`, `GET /v1/templates`, `GET /v1/templates/{t}`, no seed rows); T1.2 landed by S626 (#1270, ca9f8837, migration 0119: the built-in `web/playwright-page` v1 row, `templates/web/playwright-page/1/`, `TemplateBodyHasher`, `TemplateConformance`, `TemplateLiteralScanner`, `TemplateRenderer`, golden fixture `fixtures/template-conformance/web-playwright-page-1/`); both defined sub-rows are landed and the parent is credited whole by the S655 recount. | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | yes |
 | 05.7.3-T1 | M | Capability matching + pool model | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json` (`agent_pool:*`) | n/a | yes |
 | 07.8.1-T1 | M | `deploy_target` and CRUD | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json` | n/a | yes |
 | 11.7.1-T2 | M | SAST/DAST baseline | yes | no | no (`.github/workflows` CodeQL, `Directory.Build.props` analyzers) | n/a | partial (SAST half buildable; DAST needs staging) |

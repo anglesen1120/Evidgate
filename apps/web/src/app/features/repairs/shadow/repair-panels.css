@@ -1,0 +1,70 @@
+:host {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+[hlmCard] {
+  min-width: 0;
+  gap: 0;
+}
+[hlmCardHeader] {
+  border-block-end: var(--eg-border-width) solid var(--eg-border);
+  padding-block-end: var(--eg-space-4);
+}
+[hlmCardContent] {
+  display: grid;
+  gap: var(--eg-space-3);
+  padding-block: var(--eg-space-5);
+}
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: var(--eg-space-3);
+}
+.facts,
+dd,
+p {
+  margin: 0;
+}
+dt {
+  color: var(--eg-text-muted);
+  font-size: var(--eg-text-xs);
+}
+dd {
+  margin-block-start: var(--eg-space-1);
+}
+code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-family: var(--eg-font-mono);
+}
+.compare {
+  margin: 0;
+  border: var(--eg-border-width) solid var(--eg-border);
+  border-radius: var(--eg-radius-sm);
+  padding: var(--eg-space-2);
+  background: var(--eg-surface-raised);
+}
+.compare > div {
+  display: grid;
+  grid-template-columns: minmax(5rem, 20%) minmax(0, 1fr);
+  gap: var(--eg-space-2);
+  padding: var(--eg-space-1);
+}
+.compare > div + div {
+  border-block-start: var(--eg-border-width) solid var(--eg-border);
+}
+.compare dt {
+  color: var(--eg-text);
+}
+.compare dd {
+  margin: 0;
+}
+.compare > div + div code {
+  color: var(--eg-accent-fg);
+}
+.review-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+  align-items: start;
+  gap: var(--eg-space-4);
+}

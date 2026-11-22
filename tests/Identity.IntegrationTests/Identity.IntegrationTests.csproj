@@ -24,6 +24,11 @@
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Identity\Evidgate.Modules.Identity.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- The one capture helper every test project links, not a project reference: the redaction tests
+         must assert on exactly what a log sink would persist. -->
+    <Compile Include="..\Shared\CapturingLoggerProvider.cs" Link="CapturingLoggerProvider.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- Shared Testcontainers harness (01.6.1-T2), linked like Foundation.IntegrationTests. -->
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
     <Compile Include="..\Shared\ContainerStart.cs" Link="ContainerStart.cs" />
@@ -33,6 +38,7 @@
     <Compile Include="..\Shared\NoHealingProvider.cs" Link="NoHealingProvider.cs" />
     <Compile Include="..\Shared\ContractSchemaWarmup.cs" Link="ContractSchemaWarmup.cs" />
     <Compile Include="..\Shared\FixtureLoader.cs" Link="Shared/FixtureLoader.cs" />
+    <Compile Include="..\Shared\RepositoryPaths.cs" Link="Shared/RepositoryPaths.cs" />
     <Compile Include="..\Shared\DatabaseFixture.cs" Link="Shared/DatabaseFixture.cs" />
     <Compile Include="..\Shared\RespawnCheckpoint.cs" Link="Shared/RespawnCheckpoint.cs" />
     <Compile Include="..\Shared\TemplateDatabase.cs" Link="Shared/TemplateDatabase.cs" />

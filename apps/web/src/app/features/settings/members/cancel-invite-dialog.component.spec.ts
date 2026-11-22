@@ -84,7 +84,7 @@ describe('CancelInviteDialog pending invitation confirmation', () => {
     expect(document.activeElement).toBe(opener);
     expect(completed).toHaveBeenCalledTimes(1);
   });
-  it('shows 409 invite_not_pending verbatim without closing, and drops the stale row', async () => {
+  it('shows the 409, refreshes the stale row and lets Escape dismiss the overlay after refusal', async () => {
     data.cancelInvite.mockRejectedValue(
       new ApiRequestError({
         kind: 'conflict',
@@ -107,6 +107,11 @@ describe('CancelInviteDialog pending invitation confirmation', () => {
     expect(root.querySelector('[data-members-dialog][data-state="open"]') !== null).toBe(true);
     // L5: the refusal means the pending row was stale, so the store re-read the list once.
     expect(data.listMemberships).toHaveBeenCalledTimes(2);
+    root.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await settle();
+    expect(root.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(opener);
+    expect(data.cancelInvite).toHaveBeenCalledTimes(1);
   });
   it('double click sends one cancellation and a retry reuses the original intent', async () => {
     // ES2022 test target: Promise.withResolvers is unavailable.

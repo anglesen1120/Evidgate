@@ -57,7 +57,7 @@ async function pendingTargets(page: Page) {
   );
 }
 
-test('the editor review tab mounts lazily through the keyboard and the narrow select in both locales', async ({
+test('the editor review tab mounts lazily through the keyboard at all widths in both locales', async ({
   page,
 }) => {
   for (const locale of LOCALES) {
@@ -99,14 +99,35 @@ test('the editor review tab mounts lazily through the keyboard and the narrow se
     await expect(editor.locator('#review-reason')).toHaveValue('Unsent review reason');
     expect(await pendingReads(page)).toBe(1);
     await firstTab.click();
+    await page.setViewportSize({ width: 900, height: 900 });
+    const tabs = editor.getByRole('tablist');
+    await expect(tabs).toHaveCount(1);
+    await expect(tabs).toHaveCSS('flex-wrap', 'nowrap');
+    await expect(tabs).toHaveCSS('overflow-x', 'auto');
+    const buttons = tabs.getByRole('tab');
+    await expect(buttons).toHaveCount(3);
+    const tops = await buttons.evaluateAll((items) =>
+      items.map((item) => item.getBoundingClientRect().top),
+    );
+    expect(new Set(tops).size).toBe(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await firstTab.focus();
+    for (const [key, index] of [
+      ['End', 2],
+      ['ArrowLeft', 1],
+      ['Home', 0],
+      ['ArrowRight', 1],
+    ] as const) {
+      await page.keyboard.press(key);
+      await expect(buttons.nth(index)).toBeFocused();
+    }
     await page.setViewportSize({ width: 390, height: 900 });
-    const select = editor.locator('#case-panel-select');
-    await expect(select).toBeVisible();
-    await select.click();
-    const option = page.getByRole('option').nth(1);
-    await expect(option).toHaveText(label);
-    await option.click();
-    await expect(select).toContainText(label);
+    await expect(editor.locator('#case-panel-select')).toHaveCount(0);
+    await expect(reviewTab).toHaveAccessibleName(label);
+    await reviewTab.click();
+    await expect(reviewTab).toHaveAttribute('aria-selected', 'true');
     await expect(editor.locator('app-checklist-review-tab')).toBeVisible();
     await expect(editor.locator('#review-comment')).toHaveCount(0);
     await expect(editor.locator('[data-review-comment-snapshot]')).toBeVisible();

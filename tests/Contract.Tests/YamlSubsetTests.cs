@@ -5,11 +5,8 @@ using Xunit;
 namespace Contract.Tests;
 
 /// <summary>
-/// <see cref="YamlSubset"/> refusals that no spec-dependent suite pins: the
-/// reader is deliberately strict (its doc promises it throws instead of
-/// guessing), so these tests pin the refusal behaviours that would otherwise
-/// only surface inside a confusing contract-test failure — above all, a
-/// duplicate mapping key, which YAML forbids and a silent last-wins would hide.
+/// <see cref="YamlSubset"/> refusals that no spec-dependent suite pins: duplicate keys, anchors, aliases, tags,
+/// block scalars and multi-document input are refused instead of being read silently.
 /// </summary>
 public sealed class YamlSubsetTests
 {
@@ -105,4 +102,245 @@ public sealed class YamlSubsetTests
         a["type"]!.GetValue<string>().ShouldBe("object");
         b["type"]!.GetValue<string>().ShouldBe("string");
     }
+
+    /// <summary>An apostrophe inside a plain scalar is literal text, in a mapping value, a flow item and a sequence item.</summary>
+    [Fact]
+    public void Parse_ApostropheInPlainScalar_IsLiteral()
+    {
+        var node = YamlSubset.Parse(
+            "summary: Returns the caller's runs # note\n" +
+            "tags: [don't, 'it''s']\n" +
+            "items:\n" +
+            "  - it's fine\n") as JsonObject;
+
+        node.ShouldNotBeNull();
+        node["summary"]!.GetValue<string>().ShouldBe("Returns the caller's runs");
+        node["tags"]![0]!.GetValue<string>().ShouldBe("don't");
+        node["tags"]![1]!.GetValue<string>().ShouldBe("it's");
+        node["items"]![0]!.GetValue<string>().ShouldBe("it's fine");
+    }
+
+    /// <summary>A quote at the start of a value still opens a quoted scalar; left open it is refused.</summary>
+    [Fact]
+    public void Parse_QuoteOpenedScalarLeftOpen_Refuses()
+    {
+        var exception = Should.Throw<NotSupportedException>(() => YamlSubset.Parse("a: 1\nsummary: 'unterminated\n"));
+
+        exception.Message.ShouldContain("line 2");
+    }
+
+    /// <summary>A flow sequence wrapped over several lines (Prettier output) reads like the single-line form, as a mapping value and a sequence item.</summary>
+    [Fact]
+    public void Parse_MultiLineFlowSequence_Parses()
+    {
+        var node = YamlSubset.Parse(
+            "required: [id,\n" +
+            "  'name', # why\n" +
+            "\n" +
+            "  status]\n" +
+            "list:\n" +
+            "  - [a,\n" +
+            "    b]\n" +
+            "after: 1\n") as JsonObject;
+
+        node.ShouldNotBeNull();
+        node["required"]!.AsArray().Select(n => n!.GetValue<string>()).ShouldBe(["id", "name", "status"]);
+        node["list"]![0]!.AsArray().Count.ShouldBe(2);
+        node["after"]!.GetValue<long>().ShouldBe(1);
+    }
+
+    /// <summary>Prettier's layout for a long list: the bracket on its own line under the key, one item per line, trailing comma.</summary>
+    [Fact]
+    public void Parse_PrettierWrappedFlowList_Parses()
+    {
+        var node = YamlSubset.Parse(
+            "schema:\n" +
+            "  required:\n" +
+            "    [\n" +
+            "      id,\n" +
+            "      name,\n" +
+            "    ]\n" +
+            "  type: object\n") as JsonObject;
+
+        node.ShouldNotBeNull();
+        node["schema"]!["required"]!.AsArray().Select(n => n!.GetValue<string>()).ShouldBe(["id", "name"]);
+        node["schema"]!["type"]!.GetValue<string>().ShouldBe("object");
+    }
+
+    /// <summary>Text after a closed quoted scalar is refused, not folded into the value.</summary>
+    [Theory]
+    [InlineData("a: 'x'y'\n")]
+    [InlineData("a: \"x\"y\"\n")]
+    public void Parse_TextAfterQuotedScalar_Refuses(string yaml)
+        => Should.Throw<NotSupportedException>(() => YamlSubset.Parse(yaml)).Message.ShouldContain("line 1");
+
+    /// <summary>A quote glued to a colon inside plain text is literal.</summary>
+    [Fact]
+    public void Parse_QuoteAfterColonInPlainScalar_IsLiteral()
+    {
+        var node = YamlSubset.Parse("summary: prefix:'suffix\n") as JsonObject;
+
+        node.ShouldNotBeNull();
+        node["summary"]!.GetValue<string>().ShouldBe("prefix:'suffix");
+    }
+
+    /// <summary>One trailing comma in a flow mapping is dropped, like in a flow sequence.</summary>
+    [Fact]
+    public void Parse_FlowMappingTrailingComma_Parses()
+    {
+        var node = YamlSubset.Parse("a: {x: 1, y: two,}\n") as JsonObject;
+
+        node.ShouldNotBeNull();
+        node["a"]!.AsObject().Count.ShouldBe(2);
+        node["a"]!["y"]!.GetValue<string>().ShouldBe("two");
+    }
+
+    /// <summary>A '#' after a tab starts a comment (YAML 1.2 white space), also inside a wrapped flow list; a '#' glued to text or quoted stays data.</summary>
+    [Fact]
+    public void Parse_CommentAfterTab_IsStripped()
+    {
+        var node = YamlSubset.Parse("a: x\t# note\nb: [p,\n  q,\t# ] note\n  r]\nc: 'u\t# v'\nd: w#z\n") as JsonObject;
+
+        node.ShouldNotBeNull();
+        node["a"]!.GetValue<string>().ShouldBe("x");
+        node["b"]!.AsArray().Select(n => n!.GetValue<string>()).ShouldBe(["p", "q", "r"]);
+        node["c"]!.GetValue<string>().ShouldBe("u\t# v");
+        node["d"]!.GetValue<string>().ShouldBe("w#z");
+    }
+
+    /// <summary>A duplicated key inside a flow mapping is refused like a block one.</summary>
+    [Fact]
+    public void Parse_DuplicateFlowKey_Refuses()
+        => Should.Throw<NotSupportedException>(() => YamlSubset.Parse("a: {x: 1, x: 2}\n")).Message.ShouldContain("duplicate mapping key 'x'");
+
+    /// <summary>An anchor on a scalar, a mapping or a sequence is refused, with the line it sits on.</summary>
+    [Theory]
+    [InlineData("a: &x 1\n")]
+    [InlineData("a: &x\n  b: 1\n")]
+    [InlineData("a: &x\n  - 1\n")]
+    public void Parse_Anchor_Refuses(string yaml)
+        => Should.Throw<NotSupportedException>(() => YamlSubset.Parse(yaml)).Message.ShouldContain("an anchor");
+
+    /// <summary>An alias is refused, so a reused node can never hide a changed member.</summary>
+    [Fact]
+    public void Parse_Alias_Refuses()
+        => Should.Throw<NotSupportedException>(() => YamlSubset.Parse("a: [1]\nb: *x\n")).Message.ShouldContain("line");
+
+    /// <summary>A tag is refused on a scalar and on a collection.</summary>
+    [Theory]
+    [InlineData("a: !!str 1\n")]
+    [InlineData("a: !custom x\n")]
+    [InlineData("a: !!map\n  b: 1\n")]
+    public void Parse_Tag_Refuses(string yaml)
+        => Should.Throw<NotSupportedException>(() => YamlSubset.Parse(yaml)).Message.ShouldContain("a tag");
+
+    /// <summary>Literal and folded block scalars are refused.</summary>
+    [Theory]
+    [InlineData("a: |\n  text\n")]
+    [InlineData("a: >\n  text\n")]
+    [InlineData("? |-\n  type\n: object\n")]
+    public void Parse_BlockScalar_Refuses(string yaml)
+        => Should.Throw<NotSupportedException>(() => YamlSubset.Parse(yaml)).Message.ShouldContain("a block scalar");
+
+    /// <summary>A second document and a scalar root are refused; empty and comment-only input is null.</summary>
+    [Fact]
+    public void Parse_DocumentShape_IsChecked()
+    {
+        Should.Throw<NotSupportedException>(() => YamlSubset.Parse("a: 1\n---\nb: 2\n")).Message.ShouldContain("second document");
+        Should.Throw<NotSupportedException>(() => YamlSubset.Parse("just text\n")).Message.ShouldContain("root");
+        YamlSubset.Parse(string.Empty).ShouldBeNull();
+        YamlSubset.Parse("# only a comment\n").ShouldBeNull();
+    }
+
+    /// <summary>A syntax error surfaces as the reader's own exception type, with a line.</summary>
+    [Fact]
+    public void Parse_SyntaxError_IsNotSupported()
+        => Should.Throw<NotSupportedException>(() => YamlSubset.Parse("a: b: c\n")).Message.ShouldStartWith("line ");
+
+    /// <summary>Plain scalars become JSON null, booleans, integers (long), doubles; quoted ones stay strings.</summary>
+    [Fact]
+    public void Parse_ScalarTypes_AreResolved()
+    {
+        var node = YamlSubset.Parse("a: 1\nb: 1.5\nc: true\nd: null\ne: ~\nf:\ng: '1'\nh: \"true\"\n") as JsonObject;
+
+        node.ShouldNotBeNull();
+        node["a"]!.GetValue<long>().ShouldBe(1);
+        node["b"]!.GetValue<double>().ShouldBe(1.5);
+        node["c"]!.GetValue<bool>().ShouldBeTrue();
+        node["d"].ShouldBeNull();
+        node["e"].ShouldBeNull();
+        node["f"].ShouldBeNull();
+        node["g"]!.GetValue<string>().ShouldBe("1");
+        node["h"]!.GetValue<string>().ShouldBe("true");
+    }
+
+    /// <summary>Nesting at the cap parses; one level deeper is refused with the line of the offending collection.</summary>
+    [Fact]
+    public void Parse_NestingAtCap_Parses_AndOneDeeperRefusesWithLine()
+    {
+        YamlSubset.MaxDepth.ShouldBe(64);
+        var node = YamlSubset.Parse(Nested(64));
+        node.ShouldNotBeNull();
+
+        var exception = Should.Throw<NotSupportedException>(() => YamlSubset.Parse(Nested(YamlSubset.MaxDepth + 1)));
+
+        exception.Message.ShouldContain($"nesting deeper than {YamlSubset.MaxDepth} levels");
+        exception.Message.ShouldContain($"line {YamlSubset.MaxDepth + 1}:");
+    }
+
+    /// <summary>Sequences count toward the cap like mappings.</summary>
+    [Fact]
+    public void Parse_DeepFlowSequences_Refuse()
+    {
+        var deep = new string('[', YamlSubset.MaxDepth + 1) + new string(']', YamlSubset.MaxDepth + 1);
+
+        Should.Throw<NotSupportedException>(() => YamlSubset.Parse(deep)).Message.ShouldContain("nesting deeper");
+        YamlSubset.Parse(deep[1..^1]).ShouldNotBeNull();
+    }
+
+    /// <summary>A plain <c>&lt;&lt;</c> key is refused whatever its value; a quoted one is an ordinary member.</summary>
+    [Theory]
+    [InlineData("a: 1\n<<: *a\n")]
+    [InlineData("<<: {x: 1}\n")]
+    [InlineData("b:\n  <<: [x]\n")]
+    public void Parse_MergeKey_Refuses(string yaml)
+        => Should.Throw<NotSupportedException>(() => YamlSubset.Parse(yaml)).Message.ShouldContain("a merge key");
+
+    /// <summary>A quoted <c>"&lt;&lt;"</c> key is a literal member.</summary>
+    [Fact]
+    public void Parse_QuotedMergeKey_IsAMember()
+        => (YamlSubset.Parse("'<<': 1\n") as JsonObject)!["<<"]!.GetValue<long>().ShouldBe(1);
+
+    /// <summary>Every plain NaN or infinity spelling is refused, including overflowing numbers.</summary>
+    [Theory]
+    [InlineData("NaN")]
+    [InlineData(".nan")]
+    [InlineData(".NaN")]
+    [InlineData("Infinity")]
+    [InlineData("-Infinity")]
+    [InlineData("+Infinity")]
+    [InlineData("-.inf")]
+    [InlineData(".INF")]
+    [InlineData("+.inf")]
+    [InlineData(".NAN")]
+    [InlineData("1e999")]
+    [InlineData("-1e999")]
+    public void Parse_NonFinitePlainScalar_Refuses(string scalar)
+        => Should.Throw<NotSupportedException>(() => YamlSubset.Parse($"a: {scalar}\n")).Message.ShouldContain("NaN or infinity");
+
+    /// <summary>Quoted spellings stay strings, and ordinary words that merely start like them are untouched.</summary>
+    [Fact]
+    public void Parse_QuotedNonFinite_StaysAString()
+    {
+        var node = YamlSubset.Parse("a: 'NaN'\nb: \"-.inf\"\nc: Nano\n") as JsonObject;
+
+        node.ShouldNotBeNull();
+        node["a"]!.GetValue<string>().ShouldBe("NaN");
+        node["b"]!.GetValue<string>().ShouldBe("-.inf");
+        node["c"]!.GetValue<string>().ShouldBe("Nano");
+    }
+
+    private static string Nested(int levels)
+        => string.Concat(Enumerable.Range(0, levels - 1).Select(level => new string(' ', level) + "k:\n"))
+            + new string(' ', levels - 1) + "k: 1\n";
 }

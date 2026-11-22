@@ -57,6 +57,7 @@ const decisionCases = [
   { value: undefined, tone: 'pending', text: 'Not evaluated' },
   { value: null, tone: 'pending', text: 'Not evaluated' },
   { value: 'pending', tone: 'pending', text: 'Not evaluated' },
+  { value: 'unavailable', tone: 'neutral', text: 'Unavailable' },
   { value: 'unknown', tone: 'neutral', text: 'Unavailable' },
 ] as const;
 
@@ -71,7 +72,7 @@ const cases = completenessCases.flatMap((completeness) =>
   ),
 );
 
-describe('every combination of completeness, outcome and decision rendered side by side (210 combinations; AC8 / FR-09-2)', () => {
+describe('every combination of completeness, outcome and decision rendered side by side', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [VerdictSeparationTestComponent],
@@ -102,9 +103,14 @@ describe('every combination of completeness, outcome and decision rendered side 
         expect(element?.querySelector('[data-tone]')?.getAttribute('data-tone')).toBe(
           expected.tone,
         );
+        expect(
+          element?.querySelector('[data-tone] > hlm-icon[aria-hidden="true"] svg'),
+        ).not.toBeNull();
         expect(element?.querySelector('[tabindex], [role="button"], [aria-disabled]')).toBeNull();
       }
 
+      expect(releaseDecision?.querySelector('[data-variant="outline"]')).not.toBeNull();
+      expect(testOutcome?.querySelector('[data-variant="secondary"]')).not.toBeNull();
       expect(root.textContent?.includes('PASS')).toBe(decision.value === 'PASS');
       expect(root.textContent?.includes('FAIL')).toBe(decision.value === 'FAIL');
       expect(evidence?.textContent).not.toMatch(/PASS|FAIL|Passed|passed/);

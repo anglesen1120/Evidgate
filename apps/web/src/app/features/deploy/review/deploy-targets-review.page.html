@@ -1,0 +1,451 @@
+<article class="grid min-w-0 gap-4" [attr.aria-label]="copy.title">
+  <div class="flex items-start gap-3">
+    <span
+      class="hidden size-12 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground md:flex"
+      ><hlm-icon name="lucideActivity" class="size-6"
+    /></span>
+    <app-page-header class="min-w-0 flex-1" [title]="copy.title" [description]="subtitle()">
+      @if (visible()) {
+        <button
+          appPageHeaderActions
+          hlmBtn
+          type="button"
+          [variant]="'outline'"
+          [attr.aria-pressed]="preview()"
+          (click)="preview.set(!preview())"
+        >
+          <hlm-icon [name]="preview() ? 'lucideX' : 'lucideInfo'" />
+          {{ preview() ? copy.exitPreview : copy.admin }}
+        </button>
+      }
+    </app-page-header>
+  </div>
+  @if (visible()) {
+    <section
+      hlmCard
+      class="flex flex-wrap items-center justify-between gap-4 flex-row p-4"
+      [attr.aria-label]="copy.context"
+    >
+      <div class="grid gap-1">
+        <span class="text-xs text-muted-foreground">{{ copy.context }}</span
+        ><strong
+          ><bdi>{{ displayText(viewModel().project) }}</bdi> · <bdi>{{ viewModel().code }}</bdi> ·
+          <bdi>{{ viewModel().projectRef }}</bdi></strong
+        ><span class="text-xs text-muted-foreground"
+          >{{ copy.asOf }} <app-absolute-time [value]="viewModel().asOf"
+        /></span>
+      </div>
+      <div>
+        <span class="block text-xs text-muted-foreground">{{ copy.section }}</span
+        ><strong>{{ copy.title }}</strong>
+      </div>
+    </section>
+  }
+  @switch (state()) {
+    @case ('denied') {
+      <app-forbidden-pattern />
+    }
+    @case ('404') {
+      <app-not-found-pattern />
+    }
+  }
+  @if (notice(); as note) {
+    <app-inline-feedback
+      [title]="note.title"
+      [description]="note.description"
+      [tone]="
+        state() === 'error' || state() === 'validation'
+          ? 'destructive'
+          : state() === 'success'
+            ? 'success'
+            : 'info'
+      "
+      [actionLabel]="['error', '412', 'stale'].includes(state()) ? copy.reload : undefined"
+      (action)="state.set('ready')"
+    />
+  }
+  @if (visible()) {
+    <div
+      hlmCard
+      class="grid min-w-0 grid-cols-1 gap-px overflow-hidden bg-border p-0 sm:grid-cols-2 md:grid-cols-4"
+    >
+      @for (metric of metrics(); track metric.title) {
+        <section class="grid min-w-0 content-start gap-2 bg-card p-4">
+          <h2 class="m-0 flex items-center gap-2 text-sm font-semibold wrap-normal break-normal">
+            <hlm-icon [name]="metric.icon" class="size-6 rounded bg-muted p-1" />{{ metric.title }}
+          </h2>
+          <strong class="font-(family-name:--eg-font-display) text-2xl tabular-nums">{{
+            metric.value === null ? copy.unavailableValue : metric.value.toString().padStart(2, '0')
+          }}</strong
+          ><span class="text-xs text-muted-foreground">{{ metric.hint }}</span>
+        </section>
+      }
+    </div>
+  }
+  @if (visible() || state() === 'loading' || state() === 'empty') {
+    <section hlmCard class="min-w-0 gap-0 p-0">
+      <header class="flex items-center justify-between gap-3 border-b border-border p-4">
+        <h2 hlmCardTitle id="target-sequence">{{ copy.sequence }}</h2>
+        @if (visible()) {
+          <span class="text-xs tabular-nums">{{ viewModel().targets.length }}</span>
+        }
+      </header>
+      <div hlmTableContainer [attr.aria-busy]="state() === 'loading'">
+        <table hlmTable class="target-directory">
+          <caption hlmCaption class="sr-only">
+            {{
+              copy.sequence
+            }}
+          </caption>
+          <thead hlmTHead>
+            <tr hlmTr>
+              <th hlmTh scope="col">{{ copy.target }}</th>
+              <th hlmTh scope="col" class="text-end">{{ copy.order }}</th>
+              <th hlmTh scope="col">{{ copy.policy }}</th>
+              <th hlmTh scope="col">{{ copy.pin }}</th>
+              <th hlmTh scope="col" class="text-end">{{ copy.actions }}</th>
+            </tr>
+          </thead>
+          <tbody hlmTBody>
+            @if (state() === 'loading' || state() === 'empty') {
+              <tr hlmTr>
+                <td hlmTd colspan="5">
+                  @if (state() === 'loading') {
+                    <app-loading-pattern [label]="copy.loading" [bare]="true" />
+                  } @else {
+                    <app-empty-pattern
+                      [bare]="true"
+                      [title]="copy.empty"
+                      [description]="copy.emptyHint"
+                    />
+                  }
+                </td>
+              </tr>
+            } @else {
+              @for (t of viewModel().targets; track t.key) {
+                <tr hlmTr [attr.data-state]="key() === t.key ? 'selected' : null">
+                  <th hlmTh scope="row" class="whitespace-normal">
+                    <strong
+                      ><bdi>{{ displayText(t.name) }}</bdi></strong
+                    >
+                    @if (key() === t.key) {
+                      <hlm-icon
+                        name="lucideCheck"
+                        class="inline-block size-4 align-middle text-primary"
+                      />
+                      <span class="sr-only">{{ copy.detail }}</span>
+                    }
+                    <bdi class="block font-mono text-xs font-normal text-muted-foreground">{{
+                      t.key
+                    }}</bdi>
+                  </th>
+                  <td hlmTd class="text-end tabular-nums" [attr.data-label]="copy.order">
+                    {{ t.order }}
+                  </td>
+                  <td hlmTd [attr.data-label]="copy.policy">
+                    <app-status-pill
+                      [label]="t.policy ? copy.pinned : copy.current"
+                      [tone]="t.policy ? 'info' : 'neutral'"
+                    />
+                  </td>
+                  <td hlmTd class="whitespace-normal" [attr.data-label]="copy.pin">
+                    <div>
+                      @if (t.policy) {
+                        <bdi class="font-mono">{{ t.policy }}</bdi>
+                        @if (t.policyHash) {
+                          <bdi class="block font-mono text-xs text-muted-foreground">{{
+                            t.policyHash
+                          }}</bdi>
+                        }
+                      } @else {
+                        {{ copy.activePolicy }}
+                      }
+                    </div>
+                  </td>
+                  <td hlmTd [attr.data-label]="copy.actions">
+                    <div class="flex flex-wrap gap-2 md:justify-end">
+                      <button
+                        hlmBtn
+                        #viewButton
+                        type="button"
+                        class="shrink-0 whitespace-nowrap"
+                        [variant]="'outline'"
+                        [size]="'sm'"
+                        [attr.data-view]="t.key"
+                        [attr.aria-haspopup]="'dialog'"
+                        [attr.aria-label]="copy.view + ' ' + displayText(t.name)"
+                        (click)="openRecord(t.key, 'view', viewButton)"
+                      >
+                        {{ copy.view }}
+                      </button>
+                      @if (editAllowed() && t.key === 'production') {
+                        <button
+                          hlmBtn
+                          #editButton
+                          type="button"
+                          class="shrink-0 whitespace-nowrap"
+                          [variant]="'ghost'"
+                          [size]="'sm'"
+                          [attr.data-edit]="t.key"
+                          [attr.aria-haspopup]="'dialog'"
+                          [attr.aria-label]="copy.edit + ' ' + displayText(t.name)"
+                          (click)="openRecord(t.key, 'edit', editButton)"
+                        >
+                          {{ copy.edit }}
+                        </button>
+                      }
+                    </div>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (visible()) {
+        <p class="m-0 border-t border-border p-3 text-xs text-muted-foreground">
+          {{ copy.recordsShown }}: {{ viewModel().targets.length }} · {{ copy.sequencePage }}
+        </p>
+      }
+    </section>
+  }
+  @if (visible()) {
+    <aside class="grid gap-1 border-t border-border pt-4 text-sm text-muted-foreground">
+      <strong class="text-foreground">{{ copy.phase }}</strong>
+      <p class="m-0">{{ copy.phaseHint }}</p>
+      <p class="m-0">{{ copy.reference }}</p>
+    </aside>
+    <footer class="text-xs text-muted-foreground">{{ copy.demo }}</footer>
+  }
+  <hlm-dialog
+    [id]="'deploy-target-record'"
+    [state]="mode() ? 'open' : 'closed'"
+    [autoFocus]="mode() === 'edit' ? '#target-order' : '[data-dialog-heading]'"
+    [disableClose]="true"
+    [closeOnOutsidePointerEvents]="false"
+    [restoreFocus]="false"
+    [aria-modal]="true"
+    [aria-describedby]="null"
+    (stateChanged)="registerBackdrop($event)"
+    (closed)="closed()"
+  >
+    <hlm-dialog-content
+      *hlmDialogPortal
+      class="record-dialog"
+      [class.record-edit]="mode() !== 'view'"
+      [showCloseButton]="false"
+      (keydown.escape)="requestClose($event)"
+    >
+      @if (mode() && target(); as t) {
+        <header hlmDialogHeader class="record-header">
+          <div class="flex items-start justify-between gap-3">
+            <div class="grid min-w-0 gap-2">
+              <h2 hlmDialogTitle data-dialog-heading tabindex="-1">
+                @if (mode() === 'view') {
+                  <bdi>{{ displayText(t.name) }}</bdi>
+                } @else {
+                  {{ mode() === 'edit' ? copy.editPreview : copy.discardTitle }}
+                }
+              </h2>
+              <div class="flex min-w-0 flex-wrap items-center gap-2">
+                <bdi class="font-mono text-xs">{{ displayKey() }}</bdi>
+                <app-status-pill
+                  [label]="t.policy ? copy.immutable : copy.readonly"
+                  [tone]="t.policy ? 'info' : 'neutral'"
+                />
+                @if (mode() !== 'view') {
+                  <strong class="text-xs text-muted-foreground">{{ copy.preview }}</strong>
+                }
+              </div>
+            </div>
+            <button
+              hlmBtn
+              type="button"
+              [variant]="'ghost'"
+              [size]="'icon'"
+              data-close-record
+              [attr.aria-label]="copy.close"
+              (click)="requestClose()"
+            >
+              <hlm-icon name="lucideX" />
+            </button>
+          </div>
+        </header>
+        @if (mode() === 'view') {
+          <div class="record-body grid min-w-0 content-start gap-4">
+            <dl data-record-detail class="record-facts m-0 grid min-w-0 gap-3 text-sm">
+              <div class="min-w-0">
+                <dt class="text-xs text-muted-foreground">{{ copy.target }}</dt>
+                <dd class="m-0 mt-1 font-semibold">
+                  <bdi>{{ displayText(t.name) }}</bdi>
+                </dd>
+              </div>
+              <div class="min-w-0">
+                <dt class="text-xs text-muted-foreground">{{ copy.order }}</dt>
+                <dd class="m-0 mt-1 font-semibold wrap-anywhere">{{ t.order }}</dd>
+              </div>
+              <div class="min-w-0">
+                <dt class="text-xs text-muted-foreground">{{ copy.pin }}</dt>
+                <dd class="m-0 mt-1 font-semibold wrap-anywhere">
+                  @if (
+                    t.policy &&
+                    t.policyHash &&
+                    state() !== 'no-policy-read' &&
+                    state() !== 'unavailable'
+                  ) {
+                    <details>
+                      <summary class="cursor-pointer font-mono text-primary">
+                        {{ t.policy }}
+                      </summary>
+                      <bdi class="font-mono">{{ t.policyHash }}</bdi>
+                    </details>
+                  } @else {
+                    <bdi>{{ t.policy ?? copy.activePolicy }}</bdi>
+                    @if (t.policyHash) {
+                      · <bdi>{{ t.policyHash }}</bdi>
+                    }
+                  }
+                </dd>
+              </div>
+              <div class="min-w-0">
+                <dt class="text-xs text-muted-foreground">{{ copy.project }}</dt>
+                <dd class="m-0 mt-1 font-semibold wrap-anywhere">
+                  <bdi>{{ displayText(viewModel().project) }}</bdi>
+                </dd>
+              </div>
+              <div class="min-w-0">
+                <dt class="text-xs text-muted-foreground">{{ copy.revision }}</dt>
+                <dd class="m-0 mt-1 font-semibold wrap-anywhere">
+                  <bdi class="font-mono">{{ t.revision }}</bdi>
+                </dd>
+              </div>
+              <div class="min-w-0">
+                <dt class="text-xs text-muted-foreground">{{ copy.asOf }}</dt>
+                <dd class="m-0"><app-absolute-time [value]="viewModel().asOf" /></dd>
+              </div>
+            </dl>
+            @if (preview() && t.key === 'production' && !viewport.canMutate()) {
+              <app-desktop-required-notice />
+            } @else if (!canEdit()) {
+              <p class="m-0 text-sm text-muted-foreground">{{ copy.readonly }} · {{ copy.demo }}</p>
+            }
+            <app-deploy-promotion-history
+              [checks]="history()"
+              [readError]="state() === 'error'"
+              [releases]="viewModel().releases"
+              [(release)]="release"
+            />
+          </div>
+        } @else if (mode() === 'edit') {
+          <div
+            class="record-body grid min-w-0 content-start gap-3"
+            (focusin)="rememberField($event)"
+          >
+            <p class="m-0 font-semibold">
+              <bdi>{{ displayText(t.name) }}</bdi> · <bdi>{{ t.revision }}</bdi>
+            </p>
+            <p class="m-0 text-sm text-muted-foreground">{{ copy.draftHint }}</p>
+            @if (!viewport.canMutate()) {
+              <app-desktop-required-notice />
+            }
+            <label hlmLabel for="target-order">{{ copy.order }}</label
+            ><input
+              hlmInput
+              type="number"
+              id="target-order"
+              class="max-w-28"
+              #orderInput
+              min="1"
+              max="20"
+              required
+              [attr.inputmode]="'numeric'"
+              [value]="order() ?? ''"
+              [readOnly]="!canEdit()"
+              [attr.aria-invalid]="!validOrder()"
+              [attr.aria-describedby]="!validOrder() ? 'draft-order-feedback' : null"
+              (input)="order.set(orderInput.value ? orderInput.valueAsNumber : null)"
+            />
+            @if (!validOrder()) {
+              <p id="draft-order-feedback">{{ validationHint }}</p>
+            }
+            <label hlmLabel for="target-pin">{{ copy.pin }}</label
+            ><input
+              hlmInput
+              id="target-pin"
+              class="w-full max-w-sm"
+              #pinInput
+              required
+              maxlength="64"
+              [value]="pin()"
+              [readOnly]="!canEdit()"
+              (input)="pin.set(pinInput.value)"
+            />
+            <div class="flex items-start gap-2">
+              <hlm-checkbox
+                [inputId]="'draft-ack'"
+                [checked]="acknowledged()"
+                [disabled]="!canEdit()"
+                (checkedChange)="acknowledged.set($event)"
+              /><label hlmLabel for="draft-ack">{{ copy.ack }}</label>
+            </div>
+          </div>
+        } @else {
+          <p class="record-body m-0">{{ copy.discardHint }}</p>
+        }
+        <footer hlmDialogFooter>
+          @switch (mode()) {
+            @case ('view') {
+              <button hlmBtn type="button" [variant]="'outline'" (click)="requestClose()">
+                {{ copy.close }}
+              </button>
+              @if (canEdit()) {
+                <button hlmBtn type="button" data-edit-preview (click)="beginEdit()">
+                  {{ copy.edit }}
+                </button>
+              }
+            }
+            @case ('edit') {
+              <button
+                hlmBtn
+                type="button"
+                id="draft-cancel"
+                [variant]="'outline'"
+                (click)="requestClose()"
+              >
+                {{ copy.cancel }}</button
+              ><button
+                hlmBtn
+                type="button"
+                data-preview-draft
+                [disabled]="!readyToPreview()"
+                (click)="confirm()"
+              >
+                {{ copy.review }}
+              </button>
+            }
+            @case ('discard') {
+              <button
+                hlmBtn
+                type="button"
+                id="draft-keep"
+                [variant]="'outline'"
+                (click)="keepEditing()"
+              >
+                {{ copy.keep }}
+              </button>
+              <button
+                hlmBtn
+                type="button"
+                id="draft-discard"
+                [variant]="'destructive'"
+                (click)="mode.set(null)"
+              >
+                {{ copy.discard }}
+              </button>
+            }
+          }
+        </footer>
+      }
+    </hlm-dialog-content>
+  </hlm-dialog>
+</article>

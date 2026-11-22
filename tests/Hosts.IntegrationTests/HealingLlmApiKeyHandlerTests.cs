@@ -3,6 +3,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Secrets;
 using Evidgate.Modules.Healing;
 using Evidgate.Modules.Healing.Application;
 using Evidgate.Modules.Healing.Contracts;
+using Evidgate.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
@@ -29,7 +30,7 @@ public sealed partial class HealingLlmApiKeyHandlerTests
         // Stated at the key's own configuration slot: binding must still leave the member unbound.
         var configuredKey = "configured-key-" + Guid.NewGuid().ToString("N");
         var endpoint = new RecordingHandler(HttpStatusCode.OK, """{"content":"{}","tokens":2,"cost":0.5}""");
-        var capture = new CaptureLoggerProvider();
+        var capture = new CapturingLoggerProvider();
 
         await using var provider = Compose(capture, new FixedSecrets(key), endpoint, configuredKey).BuildServiceProvider();
 
@@ -52,8 +53,8 @@ public sealed partial class HealingLlmApiKeyHandlerTests
         // is a fact about every line the call wrote, not an empty list.
         var probeLogger = provider.GetRequiredService<ILoggerFactory>().CreateLogger("HealingProviderKeyTests");
         Log.CaptureProbe(probeLogger, "healing-provider-capture-live");
-        capture.Logs.ShouldContain(log => log.Text.Contains("healing-provider-capture-live", StringComparison.Ordinal));
-        capture.Logs.ShouldNotContain(log => log.Text.Contains(key, StringComparison.Ordinal));
+        capture.Entries.ShouldContain(log => log.Message.Contains("healing-provider-capture-live", StringComparison.Ordinal));
+        capture.Entries.SelectMany(log => log.Texts).ShouldNotContain(text => text.Contains(key, StringComparison.Ordinal));
         result.ToString().ShouldNotContain(key);
 
         // The key is read per request: the options snapshot holds the secret's name, and the value stated at its own
@@ -69,7 +70,7 @@ public sealed partial class HealingLlmApiKeyHandlerTests
     {
         var endpoint = new RecordingHandler();
         var secrets = new CountingSecrets();
-        await using var provider = Compose(new CaptureLoggerProvider(), secrets, endpoint).BuildServiceProvider();
+        await using var provider = Compose(new CapturingLoggerProvider(), secrets, endpoint).BuildServiceProvider();
 
         using var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(HttpHealingLlmProvider));
 
@@ -86,7 +87,7 @@ public sealed partial class HealingLlmApiKeyHandlerTests
     public async Task A_Key_That_Resolves_To_Nothing_Sends_No_Request()
     {
         var endpoint = new RecordingHandler(HttpStatusCode.OK, "{}");
-        var capture = new CaptureLoggerProvider();
+        var capture = new CapturingLoggerProvider();
 
         await using var provider = Compose(capture, new FixedSecrets(null), endpoint).BuildServiceProvider();
 
@@ -97,7 +98,7 @@ public sealed partial class HealingLlmApiKeyHandlerTests
             .InvokeAsync(Request(), TestContext.Current.CancellationToken));
 
         endpoint.Requests.ShouldBeEmpty();
-        capture.Logs.ShouldNotContain(log => log.Text.Contains("Bearer", StringComparison.Ordinal));
+        capture.Entries.SelectMany(log => log.Texts).ShouldNotContain(text => text.Contains("Bearer", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -164,7 +165,7 @@ public sealed partial class HealingLlmApiKeyHandlerTests
     /// <param name="endpoint">The handler that stands in for the provider's endpoint.</param>
     /// <param name="configuredKey">The value stated at the key's own configuration slot, or null to leave it unset.</param>
     private static ServiceCollection Compose(
-        CaptureLoggerProvider capture,
+        CapturingLoggerProvider capture,
         ISecretProvider secrets,
         HttpMessageHandler endpoint,
         string? configuredKey = null)

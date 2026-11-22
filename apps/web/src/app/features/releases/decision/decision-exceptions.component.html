@@ -1,0 +1,223 @@
+@let vm = view();
+<section hlmCard class="min-w-0 gap-0 py-0">
+  <header class="grid gap-1 border-b border-border px-5 py-4">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h2 tabindex="-1" class="m-0 text-lg font-semibold">{{ copy.queue }}</h2>
+      <span class="text-xs text-muted-foreground">{{ copy.runScope }}</span>
+    </div>
+    <p class="m-0 text-xs text-muted-foreground">{{ copy.queueHelp }}</p>
+  </header>
+  <app-data-table
+    class="[&_.caption]:sr-only [&_.scroll]:rounded-none [&_.scroll]:border-x-0 [&_tr:has([aria-current=true])]:bg-accent"
+    [rows]="vm.records"
+    [columns]="columns()"
+    [rowId]="rowId"
+    [caption]="copy.queueLabel"
+    [flow]="'page'"
+  />
+  @if (current(); as record) {
+    <footer class="flex min-w-0 flex-wrap items-center justify-between gap-3 p-4">
+      <p
+        data-retained-failure
+        class="m-0 basis-full border-s-4 border-(--eg-danger-fg) bg-(--eg-danger-bg) p-3 text-sm text-(--eg-danger-fg)"
+      >
+        <strong class="block">{{ copy.originalFailure }}</strong>
+        {{ copy.originalFailureHelp }}
+      </p>
+      <div class="grid gap-1">
+        <span class="text-xs tabular-nums text-muted-foreground"
+          >{{ copy.showing(vm.records.length) }} · {{ copy.caseScoped }}</span
+        >
+        <strong class="text-sm"
+          >{{ record.kind }} · <bdi>{{ record.id }}</bdi></strong
+        >
+      </div>
+      @if (vm.allowPreview) {
+        <div *appDesktopMutation class="flex min-w-0 flex-wrap items-start gap-2">
+          @switch (record.id) {
+            @case ('w-28') {
+              <app-decision-preview [action]="'revoke'" />
+            }
+            @case ('q-19') {
+              <app-decision-preview
+                [action]="'remove'"
+                [disabledReason]="
+                  vm.state === 'q-removed' || vm.state === 'q-expired' ? copy.inactive : null
+                "
+              />
+            }
+            @case ('checkout-vi-chromium') {
+              <div>
+                <button hlmBtn type="button" [variant]="'outline'" disabled>
+                  {{ copy.quarantineBlocked }}
+                </button>
+                <p class="text-xs">{{ copy.criticalHelp }}</p>
+              </div>
+            }
+            @case ('w-29') {
+              <app-decision-preview [action]="'decline'" /><app-decision-preview
+                [action]="'approve'"
+                [disabledReason]="vm.state === 'self' ? copy.selfHelp : null"
+              />
+            }
+            @case ('w-27') {
+              <span class="text-sm">{{ copy.readonly }}</span>
+            }
+          }
+        </div>
+      } @else {
+        <span class="text-sm">{{ copy.readonly }}</span>
+      }
+    </footer>
+  }
+</section>
+
+<ng-template #recordCell let-record let-stacked="stacked">
+  <div class="flex min-w-0 items-start gap-2">
+    <app-shell-icon name="shield" class="mt-0.5 text-muted-foreground" />
+    <div class="grid min-w-0 gap-1">
+      <strong class="text-sm">{{ record.kind }}</strong>
+      <app-copyable-identifier
+        class="text-xs text-muted-foreground"
+        [value]="record.id"
+        [label]="copy.reference"
+        [compact]="true"
+        [truncate]="!stacked"
+      />
+    </div>
+  </div>
+</ng-template>
+<ng-template #statusCell let-record>
+  <app-status-pill [label]="record.status" [tone]="record.tone" />
+</ng-template>
+<ng-template #scopeCell let-record>
+  <bdi class="block wrap-anywhere">{{ record.scope }}</bdi>
+  <span class="block text-xs text-muted-foreground">
+    {{ record.owner === '—' ? copy.notSupplied : record.owner }}
+  </span>
+</ng-template>
+<ng-template #expiryCell let-record>
+  @if (record.expiry === '—') {
+    {{ copy.notQuarantinable }}
+  } @else {
+    <time [attr.datetime]="record.expiry">{{ record.expiry | date: dateFormat : 'UTC' }}</time>
+  }
+</ng-template>
+<ng-template #viewCell let-record>
+  <button
+    [attr.aria-current]="current()?.id === record.id ? 'true' : null"
+    #opener
+    hlmBtn
+    type="button"
+    [variant]="'outline'"
+    class="w-max min-h-(--eg-control-touch) min-w-(--eg-control-touch) whitespace-nowrap!"
+    [attr.aria-haspopup]="'dialog'"
+    [attr.aria-label]="copy.viewLabel(record.id)"
+    [attr.data-view]="record.id"
+    (click)="openRecord(record, opener)"
+  >
+    {{ copy.view }}
+  </button>
+</ng-template>
+
+<hlm-dialog [autoFocus]="'[data-slot=dialog-title]'" (closed)="restoreFocusAfterReflow()">
+  <hlm-dialog-content
+    *hlmDialogPortal
+    class="exception-dialog [&_.spartan-dialog-close]:min-h-(--eg-control-touch) [&_.spartan-dialog-close]:min-w-(--eg-control-touch)"
+  >
+    @if (current(); as record) {
+      <header hlmDialogHeader class="grid gap-2">
+        <h2 hlmDialogTitle tabindex="-1">{{ copy.details }}</h2>
+        <div class="flex min-w-0 flex-wrap items-center gap-2">
+          <app-shell-icon name="shield" />
+          <strong>{{ record.kind }}</strong>
+          <bdi class="font-mono text-xs">{{ record.id }}</bdi>
+          <app-status-pill [label]="record.status" [tone]="record.tone" />
+        </div>
+        <p
+          hlmDialogDescription
+          class="m-0 border-s-4 border-(--eg-danger-fg) bg-(--eg-danger-bg) p-3 text-sm text-(--eg-danger-fg)"
+        >
+          <strong class="mb-1 block">{{ copy.originalFailure }}</strong>
+          {{ copy.originalFailureHelp }}
+        </p>
+      </header>
+      <div data-detail class="grid min-h-0 content-start gap-4 overflow-y-auto overscroll-contain">
+        <h3 class="font-semibold">{{ copy.reasonScope }}</h3>
+        <dl class="m-0 grid gap-3 [&_dd]:m-0 [&_dd]:font-medium [&_dt]:text-muted-foreground">
+          <div class="grid gap-1 sm:grid-cols-[1fr_2fr]">
+            <dt>{{ copy.kind }}</dt>
+            <dd>{{ record.kind }}</dd>
+          </div>
+          <div class="grid gap-1 sm:grid-cols-[1fr_2fr]">
+            <dt>{{ copy.caseLabel }}</dt>
+            <dd>
+              <bdi>{{ record.scope }}</bdi>
+            </dd>
+          </div>
+          <div class="grid gap-1 sm:grid-cols-[1fr_2fr]">
+            <dt>{{ copy.owner }}</dt>
+            <dd>{{ record.owner === '—' ? copy.notSupplied : record.owner }}</dd>
+          </div>
+          <div class="grid gap-1 sm:grid-cols-[1fr_2fr]">
+            <dt>{{ copy.reason }}</dt>
+            <dd>{{ record.reason }}</dd>
+          </div>
+          <div class="grid gap-1 sm:grid-cols-[1fr_2fr]">
+            <dt>{{ copy.expires }}</dt>
+            <dd>
+              @if (record.expiry === '—') {
+                {{ copy.notQuarantinable }}
+              } @else {
+                <time [attr.datetime]="record.expiry">{{
+                  record.expiry | date: dateFormat : 'UTC'
+                }}</time>
+                <bdi class="block text-xs text-muted-foreground">{{ record.expiry }}</bdi>
+              }
+            </dd>
+          </div>
+          <div class="grid gap-1 sm:grid-cols-[1fr_2fr]">
+            <dt>{{ copy.policy }}</dt>
+            <dd>
+              <bdi>{{ facts.policy }}</bdi>
+            </dd>
+          </div>
+        </dl>
+        @if (record.id === 'w-28') {
+          <section class="grid gap-2 border-t pt-4">
+            <h3 class="font-semibold">{{ copy.history }}</h3>
+            <dl>
+              <div class="grid gap-1 sm:grid-cols-[1fr_2fr]">
+                <dt>{{ copy.requestedBy }}</dt>
+                <dd>{{ facts.requester }}</dd>
+              </div>
+            </dl>
+            <app-waiver-banner [approver]="facts.approver" [expiresAt]="record.expiry" />
+          </section>
+        }
+      </div>
+      <footer hlmDialogFooter>
+        <span class="me-auto self-center text-xs text-muted-foreground">
+          {{ copy.readonly }} · {{ copy.caseScoped }}
+        </span>
+        <button
+          hlmBtn
+          hlmDialogClose
+          data-close
+          [variant]="'outline'"
+          type="button"
+          class="min-h-(--eg-control-touch)"
+        >
+          {{ copy.close }}
+        </button>
+      </footer>
+    }
+  </hlm-dialog-content>
+</hlm-dialog>
+@if (vm.state === 'q-removed' || vm.state === 'q-expired' || vm.state === 'removed404') {
+  <section hlmCard class="mt-4 items-start gap-3 p-5">
+    <h2 class="text-lg font-semibold">{{ copy.caseQuarantine }}</h2>
+    <p>{{ copy.addHelp }}</p>
+    <app-decision-preview *appDesktopMutation [action]="'add'" />
+  </section>
+}

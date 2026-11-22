@@ -20,8 +20,8 @@ import { SCOPE_ORGANIZATIONS, SCOPE_PROJECTS, stubScopeBrowserApis } from './sco
 
 const groups: readonly NavGroupView[] = [
   {
-    id: 'design',
-    label: 'Test design',
+    id: 'workspace',
+    label: 'Workspace',
     items: [
       {
         id: 'overview',
@@ -83,29 +83,47 @@ describe('ShellComponent', () => {
 
   it('provides the skip target, main landmark, named nav and router outlet', () => {
     expect(root.querySelector('a.skip-link')?.getAttribute('href')).toBe('#main-content');
-    expect(root.querySelector('a.skip-link')?.classList.contains('transition-none')).toBe(true);
+    expect(root.querySelector('a.skip-link')?.classList.contains('transition-none!')).toBe(true);
     expect(root.querySelector('main#main-content')?.getAttribute('tabindex')).toBe('-1');
     expect(root.querySelector('nav[aria-label="Primary navigation"]')).not.toBeNull();
     expect(root.querySelector('router-outlet')).not.toBeNull();
     expect(root.textContent).not.toContain('QA engineer');
   });
 
+  it('keeps the sticky navigation viewport inside the full-height desktop sidebar', () => {
+    const sidebar = root.querySelector('aside#shell-navigation')!;
+    expect(sidebar.classList.contains('self-stretch')).toBe(true);
+    expect(sidebar.classList.contains('h-dvh')).toBe(false);
+    expect(sidebar.querySelector(':scope > .sticky.h-dvh > app-shell-nav')).not.toBeNull();
+  });
+
   it('keeps the topbar keyboard stops in the order the header reads', () => {
     const topbar = root.querySelector<HTMLElement>('header.topbar')!;
     const stops = Array.from(topbar.querySelectorAll<HTMLElement>('button'));
-    expect(stops).toHaveLength(fixture.componentInstance.canSwitchLocale ? 5 : 4);
+    expect(stops).toHaveLength(fixture.componentInstance.canSwitchLocale ? 7 : 6);
     expect(stops[0]?.classList.contains('nav-toggle')).toBe(true);
     expect(stops[1]?.getAttribute('role')).toBe('combobox');
     expect(stops[2]?.getAttribute('role')).toBe('combobox');
-    expect(stops.at(-1)?.classList.contains('theme-toggle')).toBe(true);
+    expect(stops[3]?.classList.contains('screen-search')).toBe(true);
+    expect(stops[4]?.classList.contains('theme-toggle')).toBe(true);
+    expect(stops.at(-1)?.getAttribute('aria-label')).toBe('Account menu');
     if (fixture.componentInstance.canSwitchLocale) {
-      expect(stops[3]?.classList.contains('locale-toggle')).toBe(true);
+      expect(stops[5]?.classList.contains('locale-toggle')).toBe(true);
     }
 
     const theme = topbar.querySelector<HTMLElement>('button.theme-toggle')!;
     const scope = topbar.querySelector<HTMLElement>('app-scope-switcher')!;
     expect(scope.classList.contains('compact')).toBe(true);
     expect(scope.compareDocumentPosition(theme) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('names the current manifest destination on direct and nested routes', async () => {
+    await TestBed.inject(Router).navigateByUrl(
+      '/orgs/org-one/projects/project-one/overview/child?q=1',
+    );
+    await fixture.whenStable();
+    const crumb = root.querySelector('header nav [aria-current="page"]');
+    expect(crumb?.textContent?.trim()).toBe('Overview');
   });
 
   it('measures the topbar so the focus scroll offset follows its wrapped height', () => {
@@ -129,7 +147,7 @@ describe('ShellComponent', () => {
     await renderScope();
     const topbar = root.querySelector('header.topbar');
     expect(topbar?.querySelectorAll('[role="combobox"]')).toHaveLength(0);
-    expect(topbar?.querySelectorAll('button')).toHaveLength(2);
+    expect(topbar?.querySelectorAll('button')).toHaveLength(4);
     expect(root.querySelectorAll('app-scope-switcher')).toHaveLength(1);
     const aside = root.querySelector<HTMLElement>('aside');
     expect(aside?.querySelectorAll('[role="combobox"]')).toHaveLength(2);

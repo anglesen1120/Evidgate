@@ -83,6 +83,17 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         // after a queue write, and those rows are Tenancy.IntegrationTests' subject). The queue's list is scanned.
         "/v1/projects/{p}/authoring/changes/{c}",
 
+        // 03.6.1's draft detail: a draft row exists only after a create write, and drafts are
+        // Tenancy.IntegrationTests' subject (create/update/list are asserted there against the real
+        // database). Its list is scanned here because an empty page still exercises the read path.
+        "/v1/drafts/{d}",
+
+        // 03.5.1's template detail: no template row exists in this host (the registry ships no seed row and
+        // templates are Tenancy.IntegrationTests' subject), so the route answers 404. Its body is a kind, a
+        // name, a version, a body reference and the conformance rules document — no secret among them — and
+        // its list is scanned above because an empty page still exercises the read path.
+        "/v1/templates/{t}",
+
         // 02.3.1-T1.1's pre-tenant login routes answer no resource body: `start` is a 302 to the
         // provider or a 503 `unavailable` envelope (no credential is configured in this host), and
         // `callback` without a pending-login cookie is a 401 `token_invalid` envelope. Neither
@@ -489,6 +500,14 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             // The API-token list: one row was created above, so the scan is not vacuous, and the route answers
             // metadata only — the plaintext and the HMAC are never selected.
             ["/v1/projects/{p}/api-tokens"] = $"/v1/projects/{project}/api-tokens",
+            // 03.6.1's draft page: a draft is a path, a body hash and a body reference — no secret among them.
+            ["/v1/projects/{p}/drafts"] = $"/v1/projects/{project}/drafts",
+            // 03.5.1's template page: this host seeds no template row, so the scan reads an empty page; a row is a
+            // kind, a name, a version and a content-addressed body reference — no secret among them.
+            ["/v1/templates"] = "/v1/templates",
+            // The tenant's support-grant page (02.8.1 §5): this fixture files no grant, so the scan reads an empty
+            // page. Its rows are ids, permission strings, a reason and instants — no secret among them.
+            ["/v1/orgs/{o}/support-grants"] = $"/v1/orgs/{org}/support-grants",
             ["/v1/projects/{p}/cases"] = $"/v1/projects/{project}/cases",
             ["/v1/projects/{p}/suites"] = $"/v1/projects/{project}/suites",
             ["/v1/projects/{p}/waivers"] = $"/v1/projects/{project}/waivers",

@@ -283,7 +283,8 @@ public sealed class GitHubInstallationTokenTests
         var result = await bench.MintAsync();
 
         result.Value.ToString().ShouldNotContain("ghs_secret_value");
-        bench.TokenLogs.Lines.ShouldNotContain(line => line.Contains("ghs_secret_value", StringComparison.Ordinal));
+        bench.TokenLogs.Entries.SelectMany(entry => entry.Texts)
+            .ShouldNotContain(line => line.Contains("ghs_secret_value", StringComparison.Ordinal));
     }
 
     private static StubHandler TokenHandler(string token, TimeSpan lifetime) =>

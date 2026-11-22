@@ -21,20 +21,44 @@ describe('RunHeaderComponent', () => {
     return { fixture, root: fixture.nativeElement as HTMLElement };
   }
 
-  it('renders a named compact card with independent state and completeness, no fabricated verdict', async () => {
+  it('labels four independent summary facts without fabricating an outcome or a decision', async () => {
     const { root } = await render();
-    expect(root.querySelector('section')?.getAttribute('data-slot')).toBe('card');
+    expect(root.querySelectorAll('dl > [data-slot="card"]')).toHaveLength(4);
     expect(root.querySelector('section')?.getAttribute('aria-labelledby')).toBe(
       'run-summary-title',
     );
     expect(root.querySelector('#run-summary-title')?.textContent).toContain(run.run_id);
-    expect(root.querySelectorAll('dt')).toHaveLength(3);
+    expect([...root.querySelectorAll('dt')].map((term) => term.textContent?.trim())).toEqual([
+      'Evidence completeness',
+      'Test outcome',
+      'Stored run decision',
+      'Evidence revision',
+    ]);
     expect(root.querySelector('app-run-state-pill')).not.toBeNull();
     expect(root.querySelector('app-evidence-badge')?.textContent).toContain(
       'Completeness: Unavailable',
     );
     expect(root.querySelector('app-decision-chip, app-outcome-pill')).toBeNull();
     expect(root.querySelector('[data-run-environment]')).toBeNull();
+  });
+
+  it('shows the supplied freeze and missing count without inferring a verdict', async () => {
+    const { fixture, root } = await render();
+    expect(root.querySelector('[data-run-latest-freeze]')).toBeNull();
+    fixture.componentRef.setInput('latestSnapshot', {
+      revision_no: 3,
+      created_at: '2026-10-31T10:30:00Z',
+      completeness: 'incomplete',
+      missing: ['missing_shard'],
+      evaluation_id: null,
+    });
+    fixture.componentRef.setInput('runCompleteness', 'incomplete');
+    await fixture.whenStable();
+    const freeze = root.querySelector('[data-run-latest-freeze]');
+    expect(freeze?.textContent).toContain('Latest loaded freeze: 3');
+    expect(freeze?.querySelector('time')?.getAttribute('datetime')).toBe('2026-10-31T10:30:00Z');
+    expect(root.querySelector('dl')?.textContent).toMatch(/Missing evidence reasons:\s*1/);
+    expect(root.querySelector('app-decision-chip, app-outcome-pill')).toBeNull();
   });
 
   it('keeps incomplete collection explanation and a keyboard-focusable evidence action', async () => {

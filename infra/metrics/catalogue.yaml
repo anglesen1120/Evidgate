@@ -98,6 +98,24 @@ entries:
     labels: []
     source: src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/ReconcileRunTask.cs
 
+  - id: runs_created
+    instrument: evidgate_runs_created_total
+    meter: evidgate
+    kind: counter
+    unit: '{run}'
+    description: Runs created, counted after the transaction that creates the run commits. trigger_event is the validated vocabulary (push, pull_request, schedule, manual, dispatch) or none; is_fork and unverified_ref are booleans. A fork run is advisory-only, so the is_fork share is how an operator sees fork traffic reach the API. Never a ref name, a sha or an id.
+    labels: [trigger_event, is_fork, unverified_ref]
+    source: src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/CreateRunCommandHandler.cs
+
+  - id: authoring_apply_outcomes
+    instrument: evidgate_authoring_apply_total
+    meter: evidgate
+    kind: counter
+    unit: '{apply}'
+    description: Batched authoring apply attempts by outcome. applied is counted after the batch commits; stale (a precondition or version lost) and conflict (any 409 refusal, for example a selected change no longer pending or a delete whose target still has live cases) count refused requests, which write nothing. The stale share is how an operator sees the UI holding an old selection.
+    labels: [outcome]
+    source: src/Modules/Evidgate.Modules.Authoring/Application/Changes/ApplyAuthoringChangesCommand.cs
+
   - id: artifact_failure_rate
     instrument: evidgate_artifact_failure_total
     meter: evidgate
@@ -167,7 +185,7 @@ entries:
     meter: evidgate
     kind: counter
     unit: '{check}'
-    description: Secret-shape checks whose regex timed out and were answered as secret-shaped (the value is refused, never passed as clean). By pattern; never the checked value. A rise means customer values are hitting the match budget or the host is stalling. Operator steps and the alert specification are in docs/runbooks/secret-shape-timeout.md; no deployed alert rule exists yet.
+    description: Secret-shape checks whose regex timed out and were answered as secret-shaped (the value is refused, never passed as clean). By pattern; never the checked value. The patterns are linear, so a rise means a stalled host, not hostile input; ordinary values can be refused while it lasts. Operator steps and the alert specification are in docs/runbooks/secret-shape-timeout.md; no deployed alert rule exists yet.
     labels: [pattern]
     source: src/BuildingBlocks/SharedKernel/Security/SecretShapeMetrics.cs
 

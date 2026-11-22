@@ -5,6 +5,7 @@ using Evidgate.BuildingBlocks.SharedKernel.GitHub;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.BuildingBlocks.SharedKernel.Secrets;
 using Evidgate.Modules.Catalog.Infrastructure.GitHub;
+using Evidgate.Testing;
 using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -176,42 +177,6 @@ internal sealed class MapSecretProvider : ISecretProvider
         ValueTask.FromResult(name == SecretNames.GitHubAppPrivateKey ? _privateKey : null);
 }
 
-/// <summary>Captures formatted log lines so a test can assert what did and did not reach a log.</summary>
-internal sealed class ListLogger<T> : ILogger<T>
-{
-    private readonly List<string> _lines = [];
-
-    /// <summary>Every formatted line and exception text written so far, in order.</summary>
-    internal IReadOnlyList<string> Lines
-    {
-        get
-        {
-            lock (_lines)
-            {
-                return _lines.ToList();
-            }
-        }
-    }
-
-    public IDisposable? BeginScope<TState>(TState state)
-        where TState : notnull => null;
-
-    public bool IsEnabled(LogLevel logLevel) => true;
-
-    public void Log<TState>(
-        LogLevel logLevel,
-        EventId eventId,
-        TState state,
-        Exception? exception,
-        Func<TState, Exception?, string> formatter)
-    {
-        lock (_lines)
-        {
-            _lines.Add($"{logLevel}:{eventId.Id}:{formatter(state, exception)}:{exception}");
-        }
-    }
-}
-
 /// <summary>The composed App client a test drives: one stub handler behind both clients and a fake clock.</summary>
 internal sealed class GitHubTestBench
 {
@@ -236,13 +201,17 @@ internal sealed class GitHubTestBench
         Options = options ?? DefaultOptions(pem: pem ?? TestPem);
         Options.PrivateKey ??= pem ?? TestPem;
         Time = new FakeTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
-        ClientLogs = new ListLogger<GitHubClient>();
-        TokenLogs = new ListLogger<GitHubInstallationTokenSource>();
-        AppTokenLogs = new ListLogger<GitHubAppTokenSource>();
+        ClientLogs = new CapturingLoggerProvider();
+        TokenLogs = new CapturingLoggerProvider();
+        AppTokenLogs = new CapturingLoggerProvider();
+        var captureAllLevels = new LoggerFilterOptions { MinLevel = LogLevel.Trace };
+        var clientLogger = new LoggerFactory([ClientLogs], captureAllLevels).CreateLogger<GitHubClient>();
+        var tokenLogger = new LoggerFactory([TokenLogs], captureAllLevels).CreateLogger<GitHubInstallationTokenSource>();
+        var appTokenLogger = new LoggerFactory([AppTokenLogs], captureAllLevels).CreateLogger<GitHubAppTokenSource>();
 
         var http = new HttpClient(handler) { BaseAddress = new Uri("https://api.github.com") };
         var clients = new StubClientFactory(http);
-        AppTokens = new GitHubAppTokenSource(Microsoft.Extensions.Options.Options.Create(Options), Time, AppTokenLogs);
+        AppTokens = new GitHubAppTokenSource(Microsoft.Extensions.Options.Options.Create(Options), Time, appTokenLogger);
         Resolver = new StubInstallationResolver();
         Tokens = new GitHubInstallationTokenSource(
             Meters,
@@ -250,9 +219,9 @@ internal sealed class GitHubTestBench
             AppTokens,
             Microsoft.Extensions.Options.Options.Create(Options),
             Time,
-            TokenLogs,
+            tokenLogger,
             withResolver ? Resolver : null);
-        Client = new GitHubClient(http, Tokens, AppTokens, Microsoft.Extensions.Options.Options.Create(Options), Time, ClientLogs);
+        Client = new GitHubClient(http, Tokens, AppTokens, Microsoft.Extensions.Options.Options.Create(Options), Time, clientLogger);
     }
 
     internal StubHandler Handler { get; }
@@ -269,11 +238,11 @@ internal sealed class GitHubTestBench
 
     internal GitHubClient Client { get; }
 
-    internal ListLogger<GitHubClient> ClientLogs { get; }
+    internal CapturingLoggerProvider ClientLogs { get; }
 
-    internal ListLogger<GitHubInstallationTokenSource> TokenLogs { get; }
+    internal CapturingLoggerProvider TokenLogs { get; }
 
-    internal ListLogger<GitHubAppTokenSource> AppTokenLogs { get; }
+    internal CapturingLoggerProvider AppTokenLogs { get; }
 
     /// <summary>Mints the catalog feature's token for one installation and repository, as the client does.</summary>
     /// <param name="installationId">The installation id.</param>

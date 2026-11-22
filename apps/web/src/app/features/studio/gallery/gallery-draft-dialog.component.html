@@ -1,0 +1,162 @@
+<hlm-dialog
+  [state]="'open'"
+  [autoFocus]="'[data-gallery-draft-title]'"
+  [restoreFocus]="true"
+  (stateChanged)="onStateChanged($event)"
+  (closed)="dismissed.emit()"
+>
+  <hlm-dialog-content
+    *hlmDialogPortal
+    [showCloseButton]="false"
+    class="record-dialog draft-dialog min-w-0 wrap-anywhere"
+    (keydown.escape)="confirmation() && keepEditingOnEscape($event)"
+  >
+    <header hlmDialogHeader>
+      <h2 hlmDialogTitle tabindex="-1" data-gallery-draft-title>
+        {{ confirmation() ? copy.discardTitle : copy.create }}
+      </h2>
+      <div class="flex flex-wrap items-center gap-2">
+        <code hlmBadge [variant]="'outline'"
+          ><bdi>{{ item().id }}</bdi></code
+        >
+        <span hlmBadge [variant]="'secondary'"
+          ><hlm-icon name="lucideInfo" />{{
+            item().source === 'built' ? copy.builtBadge : copy.teamBadge
+          }}</span
+        >
+      </div>
+      <p hlmDialogDescription>{{ copy.previewOnly }}</p>
+      <button
+        hlmBtn
+        [variant]="'ghost'"
+        [size]="'icon-sm'"
+        type="button"
+        class="spartan-dialog-close"
+        [attr.aria-label]="copy.close"
+        (click)="confirmation() ? keepEditing() : dismiss()"
+      >
+        <hlm-icon name="lucideX" />
+      </button>
+    </header>
+    @if (confirmation()) {
+      <p class="record-body">{{ copy.discardNotice }}</p>
+      <footer hlmDialogFooter>
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          type="button"
+          id="gallery-keep"
+          data-gallery-keep
+          (click)="keepEditing()"
+        >
+          {{ copy.keep }}
+        </button>
+        <button
+          hlmBtn
+          [variant]="'destructive'"
+          type="button"
+          data-gallery-discard
+          (click)="discard()"
+        >
+          {{ copy.discard }}
+        </button>
+      </footer>
+    } @else {
+      <div class="fields record-body" [attr.aria-busy]="busy()" (focusin)="rememberField($event)">
+        @if (readOnly()) {
+          <app-desktop-required-notice />
+        }
+        <div class="field">
+          <label hlmLabel for="gallery-form-template">{{ copy.template }}</label>
+          <hlm-select
+            [ngModel]="item().id"
+            (ngModelChange)="select($event)"
+            [itemToString]="titleFor"
+            [disabled]="fieldsLocked()"
+          >
+            <hlm-select-trigger [buttonId]="'gallery-form-template'"
+              ><hlm-select-value
+            /></hlm-select-trigger>
+            <hlm-select-content *hlmSelectPortal [aria-label]="copy.template">
+              @for (template of templates(); track template.id) {
+                <hlm-select-item [value]="template.id">{{ template.title }}</hlm-select-item>
+              }
+            </hlm-select-content>
+          </hlm-select>
+        </div>
+        <label hlmLabel for="gallery-draft-name">{{ copy.name }}</label>
+        <input
+          hlmInput
+          id="gallery-draft-name"
+          [readonly]="fieldsLocked()"
+          required
+          [ngModel]="draftName()"
+          (ngModelChange)="draftName.set($event)"
+        />
+        <label hlmLabel for="gallery-intent">{{ copy.intent }}</label>
+        <textarea
+          hlmInput
+          id="gallery-intent"
+          rows="2"
+          required
+          [readonly]="fieldsLocked()"
+          [ngModel]="intent()"
+          (ngModelChange)="intent.set($event)"
+        ></textarea>
+        <label hlmLabel for="gallery-assertion">{{ copy.assertions }}</label>
+        <textarea
+          hlmInput
+          id="gallery-assertion"
+          rows="2"
+          required
+          [readonly]="fieldsLocked()"
+          [ngModel]="assertion()"
+          (ngModelChange)="assertion.set($event)"
+          [attr.aria-invalid]="invalid()"
+          [attr.aria-describedby]="invalid() ? 'gallery-assertion-error' : null"
+        ></textarea>
+        @if (invalid()) {
+          <p role="alert" id="gallery-assertion-error">{{ copy.invalid }}</p>
+        }
+        @if (missingText()) {
+          <p role="alert">{{ copy.noName }}</p>
+        }
+        <dl class="flex flex-wrap gap-4">
+          <div>
+            <dt>{{ copy.variant }}</dt>
+            <dd>
+              <bdi>{{ escapeFormatChars(item().variant) }}</bdi>
+            </dd>
+          </div>
+          <div>
+            <dt>{{ copy.author }}</dt>
+            <dd>{{ copy.linh }}</dd>
+          </div>
+        </dl>
+        @if (busy()) {
+          <app-inline-feedback [title]="copy.busy" />
+        }
+        @if (mode() === 'createerror') {
+          <app-inline-feedback [tone]="'destructive'" [title]="copy.createError" />
+        }
+        @if (noResult()) {
+          <app-inline-feedback [title]="copy.unavailable" />
+        }
+      </div>
+      <footer hlmDialogFooter>
+        <button hlmBtn [variant]="'outline'" type="button" data-gallery-cancel (click)="dismiss()">
+          {{ copy.cancel }}
+        </button>
+        <button
+          hlmBtn
+          type="button"
+          data-gallery-submit
+          [disabled]="blocked()"
+          (click)="useTemplate()"
+        >
+          {{ copy.use }}
+        </button>
+      </footer>
+    }
+  </hlm-dialog-content>
+</hlm-dialog>

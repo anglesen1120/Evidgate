@@ -18,6 +18,7 @@
     <ProjectReference Include="..\..\src\Evidgate.Worker\Evidgate.Worker.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\Shared\CapturingLoggerProvider.cs" Link="CapturingLoggerProvider.cs" />
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
     <Compile Include="..\Shared\ContainerStart.cs" Link="ContainerStart.cs" />
     <Compile Include="..\Shared\ContainerStartReaper.cs" Link="ContainerStartReaper.cs" />

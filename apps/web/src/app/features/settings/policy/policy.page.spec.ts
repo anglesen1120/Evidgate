@@ -1,3 +1,5 @@
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { computed, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
@@ -47,6 +49,16 @@ const head: PolicyRevisionSummaryDto = {
   created_at: revision.created_at,
   version: revision.version,
 };
+
+class PolicyOverviewHarness extends ComponentHarness {
+  static hostSelector = 'app-policy-page';
+  readonly mode = this.locatorForOptional('[data-overview-mode] dd');
+  readonly head = this.locatorForOptional('[data-overview-head] dd');
+  readonly activeNumber = this.locatorForOptional('[data-overview-active] app-number-value');
+  readonly more = this.locatorFor('[data-policy-more]');
+  readonly viewRevision = this.locatorFor('[data-policy-view]');
+  readonly viewDialog = this.documentRootLocatorFactory().locatorFor('[data-policy-view-dialog]');
+}
 
 class FakePolicyStore {
   readonly phase = signal<'idle' | 'ready' | 'loading' | 'not_found' | 'error'>('ready');
@@ -136,9 +148,8 @@ describe('PolicyPage', () => {
   it('keeps compact authored tab labels with complete accessible names and unbroken targets', async () => {
     const { fixture, root } = await render();
     const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
-    expect(tabs.map((tab) => tab.textContent?.trim())).toEqual(['Values', 'Compare', 'Activation']);
+    expect(tabs.map((tab) => tab.textContent?.trim())).toEqual(['Compare', 'Activation']);
     expect(tabs.map((tab) => tab.getAttribute('aria-label') ?? tab.textContent?.trim())).toEqual([
-      'Policy values',
       'Compare revisions',
       'Activation',
     ]);
@@ -147,7 +158,7 @@ describe('PolicyPage', () => {
       expect(tab.classList.contains('min-w-max')).toBe(true);
       expect(tab.classList.contains('flex-auto')).toBe(true);
     }
-    const compareTab = tabs[1];
+    const compareTab = tabs[0];
     if (!compareTab) throw new Error('Expected the policy comparison tab');
     compareTab.click();
     await fixture.whenStable();
@@ -165,7 +176,9 @@ describe('PolicyPage', () => {
       expect(input?.classList.contains('font-mono')).toBe(true);
       const field = input?.parentElement;
       expect(field?.classList.contains('w-full')).toBe(true);
-      expect(field?.classList.contains('md:w-[40ch]')).toBe(true);
+      expect(field?.classList.contains('md:w-[40ch]')).toBe(false);
+      expect(input?.classList.contains('md:w-[44ch]')).toBe(true);
+      expect(input?.classList.contains('max-w-full')).toBe(true);
       expect(field?.classList.contains('md:max-w-full')).toBe(true);
       expect(field?.classList.contains('flex-1')).toBe(false);
       expect(field?.classList.contains('max-w-[40ch]')).toBe(false);
@@ -183,6 +196,28 @@ describe('PolicyPage', () => {
     expect(root.querySelector('[data-policy-mode]')?.getAttribute('data-mode')).toBe('advisory');
     expect(root.querySelector('[data-policy-publish-open]')).not.toBeNull();
   });
+  it('shows only independently readable facts in the revision overview', async () => {
+    const { fixture } = await render();
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      PolicyOverviewHarness,
+    );
+    expect(await (await harness.mode())?.text()).toContain('advisory');
+    expect(await (await harness.head())?.text()).toContain('2');
+    expect(await (await harness.activeNumber())?.text()).toBe('2');
+    store.reads.activation.set({
+      phase: 'ready',
+      value: { ...activation, policy_revision_id: 'outside-the-loaded-page' },
+      error: null,
+    });
+    expect(await harness.activeNumber()).toBeNull();
+    store.reads.activation.set({ phase: 'forbidden', value: null, error: null });
+    expect(await harness.mode()).toBeNull();
+    expect(await harness.head()).not.toBeNull();
+    store.reads.head.set({ phase: 'empty', value: null, error: null });
+    expect(await harness.head()).toBeNull();
+  });
+
   it('shows the no-activation state without hiding the revisions', async () => {
     store.reads.activation.set({ phase: 'empty', value: null, error: null });
     const { root } = await render();
@@ -240,6 +275,10 @@ describe('PolicyPage', () => {
     expect(root.querySelector('#policy-publish-body')).toBeNull();
     expect(root.querySelector('[data-policy-publish-submit]')).toBeNull();
     expect(root.querySelector('app-policy-publish-dialog')).toBeNull();
+    root.querySelector<HTMLButtonElement>('[data-policy-view]')?.click();
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-policy-view-dialog]')).not.toBeNull(),
+    );
     expect(store.loadBody).toHaveBeenCalledWith(revision.id);
   });
   it('forwards initial revision query parameter to the store validator', async () => {
@@ -354,6 +393,23 @@ describe('PolicyPage', () => {
     fixture.destroy();
     expect(store.reset).toHaveBeenCalledTimes(1);
   });
+  it('opens an already loaded revision after loading the next page fails', async () => {
+    store.hasMore.set(true);
+    store.loadMore.mockImplementationOnce(() => {
+      store.phase.set('error');
+      return Promise.resolve();
+    });
+    const { fixture } = await render();
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      PolicyOverviewHarness,
+    );
+    await (await harness.more()).click();
+    expect(await (await harness.host()).getAttribute('data-policy-phase')).toBe('error');
+    await (await harness.viewRevision()).click();
+    expect(await (await harness.viewDialog()).text()).toContain(revision.id);
+    expect(store.loadBody).toHaveBeenCalledWith(revision.id);
+  });
   it('announces loading, labels the revision field and disables actions until the read completes', async () => {
     store.phase.set('loading');
     store.revisions.set([]);
@@ -384,19 +440,26 @@ describe('PolicyPage', () => {
       Promise.resolve(args[0] === previous.id ? previous : revision),
     );
     const { fixture, root } = await render();
-    root
-      .querySelector<HTMLButtonElement>(
-        '[data-policy-revision][data-revision-no="1"] [data-policy-select]',
-      )
-      ?.click();
+    const trigger = root.querySelector<HTMLButtonElement>(
+      '[data-revision-no="1"] [data-policy-view]',
+    );
+    trigger?.focus();
+    trigger?.click();
     await fixture.whenStable();
-    expect(
-      root.querySelector('[data-policy-revision][data-revision-no="1"] [aria-pressed="true"]'),
-    ).not.toBeNull();
-    expect(root.querySelector('[data-policy-selected-metadata]')?.textContent).toContain(
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+    expect(root.querySelector('[data-revision-no="1"][data-policy-selected]')).not.toBeNull();
+    expect(dialog?.querySelector('[data-policy-selected-metadata]')?.textContent).toContain(
       previous.id,
     );
-    expect(root.querySelector('[data-policy-field="flaky_budget"]')?.textContent).toContain('0');
+    expect(dialog?.textContent).toContain(previous.hash);
+    expect(dialog?.textContent).toContain('Retired');
+    expect(dialog?.querySelector('time')?.getAttribute('datetime')).toBe(previous.created_at);
+    expect(dialog?.querySelector('[data-policy-field="flaky_budget"]')?.textContent).toContain('0');
+    dialog?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }),
+    );
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+    expect(document.activeElement).toBe(trigger);
     expect(store.open).not.toHaveBeenCalled();
   });
   it('retains narrow inspection and refuses a publish opener captured before resize', async () => {
@@ -410,8 +473,9 @@ describe('PolicyPage', () => {
       'Desktop required',
     );
     expect(root.querySelector('[data-policy-open]')).not.toBeNull();
-    expect(root.querySelector('[data-policy-select]')).not.toBeNull();
-    expect(root.querySelector('[data-policy-values]')).not.toBeNull();
+    root.querySelector<HTMLButtonElement>('[data-policy-view]')?.click();
+    await fixture.whenStable();
+    expect(document.querySelector('[role="dialog"] [data-policy-values]')).not.toBeNull();
     expect(document.querySelector('[data-policy-publish-dialog]')).toBeNull();
     expect(store.publish).not.toHaveBeenCalled();
   });

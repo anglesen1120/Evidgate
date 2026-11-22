@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Application.Commands;
@@ -60,23 +61,26 @@ internal static class AuthoringChecklistEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        if (AuthoringEndpointSupport.LimitError(context.Request.Query["limit"], out var limit) is { } limitError)
-        {
-            return AuthoringEndpointSupport.Failure<ChecklistItemListResponse>(limitError);
-        }
+        ArgumentNullException.ThrowIfNull(context);
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
+        var requestError = AuthoringEndpointSupport.LimitError(context.Request.Query["limit"], out var limit);
 
         Guid? nodeId = null;
-        if (AuthoringEndpointSupport.Blank(context.Request.Query["node_id"]) is { } rawNodeId)
+        if (requestError is null && AuthoringEndpointSupport.Blank(context.Request.Query["node_id"]) is { } rawNodeId)
         {
-            if (!AuthoringEndpointSupport.TryParseGuid(rawNodeId, out var parsed))
+            if (AuthoringEndpointSupport.TryParseGuid(rawNodeId, out var parsed))
             {
-                return Result.Failure<ChecklistItemListResponse>(
-                    Error.Invalid("node_id must be the id of a node", [new ErrorDetail("/node_id", "invalid")]));
+                nodeId = parsed;
             }
-
-            nodeId = parsed;
+            else
+            {
+                requestError = Error.Invalid(
+                    "node_id must be the id of a node", [new ErrorDetail("/node_id", "invalid")]);
+            }
         }
 
+        // The pipeline authorizes the caller before the handler answers the query error.
         return await mediator.Send(
             new ListChecklistItemsQuery(
                 p,
@@ -84,7 +88,8 @@ internal static class AuthoringChecklistEndpoints
                 AuthoringEndpointSupport.Blank(context.Request.Query["state"]),
                 AuthoringEndpointSupport.Blank(context.Request.Query["priority"]),
                 AuthoringEndpointSupport.Blank(context.Request.Query["cursor"]),
-                limit),
+                limit,
+                requestError),
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -95,6 +100,11 @@ internal static class AuthoringChecklistEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(context);
+
+        // Refuse an unresolved caller before anything else reads the request.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
         var (body, readError) = await AuthoringEndpointSupport
             .ReadBodyAsync(context, cancellationToken)
             .ConfigureAwait(false);
@@ -129,6 +139,9 @@ internal static class AuthoringChecklistEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        // Refuse an unresolved caller before the precondition is parsed.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
         if (AuthoringEndpointSupport.IfMatchVersion(context, out var expectedVersion) is { } ifMatchError)
         {
             return AuthoringEndpointSupport.Failure<AuthoringChangeResponse>(ifMatchError);
@@ -171,6 +184,9 @@ internal static class AuthoringChecklistEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        // Refuse an unresolved caller before the precondition is parsed.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
         if (AuthoringEndpointSupport.IfMatchVersion(context, out var expectedVersion) is { } ifMatchError)
         {
             return Result.Failure(ifMatchError);

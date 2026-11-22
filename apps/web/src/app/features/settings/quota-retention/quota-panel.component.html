@@ -1,18 +1,36 @@
 <section
-  class="grid min-w-0 gap-(--eg-space-7)"
+  class="@container grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 wrap-anywhere"
   aria-labelledby="quota-title"
   [attr.aria-busy]="quota.loadState() === 'loading'"
 >
-  <header class="grid min-w-0 gap-(--eg-space-3)">
-    <h2 hlmCardTitle [size]="sectionSize" id="quota-title">{{ copy.title }}</h2>
-    <p class="eg-type-body m-0 max-w-[65ch] text-muted-foreground">{{ copy.description }}</p>
+  <header class="flex min-w-0 items-start gap-3">
+    <span
+      class="grid size-12 shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent)"
+    >
+      <app-shell-icon [name]="'grid'" class="size-6" />
+    </span>
+    <div class="grid min-w-0 gap-1">
+      <h2
+        hlmCardTitle
+        [size]="pageSize"
+        id="quota-title"
+        class="text-[length:var(--eg-leading-md)]!"
+      >
+        {{ copy.title }}
+      </h2>
+      <p class="m-0 text-sm text-muted-foreground">
+        @if (quota.loadState() === 'ready' && quota.usageSummary(); as summary) {
+          {{ copy.period }}: <span data-quota-period>{{ summary.period }}</span> ·
+          {{ copy.counters }}: <app-number-value [value]="summary.metrics.length" />
+        } @else {
+          {{ copy.description }}
+        }
+      </p>
+    </div>
   </header>
   @if (quota.loadState() === 'loading' || quota.loadState() === 'idle') {
     <app-loading-pattern [label]="copy.loading" [layout]="loadingLayout" [bare]="true" />
   } @else if (quota.usageSummary(); as summary) {
-    <p class="m-0 text-muted-foreground">
-      {{ copy.period }}: <span data-quota-period>{{ summary.period }}</span>
-    </p>
     @if (summary.next_cursor) {
       <app-inline-feedback
         data-quota-projects-more
@@ -21,25 +39,43 @@
       />
     }
     @if (summary.metrics.length === 0) {
-      <p class="m-0" role="status" data-quota-empty>{{ copy.empty }}</p>
+      <app-inline-feedback data-quota-empty [title]="copy.empty" />
     }
-    <div class="grid min-w-0 gap-(--eg-space-7)">
+    <div
+      class="grid min-w-0 gap-3 @sm:grid-cols-2 @4xl:grid-cols-[repeat(var(--quota-columns),minmax(0,1fr))]"
+      [class]="summary.metrics.length === 3 ? '@2xl:grid-cols-3' : ''"
+      [style.--quota-columns]="summary.metrics.length > 3 ? 4 : summary.metrics.length || 1"
+    >
       @for (metric of summary.metrics; track metric.metric; let index = $index) {
         <section
           hlmCard
-          class="min-w-0 gap-(--eg-space-5) p-(--eg-space-5)"
+          class="min-w-0 content-start gap-3 rounded-xl p-4"
           [attr.data-quota-metric]="metric.metric"
           [attr.aria-labelledby]="'quota-metric-' + index"
         >
-          <h3 hlmCardTitle [size]="subsectionSize" [id]="'quota-metric-' + index">
+          <h3
+            class="m-0 flex items-center gap-2 text-sm font-semibold"
+            [id]="'quota-metric-' + index"
+          >
+            <span
+              class="grid size-7 shrink-0 place-items-center rounded-lg"
+              [class]="
+                index === 0
+                  ? 'bg-(--eg-accent-soft) text-(--eg-accent)'
+                  : 'bg-muted text-muted-foreground'
+              "
+            >
+              <app-shell-icon [name]="metricIcon(metric.metric)" class="size-4" />
+            </span>
             {{ metricLabel(metric.metric) }}
           </h3>
-          <dl
-            class="m-0 grid min-w-0 gap-(--eg-space-5) [grid-template-columns:repeat(auto-fit,minmax(min(100%,30ch),1fr))]"
-          >
-            <div class="grid min-w-0 gap-(--eg-space-2) md:text-end">
-              <dt class="text-muted-foreground">{{ copy.used }}</dt>
-              <dd class="m-0 font-semibold tabular-nums" data-quota-used>
+          <dl class="m-0 grid min-w-0 gap-1">
+            <div class="flex flex-wrap items-baseline gap-x-2">
+              <dt class="sr-only">{{ copy.used }}</dt>
+              <dd
+                class="m-0 font-(family-name:--eg-font-display) text-2xl font-bold tabular-nums"
+                data-quota-used
+              >
                 @if (metric.used === null) {
                   {{ copy.unavailable }}
                 } @else {
@@ -47,9 +83,9 @@
                 }
               </dd>
             </div>
-            <div class="grid min-w-0 gap-(--eg-space-2) md:text-end">
-              <dt class="text-muted-foreground">{{ copy.limit }}</dt>
-              <dd class="m-0 font-semibold tabular-nums" data-quota-limit>
+            <div class="flex flex-wrap items-baseline gap-x-1 text-sm text-muted-foreground">
+              <dt>{{ copy.limit }}:</dt>
+              <dd class="m-0 tabular-nums" data-quota-limit>
                 @if (metric.limit === null) {
                   {{ copy.unavailable }}
                 } @else {
@@ -58,39 +94,28 @@
               </dd>
             </div>
           </dl>
+          @if (
+            metric.used !== null && metric.used >= 0 && metric.limit !== null && metric.limit > 0
+          ) {
+            <div
+              aria-hidden="true"
+              data-quota-meter
+              class="h-1.5 overflow-hidden rounded-full bg-muted"
+            >
+              <div
+                class="h-full max-w-full rounded-full bg-(--eg-accent)"
+                [style.width.%]="(metric.used / metric.limit) * 100"
+              ></div>
+            </div>
+          }
           @if (metric.used === null) {
-            <p data-quota-reason class="m-0 text-muted-foreground">{{ copy.notMeasured }}</p>
+            <p data-quota-reason class="m-0 text-xs text-muted-foreground">
+              {{ copy.notMeasured }}
+            </p>
           } @else if (metric.blocked_at) {
             <app-status-pill [tone]="dangerTone" [label]="copy.blocked" />
           } @else if (metric.warned_at) {
             <app-status-pill [tone]="warningTone" [label]="copy.warned" />
-          }
-          @if (metric.warned_at || metric.blocked_at) {
-            <dl class="m-0 grid gap-(--eg-space-3)">
-              @if (metric.warned_at) {
-                <div>
-                  <dt class="text-muted-foreground">{{ copy.warnedAt }}</dt>
-                  <dd class="m-0"><app-absolute-time [value]="metric.warned_at" /></dd>
-                </div>
-              }
-              @if (metric.blocked_at) {
-                <div>
-                  <dt class="text-muted-foreground">{{ copy.blockedAt }}</dt>
-                  <dd class="m-0"><app-absolute-time [value]="metric.blocked_at" /></dd>
-                </div>
-              }
-            </dl>
-          }
-          @if (metric.projects.length > 0) {
-            <section class="grid min-w-0 gap-(--eg-space-4)" data-quota-projects>
-              <h4 class="m-0 text-sm font-semibold">{{ copy.projects }}</h4>
-              <app-data-table
-                [columns]="columns()"
-                [rows]="metric.projects"
-                [rowId]="projectId"
-                [caption]="metricLabel(metric.metric) + ' · ' + copy.projectCaption"
-              />
-            </section>
           }
         </section>
       }
@@ -104,26 +129,196 @@
       (action)="quota.reload()"
     />
   }
-  <section
-    hlmCard
-    class="grid min-w-0 gap-(--eg-space-5) p-(--eg-space-5)"
-    aria-labelledby="quota-storage-title"
-    data-quota-storage
-  >
-    <h3 hlmCardTitle [size]="subsectionSize" id="quota-storage-title">{{ copy.storageTitle }}</h3>
-    <p class="m-0 max-w-[65ch] text-muted-foreground">{{ copy.storageReason }}</p>
-    <dl class="m-0 grid gap-(--eg-space-4) md:grid-cols-2">
-      <div>
-        <dt class="text-muted-foreground">{{ copy.storedBytes }}</dt>
-        <dd class="m-0">{{ copy.unavailable }}</dd>
-      </div>
-      <div>
-        <dt class="text-muted-foreground">{{ copy.egressBytes }}</dt>
-        <dd class="m-0">{{ copy.unavailable }}</dd>
-      </div>
-    </dl>
-  </section>
+  <div class="grid min-w-0 gap-4">
+    @if (quota.loadState() === 'ready' && quota.usageSummary(); as summary) {
+      @for (metric of projectMetrics(); track metric.metric) {
+        <section hlmCard class="min-w-0 gap-0 overflow-visible rounded-xl p-0" data-quota-projects>
+          <header class="grid min-w-0 gap-1 border-b border-border px-5 py-4">
+            <h3 hlmCardTitle [size]="subsectionSize">{{ metricLabel(metric.metric) }}</h3>
+            <p class="m-0 text-sm text-muted-foreground">{{ copy.projects }}</p>
+          </header>
+          <ng-template #projectAction let-row>
+            <button
+              hlmBtn
+              #trigger
+              [variant]="'outline'"
+              type="button"
+              data-quota-view
+              [attr.aria-haspopup]="'dialog'"
+              class="min-h-(--eg-control-touch)"
+              [attr.aria-label]="
+                copy.view + ' · ' + metricLabel(metric.metric) + ' · ' + row.project_id
+              "
+              (click)="inspected.set({ row, metric: metric.metric, trigger })"
+            >
+              {{ copy.view }}
+            </button>
+          </ng-template>
+          <app-data-table
+            [columns]="[...columns(), { ...viewColumn, cellTemplate: projectAction }]"
+            [rows]="metric.projects"
+            [rowId]="projectId"
+            [rowHeight]="'compact'"
+            [fitToContainer]="true"
+            [caption]="metricLabel(metric.metric) + ' · ' + copy.projectCaption"
+          />
+        </section>
+      }
+      @if (summary.metrics.length) {
+        <section hlmCard class="min-w-0 gap-0 rounded-xl p-0" aria-labelledby="quota-state-title">
+          <header class="grid gap-1 border-b border-border px-5 py-4">
+            <h3 hlmCardTitle [size]="subsectionSize" id="quota-state-title">
+              {{ copy.recordedState }}
+            </h3>
+            <p class="m-0 text-sm text-muted-foreground">{{ copy.stateDescription }}</p>
+          </header>
+          <div hlmTableContainer>
+            <table hlmTable aria-labelledby="quota-state-title">
+              <thead hlmTHead>
+                <tr hlmTr>
+                  <th hlmTh scope="col">{{ copy.metric }}</th>
+                  <th hlmTh scope="col">{{ copy.recordedState }}</th>
+                  <th hlmTh scope="col" class="text-end">{{ copy.actions }}</th>
+                </tr>
+              </thead>
+              <tbody hlmTBody>
+                @for (metric of summary.metrics; track metric.metric) {
+                  <tr hlmTr class="h-14">
+                    <th hlmTh scope="row" class="min-w-0 font-semibold text-foreground">
+                      {{ metricLabel(metric.metric) }}
+                      <code class="block text-xs font-normal text-muted-foreground">{{
+                        metric.metric
+                      }}</code>
+                    </th>
+                    <td hlmTd>
+                      @if (metric.used === null && !metric.blocked_at && !metric.warned_at) {
+                        <app-status-pill [tone]="'neutral'" [label]="copy.unavailable" />
+                      } @else {
+                        <ng-container
+                          [ngTemplateOutlet]="stateCell"
+                          [ngTemplateOutletContext]="{ $implicit: metric }"
+                        />
+                      }
+                    </td>
+                    <td hlmTd class="text-end">
+                      <button
+                        hlmBtn
+                        #trigger
+                        [variant]="'outline'"
+                        type="button"
+                        [attr.aria-haspopup]="'dialog'"
+                        data-quota-view
+                        class="min-h-(--eg-control-touch)"
+                        [attr.aria-label]="copy.view + ' · ' + metricLabel(metric.metric)"
+                        (click)="inspected.set({ row: metric, metric: metric.metric, trigger })"
+                      >
+                        {{ copy.view }}
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      }
+    }
+    <section
+      hlmCard
+      class="min-w-0 gap-0 rounded-xl p-0 @2xl:grid @2xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] @2xl:items-center"
+      aria-labelledby="quota-storage-title"
+      data-quota-storage
+    >
+      <header class="grid gap-1 px-5 pt-4 @2xl:py-4">
+        <h3 hlmCardTitle [size]="subsectionSize" id="quota-storage-title">
+          {{ copy.storageTitle }}
+        </h3>
+        <p class="m-0 max-w-[65ch] text-sm text-muted-foreground">{{ copy.storageReason }}</p>
+      </header>
+      <dl class="m-0 grid min-w-0 gap-0 px-5 py-3 text-sm">
+        <div
+          class="grid grid-cols-[minmax(0,1fr)_minmax(0,1.45fr)] gap-2 border-b border-border py-2"
+        >
+          <dt class="text-muted-foreground">{{ copy.storedBytes }}</dt>
+          <dd class="m-0 font-semibold">{{ copy.unavailable }}</dd>
+        </div>
+        <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1.45fr)] gap-2 py-2">
+          <dt class="text-muted-foreground">{{ copy.egressBytes }}</dt>
+          <dd class="m-0 font-semibold">{{ copy.unavailable }}</dd>
+        </div>
+      </dl>
+    </section>
+  </div>
 </section>
+@if (inspected(); as selection) {
+  @let row = selection.row;
+  <hlm-dialog
+    [state]="'open'"
+    [restoreFocus]="selection.trigger"
+    [autoFocus]="'first-heading'"
+    (closed)="inspected.set(null)"
+  >
+    <hlm-dialog-content *hlmDialogPortal [size]="'md'" data-quota-dialog>
+      <header hlmDialogHeader>
+        <h2 hlmDialogTitle>{{ copy.counter }}</h2>
+        <p hlmDialogDescription>{{ metricLabel(selection.metric) }}</p>
+      </header>
+      <dl class="m-0 grid min-w-0 gap-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0">
+        @if (row.scope === 'project') {
+          <div>
+            <dt>{{ copy.project }}</dt>
+            <dd>
+              <app-copyable-identifier
+                [value]="row.project_id"
+                [label]="copy.project"
+                [truncate]="false"
+              />
+            </dd>
+          </div>
+        }
+        <div>
+          <dt>{{ copy.used }}</dt>
+          <dd data-quota-detail-used>
+            @if (row.used !== null) {
+              <app-number-value [value]="row.used" />
+            } @else {
+              {{ copy.unavailable }}
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>{{ copy.limit }}</dt>
+          <dd data-quota-detail-limit>
+            @if (row.limit !== null) {
+              <app-number-value [value]="row.limit" />
+            } @else {
+              {{ copy.unavailable }}
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>{{ copy.recordedState }}</dt>
+          <dd>
+            @if (row.used === null && !row.warned_at && !row.blocked_at) {
+              {{ copy.unavailable }}
+            } @else {
+              <ng-container
+                [ngTemplateOutlet]="stateCell"
+                [ngTemplateOutletContext]="{ $implicit: row }"
+              />
+            }
+          </dd>
+        </div>
+        @if (row.retry_after_seconds !== null) {
+          <div>
+            <dt>{{ copy.retryAfter }}</dt>
+            <dd><app-number-value [value]="row.retry_after_seconds" /></dd>
+          </div>
+        }
+      </dl>
+    </hlm-dialog-content>
+  </hlm-dialog>
+}
 <ng-template #usedCell let-row>
   <span data-quota-project-used><app-number-value [value]="row.used" /></span>
 </ng-template>
@@ -137,19 +332,23 @@
   </span>
 </ng-template>
 <ng-template #stateCell let-row>
-  <div class="grid min-w-0 gap-(--eg-space-3)">
+  <div class="grid min-w-0 justify-items-start gap-1">
     @if (row.blocked_at) {
       <app-status-pill [tone]="dangerTone" [label]="copy.blocked" />
     } @else if (row.warned_at) {
       <app-status-pill [tone]="warningTone" [label]="copy.warned" />
     } @else {
-      <span>{{ copy.noAlert }}</span>
+      <app-status-pill [tone]="'neutral'" [label]="copy.noAlert" />
     }
     @if (row.warned_at) {
-      <span>{{ copy.warnedAt }}: <app-absolute-time [value]="row.warned_at" /></span>
+      <span class="text-xs text-muted-foreground"
+        >{{ copy.warnedAt }}: <app-absolute-time [value]="row.warned_at"
+      /></span>
     }
     @if (row.blocked_at) {
-      <span>{{ copy.blockedAt }}: <app-absolute-time [value]="row.blocked_at" /></span>
+      <span class="text-xs text-muted-foreground"
+        >{{ copy.blockedAt }}: <app-absolute-time [value]="row.blocked_at"
+      /></span>
     }
   </div>
 </ng-template>

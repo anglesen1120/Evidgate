@@ -1,0 +1,76 @@
+<section hlmCard [size]="'sm'" aria-labelledby="quality-flaky">
+  <header hlmCardHeader class="border-b border-border">
+    <h2 hlmCardTitle [size]="'subsection'" id="quality-flaky">{{ copy.flaky }}</h2>
+  </header>
+  <app-data-table
+    class="[&_.caption]:sr-only [&_.scroll]:rounded-none [&_.scroll]:border-x-0"
+    [rows]="model().cases"
+    [columns]="columns()"
+    [rowId]="rowId"
+    [caption]="copy.flaky"
+    [flow]="'page'"
+  />
+  <p hlmCardContent class="m-0 text-xs text-muted-foreground">
+    {{ copy.limit(model().cases.length) }}
+  </p>
+</section>
+<ng-template #caseCell let-row let-name="value">
+  <strong class="block text-sm">{{ name }}</strong>
+  <bdi class="block font-mono text-xs text-muted-foreground">{{ row.id }}</bdi>
+</ng-template>
+<ng-template #rateCell let-row let-rate="value">
+  <span class="block text-end font-semibold tabular-nums">{{ rate }}</span>
+  <span aria-hidden="true" class="mt-1 block h-1.5 overflow-hidden rounded-sm bg-muted">
+    <span class="block h-full bg-(--eg-accent)" [style.width.%]="row.flakePercent"></span>
+  </span>
+</ng-template>
+<section hlmCard [size]="'sm'" aria-labelledby="quality-bindings">
+  <header hlmCardHeader class="border-b border-border">
+    <h2 hlmCardTitle [size]="'subsection'" id="quality-bindings">{{ copy.bindings }}</h2>
+    <p hlmCardDescription>{{ copy.scope }}</p>
+  </header>
+  <div
+    hlmTableContainer
+    tabindex="0"
+    role="region"
+    aria-labelledby="quality-bindings"
+    class="min-w-0 focus-visible:outline-2 focus-visible:outline-ring"
+  >
+    <table hlmTable aria-labelledby="quality-bindings">
+      <thead hlmTHead>
+        <tr hlmTr>
+          <th hlmTh scope="col">{{ copy.subject }}</th>
+          <th hlmTh scope="col">{{ copy.completeness }}</th>
+          <th hlmTh scope="col">{{ copy.outcome }}</th>
+          <th hlmTh scope="col">{{ copy.decision }}</th>
+        </tr>
+      </thead>
+      <tbody hlmTBody>
+        @for (row of model().bindings; track row.label) {
+          <tr hlmTr [attr.data-binding]="row.label">
+            <th hlmTh scope="row" class="whitespace-normal text-start">
+              <strong class="block text-sm text-foreground">{{ row.label }}</strong>
+              @if (row.revision) {
+                <bdi class="block font-mono text-xs">{{ row.revision }}</bdi>
+              }
+              <span class="block text-xs font-normal text-muted-foreground">{{ row.context }}</span>
+            </th>
+            @if (row.revision) {
+              <td hlmTd>
+                <app-evidence-badge [completeness]="row.completeness" [compact]="true" />
+              </td>
+              <td hlmTd><app-outcome-pill [outcome]="row.outcome" [compact]="true" /></td>
+              <td hlmTd><app-decision-chip [decision]="row.decision" [compact]="true" /></td>
+            } @else {
+              <td hlmTd colspan="3">
+                <span class="inline-flex items-center gap-2 text-muted-foreground">
+                  <hlm-icon name="lucideInfo" class="size-4" />{{ copy.unbound }}
+                </span>
+              </td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>

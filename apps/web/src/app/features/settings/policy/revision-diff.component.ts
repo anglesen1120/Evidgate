@@ -18,6 +18,7 @@ import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
+import { HlmTableImports } from '@evidgate/ui/table';
 import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { clipDiffText, diffPolicyBodies, type PolicyDiff } from './policy-diff';
 import { PolicyStore } from './policy.store';
@@ -32,12 +33,17 @@ import { PolicyStore } from './policy.store';
     HlmCardImports,
     HlmLabel,
     HlmSelectImports,
+    HlmTableImports,
   ],
   host: { class: 'block min-w-0' },
   template: `
-    <section hlmCard class="gap-4 p-4" aria-labelledby="policy-diff-title">
-      <h3 hlmCardTitle [size]="subsectionSize" id="policy-diff-title">{{ copy.title }}</h3>
-      <div class="grid min-w-0 gap-3 md:grid-cols-2">
+    <section hlmCard class="min-w-0 gap-0 rounded-lg py-0" aria-labelledby="policy-diff-title">
+      <header hlmCardHeader class="p-(--eg-space-5)">
+        <h3 hlmCardTitle [size]="subsectionSize" id="policy-diff-title">{{ copy.title }}</h3>
+      </header>
+      <div
+        class="grid min-w-0 gap-(--eg-space-3) px-(--eg-space-5) pb-(--eg-space-5) sm:grid-cols-2"
+      >
         <div class="grid min-w-0 gap-2">
           <label hlmLabel for="policy-diff-base">{{ copy.base }}</label>
           <hlm-select
@@ -85,7 +91,12 @@ import { PolicyStore } from './policy.store';
           </hlm-select>
         </div>
       </div>
-      <div data-policy-diff [attr.aria-busy]="phase() === 'loading'" [attr.aria-live]="'polite'">
+      <div
+        class="min-w-0 border-0 border-t border-solid border-border"
+        data-policy-diff
+        [attr.aria-busy]="phase() === 'loading'"
+        [attr.aria-live]="'polite'"
+      >
         @switch (phase()) {
           @case ('loading') {
             <p hlmAlert class="m-0 text-muted-foreground" role="status">{{ copy.loading }}</p>
@@ -113,38 +124,54 @@ import { PolicyStore } from './policy.store';
           @case ('ready') {
             @if (diff().rows.length === 0) {
               <p hlmAlert class="m-0 text-muted-foreground">{{ copy.same }}</p>
-            }
-            <ol class="m-0 grid list-none gap-3 p-0 empty:hidden">
-              @for (row of diff().rows; track row) {
-                <li
-                  class="grid min-w-0 gap-3 rounded-md border border-solid border-border p-3"
-                  data-diff-row
-                  [attr.data-diff-kind]="row.kind"
-                  [attr.data-diff-path]="row.path"
+            } @else {
+              <div hlmTableContainer>
+                <table
+                  hlmTable
+                  class="w-full table-fixed border-collapse [&_td]:align-top [&_th]:whitespace-normal [&_pre]:m-0 [&_pre]:whitespace-pre-wrap [&_pre]:font-mono [&_pre]:wrap-anywhere"
+                  [attr.aria-labelledby]="'policy-diff-title'"
                 >
-                  <div class="flex flex-wrap items-center gap-2">
-                    <app-status-pill [tone]="kindTone(row.kind)" [label]="kindLabel(row.kind)" />
-                    <code class="font-mono wrap-anywhere">{{ pathLabel(row.path) }}</code>
-                  </div>
-                  <dl
-                    class="m-0 grid min-w-0 gap-3 md:grid-cols-2 [&>div]:min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_pre]:m-0 [&_pre]:whitespace-pre-wrap [&_pre]:font-mono [&_pre]:wrap-anywhere"
-                  >
-                    <div>
-                      <dt>{{ copy.before }}</dt>
-                      <dd>
-                        <pre>{{ row.before ?? copy.absent }}</pre>
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>{{ copy.after }}</dt>
-                      <dd>
-                        <pre>{{ row.after ?? copy.absent }}</pre>
-                      </dd>
-                    </div>
-                  </dl>
-                </li>
-              }
-            </ol>
+                  <thead hlmTHead class="bg-(--eg-surface-raised) text-xs">
+                    <tr hlmTr>
+                      <th hlmTh scope="col" class="w-2/5">{{ copy.field }}</th>
+                      <th hlmTh scope="col">{{ copy.before }}</th>
+                      <th hlmTh scope="col">{{ copy.after }}</th>
+                    </tr>
+                  </thead>
+                  <tbody hlmTBody>
+                    @for (row of diff().rows; track row) {
+                      <tr
+                        hlmTr
+                        class="border-0 border-t border-solid border-border"
+                        data-diff-row
+                        [attr.data-diff-kind]="row.kind"
+                        [attr.data-diff-path]="row.path"
+                      >
+                        <th hlmTh scope="row" class="py-(--eg-space-3) align-top">
+                          <code class="block font-mono wrap-anywhere">{{
+                            pathLabel(row.path)
+                          }}</code>
+                        </th>
+                        <td hlmTd>
+                          <pre>{{ row.before ?? copy.absent }}</pre>
+                        </td>
+                        <td hlmTd>
+                          <div class="flex min-w-0 flex-wrap items-start gap-(--eg-space-2)">
+                            <pre class="min-w-0 font-semibold text-(--eg-accent)">{{
+                              row.after ?? copy.absent
+                            }}</pre>
+                            <app-status-pill
+                              [tone]="kindTone(row.kind)"
+                              [label]="kindLabel(row.kind)"
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
             @if (diff().truncated) {
               <p hlmAlert class="mt-3 bg-muted text-muted-foreground" data-policy-diff-truncated>
                 {{ copy.truncated }}
@@ -173,6 +200,7 @@ export class RevisionDiffComponent {
   private generation = 0;
   protected readonly copy = {
     title: $localize`:@@settings.policy.diff-title:Compare revisions`,
+    field: $localize`:@@settings.policy.diff-field:Field`,
     base: $localize`:@@settings.policy.diff-base:Base revision`,
     target: $localize`:@@settings.policy.diff-target:Target revision`,
     choose: $localize`:@@settings.policy.diff-choose:Choose a revision`,

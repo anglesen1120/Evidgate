@@ -37,6 +37,9 @@ class EditorHarness extends ComponentHarness {
   async text() {
     return (await this.host()).text();
   }
+  async record() {
+    return (await this.locatorFor('app-editor-record-summary')()).text();
+  }
   async priority(label: string) {
     await this.click('#case-priority');
     for (const option of await this.documentRootLocatorFactory().locatorForAll(
@@ -181,6 +184,28 @@ describe('EditorPage', () => {
       'Retained data',
     ]);
     expect(await harness.text()).toContain('Critical');
+  }
+  it('identifies the checklist parent and case without fetching history or checklist data', async () => {
+    const { harness } = await mount();
+    expect(await harness.record()).toContain(`Checklist parent: ${CASE.checklist_item_id}`);
+    expect(await harness.text()).toContain(`Case ID: ${CASE.case_id}`);
+    expect(data.readCase).toHaveBeenCalledTimes(1);
+    expect(data.versions).not.toHaveBeenCalled();
+  });
+  for (const [state, label] of [
+    ['draft', 'Draft'],
+    ['approved', 'Approved'],
+    ['retired', 'Retired'],
+  ] as const) {
+    it(`labels the current revision as ${label} without inferring approval`, async () => {
+      data.readCase.mockResolvedValue({ view: { ...CASE, state }, etag: '"2"' });
+      const { harness } = await mount();
+      const record = await harness.record();
+      expect(record).toContain('Current version: 2');
+      expect(record).toContain(label);
+      expect(record).toContain(CASE.code);
+      if (state !== 'approved') expect(record).not.toContain('Approved');
+    });
   }
   it('retains every field after 412 and closing the conflict issues no second write', async () => {
     data.updateCase.mockRejectedValue(refused('precondition_failed', 412));

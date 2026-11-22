@@ -1,4 +1,4 @@
-import { DatePipe } from '@angular/common';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -6,10 +6,18 @@ import {
   inject,
   input,
   LOCALE_ID,
+  output,
 } from '@angular/core';
 import type { CiBindingView, IngestTokenView } from '@evidgate/sdk';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmAlertImports } from '@evidgate/ui/alert';
+import { HlmTableImports } from '@evidgate/ui/table';
+import {
+  OnboardingRecordButtonComponent,
+  OnboardingTableRangeComponent,
+  RECORD_COPY,
+  type OnboardingRecordView,
+} from '../onboarding-record-view.component';
 
 import { shortDateFormat } from '../../../shared/time/short-date-format';
 
@@ -25,7 +33,16 @@ import type {
 
 @Component({
   selector: 'app-connection-health',
-  imports: [DatePipe, StatusPillComponent, HlmCardImports, HlmAlertImports],
+  imports: [
+    DatePipe,
+    NgTemplateOutlet,
+    StatusPillComponent,
+    HlmCardImports,
+    HlmAlertImports,
+    HlmTableImports,
+    OnboardingRecordButtonComponent,
+    OnboardingTableRangeComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class: 'block min-w-0',
@@ -35,10 +52,12 @@ import type {
   template: `
     <section
       hlmCard
-      class="gap-(--eg-space-4) p-(--eg-space-6) [overflow-wrap:anywhere] [&_p]:m-0 [&_p]:text-sm [&_p]:text-muted-foreground"
+      class="min-w-0 gap-(--eg-space-4) p-(--eg-space-4) wrap-anywhere md:p-(--eg-space-5) [&_p]:m-0 [&_p]:text-sm [&_p]:text-muted-foreground"
       aria-labelledby="connection-health-title"
     >
-      <header class="flex flex-wrap items-center justify-between gap-(--eg-space-3)">
+      <header
+        class="flex min-w-0 flex-wrap items-center justify-between gap-(--eg-space-3) border-b border-border pb-(--eg-space-4)"
+      >
         <h3
           hlmCardTitle
           [size]="subsectionHeadingSize"
@@ -49,43 +68,106 @@ import type {
         <app-status-pill [tone]="tones[health().state]" [label]="stateLabels[health().state]" />
       </header>
       <p>{{ reasonLabels[health().reason] }}</p>
-      @if (health().credentials.length > 0) {
-        <ul class="m-0 grid list-none gap-(--eg-space-4) p-0">
-          @for (row of rows(); track row.credential.kind + ':' + row.credential.id) {
-            <li
-              class="grid min-w-0 gap-(--eg-space-2) border-t border-border pt-(--eg-space-4) [overflow-wrap:anywhere]"
-              data-testid="connection-health-credential"
-            >
-              <div class="flex flex-wrap items-center justify-between gap-(--eg-space-3)">
-                <strong class="min-w-0">{{ row.credential.label }}</strong>
-                <app-status-pill
-                  [tone]="credentialTone(row.credential)"
-                  [label]="statusLabels[row.credential.status]"
-                />
-              </div>
-              <p>{{ detailLabels[row.credential.detail] }}</p>
-              @if (row.expiresAt) {
-                <p>
-                  {{ expiresLabel }}
-                  <time [attr.datetime]="row.expiresAt">{{
-                    row.expiresAt | date: dateTimeFormat : '+0000'
-                  }}</time>
-                </p>
-              }
-              @if (row.overlapEndsAt) {
-                <p>
-                  {{ overlapLabel }}
-                  <time [attr.datetime]="row.overlapEndsAt">{{
-                    row.overlapEndsAt | date: dateTimeFormat : '+0000'
-                  }}</time>
-                </p>
-              }
-            </li>
-          }
-        </ul>
-      }
+      <div hlmTableContainer class="min-w-0 max-w-full">
+        <table hlmTable class="[&_th]:whitespace-normal [&_td]:whitespace-normal">
+          <caption hlmCaption class="caption-top text-start">
+            {{
+              credentialHealth
+            }}
+          </caption>
+          <thead hlmTHead>
+            <tr hlmTr>
+              <th hlmTh scope="col">{{ copy.credential }}</th>
+              <th hlmTh scope="col">{{ copy.status }}</th>
+              <th hlmTh scope="col">{{ copy.actions }}</th>
+            </tr>
+          </thead>
+          <tbody hlmTBody>
+            @for (row of rows(); track row.credential.kind + ':' + row.credential.id) {
+              <tr hlmTr class="h-(--eg-space-11)" data-testid="connection-health-credential">
+                <th hlmTh scope="row">
+                  <bdi class="font-semibold text-foreground">{{ row.credential.label }}</bdi
+                  ><span class="block text-xs font-normal text-muted-foreground">{{
+                    row.credential.kind === 'token' ? tokenKind : bindingKind
+                  }}</span>
+                </th>
+                <td hlmTd>
+                  <app-status-pill
+                    [tone]="credentialTone(row.credential)"
+                    [label]="statusLabels[row.credential.status]"
+                  />
+                  <p>{{ detailLabels[row.credential.detail] }}</p>
+                  <ng-container [ngTemplateOutlet]="timing" />
+                </td>
+                <td hlmTd>
+                  <app-onboarding-record
+                    [appOnboardingRecord]="facts"
+                    [subject]="row.credential.label"
+                    [recordTitle]="copy.health"
+                    [recordId]="row.credential.id"
+                    [recordStatus]="statusLabels[row.credential.status]"
+                    [recordTone]="credentialTone(row.credential)"
+                    (inspect)="viewRecord.emit($event)"
+                  />
+                  <ng-template #facts>
+                    <dl>
+                      <div>
+                        <dt>{{ copy.credential }}</dt>
+                        <dd>{{ row.credential.kind === 'token' ? tokenKind : bindingKind }}</dd>
+                      </div>
+                      <div>
+                        <dt>{{ copy.identifier }}</dt>
+                        <dd>
+                          <bdi class="font-mono">{{ row.credential.id }}</bdi>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>{{ copy.status }}</dt>
+                        <dd>
+                          <app-status-pill
+                            [tone]="credentialTone(row.credential)"
+                            [label]="statusLabels[row.credential.status]"
+                          />
+                          <p>{{ detailLabels[row.credential.detail] }}</p>
+                        </dd>
+                      </div>
+                    </dl>
+                    <ng-container [ngTemplateOutlet]="timing" />
+                  </ng-template>
+                  <ng-template #timing>
+                    @if (row.expiresAt; as expiry) {
+                      <p>
+                        {{ expiresLabel }}
+                        <time [attr.datetime]="expiry">{{
+                          expiry | date: dateTimeFormat : '+0000'
+                        }}</time>
+                      </p>
+                    }
+                    @if (row.overlapEndsAt; as end) {
+                      <p>
+                        {{ overlapLabel }}
+                        <time [attr.datetime]="end">{{
+                          end | date: dateTimeFormat : '+0000'
+                        }}</time>
+                      </p>
+                    }
+                  </ng-template>
+                </td>
+              </tr>
+            } @empty {
+              <tr hlmTr>
+                <td hlmTd colspan="3">{{ notRecorded }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <app-onboarding-table-range
+        [appOnboardingTableRange]="rows().length"
+        [truncated]="bindingsTruncated() || tokensTruncated()"
+      />
       <p
-        class="grid gap-(--eg-space-2) border-t border-border pt-(--eg-space-4)"
+        class="grid min-w-0 gap-(--eg-space-1) rounded-(--eg-radius-md) bg-muted p-(--eg-space-4) [&_strong]:text-foreground [&_time]:tabular-nums"
         data-testid="connection-health-last-use"
       >
         <strong>{{ lastUseLabel }}</strong>
@@ -112,6 +194,11 @@ export class ConnectionHealthComponent {
   readonly tokens = input.required<readonly IngestTokenView[]>();
   readonly bindingsTruncated = input(false);
   readonly tokensTruncated = input(false);
+  readonly viewRecord = output<OnboardingRecordView>();
+  protected readonly copy = RECORD_COPY;
+  protected readonly credentialHealth = $localize`:@@onboarding.record.health-caption:Credential health`;
+  protected readonly tokenKind = $localize`:@@onboarding.connect.token-title:Ingest token`;
+  protected readonly bindingKind = $localize`:@@onboarding.record.binding-kind:CI binding`;
   protected readonly subsectionHeadingSize = 'subsection' as const;
 
   protected readonly rows = computed(() => {
@@ -142,7 +229,7 @@ export class ConnectionHealthComponent {
   };
   protected readonly tones: Record<ConnectionHealthState, StatusTone> = {
     healthy: 'success',
-    pending: 'warning',
+    pending: 'neutral',
     unhealthy: 'danger',
     unknown: 'neutral',
   };
@@ -176,7 +263,8 @@ export class ConnectionHealthComponent {
   };
 
   protected credentialTone(credential: CredentialHealth): StatusTone {
-    if (credential.detail === 'rotating' || credential.detail === 'pending') return 'warning';
+    if (credential.detail === 'pending') return 'neutral';
+    if (credential.detail === 'rotating') return 'warning';
     return credential.usable ? 'success' : 'danger';
   }
 }

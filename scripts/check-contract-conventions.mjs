@@ -150,6 +150,9 @@ const EXPECTED = [
   ['/support-grants', 'post', 'support:grant', 'v1'],
   ['/support-grants/{g}/approve', 'post', 'support:approve', 'v1'],
   ['/support-grants/{g}/revoke', 'post', 'support:approve', 'v1'],
+  // The tenant admin's grant list (02.8.1 §5): declared by the story's route table rather than the
+  // core 00 §9.3 row, which names only the request and the approve/revoke pair.
+  ['/orgs/{o}/support-grants', 'get', 'support:read', 'v1'],
   ['/orgs/{o}/security-events', 'get', 'security_event:read', 'v1'],
   ['/projects/{p}/cases', 'get', 'case:read', 'v1'],
   ['/projects/{p}/cases/{c}', 'patch', 'case:write', 'v1'],
@@ -171,8 +174,17 @@ const EXPECTED = [
   ['/fixtures/{f}', 'get', 'suite:read', 'v1'],
   ['/fixtures/{f}/revisions', 'post', 'fixture:write', 'v1'],
   ['/webhooks/github', 'post', 'none', 'v1'],
+  // The draft read/write pair is v1; its dry-run and PR operations are the v2 rows below. A draft's
+  // un-nested routes evaluate the permission against the draft's own project, and another project's
+  // draft and an unknown id both answer the same 404 (03.6.1 §8).
+  ['/projects/{p}/drafts', 'post', 'draft:write', 'v1'],
+  ['/projects/{p}/drafts', 'get', 'case:read', 'v1'],
+  ['/drafts/{d}', 'get', 'case:read', 'v1'],
+  ['/drafts/{d}', 'patch', 'draft:write', 'v1'],
   ['/drafts/{d}/dry-run', 'post', 'draft:dry_run', 'v2'],
   ['/drafts/{d}/pull-request', 'post', 'draft:merge_request', 'v2'],
+  ['/templates', 'get', 'case:read', 'v1'],
+  ['/templates/{t}', 'get', 'case:read', 'v1'],
   ['/projects/{p}/incidents', 'get', 'healing:triage', 'v1'],
   ['/incidents/{i}', 'get', 'healing:triage', 'v1'],
   ['/incidents/{i}/label', 'post', 'healing:triage', 'v1'],

@@ -10,22 +10,31 @@ import type { StepNumber } from '../data/step-derivation';
   imports: [HlmAlertImports, HlmButton, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section hlmAlert role="note" class="border-dashed" data-testid="onboarding-step-pending">
+    <section
+      hlmAlert
+      role="note"
+      class="min-w-0 bg-muted text-foreground"
+      data-testid="onboarding-step-pending"
+    >
       <p hlmAlertTitle>{{ hasProject() ? summaryTitle : unavailable }}</p>
       <div hlmAlertDescription class="grid min-w-0 gap-(--eg-space-4)">
         <p class="m-0">{{ description() }}</p>
         @if (progress()?.sampleRun; as run) {
           <dl
-            class="m-0 grid min-w-0 gap-(--eg-space-3) [&_dd]:m-0 [&_dd]:font-mono [&_dd]:text-xs [&_dd]:[overflow-wrap:anywhere]"
+            class="m-0 grid min-w-0 gap-(--eg-space-4) border-t border-border pt-(--eg-space-4) sm:grid-cols-2 [&>div]:min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:mt-(--eg-space-1) [&_dd]:font-mono [&_dd]:text-sm [&_dd]:wrap-anywhere"
           >
             <div>
               <dt>{{ runLabel }}</dt>
-              <dd>{{ run.run_id }}</dd>
+              <dd>
+                <bdi>{{ run.run_id }}</bdi>
+              </dd>
             </div>
             @if (run.current_evidence_revision_id; as revision) {
               <div>
                 <dt>{{ evidenceLabel }}</dt>
-                <dd>{{ revision }}</dd>
+                <dd>
+                  <bdi>{{ revision }}</bdi>
+                </dd>
               </div>
             }
           </dl>

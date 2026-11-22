@@ -43,7 +43,7 @@ public sealed class RespawnCheckpoint
     /// restore inserts in this order.
     /// </summary>
     public static IReadOnlyList<string> SeedAndTenantTables { get; } =
-        ["public.role", "public.role_permission", "public.report_parser"];
+        ["public.role", "public.role_permission", "public.report_parser", "public.template"];
 
     private readonly string _truncate;
     private readonly string _restore;

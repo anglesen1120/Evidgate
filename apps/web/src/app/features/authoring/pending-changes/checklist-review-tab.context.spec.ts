@@ -64,15 +64,17 @@ const VI = {
 
 class ReviewContextHarness extends PendingUiHarness {
   async fact(scope: 'context' | 'fact', key: string) {
-    return this.textAt(`[data-review-${scope}="${key}"]`);
+    const selector = `[data-review-${scope}="${key}"]`;
+    return scope === 'fact' ? this.overlayText(selector) : this.textAt(selector);
   }
   async value(scope: 'context' | 'fact', key: string) {
-    return this.textAt(`[data-review-${scope}="${key}"] dd`);
+    const selector = `[data-review-${scope}="${key}"] dd`;
+    return scope === 'fact' ? this.overlayText(selector) : this.textAt(selector);
   }
   async timestamp() {
-    return (await this.locatorFor('[data-review-fact="created-at"] time')()).getAttribute(
-      'datetime',
-    );
+    return (
+      await this.documentRootLocatorFactory().locatorFor('[data-review-fact="created-at"] time')()
+    ).getAttribute('datetime');
   }
 }
 
@@ -143,6 +145,11 @@ describe.each(['en', 'vi'] as const)('Checklist review context in %s', (locale) 
       ui: await TestbedHarnessEnvironment.harnessForFixture(fixture, ReviewContextHarness),
     };
   }
+  async function mountView(row: AuthoringChangeListItem | UnlistedEnumRow = ROW) {
+    const mounted = await mount(row);
+    await mounted.ui.click('[data-review-change]');
+    return mounted;
+  }
 
   it('renders the labelled parent checklist item identifier with the shared copy primitive', async () => {
     const { ui } = await mount();
@@ -167,30 +174,30 @@ describe.each(['en', 'vi'] as const)('Checklist review context in %s', (locale) 
     );
   });
 
-  it('renders the supplied operation as the localized row heading', async () => {
-    const { ui } = await mount();
-    expect(await ui.textAt('[data-review-change] h3')).toBe(
+  it('renders the supplied operation in the localized change description', async () => {
+    const { ui } = await mountView();
+    expect(await ui.overlayText('[data-pending-preview-content] [hlmDialogDescription]')).toBe(
       locale === 'vi' ? VI['authoring.pending-changes.comment-label'] : 'Comment',
     );
   });
 
   it('renders the change identifier with the shared copy primitive', async () => {
-    const { ui } = await mount();
+    const { ui } = await mountView();
     expect(await ui.value('fact', 'change-id')).toContain(CHANGE);
-    expect(await ui.count('[data-review-fact="change-id"] app-copyable-identifier')).toBe(1);
+    expect(await ui.overlayCount('[data-review-fact="change-id"] app-copyable-identifier')).toBe(1);
   });
 
   it('renders the supplied author membership identifier without substituting a name', async () => {
-    const { ui } = await mount();
+    const { ui } = await mountView();
     expect(await ui.value('fact', 'author-id')).toContain(AUTHOR);
     expect(await ui.fact('fact', 'author-id')).toContain(
       locale === 'vi' ? VI['authoring.review-context.author-id'] : 'Author membership id',
     );
-    expect(await ui.count('[data-review-fact="author-id"] app-copyable-identifier')).toBe(1);
+    expect(await ui.overlayCount('[data-review-fact="author-id"] app-copyable-identifier')).toBe(1);
   });
 
   it('marks the unavailable author display name as Not provided', async () => {
-    const { ui } = await mount();
+    const { ui } = await mountView();
     expect(await ui.value('fact', 'author-name')).toBe(
       locale === 'vi' ? VI['authoring.review-context.not-provided'] : 'Not provided',
     );
@@ -203,10 +210,10 @@ describe.each(['en', 'vi'] as const)('Checklist review context in %s', (locale) 
   ] as const)(
     'renders supplied source %s with a shared status primitive',
     async (source, en, vi) => {
-      const { ui } = await mount({ ...ROW, source });
+      const { ui } = await mountView({ ...ROW, source });
       expect(await ui.value('fact', 'source')).toContain(locale === 'vi' ? vi : en);
       expect(await ui.value('fact', 'source')).toContain(source);
-      expect(await ui.count('[data-review-fact="source"] app-status-pill')).toBe(1);
+      expect(await ui.overlayCount('[data-review-fact="source"] app-status-pill')).toBe(1);
     },
   );
 
@@ -217,58 +224,58 @@ describe.each(['en', 'vi'] as const)('Checklist review context in %s', (locale) 
   ] as const)(
     'renders supplied state %s without inferring case approval',
     async (state, en, vi) => {
-      const { ui } = await mount({ ...ROW, state });
+      const { ui } = await mountView({ ...ROW, state });
       expect(await ui.value('fact', 'state')).toContain(locale === 'vi' ? vi : en);
       expect(await ui.value('fact', 'state')).toContain(state);
-      expect(await ui.count('[data-review-fact="state"] app-status-pill')).toBe(1);
+      expect(await ui.overlayCount('[data-review-fact="state"] app-status-pill')).toBe(1);
     },
   );
 
   it('renders unknown source and state values as raw provenance text', async () => {
     // A newer server may send an enum value this build does not list yet.
     const row: UnlistedEnumRow = { ...ROW, source: 'future_source', state: 'future_state' };
-    const { ui } = await mount(row);
+    const { ui } = await mountView(row);
     expect(await ui.value('fact', 'source')).toBe('future_source');
     expect(await ui.value('fact', 'state')).toBe('future_state');
   });
 
   it('renders the supplied target base version with the shared number primitive', async () => {
-    const { ui } = await mount();
+    const { ui } = await mountView();
     expect(await ui.value('fact', 'base-version')).toBe('7');
-    expect(await ui.count('[data-review-fact="base-version"] app-number-value')).toBe(1);
+    expect(await ui.overlayCount('[data-review-fact="base-version"] app-number-value')).toBe(1);
   });
 
   it('renders the supplied creation instant as absolute UTC time', async () => {
-    const { ui } = await mount();
+    const { ui } = await mountView();
     expect(await ui.timestamp()).toBe(ROW.created_at);
     expect(await ui.value('fact', 'created-at')).toContain('2026');
     expect(await ui.value('fact', 'created-at')).toContain('UTC');
   });
 
   it('renders the supplied change reason without replacing it with a label', async () => {
-    const { ui } = await mount();
+    const { ui } = await mountView();
     expect(await ui.value('fact', 'reason')).toBe(ROW.reason);
   });
 
   it('keeps an absent optional reason distinct from contract facts that are Not provided', async () => {
-    const { ui } = await mount({ ...ROW, reason: null });
+    const { ui } = await mountView({ ...ROW, reason: null });
     expect(await ui.value('fact', 'reason')).toBe(
       locale === 'vi' ? VI['authoring.pending-changes.reason-unset'] : 'Not set',
     );
   });
 
   it('renders the supplied comment as inert text below the provenance facts', async () => {
-    const { ui } = await mount();
-    expect(await ui.textAt('[data-review-change] [data-review-comment-body]')).toBe(
+    const { ui } = await mountView();
+    expect(await ui.overlayText('[data-pending-preview-content] [data-review-comment-body]')).toBe(
       'A server-supplied comment',
     );
   });
 
-  it('uses a complete definition list for each row', async () => {
-    const { ui } = await mount();
-    expect(await ui.count('[data-review-change] dl')).toBe(1);
-    expect(await ui.count('[data-review-change] dl dt')).toBe(8);
-    expect(await ui.count('[data-review-change] dl dd')).toBe(8);
+  it('keeps all eight labelled facts in the summary and history definition lists', async () => {
+    const { ui } = await mountView();
+    expect(await ui.overlayCount('[data-pending-preview-content] dl.facts')).toBe(2);
+    expect(await ui.overlayCount('[data-pending-preview-content] dl.facts dt')).toBe(8);
+    expect(await ui.overlayCount('[data-pending-preview-content] dl.facts dd')).toBe(8);
   });
 
   it('does not expose parent or row facts without authoring read permission', async () => {
@@ -286,9 +293,16 @@ describe.each(['en', 'vi'] as const)('Checklist review context in %s', (locale) 
       const { fixture, ui } = await mount();
       const root = fixture.nativeElement as HTMLElement;
       document.body.append(root);
-      expect(await ui.count('[data-review-change] dl')).toBe(1);
       expect(await ui.count('[data-review-context="parent-item"]')).toBe(1);
-      const result = await axe.run(root, AXE_JSDOM_RUN_OPTIONS);
+      const contextResult = await axe.run(root, AXE_JSDOM_RUN_OPTIONS);
+      expect(
+        formatViolations(unexceptedViolations(contextResult.violations, A11Y_EXCEPTIONS)),
+      ).toEqual([]);
+      await ui.click('[data-review-change]');
+      expect(await ui.overlayCount('[data-pending-preview-content] dl.facts')).toBe(2);
+      const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+      if (!dialog) throw new Error('Expected the change details dialog');
+      const result = await axe.run(dialog, AXE_JSDOM_RUN_OPTIONS);
       expect(result.passes.some((rule) => rule.id === 'definition-list')).toBe(true);
       expect(formatViolations(unexceptedViolations(result.violations, A11Y_EXCEPTIONS))).toEqual(
         [],

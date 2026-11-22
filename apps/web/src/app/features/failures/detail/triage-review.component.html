@@ -1,0 +1,179 @@
+<section hlmCard>
+  <header hlmCardHeader class="border-b">
+    <h2 hlmCardTitle [size]="'section'">{{ c.compare }}</h2>
+  </header>
+  <div hlmCardContent class="grid min-w-0 gap-3 [&_p]:m-0">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <code>{{ classification() }}</code>
+      <app-status-pill
+        [tone]="confirmed() ? 'info' : 'neutral'"
+        [label]="confirmed() ? c.confirmed : c.rule"
+      />
+    </div>
+    <p>{{ c.productReason }}</p>
+    <dl
+      class="m-0 grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-x-3 gap-y-1 text-xs [&_dd]:m-0 [&_dd]:font-medium [&_dt]:text-muted-foreground"
+    >
+      <dt>{{ c.drift }}</dt>
+      <dd>{{ c.na }}</dd>
+      <dt>{{ c.remediation }}</dt>
+      <dd>{{ c.fix }}</dd>
+      <dt>{{ c.profile }}</dt>
+      <dd>{{ c.matched }}</dd>
+    </dl>
+    <div>
+      <strong>{{ c.related }}</strong> {{ text.issue }}
+      <p class="text-muted-foreground">{{ c.noTracker }}</p>
+    </div>
+    <h3 class="m-0 border-t border-border pt-3 font-semibold">{{ c.human }}</h3>
+    <p>{{ c.humanBody }}</p>
+    <app-desktop-required-notice />
+    <div *appDesktopMutation class="flex flex-wrap gap-2">
+      <hlm-dialog>
+        <button hlmBtn hlmDialogTrigger type="button" [disabled]="!writable()">{{ c.save }}</button>
+        <hlm-dialog-content
+          *hlmDialogPortal
+          [showCloseButton]="false"
+          class="max-h-[90dvh] overflow-y-auto"
+        >
+          <header hlmDialogHeader>
+            <h2 hlmDialogTitle>{{ text.saveHeading }}</h2>
+            <p hlmDialogDescription>{{ description() }}</p>
+          </header>
+          <div class="grid gap-2">
+            <label id="triage-label-label" for="triage-label">{{ c.label }}</label>
+            <hlm-select [value]="store.label()" (valueChange)="store.chooseLabel($event)">
+              <hlm-select-trigger
+                [buttonId]="'triage-label'"
+                class="w-full min-h-(--eg-control-touch)"
+              >
+                @for (item of labels; track item[0]) {
+                  @if (item[0] === store.label()) {
+                    {{ item[1] }}
+                  }
+                }
+                @if (!store.label()) {
+                  {{ c.label }}
+                }
+              </hlm-select-trigger>
+              <hlm-select-content *hlmSelectPortal aria-labelledby="triage-label-label">
+                @for (item of labels; track item[0]) {
+                  <hlm-select-item [value]="item[0]">{{ item[1] }}</hlm-select-item>
+                }
+              </hlm-select-content>
+            </hlm-select>
+            <label for="triage-reason">{{ c.reason }}</label>
+            <textarea
+              #reason
+              hlmInput
+              id="triage-reason"
+              required
+              rows="3"
+              maxlength="2000"
+              [value]="store.reason()"
+              (input)="store.editReason(reason.value)"
+            ></textarea>
+            <label id="triage-owner-label" for="triage-owner">{{ c.owner }}</label>
+            <hlm-select [value]="store.owner()" (valueChange)="store.chooseOwner($event)">
+              <hlm-select-trigger
+                [buttonId]="'triage-owner'"
+                class="w-full min-h-(--eg-control-touch)"
+              >
+                @for (item of owners; track item[0]) {
+                  @if (item[0] === store.owner()) {
+                    {{ item[1] }}
+                  }
+                }
+                @if (!store.owner()) {
+                  {{ c.owner }}
+                }
+              </hlm-select-trigger>
+              <hlm-select-content *hlmSelectPortal aria-labelledby="triage-owner-label">
+                @for (item of owners; track item[0]) {
+                  <hlm-select-item [value]="item[0]">{{ item[1] }}</hlm-select-item>
+                }
+              </hlm-select-content>
+            </hlm-select>
+          </div>
+          <footer hlmDialogFooter>
+            <button hlmBtn hlmDialogClose [variant]="'outline'" type="button">
+              {{ c.cancel }}
+            </button>
+            <button
+              hlmBtn
+              hlmDialogClose
+              type="button"
+              [disabled]="!writable() || !store.reason().trim()"
+              (click)="showPreview(false)"
+            >
+              {{ c.preview }}
+            </button>
+          </footer>
+        </hlm-dialog-content>
+      </hlm-dialog>
+      <hlm-dialog>
+        <button
+          hlmBtn
+          hlmDialogTrigger
+          type="button"
+          [variant]="'outline'"
+          [disabled]="!writable() || !confirmed()"
+          [attr.aria-describedby]="'triage-close-help'"
+        >
+          {{ c.close }}
+        </button>
+        <hlm-dialog-content *hlmDialogPortal [showCloseButton]="false">
+          <header hlmDialogHeader>
+            <h2 hlmDialogTitle>{{ text.closeHeading }}</h2>
+            <p hlmDialogDescription>{{ c.previewBody }}</p>
+          </header>
+          <label id="triage-closure-label" for="triage-closure">{{ c.closeReason }}</label>
+          <hlm-select [value]="store.closure()" (valueChange)="store.chooseClosure($event)">
+            <hlm-select-trigger
+              [buttonId]="'triage-closure'"
+              class="w-full min-h-(--eg-control-touch)"
+            >
+              @for (item of reasons; track item[0]) {
+                @if (item[0] === store.closure()) {
+                  {{ item[1] }}
+                }
+              }
+              @if (!store.closure()) {
+                {{ c.closeReason }}
+              }
+            </hlm-select-trigger>
+            <hlm-select-content *hlmSelectPortal aria-labelledby="triage-closure-label">
+              @for (item of reasons; track item[0]) {
+                <hlm-select-item [value]="item[0]">{{ item[1] }}</hlm-select-item>
+              }
+            </hlm-select-content>
+          </hlm-select>
+          <footer hlmDialogFooter>
+            <button hlmBtn hlmDialogClose type="button" [variant]="'outline'">
+              {{ c.cancel }}
+            </button>
+            <button
+              hlmBtn
+              hlmDialogClose
+              type="button"
+              [variant]="'destructive'"
+              [disabled]="!store.closure() || !writable() || !confirmed()"
+              (click)="showPreview(true)"
+            >
+              {{ c.previewClose }}
+            </button>
+          </footer>
+        </hlm-dialog-content>
+      </hlm-dialog>
+    </div>
+    <p id="triage-close-help" class="text-xs text-muted-foreground">{{ c.labelFirst }}</p>
+    @if (store.preview(); as preview) {
+      <app-inline-feedback [title]="c.previewed" [description]="c.previewBody">
+        <p>{{ previewSummary() }}</p>
+        @if (!('closure' in preview)) {
+          <blockquote>{{ preview.reason }}</blockquote>
+        }
+      </app-inline-feedback>
+    }
+  </div>
+</section>

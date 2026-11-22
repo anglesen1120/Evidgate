@@ -98,7 +98,7 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await tabThroughTableScroller(page, page.locator('app-run-list-table'));
 
   await page.keyboard.press('Tab');
-  const firstRow = page.getByRole('link', { name: FIRST_RUN });
+  const firstRow = page.locator('[data-run-row]').getByRole('link', { name: FIRST_RUN });
   await expect(firstRow).toBeFocused();
   expect((await firstRow.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
 
@@ -117,12 +117,18 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await expect(back).toBeFocused();
   expect((await back.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
 
+  // The header's inspect-evidence action sits between the back link and the run summary.
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Inspect evidence' })).toBeFocused();
   await tabThroughRunControls(page, page.locator('app-run-header').first(), 2);
   await page.keyboard.press('Tab');
   const attemptsRegion = page.getByRole('region', { name: 'Attempts table' });
   await expect(attemptsRegion).toBeFocused();
   await expect(page.locator('app-attempts-table [data-attempt-row]')).toHaveCount(7);
   await tabThroughRunControls(page, page.locator('app-attempts-table tbody'), 7);
+  // The producer table follows the attempts table in the page flow.
+  await tabThroughTableScroller(page, page.locator('#producers'));
+  await tabThroughRunControls(page, page.locator('#producers'), 2);
 
   // Evidence and the latest live decision are tabs: only the selected tab is a Tab stop, the arrow
   // keys move inside the list, and the selected panel is the next stop. The hidden panel leaves the
@@ -163,8 +169,6 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await tabThroughRunControls(page, page.locator('app-manifest-panel'), 3);
   const copy = page.getByRole('button', { name: 'Copy full manifest hash' });
   expect((await copy.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
-  await tabThroughTableScroller(page, page.locator('#producers'));
-  await tabThroughRunControls(page, page.locator('#producers'), 2);
   const release = page.locator('app-release-panel');
   await expect(release.locator('.actions button')).toHaveCount(4);
   for (const [hook, label, value] of [
@@ -339,6 +343,10 @@ test('the 250-row narrow records keep every fact reachable and preserve focus on
   await expect(previous).toBeFocused();
   expect((await activeElement(page)).tag).not.toBe('body');
   await page.keyboard.press('Shift+Tab');
+  const lastId = await records.last().getAttribute('data-row-id');
+  const lastView = records.last().getByRole('link', { name: `View ${lastId}`, exact: true });
+  await expect(lastView).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
   await expect(records.last().locator('app-copy-value-button button')).toBeFocused();
   await expect(records.last()).toBeInViewport();
   await expectNoA11yViolations(page, 'run list, 250 labelled records');
@@ -403,10 +411,9 @@ test('Load more appends the next page and leaves focus on the row it appended', 
   }
   await tabThroughTableScroller(page, page.locator('app-run-list-table'));
 
-  // Each served row has its navigation link, one original-ID copy action and only measured
-  // full-value disclosures. The paging control follows every one of those controls.
+  // The ID link, copy action, measured disclosures and trailing View link all precede paging.
   for (let row = 0; row < FULL_PAGE_ROWS; row++) {
-    await tabThroughRunControls(page, rows.nth(row), 1, 1);
+    await tabThroughRunControls(page, rows.nth(row), 1, 2);
   }
   const loadMore = page.locator('[data-run-load-more]');
   await page.keyboard.press('Tab');
@@ -428,7 +435,7 @@ test('Load more appends the next page and leaves focus on the row it appended', 
   await expect(loadMore).toHaveCount(0);
   const appended = rows.nth(FULL_PAGE_ROWS);
   await expect(appended).toHaveAttribute('data-row-id', runListPage2.body.items[0]!.run_id);
-  const appendedLink = appended.locator('a');
+  const appendedLink = appended.locator('[data-run-row] a');
   await expect(appendedLink, JSON.stringify(await activeElement(page))).toBeFocused();
   await auditRunTabStops(page.locator('app-run-list-page'), 'load-more/appended');
   expect((await activeElement(page)).tag).toBe('a');
@@ -445,7 +452,13 @@ test('Load more appends the next page and leaves focus on the row it appended', 
   }
 
   await page.keyboard.press('Tab');
-  await expect(rows.nth(FULL_PAGE_ROWS + 1).locator('a')).toBeFocused();
+  const appendedView = appended.getByRole('link', {
+    name: `View ${runListPage2.body.items[0]!.run_id}`,
+    exact: true,
+  });
+  await expect(appendedView).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(rows.nth(FULL_PAGE_ROWS + 1).locator('[data-run-row] a')).toBeFocused();
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
@@ -465,6 +478,7 @@ test('Load more preserves appended-row focus in fitted tablet records', async ({
   const appended = rows.nth(FULL_PAGE_ROWS);
   await expect(appended).toHaveJSProperty('tagName', 'LI');
   await expect(appended).toHaveAttribute('data-row-id', runListPage2.body.items[0]!.run_id);
-  await expect(appended.locator('a'), JSON.stringify(await activeElement(page))).toBeFocused();
+  const appendedId = appended.locator('[data-run-row] a');
+  await expect(appendedId, JSON.stringify(await activeElement(page))).toBeFocused();
   await expect(page.locator('app-run-list-table .eg-table-narrow')).toHaveCount(1);
 });

@@ -1,6 +1,9 @@
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { MembershipView, RoleView } from '@evidgate/sdk';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { activeMemberMenuTrigger, memberAction } from './member-actions.test-helpers';
 import { MemberListComponent } from './member-list.component';
@@ -30,7 +33,15 @@ function role(name: string, index: number): RoleView {
   };
 }
 
+class MemberActionsHarness extends ComponentHarness {
+  static hostSelector = 'app-member-list';
+  readonly header = this.locatorFor('th[data-column-role="actions"]');
+  readonly trigger = this.locatorFor('button[data-members-actions]');
+  readonly view = this.locatorFor('[data-member-view]');
+}
+
 describe('MemberListComponent', () => {
+  provideLayoutTestStubs();
   let fixture: ComponentFixture<MemberListComponent>;
   let root: HTMLElement;
 
@@ -53,15 +64,38 @@ describe('MemberListComponent', () => {
     await fixture.whenStable();
   }
 
+  it('opens the read-only member facts and returns focus on Escape', async () => {
+    const membership = { ...member('pending'), roles: [role('Audit\u202Eor', 0)] };
+    await render([membership]);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      MemberActionsHarness,
+    );
+    const trigger = await harness.view();
+    await trigger.focus();
+    await trigger.click();
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog?.textContent).toContain(membership.invited_email);
+    expect(dialog?.textContent).toContain('Invitation pending');
+    expect(dialog?.textContent).toContain('Audit⟨U+202E⟩or');
+    expect(dialog?.textContent).not.toContain('\u202E');
+    expect(dialog?.querySelector('time')?.getAttribute('datetime')).toBe(membership.created_at);
+    dialog?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }),
+    );
+    await fixture.whenStable();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(await trigger.isFocused()).toBe(true);
+  });
   it.each([
-    ['pending', 'Invited'],
+    ['pending', 'Invitation pending'],
     ['active', 'Active'],
     ['removed', 'Removed'],
     ['revoked', 'Revoked'],
     ['expired', 'Expired'],
   ])('labels a %s membership from the closed status lookup', async (status, expected) => {
     await render([member(status)]);
-    expect(root.querySelector('.status-pill__label')?.textContent?.trim()).toBe(expected);
+    expect(root.querySelector('[data-members-row]')?.textContent?.trim()).toBe(expected);
   });
 
   it.each(['suspended', 'constructor', '__proto__', '<img src=x onerror=alert(1)>'])(
@@ -79,12 +113,29 @@ describe('MemberListComponent', () => {
   it('omits the entire mutation column without membership:write', async () => {
     await render([member('active')]);
     expect(root.querySelectorAll('thead th')).toHaveLength(3);
+    expect(
+      Array.from(root.querySelectorAll('thead th'), (cell) => cell.textContent.trim()),
+    ).toEqual(['Member', 'Organization roles', 'Status']);
     expect(root.querySelector('[data-members-actions]')).toBeNull();
     expect(root.querySelector('app-data-table')).not.toBeNull();
     expect(root.querySelector('app-data-table')?.textContent).toContain('Members and invitations');
     expect(
       root.querySelector('th[data-column-kind="email"]')?.getAttribute('data-column-priority'),
     ).toBe('primary');
+  });
+
+  it('reserves room for the Actions header and its unbroken menu label', async () => {
+    await render([member('pending')], true);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      MemberActionsHarness,
+    );
+    const header = await harness.header();
+    expect(await header.text()).toBe('Actions');
+    expect(await header.hasClass('break-all')).toBe(false);
+    expect(await header.hasClass('break-words')).toBe(false);
+    expect(await header.getCssValue('min-inline-size')).toBe('max-content');
+    expect(await (await harness.trigger()).hasClass('whitespace-nowrap')).toBe(true);
   });
 
   it('uses role-based column budgets and one row menu instead of percentage widths and four actions', async () => {
@@ -96,7 +147,9 @@ describe('MemberListComponent', () => {
     const trigger = root.querySelector<HTMLButtonElement>('[data-members-actions]');
     expect(trigger?.hasAttribute('aria-label')).toBe(false);
     expect(trigger?.textContent).toContain('Actions');
-    expect(trigger?.querySelector('.sr-only')?.textContent?.trim()).toBe('pending@example.test');
+    expect(trigger?.querySelector('.sr-only')?.textContent?.trim()).toBe(
+      'Actions pending@example.test',
+    );
     expect(root.querySelector('[data-members-edit-open]')).toBeNull();
     expect(root.textContent).toContain('No roles assigned');
     memberAction(root, '[data-members-edit-open]');
@@ -135,7 +188,7 @@ describe('MemberListComponent', () => {
       expect(records).not.toBeNull();
       expect(root.querySelector('table')).toBeNull();
       expect(records?.textContent).toContain(membership.invited_email);
-      expect(records?.textContent).toContain('Invited');
+      expect(records?.textContent).toContain('Invitation pending');
       expect(records?.textContent).toContain('A long assigned organization role');
       expect(
         [...root.querySelectorAll('.eg-table-fact dt')].map((label) => label.textContent),

@@ -36,6 +36,68 @@ class NavigatorHarness extends ComponentHarness {
 }
 
 describe('the onboarding step navigator', () => {
+  it.each([390, 900])(
+    'keeps all five steps in one locally scrollable row at %ipx',
+    async (width) => {
+      const viewport = new OnboardingViewport();
+      viewport.setWidth(width);
+      const { fixture, root } = await mountShell({ viewport });
+      const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, NavigatorHarness);
+      if (width < 768) await (await harness.toggle()).click();
+      const list = await harness.list();
+      expect(await list.hasClass('flex-nowrap')).toBe(true);
+      expect(await list.hasClass('overflow-x-auto')).toBe(true);
+      expect(currentSteps(root)).toEqual(['onboarding-select-step-1']);
+      expect(root.querySelector('[role="tablist"]')).toBeNull();
+    },
+  );
+
+  it('reveals the resumed and newly viewed steps inside the strip without moving focus or scrolling the page', async () => {
+    const viewport = new OnboardingViewport();
+    viewport.setWidth(900);
+    const { fixture, root, store } = await mountShell({ viewport });
+    store.status.set('loading');
+    await fixture.whenStable();
+    const pageScroll = vi.spyOn(window, 'scrollTo');
+    // jsdom does not lay out text. Five wide translated labels overflow this 600px strip.
+    const geometry = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        if (this.id === 'onboarding-step-list') return new DOMRect(100, 400, 600, 60);
+        const step = Number(this.dataset['testid']?.match(/^onboarding-select-step-(\d)$/)?.[1]);
+        if (step)
+          return new DOMRect(
+            100 + (step - 1) * 200 - (this.closest('ol')?.scrollLeft ?? 0),
+            400,
+            200,
+            60,
+          );
+        return new DOMRect();
+      });
+    try {
+      store.currentStep.set('enabled');
+      store.viewStep.set(5);
+      store.status.set('ready');
+      await fixture.whenStable();
+      const list = root.querySelector<HTMLOListElement>('#onboarding-step-list')!;
+      expect(list.scrollLeft).toBe(400);
+      expect(currentSteps(root)).toEqual(['onboarding-select-step-5']);
+      const focus = document.activeElement;
+      store.viewStep.set(4); // Already fully visible.
+      await fixture.whenStable();
+      expect(list.scrollLeft).toBe(400);
+      store.viewStep.set(2); // Only its left edge needs revealing.
+      await fixture.whenStable();
+      expect(list.scrollLeft).toBe(200);
+      expect(list.scrollTop).toBe(0);
+      expect(document.activeElement).toBe(focus);
+      expect(pageScroll).not.toHaveBeenCalled();
+    } finally {
+      geometry.mockRestore();
+      pageScroll.mockRestore();
+    }
+  });
+
   it('provides one ordered navigator and a full-width body with one meaningful heading', async () => {
     const { root } = await mountShell();
     expect(root.querySelectorAll('nav')).toHaveLength(1);

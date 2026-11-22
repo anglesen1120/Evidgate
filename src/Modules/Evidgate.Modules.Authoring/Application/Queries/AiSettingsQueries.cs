@@ -61,8 +61,12 @@ internal sealed class GetAiSettingsQueryHandler(
 /// <param name="ProjectId">The project from the route.</param>
 /// <param name="Cursor">The opaque cursor of the next page, or null for the first page.</param>
 /// <param name="Limit">The page size the route already bounded.</param>
-internal sealed record ListAiSettingsVersionsQuery(Guid ProjectId, string? Cursor, int Limit)
-    : IQuery<Result<AiSettingsVersionListResponse>>;
+/// <param name="RequestError">The first edge validation error, answered after authorization.</param>
+internal sealed record ListAiSettingsVersionsQuery(
+    Guid ProjectId,
+    string? Cursor,
+    int Limit,
+    Error? RequestError = null) : IQuery<Result<AiSettingsVersionListResponse>>;
 
 /// <summary>
 /// Handler of <see cref="ListAiSettingsVersionsQuery"/>: the project probe and one keyset statement, whatever
@@ -93,6 +97,11 @@ internal sealed class ListAiSettingsVersionsQueryHandler(
         if (AuthoringRules.Project(query.ProjectId, principals, tenant) is { } scopeError)
         {
             return Result.Failure<AiSettingsVersionListResponse>(scopeError);
+        }
+
+        if (query.RequestError is { } requestError)
+        {
+            return Result.Failure<AiSettingsVersionListResponse>(requestError);
         }
 
         var cursorVersionNo = 0;
@@ -128,6 +137,20 @@ internal sealed class ListAiSettingsVersionsQueryHandler(
         // `limit + 1` rows tell a last page from a full one: the extra row is read and dropped, never returned.
         var hasMore = rows.Count > query.Limit;
         var size = hasMore ? query.Limit : rows.Count;
+        var items = Summaries(rows, size);
+
+        return Result.Success(new AiSettingsVersionListResponse(
+            items,
+            hasMore ? EncodeCursor(rows[size - 1].VersionNo) : null));
+    }
+
+    /// <summary>The page's rows as the wire summaries, in the order the statement returned them.</summary>
+    /// <param name="rows">The page's rows, one more than the page size when another page follows.</param>
+    /// <param name="size">How many of <paramref name="rows"/> belong to this page.</param>
+    private static List<AiSettingsVersionSummary> Summaries(
+        IReadOnlyList<AiSettingsSql.VersionRow> rows,
+        int size)
+    {
         var items = new List<AiSettingsVersionSummary>(size);
 
         for (var index = 0; index < size; index++)
@@ -135,9 +158,7 @@ internal sealed class ListAiSettingsVersionsQueryHandler(
             items.Add(AiSettingsModels.Summary(rows[index]));
         }
 
-        return Result.Success(new AiSettingsVersionListResponse(
-            items,
-            hasMore ? EncodeCursor(rows[size - 1].VersionNo) : null));
+        return items;
     }
 
     /// <summary>The cursor of the next page: the version number this page stopped at, in invariant digits.</summary>

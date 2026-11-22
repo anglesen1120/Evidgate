@@ -5,8 +5,11 @@ import type { HealingSwitchResolutionView } from '@evidgate/sdk';
 
 import { SessionStore } from '../../core/session/session.store';
 import { DataTableComponent } from '../../shared/ui/data-table';
+import { provideLayoutTestStubs } from '../../shared/testing/layout.testing';
 import { resolution, switchRow } from './healing-switch.test-support';
 import { SwitchScopeHierarchy } from './switch-scope-hierarchy.component';
+
+provideLayoutTestStubs();
 
 function mount(answer: HealingSwitchResolutionView) {
   TestBed.configureTestingModule({

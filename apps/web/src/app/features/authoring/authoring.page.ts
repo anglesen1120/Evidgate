@@ -1,4 +1,4 @@
-import { NgTemplateOutlet } from '@angular/common';
+import { formatNumber, NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -23,6 +23,7 @@ import {
 import { RequestStateComponent } from '../../shared/ui/states/request-state.component';
 import { InlineFeedbackComponent } from '../../shared/ui/states/inline-feedback.component';
 import { CopyableIdentifierComponent } from '../../shared/ui/values/copyable-identifier.component';
+import { ShellIconComponent } from '../../shell/layout/shell-icon.component';
 import { AuthoringTreePaneComponent } from './authoring-tree-pane.component';
 import { AuthoringCaseTableComponent } from './authoring-case-table.component';
 import { AUTHORING_TREE_COPY, treeBrowseCappedHelp } from './authoring-tree.copy';
@@ -35,6 +36,7 @@ import { AuthoringStore } from './authoring.store';
     HlmButton,
     HlmCardImports,
     HeaderActionsDirective,
+    ShellIconComponent,
     PageHeaderComponent,
     SectionHeaderComponent,
     RequestStateComponent,
@@ -109,6 +111,15 @@ export class AuthoringPage {
     return node && !path.some((ancestor) => ancestor.node_id === node.node_id)
       ? [...path, node]
       : path;
+  });
+  protected readonly subtitle = computed(() => {
+    if (this.viewStatus() !== 'ready') return this.copy.description;
+    const roots = formatNumber(this.store.roots().items.length, this.locale);
+    return (
+      (this.store.selectedNode()?.title ?? this.copy.all) +
+      ' · ' +
+      $localize`:@@authoring.tree.loaded-roots:Loaded roots: ${roots}:count:`
+    );
   });
   /**
    * One polite line per settled read: the scope now shown, then every cap notice on screen. A

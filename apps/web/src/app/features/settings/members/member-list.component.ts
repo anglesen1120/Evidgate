@@ -1,18 +1,26 @@
+import { DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
   computed,
   inject,
   input,
+  LOCALE_ID,
   output,
   type TemplateRef,
   viewChild,
 } from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmBadge } from '@evidgate/ui/badge';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmDropdownMenuImports } from '@evidgate/ui/dropdown-menu';
 import type { MembershipView } from '@evidgate/sdk';
+import {
+  BADGE_CLASSES,
+  BADGE_ICON_NAMES,
+  BADGE_TONE_CLASSES,
+} from '../../../shared/ui/chips/badge-classes';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import {
@@ -20,12 +28,19 @@ import {
   type DataTableColumn,
 } from '../../../shared/ui/data-table/data-table.component';
 import type { DataTableCellContext } from '../../../shared/ui/data-table/data-table-column';
+import { shortDateFormat } from '../../../shared/time/short-date-format';
+import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
+import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 
 export const MEMBERS_COPY = {
   title: $localize`:@@settings.members.title:Members and roles`,
   directory: $localize`:@@settings.members.directory:Members and invitations`,
+  activeMembers: $localize`:@@settings.members-active-count:Active members`,
+  pendingInvitations: $localize`:@@settings.members-pending-count:Pending invitations`,
+  organizationAdmins: $localize`:@@settings.members-admin-count:Organization admins`,
   loading: $localize`:@@settings.members.loading:Loading members…`,
-  description: $localize`:@@settings.members.description:Manage organization membership. The server decides actual access.`,
+  description: $localize`:@@settings.members.description:Review organization roles and invitations before changing membership.`,
   member: $localize`:@@settings.members.member:Member`,
   status: $localize`:@@settings.members.status:Status`,
   roles: $localize`:@@settings.members.roles:Organization roles`,
@@ -91,7 +106,7 @@ export const MEMBERS_COPY = {
   saved: $localize`:@@settings.members.saved:Membership updated.`,
   loadMoreFailed: $localize`:@@settings.members.load-more-failed:The next members page could not be loaded. The members already shown are unchanged.`,
   narrow: $localize`:@@settings.members.narrow:Use a wider screen to invite, edit or remove members.`,
-  pending: $localize`:@@settings.members.pending:Invited`,
+  pending: $localize`:@@settings.members.pending:Invitation pending`,
   active: $localize`:@@settings.members.active:Active`,
   removed: $localize`:@@settings.members.removed:Removed`,
   revoked: $localize`:@@settings.members.revoked:Revoked`,
@@ -103,30 +118,119 @@ export const MEMBERS_COPY = {
   imports: [
     StatusPillComponent,
     DataTableComponent,
+    DatePipe,
+    AbsoluteTimeComponent,
+    ShellIconComponent,
     HlmButton,
     HlmBadge,
+    HlmIcon,
     HlmDialogImports,
     HlmDropdownMenuImports,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
+    <ng-template #identityCell let-member let-stacked="stacked">
+      <div class="flex min-w-0 items-center gap-3">
+        <span
+          class="grid size-8 shrink-0 place-items-center rounded-full bg-secondary text-muted-foreground"
+        >
+          <app-shell-icon [name]="member.status === 'pending' ? 'inbox' : 'account'" />
+        </span>
+        <div class="grid min-w-0 flex-1 gap-1">
+          <hlm-dialog [aria-modal]="true" class="min-w-0">
+            <button
+              hlmBtn
+              hlmDialogTrigger
+              [variant]="'link'"
+              type="button"
+              data-member-view
+              class="h-auto max-w-full justify-start px-0 py-1 text-start font-semibold pointer-coarse:min-h-(--eg-control-touch)"
+            >
+              <span class="sr-only" i18n="@@settings.members.view">View member</span>
+              <bdi [class.truncate]="!stacked" [class.whitespace-normal]="stacked">{{
+                display(member.invited_email)
+              }}</bdi>
+            </button>
+            <hlm-dialog-content *hlmDialogPortal [showCloseButton]="false" [size]="'md'">
+              <header hlmDialogHeader>
+                <h2 hlmDialogTitle>{{ copy.member }}</h2>
+                <p hlmDialogDescription>{{ copy.directory }}</p>
+              </header>
+              <dl
+                class="m-0 grid content-start gap-4 sm:grid-cols-2 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:mt-1 [&_dd]:wrap-anywhere"
+              >
+                <div>
+                  <dt>{{ copy.email }}</dt>
+                  <dd>
+                    <bdi>{{ display(member.invited_email) }}</bdi>
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ copy.status }}</dt>
+                  <dd>{{ statusLabel(member.status) }}</dd>
+                </div>
+                <div>
+                  <dt i18n="@@settings.members.created">Created</dt>
+                  <dd><app-absolute-time [value]="member.created_at" /></dd>
+                </div>
+                <div>
+                  <dt>{{ copy.roles }}</dt>
+                  <dd>
+                    @if (member.roles.length) {
+                      <ul class="m-0 list-none p-0">
+                        @for (role of member.roles; track role.id) {
+                          <li>
+                            <bdi>{{ display(role.name) }}</bdi>
+                          </li>
+                        }
+                      </ul>
+                    } @else {
+                      {{ copy.noRoles }}
+                    }
+                  </dd>
+                </div>
+              </dl>
+              <footer hlmDialogFooter>
+                <button hlmBtn hlmDialogClose [variant]="'outline'" type="button" i18n="@@ui.close">
+                  Close
+                </button>
+              </footer>
+            </hlm-dialog-content>
+          </hlm-dialog>
+          <small class="text-xs text-muted-foreground">
+            <span i18n="@@settings.members.created-date"
+              >Created {{ member.created_at | date: calendarFormat : 'UTC' }} UTC</span
+            >
+          </small>
+        </div>
+      </div>
+    </ng-template>
     <ng-template #statusCell let-member>
       <span
         data-members-row
         [attr.data-membership-id]="member.id"
         [attr.data-members-status]="member.status"
       >
-        <app-status-pill
-          [tone]="member.status === 'active' ? 'success' : 'neutral'"
-          [label]="statusLabel(member.status)"
-        />
+        @if (member.status === 'pending') {
+          <span hlmBadge [variant]="'secondary'" [class]="pendingBadge">
+            <hlm-icon [name]="pendingIcon" />
+            <span>{{ copy.pending }}</span>
+          </span>
+        } @else {
+          <app-status-pill
+            [tone]="member.status === 'active' ? 'info' : 'neutral'"
+            [label]="statusLabel(member.status)"
+          />
+        }
       </span>
     </ng-template>
     <ng-template #rolesCell let-member let-stacked="stacked">
       <div class="flex min-w-0 items-center gap-2" [class.flex-wrap]="stacked">
         @for (role of member.roles.slice(0, 2); track role.id) {
-          <span hlmBadge [variant]="'secondary'" class="role-name min-w-0">{{ role.name }}</span>
+          <span hlmBadge [variant]="'secondary'" class="role-name min-w-0">{{
+            display(role.name)
+          }}</span>
         } @empty {
           {{ copy.noRoles }}
         }
@@ -143,14 +247,16 @@ export const MEMBERS_COPY = {
             >
               +{{ member.roles.length - 2 }}
             </button>
-            <hlm-dialog-content *hlmDialogPortal [closeLabel]="copy.cancel">
+            <hlm-dialog-content *hlmDialogPortal [size]="'md'" [closeLabel]="copy.cancel">
               <header hlmDialogHeader>
                 <h2 hlmDialogTitle>{{ copy.roles }}</h2>
-                <p hlmDialogDescription class="m-0 wrap-anywhere">{{ member.invited_email }}</p>
+                <p hlmDialogDescription class="m-0 wrap-anywhere">
+                  {{ display(member.invited_email) }}
+                </p>
               </header>
               <ul class="m-0 grid min-w-0 gap-2 ps-4">
                 @for (role of member.roles; track role.id) {
-                  <li class="wrap-anywhere">{{ role.name }}</li>
+                  <li class="wrap-anywhere">{{ display(role.name) }}</li>
                 }
               </ul>
               <footer hlmDialogFooter>
@@ -170,13 +276,15 @@ export const MEMBERS_COPY = {
           #actionsButton
           [variant]="'ghost'"
           type="button"
-          class="mutation min-h-[var(--eg-control-touch)]"
+          [size]="'icon-sm'"
+          class="mutation min-h-(--eg-control-sm) min-w-max whitespace-nowrap pointer-coarse:min-h-(--eg-control-touch)"
           [hlmDropdownMenuTrigger]="actionsMenu"
           data-members-actions
           [attr.data-members-status]="member.status"
           [attr.data-membership-id]="member.id"
         >
-          {{ copy.actions }}<span class="sr-only"> {{ member.invited_email }}</span>
+          <span aria-hidden="true" class="text-lg leading-none">⋯</span>
+          <span class="sr-only">{{ copy.actions }} {{ member.invited_email }}</span>
         </button>
         <ng-template #actionsMenu>
           <hlm-dropdown-menu
@@ -224,6 +332,8 @@ export const MEMBERS_COPY = {
       }
     </ng-template>
     <app-data-table
+      class="[&_tbody_td]:align-middle [&_[data-column-role=actions]]:whitespace-nowrap [&_[data-column-role=actions]]:wrap-normal"
+      [flow]="'page'"
       [columns]="columns()"
       [rows]="members()"
       [rowId]="rowId"
@@ -233,6 +343,8 @@ export const MEMBERS_COPY = {
 })
 export class MemberListComponent {
   protected readonly viewport = inject(NarrowMutationPolicy);
+  protected readonly calendarFormat = shortDateFormat(inject(LOCALE_ID));
+  protected readonly display = escapeFormatChars;
 
   readonly members = input.required<readonly MembershipView[]>();
   readonly canWrite = input(false);
@@ -241,6 +353,10 @@ export class MemberListComponent {
   readonly resend = output<{ member: MembershipView; opener: HTMLElement }>();
   readonly cancelInvite = output<{ member: MembershipView; opener: HTMLElement }>();
   protected readonly copy = MEMBERS_COPY;
+  protected readonly pendingBadge = `${BADGE_CLASSES} ${BADGE_TONE_CLASSES.pending}`;
+  protected readonly pendingIcon = BADGE_ICON_NAMES.pending;
+  private readonly identityCell =
+    viewChild<TemplateRef<DataTableCellContext<MembershipView>>>('identityCell');
   private readonly statusCell =
     viewChild<TemplateRef<DataTableCellContext<MembershipView>>>('statusCell');
   private readonly rolesCell =
@@ -249,10 +365,11 @@ export class MemberListComponent {
     viewChild<TemplateRef<DataTableCellContext<MembershipView>>>('actionsCell');
   protected readonly rowId = (member: MembershipView): string => member.id;
   protected readonly columns = computed<readonly DataTableColumn<MembershipView>[]>(() => {
+    const identity = this.identityCell();
     const status = this.statusCell();
     const roles = this.rolesCell();
     const actions = this.actionsCell();
-    if (!status || !roles || !actions) return [];
+    if (!identity || !status || !roles || !actions) return [];
     const columns: DataTableColumn<MembershipView>[] = [
       {
         id: 'member',
@@ -262,13 +379,7 @@ export class MemberListComponent {
         priority: 'primary',
         overflow: 'truncate',
         cell: (member) => member.invited_email,
-      },
-      {
-        id: 'status',
-        header: this.copy.status,
-        role: 'status',
-        cell: (member) => this.statusLabel(member.status),
-        cellTemplate: status,
+        cellTemplate: identity,
       },
       {
         id: 'roles',
@@ -278,12 +389,20 @@ export class MemberListComponent {
         cell: () => this.copy.roles,
         cellTemplate: roles,
       },
+      {
+        id: 'status',
+        header: this.copy.status,
+        role: 'status',
+        cell: (member) => this.statusLabel(member.status),
+        cellTemplate: status,
+      },
     ];
     if (this.canWrite()) {
       columns.push({
         id: 'actions',
         header: this.copy.actions,
         role: 'actions',
+        width: { min: 'max-content' },
         mutates: true,
         cell: () => this.copy.actions,
         cellTemplate: actions,

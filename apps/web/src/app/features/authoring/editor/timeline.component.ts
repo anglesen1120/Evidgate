@@ -1,4 +1,3 @@
-import { NgTemplateOutlet } from '@angular/common';
 import {
   afterNextRender,
   afterRenderEffect,
@@ -15,7 +14,7 @@ import {
 } from '@angular/core';
 import type { AuthoringVersionListItemDto } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmCardTitle } from '@evidgate/ui/card';
+import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
@@ -39,6 +38,7 @@ import { VersionDiffComponent } from './version-diff.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     HlmButton,
+    HlmCard,
     HlmCardTitle,
     HlmDialogImports,
     HlmInput,
@@ -48,7 +48,6 @@ import { VersionDiffComponent } from './version-diff.component';
     AbsoluteTimeComponent,
     DataTableComponent,
     DataTableValueComponent,
-    NgTemplateOutlet,
     VersionDiffComponent,
   ],
   providers: [TimelineStore],
@@ -118,6 +117,8 @@ export class TimelineComponent {
   private readonly restoreStatus = viewChild<ElementRef<HTMLElement>>('restoreStatus');
   private readonly timelineStatus = viewChild<ElementRef<HTMLElement>>('timelineStatus');
   private readonly table = viewChild(DataTableComponent<AuthoringVersionListItemDto>);
+  private readonly versionCell =
+    viewChild<TemplateRef<DataTableCellContext<AuthoringVersionListItemDto>>>('versionCell');
   private readonly metadata =
     viewChild<TemplateRef<DataTableCellContext<AuthoringVersionListItemDto>>>('metadata');
   private readonly actions =
@@ -131,8 +132,15 @@ export class TimelineComponent {
     () => {
       const metadata = this.metadata();
       const actions = this.actions();
+      const version = this.versionCell();
       return [
-        { id: 'version', header: this.versionLabel, cell: (row) => row.version_no, role: 'number' },
+        {
+          id: 'version',
+          header: $localize`:@@authoring.editor.version-column:Version`,
+          cell: (row) => row.version_no,
+          role: 'number',
+          ...(version ? { cellTemplate: version } : {}),
+        },
         {
           id: 'metadata',
           header: this.contentLabel,

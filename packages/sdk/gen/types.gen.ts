@@ -1163,6 +1163,142 @@ export type PolicyRevisionListResponse = {
  */
 export type JsonElement = unknown;
 
+export type DraftFileDto = {
+    /**
+     * Relative path with no leading slash, backslash, parent segment or control character.
+     */
+    path: string;
+    body_sha: string;
+    /**
+     * Body pointer; the body itself is not embedded in a draft.
+     */
+    body_ref: string;
+};
+
+/**
+ * The draft's file set, at most 256 KiB of JSON on the wire. File paths must be unique within this draft; duplicate paths are rejected by server validation even when their body pointers differ.
+ */
+export type DraftContentDto = {
+    files: Array<DraftFileDto>;
+};
+
+export type DraftDto = {
+    id: string;
+    project_id: string;
+    author_membership_id: string;
+    kind: 'template' | 'ai' | 'regression';
+    base_commit: string;
+    status: 'draft' | 'dry_running' | 'dry_passed' | 'dry_failed' | 'pr_open' | 'merged' | 'closed';
+    version: number;
+    content: DraftContentDto;
+    /**
+     * Optional provenance object (template, AI run or incident reference); server validation caps its UTF-8 JSON at 4096 bytes; a number is at most 64 characters with an exponent of at most 400 in magnitude and the numbers' written-out sizes add up to at most 4096, otherwise 422 `draft_invalid` naming `provenance`. A number outside the IEEE 754 double range is 422 `request_invalid`.
+     */
+    provenance: {
+        [key: string]: unknown;
+    } | null;
+    ai_run_id: string | null;
+    dry_run_id: string | null;
+    allow_unverified: boolean;
+    unverified_reason: string | null;
+    pr_branch: string | null;
+    pr_commit_sha: string | null;
+    pr_url: string | null;
+    pr_number: number | null;
+    linked_case_id: string | null;
+    linked_revision_id: string | null;
+    created_at: string;
+    updated_at: string;
+};
+
+/**
+ * A draft without its `content`; only `GET /drafts/{d}` returns the file set.
+ */
+export type DraftSummaryDto = {
+    id: string;
+    project_id: string;
+    author_membership_id: string;
+    kind: 'template' | 'ai' | 'regression';
+    base_commit: string;
+    status: 'draft' | 'dry_running' | 'dry_passed' | 'dry_failed' | 'pr_open' | 'merged' | 'closed';
+    version: number;
+    file_count: number;
+    /**
+     * Optional provenance object (template, AI run or incident reference); server validation caps its UTF-8 JSON at 4096 bytes; a number is at most 64 characters with an exponent of at most 400 in magnitude and the numbers' written-out sizes add up to at most 4096, otherwise 422 `draft_invalid` naming `provenance`. A number outside the IEEE 754 double range is 422 `request_invalid`.
+     */
+    provenance: {
+        [key: string]: unknown;
+    } | null;
+    ai_run_id: string | null;
+    dry_run_id: string | null;
+    allow_unverified: boolean;
+    unverified_reason: string | null;
+    pr_branch: string | null;
+    pr_commit_sha: string | null;
+    pr_url: string | null;
+    pr_number: number | null;
+    linked_case_id: string | null;
+    linked_revision_id: string | null;
+    created_at: string;
+    updated_at: string;
+};
+
+export type CreateDraftRequest = {
+    kind: 'template' | 'ai' | 'regression';
+    base_commit: string;
+    content: DraftContentDto;
+    /**
+     * Optional provenance object (template, AI run or incident reference); server validation caps its UTF-8 JSON at 4096 bytes; a number is at most 64 characters with an exponent of at most 400 in magnitude and the numbers' written-out sizes add up to at most 4096, otherwise 422 `draft_invalid` naming `provenance`. A number outside the IEEE 754 double range is 422 `request_invalid`.
+     */
+    provenance?: {
+        [key: string]: unknown;
+    } | null;
+};
+
+export type UpdateDraftRequest = {
+    content: DraftContentDto;
+};
+
+export type DraftListResponse = {
+    items: Array<DraftSummaryDto>;
+    next_cursor: string | null;
+};
+
+export type TemplateDto = {
+    id: string;
+    kind: 'web' | 'api' | 'unit' | 'mobile';
+    platform: Platform;
+    level: Level;
+    purpose: Purpose;
+    name: string;
+    version: number;
+    body_ref: string;
+    created_at: string;
+};
+
+export type TemplateDetailDto = {
+    id: string;
+    kind: 'web' | 'api' | 'unit' | 'mobile';
+    platform: Platform;
+    level: Level;
+    purpose: Purpose;
+    name: string;
+    version: number;
+    body_ref: string;
+    /**
+     * The rules a generated project is checked against: a named set (object) or an ordered list (array), stored as at most 64 KiB of JSON and nested at most 32 levels deep.
+     */
+    conformance_rules: {
+        [key: string]: unknown;
+    } | Array<unknown>;
+    created_at: string;
+};
+
+export type TemplateListResponse = {
+    items: Array<TemplateDto>;
+    next_cursor: string | null;
+};
+
 export type FixtureDto = {
     id: string;
     org_id: string;
@@ -1584,6 +1720,26 @@ export type ApiTokenCreatedResponse = {
     token: string;
     permissions: Array<string>;
     expires_at: string;
+};
+
+export type SupportGrant = {
+    id: string;
+    org_id: string;
+    operator_user_id: string;
+    scopes: Array<string>;
+    project_ids: Array<string>;
+    reason: string;
+    state: 'requested' | 'approved' | 'revoked' | 'expired';
+    approved_by: string | null;
+    approved_at: string | null;
+    expires_at: string;
+    revoked_at: string | null;
+    created_at: string;
+};
+
+export type SupportGrantList = {
+    items: Array<SupportGrant>;
+    next_cursor: string | null;
 };
 
 export type ApiTokenListResponse = {
@@ -3710,19 +3866,29 @@ export type SecurityEventTo = string;
 export type Cursor = string;
 
 /**
- * Only suites of this platform (03.1.4 AC3); an unknown value is a 422.
+ * Only rows of this platform (03.1.4 AC3); an unknown value is a 422.
  */
 export type PlatformFilter = Platform;
 
 /**
- * Only suites of this level; an unknown value is a 422.
+ * Only rows of this level (03.1.4 AC3); an unknown value is a 422.
  */
 export type LevelFilter = Level;
 
 /**
- * Only suites of this purpose; an unknown value is a 422.
+ * Only rows of this purpose (03.1.4 AC3); an unknown value is a 422.
  */
 export type PurposeFilter = Purpose;
+
+/**
+ * Only drafts in this state; an unknown value is a 422 `draft_invalid`.
+ */
+export type DraftStatusFilter = 'draft' | 'dry_running' | 'dry_passed' | 'dry_failed' | 'pr_open' | 'merged' | 'closed';
+
+/**
+ * Only templates of this kind; an unknown value is a 422 `request_invalid`.
+ */
+export type TemplateKindFilter = 'web' | 'api' | 'unit' | 'mobile';
 
 /**
  * Opaque cursor from `next_cursor`; ordering `(revision_no, id)` (07.1.1-T3, 00 §9.1).
@@ -3880,6 +4046,8 @@ export type ExecutionPlanCursor = string;
 export type ExecutionPlanLimit = number;
 
 export type DraftId = string;
+
+export type TemplateId = string;
 
 export type IncidentId = string;
 
@@ -8898,6 +9066,10 @@ export type ApproveSupportGrantData = {
 
 export type ApproveSupportGrantErrors = {
     /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
      * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
      */
     401: ErrorEnvelope;
@@ -8913,6 +9085,10 @@ export type ApproveSupportGrantErrors = {
      * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
      */
     409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
     /**
      * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
@@ -8957,6 +9133,10 @@ export type RevokeSupportGrantData = {
 
 export type RevokeSupportGrantErrors = {
     /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
      * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
      */
     401: ErrorEnvelope;
@@ -8972,6 +9152,10 @@ export type RevokeSupportGrantErrors = {
      * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
      */
     409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
     /**
      * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
      */
@@ -8990,6 +9174,59 @@ export type RevokeSupportGrantResponses = {
      */
     200: unknown;
 };
+
+export type ListSupportGrantsData = {
+    body?: never;
+    path: {
+        o: string;
+    };
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/orgs/{o}/support-grants';
+};
+
+export type ListSupportGrantsErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListSupportGrantsError = ListSupportGrantsErrors[keyof ListSupportGrantsErrors];
+
+export type ListSupportGrantsResponses = {
+    /**
+     * Page of support grants
+     */
+    200: SupportGrantList;
+};
+
+export type ListSupportGrantsResponse = ListSupportGrantsResponses[keyof ListSupportGrantsResponses];
 
 export type ListSecurityEventsData = {
     body?: never;
@@ -9411,6 +9648,358 @@ export type RegisterGitRepoBindingResponses = {
 
 export type RegisterGitRepoBindingResponse = RegisterGitRepoBindingResponses[keyof RegisterGitRepoBindingResponses];
 
+export type ListDraftsData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+        /**
+         * Only drafts in this state; an unknown value is a 422 `draft_invalid`.
+         */
+        status?: 'draft' | 'dry_running' | 'dry_passed' | 'dry_failed' | 'pr_open' | 'merged' | 'closed';
+    };
+    url: '/projects/{p}/drafts';
+};
+
+export type ListDraftsErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListDraftsError = ListDraftsErrors[keyof ListDraftsErrors];
+
+export type ListDraftsResponses = {
+    /**
+     * Page of drafts
+     */
+    200: DraftListResponse;
+};
+
+export type ListDraftsResponse = ListDraftsResponses[keyof ListDraftsResponses];
+
+export type CreateDraftData = {
+    body: CreateDraftRequest;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/drafts';
+};
+
+export type CreateDraftErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type CreateDraftError = CreateDraftErrors[keyof CreateDraftErrors];
+
+export type CreateDraftResponses = {
+    /**
+     * The created draft
+     */
+    201: DraftDto;
+};
+
+export type CreateDraftResponse = CreateDraftResponses[keyof CreateDraftResponses];
+
+export type GetDraftData = {
+    body?: never;
+    path: {
+        d: string;
+    };
+    query?: never;
+    url: '/drafts/{d}';
+};
+
+export type GetDraftErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetDraftError = GetDraftErrors[keyof GetDraftErrors];
+
+export type GetDraftResponses = {
+    /**
+     * The draft
+     */
+    200: DraftDto;
+};
+
+export type GetDraftResponse = GetDraftResponses[keyof GetDraftResponses];
+
+export type UpdateDraftData = {
+    body: UpdateDraftRequest;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        d: string;
+    };
+    query?: never;
+    url: '/drafts/{d}';
+};
+
+export type UpdateDraftErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type UpdateDraftError = UpdateDraftErrors[keyof UpdateDraftErrors];
+
+export type UpdateDraftResponses = {
+    /**
+     * The updated draft
+     */
+    200: DraftDto;
+};
+
+export type UpdateDraftResponse = UpdateDraftResponses[keyof UpdateDraftResponses];
+
+export type ListTemplatesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Only templates of this kind; an unknown value is a 422 `request_invalid`.
+         */
+        kind?: 'web' | 'api' | 'unit' | 'mobile';
+        /**
+         * Only rows of this platform (03.1.4 AC3); an unknown value is a 422.
+         */
+        platform?: Platform;
+        /**
+         * Only rows of this level (03.1.4 AC3); an unknown value is a 422.
+         */
+        level?: Level;
+        /**
+         * Only rows of this purpose (03.1.4 AC3); an unknown value is a 422.
+         */
+        purpose?: Purpose;
+        /**
+         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/templates';
+};
+
+export type ListTemplatesErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListTemplatesError = ListTemplatesErrors[keyof ListTemplatesErrors];
+
+export type ListTemplatesResponses = {
+    /**
+     * Page of templates
+     */
+    200: TemplateListResponse;
+};
+
+export type ListTemplatesResponse = ListTemplatesResponses[keyof ListTemplatesResponses];
+
+export type GetTemplateData = {
+    body?: never;
+    path: {
+        t: string;
+    };
+    query?: never;
+    url: '/templates/{t}';
+};
+
+export type GetTemplateErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetTemplateError = GetTemplateErrors[keyof GetTemplateErrors];
+
+export type GetTemplateResponses = {
+    /**
+     * The template
+     */
+    200: TemplateDetailDto;
+};
+
+export type GetTemplateResponse = GetTemplateResponses[keyof GetTemplateResponses];
+
 export type ListFixturesData = {
     body?: never;
     path: {
@@ -9645,15 +10234,15 @@ export type ListSuitesData = {
         cursor?: string;
         limit?: number;
         /**
-         * Only suites of this platform (03.1.4 AC3); an unknown value is a 422.
+         * Only rows of this platform (03.1.4 AC3); an unknown value is a 422.
          */
         platform?: Platform;
         /**
-         * Only suites of this level; an unknown value is a 422.
+         * Only rows of this level (03.1.4 AC3); an unknown value is a 422.
          */
         level?: Level;
         /**
-         * Only suites of this purpose; an unknown value is a 422.
+         * Only rows of this purpose (03.1.4 AC3); an unknown value is a 422.
          */
         purpose?: Purpose;
     };

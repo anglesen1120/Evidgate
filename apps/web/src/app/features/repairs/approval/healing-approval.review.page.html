@@ -1,0 +1,55 @@
+@let state = ctx.state();
+@let snapshot =
+  state === 'default' || state === 'prepared' || state === '422'
+    ? labels.snapshot
+    : state === 'approved' || state === 'rejected'
+      ? labels.atTen
+      : labels.alternative;
+<header class="flex min-w-0 items-start gap-3">
+  <span
+    class="grid size-11 shrink-0 place-items-center rounded-md bg-(--eg-accent-soft) text-(--eg-accent-fg)"
+  >
+    <hlm-icon name="lucideCircleCheck" class="size-5" />
+  </span>
+  <app-page-header
+    class="min-w-0 flex-1 [--eg-text-2xl:var(--eg-space-7)]"
+    [title]="copy.title"
+    [description]="ctx.isolated() ? copy.subtitle : record.id + ' · ' + snapshot"
+  >
+    @if (!ctx.isolated()) {
+      <div appPageHeaderActions class="flex flex-wrap gap-2">
+        <a
+          hlmBtn
+          [variant]="'outline'"
+          [routerLink]="ctx.link('healing-queue')"
+          [queryParams]="{ id: record.id }"
+        >
+          <hlm-icon name="lucideChevronLeft" class="size-4" />{{ labels.queueLink }}
+        </a>
+        <a
+          hlmBtn
+          [variant]="'outline'"
+          [routerLink]="ctx.link('shadow-detail')"
+          [queryParams]="{ id: record.id, state: ctx.relatedState() }"
+        >
+          <hlm-icon name="lucideActivity" class="size-4" />{{ copy.inspect }}
+        </a>
+      </div>
+    }
+  </app-page-header>
+</header>
+<app-repair-review-notice [state]="state" />
+@if (!ctx.isolated()) {
+  <div class="review-grid">
+    <app-repair-evidence [panel]="'original'" [context]="ctx" />
+    @for (scopeKey of ctx.draftScope(); track scopeKey) {
+      <app-approval-decision [context]="ctx" />
+    }
+  </div>
+  <div class="review-grid">
+    <app-repair-evidence [panel]="'diff'" [context]="ctx" />
+    <app-repair-evidence [panel]="'result'" [context]="ctx" />
+  </div>
+  <app-repair-evidence [panel]="'validation'" [context]="ctx" />
+  <app-repair-evidence [panel]="'provenance'" [context]="ctx" />
+}

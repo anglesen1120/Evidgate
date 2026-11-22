@@ -67,6 +67,7 @@ import {
   template: `
     <p
       class="m-0 min-h-(--eg-leading-sm) text-sm focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
+      [class.sr-only]="!busy()"
       role="status"
       tabindex="-1"
       #busyStatus
@@ -80,7 +81,9 @@ import {
       <app-desktop-required-notice />
     }
     @if (policy.narrow()) {
-      <dl class="m-0 grid min-w-0 gap-(--eg-space-4) text-sm [&_dd]:m-0 [&_dd]:wrap-anywhere">
+      <dl
+        class="m-0 grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-(--eg-space-4) text-sm [&>div]:min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:mt-(--eg-space-1) [&_dd]:font-semibold [&_dd]:wrap-anywhere"
+      >
         <div>
           <dt>{{ nameLabel }}</dt>
           <dd>{{ name() || notSetLabel }}</dd>
@@ -96,25 +99,31 @@ import {
     }
     <form
       *appDesktopMutation
-      class="grid min-w-0 max-w-[65ch] gap-(--eg-space-5) text-sm text-muted-foreground [&_p]:m-0"
+      class="grid min-w-0 max-w-[65ch] gap-(--eg-space-5) text-sm md:grid-cols-2 [&_p]:m-0"
       #form="ngForm"
       novalidate
       (ngSubmit)="submit(form)"
       [attr.aria-busy]="busy()"
     >
-      <app-form-required-note />
-      <app-form-error-summary [summaryId]="'onboarding-project-errors'" [feedback]="feedback" />
+      <app-form-required-note class="md:col-span-2" />
+      <app-form-error-summary
+        class="md:col-span-2"
+        [summaryId]="'onboarding-project-errors'"
+        [feedback]="feedback"
+      />
+      <!-- Keep requiredness native, like pattern: the feedback model owns when an untouched
+           field becomes visibly/semantically invalid, not NgModel's eager required validator. -->
       <div class="grid min-w-0 gap-(--eg-space-3)">
         <label hlmLabel for="onboarding-project-name">{{ nameLabel }}</label>
         <input
           hlmInput
-          class="min-h-(--eg-control-touch)"
+          class="min-h-(--eg-control-touch) w-full min-w-0"
           id="onboarding-project-name"
           data-testid="onboarding-project-name"
           name="name"
           type="text"
           autocomplete="off"
-          required
+          [attr.required]="''"
           [attr.pattern]="nonBlankPattern"
           [(ngModel)]="name"
           (input)="dismissServerReason('name')"
@@ -130,14 +139,14 @@ import {
         <label hlmLabel for="onboarding-project-slug">{{ slugLabel }}</label>
         <input
           hlmInput
-          class="min-h-(--eg-control-touch)"
+          class="min-h-(--eg-control-touch) w-full min-w-0 font-mono"
           id="onboarding-project-slug"
           name="slug"
           type="text"
           autocomplete="off"
           [attr.autocapitalize]="'none'"
           spellcheck="false"
-          required
+          [attr.required]="''"
           [attr.pattern]="nonBlankPattern"
           [(ngModel)]="slug"
           (input)="dismissServerReason('slug')"
@@ -150,9 +159,11 @@ import {
         <app-field-feedback [field]="slugField" />
       </div>
       @if (!permitted()) {
-        <p id="onboarding-project-permission">{{ permissionReason }}</p>
+        <p class="text-muted-foreground md:col-span-2" id="onboarding-project-permission">
+          {{ permissionReason }}
+        </p>
       }
-      <div class="flex flex-wrap gap-(--eg-space-3)">
+      <div class="flex flex-wrap gap-(--eg-space-3) md:col-span-2">
         <button
           hlmBtn
           class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere"

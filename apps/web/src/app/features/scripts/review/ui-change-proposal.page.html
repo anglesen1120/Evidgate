@@ -1,0 +1,448 @@
+@let v = viewModel();
+<div class="flex min-w-0 items-start gap-3">
+  <span
+    class="grid size-12 shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent)"
+  >
+    <hlm-icon name="lucideActivity" class="size-6" />
+  </span>
+  <app-page-header
+    class="min-w-0 flex-1"
+    [title]="c.title"
+    [description]="
+      notice()?.replace
+        ? v.project
+        : v.id + ' · ' + v.incident + ' · ' + v.manualCase + ' ' + v.baseVersion
+    "
+  >
+    <div appPageHeaderActions class="grid gap-1 text-xs text-muted-foreground">
+      <span>{{ c.asOf }} <app-absolute-time [value]="v.asOf" /></span>
+      <bdi>{{ v.project }}</bdi>
+    </div>
+  </app-page-header>
+</div>
+@if (notice(); as n) {
+  @switch (state()) {
+    @case ('loading') {
+      <app-loading-pattern [layout]="'cards'" [label]="n.title" />
+    }
+    @case ('empty') {
+      <app-empty-pattern [title]="n.title" [description]="n.description" />
+    }
+    @default {
+      <app-inline-feedback
+        [tone]="n.tone"
+        [title]="n.title"
+        [description]="n.description"
+        [actionLabel]="state() === 'error' ? c.retry : state() === 'stale' ? c.reload : undefined"
+        (action)="restore()"
+      />
+    }
+  }
+  @if (state() === '401') {
+    <a
+      hlmBtn
+      [variant]="'outline'"
+      class="justify-self-start"
+      routerLink="/login"
+      [queryParams]="{ returnUrl: returnUrl() }"
+      >{{ c.signIn }}</a
+    >
+  }
+}
+@if (!notice()?.replace) {
+  @if (state() === 'rejected') {
+    <p>{{ reason().trim() || c.reasonDefault }}</p>
+  }
+  @if (policy.narrow()) {
+    <p class="text-sm text-muted-foreground">{{ c.narrow }}</p>
+  }
+  <div
+    hlmCard
+    class="grid min-w-0 grid-cols-1 gap-px overflow-hidden bg-border p-0 sm:grid-cols-2 md:grid-cols-4"
+  >
+    @for (m of viewModel().metrics; track m.title) {
+      <section class="grid min-w-0 content-start gap-3 bg-card p-4">
+        <h2 class="flex items-center gap-2 text-sm font-semibold wrap-normal break-normal">
+          <span
+            class="flex size-8 shrink-0 items-center justify-center rounded-md bg-(--eg-accent-soft) text-(--eg-accent)"
+            ><hlm-icon class="size-4" [name]="m.icon" /></span
+          >{{ m.title }}
+        </h2>
+        <div>
+          <p
+            class="m-0 font-(family-name:--eg-font-display) text-2xl font-bold tracking-tight tabular-nums"
+          >
+            {{ m.value }}
+          </p>
+          <p class="m-0 text-xs text-muted-foreground">{{ m.detail }}</p>
+        </div>
+      </section>
+    }
+  </div>
+  <div class="grid min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,0.77fr)_minmax(0,1.23fr)]">
+    <div
+      class="grid min-w-0 gap-5 lg:[@media(min-height:721px)]:sticky lg:[@media(min-height:721px)]:top-4"
+    >
+      <section hlmCard class="min-w-0 gap-0">
+        <header hlmCardHeader class="border-b border-(--eg-border)">
+          <div class="flex flex-wrap items-start justify-between gap-2">
+            <h2 hlmCardTitle>{{ c.failure }}</h2>
+            <app-status-pill [tone]="'danger'" [label]="c.failed" />
+          </div>
+        </header>
+        <div hlmCardContent class="grid min-w-0 gap-3 pt-4">
+          <div
+            class="rounded border-s-4 border-(--eg-danger-fg) bg-(--eg-danger-bg) p-3 text-(--eg-danger-fg)"
+          >
+            <strong>{{ c.hidden }}</strong
+            ><code class="block whitespace-pre-wrap wrap-anywhere">{{ v.assertion }}</code>
+          </div>
+          <dl
+            class="m-0 grid min-w-0 text-sm [&>div]:grid [&>div]:items-baseline [&>div]:gap-x-3 [&>div]:gap-y-1 [&>div]:border-b [&>div]:border-(--eg-border) [&>div]:py-2 sm:[&>div]:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:wrap-anywhere [&_dd]:font-semibold"
+          >
+            <div>
+              <dt>{{ c.incident }}</dt>
+              <dd>{{ v.incident }} · {{ v.incidentClass }}</dd>
+            </div>
+            <div>
+              <dt>{{ c.result }}</dt>
+              <dd>
+                <code>{{ v.originalResult }}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>{{ c.attempt }}</dt>
+              <dd>{{ v.attemptEvidence ?? c.missing }}</dd>
+            </div>
+            <div>
+              <dt>{{ c.completeness }}</dt>
+              <dd>
+                <app-evidence-badge [completeness]="v.completeness" [compact]="true" /> ·
+                {{ c.shard }}
+              </dd>
+            </div>
+            <div>
+              <dt>{{ c.outcome }}</dt>
+              <dd>
+                <app-outcome-pill [outcome]="v.outcome" [compact]="true" />
+                <code>{{ v.outcome }}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>{{ c.decision }}</dt>
+              <dd>
+                <app-decision-chip [decision]="v.storedDecision" [compact]="true" /> ·
+                {{ v.revision }}
+              </dd>
+            </div>
+            <div>
+              <dt>{{ c.runContext }}</dt>
+              <dd>{{ v.run }} · {{ v.revision }}</dd>
+            </div>
+            <div>
+              <dt>{{ c.runEvidence }}</dt>
+              <dd>{{ state() === 'evidence' ? c.unavailable : c.snapshot }}</dd>
+            </div>
+            <div>
+              <dt>{{ c.sourceStep }}</dt>
+              <dd>{{ v.sourceStep }}</dd>
+            </div>
+            <div>
+              <dt>{{ c.frozen }}</dt>
+              <dd><app-absolute-time [value]="v.frozen" /></dd>
+            </div>
+          </dl>
+          <p class="text-xs text-muted-foreground">{{ c.noHttp }}</p>
+        </div>
+      </section>
+      <section hlmCard class="min-w-0 gap-0">
+        <header hlmCardHeader class="border-b border-(--eg-border)">
+          <h2 hlmCardTitle>{{ c.item }}</h2>
+        </header>
+        <div hlmCardContent class="grid min-w-0 gap-3 pt-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <code>{{ v.id }}</code>
+            @if (state() === 'rejected' || state() === 'stale') {
+              <app-status-pill
+                [label]="decision()"
+                [tone]="state() === 'rejected' ? 'danger' : 'warning'"
+              />
+            } @else {
+              <span
+                hlmBadge
+                [variant]="'secondary'"
+                data-review-status
+                [attr.data-tone]="'pending'"
+                [class]="pendingClasses"
+                ><hlm-icon name="lucideClock" class="size-4" />{{ decision() }}</span
+              >
+            }
+          </div>
+          <strong>{{ c.discount }}</strong>
+          <p class="text-xs text-muted-foreground">{{ v.author }} · {{ v.manualCase }}</p>
+          <p>{{ c.noRepair }}</p>
+        </div>
+      </section>
+    </div>
+    <div class="grid min-w-0 gap-5">
+      <section hlmCard class="min-w-0 gap-0">
+        <header hlmCardHeader class="border-b border-(--eg-border)">
+          <div class="flex flex-wrap items-start justify-between gap-2">
+            <h2 hlmCardTitle>{{ c.manualReview }}</h2>
+            <app-status-pill [tone]="'info'" [label]="c.meaning" />
+          </div>
+        </header>
+        <div hlmCardContent class="grid min-w-0 gap-3 pt-4">
+          <p class="max-w-prose">{{ c.meaningDetail }}</p>
+          <dl
+            class="m-0 grid min-w-0 text-sm [&>div]:grid [&>div]:items-baseline [&>div]:gap-x-3 [&>div]:gap-y-1 [&>div]:border-b [&>div]:border-(--eg-border) [&>div]:py-2 sm:[&>div]:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:wrap-anywhere [&_dd]:font-semibold"
+          >
+            <div>
+              <dt>{{ c.timeline }}</dt>
+              <dd>{{ v.manualCase }} · {{ v.approvedVersion }}</dd>
+            </div>
+            <div>
+              <dt>{{ c.versions }}</dt>
+              <dd>
+                <code>{{ v.approvedVersion }} / {{ v.baseVersion }} / {{ v.currentVersion }}</code>
+                · {{ c.awaitingVersion }}
+              </dd>
+            </div>
+            <div>
+              <dt>{{ c.author }}</dt>
+              <dd>{{ v.author }} · {{ v.incident }}</dd>
+            </div>
+            <div>
+              <dt>{{ c.reviewer }}</dt>
+              <dd>{{ v.reviewer }}</dd>
+            </div>
+            <div>
+              <dt>{{ c.reason }}</dt>
+              <dd>{{ c.reasonDetail }}</dd>
+            </div>
+          </dl>
+          @if (canDecide()) {
+            <footer class="flex flex-wrap justify-end gap-2 border-t border-(--eg-border) pt-3">
+              <hlm-dialog
+                #rejectDialog
+                [role]="'alertdialog'"
+                [autoFocus]="'[data-cancel]'"
+                [restoreFocus]="true"
+                ><button
+                  type="button"
+                  hlmBtn
+                  hlmDialogTrigger
+                  [variant]="'outline'"
+                  class="min-h-(--eg-control-touch) whitespace-nowrap"
+                >
+                  {{ c.reject }}</button
+                ><hlm-dialog-content
+                  *hlmDialogPortal
+                  [showCloseButton]="false"
+                  class="grid max-h-[calc(100dvh-var(--eg-space-8))] w-[min(760px,calc(100vw-var(--eg-space-8)))] min-w-0 max-w-none grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 max-[599px]:h-dvh max-[599px]:max-h-dvh max-[599px]:w-screen max-[599px]:rounded-none"
+                  ><header hlmDialogHeader class="border-b border-border p-5">
+                    <h2 hlmDialogTitle class="flex items-center gap-2">
+                      <hlm-icon
+                        name="lucideTriangleAlert"
+                        class="size-5 shrink-0 text-(--eg-danger-fg)"
+                      />
+                      {{ c.reject }}
+                    </h2>
+                    <p hlmDialogDescription>
+                      <bdi>{{ v.id }}</bdi> · <bdi>{{ v.manualCase }}</bdi> · {{ v.baseVersion }}
+                    </p>
+                    <p class="text-sm text-muted-foreground">{{ c.rejectHelp }}</p>
+                  </header>
+                  <div class="grid min-h-0 gap-3 overflow-y-auto overscroll-contain p-5">
+                    <label hlmLabel for="rejection-reason">{{ c.rejectReason }}</label
+                    ><textarea
+                      hlmInput
+                      id="rejection-reason"
+                      rows="3"
+                      required
+                      #why
+                      [value]="reason()"
+                      [attr.aria-invalid]="invalid()"
+                      [attr.aria-describedby]="invalid() ? 'reject-error' : null"
+                      (input)="reason.set(why.value); invalid.set(false)"
+                    ></textarea>
+                    @if (invalid()) {
+                      <p id="reject-error" role="alert" class="text-(--eg-danger-fg)">
+                        {{ c.required }}
+                      </p>
+                    }
+                  </div>
+                  <footer hlmDialogFooter class="border-t border-border p-4">
+                    <button
+                      data-cancel
+                      type="button"
+                      hlmBtn
+                      [variant]="'outline'"
+                      (click)="rejectDialog.close()"
+                    >
+                      {{ c.cancel }}</button
+                    ><button
+                      type="button"
+                      hlmBtn
+                      [variant]="'destructive'"
+                      (click)="previewDecision(true) ? rejectDialog.close() : why.focus()"
+                    >
+                      {{ c.reject }}
+                    </button>
+                  </footer></hlm-dialog-content
+                ></hlm-dialog
+              ><hlm-dialog #queueDialog [autoFocus]="'[data-cancel]'" [restoreFocus]="true"
+                ><button
+                  type="button"
+                  hlmBtn
+                  hlmDialogTrigger
+                  [variant]="'default'"
+                  class="min-h-(--eg-control-touch) whitespace-nowrap"
+                >
+                  {{ c.queue }}</button
+                ><hlm-dialog-content
+                  *hlmDialogPortal
+                  [showCloseButton]="false"
+                  class="grid max-h-[calc(100dvh-var(--eg-space-8))] w-[min(760px,calc(100vw-var(--eg-space-8)))] min-w-0 max-w-none grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 max-[599px]:h-dvh max-[599px]:max-h-dvh max-[599px]:w-screen max-[599px]:rounded-none"
+                  ><header hlmDialogHeader class="border-b border-border p-5">
+                    <h2 hlmDialogTitle class="flex items-center gap-2">
+                      <hlm-icon name="lucideClock" class="size-5 shrink-0 text-muted-foreground" />
+                      {{ c.queue }}
+                    </h2>
+                    <p hlmDialogDescription>
+                      <bdi>{{ v.id }}</bdi> · <bdi>{{ v.manualCase }}</bdi> · {{ v.baseVersion }}
+                    </p>
+                    <p class="text-sm text-muted-foreground">{{ c.queueHelp }}</p>
+                  </header>
+                  <div class="min-h-0 overflow-y-auto overscroll-contain p-5">
+                    <dl
+                      class="m-0 grid min-w-0 text-sm [&>div]:grid [&>div]:items-baseline [&>div]:gap-x-3 [&>div]:gap-y-1 [&>div]:border-b [&>div]:border-(--eg-border) [&>div]:py-2 sm:[&>div]:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:wrap-anywhere [&_dd]:font-semibold"
+                    >
+                      <div>
+                        <dt>{{ c.proposalIncident }}</dt>
+                        <dd>{{ v.id }} · {{ v.incident }}</dd>
+                      </div>
+                      <div>
+                        <dt>{{ c.caseBase }}</dt>
+                        <dd>{{ v.manualCase }} · {{ v.baseVersion }}</dd>
+                      </div>
+                      <div>
+                        <dt>{{ c.destination }}</dt>
+                        <dd>{{ c.batch }}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                  <footer hlmDialogFooter class="border-t border-border p-4">
+                    <button
+                      data-cancel
+                      type="button"
+                      hlmBtn
+                      [variant]="'outline'"
+                      (click)="queueDialog.close()"
+                    >
+                      {{ c.cancel }}</button
+                    ><button
+                      type="button"
+                      hlmBtn
+                      [variant]="'default'"
+                      (click)="previewDecision(false) && queueDialog.close()"
+                    >
+                      {{ c.queue }}
+                    </button>
+                  </footer></hlm-dialog-content
+                ></hlm-dialog
+              >
+            </footer>
+          }
+        </div>
+      </section>
+      <section hlmCard class="min-w-0 gap-0">
+        <header hlmCardHeader class="border-b border-(--eg-border)">
+          <h2 hlmCardTitle>{{ c.compare }}</h2>
+        </header>
+        <div hlmCardContent class="grid min-w-0 gap-3 pt-4">
+          @if (state() === 'comparison') {
+            <p>{{ c.noDiff }}</p>
+          } @else {
+            <div hlmTableContainer class="min-w-0 max-w-full overflow-x-auto">
+              <table hlmTable data-comparison>
+                <caption class="sr-only">
+                  {{
+                    c.compare
+                  }}
+                </caption>
+                <thead hlmTHead>
+                  <tr hlmTr>
+                    <th hlmTh scope="col">{{ c.step }}</th>
+                    <th hlmTh scope="col">{{ c.base }}</th>
+                    <th hlmTh scope="col">{{ c.proposed }}</th>
+                  </tr>
+                </thead>
+                <tbody hlmTBody>
+                  @for (row of v.comparison; track row.field) {
+                    <tr hlmTr>
+                      <th hlmTh scope="row">{{ row.field }}</th>
+                      <td hlmTd class="whitespace-normal wrap-normal break-normal">
+                        {{ row.approved }}
+                      </td>
+                      <td
+                        hlmTd
+                        class="whitespace-normal wrap-normal break-normal"
+                        [class.bg-(--eg-accent-soft)]="row.field !== c.data"
+                      >
+                        {{ row.proposed }}
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            <p class="text-xs text-muted-foreground">{{ c.redactionNotice }}</p>
+            @if (state() === 'long') {
+              <p class="max-w-prose">{{ c.long }}</p>
+            }
+          }
+        </div>
+      </section>
+      <section hlmCard class="min-w-0 gap-0">
+        <header hlmCardHeader class="border-b border-(--eg-border)">
+          <h2 hlmCardTitle>{{ c.provenance }}</h2>
+        </header>
+        <div hlmCardContent class="grid min-w-0 gap-3 pt-4">
+          <dl
+            class="m-0 grid min-w-0 text-sm [&>div]:grid [&>div]:items-baseline [&>div]:gap-x-3 [&>div]:gap-y-1 [&>div]:border-b [&>div]:border-(--eg-border) [&>div]:py-2 sm:[&>div]:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:wrap-anywhere [&_dd]:font-semibold"
+          >
+            <div>
+              <dt>{{ c.profile }}</dt>
+              <dd>{{ v.profile }}</dd>
+            </div>
+            <div>
+              <dt>{{ c.build }}</dt>
+              <dd>
+                <code>{{ v.build }}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>{{ c.structural }}</dt>
+              <dd>{{ c.gate }}</dd>
+            </div>
+          </dl>
+          <h3 class="font-semibold">{{ c.untrusted }}</h3>
+          <blockquote class="m-0 border-s-2 border-(--eg-border) ps-3">
+            {{ c.suggestion }}
+          </blockquote>
+          <p class="text-xs text-muted-foreground">{{ c.sourceNote }}</p>
+        </div>
+      </section>
+      <section hlmCard class="min-w-0 gap-0">
+        <header hlmCardHeader class="border-b border-(--eg-border)">
+          <h2 hlmCardTitle>{{ c.reviewDecision }}</h2>
+        </header>
+        <div hlmCardContent class="grid min-w-0 gap-3 pt-4">
+          <p class="max-w-prose">{{ c.queueOnly }}</p>
+        </div>
+      </section>
+    </div>
+  </div>
+  <p class="text-xs text-muted-foreground">{{ c.preview }}</p>
+}

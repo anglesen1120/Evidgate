@@ -1,257 +1,327 @@
-<header class="mb-4 flex flex-wrap items-start justify-between gap-4">
-  <div class="min-w-0 flex-1 basis-[var(--eg-rail-width)]">
-    @if (ownsPageHeading) {
-      <h1
-        hlmCardTitle
-        [size]="pageHeadingSize"
-        #heading
-        tabindex="-1"
-        class="m-0 focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring"
-      >
-        {{ copy.title }}
-      </h1>
-    } @else {
-      <h2
-        hlmCardTitle
-        [size]="sectionHeadingSize"
-        #heading
-        tabindex="-1"
-        class="m-0 focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring"
-      >
-        {{ copy.title }}
-      </h2>
-    }
-    <p class="mt-2! text-muted-foreground">{{ copy.description }}</p>
-  </div>
-</header>
-<form
-  hlmCard
-  class="mb-4 grid min-w-0 gap-3 p-4"
-  (ngSubmit)="apply()"
-  aria-labelledby="audit-filters-title"
->
-  <h3 hlmCardTitle [size]="subsectionHeadingSize" id="audit-filters-title" class="m-0">
-    {{ copy.filters }}
-  </h3>
-  <div class="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
-    <div class="grid min-w-0 gap-2">
-      <label hlmLabel for="audit-actor">{{ copy.actorType }}</label>
-      <hlm-select
-        name="actorType"
-        [ngModel]="draft().actorType"
-        (ngModelChange)="updateDraft({ actorType: $event })"
-        [itemToString]="actorLabel"
-      >
-        <hlm-select-trigger
-          [buttonId]="'audit-actor'"
-          class="w-full min-h-[var(--eg-control-touch)] whitespace-normal"
+<header class="grid min-w-0 items-center gap-x-4 gap-y-3 @xl:grid-cols-[minmax(0,1fr)_auto]">
+  <div class="flex min-w-0 items-start gap-3">
+    <span
+      class="grid size-12 shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent)"
+    >
+      <hlm-icon [name]="'lucideClock'" class="size-6" />
+    </span>
+    <div class="min-w-0">
+      @if (ownsPageHeading) {
+        <h1
+          hlmCardTitle
+          [size]="pageHeadingSize"
+          #heading
+          tabindex="-1"
+          class="m-0 focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring"
         >
-          <hlm-select-value [placeholder]="copy.anyActor" />
-        </hlm-select-trigger>
-        <hlm-select-content *hlmSelectPortal [aria-label]="copy.actorType">
-          <hlm-select-item [value]="''">{{ copy.anyActor }}</hlm-select-item>
-          <hlm-select-item [value]="'user'">{{ copy.user }}</hlm-select-item>
-          <hlm-select-item [value]="'ci_producer'">{{ copy.ciProducer }}</hlm-select-item>
-          <hlm-select-item [value]="'agent'">{{ copy.agent }}</hlm-select-item>
-          <hlm-select-item [value]="'platform_operator'">{{ copy.operator }}</hlm-select-item>
-          <hlm-select-item [value]="'system'">{{ copy.system }}</hlm-select-item>
-        </hlm-select-content>
-      </hlm-select>
-    </div>
-    <div class="grid min-w-0 gap-2">
-      <label hlmLabel for="audit-action">{{ copy.action }}</label>
-      <input
-        hlmInput
-        class="min-h-[var(--eg-control-touch)]"
-        id="audit-action"
-        name="action"
-        maxlength="128"
-        [ngModel]="draft().action"
-        (ngModelChange)="updateDraft({ action: $event })"
-        [aria-describedby]="'audit-action-hint'"
-      />
-      <p id="audit-action-hint" class="m-0 text-xs text-muted-foreground">{{ copy.actionHint }}</p>
-    </div>
-    <div class="grid min-w-0 gap-2">
-      <label hlmLabel for="audit-object">{{ copy.objectType }}</label>
-      <input
-        hlmInput
-        class="min-h-[var(--eg-control-touch)]"
-        id="audit-object"
-        name="objectType"
-        maxlength="64"
-        [ngModel]="draft().objectType"
-        (ngModelChange)="updateDraft({ objectType: $event })"
-        [aria-describedby]="'audit-object-hint'"
-      />
-      <p id="audit-object-hint" class="m-0 text-xs text-muted-foreground">{{ copy.objectHint }}</p>
-    </div>
-    <div class="grid min-w-0 gap-2">
-      <label hlmLabel for="audit-from">{{ copy.from }}</label>
-      <input
-        hlmInput
-        class="min-h-[var(--eg-control-touch)]"
-        id="audit-from"
-        name="from"
-        type="datetime-local"
-        step="1"
-        [ngModel]="draft().from"
-        (ngModelChange)="updateDraft({ from: $event })"
-        [attr.aria-invalid]="invalidRange()"
-        [aria-describedby]="
-          invalidRange() ? 'audit-date-hint audit-range-error' : 'audit-date-hint'
-        "
-      />
-    </div>
-    <div class="grid min-w-0 gap-2">
-      <label hlmLabel for="audit-to">{{ copy.to }}</label>
-      <input
-        hlmInput
-        class="min-h-[var(--eg-control-touch)]"
-        id="audit-to"
-        name="to"
-        type="datetime-local"
-        step="1"
-        [ngModel]="draft().to"
-        (ngModelChange)="updateDraft({ to: $event })"
-        [attr.aria-invalid]="invalidRange()"
-        [aria-describedby]="
-          invalidRange() ? 'audit-date-hint audit-range-error' : 'audit-date-hint'
-        "
-      />
-    </div>
-  </div>
-  <p id="audit-date-hint" class="text-xs text-muted-foreground">{{ copy.dateHint }}</p>
-  @if (invalidRange()) {
-    <p class="text-destructive" id="audit-range-error" role="alert">{{ copy.rangeError }}</p>
-  }
-  <div class="flex flex-wrap gap-3">
-    <button
-      hlmBtn
-      [variant]="'secondary'"
-      class="min-h-[var(--eg-control-touch)] whitespace-normal"
-      type="submit"
-      data-audit-apply
-    >
-      {{ copy.apply }}
-    </button>
-    <button
-      hlmBtn
-      [variant]="'outline'"
-      class="min-h-[var(--eg-control-touch)] whitespace-normal"
-      type="button"
-      data-audit-clear
-      (click)="clear()"
-    >
-      {{ copy.clear }}
-    </button>
-  </div>
-</form>
-@if (session.currentOrg(); as org) {
-  <app-audit-export
-    class="mb-4 min-w-0 max-w-full"
-    [orgId]="org.id"
-    [hasDraftChanges]="unappliedFilters()"
-  />
-}
-@if (status() === 'error') {
-  @if (store.loadError(); as failure) {
-    @if (
-      failure.kind === 'rate_limited' ||
-      failure.kind === 'forbidden' ||
-      failure.kind === 'not_found' ||
-      (failure.kind === 'unavailable' && failure.retryAfterSeconds !== null)
-    ) {
-      <div hlmAlert [variant]="'destructive'" class="mb-4 grid gap-3 wrap-anywhere" role="alert">
-        <p>{{ failure.message }}</p>
-        <code>{{ failure.code }}</code>
-      </div>
-    }
-  }
-}
-<app-request-state
-  [status]="status()"
-  [loadingLabel]="copy.loading"
-  [error]="store.loadError()"
-  [empty]="store.rows().length === 0"
-  [emptyTitle]="filtered() ? copy.noMatchTitle : copy.emptyTitle"
-  [emptyDescription]="filtered() ? copy.noMatchDescription : copy.emptyDescription"
-  [emptyActionLabel]="filtered() ? copy.clear : undefined"
-  (emptyAction)="clear()"
-  [retryEligible]="retryReady() && (store.loadError()?.retryable ?? false)"
-  (retry)="reload()"
->
-  <section class="grid min-w-0 gap-3" [attr.aria-busy]="store.paging()">
-    <app-audit-table [rows]="visibleRows()" />
-    @if (pagingAlert(); as failure) {
-      <div
-        hlmAlert
-        [variant]="'destructive'"
-        class="grid gap-3 wrap-anywhere"
-        role="alert"
-        data-audit-paging-error
-      >
-        <p>{{ failure.message }}</p>
-        @if (failure.code) {
-          <code>{{ failure.code }}</code>
+          {{ copy.title }}
+        </h1>
+      } @else {
+        <h2
+          hlmCardTitle
+          [size]="pageHeadingSize"
+          #heading
+          tabindex="-1"
+          class="m-0 text-[length:var(--eg-leading-md)]! focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring"
+        >
+          {{ copy.title }}
+        </h2>
+      }
+      <p class="mt-1! text-sm text-muted-foreground">
+        @if (status() === 'ready') {
+          {{ session.currentOrg()?.name }} · {{ summary()[0].caption }}: {{ summary()[0].value }} ·
+          {{ summary()[1].label }}: {{ summary()[1].value }}
+        } @else {
+          {{ copy.description }}
         }
-        <button
-          hlmBtn
-          [variant]="'outline'"
-          class="min-h-[var(--eg-control-touch)] whitespace-normal"
-          type="button"
-          [disabled]="store.paging()"
-          (click)="loadMore()"
-        >
-          {{ copy.retry }}
-        </button>
+      </p>
+    </div>
+  </div>
+  @if (session.currentOrg(); as org) {
+    <app-audit-export [orgId]="org.id" [hasDraftChanges]="unappliedFilters()" />
+  }
+</header>
+@if (status() === 'ready' && (store.rows().length > 0 || filtered())) {
+  <dl data-audit-summary class="m-0 grid min-w-0 gap-3 @sm:grid-cols-2 @2xl:grid-cols-4">
+    @for (card of summary(); track card.icon) {
+      <div hlmCard class="min-w-0 gap-3 rounded-xl p-4">
+        <dt class="flex items-center gap-2 text-sm font-semibold @2xl:min-h-10 @4xl:min-h-7">
+          <span
+            class="grid size-7 shrink-0 place-items-center rounded-lg"
+            [class]="
+              card.icon === 'clock'
+                ? 'bg-(--eg-accent-soft) text-(--eg-accent)'
+                : card.icon === 'people'
+                  ? 'bg-(--eg-info-bg) text-(--eg-info-fg)'
+                  : 'bg-muted text-muted-foreground'
+            "
+          >
+            @if (card.icon === 'clock') {
+              <hlm-icon [name]="'lucideClock'" class="size-4" />
+            } @else {
+              <app-shell-icon [name]="card.icon" class="size-4" />
+            }
+          </span>
+          {{ card.label }}
+        </dt>
+        <dd class="m-0 grid gap-1">
+          <span
+            data-audit-value
+            class="font-(family-name:--eg-font-display) text-2xl font-bold tabular-nums"
+            >{{ card.value }}</span
+          >
+          <span class="text-sm text-muted-foreground">{{ card.caption }}</span>
+        </dd>
       </div>
     }
-    <p role="status" [attr.aria-live]="'polite'">
-      @if (store.paging()) {
-        {{ copy.loadingMore }}
-      }
-    </p>
-    @if (store.browseCapped()) {
-      <p role="status" data-audit-browse-capped>{{ browseCappedText(store.rows().length) }}</p>
+  </dl>
+}
+<div hlmCard class="min-w-0 gap-0 overflow-visible rounded-xl p-0">
+  <header
+    class="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4"
+  >
+    <app-section-header
+      [title]="activity"
+      [size]="subsectionHeadingSize"
+      [headingLevel]="ownsPageHeading ? 2 : 3"
+    />
+    @if (status() === 'ready' && store.rows().length) {
+      <app-status-pill [tone]="'neutral'" [label]="copy.newestFirst" />
     }
-    <p data-audit-row-range>{{ rowRange() }}</p>
-    <nav class="flex flex-wrap gap-3" [attr.aria-label]="copy.pagination">
-      <button
-        hlmBtn
-        [variant]="'outline'"
-        class="min-h-[var(--eg-control-touch)] whitespace-normal"
-        type="button"
-        data-audit-previous
-        [disabled]="offset() === 0 || store.paging()"
-        (click)="previous()"
-      >
-        {{ copy.previous }}
-      </button>
-      <button
-        hlmBtn
-        [variant]="'outline'"
-        class="min-h-[var(--eg-control-touch)] whitespace-normal"
-        type="button"
-        data-audit-next
-        [disabled]="!nextWindow() || store.paging()"
-        (click)="next()"
-      >
-        {{ copy.next }}
-      </button>
-      @if (store.hasMore()) {
+  </header>
+  <form
+    class="grid min-w-0 gap-3 border-b border-border px-5 py-4"
+    (ngSubmit)="apply()"
+    aria-labelledby="audit-filters-title"
+  >
+    <span id="audit-filters-title" class="sr-only">{{ copy.filters }}</span>
+    <div
+      class="grid min-w-0 items-start gap-3 @xl:grid-cols-2 @2xl:grid-cols-3 @5xl:grid-cols-[repeat(3,minmax(0,1fr))_repeat(2,minmax(0,1.4fr))] [&_input]:box-border [&_input]:min-w-0 [&_input]:w-full"
+    >
+      <div class="grid min-w-0 gap-2">
+        <label hlmLabel for="audit-actor">{{ copy.actorType }}</label>
+        <hlm-select
+          name="actorType"
+          [ngModel]="draft().actorType"
+          (ngModelChange)="updateDraft({ actorType: $event })"
+          [itemToString]="actorLabel"
+        >
+          <hlm-select-trigger
+            [buttonId]="'audit-actor'"
+            class="w-full min-h-[var(--eg-control-touch)] whitespace-normal"
+          >
+            <hlm-select-value [placeholder]="copy.anyActor" />
+          </hlm-select-trigger>
+          <hlm-select-content *hlmSelectPortal [aria-label]="copy.actorType">
+            <hlm-select-item [value]="''">{{ copy.anyActor }}</hlm-select-item>
+            <hlm-select-item [value]="'user'">{{ copy.user }}</hlm-select-item>
+            <hlm-select-item [value]="'ci_producer'">{{ copy.ciProducer }}</hlm-select-item>
+            <hlm-select-item [value]="'agent'">{{ copy.agent }}</hlm-select-item>
+            <hlm-select-item [value]="'platform_operator'">{{ copy.operator }}</hlm-select-item>
+            <hlm-select-item [value]="'system'">{{ copy.system }}</hlm-select-item>
+          </hlm-select-content>
+        </hlm-select>
+      </div>
+      <div class="grid min-w-0 gap-2">
+        <label hlmLabel for="audit-action">{{ copy.action }}</label>
+        <input
+          hlmInput
+          class="min-h-[var(--eg-control-touch)]"
+          id="audit-action"
+          name="action"
+          maxlength="128"
+          [ngModel]="draft().action"
+          (ngModelChange)="updateDraft({ action: $event })"
+          [aria-describedby]="'audit-action-hint'"
+        />
+        <p id="audit-action-hint" class="m-0 text-xs text-muted-foreground">
+          {{ copy.actionHint }}
+        </p>
+      </div>
+      <div class="grid min-w-0 gap-2">
+        <label hlmLabel for="audit-object">{{ copy.objectType }}</label>
+        <input
+          hlmInput
+          class="min-h-[var(--eg-control-touch)]"
+          id="audit-object"
+          name="objectType"
+          maxlength="64"
+          [ngModel]="draft().objectType"
+          (ngModelChange)="updateDraft({ objectType: $event })"
+          [aria-describedby]="'audit-object-hint'"
+        />
+        <p id="audit-object-hint" class="m-0 text-xs text-muted-foreground">
+          {{ copy.objectHint }}
+        </p>
+      </div>
+      <div class="grid min-w-0 gap-2">
+        <label hlmLabel for="audit-from">{{ copy.from }}</label>
+        <input
+          hlmInput
+          class="min-h-[var(--eg-control-touch)]"
+          id="audit-from"
+          name="from"
+          type="datetime-local"
+          step="1"
+          [ngModel]="draft().from"
+          (ngModelChange)="updateDraft({ from: $event })"
+          [attr.aria-invalid]="invalidRange()"
+          [aria-describedby]="
+            invalidRange() ? 'audit-date-hint audit-range-error' : 'audit-date-hint'
+          "
+        />
+      </div>
+      <div class="grid min-w-0 gap-2">
+        <label hlmLabel for="audit-to">{{ copy.to }}</label>
+        <input
+          hlmInput
+          class="min-h-[var(--eg-control-touch)]"
+          id="audit-to"
+          name="to"
+          type="datetime-local"
+          step="1"
+          [ngModel]="draft().to"
+          (ngModelChange)="updateDraft({ to: $event })"
+          [attr.aria-invalid]="invalidRange()"
+          [aria-describedby]="
+            invalidRange() ? 'audit-date-hint audit-range-error' : 'audit-date-hint'
+          "
+        />
+      </div>
+    </div>
+    @if (invalidRange()) {
+      <p class="text-destructive" id="audit-range-error" role="alert">{{ copy.rangeError }}</p>
+    }
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <p id="audit-date-hint" class="text-xs text-muted-foreground">{{ copy.dateHint }}</p>
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+          hlmBtn
+          [variant]="'secondary'"
+          class="min-h-[var(--eg-control-touch)] whitespace-normal"
+          type="submit"
+          data-audit-apply
+        >
+          {{ copy.apply }}
+        </button>
         <button
           hlmBtn
           [variant]="'outline'"
           class="min-h-[var(--eg-control-touch)] whitespace-normal"
           type="button"
-          data-audit-load-more
-          [disabled]="store.paging()"
-          (click)="loadMore()"
+          data-audit-clear
+          (click)="clear()"
         >
-          {{ copy.loadMore }}
+          {{ copy.clear }}
         </button>
+      </div>
+    </div>
+  </form>
+  @if (status() === 'error') {
+    @if (store.loadError(); as failure) {
+      @if (
+        failure.kind === 'rate_limited' ||
+        failure.kind === 'forbidden' ||
+        failure.kind === 'not_found' ||
+        (failure.kind === 'unavailable' && failure.retryAfterSeconds !== null)
+      ) {
+        <div hlmAlert [variant]="'destructive'" class="m-4 grid gap-3 wrap-anywhere" role="alert">
+          <p>{{ failure.message }}</p>
+          <code>{{ failure.code }}</code>
+        </div>
       }
-    </nav>
-  </section>
-</app-request-state>
+    }
+  }
+  <app-request-state
+    [status]="status()"
+    [loadingLabel]="copy.loading"
+    [error]="store.loadError()"
+    [empty]="store.rows().length === 0"
+    [emptyTitle]="filtered() ? copy.noMatchTitle : copy.emptyTitle"
+    [emptyDescription]="filtered() ? copy.noMatchDescription : copy.emptyDescription"
+    [emptyActionLabel]="filtered() ? copy.clear : undefined"
+    (emptyAction)="clear()"
+    [retryEligible]="retryReady() && (store.loadError()?.retryable ?? false)"
+    (retry)="reload()"
+  >
+    <section class="grid min-w-0 gap-0" [attr.aria-busy]="store.paging()">
+      <app-audit-table [rows]="visibleRows()" />
+      @if (pagingAlert(); as failure) {
+        <div
+          hlmAlert
+          [variant]="'destructive'"
+          class="grid gap-3 wrap-anywhere"
+          role="alert"
+          data-audit-paging-error
+        >
+          <p>{{ failure.message }}</p>
+          @if (failure.code) {
+            <code>{{ failure.code }}</code>
+          }
+          <button
+            hlmBtn
+            [variant]="'outline'"
+            class="min-h-[var(--eg-control-touch)] whitespace-normal"
+            type="button"
+            [disabled]="store.paging()"
+            (click)="loadMore()"
+          >
+            {{ copy.retry }}
+          </button>
+        </div>
+      }
+      <p role="status" class="px-4 text-sm" [attr.aria-live]="'polite'">
+        @if (store.paging()) {
+          {{ copy.loadingMore }}
+        }
+      </p>
+      @if (store.browseCapped()) {
+        <p role="status" class="px-4 py-2" data-audit-browse-capped>
+          {{ browseCappedText(store.rows().length) }}
+        </p>
+      }
+      <footer
+        class="flex min-w-0 flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3"
+      >
+        <p class="text-xs text-muted-foreground" data-audit-row-range>{{ rowRange() }}</p>
+        <nav class="flex flex-wrap gap-2" [attr.aria-label]="copy.pagination">
+          <button
+            hlmBtn
+            [variant]="'outline'"
+            class="min-h-[var(--eg-control-touch)] whitespace-normal"
+            type="button"
+            data-audit-previous
+            [disabled]="offset() === 0 || store.paging()"
+            (click)="previous()"
+          >
+            {{ copy.previous }}
+          </button>
+          <button
+            hlmBtn
+            [variant]="'outline'"
+            class="min-h-[var(--eg-control-touch)] whitespace-normal"
+            type="button"
+            data-audit-next
+            [disabled]="!nextWindow() || store.paging()"
+            (click)="next()"
+          >
+            {{ copy.next }}
+          </button>
+          @if (store.hasMore()) {
+            <button
+              hlmBtn
+              [variant]="'outline'"
+              class="min-h-[var(--eg-control-touch)] whitespace-normal"
+              type="button"
+              data-audit-load-more
+              [disabled]="store.paging()"
+              (click)="loadMore()"
+            >
+              {{ copy.loadMore }}
+            </button>
+          }
+        </nav>
+      </footer>
+    </section>
+  </app-request-state>
+</div>

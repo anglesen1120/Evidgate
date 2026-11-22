@@ -76,6 +76,7 @@ export class AuthoringCaseTableComponent {
       this.route.queryParamMap,
     ]).pipe(
       map(([params, query]) => ({
+        orgId: params.map((param) => param.get('orgId')).find(Boolean) ?? null,
         projectId:
           [...params]
             .reverse()
@@ -86,6 +87,12 @@ export class AuthoringCaseTableComponent {
       distinctUntilChanged((left, right) => JSON.stringify(left) === JSON.stringify(right)),
     ),
   );
+  protected readonly editorScope = computed(() => {
+    const scope = this.routeState();
+    return scope?.orgId && scope.projectId
+      ? ['/orgs', scope.orgId, 'projects', scope.projectId, 'authoring', 'cases']
+      : null;
+  });
   private readonly request = resource({
     params: () => this.routeState(),
     loader: async ({ params }) => {
@@ -108,6 +115,29 @@ export class AuthoringCaseTableComponent {
     () => this.store.status() === 'loading' || this.request.isLoading(),
   );
   protected readonly hasRows = computed(() => this.store.rows().length > 0);
+  protected readonly loadedStates = computed(() => {
+    const counts = { draft: 0, approved: 0, retired: 0 };
+    for (const row of this.store.rows()) counts[row.state]++;
+    const state = this.store.query().state;
+    return {
+      draft: !state || state === 'draft' ? counts.draft : null,
+      approved: !state || state === 'approved' ? counts.approved : null,
+      retired: !state || state === 'retired' ? counts.retired : null,
+    };
+  });
+  protected readonly states = ['draft', 'approved', 'retired'] as const;
+  protected quickState(state: AuthoringCaseFilters['state']): void {
+    // Only the status changes: unsubmitted search or filter edits stay in the draft.
+    this.navigate({
+      item_id: null,
+      state: null,
+      priority: null,
+      covered: null,
+      q: null,
+      cursor: null,
+      ...caseFiltersToQuery({ ...this.routeFilters(), state }),
+    });
+  }
   protected readonly emptyTitle = computed(() =>
     this.store.filtered()
       ? this.copy.noMatch

@@ -1,8 +1,6 @@
-using System.Collections.Concurrent;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Shouldly;
 
 namespace Tenancy.IntegrationTests;
@@ -220,54 +218,6 @@ internal sealed class IngestTestWorld : IAsyncDisposable
         {
             // The registry host is disposed even when the principal host's own disposal throws.
             await Api.DisposeAsync();
-        }
-    }
-}
-
-/// <summary>
-/// A minimal <see cref="ILoggerProvider"/> that keeps every rendered line, so a test can assert a secret or an event
-/// body never reaches a log (S3). The same technique as <c>Hosts.IntegrationTests.CaptureLoggerProvider</c>; it is
-/// re-declared here because that type lives in another test assembly.
-/// </summary>
-internal sealed class IngestLogSink : ILoggerProvider
-{
-    private readonly ConcurrentQueue<string> _lines = new();
-
-    /// <summary>Everything captured since the last <see cref="Clear"/>, in order.</summary>
-    internal IReadOnlyList<string> Lines => [.. _lines];
-
-    /// <summary>Forgets every captured line.</summary>
-    internal void Clear() => _lines.Clear();
-
-    /// <inheritdoc />
-    public ILogger CreateLogger(string categoryName) => new Sink(categoryName, _lines);
-
-    /// <inheritdoc />
-    public void Dispose()
-    {
-        // Nothing to release.
-    }
-
-    private sealed class Sink(string category, ConcurrentQueue<string> lines) : ILogger
-    {
-        public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(
-            LogLevel logLevel,
-            EventId eventId,
-            TState state,
-            Exception? exception,
-            Func<TState, Exception?, string> formatter)
-        {
-            var pairs = state as IReadOnlyList<KeyValuePair<string, object?>>;
-            var text = pairs is null
-                ? formatter(state, exception)
-                : $"{formatter(state, exception)} | {string.Join(" | ", pairs.Select(pair => $"{pair.Key}={pair.Value}"))}";
-
-            lines.Enqueue($"{category}: {text}");
         }
     }
 }

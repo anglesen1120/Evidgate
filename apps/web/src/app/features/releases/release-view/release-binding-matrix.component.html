@@ -1,0 +1,114 @@
+<section hlmCard aria-labelledby="release-matrix" class="min-w-0 gap-0 py-0">
+  <header hlmCardHeader class="flex min-w-0 flex-wrap items-center justify-between gap-3 px-5 py-4">
+    <app-section-header
+      [title]="copy.matrix"
+      [titleId]="'release-matrix'"
+      [description]="copy.matrixHelp"
+    />
+    <div
+      id="release-component-filter"
+      role="group"
+      [attr.aria-label]="copy.filter"
+      class="flex max-w-full min-w-0 flex-nowrap items-center gap-1 overflow-x-auto rounded-md bg-muted p-1"
+    >
+      @for (option of filters(); track option.value) {
+        <button
+          hlmBtn
+          type="button"
+          [variant]="filter() === option.value ? 'outline' : 'ghost'"
+          [attr.aria-pressed]="filter() === option.value"
+          class="shrink-0 gap-2 whitespace-nowrap pointer-coarse:min-h-(--eg-control-touch)"
+          (click)="filterChanged.emit(option.value)"
+        >
+          {{ option.label }}
+          <span class="text-xs tabular-nums text-muted-foreground">{{ option.count }}</span>
+        </button>
+      }
+    </div>
+  </header>
+  <app-data-table
+    class="[&_.caption]:sr-only [&_.scroll]:rounded-none [&_.scroll]:border-x-0 [&_td]:align-middle"
+    [rows]="selectedRows()"
+    [columns]="columns()"
+    [rowId]="rowId"
+    [caption]="copy.matrix"
+    [flow]="'page'"
+  />
+  <footer hlmCardContent class="grid gap-1 py-3 text-xs text-muted-foreground">
+    <span class="tabular-nums">{{ copy.showing(selectedRows().length, rows().length) }}</span>
+    <span>{{ copy.matrixFooter }}</span>
+  </footer>
+</section>
+
+<ng-template #componentCell let-row>
+  <button
+    hlmBtn
+    [variant]="'link'"
+    type="button"
+    class="p-0 font-semibold underline pointer-coarse:min-h-(--eg-control-touch)"
+    (click)="inspect.emit(row.component)"
+  >
+    {{ row.component }}
+  </button>
+</ng-template>
+<ng-template #digestCell let-row>
+  @if (unavailable(row)) {
+    {{ copy.unavailable }}
+  } @else {
+    <details [open]="state() === 'long'">
+      <summary
+        class="cursor-pointer font-mono wrap-anywhere pointer-coarse:min-h-(--eg-control-touch)"
+      >
+        <bdi>{{ row.digest }}</bdi>
+      </summary>
+      <small class="eg-type-caption">{{ copy.noFullDigest }}</small>
+    </details>
+  }
+</ng-template>
+<ng-template #bindingCell let-row>
+  @if (unavailable(row)) {
+    {{ copy.unavailable }}
+  } @else if (row.evaluation; as evaluation) {
+    <bdi class="block font-mono">{{ evaluation.run }}</bdi>
+    <span class="block text-xs text-muted-foreground">{{
+      state() === 'restricted' ? copy.restricted : evaluation.evidence
+    }}</span>
+  } @else {
+    {{ copy.unbound }}
+  }
+</ng-template>
+<ng-template #freshnessCell let-row>
+  @if (unavailable(row)) {
+    {{ copy.unavailable }}
+  } @else if (row.evaluation; as evaluation) {
+    <app-status-pill
+      [tone]="evaluation.freshness === 'fresh' ? 'info' : 'warning'"
+      [label]="evaluation.freshness === 'fresh' ? copy.fresh : copy.stale"
+    />
+  } @else {
+    <app-status-pill [tone]="'neutral'" [label]="copy.missing" />
+  }
+</ng-template>
+<ng-template #evidenceCell let-row>
+  @if (unavailable(row)) {
+    {{ copy.unavailable }}
+  } @else if (row.evaluation; as evaluation) {
+    <app-evidence-badge [completeness]="evaluation.completeness" [compact]="true" />
+  } @else {
+    {{ copy.noEvidence }}
+  }
+</ng-template>
+<ng-template #outcomeCell let-row>
+  @if (unavailable(row)) {
+    {{ copy.unavailable }}
+  } @else {
+    <app-outcome-pill [outcome]="row.evaluation?.outcome" [compact]="true" />
+  }
+</ng-template>
+<ng-template #decisionCell let-row>
+  @if (unavailable(row)) {
+    {{ copy.unavailable }}
+  } @else {
+    <app-decision-chip [decision]="row.evaluation?.decision ?? 'pending'" [compact]="true" />
+  }
+</ng-template>

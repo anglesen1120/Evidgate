@@ -267,7 +267,15 @@ for (const locale of LOCALES) {
     await expect(pager.getByRole('button').first()).toBeFocused();
     const last = runList250.body.items[runList250.body.items.length - 1]!;
     const lastRecord = page.locator(`${ROWS}[data-row-id="${last.run_id}"]`);
-    await lastRecord.locator('a').focus();
+    const idLink = lastRecord.locator('[data-run-row]').getByRole('link', { name: last.run_id });
+    const viewLink = lastRecord.getByRole('link', {
+      name: `${locale === 'vi' ? 'Xem' : 'View'} ${last.run_id}`,
+      exact: true,
+    });
+    const href = await idLink.getAttribute('href');
+    expect(href).toBeTruthy();
+    await expect(viewLink).toHaveAttribute('href', href!);
+    await idLink.focus();
     await expect(lastRecord).toBeInViewport();
     await expect(next).toBeDisabled();
     await pager.getByRole('button').first().focus();

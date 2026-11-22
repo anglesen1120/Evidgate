@@ -1,0 +1,172 @@
+<section hlmCard [size]="'sm'">
+  <header hlmCardHeader class="border-b border-border pb-4">
+    <h2 hlmCardTitle>{{ c.effect }}</h2>
+  </header>
+  <div hlmCardContent class="grid min-w-0 gap-3">
+    @switch (state()) {
+      @case ('previewloading') {
+        <p role="status" aria-busy="true">{{ c.previewloading }}</p>
+      }
+      @case ('previewerror') {
+        <app-inline-feedback [tone]="'destructive'" [title]="c.previewerror"
+          ><a
+            feedbackAction
+            hlmBtn
+            [variant]="'outline'"
+            [routerLink]="[]"
+            [queryParams]="{ id: record.id }"
+            >{{ c.retry }}</a
+          ></app-inline-feedback
+        >
+      }
+      @default {
+        <ng-container [ngTemplateOutlet]="counts" />
+      }
+    }
+    <p>{{ c.consequences }}</p>
+    @if (state() === 'prepared' || store.prepared()) {
+      <app-inline-feedback [title]="c.prepared" [description]="c.unchanged" />
+    }
+    @if (
+      state() === '412' || state() === 'reloaded' || state() === 'prepared' || store.prepared()
+    ) {
+      <p class="whitespace-pre-wrap">
+        <strong>{{ c.retainedReason }}</strong> · {{ store.reason() || c.draft }}
+      </p>
+    }
+    @if (state() === 'submitting') {
+      <p role="status" aria-busy="true">{{ c.submitting }}</p>
+    }
+    @if (eligible()) {
+      <app-desktop-required-notice />
+      @if (policy.canMutate()) {
+        <button hlmBtn type="button" data-revoke class="justify-self-start" (click)="store.open()">
+          <hlm-icon name="lucideOctagonX" class="size-4" />
+          {{ c.revoke }}
+        </button>
+        <hlm-dialog
+          [state]="opened() ? 'open' : 'closed'"
+          [role]="'alertdialog'"
+          [aria-label]="c.revoke"
+          [restoreFocus]="true"
+          [autoFocus]="'[data-cancel]'"
+          [closeOnOutsidePointerEvents]="false"
+          (stateChanged)="$event === 'closed' && store.close()"
+        >
+          <hlm-dialog-content
+            *hlmDialogPortal
+            [showCloseButton]="false"
+            class="max-h-[85dvh] overflow-y-auto wrap-anywhere sm:max-w-[35rem]"
+          >
+            <header hlmDialogHeader>
+              <h2 hlmDialogTitle class="flex items-center gap-2">
+                <hlm-icon name="lucideOctagonX" class="size-5 text-(--eg-danger-fg)" />{{
+                  c.revoke
+                }}
+              </h2>
+              <p hlmDialogDescription>
+                {{ record.revision }} · {{ record.candidate }} · {{ record.hash }}
+              </p>
+              <p class="text-sm text-muted-foreground">{{ c.consequences }}</p>
+            </header>
+            <dl class="grid gap-2 sm:grid-cols-2">
+              <div>
+                <dt>{{ c.record }}</dt>
+                <dd>
+                  <code>{{ record.revision }}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>{{ c.chain }}</dt>
+                <dd>
+                  <code>{{ record.chain }}</code>
+                </dd>
+              </div>
+              <div class="col-span-full">
+                <dt>{{ c.hash }}</dt>
+                <dd>
+                  <code class="select-all">{{ record.fullHash }}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>{{ c.reviewed }}</dt>
+                <dd>{{ record.reviewer }} · <app-absolute-time [value]="record.reviewedAt" /></dd>
+              </div>
+              <div>
+                <dt>{{ c.base }}</dt>
+                <dd>
+                  <code>{{ record.base }}</code>
+                </dd>
+              </div>
+            </dl>
+            <ng-container [ngTemplateOutlet]="counts" />
+            <label hlmLabel for="lineage-reason">{{ c.reason }}</label>
+            <textarea
+              hlmInput
+              id="lineage-reason"
+              rows="3"
+              maxlength="2000"
+              required
+              [pattern]="nonblank"
+              [forceInvalid]="blank()"
+              [aria-describedby]="blank() ? 'lineage-hint lineage-error' : 'lineage-hint'"
+              [ngModel]="store.reason()"
+              (ngModelChange)="store.edit($event)"
+            ></textarea>
+            <small id="lineage-hint">{{ c.reasonHelp }}</small>
+            @if (blank()) {
+              <p role="alert" id="lineage-error">{{ c.blank }}</p>
+            }
+            <footer hlmDialogFooter class="sticky bottom-0 border-t border-border bg-card py-3">
+              <button
+                hlmBtn
+                [variant]="'outline'"
+                type="button"
+                data-cancel
+                (click)="store.close()"
+              >
+                {{ c.cancel }}
+              </button>
+              <button
+                hlmBtn
+                [variant]="'destructive'"
+                type="button"
+                data-confirm
+                [disabled]="!store.reason().trim()"
+                (click)="prepare()"
+              >
+                {{ c.confirm }}
+              </button>
+            </footer>
+          </hlm-dialog-content>
+        </hlm-dialog>
+      }
+    }
+  </div>
+</section>
+<ng-template #counts>
+  @switch (snapshot()) {
+    @case ('unknown') {
+      <p>{{ c.unavailable }}</p>
+    }
+    @case ('empty') {
+      <p>{{ c.none }}</p>
+    }
+    @case ('known') {
+      <dl class="m-0 grid gap-3 sm:grid-cols-2">
+        <div>
+          <dt>{{ c.dependents }}</dt>
+          <dd>
+            <code>{{ record.activeSummary }}</code>
+          </dd>
+        </div>
+        <div>
+          <dt>{{ c.retained }}</dt>
+          <dd>
+            <code>{{ record.historicalSummary }}</code>
+          </dd>
+        </div>
+      </dl>
+    }
+  }
+</ng-template>

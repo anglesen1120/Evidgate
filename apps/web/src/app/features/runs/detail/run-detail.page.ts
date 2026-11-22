@@ -1,6 +1,7 @@
-import { DOCUMENT } from '@angular/common';
+import { DOCUMENT, formatNumber } from '@angular/common';
 import {
   afterNextRender,
+  afterRenderEffect,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -9,18 +10,22 @@ import {
   inject,
   Injector,
   linkedSignal,
+  LOCALE_ID,
   signal,
   type Signal,
+  viewChild,
   type WritableSignal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmTabsImports } from '@evidgate/ui/tabs';
 import { combineLatest } from 'rxjs';
 import type { ApiError } from '../../../core/http/api-error';
 import { PageHeaderImports } from '../../../shared/ui/page-header';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { CancelRunActionComponent } from '../actions/cancel/cancel-run-action.component';
 import { AttemptsTableComponent } from './attempts/attempts-table.component';
 import { DecisionViewComponent } from './decision/decision-view.component';
@@ -35,6 +40,7 @@ import { parsePinnedRevision } from './revision-pin';
 import { RunHeaderComponent } from './run-header.component';
 import { RunDetailStore } from './run-detail.store';
 import { RunTimelineComponent } from './timeline/run-timeline.component';
+import { runValueLabel } from './run-value-label';
 
 @Component({
   selector: 'app-run-detail-page',
@@ -51,7 +57,9 @@ import { RunTimelineComponent } from './timeline/run-timeline.component';
     DecisionViewComponent,
     AttemptsTableComponent,
     HlmButton,
+    HlmIcon,
     HlmTabsImports,
+    ShellIconComponent,
     PageHeaderImports,
   ],
   providers: [RunDetailStore],
@@ -75,8 +83,38 @@ export class RunDetailPage {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   private readonly injector = inject(Injector);
+  private readonly locale = inject(LOCALE_ID);
 
   protected readonly detailTab = signal('evidence');
+  private readonly tabStrip = viewChild<ElementRef<HTMLElement>>('tabStrip');
+
+  private revealSelectedTab(): void {
+    const selected = this.detailTab();
+    const strip = this.tabStrip()?.nativeElement;
+    if (!strip || strip.scrollWidth <= strip.clientWidth) return;
+    const tab = strip.querySelector<HTMLElement>(`[data-run-tab="${selected}"]`);
+    if (!tab) return;
+    const box = strip.getBoundingClientRect();
+    const inset = strip.clientLeft + Number.parseFloat(getComputedStyle(strip).paddingInlineStart);
+    const { left, right } = tab.getBoundingClientRect();
+    const delta = Math.min(0, left - box.left - inset) || Math.max(0, right - box.right + inset);
+    if (delta) strip.scrollLeft += delta;
+  }
+
+  // The header describes the current collection, not every decision this run has ever had.
+  // Never place an older or differently pinned evaluation next to its completeness badge.
+  protected readonly summaryDecision = computed(() => {
+    if (this.store.decisionError() !== null) return null;
+    const decision = this.store.decision();
+    if (decision?.kind !== 'evaluated') return decision;
+    const latest = this.store.latestRevisionNo();
+    const pin = this.store.pinnedRevision();
+    return this.store.run()?.current_evidence_revision_id &&
+      decision.evidenceRevision === latest &&
+      (pin === null || pin === latest)
+      ? decision
+      : null;
+  });
   protected readonly producerSlots = computed(() => {
     const run = this.store.run();
     return run === null ? null : producerSlotsFromRun(run);
@@ -106,6 +144,8 @@ export class RunDetailPage {
   );
   /** The fragment landed once: a polling update never moves focus a second time. */
   private landed = false;
+  /** The producer landing was re-applied once the attempts read settled. */
+  private settled = false;
   protected readonly retryEligible = signal(false);
   /** The decision region's own retry window: a decision failure never gates the run's retry. */
   protected readonly decisionRetryEligible = signal(false);
@@ -119,6 +159,16 @@ export class RunDetailPage {
       : status === 'ready'
         ? 'ready'
         : 'error';
+  });
+  protected readonly subtitle = computed(() => {
+    const run = this.store.run();
+    if (this.requestStatus() !== 'ready' || !run) return undefined;
+    const version = formatNumber(run.version, this.locale);
+    return `${runValueLabel('purpose', run.purpose)} · ${$localize`:@@runs.detail.header-version:Version ${version}:version:`}`;
+  });
+  protected readonly latestSnapshot = computed(() => {
+    const latest = this.store.latestRevisionNo();
+    return this.store.revisions()?.find((revision) => revision.revision_no === latest) ?? null;
   });
   protected readonly attemptsStatus = computed<'loading' | 'ready' | 'error'>(() => {
     const status = this.store.attemptsStatus();
@@ -161,12 +211,15 @@ export class RunDetailPage {
     back: $localize`:@@runs.detail.back:Back to runs`,
     evidence: $localize`:@@runs.evidence.title:Evidence`,
     decision: $localize`:@@runs.decision.title:Latest live decision`,
+    inspectEvidence: $localize`:@@runs.detail.inspect-evidence:Inspect evidence`,
     decisionTab: $localize`:@@runs.detail.decision-tab-compact:Live decision`,
   };
   constructor() {
+    afterRenderEffect(() => this.revealSelectedTab());
     this.route.fragment.pipe(takeUntilDestroyed()).subscribe((fragment) => {
       this.fragment.set(fragment);
       this.landed = false;
+      this.settled = false;
       if (fragment?.startsWith('producer-')) this.detailTab.set('evidence');
     });
     combineLatest([this.route.paramMap, this.route.queryParamMap])
@@ -195,6 +248,26 @@ export class RunDetailPage {
         replaceUrl: true,
         preserveFragment: true,
       });
+    });
+    // The attempts table sits above the producer table, so its height arriving displaces a row that
+    // was landed on first. Re-landing happens once, when that read settles, and only while the
+    // visitor has not moved focus elsewhere.
+    effect(() => {
+      if (this.attemptsStatus() === 'loading' || this.settled) return;
+      const fragment = this.fragment();
+      if (!this.landed || !fragment?.startsWith('producer-')) return;
+      this.settled = true;
+      afterNextRender(
+        () => {
+          if (this.fragment() !== fragment) return;
+          const target = resolveEvidenceAnchor(fragment, this.document);
+          const active = this.document.activeElement;
+          if (target && (active === target || active === this.document.body)) {
+            this.focusEvidenceTarget(target);
+          }
+        },
+        { injector: this.injector },
+      );
     });
     this.watchRetryWindow(this.store.loadError, this.retryEligible);
     this.watchRetryWindow(this.store.decisionError, this.decisionRetryEligible);
@@ -269,14 +342,13 @@ export class RunDetailPage {
   protected showEvidence(): void {
     const focus = () => {
       const target = this.host.nativeElement.querySelector<HTMLElement>('#evidence-title');
-      if (target) this.focusEvidenceTarget(target);
+      if (!target) return false;
+      this.focusEvidenceTarget(target);
+      return true;
     };
-    if (this.detailTab() === 'evidence') {
-      focus();
-      return;
-    }
+    if (this.detailTab() === 'evidence' && focus()) return;
     this.detailTab.set('evidence');
-    // The destination must be visible before focus leaves the now-hidden decision panel.
+    // Wait for the destination to mount or become visible before moving focus.
     afterNextRender(focus, { injector: this.injector });
   }
   /**

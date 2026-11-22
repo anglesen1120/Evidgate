@@ -4,9 +4,12 @@ import {
   Component,
   computed,
   input,
+  linkedSignal,
   viewChild,
   type TemplateRef,
 } from '@angular/core';
+import { HlmDialogImports } from '@evidgate/ui/dialog';
+import { HlmButton } from '@evidgate/ui/button';
 import type { SecurityEventRow } from '../../../core/data/security-events-data.service';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import {
@@ -26,6 +29,8 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
   selector: 'app-security-events-table',
   imports: [
     JsonPipe,
+    HlmButton,
+    HlmDialogImports,
     AbsoluteTimeComponent,
     StatusPillComponent,
     DataTableComponent,
@@ -36,8 +41,17 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
   host: { class: 'block min-w-0' },
   template: `
     <ng-template #eventCell let-row let-stacked="stacked">
-      <div class="grid min-w-0 gap-2">
-        <app-data-table-value [value]="typeLabel(row.type)" [truncate]="!stacked" />
+      <div class="grid min-w-0">
+        <app-data-table-value
+          class="font-semibold"
+          [value]="typeLabel(row.type)"
+          [truncate]="!stacked"
+        />
+        <app-data-table-value
+          class="font-mono text-xs text-muted-foreground"
+          [value]="row.id"
+          [truncate]="!stacked"
+        />
         @if (row.type === 'support_access') {
           <app-status-pill [tone]="'warning'" [label]="copy.support" />
         }
@@ -46,13 +60,24 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
     <ng-template #severityCell let-row>
       <app-status-pill [tone]="severityTone(row.severity)" [label]="severityLabel(row.severity)" />
     </ng-template>
-    <ng-template #timeCell let-row let-stacked="stacked">
-      <app-absolute-time [value]="row.created_at" [class.whitespace-nowrap]="!stacked" />
+    <ng-template #timeCell let-row>
+      <app-absolute-time class="text-xs tabular-nums whitespace-normal" [value]="row.created_at" />
+    </ng-template>
+    <ng-template #requestCell let-row let-stacked="stacked">
+      @if (row.request_id) {
+        <app-data-table-value
+          class="max-w-[12ch] font-mono text-xs"
+          [value]="row.request_id"
+          [truncate]="!stacked"
+        />
+      } @else {
+        <span class="text-xs text-muted-foreground">{{ copy.unavailable }}</span>
+      }
     </ng-template>
     <ng-template #actorCell let-row let-stacked="stacked">
-      <div class="grid min-w-0 gap-1">
+      <div class="grid min-w-0">
         @if (row.actor.kind) {
-          <app-data-table-value [value]="row.actor.kind" [truncate]="!stacked" />
+          <app-data-table-value class="text-xs" [value]="row.actor.kind" [truncate]="!stacked" />
         }
         @if (row.actor.id) {
           <app-copyable-identifier
@@ -67,71 +92,115 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
       </div>
     </ng-template>
     <ng-template #detailsCell let-row>
-      <details class="min-w-0">
-        <summary
-          class="min-h-[var(--eg-control-touch)] cursor-pointer content-center text-sm hover:underline focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring"
-        >
-          {{ copy.details }}
-        </summary>
-        <dl class="m-0 grid min-w-0 gap-3 text-sm">
-          <div>
-            <dt class="text-muted-foreground">{{ copy.id }}</dt>
-            <dd class="m-0">
-              <app-copyable-identifier [value]="row.id" [label]="copy.id" [truncate]="false" />
-            </dd>
-          </div>
-          <div>
-            <dt class="text-muted-foreground">{{ copy.type }}</dt>
-            <dd class="m-0 wrap-anywhere">
-              <bdi>{{ row.type }}</bdi>
-            </dd>
-          </div>
-          <div>
-            <dt class="text-muted-foreground">{{ copy.project }}</dt>
-            <dd class="m-0">
-              @if (row.project_id) {
-                <app-copyable-identifier
-                  [value]="row.project_id"
-                  [label]="copy.project"
-                  [truncate]="false"
-                />
-              } @else {
-                {{ copy.noProject }}
-              }
-            </dd>
-          </div>
-          <div>
-            <dt class="text-muted-foreground">{{ copy.request }}</dt>
-            <dd class="m-0">
-              @if (row.request_id) {
-                <app-copyable-identifier
-                  [value]="row.request_id"
-                  [label]="copy.request"
-                  [truncate]="false"
-                />
-              } @else {
-                {{ copy.unavailable }}
-              }
-            </dd>
-          </div>
-          @if (row.type === 'support_access') {
-            <div>
-              <dt class="text-muted-foreground">{{ copy.support }}</dt>
-              <dd class="m-0 wrap-anywhere">{{ copy.supportDescription }}</dd>
-            </div>
-          }
-          <div>
-            <dt class="text-muted-foreground">{{ copy.metadata }}</dt>
-            <dd class="m-0">
-              <pre
-                class="m-0 max-w-full whitespace-pre-wrap wrap-anywhere text-xs"
-              ><bdi>{{ row.details | json }}</bdi></pre>
-            </dd>
-          </div>
-        </dl>
-      </details>
+      <button
+        hlmBtn
+        #trigger
+        [variant]="'outline'"
+        type="button"
+        data-security-view
+        [attr.aria-haspopup]="'dialog'"
+        class="min-h-(--eg-control-touch)"
+        [attr.aria-label]="copy.view + ' · ' + typeLabel(row.type) + ' · ' + row.id"
+        (click)="inspected.set({ row, trigger })"
+      >
+        {{ copy.view }}
+      </button>
     </ng-template>
+    @if (inspected(); as selection) {
+      @let row = selection.row;
+      <hlm-dialog
+        [state]="'open'"
+        [restoreFocus]="selection.trigger"
+        [autoFocus]="'first-heading'"
+        (closed)="inspected.set(null)"
+      >
+        <hlm-dialog-content *hlmDialogPortal [size]="'md'" data-security-dialog>
+          <header hlmDialogHeader>
+            <h2 hlmDialogTitle>{{ typeLabel(row.type) }}</h2>
+            <div class="flex flex-wrap items-center gap-2">
+              <app-status-pill
+                [tone]="severityTone(row.severity)"
+                [label]="severityLabel(row.severity)"
+              /><app-absolute-time [value]="row.created_at" />
+            </div>
+          </header>
+          <dl class="m-0 grid min-w-0 gap-3 text-sm">
+            <div>
+              <dt class="text-muted-foreground">{{ copy.id }}</dt>
+              <dd class="m-0">
+                <app-copyable-identifier [value]="row.id" [label]="copy.id" [truncate]="false" />
+              </dd>
+            </div>
+            <div>
+              <dt class="text-muted-foreground">{{ copy.type }}</dt>
+              <dd class="m-0 wrap-anywhere">
+                <bdi>{{ row.type }}</bdi>
+              </dd>
+            </div>
+            <div>
+              <dt class="text-muted-foreground">{{ copy.actor }}</dt>
+              <dd class="m-0">
+                <bdi>{{ row.actor.kind }}</bdi>
+                @if (row.actor.id) {
+                  <app-copyable-identifier
+                    [value]="row.actor.id"
+                    [label]="copy.actor"
+                    [truncate]="false"
+                  />
+                } @else {
+                  {{ copy.unavailable }}
+                }
+              </dd>
+            </div>
+            <div>
+              <dt class="text-muted-foreground">{{ copy.project }}</dt>
+              <dd class="m-0">
+                @if (row.project_id) {
+                  <app-copyable-identifier
+                    [value]="row.project_id"
+                    [label]="copy.project"
+                    [truncate]="false"
+                  />
+                } @else {
+                  {{ copy.noProject }}
+                }
+              </dd>
+            </div>
+            <div>
+              <dt class="text-muted-foreground">{{ copy.request }}</dt>
+              <dd class="m-0">
+                @if (row.request_id) {
+                  <app-copyable-identifier
+                    [value]="row.request_id"
+                    [label]="copy.request"
+                    [truncate]="false"
+                  />
+                } @else {
+                  {{ copy.unavailable }}
+                }
+              </dd>
+            </div>
+            @if (row.type === 'support_access') {
+              <div>
+                <dt class="text-muted-foreground">{{ copy.support }}</dt>
+                <dd class="m-0 wrap-anywhere">{{ copy.supportDescription }}</dd>
+              </div>
+            }
+            <div>
+              <dt class="text-muted-foreground">{{ copy.metadata }}</dt>
+              <dd class="m-0">
+                <pre
+                  class="m-0 max-w-full whitespace-pre-wrap wrap-anywhere text-xs"
+                ><bdi>{{ row.details | json }}</bdi></pre>
+              </dd>
+            </div>
+          </dl>
+        </hlm-dialog-content>
+      </hlm-dialog>
+    }
     <app-data-table
+      class="[&>.caption]:sr-only [&>.scroll]:rounded-none [&>.scroll]:border-0"
+      [rowHeight]="'compact'"
       [columns]="columns()"
       [rows]="rows()"
       [rowId]="rowId"
@@ -143,6 +212,13 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
 })
 export class SecurityEventsTableComponent {
   readonly rows = input.required<readonly SecurityEventRow[]>();
+  protected readonly inspected = linkedSignal<
+    readonly SecurityEventRow[],
+    { row: SecurityEventRow; trigger: HTMLButtonElement } | null
+  >({
+    source: this.rows,
+    computation: () => null,
+  });
   protected readonly typeLabel = securityTypeLabel;
   protected readonly rowId = (row: SecurityEventRow): string => row.id;
   protected readonly copy = {
@@ -151,6 +227,7 @@ export class SecurityEventsTableComponent {
     severity: $localize`:@@settings.security.severity:Severity`,
     time: $localize`:@@settings.security.time:Time (UTC)`,
     actor: $localize`:@@settings.security.actor:Principal`,
+    view: $localize`:@@settings.row.view:View`,
     details: $localize`:@@settings.security.details:Inspect event`,
     id: $localize`:@@settings.security.id:Event id`,
     project: $localize`:@@settings.security.project:Project id`,
@@ -167,6 +244,8 @@ export class SecurityEventsTableComponent {
     viewChild<TemplateRef<DataTableCellContext<SecurityEventRow>>>('severityCell');
   private readonly timeCell =
     viewChild<TemplateRef<DataTableCellContext<SecurityEventRow>>>('timeCell');
+  private readonly requestCell =
+    viewChild<TemplateRef<DataTableCellContext<SecurityEventRow>>>('requestCell');
   private readonly actorCell =
     viewChild<TemplateRef<DataTableCellContext<SecurityEventRow>>>('actorCell');
   private readonly detailsCell =
@@ -175,24 +254,16 @@ export class SecurityEventsTableComponent {
     const event = this.eventCell(),
       severity = this.severityCell(),
       time = this.timeCell(),
+      request = this.requestCell(),
       actor = this.actorCell(),
       details = this.detailsCell();
-    if (!event || !severity || !time || !actor || !details) return [];
+    if (!event || !severity || !time || !actor || !request || !details) return [];
     return [
-      {
-        id: 'time',
-        header: this.copy.time,
-        role: 'date',
-        width: { min: '18ch', preferred: '1%', max: '26ch' },
-        cell: (row) => row.created_at,
-        cellTemplate: time,
-      },
       {
         id: 'event',
         header: this.copy.type,
         role: 'identity',
-        priority: 'primary',
-        width: { min: '20ch', preferred: 'auto', max: '36ch' },
+        width: { min: '14ch', preferred: 'auto', max: '36ch' },
         cell: (row) => securityTypeLabel(row.type),
         cellTemplate: event,
       },
@@ -200,7 +271,7 @@ export class SecurityEventsTableComponent {
         id: 'severity',
         header: this.copy.severity,
         role: 'status',
-        width: { min: '12ch', preferred: '1%', max: '24ch' },
+        width: { min: '9ch', preferred: '1%', max: '24ch' },
         cell: (row) => row.severity,
         cellTemplate: severity,
       },
@@ -209,15 +280,31 @@ export class SecurityEventsTableComponent {
         header: this.copy.actor,
         role: 'identity',
         kind: 'identifier',
-        width: { min: '12ch', preferred: 'auto', max: '28ch' },
+        width: { min: '10ch', preferred: 'auto', max: '26ch' },
         cell: (row) => row.actor.id ?? '',
         cellTemplate: actor,
+      },
+      {
+        id: 'time',
+        header: this.copy.time,
+        role: 'date',
+        width: { min: '13ch', preferred: '16%', max: '26ch' },
+        cell: (row) => row.created_at,
+        cellTemplate: time,
+      },
+      {
+        id: 'request',
+        header: this.copy.request,
+        role: 'text',
+        width: { min: '8ch', preferred: '10%', max: '14ch' },
+        cell: (row) => row.request_id ?? this.copy.unavailable,
+        cellTemplate: request,
       },
       {
         id: 'details',
         header: this.copy.details,
         role: 'actions',
-        width: { min: '16ch', preferred: '1%', max: '24ch' },
+        width: { min: '15ch', preferred: '1%', max: '24ch' },
         cell: () => this.copy.details,
         cellTemplate: details,
       },

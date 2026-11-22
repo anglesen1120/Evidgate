@@ -1,0 +1,215 @@
+@let vm = view();
+<header class="flex min-w-0 items-start gap-3">
+  <span
+    class="grid size-12 shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent)"
+  >
+    <app-shell-icon name="shield-check" />
+  </span>
+  <app-page-header
+    class="min-w-0 grow [&_h1]:text-[length:var(--eg-space-7)]"
+    [title]="copy.title"
+    [description]="vm.live ? copy.runIdentity + ' · ' + copy.timestamp : copy.description"
+  >
+    @if (vm.live) {
+      <div appPageHeaderActions class="flex flex-wrap items-center gap-2">
+        <button
+          hlmBtn
+          type="button"
+          [variant]="'outline'"
+          (click)="summaryTarget()?.nativeElement.focus()"
+        >
+          <app-shell-icon name="run" />{{ copy.runRecord }}
+        </button>
+        <button
+          hlmBtn
+          type="button"
+          [variant]="'outline'"
+          (click)="evidenceTarget()?.nativeElement.focus()"
+        >
+          <app-shell-icon name="file" />{{ copy.evidence }}
+        </button>
+        @if (vm.allowPreview) {
+          <app-decision-preview *appDesktopMutation [action]="'request'" />
+        }
+      </div>
+    }
+  </app-page-header>
+</header>
+@if (vm.state === 'loading') {
+  <app-loading-pattern [label]="copy.loading" />
+}
+@if (!vm.live && vm.notice; as notice) {
+  <app-empty-pattern
+    [title]="notice.title"
+    [description]="notice.body"
+    [actionLabel]="notice.action"
+    (action)="restore()"
+  />
+}
+@if (vm.assessment; as assessment) {
+  <section hlmCard class="gap-4 p-5">
+    <h2 class="text-xl font-semibold">{{ assessment.title }}</h2>
+    <p class="text-muted-foreground">{{ copy.separate }}</p>
+    <dl class="grid gap-4 sm:grid-cols-3 [&_dt]:mb-2 [&_dt]:font-semibold">
+      <div>
+        <dt>{{ copy.completeness }}</dt>
+        <dd>
+          @if (assessment.completeness) {
+            <app-evidence-badge [completeness]="assessment.completeness" [compact]="true" />
+          } @else {
+            <app-status-pill
+              [tone]="'neutral'"
+              [label]="assessment.availability ?? copy.unavailable"
+            />
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.outcome }}</dt>
+        <dd>
+          @if (assessment.outcome) {
+            <app-outcome-pill [outcome]="assessment.outcome" [compact]="true" />
+          } @else {
+            <app-status-pill
+              [tone]="'neutral'"
+              [label]="assessment.outcomeNote ?? assessment.availability ?? copy.unavailable"
+            />
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.decision }}</dt>
+        <dd>
+          @if (assessment.decision === 'pending') {
+            <app-status-pill [tone]="'neutral'" [label]="copy.waiting" />
+          } @else {
+            <app-decision-chip
+              [decision]="assessment.decision"
+              [showDetail]="false"
+              [compact]="true"
+            />
+          }
+        </dd>
+      </div>
+    </dl>
+    @if (vm.state === 'shadow') {
+      <p class="font-semibold">{{ copy.shadowOriginal }}</p>
+    }
+  </section>
+}
+@if (vm.live) {
+  <dl
+    #summary
+    tabindex="-1"
+    class="m-0 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4 [&_dt]:flex [&_dt]:items-center [&_dt]:gap-2 [&_dt]:font-semibold [&_dt_hlm-icon]:size-7 [&_dt_hlm-icon]:rounded-md [&_dt_hlm-icon]:bg-muted [&_dt_hlm-icon]:p-1.5 [&_dd]:m-0 [&_dd]:grid [&_dd]:gap-2 [&_dd]:justify-items-start [&_small]:text-xs [&_small]:text-muted-foreground"
+  >
+    <div hlmCard class="gap-4 p-4">
+      <dt><hlm-icon name="lucideInfo" />{{ copy.completeness }}</dt>
+      <dd>
+        <app-evidence-badge [completeness]="facts.completeness" [compact]="true" /><small>{{
+          copy.missingShard
+        }}</small>
+      </dd>
+    </div>
+    <div hlmCard class="gap-4 p-4">
+      <dt><hlm-icon name="lucideActivity" />{{ copy.outcome }}</dt>
+      <dd>
+        <app-outcome-pill [outcome]="facts.outcome" [compact]="true" /><small>{{
+          copy.knownFailure
+        }}</small>
+      </dd>
+    </div>
+    <div hlmCard class="gap-4 p-4">
+      <dt><hlm-icon name="lucideCircleCheck" />{{ copy.decision }}</dt>
+      <dd>
+        <app-decision-chip [decision]="facts.decision" [compact]="true" /><small>{{
+          copy.liveEvaluation
+        }}</small>
+      </dd>
+    </div>
+    <div hlmCard class="gap-4 p-4">
+      <dt><hlm-icon name="lucideClock" />{{ copy.policyRevision }}</dt>
+      <dd>
+        <bdi class="font-(family-name:--eg-font-display) text-2xl font-bold">{{ facts.policy }}</bdi
+        ><small>{{ copy.evaluator }}</small>
+      </dd>
+    </div>
+  </dl>
+  @if (vm.notice; as notice) {
+    @if (vm.state === 'empty' || vm.state === 'no-match') {
+      <app-empty-pattern
+        [title]="notice.title"
+        [description]="notice.body"
+        [actionLabel]="notice.action"
+        (action)="restore()"
+      />
+    } @else {
+      <app-inline-feedback
+        [title]="notice.title"
+        [description]="notice.body"
+        [actionLabel]="notice.action"
+        (action)="restore()"
+      />
+    }
+  }
+  @if (vm.state === 'submitted') {
+    <section hlmCard class="gap-3 p-5">
+      <h2 class="text-lg font-semibold">{{ copy.draft }}</h2>
+      <dl class="grid gap-3 sm:grid-cols-3 [&_dt]:font-semibold">
+        <div>
+          <dt>{{ copy.caseLabel }}</dt>
+          <dd>{{ facts.shipping }}</dd>
+        </div>
+        <div>
+          <dt>{{ copy.expiry }}</dt>
+          <dd>{{ facts.expiry }}</dd>
+        </div>
+        <div>
+          <dt>{{ copy.reason }}</dt>
+          <dd>{{ copy.reasonShipping }}</dd>
+        </div>
+      </dl>
+      <p role="status">{{ copy.awaitingServer }}</p>
+      <button type="button" hlmBtn disabled class="w-fit">{{ copy.submitting }}</button>
+    </section>
+  }
+  @if (vm.records.length) {
+    @if (vm.allowPreview) {
+      <app-desktop-required-notice class="empty:hidden" />
+    }
+    @for (snapshot of [vm]; track snapshot.state) {
+      <app-decision-exceptions [view]="snapshot" />
+    }
+  }
+  <div #evidence tabindex="-1" class="grid min-w-0 items-start gap-4 lg:grid-cols-2">
+    <section hlmCard class="min-w-0 gap-0 py-0">
+      <h2 class="m-0 border-b border-border px-5 py-4 text-lg font-semibold">
+        {{ copy.storedReasons }}
+      </h2>
+      <dl class="m-0 divide-y divide-border px-5">
+        @for (reason of facts.reasons; track reason[0]) {
+          <div class="py-3">
+            <dt class="font-mono font-semibold">{{ reason[0] }}</dt>
+            <dd class="m-0 text-sm">{{ reason[1] }}</dd>
+          </div>
+        }
+      </dl>
+    </section>
+    <section hlmCard class="min-w-0 gap-0 py-0">
+      <h2 class="m-0 border-b border-border px-5 py-4 text-lg font-semibold">{{ copy.pinned }}</h2>
+      <dl class="m-0 grid gap-3 p-5 sm:grid-cols-3">
+        @for (fact of facts.inputs; track fact[0]) {
+          @if (
+            vm.state !== 'after-load' || (fact[0] !== copy.exceptionsHash && fact[0] !== copy.asOf)
+          ) {
+            <div class="min-w-0">
+              <dt class="text-xs text-muted-foreground">{{ fact[0] }}</dt>
+              <dd class="m-0 font-mono">{{ fact[1] }}</dd>
+            </div>
+          }
+        }
+      </dl>
+    </section>
+  </div>
+}
+<p class="text-xs text-muted-foreground">{{ copy.watermark }}</p>

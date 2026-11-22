@@ -49,7 +49,7 @@ public sealed class HealingSystemSwitchBoundaryTests
     /// <summary>The only source file of <c>src/</c> that names the definer is the Healing operator writer.</summary>
     [Fact]
     public void Only_the_healing_operator_writer_names_the_system_switch_definer() =>
-        Scan(Path.Combine(SolutionLayout.RepoRoot, "src")).ShouldBe([AllowedFile]);
+        Scan("src").ShouldBe([AllowedFile]);
 
     /// <summary>
     /// No other test may call the definer: the named allowlist, and nothing else, so a new suite that reaches for the
@@ -57,7 +57,7 @@ public sealed class HealingSystemSwitchBoundaryTests
     /// </summary>
     [Fact]
     public void Only_the_allowlisted_tests_name_the_system_switch_definer() =>
-        Scan(Path.Combine(SolutionLayout.RepoRoot, "tests")).ShouldBe(AllowedTestFiles.Order(StringComparer.Ordinal));
+        Scan("tests").ShouldBe(AllowedTestFiles.Order(StringComparer.Ordinal));
 
     /// <summary>
     /// Non-vacuity: the allowed file really carries the SQL <em>call</em> — not merely the name in prose — so the scans
@@ -73,18 +73,8 @@ public sealed class HealingSystemSwitchBoundaryTests
 
     private static List<string> Scan(string root)
     {
-        if (!Directory.Exists(root))
-        {
-            return [];
-        }
-
-        return Directory
-            .EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
-            .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .Where(file => File.ReadAllText(file).Contains(Needle, StringComparison.Ordinal))
-            .Select(file => Path.GetRelativePath(SolutionLayout.RepoRoot, file).Replace('\\', '/'))
-            .Order(StringComparer.Ordinal)
+        return SolutionLayout.SourceFiles(root)
+            .Where(file => File.ReadAllText(Path.Combine(SolutionLayout.RepoRoot, file)).Contains(Needle, StringComparison.Ordinal))
             .ToList();
     }
 }

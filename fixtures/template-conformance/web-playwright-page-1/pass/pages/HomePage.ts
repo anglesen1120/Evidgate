@@ -1,0 +1,19 @@
+import { type Locator, type Page } from '@playwright/test';
+
+export class HomePage {
+  constructor(private readonly page: Page) {}
+
+  async open(): Promise<void> {
+    await this.page.goto('https://example.com');
+  }
+
+  primaryAction(): Locator {
+    return this.page.getByRole('button', { name: 'Sign in' });
+  }
+
+  async signIn(username: string, password: string): Promise<void> {
+    await this.page.getByLabel('Email').fill(username);
+    await this.page.getByLabel('Secret').fill(password);
+    await this.primaryAction().click();
+  }
+}

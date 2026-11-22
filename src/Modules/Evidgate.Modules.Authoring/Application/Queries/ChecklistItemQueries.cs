@@ -23,20 +23,20 @@ namespace Evidgate.Modules.Authoring.Application.Queries;
 /// <param name="Priority">Optional priority filter.</param>
 /// <param name="Cursor">The opaque cursor of the previous page, or null.</param>
 /// <param name="Limit">Page size, 1..200 (validated at the edge).</param>
+/// <param name="RequestError">The first query-binding error, answered after authorization.</param>
 internal sealed record ListChecklistItemsQuery(
     Guid ProjectId,
     Guid? NodeId,
     string? State,
     string? Priority,
     string? Cursor,
-    int Limit)
+    int Limit,
+    Error? RequestError = null)
     : IQuery<Result<ChecklistItemListResponse>>;
 
 /// <summary>
-/// Handler of <see cref="ListChecklistItemsQuery"/>: one liveness probe for the addressed project (AC10: an unknown
-/// project is 404, not an empty page) and then one statement per page (P3) over
-/// <c>checklist_item_list_idx</c> (P4), one row more than asked to decide whether a next page exists, so no count
-/// runs. A filter outside the stored vocabulary is a 422 naming the query member instead of an empty page.
+/// Scope authorization precedes carried query errors. An unknown project is a 404 rather than an empty page.
+/// Fetching one row beyond the requested page detects the next page without a count query.
 /// </summary>
 [Permission(Permissions.Authoring.Read)]
 internal sealed class ListChecklistItemsQueryHandler(
@@ -58,10 +58,14 @@ internal sealed class ListChecklistItemsQueryHandler(
             return Result.Failure<ChecklistItemListResponse>(scopeError);
         }
 
+        if (query.RequestError is { } requestError)
+        {
+            return Result.Failure<ChecklistItemListResponse>(requestError);
+        }
+
         var orgId = scopes.Require().OrgId;
 
-        // AC10: a project the tenant cannot see is 404, not an empty page — an empty page would tell a caller that the
-        // project exists and holds no items (the tree and manual-case lists answer the same way).
+        // An empty page would reveal that an otherwise invisible project exists.
         if (await db.ScalarAsync<int?>(
                 AuthoringNodeReadSql.ProjectExists,
                 new { org_id = orgId, project_id = query.ProjectId },
@@ -70,31 +74,9 @@ internal sealed class ListChecklistItemsQueryHandler(
             return Result.Failure<ChecklistItemListResponse>(AuthoringRules.ProjectNotFound);
         }
 
-        if (query.State is { } state && !ChecklistItemStateMachine.States.Contains(state, StringComparer.Ordinal))
+        if (ValidateFiltersAndCursor(query, out var afterPosition, out var afterId) is { } filterError)
         {
-            return Result.Failure<ChecklistItemListResponse>(
-                AuthoringErrors.Invalid("/state", "value_invalid", "state must be one of the checklist item states"));
-        }
-
-        if (query.Priority is { } priority && !AuthoringPriorities.IsValid(priority))
-        {
-            return Result.Failure<ChecklistItemListResponse>(
-                AuthoringErrors.Invalid("/priority", "value_invalid", "priority must be one of the four priorities"));
-        }
-
-        int? afterPosition = null;
-        Guid? afterId = null;
-
-        if (query.Cursor is { } cursor)
-        {
-            if (!TryDecodeCursor(cursor, out var position, out var itemId))
-            {
-                return Result.Failure<ChecklistItemListResponse>(
-                    AuthoringErrors.Invalid("/cursor", "invalid", "the cursor was not issued by this route"));
-            }
-
-            afterPosition = position;
-            afterId = itemId;
+            return Result.Failure<ChecklistItemListResponse>(filterError);
         }
 
         var rows = await db.QueryAsync<ChecklistItemDto>(
@@ -118,6 +100,40 @@ internal sealed class ListChecklistItemsQueryHandler(
         return Result.Success(new ChecklistItemListResponse(
             items,
             hasNext && items.Count > 0 ? EncodeCursor(items[^1]) : null));
+    }
+
+    /// <summary>Refuses a filter value or cursor outside the route's vocabulary, answering the first offender.</summary>
+    /// <returns>The refusal, or <c>null</c> with the decoded cursor halves set.</returns>
+    private static Error? ValidateFiltersAndCursor(
+        ListChecklistItemsQuery query,
+        out int? afterPosition,
+        out Guid? afterId)
+    {
+        afterPosition = null;
+        afterId = null;
+
+        if (query.State is { } state && !ChecklistItemStateMachine.States.Contains(state, StringComparer.Ordinal))
+        {
+            return AuthoringErrors.Invalid("/state", "value_invalid", "state must be one of the checklist item states");
+        }
+
+        if (query.Priority is { } priority && !AuthoringPriorities.IsValid(priority))
+        {
+            return AuthoringErrors.Invalid("/priority", "value_invalid", "priority must be one of the four priorities");
+        }
+
+        if (query.Cursor is { } cursor)
+        {
+            if (!TryDecodeCursor(cursor, out var position, out var itemId))
+            {
+                return AuthoringErrors.Invalid("/cursor", "invalid", "the cursor was not issued by this route");
+            }
+
+            afterPosition = position;
+            afterId = itemId;
+        }
+
+        return null;
     }
 
     /// <summary>The cursor of one page position: the row's <c>(position, id)</c> pair, the order's own key (AC2).</summary>

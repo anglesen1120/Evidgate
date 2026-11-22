@@ -4,16 +4,26 @@ import {
   Component,
   ElementRef,
   LOCALE_ID,
+  computed,
   effect,
   inject,
   resource,
   viewChild,
 } from '@angular/core';
 import { Router } from '@angular/router';
-import { HlmAlert, HlmAlertDescription } from '@evidgate/ui/alert';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmCard, HlmCardHeader, HlmCardTitle, HlmCardDescription } from '@evidgate/ui/card';
+import {
+  HlmCard,
+  HlmCardContent,
+  HlmCardFooter,
+  HlmCardHeader,
+  HlmCardTitle,
+} from '@evidgate/ui/card';
 
+import {
+  InlineFeedbackComponent,
+  type InlineFeedbackTone,
+} from '../../../shared/ui/states/inline-feedback.component';
 import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { ThemeService } from '../../../shell/layout/theme.service';
 import {
@@ -23,6 +33,12 @@ import {
 import { AuthFlow, LOCATION_NAVIGATE } from '../auth-flow';
 import { LOGIN_EXTENSION_LOADER } from './login-extension';
 
+interface LoginNotice {
+  readonly tone: InlineFeedbackTone;
+  readonly title: string;
+  readonly description?: string;
+}
+
 @Component({
   selector: 'app-login-page',
   // The flow belongs to this visit so callback and expiry notices cannot retain an earlier query.
@@ -31,179 +47,24 @@ import { LOGIN_EXTENSION_LOADER } from './login-extension';
     NgComponentOutlet,
     ShellIconComponent,
     LocaleSwitcherComponent,
-    HlmAlert,
-    HlmAlertDescription,
+    InlineFeedbackComponent,
     HlmButton,
     HlmCard,
     HlmCardHeader,
     HlmCardTitle,
-    HlmCardDescription,
+    HlmCardContent,
+    HlmCardFooter,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class: 'box-border flex min-h-dvh min-w-0 flex-col bg-background font-sans text-foreground',
   },
-  template: `
-    <header
-      class="login-topbar box-border flex min-h-(--eg-space-12) flex-wrap items-center justify-between gap-(--eg-space-4) border-0 border-b-(length:--eg-border-width) border-solid border-border bg-card px-(--eg-space-4) py-(--eg-space-3) min-[421px]:px-(--eg-space-7)"
-    >
-      <div
-        class="login-brand flex items-center gap-(--eg-space-3) font-(family-name:--eg-font-display) text-lg font-(weight:--eg-weight-bold)"
-      >
-        <app-shell-icon class="text-primary" [name]="'shield-check'" />
-        <span i18n="@@shell.layout.brand">Evidgate</span>
-      </div>
-      <div class="login-preferences flex items-center gap-(--eg-space-3)">
-        @if (canSwitchLocale) {
-          <app-locale-switcher [disabled]="auth.redirecting()" (switchRequested)="switchLocale()" />
-        }
-        <button
-          type="button"
-          hlmBtn
-          [variant]="'outline'"
-          [size]="'icon'"
-          class="theme-toggle min-h-(--eg-control-touch) min-w-(--eg-control-touch) aria-pressed:bg-accent aria-pressed:text-accent-foreground"
-          [attr.aria-label]="darkLabel"
-          [attr.aria-pressed]="theme.isDark()"
-          (click)="theme.toggle()"
-        >
-          <app-shell-icon [name]="theme.isDark() ? 'moon' : 'sun'" />
-        </button>
-      </div>
-    </header>
-    <main
-      class="box-border mx-auto grid w-full min-w-0 max-w-[calc(2*var(--eg-rail-width))] grid-cols-1 items-start gap-(--eg-space-7) p-(--eg-space-4) min-[421px]:p-(--eg-space-7) min-[900px]:my-auto min-[900px]:max-w-[calc(18*var(--eg-space-12))] min-[900px]:grid-cols-2 min-[900px]:gap-(--eg-space-8) min-[900px]:py-(--eg-space-10)"
-      aria-labelledby="login-heading"
-    >
-      <header
-        class="login-intro grid gap-(--eg-space-5) [overflow-wrap:anywhere] min-[900px]:py-(--eg-space-7)"
-      >
-        <h1
-          #loginHeading
-          hlmCardTitle
-          [size]="pageHeadingSize"
-          class="min-w-0 focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-offset-(--eg-focus-offset) focus-visible:outline-ring"
-          id="login-heading"
-          tabindex="-1"
-          [textContent]="heading"
-        ></h1>
-        <p class="m-0 text-sm text-muted-foreground">{{ introduction }}</p>
-      </header>
-      <section
-        hlmCard
-        class="login-card min-w-0 gap-(--eg-space-5) p-(--eg-space-4) [overflow-wrap:anywhere] min-[421px]:p-(--eg-space-7) min-[900px]:col-start-2 min-[900px]:row-span-2"
-        aria-labelledby="provider-heading"
-      >
-        <header hlmCardHeader class="gap-(--eg-space-3) p-0">
-          <h2
-            hlmCardTitle
-            [size]="subsectionHeadingSize"
-            id="provider-heading"
-            [textContent]="welcome"
-          ></h2>
-          <p hlmCardDescription class="m-0">{{ explanation }}</p>
-        </header>
-
-        <!-- Keep the live region mounted and outside the busy controls. -->
-        <div
-          class="login-notice min-h-(--eg-leading-sm) min-w-0"
-          role="status"
-          [attr.aria-live]="'polite'"
-          aria-atomic="true"
-        >
-          @if (auth.redirecting() || auth.reason() !== 'none') {
-            <div
-              hlmAlert
-              [variant]="
-                !auth.redirecting() &&
-                (auth.reason() === 'failed' || auth.reason() === 'unavailable')
-                  ? 'destructive'
-                  : 'default'
-              "
-              [attr.role]="null"
-            >
-              <div hlmAlertDescription class="gap-(--eg-space-3) [&>p]:m-0">
-                @if (auth.redirecting()) {
-                  <p>{{ redirecting }}</p>
-                } @else {
-                  @switch (auth.reason()) {
-                    @case ('expired') {
-                      <p>{{ expired }}</p>
-                    }
-                    @case ('signed-out') {
-                      <p>{{ signedOut }}</p>
-                      <p>{{ signedOutDetail }}</p>
-                    }
-                    @case ('unavailable') {
-                      <p>{{ unavailable }}</p>
-                    }
-                    @case ('failed') {
-                      <p>{{ failed }}</p>
-                    }
-                  }
-                }
-              </div>
-            </div>
-          }
-        </div>
-
-        <div
-          class="login-providers grid min-w-0 gap-(--eg-space-4)"
-          [attr.aria-busy]="auth.redirecting()"
-        >
-          <button
-            hlmBtn
-            class="primary-provider h-auto min-h-(--eg-control-touch) w-full whitespace-normal"
-            type="button"
-            [disabled]="auth.redirecting()"
-            (click)="auth.start('google')"
-          >
-            {{ google }}
-          </button>
-          <button
-            hlmBtn
-            [variant]="'outline'"
-            class="h-auto min-h-(--eg-control-touch) w-full whitespace-normal"
-            type="button"
-            [disabled]="auth.redirecting()"
-            (click)="auth.start('github')"
-          >
-            {{ github }}
-          </button>
-        </div>
-
-        <p
-          class="login-credential-note m-0 border-0 border-t-(length:--eg-border-width) border-solid border-border pt-(--eg-space-3) text-sm text-muted-foreground"
-        >
-          {{ credentialNote }}
-        </p>
-        @if (extension.value(); as component) {
-          <ng-container *ngComponentOutlet="component" />
-        }
-      </section>
-      <section
-        hlmCard
-        class="login-destination min-w-0 gap-(--eg-space-5) p-(--eg-space-4) [overflow-wrap:anywhere] min-[421px]:p-(--eg-space-7) min-[900px]:col-start-1"
-        aria-labelledby="destination-heading"
-      >
-        <h2
-          hlmCardTitle
-          [size]="subsectionHeadingSize"
-          id="destination-heading"
-          [textContent]="destinationHeading"
-        ></h2>
-        <p class="m-0 text-sm text-muted-foreground">
-          {{ auth.returnUrl() === '/' ? defaultDestination : savedDestination }}
-        </p>
-        <p class="m-0 text-sm text-muted-foreground">{{ destinationPrivacy }}</p>
-      </section>
-    </main>
-  `,
+  templateUrl: './login.page.html',
 })
 export class LoginPage {
   protected readonly auth = inject(AuthFlow);
 
-  protected readonly theme = inject(ThemeService);
+  private readonly theme = inject(ThemeService);
 
   private readonly document = inject(DOCUMENT);
 
@@ -215,6 +76,7 @@ export class LoginPage {
 
   private readonly router = inject(Router);
 
+  protected readonly isDark = this.theme.isDark;
   protected readonly pageHeadingSize = 'page' as const;
   protected readonly subsectionHeadingSize = 'subsection' as const;
   private readonly localeBase = this.document.baseURI;
@@ -246,6 +108,10 @@ export class LoginPage {
     });
   }
 
+  protected toggleTheme(): void {
+    this.theme.toggle();
+  }
+
   switchLocale(): void {
     if (this.auth.redirecting()) return;
     const query = new URLSearchParams({ returnUrl: this.auth.returnUrl() });
@@ -258,7 +124,7 @@ export class LoginPage {
     if (destination !== null) this.navigate(destination);
   }
 
-  readonly introduction = $localize`:@@auth.login.introduction:Return to your workspace to review evidence and make informed release decisions.`;
+  protected readonly organizationSignIn = $localize`:@@auth.login.organization-sign-in:Organization sign-in`;
   readonly welcome = $localize`:@@auth.login.welcome:Welcome back`;
   readonly destinationHeading = $localize`:@@auth.login.destination-heading:Your return destination`;
   readonly savedDestination = $localize`:@@auth.login.saved-destination:After sign-in, continue to your saved workspace destination. Access is checked before it opens.`;
@@ -266,14 +132,30 @@ export class LoginPage {
   readonly destinationPrivacy = $localize`:@@auth.login.destination-privacy:Private route details are not displayed on this sign-in page.`;
 
   readonly heading = $localize`:@@auth.login.heading:Sign in to Evidgate`;
-  readonly explanation = $localize`:@@auth.login.explanation:Choose your provider to continue.`;
+  protected readonly accountGuidance = $localize`:@@auth.login.organization-account:Use your organization account. Your workspace membership is checked after sign-in.`;
   readonly google = $localize`:@@auth.login.google:Continue with Google`;
   readonly github = $localize`:@@auth.login.github:Continue with GitHub`;
-  readonly credentialNote = $localize`:@@auth.login.credential-note:Your provider account is your only sign-in credential. Evidgate does not ask for a separate email or password.`;
+  readonly credentialNote = $localize`:@@auth.login.organization-access:Access is managed by your organization. No local password is required.`;
   readonly redirecting = $localize`:@@auth.login.redirecting:Opening your sign-in provider…`;
   readonly expired = $localize`:@@auth.login.expired:Your session expired. Sign in again to continue.`;
   readonly signedOut = $localize`:@@auth.login.signed-out:Signed out on this tab`;
   readonly signedOutDetail = $localize`:@@auth.login.signed-out-detail:Your browser session may still be valid. Server sign-out is not available yet.`;
   readonly unavailable = $localize`:@@auth.login.unavailable:Sign-in is temporarily unavailable. Choose a provider to try again.`;
   readonly failed = $localize`:@@auth.login.failed:Sign-in failed. Choose a provider to try again.`;
+
+  protected readonly notice = computed<LoginNotice | null>(() => {
+    if (this.auth.redirecting()) return { tone: 'info', title: this.redirecting };
+    switch (this.auth.reason()) {
+      case 'expired':
+        return { tone: 'info', title: this.expired };
+      case 'signed-out':
+        return { tone: 'info', title: this.signedOut, description: this.signedOutDetail };
+      case 'unavailable':
+        return { tone: 'destructive', title: this.unavailable };
+      case 'failed':
+        return { tone: 'destructive', title: this.failed };
+      case 'none':
+        return null;
+    }
+  });
 }

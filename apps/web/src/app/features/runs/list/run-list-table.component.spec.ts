@@ -64,11 +64,11 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
       .injector.get(DataTableComponent);
     expect(table.fitToContainer()).toBe(true);
     const minimums = {
-      id: 'calc(17ch + var(--eg-space-4) * 2)',
+      id: 'calc(17ch + var(--eg-control-touch) + var(--eg-space-4) * 2 + var(--eg-space-2))',
       state: 'calc(12ch + var(--eg-space-4) * 2)',
       evidence: 'calc(14ch + var(--eg-space-4) * 2)',
       decision: 'calc(15ch + var(--eg-space-4) * 2)',
-      created: '18ch',
+      actions: 'calc(9ch + var(--eg-space-4) * 2)',
     };
     for (const [id, minimum] of Object.entries(minimums)) {
       expect(table.columns().find((column) => column.id === id)?.width?.min).toBe(minimum);
@@ -79,6 +79,9 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
       }
     }
     expect(root.querySelectorAll('[role="columnheader"]')).toHaveLength(7);
+    expect(
+      root.querySelector('[data-run-row] [data-run-created] time')?.getAttribute('datetime'),
+    ).toBe(run(1).created_at);
     const identity = root.querySelector('[data-run-row] a');
     expect(identity?.textContent?.trim()).toBe('018f0000…00000001');
     expect(identity?.getAttribute('aria-label')).toContain(run(1).run_id);
@@ -94,6 +97,11 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     const { root } = await render([run(1)]);
     const link = root.querySelector<HTMLAnchorElement>('.identifier a')!;
     expect(link.getAttribute('href')).toBe(`/${run(1).run_id}?state=complete&ref=main`);
+    const view = root.querySelector<HTMLAnchorElement>('td.cdk-column-actions a');
+    expect(view?.textContent?.trim()).toBe('View');
+    expect(view?.getAttribute('aria-label')).toBe(`View ${run(1).run_id}`);
+    expect(view?.classList.contains('whitespace-nowrap')).toBe(true);
+    expect(view?.getAttribute('href')).toBe(link.getAttribute('href'));
     expect(link.textContent).toContain(run(1).run_id.slice(0, 8));
     expect(link.getAttribute('aria-label')).toBe(`${link.textContent?.trim()} (${run(1).run_id})`);
     expect(link.classList.contains('whitespace-nowrap')).toBe(true);
@@ -111,7 +119,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     ]);
     expect(
       [...root.querySelectorAll('[role="columnheader"]')].map((cell) => cell.textContent?.trim()),
-    ).toEqual(['Run id', 'State', 'Evidence', 'Decision', 'Ref', 'Run scope', 'Created (UTC)']);
+    ).toEqual(['Run id', 'State', 'Evidence', 'Decision', 'Ref', 'Run scope', 'Actions']);
     expect(root.querySelectorAll('[data-run-evidence] .status-pill--neutral')).toHaveLength(5);
     expect(root.querySelector('[data-run-evidence] .status-pill--success')).toBeNull();
     expect(root.querySelectorAll('[data-run-evidence-hint]')).toHaveLength(1);
@@ -166,7 +174,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     async (createdAt) => {
       const { root } = await render([run(1, { created_at: createdAt })]);
       expect(root.querySelector('time')).toBeNull();
-      const cell = root.querySelector('td[data-column-role="date"]');
+      const cell = root.querySelector('[data-run-row] app-absolute-time');
       expect(cell?.textContent?.trim()).toBe('Time unavailable');
     },
   );
@@ -195,7 +203,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
       'status',
       'identity',
       'text',
-      'date',
+      'actions',
     ]);
     expect(headers[0]?.getAttribute('data-column-priority')).toBe('primary');
     expect(headers[4]?.getAttribute('data-column-kind')).toBe('branch');
@@ -207,6 +215,9 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     const record = root.querySelector('.eg-table-record');
     expect(record?.querySelectorAll('dt')).toHaveLength(7);
     expect(record?.querySelectorAll('dd')).toHaveLength(7);
+    expect(record?.querySelector('[data-run-created] time')?.getAttribute('datetime')).toBe(
+      run(1).created_at,
+    );
     expect(record?.querySelector('a')?.textContent).toBe(run(1).run_id);
     expect(record?.querySelector('a')?.getAttribute('aria-label')).toBe(run(1).run_id);
     expect(record?.querySelector('a')?.classList.contains('whitespace-nowrap')).toBe(false);

@@ -1,41 +1,112 @@
 @if (view() === 'summary') {
-  <section
-    hlmCard
-    class="run-summary gap-(--eg-space-5) p-(--eg-space-5)"
-    aria-labelledby="run-summary-title"
-  >
-    <h2
-      hlmCardTitle
-      [size]="sectionSize"
-      id="run-summary-title"
-      class="m-0 flex flex-wrap gap-(--eg-space-3)"
-    >
-      {{ copy.id }}
-      <bdi class="font-mono font-(weight:--eg-weight-regular)">{{ display(run().run_id) }}</bdi>
-    </h2>
-    <app-copy-value-button [value]="run().run_id" [label]="copy.id" />
-    <dl>
-      <div>
-        <dt>{{ copy.state }}</dt>
-        <dd><app-run-state-pill [state]="run().state" [compact]="true" /></dd>
+  <section class="run-summary grid min-w-0 gap-(--eg-space-4)" aria-labelledby="run-summary-title">
+    <div class="flex min-w-0 flex-wrap items-center gap-x-(--eg-space-5) gap-y-(--eg-space-2)">
+      <div class="flex min-w-0 items-center gap-(--eg-space-2)">
+        <h2 id="run-summary-title" class="m-0 min-w-0 text-sm font-medium">
+          {{ copy.id }} <bdi class="font-mono">{{ display(run().run_id) }}</bdi>
+        </h2>
+        <app-copy-value-button [value]="run().run_id" [label]="copy.id" />
       </div>
-      <div>
-        <dt>{{ copy.ref }}</dt>
+      <div class="flex items-center gap-(--eg-space-2)">
+        <span class="eg-type-caption text-muted-foreground">{{ copy.state }}</span>
+        <app-run-state-pill [state]="run().state" [compact]="true" />
+      </div>
+      <div class="flex min-w-0 flex-wrap items-center gap-(--eg-space-2)">
+        <span class="eg-type-caption text-muted-foreground">{{ copy.ref }}</span>
+        @if (run().ref.name; as ref) {
+          <bdi class="min-w-0 font-mono">{{ display(ref) }}</bdi>
+          <app-copy-value-button [value]="ref" [label]="copy.ref" />
+        } @else {
+          <span class="text-muted-foreground">{{ copy.notProvided }}</span>
+        }
+        @if (run().unverified_ref) {
+          <app-status-pill
+            class="[&_.spartan-badge]:max-w-full"
+            [tone]="'warning'"
+            [label]="copy.unverified"
+          />
+        }
+      </div>
+    </div>
+    @let live = decision();
+    <dl
+      class="m-0 grid min-w-0 gap-(--eg-space-4) sm:grid-cols-2 lg:grid-cols-4 [&>div]:min-w-0 [&>div]:justify-between [&>div]:gap-(--eg-space-5) [&>div]:p-(--eg-space-5) [&_dt]:flex [&_dt]:items-center [&_dt]:gap-(--eg-space-3) [&_dt]:font-semibold [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:font-(family-name:--eg-font-display) [&_dd]:text-(length:--eg-space-7) [&_dd]:leading-(--eg-leading-xl) [&_dd]:font-semibold [&_.verdict]:h-auto [&_.verdict]:max-w-full [&_.verdict]:text-(length:--eg-text-lg) [&_.verdict]:leading-(--eg-leading-lg) [&_dt>hlm-icon]:size-(--eg-control-sm) [&_dt>hlm-icon]:rounded-(--eg-radius-md) [&_dt>hlm-icon]:p-(--eg-space-3)"
+    >
+      <div hlmCard [size]="'sm'">
+        <dt>
+          <hlm-icon [name]="'lucideInfo'" class="bg-(--eg-info-bg) text-(--eg-info-fg)" />
+          {{ copy.completeness }}
+        </dt>
         <dd>
-          @if (run().ref.name; as ref) {
-            <bdi>{{ display(ref) }}</bdi>
-            <app-copy-value-button [value]="ref" [label]="copy.ref" />
-          } @else {
-            <span class="text-muted-foreground">{{ copy.notProvided }}</span>
-          }
-          @if (run().unverified_ref) {
-            <app-status-pill [tone]="'warning'" [label]="copy.unverified" />
+          <app-evidence-badge [completeness]="runCompleteness()" [compact]="true" />
+          @if (latestSnapshot(); as snapshot) {
+            <span class="eg-type-caption mt-(--eg-space-2) block font-normal text-muted-foreground">
+              {{ copy.missing }}: <app-number-value [value]="snapshot.missing.length" />
+            </span>
           }
         </dd>
       </div>
-      <div>
-        <dt>{{ copy.completeness }}</dt>
-        <dd><app-evidence-badge [completeness]="runCompleteness()" [compact]="true" /></dd>
+      <div hlmCard [size]="'sm'">
+        <dt>
+          <hlm-icon [name]="'lucideActivity'" class="bg-(--eg-neutral-bg) text-(--eg-neutral-fg)" />
+          {{ copy.outcome }}
+        </dt>
+        <dd>
+          @if (live && live.kind === 'evaluated') {
+            <app-outcome-pill [outcome]="live.outcome" [compact]="true" />
+          } @else {
+            <span class="text-muted-foreground">{{
+              decisionLoading() ? copy.loading : copy.unavailable
+            }}</span>
+          }
+        </dd>
+      </div>
+      <div hlmCard [size]="'sm'">
+        <dt>
+          <hlm-icon
+            [name]="live?.kind === 'pending' ? 'lucideClock' : 'lucideCircle'"
+            class="bg-(--eg-neutral-bg) text-(--eg-neutral-fg)"
+          />
+          {{ copy.decision }}
+        </dt>
+        <dd>
+          @if (live && live.kind === 'evaluated') {
+            <app-decision-chip [decision]="live.decision" [compact]="true" />
+            <span class="eg-type-caption mt-(--eg-space-2) block font-normal text-muted-foreground">
+              {{ copy.evidence }} <app-number-value [value]="live.evidenceRevision" />
+            </span>
+          } @else if (live?.kind === 'pending') {
+            <span class="text-(--eg-pending-fg)">{{ valueLabel('decision', 'pending') }}</span>
+          } @else {
+            <span class="text-muted-foreground">{{
+              decisionLoading() ? copy.loading : copy.unavailable
+            }}</span>
+          }
+        </dd>
+      </div>
+      <div hlmCard [size]="'sm'">
+        <dt>
+          <hlm-icon [name]="'lucideCopy'" class="bg-(--eg-accent-soft) text-(--eg-accent-fg)" />
+          {{ copy.evidence }}
+        </dt>
+        <dd
+          class="flex min-w-0 flex-wrap items-center gap-(--eg-space-2) [&_app-copyable-identifier]:text-sm"
+        >
+          @if (run().current_evidence_revision_id; as revision) {
+            <app-copyable-identifier [value]="revision" [label]="copy.evidence" [compact]="true" />
+            @if (latestSnapshot(); as snapshot) {
+              <span
+                class="eg-type-caption block w-full font-normal text-muted-foreground"
+                data-run-latest-freeze
+              >
+                {{ copy.latestFreeze }}: <app-number-value [value]="snapshot.revision_no" /> ·
+                <app-absolute-time [value]="snapshot.created_at" />
+              </span>
+            }
+          } @else {
+            <span class="text-muted-foreground">{{ copy.none }}</span>
+          }
+        </dd>
       </div>
     </dl>
     @if (run().state === 'incomplete' || runCompleteness() === 'incomplete') {
@@ -58,19 +129,17 @@
     }
   </section>
 } @else {
-  <section
-    hlmCard
-    class="gap-(--eg-space-5) p-(--eg-space-5)"
-    aria-labelledby="run-environment-title"
-  >
+  <section hlmCard class="gap-0 py-0" aria-labelledby="run-environment-title">
     <h2
       hlmCardTitle
       [size]="sectionSize"
       id="run-environment-title"
-      class="m-0"
+      class="m-0 border-b border-(--eg-border) px-(--eg-space-5) py-(--eg-space-4)"
       [textContent]="copy.context"
     ></h2>
-    <dl>
+    <dl
+      class="m-0 grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-(--eg-space-5) p-(--eg-space-5) [&>div]:min-w-0 [&_dt]:text-xs [&_dt]:leading-(--eg-leading-xs) [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:mt-(--eg-space-1) [&_dd]:flex [&_dd]:min-w-0 [&_dd]:flex-wrap [&_dd]:items-center [&_dd]:gap-(--eg-space-2) [&_bdi]:max-w-full"
+    >
       <div>
         <dt>{{ copy.id }}</dt>
         <dd data-run-id>
@@ -103,7 +172,12 @@
             <span class="text-muted-foreground">{{ copy.notProvided }}</span>
           }
           @if (run().unverified_ref) {
-            <app-status-pill [tone]="'warning'" [label]="copy.unverified" data-run-unverified />
+            <app-status-pill
+              class="[&_.spartan-badge]:max-w-full"
+              [tone]="'warning'"
+              [label]="copy.unverified"
+              data-run-unverified
+            />
           }
         </dd>
       </div>
@@ -199,6 +273,8 @@
         </dd>
       </div>
     </dl>
-    <app-evidence-badge [completeness]="runCompleteness()" />
+    <div class="border-t border-(--eg-border) px-(--eg-space-5) py-(--eg-space-4)">
+      <app-evidence-badge [completeness]="runCompleteness()" />
+    </div>
   </section>
 }

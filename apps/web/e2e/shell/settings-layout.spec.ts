@@ -64,8 +64,11 @@ for (const locale of LOCALES) {
       await page.evaluate(() => document.fonts.ready);
       const size = await action.evaluate((button) => {
         const bounds = button.getBoundingClientRect();
-        if (!button.parentElement) throw new Error('Expected the export action grid');
-        const parent = button.parentElement.getBoundingClientRect();
+        // The export host and its wrapper are display: contents and have no box of their own.
+        let grid = button.parentElement;
+        while (grid && getComputedStyle(grid).display === 'contents') grid = grid.parentElement;
+        if (!grid) throw new Error('Expected the export action grid');
+        const parent = grid.getBoundingClientRect();
         const range = document.createRange();
         range.selectNodeContents(button);
         const text = range.getBoundingClientRect();
@@ -77,8 +80,8 @@ for (const locale of LOCALES) {
           parseFloat(style.borderRightWidth);
         return {
           width: bounds.width,
-          left: bounds.left,
-          parentLeft: parent.left,
+          right: bounds.right,
+          parentRight: parent.right,
           content: text.width + insets,
           textHeight: text.height,
           lineHeight: parseFloat(style.lineHeight),
@@ -86,7 +89,8 @@ for (const locale of LOCALES) {
       });
       expect(size.width).toBeLessThanOrEqual(size.content + 2);
       expect(size.textHeight).toBeLessThanOrEqual(size.lineHeight + 1);
-      expect(Math.abs(size.left - size.parentLeft)).toBeLessThanOrEqual(1);
+      // At this width the export row is two columns: the action fills the trailing auto column.
+      expect(Math.abs(size.right - size.parentRight)).toBeLessThanOrEqual(1);
     }
   });
 

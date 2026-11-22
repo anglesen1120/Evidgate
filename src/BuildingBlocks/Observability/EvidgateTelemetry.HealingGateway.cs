@@ -17,7 +17,7 @@ public static partial class EvidgateTelemetry
     /// </summary>
     public const string HealingLlmRefusedMetricName = "evidgate_healing_llm_refused_total";
 
-    private static readonly Counter<long> HealingLlmRefused = Meter.CreateCounter<long>(
+    private static readonly Counter<long> HealingLlmRefused = EvidgateMeter.Instance.CreateCounter<long>(
         HealingLlmRefusedMetricName,
         unit: "{call}",
         description: "Healing LLM calls refused before any provider call, by reason. Never labelled with an org or project id, an incident or candidate id, or any request value.");

@@ -1,0 +1,177 @@
+<div class="context flex flex-wrap items-center gap-2">
+  <span hlmBadge [variant]="'secondary'"><hlm-icon name="lucideInfo" />{{ copy.historical }}</span>
+  <code class="text-xs"
+    ><bdi>{{ viewModel().scope }}</bdi></code
+  >
+</div>
+<div class="flex min-w-0 items-start gap-(--eg-space-4)">
+  <app-page-header
+    class="min-w-0 flex-1 [&_h1]:text-(length:--eg-leading-md)"
+    [title]="copy.title"
+    [description]="showGallery() ? copy.facts(viewModel().templates.length) : undefined"
+  >
+    @if (showGallery() && !policy.narrow()) {
+      <button
+        appPageHeaderActions
+        hlmBtn
+        type="button"
+        #createButton
+        data-gallery-create
+        [disabled]="locked()"
+        (click)="openDraft()"
+      >
+        {{ copy.create }}
+      </button>
+    }
+  </app-page-header>
+</div>
+<p class="m-0 text-sm text-muted-foreground">{{ copy.description }}</p>
+@if (policy.narrow()) {
+  <app-desktop-required-notice />
+}
+@switch (state()) {
+  @case ('404') {
+    <app-empty-pattern [title]="copy.missing" />
+  }
+  @case ('record-unavailable') {
+    <app-empty-pattern [title]="copy.recordMissing" [description]="copy.missing" />
+  }
+  @case ('error') {
+    <app-inline-feedback
+      [tone]="'destructive'"
+      [title]="copy.error"
+      [actionLabel]="copy.retry"
+      (action)="state.set('default')"
+    />
+  }
+  @case ('401') {
+    <app-inline-feedback
+      [tone]="'warning'"
+      [title]="copy.expired"
+      [description]="copy.navigationDisabled"
+      [actionLabel]="copy.signIn"
+      [actionDisabled]="true"
+    />
+  }
+  @case ('403') {
+    <app-inline-feedback [title]="copy.forbidden" />
+  }
+  @case ('429') {
+    <app-inline-feedback [tone]="'warning'" [title]="copy.limited" />
+  }
+  @case ('412') {
+    <app-inline-feedback
+      [tone]="'warning'"
+      [title]="copy.conflict"
+      [actionLabel]="copy.reload"
+      (action)="state.set('default')"
+    />
+  }
+  @case ('success') {
+    <app-inline-feedback
+      [title]="copy.success"
+      [description]="copy.checkoutCase"
+      [actionLabel]="copy.openEditor"
+      [actionDisabled]="true"
+      ><p>{{ copy.navigationDisabled }}</p></app-inline-feedback
+    >
+  }
+}
+@if (policy.narrow()) {
+  @switch (state()) {
+    @case ('invalid') {
+      <app-inline-feedback
+        [tone]="'warning'"
+        [title]="copy.invalid"
+        [description]="copy.previewOnly"
+      />
+    }
+    @case ('busy') {
+      <app-inline-feedback [title]="copy.busy" [description]="copy.previewOnly" />
+    }
+    @case ('createerror') {
+      <app-inline-feedback
+        [tone]="'destructive'"
+        [title]="copy.createError"
+        [description]="copy.previewOnly"
+      />
+    }
+  }
+}
+@if (showGallery()) {
+  <section hlmCard class="filters" role="search" [attr.aria-label]="copy.find">
+    <div class="field min-w-0">
+      <span class="text-sm font-semibold" id="gallery-source-label">{{ copy.source }}</span>
+      <div class="sources" role="group" aria-labelledby="gallery-source-label">
+        @for (source of sources(); track source.id) {
+          <button
+            hlmBtn
+            type="button"
+            [variant]="'ghost'"
+            class="source"
+            [attr.data-gallery-source]="source.id"
+            [attr.aria-pressed]="store.source() === source.id"
+            (click)="store.changeSource(source.id)"
+          >
+            <span><app-shell-icon [name]="source.icon" />{{ source.label }}</span>
+            <strong>{{ source.count }}</strong>
+          </button>
+        }
+      </div>
+    </div>
+    <div class="field query-field">
+      <label hlmLabel for="gallery-search"
+        ><app-shell-icon [name]="'search'" />{{ copy.find }}</label
+      >
+      <input
+        hlmInput
+        type="search"
+        #queryBox
+        id="gallery-search"
+        [value]="store.query()"
+        (input)="store.search(queryBox.value)"
+      />
+    </div>
+  </section>
+}
+@if (showGallery() || state() === 'empty' || state() === 'loading') {
+  <app-gallery-template-table
+    [rows]="showGallery() ? visible() : []"
+    [selected]="picked()?.id"
+    [attr.aria-busy]="state() === 'loading'"
+    (picked)="previewTemplate($event)"
+  />
+  @if (state() === 'loading') {
+    <app-loading-pattern [label]="copy.loading" />
+  } @else if (state() === 'empty' || !viewModel().templates.length) {
+    <app-empty-pattern [title]="copy.empty" />
+  } @else if (!picked()) {
+    <app-empty-pattern [title]="copy.noMatch" [actionLabel]="copy.clear" (action)="clear()" />
+  }
+  @if (showGallery() && viewModel().templates.length) {
+    <p role="status" class="m-0 text-xs tabular-nums text-muted-foreground">{{ shown() }}</p>
+  }
+}
+@if (showGallery()) {
+  @if (viewed(); as item) {
+    <app-gallery-template-view
+      [item]="item"
+      [readOnly]="policy.narrow()"
+      [createDisabled]="locked()"
+      (createRequested)="openDraft()"
+      (dismissed)="viewed.set(null)"
+    />
+  } @else if (picked(); as selected) {
+    @if (dialog(); as mode) {
+      <app-gallery-draft-dialog
+        [initial]="selected"
+        [templates]="viewModel().templates"
+        [mode]="mode"
+        [readOnly]="policy.narrow()"
+        (dismissed)="closeDraft()"
+        (historical)="dialog.set(null); state.set('success')"
+      />
+    }
+  }
+}
+<footer>{{ copy.footer }}</footer>

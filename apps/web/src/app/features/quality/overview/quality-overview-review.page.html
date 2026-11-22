@@ -1,0 +1,256 @@
+<header class="flex min-w-0 items-start gap-3">
+  <span
+    class="grid size-12 shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent)"
+  >
+    <app-shell-icon name="grid" />
+  </span>
+  <app-page-header
+    class="min-w-0 grow [&_h1]:text-[length:var(--eg-space-7)]"
+    [title]="copy.title"
+    [description]="showFilters() ? project() + ' · ' + branch() : undefined"
+  >
+    @if (hasSnapshot()) {
+      <div appPageHeaderActions class="grid justify-items-start gap-1 sm:justify-items-end">
+        <span class="flex items-center gap-1 text-xs tabular-nums text-muted-foreground">
+          <hlm-icon name="lucideClock" class="size-4" />
+          <time [attr.datetime]="from()">{{ from() }}</time> —
+          <time [attr.datetime]="to()">{{ to() }}</time>
+        </span>
+        <button
+          type="button"
+          hlmBtn
+          [disabled]="true"
+          [attr.aria-describedby]="'quality-drill-reason'"
+        >
+          {{ copy.completeRuns }}
+        </button>
+        <small class="text-xs text-muted-foreground" id="quality-drill-reason">{{
+          copy.preview
+        }}</small>
+      </div>
+    }
+  </app-page-header>
+</header>
+@if (showFilters()) {
+  <form
+    hlmCard
+    [size]="'sm'"
+    novalidate
+    [formGroup]="periodForm()"
+    (ngSubmit)="apply()"
+    class="grid! min-w-0 items-end gap-3 px-4 sm:grid-cols-2 lg:grid-cols-[repeat(3,minmax(0,1fr))_auto_auto]"
+  >
+    <div class="grid min-w-0 gap-2">
+      <label hlmLabel for="quality-from">{{ copy.from }}</label>
+      <input
+        hlmInput
+        id="quality-from"
+        type="date"
+        formControlName="from"
+        class="pointer-coarse:min-h-(--eg-control-touch)"
+      />
+    </div>
+    <div class="grid min-w-0 gap-2">
+      <label hlmLabel for="quality-to">{{ copy.to }}</label>
+      <input
+        hlmInput
+        id="quality-to"
+        type="date"
+        formControlName="to"
+        class="pointer-coarse:min-h-(--eg-control-touch)"
+      />
+    </div>
+    <div class="grid min-w-0 gap-2">
+      <label hlmLabel for="quality-branch">{{ copy.branch }}</label>
+      <hlm-select [value]="branch()">
+        <hlm-select-trigger
+          [buttonId]="'quality-branch'"
+          class="w-full pointer-coarse:min-h-(--eg-control-touch)"
+          ><hlm-select-value
+        /></hlm-select-trigger>
+        <hlm-select-content *hlmSelectPortal [aria-label]="copy.branch">
+          <hlm-select-item [value]="branch()">{{ branch() }}</hlm-select-item>
+        </hlm-select-content>
+      </hlm-select>
+    </div>
+    <button
+      hlmBtn
+      type="submit"
+      class="pointer-coarse:min-h-(--eg-control-touch)"
+      [disabled]="state() === 'loading'"
+      [attr.aria-describedby]="state() === 'loading' ? 'quality-notice' : null"
+    >
+      {{ copy.apply }}
+    </button>
+    <button
+      hlmBtn
+      [variant]="'ghost'"
+      type="button"
+      class="pointer-coarse:min-h-(--eg-control-touch)"
+      (click)="reset()"
+    >
+      {{ copy.reset }}
+    </button>
+  </form>
+}
+@if (notice(); as feedback) {
+  <app-inline-feedback
+    id="quality-notice"
+    [tone]="feedback.tone"
+    [title]="feedback.title"
+    [description]="feedback.description"
+    [actionLabel]="feedback.action"
+    [actionDisabled]="state() !== 'no-match'"
+    (action)="reset()"
+  >
+    @if (feedback.action && state() !== 'no-match') {
+      <p class="m-0 text-xs">{{ copy.actionUnavailable }}</p>
+    }
+    @if (state() === 'unprovided') {
+      <p class="m-0 text-xs tabular-nums">
+        {{ project() }} · {{ branch() }} · {{ from() }} — {{ to() }}
+      </p>
+    }
+  </app-inline-feedback>
+}
+@if (hasSnapshot()) {
+  <section
+    data-snapshot
+    [attr.aria-busy]="state() === 'loading'"
+    [attr.aria-label]="copy.title"
+    class="grid min-w-0 gap-4"
+  >
+    <p class="m-0 text-xs text-muted-foreground">
+      {{ copy.asOf }} <time [attr.datetime]="model().asOf">{{ model().asOf }}</time> ·
+      {{ copy.window }}
+    </p>
+    <dl class="m-0 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      @for (metric of metrics(); track metric.key) {
+        <div
+          hlmCard
+          [size]="'sm'"
+          [attr.data-metric]="metric.key"
+          class="min-w-0 justify-start gap-3 px-4"
+        >
+          <dt class="flex items-center gap-2 border-s-2 border-(--eg-accent) ps-2 font-semibold">
+            <span
+              class="grid size-8 shrink-0 place-items-center rounded-md bg-(--eg-accent-soft) text-(--eg-accent)"
+            >
+              <hlm-icon [name]="metric.icon" class="size-4" />
+            </span>
+            {{ metric.title }}
+          </dt>
+          <dd class="m-0 grid gap-1">
+            <strong class="font-(family-name:--eg-font-display) text-2xl tabular-nums">{{
+              metric.value
+            }}</strong>
+            <small class="text-xs text-muted-foreground">{{ metric.description }}</small>
+            @if (
+              (metric.key === 'rate' || metric.key === 'incomplete') && metric.value.endsWith('%')
+            ) {
+              <span aria-hidden="true" class="mt-1 block h-1.5 overflow-hidden rounded-sm bg-muted">
+                <span class="block h-full bg-(--eg-accent)" [style.width]="metric.value"></span>
+              </span>
+            }
+          </dd>
+        </div>
+      }
+    </dl>
+    <div class="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,2.5fr)_minmax(0,1fr)]">
+      <div class="grid min-w-0 gap-4">
+        <app-quality-history [days]="model().days" />
+        <app-quality-breakdown [model]="model()" [longNames]="state() === 'long'" />
+      </div>
+      <aside class="grid min-w-0 gap-4">
+        <app-quality-outcome-mix [days]="model().days" />
+        <section hlmCard [size]="'sm'">
+          <header hlmCardHeader class="border-b border-border">
+            <h2 hlmCardTitle [size]="'subsection'">{{ copy.decisionTime }}</h2>
+          </header>
+          <div hlmCardContent class="grid min-w-0 gap-3">
+            @if (state() === 'unavailable') {
+              <p class="m-0">{{ copy.noPercentiles }}</p>
+            } @else {
+              <dl class="m-0 grid gap-3 divide-y divide-border">
+                <div class="pb-2">
+                  <dt class="font-semibold">{{ model().median }}</dt>
+                  <dd class="m-0 text-xs text-muted-foreground">{{ copy.median }}</dd>
+                </div>
+                <div>
+                  <dt class="font-semibold">{{ model().upper }}</dt>
+                  <dd class="m-0 text-xs text-muted-foreground">{{ copy.upper }}</dd>
+                </div>
+              </dl>
+              <p class="m-0 text-xs text-muted-foreground">{{ model().latencySamples }}</p>
+            }
+            <button
+              hlmBtn
+              [variant]="'link'"
+              type="button"
+              class="justify-self-start"
+              [disabled]="true"
+              [attr.aria-describedby]="'quality-eval-reason'"
+            >
+              {{ copy.evaluated }}
+            </button>
+            <small id="quality-eval-reason" class="text-xs text-muted-foreground">{{
+              copy.preview
+            }}</small>
+          </div>
+        </section>
+        <section hlmCard [size]="'sm'">
+          <header hlmCardHeader class="border-b border-border">
+            <h2 hlmCardTitle [size]="'subsection'">{{ copy.health }}</h2>
+          </header>
+          <div hlmCardContent class="grid min-w-0 gap-2">
+            <strong>{{ state() === 'zero' ? copy.noSamples : model().incompleteRate }}</strong>
+            <p class="m-0">{{ state() === 'zero' ? copy.zero : model().collection }}</p>
+            <button
+              hlmBtn
+              [variant]="'link'"
+              type="button"
+              class="justify-self-start"
+              [disabled]="true"
+              [attr.aria-describedby]="'quality-incomplete-reason'"
+            >
+              {{ copy.incompleteRuns }}
+            </button>
+            <small id="quality-incomplete-reason" class="text-xs text-muted-foreground">{{
+              copy.preview
+            }}</small>
+          </div>
+        </section>
+        <section hlmCard [size]="'sm'">
+          <header hlmCardHeader class="border-b border-border">
+            <h2 hlmCardTitle [size]="'subsection'">{{ copy.decisions }}</h2>
+          </header>
+          <div hlmCardContent class="grid min-w-0 gap-2">
+            <p class="m-0">{{ copy.historyOnly }}</p>
+            <button
+              hlmBtn
+              [variant]="'link'"
+              type="button"
+              class="justify-self-start"
+              [disabled]="true"
+              [attr.aria-describedby]="'quality-release-reason'"
+            >
+              {{ copy.release }}
+            </button>
+            <small id="quality-release-reason" class="text-xs text-muted-foreground">{{
+              copy.preview
+            }}</small>
+          </div>
+        </section>
+      </aside>
+    </div>
+    <details class="min-w-0">
+      <summary
+        class="cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-ring"
+      >
+        {{ copy.source }}
+      </summary>
+      <p class="m-0 max-w-prose text-sm text-muted-foreground">{{ copy.boundaries }}</p>
+    </details>
+  </section>
+}
+<footer class="text-xs text-muted-foreground">{{ copy.footnote }}</footer>

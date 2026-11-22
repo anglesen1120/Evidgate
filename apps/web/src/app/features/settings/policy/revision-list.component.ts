@@ -1,3 +1,4 @@
+import { DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import type { PolicyRevisionSummaryDto } from '@evidgate/sdk';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
@@ -6,12 +7,15 @@ import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-
 import { PolicyRevisionStateComponent } from './policy-revision-state.component';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
+import { HlmTableImports } from '@evidgate/ui/table';
 
 @Component({
   selector: 'app-policy-revision-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     HlmButton,
+    HlmTableImports,
+    DecimalPipe,
     HlmCardImports,
     AbsoluteTimeComponent,
     StatusPillComponent,
@@ -22,78 +26,129 @@ import { HlmCardImports } from '@evidgate/ui/card';
   template: `
     <section
       hlmCard
-      class="gap-4 p-4"
+      class="min-w-0 gap-0 rounded-lg py-0"
       aria-labelledby="policy-revisions-title"
       [attr.aria-busy]="busy()"
     >
-      <h3 hlmCardTitle [size]="subsectionSize" id="policy-revisions-title">{{ copy.title }}</h3>
-      @if (rows().length === 0) {
-        <p class="m-0 text-muted-foreground">{{ copy.empty }}</p>
-      } @else {
-        <ol class="m-0 grid list-none gap-0 p-0">
-          @for (row of rows(); track row.id) {
-            <li
-              class="grid min-w-0 gap-3 border-0 border-t border-solid border-border py-4 first:border-t-0 first:pt-0 last:pb-0"
-              data-policy-revision
-              [attr.data-revision-no]="row.revision_no"
-              [attr.data-revision-state]="row.state"
-              [attr.data-policy-head]="row.id === headId() ? '' : null"
-              [attr.data-policy-selected]="row.id === selectedId() ? '' : null"
-            >
-              <div class="flex flex-wrap items-center gap-2">
-                <button
-                  hlmBtn
-                  [variant]="'outline'"
-                  type="button"
-                  class="min-h-(--eg-control-touch) max-w-full whitespace-normal"
-                  data-policy-select
-                  [attr.aria-pressed]="row.id === selectedId()"
-                  [attr.aria-controls]="'policy-selected-detail'"
-                  [disabled]="busy()"
-                  (click)="select(row.id)"
-                >
-                  {{ copy.revision }} {{ row.revision_no }}
-                </button>
-                @if (row.id === headId()) {
-                  <app-status-pill [tone]="headTone" [label]="copy.head" />
-                }
-                <app-policy-revision-state [state]="row.state" />
-              </div>
-              <dl
-                class="m-0 grid gap-3 [&_dd]:m-0 [&_dd]:wrap-anywhere [&_dt]:text-xs [&_dt]:text-muted-foreground"
-              >
-                <div>
-                  <dt>{{ copy.hash }}</dt>
-                  <dd>
-                    <app-copyable-identifier
-                      [value]="row.hash"
-                      [label]="copy.hash + ' · ' + copy.revision + ' ' + row.revision_no"
-                    />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{{ copy.created }}</dt>
-                  <dd>
-                    <app-absolute-time [value]="row.created_at" />
-                  </dd>
-                </div>
-              </dl>
-            </li>
-          }
-        </ol>
-      }
-      @if (hasMore()) {
-        <button
-          hlmBtn
-          [variant]="'outline'"
-          class="min-h-[var(--eg-control-touch)] whitespace-normal"
-          type="button"
-          data-policy-more
-          [disabled]="busy()"
-          (click)="loadMore.emit()"
+      <header hlmCardHeader class="border-0 border-b border-solid border-border p-(--eg-space-5)">
+        <h3 hlmCardTitle [size]="subsectionSize" id="policy-revisions-title">{{ copy.title }}</h3>
+      </header>
+      <div hlmTableContainer>
+        <table
+          hlmTable
+          class="w-full table-fixed border-collapse max-md:block [&_td]:whitespace-normal [&_th]:whitespace-normal"
+          aria-labelledby="policy-revisions-title"
+          [attr.role]="'table'"
         >
-          {{ copy.more }}
-        </button>
+          <thead
+            hlmTHead
+            [attr.role]="'rowgroup'"
+            class="bg-(--eg-surface-raised) text-xs max-md:sr-only"
+          >
+            <tr hlmTr [attr.role]="'row'">
+              <th hlmTh [attr.role]="'columnheader'" scope="col" class="w-2/5">
+                {{ copy.revision }}
+              </th>
+              <th hlmTh [attr.role]="'columnheader'" scope="col">{{ copy.state }}</th>
+              <th hlmTh [attr.role]="'columnheader'" scope="col">{{ copy.created }}</th>
+              <th hlmTh [attr.role]="'columnheader'" scope="col" class="text-end">
+                {{ copy.actions }}
+              </th>
+            </tr>
+          </thead>
+          <tbody hlmTBody [attr.role]="'rowgroup'" class="max-md:block">
+            @for (row of rows(); track row.id) {
+              <tr
+                hlmTr
+                [attr.role]="'row'"
+                class="h-(--eg-space-12) border-0 border-t border-solid border-border data-[policy-selected]:bg-(--eg-accent-soft) max-md:grid max-md:h-auto max-md:gap-(--eg-space-3) max-md:p-(--eg-space-4)"
+                data-policy-revision
+                [attr.data-revision-no]="row.revision_no"
+                [attr.data-revision-state]="row.state"
+                [attr.data-policy-head]="row.id === headId() ? '' : null"
+                [attr.data-policy-selected]="row.id === selectedId() ? '' : null"
+              >
+                <td hlmTd [attr.role]="'cell'" class="min-w-0 py-(--eg-space-1)">
+                  <div class="flex flex-wrap items-center gap-(--eg-space-3)">
+                    <span class="font-semibold tabular-nums"
+                      >{{ copy.revision }} {{ row.revision_no }}</span
+                    >
+                    @if (row.id === headId()) {
+                      <app-status-pill [tone]="headTone" [label]="copy.head" />
+                    }
+                  </div>
+                  <app-copyable-identifier
+                    class="block text-xs text-muted-foreground"
+                    [value]="row.hash"
+                    [label]="copy.hash + ' · ' + copy.revision + ' ' + row.revision_no"
+                    [compact]="true"
+                  />
+                </td>
+                <td hlmTd [attr.role]="'cell'">
+                  <span class="block text-xs text-muted-foreground md:hidden">{{
+                    copy.state
+                  }}</span>
+                  <app-policy-revision-state [state]="row.state" />
+                </td>
+                <td hlmTd [attr.role]="'cell'">
+                  <span class="block text-xs text-muted-foreground md:hidden">{{
+                    copy.created
+                  }}</span>
+                  <app-absolute-time [value]="row.created_at" />
+                </td>
+                <td hlmTd [attr.role]="'cell'" class="text-end">
+                  <button
+                    hlmBtn
+                    #trigger
+                    [variant]="'outline'"
+                    type="button"
+                    [attr.aria-haspopup]="'dialog'"
+                    data-policy-view
+                    class="min-h-(--eg-control-touch)"
+                    [attr.aria-label]="copy.view + ' · ' + copy.revision + ' ' + row.revision_no"
+                    [disabled]="busy()"
+                    (click)="select(row.id, trigger)"
+                  >
+                    {{ copy.view }}
+                  </button>
+                </td>
+              </tr>
+            } @empty {
+              <tr hlmTr [attr.role]="'row'">
+                <td hlmTd [attr.role]="'cell'" colspan="4">
+                  <p class="m-0 text-muted-foreground">{{ copy.empty }}</p>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (rows().length || hasMore()) {
+        <footer
+          hlmCardFooter
+          class="flex min-w-0 flex-wrap items-center justify-between gap-(--eg-space-3) border-0 border-t border-solid border-border p-(--eg-space-5)"
+        >
+          @if (rows().length) {
+            <span
+              class="text-xs tabular-nums text-muted-foreground"
+              i18n="@@settings.policy.history-range"
+              >Showing 1–{{ rows().length | number }} loaded revisions</span
+            >
+          }
+          @if (hasMore()) {
+            <button
+              hlmBtn
+              [variant]="'outline'"
+              class="min-h-(--eg-control-touch) whitespace-normal"
+              type="button"
+              data-policy-more
+              [disabled]="busy()"
+              (click)="loadMore.emit()"
+            >
+              {{ copy.more }}
+            </button>
+          }
+        </footer>
       }
     </section>
   `,
@@ -102,19 +157,23 @@ export class RevisionListComponent {
   readonly rows = input<readonly PolicyRevisionSummaryDto[]>([]);
   readonly headId = input<string | null>(null);
   readonly selectedId = input<string | null>(null);
-  readonly selected = output<string>();
+  readonly selected = output<{ id: string; trigger: HTMLButtonElement }>();
   protected readonly subsectionSize = 'subsection' as const;
   protected readonly headTone = 'info' as const;
   readonly hasMore = input(false);
   readonly busy = input(false);
   readonly loadMore = output<void>();
-  protected select(id: string): void {
-    if (!this.busy() && this.rows().some((row) => row.id === id)) this.selected.emit(id);
+  protected select(id: string, trigger: HTMLButtonElement): void {
+    if (!this.busy() && this.rows().some((row) => row.id === id))
+      this.selected.emit({ id, trigger });
   }
   protected readonly copy = {
-    title: $localize`:@@settings.policy.revisions:Revisions`,
+    title: $localize`:@@settings.policy.revision-history:Revision history`,
+    view: $localize`:@@settings.row.view:View`,
+    actions: $localize`:@@settings.row.actions:Actions`,
     empty: $localize`:@@settings.policy.revisions-empty:No revisions available.`,
     revision: $localize`:@@settings.policy.revision:Revision`,
+    state: $localize`:@@settings.policy.state:Revision state`,
     head: $localize`:@@settings.policy.head:Head`,
     hash: $localize`:@@settings.policy.hash:Hash`,
     created: $localize`:@@settings.policy.created:Created`,

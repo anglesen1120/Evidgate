@@ -1,0 +1,205 @@
+@let ctx = context();
+@let state = ctx.state();
+@let replacement = state === '412' || state === 'reloaded';
+<section hlmCard [size]="'sm'">
+  <header hlmCardHeader>
+    <h2 hlmCardTitle [size]="'section'">{{ copy.human }}</h2>
+  </header>
+  <div hlmCardContent>
+    <app-proposal-status [context]="ctx" />
+    <dl class="facts">
+      @if (ctx.revision().revision === 7) {
+        <div>
+          <dt>{{ copy.reviewer }}</dt>
+          <dd>
+            {{ state === 'conflict' ? copy.noAssignment : record.reviewer }}
+            @if (state !== 'conflict') {
+              · <code>{{ record.role }}</code>
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>{{ copy.author }}</dt>
+          <dd>{{ record.author }}</dd>
+        </div>
+      }
+      <div>
+        <dt>{{ copy.permission }}</dt>
+        <dd>
+          <code>{{ record.approvalPermission }}</code>
+        </dd>
+      </div>
+      <div class="col-span-full border-s-2 border-border ps-3">
+        <dt>{{ replacement ? labels.hash : copy.exact }}</dt>
+        <dd class="select-all">
+          <code>{{ replacement ? ctx.revision().hash : record.fullHash }}</code>
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.version }}</dt>
+        <dd>
+          <code>{{ record.base }} · {{ ctx.revision().revision }}</code>
+        </dd>
+      </div>
+      @if (ctx.revision().revision === 7) {
+        <div>
+          <dt>{{ copy.expiry }}</dt>
+          <dd>
+            <code>{{ record.expires }}</code>
+          </dd>
+        </div>
+      }
+    </dl>
+    <p class="text-muted-foreground">{{ copy.noWrite }}</p>
+    @if (state === 'approved' || state === 'rejected') {
+      <section data-decision-preview class="grid gap-2 rounded-sm border border-border p-3">
+        <strong>{{ labels[state] }} · {{ labels.atTen }}</strong>
+        <p>
+          {{ copy.recordedBy }}: {{ record.reviewer }} · <code>{{ record.fullHash }}</code> ·
+          <code>{{ record.base }}</code>
+        </p>
+        <p>{{ state === 'approved' ? copy.approveReason : copy.rejectReason }}</p>
+      </section>
+    } @else {
+      <p>{{ copy.assignment }}</p>
+      @if (state === '422') {
+        <app-inline-feedback [tone]="'destructive'" [title]="copy.missingReason" />
+      }
+      @if (state === 'prepared' || store.prepared()) {
+        <app-inline-feedback [title]="copy.prepared" [description]="copy.stored">
+          @if (store.prepared(); as preview) {
+            <p>
+              {{ copy[preview.action] }} · {{ record.reviewer }} ·
+              <code>{{ record.fullHash }}</code>
+            </p>
+            <p>{{ preview.reason }}</p>
+          }
+        </app-inline-feedback>
+      }
+      @if (!eligible()) {
+        <p>{{ blocker() }}</p>
+      }
+      <footer
+        class="sticky bottom-0 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-card py-3"
+      >
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          type="button"
+          class="min-h-11"
+          [attr.data-action]="'reject'"
+          [disabled]="!eligible()"
+          (click)="open('reject')"
+        >
+          {{ copy.reject }}
+        </button>
+        <button
+          hlmBtn
+          type="button"
+          class="min-h-11"
+          [attr.data-action]="'approve'"
+          [disabled]="!eligible()"
+          (click)="open('approve')"
+        >
+          {{ copy.approve }}
+        </button>
+      </footer>
+    }
+  </div>
+</section>
+<hlm-dialog
+  [state]="store.action() && eligible() ? 'open' : 'closed'"
+  [aria-label]="copy[store.action() ?? 'approve']"
+  [autoFocus]="'[data-cancel]'"
+  [restoreFocus]="true"
+  (stateChanged)="$event === 'closed' && store.close()"
+>
+  <hlm-dialog-content
+    *hlmDialogPortal
+    [showCloseButton]="false"
+    class="max-h-[90dvh] overflow-y-auto wrap-anywhere sm:max-w-[35rem]"
+  >
+    <header hlmDialogHeader>
+      <h2 hlmDialogTitle class="flex items-center gap-2">
+        <hlm-icon
+          class="size-5"
+          [name]="store.action() === 'reject' ? 'lucideOctagonX' : 'lucideCircleCheck'"
+        />
+        {{ copy[store.action() ?? 'approve'] }}
+      </h2>
+      <p hlmDialogDescription>{{ record.id }} · {{ ctx.revision().hash }} · {{ record.base }}</p>
+      <p class="text-sm text-muted-foreground">{{ copy.noWrite }}</p>
+    </header>
+    <dl class="facts">
+      <div>
+        <dt>{{ labels.candidate }}</dt>
+        <dd>{{ record.id }}</dd>
+      </div>
+      <div class="col-span-full">
+        <dt>{{ copy.exact }}</dt>
+        <dd>
+          <code>{{ record.fullHash }}</code>
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.version }}</dt>
+        <dd>
+          <code>{{
+            record.base + ' · ' + record.revisionHeader + ': ' + ctx.revision().revision
+          }}</code>
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.reviewer }}</dt>
+        <dd>{{ record.reviewer }}</dd>
+      </div>
+      <div>
+        <dt>{{ copy.expiry }}</dt>
+        <dd>{{ record.expires }}</dd>
+      </div>
+    </dl>
+    @let invalidReason = state === '422' && !store.reason().trim();
+    <label hlmLabel for="proposal-review-reason">{{ copy.reason }}</label>
+    <textarea
+      hlmInput
+      id="proposal-review-reason"
+      required
+      rows="3"
+      maxlength="2000"
+      [pattern]="nonblank"
+      [ngModel]="store.reason()"
+      (ngModelChange)="store.edit($event)"
+      [forceInvalid]="invalidReason"
+      [aria-describedby]="invalidReason ? 'preview-impact proposal-reason-error' : 'preview-impact'"
+    ></textarea>
+    @if (invalidReason) {
+      <p id="proposal-reason-error" class="text-sm text-(--eg-danger-fg)">
+        {{ copy.missingReason }}
+      </p>
+    }
+    <p id="preview-impact">{{ copy.stored }}</p>
+    <footer hlmDialogFooter class="sticky bottom-0 border-t border-border bg-card py-3">
+      <button
+        hlmBtn
+        [variant]="'outline'"
+        type="button"
+        class="min-h-11"
+        data-cancel
+        (click)="store.close()"
+      >
+        {{ copy.cancel }}
+      </button>
+      <button
+        hlmBtn
+        type="button"
+        data-prepare
+        [variant]="store.action() === 'reject' ? 'destructive' : 'default'"
+        class="min-h-11"
+        [disabled]="!eligible() || !store.reason().trim()"
+        (click)="prepare()"
+      >
+        {{ copy.prepare }}
+      </button>
+    </footer>
+  </hlm-dialog-content>
+</hlm-dialog>

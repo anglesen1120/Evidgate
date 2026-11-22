@@ -15,6 +15,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard } from '@evidgate/ui/card';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { SessionStore } from '../../../core/session/session.store';
@@ -25,16 +26,15 @@ import { InlineFeedbackComponent } from '../../../shared/ui/states/inline-feedba
 import { RetryAfterComponent } from '../../../shared/ui/conflict/retry-after.component';
 import { DesktopMutationDirective } from '../../../shared/ui/narrow/desktop-mutation.directive';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
-import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
 import { NumberValueComponent } from '../../../shared/ui/values/number-value.component';
-import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { createFormFeedback } from '../../../shared/forms/form-feedback';
 import { FieldFeedbackComponent } from '../../../shared/forms/field-feedback.component';
 import { FormErrorSummaryComponent } from '../../../shared/forms/form-error-summary.component';
 import { codePoints } from '../editor/editor.model';
 import { PENDING_COPY } from './pending-changes.copy';
-import { PENDING_UI, operationLabel } from './pending-changes.ui-copy';
+import { PENDING_UI } from './pending-changes.ui-copy';
+import { PendingChangeTableComponent } from './pending-change-table.component';
 import { PendingChangesStore } from './pending-changes.store';
 import { PendingConfirmComponent } from './pending-confirm.component';
 
@@ -46,6 +46,7 @@ import { PendingConfirmComponent } from './pending-confirm.component';
     FormsModule,
     RouterLink,
     HlmButton,
+    HlmCard,
     HlmInput,
     HlmLabel,
     SectionHeaderComponent,
@@ -54,10 +55,9 @@ import { PendingConfirmComponent } from './pending-confirm.component';
     InlineFeedbackComponent,
     RetryAfterComponent,
     DesktopMutationDirective,
-    StatusPillComponent,
+    PendingChangeTableComponent,
     CopyableIdentifierComponent,
     NumberValueComponent,
-    AbsoluteTimeComponent,
     PendingConfirmComponent,
     FieldFeedbackComponent,
     FormErrorSummaryComponent,
@@ -75,7 +75,6 @@ export class ChecklistReviewTabComponent {
   readonly itemId = input.required<string>();
   protected readonly copy = PENDING_COPY;
   protected readonly ui = PENDING_UI;
-  protected readonly operationLabel = operationLabel;
   private readonly scope = computed(() => ({ project: this.projectId(), item: this.itemId() }));
   protected readonly comment = linkedSignal({ source: this.scope, computation: () => '' });
   protected readonly reason = linkedSignal({ source: this.scope, computation: () => '' });

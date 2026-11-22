@@ -4,7 +4,7 @@
 > Level: high-level plan; each story gets a detailed plan in `plans/features/` (00 §12) before build.
 > Legend: ✅ verified (link opened for this plan) · ⚠️ unverified · `[INFERENCE]` · `[DECISION]` · `[OPEN]`.
 
-> **Phases (CR-D-2):** the Milestone column holds the CR-D-2 phase (G1–G4) from [13 §4.4](13-product-phases.md); M0–M5 in this plan's prose refers to the pre-CR-D-2 sequence. Phase totals (raw): G1 16 · G2 21 · G3 24.5 · G4 21.5 person-days.
+> **Phases (CR-D-2):** the Milestone column holds the CR-D-2 phase (G1–G4) from [13 §4.4](13-product-phases.md); M0–M5 in this plan's prose refers to the pre-CR-D-2 sequence. Phase totals (raw): G1 24 · G2 27 · G3 28.5 · G4 26.5 person-days.
 
 ## 1. Purpose and scope
 
@@ -320,6 +320,29 @@ Epic 09.8 total: 6.0
 
 **Epic 09.9 total: 2.5**
 
+### Epic 09.10 Adopt UI design v3 [PROPOSAL owner-approved redesign 2026-11-22]
+
+#### Story 09.10.1 Adopt UI design v3 - acceptance: `apps/web` renders the owner-approved v3 design (`docs/design/web-ui-v3/`, 48 mockups 00-47) in light and dark, vi and en, from one token set and one navigation manifest, with no change to any contract, state meaning or permission rule.
+| ID | Task | Size | Version | Milestone | Depends on |
+|---|---|---|---|---|---|
+| 09.10.1-T1 | Design tokens (`tokens-v3.css`) and the two self-hosted OFL fonts into the `apps/web` theme, light and dark, replacing the v2 tokens | M | V1 | G1 | 09.1.1-T11 |
+| 09.10.1-T2 | App shell from the navigation manifest: sidebar, topbar, project selector, account menu, global screen search, mobile menu; sign-in screen with the allow-listed `returnTo` (mockups 01 shell, 02) | L | V1 | G1 | 09.10.1-T1, 09.1.1-T4, 09.1.1-T5 |
+| 09.10.1-T3 | Shared components restyle: status and decision chips (status never colour-only, pending neutral), buttons, KPI cards, tables, disclosure, dialogs, empty/error states (mockup 00) | L | V1 | G1 | 09.10.1-T1, 09.1.1-T7, 09.1.1-T8 |
+| 09.10.1-T4 | Runs and evidence screens: overview, run list, run detail, evidence panel, report comparison (mockups 01, 03, 04, 05, 07) | L | V1 | G2 | 09.10.1-T2, 09.10.1-T3, 09.3.1-T1, 09.3.1-T3 |
+| 09.10.1-T5 | Decision and waivers, release view, quality overview (mockups 06, 21, 22) | M | V2 | G4 | 09.10.1-T4, 09.3.1-T10, 09.9.1-T2 |
+| 09.10.1-T6 | Failures and investigation: failure inbox, failure detail and triage, investigation history, artifact viewer (mockups 08, 09, 10, 11) | L | V1 | G3 | 09.10.1-T3, 09.4.1-T1, 09.4.1-T5 |
+| 09.10.1-T7 | Healing review: queue, shadow detail, approval, knowledge and revocation, availability (mockups 12-16) | L | V1 | G3 | 09.10.1-T3, 09.5.1-T1, 09.5.2-T3 |
+| 09.10.1-T8 | Test Studio: template gallery, draft editor, review and merge, suite composition (mockups 17-20) | M | V2 | G4 | 09.10.1-T3, 09.6.1-T1 |
+| 09.10.1-T9 | Authoring: feature tree, case editor, pending changes, generation, AI settings, import and export, generated scripts, UI-change proposal (mockups 40-47) | XL | V2 | G1 | 09.10.1-T3, 13.4.1-T1 |
+| 09.10.1-T10 | Onboarding and catalog: onboarding wizard, project connection, test catalog, mapping resolution (mockups 23-26) | L | V1 | G2 | 09.10.1-T3, 09.2.1-T1, 09.2.1-T6 |
+| 09.10.1-T11 | Settings core: settings shell, members and roles, secret references, release policy, usage and credits, audit log, security events (mockups 27-33) | L | V1 | G2 | 09.10.1-T3, 09.7.1-T1 |
+| 09.10.1-T12 | Settings extended: agent pools, webhooks, support access, API tokens, deploy targets (mockups 34-38) | M | V2 | G4 | 09.10.1-T11, 09.7.1-T7, 09.7.2-T1 |
+| 09.10.1-T13 | Visual-regression baseline and accessibility pass at 1440 and 900 px, light and dark, vi and en, over every migrated screen | L | V2 | G4 | 09.10.1-T4, 09.10.1-T5, 09.10.1-T6, 09.10.1-T7, 09.10.1-T8, 09.10.1-T9, 09.10.1-T10, 09.10.1-T12, 09.8.1-T2 |
+
+**Story 09.10.1 total: 23.0** (V1 15.0, V2 8.0) - `[INFERENCE]` sizes; mockup 39 (localization review) is a design-review page, not a product screen, and has no task. Each task re-skins a screen whose behaviour is owned by its 09.x task; a screen migration may start only when that behaviour task has landed, otherwise it waits (no mock-backed release).
+
+**Epic 09.10 total: 23.0**
+
 ## 10. Dependencies
 
 | Needs | From |
@@ -347,6 +370,7 @@ Epic 09.8 total: 6.0
 | 3 | Static hosting target for `apps/web` and its role in the RTO/RPO story; it must also emit the app-origin CSP + Trusted Types headers (FR-09-15, F-09-5) | Tech Lead (with 10) | M2 mid |
 | 4 | Whether a customer-facing read-only report link is needed by the pilot (would add a share surface) | Owner | M3 |
 | 5 | Cross-plan story ids: the `Depends on` column references ids from plans 01-08, 11 and 12 that were written in parallel (plan 10 at plan level until it lands); the integrator must reconcile any mismatch — **Closed 2026-09-25:** script check over all 487 task rows finds 0 unresolved ids; whether each cited id means what the citation says is checked in each feature plan's Definition of Ready (00 §12) | Tech Lead | before M1 |
+| 6 | UI design v3 contract questions (story 09.10.1; each is a screen showing a behaviour no contract specifies yet): maximum token expiry (37; the show-once secret is already specified by 02.4.4), read permission for the policy tab (30), retention change answering 412 (31), waiver decline (06: no decline endpoint is specified) - answers go to the owning story, never into the screen first. Detail: `plans/features/09-web-ui/09.10.1-adopt-ui-design-v3.md` §3 | Tech Lead (with 02, 07, 06) | before 09.10.1-T11 / T5 |
 
 ## 12. Estimate summary
 
@@ -361,9 +385,10 @@ Epic 09.8 total: 6.0
 | 09.7 Settings and administration | 11.5 | 2.0 | 0 | 13.5 |
 | 09.8 Accessibility, i18n, E2E | 5.0 | 1.0 | 0 | 6.0 |
 | 09.9 Quality overview | 0 | 2.5 | 0 | 2.5 |
-| **Total** | **63.0** | **20.0** | **0** | **83.0** |
+| 09.10 Adopt UI design v3 | 15.0 | 8.0 | 0 | 23.0 |
+| **Total** | **78.0** | **28.0** | **0** | **106.0** |
 
-→ with 20 % buffer **99.6** person-days
+→ with 20 % buffer **127.2** person-days
 
 ## 13. Contract change requests
 

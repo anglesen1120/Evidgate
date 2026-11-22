@@ -4,6 +4,7 @@ import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmCard, HlmCardTitle, HlmCardDescription } from '@evidgate/ui/card';
+import { HlmIcon } from '@evidgate/ui/icon';
 
 import type { NavEntry } from '../nav/nav.models';
 import { NAV_ENTRIES } from '../nav/nav-registry';
@@ -28,30 +29,22 @@ function entryIdOf(route: ActivatedRoute): string | null {
 
 @Component({
   selector: 'app-route-stub',
-  imports: [HlmBadge, HlmCard, HlmCardTitle, HlmCardDescription],
+  imports: [HlmBadge, HlmCard, HlmCardTitle, HlmCardDescription, HlmIcon],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0 font-sans text-foreground' },
   template: `<section
     hlmCard
-    class="min-w-0 items-start gap-(--eg-space-4) px-(--eg-space-4) py-(--eg-space-8) [overflow-wrap:anywhere] min-[768px]:px-(--eg-space-5)"
+    class="min-w-0 items-start gap-(--eg-space-4) p-(--eg-space-5) min-[768px]:p-(--eg-space-6)"
     aria-labelledby="route-stub-heading"
   >
-    <p
-      hlmBadge
-      [variant]="'secondary'"
-      class="eyebrow m-0 whitespace-normal"
-      i18n="@@shell.stub.eyebrow"
-    >
-      Screen not built yet
-    </p>
-    <h1
-      hlmCardTitle
-      class="m-0 font-(family-name:--eg-font-display) text-xl font-(weight:--eg-weight-bold)"
-      id="route-stub-heading"
-    >
-      {{ title }}
-    </h1>
-    <p hlmCardDescription class="m-0" i18n="@@shell.stub.body">
+    <div class="flex min-w-0 max-w-full flex-wrap items-center gap-(--eg-space-3)">
+      <h1 hlmCardTitle [size]="'page'" id="route-stub-heading">{{ title }}</h1>
+      <p hlmBadge [variant]="'secondary'" class="eyebrow m-0 max-w-full">
+        <hlm-icon [name]="'lucideInfo'" />
+        <span i18n="@@shell.stub.eyebrow">Screen not built yet</span>
+      </p>
+    </div>
+    <p hlmCardDescription class="max-w-prose text-sm" i18n="@@shell.stub.body">
       This screen arrives with its own feature story. Its route, permission guard and navigation
       entry are in place so the shell can be reviewed end to end.
     </p>

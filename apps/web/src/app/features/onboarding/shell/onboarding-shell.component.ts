@@ -29,6 +29,8 @@ import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmIcon } from '@evidgate/ui/icon';
 
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
+import { PageHeaderComponent } from '../../../shared/ui/page-header';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
 import {
   ErrorPatternComponent,
@@ -38,6 +40,7 @@ import {
 } from '../../../shared/ui/states';
 import type { StepNumber } from '../data/step-derivation';
 import { OnboardingStore } from '../onboarding.store';
+import { OnboardingRecordDialogComponent } from '../onboarding-record-view.component';
 import { CreateProjectPage } from '../steps/create-project.page';
 import { ConnectCiPage } from '../steps/connect-ci.page';
 import { EnableCollectionPage } from '../steps/enable-collection.page';
@@ -52,6 +55,7 @@ import {
   viewedSummary,
 } from './onboarding-summaries';
 import { StepPendingComponent } from './step-pending.component';
+import { revealViewedStep } from './viewed-step-scroll';
 
 @Component({
   selector: 'app-onboarding-shell',
@@ -60,10 +64,13 @@ import { StepPendingComponent } from './step-pending.component';
     RouterLink,
     HlmCardImports,
     HlmIcon,
+    PageHeaderComponent,
+    ShellIconComponent,
     CreateProjectPage,
     ConnectCiPage,
     EnableCollectionPage,
     EvidencePanelComponent,
+    OnboardingRecordDialogComponent,
     StepPendingComponent,
     ErrorPatternComponent,
     ForbiddenPatternComponent,
@@ -91,7 +98,6 @@ export class OnboardingShellComponent {
   private readonly currentUrl = signal('');
 
   protected readonly outlineVariant = 'outline';
-  protected readonly pageHeadingSize = 'page' as const;
   protected readonly sectionHeadingSize = 'section' as const;
   protected readonly loadingLabel = $localize`:@@onboarding.shell.loading:Loading project setup`;
   protected readonly completedCount = computed(() =>
@@ -99,6 +105,13 @@ export class OnboardingShellComponent {
   );
   protected readonly progressText = computed(() =>
     completionSummary(this.completedCount(), this.steps.length),
+  );
+  protected readonly bindingsMetric = $localize`:@@onboarding.evidence.bindings:CI bindings`;
+  protected readonly tokensMetric = $localize`:@@onboarding.evidence.tokens:Ingest tokens`;
+  protected readonly headerFacts = computed(() =>
+    [this.store.project()?.name, this.viewedSummary(), this.progressText()]
+      .filter(Boolean)
+      .join(' · '),
   );
   private readonly heading = viewChild<ElementRef<HTMLHeadingElement>>('stepHeading');
   private readonly stepButtons = viewChildren<ElementRef<HTMLButtonElement>>('stepButton');
@@ -151,13 +164,8 @@ export class OnboardingShellComponent {
    * replaced by the shell's `<main>` focus, and the visitor's place with it.
    */
   private readonly createdHandoff = signal<'none' | 'queued' | 'ran'>('none');
-  /**
-   * The page's own heading. It is the one named element every branch of the shell renders, so a
-   * retry that fails has somewhere stable to put focus: the retry button itself is replaced by the
-   * failure branch it triggers, and dropping the user on `<body>` loses both the position and the
-   * announcement (WCAG 2.4.3; state-sheet.md:33).
-   */
-  private readonly pageHeading = viewChild<ElementRef<HTMLHeadingElement>>('pageHeading');
+  // Retry replaces its own button. The page title survives every failure branch.
+  private readonly pageHeader = viewChild(PageHeaderComponent);
   /**
    * Set by a retry whose read failed. The render pass at the end of the constructor moves focus
    * and clears it; a signal (not a plain field) because the failure may be published after the
@@ -219,6 +227,7 @@ export class OnboardingShellComponent {
       stepButtons: () => this.stepButtons().map(({ nativeElement }) => nativeElement),
       viewedButton: () => this.viewedStepButton(),
     });
+    revealViewedStep(() => this.viewedStepButton());
     afterRenderEffect(() => this.focusMovedStep());
     afterRenderEffect(() => this.focusReloadFailure());
     effect((onCleanup) => {
@@ -348,12 +357,12 @@ export class OnboardingShellComponent {
     if (!this.announceReloadFailure()) {
       return;
     }
-    const heading = this.pageHeading()?.nativeElement;
+    const heading = this.pageHeader();
     if (heading === undefined) {
       return;
     }
     this.announceReloadFailure.set(false);
-    heading.focus();
+    heading.focusTitle();
   }
 
   /**

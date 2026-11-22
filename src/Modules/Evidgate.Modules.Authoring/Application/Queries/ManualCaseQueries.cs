@@ -33,6 +33,7 @@ namespace Evidgate.Modules.Authoring.Application.Queries;
 /// <param name="Q">Optional case-insensitive title substring, at most 200 code points.</param>
 /// <param name="Cursor">The opaque cursor of the previous page, or null for the first page.</param>
 /// <param name="Limit">The page size the route already bounded.</param>
+/// <param name="RequestError">The first edge validation error, answered after authorization.</param>
 internal sealed record ListManualCasesQuery(
     Guid ProjectId,
     Guid? NodeId,
@@ -42,7 +43,8 @@ internal sealed record ListManualCasesQuery(
     bool? Covered,
     string? Q,
     string? Cursor,
-    int Limit) : IQuery<Result<ManualCaseListResponse>>;
+    int Limit,
+    Error? RequestError = null) : IQuery<Result<ManualCaseListResponse>>;
 
 /// <summary>
 /// Handler of <see cref="ListManualCasesQuery"/>: four statements (the project probe, the project's linked catalog
@@ -88,61 +90,90 @@ internal sealed class ListManualCasesQueryHandler(
             return Result.Failure<ManualCaseListResponse>(scopeError);
         }
 
+        if (query.RequestError is { } requestError)
+        {
+            return Result.Failure<ManualCaseListResponse>(requestError);
+        }
+
         var orgId = scopes.Require().OrgId;
 
+        if (ParseFilters(query, out var text, out var cursor) is { } filterError)
+        {
+            return Result.Failure<ManualCaseListResponse>(filterError);
+        }
+
+        return await ReadPageAsync(db, catalog, query, orgId, text, cursor, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Refuses a filter value or cursor outside this route's vocabulary, answering the first offender.</summary>
+    /// <returns>The refusal, or <c>null</c> with the normalised q and the decoded cursor set.</returns>
+    private static Error? ParseFilters(
+        ListManualCasesQuery query,
+        out string? text,
+        out (string Code, Guid Id)? cursor)
+    {
+        text = null;
+        cursor = null;
         if (query.State is { } state && !ManualTestCaseStateMachine.States.Contains(state, StringComparer.Ordinal))
         {
-            return Result.Failure<ManualCaseListResponse>(Error.Invalid(
+            return Error.Invalid(
                 "state is one of draft, approved or retired",
-                [new ErrorDetail("/state", "value_invalid")]));
+                [new ErrorDetail("/state", "value_invalid")]);
         }
 
         if (query.Priority is { } priority && !AuthoringPriorities.IsValid(priority))
         {
-            return Result.Failure<ManualCaseListResponse>(Error.Invalid(
+            return Error.Invalid(
                 "priority is one of critical, high, medium or low",
-                [new ErrorDetail("/priority", "value_invalid")]));
+                [new ErrorDetail("/priority", "value_invalid")]);
         }
 
-        var text = AuthoringEndpointText.Blank(query.Q);
-
+        text = AuthoringEndpointText.Blank(query.Q);
         if (text is { } raw)
         {
             if (AuthoringText.ContainsNul(raw))
             {
-                // `q` reaches a `text` comparison, which refuses U+0000 (22021) after the statement has started: the
-                // caller's NUL is answered here instead, in the same 422 shape as any other unusable q (security S-1/S-2).
-                return Result.Failure<ManualCaseListResponse>(Error.Invalid(
+                // PostgreSQL text refuses NUL after the statement starts; answer it as the usual filter 422 instead.
+                return Error.Invalid(
                     "q must not contain a NUL (U+0000) character",
-                    [new ErrorDetail("/q", "invalid_text")]));
+                    [new ErrorDetail("/q", "invalid_text")]);
             }
 
-            // The stored titles are NFC, so a decomposed query would never match one: compose it first, then
-            // count code points (the unit the database's char_length and the schema's maxLength count).
+            // Stored titles are NFC; compose before counting the code points used by the database and schema.
             text = AuthoringText.Normalize(raw);
-
             if (!AuthoringText.Fits(text, MaximumQueryLength))
             {
-                return Result.Failure<ManualCaseListResponse>(Error.Invalid(
+                return Error.Invalid(
                     string.Create(CultureInfo.InvariantCulture, $"q is at most {MaximumQueryLength} characters"),
-                    [new ErrorDetail("/q", "too_long")]));
+                    [new ErrorDetail("/q", "too_long")]);
             }
         }
-
-        (string Code, Guid Id)? cursor = null;
 
         if (AuthoringEndpointText.Blank(query.Cursor) is { } rawCursor)
         {
             if (!ManualCaseCursor.TryDecode(rawCursor, out var decoded))
             {
-                return Result.Failure<ManualCaseListResponse>(Error.Invalid(
+                return Error.Invalid(
                     "cursor is the opaque next_cursor of the previous page",
-                    [new ErrorDetail("/cursor", "malformed")]));
+                    [new ErrorDetail("/cursor", "malformed")]);
             }
 
             cursor = decoded;
         }
 
+        return null;
+    }
+
+    /// <summary>Answers one keyset page: the project probe, the live-link reads and the page statement, in that order.</summary>
+    private static async ValueTask<Result<ManualCaseListResponse>> ReadPageAsync(
+        ITenantDb db,
+        ICatalogContracts catalog,
+        ListManualCasesQuery query,
+        Guid orgId,
+        string? text,
+        (string Code, Guid Id)? cursor,
+        CancellationToken cancellationToken)
+    {
         if (await db.ScalarAsync<int?>(AuthoringManualCaseReadSql.ProjectExists, new { project_id = query.ProjectId }, cancellationToken)
                 .ConfigureAwait(false) is null)
         {

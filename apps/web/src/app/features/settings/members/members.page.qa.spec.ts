@@ -8,6 +8,7 @@ import type { MembershipView, RoleView } from '@evidgate/sdk';
 import { MembersDataService } from '../../../core/data/members-data.service';
 import { ApiRequestError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { MembersPage } from './members.page';
 import { MembersStore } from './members.store';
 
@@ -56,6 +57,7 @@ type PageSurface = {
 };
 
 describe('MembersPage paging through the real MembersStore (09.7.1-T2 QA)', () => {
+  provideLayoutTestStubs();
   let data: PagedData;
   let fixture: ComponentFixture<MembersPage>;
   let root: HTMLElement;
@@ -100,6 +102,30 @@ describe('MembersPage paging through the real MembersStore (09.7.1-T2 QA)', () =
     store = fixture.debugElement.injector.get(MembersStore);
     return fixture.componentInstance as unknown as PageSurface;
   }
+
+  it('counts active and pending memberships on the visible page, never across unvisited pages', async () => {
+    TestBed.overrideProvider(SessionStore, {
+      useValue: { currentOrg: signal({ id: 'org1' }), has: () => false },
+    });
+    data.page2 = () =>
+      Promise.resolve({
+        items: [
+          { ...MEMBER, id: 'm2', status: 'removed', roles: [ROLE] },
+          { ...MEMBER, id: 'm3', status: 'pending', roles: [ROLE] },
+          { ...MEMBER, id: 'm4', roles: [ROLE] },
+        ],
+        next_cursor: null,
+      });
+    await render();
+    expect(root.textContent).toContain('Read-only');
+    const counts = root.querySelector('[data-members-page-count]');
+    expect(counts?.textContent).toContain('On this page');
+    expect(counts?.querySelector('app-number-value')?.textContent?.trim()).toBe('1');
+    await store.loadMore();
+    await fixture.whenStable();
+    const values = root.querySelectorAll('[data-members-page-count] app-number-value');
+    expect(Array.from(values, (el) => el.textContent?.trim())).toEqual(['2', '1', '1']);
+  });
 
   it('a refused second page keeps the first page on screen and records the refusal, with Next still offered', async () => {
     data.page2 = () =>

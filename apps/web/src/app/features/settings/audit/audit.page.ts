@@ -16,15 +16,25 @@ import { ActivatedRoute } from '@angular/router';
 import { HlmAlertImports } from '@evidgate/ui/alert';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
 import { SessionStore } from '../../../core/session/session.store';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
+import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
+import { SectionHeaderComponent } from '../../../shared/ui/page-header/section-header.component';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
 import { AUDIT_ACTOR_TYPE_LABELS } from './actor-type-labels';
 import { AuditExportComponent } from './audit-export.component';
 import { AuditTableComponent } from './audit-table.component';
-import { AuditStore, EMPTY_AUDIT_FILTERS, type AuditFilters } from './audit.store';
+import {
+  AUDIT_EXPORT_CAP,
+  AuditStore,
+  EMPTY_AUDIT_FILTERS,
+  type AuditFilters,
+} from './audit.store';
+import { supportAccessOf } from './support-access';
 
 const VISIBLE_ROW_LIMIT = 25;
 
@@ -35,6 +45,10 @@ const VISIBLE_ROW_LIMIT = 25;
     HlmAlertImports,
     HlmButton,
     HlmCardImports,
+    HlmIcon,
+    ShellIconComponent,
+    StatusPillComponent,
+    SectionHeaderComponent,
     HlmInput,
     HlmLabel,
     HlmSelectImports,
@@ -46,7 +60,8 @@ const VISIBLE_ROW_LIMIT = 25;
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './audit.page.html',
   host: {
-    class: 'block min-w-0 text-sm text-foreground [&_p]:m-0 [&_code]:font-mono',
+    class:
+      '@container grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 wrap-anywhere text-sm text-foreground [&_p]:m-0 [&_code]:font-mono',
     '[attr.data-audit-phase]': 'store.phase()',
   },
 })
@@ -73,7 +88,6 @@ export class AuditPage {
       : value;
   };
   protected readonly pageHeadingSize = 'page' as const;
-  protected readonly sectionHeadingSize = 'section' as const;
   protected readonly subsectionHeadingSize = 'subsection' as const;
   protected readonly draft = signal<AuditFilters>({ ...EMPTY_AUDIT_FILTERS });
   protected readonly invalidRange = signal(false);
@@ -120,7 +134,8 @@ export class AuditPage {
   protected readonly copy = {
     title: $localize`:@@settings.audit.title:Audit log`,
     loading: $localize`:@@settings.audit.loading:Loading audit activity…`,
-    description: $localize`:@@settings.audit.description:Review organization activity and support access. Audit records cannot be edited here.`,
+    description: $localize`:@@settings.audit.description:Trace administrative changes to an actor, request and immutable audit record.`,
+    newestFirst: $localize`:@@settings.audit.newest-first:Newest first`,
     filters: $localize`:@@settings.audit.filters:Filter activity`,
     actorType: $localize`:@@settings.audit.actor-type:Actor type`,
     anyActor: $localize`:@@settings.audit.any-actor:Any actor`,
@@ -151,6 +166,37 @@ export class AuditPage {
     retry: $localize`:@@settings.audit.paging-retry:Retry loading more`,
     pagingFailed: $localize`:@@settings.audit.paging-failed:The next audit page could not be loaded. The rows already shown are unchanged.`,
   };
+  protected readonly activity = $localize`:@@settings.audit-activity:Administrative activity`;
+  protected readonly summary = computed(() => {
+    const rows = this.store.rows();
+    const supportCount = rows.reduce((n, row) => n + Number(supportAccessOf(row) !== null), 0);
+    return [
+      {
+        label: $localize`:@@settings.audit.recorded-activity:Recorded activity`,
+        caption: $localize`:@@settings.audit-loaded-records:Loaded records`,
+        value: formatNumber(rows.length, this.locale),
+        icon: 'clock',
+      },
+      {
+        label: $localize`:@@settings.audit.support:Support access`,
+        caption: $localize`:@@settings.audit-loaded-support:Loaded support records`,
+        value: formatNumber(supportCount, this.locale),
+        icon: 'people',
+      },
+      {
+        label: $localize`:@@settings.audit.export-bound:Export bound`,
+        caption: $localize`:@@settings.audit-export-limit:Maximum rows per export`,
+        value: formatNumber(AUDIT_EXPORT_CAP, this.locale),
+        icon: 'folder',
+      },
+      {
+        label: $localize`:@@settings.audit-record-scope:Record scope`,
+        caption: this.session.currentOrg()?.name,
+        value: $localize`:@@settings.audit.export-organization:Organization`,
+        icon: 'shield',
+      },
+    ] as const;
+  });
 
   constructor() {
     effect(() => {

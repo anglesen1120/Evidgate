@@ -1,3 +1,4 @@
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
@@ -11,6 +12,7 @@ import unavailable from '../../../../../../../fixtures/web-api/suite-revision-un
 import { SuitesDataService } from '../../../core/data/suites-data.service';
 import { ApiRequestError } from '../../../core/http/api-error';
 import { mapApiError } from '../../../core/http/error-mapper';
+import { CopyableIdentifierHarness } from '../../../shared/ui/values/values.harness';
 import { routes } from '../suites.routes';
 import { SuiteCompositionComponent } from './suite-composition.component';
 import {
@@ -73,7 +75,7 @@ describe('SuiteCompositionComponent', () => {
       [...root.querySelectorAll('h2[hlmCardTitle]')].map((heading) =>
         heading.getAttribute('data-title-size'),
       ),
-    ).toEqual(['section', 'section', 'section', 'section']);
+    ).toEqual(['section', 'section', 'section', 'section', 'section']);
   });
 
   it('renders fixture members at their case revision and variant intersections', async () => {
@@ -81,7 +83,16 @@ describe('SuiteCompositionComponent', () => {
     expect(getRevision).toHaveBeenCalledExactlyOnceWith(revision.id);
     const table = root.querySelector('table[data-testid="suite-matrix"]');
     expect(table?.querySelector('caption')?.textContent).toContain('Case revisions by variant');
-    const columns = [...(table?.querySelectorAll('thead th[scope="col"] bdi.identifier') ?? [])];
+    const region = table?.closest('[role="region"]');
+    expect(region?.getAttribute('aria-label')).toBe('Composition matrix');
+    expect(region?.classList.contains('overflow-x-auto')).toBe(true);
+    expect(region?.getAttribute('tabindex')).toBe('0');
+    expect(root.querySelector('[role="tablist"], tbody [aria-haspopup="dialog"]')).toBeNull();
+    const columns = [
+      ...(table?.querySelectorAll(
+        'thead th[scope="col"] app-copyable-identifier .identifier-accessible',
+      ) ?? []),
+    ];
     const rows = [...(table?.querySelectorAll('tbody tr') ?? [])];
     expect(columns).toHaveLength(3);
     expect(rows).toHaveLength(3);
@@ -91,7 +102,7 @@ describe('SuiteCompositionComponent', () => {
           candidate.querySelector('th[scope="row"] bdi')?.textContent === member.case_revision_id,
       );
       const column = columns.findIndex(
-        (candidate) => candidate.textContent === member.variant_hash,
+        (candidate) => candidate.textContent?.trim() === `Variant hash: ${member.variant_hash}`,
       );
       expect(column).toBeGreaterThanOrEqual(0);
       const cell = row?.querySelectorAll('td').item(column);
@@ -106,13 +117,32 @@ describe('SuiteCompositionComponent', () => {
     expect(firstRow?.querySelectorAll('td').item(1)?.textContent?.trim()).toBe('No member');
   });
 
+  it('shows a short matrix header and discloses its exact variant hash', async () => {
+    const { harness } = await open();
+    const [column] = await TestbedHarnessEnvironment.loader(harness.fixture).getAllHarnesses(
+      CopyableIdentifierHarness,
+    );
+    if (!column) throw new Error('Missing matrix header identifier');
+    const full = (await column.accessibleValue()).replace('Variant hash: ', '');
+    expect(revision.members.some((member) => member.variant_hash === full)).toBe(true);
+    expect(await column.previewText()).toContain('…');
+    expect(await column.previewText()).not.toContain(full);
+    await column.showFull();
+    expect(await column.fullText()).toBe(full);
+    await column.closeFull();
+  });
+
   it('renders the revision identity, strategy and dependency direction from the fixture', async () => {
     const { root } = await open();
     expect(root.querySelector('[data-revision-no]')?.textContent).toBe(
       String(revision.revision_no),
     );
     expect(root.querySelector('[data-revision-status] bdi')?.textContent).toBe(revision.status);
-    expect(root.querySelector('header .identifier')?.textContent).toBe(revision.revision_hash);
+    const identity = root.querySelector('[aria-labelledby="suite-identity-heading"]');
+    expect(identity?.querySelector('[data-suite-id]')?.textContent).toBe(revision.suite_id);
+    expect(identity?.querySelector('[data-revision-hash]')?.textContent).toBe(
+      revision.revision_hash,
+    );
     const strategy = root.querySelector('[data-testid="suite-strategy"]');
     expect(strategy?.textContent).toContain('Shard count');
     expect(strategy?.querySelector('dd')?.textContent).toBe('2');
@@ -131,7 +161,15 @@ describe('SuiteCompositionComponent', () => {
   ] as const)('keeps the %s revision and strategy entirely read-only', async (status, body) => {
     getRevision.mockResolvedValue(body);
     const { root } = await open(body.id);
-    expect(root.querySelector(editAffordances)).toBeNull();
+    const controls = [...root.querySelectorAll(editAffordances)];
+    expect(controls.length).toBeGreaterThan(0);
+    for (const control of controls) {
+      expect(
+        control.matches(
+          'thead app-copyable-identifier button[aria-haspopup="dialog"], thead app-copyable-identifier app-copy-value-button button',
+        ),
+      ).toBe(true);
+    }
     expect(root.querySelector('a')).toBeNull();
     expect(root.querySelector('[data-testid="suite-strategy"]')?.textContent).toContain(
       'read-only',

@@ -1,4 +1,4 @@
-import { DecimalPipe, DOCUMENT, formatNumber } from '@angular/common';
+import { DecimalPipe, DOCUMENT, formatNumber, Location } from '@angular/common';
 import {
   afterNextRender,
   ChangeDetectionStrategy,
@@ -14,11 +14,15 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
-import { combineLatest, map } from 'rxjs';
+import { ActivatedRoute, NavigationStart, Router } from '@angular/router';
+import { combineLatest, distinctUntilChanged, filter, map, tap } from 'rxjs';
+import type { CaseDto } from '@evidgate/sdk';
+import type { CatalogSelection } from './case-record-dialog.component';
+import { CATALOG_RECORD } from './case-record.copy';
 import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
@@ -28,6 +32,7 @@ import { RequestStateComponent } from '../../shared/ui/states/request-state.comp
 import { InlineFeedbackComponent } from '../../shared/ui/states/inline-feedback.component';
 import { RETAINED_ROWS_CAP } from '../../shared/keyset-retention';
 import { NarrowMutationPolicy } from '../../shared/ui/narrow/narrow-mutation-policy';
+import { ShellIconComponent } from '../../shell/layout/shell-icon.component';
 import { CatalogMembersReader } from './catalog-members.reader';
 import { CaseListTableComponent } from './case-list-table.component';
 import {
@@ -44,6 +49,8 @@ import {
     DecimalPipe,
     FormsModule,
     HlmButton,
+    HlmCard,
+    HlmCardTitle,
     HlmInput,
     HlmLabel,
     HlmSelectImports,
@@ -52,6 +59,7 @@ import {
     RequestStateComponent,
     InlineFeedbackComponent,
     CaseListTableComponent,
+    ShellIconComponent,
   ],
   providers: [CaseListStore, CatalogMembersReader],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -73,6 +81,29 @@ export class CaseListPage {
   private readonly destroyRef = inject(DestroyRef);
   private readonly locale = inject(LOCALE_ID);
   private readonly cap = inject(RETAINED_ROWS_CAP);
+  private readonly location = inject(Location);
+  private readonly recordNavigation = {};
+  protected readonly recordCopy = CATALOG_RECORD;
+  private readonly query = toSignal(this.route.queryParamMap);
+  protected readonly selected = linkedSignal<CatalogSelection | null>(() => {
+    const query = this.query();
+    const record = query?.get('record');
+    const mode = query?.get('mode');
+    if (!record?.startsWith('case:') || (mode !== 'view' && mode !== 'edit')) return null;
+    const id = record.slice(5);
+    return id ? { id, mode } : null;
+  });
+  protected readonly readableSelection = computed(() =>
+    this.session.has('case:read') ? this.selected() : null,
+  );
+  protected readonly recordUnavailable = computed(() => {
+    const record = this.selected();
+    return (
+      !!record &&
+      this.store.status() === 'ready' &&
+      !this.store.visibleRows().some((row) => row.id === record.id)
+    );
+  });
   private readonly routeState = toSignal(
     combineLatest([
       combineLatest(this.route.pathFromRoot.map((route) => route.paramMap)),
@@ -87,11 +118,28 @@ export class CaseListPage {
           .reverse()
           .map((param) => param.get('orgId'))
           .find(Boolean);
-        const raw = Object.fromEntries(
-          ['status', 'framework', 'q', 'cursor', 'limit'].map((key) => [key, query.get(key)]),
-        );
-        if (projectId) this.store.init(projectId, raw);
-        return { ...raw, orgId };
+        return {
+          orgId,
+          projectId,
+          status: query.get('status'),
+          framework: query.get('framework'),
+          q: query.get('q'),
+          cursor: query.get('cursor'),
+          limit: query.get('limit'),
+        };
+      }),
+      distinctUntilChanged(
+        (a, b) =>
+          a.orgId === b.orgId &&
+          a.projectId === b.projectId &&
+          a.status === b.status &&
+          a.framework === b.framework &&
+          a.q === b.q &&
+          a.cursor === b.cursor &&
+          a.limit === b.limit,
+      ),
+      tap((state) => {
+        if (state.projectId) this.store.init(state.projectId, state);
       }),
     ),
   );
@@ -99,6 +147,7 @@ export class CaseListPage {
   protected readonly copy = {
     title: $localize`:@@catalog.title:Test catalog`,
     description: $localize`:@@catalog.description:Browse stable automated test identities in this project. A missing identity is not a failed test.`,
+    results: $localize`:@@catalog.results-title:Catalog results`,
     filters: $localize`:@@catalog.filters:Filter test identities`,
     filterHint: $localize`:@@catalog.loaded-filter-hint:Status and framework filter the server list. Search matches name or ID in loaded results only; it never loads more results.`,
     status: $localize`:@@catalog.status:Status`,
@@ -138,7 +187,30 @@ export class CaseListPage {
     { value: 'active', label: this.copy.active },
     { value: 'missing', label: this.copy.missing },
     { value: 'archived', label: this.copy.archived },
-  ];
+  ] as const;
+  protected readonly loadedCounts = computed(() => {
+    const counts = { active: 0, missing: 0, archived: 0 };
+    for (const row of this.store.rows()) counts[row.status]++;
+    const status = this.store.filters().status;
+    // Without an explicit status the catalog API returns active and missing, never archived.
+    return {
+      '': !status ? counts.active + counts.missing : null,
+      active: !status || status === 'active' ? counts.active : null,
+      missing: !status || status === 'missing' ? counts.missing : null,
+      archived: status === 'archived' ? counts.archived : null,
+    };
+  });
+  protected readonly subtitle = computed(() =>
+    this.store.status() !== 'ready'
+      ? this.copy.description
+      : this.copy.results +
+        ' · ' +
+        $localize`:@@catalog.case-view.loaded-count:Loaded identities: ${formatNumber(this.store.rows().length, this.locale)}:count:`,
+  );
+  protected quickStatus(status: CaseListFilters['status']): void {
+    const applied = this.store.filters();
+    this.apply({ ...applied, status: applied.status === status ? '' : status });
+  }
   protected readonly statusLabel = (value: unknown) =>
     this.statusOptions.find((option) => option.value === value)?.label ?? this.copy.all;
   private readonly table = viewChild(CaseListTableComponent);
@@ -166,6 +238,48 @@ export class CaseListPage {
   });
 
   constructor() {
+    this.router.events
+      .pipe(
+        filter((event) => event instanceof NavigationStart),
+        takeUntilDestroyed(),
+      )
+      .subscribe((event) => {
+        const navigation = this.router.currentNavigation();
+        const table = this.table();
+        if (
+          !navigation ||
+          !this.readableSelection() ||
+          !table ||
+          navigation.extras.info === this.recordNavigation
+        )
+          return;
+        if (this.changesSecurityScope(event.url)) {
+          this.selected.set(null);
+          return;
+        }
+        let inspecting = true;
+        const allowed = table.requestLeave(() => {
+          if (inspecting) return;
+          if (event.navigationTrigger === 'popstate') this.location.back();
+          else {
+            table.restoreOpener();
+            void this.router.navigateByUrl(event.url, { info: this.recordNavigation });
+          }
+        });
+        inspecting = false;
+        if (!allowed) {
+          const targetState = this.location.getState();
+          navigation.abort();
+          if (event.navigationTrigger === 'popstate') {
+            // The router's default cancellation replaces the destination history entry.
+            // Keep that exact destination behind the still-open editor for a confirmed Back.
+            this.location.replaceState(event.url, '', targetState);
+            this.location.go(this.router.url, '', this.recordState(true));
+          }
+        } else {
+          table.restoreOpener();
+        }
+      });
     effect(() => {
       const orgId = this.routeState()?.orgId;
       const permitted = this.canReadMembers();
@@ -210,15 +324,78 @@ export class CaseListPage {
     );
   }
 
-  protected async assignOwner(change: { caseId: string; membershipId: string }): Promise<void> {
-    if (!this.canReadMembers() || !this.viewport.allowsMutation() || !this.store.canAssign())
+  protected readonly assignOwner = async (row: CaseDto, membershipId: string): Promise<boolean> => {
+    if (
+      !this.canReadMembers() ||
+      !this.viewport.allowsMutation() ||
+      !this.store.canAssign() ||
+      this.members.members().get(membershipId)?.status !== 'active'
+    )
+      return false;
+    const current = this.store.visibleRows().find((r) => r.id === row.id);
+    if (
+      !current ||
+      current.version !== row.version ||
+      current.org_id !== row.org_id ||
+      current.project_id !== row.project_id ||
+      this.store.ownerPending(row.id)
+    )
+      return false;
+    await this.store.assignOwner(row.id, membershipId);
+    const updated = this.store.visibleRows().find((r) => r.id === row.id);
+    return !this.store.ownerFailure(row.id) && updated?.owner_membership_id === membershipId;
+  };
+  protected readonly reloadOwner = (id: string) => this.store.reloadOwner(id);
+
+  protected setRecord(next: CatalogSelection | null): void {
+    const previous = this.selected();
+    this.selected.set(next);
+    const state: unknown = this.location.getState();
+    const fromList =
+      !!state &&
+      typeof state === 'object' &&
+      'catalogDialogFromList' in state &&
+      state.catalogDialogFromList === true;
+    if (!next && fromList) {
+      this.location.back();
       return;
-    await this.store.assignOwner(change.caseId, change.membershipId);
+    }
+    const target = this.router.parseUrl(this.router.url);
+    target.queryParams = { ...target.queryParams };
+    if (next) {
+      target.queryParams['record'] = 'case:' + next.id;
+      target.queryParams['mode'] = next.mode;
+    } else {
+      delete target.queryParams['record'];
+      delete target.queryParams['mode'];
+    }
+    void this.router.navigateByUrl(target, {
+      replaceUrl: !next || previous !== null,
+      state: this.recordState(!!next && (previous === null || fromList)),
+      info: this.recordNavigation,
+    });
+  }
+  private recordState(fromList: boolean) {
+    return { catalogDialogFromList: fromList };
+  }
+  private changesSecurityScope(url: string): boolean {
+    const path =
+      this.router.parseUrl(url).root.children['primary']?.segments.map((segment) => segment.path) ??
+      [];
+    if (path.includes('sign-in') || path.includes('logout') || path.includes('forbidden'))
+      return true;
+    const org = path.indexOf('orgs');
+    const project = path.indexOf('projects');
+    const current = this.routeState();
+    return (
+      (org >= 0 && path[org + 1] !== current?.orgId) ||
+      (project >= 0 && path[project + 1] !== current?.projectId)
+    );
   }
 
-  protected apply(): void {
+  protected apply(draft: CaseListFilters = this.draft()): void {
     // Only server filters invalidate a cursor; local search stays on loaded results.
-    const filters = caseFiltersFromQuery(caseFiltersToQuery(this.draft()));
+    const filters = caseFiltersFromQuery(caseFiltersToQuery(draft));
     const previous = this.store.filters();
     const serverChanged =
       filters.status !== previous.status || filters.framework !== previous.framework;

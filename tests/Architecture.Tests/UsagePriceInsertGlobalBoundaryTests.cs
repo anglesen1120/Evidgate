@@ -30,11 +30,11 @@ public sealed class UsagePriceInsertGlobalBoundaryTests
 
     [Fact]
     public void Only_the_usage_price_store_names_the_global_insert_definer() =>
-        Scan(Path.Combine(SolutionLayout.RepoRoot, "src")).ShouldBe([AllowedFile]);
+        Scan("src").ShouldBe([AllowedFile]);
 
     [Fact]
     public void Only_the_allowlisted_tests_name_the_global_insert_definer() =>
-        Scan(Path.Combine(SolutionLayout.RepoRoot, "tests")).ShouldBe(AllowedTestFiles.Order(StringComparer.Ordinal));
+        Scan("tests").ShouldBe(AllowedTestFiles.Order(StringComparer.Ordinal));
 
     /// <summary>
     /// The loader is the only application path to the store's global write, so a new production caller of it is as
@@ -42,7 +42,7 @@ public sealed class UsagePriceInsertGlobalBoundaryTests
     /// </summary>
     [Fact]
     public void Only_the_usage_module_declares_and_registers_the_price_loader() =>
-        Scan(Path.Combine(SolutionLayout.RepoRoot, "src"), "UsagePriceLoader").ShouldBe(
+        Scan("src", "UsagePriceLoader").ShouldBe(
         [
             "src/Modules/Evidgate.Modules.Usage/Application/UsagePriceLoader.cs",
             "src/Modules/Evidgate.Modules.Usage/UsageModule.cs",
@@ -59,18 +59,8 @@ public sealed class UsagePriceInsertGlobalBoundaryTests
 
     private static List<string> Scan(string root, string needle = Needle)
     {
-        if (!Directory.Exists(root))
-        {
-            return [];
-        }
-
-        return Directory
-            .EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
-            .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .Where(file => File.ReadAllText(file).Contains(needle, StringComparison.Ordinal))
-            .Select(file => Path.GetRelativePath(SolutionLayout.RepoRoot, file).Replace('\\', '/'))
-            .Order(StringComparer.Ordinal)
+        return SolutionLayout.SourceFiles(root)
+            .Where(file => File.ReadAllText(Path.Combine(SolutionLayout.RepoRoot, file)).Contains(needle, StringComparison.Ordinal))
             .ToList();
     }
 }

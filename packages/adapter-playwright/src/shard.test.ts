@@ -7,7 +7,7 @@
 // config `shard:` (lib/common/index.js:528); there is no `PLAYWRIGHT_SHARD` environment
 // variable (grep SHARD over node_modules/playwright/lib finds only PWTEST_SHARD_WEIGHTS).
 // The derived ids are the manifest slots the server registered — `shard-<index>`, 1-based,
-// `shard-1` unsharded (plans/features/README.md T54; ProducerRegistry.cs:344).
+// `shard-1` unsharded (plans/features/README.md T54; ProducerRegistry.ProducerId).
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

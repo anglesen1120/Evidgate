@@ -950,3 +950,804 @@ Closed by S508 (#1039, sha: e6252c1c): P2 (every `Request`-typed declaration of 
 | Principal-only pre-read guards outside Catalog lack the tenant check (S501) | These routes already refuse a null principal before their body read: `IngestionEndpoints.cs:92`, `OrchestratorEndpoints.cs:155,220`, `ReleaseEndpoints.cs:75,116`, `PolicyEndpoints.cs:90,120`. A session with an unreadable `X-Evidgate-Org` is published as a principal without a tenant, so it passes that guard (the Catalog fix, `CatalogRequestRules.cs:42-47`, added the tenant check). [INFERENCE: not reproduced on these routes.] Authoring edge not examined. | receiver: backend lane (Ingestion, Orchestrator, Policy, Authoring), add the tenant check beside the principal check |
 
 Closed by S507 (#1045, sha: 29e6375d): the ten route-local sites (Ingestion events; Orchestrator upload, create-run, environment-revision, cancel, finalize; Release create, bind; Policy append, activate) now call `RawBodyGuard.RequireResolvedTenant` after their own principal check, Authoring routes call `RequireAuthenticatedTenant` in the shared readers, and Catalog uses the same guard; the row's "Authoring edge not examined" is answered (Authoring had no guard). Mutants on 29e6375d went red for the Orchestrator, Authoring, Ingestion, shared-guard and new-file cases. Open leftovers moved to six new carried rows (S507).
+
+## Moved from status-carried.md by S513 (2026-11-20)
+
+| Request-cap scan: 18 flag-direction lines unpinned (S508) | In `requestCapScan.requests.testing.ts` a mutant of each line leaves all 177 tests green, though the real code flags the form on every probe: 37 (`(Request)` type), 103 (`({a: r} = o)`), 107 (default in an array pattern), 154, 209 and 211 (`??=`, `&&=`), 286, 319-320, 334-335, 339, 362, 367-369 and 373 (`knownOther` arms). Found by the S508 review over 90 mutants (59 killed, 13 safe-direction or equivalent). Fix: one fixture with a body-free twin per line | receiver: CLI lane |
+| Request-cap scan passes Readonly<Request> and type aliases (S508) | `isRequestTypeNode` (`requestCapScan.requests.testing.ts:38`, regex `/(^|\.)Request$/`) matches the name `Request` or `ns.Request` only, so `Readonly<Request>`, `type R = Request` and a `private req` parameter property are not typed Request and pass. Unchanged since the base scan (`af687f07`, `requestCapScan.aliases.testing.ts:198`, same regex), so not a regression, and not in the header limits. Fix: resolve alias and generic wrappers, one fixture each | receiver: CLI lane |
+| Request-cap scan helpers over the size limit (S508) | `scanSource` is 219 lines (206 on base), `fetchAliases` 65 (limit 60 per method). The per-scope filter in `resolveDeclarations` is quadratic: 4000 same-named functions 1.2 s, 16000 13.5 s (real tree under 1 s). R1: `new Request(d, init)` with `d` unresolved or an untyped parameter passes (named in the header; also passes on base when the name is not typed elsewhere). Fix: split `scanSource`, index declarations by scope | receiver: CLI lane |
+
+Closed by S513 (#1053, sha: 7b546dc5): the 18 flag-direction lines are pinned by `requestCapScan.pins.test.ts` (fixture plus body-free twin each; two mutants are equivalent), type aliases, interfaces and the Readonly/Required/Partial/NonNullable wrappers resolve to `Request`, `scanSource` and `fetchAliases` are split (longest method 38 lines) with declarations indexed by scope, and a `new Request` input that is an undeclared name or an untyped parameter is flagged with the same allow-list. The row about `private req` was half wrong: `fetch(req)` was already flagged. Remaining limits moved to one new carried row (S513).
+
+## Moved from status-carried.md by S515 (2026-11-20)
+
+| Catalog unstorable-body test gaps (S497) | `CatalogUnstorableBodyTests*.cs` has no dry-run VALUE test (`Suites.cs:44` is name only), no VALUE test on case update (`Cases.cs:65`), fixture revision (`Fixtures.cs:51`) or git binding (`Fixtures.cs:77`), and NUL was measured on base only for suite revision, fixture create and the requirement route. All six routes share the reader guard at `CatalogRequestRules.cs:57-62`, so this is test coverage, not a known defect. | receiver: backend lane (Catalog), add the facts when the file is next touched |
+| Body-read scan covers only Catalog `Endpoints/` (S497) | `CatalogBodyReadBoundaryTests.cs:19` scans `Endpoints/` for `JsonDocument.Parse(`; a body read from an Application handler or another folder of the module would not be flagged. None exists today (S497 security review grep). | receiver: backend lane (Catalog), widen the scan root if a body reader appears outside `Endpoints/` |
+| Catalog scan mutants are static only (S501) | `CatalogBodyReadBoundaryTests` proves the scan by 38 `InlineData` source strings and three facts red on base; no mutant of a real new raw-body route file ran on the LAN. Rules-file exemption and the `>= 6` text-count assertion are test-design nits. | receiver: backend lane (Catalog), add a mutant run when the file is next touched |
+
+Closed by #1056 (71665d89): eight value and NUL facts (case update, fixture revision, git binding, suite dry-run) bring `CatalogUnstorableBodyTests` to 29 facts; `CatalogBodyReadBoundaryTests` scans the whole Catalog module with a six-file allow-list pinned by call text and count and exact route pins; mutants M1-M5 (real route file guard removed, new route file, Application body read, new typed-body route, extra parse in an allow-listed file) ran red on the LAN. Remaining limits are the row "Catalog scan limits (S515)".
+
+## Moved from status-carried.md by S516 (2026-11-21)
+
+| Key-set pin: renaming the private .NET field was not mutant-run (S498) | `VariantKeySetPinTests` fails closed on a renamed or retyped `ParameterSecretRule.EnumLike`/`NonIdentifying` (`ShouldNotBeNull` on the reflected field), but only the added-key and fixture-key mutants ran on the LAN; the rename mutant ran for the TS constant on the Mac only. | receiver: variant package lane |
+
+Closed by #1055 (657df323): all four mutants (rename and `HashSet<string>` to `SortedSet<string>` retype of `EnumLike` and `NonIdentifying`, LAN runs lan-pin-mutant-s516-mut-1795192697-28682 and siblings on 04c127b7, M1-M4) ran red in `VariantKeySetPinTests.ServerKeySet_EqualsTheSharedPin`.
+
+| Key-set pin parser edge cases (S498) | `keySets.test.ts` reads the `ENUM_LIKE`/`NON_IDENTIFYING` literals line by line: text after `{` on the opening line is dropped and a `}`-leading line inside a block comment ends the literal. Both still fail closed on today's layout. | receiver: variant package lane |
+
+Closed by #1055 (657df323): `keySets.test.ts` now reads the literals through the TypeScript parser (`keySetLiteral.testing.ts`, syntax errors and unknown entries fail closed) with one test per edge case, red on the old reader; the real sets read identically (11 + 11).
+
+| Release and Policy guard sites have no individual mutant (S507) | The LAN mutant chain removed the guard at Orchestrator, Authoring, Ingestion and the shared guard, but not at `ReleaseEndpoints.cs:81,123` or `PolicyEndpoints.cs:94,125`; only the 27-route table fact and the shared-guard mutant cover them. | receiver: next lane touching `RawBodyTenantRefusalTests`, run one mutant per site |
+
+Closed by #1055 (657df323): one mutant per site (`ReleaseEndpoints.cs:81,123`, `PolicyEndpoints.cs:94,125`, M5-M8, LAN runs on 04c127b7) ran red in `RawBodyTenantRefusalTests.RawBodyWrite_MemberWithoutTenant_ReadsNoBodyByteAndReturnsPipelineUnauthenticated`, naming release.create, release.bind-run, policy.append-revision and policy.activate.
+
+## Moved from status-carried.md by S518 (2026-11-21)
+
+| Secret-shape timeout runbook polish (S510) | Not done in #1044: the runbook is missing from the `incident-process.md` §6 table (needs a P-class mapping); `alert-rules.md` still says Last review 2026-11-05; the runbook lacks purpose/known-gaps/evidence sections; the catalogue says "customer values are hitting the match budget" while the runbook and `SecretShape.cs:94-98` say a stalled host, not hostile input. Two runbook statements are `[INFERENCE]`: every caller maps a true result to a refusal and never a 500, and a retry after recovery passes. No check validates rule-spec semantics. | receiver: observability lane, 10.3.1-T5.2 |
+
+Closed by #1059 (6a06088a): the runbook is in the incident-process §6 table (P3-c, escalating to P2-g), has purpose, known-gaps and evidence sections, the catalogue wording says a stalled host (`SecretShape.cs:96-98`), `alert-rules.md` §6 was reviewed on 442f1fd1, and the 'every caller refuses' statement is now a read caller table; what stays open is carried as 'Secret-shape timeout runbook: untraced and unproven parts (S518)'.
+
+## Moved from status-carried.md by S517 (2026-11-21)
+
+| Architecture tests copy the src walk (S504) | Closed by #1037: one `SolutionLayout.ProductionSourceFiles()` walk for 5 copies, `Scan` split. Open: explicit Roslyn reference decision (5.3.0 stays transitive via Corvus); six subtree walks keep their own filter (EvaluatorPurity, ReleaseArchitecture has no bin/obj filter, HealingSystemSwitch, UsagePriceInsertGlobal, PolicyPersistenceSqlOwnership, CatalogBodyRead); walk floor is 1000 plus anchors, not an exact count | receiver: coordinator (next architecture-test lane) |
+
+Closed by #1062 (422946b5): `SolutionLayout.SourceFiles` is the one source walk with one bin/obj filter, and EvaluatorPurity, ReleaseArchitecture, HealingSystemSwitch, UsagePriceInsertGlobal, PolicyPersistenceSqlOwnership and CatalogBodyRead use it; per-subtree floors with anchors pin it, and eight LAN mutants ran red. The Roslyn reference decision moved to its own carried row.
+
+## Moved from status-carried.md by S520 (2026-11-21)
+
+| Estimate rows of feature plan 04.1.3 sum to 3.0 d against 2.5 d in its re-estimate (S511) | The sub-task rows T1.1 0.25 + T1.2 0.25 + T2.1 0.5 + T2.2a 0.5 + T2.2b 0.5 + T3.1 0.5 + T3.2 0.5 = 3.0 d (T2.2c unsized, not counted), while the feature plan Re-estimate line and the area plan epic 04.1 (T1 S 0.5, T2 M 1.0, T3 M 1.0) say 2.5 d. T2's three delivered sub-rows (T2.1, T2.2a, T2.2b) add up to 1.5 d against the 1.0 d M row. No roll-up in 00 §14 was changed. | receiver: next lane touching the 04.1.3 plan, decide whether 00 §14 takes +0.5 d or the sub-task sizes are re-cut |
+
+Closed by #1065 (4a2afcd6): the 04.1.3 sub-rows were re-cut (T2.1 and T2.2b to XS) so each parent sums to its area-plan row and the total equals the 2.5 d Re-estimate line; T2.2c stays [OPEN] outside the roll-up (new carried row).
+
+## Moved from status-carried.md by S519 (2026-11-21)
+
+| data-table-column-geometry first test near the 5 s budget on a cold loaded host (S511) | In the wave gate smoke (load_max about 17) the first test of `apps/web/src/app/shared/ui/data-table/data-table-column-geometry.spec.ts`, `keeps en role content intact at 900 px and 1× text`, took 5048 ms against the 5000 ms vitest timeout; the same test took 686 ms in the full vitest stage and 1177 ms in the smoke rerun on the same sha. No timeout raised, nothing skipped; not on the PROJECT.md known-failures list. | receiver: web lane, cut the cold first test's setup cost, do not raise the timeout |
+
+Closed by #1067 (ff020aa7): a warm-up page in beforeAll moves the cold renderer, font and first-layout cost out of the 5 s test budget into the hook budget; assertions unchanged, no timeout raised. First test of the file: 5048 ms at load about 17 before; 2551 ms at load_max 46.95 and 412 ms at load_max 16.36 after (LAN rounds on 23d7a0a3 and dd018a65). One sample per load level, not a distribution: the first test is no longer the near-budget outlier, which does not prove it can never time out. The wave vitest at load 47 failed on ten tests in nine other specs (new carried row).
+
+## Moved from status-carried.md by S522 (2026-11-21)
+
+| Ingestion tenant-less refusal records no rejection metric (S507) | `IngestEventBatchAsync` (`IngestionEndpoints.cs:103`): the anonymous branch records `IngestBatchRejection`; the `RawBodyGuard` throw for a tenant-less principal records nothing, so that refusal is uncounted. | receiver: Ingestion lane, record it before the guard |
+
+Closed by #1069 (6347395b): the tenant-less refusal of the events route is now counted once in `evidgate_ingest_batch_rejected_total`; it shares the existing `reason=unauthenticated` value with the anonymous refusal, so the counter cannot tell the two apart.
+
+## Moved from status-carried.md by S523 (2026-11-21)
+
+| check_features cannot read letter-suffixed sub-task ids (04.1.3-T2) (S520) | `scripts/check_features.py:56` matches sub-row ids only as `{tid}\.(\d+)$`, so T2.2a/T2.2b/T2.2c are not counted and the script reports `04.1.3-T2 sub-tasks sum ... != task size 1 (M)` (0.5 on base, 0.25 after the S520 re-cut; sizes themselves sum to 1.0). It is not a verify.sh stage. The same script also requires ids 1..n and sub-tasks no larger than S, so widening the regex alone would then flag T2.2c. | receiver: coordinator (plan-tooling lane) |
+
+Closed by #1072 (b6aacb28): `scripts/check_features.py` reads letter-suffixed sub-task ids (contiguous from `a`) and treats an `[OPEN]` row with an `unsized` Size cell as a warning left out of the sum; 00 §12 and its §15 log state the rule, and the checker exits 0 on the wave.
+
+## Moved from status-carried.md by S525 (2026-11-21)
+
+| Feature plans missing for planned stories (found S55; includes the `check_features.py` failure) | `scripts/check_features.py` exits 1 with 6 errors after S139 (10 on dd479e95: the same six `expected 1 feature file, found 0` ids 13.6.1, 13.7.1, 13.7.2, 13.8.1, 13.8.2, 13.9.1 plus two older non-plan-13 structure errors in the 02.3.2 and 08.6.3 plans). S139 wrote the plans for 13.6.1 and 13.8.1 (measured 8 → 6, `files: 199` → `201`, the diff is exactly those two ids; merged in #289, 8f8e365e). S136 wrote the plans for 13.5.1 and 13.5.2 (measured 10 → 8, the diff is exactly those two ids). S112 wrote the plans for 13.3.1 and 13.4.1 (measured: 10 errors on develop, 8 in the worktree, the diff is exactly those two). The remaining task rows cannot be built as written; writing those plans is a T0 feature-plan lane, not product completion. | receiver: queue row F37 (T0 feature-plan lane, next 13.7.1, 13.7.2, 13.8.2, 13.9.1 `plans/13-product-phases.md:33`); hand-over Notes: gap - the receiving plans have no Notes section; receiver queue row F36 (widened: add the Notes section). S112 new `[OPEN]` rows: `plans/open-items/05-product-phases-g1.md` OI-13-401 to OI-13-413, OI-13-501 to OI-13-506 Closed in part by S346 (#708, 39fc58de): the 13.7.1 and 13.7.2 plans are written (check_features 11 → 9, plan_graph totals unchanged); 13.8.2 and 13.9.1 remain. |
+
+Closed in part by S525: the old title and the checker claims are stale. All six named plans exist (13.6.1 and 13.8.1 b4163af3, #289; 13.7.1 and 13.7.2 659102c9, #708; 13.8.2 and 13.9.1 78ecb24d, #755) and `python3 scripts/check_features.py` on 330e7ada prints `stories checked: 205, files: 205`, `errors: 0`, rc 0. The Notes-section gap and the open-item pointers stay in the narrowed row 'Plan-13 feature plans for 13.1.2, 13.5.2 and 13.6.1-13.9.1 have no Notes section (S55 row narrowed by S525)' in docs/status-carried.md.
+
+## Moved from status-carried.md by S526 (2026-11-21)
+
+| Item | Blocker | Owner |
+|---|---|---|
+| Plan-13 feature plans for 13.1.2, 13.5.2 and 13.6.1-13.9.1 have no Notes section (S55 row narrowed by S525) | The 'plans missing' claim is closed (see status-archive S525): all 205 feature files exist and `python3 scripts/check_features.py` exits 0. What remains: 8 of 14 files in `plans/features/13-product-phases/` (13.1.2, 13.5.2, 13.6.1, 13.7.1, 13.7.2, 13.8.1, 13.8.2, 13.9.1) have no Notes heading, so review hand-overs have no durable home; the checker does not test this. Open items: `plans/open-items/05-product-phases-g1.md` OI-13-401 to OI-13-413, OI-13-501 to OI-13-506. | receiver: queue row F36 (T0 feature-plan lane: add the Notes section) |
+
+Closed by S526 (#1075, bb96af2e): the S525 row counted `## Notes` headings only. Six of the eight plans already held a Notes block in bold-line form (13.5.2:231, 13.6.1:254, 13.7.1:237, 13.7.2:220, 13.8.1:253) or under a sub-heading (13.1.2:522, Notes at :547); only 13.8.2 and 13.9.1 had none and now carry `## Notes, decisions and open items` (13.8.2:270, 13.9.1:249). STATUS.md:394 (13.7.1-T1) was corrected. The form difference is recorded in the carried row 'Plan-13 Notes blocks come in two forms (S526)'.
+
+## Moved from status-carried.md by S524 (2026-11-21)
+
+| EvidgateTelemetry.cs is over the 500-line limit (S522) | `src/BuildingBlocks/Observability/EvidgateTelemetry.cs` is 510 lines after #1069 (506 on the wave base 3ad7b646, so already over); split by responsibility (meter and counters, record methods). Also noted by the #1069 delta check: the resolved-tenant positive control in `IngestUnauthenticatedRefusalMetricTests` asserts only status != 401; the expected path is 403 forbidden (member lacks event:write), not observed. | receiver: observability lane |
+
+Closed by S524 (#1071, d3152c9a): EvidgateTelemetry.cs is split into three partial files (285, 112 and 136 lines) with no member changed, and the positive control in IngestUnauthenticatedRefusalMetricTests asserts Forbidden.
+
+## Moved from status-carried.md by S528 (2026-11-21)
+
+| Telemetry partials depend on compile order for the Meter (S524) | Seven EvidgateTelemetry partial files (HealingGateway, Operations, Quota, RawReportEnqueue, Releases, Sessions, Workflow) read the Meter of EvidgateTelemetry.cs in field initialisers, so that file must compile first (true on the LAN: csc lists it first); an order-independent holder is a design change. The AI settings and authoring counters have no recording test. | receiver: observability lane |
+
+Closed in part by S528 (#1079, fa1328be): AiSettingsMetricTests and AuthoringMetricTests record and assert the AI settings and authoring instruments through the real handlers; the compile-order claim stays open in the corrected row.
+
+## Moved from status-carried.md by S529 (2026-11-21)
+
+| Merge debt (#427) | D-S205-M1, merged under 6c: (a) the perf lens ran inside the security-reviewer, no separate performance agent; (b) U7: `IngestEventBatch.Handle` and its file exceed the size limits (the PR added about 20 lines) and must be split; (c) U1: plan ids remain in two comments of `src/Modules/Evidgate.Modules.Ingestion/Endpoints/IngestionEndpoints.cs` | receiver: next ingestion task |
+
+Closed by S529: superseded by the carried row 'Ingest Handle cut and usage-emitter allow-list (S529)'; the file split was abandoned (Handle is one 509-line method).
+
+## Moved from status-carried.md by S531 (2026-11-21)
+
+| Source files over 500 lines (S529 count) | 32 under src, 2026-11-21: AuthoringVersionWriter 2444, SafeZipArchive 1234, XlsxReader 1234, ManualCaseCommands 1054, AuthoringImporter 1047, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, NodeCommands 781, JsonCanonicalizer 751, IngestEventBatch 746, SafeXml 741, OrchestratorEndpoints 729, AssertionExtractor 728, AuthoringContent 702, ImportValidator 697, S3ObjectStorage 672, CsvFormat 666, EventBatchParser 665, AuthoringVersionQueries 655, LinkEndpoints 649, AuthoringExporter 609, ImportSchema 601, ProducerRegistry 588, MediaSniffer 548, SecretRedactor 544, and six of 517-541 (git ls-files) | receiver: backend lanes, split when next touched |
+
+Closed in part by S531 (#1083, 3d97e720): ManualCaseCommands.cs and NodeCommands.cs were split into one file per command (largest 274 lines); the remaining files are carried in the row 'Source files over 500 lines (S531 count)'.
+
+## Moved from status-carried.md by S530 (2026-11-21)
+
+| Authoring and AI settings instruments absent from the metric catalogue (S528) | evidgate_authoring_ai_settings_write_total, evidgate_authoring_change_queued_total, evidgate_authoring_apply_total, evidgate_authoring_apply_batch_size and evidgate_runs_created_total are in neither infra/metrics/catalogue.yaml nor docs/runbooks/telemetry.md; MetricCatalogueTests only checks entries that exist. | receiver: observability lane |
+
+Closed by S530 (#1085, 6061272d): the success recordings moved after commit and runs_created and authoring_apply are catalogued; what stays open is the carried row 'Authoring instruments without a reader stay out of the metric catalogue (S530)'.
+
+## Moved from status-carried.md by S532 (2026-11-21)
+
+| Source files over 500 lines (S531 count) | 30 under src, wave 3d97e720 (`git ls-files 'src/*.cs'` fed to `wc -l`, files over 500 lines, total line excluded): AuthoringVersionWriter 2444, SafeZipArchive 1234, XlsxReader 1234, AuthoringImporter 1047, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, JsonCanonicalizer 751, IngestEventBatch 746, SafeXml 741, OrchestratorEndpoints 729, AssertionExtractor 728, AuthoringContent 702, ImportValidator 697, S3ObjectStorage 672, and fifteen of 517-666. Methods over 60 lines in the moved types: ManualCase{Create,Update,State,Move} Handle, Node{Create,Update} HandleCoreAsync | receiver: backend lanes, split when next touched |
+
+Closed by S532 (#1087, 7b9f936e): AuthoringVersionWriter.cs was split into partial files of at most 420 lines; the recount is the carried row 'Source files over 500 lines (S532 count)'.
+
+## Moved from status-carried.md by S533 (2026-11-21)
+
+| Source files over 500 lines (S532 count) | 29 under src, wave 7b9f936e (`git ls-files 'src/*.cs'` fed to `wc -l`, files over 500, total line excluded): SafeZipArchive 1234, XlsxReader 1234, AuthoringImporter 1047, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, JsonCanonicalizer 751, IngestEventBatch 746, SafeXml 741, OrchestratorEndpoints 729, AssertionExtractor 728, AuthoringContent 702, ImportValidator 697, S3ObjectStorage 672, and fifteen of 517-666. Over 60 lines: AuthoringVersionWriter AppendCoreAsync 156, CreateAsync 129, UpdateAsync 208, MoveManualTestCaseCoreAsync 121, RestoreCoreAsync 250, SoftDeleteAsync 112, ReorderNodesCoreAsync 184; ManualCase and Node handlers | receiver: backend lanes, split when next touched |
+
+Closed by S533 (#1089, d7536c2e): AuthoringVersionQueries.cs (655 lines, 12 types) was split into eight files of at most 182 lines; the recount is the carried row 'Source files over 500 lines (S533 count)'.
+
+## Moved from status-carried.md by S521 (2026-11-21)
+
+| Approver identity is not bound to a tenant admin (S512) | `support_grant.approved_by` is checked only as a user different from the requester; the DB does not check that the approver holds an active `tenant_admin` membership in the grant org (security review SEC-F2, split by the coordinator; the 72 h expiry cap shipped in 0115). Until T1.2 binds it, a writer with the owner-side path could record any user as approver; no route reaches the table yet. | receiver: 02.8.1-T1.2 (it may not ship a request or approve route without this binding) |
+
+Closed by S521 (#1082, fd375d56): migration 0116 makes `support_grant_guard()` require an active membership of the grant org with the built-in `tenant_admin` role under `FOR SHARE`, `ApproveSupportGrant` takes the approver from the authenticated principal only, and both are covered by `SupportGrantApproverTests` (including both lock orders) and the S521 mutant round.
+
+## Moved from status-carried.md by S534 (2026-11-21)
+
+| Source files over 500 lines (S533 count) | 28 under src, wave d7536c2e (`git ls-files 'src/*.cs'` fed to `wc -l`, over 500): SafeZipArchive 1234, XlsxReader 1234, AuthoringImporter 1047, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, JsonCanonicalizer 751, twenty-one of 517-746. Over 60 lines: AuthoringVersionWriter AppendCoreAsync 156, CreateAsync 129, UpdateAsync 208, MoveManualTestCaseCoreAsync 121, RestoreCoreAsync 250, SoftDeleteAsync 112, ReorderNodesCoreAsync 184; ListAuthoringVersionsQueryHandler.Handle 114; ManualCase and Node handlers. Row 'Route 22 from/to' still cites AuthoringVersionQueries.cs:635 (now AuthoringVersionInstant.cs:47, not edited in place) | receiver: backend lanes, split when next touched |
+
+Closed by S534 (#1091, 2cf1f1ca): AuthoringExporter.cs (609 lines) was split into AuthoringExporter.cs (292) and AuthoringExporter.RowAssembly.cs (323); the recount is the carried row 'Source files over 500 lines (S534 count)'.
+
+## Moved from status-carried.md by S535 (2026-11-21)
+
+| Source files over 500 lines (S534 count) | 27 under src, wave 2cf1f1ca (`git ls-files 'src/*.cs'` fed to `wc -l`, over 500): SafeZipArchive 1234, XlsxReader 1234, AuthoringImporter 1047, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, JsonCanonicalizer 751, twenty of 517-746. Over 60 lines: AuthoringVersionWriter AppendCoreAsync 156, CreateAsync 129, UpdateAsync 208, MoveManualTestCaseCoreAsync 121, RestoreCoreAsync 250, SoftDeleteAsync 112, ReorderNodesCoreAsync 184; ListAuthoringVersionsQueryHandler.Handle 114; AuthoringExporter.ExportAsync ~107, RowAssembly.Build ~75; ManualCase, Node handlers. Row 'Route 22 from/to' cites AuthoringVersionQueries.cs:635 (now AuthoringVersionInstant.cs:47) | receiver: backend lanes |
+
+Closed by S535 (#1094, d4d41b97): ProducerRegistry.cs (588 lines) was split into ProducerRegistry.cs (387), ProducerSlotErrors.cs (46), ProducerSlotArguments.cs (71) and ProducerSlotSql.cs (94); the recount is the carried row 'Source files over 500 lines (S535 count)'.
+
+## Moved from status-carried.md by S537 (2026-11-21)
+
+| `ParseArtifactTask.cs` over 500 lines (S357, 10.3.1-T3, #732) | The file was 510 lines and is 517 after the artifact-failure counter. Extract the failure-recording block into a partial (rules §Size). P3. [OPEN] | receiver: next lane touching the parse task |
+
+Closed by S537 (#1095, 388f3235): ParseArtifactTask.cs (517 lines) was split into ParseArtifactTask.cs (413) and ParseArtifactTaskHandler.Log.cs (110); the recount is the carried row 'Source files over 500 lines (S537 count)'.
+
+| Source files over 500 lines (S535 count) | 26 under src, wave d4d41b97 (`git ls-files 'src/*.cs'` fed to `wc -l`, over 500): SafeZipArchive 1234, XlsxReader 1234, AuthoringImporter 1047, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, JsonCanonicalizer 751, nineteen of 517-746. Over 60 lines: AuthoringVersionWriter AppendCoreAsync 156, CreateAsync 129, UpdateAsync 208, MoveManualTestCaseCoreAsync 121, RestoreCoreAsync 250, SoftDeleteAsync 112, ReorderNodesCoreAsync 184; ListAuthoringVersionsQueryHandler.Handle 114; AuthoringExporter.ExportAsync ~107, RowAssembly.Build ~75; ManualCase, Node handlers; ProducerRegistry RegisterSlotsAsync 85, BindOrCheckAsync 85, CloseSlotAsync 111 | receiver: backend lanes |
+
+Replaced by S537 (#1095, 388f3235): recount in the carried row 'Source files over 500 lines (S537 count)'.
+
+## Moved from status-carried.md by S536 (2026-11-21)
+
+| Support grant test gaps (S512, I2) | The guard tests run on a superuser connection and there is no test for a two-dimensional `scopes` array (the CHECK uses `array_ndims`) nor for the project-in-org check on the RLS path (only the guard INSERT branch is exercised). | receiver: 02.8.1-T1.2 test pass |
+
+Closed by S536 (#1098, 75b95f23): tests only, in SupportGrantOperatorRlsTests.AppRole.cs. The guard now runs on the app role (AppRole_Guard_Refuses_Transition, AppRole_Guard_Refuses_Approving_An_Expired_Request_That_A_Fresh_One_Passes); two-dimensional `scopes` and `project_ids` are refused with the CHECK name (AppRole_Insert_Refuses_A_MultiDimensional_Array); the project-in-org check is covered on the RLS path (AppRole_ProjectScope_Refuses_Foreign_Unknown_And_Mixed_Lists_But_Accepts_Duplicates) and on the owner path (OwnerPath_ProjectScope_Refuses_A_Project_Of_Another_Org_Where_Rls_Does_Not_Narrow); a cross-org insert is refused by the tenant policy (AppRole_Insert_For_Another_Org_Is_Refused_By_The_Tenant_Policy). What stays open: carried row 'Support grant expired fixture and org-predicate mutant (S536)'.
+
+## Moved from status-carried.md by S538 (2026-11-21)
+
+| Source files over 500 lines (S537 count) | 25 under src, wave 388f3235 (`git ls-files 'src/*.cs'` fed to `wc -l`, over 500): SafeZipArchive 1234, XlsxReader 1234, AuthoringImporter 1047, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, JsonCanonicalizer 751, eighteen of 528-746. Over 60 lines: AuthoringVersionWriter AppendCore 156, CreateAsync 129, UpdateAsync 208, MoveManualTestCaseCore 121, RestoreCore 250, SoftDeleteAsync 112, ReorderNodesCore 184; ListAuthoringVersionsQueryHandler 114; AuthoringExporter.ExportAsync ~107, RowAssembly.Build ~75; ManualCase, Node handlers; ProducerRegistry RegisterSlotsAsync 85, BindOrCheckAsync 85, CloseSlotAsync 111; ParseArtifactTaskHandler.HandleAsync 152 | receiver: backend lanes |
+
+Replaced by S538 (#1100, c14e7020): S3ObjectStorage.cs (672 lines) was split into three files and the recount is the carried row 'Source files over 500 lines (S538 count)'.
+
+## Moved from status-carried.md by S539 (2026-11-21)
+
+| Source files over 500 lines (S538 count) | 24 under src, wave c14e7020 (`git ls-files 'src/*.cs'` fed to `wc -l`, over 500): SafeZipArchive 1234, XlsxReader 1234, AuthoringImporter 1047, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, JsonCanonicalizer 751, seventeen of 528-746. S3ObjectStorage is split (418/125/141, #1100) and leaves the list. | receiver: backend lanes |
+
+Replaced by S539 (#1102, 5e891236): JsonCanonicalizer.cs (751 lines) was split into three files and the recount is the carried row 'Source files over 500 lines (S539 count)'.
+
+## Moved from status-carried.md by S540 (2026-11-21)
+
+| ApproveSupportGrant handler pre-check has no test of its own (S521) | Mutant M2 (handler pre-check removed) stayed green on the LAN: the `support_grant_guard()` trigger raises 23514 and the handler maps it to the same 403, so no test can tell the two apart. The pre-check is defence in depth; pinning it would need a test with the trigger disabled. | receiver: 02.8.1-T1.2b test pass (decide: accept as is, or add a disabled-trigger test) |
+| Support grant expired fixture and org-predicate mutant (S536) | Expired-grant fixture of row '02.9.1-T1 expired support grant fixture + support-grant routes (from #19)' still open: IsolationWorld seeds requested grants only, an expired row needs a replica-seeded insert and shifts the shared list counts. Mutant B (guard drops `p.org_id = new.org_id`) is caught only by the owner-path test OwnerPath_ProjectScope_Refuses_A_Project_Of_Another_Org_Where_Rls_Does_Not_Narrow, not on the app role, where project RLS hides other orgs. | receiver: 02.8.1-T1.2 test pass |
+| 02.9.1-T1 expired support grant fixture + support-grant routes (from #19) | `support_grant` does not exist yet; add it to `IsolationWorld` and the routes to `IsolationRouteCases`. Recorded in 02.9.1 §10 Notes; a Notes line in the 02.8.1 plan is blocked by `check-dor-security`: "E plans/features/02-identity-tenancy/02.8.1-time-boxed-operator-access.md: §8 does not answer the DoR question 'authorization'" (also 'retention/deletion', 'telemetry', 'failure path') | receiver: 02.8.1-T1; hand-over Notes: `plans/features/02-identity-tenancy/02.9.1-isolation-suite.md:103` |
+
+Closed by S540 (#1104, 2581eb60): the approve and revoke handler pre-checks are pinned by trigger-off tests in SupportGrantTests.PreCheck.cs, and IsolationWorld seeds an expired support grant (SupportGrantIds[2]) with a cross-org approve probe; the list, approve and revoke routes of the third row are all served and covered in IsolationRouteCases. The org-predicate mutant half stays open as the carried row 'Support grant org-predicate mutant on the app role (S536)'.
+
+## Moved from status-carried.md by S541 (2026-11-21)
+
+| Source files over 500 lines (S539 count) | 23 under src, wave 5e891236 (`git ls-files 'src/*.cs' then wc -l`, over 500): SafeZipArchive 1234, XlsxReader 1234, AuthoringImporter 1047, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, seventeen of 528-746. JsonCanonicalizer (751) is split (298/160/306, #1102) and leaves the list. | receiver: backend lanes |
+
+Replaced by S541 (#1106, f0b7f046): AssertionExtractor.cs (728 lines) was split into three files and the recount is the carried row 'Source files over 500 lines (S541 count)'.
+
+## Moved from status-carried.md by S542 (2026-11-21)
+
+| Source files over 500 lines (S541 count) | 22 under src, wave f0b7f046 (`git ls-files 'src/*.cs'` fed to `wc -l`, over 500): SafeZipArchive 1234, XlsxReader 1234, AuthoringImporter 1047, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, sixteen of 528-746. AssertionExtractor (728) is split (309/232/197, #1106) and leaves the list. | receiver: backend lanes |
+| Methods over 60 lines missing from the S538 list (S541 finds) | AssertionExtractor.ParseExpect (111 lines, in AssertionExtractor.Script.cs) and AssertionExtractor.ScanPython (85 lines, in AssertionExtractor.Python.cs) were over 60 lines before and after #1106 but are not in the row 'Methods over 60 lines (S538 list)'. That list was built from a narrower scan, so other entries may be missing too; a full method-length recount is owed. | receiver: the lane that next recounts methods |
+
+Replaced by S542 (#1108, cb3ab0e7): AuthoringImporter.cs (1047 lines) was split into three files (300/403/362) and the recounts are the carried rows 'Source files over 500 lines (S542 count)' and 'Methods over 60 lines missing from the S538 list (S542 finds)'.
+
+## Moved from status-carried.md by S543 (2026-11-21)
+
+| Source files over 500 lines (S542 count) | 21 under src, wave cb3ab0e7 (`git ls-files 'src/*.cs'` fed to `wc -l`, over 500, files only): SafeZipArchive 1234, XlsxReader 1234, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, sixteen of 528-746. AuthoringImporter (1047) is split (300/403/362, #1108) and leaves the list. | receiver: backend lanes |
+| Methods over 60 lines missing from the S538 list (S542 finds) | AssertionExtractor.ParseExpect (111 lines, in AssertionExtractor.Script.cs) and AssertionExtractor.ScanPython (85 lines, in AssertionExtractor.Python.cs); AuthoringImporter (split in #1108, bodies unchanged): ApplyAsync 197 and LockRanksAsync 101 (AuthoringImporter.Apply.cs), ImportCoreAsync 94 and CodesAsync 73 (AuthoringImporter.cs). Rule: the signature line through the closing brace, without XML docs or attributes. None of these is in the row 'Methods over 60 lines (S538 list)'; a full method-length recount is owed. | receiver: the lane that next recounts methods |
+
+Replaced by S543 (#1110, aa3b79fb): XlsxReader.cs (1234 lines) was split into three files (435/385/437) and the recounts are the carried rows 'Source files over 500 lines (S543 count)' and 'Methods over 60 lines missing from the S538 list (S543 finds)'.
+
+## Moved from status-carried.md by S544 (2026-11-21)
+
+| Source files over 500 lines (S543 count) | 20 under src, wave aa3b79fb (`git ls-files 'src/*.cs'` fed to `wc -l`, over 500, files only): SafeZipArchive 1234, IsolationSelfCheck 969, ImportPlanner 925, ChildProcessParseRunner 808, IngestEventBatch 746, fifteen of 528-741. XlsxReader (1234) is split (435/385/437, #1110) and leaves the list. | receiver: backend lanes |
+| Methods over 60 lines missing from the S538 list (S543 finds) | AssertionExtractor.ParseExpect (111, AssertionExtractor.Script.cs) and ScanPython (85, AssertionExtractor.Python.cs); AuthoringImporter (#1108): ApplyAsync 197, LockRanksAsync 101 (AuthoringImporter.Apply.cs), ImportCoreAsync 94, CodesAsync 73 (AuthoringImporter.cs); XlsxReader (#1110): ReadSheet 164, ReadCellText 85, ReadRowCells 75 (XlsxReader.Sheet.cs), DecodeRow 75, WriteRow 66, ReadStringItemText 63 (XlsxReader.Cells.cs). Rule: signature line through closing brace, no XML docs or attributes. None is in row 'Methods over 60 lines (S538 list)'; a full recount is owed. | receiver: the lane that next recounts methods |
+
+Replaced by S544 (#1112, c39f4375): ImportPlanner.cs (925 lines) was split into three files (423/282/234) and the recounts are the carried rows 'Source files over 500 lines (S544 count)' and 'Methods over 60 lines missing from the S538 list (S544 finds)'.
+
+## Moved from status-carried.md by S545 (2026-11-21)
+
+| Source files over 500 lines (S544 count) | 18 under src, wave 8b20f10c (`git ls-files 'src/*.cs'` fed to `wc -l`, over 500, files only): SafeZipArchive 1234, IsolationSelfCheck 969, ChildProcessParseRunner 808, IngestEventBatch 746, SafeXml 741, thirteen of 528-729. ImportPlanner (925, #1112) and ImportValidator (#1114) leave the list. | receiver: backend lanes |
+| Methods over 60 lines missing from the S538 list (S544 finds) | AssertionExtractor.ParseExpect 111 (.Script.cs), ScanPython 85 (.Python.cs); AuthoringImporter (#1108): ApplyAsync 197, LockRanksAsync 101 (AuthoringImporter.Apply.cs), ImportCoreAsync 94, CodesAsync 73 (AuthoringImporter.cs); XlsxReader (#1110): ReadSheet 164, ReadCellText 85, ReadRowCells 75 (XlsxReader.Sheet.cs), DecodeRow 75, WriteRow 66, ReadStringItemText 63 (XlsxReader.Cells.cs). ImportPlanner (#1112): CasesAsync 156, DecideAsync 102 (ImportPlanner.Cases.cs), ItemsAsync 101, PlanAsync 84 (ImportPlanner.cs). Rule: signature through closing brace. None is in row 'Methods over 60 lines (S538 list)'; a full recount is owed. | receiver: the lane that next recounts methods |
+
+Replaced by S545 (#1114): ImportValidator.cs (697 lines) was split into two files (355/351); the recounts are the carried rows 'Source files over 500 lines (S545 count)' and the two 'Methods over 60 lines missing from the S538 list (S545 finds…)' rows.
+
+## Moved from status-carried.md by S546 (2026-11-21)
+
+| Source files over 500 lines (S545 count) | 18 under src, wave 9ae6c483 (`git ls-files 'src/*.cs'` fed to `wc -l`, over 500, files only): SafeZipArchive 1234, IsolationSelfCheck 969, ChildProcessParseRunner 808, IngestEventBatch 746, SafeXml 741, thirteen of 528-729. ImportValidator (697, #1114) had already left the list; the recount over the wave head gives the same 18. | receiver: backend lanes |
+| Methods over 60 lines missing from the S538 list (S545 finds) | AssertionExtractor.ParseExpect 111 (.Script.cs), ScanPython 85 (.Python.cs); AuthoringImporter (#1108): ApplyAsync 197, LockRanksAsync 101 (AuthoringImporter.Apply.cs), ImportCoreAsync 94, CodesAsync 73 (AuthoringImporter.cs); XlsxReader (#1110): ReadSheet 164, ReadCellText 85, ReadRowCells 75 (XlsxReader.Sheet.cs), DecodeRow 75, WriteRow 66, ReadStringItemText 63 (XlsxReader.Cells.cs). Rule: signature through closing brace. None is in row 'Methods over 60 lines (S538 list)', continued in the next row; a full recount is owed. | receiver: the lane that next recounts methods |
+| Methods over 60 lines missing from the S538 list (S545 finds, planner and validator) | ImportPlanner (#1112): CasesAsync 156, DecideAsync 102 (ImportPlanner.Cases.cs), ItemsAsync 101, PlanAsync 84 (ImportPlanner.cs); ImportValidator (#1114): Row 189 (ImportValidator.cs), Keys 119 (ImportValidator.Checks.cs). Rule: signature through closing brace. None is in row 'Methods over 60 lines (S538 list)'; a full recount is owed. | receiver: the lane that next recounts methods |
+
+Replaced by S546 (#1113): CsvFormat.cs (666 lines) was split into three files (388/112/180); the recounts are the carried rows 'Source files over 500 lines (S546 count)' and the two 'Methods over 60 lines missing from the S538 list (S546 finds…)' rows.
+
+## Moved from status-carried.md by S548 (2026-11-21)
+
+| Source files over 500 lines (S546 count) | 17 under src, wave 4a4f6568 (`git ls-files 'src/*.cs'` fed to `wc -l`, over 500, files only): SafeZipArchive 1234, IsolationSelfCheck 969, ChildProcessParseRunner 808, IngestEventBatch 746, SafeXml 741, twelve of 528-729. CsvFormat (666, #1113) left the list; it is now three files (388/112/180). | receiver: backend lanes |
+| Methods over 60 lines missing from the S538 list (S546 finds) | AssertionExtractor.ParseExpect 111 (.Script.cs), ScanPython 85 (.Python.cs); AuthoringImporter (#1108): ApplyAsync 197, LockRanksAsync 101 (AuthoringImporter.Apply.cs), ImportCoreAsync 94, CodesAsync 73 (AuthoringImporter.cs); XlsxReader (#1110): ReadSheet 164, ReadCellText 85, ReadRowCells 75 (XlsxReader.Sheet.cs), DecodeRow 75, WriteRow 66, ReadStringItemText 63 (XlsxReader.Cells.cs). Rule: signature through closing brace. None is in row 'Methods over 60 lines (S538 list)', continued in the next row; a full recount is owed. | receiver: the lane that next recounts methods |
+| Methods over 60 lines missing from the S538 list (S546 finds, planner, validator and CSV) | ImportPlanner (#1112): CasesAsync 156, DecideAsync 102 (ImportPlanner.Cases.cs), ItemsAsync 101, PlanAsync 84 (ImportPlanner.cs); ImportValidator (#1114): Row 189 (ImportValidator.cs), Keys 119 (ImportValidator.Checks.cs). CsvFormat (#1113): Read 109, ReadRecord 95 (CsvFormat.cs), DecodeRow 93, WriteRow 61 (CsvFormat.Rows.cs). Rule: signature through closing brace. None is in row 'Methods over 60 lines (S538 list)'; a full recount is owed. | receiver: the lane that next recounts methods |
+
+Replaced by S548 (#1119): ImportSchema.cs (601 lines) was split into two files (320/288); the recounts are the carried rows 'Source files over 500 lines (S548 count)' and the two 'Methods over 60 lines missing from the S538 list (S548 finds...)' rows.
+
+## Moved from status-carried.md by S547 (2026-11-21)
+
+| Source files over 500 lines (S548 count) | 16 under src, wave 9bf967e9 (`git ls-files 'src/*.cs'` fed to `wc -l`, over 500, files only): SafeZipArchive 1234, IsolationSelfCheck 969, ChildProcessParseRunner 808, IngestEventBatch 746, SafeXml 741, eleven of 528-729 (including EventBatchParser 665). ImportSchema (601, #1119) left the list; it is now two files (320/288). | receiver: backend lanes |
+| Methods over 60 lines missing from the S538 list (S548 finds) | AssertionExtractor.ParseExpect 111 (.Script.cs), ScanPython 85 (.Python.cs); AuthoringImporter (#1108): ApplyAsync 197, LockRanksAsync 101 (AuthoringImporter.Apply.cs), ImportCoreAsync 94, CodesAsync 73 (AuthoringImporter.cs); XlsxReader (#1110): ReadSheet 164, ReadCellText 85, ReadRowCells 75 (XlsxReader.Sheet.cs), DecodeRow 75, WriteRow 66, ReadStringItemText 63 (XlsxReader.Cells.cs). ImportSchema (#1119): Scan 126 (ImportSchema.cs). Rule: signature through closing brace. None is in row 'Methods over 60 lines (S538 list)', continued in the next row; a full recount is owed. | receiver: the lane that next recounts methods |
+| Methods over 60 lines missing from the S538 list (S548 finds, planner, validator and CSV) | ImportPlanner (#1112): CasesAsync 156, DecideAsync 102 (ImportPlanner.Cases.cs), ItemsAsync 101, PlanAsync 84 (ImportPlanner.cs); ImportValidator (#1114): Row 189 (ImportValidator.cs), Keys 119 (ImportValidator.Checks.cs). CsvFormat (#1113): Read 109, ReadRecord 95 (CsvFormat.cs), DecodeRow 93, WriteRow 61 (CsvFormat.Rows.cs). Rule: signature through closing brace. None is in row 'Methods over 60 lines (S538 list)'; a full recount is owed. | receiver: the lane that next recounts methods |
+
+Replaced by S547 (#1117): EventBatchParser.cs (665 lines) was split into two files (370/304); the recounts are the carried rows 'Source files over 500 lines (S547 count)' and the two 'Methods over 60 lines missing from the S538 list (S547 finds...)' rows.
+
+## Moved from status-carried.md by S549 (2026-11-21)
+
+| Source files over 500 lines (S547 count) | 15 under src, wave 98d132a8 (`git ls-files 'src/*.cs'` fed to `wc -l`, over 500, files only): SafeZipArchive 1234, IsolationSelfCheck 969, ChildProcessParseRunner 808, IngestEventBatch 746, SafeXml 741, ten of 528-729. EventBatchParser (665, #1117) left the list; it is now two files (370/304). | receiver: backend lanes |
+| Methods over 60 lines missing from the S538 list (S547 finds) | AssertionExtractor.ParseExpect 111 (.Script.cs), ScanPython 85 (.Python.cs); AuthoringImporter (#1108): ApplyAsync 197, LockRanksAsync 101 (AuthoringImporter.Apply.cs), ImportCoreAsync 94, CodesAsync 73 (AuthoringImporter.cs); XlsxReader (#1110): ReadSheet 164, ReadCellText 85, ReadRowCells 75 (XlsxReader.Sheet.cs), DecodeRow 75, WriteRow 66, ReadStringItemText 63 (XlsxReader.Cells.cs). ImportSchema (#1119): Scan 126 (ImportSchema.cs). Rule: signature through closing brace. None is in row 'Methods over 60 lines (S538 list)', continued in the next row; a full recount is owed. | receiver: the lane that next recounts methods |
+| Methods over 60 lines missing from the S538 list (S547 finds, planner, validator and CSV) | ImportPlanner (#1112): CasesAsync 156, DecideAsync 102 (ImportPlanner.Cases.cs), ItemsAsync 101, PlanAsync 84 (ImportPlanner.cs); ImportValidator (#1114): Row 189 (ImportValidator.cs), Keys 119 (ImportValidator.Checks.cs). CsvFormat (#1113): Read 109, ReadRecord 95 (CsvFormat.cs), DecodeRow 93, WriteRow 61 (CsvFormat.Rows.cs). EventBatchParser (#1117): ParseEvent 290 (EventBatchParser.Event.cs), Parse 116 (EventBatchParser.cs). Rule: signature through closing brace. None is in row 'Methods over 60 lines (S538 list)'; a full recount is owed. | receiver: the lane that next recounts methods |
+
+Replaced by S549 (#1120): MediaSniffer.cs (548 lines) was split into two files (359/193); the recounts are the carried rows 'Source files over 500 lines (S549 count)' and the two 'Methods over 60 lines missing from the S538 list (S549 finds...)' rows, plus the new row '... (S549 finds, sniffer)'.
+
+## Moved from status-carried.md by S550 (2026-11-21)
+
+| Source files over 500 lines (S549 count) | 14 under src, wave 730a1e6a (`git ls-files 'src/*.cs'` fed to `wc -l`, over 500, files only): SafeZipArchive 1234, IsolationSelfCheck 969, ChildProcessParseRunner 808, IngestEventBatch 746, SafeXml 741, nine of 528-729. MediaSniffer (548, #1120) left the list; it is now two files (359/193). | receiver: backend lanes |
+| Methods over 60 lines missing from the S538 list (S549 finds) | AssertionExtractor.ParseExpect 111 (.Script.cs), ScanPython 85 (.Python.cs); AuthoringImporter (#1108): ApplyAsync 197, LockRanksAsync 101 (AuthoringImporter.Apply.cs), ImportCoreAsync 94, CodesAsync 73 (AuthoringImporter.cs); XlsxReader (#1110): ReadSheet 164, ReadCellText 85, ReadRowCells 75 (XlsxReader.Sheet.cs), DecodeRow 75, WriteRow 66, ReadStringItemText 63 (XlsxReader.Cells.cs). ImportSchema (#1119): Scan 126 (ImportSchema.cs). Rule: signature through closing brace. None is in row 'Methods over 60 lines (S538 list)', continued in the next row; a full recount is owed. | receiver: the lane that next recounts methods |
+| Methods over 60 lines missing from the S538 list (S549 finds, planner, validator and CSV) | ImportPlanner (#1112): CasesAsync 156, DecideAsync 102 (ImportPlanner.Cases.cs), ItemsAsync 101, PlanAsync 84 (ImportPlanner.cs); ImportValidator (#1114): Row 189 (ImportValidator.cs), Keys 119 (ImportValidator.Checks.cs). CsvFormat (#1113): Read 109, ReadRecord 95 (CsvFormat.cs), DecodeRow 93, WriteRow 61 (CsvFormat.Rows.cs). EventBatchParser (#1117): ParseEvent 290 (EventBatchParser.Event.cs), Parse 116 (EventBatchParser.cs). Rule: signature through closing brace. None is in row 'Methods over 60 lines (S538 list)'; a full recount is owed. | receiver: the lane that next recounts methods |
+| Methods over 60 lines missing from the S538 list (S549 finds, sniffer) | MediaSniffer (#1120): none. After the split MediaSniffer.cs (359 lines) has 17 methods, longest Check 49; MediaSniffer.Helpers.cs (193) has 16, longest DetectBom 29 (signature through closing brace, awk count). | receiver: backend lanes |
+
+Replaced by S550 (#1122): AuthoringContent.cs (702 lines) was split into two files (482/227); the recounts are the carried rows 'Source files over 500 lines (S550 count)' and the two 'Methods over 60 lines missing from the S538 list (S550 finds...)' rows, plus the new rows '... (S550 finds, authoring content)' and 'Stale AuthoringContent line cites (S550)'.
+
+## Moved from status-carried.md by S551 (2026-11-21)
+
+| Source files over 500 lines (S550 count) | 13 under src, wave 1548604d (`git ls-files 'src/*.cs'` fed to `wc -l`, over 500, files only): SafeZipArchive 1234, IsolationSelfCheck 969, ChildProcessParseRunner 808, IngestEventBatch 746, SafeXml 741, eight of 528-729. AuthoringContent (702, #1122) left the list; it is now two files (482/227). | receiver: backend lanes |
+| Methods over 60 lines missing from the S538 list (S550 finds) | AssertionExtractor.ParseExpect 111 (.Script.cs), ScanPython 85 (.Python.cs); AuthoringImporter (#1108): ApplyAsync 197, LockRanksAsync 101 (AuthoringImporter.Apply.cs), ImportCoreAsync 94, CodesAsync 73 (AuthoringImporter.cs); XlsxReader (#1110): ReadSheet 164, ReadCellText 85, ReadRowCells 75 (XlsxReader.Sheet.cs), DecodeRow 75, WriteRow 66, ReadStringItemText 63 (XlsxReader.Cells.cs). ImportSchema (#1119): Scan 126 (ImportSchema.cs). Rule: signature through closing brace. None is in row 'Methods over 60 lines (S538 list)', continued in the next row; a full recount is owed. | receiver: the lane that next recounts methods |
+| Methods over 60 lines missing from the S538 list (S550 finds, planner, validator and CSV) | ImportPlanner (#1112): CasesAsync 156, DecideAsync 102 (ImportPlanner.Cases.cs), ItemsAsync 101, PlanAsync 84 (ImportPlanner.cs); ImportValidator (#1114): Row 189 (ImportValidator.cs), Keys 119 (ImportValidator.Checks.cs). CsvFormat (#1113): Read 109, ReadRecord 95 (CsvFormat.cs), DecodeRow 93, WriteRow 61 (CsvFormat.Rows.cs). EventBatchParser (#1117): ParseEvent 290 (EventBatchParser.Event.cs), Parse 116 (EventBatchParser.cs). Rule: signature through closing brace. None is in row 'Methods over 60 lines (S538 list)'; a full recount is owed. | receiver: the lane that next recounts methods |
+| Methods over 60 lines missing from the S538 list (S550 finds, authoring content) | AuthoringContent (#1122): Parse 82 (AuthoringContent.cs), Steps 92 (AuthoringContent.Steps.cs); signature through closing brace, awk count. Not cut: the split was a pure move. | receiver: backend lanes |
+
+Replaced by S551 (#1124): ArtifactCompletionVerifier.cs (541 lines) was split into two files (322/228); the recounts are the carried rows 'Source files over 500 lines (S551 count)' and the three 'Methods over 60 lines missing from the S538 list (S551 finds...)' rows.
+
+## Moved from status-carried.md by S552 (2026-11-21)
+
+| Isolation test files over 500 lines (S512) | `tests/Isolation.Tests/Rls/RlsIsolationTests.cs` (946 lines) and `tests/Isolation.Tests/TenantRowFactory.cs` (943 lines) were already over the 500-line rule and grew by 16 and 20 lines in the support-grant slice; the slice's own files stay under 500. | receiver: next Isolation.Tests task (split by responsibility) |
+
+Replaced by S552 (#1126): RlsIsolationTests.cs (946 lines) was split into three files (408/336/221); the recount is the carried row 'Isolation test files over 500 lines (S512, S552 count)' (TenantRowFactory.cs half kept), plus the new row 'Plan 13.6.1 cites of RlsIsolationTests name the wrong lines (S552)'.
+
+## Moved from status-carried.md by S554 (2026-11-21)
+
+| Stale line cites after file splits (S535) | Row 'Route 22 from/to' cites AuthoringVersionQueries.cs:635 (now the TryParse call at AuthoringVersionInstant.cs:88); row 'Unpaired-surrogate detector has copies in Policy, Ingestion and Authoring (S492)' cites ProducerRegistry.cs:443-474 (code now in ProducerSlotArguments.cs, IsStorableText 32-58); other rows name ProducerSlotSql.ReadByProducer (S51 finalize lookups) by symbol only and stay valid. Not edited in place | receiver: backend lanes, re-point when next touched |
+
+Closed by S554 (#1131): the cites of 13.1.1 and open-items 05 to the S535 split files are re-pointed by symbol (13.1.1 line 559 included) except the migration; the remainder is the carried row 'Remaining stale cites after S554'.
+
+| Unused usings kept in XlsxReader.cs (S543) | The main file keeps five unused usings (System.Buffers, System.Globalization, System.Runtime.InteropServices, System.Text, System.Text.Json) so ReadArchive stays at lines 150-168 and the cite XlsxReader.cs:157 in plans/features/13-product-phases/13.1.1-feature-tree-and-manual-test-cases.md:559 stays true. Remove them when that cite is re-pointed by symbol. | receiver: the lane that next edits 13.1.1 |
+
+Closed by S554 (#1131): the five unused usings are dropped from XlsxReader.cs and the 13.1.1 line 559 cite names `ReadArchive`.
+
+| Unused usings kept in ImportPlanner.cs (S544) | ImportPlanner.cs keeps two unused using directives (lines 2 and 4) because plans/features/13-product-phases/13.1.1-feature-tree-and-manual-test-cases.md:559 cites ImportPlanner.cs:293 and a drop would move that line. Remove them with a re-point of the cite by symbol (NodeLimits.MaximumSiblingsPerGroup in Nodes) in one change. | receiver: the next lane that edits 13.1.1 or ImportPlanner.cs |
+
+Closed by S554 (#1131): the two unused usings are dropped from ImportPlanner.cs and the cite names `NodeLimits.MaximumSiblingsPerGroup` in `Nodes`.
+
+| Stale AuthoringContent line cites (S550) | Plan 13.1.1 lines 430, 524, 578 and open-items 05 line 24 cite `AuthoringContent.cs:376-427` (NormaliseLeaves, now AuthoringContent.Steps.cs); migrations/0039_authoring_tree.sql:537 cites `:78`. Both stale; the migration is immutable. `:76` and `:196-200` (13.1.1 lines 525, 538, 579; open-items 05 line 25) are still true. | receiver: plan owner (13.1.1) |
+
+Closed by S554 (#1131): the `AuthoringContent.cs:376-427` cites on 13.1.1 lines 430, 524, 578 and open-items 05 line 24 name `AuthoringContent.Steps.cs` (`NormaliseLeaves`); the migration cite stays as the carried row 'Remaining stale cites after S554'.
+
+## Moved from status-carried.md by S555 (2026-11-21)
+
+| Isolation test files over 500 lines (S512, S552 count) | `tests/Isolation.Tests/TenantRowFactory.cs` is still 943 lines (over the 500-line rule; it grew by 20 lines in the support-grant slice, whose own files stay under 500). `RlsIsolationTests` is now three files, 408 / 336 / 221 lines (`wc -l tests/Isolation.Tests/Rls/RlsIsolationTests*.cs`, #1126). Method over 60 lines in that class, not cut (pure move): ForcedRls_And_NoBypassRls 244 (RlsIsolationTests.Hardening.cs, signature through closing brace). | receiver: next Isolation.Tests task (split TenantRowFactory by responsibility) |
+
+Replaced by S555 (#1130): TenantRowFactory.cs (943 lines) was split into three files (324/353/277); the recount and the method list are the carried row 'Isolation test methods over 60 lines (S555)'.
+
+## Moved from status-carried.md by S553 (2026-11-21)
+
+| Authoring If-Match and import-query order (S507) | Nine Authoring routes (checklist update/delete, manual-case patch/delete/state/item, node update/reorder/delete) parse `If-Match` before the body guard, and `ImportAsync` (`AuthoringImportEndpoints.cs`) validates `format` and `dry_run` before `ReadFileAsync`; an anonymous caller without the tag or query gets 422, not 401. No body byte is read. | receiver: Authoring lane, move the guard first |
+
+Closed by S553 (#1135, merged as 9c616f0d): `RawBodyGuard.RequireAuthenticatedTenant` is the first statement of the nine routes, of `ImportAsync`, and of the three restore routes (`RestoreNodeAsync`, `RestoreChecklistItemAsync`, `RestoreManualCaseAsync`) found beyond the row, which parsed `If-Match` the same way. An anonymous or tenant-less caller now gets the pipeline 401 before `If-Match`, `format` or `dry_run`. What stays open is the three carried rows 'Authoring read routes validate the query before authentication (S553)', 'Authoring guard-first pin discovers delegates by helper name only (S553)' and 'Authoring write routes without a precondition rely on having no validator (S553)'.
+
+## Moved from status-carried.md by S558 (2026-11-21)
+
+| Oversized Tenancy test files (S198) | 38 Tenancy test files were already over 500 lines on `782e7553` and grew by 1 to 26 lines in S198 (org filters, `Unique.Slug`, dedicated-database scope); no file newly crossed 500 (`EventSchemaTests`, `ReconcileForcedIncompleteTests` were split); splitting a 700 to 2400 line test class is a separate refactor; S364 (#746) changed 5 lines of `TenantGucTests.cs` (843 lines, viewer role id seed) | receiver: next Tenancy test-infra lane |
+
+Superseded by S558 (#1139, merged as 870bc630): `CatalogIdentityTests.cs` was split into four files of at most 448 lines; the recount (54 files over 500 lines) is the new carried row "Oversized Tenancy test files (S558)".
+
+## Moved from status-carried.md by S562 (2026-11-21)
+
+| Oversized Tenancy test files (S558) | After S558 (#1139, CatalogIdentityTests split into 83 / 448 / 358 / 299 lines) 54 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule: `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S562 (#1144, merged as af0b5ae8): `HealingLlmSchemaTests.cs` was split into four files of at most 351 lines; the recount on e43441b3 (52 files over 500 lines, S561 included) is the new carried row "Oversized Tenancy test files (S562)".
+
+## Moved from status-carried.md by S564 (2026-11-21)
+
+| Oversized Tenancy test files (S562) | After S562 (#1144, HealingLlmSchemaTests split into 226 / 351 / 167 / 317 lines) and S561, 52 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule: `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S564 (#1148, merged as c942cd17): `RunSchemaTests.cs` was split into three files of at most 320 lines; the recount on c942cd17 (50 files over 500 lines, S563 included) is the new carried row "Oversized Tenancy test files (S564)".
+
+## Moved from status-carried.md by S560 (2026-11-21)
+
+| Authoring guard-first pin discovers delegates by helper name only (S553) | `AuthoringGuardFirstBoundaryTests` finds a delegate only if it calls `IfMatchVersion`, `IfMatchOrder`, `ReadFormat` or `DryRun` (`AuthoringGuardFirstBoundaryTests.cs:51-52,127-129,145-152`). A new write delegate that parses `If-Match` through a differently named wrapper in `AuthoringEndpointSupport.cs`, or is reached by a method-group alias, is not found; the expected set of 13 stays unchanged and an anonymous request could answer 422. Not a current bug. | receiver: Authoring lane, enumerate delegates from the MapPost/MapPatch/MapDelete calls, add wrapper and alias fixtures |
+| Authoring write routes without a precondition rely on having no validator (S553) | `UnlinkAsync` (`AuthoringManualCaseEndpoints.cs:414`), `DiscardAsync` (`AuthoringChangeEndpoints.cs:184`) and `RestoreVersionAsync` (`AuthoringRestoreEndpoints.cs:137`) go straight to `mediator.Send` with no guard first. Safe today: none of the three commands has a validator (`AuthoringModule.cs:55-58`), so the 401 comes first. A validator added to one would answer 422 before the 401, and the pin does not see these routes. | receiver: Authoring lane, add the guard first (3 lines), widen the pin to every write route |
+
+Superseded by S560 (#1150, merged as 70c17040): `AuthoringGuardFirstBoundaryTests` now enumerates the 23 write routes from the `MapPost`/`MapPut`/`MapPatch`/`MapDelete` calls, resolves each method group, and fails closed on a wrapper name, method-group alias, lambda, lambda-parameter alias, unresolved or overloaded delegate, other `Map*` call and conditional text; fixtures cover each shape. Closed in full (the wrapper and alias fixtures named in the receiver are in `AuthoringGuardFirstBoundaryTests.Fixtures.cs`).
+
+Superseded by S560 (#1150, merged as 70c17040): `DiscardAsync`, `UnlinkAsync` and `RestoreVersionAsync` now call `RawBodyGuard.RequireAuthenticatedTenant` first, as do the other seven delegates that relied on a body reader, so a validator added to any write command can no longer answer 422 before the 401. Closed in full; what stays open (guard removal caught only by the pin, pin scope, typed bodies and filters, sibling scanners) is in the four S560 rows of `docs/status-carried.md`.
+
+## Moved from status-carried.md by S567 (2026-11-21)
+
+| Oversized Tenancy test files (S564) | After S564 (#1148, RunSchemaTests split into 243 / 232 / 320 lines) and S563 (ReconcileComparerUnitTests split), 50 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule: `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S567 (#1154, merged as f0766633): `EvidenceUploadUrlTests.cs` was split into three files of at most 270 lines; the recount on f0766633 (47 files over 500, S565 and S566 included) is the row 'Oversized Tenancy test files (S567)' in `docs/status-carried.md`.
+
+## Moved from status-carried.md by S568 (2026-11-21)
+
+| Oversized Tenancy test files (S567) | After S567 (#1154, EvidenceUploadUrlTests split into 222 / 270 / 203 lines), S565 (PolicyEndpointTests) and S566 (CaseAttemptWriterTests), 47 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on f0766633): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S568 (#1156, merged as 19c14a02): `ProducerSlotTests.cs` was split into three files of at most 283 lines; the recount on 356ec5eb (45 files over 500, S569 included) is the row 'Oversized Tenancy test files (S568)' in `docs/status-carried.md`.
+
+## Moved from status-carried.md by S571 (2026-11-21)
+
+| EventBatchParserUnitTests over 500 lines (S360) | `tests/Tenancy.IntegrationTests/EventBatchParserUnitTests.cs` is 640 lines (637 before S360; the new epoch refusal rows add 3), over the 500-line file limit; split into partial classes by concern. Also `ReconcileComparer.ShardReasons` (`src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/ReconcileComparer.cs`) was 89 lines before S360 and is 99 after (10 added by the stale reason) against the 60-line method limit; split per reason code. Both pre-existing size debt, not introduced by 04.1.2-T2. [OPEN] | receiver: the next ingest/reconcile test-hygiene lane |
+| Oversized Tenancy test files (S568) | After S568 (#1156, ProducerSlotTests split into 218 / 283 / 207 lines), S567 (EvidenceUploadUrlTests), S569 (EvidenceArtifactSchemaTests), S565 (PolicyEndpointTests) and S566 (CaseAttemptWriterTests), 45 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 356ec5eb): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S571 (#1162, merged as 620ee937): `EventBatchParserUnitTests.cs` was split into three files of at most 313 lines and the S360 row stays in `docs/status-carried.md` for the open `ReconcileComparer.ShardReasons` item; the recount on 620ee937 (43 files over 500, S570 included) is the row 'Oversized Tenancy test files (S571)' in `docs/status-carried.md`.
+
+## Moved from status-carried.md by S573 (2026-11-21)
+
+| Oversized Tenancy test files (S571) | After S571 (#1162, EventBatchParserUnitTests split into 313 / 216 / 128 lines) and S570 (#1157, CaseAttemptSchemaTests split), 43 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 620ee937): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S573 (#1165, merged as 30524eb6): `RunIdentitySchemaTests.cs` was split into two files of at most 345 lines; the recount on 30524eb6 (41 files over 500, S572 included) is the row 'Oversized Tenancy test files (S573)' in `docs/status-carried.md`.
+
+## Moved from status-carried.md by S574 (2026-11-21)
+
+| Oversized Tenancy test files (S573) | After S573 (#1165, RunIdentitySchemaTests split into 345 / 286 lines), S572 (#1161, SecurityEventApiTests split) and S571 (#1162), 41 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 30524eb6): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S574 (#1164, merged as 7984df36): `RegistryEndpointTests.cs` was split into two files of at most 324 lines; the recount on 7984df36 (40 files over 500) is the row 'Oversized Tenancy test files (S574)' in `docs/status-carried.md`.
+
+## Moved from status-carried.md by S575 (2026-11-21)
+
+| Oversized Tenancy test files (S574) | After S574 (#1164, RegistryEndpointTests split into 324 / 311 lines), S573 (#1165), S572 (#1161) and S571 (#1162), 40 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 7984df36): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S575 (#1169, merged as 6e393b74) and S576 (#1168): `PolicyActivationReadTests.cs` was split into 425 / 180 lines and `AuthoringImportFormatUnitTests` into 398 / 276 lines; the recount on 5b58c7b5 (38 files over 500) is the row 'Oversized Tenancy test files (S575)' in `docs/status-carried.md`.
+
+## Moved from status-carried.md by S580 (2026-11-21)
+
+| Oversized Tenancy test files (S575) | After S575 (#1169, PolicyActivationReadTests split into 425 / 180 lines), S576 (#1168, AuthoringImportFormatUnitTests split into 398 / 276 lines), S574 (#1164), S573 (#1165), S572 (#1161) and S571 (#1162), 38 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 5b58c7b5): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S580 (#1174, merged as 503d35ad): `QuarantineSchemaTests.cs` was split into 360 / 182 lines; the recount on 503d35ad (34 files over 500, covering S577 to S580) is the row 'Oversized Tenancy test files (S580)' in `docs/status-carried.md`.
+
+## Moved from status-carried.md by S581 (2026-11-21)
+
+| Oversized Tenancy test files (S580) | After S580 (#1174, QuarantineSchemaTests split into 360 / 182 lines), S579, S578, S577 (#1171), S575 (#1169) and S576 (#1168), 34 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 503d35ad): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+| file-size debt in the reconcile slice (S165) | `ReconcileAsync` is about 105 lines (pre-existing) and `ReconcileDeadlineSweepTests.cs` / `ReconcileForcedIncompleteTests.cs` are at or over the 500-line limit (PR #348) | receiver: next 05.3.2 task |
+
+Superseded by S581 (#1177, merged as bb2b2ed1): `ReconcileDeadlineSweepTests.cs` was split into 387 / 257 lines; the recount on 136c2aed (32 files over 500, after S582 as well) is the row 'Oversized Tenancy test files (S581)' in `docs/status-carried.md`. The row 'file-size debt in the reconcile slice (S165)' keeps only the `ReconcileAsync` method-length item (both test files are under 500 lines).
+
+## Moved from status-carried.md by S583 (2026-11-21)
+
+| Oversized Tenancy test files (S581) | After S582 (IngestDedupeTests split into 359 / 190 lines), S581 (#1177, ReconcileDeadlineSweepTests split into 387 / 257 lines), S580 (#1174), S579, S578, S577 (#1171), S575 (#1169) and S576 (#1168), 32 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 136c2aed): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S583 (#1179, merged as 02cfd03e): `ReconcileDeadlineRearmTests.cs` was split into 275 / 243 lines; the recount on 0ff047f9 (31 files over 500) is the row 'Oversized Tenancy test files (S583)' in `docs/status-carried.md`.
+
+## Moved from status-carried.md by S585 (2026-11-21)
+
+| Oversized Tenancy test files (S583) | After S583 (#1179, ReconcileDeadlineRearmTests split into 275 / 243 lines), S582, S581 (#1177), S580 (#1174), S579, S578, S577 (#1171), S575 (#1169) and S576 (#1168), 31 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 0ff047f9): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S585 (#1182, merged as 0bc3230c): `ProducerSlotQaTests.cs` was split into 372 / 199 lines; the recount on 692a569a (29 files over 500, after S586 #1183) is the row 'Oversized Tenancy test files (S585)'.
+
+## Moved from status-carried.md by S584 (2026-11-21)
+
+| Oversized Tenancy test files (S585) | After S586 (#1183, CatalogUnitTests split into 301 / 277 lines), S585 (#1182, ProducerSlotQaTests split into 372 / 199 lines), S583 (#1179), S582, S581 (#1177), S580 (#1174), S579, S578, S577 (#1171), S575 (#1169) and S576 (#1168), 29 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 692a569a): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S584 (#1185, merged as eee37028): `AuthoringQaItemsCasesTests.cs` was split into 381 / 146 lines; the recount on eee37028 (28 files over 500) is the row 'Oversized Tenancy test files (S584)'.
+
+## Moved from status-carried.md by S587 (2026-11-21)
+
+| Oversized Tenancy test files (S584) | After S584 (#1185, AuthoringQaItemsCasesTests split into 381 / 146 lines), S586 (#1183, CatalogUnitTests split into 301 / 277 lines), S585 (#1182, ProducerSlotQaTests split into 372 / 199 lines), S583 (#1179), S582, S581 (#1177), S580 (#1174), S579, S578, S577 (#1171), S575 (#1169) and S576 (#1168), 28 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on eee37028): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S587 (#1187, merged as 384956d6): `AuthoringImportTests.cs` was split into 404 / 278 lines; the recount on 384956d6 (27 files over 500) is the row 'Oversized Tenancy test files (S587)'.
+
+## Moved from status-carried.md by S589 (2026-11-21)
+
+| Oversized Tenancy test files (S587) | After S587 (#1187, AuthoringImportTests split into 404 / 278 lines) and the splits listed in the S584 row's history, 27 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 384956d6): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S589 (#1188, merged as e17d91b0): `AuthoringExporterTests.cs` was split into 469 / 325 lines; the recount on e17d91b0 (26 files over 500) is the row 'Oversized Tenancy test files (S589)'.
+
+## Moved from status-carried.md by S588 (2026-11-21)
+
+| Oversized Tenancy test files (S589) | After S589 (#1188, AuthoringExporterTests split into 469 / 325 lines) and the earlier splits (S584-S587), 26 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on e17d91b0): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S588 (#1190, merged as 0e10e11e): `AuthoringSchemaTests.cs` was split into 414 / 343 lines; the recount on 0e10e11e (25 files over 500) is the row 'Oversized Tenancy test files (S588)'.
+
+## Moved from status-carried.md by S591 (2026-11-21)
+
+| Oversized Tenancy test files (S588) | After S588 (#1190, AuthoringSchemaTests split into 414 / 343 lines) and the earlier splits (S584-S589), 25 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 0e10e11e): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S591 (#1194, merged as 81e43293): `HealingLlmGatewayTests.cs` was split into 444 / 236 lines; the recount on 472c4c9d (23 files over 500, with S590) is the row 'Oversized Tenancy test files (S591)'.
+
+## Moved from status-carried.md by S592 (2026-11-21)
+
+| Oversized Tenancy test files (S591) | After S591 (#1194, HealingLlmGatewayTests split into 444 / 236 lines), S590 (#1193, AuthoringImportExportTests split) and the earlier splits (S584-S589), 23 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 472c4c9d): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S592 (#1195, merged as 145301e7): `AuthoringXlsxFormatTests.cs` was split into 429 / 237 / 238 lines; the recount on 655ac566 gave 22 files, see the '(S592)' row in docs/status-carried.md.
+
+## Moved from status-carried.md by S593 (2026-11-21)
+
+| Oversized Tenancy test files (S592) | After S592 (#1195, AuthoringXlsxFormatTests split into 429 / 237 / 238 lines), S591, S590 and the earlier splits (S584-S589), 22 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 655ac566): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S593 (#1199, merged as 4cc2729a): `EvidenceFreezeGuardTests.cs` was split into 487 / 327 lines; the recount on 4cc2729a gave 21 files, see the '(S593)' row in docs/status-carried.md.
+
+## Moved from status-carried.md by S595 (2026-11-21)
+
+| Oversized Tenancy test files (S593) | After S593 (#1199, EvidenceFreezeGuardTests split into 487 / 327 lines), S592, S591, S590 and the earlier splits (S584-S589), 21 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 4cc2729a): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S595 (#1201, merged as 70d4a479): `EvidenceRevisionSchemaTests.cs` was split into 259 / 355 / 300 lines; the recount on 70d4a479 gave 20 files, see the '(S595)' row in docs/status-carried.md.
+
+## Moved from status-carried.md by S594 (2026-11-21)
+
+| Oversized Tenancy test files (S595) | After S595 (#1201, EvidenceRevisionSchemaTests split into 259 / 355 / 300 lines), S593, S592, S591, S590 and the earlier splits (S584-S589), 20 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on 70d4a479): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S594 (#1203, merged as c6c6adae): `AuthoringImporterTests.cs` was split into 459 / 282 / 305 lines; the recount on c6c6adae gave 19 files, see the '(S594)' row in docs/status-carried.md.
+
+## Moved from status-carried.md by S596 (2026-11-21)
+
+| Oversized Tenancy test files (S594) | After S594 (#1203, AuthoringImporterTests split into 459 / 282 / 305 lines), S595, S593, S592, S591, S590 and the earlier splits (S584-S589), 19 files of `tests/Tenancy.IntegrationTests` are still over the 500-line rule (recount on c6c6adae): `find tests/Tenancy.IntegrationTests -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -exec wc -l {} + \| grep -v ' total$' \| awk '$1>500' \| wc -l` (files only; method lengths are tracked in 'Methods over 60 lines (S538 list)'). Split each by responsibility, pure moves | receiver: next Tenancy test-infra lane |
+
+Superseded by S596 (#1205, merged as 901d8dcb): `AuthoringVersionTests.cs` was split into 436 / 380 / 154 lines; the recount on 901d8dcb gave 18 files, see the '(S596)' row in docs/status-carried.md.
+
+## STATUS replaced text (S599, 2026-11-21)
+
+Replaced or removed by the S599 recount (through #1206, `7d196b99`); text verbatim. Items 1 and 2 are the §1 Resume lines; item 3 the §2 method line; the rest are partial-parent table rows (04.1.2-T3, 05.2.1-T3, 08.5.1-T1 rewritten; 05.3.2-T3 and 10.1.2-T1 credited and removed), the partial-parent paragraph and the §5 row 10.1.2-T1.
+
+1. - Fully landed on develop (recount S369 through #751, `41edd414`): 240/660 tasks (≈36.4 %); 240.0/706.75 raw person-days (≈34.0 %); remaining 420 tasks / 466.75 d. Via merged PRs: 213 tasks / 215.0 d; the other 27 tasks / 25.0 d are direct commits on develop. 37 parents are partial and carry no credit (§2). (archive: S372 item 2)
+2. - Landed by phase (done tasks / raw d): G1 153 / 160.25; G2 70 / 63.5; G3 5 / 4.5; G4 12 / 11.75.
+3. Counted by expanding task ranges in merged PR bodies, close-out rows and plan Notes against plan_graph task ids (S369 recount through #751, `41edd414`, method unchanged from S189; the S337 recount covered #689, the S317 recount #648 and the S299 recount #612); a parent task counts only when every defined sub-row has landed on develop; sizes XS .25 S .5 M 1 L 2 XL 3. detail: carried rows 'STATUS §2 count log S112-S128' (S144 F61), 'STATUS §2 count log S299', 'STATUS §2 count log S317' and 'STATUS §2 count log S369'.
+| 04.1.2-T3 | T3.1 | none (T3.1 landed #811 c932d98c; T3 complete, leaves this list at the next recount) |
+| 05.2.1-T3 | none open (T3.1 remainder landed #846, 12e9a9db; the parent is credited at the next roll-up recount) | #846 |
+| 08.5.1-T1 | none open (T1.1-T1.7 landed; the parent is credited at the next roll-up recount) | #306, #814, #822, #828 |
+| 05.3.2-T3 | T3.1, T3.2 | none |
+| 10.1.2-T1 | T1.1 | none (T1 complete: remaining AC1 anchors landed #820 68358713; leaves this list at the next recount) |
+The 31 table rows above represent 32 partial parents (the 10.7.1-T1/T2 row covers two); with 09.5.2-T3 (T3.2 open; T3.1 landed in #684), 10.7.1-T3 (drill open, #698), 10.7.1-T5 (T5.2 open; T5.1 landed in #696) and 10.7.1-T6 (T6.2 open; T6.1 landed in #696) and 03.4.1-T1 (counted as partial at S372; T1.4 landed in #860 after this count, so the parent is complete and the next recount moves it to done) make 37 (the table rows 10.3.1-T2, 10.3.2-T1 and 11.2.1-T2 are the parents withheld by S369; 10.7.1-T1 and 10.7.1-T2 share one row); they are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5. those four have no row in the table above because a row insert would shift every STATUS.md:N cite below. (archive: S372 item 5)
+| 10.1.2-T1 | M | Secret inventory and CI check | yes | no | no | n/a | yes (S250 #516; AC1 runbook anchors closed S407 #820, 68358713) |
+
+The rows above were replaced by the S599 recount (244 / 243.5); the §5 row 10.1.2-T1 is removed because the task is credited as whole.
+
+S599 delta-fix (same recount): §5 rows whose 'credited at the next recount' wording contradicted the recount, verbatim before the edit (08.5.1-T1, 04.1.2-T3, 02.4.3-T2):
+
+| 08.5.1-T1 | XL | Evidgate-provided AI gateway (split before build); unblocked by 12.3.1-T1; partial: T1.1-T1.2 landed by S145 (#306, f8fd2f56; `healing_llm_call`, `healing_llm_budget`, provider seam, migration 0054), T1.3-T1.4 landed by S402 (#814, 009af9ec), T1.5-T1.7 landed by S406 (#822 c0609f31, #828 b66504d0; migration 0107; details in the 08.5.1 plan Notes S406); no remainder is ready, the parent is credited at the next recount | yes | yes (0049+) | no | T1.1-T1.2 ; T1.3-T1.4 ; T1.5-T1.6-T1.7 | yes (dep 12.3.1-T1 merged; `MockHealingLlmProvider` covers tests) |
+| 04.1.2-T3 | M | OpenAPI + integration tests for both stories. Partial: events operation documented (`contracts/openapi.yaml:1009,6848,7182`) and the 04.1.1+04.1.2 suite is on develop; the run-create 409 `producer_slots_conflict` is now documented as a defensive refusal (#811, c932d98c; wire-unreachable while create issues a fresh run id); T3 is complete, credit lands at the next recount. | yes | no | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | no — complete |
+| 02.4.3-T2 | M | `github_installation`, install callback, token minting | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json`; S91: additive endpoint registration | landed S410 (#835, 33cd2497); credited at the next recount | yes |
+| 04.1.2-T3 | M | OpenAPI + integration tests for both stories. Partial: events operation documented (`contracts/openapi.yaml:1009,6848,7182`) and the 04.1.1+04.1.2 suite is on develop; the run-create 409 `producer_slots_conflict` is now documented as a defensive refusal (#811, c932d98c; wire-unreachable while create issues a fresh run id); T3 stays partial (S599: AC7 rejection counter open). | yes | no | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | no — complete |
+
+## Moved from status-carried.md by S600 (2026-11-21)
+
+| Dogfood reports not mapped until 04.4.1 (S245) | 01.10.1-T1 landed as partial (#510): `scripts/dogfood/collect.sh` plus real xUnit v3/Vitest/Playwright JUnit reports in `scripts/dogfood/testdata` parse through `IParsing.ParseXmlReport` with a sample-element walk (`DogfoodReportTests`), but no customer JUnit mapper exists until 04.4.1. When it lands, feed `scripts/dogfood/testdata` through it as regression input (zero errors) to close AC1's first half; vitest fixture holds the placeholder `packages/adapter-junit` spec only. Closed S400 (#806): mapper half landed; the reports now live in `fixtures/reports/own-ci` (old path `scripts/dogfood/testdata` is gone). | 04.4.1 owner |
+
+Superseded by S600 (#1210, merged as a5d1c3cd): the reports were refreshed from a new LAN run and map with zero discrepancies; 01.10.1-T1.1/T1.2 stay partial because 6 Playwright cases fail, see the 'Dogfood own-CI reports partial: 6 Playwright cases fail (S600)' row in docs/status-carried.md.
+
+## Moved from status-carried.md by S602 (2026-11-21)
+
+| 6 own-CI Playwright cases fail on the LAN host (S600) | Specs `settings-policy.layout.spec.ts` ('UUID lookup is bounded at 1024px' and '1280px', en and vi: 4 cases) and `settings-policy.spec.ts` ('revision form keeps its field beside the action on desktop', en and vi: 2 cases), all `expect(received).toBe(expected)`, system Chrome on the LAN host (/usr/bin/google-chrome). Sibling lane S602 is fixing the cause: the UUID field width depends on the wrapper's fallback font. After that fix, refresh `fixtures/reports/own-ci/playwright.junit.xml` with `collect.sh --produce` on the LAN and close 01.10.1-T1.1/T1.2. | next web lane (S602) |
+
+Superseded by S602 (#1215, merged as e285d443): the UUID field is now sized in its own monospace font, and the six cases are green on the LAN host on 64a01403 (fixtures e2e, 61 passed incl. a throwaway measure case). The committed `fixtures/reports/own-ci/playwright.junit.xml` still holds the failing run; a new `collect.sh --produce` run is a later dogfood lane, see the row 'Dogfood own-CI reports partial: 6 Playwright cases fail (S600)'.
+
+## Moved from status-carried.md by S606 (2026-11-21)
+
+| Dogfood own-CI reports partial: 6 Playwright cases fail (S600) | 01.10.1-T1: #1210 (S600, a5d1c3cd) refreshed `fixtures/reports/own-ci` from one LAN run (xunit 86/0 failed, vitest 1/0, playwright 56 tests/6 failed) and `DogfoodReportTests` maps all three with zero discrepancies, so the mapper half and the manifest listing three producers are met. T1.1 and T1.2 remain unmarked; six producer cases still fail, separately from the successful mapper/manifest checks. Plan sub-rows are not marked delivered. | next dogfood lane |
+
+Closed by S606 (#1220, merged as 0127a4ae): one `collect.sh --produce` run on the LAN refreshed all three own-CI reports (xunit 86, vitest 1, playwright 72 testcases, 0 failures each; the fourth Playwright suite is `settings-policy.fallback-font.spec.ts`), `DogfoodReportTests` passed 19 of 19 on the LAN, and the 01.10.1-T1 Note records T1.1 and T1.2 as delivered. Remaining test hardening is the row 'Dogfood report test has no count pins (S606)'.
+
+## Moved from status-carried.md by S607 (2026-11-21)
+
+| Dogfood report test has no count pins (S606) | The report-mapping tests built on `AssertMapsCleanly` in `DogfoodReportTests` compare the mapped counts with the XML itself and pin none, so a committed own-CI report that holds failing cases still passes them (the S600 report did, with 6 failures). The doc comment at `DogfoodReportTests.cs:81` also still says the Playwright report has three suites; it has four since #1220. Open: decide whether the own-CI reports must have zero failures, and fix the comment. | next dogfood lane |
+
+Closed by #1223: the committed own-CI reports are pinned to zero failure/error elements and zero failed or errored mapper cases (`Dogfood_OwnCiReport_HasNoFailingCases`, with built-in negative reports), and the stale suite-count comment is fixed; no testcase totals are pinned.
+
+## Moved from status-carried.md by S608 (2026-11-21)
+
+| Execution key conflict: SQL catch under a race unpinned (S601) | #1211 pins the 422 `execution_key_conflict` refusal at run create (`RunCreationExecutionKeyConflictTests`); the mutant that removes only the unique-violation catch in `CreateRunCommandHandler.cs` (lines 387-394) leaves it green, because the in-memory check in `CreateRunCommandHandler.Derive.cs` refuses first, so the catch is reachable only when two creates race on one run id and no test drives that. Open: a race test (or a handler seam test) that makes the unique index answer first. | receiver: next 05.2.1 test-hardening lane |
+
+Closed by #1225 (53fe5538): the race premise did not hold. `CreateRunCommandHandler.cs` takes `runId = Guid.CreateVersion7()` per create and `migrations/0031_orchestration_run.sql:186` scopes the constraint to `(org_id, run_id, execution_key)`, while `CreateRunCommandHandler.Derive.cs:144-148` dedupes the same keys with `seen.Add(key)`, so two creates never share a run id and the catch cannot answer a race. The catch is now pinned by fault injection; keeping or deleting it is the carried row 'Execution key conflict: catch unreachable, keep or delete (S608)'.
+
+## Moved from status-carried.md by S609 (2026-11-21)
+
+| collect.sh residual check hardening (S600) | Three low findings left open by the S600 delta check on `scripts/dogfood/collect.sh` and `DogfoodReportTests.cs`: (1) the machine-name residual comparison is case-sensitive; (2) no test fails if the checkout-path/realpath residual is dropped, and the host-name and HOME tests return early on short names or an empty HOME; (3) a refusal on a later producer leaves a scrubbed earlier file in `--out` with no manifest. For (3), the earlier file is already scrubbed; (1) can miss machine identifiers whose casing differs. | next dogfood lane |
+
+Closed by #1227 (e1813329): the residual comparison ignores case (`refuse_residual` casefold, and the host sentinel check), the checkout-path/realpath residual, a fixed HOME and an additive extra identifier (`EVIDGATE_COLLECT_EXTRA_RESIDUAL`) are pinned by tests that cannot return early (`DogfoodReportTests.Residual.cs`), and a refusal on any producer now leaves `--out` empty (refuse-all, manifest last). What remains is the row 'collect.sh residual check scope (S609)'.
+
+## Moved from status-carried.md by S610 (2026-11-21)
+
+| OAuth callback `code`/`state` stay out of logs only by a code-level floor (S605) | ASP.NET's request line carries the callback query; `ApiHost.cs:76` starts `Microsoft.AspNetCore.Hosting.Diagnostics` at Warning in code, and `GitHubInstallationTests.Logs.cs` fails if that floor is lowered (mutant run red). That config cannot lower it is INFERRED from framework rule order, not run: a provider-specific `Logging:<Provider>:LogLevel` override would beat it. A test booting the host with such an override and scanning the logs would prove it. | receiver: Tech Lead (Identity); recorded owner: Tech Lead |
+
+Closed by #1231 (cd1d3e08): the inference was tested and is false for two key shapes (a provider-specific section and a provider-less trailing wildcard lower the floor); the exact-category, dotted-wildcard and parent keys do not. What remains is the rows 'Callback log floor can be lowered by configuration (S610)' and 'Callback log floor fix candidates and tests to flip (S610)'.
+
+## Moved from status-carried.md by S611 (2026-11-21)
+
+| Sibling architecture scanners accept conditional text (S560) | S560 made the Authoring pin reject any `#if` or disabled text in an endpoint file (security note 1 and code finding closed in 97aef5f0), but `RawBodyGuardBoundaryTests.cs:158-163` and `RateLimitGateSeamBoundaryTests.cs:302-307` still look only for disabled text that mentions their own needle, so a guard or call wrapped in `#if` can hide from them. | receiver: Architecture lane, reuse the fail-closed conditional-text check in both scanners |
+
+Closed by PR #1233 (merge 04c8038b): `ConditionalSourceText.FirstLine` is the one shared check, used by the Authoring pin, `RawBodyGuardBoundaryTests` and `RateLimitGateSeamBoundaryTests`, so any disabled text or `#if`/`#elif` directive refuses the file; fixtures and LAN mutants (old needle-only check restored, new fixtures red) cover both scanners.
+
+## Moved from status-carried.md by S612 (2026-11-21)
+
+| Draft provenance budget undercounts positive exponents (03.6.1-T1, #1214) | `DraftRules.cs:337` (`Math.Max(1, fraction - exponent)`) counts 1 for a positive exponent or many integer digits: 4096 numbers `1e308` (~25 KB) pass the 4096 summed budget, then PostgreSQL renders ~1.3 MB in the measuring cast before 422 `too_large`. Fix: count integer digits + exponent, cap the exponent at 308, add a test asserting no `as jsonb` statement runs. Low: one bounded query, authenticated `draft:write`, nothing stored. | follow-up Catalog draft lane (T3) |
+
+Closed by PR #1235 (merge 1fb1962a): `DraftBody.RenderedLength` counts integer digits shifted by the exponent, fraction digits, the point and the sign, so `1e308` counts 309 and 4096 of them are refused in C# before any jsonb cast; unit rows and the zero-`as jsonb` pins cover it, and the old-formula LAN mutant was red.
+
+| Draft insert maps the author FK as a missing project (03.6.1-T1, #1214) | `DraftCommands.cs:110-114` catches every `ForeignKeyViolation` as `ProjectNotFound`: a member revoked between the actor lookup (:84) and `SaveChanges` (:108) gets 404 `not_found` instead of 403 `draft_author_required`. Fix: switch on `PostgresException.ConstraintName` (`draft_project_fk`, `draft_author_fk`). Low: one-request race, no data written, no leak. | follow-up Catalog draft lane (T3) |
+
+Closed by PR #1235 (merge 1fb1962a): the insert catch switches on the constraint name (`draft_author_fk` 403 `draft_author_required`, `draft_project_fk` 404, any other foreign key propagates); `DraftTests.ForeignKeyFault` pins all three by fault injection and the constraint-switch-removed LAN mutant was red.
+
+## Moved from status-carried.md by S614 (2026-11-21)
+
+| Authoring metric outcomes without a deterministic test seam (S528) | AI settings stale at SaveAiSettingsCommand.cs:258 (unique-key loss behind the advisory lock) and apply conflict from the flip-count mismatch ApplyAuthoringChangesCommand.cs:112-116 need a race. Mutants: the apply stale Record call has no separate mutant (M7 was masked by M4 on Apply_StaleIfMatch); the AI settings stale call has none at all. | receiver: authoring lane |
+
+Closed by PR #1237 (merge a03b7402): `AuthoringCommitFaultMetricTests.LostWrite.cs` drives the AI settings unique-version loss and the apply flip-count mismatch by test-owned database triggers (no production seam); the stale-Record mutant and the flip-count-check mutant were each red in the new test only.
+
+## Moved from status-carried.md by S615 (2026-11-21)
+
+| Callback log floor can be lowered by configuration (S610) | Proven only for the test capture provider (`GitHubInstallationTests.LogFloor.cs`, 39/39): category `Microsoft.AspNetCore.Hosting.Diagnostics` (floor `ApiHost.cs:76`), Information lines carry the callback query. Keys: `Logging:<type FullName>:LogLevel:Default`, `Logging:<provider>:LogLevel:<category>`, provider-less `Logging:LogLevel:<category>*` (trailing wildcard, every provider: inferred). Safe: provider-less exact, `<category>.*`, parent `Microsoft.AspNetCore`. Console/Debug/EventSource/OpenTelemetry: inferred, not run. | receiver: T3 fix lane (Identity/ApiHost) |
+| Callback log floor fix candidates and tests to flip (S610) | Candidates: `PostConfigure<LoggerFilterOptions>` removing every rule below Warning that matches the category (exact, prefix, wildcard, any provider); or switch the request-start log off at source. Flip on fix: `LogFloor_ProviderSpecificDefaultAtTrace_ExposesCallbackQuery_KnownGap`, `LogFloor_ProviderSpecificHostingCategoryAtTrace_ExposesCallbackQuery_KnownGap`, `LogFloor_ProviderlessTrailingWildcardOnTheHostingCategoryAtTrace_ExposesCallbackQuery_KnownGap`. | receiver: T3 fix lane (Identity/ApiHost) |
+
+Closed by #1239 (833e2a4d): `RequestLogFloor.Apply` (a `PostConfigure<LoggerFilterOptions>` in `ApiHost`) appends a Warning rule `Category*Category` for the provider-less case and every provider named in the rules, outranking every pattern that can match the category; the three `_KnownGap` tests are now `..._DoesNotLowerTheFloor`, with reload, provider-parent and Console-by-alias cases and a Hosts theory over the key shapes; mutants (fix removed, per-provider part dropped) were red.
+
+## Moved from status-carried.md by S613 (2026-11-21)
+
+| Five hand-rolled log-capture helpers (S605) | `CapturingLoggerProvider` (Identity.IntegrationTests) is the fifth capture helper next to `CapturingLoggerFactory` (`LogRedactionTests.cs`, Google login) and `ListLogger<T>` (`GitHubTestDoubles.cs`, Catalog) plus two more; the older ones keep message and state only, with weaker capture (no scopes or exception text). Merge them into one shared test-support provider and migrate the callers. | receiver: Tech Lead (test infrastructure); recorded owner: Tech Lead |
+
+Restated for what stays unmigrated by #1241 (af28ed14): the shared provider `tests/Shared/CapturingLoggerProvider.cs` replaced the Identity and Catalog helpers; the remaining helpers are in the carried row "Log-capture helpers left unmigrated (S613)".
+
+## Moved from status-carried.md by S617 (2026-11-21)
+
+| Telemetry partials depend on compile order for the Meter (S524) | Seven EvidgateTelemetry partial files (HealingGateway, Operations, Quota, RawReportEnqueue, Releases, Sessions, Workflow) read the Meter of EvidgateTelemetry.cs in field initialisers, so that file must compile first (true on the LAN: csc lists it first); an order-independent holder is a design change. Recording tests for the AI settings and authoring counters exist since S528 (#1079); the race-only outcomes were pinned by #1237 (archived under S614). | receiver: observability lane |
+
+Closed by PR #1244 (merge 762caa61): `EvidgateMeter` (internal static holder, `src/BuildingBlocks/Observability/EvidgateMeter.cs`) owns the one Meter and every `EvidgateTelemetry` partial creates its instruments from `EvidgateMeter.Instance`, so no partial depends on file order; `TelemetryMeterOrderTests` (Architecture.Tests) and `TelemetryInstrumentBindingTests` (Hosts.IntegrationTests) pin it, and the reintroduced private-field mutant was red on the LAN.
+
+## Moved from status-carried.md by S619 (2026-11-21)
+
+| Floor notice registration has no ApiHost test (S615) | `RequestLogFloorTests` builds its own hosts with `RequestLogFloor.Apply` and `RequestLogFloorNotice`; only the Identity tests run the real `ApiHost.CreateBuilder`, and they do not assert the notice, so deleting `AddHostedService<RequestLogFloorNotice>` in `ApiHost.cs` leaves every test green. | receiver: next Api host test lane |
+
+Closed by PR #1248 (a6723611): `tests/Hosts.IntegrationTests/ApiHostRequestLogFloorTests.cs` builds the real `ApiHost.CreateBuilder` and pins the notice and the floor rules; deleting `ApiHost.cs:187` or `:188` turned two tests red each on the LAN.
+
+## Moved from status-carried.md by S620 (2026-11-21)
+
+| Dogfood report counting helpers duplicated (S607) | `AssertMapsCleanly` in `DogfoodReportTests.cs` (499 lines, no headroom) and `AssertNoFailingCases` in `DogfoodReportTests.Green.cs` each count failure elements; the first uses a regex on the text, the second counts XML elements by local name. Open: when the main file is next split, move `AssertMapsCleanly` into the partial and share one counter. | next dogfood lane |
+
+Closed by PR #1250 (merge 664600b5): `DogfoodReportTests.Counting.cs` holds one XML `CountElements` (local names, DTD prohibited) used by `AssertMapsCleanly` and `AssertNoFailingCases`; the regex is gone.
+
+## Moved from status-carried.md by S622 (2026-11-21)
+
+| Plan 13.6.1 cites of RlsIsolationTests name the wrong lines (S552) | plans/features/13-product-phases/13.6.1-element-profiles.md:102: `RlsIsolationTests.cs:85-91` is the TablePrivilegeAllowlist doc, not SelectableRelationAllowlist (field at RlsIsolationTests.cs:102); the block it now names, `RlsIsolationTests.Hardening.cs:135-141` (was `:534-540`), is the end of the catalogue-policy block plus the start of the organization-policies check and never asserted `security_invoker=true`. Both mismatches predate the move; #1126 only re-pointed the moved numbers. | receiver: 13.6.1 plan owner |
+| Plan 04.1.2 names the finalize tests by the main file (S557) | plans/features/04-ingestion-adapters/04.1.2-quota-epochs-and-observability.md:197 says the endpoint-level finalize tests live in `tests/Tenancy.IntegrationTests/FinalizeEndpointTests.cs`; since #1134 (S557) that class is split into FinalizeEndpointTests.cs (no tests), FinalizeEndpointTests.Acceptance.cs, FinalizeEndpointTests.Concurrency.cs and FinalizeEndpointTests.Edge.cs, so the path names a file with no test. Not edited in the S557 pure-move lanes. | receiver: next edit of plan 04.1.2 (name the class FinalizeEndpointTests and its partial files) |
+| Plan 04.1.2 names a test that does not exist (S568) | `plans/features/04-ingestion-adapters/04.1.2-quota-epochs-and-observability.md:137` cites `ProducerSlotTests.register_slots_per_shard_same_tx` (AC2); the test is `RegisterSlots_PerShard_SameTx` in `tests/Tenancy.IntegrationTests/ProducerSlotTests.cs` (pre-existing mismatch, not changed by the #1156 pure move; line 190 of the plan uses the real name). Re-point the cell to the real name | receiver: next 04.1.2 plan-edit lane |
+| Plan 13.5.1 line cite into the evidence artifact schema tests is off (S569) | `plans/features/13-product-phases/13.5.1-bound-playwright-scripts.md:50` cites `tests/Tenancy.IntegrationTests/EvidenceArtifactSchemaTests.cs:204-218` for `TenantKey_UniqueOrgIdId_Exists`; the test sits at :215-231 (the range covers the end of the previous test and the declaration only). Pre-existing before the S569 split, which kept main :1-296 unchanged, so it still resolves; not edited in that PR. Fix: re-point by symbol name only. | plan owner of 13.5.1 |
+| Plan 02.1.1 names a test that does not exist (S574) | `plans/features/02-identity-tenancy/02.1.1-org-and-project-registry.md:177` cites `RegistryEndpointTests.MaxProjectsReached429`; the test is `MaxProjectsReachedIs429` in `tests/Tenancy.IntegrationTests/RegistryEndpointTests.PatchScopeAndQuota.cs:168` (pre-existing mismatch, not changed by the #1164 pure move). [OPEN] Re-point the cell to the real name | receiver: next 02.1.1 plan-edit lane |
+| Stale line ranges in docs/security/resolver-review.md (S581) | `docs/security/resolver-review.md` :106 and :143 cite `ReconcileDeadlineSweepTests.cs:339-388` and `:373-388`; the file has 387 lines since #1177 and the cited tests end at :386 (:388 was the next banner line before the split, so the ranges were already one line loose). Substantive evidence lines are unchanged | receiver: next edit of docs/security/resolver-review.md |
+| Wrong test name cited in plan 08.5.1 (S591) | `plans/features/08-healing-learning/08.5.1-llm-gateway.md:137` cites `InvokeHealingLlm_ConcurrentCalls`; no test of that name exists (searched `git grep` over `tests/` on 81e43293; `InvokeHealingLlm_BudgetExceeded` is in HealingLlmTwoPhaseBudgetTests.cs:34). Pre-existing; correct the cite or add the test | receiver: next 08.5.1 plan lane |
+
+Closed by PR #1252 (merge 06999b01): each plan or doc cite now names the test or range that exists on the wave; the 13.6.1 security_invoker claim is recorded as a new open row.
+
+## Moved from status-carried.md by S621 (2026-11-21)
+
+| Self-test `Texts` fact lacks the state pair (S613) | Low: `CapturingLoggerProviderTests.Texts_CoverEveryPart_AndClearEmptiesTheCapture` (`tests/Catalog.UnitTests/CapturingLoggerProviderTests.cs:92-94`) asserts message, scope and exception text but not that `Texts` yields the state pair; add `texts.ShouldContain("Value=state-marker")`. Dropping state from `Texts` alone would stay green there (the state fact covers `State`, not `Texts`). | receiver: Tech Lead (test infrastructure); recorded owner: Tech Lead |
+
+Closed by PR #1255 (merge 4ee842aa): `Texts_CoverEveryPart_AndClearEmptiesTheCapture` now asserts `Value=state-marker`, and a mutant that drops the state pair from `Texts` turns it red.
+
+## Moved from status-carried.md by S624 (2026-11-21)
+
+| Item | Blocker | Owner |
+|---|---|---|
+| Floor notice can be silenced by the operator's own filter (S615) | `RequestLogFloorNotice` logs its Warning under category `Evidgate.Api.RequestLogFloorNotice`, so `Logging:LogLevel:Default=Error` or a rule on `Evidgate` drops it; the floor itself holds. Also: a later code `PostConfigure<LoggerFilterOptions>` registered after `ApiHost.cs` (`RequestLogFloor.Apply`) could append an 81-char rule after the floor and win the tie; none exists in src or tests. | receiver: next Api logging change (two separate closures: emit the notice outside the operator's filters; assert at start that the floor is the last matching rule) |
+| ApiHost floor test nits (S619) | QA notes on `tests/Hosts.IntegrationTests/ApiHostRequestLogFloorTests.cs` (PR #1248), nonblocking: the no-lowering-key fixture would fail if ambient Logging configuration ever carried a lowering key for the request-log category; the test name `RealApiHost_FloorRulesAreTheLastRules_ForEveryProviderAndProviderLess` is broader than its two provider-name assertions. | receiver: next lane touching `RequestLogFloor`; owner question: none; recorded owner: Tech Lead |
+
+Closed by PR #1258 (merge 51d5ff24): the notice has its own Warning rule per provider after the operator's rules, `RequestLogFloor.AssertFloorIsLast` refuses start when a rule follows the floor (a test and a mutant prove it), the no-lowering fixture ignores ambient level keys, and the broad test was renamed and now asserts both patterns.
+
+## Moved from status-carried.md by S625 (2026-11-21)
+
+| collect.sh residual check scope (S609) | Left open by #1227: the residual check in `scripts/dogfood/collect.sh` (`refuse_residual`) inspects attribute values, text and tail only, not element names, attribute names or namespace URIs; matching has no Unicode normalisation or percent-decoding; the final writes to `--out` are sequential, not atomic, and a pre-existing `--out` is not cleaned; the real-host-name retention test in `DogfoodReportTests.Residual.cs` is conditional on a host name of 4+ characters. | next dogfood lane |
+
+Closed by PR #1262 (merge 2a39015b): the residual check scans element tags, namespace URIs and attribute names, matches after NFKC and one strict percent-decode, `--out` is written by temp file and rename with stale owned files removed, and the host-name retention test injects `HOSTNAME`; remaining gaps are the S625 rows in status-carried.md.
+
+## Moved from status-carried.md by S627 (2026-11-21)
+
+| Item | Blocker | Owner |
+|---|---|---|
+| Log-capture helpers left unmigrated (S621) | Hand-rolled capture providers still outside the shared one after #1255: `ConflictLogSink` (`tests/Tenancy.IntegrationTests/UsageLedgerPayloadHashTests.Log.cs`; moving it also changes the world record in `UsageLedgerPayloadHashTests.cs`), `CaptureLogs` in `SecretScanConsumerTests.cs`, `SinkProvider` in `RequestLogFloorTests.cs`, and the `ILoggerProvider` in `QaS271WorkerGate.cs`. Migrate each with equal-or-stronger assertions. | receiver: Tech Lead (test infrastructure); recorded owner: Tech Lead |
+
+Closed by PR #1261 (merge fe8b597a): the four providers now use the shared capturing provider; the shared helper gained an abstract base so a test can derive its own provider identity, and mutants of the logged level, message and floor each turned the migrated tests red.
+
+## Moved from status-carried.md by S629 (2026-11-21)
+
+| Item | Blocker | Owner |
+|---|---|---|
+| Imprecise line cite to ProducerSlotQaTests (S585) | `tests/Identity.IntegrationTests/Sessions/Store/SessionIndexPlanTests.cs:100` cites `ProducerSlotQaTests.cs:315-317`, but the quoted `pg_read_all_stats` wording is at `ProducerSlotQaTests.cs:333` (lines 315-317 hold the start of the WaitForBlockedInsertAsync doc comment). Pre-existing, unchanged by the #1182 split; re-point the cite by symbol name | receiver: the next Identity test lane |
+| Execution key conflict: catch unreachable, keep or delete (S608) | The unique-violation catch in `CreateRunCommandHandler.cs` (execution-key constraint) cannot fire today: run id is a fresh `Guid.CreateVersion7()` per create, the constraint is `unique (org_id, run_id, execution_key)` (`migrations/0031_orchestration_run.sql:186`), and the in-memory `HashSet` check (`CreateRunCommandHandler.Derive.cs:144-148`) dedupes the same keys that go to SQL. #1225 pins the 23505 to 422 mapping by fault injection in a dedicated database (`CreateRun_UniqueViolationFromInsert_MapsTo422_NothingWritten`). Open: delete the catch or keep it as defence in depth. | owner decision |
+| SchemaExemption reason names a task id (S616) | The `public.template` reason text in `tests/Persistence.IntegrationTests/SchemaConventionScan.cs` (about line 165) cites `03.5.1-T1` and migration 0118, as the neighbouring `public.report_parser` reason does with `04.4.1-T1`; agent-code-rules forbid plan and task ids in source comments, the code review applied the same rule to two other comments in #1247 (U1). Not changed in #1247 to keep the exemption wording identical to its precedent. | Next lane touching `SchemaConventionScan.cs`: reword both reasons to say why (insert-only registry, written by migration and owner role) without ids. |
+
+Closed by PR #1265 (merge 49353136): the cite names `ProducerSlotQaTests.WaitForBlockedInsertAsync`, the `report_parser`, `template` and `raw_report` exemption reasons carry no plan ids or migration numbers, and the unique-violation catch in `CreateRunCommandHandler.cs` is kept as defence in depth with a why-comment (owner delegated the decision to the coordinator).
+
+## Moved from status-carried.md by S628 (2026-11-21)
+
+| Item | Blocker | Owner |
+|---|---|---|
+| collect.sh residual composition bypass (S625) | A combining mark after a composable letter (`Fa` + U+0301 + `ke`) composes under NFKC before the Cf/Mn/Me filter in `without_ignorables` (scripts/dogfood/collect.sh), so the identifier is accepted; the test inserts the mark after `-` only. | Remove ignorable marks before composing (filter on the NFD form, then NFKC) and add a test with the mark after a letter. Receiver: next dogfood lane. |
+| collect.sh itertext rescan cost (S625) | `refuse_residual` joins `itertext()` per element, so every ancestor rescans its subtree: a 103-deep, 526 KB report took 1.3 s (27 M inspected characters against 0.26 M). Bounded by the 8 MiB cap, fails closed, not a leak. | Inspect mixed-content streams without flattening each subtree (check only child-boundary joins). Receiver: next dogfood lane. |
+| collect.sh temp exhaustion leaves temps (S625) | When all 100 temp names for the manifest exist, `stage_atomic` calls `sys.exit` after the report temps were staged; `SystemExit` bypasses the `except Exception` cleanup and `.<name>.tmp-0` files stay in --out (exit 1, no publish). | Raise a catchable error from `stage_atomic` or clean up in `finally`; add a test that occupies all temp names. Receiver: next dogfood lane. |
+| collect.sh host label and dir fsync (S625) | Only the full host name is matched: with HOSTNAME `foo.corp.local` a report that says `foo` is accepted (the FQDN short label is unmatched); names under 4 characters are skipped. The upload directory is not fsynced after the renames, so a crash can lose a rename (durability only). | Coordinator follow-up lane (next): decide whether to match the short label (risk: a common word such as `test` refuses every report) and whether to fsync the directory. |
+
+Closed by PR #1266 (merge 8bcd99ef): the residual check strips marks on the decomposed form and never recomposes, matches the first DNS label of a dotted host name, fails closed and removes its own temps when all temp names exist, scans the document's character data in one linear pass and fsyncs the upload directory; one mutant per gap turned the tests red. Remaining findings are carried as the four S628 rows.
+
+## Moved from status-carried.md by S630 (2026-11-22)
+
+| Contract.Tests cannot run on the Mac and its YAML reader rejects Prettier output (S521) | `tests/Contract.Tests` runs only on the LAN host, so S521 found two reds only in LAN round 1 and one in round 2. `YamlSubset` rejects apostrophes in plain scalars (round 1) and multi-line flow lists (round 2), both of which Prettier writes, so a contract edit can pass `prettier --check` and still break the reader. S521 worked around it (reworded summary, block-sequence `required`). | receiver: contract tooling lane (make the reader accept both forms, or make Prettier produce what it accepts) |
+
+Narrowed in place by PR #1269 (merge be9897ea): the reader accepts apostrophes in plain scalars and multi-line flow lists, with a mutant per form turning the tests red; the Mac-run half stays carried and two S630 rows record the rest.
+
+
+## Moved from status-carried.md by S631 (2026-11-22)
+
+| collect.sh U+0345 casefold bypass (S628) | `match_form` casefolds before it strips, and U+0345 (Mn) casefolds to U+03B9, so `Fake-Bu` + U+0345 + `ild-Host-Zq` is not matched (found by the S628 delta; present before #1266). | Strip, casefold, strip again in `scripts/dogfood/collect.sh` and add `\u0345` to `Dogfood_Collect_CombiningMarkAfterLetter_IsRefused`. Receiver: next dogfood lane. |
+| collect.sh unstripped invisibles (S628) | The strip set is Cf, Mn, Me only: Hangul fillers U+115F, U+1160, U+3164, U+FFA0 (Lo) and default-ignorable Cn code points (U+2065, U+FFF0-FFF8, tag-block ranges) are not removed, so `build` + U+3164 + `-box` evades a match (present before #1266; the header comment says "default-ignorable"). | Add the fillers and Cn default-ignorables to the strip, or narrow the comment and pin the choice with a test. Receiver: next dogfood lane. |
+| collect.sh residual nits (S628) | The directory `os.open` after the renames is outside its `try` (an unreadable `--out` reports failure after publishing); the full host-name length test and the `host` label skip use raw text, not the match form. Mutant D (per-node `itertext` re-added) is caught only by the 10 s wall bound test `DeepNonAsciiReport_FinishesWithinTenSeconds`; a count assertion would be the stable form. | Move the open into the `try`, measure lengths on the match form, and replace the timing bound with a scanned-character count. Receiver: next dogfood lane. |
+
+Closed by PR #1273 (merge f205b394): the match form strips, casefolds and strips again, the strip set adds the Default_Ignorable_Code_Point ranges, the host checks use the match form and the directory open sits inside the try; mutants for casefold order, U+115F and the Cn ranges turn the tests red. New residual items are carried as the S631 rows.
+
+## Moved from status-carried.md by S632 (2026-11-22)
+
+| Floor start check runs after Kestrel may listen (S624) | `RequestLogFloor.AssertFloorIsLast` runs in `RequestLogFloorNotice.StartAsync` (hosted service), so a late `PostConfigure<LoggerFilterOptions>` rule is refused at start but the web host may already be listening for a short window (order not confirmed against the framework source); the check also requires only the provider-less floor and notice rules, not each provider's pair. | receiver: next Api logging change (call the check at the end of `ApiHost` build, or from a validated options hook) |
+
+Closed by S632 (PR #1272, merge 0f56859c): the premise was false on .NET 10 (`WebApplicationBuilder.Build` appends the web host service after user hosted services, so the notice check already ran before the server listened); the check now runs at build time in `ApiHost.BuildWithLogFloor` and requires the floor and notice pair for every provider a rule names. Disposal of a refused host stays carried as 'Refused-host disposal untested (S632)'.
+
+## Moved from status-carried.md by S633 (2026-11-22)
+
+| collect.sh controls and braille blank unstripped (S631) | C0/C1 control characters (U+007F-U+009F) and U+2800 are not in the strip set, and XML 1.0 accepts them, so `Run` + U+0085 + `ner` evades the residual match; widening only adds refusals. | next dogfood lane |
+| collect.sh Cn outside the listed ranges (S631) | `unicodedata.category` follows the interpreter's Unicode version, so a code point newly assigned Mn or Cf reports Cn on an older python3 and is stripped only inside the listed Default_Ignorable ranges; fix is to add Cn to the strip set (then the Cn mutant needs a range plus category pair) or to pin a minimum Python. | next dogfood lane |
+| collect.sh NFKD memory expansion (S631) | `without_ignorables` builds a list of one-character strings from the NFKD text; an 8 MiB report of U+FDFA expands about 18x (about 3 GB peak) and can be OOM-killed. Fails closed, availability only; time stays linear. | next dogfood lane |
+| collect.sh silent directory fsync failure (S631) | The directory open and fsync swallow every OSError after the renames (the set is already published); an EIO there prints nothing. A one-line stderr warning would make it visible. | next dogfood lane |
+| collect.sh deep-report guard is timeout only (S631) | Mutant M4 (per-node itertext re-added) is caught only by the 60 s process timeout in `DeepNonAsciiReport_FinishesWithinTenSeconds` and `DeepNonAsciiReport_ScansEachCharacterAtMostTwice`, so the scanned-character count does not assert deterministically; a count check needs the script to stop early once scanned_chars passes a cap. Also, dropping U+3164 or U+FFA0 alone survives because NFKD maps both to U+1160 (redundant list entries). | next dogfood lane |
+
+Closed by S633 (PR #1277, merge a630ae3d): C0/C1 controls, DEL and U+2800 are stripped, Cn is stripped by category, NFKD/NFKC growth past 4x the input plus 64 refuses, the directory fsync failure prints one warning, and `EVIDGATE_COLLECT_SCAN_CAP` makes the single-pass guard fail by count (mutant: `ScansEachCharacterAtMostTwice` in 765 ms); residual gaps are the two S633 rows in status-carried.md.
+
+## Moved from status-carried.md by S635 (2026-11-22)
+
+| Contract.Tests YAML reader residual edges (S630) | `[a,,]` parses with a null member (only one trailing comma is dropped); a tab before a quote is not a quote start; `JoinFlowLines` re-measures the whole joined text per line (quadratic on thousands of wrapped lines); no direct test for a trailing comma in a flow mapping or for an unterminated list followed by a later `]`. All low. | contract tooling lane |
+| Refused-host disposal untested (S632) | `ApiHost.BuildWithLogFloor` disposes the built host when the log-floor check refuses it, but no test asserts the disposal (a mutant that drops the `Dispose` call survives); the BuildApp wiring itself is pinned by `ApiHostRequestLogFloorTests.ProductionEntryBuildApp_BuildsThroughTheCheckedWrapper_NeverTheBareBuilder`. | low; next Api host change (observe a provider or subscription disposal from a refused build) |
+
+Closed by S635 (PR #1279, merge f4b547ce): empty flow entries (`[a,,]`, `[,a]`, `{x: 1,,}`) are refused, a tab before a quote and after a mapping colon is handled, a trailing comma in a flow mapping and an unterminated list followed by a later `]` have direct tests, and a refused `ApiHost.BuildWithLogFloor` build is shown to dispose the host (mutant: dropping `Dispose` turns the test red). `JoinFlowLines` is now linear but has a correctness test only (5000 wrapped lines), no timing bound; the tab-before-`#` gap is a new row in status-carried.md.
+
+## Moved from status-carried.md by S636 (2026-11-22)
+
+| collect.sh scan cap parsing (S633) | `EVIDGATE_COLLECT_SCAN_CAP` is checked with `isdigit()`, which accepts non-ASCII digits that `int()` rejects (traceback instead of the message); the test only covers `lots`. The fsync warning test injects no filename, so restoring the path leak would still pass, and the host first-label expansion branch has no test. | next dogfood lane |
+| collect.sh normalisation allocation and strip gaps (S633) | `normalise` builds the expanded string before the length check (peak about 18x of an 8 MiB report before refusal); private-use (Co) code points are not stripped; `match_form` is not cached for repeated tag and attribute names; the scan counter cannot see repeated `match_form` calls per value. | next dogfood lane |
+| collect.sh host label noise (S628) | The first DNS label of a dotted host name (3+ characters, not digits, not `host`/`localhost`) is matched as a substring, so a label such as `app`, `server` or `git` refuses every report containing it; decided by the coordinator for #1266. | Coordinator: keep, or require a distinctive label (longer, digit or hyphen) or word-boundary matching. |
+
+Closed by S636 (PR #1281, merge 5c0df2fb): the scan cap accepts only 1 to 12 ASCII digits, normalisation is checked per 64 Ki-character piece and private-use code points are stripped, the scan counter counts the percent-decoded reading (the script had no lru_cache), and a host label is refused only when distinctive (5 or more characters, a digit or a hyphen) and as a whole word; the full host name is still refused (apart from the short-name and `host` exemptions, carried separately).
+
+## Moved from status-carried.md by S637 (2026-11-22)
+
+| Authoring write-route pin scope is the Endpoints folder (S560) | `AuthoringGuardFirstBoundaryTests` reads only `src/Modules/Evidgate.Modules.Authoring/Endpoints/` and rejects an unnamed `Map*` call there; a write route registered in another folder or module is outside it, and a call to an out-of-folder `Map...Endpoints` composer is skipped. No such route exists on 70c17040 (security note 2 of S560). | receiver: Authoring lane, widen the scan to every module's route files when a second module serves write routes under the authoring path |
+| Authoring pin does not inspect typed bodies or filters (S560) | The pin checks the first statement of each of the 23 write delegates; it does not constrain handler parameters (a future `[FromBody]` or DTO parameter binds before the guard) and does not read `AddEndpointFilter`, `WithMetadata` or `MapGroup` chains. None exists today: all 23 delegates take `Guid`, `HttpContext`, `IMediator`, `CancellationToken` (security notes 3 and 4 of S560). | receiver: Authoring lane, add a parameter-type and filter-chain check when a typed-body or filtered write route is planned |
+
+Both rows closed by PR #1283 (ccb1699c): the pin scans every production route file under the authoring path, follows composers outside the folder, and refuses body or DTO parameters and filter chains on write routes; the residual limits moved to 'Authoring pin residual bypass limits (S637)'.
+
+## Moved from status-carried.md by S638 (2026-11-22)
+
+| Org template row may reuse a built-in key (S616) | `public.template` (migration 0118): the composite unique treats `org_id IS NULL` as distinct and the partial unique index covers built-ins only, so an org row may carry the `(kind, name, version)` of a built-in; `TemplateTests.Constraints.cs` asserts that allowed case. Org A's list can then show two rows with one key. No tenant writer exists (app role is SELECT only), so there is no live exposure; ambiguity is within one org, not across tenants. | 03.5.1-T1.2 and any slice adding a tenant writer: resolve templates by `id` only, or refuse an org row matching a built-in key (trigger or exclusion) before the writer ships. |
+| Template migration has no executable no-seed assertion (S616) | The decision that migration 0118 inserts no template row (T1.2 seeds real rows) is recorded in the plan Note but no test enforces it: `TemplateTests.cs:54-57` runs `delete from public.template` before every test, so an accidental `insert` in the migration would be erased before any assertion runs. QA S616Qa2 raised it; not built because a fresh-database row count needs a fixture hook that does not exist. | 03.5.1-T1.2: when the seed migration lands, assert the exact built-in set on a freshly migrated database before the suite's cleanup, which also covers the no-seed state for T1.1. |
+
+Both rows closed by PR #1288 (61162c8b): migration 0121 refuses an org template row that reuses a built-in key (and the reverse) with SQLSTATE 23505 `template_key_reuse`, and `TemplateTests.Template_FreshDatabase_HoldsExactlyTheShippedBuiltInSet` asserts the shipped set on a freshly migrated database before any suite cleanup.
+
+## Moved from status-carried.md by S639 (2026-11-22)
+
+| collect.sh short full host name exemption (S636) | A host name under 4 characters after normalisation, or equal to `host`, is not refused as a full name (`residual` filter in scripts/dogfood/collect.sh); behaviour predates the S636 label change and the report scrub already writes `host` as the testsuite hostname. | next dogfood lane |
+| collect.sh NFKC pass not counted (S636) | `matching_forms` runs `normalise("NFKC", value)` per value without adding to the scan counter, so a regression that repeats that pass per node would not trip `EVIDGATE_COLLECT_SCAN_CAP`. | next dogfood lane |
+| Contract.Tests YAML comment after tab (S635) | `StripComment` in tests/Contract.Tests/YamlSubset.cs treats `#` as a comment only after a space, so `y,<TAB># ] note` inside a wrapped flow list is not stripped and the list fails to close or parses a wrong entry; the shipped spec has no such input. Low. | contract tooling lane |
+
+All three rows closed by PR #1286 (e0f1c2ab): `collect.sh` refuses a full host name under 4 characters as a whole word (the placeholder `host` stays exempt), the NFKC pass is counted by the scan counter, and `YamlSubset.StripComment` treats `#` after a tab as a comment start.
+
+## Moved from status-carried.md by S640 (2026-11-22)
+
+| Draft list returns full content (03.6.1-T1, #1214) | `DraftQueries.cs:62-91` and `DraftReadSql.cs:10-15` return `content` for every item: `limit=200` over drafts of ~230 KB loads ~46 MB per request. Fix is a contract change: cap the page near 20-25 or return a summary item with content only on `GET /v1/drafts/{d}`. Low: needs `draft:write` to create bulk. | owner / 03.6.1 plan |
+
+Closed by PR #1291 (c5c180c7): the draft list returns `DraftSummaryDto` items (no `content`, a `file_count` instead) and its SQL no longer selects `content`; `GET /v1/drafts/{d}` still returns the content.
+
+## Moved from status-carried.md by S642 (2026-11-22)
+
+| Contract.Tests keeps a hand-rolled YAML reader while YamlDotNet is pinned (S630) | YamlDotNet 18.1.0 is pinned in `Directory.Packages.props` and used by Catalog and Hosts.IntegrationTests; `tests/Contract.Tests/YamlSubset.cs` (491 lines) plus `YamlSubset.Flow.cs` is hand-rolled, read by `OpenApiSpec`, `DraftContractTests`, `SecurityEventContractTests`. A switch needs the duplicate-key refusal and the subset checks (no anchors, tags, block scalars) re-implemented on top of the library. | contract tooling lane (owner may choose a switch) |
+
+Closed by PR #1293 (b3c912a8): `tests/Contract.Tests/YamlSubset.cs` parses with the pinned YamlDotNet event parser, the hand-rolled scanner and `YamlSubset.Flow.cs` are deleted, and the duplicate-key, anchor, alias, tag and block-scalar refusals are pinned by `YamlSubsetTests`.
+
+## Moved from status-carried.md by S643 (2026-11-22)
+
+| collect.sh HOSTNAME whitespace not trimmed (S639) | `scripts/dogfood/collect.sh` folds `$HOSTNAME` as given, so a value with a trailing newline or space (a hand-built CI environment) is matched as a substring with that whitespace and `build-box:` in a report is not refused; `socket.gethostname()` is still checked. Fix: `.strip()` both names before `identifier_form`. Low. | next dogfood lane |
+| collect.sh localhost host name over-refusal (S639) | A host name of `localhost` (9 characters) takes the substring path in `collect.sh`, so any report with `http://localhost:4200` is refused; the first-label loop already excludes `localhost`, the full-name loop does not. Behaviour predates S639 and only over-refuses. | next dogfood lane |
+| Dogfood real host test short names (S639) | `DogfoodReportTests.cs` `Dogfood_Collect_MachineNameInTestcase_IsRefused` now runs for a real host name of 1-3 characters; a host named `out` would make the control's `<system-out>` refuse, and `x` would hit the `xunit` substring exclusion in `RunCollect`. The LAN host name is longer. Fix: pick a control word the name cannot match. Test only. | next dogfood lane |
+
+Closed by PR #1296 (96977a21): `scripts/dogfood/collect.sh` strips host names after folding and never refuses the full name `localhost`, and the real-host test skips `host`/`localhost` and no longer searches short values in the refusal diagnostic; pinned by `DogfoodReportTests.HostEdges.cs` and the trim and localhost mutants.
+
+## Moved from status-carried.md by S644 (2026-11-22)
+
+| Draft summary list: cursor/status tests lack summary assertions (S640) | `DraftTests.Read.cs` cursor-walk and status-filter list tests check ids, order and cursors but not `file_count` or the absent `content`; both page statements share `SummaryColumns`, so the risk is low. Also `jsonb_array_length(d.content -> 'files')` raises on a stored non-array `files` (CHECK only requires an object); `DraftRules` blocks that through the API. Fix: assert on those pages; a CHECK in a later migration. | owner / catalog lane |
+| YamlSubset accepts unbounded nesting, literal << keys and NaN/Infinity plain scalars (S642) | `tests/Contract.Tests/YamlSubset.cs` (PR #1293) has no nesting-depth cap (a stack overflow would kill the test host without a line number), reads a `<<` key as a literal member (a YAML 1.1 tool would merge it), and types plain `NaN`/`Infinity` as double. Low: the input is the repo's own contract spec and each case fails loudly. | contract tooling lane |
+
+Closed by #1298 (b4bfc784): `DraftTests.Read.cs` list tests assert `file_count` and the absent `content`, and `YamlSubset` refuses nesting over 64, `<<` keys and NaN/infinity/overflowing plain scalars, pinned by mutants. The CHECK half stays carried as 'Draft content files CHECK for non-array files (S644)'.
+
+## Moved from status-carried.md by S641 (2026-11-22)
+
+| Authoring read routes validate the query before authentication (S553) | After S553 (#1135) the write delegates guard first, but GET and export routes still parse their query before any 401: `AuthoringNodeEndpoints.cs:89`, `AuthoringVersionEndpoints.cs:65`, `AuthoringImportEndpoints.cs:133` (export), `AuthoringChecklistEndpoints.cs:63`, `AuthoringManualCaseEndpoints.cs:123`, `AuthoringChangeEndpoints.cs:96`, `AiSettingsEndpoints.cs:130`. An anonymous caller with a bad query gets 422, not 401; no body is read and no data leaks. | receiver: Authoring lane, guard first, extend the guard-first pin to read routes |
+
+Closed by PR #1295 (ff308803): the Authoring read and export delegates authenticate first and carry the first validation error to the handler (`RequestError`), so an anonymous caller gets 401 and a caller without the permission 403 before any 422; pinned by `AuthoringGuardFirstBoundaryTests.AuthoringReadDelegates_AllRegisteredReads_GuardFirstAndSendFirst` and `AuthoringReadGuardFirstTests`.
+
+## Moved from status-carried.md by S645 (2026-11-22)
+
+| Draft provenance number scan allocates before the token bound (03.6.1-T1, S612) | Security review Low: `DraftRules.cs` calls `GetRawText()` per number before the 64-character check, so one oversized token costs a string of about twice the 256 KiB body cap (bounded, once per request). Fix idea: `JsonMarshal.GetRawUtf8Value` and check the span length first. Also: the S612 f3 mutant ran before `ForeignKeyRefusal` was extracted; the final-head FK tests were green but not mutated. | receiver: follow-up Catalog draft lane |
+
+Closed by PR #1302 (b128af40): `DraftBody.RenderedLength` measures the raw UTF-8 span before any string is built; pinned by `DraftNumberRenderingTests.ExceedsNumericRange_OfA200KiBNumberToken_AllocatesNoStringForIt` and `DraftTests.Create_ProvenanceNumberTokenOverTheBound_Is422OnProvenance`; `ForeignKeyRefusal` mutated on the final head (both foreign-key tests red).
+
+## Moved from status-carried.md by S648 (2026-11-22)
+
+| Template vitest load timeouts (S634) | The S634 final `vitest` run (LAN load_max 35, e59b20aa) failed 4 of 6448 by timeout, no assertion failure: fixture-contract-refs-cap.spec "expands a bounded local graph..." (5000 ms) and ui-gallery.a11y.spec x3 (30000 ms). The wave-gate full `vitest` must clear them; a repeat failure there is a real defect. | wave-gate panel |
+
+Closed by S648 (#1305, `c6c2e27f`): the gallery axe scan is split into per-partition tests (slowest 4.1 s on the Mac, LAN round 2 green at load_max 22.44); `fixture-contract-refs-cap.spec` needed no change.
+
+## Moved from status-carried.md by S649 (2026-11-22)
+
+| Authoring read methods over 60 lines (S641) | `ListManualCasesQueryHandler.Handle` was 116 lines before the read guard-first change and is 121 now (five-line `RequestError` guard added), and `MapAuthoringManualCaseEndpoints` is 76 lines (unchanged); neither was split. | receiver: Authoring lane, split by responsibility |
+| Authoring read: project-scope mismatch answers 422 before the scope refusal (S641) | In the seven read handlers the carried `RequestError` returns before `AuthoringRules.Project`, so a caller scoped to another project with a bad query gets 422 instead of 403 `project_scope_mismatch`. Pre-existing (the old delegate validated before the handler); no data is exposed. | receiver: Authoring lane, move the `RequestError` return after the project gate |
+
+Closed by S649 (#1304, `df589bf9`): the seven Authoring read handlers return the carried `RequestError` after the project gate (401, 403 permission, 403 `project_scope_mismatch`, then 422; `AuthoringReadGuardFirstTests.ReadRoutes_InvalidQuery_RefuseTheProjectScopeBeforeValidation`, both mutants red on LAN), and `ListManualCasesQueryHandler.Handle` plus `MapAuthoringManualCaseEndpoints` (and the checklist, versions and tree handlers) are split to 60 lines or fewer.
+
+## Moved from status-carried.md by S650 (2026-11-22)
+
+| Unrelated vitest 5 s timeouts under LAN load (S648) | The S648 LAN round 1 vitest run (load_max 31.08) was red on the cold first gallery test (fixed by #1305) and on four specs this lane did not touch: `app.routes.settings-shell.spec`, `onboarding.store.derivation.spec`, `hlm-dialog-footer.spec` and `retention.write-attempt.spec`, each a 5 s default-timeout failure; round 2 on the same web code (load_max 22.44) was green with 6468 tests. Not fixed: no test change, no timeout raise. | receiver: WAVE-GATE vitest, rerun the four specs at load before any change |
+
+Closed by S650 (#1308, `638239d3`): the four specs (settings-shell, onboarding.store.derivation, hlm-dialog-footer, retention.write-attempt) pass on the LAN at load_max 38.72 with no timeout change; the one remaining thin margin is carried in a new row.
+
+## Moved from status-carried.md by S647 (2026-11-22)
+
+| Authoring pin residual bypass limits (S637) | `AuthoringGuardFirstBoundaryTests` does not catch: a convention applied through a stored builder variable, `FilterFactories` added via `Add` on a group parameter, route registration through helpers not named `Map*`, a handler overload in another partial-class part, a parameter type aliased to a Guid/HttpContext/IMediator/CancellationToken name, or the filters `ApiHost.cs:272` adds to the `MapAuthoringEndpoints()` result. None exists today. | receiver: Authoring lane, extend the pin before a route needs one of these |
+| Authoring read pin cannot prove every refusal follows the send (S641) | `AuthoringGuardFirstBoundaryTests.Reads.cs` checks guard first and no return or throw before the first `mediator.Send`, but has no dominance analysis: `if (!invalid) { return await Send(q); } return Results.BadRequest();`, assign-then-return and a response write without a return still pass, and helper throws (`ThrowIfGreaterThan`, `Guard.*`) are not detected. | receiver: Authoring lane, a dominance rule that accepts `AuthoringImportEndpoints.ExportAsync` |
+
+Closed by S647 (PR #1309): the pin now covers each listed bypass shape with a red fixture and a green twin; the remaining limits are carried in the row 'Authoring pin residual limits (S647)'.
+
+## STATUS replaced text (S655, 2026-11-22)
+
+Replaced or removed by the S655 recount (through #1315, `4750af76`); text verbatim. Items 1 and 2 are the §1 Resume lines, item 3 the §2 method line, then the partial-parent rows that left the table and the §5 rows whose 'counts at the next recount' wording the recount made false.
+
+1. - Fully landed on `wave/2026-11-20b` (recount S599 through #1206, `7d196b99`; not yet merged to develop, which is at #1050): 244/660 tasks (≈37.0 %); 243.5/706.75 raw person-days (≈34.5 %); remaining 416 tasks / 463.25 d. Via merged PRs: 217 tasks / 218.5 d; the other 27 tasks / 25.0 d are direct commits on develop. 50 parents are partial and carry no credit (§2); the pre-recount figure of 37 (STATUS.md and AGENTS.md on 7d196b99) was right: 36 at S369 plus 03.4.1-T1, which has no table row. 03.6.1-T1 (S597) is not landed. (archive: S599 item 1)
+2. - Landed by phase (done tasks / raw d): G1 154 / 161.25; G2 73 / 66.0; G3 5 / 4.5; G4 12 / 11.75. (archive: S599 item 2)
+3. Counted by expanding task ranges in merged PR bodies, close-out rows and plan Notes against plan_graph task ids (S599 recount through #1206, `7d196b99`, method unchanged from S189; the S369 recount covered #751, S337 #689, the S317 recount #648 and the S299 recount #612); a parent task counts only when every defined sub-row has landed on develop; sizes XS .25 S .5 M 1 L 2 XL 3. detail: carried rows 'STATUS §2 count log S112-S128' (S144 F61), 'STATUS §2 count log S299', 'STATUS §2 count log S317' and 'STATUS §2 count log S369'.
+
+| 03.1.4-T2 | T2.2 | #458 |
+| 02.4.3-T2 | AC4 log-allowlist test: no log sink is scanned (plan 02.4.3 Notes) | #835, #836 |
+| 07.5.1-T2 | T2.1 consumed-release-decision byte-identity test | #996 |
+| 03.1.4-T2 | S | `platform`, `level`, `purpose` on suite/template. Both halves landed: suite half #458 (migration 0068: create/list/read, filters, revision hash input v2, diff); template half #1282 (migration 0120: columns, CHECKs, 0119 row backfill, index, list filters and fields; no template hash, a change is a new version). The task counts at the next recount; aggregate counts stay as they are. | yes | yes (0049+) | S97: Catalog suite create/list endpoint code + tests; `contracts/openapi.yaml`, generated SDK | n/a | yes |
+| 02.4.3-T2 | M | `github_installation`, install callback, token minting | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json`; S91: additive endpoint registration | landed S410 (#835, 33cd2497); stays partial (S599: AC4 log-sink test open) | yes |
+| 03.6.1-T1 | M | Suite draft tables + `ETag`/`If-Match` on the draft routes | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | yes |
+| 03.5.1-T1 | M | `template` registry + web template. Partial: T1.1 landed by S616 (#1247, 5d9a86b8, migration 0118: `public.template`, `GET /v1/templates`, `GET /v1/templates/{t}`, no seed rows); T1.2 landed by S626 (#1270, ca9f8837, migration 0119: the built-in `web/playwright-page` v1 row, `templates/web/playwright-page/1/`, `TemplateBodyHasher`, `TemplateConformance`, `TemplateLiteralScanner`, `TemplateRenderer`, golden fixture `fixtures/template-conformance/web-playwright-page-1/`); both defined sub-rows are landed, so the parent counts at the next recount (not counted in the S599 figures above). | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | yes |
+
+The rows above were replaced by the S655 recount (249 / 247.5); the three partial-table rows left the list and 04.8.1-T2 joined it (48 partial parents).
+
+## STATUS replaced text (S655 close-out, 2026-11-22)
+
+Replaced by the withdrawal of the 13.2.2-T1 credit (248 / 246.5); text verbatim.
+
+13.2.2-T1 stays credited as at S189 (memo accepted by PR review) although its Done-when test is not built (carried row 'Role-prompt memo check'); the roster is the table rows, not an audit of every credited task.
+
+## Moved from status-carried.md by S665 (2026-11-22)
+
+| Mockup 20 suite composition re-skin pending (S660) | Screen 20 was not built as a review screen because production `features/suites/composition` already exists; its v3 re-skin against the mockup is still open. No plan credit was taken by S660. | receiver: 09.10 screen re-skin lane for `features/suites/composition` |
+
+Closed by S665 (#1332, `969a647a`): the v3 re-skin of `features/suites/composition` landed on the wave; the mockup elements with no production behaviour are carried in the row 'Mockup 20 elements without behaviour (S665)'.
+
+## Moved from status-carried.md by S663 (2026-11-22)
+
+| Screen 16 availability re-skin (09.10.1, S659) | Screen 16 already ships as the production availability page and was skipped by the failures/healing review lane. | receiver: S663 re-skin lane (09.10.1) |
+
+Closed by S663 (#1334, `86a08601`): screen 16 was re-skinned with the other settings screens; its browser capture is carried in 'Availability browser capture (S663)'.
+
+## Moved from status-carried.md by S666 (2026-11-22)
+
+| Shell e2e-a11y not LAN-green on fixed code (S657) | LAN round 2 on `c1b40c1b` ran `e2e-a11y` red with 16 `label-content-name-mismatch` violations (brand link, usage nav link). The fixes (`9f97657b`, `f0bc3dc7`) were verified on the Mac only (71 targeted shell e2e passed; core e2e incl. a11y 64 passed on an earlier tree) because no LAN round was left. | receiver: WAVE-GATE, confirm `e2e-a11y` green on the wave head |
+
+Closed by S666 (#1340, `716d6510`): `e2e-a11y` ran green on the wave head via the LAN round on `68bbe48a` (rc 0, 38 s), with the full shell (1223) and core (64) e2e green on the Mac.

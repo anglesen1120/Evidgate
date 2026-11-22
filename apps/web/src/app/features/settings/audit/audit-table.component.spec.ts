@@ -2,9 +2,12 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import type { AuditEntryDto } from '@evidgate/sdk';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { DataTableComponent } from '../../../shared/ui/data-table/data-table.component';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
 import { AuditTableComponent } from './audit-table.component';
+
+provideLayoutTestStubs();
 
 function row(id: string, changes: Partial<AuditEntryDto> = {}): AuditEntryDto {
   return {
@@ -23,14 +26,23 @@ function row(id: string, changes: Partial<AuditEntryDto> = {}): AuditEntryDto {
   };
 }
 
-function supportTrigger(root: HTMLElement): HTMLButtonElement {
-  const chip = root.querySelector<HTMLButtonElement>('.support-access');
+async function openAuditView(root: Element): Promise<HTMLElement> {
+  const trigger = root.querySelector<HTMLButtonElement>('[data-audit-view]');
+  if (!trigger) throw new Error('Expected an audit View button');
+  trigger.focus();
+  trigger.click();
+  return vi.waitFor(() => {
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+    if (!dialog) throw new Error('Expected audit dialog');
+    return dialog;
+  });
+}
+async function supportTrigger(root: Element): Promise<HTMLButtonElement> {
+  const dialog = await openAuditView(root);
+  const chip = dialog.querySelector<HTMLButtonElement>('.support-access');
   if (!chip) throw new Error('Expected support trigger');
-  const disclosure = chip.closest('details');
-  if (disclosure) disclosure.open = true;
   return chip;
 }
-
 describe('AuditTableComponent', () => {
   beforeEach(() =>
     TestBed.configureTestingModule({
@@ -74,7 +86,7 @@ describe('AuditTableComponent', () => {
       row('operator', { actor_type: 'platform_operator' }),
       row('other', { metadata: { support_grant_id: 'grant-other' } }),
     ]);
-    const chip = supportTrigger(root);
+    const chip = await supportTrigger(root);
     chip.focus();
     await vi.waitFor(() => {
       fixture.detectChanges();
@@ -98,7 +110,7 @@ describe('AuditTableComponent', () => {
   });
   it('shows the support description on hover without changing the audit row', async () => {
     const { fixture, root } = await render([row('operator', { actor_type: 'platform_operator' })]);
-    const chip = supportTrigger(root);
+    const chip = await supportTrigger(root);
     chip.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
     await vi.waitFor(() => {
       fixture.detectChanges();
@@ -118,7 +130,11 @@ describe('AuditTableComponent', () => {
       row('ordinary'),
       row('operator', {
         actor_type: 'platform_operator',
-        metadata: { support_grant_id: 'grant-42', private_note: 'not for display' },
+        metadata: {
+          support_grant_id: 'grant-42',
+          private_note: 'not for display',
+          expiry: 'private expiry',
+        },
       }),
     ]);
     const rows = Array.from(root.querySelectorAll('tbody tr'));
@@ -129,14 +145,16 @@ describe('AuditTableComponent', () => {
     expect(first.querySelector('[data-audit-support="true"]')).toBeNull();
     expect(first.querySelector('.support-access')).toBeNull();
     expect(second.querySelector('[data-audit-support="true"]')).not.toBeNull();
-    const chip = supportTrigger(root);
+    expect(root.textContent).not.toContain('not for display');
+    expect(root.textContent).not.toContain('expiry');
+    const chip = await supportTrigger(second);
     expect(chip.textContent).toContain('Support access');
     expect(chip.tabIndex).toBe(0);
     const mobileDescription = chip.nextElementSibling;
     expect(mobileDescription?.textContent).toContain(
       'Platform staff access under support grant grant-42',
     );
-    expect(chip.closest('details')?.open).toBe(true);
+    expect(chip.closest('[role="dialog"]')).not.toBeNull();
     chip.focus();
     await vi.waitFor(() => {
       fixture.detectChanges();
@@ -144,16 +162,17 @@ describe('AuditTableComponent', () => {
         'Platform staff access under support grant grant-42',
       );
     });
-    expect(root.textContent).not.toContain('not for display');
-    expect(root.textContent).not.toContain('expiry');
+    expect(chip.closest('[role="dialog"]')?.textContent).not.toContain('not for display');
+    expect(chip.closest('[role="dialog"]')?.textContent).not.toContain('expiry');
   });
   it('flags an operator without a grant key without inventing a grant or expiry', async () => {
     const { fixture, root } = await render([row('operator', { actor_type: 'platform_operator' })]);
     expect(root.querySelector('[data-audit-support="true"]')).not.toBeNull();
-    expect(root.querySelector('.support-access')?.nextElementSibling?.textContent).toContain(
+    const chip = await supportTrigger(root);
+    expect(chip.nextElementSibling?.textContent).toContain(
       'Platform staff access (grant id not recorded on this row)',
     );
-    supportTrigger(root).focus();
+    chip.focus();
     await vi.waitFor(() => {
       fixture.detectChanges();
       expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(
@@ -204,13 +223,13 @@ describe('AuditTableComponent', () => {
     const table = fixture.debugElement.query(By.directive(DataTableComponent))
       .componentInstance as DataTableComponent<AuditEntryDto>;
     const idWidth = {
-      min: 'calc(28ch + var(--eg-space-4) * 2)',
+      min: 'calc(13ch + var(--eg-space-4) * 2)',
       preferred: 'auto',
-      max: 'calc(40ch + var(--eg-space-4) * 2)',
+      max: 'calc(28ch + var(--eg-space-4) * 2)',
     };
     expect(table.columns().map(({ id, width }) => ({ id, width }))).toEqual([
       { id: 'actor', width: idWidth },
-      { id: 'action', width: { min: '12ch', preferred: '1%', max: '20ch' } },
+      { id: 'action', width: { min: '12ch', preferred: 'auto', max: '24ch' } },
       { id: 'object', width: idWidth },
       {
         id: 'time',
@@ -223,7 +242,7 @@ describe('AuditTableComponent', () => {
       {
         id: 'details',
         width: {
-          min: 'calc(18ch + var(--eg-space-4) * 2)',
+          min: 'calc(14ch + var(--eg-space-4) * 2)',
           preferred: '1%',
           max: 'calc(22ch + var(--eg-space-4) * 2)',
         },
@@ -231,9 +250,9 @@ describe('AuditTableComponent', () => {
     ]);
     const headers = root.querySelectorAll<HTMLElement>('thead th');
     expect(headers[0]?.style.inlineSize).toBe('auto');
-    expect(headers[1]?.style.inlineSize).toBe('1%');
+    expect(headers[1]?.style.inlineSize).toBe('auto');
     expect(headers[3]?.style.minInlineSize).toBe('calc(24ch + var(--eg-space-4) * 2)');
-    expect(headers[4]?.style.minInlineSize).toBe('calc(18ch + var(--eg-space-4) * 2)');
+    expect(headers[4]?.style.minInlineSize).toBe('calc(14ch + var(--eg-space-4) * 2)');
   });
   it('uses page flow, compact inline ids and one-line scan utilities for a bounded audit page', async () => {
     const actor = '0198a000-0000-7000-8000-000000000001';
@@ -251,7 +270,9 @@ describe('AuditTableComponent', () => {
     expect(root.querySelector('app-absolute-time')?.classList.contains('whitespace-nowrap')).toBe(
       true,
     );
-    expect(root.querySelector('summary span')?.classList.contains('whitespace-nowrap')).toBe(true);
+    expect(root.querySelector('[data-audit-view]')?.classList.contains('whitespace-nowrap')).toBe(
+      true,
+    );
     const scanIds = fixture.debugElement
       .queryAll(By.directive(CopyableIdentifierComponent))
       .map(({ componentInstance }) => componentInstance as CopyableIdentifierComponent)
@@ -283,17 +304,16 @@ describe('AuditTableComponent', () => {
         const records = root.querySelector('app-data-table-records');
         expect(records).not.toBeNull();
         expect(root.querySelector('table')).toBeNull();
-        for (const value of [actor, object, request, action])
-          expect(records?.textContent).toContain(value);
+        for (const value of [actor, object, action]) expect(records?.textContent).toContain(value);
         expect(records?.querySelector('app-copyable-identifier .preview')).toBeNull();
         expect(records?.querySelector('app-absolute-time.whitespace-nowrap')).toBeNull();
-        expect(records?.querySelector('summary .whitespace-nowrap')).toBeNull();
+        expect(records?.querySelector('[data-audit-view].whitespace-nowrap')).toBeNull();
         const labels = [...root.querySelectorAll('.eg-table-fact > dt')].map(
           (label) => label.textContent,
         );
         expect(labels).toEqual(['Action', 'Actor', 'Object', 'Time (UTC)', 'Event details']);
         expect(root.querySelector('time')?.textContent).toContain('UTC');
-        expect(root.querySelector('[data-audit-details]')).not.toBeNull();
+        expect((await openAuditView(root)).textContent).toContain(request);
       } finally {
         width.mockRestore();
       }
@@ -321,18 +341,24 @@ describe('AuditTableComponent', () => {
       row('with-request', { request_id: 'request-visible-in-details' }),
       row('empty', { request_id: null, object_type: null, object_id: null }),
     ]);
-    const rows = root.querySelectorAll('tbody tr');
-    const disclosure = rows[0]?.querySelector<HTMLDetailsElement>('details');
-    expect(disclosure?.open).toBe(false);
-    expect(disclosure?.querySelector('summary')?.textContent).toContain('Event details');
-    expect(disclosure?.textContent).toContain('request-visible-in-details');
-    expect(disclosure?.textContent).not.toContain('Support access');
-    if (!disclosure) throw new Error('Expected row disclosure');
-    disclosure.open = true;
-    expect(disclosure.open).toBe(true);
-    expect(rows[1]?.querySelector('details')).toBeNull();
-    expect(rows[1]?.textContent).toContain('—');
-    expect(rows[1]?.querySelector('[hidden]')).toBeNull();
+    const [withRequest, withoutRequest] = root.querySelectorAll('tbody tr');
+    if (!withRequest || !withoutRequest) throw new Error('Expected both audit rows');
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    const trigger = withRequest.querySelector('[data-audit-view]');
+    const dialog = await openAuditView(withRequest);
+    expect(dialog.textContent).toContain('request-visible-in-details');
+    expect(dialog.textContent).toContain('project.updated');
+    expect(dialog.textContent).not.toContain('Support access');
+    dialog.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }),
+    );
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+    expect(document.activeElement).toBe(trigger);
+    const empty = await openAuditView(withoutRequest);
+    expect(empty.textContent).not.toContain('Request id');
+    expect(empty.textContent).not.toContain('Support access');
+    expect(withoutRequest.textContent).toContain('—');
+    expect(withoutRequest.querySelector('[hidden]')).toBeNull();
     expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(2);
   });
 });

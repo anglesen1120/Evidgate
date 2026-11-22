@@ -35,7 +35,8 @@ describe('RevisionChipComponent', () => {
     expect(
       root.querySelector('[tabindex], [role], [aria-disabled], [aria-busy], button, a'),
     ).toBeNull();
-    expect(root.querySelector('[title], svg')).toBeNull();
+    expect(root.querySelector('[title]')).toBeNull();
+    expect(root.querySelector('[hlmBadge] > hlm-icon[aria-hidden="true"] svg')).not.toBeNull();
     expect(root.querySelector('[class*="success"], [class*="danger"]')).toBeNull();
     expect(root.textContent).not.toMatch(/\b(?:PASS|FAIL|Complete)\b/);
     expect(fetch).not.toHaveBeenCalled();

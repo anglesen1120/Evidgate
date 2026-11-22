@@ -1,6 +1,7 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { MembershipView, RoleView } from '@evidgate/sdk';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { MemberListComponent } from './member-list.component';
 import { RoleMatrixComponent } from './role-matrix.component';
 
@@ -43,6 +44,7 @@ function expectTableSemantics(root: HTMLElement): void {
 }
 
 describe('RoleMatrixComponent responsive records', () => {
+  provideLayoutTestStubs();
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [RoleMatrixComponent, MemberListComponent],
@@ -117,6 +119,12 @@ describe('RoleMatrixComponent responsive records', () => {
       rows: [{ membership: MEMBER, granted: new Set(['comparison-0']) }],
     });
     await fixture.whenStable();
+    const region = root.querySelector('table')?.closest<HTMLElement>('[role="region"]');
+    if (!region) throw new Error('Expected the matrix inside its named scroll region');
+    expect(region.getAttribute('aria-label')).toBe('Organization-wide role matrix');
+    expect(region.tabIndex).toBe(0);
+    region.focus();
+    expect(document.activeElement).toBe(region);
     const headers = [...root.querySelectorAll<HTMLElement>('thead th[data-column-role="status"]')];
     expect(headers.map((header) => header.textContent)).toEqual(roles.map((role) => role.name));
     expect(root.querySelectorAll('tbody td')).toHaveLength(9);
@@ -191,7 +199,7 @@ describe('RoleMatrixComponent responsive records', () => {
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelectorAll('[role="table"]')).toHaveLength(1);
     const identity = root.querySelector('td[data-column-kind="email"]');
-    expect(identity?.querySelector('app-data-table-value')?.textContent).toContain(
+    expect(identity?.querySelector('[data-member-view]')?.textContent).toContain(
       MEMBER.invited_email,
     );
     expect(identity?.getAttribute('data-column-priority')).toBe('primary');

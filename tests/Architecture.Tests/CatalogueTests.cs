@@ -95,10 +95,6 @@ public sealed class CatalogueTests
             "13.1.1",
             "plans/features/13-product-phases/13.1.1-feature-tree-and-manual-test-cases.md:39 — AC17 seeds `script:generate` and names 13.5.1 as its consumer (route-less here)"),
         new(
-            "support:read",
-            "02.8.1",
-            "plans/features/02-identity-tenancy/02.8.1-time-boxed-operator-access.md:114 — 02.8.1-T1.2 `ListSupportGrants`"),
-        new(
             "webhook:read",
             "07.6.2",
             "plans/features/07-policy-decisions/07.6.2-outbound-webhooks-and-delivery-operations.md:165 — 07.6.2-T2.1 endpoint CRUD + deliveries list"),

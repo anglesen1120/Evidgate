@@ -381,27 +381,47 @@ test.describe('sign-in, keyboard only (AC2, T1.2)', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 
-  for (const width of [390, 1440]) {
-    test(`login composition preserves readable order at ${width}px`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 900 });
-      await page.goto(withVariant(localePath('en', '/login'), ANONYMOUS_SESSION));
-      const intro = page.locator('.login-intro');
-      const card = page.locator('.login-card');
-      await expect(intro).toBeVisible();
-      await expect(card).toBeVisible();
-      await expect(page.locator('.login-destination')).toContainText('continue to your workspace');
-      await expect(card).toHaveCSS('border-top-style', 'solid');
-      const introBox = await intro.boundingBox();
-      const cardBox = await card.boundingBox();
-      if (!introBox || !cardBox) throw new Error('Login composition has no visible bounds');
-      if (width < 900) {
-        expect(cardBox.y).toBeGreaterThanOrEqual(introBox.y + introBox.height);
-      } else {
-        expect(cardBox.x).toBeGreaterThan(introBox.x);
+  for (const width of [390, 900, 1440]) {
+    for (const locale of ['en', 'vi'] as const) {
+      for (const theme of ['light', 'dark'] as const) {
+        test(`sign-in card stays centered and stacked at ${width}px, ${locale}, ${theme}`, async ({
+          page,
+        }) => {
+          await page.setViewportSize({ width, height: 900 });
+          await seedStoredTheme(page, theme);
+          await page.goto(withVariant(localePath(locale, '/login'), ANONYMOUS_SESSION));
+          const main = page.getByRole('main', {
+            name: locale === 'vi' ? 'Đăng nhập vào Evidgate' : 'Sign in to Evidgate',
+          });
+          const card = main.locator('.login-card');
+          const intro = card.locator('.login-intro');
+          const providers = card.locator('.login-providers');
+          const destination = card.locator('.login-destination');
+          await expect(page.locator('.theme-toggle')).toHaveAttribute(
+            'aria-pressed',
+            String(theme === 'dark'),
+          );
+          await expect(intro.getByRole('heading', { level: 1 })).toBeVisible();
+          await expect(providers.getByRole('button')).toHaveCount(2);
+          await expect(destination).toContainText(
+            locale === 'vi' ? 'tiếp tục đến không gian làm việc' : 'continue to your workspace',
+          );
+          await expect(card).toHaveCSS('border-top-style', 'solid');
+          const [cardBox, introBox, providersBox, destinationBox] = await Promise.all(
+            [card, intro, providers, destination].map((part) => part.boundingBox()),
+          );
+          if (!cardBox || !introBox || !providersBox || !destinationBox) {
+            throw new Error('Login composition has no visible bounds');
+          }
+          const viewport = await page.evaluate(() => document.documentElement.clientWidth);
+          expect(Math.abs(cardBox.x * 2 + cardBox.width - viewport)).toBeLessThanOrEqual(2);
+          expect(providersBox.y).toBeGreaterThanOrEqual(introBox.y + introBox.height);
+          expect(destinationBox.y).toBeGreaterThanOrEqual(providersBox.y + providersBox.height);
+          expect(
+            await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+          ).toBe(true);
+        });
       }
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-        true,
-      );
-    });
+    }
   }
 });

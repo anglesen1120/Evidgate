@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Application.Commands;
 using Mediator;
@@ -77,6 +78,9 @@ internal static class AuthoringRestoreEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        // Refuse an unresolved caller before the precondition is parsed.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
         if (AuthoringEndpointSupport.IfMatchVersion(context, out var expectedVersion) is { } ifMatchError)
         {
             return AuthoringEndpointSupport.Failure<AuthoringRestoreResponse>(ifMatchError);
@@ -95,6 +99,9 @@ internal static class AuthoringRestoreEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        // Refuse an unresolved caller before the precondition is parsed.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
         if (AuthoringEndpointSupport.IfMatchVersion(context, out var expectedVersion) is { } ifMatchError)
         {
             return AuthoringEndpointSupport.Failure<AuthoringRestoreResponse>(ifMatchError);
@@ -113,6 +120,9 @@ internal static class AuthoringRestoreEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        // Refuse an unresolved caller before the precondition is parsed.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
         if (AuthoringEndpointSupport.IfMatchVersion(context, out var expectedVersion) is { } ifMatchError)
         {
             return AuthoringEndpointSupport.Failure<AuthoringRestoreResponse>(ifMatchError);
@@ -129,8 +139,15 @@ internal static class AuthoringRestoreEndpoints
         Guid v,
         HttpContext context,
         IMediator mediator,
-        CancellationToken cancellationToken) =>
-        await mediator.Send(
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        // Refuse an unresolved caller before anything else reads the request.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
+        return await mediator.Send(
             new RestoreVersionCommand(p, v, AuthoringEndpointSupport.IdempotencyKey(context)),
             cancellationToken).ConfigureAwait(false);
+    }
 }

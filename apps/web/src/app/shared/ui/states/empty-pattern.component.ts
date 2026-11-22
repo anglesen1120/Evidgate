@@ -1,12 +1,13 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmCard, HlmCardDescription, HlmCardTitle } from '@evidgate/ui/card';
 
 @Component({
   selector: 'app-empty-pattern',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [NgTemplateOutlet, HlmButton, HlmCard, HlmCardDescription, HlmCardTitle],
+  imports: [HlmIcon, NgTemplateOutlet, HlmButton, HlmCard, HlmCardDescription, HlmCardTitle],
   host: { class: 'block min-w-0' },
   template: `
     @if (bare()) {
@@ -18,12 +19,13 @@ import { HlmCard, HlmCardDescription, HlmCardTitle } from '@evidgate/ui/card';
     } @else {
       <section
         hlmCard
-        class="state-panel state-panel--empty min-w-0 min-h-[calc(var(--eg-space-12)*3+var(--eg-space-8))] items-center justify-center gap-(--eg-space-3) px-(--eg-space-5) py-(--eg-space-8) text-center wrap-anywhere"
+        class="state-panel state-panel--empty min-w-0 items-start gap-(--eg-space-3) rounded-(--eg-radius-md) p-(--eg-space-5) text-start wrap-anywhere bg-(--eg-surface-raised) text-(--eg-text)"
       >
         <ng-container [ngTemplateOutlet]="content" />
       </section>
     }
     <ng-template #content>
+      <hlm-icon [name]="'lucideCircle'" class="size-(--eg-control-sm) text-(--eg-neutral-fg)" />
       <h2
         hlmCardTitle
         class="state-panel__title m-0 font-(family-name:--eg-font-display) text-lg"

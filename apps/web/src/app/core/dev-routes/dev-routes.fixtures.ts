@@ -42,10 +42,41 @@
 // (`revisions/:revisionId`), so `/dev/suite-composition/orgs/:orgId/projects/:projectId/suites/
 // revisions/:revisionId` mounts it under the identical guard chain with only the phase gate omitted.
 
+import type { Type } from '@angular/core';
 import type { Routes } from '@angular/router';
 
 import { authGuard, orgScopeGuard, permissionGuard, projectScopeGuard } from '../guards';
 import { ShellComponent } from '../../shell/layout/shell.component';
+import { setupScriptsReviewRoutes } from './dev-routes.setup-scripts.fixtures';
+
+/**
+ * Review-only v3 screens fed by static view models, no HTTP: mounted under the project scope with
+ * the permission the owning nav entry uses. Absent from production like every `dev/*` address.
+ */
+function reviewScreen(
+  path: string,
+  permission: string,
+  load: () => Promise<Type<unknown>>,
+): Routes[number] {
+  return {
+    path,
+    component: ShellComponent,
+    children: [
+      {
+        path: 'orgs/:orgId',
+        canMatch: [authGuard, orgScopeGuard],
+        children: [
+          {
+            path: 'projects/:projectId',
+            canMatch: [projectScopeGuard, permissionGuard(permission)],
+            data: { pageHeadingLevel: 1 },
+            loadComponent: load,
+          },
+        ],
+      },
+    ],
+  };
+}
 
 /** The review-only routes, mounted first so a product path can never shadow one. */
 export function devRoutes(): Routes {
@@ -279,5 +310,84 @@ export function devRoutes(): Routes {
         },
       ],
     },
+    reviewScreen('dev/release-decision', 'run:read', () =>
+      // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph.
+      import('../../features/releases/decision/decision-review.page').then(
+        (m) => m.ReleaseDecisionReviewPage,
+      ),
+    ),
+    reviewScreen('dev/studio-gallery', 'run:read', () =>
+      // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph.
+      import('../../features/studio/gallery/studio-gallery-review.page').then(
+        (m) => m.StudioGalleryReviewPage,
+      ),
+    ),
+    reviewScreen('dev/studio-draft-editor', 'run:read', () =>
+      // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph.
+      import('../../features/studio/draft-editor/studio-draft-editor-review.page').then(
+        (m) => m.StudioDraftEditorReviewPage,
+      ),
+    ),
+    reviewScreen('dev/studio-review-merge', 'run:read', () =>
+      // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph.
+      import('../../features/studio/review-merge/studio-review-merge-review.page').then(
+        (m) => m.StudioReviewMergeReviewPage,
+      ),
+    ),
+    reviewScreen('dev/release-view', 'run:read', () =>
+      // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph.
+      import('../../features/releases/release-view/release-view-review.page').then(
+        (m) => m.ReleaseViewReviewPage,
+      ),
+    ),
+    reviewScreen('dev/quality-overview', 'run:read', () =>
+      // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph.
+      import('../../features/quality/overview/quality-overview-review.page').then(
+        (m) => m.QualityOverviewReviewPage,
+      ),
+    ),
+    /* eslint-disable evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph; fixture-fed screens with no product route. */
+    reviewScreen('dev/failure-inbox', 'healing:triage', () =>
+      import('../../features/failures/inbox/failure-inbox.review.page').then(
+        (m) => m.FailureInboxReviewPage,
+      ),
+    ),
+    reviewScreen('dev/failure-detail', 'healing:triage', () =>
+      import('../../features/failures/detail/failure-detail.review.page').then(
+        (m) => m.FailureDetailReviewPage,
+      ),
+    ),
+    reviewScreen('dev/investigation-history', 'healing:triage', () =>
+      import('../../features/failures/history/investigation-history.review.page').then(
+        (m) => m.InvestigationHistoryReviewPage,
+      ),
+    ),
+    reviewScreen('dev/artifact-viewer', 'healing:triage', () =>
+      import('../../features/failures/artifact/artifact-viewer.review.page').then(
+        (m) => m.ArtifactViewerReviewPage,
+      ),
+    ),
+    reviewScreen('dev/healing-queue', 'healing:triage', () =>
+      import('../../features/repairs/queue/healing-queue.review.page').then(
+        (m) => m.HealingQueueReviewPage,
+      ),
+    ),
+    reviewScreen('dev/shadow-detail', 'healing:triage', () =>
+      import('../../features/repairs/shadow/shadow-detail.review.page').then(
+        (m) => m.ShadowDetailReviewPage,
+      ),
+    ),
+    reviewScreen('dev/healing-approval', 'healing:triage', () =>
+      import('../../features/repairs/approval/healing-approval.review.page').then(
+        (m) => m.HealingApprovalReviewPage,
+      ),
+    ),
+    reviewScreen('dev/knowledge-lineage', 'healing:triage', () =>
+      import('../../features/knowledge/lineage/knowledge-lineage.review.page').then(
+        (m) => m.KnowledgeLineageReviewPage,
+      ),
+    ),
+    /* eslint-enable evidgate/no-feature-cross-import */
+    ...setupScriptsReviewRoutes(),
   ];
 }

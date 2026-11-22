@@ -65,16 +65,6 @@ public static partial class ApiHost
     {
         var builder = WebApplication.CreateBuilder(args);
 
-        // 02.3.1 §5/§8 (S3), hand-over (viii) of #160: ASP.NET's request log — the category
-        // `Microsoft.AspNetCore.Hosting.Diagnostics` — writes "Request starting … GET <url?query>" at
-        // Information, and the login callback's query carries the authorization `code` and the one-time
-        // `state`. The span of the same request is redacted below (`LoginTraceRedaction`), but the log line
-        // cannot be: the framework composes it before any middleware of ours runs, so nothing on our side can
-        // take the query out of it. That category therefore starts at Warning for the whole Api: a request
-        // stays observable through the (redacted) span — method, route, status, duration — and no framework
-        // log line can ever carry a code or a state again, whatever route reaches us.
-        builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
-
         builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = ShutdownTimeout);
 
         // N9: the host-wide body limit of a route that declares none, applied by Kestrel before a handler reads.
@@ -193,13 +183,43 @@ public static partial class ApiHost
         // fail-closed gate that guards them until 02.x lands authentication.
         builder.Services.AddOperatorEndpoints();
 
+        // The request-start log carries the login callback's query (code, state); see RequestLogFloor.
+        builder.Services.PostConfigure<LoggerFilterOptions>(RequestLogFloor.Apply);
+        builder.Services.AddHostedService<RequestLogFloorNotice>();
+
         return builder;
+    }
+
+    /// <summary>
+    /// Builds the host and refuses it when the request-log floor is not the last word on the filter rules. The
+    /// check runs here, before anything can start, so no listener is ever bound by a host that would log the
+    /// login callback's query.
+    /// </summary>
+    /// <param name="builder">The configured builder, every service registration done.</param>
+    /// <exception cref="InvalidOperationException">A rule follows the floor or a floor rule is missing.</exception>
+    public static WebApplication BuildWithLogFloor(WebApplicationBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        var app = builder.Build();
+        try
+        {
+            RequestLogFloor.AssertFloorIsLast(app.Services.GetRequiredService<IOptionsMonitor<LoggerFilterOptions>>().CurrentValue);
+        }
+        catch
+        {
+            // The refused host is never returned, so nobody else can release its providers and subscriptions.
+            ((IDisposable)app).Dispose();
+            throw;
+        }
+
+        return app;
     }
 
     /// <summary>Builds the application pipeline, module routes and OpenAPI document.</summary>
     public static WebApplication BuildApp(string[] args)
     {
-        var app = CreateBuilder(args).Build();
+        var app = BuildWithLogFloor(CreateBuilder(args));
 
         // First, so every later middleware and endpoint sees the client address, not the proxy's.
         app.UseTrustedForwardedHeaders();
@@ -278,6 +298,9 @@ public static partial class ApiHost
         app.MapCiAdminEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // Project API tokens for automation: the same tenant and envelope filters as every /v1 tenant route.
         app.MapApiTokenEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
+        // The tenant's support-grant decisions and list: only approve, revoke and list are served; the operator's
+        // request route stays unmapped in this change.
+        app.MapSupportGrantEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         app.MapCiTokenEndpoints().AddEndpointFilter<ResultEndpointFilter>();
         // 02.3.1-T1: the federated login start/callback routes. Pre-tenant as well (the browser holds no
         // session yet), and the callback resolves nothing before the provider has verified the identity, so

@@ -7,6 +7,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { HlmAlertImports } from '@evidgate/ui/alert';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmDialog, HlmDialogImports } from '@evidgate/ui/dialog';
@@ -16,7 +17,7 @@ import type { ConflictField } from './conflict-details';
 
 @Component({
   selector: 'app-conflict-dialog',
-  imports: [HlmAlertImports, HlmBadge, HlmButton, HlmDialogImports],
+  imports: [HlmIcon, HlmAlertImports, HlmBadge, HlmButton, HlmDialogImports],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <hlm-dialog [state]="open() ? 'open' : 'closed'" (stateChanged)="onStateChanged($event)">
@@ -25,7 +26,11 @@ import type { ConflictField } from './conflict-details';
         [showCloseButton]="false"
         class="max-h-[calc(100dvh-var(--eg-space-8))] overflow-y-auto"
       >
-        <header hlmDialogHeader class="flex flex-row flex-wrap items-start justify-between gap-2">
+        <header
+          hlmDialogHeader
+          class="flex flex-row flex-wrap items-start justify-between gap-(--eg-space-4) border-b border-(--eg-border) pb-(--eg-space-5)"
+        >
+          <hlm-icon [name]="'lucideInfo'" class="size-(--eg-control-sm) text-(--eg-accent)" />
           <div class="min-w-0 flex-1">
             <h2 hlmDialogTitle i18n="@@shared.conflict.title">Review conflict</h2>
             <p hlmDialogDescription i18n="@@shared.conflict.description">
@@ -64,35 +69,28 @@ import type { ConflictField } from './conflict-details';
           }
           <div class="fields grid gap-3">
             @for (field of fields(); track field.id) {
-              <section class="field rounded-md border border-solid border-border bg-muted p-3">
+              <section
+                class="field rounded-md border border-solid border-border bg-(--eg-surface-raised) p-(--eg-space-4)"
+              >
                 <h3 class="m-0 mb-2 flex flex-wrap items-center gap-2 text-base">
                   {{ field.label }}
                   @if (field.local !== null && field.server !== null) {
                     @if (field.local === field.server) {
-                      <span
-                        hlmBadge
-                        [variant]="'outline'"
-                        class="marker"
-                        i18n="@@shared.conflict.same"
-                        >Same</span
-                      >
+                      <span hlmBadge [variant]="'outline'" class="marker">
+                        <hlm-icon [name]="'lucideCheck'" />
+                        <span i18n="@@shared.conflict.same">Same</span>
+                      </span>
                     } @else {
-                      <span
-                        hlmBadge
-                        [variant]="'secondary'"
-                        class="marker"
-                        i18n="@@shared.conflict.changed"
-                        >Changed</span
-                      >
+                      <span hlmBadge [variant]="'secondary'" class="marker">
+                        <hlm-icon [name]="'lucideActivity'" />
+                        <span i18n="@@shared.conflict.changed">Changed</span>
+                      </span>
                     }
                   } @else {
-                    <span
-                      hlmBadge
-                      [variant]="'outline'"
-                      class="marker"
-                      i18n="@@shared.conflict.not-compared"
-                      >Not compared</span
-                    >
+                    <span hlmBadge [variant]="'outline'" class="marker">
+                      <hlm-icon [name]="'lucideCircle'" />
+                      <span i18n="@@shared.conflict.not-compared">Not compared</span>
+                    </span>
                   }
                 </h3>
                 <dl

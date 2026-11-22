@@ -1,9 +1,9 @@
 // The two things a conflict leaves behind besides "nothing was written": one Error log line per conflicting key that
 // names the org, the key and both hashes but never a payload value, and one increment of the Evidgate conflicts counter.
-using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.Modules.Usage.Contracts;
+using Evidgate.Testing;
 using Microsoft.Extensions.Logging;
 using Shouldly;
 using Xunit;
@@ -32,13 +32,12 @@ public sealed partial class UsageLedgerPayloadHashTests
 
         attempt.Conflicts.ShouldBe([key]);
 
-        var line = world.Log.Lines
-            .Single(captured => captured.Text.Contains(key, StringComparison.Ordinal));
+        var line = ConflictEntry(world, key);
 
         line.Level.ShouldBe(LogLevel.Error);
 
         // Plain string probes: no Shouldly string extension, so the overload is never in question.
-        var text = line.Text;
+        var text = AllText(line);
         text.Contains(world.Org.ToString("D"), StringComparison.Ordinal).ShouldBeTrue("the log names the tenant");
         text.Contains(HashOf(stored), StringComparison.Ordinal)
             .ShouldBeTrue("the stored hash names the first payload");
@@ -68,9 +67,7 @@ public sealed partial class UsageLedgerPayloadHashTests
 
         attempt.Conflicts.ShouldBe([key]);
 
-        var text = world.Log.Lines
-            .Single(captured => captured.Text.Contains(key, StringComparison.Ordinal))
-            .Text;
+        var text = AllText(ConflictEntry(world, key));
 
         text.Contains($"holds {HashOf(stored)}", StringComparison.Ordinal)
             .ShouldBeTrue("the stored digest is the payload on file");
@@ -106,51 +103,11 @@ public sealed partial class UsageLedgerPayloadHashTests
     }
 
     /// <summary>
-    /// A log sink that keeps the level as well as the rendered line, so "an Error was logged" is assertable, not only
-    /// "something was logged". The same technique as <see cref="IngestLogSink"/>; the level is the one addition.
+    /// The one captured call that names the key. Every string the call could persist (message, state, scopes,
+    /// exception) is searched, so a payload value leaking through any of them is seen.
     /// </summary>
-    private sealed class ConflictLogSink : ILoggerProvider
-    {
-        private readonly ConcurrentQueue<(LogLevel Level, string Text)> _lines = new();
+    private static CapturedLog ConflictEntry(World world, string key) =>
+        world.Log.Entries.Single(entry => entry.Texts.Any(text => text.Contains(key, StringComparison.Ordinal)));
 
-        /// <summary>Every captured line since <see cref="Clear"/>, in order.</summary>
-        internal IReadOnlyList<(LogLevel Level, string Text)> Lines => [.. _lines];
-
-        /// <summary>Forgets every captured line.</summary>
-        internal void Clear() => _lines.Clear();
-
-        /// <inheritdoc />
-        public ILogger CreateLogger(string categoryName) => new Sink(categoryName, _lines);
-
-        /// <inheritdoc />
-        public void Dispose()
-        {
-            // Nothing to release.
-        }
-
-        private sealed class Sink(string category, ConcurrentQueue<(LogLevel Level, string Text)> lines) : ILogger
-        {
-            public IDisposable? BeginScope<TState>(TState state)
-                where TState : notnull => null;
-
-            public bool IsEnabled(LogLevel logLevel) => true;
-
-            public void Log<TState>(
-                LogLevel logLevel,
-                EventId eventId,
-                TState state,
-                Exception? exception,
-                Func<TState, Exception?, string> formatter)
-            {
-                var pairs = state as IReadOnlyList<KeyValuePair<string, object?>>;
-
-                lines.Enqueue((
-                    logLevel,
-                    pairs is null
-                        ? $"{category}: {formatter(state, exception)}"
-                        : $"{category}: {formatter(state, exception)} | "
-                            + string.Join(" | ", pairs.Select(pair => $"{pair.Key}={pair.Value}"))));
-            }
-        }
-    }
+    private static string AllText(CapturedLog entry) => string.Join(" | ", entry.Texts);
 }

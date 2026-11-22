@@ -1,94 +1,155 @@
-<testsuites id="" name="" tests="44" failures="0" skipped="0" errors="0" time="50.406319">
-<testsuite name="settings-policy.spec.ts" timestamp="2026-11-05T05:06:42.186Z" hostname="host" tests="32" failures="0" skipped="0" time="43.295" errors="0">
-<testcase name="revision form keeps its field beside the action on desktop (en)" classname="settings-policy.spec.ts" time="1.338">
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites id="" name="" tests="72" failures="0" skipped="0" errors="0" time="105.02169900000001">
+<testsuite name="settings-policy.fallback-font.spec.ts" timestamp="2026-11-21T11:05:42.456Z" hostname="host" tests="16" failures="0" skipped="0" time="38.442" errors="0">
+<testcase name="UUID field does not scroll at 768px with narrow sans, wide mono (en)" classname="settings-policy.fallback-font.spec.ts" time="4.421">
 </testcase>
-<testcase name="revision list, head marking, mode chip and diff state (en)" classname="settings-policy.spec.ts" time="1.28">
+<testcase name="UUID field does not scroll at 1024px with narrow sans, wide mono (en)" classname="settings-policy.fallback-font.spec.ts" time="3.496">
 </testcase>
-<testcase name="two revisions diff in the panel and in the 412 dialog (en)" classname="settings-policy.spec.ts" time="1.68">
+<testcase name="UUID field does not scroll at 1280px with narrow sans, wide mono (en)" classname="settings-policy.fallback-font.spec.ts" time="3.615">
 </testcase>
-<testcase name="a revision id that is not a UUID requests nothing (en)" classname="settings-policy.spec.ts" time="1.003">
+<testcase name="UUID field does not scroll at 1440px with narrow sans, wide mono (en)" classname="settings-policy.fallback-font.spec.ts" time="3.938">
 </testcase>
-<testcase name="read-only grant offers no publish control (en)" classname="settings-policy.spec.ts" time="0.818">
+<testcase name="UUID field does not scroll at 768px with narrow sans, default mono (en)" classname="settings-policy.fallback-font.spec.ts" time="2.468">
 </testcase>
-<testcase name="publish 201: seeded body, confirmation and the reloaded head (en)" classname="settings-policy.spec.ts" time="1.296">
+<testcase name="UUID field does not scroll at 1024px with narrow sans, default mono (en)" classname="settings-policy.fallback-font.spec.ts" time="1.771">
 </testcase>
-<testcase name="publish 200 unchanged: confirmation without a new revision (en)" classname="settings-policy.spec.ts" time="1.095">
+<testcase name="UUID field does not scroll at 1280px with narrow sans, default mono (en)" classname="settings-policy.fallback-font.spec.ts" time="1.876">
 </testcase>
-<testcase name="publish 412: conflict diff, explicit reload, no retry (en)" classname="settings-policy.spec.ts" time="2.245">
+<testcase name="UUID field does not scroll at 1440px with narrow sans, default mono (en)" classname="settings-policy.fallback-font.spec.ts" time="1.938">
 </testcase>
-<testcase name="publish 422 unknown field is verbatim (en)" classname="settings-policy.spec.ts" time="0.867">
+<testcase name="UUID field does not scroll at 768px with narrow sans, wide mono (vi)" classname="settings-policy.fallback-font.spec.ts" time="1.979">
 </testcase>
-<testcase name="publish 422 critical case is verbatim (en)" classname="settings-policy.spec.ts" time="0.883">
+<testcase name="UUID field does not scroll at 1024px with narrow sans, wide mono (vi)" classname="settings-policy.fallback-font.spec.ts" time="1.873">
 </testcase>
-<testcase name="local refusals send nothing and keep the editor open (en)" classname="settings-policy.spec.ts" time="1.185">
+<testcase name="UUID field does not scroll at 1280px with narrow sans, wide mono (vi)" classname="settings-policy.fallback-font.spec.ts" time="1.926">
 </testcase>
-<testcase name="360px is inspection-only (en)" classname="settings-policy.spec.ts" time="0.789">
+<testcase name="UUID field does not scroll at 1440px with narrow sans, wide mono (vi)" classname="settings-policy.fallback-font.spec.ts" time="2.021">
 </testcase>
-<testcase name="keyboard publish: Enter opens, trap holds, Escape restores focus (en)" classname="settings-policy.spec.ts" time="0.713">
+<testcase name="UUID field does not scroll at 768px with narrow sans, default mono (vi)" classname="settings-policy.fallback-font.spec.ts" time="2.149">
 </testcase>
-<testcase name="review route refuses missing read grant and foreign org (en)" classname="settings-policy.spec.ts" time="0.877">
+<testcase name="UUID field does not scroll at 1024px with narrow sans, default mono (vi)" classname="settings-policy.fallback-font.spec.ts" time="1.677">
 </testcase>
-<testcase name="axe has no violations on list/diff, publish and conflict (en, light)" classname="settings-policy.spec.ts" time="3.485">
+<testcase name="UUID field does not scroll at 1280px with narrow sans, default mono (vi)" classname="settings-policy.fallback-font.spec.ts" time="1.475">
 </testcase>
-<testcase name="axe has no violations on list/diff, publish and conflict (en, dark)" classname="settings-policy.spec.ts" time="2.998">
-</testcase>
-<testcase name="revision form keeps its field beside the action on desktop (vi)" classname="settings-policy.spec.ts" time="0.981">
-</testcase>
-<testcase name="revision list, head marking, mode chip and diff state (vi)" classname="settings-policy.spec.ts" time="1.445">
-</testcase>
-<testcase name="two revisions diff in the panel and in the 412 dialog (vi)" classname="settings-policy.spec.ts" time="1.603">
-</testcase>
-<testcase name="a revision id that is not a UUID requests nothing (vi)" classname="settings-policy.spec.ts" time="1.171">
-</testcase>
-<testcase name="read-only grant offers no publish control (vi)" classname="settings-policy.spec.ts" time="1.158">
-</testcase>
-<testcase name="publish 201: seeded body, confirmation and the reloaded head (vi)" classname="settings-policy.spec.ts" time="1.409">
-</testcase>
-<testcase name="publish 200 unchanged: confirmation without a new revision (vi)" classname="settings-policy.spec.ts" time="1.027">
-</testcase>
-<testcase name="publish 412: conflict diff, explicit reload, no retry (vi)" classname="settings-policy.spec.ts" time="2.286">
-</testcase>
-<testcase name="publish 422 unknown field is verbatim (vi)" classname="settings-policy.spec.ts" time="1.133">
-</testcase>
-<testcase name="publish 422 critical case is verbatim (vi)" classname="settings-policy.spec.ts" time="0.9">
-</testcase>
-<testcase name="local refusals send nothing and keep the editor open (vi)" classname="settings-policy.spec.ts" time="1.163">
-</testcase>
-<testcase name="360px is inspection-only (vi)" classname="settings-policy.spec.ts" time="0.747">
-</testcase>
-<testcase name="keyboard publish: Enter opens, trap holds, Escape restores focus (vi)" classname="settings-policy.spec.ts" time="0.781">
-</testcase>
-<testcase name="review route refuses missing read grant and foreign org (vi)" classname="settings-policy.spec.ts" time="0.491">
-</testcase>
-<testcase name="axe has no violations on list/diff, publish and conflict (vi, light)" classname="settings-policy.spec.ts" time="2.209">
-</testcase>
-<testcase name="axe has no violations on list/diff, publish and conflict (vi, dark)" classname="settings-policy.spec.ts" time="2.239">
+<testcase name="UUID field does not scroll at 1440px with narrow sans, default mono (vi)" classname="settings-policy.fallback-font.spec.ts" time="1.819">
 </testcase>
 </testsuite>
-<testsuite name="settings-policy.summary.spec.ts" timestamp="2026-11-05T05:06:42.186Z" hostname="host" tests="12" failures="0" skipped="0" time="9.268" errors="0">
-<testcase name="policy summary renders the mode and both revisions (en)" classname="settings-policy.summary.spec.ts" time="1.646">
+<testsuite name="settings-policy.layout.spec.ts" timestamp="2026-11-21T11:05:42.456Z" hostname="host" tests="12" failures="0" skipped="0" time="34.62" errors="0">
+<testcase name="UUID lookup is bounded at 1024px (en)" classname="settings-policy.layout.spec.ts" time="4.183">
 </testcase>
-<testcase name="an enforcing activation renders the gating chip (en)" classname="settings-policy.summary.spec.ts" time="1.103">
+<testcase name="UUID lookup is bounded at 1280px (en)" classname="settings-policy.layout.spec.ts" time="3.673">
 </testcase>
-<testcase name="no activation shows the empty state and keeps the list (en)" classname="settings-policy.summary.spec.ts" time="0.707">
+<testcase name="policy labels and lookup fit 320px (en, light)" classname="settings-policy.layout.spec.ts" time="4.801">
 </testcase>
-<testcase name="an activation the caller may not read is forbidden, not retryable (en)" classname="settings-policy.summary.spec.ts" time="0.564">
+<testcase name="policy labels and lookup fit 390px (en, light)" classname="settings-policy.layout.spec.ts" time="4.12">
 </testcase>
-<testcase name="a throttled activation read keeps its retry closed until the wait ends (en)" classname="settings-policy.summary.spec.ts" time="0.791">
+<testcase name="policy labels and lookup fit 320px (en, dark)" classname="settings-policy.layout.spec.ts" time="2.208">
 </testcase>
-<testcase name="a project with no head revision shows the empty head state (en)" classname="settings-policy.summary.spec.ts" time="0.521">
+<testcase name="policy labels and lookup fit 390px (en, dark)" classname="settings-policy.layout.spec.ts" time="2.24">
 </testcase>
-<testcase name="policy summary renders the mode and both revisions (vi)" classname="settings-policy.summary.spec.ts" time="0.813">
+<testcase name="UUID lookup is bounded at 1024px (vi)" classname="settings-policy.layout.spec.ts" time="1.968">
 </testcase>
-<testcase name="an enforcing activation renders the gating chip (vi)" classname="settings-policy.summary.spec.ts" time="0.59">
+<testcase name="UUID lookup is bounded at 1280px (vi)" classname="settings-policy.layout.spec.ts" time="2.025">
 </testcase>
-<testcase name="no activation shows the empty state and keeps the list (vi)" classname="settings-policy.summary.spec.ts" time="0.73">
+<testcase name="policy labels and lookup fit 320px (vi, light)" classname="settings-policy.layout.spec.ts" time="2.221">
 </testcase>
-<testcase name="an activation the caller may not read is forbidden, not retryable (vi)" classname="settings-policy.summary.spec.ts" time="0.586">
+<testcase name="policy labels and lookup fit 390px (vi, light)" classname="settings-policy.layout.spec.ts" time="2.189">
 </testcase>
-<testcase name="a throttled activation read keeps its retry closed until the wait ends (vi)" classname="settings-policy.summary.spec.ts" time="0.623">
+<testcase name="policy labels and lookup fit 320px (vi, dark)" classname="settings-policy.layout.spec.ts" time="2.465">
 </testcase>
-<testcase name="a project with no head revision shows the empty head state (vi)" classname="settings-policy.summary.spec.ts" time="0.594">
+<testcase name="policy labels and lookup fit 390px (vi, dark)" classname="settings-policy.layout.spec.ts" time="2.527">
+</testcase>
+</testsuite>
+<testsuite name="settings-policy.spec.ts" timestamp="2026-11-21T11:05:42.456Z" hostname="host" tests="32" failures="0" skipped="0" time="80.714" errors="0">
+<testcase name="revision form keeps its field beside the action on desktop (en)" classname="settings-policy.spec.ts" time="4.204">
+</testcase>
+<testcase name="revision list, head marking, mode chip and diff state (en)" classname="settings-policy.spec.ts" time="5.562">
+</testcase>
+<testcase name="two revisions diff in the panel and in the 412 dialog (en)" classname="settings-policy.spec.ts" time="5.324">
+</testcase>
+<testcase name="a revision id that is not a UUID requests nothing (en)" classname="settings-policy.spec.ts" time="2.156">
+</testcase>
+<testcase name="read-only grant offers no publish control (en)" classname="settings-policy.spec.ts" time="1.933">
+</testcase>
+<testcase name="publish 201: seeded body, confirmation and the reloaded head (en)" classname="settings-policy.spec.ts" time="2.912">
+</testcase>
+<testcase name="publish 200 unchanged: confirmation without a new revision (en)" classname="settings-policy.spec.ts" time="2.37">
+</testcase>
+<testcase name="publish 412: conflict diff, explicit reload, no retry (en)" classname="settings-policy.spec.ts" time="3.578">
+</testcase>
+<testcase name="publish 422 unknown field is verbatim (en)" classname="settings-policy.spec.ts" time="2.378">
+</testcase>
+<testcase name="publish 422 critical case is verbatim (en)" classname="settings-policy.spec.ts" time="2.291">
+</testcase>
+<testcase name="local refusals send nothing and keep the editor open (en)" classname="settings-policy.spec.ts" time="2.394">
+</testcase>
+<testcase name="360px is inspection-only (en)" classname="settings-policy.spec.ts" time="2.352">
+</testcase>
+<testcase name="keyboard publish: Enter opens, trap holds, Escape restores focus (en)" classname="settings-policy.spec.ts" time="1.9">
+</testcase>
+<testcase name="review route refuses missing read grant and foreign org (en)" classname="settings-policy.spec.ts" time="0.621">
+</testcase>
+<testcase name="axe has no violations on list/diff, publish and conflict (en, light)" classname="settings-policy.spec.ts" time="4.492">
+</testcase>
+<testcase name="axe has no violations on list/diff, publish and conflict (en, dark)" classname="settings-policy.spec.ts" time="4.45">
+</testcase>
+<testcase name="revision form keeps its field beside the action on desktop (vi)" classname="settings-policy.spec.ts" time="1.332">
+</testcase>
+<testcase name="revision list, head marking, mode chip and diff state (vi)" classname="settings-policy.spec.ts" time="2.076">
+</testcase>
+<testcase name="two revisions diff in the panel and in the 412 dialog (vi)" classname="settings-policy.spec.ts" time="2.401">
+</testcase>
+<testcase name="a revision id that is not a UUID requests nothing (vi)" classname="settings-policy.spec.ts" time="1.079">
+</testcase>
+<testcase name="read-only grant offers no publish control (vi)" classname="settings-policy.spec.ts" time="1.392">
+</testcase>
+<testcase name="publish 201: seeded body, confirmation and the reloaded head (vi)" classname="settings-policy.spec.ts" time="2.073">
+</testcase>
+<testcase name="publish 200 unchanged: confirmation without a new revision (vi)" classname="settings-policy.spec.ts" time="1.826">
+</testcase>
+<testcase name="publish 412: conflict diff, explicit reload, no retry (vi)" classname="settings-policy.spec.ts" time="2.666">
+</testcase>
+<testcase name="publish 422 unknown field is verbatim (vi)" classname="settings-policy.spec.ts" time="1.609">
+</testcase>
+<testcase name="publish 422 critical case is verbatim (vi)" classname="settings-policy.spec.ts" time="1.572">
+</testcase>
+<testcase name="local refusals send nothing and keep the editor open (vi)" classname="settings-policy.spec.ts" time="1.603">
+</testcase>
+<testcase name="360px is inspection-only (vi)" classname="settings-policy.spec.ts" time="1.659">
+</testcase>
+<testcase name="keyboard publish: Enter opens, trap holds, Escape restores focus (vi)" classname="settings-policy.spec.ts" time="1.645">
+</testcase>
+<testcase name="review route refuses missing read grant and foreign org (vi)" classname="settings-policy.spec.ts" time="0.637">
+</testcase>
+<testcase name="axe has no violations on list/diff, publish and conflict (vi, light)" classname="settings-policy.spec.ts" time="4.115">
+</testcase>
+<testcase name="axe has no violations on list/diff, publish and conflict (vi, dark)" classname="settings-policy.spec.ts" time="4.112">
+</testcase>
+</testsuite>
+<testsuite name="settings-policy.summary.spec.ts" timestamp="2026-11-21T11:05:42.456Z" hostname="host" tests="12" failures="0" skipped="0" time="34.299" errors="0">
+<testcase name="policy summary renders the mode and both revisions (en)" classname="settings-policy.summary.spec.ts" time="6.346">
+</testcase>
+<testcase name="an enforcing activation renders the gating chip (en)" classname="settings-policy.summary.spec.ts" time="3.774">
+</testcase>
+<testcase name="no activation shows the empty state and keeps the list (en)" classname="settings-policy.summary.spec.ts" time="3.643">
+</testcase>
+<testcase name="an activation the caller may not read is forbidden, not retryable (en)" classname="settings-policy.summary.spec.ts" time="3.446">
+</testcase>
+<testcase name="a throttled activation read keeps its retry closed until the wait ends (en)" classname="settings-policy.summary.spec.ts" time="2.002">
+</testcase>
+<testcase name="a project with no head revision shows the empty head state (en)" classname="settings-policy.summary.spec.ts" time="1.889">
+</testcase>
+<testcase name="policy summary renders the mode and both revisions (vi)" classname="settings-policy.summary.spec.ts" time="2.877">
+</testcase>
+<testcase name="an enforcing activation renders the gating chip (vi)" classname="settings-policy.summary.spec.ts" time="2.035">
+</testcase>
+<testcase name="no activation shows the empty state and keeps the list (vi)" classname="settings-policy.summary.spec.ts" time="1.91">
+</testcase>
+<testcase name="an activation the caller may not read is forbidden, not retryable (vi)" classname="settings-policy.summary.spec.ts" time="2.032">
+</testcase>
+<testcase name="a throttled activation read keeps its retry closed until the wait ends (vi)" classname="settings-policy.summary.spec.ts" time="2.153">
+</testcase>
+<testcase name="a project with no head revision shows the empty head state (vi)" classname="settings-policy.summary.spec.ts" time="2.192">
 </testcase>
 </testsuite>
 </testsuites>

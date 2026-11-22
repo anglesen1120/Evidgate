@@ -109,7 +109,7 @@ public sealed class RespawnTests : TenantTest
 
     /// <summary>
     /// The positive control of the reset: the migration-seeded catalogue is present on a fresh copy, a tenant
-    /// role next to it is swept, and the catalogue rows are exactly the same after the reset. A reset that
+    /// role and template next to it are swept, and the catalogue rows are exactly the same after the reset. A reset that
     /// truncated the catalogue again would fail here instead of letting a "denied" assertion pass against nothing.
     /// </summary>
     [Fact]
@@ -127,6 +127,14 @@ public sealed class RespawnTests : TenantTest
             "insert into public.role (id, org_id, code, name, is_builtin, kind) values (@id, @org_id, 'night_shift', 'Night shift', false, 'member')",
             [("id", Guid.CreateVersion7()), ("org_id", org)],
             Token);
+        await Fixture.SeedAsync(
+            """
+            insert into public.template (id, org_id, kind, name, version, body_ref, conformance_rules)
+            values (@id, @org_id, 'web', 'tenant-reset-probe', 1, 'sha256:' || repeat('a', 64), '{}'::jsonb)
+            """,
+            [("id", Guid.CreateVersion7()), ("org_id", org)],
+            Token);
+        (await Fixture.NonEmptyApplicationTablesAsync(Token)).ShouldContain("public.template (1 row(s))");
 
         await Fixture.ResetAsync(Token);
 

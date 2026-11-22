@@ -24,13 +24,15 @@ namespace Evidgate.Modules.Authoring.Application.Queries;
 /// <param name="IncludePath">True when <c>include=path</c> asked for the breadcrumb.</param>
 /// <param name="Cursor">The opaque <c>(position, id)</c> cursor, or null for the first page.</param>
 /// <param name="Limit">The page size, 1..200.</param>
+/// <param name="RequestError">The first query-binding error, answered after authorization.</param>
 internal sealed record GetAuthoringTreeQuery(
     Guid ProjectId,
     Guid? ParentId,
     Guid? NodeId,
     bool IncludePath,
     string? Cursor,
-    int Limit)
+    int Limit,
+    Error? RequestError = null)
     : IQuery<Result<AuthoringTreeView>>;
 
 /// <summary>
@@ -45,17 +47,12 @@ internal sealed record GetAuthoringTreeQuery(
 internal sealed record AuthoringTreeView(AuthoringTreeResponse Body, string OrderHash);
 
 /// <summary>
-/// Handler of <see cref="GetAuthoringTreeQuery"/>: the project gate, then at most <b>six</b> statements in a
-/// <b>read-only</b> transaction — project liveness, the node the page is addressed by (the <c>node_id</c> form, which
-/// also lists that node's children, or the <c>parent_id</c> form, which reads the group's node for its existence and its
-/// breadcrumb), the page, one counts statement for the whole page, the ancestors only when <c>include=path</c> asked for
-/// them, and the order tag that becomes the <c>ETag</c>. A listing that addresses no node spends four of them.
-/// The page itself is one keyset statement over <c>feature_node_tree_idx</c>.
+/// Checks project scope before a carried binding refusal, then reads the live project, addressed node, sibling page,
+/// counts, optional breadcrumb and order tag in at most <b>six</b> statements of a read-only transaction — four when the
+/// request addresses no node. Counts are read for the whole page rather than once per node.
 /// </summary>
 /// <remarks>
-/// <b>Roots versus children, and why <c>parent_id is null</c> is not written as a parameter</b> (OI-13-112): the two
-/// groups use two statements so each one's predicate is a searchable form of the index; the alternation happens here, in
-/// C#, not inside the SQL text (00 §5.7 S1: parameters are values, never SQL fragments).
+/// Roots and children use separate statements so each predicate remains searchable through the tree index.
 /// </remarks>
 [Permission(Permissions.Authoring.Read)]
 internal sealed class GetAuthoringTreeQueryHandler(
@@ -69,12 +66,16 @@ internal sealed class GetAuthoringTreeQueryHandler(
     public async ValueTask<Result<AuthoringTreeView>> Handle(GetAuthoringTreeQuery query, CancellationToken cancellationToken)
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Authoring, nameof(GetAuthoringTreeQuery));
-
         ArgumentNullException.ThrowIfNull(query);
 
         if (AuthoringRules.Project(query.ProjectId, principals, tenant) is { } mismatch)
         {
             return Result.Failure<AuthoringTreeView>(mismatch);
+        }
+
+        if (query.RequestError is { } requestError)
+        {
+            return Result.Failure<AuthoringTreeView>(requestError);
         }
 
         var orgId = scopes.Require().OrgId;
@@ -87,45 +88,10 @@ internal sealed class GetAuthoringTreeQueryHandler(
             return Result.Failure<AuthoringTreeView>(AuthoringRules.ProjectNotFound);
         }
 
-        // The group the page lists, and the node the answer names (route 1's `node` member is populated for node_id only).
-        AuthoringNodeReadSql.NodePageRow? addressed = null;
-        AuthoringNodeReadSql.NodePageRow? groupNode = null;
-        Guid? groupParent;
-
-        if (query.NodeId is { } nodeId)
+        var groupNode = await ReadGroupNodeAsync(db, orgId, query, cancellationToken).ConfigureAwait(false);
+        if ((query.NodeId is not null || query.ParentId is not null) && groupNode is null)
         {
-            addressed = await db.QuerySingleOrDefaultAsync<AuthoringNodeReadSql.NodePageRow>(
-                AuthoringNodeReadSql.LiveNode,
-                new { org_id = orgId, project_id = query.ProjectId, id = nodeId },
-                cancellationToken).ConfigureAwait(false);
-
-            if (addressed is null)
-            {
-                return Result.Failure<AuthoringTreeView>(AuthoringErrors.EntityNotFound(AuthoringEntityKind.FeatureNode));
-            }
-
-            groupNode = addressed;
-            groupParent = addressed.Id;
-        }
-        else if (query.ParentId is { } parentId)
-        {
-            // A parent that is gone is the same 404 as a node that never existed (AC10), so the page can never be
-            // listed for a tombstone.
-            groupNode = await db.QuerySingleOrDefaultAsync<AuthoringNodeReadSql.NodePageRow>(
-                AuthoringNodeReadSql.LiveNode,
-                new { org_id = orgId, project_id = query.ProjectId, id = parentId },
-                cancellationToken).ConfigureAwait(false);
-
-            if (groupNode is null)
-            {
-                return Result.Failure<AuthoringTreeView>(AuthoringErrors.EntityNotFound(AuthoringEntityKind.FeatureNode));
-            }
-
-            groupParent = parentId;
-        }
-        else
-        {
-            groupParent = null;
+            return Result.Failure<AuthoringTreeView>(AuthoringErrors.EntityNotFound(AuthoringEntityKind.FeatureNode));
         }
 
         int? cursorPosition = null;
@@ -143,7 +109,44 @@ internal sealed class GetAuthoringTreeQueryHandler(
             cursorId = decodedId;
         }
 
-        var rows = await PageAsync(orgId, query, groupParent, cursorPosition, cursorId, cancellationToken).ConfigureAwait(false);
+        return await ReadPageAsync(
+            db, orgId, query, groupNode, cursorPosition, cursorId, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The node the page is grouped by: the addressed node itself for <c>node_id</c> (whose live children are listed), or
+    /// the parent for <c>parent_id</c>, which also closes that listing's breadcrumb. Null when the request lists roots.
+    /// </summary>
+    private static Task<AuthoringNodeReadSql.NodePageRow?> ReadGroupNodeAsync(
+        ITenantDb db,
+        Guid orgId,
+        GetAuthoringTreeQuery query,
+        CancellationToken cancellationToken)
+    {
+        if ((query.NodeId ?? query.ParentId) is not { } id)
+        {
+            return Task.FromResult<AuthoringNodeReadSql.NodePageRow?>(null);
+        }
+
+        // A missing or deleted parent cannot supply a live listing group; the task is handed on without a second state machine.
+        return db.QuerySingleOrDefaultAsync<AuthoringNodeReadSql.NodePageRow>(
+            AuthoringNodeReadSql.LiveNode,
+            new { org_id = orgId, project_id = query.ProjectId, id },
+            cancellationToken);
+    }
+
+    private static async Task<Result<AuthoringTreeView>> ReadPageAsync(
+        ITenantDb db,
+        Guid orgId,
+        GetAuthoringTreeQuery query,
+        AuthoringNodeReadSql.NodePageRow? groupNode,
+        int? cursorPosition,
+        Guid? cursorId,
+        CancellationToken cancellationToken)
+    {
+        var addressed = query.NodeId is not null ? groupNode : null;
+        var groupParent = query.NodeId is not null ? groupNode?.Id : query.ParentId;
+        var rows = await PageAsync(db, orgId, query, groupParent, cursorPosition, cursorId, cancellationToken).ConfigureAwait(false);
 
         var hasMore = rows.Count > query.Limit;
         var page = hasMore ? rows.Take(query.Limit).ToList() : rows;
@@ -167,21 +170,9 @@ internal sealed class GetAuthoringTreeQueryHandler(
 
         var items = page.Select(row => ToDto(row, byId)).ToList();
 
-        var node = addressed is null
-            ? null
-            : ToDto(
-                new AuthoringNodeReadSql.NodePageRow
-                {
-                    Id = addressed.Id,
-                    ParentId = addressed.ParentId,
-                    Kind = addressed.Kind,
-                    Title = addressed.Title,
-                    Position = addressed.Position,
-                    Version = addressed.Version,
-                },
-                byId);
+        var node = addressed is null ? null : AddressedDto(addressed, byId);
 
-        var path = await PathAsync(orgId, query, groupParent, groupNode, query.NodeId is null && groupNode is not null, cancellationToken).ConfigureAwait(false);
+        var path = await PathAsync(db, orgId, query, groupParent, groupNode, query.NodeId is null && groupNode is not null, cancellationToken).ConfigureAwait(false);
 
         var order = await db.QueryAsync<AuthoringNodeReadSql.SiblingVersionRow>(
             groupParent is null ? AuthoringNodeReadSql.SiblingVersionsRoot : AuthoringNodeReadSql.SiblingVersionsChild,
@@ -197,7 +188,23 @@ internal sealed class GetAuthoringTreeQueryHandler(
             AuthoringHashes.OrderHash(order.Select(row => (row.Id, row.Version)))));
     }
 
-    private async Task<List<AuthoringNodeReadSql.NodePageRow>> PageAsync(
+    private static NodeDto AddressedDto(
+        AuthoringNodeReadSql.NodePageRow addressed,
+        Dictionary<Guid, AuthoringNodeReadSql.NodeCountRow> counts) =>
+        ToDto(
+            new AuthoringNodeReadSql.NodePageRow
+            {
+                Id = addressed.Id,
+                ParentId = addressed.ParentId,
+                Kind = addressed.Kind,
+                Title = addressed.Title,
+                Position = addressed.Position,
+                Version = addressed.Version,
+            },
+            counts);
+
+    private static async Task<List<AuthoringNodeReadSql.NodePageRow>> PageAsync(
+        ITenantDb db,
         Guid orgId,
         GetAuthoringTreeQuery query,
         Guid? groupParent,
@@ -223,7 +230,8 @@ internal sealed class GetAuthoringTreeQueryHandler(
     /// client that lists a group's children can render "root / … / parent". Null when no path was asked for and when the
     /// request listed the project's roots, which have no ancestors by definition.
     /// </summary>
-    private async Task<IReadOnlyList<NodePathEntry>?> PathAsync(
+    private static async Task<IReadOnlyList<NodePathEntry>?> PathAsync(
+        ITenantDb db,
         Guid orgId,
         GetAuthoringTreeQuery query,
         Guid? groupParent,

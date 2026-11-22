@@ -12,6 +12,7 @@ import {
 import type { IngestTokenView } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmDialog, HlmDialogImports } from '@evidgate/ui/dialog';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { DesktopMutationDirective, NarrowMutationPolicy } from '../../../shared/ui/narrow';
 import { sanitizeLabel } from './default-policy';
 
@@ -22,7 +23,7 @@ export interface RotateScope {
 
 @Component({
   selector: 'app-connect-ci-rotate-confirm',
-  imports: [HlmButton, HlmDialogImports, DesktopMutationDirective],
+  imports: [HlmButton, HlmDialogImports, HlmIcon, DesktopMutationDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
@@ -54,12 +55,21 @@ export interface RotateScope {
       <hlm-dialog-content
         *hlmDialogPortal
         [showCloseButton]="false"
-        class="max-h-[calc(100dvh-var(--eg-space-10))] overflow-y-auto wrap-anywhere"
+        [size]="'md'"
+        class="wrap-anywhere"
       >
         <header hlmDialogHeader>
+          <hlm-icon
+            hlmDialogStatusIcon
+            [name]="'lucideTriangleAlert'"
+            class="size-(--eg-space-6) text-(--eg-warning-fg)"
+          />
           <h2 hlmDialogTitle i18n="@@onboarding.connect.rotate-confirm-title">
             Rotate this ingest token?
           </h2>
+          <p hlmDialogSubject>
+            <bdi>{{ name() }}</bdi>
+          </p>
         </header>
         <p hlmDialogDescription i18n="@@onboarding.connect.rotate-confirm-warning">
           Rotation creates a replacement token. The previous token stops working according to the
@@ -67,7 +77,7 @@ export interface RotateScope {
           replacement there; rotation does not update CI for you.
         </p>
         <dl
-          class="m-0 grid min-w-0 gap-(--eg-space-4) [&_dd]:m-0 [&_dd]:wrap-anywhere [&_dt]:text-muted-foreground"
+          class="m-0 grid min-w-0 gap-(--eg-space-4) rounded-(--eg-radius-md) bg-muted p-(--eg-space-4) text-sm sm:grid-cols-2 [&>div]:min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:mt-(--eg-space-1) [&_dd]:font-semibold [&_dd]:wrap-anywhere"
         >
           <div>
             <dt i18n="@@onboarding.connect.token-title">Ingest token</dt>

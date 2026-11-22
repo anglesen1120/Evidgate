@@ -11,6 +11,7 @@ import {
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCard } from '@evidgate/ui/card';
 import { HlmDropdownMenuImports } from '@evidgate/ui/dropdown-menu';
+import { HlmToaster } from '@evidgate/ui/sonner';
 
 import type { ApiError } from '../../../core/http/api-error';
 import { LabelChip, MissingReasonList, WaiverBanner, type MissingReason } from '../annotations';
@@ -43,6 +44,12 @@ import { DecisionChipComponent, EvidenceBadgeComponent, OutcomePillComponent } f
 import { ConnectStepRevealComponent } from '../reveal/connect-step-reveal.component';
 import { RevealSlot } from '../reveal/one-time-reveal.slot';
 import { PageHeaderComponent } from '../page-header/page-header.component';
+import { GALLERY_COPY } from './gallery-example-copy';
+import { GALLERY_SECTIONS } from './gallery-sections';
+import { GallerySpecimenComponent } from './gallery-specimen.component';
+import { GalleryMemberDirectoryComponent } from './gallery-member-directory.component';
+import { GalleryQualitySnapshotComponent } from './gallery-quality-snapshot.component';
+import { GalleryRefusalComponent } from './gallery-refusal.component';
 import { GalleryCompositionComponent } from './gallery-composition.component';
 import { GalleryStatesComponent } from './gallery-states.component';
 import { GalleryTablesComponent } from './gallery-tables.component';
@@ -67,6 +74,11 @@ const SPECIMEN_COLUMN_WIDTHS: Readonly<Record<string, DataTableColumnWidth>> = {
     HlmButton,
     HlmCard,
     HlmDropdownMenuImports,
+    HlmToaster,
+    GallerySpecimenComponent,
+    GalleryMemberDirectoryComponent,
+    GalleryQualitySnapshotComponent,
+    GalleryRefusalComponent,
     ConnectStepRevealComponent,
     DecisionChipComponent,
     EvidenceBadgeComponent,
@@ -99,8 +111,9 @@ const SPECIMEN_COLUMN_WIDTHS: Readonly<Record<string, DataTableColumnWidth>> = {
 })
 export class UiGalleryComponent {
   protected readonly reveal = inject(RevealSlot);
-
   private readonly injector = inject(Injector);
+  protected readonly sheet = GALLERY_SECTIONS;
+  protected readonly copy = GALLERY_COPY;
 
   protected readonly galleryTitle = $localize`:@@shared.gallery.title:Shared UI state gallery`;
   protected readonly galleryIntroduction = $localize`:@@shared.gallery.introduction:Render-only examples of evidence, decisions and their independent states.`;

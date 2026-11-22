@@ -193,7 +193,7 @@ export async function visit(
 ): Promise<void> {
   await page.goto(withVariants(policyReviewPath(locale, ORG_ACME, revisionId), variants));
   await expect(page.locator(PAGE)).toBeVisible();
-  await expect(page.locator(`${PAGE} [data-policy-selected-metadata]`)).toBeVisible();
+  await expect(page.locator(`${ROWS}[data-policy-selected] [data-policy-view]`)).toBeVisible();
   await ready(page, rowCount);
 }
 

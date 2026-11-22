@@ -7,20 +7,26 @@ import type { AuthoringVersionHead } from '../../../core/data/authoring-editor-d
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [HlmCardTitle],
   template: `
-    <section class="grid min-w-0 gap-4" data-editor-diff>
+    <section
+      class="grid min-w-0 gap-(--eg-space-4) border-t border-border pt-(--eg-space-5) @container/diff"
+      data-editor-diff
+    >
       <h3 hlmCardTitle [size]="'subsection'" i18n="@@authoring.editor.diff-title">
         Stored snapshot comparison · read-only
       </h3>
       @if (left(); as before) {
         @if (right(); as after) {
-          <p class="m-0" i18n="@@authoring.editor.diff-versions">
+          <p
+            class="m-0 text-sm text-muted-foreground tabular-nums"
+            i18n="@@authoring.editor.diff-versions"
+          >
             Version {{ before.view.version_no }} → version {{ after.view.version_no }}
           </p>
           @for (row of rows(); track row.key) {
-            <section class="grid min-w-0 gap-3 border-t border-border pt-4">
+            <section class="grid min-w-0 gap-(--eg-space-3)">
               <h4 class="m-0 font-semibold wrap-anywhere">{{ row.key }}</h4>
-              <div class="grid min-w-0 gap-4 lg:grid-cols-2">
-                <div class="min-w-0">
+              <div class="grid min-w-0 gap-(--eg-space-4) @min-[34rem]/diff:grid-cols-2">
+                <div class="min-w-0 rounded-(--eg-radius-md) bg-muted p-(--eg-space-4)">
                   <p class="m-0 mb-2 text-sm font-semibold" [class.text-destructive]="row.changed">
                     @if (row.changed) {
                       <span i18n="@@authoring.editor.diff-before">− Before</span>
@@ -30,7 +36,7 @@ import type { AuthoringVersionHead } from '../../../core/data/authoring-editor-d
                   </p>
                   <pre class="m-0 whitespace-pre-wrap text-sm wrap-anywhere">{{ row.before }}</pre>
                 </div>
-                <div class="min-w-0">
+                <div class="min-w-0 rounded-(--eg-radius-md) bg-muted p-(--eg-space-4)">
                   <p class="m-0 mb-2 text-sm font-semibold">
                     @if (row.changed) {
                       <span i18n="@@authoring.editor.diff-after">+ After</span>

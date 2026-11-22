@@ -97,8 +97,8 @@ public sealed class SessionIndexPlanTests : SessionHardeningTestBase
     /// purpose: publishing that figure needs <c>pg_stat_force_next_flush()</c>, which <c>evidgate_owner</c>
     /// (created <c>nosuperuser</c> and without <c>pg_monitor</c>) may not call, and the unforced snapshot lands
     /// on the stats timer, so a gate could see a stale zero for a perfectly HOT update. The harness's own
-    /// precedent states the missing grant — <c>tests/Tenancy.IntegrationTests/ProducerSlotQaTests.cs:315-317</c>
-    /// ("<c>pg_read_all_stats</c> is not granted") — so the privilege route is dropped here too.
+    /// precedent states the missing grant — the comment in <c>ProducerSlotQaTests.WaitForBlockedInsertAsync</c>
+    /// (<c>tests/Tenancy.IntegrationTests</c>): "<c>pg_read_all_stats</c> is not granted" — so the privilege route is dropped here too.
     /// </summary>
     [Fact]
     public async Task The_Slide_Columns_Are_In_No_Index_So_A_Slide_Can_Be_Heap_Only()

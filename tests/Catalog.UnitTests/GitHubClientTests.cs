@@ -399,7 +399,7 @@ public sealed class GitHubClientTests
 
         await bench.Client.GetRepositoryAsync(GitHubTestBench.OrgId, 5, CancellationToken.None);
 
-        var lines = bench.ClientLogs.Lines.Concat(bench.TokenLogs.Lines).ToList();
+        var lines = bench.ClientLogs.Entries.Concat(bench.TokenLogs.Entries).SelectMany(entry => entry.Texts).ToList();
         lines.ShouldNotBeEmpty();
         foreach (var line in lines)
         {

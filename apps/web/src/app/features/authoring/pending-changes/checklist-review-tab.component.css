@@ -3,10 +3,33 @@
   min-inline-size: 0;
   color: var(--eg-text);
 }
-.region {
+.region,
+app-request-state {
   display: grid;
   min-inline-size: 0;
   gap: var(--eg-space-4);
+}
+.context-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: var(--eg-space-4);
+  margin: 0;
+}
+.context-facts > div {
+  min-inline-size: 0;
+  gap: var(--eg-space-3);
+  padding: var(--eg-space-5);
+}
+.context-facts dt {
+  font-size: var(--eg-text-sm);
+  font-weight: var(--eg-weight-semibold);
+}
+.context-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.review-panel {
+  padding: var(--eg-space-5);
 }
 .field {
   display: grid;

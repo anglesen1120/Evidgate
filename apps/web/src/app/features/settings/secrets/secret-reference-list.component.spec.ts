@@ -5,9 +5,11 @@ import fixtureData from '../../../../../../../fixtures/web-api/ingest-tokens-lis
 import { SecretReferenceListComponent } from './secret-reference-list.component';
 import { ROTATION_CLOCK } from './rotation-reminder-chip.component';
 import { SECRET_DESKTOP_PROVIDER } from './secrets-page.testing';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 
 const base = fixtureData.body.items[0] as IngestTokenView;
 describe('SecretReferenceListComponent metadata boundary (AC3)', () => {
+  provideLayoutTestStubs();
   beforeEach(() => TestBed.configureTestingModule({ providers: [SECRET_DESKTOP_PROVIDER] }));
   afterEach(() => {
     TestBed.resetTestingModule();
@@ -82,7 +84,7 @@ describe('SecretReferenceListComponent metadata boundary (AC3)', () => {
     ).toEqual(names.map((name) => `Rotate credential ${name}`));
     expect(root.querySelector('strong')).toBeNull();
   });
-  it('renders 20 seeded metadata rows but never any decoy full-length value, including attributes', () => {
+  it('renders 20 seeded metadata rows but never any decoy full-length value, including attributes', async () => {
     TestBed.configureTestingModule({
       providers: [{ provide: ROTATION_CLOCK, useValue: () => new Date('2026-10-25T00:00:00Z') }],
     });
@@ -98,13 +100,20 @@ describe('SecretReferenceListComponent metadata boundary (AC3)', () => {
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelectorAll('[data-secret-reference]')).toHaveLength(20);
-    for (const row of rows) {
+    const inspect = root.querySelectorAll<HTMLButtonElement>('[data-secret-inspect]');
+    for (const [index, row] of rows.entries()) {
       expect(root.outerHTML).not.toContain(row.secret);
       expect(root.textContent).toContain(row.name);
       expect(root.textContent).toContain(row.prefix);
-      for (const scope of row.scopes) expect(root.textContent).toContain(scope);
+      inspect[index]?.click();
+      await fixture.whenStable();
+      const detail = document.querySelector('[role="dialog"]');
+      expect(detail?.outerHTML).not.toContain(row.secret);
+      for (const scope of row.scopes) expect(detail?.textContent).toContain(scope);
+      expect(detail?.querySelector('time')?.getAttribute('datetime')).toBeTruthy();
+      detail?.querySelector<HTMLButtonElement>('button[hlmDialogClose]')?.click();
+      await fixture.whenStable();
     }
-    expect(root.querySelector('time')?.getAttribute('datetime')).toBeTruthy();
     expect(root.querySelector('[data-rotate]')).toBeNull();
   });
   it('offers Rotate only for active rows when write permission is supplied', () => {
@@ -135,7 +144,9 @@ describe('SecretReferenceListComponent metadata boundary (AC3)', () => {
     const button = root.querySelector<HTMLButtonElement>('[data-rotate]');
     const rotate = vi.fn();
     fixture.componentInstance.rotate.subscribe(rotate);
-    expect(root.querySelector('[data-secret-reference]')?.getAttribute('data-slot')).toBe('card');
+    expect(root.querySelector('[data-secret-reference]')?.getAttribute('data-slot')).toBe(
+      'table-row',
+    );
     expect(button?.getAttribute('data-slot')).toBe('button');
     expect(button?.type).toBe('button');
     expect(root.querySelector('[data-secret-reference] h3')?.textContent).toBe(

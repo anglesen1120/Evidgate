@@ -231,7 +231,7 @@ internal sealed class QueueAuthoringChangeCommandHandler(
             return Result.Failure<QueuedAuthoringChangeResponse>(reasoned);
         }
 
-        return await InsertAsync(db, orgId, projectId, request, versions, author.Value, audit, cancellationToken)
+        return await InsertAsync(db, scopes.Require(), orgId, projectId, request, versions, author.Value, audit, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -408,6 +408,7 @@ internal sealed class QueueAuthoringChangeCommandHandler(
     /// </summary>
     private static async ValueTask<Result<QueuedAuthoringChangeResponse>> InsertAsync(
         ITenantDb db,
+        ITenantScope scope,
         Guid orgId,
         Guid projectId,
         QueueRequest request,
@@ -444,7 +445,8 @@ internal sealed class QueueAuthoringChangeCommandHandler(
             }
 
             audit.Describe(new AuditObject("authoring_change", id.ToString("D")));
-            EvidgateTelemetry.RecordAuthoringChangeQueued(request.Payload.ChangeType);
+            var changeType = request.Payload.ChangeType;
+            scope.AfterCommit(() => EvidgateTelemetry.RecordAuthoringChangeQueued(changeType));
 
             var baseVersion = TargetVersion(versions, request.TargetId);
 

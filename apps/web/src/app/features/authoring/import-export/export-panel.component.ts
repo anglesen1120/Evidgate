@@ -11,10 +11,12 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard, HlmCardContent, HlmCardHeader } from '@evidgate/ui/card';
 import { HlmCheckbox } from '@evidgate/ui/checkbox';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
+import { HlmTableImports } from '@evidgate/ui/table';
 import { DesktopMutationDirective } from '../../../shared/ui/narrow/desktop-mutation.directive';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { DesktopRequiredNoticeComponent } from '../../../shared/ui/narrow/desktop-required-notice.component';
@@ -25,7 +27,7 @@ import { ExportConfirmDialogComponent } from './export-confirm-dialog.component'
 import { ExportStore } from './export.store';
 import { EXPORT_COPY } from './export.copy';
 import type { AuthoringDownload } from './import-export-data.service';
-import { IMPEX_COPY } from './import-export.copy';
+import { IMPEX_COPY, IMPORT_FIELD_LABELS } from './import-export.copy';
 import { IMPORT_COLUMNS } from './local-file-preview';
 
 /** Keep the object URL alive long enough for Safari and Firefox to start the download. */
@@ -63,10 +65,14 @@ export function downloadExportFile(
   imports: [
     FormsModule,
     HlmButton,
+    HlmCard,
+    HlmCardContent,
+    HlmCardHeader,
     HlmCheckbox,
     HlmInput,
     HlmLabel,
     HlmSelectImports,
+    HlmTableImports,
     DesktopMutationDirective,
     DesktopRequiredNoticeComponent,
     SectionHeaderComponent,
@@ -89,6 +95,7 @@ export class ExportPanelComponent {
   private readonly notice = viewChild<ElementRef<HTMLElement>>('exportNarrowNotice');
   protected readonly formats = ['csv', 'json', 'xlsx'] as const;
   protected readonly columns = IMPORT_COLUMNS;
+  protected readonly fieldLabels = IMPORT_FIELD_LABELS;
   protected readonly kinds = [
     { value: 'nodes', label: this.copy.nodes },
     { value: 'items', label: this.copy.items },

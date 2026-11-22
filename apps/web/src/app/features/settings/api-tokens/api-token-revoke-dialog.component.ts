@@ -11,6 +11,7 @@ import {
 import type { ApiTokenView } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { createIntent, type Intent } from '../../../core/http/intent';
 import { ApiTokensStore } from './api-tokens.store';
 import { API_TOKENS_WRITE_COPY } from './api-tokens-write.copy';
@@ -22,7 +23,13 @@ import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-
 
 @Component({
   selector: 'app-api-token-revoke-dialog',
-  imports: [HlmButton, HlmDialogImports, ApiTokenWriteErrorComponent, ApiTokenFactsComponent],
+  imports: [
+    HlmButton,
+    HlmDialogImports,
+    HlmIcon,
+    ApiTokenWriteErrorComponent,
+    ApiTokenFactsComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <hlm-dialog
@@ -39,14 +46,23 @@ import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-
         *hlmDialogPortal
         [showCloseButton]="false"
         data-api-revoke-dialog
-        class="max-h-[calc(100dvh-var(--eg-space-10))] overflow-y-auto wrap-anywhere"
+        [size]="'lg'"
+        class="wrap-anywhere"
         (keydown.escape)="escape($event)"
       >
         <header hlmDialogHeader>
-          <h2 hlmDialogTitle>{{ copy.revokeTitle }}</h2>
+          <h2 hlmDialogTitle class="flex items-center gap-2">
+            <hlm-icon [name]="'lucideTriangleAlert'" class="size-5 text-(--eg-danger-fg)" />
+            {{ copy.revokeTitle }}
+          </h2>
         </header>
         <p hlmDialogDescription>{{ copy.revokeWarning }}</p>
-        <p class="wrap-anywhere">{{ projectLabel }}: {{ projectName() }}</p>
+        <p class="m-0 wrap-anywhere">
+          <strong
+            ><bdi>{{ row().name }}</bdi></strong
+          >
+          · {{ projectLabel }}: <bdi>{{ projectName() }}</bdi>
+        </p>
         <app-api-token-facts [row]="row()" />
         <app-api-token-write-error [error]="store.revokeError()" />
         <footer hlmDialogFooter class="mt-3">

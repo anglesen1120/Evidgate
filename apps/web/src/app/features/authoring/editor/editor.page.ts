@@ -1,4 +1,4 @@
-import { DOCUMENT } from '@angular/common';
+import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
 import {
   afterRenderEffect,
   ChangeDetectionStrategy,
@@ -14,12 +14,13 @@ import {
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmCardTitle } from '@evidgate/ui/card';
+import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
 import { HlmTabsImports } from '@evidgate/ui/tabs';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { createFormFeedback } from '../../../shared/forms/form-feedback';
 import { FieldFeedbackComponent } from '../../../shared/forms/field-feedback.component';
 import { FormErrorSummaryComponent } from '../../../shared/forms/form-error-summary.component';
@@ -27,14 +28,13 @@ import {
   FieldRequirementComponent,
   FormRequiredNoteComponent,
 } from '../../../shared/forms/form-requirement.component';
-import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { ConflictDialogComponent } from '../../../shared/ui/conflict/conflict-dialog.component';
 import { PageHeaderComponent } from '../../../shared/ui/page-header/page-header.component';
 import { DesktopRequiredNoticeComponent, NarrowMutationPolicy } from '../../../shared/ui/narrow';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
-import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
-import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { ChecklistReviewTabComponent } from '../pending-changes/checklist-review-tab.component';
+import { EditorReadonlyValuesComponent } from './editor-readonly-values.component';
+import { EditorRecordSummaryComponent } from './editor-record-summary.component';
 import { EditorStore } from './editor.store';
 import { TimelineComponent } from './timeline.component';
 import {
@@ -50,13 +50,6 @@ import {
   type CaseTextField,
   type StepTextField,
 } from './editor.model';
-
-/** Tab labels the narrow panel select shows; the tab list carries the same translations. */
-const PANEL_LABELS: Readonly<Record<string, string>> = {
-  editor: $localize`:@@authoring.editor.editor-tab:Editor`,
-  review: $localize`:@@authoring.editor.review-tab-label:Checklist review`,
-  timeline: $localize`:@@authoring.editor.timeline-tab:Timeline`,
-};
 
 /** Conflict comparison must show stored values, so an omitted optional field equals an explicit null. */
 function stepsSnapshot(
@@ -79,7 +72,9 @@ function stepsSnapshot(
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     FormsModule,
+    NgTemplateOutlet,
     HlmButton,
+    HlmCard,
     HlmCardTitle,
     HlmDialogImports,
     HlmInput,
@@ -90,18 +85,19 @@ function stepsSnapshot(
     FormErrorSummaryComponent,
     FormRequiredNoteComponent,
     FieldRequirementComponent,
-    AbsoluteTimeComponent,
     ConflictDialogComponent,
     PageHeaderComponent,
     DesktopRequiredNoticeComponent,
     RequestStateComponent,
-    CopyableIdentifierComponent,
-    StatusPillComponent,
+    EditorReadonlyValuesComponent,
+    EditorRecordSummaryComponent,
+    ShellIconComponent,
     TimelineComponent,
     ChecklistReviewTabComponent,
   ],
   providers: [EditorStore],
   templateUrl: './editor.page.html',
+  styleUrl: './editor.page.css',
   host: {
     class: 'block min-w-0 text-foreground',
     '(focusin)': 'rememberFocus($event)',
@@ -122,16 +118,9 @@ export class EditorPage {
   protected readonly fields = CASE_FIELDS;
   protected readonly stepFields = STEP_FIELDS;
   protected readonly priorities = PRIORITIES;
-  protected readonly lifecycleLabel = $localize`:@@authoring.editor.lifecycle:Status`;
-  protected readonly lifecycle = {
-    draft: $localize`:@@authoring.editor.lifecycle-draft:Draft`,
-    approved: $localize`:@@authoring.editor.lifecycle-approved:Approved`,
-    retired: $localize`:@@authoring.editor.lifecycle-retired:Retired`,
-  };
   protected readonly reasonUnavailable = REASON_UNAVAILABLE;
   protected readonly writeReason = WRITE_REASON;
   protected readonly count = codePoints;
-  protected readonly notSet = $localize`:@@authoring.editor.not-set:Not set`;
   protected readonly errorOf = errorOf;
   protected readonly tab = linkedSignal({ source: this.store.scope, computation: () => 'editor' });
   protected readonly reviewVisited = linkedSignal({
@@ -146,8 +135,13 @@ export class EditorPage {
       ? (this.store.base()?.view.title ?? $localize`:@@authoring.editor.page-title:Case editor`)
       : $localize`:@@authoring.editor.page-title:Case editor`,
   );
-  protected readonly intro = $localize`:@@authoring.editor.intro:Edit an existing manual case. Saving appends a version; past versions remain unchanged.`;
-  protected readonly codeLabel = $localize`:@@authoring.editor.case-code:Case code`;
+  protected readonly intro = computed(() => {
+    const view = this.store.base()?.view;
+    return this.status() === 'ready' && view
+      ? `${view.code} · ${$localize`:@@authoring.editor.version-column:Version`}: ${view.version}`
+      : $localize`:@@authoring.editor.intro:Edit an existing manual case. Saving appends a version; past versions remain unchanged.`;
+  });
+  protected readonly contentTitle = $localize`:@@authoring.editor.case-content:Case content`;
   protected readonly status = computed(() => {
     const error = errorOf(this.store.head.error());
     if (
@@ -171,6 +165,7 @@ export class EditorPage {
   );
   protected readonly readonlyHeading = viewChild<ElementRef<HTMLElement>>('readonlyHeading');
   private readonly timeline = viewChild(TimelineComponent);
+  private readonly tabStrip = viewChild<ElementRef<HTMLElement>>('tabStrip');
   private lastFocused: Element | null = null;
   private leaveDecision: ((answer: boolean) => void) | undefined;
   private readonly stepIds = computed(
@@ -230,11 +225,20 @@ export class EditorPage {
   });
   constructor() {
     this.destroy.onDestroy(() => this.leaveDecision?.(false));
+    afterRenderEffect((onCleanup) => {
+      const strip = this.tabStrip()?.nativeElement;
+      if (!strip) return;
+      const observer = new ResizeObserver(() => this.revealActiveTab());
+      observer.observe(strip);
+      onCleanup(() => observer.disconnect());
+    });
+    afterRenderEffect(() => {
+      this.tab();
+      this.revealActiveTab();
+    });
     afterRenderEffect(() => {
       const narrow = this.viewport.narrow();
-      if (narrow && this.lastFocused?.closest('[role="tablist"]'))
-        this.document.getElementById('case-panel-select')?.focus();
-      else if (narrow && this.lastFocused && !this.document.contains(this.lastFocused))
+      if (narrow && this.lastFocused && !this.document.contains(this.lastFocused))
         this.readonlyHeading()?.nativeElement.focus();
       const step = this.focusStep();
       if (!narrow && step !== null) {
@@ -245,6 +249,18 @@ export class EditorPage {
         ? this.document.activeElement
         : null;
     });
+  }
+  private revealActiveTab(): void {
+    const strip = this.tabStrip()?.nativeElement;
+    if (strip) this.revealTab(strip, strip.querySelector('[aria-selected="true"]'));
+  }
+  protected revealTab(strip: HTMLElement, target: EventTarget | null): void {
+    if (!(target instanceof HTMLElement) || strip.scrollWidth <= strip.clientWidth) return;
+    const bounds = strip.getBoundingClientRect();
+    const tab = target.getBoundingClientRect();
+    const inset = parseFloat(getComputedStyle(strip).paddingInlineStart) || 0;
+    if (tab.left < bounds.left + inset) strip.scrollLeft += tab.left - bounds.left - inset;
+    else if (tab.right > bounds.right - inset) strip.scrollLeft += tab.right - bounds.right + inset;
   }
   protected rememberFocus(event: FocusEvent): void {
     this.lastFocused = event.target instanceof Element ? event.target : null;
@@ -280,9 +296,6 @@ export class EditorPage {
   protected priorityLabel(value: string): string {
     return PRIORITIES.find((priority) => priority.value === value)?.label ?? value;
   }
-  /** The narrow panel select shows the tab's label, not the raw wire value it closes over. */
-  protected readonly panelLabel = (value: string): string => PANEL_LABELS[value] ?? value;
-  protected readonly panelSelectLabel = $localize`:@@authoring.editor.choose-panel:Choose a section`;
   protected readonly prioritySelectLabel = $localize`:@@authoring.editor.priority:Priority`;
   protected changePriority(value: unknown): void {
     const priority = PRIORITIES.find((entry) => entry.value === value);

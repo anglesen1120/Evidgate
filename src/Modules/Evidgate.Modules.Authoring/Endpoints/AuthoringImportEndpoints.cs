@@ -93,6 +93,9 @@ internal static class AuthoringImportEndpoints
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        // Refuse an unresolved caller before the query is validated.
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
+
         if (ImportFormats.ReadFormat(context.Request.Query["format"].ToString()) is not { } format)
         {
             return Result.Failure<ImportResponse>(ImportFormats.Unsupported());
@@ -129,27 +132,32 @@ internal static class AuthoringImportEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+        RawBodyGuard.RequireAuthenticatedTenant(context.RequestServices);
 
-        if (ImportFormats.ReadFormat(context.Request.Query["format"].ToString()) is not { } format)
+        var format = ImportFormats.ReadFormat(context.Request.Query["format"].ToString());
+
+        if (format is null)
         {
-            return Result.Failure<IResult>(ImportFormats.Unsupported());
+            // The pipeline authorizes the caller before the handler answers the query error.
+            return await mediator.Send(
+                new ExportAuthoringQuery(p, string.Empty, null, ImportInclude.None, ImportFormats.Unsupported()),
+                cancellationToken).ConfigureAwait(false);
         }
 
-        if (AuthoringEndpointText.OptionalId(context.Request.Query, "node_id", out var nodeId) is { } nodeError)
+        Guid? nodeId = null;
+        var include = ImportInclude.None;
+        var requestError = AuthoringEndpointText.OptionalId(context.Request.Query, "node_id", out nodeId);
+        requestError ??= ImportFormats.Include(context.Request.Query["include"].ToString(), out include);
+
+        if (requestError is null)
         {
-            return Result.Failure<IResult>(nodeError);
+            // An export belongs to this response only: never stored, never served from a cache.
+            context.Response.Headers[HeaderNames.CacheControl] = "no-store";
         }
 
-        if (ImportFormats.Include(context.Request.Query["include"].ToString(), out var include) is { } includeError)
-        {
-            return Result.Failure<IResult>(includeError);
-        }
-
-        // An export is generated for this response only: never stored, never served from a cache (13.1.1 AC14).
-        context.Response.Headers[HeaderNames.CacheControl] = "no-store";
-
-        return await mediator.Send(new ExportAuthoringQuery(p, format, nodeId, include), cancellationToken)
-            .ConfigureAwait(false);
+        return await mediator.Send(
+            new ExportAuthoringQuery(p, format, nodeId, include, requestError),
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

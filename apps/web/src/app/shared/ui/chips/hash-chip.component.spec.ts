@@ -37,6 +37,7 @@ describe('HashChipComponent', () => {
       await fixture.whenStable();
       const root = fixture.nativeElement as HTMLElement;
       const badge = root.querySelector('[hlmBadge]');
+      expect(badge?.querySelector('hlm-icon[aria-hidden="true"] svg')).not.toBeNull();
       expect(root.querySelector('.identity-chip__value')?.textContent).toBe(visible);
       expect(badge?.getAttribute('data-full-value')).toBe(HASH);
       expect(badge?.classList.contains('font-mono')).toBe(true);

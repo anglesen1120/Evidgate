@@ -1,0 +1,114 @@
+<section hlmCard class="min-w-0">
+  <header hlmCardHeader class="flex flex-wrap items-center justify-between gap-2 border-b">
+    <h2 hlmCardTitle [size]="'section'">{{ c.original }}</h2>
+    <span class="rounded-sm bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">{{
+      text.pinned
+    }}</span>
+  </header>
+  <div hlmCardContent class="grid min-w-0 gap-2 [&_p]:m-0">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <code>{{ text.attemptPath }}</code>
+      <app-status-pill [label]="c.failed" [tone]="'danger'" />
+    </div>
+    <p class="text-xs text-muted-foreground">
+      {{ text.caseContext }}
+      <time datetime="2026-10-13T09:42:06Z">{{ text.originalTime }}</time>
+    </p>
+    <app-inline-feedback
+      [tone]="'destructive'"
+      [title]="c.normalized"
+      [description]="r.message"
+      [announcement]="'off'"
+    />
+    <p class="text-xs text-muted-foreground">
+      {{ text.rawLabel }} <code>{{ ev.raw }}</code> {{ text.requestTiming }}
+    </p>
+    @if (state() === 'infra') {
+      <app-inline-feedback [title]="c.infra" [description]="c.infraBody" [tone]="'destructive'" />
+    }
+    <dl
+      class="m-0 grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-x-3 gap-y-1 text-xs [&_dd]:m-0 [&_dd]:font-medium [&_dt]:text-muted-foreground"
+    >
+      <dt>{{ c.manifest }}</dt>
+      <dd>{{ ev.manifest }}</dd>
+      <dt>{{ c.policy }}</dt>
+      <dd>{{ ev.build }}</dd>
+      <dt>{{ text.outcomeLabel }}</dt>
+      <dd>
+        <code>{{ text.outcome }}</code>
+      </dd>
+      <dt>{{ text.decisionLabel }}</dt>
+      <dd>
+        <strong>{{ text.decision }}</strong>
+      </dd>
+    </dl>
+    <a
+      hlmBtn
+      [variant]="'outline'"
+      class="justify-self-start"
+      [routerLink]="historyPath()"
+      [queryParams]="{ id: r.caseId }"
+      >{{ text.historyLink }}</a
+    >
+  </div>
+</section>
+@if (state() === 'nomatch') {
+  <app-inline-feedback [title]="c.nomatch" [actionLabel]="c.clear" (action)="clearFilter.emit()" />
+} @else if (state() !== 'infra') {
+  <section hlmCard>
+    <header hlmCardHeader class="border-b">
+      <h2 hlmCardTitle [size]="'section'">{{ c.chronology }}</h2>
+    </header>
+    <div hlmCardContent class="grid min-w-0 gap-3">
+      <ol class="m-0 list-disc space-y-2 ps-4">
+        @for (step of ev.steps; track step[1]) {
+          <li>
+            <div class="flex flex-wrap justify-between gap-2">
+              <strong>{{ step[0] }}</strong
+              ><time class="text-xs text-muted-foreground tabular-nums">{{ step[1] }}</time>
+            </div>
+          </li>
+        }
+      </ol>
+      <h3 class="m-0 border-t border-border pt-3 font-semibold">{{ c.log }}</h3>
+      <pre class="m-0 min-w-0 rounded-md bg-secondary p-3 text-xs whitespace-pre-wrap">{{
+        text.logExcerpt
+      }}</pre>
+    </div>
+  </section>
+}
+<section hlmCard>
+  <header hlmCardHeader class="border-b">
+    <h2 hlmCardTitle [size]="'section'">{{ text.artifactsHeading }}</h2>
+  </header>
+  <div hlmCardContent class="grid min-w-0 gap-3 [&_p]:m-0">
+    <strong>{{ text.screenshotLabel }}</strong>
+    <p>{{ text.screenshotDetails }}</p>
+    <a
+      hlmBtn
+      [variant]="'outline'"
+      class="justify-self-start"
+      [routerLink]="artifactPath()"
+      [queryParams]="{ id: ev.screenshot }"
+      >{{ c.artifact }}</a
+    >
+    <p>{{ text.trace }}</p>
+    <p>{{ text.dom }}</p>
+    <p>{{ text.scan }} <app-status-pill [tone]="'neutral'" [label]="c.scan" /></p>
+  </div>
+</section>
+<section hlmCard>
+  <header hlmCardHeader class="border-b">
+    <h2 hlmCardTitle [size]="'section'">{{ c.attempts }}</h2>
+  </header>
+  <ol hlmCardContent class="grid gap-3">
+    <li>
+      <code>{{ text.firstAttempt }}</code> <app-status-pill [label]="c.failed" [tone]="'danger'" />
+      {{ text.firstTiming }}
+    </li>
+    <li>
+      <code>{{ text.retryAttempt }}</code> <app-status-pill [label]="c.passed" [tone]="'success'" />
+      {{ text.retryTiming }}
+    </li>
+  </ol>
+</section>

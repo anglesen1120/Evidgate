@@ -8,6 +8,13 @@
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Catalog\Evidgate.Modules.Catalog.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- The one capture helper every test project links, not a project reference: the GitHub
+         tests must assert on exactly what a log sink would persist. -->
+    <Compile Include="..\Shared\CapturingLoggerProvider.cs" Link="CapturingLoggerProvider.cs" />
+    <!-- Template tests read the packaged template and the golden verdict fixture from the repository. -->
+    <Compile Include="..\Shared\RepositoryPaths.cs" Link="RepositoryPaths.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- The App client is composed through AddHttpClient and IOptions, so the test host needs the
          shared framework; no container package is referenced and no test opens a socket. -->
     <FrameworkReference Include="Microsoft.AspNetCore.App" />

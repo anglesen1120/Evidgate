@@ -235,9 +235,12 @@ for (const locale of LOCALES) {
       HEAD_ID,
       afterPublish.body.items.length,
     );
-    const selectedHead = page.locator(`${HEAD_ROW} [data-policy-select]`);
+    const selectedHead = page.locator(`${HEAD_ROW} [data-policy-view]`);
     await selectedHead.click();
-    await expect(selectedHead).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('dialog').locator('[data-policy-selected-metadata]')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(selectedHead).toBeFocused();
+    await expect(page.locator(HEAD_ROW)).toHaveAttribute('data-policy-selected', '');
     await page.locator('#policy-diff-base').click();
     await page.getByRole('listbox').locator(`[data-value="${HEAD_ID}"]`).click();
     const dialog = await openPublish(page, PUBLISHED_SEED);
@@ -428,6 +431,7 @@ for (const locale of LOCALES) {
     await expect(opener).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveCSS('width', '760px');
     await expect(dialog.locator(BODY)).toHaveValue(SEED);
     await expect.poll(() => focusInside(page, DIALOG)).toBe(true);
     // Two full cycles over the dialog's three stops (body, Cancel, Publish) prove the wrapping edge.

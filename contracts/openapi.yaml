@@ -4948,6 +4948,17 @@ paths:
       operationId: approveSupportGrant
       tags: [support]
       summary: Approve a support grant; approver is a `tenant_admin` of the target org ≠ requester
+      description: >-
+        No request body. The approver is taken only from the authenticated principal and must be an
+        active member holding the built-in `tenant_admin` role of the grant's organization, distinct
+        from the requester. Returns 200 with no body. Missing permission is 403 `forbidden`; an
+        ineligible approver is 403 `approver_not_tenant_admin`; a missing grant or one of another org
+        is 404 `not_found`; a grant no longer requested is 409 `grant_not_requested`; self-approval
+        is 422 `approver_must_differ`. A missing or over-long `Idempotency-Key` is 400
+        `request_invalid` and wrote nothing; a key already used for a different grant is 409
+        `idempotency_conflict`. A concurrent decision that changed the row first is 412
+        `precondition_failed`; a lock wait that deadlocked or timed out is the retryable 503
+        `unavailable`, as is a busy audit chain, and neither wrote anything.
       x-permission: support:approve
       x-version: v1
       parameters:
@@ -4960,6 +4971,8 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -4968,6 +4981,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
         '422':
           $ref: '#/components/responses/Unprocessable'
         '429':
@@ -4980,9 +4995,14 @@ paths:
       tags: [support]
       summary: Revoke a support grant
       description: >-
-        Permission: 00 §9.3 lists `support:grant` / `support:approve` for the
-        `approve|revoke` route pair; `support:approve` is carried here pending
-        CR clarification.
+        No request body. Any holder of `support:approve` in the grant's organization may revoke a
+        requested or approved grant; the caller need not be its approver. Returns 200 with no body.
+        A missing grant or one of another org is 404 `not_found`; a previously revoked grant is
+        409 `grant_already_revoked`. A missing or over-long `Idempotency-Key` is 400
+        `request_invalid` and wrote nothing; a key already used for a different grant is 409
+        `idempotency_conflict`. A concurrent decision that changed the row first is 412
+        `precondition_failed`, and it wrote nothing either. A busy audit chain answers the
+        retryable 503 `unavailable` with `Retry-After`, also without a write.
       x-permission: support:approve
       x-version: v1
       parameters:
@@ -4995,6 +5015,8 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -5003,6 +5025,48 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /orgs/{o}/support-grants:
+    get:
+      operationId: listSupportGrants
+      tags: [support]
+      summary: Cursor page of the support grants of the organization
+      description: >-
+        Keyset-ordered on `(created_at, id)` descending. State is derived from approval, revocation
+        and expiry timestamps: requested, approved, revoked or expired. An authenticated caller who
+        is not an active member of the organization named in the path is refused at tenant
+        resolution with 403 `forbidden` (the same body for an unknown org, so the answer never
+        discloses which org ids exist); 404 `not_found` is answered only for a resolved tenant that
+        differs from `{o}`, such as a service credential bound to another org.
+      x-permission: support:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of support grants
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportGrantList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -5318,6 +5382,267 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/drafts:
+    post:
+      operationId: createDraft
+      tags: [catalog]
+      summary: Create a project draft
+      description: >-
+        Creates an editable draft at version 1; `ETag` is the quoted version. The author is the caller's
+        active membership, never a body member; no active membership is 403 `draft_author_required`.
+        Authentication and authorization precede field validation (a body that is not JSON, is over
+        256 KiB or carries unstorable text is refused by the body reader before the permission check). Invalid fields are 422 `draft_invalid`
+        with the field named in `error.details`; a body over 256 KiB is 413. A missing project and an
+        other-tenant project both answer 404 `not_found`. Missing or invalid `Idempotency-Key` is
+        400 `request_invalid`; reusing a key for a different request is 409 `idempotency_conflict`.
+      x-permission: draft:write
+      x-version: v1
+      x-max-bytes: 262144
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDraftRequest'
+      responses:
+        '201':
+          description: The created draft
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DraftDto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    get:
+      operationId: listDrafts
+      tags: [catalog]
+      summary: Cursor page of project drafts
+      description: >-
+        Ordered by `(created_at, id)` with an optional status filter. Items are summaries: no `content`,
+        a `file_count` instead; `GET /drafts/{d}` returns the file set. Authentication and authorization
+        precede query validation. An unknown `status` is 422 `draft_invalid` naming the field; a malformed
+        cursor or an out-of-range limit is 422 `request_invalid` with the member named.
+        A missing project and an other-tenant project both answer 404 `not_found`.
+      x-permission: case:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/DraftStatusFilter'
+      responses:
+        '200':
+          description: Page of drafts
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DraftListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /drafts/{d}:
+    get:
+      operationId: getDraft
+      tags: [catalog]
+      summary: One draft with its version ETag
+      description: >-
+        Permission is evaluated against the draft's own project. Unknown and other-tenant ids both
+        answer 404 `not_found`; permission in another project grants no access. `ETag` is the quoted version.
+      x-permission: case:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/DraftId'
+      responses:
+        '200':
+          description: The draft
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DraftDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    patch:
+      operationId: updateDraft
+      tags: [catalog]
+      summary: Replace editable draft content under If-Match
+      description: >-
+        Permission is evaluated against the draft's own project before field validation or `If-Match`
+        parsing (a body that is not JSON, over 256 KiB or with unstorable text is refused by the body reader first). Unknown and other-tenant ids both answer 404 `not_found`; permission in another project
+        grants no access. Only `draft` status permits content changes; otherwise 409 `draft_state_conflict`.
+        Missing or malformed `If-Match` is 422 `request_invalid` with an `If-Match` detail (`required` when
+        missing); stale is 412 `precondition_failed` with the current `version` in `error.details`.
+        A successful update increments version by one and returns its quoted value as `ETag`.
+        Invalid content is 422 `draft_invalid` naming the field; a body over 256 KiB is 413.
+        Missing or invalid `Idempotency-Key` is 400 `request_invalid`; reusing a key for a different
+        request is 409 `idempotency_conflict`.
+      x-permission: draft:write
+      x-version: v1
+      x-max-bytes: 262144
+      parameters:
+        - $ref: '#/components/parameters/DraftId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDraftRequest'
+      responses:
+        '200':
+          description: The updated draft
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DraftDto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /templates:
+    get:
+      operationId: listTemplates
+      tags: [catalog]
+      summary: Cursor page of active templates
+      description: >-
+        Active built-ins (`org_id IS NULL`) are visible to every member role, plus the caller's own org rows;
+        an inactive row and another org's row are invisible. Ordered by `(created_at, id)` with optional kind,
+        platform, level and purpose filters. Authentication and authorization precede query validation: an unknown
+        kind, an unknown taxonomy value, a malformed cursor or an out-of-range limit is 422 `request_invalid` with the
+        member named.
+      x-permission: case:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/TemplateKindFilter'
+        - $ref: '#/components/parameters/PlatformFilter'
+        - $ref: '#/components/parameters/LevelFilter'
+        - $ref: '#/components/parameters/PurposeFilter'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of templates
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /templates/{t}:
+    get:
+      operationId: getTemplate
+      tags: [catalog]
+      summary: One active template with its conformance rules
+      description: >-
+        An active built-in or the caller's own org row; an inactive row, another org's row and an unknown id
+        all answer 404 `not_found`, so the id alone never tells a caller whether a row exists.
+      x-permission: case:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/TemplateId'
+      responses:
+        '200':
+          description: The template
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateDetailDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -9047,20 +9372,36 @@ components:
       name: platform
       in: query
       required: false
-      description: Only suites of this platform (03.1.4 AC3); an unknown value is a 422.
+      description: Only rows of this platform (03.1.4 AC3); an unknown value is a 422.
       schema: { $ref: './schemas/taxonomy.v1.json#/$defs/platform' }
     LevelFilter:
       name: level
       in: query
       required: false
-      description: Only suites of this level; an unknown value is a 422.
+      description: Only rows of this level (03.1.4 AC3); an unknown value is a 422.
       schema: { $ref: './schemas/taxonomy.v1.json#/$defs/level' }
     PurposeFilter:
       name: purpose
       in: query
       required: false
-      description: Only suites of this purpose; an unknown value is a 422.
+      description: Only rows of this purpose (03.1.4 AC3); an unknown value is a 422.
       schema: { $ref: './schemas/taxonomy.v1.json#/$defs/purpose' }
+    DraftStatusFilter:
+      name: status
+      in: query
+      required: false
+      description: Only drafts in this state; an unknown value is a 422 `draft_invalid`.
+      schema:
+        type: string
+        enum: [draft, dry_running, dry_passed, dry_failed, pr_open, merged, closed]
+    TemplateKindFilter:
+      name: kind
+      in: query
+      required: false
+      description: Only templates of this kind; an unknown value is a 422 `request_invalid`.
+      schema:
+        type: string
+        enum: [web, api, unit, mobile]
     PolicyRevisionCursor:
       name: cursor
       in: query
@@ -9454,6 +9795,13 @@ components:
         maximum: 500
     DraftId:
       name: d
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TemplateId:
+      name: t
       in: path
       required: true
       schema:
@@ -11959,6 +12307,223 @@ components:
       description: >-
         Any JSON value. The served document names the .NET `JsonElement` this way; the members that use it (variant
         `params`, the three strategy documents) say what they hold in their own description.
+    DraftFileDto:
+      type: object
+      required: [path, body_sha, body_ref]
+      additionalProperties: false
+      properties:
+        path:
+          type: string
+          minLength: 1
+          maxLength: 512
+          pattern: '^(?!/)(?!.*(?:^|/)\.\.(?:/|$))[^\\\u0000-\u001f\u007f-\u009f]+$'
+          description: Relative path with no leading slash, backslash, parent segment or control character.
+        body_sha: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        body_ref:
+          type: string
+          minLength: 1
+          maxLength: 512
+          pattern: '^[^\u0000-\u001f\u007f-\u009f]+$'
+          description: Body pointer; the body itself is not embedded in a draft.
+    DraftContentDto:
+      type: object
+      required: [files]
+      additionalProperties: false
+      description: >-
+        The draft's file set, at most 256 KiB of JSON on the wire. File paths must be unique within this
+        draft; duplicate paths are rejected by server validation even when their body pointers differ.
+      properties:
+        files:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items: { $ref: '#/components/schemas/DraftFileDto' }
+    DraftDto:
+      type: object
+      required:
+        - id
+        - project_id
+        - author_membership_id
+        - kind
+        - base_commit
+        - status
+        - version
+        - content
+        - provenance
+        - ai_run_id
+        - dry_run_id
+        - allow_unverified
+        - unverified_reason
+        - pr_branch
+        - pr_commit_sha
+        - pr_url
+        - pr_number
+        - linked_case_id
+        - linked_revision_id
+        - created_at
+        - updated_at
+      properties:
+        id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        author_membership_id: { type: string, format: uuid }
+        kind: { type: string, enum: [template, ai, regression] }
+        base_commit: { type: string, pattern: '^[0-9a-f]{7,64}$' }
+        status:
+          type: string
+          enum: [draft, dry_running, dry_passed, dry_failed, pr_open, merged, closed]
+        version: { type: integer, minimum: 1 }
+        content: { $ref: '#/components/schemas/DraftContentDto' }
+        provenance:
+          type: [object, 'null']
+          additionalProperties: true
+          description: >-
+            Optional provenance object (template, AI run or incident reference); server validation caps its
+            UTF-8 JSON at 4096 bytes; a number is at most 64 characters with an exponent of at most 400 in
+            magnitude and the numbers' written-out sizes add up to at most 4096, otherwise 422 `draft_invalid`
+            naming `provenance`. A number outside the IEEE 754 double range is 422 `request_invalid`.
+        ai_run_id: { type: [string, 'null'], format: uuid }
+        dry_run_id: { type: [string, 'null'], format: uuid }
+        allow_unverified: { type: boolean }
+        unverified_reason: { type: [string, 'null'] }
+        pr_branch: { type: [string, 'null'] }
+        pr_commit_sha: { type: [string, 'null'] }
+        pr_url: { type: [string, 'null'] }
+        pr_number: { type: [integer, 'null'] }
+        linked_case_id: { type: [string, 'null'], format: uuid }
+        linked_revision_id: { type: [string, 'null'], format: uuid }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    DraftSummaryDto:
+      type: object
+      description: >-
+        A draft without its `content`; only `GET /drafts/{d}` returns the file set.
+      required:
+        - id
+        - project_id
+        - author_membership_id
+        - kind
+        - base_commit
+        - status
+        - version
+        - file_count
+        - provenance
+        - ai_run_id
+        - dry_run_id
+        - allow_unverified
+        - unverified_reason
+        - pr_branch
+        - pr_commit_sha
+        - pr_url
+        - pr_number
+        - linked_case_id
+        - linked_revision_id
+        - created_at
+        - updated_at
+      properties:
+        id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        author_membership_id: { type: string, format: uuid }
+        kind: { type: string, enum: [template, ai, regression] }
+        base_commit: { type: string, pattern: '^[0-9a-f]{7,64}$' }
+        status:
+          type: string
+          enum: [draft, dry_running, dry_passed, dry_failed, pr_open, merged, closed]
+        version: { type: integer, minimum: 1 }
+        file_count: { type: integer, minimum: 0, maximum: 200 }
+        provenance:
+          type: [object, 'null']
+          additionalProperties: true
+          description: >-
+            Optional provenance object (template, AI run or incident reference); server validation caps its
+            UTF-8 JSON at 4096 bytes; a number is at most 64 characters with an exponent of at most 400 in
+            magnitude and the numbers' written-out sizes add up to at most 4096, otherwise 422 `draft_invalid`
+            naming `provenance`. A number outside the IEEE 754 double range is 422 `request_invalid`.
+        ai_run_id: { type: [string, 'null'], format: uuid }
+        dry_run_id: { type: [string, 'null'], format: uuid }
+        allow_unverified: { type: boolean }
+        unverified_reason: { type: [string, 'null'] }
+        pr_branch: { type: [string, 'null'] }
+        pr_commit_sha: { type: [string, 'null'] }
+        pr_url: { type: [string, 'null'] }
+        pr_number: { type: [integer, 'null'] }
+        linked_case_id: { type: [string, 'null'], format: uuid }
+        linked_revision_id: { type: [string, 'null'], format: uuid }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CreateDraftRequest:
+      type: object
+      required: [kind, base_commit, content]
+      additionalProperties: false
+      x-max-bytes: 262144
+      properties:
+        kind: { type: string, enum: [template, ai, regression] }
+        base_commit: { type: string, pattern: '^[0-9a-f]{7,64}$' }
+        content: { $ref: '#/components/schemas/DraftContentDto' }
+        provenance:
+          type: [object, 'null']
+          additionalProperties: true
+          description: >-
+            Optional provenance object (template, AI run or incident reference); server validation caps its
+            UTF-8 JSON at 4096 bytes; a number is at most 64 characters with an exponent of at most 400 in
+            magnitude and the numbers' written-out sizes add up to at most 4096, otherwise 422 `draft_invalid`
+            naming `provenance`. A number outside the IEEE 754 double range is 422 `request_invalid`.
+    UpdateDraftRequest:
+      type: object
+      required: [content]
+      additionalProperties: false
+      x-max-bytes: 262144
+      properties:
+        content: { $ref: '#/components/schemas/DraftContentDto' }
+    DraftListResponse:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/DraftSummaryDto' }
+        next_cursor: { type: [string, 'null'] }
+    TemplateDto:
+      type: object
+      required: [id, kind, platform, level, purpose, name, version, body_ref, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [web, api, unit, mobile] }
+        platform: { $ref: './schemas/taxonomy.v1.json#/$defs/platform' }
+        level: { $ref: './schemas/taxonomy.v1.json#/$defs/level' }
+        purpose: { $ref: './schemas/taxonomy.v1.json#/$defs/purpose' }
+        name: { type: string, minLength: 1, maxLength: 64, pattern: '^[a-z][a-z0-9-]*$' }
+        version: { type: integer, minimum: 1 }
+        body_ref: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        created_at: { type: string, format: date-time }
+    TemplateDetailDto:
+      type: object
+      required:
+        [id, kind, platform, level, purpose, name, version, body_ref, conformance_rules, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [web, api, unit, mobile] }
+        platform: { $ref: './schemas/taxonomy.v1.json#/$defs/platform' }
+        level: { $ref: './schemas/taxonomy.v1.json#/$defs/level' }
+        purpose: { $ref: './schemas/taxonomy.v1.json#/$defs/purpose' }
+        name: { type: string, minLength: 1, maxLength: 64, pattern: '^[a-z][a-z0-9-]*$' }
+        version: { type: integer, minimum: 1 }
+        body_ref: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        conformance_rules:
+          oneOf:
+            - { type: object, additionalProperties: true }
+            - { type: array, items: {} }
+          description: >-
+            The rules a generated project is checked against: a named set (object) or an ordered list (array),
+            stored as at most 64 KiB of JSON and nested at most 32 levels deep.
+        created_at: { type: string, format: date-time }
+    TemplateListResponse:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/TemplateDto' }
+        next_cursor: { type: [string, 'null'] }
     FixtureDto:
       type: object
       required: [id, org_id, project_id, fixture_key, created_at]
@@ -12593,6 +13158,70 @@ components:
         expires_at:
           type: string
           format: date-time
+    SupportGrant:
+      type: object
+      required:
+        - id
+        - org_id
+        - operator_user_id
+        - scopes
+        - project_ids
+        - reason
+        - state
+        - approved_by
+        - approved_at
+        - expires_at
+        - revoked_at
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        operator_user_id:
+          type: string
+          format: uuid
+        scopes:
+          type: array
+          items:
+            type: string
+        project_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        reason:
+          type: string
+        state:
+          type: string
+          enum: [requested, approved, revoked, expired]
+        approved_by:
+          type: [string, 'null']
+          format: uuid
+        approved_at:
+          type: [string, 'null']
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type: [string, 'null']
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    SupportGrantList:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SupportGrant'
+        next_cursor:
+          type: [string, 'null']
     ApiTokenListResponse:
       type: object
       required: [items, next_cursor]

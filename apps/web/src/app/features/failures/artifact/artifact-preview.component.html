@@ -1,0 +1,101 @@
+<section hlmCard [size]="'sm'" class="min-w-0">
+  <header hlmCardHeader class="border-b border-border">
+    <h2 hlmCardTitle>{{ c.viewer }}</h2>
+    <app-status-pill hlmCardAction [tone]="'neutral'" [label]="c.readOnly" />
+  </header>
+  <div hlmCardContent class="grid min-w-0 gap-3">
+    @if (open()) {
+      @if (state() === 'trace') {
+        <app-status-pill [tone]="'info'" [label]="c.trace" />
+        <p>{{ c.traceHelp }}</p>
+      } @else {
+        <ng-container [ngTemplateOutlet]="capture" />
+      }
+      <div class="flex flex-wrap gap-2">
+        <hlm-dialog [aria-label]="c.inspect" (closed)="viewer.reset()">
+          <button hlmBtn hlmDialogTrigger data-inspect type="button">{{ c.inspect }}</button>
+          <hlm-dialog-content *hlmDialogPortal class="max-h-[85dvh] overflow-auto">
+            <h2 hlmDialogTitle>{{ c.inspect }}</h2>
+            <p hlmDialogDescription>{{ record().id }} · {{ record().kind }}</p>
+            @if (state() === 'trace') {
+              <div class="flex flex-wrap gap-2" role="group" [attr.aria-label]="c.traceStep">
+                @for (step of steps; track step; let i = $index) {
+                  <button
+                    hlmBtn
+                    [variant]="'outline'"
+                    type="button"
+                    [attr.aria-pressed]="viewer.step() === i"
+                    (click)="viewer.select(i)"
+                  >
+                    {{ step }}
+                  </button>
+                }
+              </div>
+              <p role="status">{{ steps[viewer.step()] }}</p>
+            }
+            <div [style.font-size.%]="viewer.zoom()">
+              <ng-container [ngTemplateOutlet]="capture" />
+            </div>
+            <div class="flex flex-wrap items-center gap-2" role="group" [attr.aria-label]="c.zoom">
+              <button
+                hlmBtn
+                [variant]="'outline'"
+                type="button"
+                [disabled]="viewer.zoom() <= 75"
+                (click)="viewer.adjust(-25)"
+              >
+                {{ c.zoomOut }}
+              </button>
+              <output>{{ viewer.zoom() }}%</output>
+              <button
+                hlmBtn
+                [variant]="'outline'"
+                type="button"
+                [disabled]="viewer.zoom() >= 150"
+                (click)="viewer.adjust(25)"
+              >
+                {{ c.zoomIn }}
+              </button>
+              <button hlmBtn [variant]="'ghost'" type="button" (click)="viewer.reset()">
+                {{ c.reset }}
+              </button>
+            </div>
+          </hlm-dialog-content>
+        </hlm-dialog>
+        <ng-container [ngTemplateOutlet]="handoff" />
+      </div>
+    } @else {
+      <app-status-pill [tone]="tone()" [label]="message()" />
+      @if (state() === 'large') {
+        <ng-container [ngTemplateOutlet]="handoff" />
+      } @else {
+        <p>{{ c.closed }}</p>
+      }
+    }
+  </div>
+</section>
+<ng-template #capture>
+  <figure class="m-0 grid gap-3 rounded-md border border-border bg-muted p-4">
+    <strong class="border-b border-border pb-2">{{ c.storefront }}</strong>
+    <div class="grid gap-3 border bg-card p-4">
+      <strong>{{ c.order }}</strong>
+      @for (field of fields; track field) {
+        <div>{{ field }}<br /><span aria-hidden="true">••••</span></div>
+      }
+    </div>
+    <figcaption class="text-sm text-muted-foreground">{{ c.illustration }}</figcaption>
+  </figure>
+</ng-template>
+<ng-template #handoff>
+  <hlm-dialog [aria-label]="c.download">
+    <button hlmBtn hlmDialogTrigger data-download type="button" [variant]="'outline'">
+      {{ c.download }}
+    </button>
+    <hlm-dialog-content *hlmDialogPortal
+      ><h2 hlmDialogTitle>{{ c.download }}</h2>
+      <p hlmDialogDescription>{{ c.noDownload }}</p>
+      <code>{{ record().id }} · {{ record().kind }}</code
+      ><button hlmBtn hlmDialogClose type="button">{{ c.close }}</button></hlm-dialog-content
+    >
+  </hlm-dialog>
+</ng-template>

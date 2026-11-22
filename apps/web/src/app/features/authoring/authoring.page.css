@@ -6,13 +6,19 @@
 .panes {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--eg-space-7);
+  gap: var(--eg-space-4);
   align-items: start;
   min-inline-size: 0;
 }
 .tree-pane,
 .case-pane {
   min-inline-size: 0;
+}
+.case-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--eg-space-2) var(--eg-space-4);
 }
 .breadcrumb ol {
   list-style: none;
@@ -49,14 +55,24 @@
 .scope-help {
   color: var(--eg-text-muted);
 }
+.breadcrumb [aria-current] {
+  font-weight: var(--eg-weight-semibold);
+  color: var(--eg-text);
+}
+.breadcrumb,
+.scope-help {
+  font-size: var(--eg-text-sm);
+}
 .scope-help {
   margin: 0;
   overflow-wrap: anywhere;
   line-height: var(--eg-leading-sm);
 }
 .selected-id {
-  display: grid;
-  gap: var(--eg-space-2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--eg-space-2) var(--eg-space-3);
   margin: 0;
   min-inline-size: 0;
   font-size: var(--eg-text-sm);
@@ -75,9 +91,17 @@ app-inline-feedback {
 button {
   scroll-margin-block-start: calc(var(--eg-space-12) + var(--eg-space-7));
 }
-@media (min-width: 1280px) {
+@media (min-width: 1200px) {
   .panes {
-    grid-template-columns: minmax(0, var(--eg-rail-width)) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 2.2fr);
+  }
+}
+@media (768px <= width < 1200px) {
+  .tree-pane {
+    max-block-size: calc(var(--eg-control-touch) * 4);
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scroll-padding-block: var(--eg-space-2);
   }
 }
 @media (max-width: 767px) {

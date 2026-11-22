@@ -1,0 +1,90 @@
+<hlm-dialog
+  [state]="finished() ? 'closed' : 'open'"
+  [role]="mode() === 'dismiss' ? 'alertdialog' : 'dialog'"
+  [autoFocus]="'[data-cancel]'"
+  (stateChanged)="$event === 'closed' && cancel()"
+>
+  <hlm-dialog-content
+    *hlmDialogPortal
+    [showCloseButton]="false"
+    class="grid max-h-[calc(100dvh-var(--eg-space-8))] w-[min(760px,calc(100vw-var(--eg-space-8)))] max-w-none grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 max-[599px]:h-dvh max-[599px]:max-h-dvh max-[599px]:w-screen max-[599px]:rounded-none"
+  >
+    <header hlmDialogHeader class="border-b border-border p-5 text-start">
+      <h2 hlmDialogTitle class="flex items-center gap-2">
+        <hlm-icon
+          [name]="mode() === 'dismiss' ? 'lucideTriangleAlert' : 'lucideActivity'"
+          class="size-5"
+          [class]="mode() === 'dismiss' ? 'text-(--eg-danger-fg)' : 'text-(--eg-accent)'"
+        />
+        {{ mode() === 'dismiss' ? copy.dismiss : copy.decision }}
+      </h2>
+      <p class="text-sm text-muted-foreground">
+        <bdi>{{ display(row().name) }}</bdi> · <bdi>{{ display(row().id) }}</bdi> ·
+        {{ copy.source }}: <bdi>{{ display(source()) }}</bdi>
+      </p>
+      <p hlmDialogDescription>{{ copy.unchanged }}</p>
+    </header>
+    <div class="grid min-h-0 min-w-0 gap-4 overflow-y-auto overscroll-contain p-5 wrap-anywhere">
+      @if (mode() === 'bind') {
+        <div class="grid gap-2">
+          <label hlmLabel for="mapping-case-search">{{ copy.search }}</label
+          ><input
+            hlmInput
+            #query
+            id="mapping-case-search"
+            type="search"
+            [value]="search()"
+            (input)="filter(query.value)"
+          />
+        </div>
+        <fieldset class="grid gap-2">
+          <legend class="mb-2 font-semibold">{{ copy.binding }}</legend>
+          @for (option of matches(); track option.id) {
+            <label
+              class="flex min-h-(--eg-control-touch) cursor-pointer items-center gap-3 rounded-md border border-border p-3 focus-within:outline-2 focus-within:outline-(--eg-focus)"
+            >
+              <input
+                type="radio"
+                name="mapping-candidate"
+                [value]="option.id"
+                [checked]="candidate() === option.id"
+                (change)="candidate.set(option.id)"
+                class="accent-(--eg-accent)"
+              />
+              <span class="grid min-w-0"
+                ><bdi class="font-semibold">{{ display(option.id) }}</bdi
+                ><bdi class="text-sm text-muted-foreground">{{ display(option.title) }}</bdi></span
+              >
+            </label>
+          } @empty {
+            <p role="status">{{ copy.noChoice }}</p>
+          }
+        </fieldset>
+      }
+      <div class="grid gap-1 rounded-md bg-muted p-3 text-sm" role="status">
+        <strong>{{ mode() === 'bind' ? copy.bindSelected : copy.dismiss }}</strong
+        ><bdi
+          >{{ display(row().id) }}
+          @if (candidate(); as chosen) {
+            → {{ display(chosen) }}
+          }
+        </bdi>
+      </div>
+    </div>
+    <footer hlmDialogFooter class="border-t border-border p-4">
+      <button hlmBtn [variant]="'outline'" type="button" data-cancel (click)="cancel()">
+        {{ copy.cancel }}
+      </button>
+      <button
+        hlmBtn
+        type="button"
+        data-confirm
+        [variant]="mode() === 'dismiss' ? 'destructive' : 'default'"
+        [disabled]="!canConfirm()"
+        (click)="confirm()"
+      >
+        {{ mode() === 'dismiss' ? copy.confirmDismiss : copy.confirm }}
+      </button>
+    </footer>
+  </hlm-dialog-content>
+</hlm-dialog>

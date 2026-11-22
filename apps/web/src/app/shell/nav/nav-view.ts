@@ -66,6 +66,8 @@ export class NavViewService {
         .sort((left, right) => left.entry.order - right.entry.order)
         .map(({ entry, link }) => ({
           id: entry.id,
+          ...(entry.parentId ? { parentId: entry.parentId } : {}),
+          ...(entry.details ? { details: entry.details } : {}),
           label: entry.label,
           shortLabel: entry.shortLabel ?? entry.label,
           icon: entry.icon,
