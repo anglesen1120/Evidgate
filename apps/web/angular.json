@@ -39,7 +39,10 @@
             "tsConfig": "tsconfig.app.json",
             "polyfills": ["@angular/localize/init"],
             "styles": ["src/styles.css"],
-            "assets": [{ "glob": "theme-init.js", "input": "src" }],
+            "assets": [
+              { "glob": "theme-init.js", "input": "src" },
+              { "glob": "*-OFL.txt", "input": "src/styles/fonts", "output": "fonts-licences" }
+            ],
             "outputPath": "dist",
             "i18nMissingTranslation": "error"
           },
