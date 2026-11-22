@@ -1,0 +1,384 @@
+<article class="grid min-w-0 gap-6 wrap-anywhere" [attr.aria-label]="copy.title">
+  <div class="flex items-start gap-3">
+    <span
+      class="flex size-12 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground"
+      ><hlm-icon name="lucideCircleCheck" class="size-6" /></span
+    ><app-page-header [title]="copy.title" [description]="copy.intro" />
+  </div>
+  @if (directory()) {
+    <section
+      class="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4"
+      [attr.aria-label]="copy.org"
+    >
+      <div class="grid gap-1">
+        <span class="text-xs text-muted-foreground">{{ copy.org }}</span
+        ><strong>{{ viewModel().organization }}</strong
+        ><span class="text-xs text-muted-foreground"
+          >{{ copy.asOf }}
+          <app-absolute-time
+            [value]="state() === 'expired' ? '2026-10-13T11:00:00Z' : viewModel().asOf"
+        /></span>
+      </div>
+      <div>
+        <span class="block text-xs text-muted-foreground">{{ copy.section }}</span
+        ><strong>{{ copy.title }}</strong>
+      </div>
+    </section>
+    <p class="m-0 border-b border-border pb-3 text-xs text-muted-foreground">
+      {{ preview() ? copy.preview : copy.readOnly }}
+    </p>
+  }
+  @switch (state()) {
+    @case ('loading') {
+      <app-loading-pattern [label]="copy.loading" [layout]="'cards'" />
+    }
+    @case ('empty') {
+      <app-empty-pattern [title]="copy.empty" [description]="copy.emptyHint" />
+    }
+    @case ('denied') {
+      <app-forbidden-pattern />
+    }
+    @case ('404') {
+      <app-not-found-pattern />
+    }
+  }
+  @if (notice(); as note) {
+    <app-inline-feedback
+      [title]="note.title"
+      [description]="note.description"
+      [tone]="
+        state() === 'error' || state() === 'self'
+          ? 'destructive'
+          : state() === 'approved'
+            ? 'success'
+            : 'info'
+      "
+      [actionLabel]="['error', 'stale', 'gone', '412'].includes(state()) ? copy.reload : undefined"
+      (action)="reset()"
+    />
+  }
+  @if (state() === 'filtered') {
+    <app-empty-pattern
+      [title]="copy.filtered"
+      [description]="copy.filteredHint"
+      [actionLabel]="copy.clear"
+      (action)="reset()"
+    />
+  }
+  @if (directory()) {
+    <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      @for (metric of metrics(); track metric.status) {
+        <section hlmCard class="min-w-0 gap-2 p-4">
+          <h2 class="m-0 flex items-center gap-2 text-sm font-semibold">
+            <hlm-icon [name]="icons[metric.status]" class="size-6 rounded bg-muted p-1" />{{
+              copy[metric.status]
+            }}
+          </h2>
+          <strong class="text-2xl tabular-nums">{{ metric.count }}</strong
+          ><span class="text-xs text-muted-foreground">{{ hints[metric.status] }}</span>
+        </section>
+      }
+    </div>
+    <div class="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+      <section hlmCard class="min-w-0 gap-0 p-0">
+        <header class="grid gap-3 border-b border-border p-4">
+          <h2 hlmCardTitle>{{ copy.list }}</h2>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div class="grid gap-1">
+              <label hlmLabel for="grant-search">{{ copy.search }}</label
+              ><input
+                hlmInput
+                id="grant-search"
+                #searchInput
+                type="search"
+                [value]="search()"
+                (input)="search.set(searchInput.value)"
+              />
+            </div>
+            <div class="grid min-w-0 content-end gap-1">
+              <label hlmLabel for="grant-status">{{ copy.status }}</label>
+              <hlm-select
+                [value]="filter()"
+                [itemToString]="filterLabel"
+                (valueChange)="setFilter($event)"
+              >
+                <hlm-select-trigger [buttonId]="'grant-status'" class="w-full"
+                  ><hlm-select-value [placeholder]="copy.all"
+                /></hlm-select-trigger>
+                <hlm-select-content *hlmSelectPortal [aria-label]="copy.status"
+                  ><hlm-select-item value="all">{{ copy.all }}</hlm-select-item>
+                  @for (s of statuses; track s) {
+                    <hlm-select-item [value]="s">{{ copy[s] }}</hlm-select-item>
+                  }
+                </hlm-select-content></hlm-select
+              >
+            </div>
+          </div>
+        </header>
+        <div hlmTableContainer>
+          <table hlmTable [attr.aria-label]="copy.list">
+            <thead hlmTHead>
+              <tr hlmTr>
+                @for (label of [copy.grant, copy.operator, copy.status]; track label) {
+                  <th hlmTh scope="col">{{ label }}</th>
+                }
+              </tr>
+            </thead>
+            <tbody hlmTBody>
+              @for (grant of filtered(); track grant.ref; let idx = $index) {
+                <tr hlmTr [class.bg-accent]="selected()?.ref === grant.ref">
+                  <td hlmTd class="whitespace-normal">
+                    <button
+                      hlmBtn
+                      [variant]="'link'"
+                      type="button"
+                      class="min-h-11 px-0 font-mono"
+                      [attr.data-second-record]="idx === 1 ? '' : null"
+                      [attr.aria-pressed]="selected()?.ref === grant.ref"
+                      (click)="selection.set(grant.ref)"
+                    >
+                      {{ grant.ref }}</button
+                    ><small class="block text-xs text-muted-foreground">{{ grant.subject }}</small>
+                  </td>
+                  <td hlmTd class="whitespace-normal">
+                    {{ grant.operator ?? copy.unavailableValue }}
+                  </td>
+                  <td hlmTd>
+                    <app-status-pill
+                      [label]="copy[grant.status]"
+                      [tone]="grant.status === 'approved' ? 'info' : 'neutral'"
+                    />
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        @if (!filtered().length) {
+          <app-empty-pattern
+            [title]="copy.filtered"
+            [actionLabel]="copy.clear"
+            (action)="reset()"
+          />
+        }
+        <footer
+          class="flex flex-wrap items-center justify-between gap-2 border-t border-border p-3 text-xs text-muted-foreground"
+        >
+          <span
+            >{{ filtered().length }} {{ copy.of }} {{ grants().length }} · {{ copy.pageSize }}</span
+          >
+          <div class="flex gap-2">
+            <button hlmBtn [variant]="'outline'" type="button" disabled>{{ copy.previous }}</button
+            ><button hlmBtn [variant]="'outline'" type="button" disabled>{{ copy.next }}</button>
+          </div>
+        </footer>
+      </section>
+      @if (selected(); as g) {
+        <section hlmCard data-record-detail class="min-w-0 gap-0 p-0">
+          <header class="grid gap-2 p-4">
+            <div class="flex flex-wrap items-center justify-between gap-2" data-inspect-status>
+              <strong class="text-sm">{{ g.subject }}</strong
+              ><app-status-pill
+                [label]="copy[g.status]"
+                [tone]="g.status === 'approved' ? 'info' : 'neutral'"
+              />
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <app-copyable-identifier [value]="g.ref" [label]="copy.grant" />
+              @if (g.status === 'requested' || g.status === 'approved') {
+                <button
+                  hlmBtn
+                  data-grant-action
+                  [variant]="'outline'"
+                  type="button"
+                  [disabled]="!canEdit() || g.ref !== viewModel().selectedRef"
+                  (click)="openDecision()"
+                >
+                  {{ g.status === 'requested' ? copy.approve : copy.revoke }}
+                </button>
+              }
+            </div>
+          </header>
+          <section class="border-t border-border p-4">
+            <h2 class="m-0 text-base font-semibold">{{ copy.scopes }}</h2>
+            <dl class="mb-0 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+              <div class="min-w-0">
+                <dt class="text-xs text-muted-foreground">{{ copy.grant }}</dt>
+                <dd class="m-0 mt-1 font-semibold wrap-anywhere">
+                  <bdi>{{ g.ref }}</bdi>
+                </dd>
+              </div>
+              <div class="min-w-0">
+                <dt class="text-xs text-muted-foreground">{{ copy.operator }}</dt>
+                <dd class="m-0 mt-1 font-semibold wrap-anywhere">
+                  {{ g.operator ?? copy.unavailableValue }}
+                </dd>
+              </div>
+              <div class="min-w-0">
+                <dt class="text-xs text-muted-foreground">{{ copy.project }}</dt>
+                <dd class="m-0 mt-1 font-semibold wrap-anywhere">
+                  {{ g.project ?? copy.unavailableValue }}
+                </dd>
+              </div>
+              <div class="min-w-0">
+                <dt class="text-xs text-muted-foreground">{{ copy.scope }}</dt>
+                <dd class="m-0 mt-1 font-semibold wrap-anywhere">
+                  {{ g.scope ?? copy.unavailableValue }}
+                </dd>
+              </div>
+              <div class="min-w-0">
+                <dt class="text-xs text-muted-foreground">{{ copy.expires }}</dt>
+                <dd class="m-0 mt-1 font-semibold wrap-anywhere">
+                  <app-absolute-time [value]="g.until" />
+                </dd>
+              </div>
+              <div class="min-w-0">
+                <dt class="text-xs text-muted-foreground">{{ copy.reason }}</dt>
+                <dd class="m-0 mt-1 font-semibold wrap-anywhere">{{ g.reason }}</dd>
+              </div>
+            </dl>
+          </section>
+          <section class="border-t border-border p-4">
+            <h2 class="m-0 text-base font-semibold">{{ copy.record }}</h2>
+            <dl class="mb-0 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+              @if (g.status === 'requested') {
+                <div class="min-w-0">
+                  <dt class="text-xs text-muted-foreground">{{ copy.requester }}</dt>
+                  <dd class="m-0 mt-1 font-semibold wrap-anywhere">
+                    {{ g.requester ?? copy.unavailableValue }}
+                  </dd>
+                </div>
+                <div class="min-w-0">
+                  <dt class="text-xs text-muted-foreground">{{ copy.approver }}</dt>
+                  <dd class="m-0 mt-1 font-semibold wrap-anywhere">
+                    {{ state() === 'self' ? g.requester : viewModel().approver }}
+                  </dd>
+                </div>
+                <div class="min-w-0">
+                  <dt class="text-xs text-muted-foreground">{{ copy.at }}</dt>
+                  <dd class="m-0 mt-1 font-semibold wrap-anywhere">
+                    <app-absolute-time [value]="g.requestedAt" />
+                  </dd>
+                </div>
+                <div class="min-w-0">
+                  <dt class="text-xs text-muted-foreground">{{ copy.requestId }}</dt>
+                  <dd class="m-0 mt-1 font-semibold wrap-anywhere">
+                    <bdi>{{ g.requestRef ?? copy.unavailableValue }}</bdi>
+                  </dd>
+                </div>
+              } @else {
+                <div class="min-w-0">
+                  <dt class="text-xs text-muted-foreground">
+                    {{ g.status === 'revoked' ? copy.revokedBy : copy.approvedBy }}
+                  </dt>
+                  <dd class="m-0 mt-1 font-semibold wrap-anywhere">{{ viewModel().approver }}</dd>
+                </div>
+                @if (g.status === 'revoked') {
+                  <div class="min-w-0">
+                    <dt class="text-xs text-muted-foreground">{{ copy.revokeReason }}</dt>
+                    <dd class="m-0 mt-1 font-semibold wrap-anywhere">
+                      {{
+                        g.ref === viewModel().selectedRef && revokedReason()
+                          ? revokedReason()
+                          : copy.resolved
+                      }}
+                    </dd>
+                  </div>
+                }
+              }
+            </dl>
+          </section>
+          <p class="m-0 border-t border-border bg-muted p-4 text-xs">{{ copy.excluded }}</p>
+        </section>
+      }
+    </div>
+    <details hlmCard class="min-w-0 p-4">
+      <summary class="cursor-pointer font-semibold">{{ copy.how }}</summary>
+      <p>{{ copy.bannerHelp }}</p>
+    </details>
+    <footer class="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+      <span>{{ copy.demo }}</span
+      ><button
+        hlmBtn
+        [variant]="'outline'"
+        type="button"
+        [attr.aria-pressed]="preview()"
+        (click)="preview.set(!preview())"
+      >
+        {{ preview() ? copy.exitPreview : copy.admin }}
+      </button>
+    </footer>
+  }
+  <hlm-dialog
+    [state]="draft() ? 'open' : 'closed'"
+    [role]="draft() === 'revoke' ? 'alertdialog' : 'dialog'"
+    [aria-label]="draft() === 'revoke' ? copy.revoke : copy.approve"
+    [autoFocus]="'#grant-cancel'"
+    (closed)="draft.set(null)"
+    ><hlm-dialog-content
+      *hlmDialogPortal
+      [showCloseButton]="false"
+      class="max-h-[85dvh] overflow-y-auto"
+      ><header hlmDialogHeader>
+        <h2 hlmDialogTitle>{{ draft() === 'revoke' ? copy.revoke : copy.approve }}</h2>
+        <p hlmDialogDescription>{{ copy.localOnly }}</p>
+      </header>
+      @if (selected(); as grant) {
+        <p>{{ grant.ref }} · {{ grant.operator }} · {{ grant.project }} · {{ grant.scope }}</p>
+        <app-absolute-time [value]="grant.until" />
+      }
+      @if (draft() === 'approve') {
+        <div class="grid min-w-0 content-end gap-1">
+          <label hlmLabel for="grant-basis">{{ copy.basis }}</label>
+          <hlm-select
+            [value]="basis()"
+            [itemToString]="basisLabel"
+            (valueChange)="
+              basis.set($event === 'incident' ? 'incident' : $event === 'review' ? 'review' : '')
+            "
+          >
+            <hlm-select-trigger [buttonId]="'grant-basis'" class="w-full"
+              ><hlm-select-value [placeholder]="copy.chooseBasis"
+            /></hlm-select-trigger>
+            <hlm-select-content *hlmSelectPortal [aria-label]="copy.basis"
+              ><hlm-select-item value="incident">{{ copy.incidentBasis }}</hlm-select-item
+              ><hlm-select-item value="review">{{
+                copy.adminBasis
+              }}</hlm-select-item></hlm-select-content
+            ></hlm-select
+          >
+        </div>
+      } @else {
+        <label hlmLabel for="revoke-reason">{{ copy.revokeReason }}</label
+        ><textarea
+          hlmInput
+          id="revoke-reason"
+          #reasonInput
+          required
+          maxlength="500"
+          [value]="reason()"
+          (input)="reason.set(reasonInput.value)"
+        ></textarea>
+      }
+      <footer hlmDialogFooter>
+        <button
+          hlmBtn
+          id="grant-cancel"
+          [variant]="'outline'"
+          type="button"
+          (click)="draft.set(null)"
+        >
+          {{ copy.cancel }}</button
+        ><button
+          hlmBtn
+          [variant]="draft() === 'revoke' ? 'destructive' : 'default'"
+          type="button"
+          [disabled]="!canEdit() || (draft() === 'approve' ? !basis() : !reason().trim())"
+          (click)="confirm()"
+        >
+          {{ draft() === 'revoke' ? copy.revoke : copy.approve }}
+        </button>
+      </footer></hlm-dialog-content
+    ></hlm-dialog
+  >
+</article>
