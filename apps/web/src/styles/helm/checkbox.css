@@ -1,9 +1,78 @@
 @layer components {
   .spartan-checkbox {
-    @apply border-input dark:bg-input/30 data-checked:bg-primary data-checked:text-primary-foreground dark:data-checked:bg-primary data-checked:border-primary data-[matches-spartan-invalid=true]:aria-checked:border-primary data-[matches-spartan-invalid=true]:border-destructive dark:data-[matches-spartan-invalid=true]:border-destructive/50 focus-visible:border-ring focus-visible:ring-ring data-[matches-spartan-invalid=true]:ring-destructive/20 dark:data-[matches-spartan-invalid=true]:ring-destructive/40 flex size-4 items-center justify-center rounded-[4px] border shadow-xs transition-shadow group-has-disabled/field:opacity-50 focus-visible:ring-2 data-[matches-spartan-invalid=true]:ring-3;
+    display: inline-grid;
+    place-items: center;
+    position: relative;
+    min-inline-size: var(--eg-space-7);
+    min-block-size: var(--eg-space-7);
+    padding: 0;
+    border: 0;
+    border-radius: var(--eg-radius-sm);
+    background: transparent;
+    color: var(--eg-on-accent);
+    cursor: pointer;
+  }
+
+  .spartan-checkbox::before {
+    content: '';
+    grid-area: 1 / 1;
+    box-sizing: border-box;
+    inline-size: var(--eg-space-5);
+    block-size: var(--eg-space-5);
+    border: var(--eg-border-width) solid var(--eg-border-control);
+    border-radius: var(--eg-radius-sm);
+    background: var(--eg-surface);
+  }
+
+  .spartan-checkbox[aria-checked='true']::before,
+  .spartan-checkbox[aria-checked='mixed']::before {
+    border-color: var(--eg-accent);
+    background: var(--eg-accent);
+  }
+
+  .spartan-checkbox:not(:disabled):hover::before {
+    box-shadow: 0 0 0 var(--eg-border-width) var(--eg-accent);
+  }
+
+  .spartan-checkbox:disabled {
+    color: var(--eg-text-muted);
+    cursor: not-allowed;
+  }
+
+  .spartan-checkbox:disabled::before {
+    background: var(--eg-neutral-bg);
+    border-color: var(--eg-border-control);
+  }
+
+  .spartan-checkbox[aria-invalid='true']::before,
+  .spartan-checkbox.spartan-checkbox-invalid::before {
+    border-color: var(--eg-danger-fg);
   }
 
   .spartan-checkbox-indicator {
-    @apply [&>hlm-icon]:text-[length:--spacing(3.5)];
+    position: relative;
+    grid-area: 1 / 1;
+  }
+
+  .spartan-checkbox-indicator > hlm-icon {
+    inline-size: var(--eg-text-sm);
+    block-size: var(--eg-text-sm);
+  }
+
+  .spartan-checkbox[aria-checked='mixed'] .spartan-checkbox-indicator > hlm-icon {
+    display: none;
+  }
+
+  .spartan-checkbox[aria-checked='mixed'] .spartan-checkbox-indicator::after {
+    content: '';
+    inline-size: var(--eg-space-3);
+    border-block-start: var(--eg-focus-width) solid currentColor;
+  }
+
+  @media (pointer: coarse), (max-width: 767px) {
+    .spartan-checkbox {
+      min-inline-size: var(--eg-control-touch);
+      min-block-size: var(--eg-control-touch);
+    }
   }
 }

@@ -1,14 +1,16 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { HlmBadge } from '@evidgate/ui/badge';
+import { HlmIcon } from '@evidgate/ui/icon';
 
 import { IDENTITY_BADGE_CLASSES } from './badge-classes';
 
 @Component({
   selector: 'app-revision-chip',
-  imports: [HlmBadge],
+  imports: [HlmIcon, HlmBadge],
   host: { class: 'inline-block min-w-0 max-w-full' },
   template: `
     <span hlmBadge [variant]="'outline'" class="identity-chip revision-chip" [class]="badgeClasses">
+      <hlm-icon [name]="'lucideClock'" />
       @if (hasRevision()) {
         @if (label()) {
           <span class="identity-chip__label min-w-0 whitespace-nowrap">{{ label() }}</span>
