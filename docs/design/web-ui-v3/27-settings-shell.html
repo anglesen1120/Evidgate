@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title data-en="Settings · Evidgate" data-vi="Cài đặt · Evidgate">Settings · Evidgate</title>
+<link rel="stylesheet" href="assets/tokens-v3.css">
+<link rel="stylesheet" href="assets/components-v3.css">
+<script defer src="assets/manifest-v3.js"></script>
+<script defer src="assets/shell.js"></script>
+<style>
+[hidden]{display:none!important}
+.v3-page-body,.v3-form-layout,.v3-facts{display:grid;gap:var(--eg-space-5);min-width:0}
+.v3-form-layout{grid-template-columns:minmax(0,1.7fr) minmax(16rem,1fr);align-items:start}
+.v3-facts{grid-template-columns:repeat(auto-fit,minmax(min(11rem,100%),1fr));gap:var(--eg-space-4)}
+.v3-facts dd{margin-top:var(--eg-space-1);font-size:var(--eg-text-sm)}
+.v3-preview select{max-width:min(18rem,100%)}
+.v3-mobile-notice{display:none}
+.v3-context{margin-bottom:var(--eg-space-4)}
+.v3-state-screen{min-height:19rem;align-content:start}
+.v3-page-body pre{white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
+.v3-queue-card:has(button[aria-pressed=true]){border-color:var(--eg-accent);background:var(--eg-accent-soft);box-shadow:inset 3px 0 var(--eg-accent)}
+@media(max-width:940px){.v3-form-layout{grid-template-columns:1fr}}
+@media(max-width:767px){.v3-mobile-notice{display:block}.v3-write{display:none!important}}
+@media(pointer:coarse){main :is(button,select,summary,a.v3-btn){min-height:var(--eg-control-touch)}}
+.v3-settings-grid{display:grid;grid-template-columns:minmax(13rem,1fr) minmax(0,3fr);align-items:start;gap:var(--eg-space-5)}
+.v3-settings-item{justify-content:start;border-color:transparent;text-align:start}.v3-settings-item[aria-current]{color:var(--eg-accent);background:var(--eg-accent-soft);box-shadow:inset 3px 0 var(--eg-accent)}
+#compact-sections{display:none}@media(max-width:1024px){.v3-settings-grid{grid-template-columns:1fr}#compact-sections{display:grid}#nav-sections{display:none}}
+</style>
+</head>
+<body data-page="27" data-scope="organization"><a class="v3-skip" href="#main"><span data-en="Skip to content" data-vi="Đến nội dung">Skip to content</span></a>
+<noscript><nav><a href="01-app-shell.html">Overview / Tổng quan</a> · <a href="03-run-list.html">Test runs / Lượt kiểm thử</a></nav></noscript>
+<svg class="v3-sprites" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-4 9-8 11-4-2-8-6-8-11V5z M8 12l3 3 5-6"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h10m4 0h2M4 17h2m4 0h10 M14 4v6M8 14v6"/></symbol>
+</svg>
+<div class="v3-shell"><aside class="v3-sidebar" data-v3-sidebar></aside><div class="v3-workspace">
+<header class="v3-topbar" data-v3-topbar></header><main id="main" tabindex="-1">
+
+<header class="v3-page-header"><div class="v3-page-header__title"><span class="v3-page-header__icon"><svg class="v3-icon" aria-hidden="true"><use href="#i-settings"/></svg></span><div><h1><span data-en="Settings" data-vi="Cài đặt">Settings</span></h1><p class="v3-muted"><span data-en="Open a section within the organization or project you administer." data-vi="Mở một mục trong tổ chức hoặc dự án bạn quản trị.">Open a section within the organization or project you administer.</span></p></div></div></header>
+<p class="v3-context v3-meta"><span data-en="As of 2026-10-23 10:00 UTC" data-vi="Tính đến 10:00 UTC ngày 23/10/2026">As of 2026-10-23 10:00 UTC</span></p>
+<p class="v3-note v3-mobile-notice"><span data-en="Read-only on mobile. Use a desktop to make changes." data-vi="Chế độ chỉ đọc trên thiết bị di động. Sử dụng máy tính để thay đổi dữ liệu.">Read-only on mobile. Use a desktop to make changes.</span></p>
+<section class="v3-panel v3-pad v3-stack" id="unavailable-record" hidden><h2><span data-en="Requested record unavailable" data-vi="Bản ghi được yêu cầu không khả dụng">Requested record unavailable</span></h2><code id="requested-id"></code></section>
+<div class="v3-page-body" id="content"><div id="support-banner" class="v3-note v3-spread"><div class="v3-row"><svg class="v3-icon" aria-hidden="true"><use href="#i-shield"/></svg><span data-en="Historical grant sg-41 · expired 2026-10-13 at 11:00 UTC · no active access" data-vi="Quyền hỗ trợ lịch sử sg-41 · đã hết hạn lúc 11:00 UTC ngày 13/10 · không còn quyền truy cập">Historical grant sg-41 · expired 2026-10-13 at 11:00 UTC · no active access</span></div><a class="" href="36-support-access.html?object=sg-41"><span data-en="Inspect grant" data-vi="Xem quyền hỗ trợ">Inspect grant</span></a></div><section class="v3-panel v3-pad v3-spread"><div class="v3-row"><label class="v3-field"><span data-en="Settings scope" data-vi="Phạm vi cài đặt">Settings scope</span><select id="settings-scope"><option value="organization" data-en="Organization settings" data-vi="Cài đặt tổ chức">Organization settings</option><option value="project" data-en="Project settings" data-vi="Cài đặt dự án">Project settings</option></select></label><label class="v3-field"><span data-en="Organization" data-vi="Tổ chức">Organization</span><select id="org"><option value="lotus" data-en="Lotus Commerce" data-vi="Lotus Commerce">Lotus Commerce</option><option value="other" data-en="Other organization · no grants" data-vi="Tổ chức khác · chưa cấp quyền">Other organization · no grants</option></select></label><div id="project-selector" hidden><label class="v3-field"><span data-en="Project" data-vi="Dự án">Project</span><select id="settings-project"><option value="storefront-web" data-en="storefront-web · SHOP" data-vi="storefront-web · SHOP">storefront-web · SHOP</option><option value="evidgate-e2e" data-en="evidgate-e2e" data-vi="evidgate-e2e">evidgate-e2e</option></select></label></div></div><div class="v3-stack" id="scope-status"><span class="v3-badge v3-badge--info"><span data-en="Permission-scoped sections" data-vi="Các mục theo phạm vi quyền">Permission-scoped sections</span></span><span class="v3-badge "><span data-en="Quota · server-declared" data-vi="Hạn mức · theo máy chủ">Quota · server-declared</span></span></div></section><div class="v3-settings-grid"><nav class="v3-panel v3-stack v3-pad" aria-label="Settings sections" data-label-en="Settings sections" data-label-vi="Các mục cài đặt"><h2><span data-en="Sections" data-vi="Các mục">Sections</span></h2><div id="nav-sections" class="v3-stack"></div><label class="v3-field" id="compact-sections"><span data-en="Choose section" data-vi="Chọn mục">Choose section</span><select id="section-select"></select></label></nav><section class="v3-panel" aria-live="polite"><header class="v3-detail__header"><div class="v3-spread"><small id="scope-crumb"></small><code id="perm"></code></div><h2 id="section-title"></h2></header><div id="section-body" class="v3-pad v3-stack"></div></section></div></div>
+
+<div id="state" hidden role="status"><section hidden class="v3-panel v3-pad v3-stack v3-state-screen" id="state-loading"><div class="v3-skeleton" aria-hidden="true"><i></i><i></i></div><div class="v3-stack"><h2><span data-en="Loading" data-vi="Đang tải">Loading</span></h2><p class="v3-muted"><span data-en="Reading the current scope. No change is being submitted." data-vi="Đang đọc phạm vi hiện tại. Không có thay đổi nào đang được gửi.">Reading the current scope. No change is being submitted.</span></p></div></section>
+<section hidden class="v3-panel v3-pad v3-stack v3-state-screen" id="state-filtered"><div class="v3-stack"><h2><span data-en="No results match these filters" data-vi="Không có kết quả phù hợp với bộ lọc">No results match these filters</span></h2><p class="v3-muted"><span data-en="Your selection is retained." data-vi="Lựa chọn của bạn được giữ nguyên.">Your selection is retained.</span></p><div class="v3-row"><button type="button" class="v3-btn" data-restore><span data-en="Clear filters" data-vi="Xóa bộ lọc">Clear filters</span></button></div></div></section>
+<section hidden class="v3-panel v3-pad v3-stack v3-state-screen" id="state-error"><div class="v3-stack"><h2><span data-en="Request failed" data-vi="Yêu cầu thất bại">Request failed</span></h2><p class="v3-muted"><span data-en="The request did not complete. Retry the same scope; no changes have been applied." data-vi="Yêu cầu chưa hoàn tất. Thử lại trong cùng phạm vi; chưa áp dụng thay đổi nào.">The request did not complete. Retry the same scope; no changes have been applied.</span></p><div class="v3-row"><button type="button" class="v3-btn" data-restore><span data-en="Retry" data-vi="Thử lại">Retry</span></button></div><p class="v3-meta">req-27-31</p></div></section>
+<section hidden class="v3-panel v3-pad v3-stack v3-state-screen" id="state-denied"><div class="v3-stack"><h2><span data-en="Not authorized" data-vi="Bạn không có quyền truy cập">Not authorized</span></h2><p class="v3-muted"><span data-en="Ask an administrator for access to this scope." data-vi="Liên hệ quản trị viên để xin quyền trong phạm vi này.">Ask an administrator for access to this scope.</span></p></div></section>
+<section hidden class="v3-panel v3-pad v3-stack v3-state-screen" id="state-missing"><div class="v3-stack"><h2><span data-en="Not found" data-vi="Không tìm thấy">Not found</span></h2><p class="v3-muted"><span data-en="This resource is unavailable." data-vi="Tài nguyên này không khả dụng.">This resource is unavailable.</span></p></div></section>
+<section hidden class="v3-panel v3-pad v3-stack v3-state-screen" id="state-expired"><div class="v3-stack"><h2><span data-en="Sign in again" data-vi="Đăng nhập lại">Sign in again</span></h2><p class="v3-muted"><span data-en="Your safe return route is retained. No draft will be submitted." data-vi="Đường dẫn quay lại được giữ nguyên. Bản nháp sẽ không được gửi.">Your safe return route is retained. No draft will be submitted.</span></p><a class="v3-btn" id="sign-in-again" href="02-login.html"><span data-en="Sign in again" data-vi="Đăng nhập lại">Sign in again</span></a></div></section>
+<section hidden class="v3-panel v3-pad v3-stack v3-state-screen" id="state-limited"><div class="v3-stack"><h2><span data-en="Too many requests" data-vi="Quá nhiều yêu cầu">Too many requests</span></h2><p class="v3-muted"><span data-en="Retry-After: 30 s (server fixture). No automatic retry." data-vi="Retry-After: 30 giây (mẫu từ máy chủ). Không tự động thử lại.">Retry-After: 30 s (server fixture). No automatic retry.</span></p></div></section>
+<section hidden class="v3-panel v3-pad v3-stack v3-state-screen" id="state-empty"><div class="v3-stack"><h2><span data-en="No settings destinations" data-vi="Không có mục cài đặt">No settings destinations</span></h2><p class="v3-muted"><span data-en="No granted destinations in the selected scope. Contact an administrator." data-vi="Không có mục nào được cấp quyền trong phạm vi đã chọn. Liên hệ quản trị viên.">No granted destinations in the selected scope. Contact an administrator.</span></p></div></section>
+<section hidden class="v3-panel v3-pad v3-stack v3-state-screen" id="state-conflict"><div class="v3-stack"><h2><span data-en="Someone else changed this — reload" data-vi="Người khác đã thay đổi dữ liệu — tải lại">Someone else changed this — reload</span></h2><p class="v3-muted"><span data-en="Linked policy edit only, not navigation: pr-12 → pr-13. Required artifacts changed; the unsaved advisory draft is retained." data-vi="Chỉ là sửa chính sách ở trang liên kết, không phải điều hướng: pr-12 → pr-13. Đã thay đổi tạo tác bắt buộc; giữ lại bản nháp tư vấn.">Linked policy edit only, not navigation: pr-12 → pr-13. Required artifacts changed; the unsaved advisory draft is retained.</span></p><div class="v3-row"><button type="button" class="v3-btn" data-restore><span data-en="Reload" data-vi="Tải lại">Reload</span></button></div></div></section>
+<section hidden class="v3-panel v3-pad v3-stack v3-state-screen" id="state-none"><div class="v3-stack"><h2><span data-en="No accessible settings sections" data-vi="Không có mục cài đặt nào có quyền truy cập">No accessible settings sections</span></h2><p class="v3-muted"><span data-en="Ask an organization administrator. No restricted destinations are listed." data-vi="Liên hệ quản trị viên của tổ chức. Không liệt kê các mục bị hạn chế.">Ask an organization administrator. No restricted destinations are listed.</span></p></div></section>
+<section hidden class="v3-panel v3-pad v3-stack v3-state-screen" id="state-refreshed"><div class="v3-stack"><h2><span data-en="Session permissions changed" data-vi="Quyền của phiên đã thay đổi">Session permissions changed</span></h2><p class="v3-muted"><span data-en="Refresh permission scope before opening another section. Previous lists were cleared." data-vi="Làm mới phạm vi quyền trước khi mở mục khác. Đã xóa danh sách trước đó.">Refresh permission scope before opening another section. Previous lists were cleared.</span></p><button type="button" class="v3-btn" data-restore><span data-en="Refresh permissions" data-vi="Làm mới quyền">Refresh permissions</span></button></div></section>
+<section hidden class="v3-panel v3-pad v3-stack v3-state-screen" id="state-support-off"><div class="v3-stack"><h2><span data-en="No active support grant" data-vi="Không có quyền hỗ trợ đang hoạt động">No active support grant</span></h2><p class="v3-muted"><span data-en="Expired and revoked grants remain historical, not active sessions." data-vi="Quyền hết hạn hoặc đã thu hồi chỉ còn trong lịch sử, không phải phiên hoạt động.">Expired and revoked grants remain historical, not active sessions.</span></p></div></section>
+</div>
+<details class="v3-review-controls"><summary><span data-en="Design review controls" data-vi="Trạng thái bản mẫu">Design review controls</span></summary>
+<div class="v3-review-controls__body"><label class="v3-field"><span data-en="Prototype state" data-vi="Trạng thái bản mẫu">Prototype state</span><select id="review"><option value="default" data-en="Default" data-vi="Mặc định">Default</option><option value="loading" data-en="Loading" data-vi="Đang tải">Loading</option><option value="empty" data-en="No resources" data-vi="Chưa có dữ liệu">No resources</option><option value="filtered" data-en="No matches" data-vi="Không có kết quả phù hợp">No matches</option><option value="error" data-en="Request failed" data-vi="Yêu cầu thất bại">Request failed</option><option value="denied" data-en="403 · Not authorized" data-vi="403 · Không có quyền">403 · Not authorized</option><option value="missing" data-en="404 · Not found" data-vi="404 · Không tìm thấy">404 · Not found</option><option value="expired" data-en="401 · Session expired" data-vi="401 · Phiên đã hết hạn">401 · Session expired</option><option value="limited" data-en="429 · Retry later" data-vi="429 · Thử lại sau">429 · Retry later</option><option value="conflict" data-en="412 · Linked edit conflict" data-vi="412 · Xung đột khi sửa ở trang liên kết">412 · Linked edit conflict</option><option value="g1" data-en="G1 · Authoring settings" data-vi="G1 · Cài đặt soạn kiểm thử">G1 · Authoring settings</option><option value="viewer" data-en="Read-only viewer" data-vi="Người xem chỉ đọc">Read-only viewer</option><option value="v2" data-en="V2 · Agent pools available" data-vi="V2 · Có nhóm tác nhân">V2 · Agent pools available</option><option value="none" data-en="No accessible settings sections" data-vi="Không có mục cài đặt nào có quyền truy cập">No accessible settings sections</option><option value="refreshed" data-en="Session permissions changed" data-vi="Quyền của phiên đã thay đổi">Session permissions changed</option><option value="support-off" data-en="No active support grant" data-vi="Không có quyền hỗ trợ đang hoạt động">No active support grant</option></select></label></div></details>
+</main></div></div>
+
+<script>
+const $=id=>document.getElementById(id), all=(q,el=document)=>[...el.querySelectorAll(q)];
+const review=$('review'),content=$('content'),state=$('state');
+function setState(k){if(k!=='default')review.closest('details').open=true;review.value=k;review.dispatchEvent(new Event('change'));}
+review.addEventListener('change',()=>{const pane=$('state-'+review.value);state.hidden=!pane;content.hidden=!!pane;for(const p of state.children)p.hidden=p!==pane;});
+document.addEventListener('click',e=>{const el=e.target.closest('[data-restore]');if(el){setState('default');review.closest('details').open=true;review.focus();}});
+const incoming=new URLSearchParams(location.search);
+const requested=[...incoming].map(([key,value])=>key+'='+value).join(' · ');
+function unavailable(){
+  $('requested-id').textContent=requested;
+  $('unavailable-record').hidden=false;content.hidden=true;state.hidden=true;
+  review.closest('details').hidden=true;
+}
+function matchesRecord(allowed){return Object.entries(allowed).every(([key,values])=>!incoming.has(key)||values.includes(incoming.get(key)));}
+function signInLink(){const destination=location.pathname.split('/').pop()+location.search+location.hash;
+  const login=new URL('02-login.html',location.href);login.searchParams.set('returnTo',destination);$('sign-in-again').href=login.href;
+}
+signInLink();$('sign-in-again').addEventListener('click',signInLink);
+const url=new URL(location.href);function param(k,value){if(value)url.searchParams.set(k,value);else url.searchParams.delete(k);try{history.replaceState(null,'',url);}catch{}}
+const destinations=[
+ {
+  "key": "members",
+  "e": "Members and roles",
+  "vi": "Thành viên và vai trò",
+  "scope": "organization",
+  "perm": "membership:read",
+  "body": "<div class=\"v3-table-wrap\"><table class=\"v3-table\"><thead><tr><th scope=\"col\"><span data-en=\"Member\" data-vi=\"Thành viên\">Member</span></th><th scope=\"col\"><span data-en=\"Role\" data-vi=\"Vai trò\">Role</span></th><th scope=\"col\"><span data-en=\"Scope\" data-vi=\"Phạm vi\">Scope</span></th></tr></thead><tbody><tr><td>Linh Nguyễn</td><td>QA</td><td>Lotus Commerce</td></tr><tr><td>Minh Trần</td><td><span data-en=\"Maintainer\" data-vi=\"Người bảo trì\">Maintainer</span></td><td>Lotus Commerce</td></tr><tr><td>Hà Lê</td><td>tenant_admin</td><td>Lotus Commerce</td></tr></tbody></table></div><div class=\"v3-row\"><a class=\"v3-btn\" href=\"28-members-roles.html\"><span data-en=\"Open destination\" data-vi=\"Mở trang chi tiết\">Open destination</span></a></div>"
+ },
+ {
+  "key": "project",
+  "e": "Project",
+  "vi": "Dự án",
+  "scope": "project",
+  "perm": "project:read",
+  "body": "<dl class=\"v3-facts\"><div><dt><span data-en=\"Organization\" data-vi=\"Tổ chức\">Organization</span></dt><dd>Lotus Commerce</dd></div><div><dt><span data-en=\"Project key\" data-vi=\"Mã dự án\">Project key</span></dt><dd>SHOP</dd></div><div><dt><span data-en=\"Default output language\" data-vi=\"Ngôn ngữ đầu ra mặc định\">Default output language</span></dt><dd>vi</dd></div></dl><p class=\"v3-muted\"><span data-en=\"Read-only project record. Output language is independent of interface language.\" data-vi=\"Dữ liệu dự án chỉ đọc. Ngôn ngữ đầu ra độc lập với ngôn ngữ giao diện.\">Read-only project record. Output language is independent of interface language.</span></p><div class=\"v3-row\"><a class=\"v3-btn\" href=\"24-project-connection.html?project=p-storefront\"><span data-en=\"Open destination\" data-vi=\"Mở trang chi tiết\">Open destination</span></a></div>"
+ },
+ {
+  "key": "ai",
+  "e": "AI settings",
+  "vi": "Cài đặt AI",
+  "scope": "project",
+  "perm": "project:read",
+  "body": "<dl class=\"v3-facts\"><div><dt><span data-en=\"Saved version\" data-vi=\"Phiên bản đã lưu\">Saved version</span></dt><dd>ais-3</dd></div><div><dt><span data-en=\"Last saved\" data-vi=\"Lưu gần nhất\">Last saved</span></dt><dd>Linh Nguyễn · 2026-10-23T09:00Z</dd></div><div><dt><span data-en=\"Output languages\" data-vi=\"Ngôn ngữ đầu ra\">Output languages</span></dt><dd>vi / en</dd></div></dl><p class=\"v3-note\"><span data-en=\"Off · The organization has not opted in. Manual requirements, checklists and review are available. Contact an administrator; project settings cannot grant consent.\" data-vi=\"Tắt · Tổ chức chưa chấp thuận. Vẫn có thể soạn yêu cầu, lập danh sách và duyệt thủ công. Liên hệ quản trị viên; cài đặt dự án không thể cấp chấp thuận.\">Off · The organization has not opted in. Manual requirements, checklists and review are available. Contact an administrator; project settings cannot grant consent.</span></p><div class=\"v3-row\"><a class=\"v3-btn\" href=\"44-ai-settings.html?revision=ais-3\"><span data-en=\"AI settings\" data-vi=\"Cài đặt AI\">AI settings</span></a><a class=\"v3-btn\" href=\"31-quota-retention.html?period=2026-10\"><span data-en=\"View AI usage\" data-vi=\"Xem mức sử dụng AI\">View AI usage</span></a></div>"
+ },
+ {
+  "key": "consent",
+  "e": "Organization AI opt-in",
+  "vi": "Chấp thuận AI của tổ chức",
+  "scope": "organization",
+  "perm": "project:read",
+  "body": "<p class=\"v3-note\"><span data-en=\"Off · The organization has not opted in. Manual requirements, checklists and review are available. Contact an administrator; project settings cannot grant consent.\" data-vi=\"Tắt · Tổ chức chưa chấp thuận. Vẫn có thể soạn yêu cầu, lập danh sách và duyệt thủ công. Liên hệ quản trị viên; cài đặt dự án không thể cấp chấp thuận.\">Off · The organization has not opted in. Manual requirements, checklists and review are available. Contact an administrator; project settings cannot grant consent.</span></p><dl class=\"v3-facts\"><div><dt><span data-en=\"On specimen\" data-vi=\"Mẫu đã bật\">On specimen</span></dt><dd>src-7</dd></div><div><dt><span data-en=\"Off specimen\" data-vi=\"Mẫu đã tắt\">Off specimen</span></dt><dd><span data-en=\"Current\" data-vi=\"Hiện tại\">Current</span></dd></div><div><dt><span data-en=\"Unknown specimen\" data-vi=\"Mẫu chưa rõ\">Unknown specimen</span></dt><dd><span data-en=\"Unavailable, not off\" data-vi=\"Không khả dụng, không phải đã tắt\">Unavailable, not off</span></dd></div></dl><div class=\"v3-row\"><a class=\"v3-btn\" href=\"44-ai-settings.html?revision=ais-3\"><span data-en=\"AI settings\" data-vi=\"Cài đặt AI\">AI settings</span></a><a class=\"v3-btn\" href=\"31-quota-retention.html?period=2026-10\"><span data-en=\"View AI usage\" data-vi=\"Xem mức sử dụng AI\">View AI usage</span></a></div>"
+ },
+ {
+  "key": "secrets",
+  "e": "Secret references",
+  "vi": "Tham chiếu bí mật",
+  "scope": "project",
+  "perm": "ingest_token:read",
+  "body": "<dl class=\"v3-facts\"><div><dt><span data-en=\"Ingest token name\" data-vi=\"Tên mã nhận dữ liệu\">Ingest token name</span></dt><dd>ci-storefront</dd></div><div><dt><span data-en=\"Prefix only\" data-vi=\"Chỉ tiền tố\">Prefix only</span></dt><dd>eg_ci_84</dd></div><div><dt><span data-en=\"Last rotated\" data-vi=\"Luân chuyển gần nhất\">Last rotated</span></dt><dd>2026-10-01</dd></div><div><dt><span data-en=\"Expires\" data-vi=\"Hết hạn\">Expires</span></dt><dd>2026-11-13</dd></div></dl><div class=\"v3-row\"><a class=\"v3-btn\" href=\"29-secret-references.html\"><span data-en=\"Open destination\" data-vi=\"Mở trang chi tiết\">Open destination</span></a></div>"
+ },
+ {
+  "key": "policy",
+  "e": "Policy",
+  "vi": "Chính sách",
+  "scope": "project",
+  "perm": "policy:write",
+  "body": "<dl class=\"v3-facts\"><div><dt><span data-en=\"Revision\" data-vi=\"Phiên bản\">Revision</span></dt><dd>pr-12</dd></div><div><dt><span data-en=\"Mode\" data-vi=\"Chế độ\">Mode</span></dt><dd>advisory</dd></div></dl><p class=\"v3-muted\"><span data-en=\"Existing evaluations are not rewritten by opening this policy.\" data-vi=\"Xem chính sách không ghi đè các đánh giá hiện có.\">Existing evaluations are not rewritten by opening this policy.</span></p><div class=\"v3-row\"><a class=\"v3-btn\" href=\"30-policy-revisions.html\"><span data-en=\"Open destination\" data-vi=\"Mở trang chi tiết\">Open destination</span></a></div>"
+ },
+ {
+  "key": "quota",
+  "e": "Quota and retention",
+  "vi": "Hạn mức và thời gian lưu giữ",
+  "scope": "project",
+  "perm": "project:read",
+  "body": "<p class=\"v3-muted\"><span data-en=\"Retention applies to this project. Usage balances are organization-scoped and require usage:read.\" data-vi=\"Thời gian lưu giữ áp dụng cho dự án này. Số dư sử dụng thuộc tổ chức và cần usage:read.\">Retention applies to this project. Usage balances are organization-scoped and require usage:read.</span></p><div class=\"v3-row\"><a class=\"v3-btn\" href=\"31-quota-retention.html?period=2026-10\"><span data-en=\"Open destination\" data-vi=\"Mở trang chi tiết\">Open destination</span></a></div>"
+ },
+ {
+  "key": "usage",
+  "e": "AI usage",
+  "vi": "Mức sử dụng AI",
+  "scope": "organization",
+  "perm": "usage:read",
+  "body": "<dl class=\"v3-facts\"><div><dt><span data-en=\"Balance · October 2026\" data-vi=\"Số dư · tháng 10/2026\">Balance · October 2026</span></dt><dd>1 240 / 2 000</dd></div><div><dt><span data-en=\"Checklist estimate\" data-vi=\"Ước tính danh sách\">Checklist estimate</span></dt><dd><span data-en=\"12 credits\" data-vi=\"12 tín dụng\">12 credits</span></dd></div></dl><p class=\"v3-muted\"><span data-en=\"Shared across projects. Credits are not currency.\" data-vi=\"Dùng chung giữa các dự án. Tín dụng không phải tiền tệ.\">Shared across projects. Credits are not currency.</span></p><div class=\"v3-row\"><a class=\"v3-btn\" href=\"31-quota-retention.html?period=2026-10\"><span data-en=\"Open destination\" data-vi=\"Mở trang chi tiết\">Open destination</span></a></div>"
+ },
+ {
+  "key": "audit",
+  "e": "Audit log",
+  "vi": "Nhật ký kiểm toán",
+  "scope": "organization",
+  "perm": "audit:read",
+  "body": "<p class=\"v3-muted\"><span data-en=\"Review who changed a resource and when. Audit metadata does not change release decisions.\" data-vi=\"Xem ai thay đổi tài nguyên và vào lúc nào. Siêu dữ liệu kiểm toán không thay đổi quyết định phát hành.\">Review who changed a resource and when. Audit metadata does not change release decisions.</span></p><div class=\"v3-row\"><a class=\"v3-btn\" href=\"32-audit-log.html\"><span data-en=\"Open destination\" data-vi=\"Mở trang chi tiết\">Open destination</span></a></div>"
+ },
+ {
+  "key": "security",
+  "e": "Security events",
+  "vi": "Sự kiện bảo mật",
+  "scope": "organization",
+  "perm": "security_event:read",
+  "body": "<dl class=\"v3-facts\"><div><dt><span data-en=\"Recent events\" data-vi=\"Sự kiện gần đây\">Recent events</span></dt><dd>3</dd></div><div><dt><span data-en=\"High severity\" data-vi=\"Mức nghiêm trọng cao\">High severity</span></dt><dd>2</dd></div><div><dt><span data-en=\"Support-scoped\" data-vi=\"Phạm vi hỗ trợ\">Support-scoped</span></dt><dd>sg-41</dd></div></dl><div class=\"v3-row\"><a class=\"v3-btn\" href=\"33-security-events.html\"><span data-en=\"Open destination\" data-vi=\"Mở trang chi tiết\">Open destination</span></a></div>"
+ },
+ {
+  "key": "integrations",
+  "e": "Integrations",
+  "vi": "Tích hợp",
+  "scope": "project",
+  "perm": "webhook:read",
+  "body": "<dl class=\"v3-facts\"><div><dt><span data-en=\"Webhook references\" data-vi=\"Tham chiếu webhook\">Webhook references</span></dt><dd>wh-19 / wh-20</dd></div></dl><p class=\"v3-muted\"><span data-en=\"Delivery attempts and retries are server-declared.\" data-vi=\"Số lần gửi và thử lại do máy chủ cung cấp.\">Delivery attempts and retries are server-declared.</span></p><div class=\"v3-row\"><a class=\"v3-btn\" href=\"35-integrations-webhooks.html\"><span data-en=\"Open destination\" data-vi=\"Mở trang chi tiết\">Open destination</span></a></div>"
+ },
+ {
+  "key": "support",
+  "e": "Support access",
+  "vi": "Quyền truy cập hỗ trợ",
+  "scope": "organization",
+  "perm": "support:read",
+  "body": "<dl class=\"v3-facts\"><div><dt><span data-en=\"Grant\" data-vi=\"Quyền cấp\">Grant</span></dt><dd>sg-41 · <span data-en=\"Expired\" data-vi=\"Đã hết hạn\">Expired</span></dd></div><div><dt><span data-en=\"Project scope\" data-vi=\"Phạm vi dự án\">Project scope</span></dt><dd>storefront-web</dd></div><div><dt><span data-en=\"Expires\" data-vi=\"Hết hạn\">Expires</span></dt><dd>2026-10-13T11:00Z</dd></div></dl><div class=\"v3-row\"><a class=\"v3-btn\" href=\"36-support-access.html\"><span data-en=\"Open destination\" data-vi=\"Mở trang chi tiết\">Open destination</span></a></div>"
+ },
+ {
+  "key": "tokens",
+  "e": "API tokens",
+  "vi": "Mã API",
+  "scope": "organization",
+  "perm": "api_token:read",
+  "body": "<p class=\"v3-muted\"><span data-en=\"Inspect token metadata and audit history, never a plaintext credential.\" data-vi=\"Xem siêu dữ liệu mã và lịch sử kiểm toán, không hiển thị bí mật dạng rõ.\">Inspect token metadata and audit history, never a plaintext credential.</span></p><div class=\"v3-row\"><a class=\"v3-btn\" href=\"37-api-tokens.html\"><span data-en=\"Open destination\" data-vi=\"Mở trang chi tiết\">Open destination</span></a></div>"
+ },
+ {
+  "key": "deploy",
+  "e": "Deploy targets",
+  "vi": "Đích triển khai",
+  "scope": "project",
+  "perm": "deploy_target:read",
+  "body": "<dl class=\"v3-facts\"><div><dt><span data-en=\"Target\" data-vi=\"Đích\">Target</span></dt><dd>dt-6</dd></div><div><dt><span data-en=\"Policy revision\" data-vi=\"Phiên bản chính sách\">Policy revision</span></dt><dd>pr-12</dd></div></dl><div class=\"v3-row\"><a class=\"v3-btn\" href=\"38-deploy-targets.html\"><span data-en=\"Open destination\" data-vi=\"Mở trang chi tiết\">Open destination</span></a></div>"
+ },
+ {
+  "key": "agents",
+  "e": "Agents V2",
+  "vi": "Tác nhân V2",
+  "scope": "project",
+  "perm": "agent_pool:read",
+  "body": "<p class=\"v3-muted\"><span data-en=\"Two project-visible pools. Inspect reported capabilities and scheduling fit.\" data-vi=\"Hai nhóm tác nhân thuộc phạm vi dự án. Kiểm tra khả năng đã báo cáo và điều kiện lập lịch.\">Two project-visible pools. Inspect reported capabilities and scheduling fit.</span></p><div class=\"v3-row\"><a class=\"v3-btn\" href=\"34-agent-pools.html\"><span data-en=\"Open destination\" data-vi=\"Mở trang chi tiết\">Open destination</span></a></div>"
+ }
+];
+const scope=$('settings-scope'),org=$('org'),proj=$('settings-project');const first=url.searchParams.get('tab');let tab=first||'members',profile='default';if(url.searchParams.get('scope')==='project'||(!url.searchParams.has('scope')&&destinations.find(t=>t.key===tab)?.scope==='project'))scope.value='project';if(url.searchParams.get('project')==='evidgate-e2e')proj.value='evidgate-e2e';if(url.searchParams.get('org')==='other')org.value='other';
+const words=(el,en,vi)=>{el.dataset.en=en;el.dataset.vi=vi;el.textContent=el.dataset[document.documentElement.lang];};
+function showSettings(direct=false){const orgScope=scope.value==='organization';document.body.dataset.scope=orgScope?'organization':'project';$('project-selector').hidden=orgScope||org.value==='other';const allowed=destinations.filter(d=>org.value==='lotus'&&d.scope===scope.value&&(d.key!=='agents'||profile==='v2')&&(profile!=='g1'||['project','ai','members','audit','usage','consent'].includes(d.key))&&(profile!=='viewer'||['project','audit'].includes(d.key)));const current=allowed.find(d=>d.key===tab)||(direct?null:allowed[0]);tab=current?.key||'';const list=$('nav-sections'),sel=$('section-select');list.replaceChildren();sel.replaceChildren();for(const d of allowed){const item=document.createElement('button');item.type='button';item.className='v3-btn v3-settings-item';words(item,d.e,d.vi);if(d===current)item.setAttribute('aria-current','page');item.onclick=()=>{tab=d.key;showSettings();};list.append(item);const o=document.createElement('option');o.value=d.key;words(o,d.e,d.vi);o.selected=d===current;sel.append(o);}sel.disabled=!allowed.length;$('compact-sections').hidden=!allowed.length;$('support-banner').hidden=profile==='viewer'||profile==='g1'||org.value!=='lotus';$('scope-status').hidden=profile==='viewer'||org.value!=='lotus';const sec=$('section-title'),body=$('section-body');body.replaceChildren();$('perm').textContent=current?.perm||'';const sc=orgScope?['Organization','Tổ chức']:['Project','Dự án'];const name=org.value==='other'?'':orgScope?' · Lotus Commerce':' · '+proj.value;words($('scope-crumb'),sc[0]+name,sc[1]+name);if(current){words(sec,current.e,current.vi);if(!orgScope&&proj.value!=='storefront-web'){const p=document.createElement('p');words(p,'No section metadata supplied for this project.','Chưa có dữ liệu cho mục này trong dự án.');body.append(p);}else{body.innerHTML=current.body;all('[data-en][data-vi]',body).forEach(el=>el.textContent=el.dataset[document.documentElement.lang]);}}else{words(sec,direct?'Not found':'No accessible sections',direct?'Không tìm thấy':'Không có mục nào có quyền truy cập');const p=document.createElement('p');words(p,'Contact an administrator for access.','Liên hệ quản trị viên để xin quyền truy cập.');body.append(p);}param('scope',scope.value);param('org',org.value);param('project',orgScope?'':proj.value==='storefront-web'?'p-storefront':proj.value);param('tab',tab);}
+$('section-select').onchange=e=>{tab=e.target.value;showSettings();};for(const el of [org,proj])el.onchange=()=>{tab='';showSettings();};review.addEventListener('change',()=>{profile=review.value;if(['viewer','g1','v2','default'].includes(profile)){tab='';showSettings();}});showSettings(Boolean(first));
+scope.onchange=()=>{tab='';showSettings();location.reload();};
+const projectMatches=matchesRecord({project:['p-storefront','storefront-web']});
+if(!matchesRecord({project:['p-storefront','storefront-web','evidgate-e2e']})||(first&&!tab)){unavailable();history.replaceState(null,'',location.pathname+'?'+incoming.toString());}
+const recordKeys=['run','evidence','evaluation','attempt','artifact','case','candidate','incident','object','proposal','release','revision','mapping','generated'];
+if(recordKeys.some(key=>incoming.has(key)&&!["project"].includes(key)))unavailable();
+</script>
+</body></html>
