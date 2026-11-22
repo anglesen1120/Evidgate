@@ -1,25 +1,24 @@
-<section
-  hlmCard
-  class="gap-(--eg-space-5) p-(--eg-space-5)"
-  aria-labelledby="run-timeline-title"
-  data-run-timeline
->
-  <h2 hlmCardTitle [size]="sectionSize" id="run-timeline-title" class="m-0">{{ copy.title }}</h2>
+<section hlmCard class="gap-0 py-0" aria-labelledby="run-timeline-title" data-run-timeline>
+  <h2
+    hlmCardTitle
+    [size]="sectionSize"
+    id="run-timeline-title"
+    class="m-0 border-b border-(--eg-border) px-(--eg-space-5) py-(--eg-space-4)"
+    [textContent]="copy.title"
+  ></h2>
   <ol
-    class="m-0 grid list-none gap-(--eg-space-3) p-0"
+    class="m-0 grid list-none px-(--eg-space-5) py-(--eg-space-4)"
     aria-labelledby="run-timeline-title"
     data-timeline-steps
   >
     @for (step of steps(); track step.state) {
       <li
-        class="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-start gap-x-(--eg-space-3) gap-y-(--eg-space-2) min-[768px]:grid-cols-[12ch_minmax(0,1fr)]"
+        class="relative grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-start gap-x-(--eg-space-3) gap-y-(--eg-space-1) py-(--eg-space-2) ps-(--eg-space-5) min-[768px]:grid-cols-[12ch_minmax(0,1fr)]"
         [attr.data-step]="step.state"
         [attr.data-status]="step.status"
         [attr.aria-current]="step.status === 'current' ? 'step' : null"
       >
-        <span class="min-w-0 font-(weight:--eg-weight-medium)" data-step-label>{{
-          stepLabel(step.state)
-        }}</span>
+        <span class="min-w-0 font-semibold" data-step-label>{{ stepLabel(step.state) }}</span>
         <app-status-pill
           data-step-status
           [tone]="stepTone(step.status, step.state)"
@@ -35,7 +34,10 @@
           "
         />
         @if (step.at; as at) {
-          <span class="col-span-full min-w-0 tabular-nums" data-step-time>
+          <span
+            class="eg-type-caption col-span-full min-w-0 text-muted-foreground tabular-nums"
+            data-step-time
+          >
             <app-absolute-time [value]="at" />
           </span>
         }
@@ -43,11 +45,17 @@
     }
   </ol>
   @if (stateHistory() === null) {
-    <p class="m-0 min-w-0" data-step-times>
+    <p
+      class="m-0 min-w-0 border-t border-(--eg-border) px-(--eg-space-5) py-(--eg-space-4) text-muted-foreground"
+      data-step-times
+    >
       {{ copy.historyUnavailable }}
     </p>
   } @else if (stateHistory()?.length === 0) {
-    <p class="m-0 min-w-0" data-step-times>
+    <p
+      class="m-0 min-w-0 border-t border-(--eg-border) px-(--eg-space-5) py-(--eg-space-4) text-muted-foreground"
+      data-step-times
+    >
       {{ copy.historyEmpty }}
     </p>
   }
@@ -55,7 +63,7 @@
     <div
       hlmAlert
       role="note"
-      class="grid min-w-0 gap-(--eg-space-2) rounded-(--eg-radius-sm) border border-(--eg-info-fg) bg-(--eg-info-bg) p-(--eg-space-3) text-(--eg-info-fg)"
+      class="mx-(--eg-space-5) mb-(--eg-space-5) grid min-w-0 gap-(--eg-space-2) border-(--eg-info-fg) bg-(--eg-info-bg) text-(--eg-info-fg)"
       data-after-cancel-note
     >
       <p class="m-0 min-w-0">{{ copy.afterCancelNote }}</p>

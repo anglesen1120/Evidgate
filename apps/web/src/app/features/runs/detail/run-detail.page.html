@@ -1,14 +1,33 @@
-<app-page-header class="mb-(--eg-space-7) block" [title]="copy.title">
-  <a
-    hlmBtn
-    appPageHeaderActions
-    [variant]="'outline'"
-    class="min-h-(--eg-control-touch) text-foreground visited:text-foreground hover:text-foreground"
-    routerLink=".."
-    [queryParamsHandling]="'preserve'"
-    >{{ copy.back }}</a
-  >
-</app-page-header>
+<div class="mb-(--eg-space-4) flex min-w-0 items-start gap-(--eg-space-4)">
+  <hlm-icon
+    [name]="'lucideActivity'"
+    class="box-border size-(--eg-space-10) rounded-(--eg-radius-md) bg-(--eg-accent-soft) p-(--eg-space-4) text-(--eg-accent-fg)"
+  />
+  <app-page-header class="min-w-0 flex-1" [title]="copy.title">
+    <a
+      hlmBtn
+      appPageHeaderActions
+      [variant]="'outline'"
+      class="min-h-(--eg-control-touch) text-foreground visited:text-foreground hover:text-foreground"
+      routerLink=".."
+      [queryParamsHandling]="'preserve'"
+      >{{ copy.back }}</a
+    >
+    <ng-container ngProjectAs="[appPageHeaderActions]">
+      @if (requestStatus() === 'ready' && store.run()) {
+        <app-cancel-run-action />
+        <button
+          hlmBtn
+          type="button"
+          class="min-h-(--eg-control-touch) whitespace-normal"
+          (click)="showEvidence()"
+        >
+          {{ copy.inspectEvidence }}
+        </button>
+      }
+    </ng-container>
+  </app-page-header>
+</div>
 <app-request-state
   [status]="requestStatus()"
   [error]="store.loadError()"
@@ -16,124 +35,125 @@
   (retry)="reload()"
 >
   @if (store.run(); as run) {
-    <div class="grid min-w-0 gap-(--eg-space-7)">
+    <div class="grid min-w-0 gap-(--eg-space-5)">
       <app-run-header
         [run]="run"
         [runCompleteness]="store.latestRevisionCompleteness()"
+        [decision]="summaryDecision()"
+        [decisionLoading]="store.decisionStatus() === 'loading' && store.decision() === null"
         (viewEvidence)="showEvidence()"
       />
-      <app-cancel-run-action />
-      <app-attempts-table
-        [attempts]="store.attempts()"
-        [status]="attemptsStatus()"
-        [error]="store.attemptsError()"
-        [hasMore]="store.hasMoreAttempts()"
-        [loadingMore]="store.attemptsLoadingMore()"
-        (retry)="retryAttempts()"
-        (loadMore)="loadMoreAttempts()"
-      />
-      <!-- One polite region for evidence updates, kept outside both tab panels: the Evidence panel
-           is hidden while the decision tab is active, and a hidden live region is never spoken. -->
-      <p
-        class="sr-only"
-        role="status"
-        [attr.aria-live]="'polite'"
-        data-evidence-announcement
-        [textContent]="evidenceAnnouncement()"
-      ></p>
       <div
-        hlmTabs
-        [tab]="detailTab()"
-        (tabActivated)="detailTab.set($event)"
-        class="min-w-0 gap-(--eg-space-4)"
+        class="grid min-w-0 items-start gap-(--eg-space-5) min-[1280px]:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
       >
-        <div
-          hlmTabsList
-          [variant]="'line'"
-          [attr.aria-label]="copy.sections"
-          class="h-auto w-full flex-wrap justify-start"
-        >
-          <button
-            type="button"
-            [hlmTabsTrigger]="'evidence'"
-            class="h-auto min-h-(--eg-control-touch) flex-none whitespace-nowrap"
-          >
-            {{ copy.evidence }}
-          </button>
-          <button
-            type="button"
-            [hlmTabsTrigger]="'decision'"
-            class="h-auto min-h-(--eg-control-touch) flex-none whitespace-nowrap"
-            [attr.aria-label]="copy.decision"
-          >
-            {{ copy.decisionTab }}
-          </button>
-        </div>
-        <!-- Brain hardcodes tabindex="0" on every panel and only hides the inactive one, so the
-             page binds the stop itself: the selected panel stays reachable when it renders no
-             control of its own, and the hidden panel leaves the Tab order. -->
-        <div
-          [hlmTabsContent]="'evidence'"
-          [attr.tabindex]="detailTab() === 'evidence' ? 0 : -1"
-          class="min-w-0 focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-(--eg-focus) focus-visible:outline-offset-(--eg-focus-offset)"
-        >
-          <app-evidence-panel
-            [decision]="store.decision()"
-            [pinnedRevision]="store.pinnedRevision()"
-            [pinned]="store.selectedRevision()"
-            [revisions]="store.revisions()"
-            [revisionsStatus]="revisionsStatus()"
-            [revisionsError]="store.revisionsError()"
-            [revisionsHasMore]="store.hasMoreRevisions()"
-            [revisionsLoadingMore]="store.revisionsLoadingMore()"
-            [newerRevisionExists]="store.newerRevisionExists()"
-            [latestRevisionNo]="store.latestRevisionNo()"
-            [retryEligible]="revisionsRetryEligible()"
-            (selectRevision)="selectRevision($event)"
-            (loadOlder)="loadOlderRevisions()"
-            (viewLatest)="viewLatestRevision()"
-            (retry)="retryRevisions()"
+        <div class="grid min-w-0 gap-(--eg-space-5)">
+          <app-attempts-table
+            [attempts]="store.attempts()"
+            [status]="attemptsStatus()"
+            [error]="store.attemptsError()"
+            [hasMore]="store.hasMoreAttempts()"
+            [loadingMore]="store.attemptsLoadingMore()"
+            (retry)="retryAttempts()"
+            (loadMore)="loadMoreAttempts()"
           />
-        </div>
-        <div
-          [hlmTabsContent]="'decision'"
-          [attr.tabindex]="detailTab() === 'decision' ? 0 : -1"
-          class="min-w-0 focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-(--eg-focus) focus-visible:outline-offset-(--eg-focus-offset)"
-        >
-          <app-decision-view
-            [decision]="store.decision()"
-            [pinnedRevision]="store.pinnedRevision()"
-            [updating]="store.decisionStatus() === 'loading'"
-            [shadowIgnored]="store.shadowIgnored()"
-            [error]="store.decisionError()"
-            [retryEligible]="decisionRetryEligible()"
-            (retry)="retryDecision()"
-            (viewDecisionEvidence)="viewDecisionEvidence($event)"
+          <app-producer-status-table
+            [slots]="producerSlots()"
+            [status]="'ready'"
+            [runAfterCancelEvents]="run.after_cancel_events"
+            [targetAnchor]="producerTargetAnchor()"
           />
+          <!-- A live region inside the inactive tab would not announce revision changes. -->
+          <p
+            class="sr-only"
+            role="status"
+            [attr.aria-live]="'polite'"
+            data-evidence-announcement
+            [textContent]="evidenceAnnouncement()"
+          ></p>
+          <div
+            hlmTabs
+            [tab]="detailTab()"
+            (tabActivated)="detailTab.set($event)"
+            class="min-w-0 gap-(--eg-space-4)"
+          >
+            <div
+              hlmTabsList
+              [variant]="'line'"
+              [attr.aria-label]="copy.sections"
+              class="h-auto w-full flex-wrap justify-start border-b border-(--eg-border)"
+            >
+              <button
+                type="button"
+                [hlmTabsTrigger]="'evidence'"
+                class="h-auto min-h-(--eg-control-touch) flex-none whitespace-nowrap"
+              >
+                {{ copy.evidence }}
+              </button>
+              <button
+                type="button"
+                [hlmTabsTrigger]="'decision'"
+                class="h-auto min-h-(--eg-control-touch) flex-none whitespace-nowrap"
+                [attr.aria-label]="copy.decision"
+              >
+                {{ copy.decisionTab }}
+              </button>
+            </div>
+            <!-- Brain defaults both panels to tabindex="0"; only the active one is a tab stop. -->
+            <div
+              [hlmTabsContent]="'evidence'"
+              [attr.tabindex]="detailTab() === 'evidence' ? 0 : -1"
+              class="min-w-0 focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-(--eg-focus) focus-visible:outline-offset-(--eg-focus-offset)"
+            >
+              <app-evidence-panel
+                [decision]="store.decision()"
+                [pinnedRevision]="store.pinnedRevision()"
+                [pinned]="store.selectedRevision()"
+                [revisions]="store.revisions()"
+                [revisionsStatus]="revisionsStatus()"
+                [revisionsError]="store.revisionsError()"
+                [revisionsHasMore]="store.hasMoreRevisions()"
+                [revisionsLoadingMore]="store.revisionsLoadingMore()"
+                [newerRevisionExists]="store.newerRevisionExists()"
+                [latestRevisionNo]="store.latestRevisionNo()"
+                [retryEligible]="revisionsRetryEligible()"
+                (selectRevision)="selectRevision($event)"
+                (loadOlder)="loadOlderRevisions()"
+                (viewLatest)="viewLatestRevision()"
+                (retry)="retryRevisions()"
+              />
+            </div>
+            <div
+              [hlmTabsContent]="'decision'"
+              [attr.tabindex]="detailTab() === 'decision' ? 0 : -1"
+              class="min-w-0 focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-(--eg-focus) focus-visible:outline-offset-(--eg-focus-offset)"
+            >
+              <app-decision-view
+                [decision]="store.decision()"
+                [pinnedRevision]="store.pinnedRevision()"
+                [updating]="store.decisionStatus() === 'loading'"
+                [shadowIgnored]="store.shadowIgnored()"
+                [error]="store.decisionError()"
+                [retryEligible]="decisionRetryEligible()"
+                (retry)="retryDecision()"
+                (viewDecisionEvidence)="viewDecisionEvidence($event)"
+              />
+            </div>
+          </div>
+        </div>
+        <div class="grid min-w-0 gap-(--eg-space-5)" data-run-history-context>
+          <app-run-timeline
+            [state]="run.state"
+            [stateHistory]="run.state_history"
+            [afterCancelEvents]="run.after_cancel_events"
+          />
+          <app-run-header
+            [run]="run"
+            [runCompleteness]="store.latestRevisionCompleteness()"
+            [view]="'context'"
+          />
+          <app-manifest-panel [summary]="store.manifest()" />
         </div>
       </div>
-      <div
-        class="grid min-w-0 gap-(--eg-space-7) min-[1280px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
-        data-run-history-context
-      >
-        <app-run-timeline
-          [state]="run.state"
-          [stateHistory]="run.state_history"
-          [afterCancelEvents]="run.after_cancel_events"
-        />
-        <app-run-header
-          [run]="run"
-          [runCompleteness]="store.latestRevisionCompleteness()"
-          [view]="'context'"
-        />
-      </div>
-      <app-manifest-panel [summary]="store.manifest()" />
-      <app-producer-status-table
-        [slots]="producerSlots()"
-        [status]="'ready'"
-        [runAfterCancelEvents]="run.after_cancel_events"
-        [targetAnchor]="producerTargetAnchor()"
-      />
       <!-- Release reads have their own status and retry window, independent of the run read. -->
       <app-release-panel
         [runId]="run.run_id"

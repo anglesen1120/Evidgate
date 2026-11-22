@@ -21,14 +21,19 @@ describe('RunHeaderComponent', () => {
     return { fixture, root: fixture.nativeElement as HTMLElement };
   }
 
-  it('renders a named compact card with independent state and completeness, no fabricated verdict', async () => {
+  it('labels four independent summary facts without fabricating an outcome or a decision', async () => {
     const { root } = await render();
-    expect(root.querySelector('section')?.getAttribute('data-slot')).toBe('card');
+    expect(root.querySelectorAll('dl > [data-slot="card"]')).toHaveLength(4);
     expect(root.querySelector('section')?.getAttribute('aria-labelledby')).toBe(
       'run-summary-title',
     );
     expect(root.querySelector('#run-summary-title')?.textContent).toContain(run.run_id);
-    expect(root.querySelectorAll('dt')).toHaveLength(3);
+    expect([...root.querySelectorAll('dt')].map((term) => term.textContent?.trim())).toEqual([
+      'Evidence completeness',
+      'Test outcome',
+      'Stored run decision',
+      'Evidence revision',
+    ]);
     expect(root.querySelector('app-run-state-pill')).not.toBeNull();
     expect(root.querySelector('app-evidence-badge')?.textContent).toContain(
       'Completeness: Unavailable',
