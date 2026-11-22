@@ -1,0 +1,32 @@
+/* P8 · every graphic has the same data in text. Neutral outcomes use distinct hatching. */
+.v3-period-controls,.v3-chart-key{display:flex;align-items:center;flex-wrap:wrap;gap:var(--eg-space-4)}
+.v3-period-controls select{width:auto}
+.v3-period-controls label,.v3-chart-key>span{display:inline-flex;align-items:center;gap:var(--eg-space-2)}
+.v3-analytics-grid{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:var(--eg-space-4)}
+.v3-delta{display:inline-flex;align-items:center;border-radius:var(--eg-radius-sm);padding:var(--eg-space-1) var(--eg-space-3);background:var(--eg-info-bg);color:var(--eg-info-fg);font:600 var(--eg-text-xs)/1.5 var(--eg-font-body)}
+.v3-delta--favorable{background:var(--eg-success-bg);color:var(--eg-success-fg)}
+.v3-series-pass{background:var(--eg-success-fg)}
+.v3-series-fail{background:repeating-linear-gradient(90deg,var(--eg-danger-fg) 0 5px,var(--eg-danger-bg) 5px 6px)}
+.v3-series-other{background:var(--eg-neutral-fg)}
+.v3-series-inconclusive{background:repeating-linear-gradient(45deg,var(--eg-neutral-fg) 0 3px,var(--eg-neutral-bg) 3px 5px)}
+.v3-series-pending{background:repeating-linear-gradient(0deg,var(--eg-pending-fg) 0 2px,var(--eg-pending-bg) 2px 5px)}
+.v3-chart-key i{display:inline-block;width:var(--eg-space-4);height:var(--eg-space-4);border:1px solid var(--eg-border-control);border-radius:var(--eg-radius-sm)}
+.v3-stack-chart{display:grid;grid-template-columns:auto minmax(0,1fr);gap:var(--eg-space-3);align-items:stretch}
+.v3-stack-chart__axis{display:flex;flex-direction:column;justify-content:space-between;align-items:end;color:var(--eg-text-muted);font-size:var(--eg-text-xs)}
+.v3-stack-chart__plot{height:9rem;display:flex;align-items:end;justify-content:space-evenly;gap:var(--eg-space-5);border-block:1px solid var(--eg-border-control);background:repeating-linear-gradient(to top,var(--eg-border) 0 1px,var(--eg-surface) 1px 25%)}
+.v3-stack-chart__bar{position:relative;display:flex;flex-direction:column-reverse;justify-content:start;width:min(22%,5rem);height:100%;outline-offset:var(--eg-focus-offset)}
+.v3-stack-chart__bar:focus-visible{outline:var(--eg-focus-width) solid var(--eg-focus)}
+.v3-stack-chart__bar .v3-tooltip{bottom:var(--eg-space-3);inset-inline-start:0}
+.v3-stack-chart__labels{grid-column:2;display:flex;justify-content:space-evenly;gap:var(--eg-space-3);font-size:var(--eg-text-xs)}
+.v3-chart-table:not(:has(input:checked)) table{position:absolute;clip-path:inset(50%);width:1px;height:1px;overflow:hidden;white-space:nowrap}
+.v3-donut{width:min(100%,10rem);aspect-ratio:1;border-radius:50%;display:grid;place-items:center;margin-inline:auto;background:conic-gradient(var(--eg-success-fg) 0 var(--pass),var(--eg-danger-fg) var(--pass) var(--decided),var(--eg-neutral-fg) var(--decided) 100%)}
+.v3-donut>b{display:grid;place-content:center;text-align:center;width:76%;aspect-ratio:1;border-radius:50%;background:var(--eg-surface);font:700 var(--eg-text-2xl)/1.25 var(--eg-font-display)}
+.v3-donut small{font:400 var(--eg-text-xs)/1.5 var(--eg-font-body)}
+.v3-breakdown,.v3-ranked,.v3-reasons{list-style:none;padding:0;display:grid;gap:var(--eg-space-3)}
+.v3-breakdown li,.v3-ranked li,.v3-reasons li{display:grid;align-items:center;gap:var(--eg-space-3);font-variant-numeric:tabular-nums}
+.v3-breakdown li{grid-template-columns:minmax(0,1fr) auto auto}
+.v3-ranked li{grid-template-columns:minmax(5ch,1fr) minmax(4ch,1fr) auto auto}
+.v3-reasons li{grid-template-columns:minmax(0,1fr) auto}
+.v3-reasons progress{grid-column:1/-1;height:var(--eg-space-3);width:100%}
+.v3-ranked progress{width:100%}
+@media(max-width:900px){.v3-analytics-grid{grid-template-columns:minmax(0,1fr)}}
