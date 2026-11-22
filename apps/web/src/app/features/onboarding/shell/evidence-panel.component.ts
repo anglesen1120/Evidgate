@@ -21,108 +21,118 @@ import { activationInstantLabel } from '../steps/default-policy';
   template: `
     <section
       hlmCard
-      class="min-w-0 gap-(--eg-space-4) p-(--eg-space-6)"
+      class="min-w-0 gap-0 py-0"
       data-testid="onboarding-evidence-panel"
       aria-labelledby="onboarding-evidence-title"
     >
-      <h2 hlmCardTitle [size]="sectionHeadingSize" id="onboarding-evidence-title">{{ title }}</h2>
-      <p class="m-0 text-sm text-muted-foreground">{{ sourceLabel }}</p>
-      @if (progress(); as resources) {
-        @if (resources.project; as createdProject) {
-          <dl
-            class="m-0 grid min-w-0 gap-(--eg-space-5) min-[768px]:grid-cols-2 min-[1280px]:grid-cols-3 [&>div]:min-w-0 [&_dt]:text-sm [&_dt]:text-muted-foreground [&_dd]:mx-0 [&_dd]:mb-0 [&_dd]:mt-(--eg-space-2) [&_dd]:wrap-anywhere"
-          >
-            <div>
-              <dt>{{ projectLabel }}</dt>
-              <dd>{{ createdProject.name }}</dd>
-            </div>
-            <div>
-              <dt>{{ identifierLabel }}</dt>
-              <dd class="font-mono text-sm">
-                <bdi>{{ createdProject.id }}</bdi>
-              </dd>
-            </div>
-            @if (resources.bindings.length) {
+      <header
+        hlmCardHeader
+        class="min-w-0 border-b border-border p-(--eg-space-5) md:px-(--eg-space-6)"
+      >
+        <h2 hlmCardTitle [size]="sectionHeadingSize" id="onboarding-evidence-title">{{ title }}</h2>
+        <p hlmCardDescription class="m-0 text-sm">{{ sourceLabel }}</p>
+      </header>
+      <div
+        hlmCardContent
+        class="grid min-w-0 gap-(--eg-space-4) p-(--eg-space-5) md:px-(--eg-space-6)"
+      >
+        @if (progress(); as resources) {
+          @if (resources.project; as createdProject) {
+            <dl
+              class="m-0 grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] gap-(--eg-space-5) [&>div]:min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mx-0 [&_dd]:mb-0 [&_dd]:mt-(--eg-space-2) [&_dd]:text-sm [&_dd]:font-semibold [&_dd]:wrap-anywhere"
+            >
               <div>
-                <dt>{{ bindingsLabel }}</dt>
-                <dd>
-                  {{ resources.bindings.length | number
-                  }}{{ resources.bindingsTruncated ? '+' : '' }}
-                </dd>
+                <dt>{{ projectLabel }}</dt>
+                <dd>{{ createdProject.name }}</dd>
               </div>
-            }
-            @if (resources.tokens.length) {
               <div>
-                <dt>{{ tokensLabel }}</dt>
-                <dd>
-                  {{ resources.tokens.length | number }}{{ resources.tokensTruncated ? '+' : '' }}
-                </dd>
-              </div>
-            }
-            @if (resources.sampleRun; as run) {
-              <div>
-                <dt>{{ sampleLabel }}</dt>
+                <dt>{{ identifierLabel }}</dt>
                 <dd class="font-mono text-sm">
-                  <bdi>{{ run.run_id }}</bdi>
+                  <bdi>{{ createdProject.id }}</bdi>
                 </dd>
               </div>
-              @if (run.current_evidence_revision_id; as revision) {
+              @if (resources.bindings.length) {
                 <div>
-                  <dt>{{ evidenceLabel }}</dt>
-                  <dd class="font-mono text-sm">
-                    <bdi>{{ revision }}</bdi>
+                  <dt>{{ bindingsLabel }}</dt>
+                  <dd>
+                    {{ resources.bindings.length | number
+                    }}{{ resources.bindingsTruncated ? '+' : '' }}
                   </dd>
                 </div>
               }
+              @if (resources.tokens.length) {
+                <div>
+                  <dt>{{ tokensLabel }}</dt>
+                  <dd>
+                    {{ resources.tokens.length | number }}{{ resources.tokensTruncated ? '+' : '' }}
+                  </dd>
+                </div>
+              }
+              @if (resources.sampleRun; as run) {
+                <div>
+                  <dt>{{ sampleLabel }}</dt>
+                  <dd class="font-mono text-sm">
+                    <bdi>{{ run.run_id }}</bdi>
+                  </dd>
+                </div>
+                @if (run.current_evidence_revision_id; as revision) {
+                  <div>
+                    <dt>{{ evidenceLabel }}</dt>
+                    <dd class="font-mono text-sm">
+                      <bdi>{{ revision }}</bdi>
+                    </dd>
+                  </div>
+                }
+              }
+              @if (activation(); as active) {
+                <div>
+                  <dt>{{ activationLabel }}</dt>
+                  <dd class="font-mono text-sm">
+                    <bdi>{{ active.policy_revision_id }}</bdi>
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ activatedAtLabel }}</dt>
+                  <dd>
+                    @if (activatedAt(); as instant) {
+                      <time [attr.datetime]="instant">{{
+                        instant | date: dateTimeFormat : '+0000'
+                      }}</time>
+                    } @else {
+                      {{ unavailable }}
+                    }
+                  </dd>
+                </div>
+              }
+            </dl>
+            @if (resources.activation.kind === 'forbidden') {
+              <p
+                class="m-0 text-sm text-muted-foreground"
+                [attr.data-resource-state]="'unavailable'"
+              >
+                {{ activationUnavailable }}
+              </p>
             }
-            @if (activation(); as active) {
-              <div>
-                <dt>{{ activationLabel }}</dt>
-                <dd class="font-mono text-sm">
-                  <bdi>{{ active.policy_revision_id }}</bdi>
-                </dd>
-              </div>
-              <div>
-                <dt>{{ activatedAtLabel }}</dt>
-                <dd>
-                  @if (activatedAt(); as instant) {
-                    <time [attr.datetime]="instant">{{
-                      instant | date: dateTimeFormat : '+0000'
-                    }}</time>
-                  } @else {
-                    {{ unavailable }}
-                  }
-                </dd>
-              </div>
-            }
-          </dl>
-          @if (resources.activation.kind === 'forbidden') {
-            <p class="m-0 text-sm text-muted-foreground" [attr.data-resource-state]="'unavailable'">
-              {{ activationUnavailable }}
+          } @else {
+            <p class="m-0 text-sm text-muted-foreground" [attr.data-resource-state]="'empty'">
+              {{ empty }}
             </p>
           }
         } @else {
-          <p
-            class="m-0 border-t border-border pt-(--eg-space-4) text-sm text-muted-foreground"
-            [attr.data-resource-state]="'empty'"
-          >
-            {{ empty }}
+          <p class="m-0 text-sm text-muted-foreground" [attr.data-resource-state]="'unavailable'">
+            {{ unavailable }}
           </p>
         }
-      } @else {
-        <p class="m-0 text-sm text-muted-foreground" [attr.data-resource-state]="'unavailable'">
-          {{ unavailable }}
-        </p>
-      }
-      @if (refreshFailed()) {
-        <p
-          class="m-0 text-sm text-muted-foreground"
-          role="status"
-          [attr.data-resource-state]="'stale'"
-        >
-          {{ stale }}
-        </p>
-      }
+        @if (refreshFailed()) {
+          <p
+            class="m-0 rounded-(--eg-radius-sm) bg-muted p-(--eg-space-4) text-sm text-foreground"
+            role="status"
+            [attr.data-resource-state]="'stale'"
+          >
+            {{ stale }}
+          </p>
+        }
+      </div>
     </section>
   `,
 })

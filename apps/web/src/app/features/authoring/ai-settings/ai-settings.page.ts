@@ -13,7 +13,14 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import type { AiSettingsTemplateView } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmCardTitle } from '@evidgate/ui/card';
+import {
+  HlmCard,
+  HlmCardContent,
+  HlmCardDescription,
+  HlmCardHeader,
+  HlmCardTitle,
+} from '@evidgate/ui/card';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmCheckbox } from '@evidgate/ui/checkbox';
@@ -29,10 +36,40 @@ import { ForbiddenPatternComponent } from '../../../shared/ui/states/forbidden-p
 import { ConflictDialogComponent } from '../../../shared/ui/conflict/conflict-dialog.component';
 import { isApiRequestError } from '../../../core/http/api-error';
 import { AiSettingsHistoryComponent } from './ai-settings-history.component';
-import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
-import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
+import { AiSettingsVersionCardComponent } from './ai-settings-version-card.component';
 import { AiSettingsStore } from './ai-settings.store';
 import { count, FIELDS, replaceText, textOf, type TextField } from './ai-settings.model';
+
+const fieldSection = {
+  description: 'context',
+  environment_url: 'context',
+  writing_style: 'guidance',
+  coverage_strategy: 'guidance',
+  exclusion_rules: 'guidance',
+  step_detail: 'guidance',
+  critical: 'priority',
+  high: 'priority',
+  medium: 'priority',
+  low: 'priority',
+  reason: 'save',
+} as const satisfies Record<TextField, string>;
+
+const indexedFields = FIELDS.map((field, index) => ({ ...field, index }));
+const sections = [
+  { key: 'context', title: $localize`:@@authoring.ai-settings.project-context:Project context` },
+  {
+    key: 'guidance',
+    title: $localize`:@@authoring.ai-settings.generation-guidance:Generation guidance`,
+  },
+  {
+    key: 'priority',
+    title: $localize`:@@authoring.ai-settings.priority-criteria:Priority criteria`,
+  },
+  { key: 'save', title: $localize`:@@authoring.ai-settings.save-section:Save a version` },
+].map((section) => ({
+  ...section,
+  fields: indexedFields.filter((field) => fieldSection[field.key] === section.key),
+}));
 
 function headingLevel(data: Record<string, unknown>): number {
   const level = data['pageHeadingLevel'];
@@ -45,6 +82,11 @@ function headingLevel(data: Record<string, unknown>): number {
   imports: [
     FormsModule,
     HlmButton,
+    HlmCard,
+    HlmCardContent,
+    HlmCardDescription,
+    HlmCardHeader,
+    ShellIconComponent,
     HlmCardTitle,
     HlmInput,
     HlmLabel,
@@ -59,8 +101,7 @@ function headingLevel(data: Record<string, unknown>): number {
     ForbiddenPatternComponent,
     ConflictDialogComponent,
     AiSettingsHistoryComponent,
-    AbsoluteTimeComponent,
-    CopyableIdentifierComponent,
+    AiSettingsVersionCardComponent,
   ],
   providers: [AiSettingsStore],
   templateUrl: './ai-settings.page.html',
@@ -74,6 +115,7 @@ export class AiSettingsPage {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly pageHeadingLevel = headingLevel(this.route.snapshot.data);
   protected readonly fields = FIELDS;
+  protected readonly sections = sections;
   protected readonly languages: readonly ('en' | 'vi')[] = ['en', 'vi'];
   protected readonly count = count;
   protected readonly textOf = textOf;
@@ -82,7 +124,6 @@ export class AiSettingsPage {
   protected readonly preview = signal<AiSettingsTemplateView | null>(null);
   protected readonly title = $localize`:@@authoring.ai-settings.title:AI settings`;
   protected readonly description = $localize`:@@authoring.ai-settings.intro:Project guidance for authored cases. Saving creates an immutable settings version.`;
-  protected readonly authorLabel = $localize`:@@authoring.ai-settings.author:Author membership`;
   private templateOpener: HTMLElement | null = null;
   private readonly compositionBands = new Map<TextField, number>();
   private readonly readOnlyHeading = viewChild<ElementRef<HTMLElement>>('readOnlyHeading');

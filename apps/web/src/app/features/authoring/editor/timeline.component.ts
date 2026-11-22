@@ -15,7 +15,7 @@ import {
 } from '@angular/core';
 import type { AuthoringVersionListItemDto } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmCardTitle } from '@evidgate/ui/card';
+import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
@@ -39,6 +39,7 @@ import { VersionDiffComponent } from './version-diff.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     HlmButton,
+    HlmCard,
     HlmCardTitle,
     HlmDialogImports,
     HlmInput,

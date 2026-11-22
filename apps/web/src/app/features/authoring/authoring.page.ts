@@ -23,6 +23,7 @@ import {
 import { RequestStateComponent } from '../../shared/ui/states/request-state.component';
 import { InlineFeedbackComponent } from '../../shared/ui/states/inline-feedback.component';
 import { CopyableIdentifierComponent } from '../../shared/ui/values/copyable-identifier.component';
+import { ShellIconComponent } from '../../shell/layout/shell-icon.component';
 import { AuthoringTreePaneComponent } from './authoring-tree-pane.component';
 import { AuthoringCaseTableComponent } from './authoring-case-table.component';
 import { AUTHORING_TREE_COPY, treeBrowseCappedHelp } from './authoring-tree.copy';
@@ -35,6 +36,7 @@ import { AuthoringStore } from './authoring.store';
     HlmButton,
     HlmCardImports,
     HeaderActionsDirective,
+    ShellIconComponent,
     PageHeaderComponent,
     SectionHeaderComponent,
     RequestStateComponent,

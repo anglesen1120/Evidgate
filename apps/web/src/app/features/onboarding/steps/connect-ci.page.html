@@ -1,9 +1,9 @@
 <section
-  class="grid min-w-0 gap-(--eg-space-5) text-sm text-muted-foreground wrap-anywhere [&_p]:m-0 [&_h4]:m-0 [&_h4]:text-sm [&_h4]:font-(weight:--eg-weight-semibold) [&_h4]:text-foreground [&_dl]:m-0 [&_dl]:grid [&_dl]:gap-(--eg-space-2) [&_dl>div]:grid [&_dl>div]:gap-(--eg-space-2) [&_dt]:font-(weight:--eg-weight-semibold) [&_dt]:text-foreground [&_dd]:m-0 [&_code]:font-mono"
+  class="grid min-w-0 gap-(--eg-space-5) text-sm text-muted-foreground wrap-anywhere [&_p]:m-0 [&_h4]:m-0 [&_h4]:text-sm [&_h4]:font-semibold [&_h4]:text-foreground [&_dl]:m-0 [&_dl]:grid [&_dl]:grid-cols-[repeat(auto-fit,minmax(min(100%,11rem),1fr))] [&_dl]:gap-(--eg-space-4) [&_dl>div]:min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:mt-(--eg-space-1) [&_dd]:text-foreground [&_code]:font-mono"
   data-testid="connect-ci-page"
   [attr.aria-busy]="busy()"
 >
-  <p>{{ intro }}</p>
+  <p class="max-w-[65ch]">{{ intro }}</p>
   @if (bindingPermitted() || tokenPermitted()) {
     <app-desktop-required-notice />
   }
@@ -110,31 +110,33 @@
       {{ busyLabel }}
     }
   </p>
-  <app-connection-health
-    class="block min-w-0"
-    [health]="health()"
-    [tokens]="store.tokens()"
-    [bindingsTruncated]="store.bindingsTruncated()"
-    [tokensTruncated]="store.tokensTruncated()"
-  />
-  <app-cli-quickstart
-    class="block min-w-0"
-    [projectRef]="quickstartProjectRef()"
-    [token]="quickstartToken()"
-    [binding]="quickstartBinding()"
-  />
+  <div class="grid min-w-0 items-start gap-(--eg-space-5) xl:grid-cols-2">
+    <app-connection-health
+      class="block min-w-0"
+      [health]="health()"
+      [tokens]="store.tokens()"
+      [bindingsTruncated]="store.bindingsTruncated()"
+      [tokensTruncated]="store.tokensTruncated()"
+    />
+    <app-cli-quickstart
+      class="block min-w-0"
+      [projectRef]="quickstartProjectRef()"
+      [token]="quickstartToken()"
+      [binding]="quickstartBinding()"
+    />
+  </div>
   <app-form-required-note *appDesktopMutation />
   <div class="grid min-w-0 gap-(--eg-space-5) min-[1280px]:grid-cols-2 min-[1280px]:items-start">
     <section
       hlmCard
-      class="min-w-0 gap-(--eg-space-5) overflow-visible p-(--eg-space-4) min-[768px]:p-(--eg-space-5)"
+      class="min-w-0 gap-(--eg-space-4) overflow-visible p-(--eg-space-4) md:p-(--eg-space-5)"
       data-testid="connect-oidc-panel"
       aria-labelledby="connect-oidc-heading"
     >
       <h3
         hlmCardTitle
         [size]="subsectionHeadingSize"
-        class="m-0 text-foreground focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
+        class="m-0 border-b border-border pb-(--eg-space-4) text-foreground focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
         #bindingHeading
         id="connect-oidc-heading"
         tabindex="-1"
@@ -147,7 +149,10 @@
         <p id="connect-binding-permission">{{ bindingPermission }}</p>
       }
       @if (policy.narrow()) {
-        <dl data-testid="connect-oidc-draft" class="whitespace-pre-wrap">
+        <dl
+          data-testid="connect-oidc-draft"
+          class="rounded-(--eg-radius-md) bg-muted p-(--eg-space-4) whitespace-pre-wrap"
+        >
           <div>
             <dt>{{ repoIdField.label }}</dt>
             <dd>{{ repositoryId() || noneLabel }}</dd>
@@ -177,7 +182,7 @@
           <label hlmLabel for="connect-oidc-repo-id">{{ repoIdField.label }}</label>
           <input
             hlmInput
-            class="min-h-(--eg-control-touch)"
+            class="min-h-(--eg-control-touch) w-full min-w-0"
             id="connect-oidc-repo-id"
             data-testid="connect-oidc-repo-id"
             name="repositoryId"
@@ -199,7 +204,7 @@
           <label hlmLabel for="connect-oidc-repo-name">{{ repoNameField.label }}</label>
           <input
             hlmInput
-            class="min-h-(--eg-control-touch)"
+            class="min-h-(--eg-control-touch) w-full min-w-0"
             id="connect-oidc-repo-name"
             data-testid="connect-oidc-repo-name"
             name="repositoryName"
@@ -222,7 +227,7 @@
           <label hlmLabel for="connect-oidc-refs">{{ refsField.label }}</label>
           <textarea
             hlmInput
-            class="min-h-(--eg-control-lg) resize-y"
+            class="min-h-(--eg-control-lg) w-full min-w-0 resize-y font-mono"
             id="connect-oidc-refs"
             data-testid="connect-oidc-refs"
             name="refs"
@@ -245,7 +250,7 @@
           <label hlmLabel for="connect-oidc-workflows">{{ workflowsField.label }}</label>
           <textarea
             hlmInput
-            class="min-h-(--eg-control-lg) resize-y"
+            class="min-h-(--eg-control-lg) w-full min-w-0 resize-y font-mono"
             id="connect-oidc-workflows"
             data-testid="connect-oidc-workflows"
             name="workflows"
@@ -314,14 +319,14 @@
     </section>
     <section
       hlmCard
-      class="min-w-0 gap-(--eg-space-5) overflow-visible p-(--eg-space-4) min-[768px]:p-(--eg-space-5)"
+      class="min-w-0 gap-(--eg-space-4) overflow-visible p-(--eg-space-4) md:p-(--eg-space-5)"
       data-testid="connect-token-panel"
       aria-labelledby="connect-token-heading"
     >
       <h3
         hlmCardTitle
         [size]="subsectionHeadingSize"
-        class="m-0 text-foreground focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
+        class="m-0 border-b border-border pb-(--eg-space-4) text-foreground focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
         #tokenHeading
         id="connect-token-heading"
         tabindex="-1"
@@ -333,7 +338,10 @@
         <p id="connect-token-permission">{{ tokenPermission }}</p>
       }
       @if (policy.narrow()) {
-        <dl data-testid="connect-token-draft">
+        <dl
+          data-testid="connect-token-draft"
+          class="rounded-(--eg-radius-md) bg-muted p-(--eg-space-4)"
+        >
           <div>
             <dt>{{ tokenNameField.label }}</dt>
             <dd>{{ tokenName() || noneLabel }}</dd>
@@ -351,7 +359,7 @@
           <label hlmLabel for="connect-token-name">{{ tokenNameField.label }}</label>
           <input
             hlmInput
-            class="min-h-(--eg-control-touch)"
+            class="min-h-(--eg-control-touch) w-full min-w-0"
             id="connect-token-name"
             data-testid="connect-token-name"
             name="tokenName"

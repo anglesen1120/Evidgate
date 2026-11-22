@@ -14,12 +14,13 @@ import {
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmCardTitle } from '@evidgate/ui/card';
+import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
 import { HlmTabsImports } from '@evidgate/ui/tabs';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { createFormFeedback } from '../../../shared/forms/form-feedback';
 import { FieldFeedbackComponent } from '../../../shared/forms/field-feedback.component';
 import { FormErrorSummaryComponent } from '../../../shared/forms/form-error-summary.component';
@@ -27,14 +28,13 @@ import {
   FieldRequirementComponent,
   FormRequiredNoteComponent,
 } from '../../../shared/forms/form-requirement.component';
-import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { ConflictDialogComponent } from '../../../shared/ui/conflict/conflict-dialog.component';
 import { PageHeaderComponent } from '../../../shared/ui/page-header/page-header.component';
 import { DesktopRequiredNoticeComponent, NarrowMutationPolicy } from '../../../shared/ui/narrow';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
-import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
-import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { ChecklistReviewTabComponent } from '../pending-changes/checklist-review-tab.component';
+import { EditorReadonlyValuesComponent } from './editor-readonly-values.component';
+import { EditorRecordSummaryComponent } from './editor-record-summary.component';
 import { EditorStore } from './editor.store';
 import { TimelineComponent } from './timeline.component';
 import {
@@ -80,6 +80,7 @@ function stepsSnapshot(
   imports: [
     FormsModule,
     HlmButton,
+    HlmCard,
     HlmCardTitle,
     HlmDialogImports,
     HlmInput,
@@ -90,13 +91,13 @@ function stepsSnapshot(
     FormErrorSummaryComponent,
     FormRequiredNoteComponent,
     FieldRequirementComponent,
-    AbsoluteTimeComponent,
     ConflictDialogComponent,
     PageHeaderComponent,
     DesktopRequiredNoticeComponent,
     RequestStateComponent,
-    CopyableIdentifierComponent,
-    StatusPillComponent,
+    EditorReadonlyValuesComponent,
+    EditorRecordSummaryComponent,
+    ShellIconComponent,
     TimelineComponent,
     ChecklistReviewTabComponent,
   ],
@@ -122,16 +123,9 @@ export class EditorPage {
   protected readonly fields = CASE_FIELDS;
   protected readonly stepFields = STEP_FIELDS;
   protected readonly priorities = PRIORITIES;
-  protected readonly lifecycleLabel = $localize`:@@authoring.editor.lifecycle:Status`;
-  protected readonly lifecycle = {
-    draft: $localize`:@@authoring.editor.lifecycle-draft:Draft`,
-    approved: $localize`:@@authoring.editor.lifecycle-approved:Approved`,
-    retired: $localize`:@@authoring.editor.lifecycle-retired:Retired`,
-  };
   protected readonly reasonUnavailable = REASON_UNAVAILABLE;
   protected readonly writeReason = WRITE_REASON;
   protected readonly count = codePoints;
-  protected readonly notSet = $localize`:@@authoring.editor.not-set:Not set`;
   protected readonly errorOf = errorOf;
   protected readonly tab = linkedSignal({ source: this.store.scope, computation: () => 'editor' });
   protected readonly reviewVisited = linkedSignal({
@@ -147,7 +141,7 @@ export class EditorPage {
       : $localize`:@@authoring.editor.page-title:Case editor`,
   );
   protected readonly intro = $localize`:@@authoring.editor.intro:Edit an existing manual case. Saving appends a version; past versions remain unchanged.`;
-  protected readonly codeLabel = $localize`:@@authoring.editor.case-code:Case code`;
+  protected readonly contentTitle = $localize`:@@authoring.editor.case-content:Case content`;
   protected readonly status = computed(() => {
     const error = errorOf(this.store.head.error());
     if (

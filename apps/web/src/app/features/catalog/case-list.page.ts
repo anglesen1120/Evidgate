@@ -19,6 +19,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { combineLatest, map } from 'rxjs';
 import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
@@ -28,6 +29,7 @@ import { RequestStateComponent } from '../../shared/ui/states/request-state.comp
 import { InlineFeedbackComponent } from '../../shared/ui/states/inline-feedback.component';
 import { RETAINED_ROWS_CAP } from '../../shared/keyset-retention';
 import { NarrowMutationPolicy } from '../../shared/ui/narrow/narrow-mutation-policy';
+import { ShellIconComponent } from '../../shell/layout/shell-icon.component';
 import { CatalogMembersReader } from './catalog-members.reader';
 import { CaseListTableComponent } from './case-list-table.component';
 import {
@@ -44,6 +46,8 @@ import {
     DecimalPipe,
     FormsModule,
     HlmButton,
+    HlmCard,
+    HlmCardTitle,
     HlmInput,
     HlmLabel,
     HlmSelectImports,
@@ -52,6 +56,7 @@ import {
     RequestStateComponent,
     InlineFeedbackComponent,
     CaseListTableComponent,
+    ShellIconComponent,
   ],
   providers: [CaseListStore, CatalogMembersReader],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -99,6 +104,7 @@ export class CaseListPage {
   protected readonly copy = {
     title: $localize`:@@catalog.title:Test catalog`,
     description: $localize`:@@catalog.description:Browse stable automated test identities in this project. A missing identity is not a failed test.`,
+    results: $localize`:@@catalog.results-title:Catalog results`,
     filters: $localize`:@@catalog.filters:Filter test identities`,
     filterHint: $localize`:@@catalog.loaded-filter-hint:Status and framework filter the server list. Search matches name or ID in loaded results only; it never loads more results.`,
     status: $localize`:@@catalog.status:Status`,

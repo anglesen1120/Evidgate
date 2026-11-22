@@ -1,29 +1,40 @@
-@if (ownsPageHeading) {
-  <app-page-header
-    [title]="copy.title"
-    [description]="copy.description"
-    [titleId]="'authoring-page-title'"
+<div class="flex min-w-0 items-start gap-(--eg-space-4)">
+  <span
+    aria-hidden="true"
+    class="grid size-(--eg-space-9) shrink-0 place-items-center rounded-(--eg-radius-md) border border-border bg-(--eg-accent-soft) text-primary md:size-(--eg-space-10)"
   >
-    <div appPageHeaderActions class="flex min-w-0 flex-wrap items-center gap-(--eg-space-3)">
-      <ng-container *ngTemplateOutlet="refresh" />
-    </div>
-  </app-page-header>
-} @else {
-  <app-section-header
-    [title]="copy.title"
-    [description]="copy.description"
-    [titleId]="'authoring-page-title'"
-  >
-    <div appSectionHeaderActions class="flex min-w-0 flex-wrap items-center gap-(--eg-space-3)">
-      <ng-container *ngTemplateOutlet="refresh" />
-    </div>
-  </app-section-header>
-}
+    <app-shell-icon [name]="'tree'" />
+  </span>
+  @if (ownsPageHeading) {
+    <app-page-header
+      class="min-w-0 flex-1"
+      [title]="copy.title"
+      [description]="copy.description"
+      [titleId]="'authoring-page-title'"
+    >
+      <div appPageHeaderActions>
+        <ng-container *ngTemplateOutlet="refresh" />
+      </div>
+    </app-page-header>
+  } @else {
+    <app-section-header
+      class="min-w-0 flex-1"
+      [title]="copy.title"
+      [description]="copy.description"
+      [titleId]="'authoring-page-title'"
+    >
+      <div appSectionHeaderActions>
+        <ng-container *ngTemplateOutlet="refresh" />
+      </div>
+    </app-section-header>
+  }
+</div>
 <ng-template #refresh>
   <button
     hlmBtn
     [variant]="'outline'"
     type="button"
+    class="eg-header-action"
     data-authoring-refresh
     [disabled]="busy()"
     (click)="retry()"
@@ -32,44 +43,6 @@
   </button>
 </ng-template>
 
-@if (!denied()) {
-  <nav class="breadcrumb" data-authoring-breadcrumb [attr.aria-label]="copy.path">
-    <ol>
-      <li>
-        <button hlmBtn [variant]="'link'" type="button" (click)="select(null)">
-          {{ copy.all }}
-        </button>
-      </li>
-      @for (entry of selectedPath(); track entry.node_id) {
-        <li>
-          <span class="separator" aria-hidden="true">/</span>
-          @if (entry.node_id === store.selectedNodeId()) {
-            <bdi [attr.aria-current]="'location'">{{ entry.title }}</bdi>
-          } @else {
-            <button hlmBtn [variant]="'link'" type="button" (click)="select(entry.node_id)">
-              <bdi>{{ entry.title }}</bdi>
-            </button>
-          }
-        </li>
-      }
-    </ol>
-  </nav>
-  @if (store.selectedNode(); as selected) {
-    <dl class="selected-id">
-      <dt>{{ copy.selectedId }}</dt>
-      <dd>
-        <app-copyable-identifier
-          [value]="selected.node_id"
-          [label]="copy.selectedId"
-          [copySize]="'lg'"
-        />
-      </dd>
-    </dl>
-  } @else {
-    <p class="scope-help">{{ copy.choose }}</p>
-  }
-}
-
 <div class="panes">
   <section
     hlmCard
@@ -77,7 +50,7 @@
     aria-labelledby="authoring-hierarchy-title"
     [attr.aria-busy]="busy()"
   >
-    <div hlmCardHeader>
+    <div hlmCardHeader class="border-b border-border">
       <app-section-header
         [title]="copy.hierarchy"
         [description]="copy.hierarchyDescription"
@@ -132,13 +105,50 @@
   </section>
 
   <section hlmCard class="case-pane" data-authoring-cases aria-labelledby="authoring-cases-title">
-    <div hlmCardHeader>
+    <div hlmCardHeader class="border-b border-border">
       <app-section-header
         [title]="copy.table"
         [titleId]="'authoring-cases-title'"
         [headingLevel]="ownsPageHeading ? 2 : 3"
         [size]="'subsection'"
       />
+      @if (!denied()) {
+        <nav class="breadcrumb" data-authoring-breadcrumb [attr.aria-label]="copy.path">
+          <ol>
+            <li>
+              <button hlmBtn [variant]="'link'" type="button" (click)="select(null)">
+                {{ copy.all }}
+              </button>
+            </li>
+            @for (entry of selectedPath(); track entry.node_id) {
+              <li>
+                <span class="separator" aria-hidden="true">/</span>
+                @if (entry.node_id === store.selectedNodeId()) {
+                  <bdi [attr.aria-current]="'location'">{{ entry.title }}</bdi>
+                } @else {
+                  <button hlmBtn [variant]="'link'" type="button" (click)="select(entry.node_id)">
+                    <bdi>{{ entry.title }}</bdi>
+                  </button>
+                }
+              </li>
+            }
+          </ol>
+        </nav>
+        @if (store.selectedNode(); as selected) {
+          <dl class="selected-id">
+            <dt>{{ copy.selectedId }}</dt>
+            <dd>
+              <app-copyable-identifier
+                [value]="selected.node_id"
+                [label]="copy.selectedId"
+                [copySize]="'lg'"
+              />
+            </dd>
+          </dl>
+        } @else {
+          <p class="scope-help">{{ copy.choose }}</p>
+        }
+      }
     </div>
     <div hlmCardContent>
       @if (!denied()) {

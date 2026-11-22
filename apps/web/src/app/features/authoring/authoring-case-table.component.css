@@ -4,7 +4,6 @@
   min-inline-size: 0;
   color: var(--eg-text);
 }
-.scope-help,
 .help,
 .error,
 .pagination p {
@@ -13,8 +12,9 @@
   font-size: var(--eg-text-sm);
   line-height: var(--eg-leading-sm);
 }
-.scope-help,
 .help {
+  font-size: var(--eg-text-xs);
+  line-height: var(--eg-leading-xs);
   color: var(--eg-text-muted);
   max-inline-size: 65ch;
 }
@@ -27,11 +27,19 @@
   min-inline-size: 0;
   gap: var(--eg-space-4);
 }
-.filter-fields {
+.filters {
+  padding-block-end: var(--eg-space-5);
+  border-block-end: var(--eg-border-width) solid var(--eg-border);
+}
+.filter-fields,
+.query-fields {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
-  gap: var(--eg-space-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: var(--eg-space-3) var(--eg-space-4);
   min-inline-size: 0;
+}
+.query-fields {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
 }
 .field {
   display: grid;
@@ -48,7 +56,7 @@ hlm-select-item {
 hlm-select-trigger,
 input,
 button {
-  min-block-size: var(--eg-control-touch);
+  min-block-size: var(--eg-control-md);
   inline-size: 100%;
   max-inline-size: 100%;
   min-inline-size: 0;
@@ -66,7 +74,11 @@ button {
   inline-size: auto;
   white-space: normal;
   block-size: auto;
-  padding-block: var(--eg-space-3);
+  padding-block: var(--eg-space-2);
+}
+.pagination {
+  border-block-start: var(--eg-border-width) solid var(--eg-border);
+  padding-block-start: var(--eg-space-4);
 }
 .pagination .field {
   min-inline-size: 8ch;
@@ -76,10 +88,14 @@ button {
   font-variant-numeric: tabular-nums;
 }
 @media (min-width: 768px) {
-  .search-field {
-    grid-column: 1 / -1;
-  }
   .pagination p {
     flex: 1 1 auto;
+  }
+}
+@media (pointer: coarse) {
+  hlm-select-trigger,
+  input,
+  button {
+    min-block-size: var(--eg-control-touch);
   }
 }

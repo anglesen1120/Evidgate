@@ -1,23 +1,37 @@
-<app-page-header
-  class="mb-(--eg-space-7) block"
-  [title]="copy.title"
-  [description]="copy.description"
-/>
-<section
-  class="mb-(--eg-space-7) grid min-w-0 gap-(--eg-space-4)"
-  aria-labelledby="catalog-filters-heading"
->
-  <app-section-header [titleId]="'catalog-filters-heading'" [title]="copy.filters" />
-  <p id="catalog-filter-hint" class="m-0 max-w-prose text-muted-foreground">
-    {{ copy.filterHint }}
-  </p>
-  <form
-    class="grid min-w-0 gap-(--eg-space-4)"
-    (ngSubmit)="apply()"
-    [attr.aria-describedby]="'catalog-filter-hint'"
+<div class="mb-(--eg-space-6) flex min-w-0 items-start gap-(--eg-space-4)">
+  <span
+    class="grid size-(--eg-space-9) shrink-0 place-items-center rounded-(--eg-radius-md) border border-border bg-(--eg-accent-soft) text-primary md:size-(--eg-space-10)"
   >
-    <div class="grid min-w-0 gap-(--eg-space-4) md:grid-cols-2 xl:grid-cols-3">
-      <div class="grid min-w-0 content-start gap-(--eg-space-2)">
+    <app-shell-icon [name]="'list'" />
+  </span>
+  <app-page-header class="min-w-0 flex-1" [title]="copy.title" [description]="copy.description" />
+</div>
+<section
+  hlmCard
+  class="min-w-0 gap-0 overflow-visible rounded-(--eg-radius-lg) py-0"
+  aria-labelledby="catalog-results-heading"
+>
+  <app-section-header
+    class="border-b border-border px-(--eg-space-5) py-(--eg-space-5) md:px-(--eg-space-6)"
+    [titleId]="'catalog-results-heading'"
+    [title]="copy.results"
+  />
+  <section
+    class="grid min-w-0 gap-(--eg-space-4) border-b border-border px-(--eg-space-5) py-(--eg-space-5) md:px-(--eg-space-6)"
+    aria-labelledby="catalog-filters-heading"
+  >
+    <div class="grid min-w-0 gap-(--eg-space-2)">
+      <h3 hlmCardTitle [size]="'subsection'" id="catalog-filters-heading">{{ copy.filters }}</h3>
+      <p id="catalog-filter-hint" class="eg-type-caption max-w-prose text-muted-foreground">
+        {{ copy.filterHint }}
+      </p>
+    </div>
+    <form
+      class="grid min-w-0 gap-(--eg-space-3) md:grid-cols-[repeat(2,minmax(0,1fr))_minmax(0,1.5fr)] xl:grid-cols-[repeat(2,minmax(0,1fr))_minmax(0,1.7fr)_auto]"
+      (ngSubmit)="apply()"
+      [attr.aria-describedby]="'catalog-filter-hint'"
+    >
+      <div class="grid min-w-0 content-start gap-(--eg-space-2) md:row-span-3 md:grid-rows-subgrid">
         <label hlmLabel for="catalog-status" class="whitespace-normal">{{ copy.status }}</label>
         <hlm-select
           name="status"
@@ -42,7 +56,7 @@
           </hlm-select-content>
         </hlm-select>
       </div>
-      <div class="grid min-w-0 content-start gap-(--eg-space-2)">
+      <div class="grid min-w-0 content-start gap-(--eg-space-2) md:row-span-3 md:grid-rows-subgrid">
         <label hlmLabel for="catalog-framework" class="whitespace-normal">{{
           copy.framework
         }}</label>
@@ -55,11 +69,11 @@
           (ngModelChange)="updateDraft({ framework: $event })"
           [attr.aria-describedby]="'catalog-framework-hint'"
         />
-        <p id="catalog-framework-hint" class="m-0 text-muted-foreground">
+        <p id="catalog-framework-hint" class="eg-type-caption text-muted-foreground">
           {{ copy.frameworkHint }}
         </p>
       </div>
-      <div class="grid min-w-0 content-start gap-(--eg-space-2)">
+      <div class="grid min-w-0 content-start gap-(--eg-space-2) md:row-span-3 md:grid-rows-subgrid">
         <label hlmLabel for="catalog-search" class="whitespace-normal">{{ copy.search }}</label>
         <input
           hlmInput
@@ -71,156 +85,169 @@
           (ngModelChange)="updateDraft({ search: $event })"
         />
       </div>
-    </div>
-    <div class="flex flex-wrap gap-(--eg-space-3)">
-      <button
-        hlmBtn
-        type="submit"
-        class="min-h-(--eg-control-touch) whitespace-normal"
-        data-catalog-apply
+      <div
+        class="flex min-w-0 flex-wrap items-start gap-(--eg-space-3) md:col-span-3 xl:col-span-1 xl:col-start-4 xl:row-start-2"
       >
-        {{ copy.apply }}
-      </button>
-      <button
-        hlmBtn
-        type="button"
-        [variant]="'outline'"
-        class="min-h-(--eg-control-touch) whitespace-normal"
-        (click)="clear()"
-        data-catalog-clear
-      >
-        {{ copy.clear }}
-      </button>
-    </div>
-  </form>
-</section>
-<p class="sr-only" role="status" data-catalog-summary>
-  @if (store.status() === 'ready') {
-    <span i18n="@@catalog.loaded-count-live">{{ store.rows().length | number }} loaded</span>
-    @if (store.isEmpty()) {
-      <span i18n="@@catalog.loaded-search-no-results"
-        >No matching identities in loaded results.</span
-      >
-    } @else {
-      <span i18n="@@catalog.loaded-search-results"
-        >{{ store.visibleRows().length | number }} matching identities in loaded results.</span
-      >
-    }
-  }
-  @if (store.browseCapped()) {
-    <span>{{ capAnnouncement() }}</span>
-  }
-</p>
-<app-request-state
-  [status]="store.status()"
-  [loadingLabel]="copy.loading"
-  [error]="store.loadError()"
-  [empty]="store.isEmpty()"
-  [emptyTitle]="store.isFiltered() ? copy.noMatchTitle : copy.emptyTitle"
-  [emptyDescription]="store.isFiltered() ? copy.noMatchDescription : copy.emptyDescription"
-  [emptyActionLabel]="store.isFiltered() ? copy.clear : undefined"
-  (emptyAction)="clear()"
-  [retryEligible]="store.loadError()?.retryable ?? false"
-  (retry)="store.reload()"
->
-  <p id="catalog-owner-help" class="mb-(--eg-space-4) max-w-prose text-muted-foreground">
-    {{ ownerHelp() }}
-  </p>
-  @if (canReadMembers() && members.status() === 'error' && canAssign()) {
-    <app-inline-feedback
-      class="mb-(--eg-space-4) block"
-      [tone]="'warning'"
-      [title]="copy.ownersFailed"
-      [description]="members.failure()?.message"
-      [actionLabel]="copy.retryOwners"
-      (action)="members.reload()"
-    />
-  }
-  <app-case-list-table
-    [rows]="store.visibleRows()"
-    [members]="members.members()"
-    [membersReady]="members.status() === 'ready'"
-    [canAssign]="canAssign()"
-    [ownerPending]="store.ownerPending"
-    [ownerFailure]="store.ownerFailure"
-    (ownerChange)="assignOwner($event)"
-    (reloadOwners)="store.reloadOwner($event)"
-  />
-</app-request-state>
-@if (store.browseCapped()) {
-  <app-inline-feedback
-    class="mt-(--eg-space-4) block min-w-0"
-    [tone]="'warning'"
-    [title]="copy.browseCapped"
-    [description]="copy.browseCappedHelp"
-    [announcement]="'off'"
-    data-catalog-browse-capped
-  />
-}
-@if (store.status() === 'ready') {
-  <nav
-    class="mt-(--eg-space-4) flex min-w-0 flex-wrap items-end gap-(--eg-space-4)"
-    [attr.aria-label]="copy.pagination"
-    [attr.aria-busy]="store.loadingMore()"
-    data-catalog-pagination
-  >
-    <div class="grid min-w-0 gap-(--eg-space-2)">
-      <label hlmLabel for="catalog-page-size">{{ copy.pageSize }}</label>
-      <hlm-select
-        [ngModel]="store.pageSize()"
-        (ngModelChange)="setPageSize($event)"
-        [itemToString]="pageSizeLabel"
-      >
-        <hlm-select-trigger
-          [buttonId]="'catalog-page-size'"
-          class="min-h-(--eg-control-touch) min-w-(--eg-control-touch)"
+        <button
+          hlmBtn
+          type="submit"
+          class="min-h-(--eg-control-touch) whitespace-normal"
+          data-catalog-apply
         >
-          <hlm-select-value />
-        </hlm-select-trigger>
-        <hlm-select-content *hlmSelectPortal [aria-label]="copy.pageSize">
-          @for (size of pageSizes; track size) {
-            <hlm-select-item [value]="size" class="min-h-(--eg-control-touch)">{{
-              size | number
-            }}</hlm-select-item>
-          }
-        </hlm-select-content>
-      </hlm-select>
-    </div>
-    <p
-      #loadedSummary
-      tabindex="-1"
-      class="m-0 self-center tabular-nums text-muted-foreground focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-solid focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
-      data-catalog-loaded
-    >
-      <span i18n="@@catalog.loaded-count">{{ store.rows().length | number }} loaded</span>
-    </p>
-    @if (store.hasMore()) {
-      <button
-        hlmBtn
-        type="button"
-        [variant]="'outline'"
-        class="min-h-(--eg-control-touch) max-w-full whitespace-normal"
-        [disabled]="store.loadingMore()"
-        (click)="loadMore($event)"
-        data-catalog-load-more
-      >
-        {{ store.loadingMore() ? copy.loadingMore : copy.loadMore }}
-      </button>
+          {{ copy.apply }}
+        </button>
+        <button
+          hlmBtn
+          type="button"
+          [variant]="'outline'"
+          class="min-h-(--eg-control-touch) whitespace-normal"
+          (click)="clear()"
+          data-catalog-clear
+        >
+          {{ copy.clear }}
+        </button>
+      </div>
+    </form>
+  </section>
+  <p class="sr-only" role="status" data-catalog-summary>
+    @if (store.status() === 'ready') {
+      <span i18n="@@catalog.loaded-count-live">{{ store.rows().length | number }} loaded</span>
+      @if (store.isEmpty()) {
+        <span i18n="@@catalog.loaded-search-no-results"
+          >No matching identities in loaded results.</span
+        >
+      } @else {
+        <span i18n="@@catalog.loaded-search-results"
+          >{{ store.visibleRows().length | number }} matching identities in loaded results.</span
+        >
+      }
     }
-  </nav>
-  @if (store.loadMoreFailure(); as failure) {
+    @if (store.browseCapped()) {
+      <span>{{ capAnnouncement() }}</span>
+    }
+  </p>
+  <app-request-state
+    [status]="store.status()"
+    [loadingLabel]="copy.loading"
+    [error]="store.loadError()"
+    [empty]="store.isEmpty()"
+    [emptyTitle]="store.isFiltered() ? copy.noMatchTitle : copy.emptyTitle"
+    [emptyDescription]="store.isFiltered() ? copy.noMatchDescription : copy.emptyDescription"
+    [emptyActionLabel]="store.isFiltered() ? copy.clear : undefined"
+    (emptyAction)="clear()"
+    [retryEligible]="store.loadError()?.retryable ?? false"
+    (retry)="store.reload()"
+  >
+    <p
+      id="catalog-owner-help"
+      class="eg-type-caption text-muted-foreground px-(--eg-space-5) py-(--eg-space-4) md:px-(--eg-space-6)"
+    >
+      {{ ownerHelp() }}
+    </p>
+    @if (canReadMembers() && members.status() === 'error' && canAssign()) {
+      <app-inline-feedback
+        class="mx-(--eg-space-5) mb-(--eg-space-4) block md:mx-(--eg-space-6)"
+        [tone]="'warning'"
+        [title]="copy.ownersFailed"
+        [description]="members.failure()?.message"
+        [actionLabel]="copy.retryOwners"
+        (action)="members.reload()"
+      />
+    }
+    <app-case-list-table
+      [rows]="store.visibleRows()"
+      [members]="members.members()"
+      [membersReady]="members.status() === 'ready'"
+      [canAssign]="canAssign()"
+      [ownerPending]="store.ownerPending"
+      [ownerFailure]="store.ownerFailure"
+      (ownerChange)="assignOwner($event)"
+      (reloadOwners)="store.reloadOwner($event)"
+    />
+  </app-request-state>
+  @if (store.browseCapped()) {
     <app-inline-feedback
-      class="mt-(--eg-space-4) block"
-      [tone]="'destructive'"
-      [title]="copy.loadMoreFailed"
-      [description]="failure.message"
-      [actionLabel]="failure.retryable ? copy.retryMore : undefined"
-      [actionDisabled]="store.loadingMore()"
-      (action)="loadMore()"
-      data-catalog-page-error
+      class="mx-(--eg-space-5) my-(--eg-space-4) block min-w-0 md:mx-(--eg-space-6)"
+      [tone]="'warning'"
+      [title]="copy.browseCapped"
+      [description]="copy.browseCappedHelp"
+      [announcement]="'off'"
+      data-catalog-browse-capped
     />
   }
-  <p class="mt-(--eg-space-4) max-w-prose text-muted-foreground" data-catalog-contract-note>
-    {{ copy.contractNote }}
-  </p>
-}
+  @if (store.status() === 'ready') {
+    <nav
+      class="flex min-w-0 flex-wrap items-center gap-(--eg-space-4) border-t border-border px-(--eg-space-5) py-(--eg-space-4) md:px-(--eg-space-6)"
+      [attr.aria-label]="copy.pagination"
+      [attr.aria-busy]="store.loadingMore()"
+      data-catalog-pagination
+    >
+      <div class="flex min-w-0 flex-wrap items-center gap-(--eg-space-3)">
+        <label hlmLabel for="catalog-page-size">{{ copy.pageSize }}</label>
+        <hlm-select
+          [ngModel]="store.pageSize()"
+          (ngModelChange)="setPageSize($event)"
+          [itemToString]="pageSizeLabel"
+        >
+          <hlm-select-trigger
+            [buttonId]="'catalog-page-size'"
+            class="min-h-(--eg-control-touch) min-w-(--eg-control-touch)"
+          >
+            <hlm-select-value />
+          </hlm-select-trigger>
+          <hlm-select-content *hlmSelectPortal [aria-label]="copy.pageSize">
+            @for (size of pageSizes; track size) {
+              <hlm-select-item [value]="size" class="min-h-(--eg-control-touch)">{{
+                size | number
+              }}</hlm-select-item>
+            }
+          </hlm-select-content>
+        </hlm-select>
+      </div>
+      <p
+        #loadedSummary
+        tabindex="-1"
+        class="eg-type-caption flex min-w-0 flex-wrap items-center gap-x-(--eg-space-4) gap-y-(--eg-space-2) tabular-nums text-muted-foreground focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-solid focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
+        data-catalog-loaded
+      >
+        <span i18n="@@catalog.loaded-count">{{ store.rows().length | number }} loaded</span>
+        @if (store.isFiltered()) {
+          <span class="text-foreground" i18n="@@catalog.matches-loaded"
+            >Matches in loaded results: {{ store.visibleRows().length | number }}</span
+          >
+        }
+      </p>
+      @if (store.hasMore()) {
+        <button
+          hlmBtn
+          type="button"
+          [variant]="'outline'"
+          class="ms-auto min-h-(--eg-control-touch) max-w-full whitespace-normal"
+          [disabled]="store.loadingMore()"
+          (click)="loadMore($event)"
+          data-catalog-load-more
+        >
+          {{ store.loadingMore() ? copy.loadingMore : copy.loadMore }}
+        </button>
+      }
+    </nav>
+    @if (store.loadMoreFailure(); as failure) {
+      <app-inline-feedback
+        class="mx-(--eg-space-5) mb-(--eg-space-4) block md:mx-(--eg-space-6)"
+        [tone]="'destructive'"
+        [title]="copy.loadMoreFailed"
+        [description]="failure.message"
+        [actionLabel]="failure.retryable ? copy.retryMore : undefined"
+        [actionDisabled]="store.loadingMore()"
+        (action)="loadMore()"
+        data-catalog-page-error
+      />
+    }
+    <p
+      class="eg-type-caption max-w-prose px-(--eg-space-5) pb-(--eg-space-4) text-muted-foreground md:px-(--eg-space-6)"
+      data-catalog-contract-note
+    >
+      {{ copy.contractNote }}
+    </p>
+  }
+</section>

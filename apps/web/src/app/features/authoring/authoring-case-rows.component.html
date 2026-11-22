@@ -20,8 +20,8 @@
       {{ selectedCount() | number }} of {{ rows().length | number }} loaded selected; applies to
       visible rows only
     </p>
+    <p id="authoring-selection-help" class="help">{{ copy.selectionHelp }}</p>
   </div>
-  <p id="authoring-selection-help" class="help">{{ copy.selectionHelp }}</p>
 } @else {
   <p class="help" data-selection-notice tabindex="-1">{{ copy.narrowHelp }}</p>
 }
@@ -31,7 +31,7 @@
   [rowId]="rowId"
   [caption]="copy.caption"
   [virtualThreshold]="200"
-  [fitToContainer]="false"
+  [fitToContainer]="true"
   [fixedHeightCells]="true"
   [flow]="'page'"
 />

@@ -35,10 +35,12 @@ import type {
   template: `
     <section
       hlmCard
-      class="gap-(--eg-space-4) p-(--eg-space-6) [overflow-wrap:anywhere] [&_p]:m-0 [&_p]:text-sm [&_p]:text-muted-foreground"
+      class="min-w-0 gap-(--eg-space-4) p-(--eg-space-4) wrap-anywhere md:p-(--eg-space-5) [&_p]:m-0 [&_p]:text-sm [&_p]:text-muted-foreground"
       aria-labelledby="connection-health-title"
     >
-      <header class="flex flex-wrap items-center justify-between gap-(--eg-space-3)">
+      <header
+        class="flex min-w-0 flex-wrap items-center justify-between gap-(--eg-space-3) border-b border-border pb-(--eg-space-4)"
+      >
         <h3
           hlmCardTitle
           [size]="subsectionHeadingSize"
@@ -85,7 +87,7 @@ import type {
         </ul>
       }
       <p
-        class="grid gap-(--eg-space-2) border-t border-border pt-(--eg-space-4)"
+        class="grid min-w-0 gap-(--eg-space-1) rounded-(--eg-radius-md) bg-muted p-(--eg-space-4) [&_strong]:text-foreground [&_time]:tabular-nums"
         data-testid="connection-health-last-use"
       >
         <strong>{{ lastUseLabel }}</strong>

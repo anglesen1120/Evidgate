@@ -133,16 +133,6 @@ export class AuthoringCaseRowsComponent {
       cellTemplate: this.codeCell(),
     },
     {
-      id: 'id',
-      header: this.copy.id,
-      cell: (row) => row.case_id,
-      role: 'identity',
-      kind: 'identifier',
-      priority: 'secondary',
-      virtualWidth: 'calc(28ch + var(--eg-space-4) * 2)',
-      cellTemplate: this.idCell(),
-    },
-    {
       id: 'title',
       header: this.copy.title,
       cell: (row) => row.title,
@@ -193,6 +183,16 @@ export class AuthoringCaseRowsComponent {
       cell: () => '—',
       role: 'number',
       cellTemplate: this.pendingCell(),
+    },
+    {
+      id: 'id',
+      header: this.copy.id,
+      cell: (row) => row.case_id,
+      role: 'identity',
+      kind: 'identifier',
+      priority: 'secondary',
+      virtualWidth: 'calc(28ch + var(--eg-space-4) * 2)',
+      cellTemplate: this.idCell(),
     },
   ]);
 

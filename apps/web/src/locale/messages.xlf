@@ -26614,6 +26614,75 @@
       <trans-unit id="settings.security-event-catalog" datatype="html">
         <source>Event catalog</source>
       </trans-unit>
+      <trans-unit id="authoring.ai-settings.project-context" datatype="html">
+        <source>Project context</source>
+      </trans-unit>
+      <trans-unit id="authoring.ai-settings.generation-guidance" datatype="html">
+        <source>Generation guidance</source>
+      </trans-unit>
+      <trans-unit id="authoring.ai-settings.priority-criteria" datatype="html">
+        <source>Priority criteria</source>
+      </trans-unit>
+      <trans-unit id="authoring.ai-settings.save-section" datatype="html">
+        <source>Save a version</source>
+      </trans-unit>
+      <trans-unit id="authoring.ai-settings.version-in-use" datatype="html">
+        <source>Version in use</source>
+      </trans-unit>
+      <trans-unit id="authoring.ai-settings.org-consent" datatype="html">
+        <source>Organization AI consent</source>
+      </trans-unit>
+      <trans-unit id="authoring.ai-settings.context-help" datatype="html">
+        <source>Describe the project and its test environment.</source>
+      </trans-unit>
+      <trans-unit id="authoring.ai-settings.guidance-help" datatype="html">
+        <source>Define what cases cover, what to skip and how to write each step.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.manual-case" datatype="html">
+        <source>Manual case</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.revision" datatype="html">
+        <source>Revision</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.approved-use" datatype="html">
+        <source>Only approved revisions are used for runs and generated scripts.</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.authoring-status" datatype="html">
+        <source>Authoring status</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.not-outcome" datatype="html">
+        <source>Not an execution result</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.checklist-parent" datatype="html">
+        <source>Checklist parent</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.case-content" datatype="html">
+        <source>Case content</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.authoring-record" datatype="html">
+        <source>Authoring record</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.case-id" datatype="html">
+        <source>Case ID</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.last-updated" datatype="html">
+        <source>Last updated</source>
+      </trans-unit>
+      <trans-unit id="authoring.editor.provenance" datatype="html">
+        <source>Provenance</source>
+      </trans-unit>
+      <trans-unit id="authoring.import-export.download-summary" datatype="html">
+        <source>Download summary</source>
+      </trans-unit>
+      <trans-unit id="authoring.pending-changes.queue-instructions" datatype="html">
+        <source>Open an operation to preview it. Use the checkboxes to select changes for the batch.</source>
+      </trans-unit>
+      <trans-unit id="catalog.results-title" datatype="html">
+        <source>Catalog results</source>
+      </trans-unit>
+      <trans-unit id="catalog.matches-loaded" datatype="html">
+        <source>Matches in loaded results: <x id="INTERPOLATION" equiv-text="{{ store.visibleRows().length | number }}"/></source>
+      </trans-unit>
 </body>
   </file>
 </xliff>

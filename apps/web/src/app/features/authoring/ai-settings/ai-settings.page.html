@@ -1,9 +1,20 @@
-<div class="grid min-w-0 gap-6">
-  @if (pageHeadingLevel === 1) {
-    <app-page-header [title]="title" [description]="description" />
-  } @else {
-    <h2 hlmCardTitle [size]="'section'">{{ title }}</h2>
-  }
+<div class="grid min-w-0 gap-(--eg-space-6)">
+  <div class="flex min-w-0 items-start gap-(--eg-space-4)">
+    <span
+      aria-hidden="true"
+      class="grid size-(--eg-space-9) shrink-0 place-items-center rounded-(--eg-radius-md) border border-border bg-(--eg-accent-soft) text-primary md:size-(--eg-space-10)"
+    >
+      <app-shell-icon [name]="'settings'" />
+    </span>
+    @if (pageHeadingLevel === 1) {
+      <app-page-header class="min-w-0 flex-1" [title]="title" [description]="description" />
+    } @else {
+      <header class="grid min-w-0 gap-(--eg-space-2)">
+        <h2 hlmCardTitle [size]="'section'">{{ title }}</h2>
+        <p class="m-0 max-w-[65ch] text-sm text-muted-foreground">{{ description }}</p>
+      </header>
+    }
+  </div>
   <app-desktop-required-notice />
   @if (!store.scope()) {
     <app-forbidden-pattern />
@@ -26,27 +37,6 @@
             (retry)="store.head.reload()"
           />
         }
-        <aside class="grid gap-2 border-l-2 border-border pl-4 text-sm">
-          <h2 hlmCardTitle [size]="'section'" i18n="@@authoring.ai-settings.consent">
-            AI consent unavailable
-          </h2>
-          <p i18n="@@authoring.ai-settings.consent-reason">
-            These settings do not report tenant consent. Saving guidance does not opt in to AI;
-            manual authoring remains available.
-          </p>
-          <p i18n="@@authoring.ai-settings.version">Current version: {{ base.view.version_no }}</p>
-          @if (base.view.version_no === 0) {
-            <p i18n="@@authoring.ai-settings.default">
-              Using default guidance; no saved version exists yet.
-            </p>
-          }
-          @if (base.view.author; as author) {
-            <app-copyable-identifier [value]="author" [label]="authorLabel" />
-          }
-          @if (base.view.created_at; as instant) {
-            <app-absolute-time [value]="instant" />
-          }
-        </aside>
         <hlm-tabs [tab]="'settings'" class="block min-w-0">
           <div
             hlmTabsList
@@ -65,199 +55,303 @@
               Version history
             </button>
           </div>
-          <div [hlmTabsContent]="'settings'" class="min-w-0 pt-6">
-            @if (viewport.canMutate()) {
-              <form
-                class="grid max-w-[65ch] gap-6"
-                (ngSubmit)="save()"
-                [attr.aria-busy]="store.saving()"
-              >
-                <app-form-error-summary [summaryId]="'ai-errors'" [feedback]="feedback" />
-                <section class="grid gap-3">
-                  <h2 hlmCardTitle [size]="'section'" i18n="@@authoring.ai-settings.templates">
-                    Built-in templates
-                  </h2>
-                  <app-request-state
-                    [status]="
-                      store.templates.isLoading()
-                        ? 'loading'
-                        : store.templates.error()
-                          ? 'error'
-                          : 'ready'
-                    "
-                    [error]="templateError()"
-                    [retryEligible]="true"
-                    (retry)="store.templates.reload()"
+          <div
+            class="mt-(--eg-space-5) grid min-w-0 items-start gap-(--eg-space-5) xl:grid-cols-[minmax(0,2.1fr)_minmax(0,1fr)]"
+          >
+            <div class="min-w-0 xl:col-start-1 xl:row-start-1">
+              <div [hlmTabsContent]="'settings'" class="min-w-0 space-y-(--eg-space-5)">
+                @if (viewport.canMutate()) {
+                  <form
+                    class="grid min-w-0 gap-(--eg-space-5)"
+                    (ngSubmit)="save()"
+                    [attr.aria-busy]="store.saving()"
                   >
-                    @for (
-                      template of store.templatePage()?.items ?? [];
-                      track template.code + ':' + template.version
-                    ) {
-                      <button
-                        hlmBtn
-                        [variant]="'outline'"
-                        type="button"
-                        class="min-h-[var(--eg-control-touch)] whitespace-normal"
-                        [disabled]="!store.canWrite() || store.saving()"
-                        (click)="previewTemplate(template, $event)"
-                      >
-                        {{ template.name }} ({{ template.locale }})
-                      </button>
-                    } @empty {
-                      <p i18n="@@authoring.ai-settings.no-templates">No templates are available.</p>
-                    }
-                  </app-request-state>
-                </section>
-                @for (field of fields; track field.key; let index = $index) {
-                  <div class="grid min-w-0 gap-2">
-                    <label hlmLabel [for]="'ai-' + field.key">{{ field.label }}</label>
-                    <textarea
-                      hlmInput
-                      rows="3"
-                      class="h-auto resize-y"
-                      [id]="'ai-' + field.key"
-                      [name]="field.key"
-                      [ngModel]="value(field.key)"
-                      (ngModelChange)="edit(field.key, $event)"
-                      [readOnly]="!store.canWrite() || store.saving()"
-                      [aria-describedby]="feedback.fields[index]?.describedBy() ?? null"
-                      [attr.aria-invalid]="feedback.fields[index]?.ariaInvalid()"
-                      (blur)="feedback.fields[index]?.blur()"
-                      (compositionstart)="compose(field.key, true)"
-                      (compositionend)="compose(field.key, false)"
-                    ></textarea>
-                    <p
-                      class="m-0 text-sm text-muted-foreground tabular-nums"
-                      [id]="'ai-' + field.key + '-counter'"
-                      i18n="@@authoring.ai-settings.counter"
-                    >
-                      {{ count(value(field.key)) }} / {{ field.limit }} characters
-                    </p>
-                    @if (feedback.fields[index]; as entry) {
-                      <app-field-feedback [field]="entry" />
-                    }
-                  </div>
-                  @if (field.key === 'environment_url') {
-                    <fieldset
-                      id="ai-languages"
-                      tabindex="-1"
-                      class="grid gap-3"
-                      [attr.aria-invalid]="feedback.fields[fields.length]?.ariaInvalid()"
-                      [attr.aria-describedby]="
-                        feedback.fields[fields.length]?.describedBy() ?? null
-                      "
-                    >
-                      <legend class="mb-2" i18n="@@authoring.ai-settings.languages">
-                        Output languages
-                      </legend>
-                      @for (locale of languages; track locale) {
-                        <label
-                          class="flex min-h-[var(--eg-control-touch)] items-center gap-3"
-                          [for]="'ai-language-' + locale"
-                        >
-                          <hlm-checkbox
-                            [inputId]="'ai-language-' + locale"
-                            [aria-labelledby]="'ai-language-label-' + locale"
-                            [checked]="store.draft()?.languages?.includes(locale) ?? false"
-                            [disabled]="!store.canWrite() || store.saving()"
-                            (checkedChange)="language(locale, $event === true)"
-                          />
-                          <span [id]="'ai-language-label-' + locale">
-                            @if (locale === 'en') {
-                              <span i18n="@@authoring.ai-settings.english">English</span>
-                            } @else {
-                              <span i18n="@@authoring.ai-settings.vietnamese">Vietnamese</span>
+                    <app-form-error-summary [summaryId]="'ai-errors'" [feedback]="feedback" />
+                    @for (group of sections; track group.key) {
+                      <article hlmCard [attr.aria-labelledby]="'ai-group-' + group.key">
+                        <header hlmCardHeader class="border-b border-border">
+                          <h2 hlmCardTitle [size]="'subsection'" [id]="'ai-group-' + group.key">
+                            {{ group.title }}
+                          </h2>
+                          @if (group.key === 'context') {
+                            <p hlmCardDescription i18n="@@authoring.ai-settings.context-help">
+                              Describe the project and its test environment.
+                            </p>
+                          }
+                          @if (group.key === 'guidance') {
+                            <p hlmCardDescription i18n="@@authoring.ai-settings.guidance-help">
+                              Define what cases cover, what to skip and how to write each step.
+                            </p>
+                          }
+                        </header>
+                        <div hlmCardContent class="grid gap-(--eg-space-5)">
+                          <div
+                            class="grid min-w-0 items-start gap-(--eg-space-5)"
+                            [class.md:grid-cols-2]="
+                              group.key === 'guidance' || group.key === 'priority'
+                            "
+                          >
+                            @for (field of group.fields; track field.key) {
+                              @let entry = feedback.fields[field.index];
+                              <div class="grid min-w-0 gap-(--eg-space-2)">
+                                <label hlmLabel [for]="'ai-' + field.key">{{ field.label }}</label>
+                                <textarea
+                                  hlmInput
+                                  [rows]="
+                                    field.key === 'environment_url' || field.key === 'reason'
+                                      ? 1
+                                      : 2
+                                  "
+                                  class="h-auto w-full min-w-0 resize-y"
+                                  [id]="'ai-' + field.key"
+                                  [name]="field.key"
+                                  [ngModel]="value(field.key)"
+                                  (ngModelChange)="edit(field.key, $event)"
+                                  [readOnly]="!store.canWrite() || store.saving()"
+                                  [aria-describedby]="entry?.describedBy() ?? null"
+                                  [attr.aria-invalid]="entry?.ariaInvalid()"
+                                  (blur)="entry?.blur()"
+                                  (compositionstart)="compose(field.key, true)"
+                                  (compositionend)="compose(field.key, false)"
+                                ></textarea>
+                                <p
+                                  class="m-0 eg-type-caption text-muted-foreground tabular-nums"
+                                  [id]="'ai-' + field.key + '-counter'"
+                                  i18n="@@authoring.ai-settings.counter"
+                                >
+                                  {{ count(value(field.key)) }} / {{ field.limit }} characters
+                                </p>
+                                @if (entry) {
+                                  <app-field-feedback [field]="entry" />
+                                }
+                              </div>
                             }
-                          </span>
-                        </label>
+                          </div>
+                          @if (group.key === 'context') {
+                            <fieldset
+                              id="ai-languages"
+                              tabindex="-1"
+                              class="m-0 min-w-0 border-0 p-0"
+                              [attr.aria-invalid]="feedback.fields[fields.length]?.ariaInvalid()"
+                              [attr.aria-describedby]="
+                                feedback.fields[fields.length]?.describedBy() ?? null
+                              "
+                            >
+                              <legend
+                                class="m-0 text-sm font-semibold"
+                                i18n="@@authoring.ai-settings.languages"
+                              >
+                                Output languages
+                              </legend>
+                              <div class="flex flex-wrap gap-x-(--eg-space-5) gap-y-(--eg-space-3)">
+                                @for (locale of languages; track locale) {
+                                  <label
+                                    class="flex min-h-[var(--eg-control-touch)] items-center gap-3"
+                                    [for]="'ai-language-' + locale"
+                                  >
+                                    <hlm-checkbox
+                                      [inputId]="'ai-language-' + locale"
+                                      [aria-labelledby]="'ai-language-label-' + locale"
+                                      [checked]="
+                                        store.draft()?.languages?.includes(locale) ?? false
+                                      "
+                                      [disabled]="!store.canWrite() || store.saving()"
+                                      (checkedChange)="language(locale, $event === true)"
+                                    />
+                                    <span [id]="'ai-language-label-' + locale">
+                                      @if (locale === 'en') {
+                                        <span i18n="@@authoring.ai-settings.english">English</span>
+                                      } @else {
+                                        <span i18n="@@authoring.ai-settings.vietnamese"
+                                          >Vietnamese</span
+                                        >
+                                      }
+                                    </span>
+                                  </label>
+                                }
+                              </div>
+                              @if (feedback.fields[fields.length]; as entry) {
+                                <app-field-feedback [field]="entry" />
+                              }
+                            </fieldset>
+                          }
+                          @if (group.key === 'save') {
+                            @if (!store.canWrite()) {
+                              <p id="ai-write-reason" i18n="@@authoring.ai-settings.read-only">
+                                Saving requires project:write. You can read settings and history.
+                              </p>
+                            }
+                            @if (!base.etag) {
+                              <p i18n="@@authoring.ai-settings.missing-tag">
+                                The server did not supply an ETag. Reload before saving.
+                              </p>
+                              <button
+                                hlmBtn
+                                [variant]="'outline'"
+                                type="button"
+                                data-ai-reload
+                                [disabled]="store.head.isLoading()"
+                                (click)="store.head.reload()"
+                                i18n="@@authoring.ai-settings.reload"
+                              >
+                                Reload settings
+                              </button>
+                            }
+                            @if (store.dirty()) {
+                              <p i18n="@@authoring.ai-settings.dirty">
+                                Settings have unsaved changes.
+                              </p>
+                            }
+                            @if (store.failure(); as failure) {
+                              <p data-ai-save-error i18n="@@authoring.ai-settings.failed">
+                                Could not save; your settings draft is retained.
+                              </p>
+                              @if (
+                                failure.kind !== 'validation' &&
+                                failure.kind !== 'precondition_failed'
+                              ) {
+                                <app-request-state
+                                  [status]="'error'"
+                                  [error]="failure"
+                                  [retryEligible]="!blocked()"
+                                  (retry)="save()"
+                                />
+                              }
+                            }
+                            <div
+                              class="flex flex-wrap gap-(--eg-space-3) border-t border-border pt-(--eg-space-4)"
+                            >
+                              <button
+                                hlmBtn
+                                type="submit"
+                                class="min-h-[var(--eg-control-touch)] whitespace-normal"
+                                data-ai-save
+                                [disabled]="blocked()"
+                                [attr.aria-describedby]="
+                                  !store.canWrite() ? 'ai-write-reason' : null
+                                "
+                                i18n="@@authoring.ai-settings.save"
+                              >
+                                Save new version
+                              </button>
+                            </div>
+                          }
+                        </div>
+                      </article>
+                    }
+                  </form>
+                } @else {
+                  <section hlmCard>
+                    <header hlmCardHeader class="border-b border-border">
+                      <h2
+                        #readOnlyHeading
+                        tabindex="-1"
+                        hlmCardTitle
+                        [size]="'section'"
+                        i18n="@@authoring.ai-settings.read-only-draft"
+                      >
+                        Read-only settings draft
+                      </h2>
+                      <p hlmCardDescription i18n="@@authoring.ai-settings.draft-notice">
+                        Unsaved desktop edits are retained, not saved. Widen the screen to edit.
+                      </p>
+                    </header>
+                    <dl hlmCardContent class="m-0 grid min-w-0 gap-(--eg-space-4) wrap-anywhere">
+                      @for (field of fields; track field.key) {
+                        <div>
+                          <dt class="font-semibold">{{ field.label }}</dt>
+                          <dd class="m-0 whitespace-pre-wrap">{{ value(field.key) }}</dd>
+                        </div>
                       }
-                      @if (feedback.fields[fields.length]; as entry) {
-                        <app-field-feedback [field]="entry" />
-                      }
-                    </fieldset>
-                  }
+                      <div>
+                        <dt i18n="@@authoring.ai-settings.languages">Output languages</dt>
+                        <dd class="m-0">{{ store.draft()?.languages?.join(', ') }}</dd>
+                      </div>
+                    </dl>
+                  </section>
                 }
-                @if (!store.canWrite()) {
-                  <p id="ai-write-reason" i18n="@@authoring.ai-settings.read-only">
-                    Saving requires project:write. You can read settings and history.
-                  </p>
-                }
-                @if (!base.etag) {
-                  <p i18n="@@authoring.ai-settings.missing-tag">
-                    The server did not supply an ETag. Reload before saving.
-                  </p>
-                  <button
-                    hlmBtn
-                    [variant]="'outline'"
-                    type="button"
-                    data-ai-reload
-                    [disabled]="store.head.isLoading()"
-                    (click)="store.head.reload()"
-                    i18n="@@authoring.ai-settings.reload"
-                  >
-                    Reload settings
-                  </button>
-                }
-                @if (store.dirty()) {
-                  <p i18n="@@authoring.ai-settings.dirty">Settings have unsaved changes.</p>
-                }
-                @if (store.failure(); as failure) {
-                  <p data-ai-save-error i18n="@@authoring.ai-settings.failed">
-                    Could not save; your settings draft is retained.
-                  </p>
-                  @if (failure.kind !== 'validation' && failure.kind !== 'precondition_failed') {
-                    <app-request-state
-                      [status]="'error'"
-                      [error]="failure"
-                      [retryEligible]="!blocked()"
-                      (retry)="save()"
-                    />
-                  }
-                }
-                <div class="flex flex-wrap gap-3">
-                  <button
-                    hlmBtn
-                    type="submit"
-                    class="min-h-[var(--eg-control-touch)] whitespace-normal"
-                    data-ai-save
-                    [disabled]="blocked()"
-                    [attr.aria-describedby]="!store.canWrite() ? 'ai-write-reason' : null"
-                    i18n="@@authoring.ai-settings.save"
-                  >
-                    Save new version
-                  </button>
-                </div>
-              </form>
-            } @else {
-              <section class="grid min-w-0 gap-4">
-                <h2
-                  #readOnlyHeading
-                  tabindex="-1"
-                  hlmCardTitle
-                  [size]="'section'"
-                  i18n="@@authoring.ai-settings.read-only-draft"
-                >
-                  Read-only settings draft
-                </h2>
-                <p i18n="@@authoring.ai-settings.draft-notice">
-                  Unsaved desktop edits are retained, not saved. Widen the screen to edit.
-                </p>
-                <dl class="grid min-w-0 gap-4 wrap-anywhere">
-                  @for (field of fields; track field.key) {
-                    <div>
-                      <dt class="font-semibold">{{ field.label }}</dt>
-                      <dd class="m-0 whitespace-pre-wrap">{{ value(field.key) }}</dd>
+                @if (viewport.canMutate()) {
+                  <section hlmCard>
+                    <header hlmCardHeader class="border-b border-border">
+                      <h2
+                        hlmCardTitle
+                        [size]="'subsection'"
+                        i18n="@@authoring.ai-settings.templates"
+                      >
+                        Built-in templates
+                      </h2>
+                    </header>
+                    <div hlmCardContent>
+                      <app-request-state
+                        [status]="
+                          store.templates.isLoading()
+                            ? 'loading'
+                            : store.templates.error()
+                              ? 'error'
+                              : 'ready'
+                        "
+                        [error]="templateError()"
+                        [retryEligible]="true"
+                        (retry)="store.templates.reload()"
+                      >
+                        <div class="grid min-w-0 gap-(--eg-space-3)">
+                          @for (
+                            template of store.templatePage()?.items ?? [];
+                            track template.code + ':' + template.version
+                          ) {
+                            <button
+                              hlmBtn
+                              data-ai-template
+                              [variant]="'outline'"
+                              type="button"
+                              class="min-h-(--eg-control-touch) max-w-full whitespace-normal wrap-anywhere"
+                              [disabled]="!store.canWrite() || store.saving()"
+                              (click)="previewTemplate(template, $event)"
+                            >
+                              {{ template.name }} ({{ template.locale }})
+                            </button>
+                          } @empty {
+                            <p
+                              class="m-0 text-sm text-muted-foreground"
+                              i18n="@@authoring.ai-settings.no-templates"
+                            >
+                              No templates are available.
+                            </p>
+                          }
+                        </div>
+                      </app-request-state>
                     </div>
-                  }
-                  <div>
-                    <dt i18n="@@authoring.ai-settings.languages">Output languages</dt>
-                    <dd>{{ store.draft()?.languages?.join(', ') }}</dd>
-                  </div>
-                </dl>
-              </section>
-            }
+                  </section>
+                }
+              </div>
+              <div [hlmTabsContent]="'history'" class="min-w-0"><app-ai-settings-history /></div>
+            </div>
+            <aside
+              class="grid min-w-0 items-start gap-(--eg-space-5) sm:grid-cols-2 xl:col-start-2 xl:row-start-1 xl:grid-cols-1"
+            >
+              <app-ai-settings-version-card hlmCard [version]="base.view" />
+              <div hlmCard>
+                <header hlmCardHeader class="border-b border-border">
+                  <h2 hlmCardTitle [size]="'subsection'" i18n="@@authoring.ai-settings.org-consent">
+                    Organization AI consent
+                  </h2>
+                </header>
+                <div hlmCardContent class="grid min-w-0 gap-(--eg-space-3)">
+                  <h3
+                    id="ai-consent-status"
+                    class="m-0 text-sm font-semibold text-muted-foreground"
+                    i18n="@@authoring.ai-settings.consent"
+                  >
+                    AI consent unavailable
+                  </h3>
+                  <p class="m-0" i18n="@@authoring.ai-settings.consent-reason">
+                    These settings do not report tenant consent. Saving guidance does not opt in to
+                    AI; manual authoring remains available.
+                  </p>
+                </div>
+              </div>
+            </aside>
           </div>
-          <div [hlmTabsContent]="'history'" class="min-w-0 pt-6"><app-ai-settings-history /></div>
         </hlm-tabs>
       }
     </app-request-state>
