@@ -223,10 +223,16 @@ function builderSurfaces(
     throw new Error(`A review route in ${file} is not a literal call: extend the route walk`);
   }
   const path = `${prefix}/${segment.text}/orgs/:orgId/projects/:projectId`;
-  const permissions = [
-    ...inherited,
-    ...(permission !== undefined && ts.isStringLiteralLike(permission) ? [permission.text] : []),
-  ];
+  // `null` (or no argument) is the documented "no extra permission"; anything else must be a literal.
+  const permissions = [...inherited];
+  if (permission !== undefined && permission.kind !== ts.SyntaxKind.NullKeyword) {
+    if (!ts.isStringLiteralLike(permission)) {
+      throw new Error(
+        `A review route permission in ${file} is not a literal: extend the route walk`,
+      );
+    }
+    permissions.push(permission.text);
+  }
   const name = call.expression.getText();
   if (name === 'reviewScreen') return [{ path, component: lazyComponent(loader), permissions }];
   const childFile = importedModule(loader, file);

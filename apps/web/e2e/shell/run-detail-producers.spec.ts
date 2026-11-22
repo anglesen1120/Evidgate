@@ -182,9 +182,8 @@ for (const locale of LOCALES) {
     const producerCopies = producers.locator('app-copy-value-button button');
     await expect(producerCopies).toHaveCount(50);
     await producerCopies.first().focus();
-    await expect(producerCopies.first()).toBeFocused();
-    for (const copy of (await producerCopies.all()).slice(1)) {
-      await page.keyboard.press('Tab');
+    for (const [index, copy] of (await producerCopies.all()).entries()) {
+      if (index > 0) await page.keyboard.press('Tab');
       await expect(copy).toBeFocused();
       await expect(copy).toHaveAccessibleName(/^(Copy|Sao chép) /);
     }
@@ -195,8 +194,10 @@ for (const locale of LOCALES) {
       await expect(copy).toBeFocused();
       await page.keyboard.press('Shift+Tab');
     }
-    // Page flow deliberately has no inner scrolling-region stop in either direction.
+    // Page flow deliberately has no inner scrolling-region stop: the stop before the first producer
+    // copy is the attempts table, not the producer scroller.
     await expect(scroller).not.toBeFocused();
+    await expect(page.locator('app-attempts-table :focus')).toHaveCount(1);
 
     // `#producer-<slot>` is the documented anchor: a deep link lands on, and focuses, that row.
     await page.goto(`${runDetailPath({ locale, run: 'many-producers' })}#producer-shard-42`);

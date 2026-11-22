@@ -159,6 +159,9 @@ test('the unbound regions add no keyboard stops', async ({ page }) => {
     await page.keyboard.press('Tab');
     await expect(copy).toBeFocused();
   }
+  // Nothing in the unbound timeline or release panel adds a stop after the manifest.
+  await page.keyboard.press('Tab');
+  expect((await activeElement(page)).tag).toBe('body');
   const producers = page.locator('#producers');
   const producerCopies = producers.locator('app-copy-value-button button');
   // The producer table precedes the evidence tabs; start from the stop before it.

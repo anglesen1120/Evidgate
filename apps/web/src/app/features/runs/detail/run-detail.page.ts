@@ -226,6 +226,7 @@ export class RunDetailPage {
       this.settled = true;
       afterNextRender(
         () => {
+          if (this.fragment() !== fragment) return;
           const target = resolveEvidenceAnchor(fragment, this.document);
           const active = this.document.activeElement;
           if (target && (active === target || active === this.document.body)) {
