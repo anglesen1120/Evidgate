@@ -22350,12 +22350,13 @@
       <trans-unit id="authoring.pending-changes.summary-heading" datatype="html"><source>Summary</source><target>Tổng quan</target></trans-unit>
       <trans-unit id="authoring.pending-changes.history-heading" datatype="html"><source>History</source><target>Lịch sử</target></trans-unit>
       <trans-unit id="authoring.pending-changes.apply-checks" datatype="html"><source>Apply checks</source><target>Kiểm tra trước khi áp dụng</target></trans-unit>
-      <trans-unit id="shared.list.count-unverified" datatype="html"><source>Count unavailable with the current filter</source><target>Không xác định được số lượng với bộ lọc hiện tại</target></trans-unit>
       <trans-unit id="authoring.case-table.filter-guidance" datatype="html"><source>Filter availability and help</source><target>Bộ lọc khả dụng và hướng dẫn</target></trans-unit>
       <trans-unit id="authoring.pending-changes.select-column" datatype="html"><source>Select</source><target>Chọn</target></trans-unit>
       <trans-unit id="authoring.import-export.choose-file" datatype="html"><source>Choose file</source><target>Chọn tệp</target></trans-unit>
       <trans-unit id="authoring.import-export.no-file-hint" datatype="html"><source>No rows have been validated or imported.</source><target>Chưa có dòng nào được kiểm tra hoặc nhập.</target></trans-unit>
       <trans-unit id="authoring.import-export.showing-range" datatype="html"><source>Showing 1–<x id="end"/> of <x id="loaded"/> loaded versions</source><target>Đang hiển thị từ 1 đến <x id="end"/> trong số <x id="loaded"/> phiên bản đã tải</target></trans-unit>
+      <trans-unit id="authoring.case-table.count-unverified" datatype="html"><source>Count unavailable with the current filter</source><target>Không xác định được số lượng với bộ lọc hiện tại</target></trans-unit>
+      <trans-unit id="catalog.case-list.count-unverified" datatype="html"><source>Count unavailable with the current filter</source><target>Không xác định được số lượng với bộ lọc hiện tại</target></trans-unit>
 </body>
   </file>
 </xliff>
