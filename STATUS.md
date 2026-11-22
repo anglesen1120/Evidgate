@@ -105,7 +105,9 @@ The S599 recount (base 240 / 240.0 at `41edd414`, through #1206) adds 05.2.2-T3 
 | 13.4.1-T5 | T5.2 AC10 restore asks for a reason | #910, #915 |
 | 13.4.1-T7 | T7.2 org AI-credit balance and usage region | #908 |
 
-The 43 table rows above represent 44 partial parents (the 10.7.1-T1/T2 row covers two); with 09.5.2-T3 (T3.2 open; T3.1 landed in #684), 10.7.1-T3 (drill open, #698), 10.7.1-T5 (T5.2 open; T5.1 landed in #696) and 10.7.1-T6 (T6.2 open; T6.1 landed in #696) they make 48 (S655: 03.1.4-T2, 02.4.3-T2 and 07.5.1-T2 left the table, 04.8.1-T2 joined). Rows 10.3.1-T2, 10.3.2-T1 and 11.2.1-T2 were withheld by S369; 03.4.1-T1 was counted partial at S372 and stays so (S599). 13.2.2-T1 stays credited as at S189 (memo accepted by PR review) although its Done-when test is not built (carried row 'Role-prompt memo check'); the roster is the table rows, not an audit of every credited task. They are excluded from done counts and dependency satisfaction; landed subrows and remainders are in the delivery table and §5.
+The 43 table rows above represent 44 partial parents (the 10.7.1-T1/T2 row covers two); with 09.5.2-T3 (T3.2 open; T3.1 landed in #684), 10.7.1-T3 (drill open, #698), 10.7.1-T5 (T5.2 open; T5.1 landed in #696) and 10.7.1-T6 (T6.2 open; T6.1 landed in #696) they make 48 (S655: 03.1.4-T2, 02.4.3-T2 and 07.5.1-T2 left the table, 04.8.1-T2 joined). Rows 10.3.1-T2, 10.3.2-T1 and 11.2.1-T2 were withheld by S369; 03.4.1-T1 was counted partial at S372 and stays so (S599). They are excluded from done counts and dependency satisfaction; landed subrows and remainders are in the delivery table and §5.
+
+13.2.2-T1 stays credited as at S189 (memo accepted by PR review) although its Done-when test is not built (carried row 'Role-prompt memo check'); the roster is the table rows, not an audit of every credited task.
 
 ### Done by area
 
