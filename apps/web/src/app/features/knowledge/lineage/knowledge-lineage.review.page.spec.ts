@@ -77,6 +77,8 @@ describe('KnowledgeLineageReviewPage', () => {
   it('shows the original failure before sandbox validation and keeps the official FAIL', async () => {
     const { page } = await mount('default');
     const text = await page.text();
+    expect(text.indexOf('Knowledge record')).toBeLessThan(text.indexOf('Effect preview'));
+    expect(text.indexOf('Effect preview')).toBeLessThan(text.indexOf('Original failure'));
     const failure = text.indexOf('Required delivery address field not found');
     expect(failure).toBeGreaterThanOrEqual(0);
     expect(text.indexOf('24/24')).toBeGreaterThan(failure);

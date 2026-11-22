@@ -18,6 +18,7 @@ class PageHarness extends ComponentHarness {
     return (await this.host()).text();
   }
   readonly pills = this.locatorForAll('app-status-pill');
+  readonly subtitle = this.locatorFor('app-page-header p');
   readonly icons = this.locatorForAll('app-status-pill hlm-icon');
   readonly links = this.locatorForAll('a');
   readonly pendingBadge = this.locatorFor('app-status-pill .status-pill--neutral');
@@ -80,10 +81,15 @@ describe('FailureDetailReviewPage', () => {
     ['v1', 'No proposal action'],
     ['latest', 'Reloaded'],
   ])('renders the %s snapshot', async (state, text) => {
-    expect(await (await mount('state=' + state)).text()).toContain(text);
+    const page = await mount('state=' + state);
+    expect(await page.text()).toContain(text);
+    if (state === 'loading' || state === '404') {
+      expect(await (await page.subtitle()).text()).not.toContain('storefront-web');
+    }
   });
   it('keeps the failed original before the passing retry and classification', async () => {
     const page = await mount();
+    expect(await (await page.subtitle()).text()).toContain('storefront-web · SHOP');
     const text = await page.text();
     expect(text).toMatch(/att-1842-01[\s\S]*HTTP 500[\s\S]*att-1842-02[\s\S]*Passed/);
     expect(text.indexOf('Original failure')).toBeLessThan(text.indexOf('Classification'));

@@ -1,17 +1,41 @@
 @let state = ctx.state();
-<header>
-  <app-page-header [title]="copy.title" [description]="copy.subtitle" />
-  @if (!ctx.isolated()) {
-    <p class="text-xs text-muted-foreground">
-      {{
-        state === 'default'
-          ? copy.snapshot
-          : state === 'approved' || state === 'rejected'
-            ? copy.atTen
-            : copy.alternative
-      }}
-    </p>
-  }
+@let snapshot =
+  state === 'default'
+    ? copy.snapshot
+    : state === 'approved' || state === 'rejected'
+      ? copy.atTen
+      : copy.alternative;
+<header class="flex min-w-0 items-start gap-3">
+  <span
+    class="grid size-11 shrink-0 place-items-center rounded-md bg-(--eg-accent-soft) text-(--eg-accent-fg)"
+  >
+    <hlm-icon name="lucideActivity" class="size-5" />
+  </span>
+  <app-page-header
+    class="min-w-0 flex-1 [--eg-text-2xl:var(--eg-space-7)]"
+    [title]="copy.title"
+    [description]="ctx.isolated() ? copy.subtitle : record.id + ' · ' + snapshot"
+  >
+    @if (!ctx.isolated()) {
+      <div appPageHeaderActions class="flex flex-wrap gap-2">
+        <a
+          hlmBtn
+          [variant]="'outline'"
+          [routerLink]="ctx.link('healing-queue')"
+          [queryParams]="{ id: record.id }"
+        >
+          <hlm-icon name="lucideChevronLeft" class="size-4" />{{ copy.queueLink }}
+        </a>
+        <a
+          hlmBtn
+          [routerLink]="ctx.link('healing-approval')"
+          [queryParams]="{ id: record.id, state: ctx.relatedState() }"
+        >
+          {{ copy.reviewLink }}<hlm-icon name="lucideChevronRight" class="size-4" />
+        </a>
+      </div>
+    }
+  </app-page-header>
 </header>
 <app-repair-review-notice [state]="state" />
 @if (!ctx.isolated()) {
@@ -139,21 +163,4 @@
     </div>
   }
   <app-repair-evidence [panel]="'provenance'" [context]="ctx" />
-  <footer class="flex flex-wrap gap-2">
-    <a
-      hlmBtn
-      [variant]="'outline'"
-      class="min-h-11"
-      [routerLink]="ctx.link('healing-queue')"
-      [queryParams]="{ id: record.id }"
-      >{{ copy.queueLink }}</a
-    >
-    <a
-      hlmBtn
-      class="min-h-11"
-      [routerLink]="ctx.link('healing-approval')"
-      [queryParams]="{ id: record.id, state: ctx.relatedState() }"
-      >{{ copy.reviewLink }}</a
-    >
-  </footer>
 }

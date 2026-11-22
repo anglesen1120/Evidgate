@@ -2,7 +2,6 @@ import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { HlmCard } from '@evidgate/ui/card';
 import { HlmTableImports } from '@evidgate/ui/table';
 import { INBOX_COPY } from './failure-inbox.copy';
-import { CANDIDATE } from './failure-inbox.fixture';
 import { FailureInboxStore } from './failure-inbox.store';
 
 @Component({
@@ -29,7 +28,7 @@ import { FailureInboxStore } from './failure-inbox.store';
           <thead hlmTHead>
             <tr hlmTr>
               @for (heading of headings; track heading) {
-                <th hlmTh scope="col">{{ heading }}</th>
+                <th hlmTh scope="col" [class.text-end]="heading === c.count">{{ heading }}</th>
               }
             </tr>
           </thead>
@@ -42,7 +41,9 @@ import { FailureInboxStore } from './failure-inbox.store';
                 <td hlmTd>{{ row.label }} · {{ c[row.source] }}</td>
                 <td hlmTd>{{ c[row.owner] }}</td>
                 <td hlmTd>{{ row.revision }} · {{ c[row.context] }}</td>
-                <td hlmTd>{{ row.id === 'inc-92' ? candidate : c.absent }}</td>
+                <td hlmTd class="text-end tabular-nums">
+                  {{ row.candidateId ? '1 · ' + row.candidateId : c.absent }}
+                </td>
               </tr>
             }
           </tbody>
@@ -54,7 +55,6 @@ import { FailureInboxStore } from './failure-inbox.store';
 export class InboxSummaryComponent {
   protected readonly store = inject(FailureInboxStore);
   protected readonly c = INBOX_COPY;
-  protected readonly candidate = CANDIDATE;
   protected readonly headings = [
     this.c.incident,
     this.c.outcome,

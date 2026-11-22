@@ -42,6 +42,25 @@ describe('RunHeaderComponent', () => {
     expect(root.querySelector('[data-run-environment]')).toBeNull();
   });
 
+  it('shows the supplied freeze and missing count without inferring a verdict', async () => {
+    const { fixture, root } = await render();
+    expect(root.querySelector('[data-run-latest-freeze]')).toBeNull();
+    fixture.componentRef.setInput('latestSnapshot', {
+      revision_no: 3,
+      created_at: '2026-10-31T10:30:00Z',
+      completeness: 'incomplete',
+      missing: ['missing_shard'],
+      evaluation_id: null,
+    });
+    fixture.componentRef.setInput('runCompleteness', 'incomplete');
+    await fixture.whenStable();
+    const freeze = root.querySelector('[data-run-latest-freeze]');
+    expect(freeze?.textContent).toContain('Latest loaded freeze: 3');
+    expect(freeze?.querySelector('time')?.getAttribute('datetime')).toBe('2026-10-31T10:30:00Z');
+    expect(root.querySelector('dl')?.textContent).toMatch(/Missing evidence reasons:\s*1/);
+    expect(root.querySelector('app-decision-chip, app-outcome-pill')).toBeNull();
+  });
+
   it('keeps incomplete collection explanation and a keyboard-focusable evidence action', async () => {
     const { root, fixture } = await render({ ...run, state: 'incomplete' });
     const viewEvidence = vi.fn();

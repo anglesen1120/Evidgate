@@ -23,6 +23,8 @@ export const RELEASE_COPY = {
   noEvidence: $localize`:@@review.release.no-evidence:No evidence`,
   unavailable: $localize`:@@review.release.unavailable:Unavailable`,
   matrixFooter: $localize`:@@review.release.matrix-footer:The supplied release decision is not derived from these rows. Evaluated at 2026-10-13T10:15Z.`,
+  showing: (shown: number, total: number) =>
+    $localize`:@@review.release.shown:Showing ${shown}:shown: of ${total}:total:`,
   context: $localize`:@@review.release.context:Evidence context`,
   policy: $localize`:@@review.release.policy:Pinned policy`,
   policyExplanation: $localize`:@@review.release.policy-explanation:Freshness and late arrival qualify the binding. Neither rewrites the stored evaluation.`,

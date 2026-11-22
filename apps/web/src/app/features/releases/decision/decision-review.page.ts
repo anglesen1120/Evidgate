@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  ElementRef,
+  inject,
+  viewChild,
+} from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
@@ -20,6 +27,7 @@ import {
   EvidenceBadgeComponent,
   OutcomePillComponent,
 } from '../../../shared/ui/verdict';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { DecisionExceptions } from './decision-exceptions.component';
 import { DecisionPreview } from './decision-preview.component';
 import { decisionCopy } from './decision-review.copy';
@@ -35,6 +43,7 @@ import { decisionFixture, runFacts } from './decision-review.fixture';
     HlmButton,
     HlmCard,
     HlmIcon,
+    ShellIconComponent,
     DesktopMutationDirective,
     DesktopRequiredNoticeComponent,
     StatusPillComponent,
@@ -57,6 +66,8 @@ export class ReleaseDecisionReviewPage {
   protected readonly view = computed(() => decisionFixture(this.params()?.get('state') ?? null));
   protected readonly copy = decisionCopy;
   protected readonly facts = runFacts;
+  protected readonly summaryTarget = viewChild<ElementRef<HTMLElement>>('summary');
+  protected readonly evidenceTarget = viewChild<ElementRef<HTMLElement>>('evidence');
   protected restore(): void {
     void this.router.navigate([], {
       relativeTo: this.route,

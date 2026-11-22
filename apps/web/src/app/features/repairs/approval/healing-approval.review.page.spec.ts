@@ -75,6 +75,9 @@ describe('HealingApprovalReviewPage', () => {
     expect(pending?.querySelector('hlm-icon')).toBeTruthy();
     expect(pending?.textContent).toContain('Awaiting review');
     expect(element.textContent).toContain('24/24');
+    expect(element.querySelector('app-approval-decision dl')?.textContent).toContain(
+      'sha256:ch-8af2c41e73b90d11c6e8f207b5343e20',
+    );
   });
 
   it.each(['412', 'reloaded'])(
@@ -82,6 +85,7 @@ describe('HealingApprovalReviewPage', () => {
     async (state) => {
       const { element } = await open('?state=' + state);
       expect(element.textContent).toContain('ch-91d4…63fc');
+      expect(element.textContent).not.toContain('sha256:ch-8af2c41e73b90d11c6e8f207b5343e20');
       expect(element.textContent).not.toMatch(/24\/24|Awaiting review/);
     },
   );
@@ -99,6 +103,26 @@ describe('HealingApprovalReviewPage', () => {
     expect(element.textContent).toContain('Minh Trần');
     expect(element.textContent).toContain('09:59 UTC');
     expect(element.textContent).not.toMatch(/10:00 UTC|Approved/);
+  });
+
+  it('associates the missing reason with the rejection field in the 422 preview', async () => {
+    const { element, harness } = await open('?state=422');
+    element.querySelector<HTMLButtonElement>('[data-action="reject"]')?.click();
+    await harness.fixture.whenStable();
+    const dialog = document.querySelector('[role="dialog"]:has(#proposal-review-reason)');
+    const reason = dialog?.querySelector('textarea');
+    expect(reason?.getAttribute('aria-invalid')).toBe('true');
+    expect(reason?.getAttribute('aria-describedby')).toContain('proposal-reason-error');
+    expect(dialog?.querySelector('#proposal-reason-error')?.textContent).toContain(
+      'A reason is required',
+    );
+    if (!reason) throw new Error('Missing review reason');
+    reason.value = 'Reviewed the original failure';
+    reason.dispatchEvent(new Event('input'));
+    await harness.fixture.whenStable();
+    expect(reason.hasAttribute('aria-invalid')).toBe(false);
+    expect(reason.getAttribute('aria-describedby')).toBe('preview-impact');
+    expect(dialog?.querySelector('#proposal-reason-error')).toBeNull();
   });
 
   it.each(['approved', 'rejected'])(

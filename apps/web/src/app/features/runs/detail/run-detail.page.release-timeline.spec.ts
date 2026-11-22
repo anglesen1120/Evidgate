@@ -274,7 +274,7 @@ describe('RunDetailPage release and timeline regions', () => {
     ]);
     expect(
       pair?.parentElement?.classList.contains(
-        'min-[1280px]:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]',
+        'min-[1280px]:grid-cols-[minmax(0,5fr)_minmax(0,2fr)]',
       ),
     ).toBe(true);
     expect(pair?.previousElementSibling?.querySelector('app-evidence-panel')).not.toBeNull();

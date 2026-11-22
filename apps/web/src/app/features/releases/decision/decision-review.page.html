@@ -1,18 +1,40 @@
 @let vm = view();
-<div class="flex min-w-0 items-start gap-3">
+<header class="flex min-w-0 items-start gap-3">
   <span
-    class="grid size-11 shrink-0 place-items-center rounded-md bg-(--eg-accent-soft) text-(--eg-accent)"
+    class="grid size-12 shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent)"
   >
-    <hlm-icon name="lucideCircleCheck" class="size-5" />
+    <app-shell-icon name="shield-check" />
   </span>
-  <app-page-header class="min-w-0 grow" [title]="copy.title" [description]="copy.description">
-    @if (vm.allowPreview) {
-      <div appPageHeaderActions>
-        <app-decision-preview *appDesktopMutation [action]="'request'" />
+  <app-page-header
+    class="min-w-0 grow [&_h1]:text-[length:var(--eg-space-7)]"
+    [title]="copy.title"
+    [description]="vm.live ? copy.runIdentity + ' · ' + copy.timestamp : copy.description"
+  >
+    @if (vm.live) {
+      <div appPageHeaderActions class="flex flex-wrap items-center gap-2">
+        <button
+          hlmBtn
+          type="button"
+          [variant]="'outline'"
+          (click)="summaryTarget()?.nativeElement.focus()"
+        >
+          <app-shell-icon name="run" />{{ copy.runRecord }}
+        </button>
+        <button
+          hlmBtn
+          type="button"
+          [variant]="'outline'"
+          (click)="evidenceTarget()?.nativeElement.focus()"
+        >
+          <app-shell-icon name="file" />{{ copy.evidence }}
+        </button>
+        @if (vm.allowPreview) {
+          <app-decision-preview *appDesktopMutation [action]="'request'" />
+        }
       </div>
     }
   </app-page-header>
-</div>
+</header>
 @if (vm.state === 'loading') {
   <app-loading-pattern [label]="copy.loading" />
 }
@@ -76,20 +98,10 @@
   </section>
 }
 @if (vm.live) {
-  <div class="flex flex-wrap items-center gap-2 text-sm">
-    <button hlmBtn type="button" [variant]="'outline'" (click)="summary.focus()">
-      {{ copy.runRecord }}
-    </button>
-    <button hlmBtn type="button" [variant]="'outline'" (click)="evidence.focus()">
-      {{ copy.evidence }}
-    </button>
-    <bdi class="font-mono">{{ copy.runIdentity }}</bdi>
-    <span class="text-muted-foreground">{{ copy.timestamp }}</span>
-  </div>
   <dl
     #summary
     tabindex="-1"
-    class="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4 [&_dt]:flex [&_dt]:items-center [&_dt]:gap-2 [&_dt]:font-semibold [&_dt_hlm-icon]:size-7 [&_dt_hlm-icon]:rounded-md [&_dt_hlm-icon]:bg-muted [&_dt_hlm-icon]:p-1.5 [&_dd]:grid [&_dd]:gap-2 [&_dd]:justify-items-start [&_small]:text-xs [&_small]:text-muted-foreground"
+    class="m-0 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4 [&_dt]:flex [&_dt]:items-center [&_dt]:gap-2 [&_dt]:font-semibold [&_dt_hlm-icon]:size-7 [&_dt_hlm-icon]:rounded-md [&_dt_hlm-icon]:bg-muted [&_dt_hlm-icon]:p-1.5 [&_dd]:m-0 [&_dd]:grid [&_dd]:gap-2 [&_dd]:justify-items-start [&_small]:text-xs [&_small]:text-muted-foreground"
   >
     <div hlmCard class="gap-4 p-4">
       <dt><hlm-icon name="lucideInfo" />{{ copy.completeness }}</dt>
@@ -118,7 +130,7 @@
     <div hlmCard class="gap-4 p-4">
       <dt><hlm-icon name="lucideClock" />{{ copy.policyRevision }}</dt>
       <dd>
-        <bdi class="text-xl font-semibold">{{ facts.policy }}</bdi
+        <bdi class="font-(family-name:--eg-font-display) text-2xl font-bold">{{ facts.policy }}</bdi
         ><small>{{ copy.evaluator }}</small>
       </dd>
     </div>
@@ -163,34 +175,36 @@
   }
   @if (vm.records.length) {
     @if (vm.allowPreview) {
-      <app-desktop-required-notice />
+      <app-desktop-required-notice class="empty:hidden" />
     }
     @for (snapshot of [vm]; track snapshot.state) {
       <app-decision-exceptions [view]="snapshot" />
     }
   }
   <div #evidence tabindex="-1" class="grid min-w-0 items-start gap-4 lg:grid-cols-2">
-    <section hlmCard class="min-w-0 gap-4 p-5">
-      <h2 class="text-lg font-semibold">{{ copy.storedReasons }}</h2>
-      <dl class="divide-y">
+    <section hlmCard class="min-w-0 gap-0 py-0">
+      <h2 class="m-0 border-b border-border px-5 py-4 text-lg font-semibold">
+        {{ copy.storedReasons }}
+      </h2>
+      <dl class="m-0 divide-y divide-border px-5">
         @for (reason of facts.reasons; track reason[0]) {
           <div class="py-3">
             <dt class="font-mono font-semibold">{{ reason[0] }}</dt>
-            <dd class="text-sm">{{ reason[1] }}</dd>
+            <dd class="m-0 text-sm">{{ reason[1] }}</dd>
           </div>
         }
       </dl>
     </section>
-    <section hlmCard class="min-w-0 gap-4 p-5">
-      <h2 class="text-lg font-semibold">{{ copy.pinned }}</h2>
-      <dl class="grid gap-3 sm:grid-cols-3">
+    <section hlmCard class="min-w-0 gap-0 py-0">
+      <h2 class="m-0 border-b border-border px-5 py-4 text-lg font-semibold">{{ copy.pinned }}</h2>
+      <dl class="m-0 grid gap-3 p-5 sm:grid-cols-3">
         @for (fact of facts.inputs; track fact[0]) {
           @if (
             vm.state !== 'after-load' || (fact[0] !== copy.exceptionsHash && fact[0] !== copy.asOf)
           ) {
             <div class="min-w-0">
               <dt class="text-xs text-muted-foreground">{{ fact[0] }}</dt>
-              <dd class="font-mono">{{ fact[1] }}</dd>
+              <dd class="m-0 font-mono">{{ fact[1] }}</dd>
             </div>
           }
         }

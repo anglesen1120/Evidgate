@@ -58,7 +58,7 @@
       </div>
       <div>
         <dt>{{ c.count }}</dt>
-        <dd>{{ row.id === 'inc-92' ? candidate : c.absent }}</dd>
+        <dd class="tabular-nums">{{ row.candidateId ? '1 · ' + row.candidateId : c.absent }}</dd>
       </div>
       <div>
         <dt>{{ c.firstSeen }}</dt>
@@ -102,7 +102,7 @@
         hlmBtn
         [variant]="'outline'"
         [routerLink]="store.path('shadow-detail')"
-        [queryParams]="{ id: 'cand-73' }"
+        [queryParams]="{ id: row.candidateId }"
         >{{ c.candidate }}</a
       >
       <a

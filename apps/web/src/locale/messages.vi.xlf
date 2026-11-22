@@ -22251,6 +22251,41 @@
 <trans-unit id="settings.policy.loaded-revisions" datatype="html"><source>Loaded revisions</source><target>Phiên bản đã tải</target></trans-unit>
 <trans-unit id="settings.policy.history-range" datatype="html"><source>Showing 1–<x id="INTERPOLATION"/> loaded revisions</source><target>Đang hiển thị 1–<x id="INTERPOLATION"/> trong số các phiên bản đã tải</target></trans-unit>
 <trans-unit id="settings.secrets.ci.records" datatype="html"><source>CI binding records</source><target>Bản ghi liên kết CI</target></trans-unit>
+<trans-unit id="runs.list.column-actions" datatype="html"><source>Actions</source><target>Thao tác</target></trans-unit>
+<trans-unit id="runs.list.view" datatype="html"><source>View</source><target>Xem</target></trans-unit>
+<trans-unit id="runs.list.view-run" datatype="html"><source>View <x id="runId" equiv-text="runId"/></source><target>Xem <x id="runId" equiv-text="runId"/></target></trans-unit>
+<trans-unit id="failures.inbox.view" datatype="html"><source>View</source><target>Xem</target></trans-unit>
+<trans-unit id="failures.inbox.view-incident" datatype="html"><source>View <x id="subject" equiv-text="subject"/></source><target>Xem <x id="subject" equiv-text="subject"/></target></trans-unit>
+<trans-unit id="repairs.queue.candidate" datatype="html"><source>Candidate</source><target>Ứng viên</target></trans-unit>
+<trans-unit id="repairs.queue.status" datatype="html"><source>Review status</source><target>Trạng thái xét duyệt</target></trans-unit>
+<trans-unit id="repairs.queue.view" datatype="html"><source>View</source><target>Xem</target></trans-unit>
+<trans-unit id="repairs.queue.view-summary" datatype="html"><source>View summary</source><target>Xem tóm tắt</target></trans-unit>
+<trans-unit id="repairs.queue.view-candidate" datatype="html"><source>View <x id="subject" equiv-text="subject"/></source><target>Xem <x id="subject" equiv-text="subject"/></target></trans-unit>
+<trans-unit id="repairs.queue.view-candidate-summary" datatype="html"><source>View summary for <x id="subject" equiv-text="subject"/></source><target>Xem tóm tắt về <x id="subject" equiv-text="subject"/></target></trans-unit>
+<trans-unit id="review.decision.exception-reference" datatype="html"><source>Exception reference</source><target>Mã tham chiếu ngoại lệ</target></trans-unit>
+<trans-unit id="review.decision.exception-kind" datatype="html"><source>Kind</source><target>Loại</target></trans-unit>
+<trans-unit id="review.decision.exception-status" datatype="html"><source>Status</source><target>Trạng thái</target></trans-unit>
+<trans-unit id="review.decision.exception-scope-owner" datatype="html"><source>Case / owner</source><target>Ca kiểm thử / người phụ trách</target></trans-unit>
+<trans-unit id="review.decision.exception-actions" datatype="html"><source>Actions</source><target>Thao tác</target></trans-unit>
+<trans-unit id="review.decision.exception-view" datatype="html"><source>View</source><target>Xem</target></trans-unit>
+<trans-unit id="review.decision.exception-view-label" datatype="html"><source>View <x id="recordId" equiv-text="recordId"/></source><target>Xem <x id="recordId" equiv-text="recordId"/></target></trans-unit>
+<trans-unit id="review.decision.exception-details" datatype="html"><source>Exception details</source><target>Chi tiết ngoại lệ</target></trans-unit>
+<trans-unit id="failures.inbox.showing-range" datatype="html"><source>Showing <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> of <x id="total" equiv-text="total"/></source><target>Hiển thị <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> trong tổng số <x id="total" equiv-text="total"/></target></trans-unit>
+<trans-unit id="review.release.shown" datatype="html"><source>Showing <x id="shown" equiv-text="shown"/> of <x id="total" equiv-text="total"/></source><target>Đang hiển thị <x id="shown" equiv-text="shown"/> trên <x id="total" equiv-text="total"/></target></trans-unit>
+<trans-unit id="review.decision.shown" datatype="html"><source>Showing <x id="count" equiv-text="count"/></source><target>Đang hiển thị <x id="count" equiv-text="count"/></target></trans-unit>
+<trans-unit id="review.quality.outcome-mix" datatype="html"><source>Outcome mix</source><target>Phân bố kết quả</target></trans-unit>
+<trans-unit id="review.quality.outcome-mix-scope" datatype="html"><source>Complete runs on reported days only.</source><target>Chỉ tính lượt chạy đủ bằng chứng trong những ngày có số liệu.</target></trans-unit>
+<trans-unit id="review.quality.zero-complete" datatype="html"><source>No complete runs on reported days.</source><target>Không có lượt chạy đủ bằng chứng trong những ngày có số liệu.</target></trans-unit>
+<trans-unit id="review.quality.cases-shown" datatype="html"><source>Showing <x id="count" equiv-text="count"/> · server limit 50. Flake rate is not a pass rate or a person-level ranking.</source><target>Đang hiển thị <x id="count" equiv-text="count"/> · giới hạn máy chủ là 50. Tỷ lệ thiếu ổn định không phải là tỷ lệ đạt hay xếp hạng cá nhân.</target></trans-unit>
+<trans-unit id="review.quality.bound-subject" datatype="html"><source>Suite / component</source><target>Bộ kiểm thử / thành phần</target></trans-unit>
+<trans-unit id="repairs.queue.showing" datatype="html"><source>Showing <x id="visible" equiv-text="visible"/> of <x id="total" equiv-text="total"/></source><target>Hiển thị <x id="visible" equiv-text="visible"/> trên <x id="total" equiv-text="total"/></target></trans-unit>
+<trans-unit id="runs.detail.latest-freeze" datatype="html"><source>Latest loaded freeze</source><target>Bản đóng băng mới nhất đã tải</target></trans-unit>
+<trans-unit id="runs.detail.header-version" datatype="html"><source>Version <x id="version" equiv-text="version"/></source><target>Phiên bản <x id="version" equiv-text="version"/></target></trans-unit>
+<trans-unit id="runs.list.loaded-runs" datatype="html"><source>Loaded runs</source><target>Lượt chạy đã tải</target></trans-unit>
+<trans-unit id="runs.list.failed-decisions" datatype="html"><source>Stored FAIL decisions</source><target>Quyết định FAIL đã lưu</target></trans-unit>
+<trans-unit id="runs.list.labeled-reruns" datatype="html"><source>Labeled reruns</source><target>Lượt chạy lại có nhãn</target></trans-unit>
+<trans-unit id="runs.list.showing" datatype="html"><source>Showing <x id="shown" equiv-text="shown"/></source><target>Đang hiển thị <x id="shown" equiv-text="shown"/></target></trans-unit>
+<trans-unit id="runs.list.of-loaded" datatype="html"><source>Of <x id="count" equiv-text="count"/> loaded runs</source><target>Trong số <x id="count" equiv-text="count"/> lượt chạy đã tải</target></trans-unit>
 <trans-unit id="settings.members.view" datatype="html"><source>View member</source><target>Xem thành viên</target></trans-unit>
 <trans-unit id="settings.members.created" datatype="html"><source>Created</source><target>Ngày tạo</target></trans-unit>
 <trans-unit id="settings.row.view" datatype="html"><source>View</source><target>Xem</target></trans-unit>

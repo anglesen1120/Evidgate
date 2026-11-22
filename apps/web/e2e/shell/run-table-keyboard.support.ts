@@ -80,7 +80,7 @@ export async function tabThroughNarrowRunRecords(
   count: number,
 ): Promise<void> {
   await expect(records.locator('li[data-row-id]')).toHaveCount(count);
-  await expect(records.locator('a[href]')).toHaveCount(count);
+  await expect(records.locator('a[href]')).toHaveCount(count * 2);
   const copies = records.locator('app-copy-value-button button');
   await expect(copies).toHaveCount(count);
   const names = await copies.evaluateAll((buttons) =>
@@ -99,7 +99,7 @@ export async function tabThroughNarrowRunRecords(
   });
   try {
     const total = await walk.evaluate((state) => state.expected.length);
-    expect(total).toBe(count * 2);
+    expect(total).toBe(count * 3);
     for (let step = 0; step < total; step++) await page.keyboard.press('Tab');
     const result = await walk.evaluate((state) => ({
       count: state.actual.length,

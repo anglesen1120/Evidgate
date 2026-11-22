@@ -21,6 +21,7 @@ import { CopyValueButtonComponent } from '../../../../shared/ui/values/copy-valu
 import { NumberValueComponent } from '../../../../shared/ui/values/number-value.component';
 import { EvidenceBadgeComponent } from '../../../../shared/ui/verdict/evidence-badge.component';
 import type { Completeness } from '../../../../shared/ui/verdict/verdict-values';
+import { ShellIconComponent } from '../../../../shell/layout/shell-icon.component';
 import type { DecisionViewModel } from '../decision/decision-view-model';
 import type { RevisionsStatus } from '../revision-walk';
 import { EvidenceRevisionSelectorComponent } from './evidence-revision-selector.component';
@@ -53,6 +54,7 @@ import { resolveEvidenceAnchor } from './run-evidence-anchors';
     CopyValueButtonComponent,
     AbsoluteTimeComponent,
     NumberValueComponent,
+    ShellIconComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0', '(click)': 'onReasonLinkClick($event)' },
