@@ -43,17 +43,20 @@
 // revisions/:revisionId` mounts it under the identical guard chain with only the phase gate omitted.
 
 import type { Type } from '@angular/core';
-import type { Route, Routes } from '@angular/router';
+import type { Routes } from '@angular/router';
 
 import { authGuard, orgScopeGuard, permissionGuard, projectScopeGuard } from '../guards';
 import { ShellComponent } from '../../shell/layout/shell.component';
 
 /**
- * A review-only screen of the learn-and-repair area (no contract or behaviour task yet): the
- * normal shell, the same org/project scope guards and the `healing:triage` grant the product
- * entries carry, fed by a feature-local fixture.
+ * Review-only v3 screens fed by static view models, no HTTP: mounted under the project scope with
+ * the permission the owning nav entry uses. Absent from production like every `dev/*` address.
  */
-function healingReviewRoute(path: string, load: () => Promise<Type<unknown>>): Route {
+function reviewScreen(
+  path: string,
+  permission: string,
+  load: () => Promise<Type<unknown>>,
+): Routes[number] {
   return {
     path,
     component: ShellComponent,
@@ -64,7 +67,7 @@ function healingReviewRoute(path: string, load: () => Promise<Type<unknown>>): R
         children: [
           {
             path: 'projects/:projectId',
-            canMatch: [projectScopeGuard, permissionGuard('healing:triage')],
+            canMatch: [projectScopeGuard, permissionGuard(permission)],
             data: { pageHeadingLevel: 1 },
             loadComponent: load,
           },
@@ -78,42 +81,42 @@ function healingReviewRoute(path: string, load: () => Promise<Type<unknown>>): R
 export function devRoutes(): Routes {
   return [
     /* eslint-disable evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph; fixture-fed screens with no product route. */
-    healingReviewRoute('dev/failure-inbox', () =>
+    reviewScreen('dev/failure-inbox', 'healing:triage', () =>
       import('../../features/failures/inbox/failure-inbox.review.page').then(
         (m) => m.FailureInboxReviewPage,
       ),
     ),
-    healingReviewRoute('dev/failure-detail', () =>
+    reviewScreen('dev/failure-detail', 'healing:triage', () =>
       import('../../features/failures/detail/failure-detail.review.page').then(
         (m) => m.FailureDetailReviewPage,
       ),
     ),
-    healingReviewRoute('dev/investigation-history', () =>
+    reviewScreen('dev/investigation-history', 'healing:triage', () =>
       import('../../features/failures/history/investigation-history.review.page').then(
         (m) => m.InvestigationHistoryReviewPage,
       ),
     ),
-    healingReviewRoute('dev/artifact-viewer', () =>
+    reviewScreen('dev/artifact-viewer', 'healing:triage', () =>
       import('../../features/failures/artifact/artifact-viewer.review.page').then(
         (m) => m.ArtifactViewerReviewPage,
       ),
     ),
-    healingReviewRoute('dev/healing-queue', () =>
+    reviewScreen('dev/healing-queue', 'healing:triage', () =>
       import('../../features/repairs/queue/healing-queue.review.page').then(
         (m) => m.HealingQueueReviewPage,
       ),
     ),
-    healingReviewRoute('dev/shadow-detail', () =>
+    reviewScreen('dev/shadow-detail', 'healing:triage', () =>
       import('../../features/repairs/shadow/shadow-detail.review.page').then(
         (m) => m.ShadowDetailReviewPage,
       ),
     ),
-    healingReviewRoute('dev/healing-approval', () =>
+    reviewScreen('dev/healing-approval', 'healing:triage', () =>
       import('../../features/repairs/approval/healing-approval.review.page').then(
         (m) => m.HealingApprovalReviewPage,
       ),
     ),
-    healingReviewRoute('dev/knowledge-lineage', () =>
+    reviewScreen('dev/knowledge-lineage', 'healing:triage', () =>
       import('../../features/knowledge/lineage/knowledge-lineage.review.page').then(
         (m) => m.KnowledgeLineageReviewPage,
       ),
@@ -348,5 +351,41 @@ export function devRoutes(): Routes {
         },
       ],
     },
+    reviewScreen('dev/release-decision', 'run:read', () =>
+      // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph.
+      import('../../features/releases/decision/decision-review.page').then(
+        (m) => m.ReleaseDecisionReviewPage,
+      ),
+    ),
+    reviewScreen('dev/studio-gallery', 'run:read', () =>
+      // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph.
+      import('../../features/studio/gallery/studio-gallery-review.page').then(
+        (m) => m.StudioGalleryReviewPage,
+      ),
+    ),
+    reviewScreen('dev/studio-draft-editor', 'run:read', () =>
+      // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph.
+      import('../../features/studio/draft-editor/studio-draft-editor-review.page').then(
+        (m) => m.StudioDraftEditorReviewPage,
+      ),
+    ),
+    reviewScreen('dev/studio-review-merge', 'run:read', () =>
+      // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph.
+      import('../../features/studio/review-merge/studio-review-merge-review.page').then(
+        (m) => m.StudioReviewMergeReviewPage,
+      ),
+    ),
+    reviewScreen('dev/release-view', 'run:read', () =>
+      // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph.
+      import('../../features/releases/release-view/release-view-review.page').then(
+        (m) => m.ReleaseViewReviewPage,
+      ),
+    ),
+    reviewScreen('dev/quality-overview', 'run:read', () =>
+      // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph.
+      import('../../features/quality/overview/quality-overview-review.page').then(
+        (m) => m.QualityOverviewReviewPage,
+      ),
+    ),
   ];
 }

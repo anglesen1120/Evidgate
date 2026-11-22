@@ -16,6 +16,9 @@
 @source '../app/features/failures';
 @source '../app/features/repairs';
 @source '../app/features/knowledge';
+@source '../app/features/studio';
+@source '../app/features/releases';
+@source '../app/features/quality';
 @source not '../app/**/*.spec.ts';
 @source not '../app/**/*.fixture.ts';
 @source not '../app/**/*.testing.ts';

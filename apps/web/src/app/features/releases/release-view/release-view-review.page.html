@@ -1,0 +1,112 @@
+<app-page-header [title]="copy.title" [description]="displayScope() ? copy.subtitle : undefined">
+  @if (snapshot() && state() !== 'no-match') {
+    <button
+      appPageHeaderActions
+      hlmBtn
+      type="button"
+      class="pointer-coarse:min-h-(--eg-control-touch)"
+      (click)="context()?.focus()"
+    >
+      {{ copy.openContext }}
+    </button>
+  }
+</app-page-header>
+
+@if (notice(); as notice) {
+  @if (notice.action; as action) {
+    <app-inline-feedback
+      [title]="notice.title"
+      [description]="notice.description"
+      [tone]="
+        state() === 'error'
+          ? 'destructive'
+          : state() === '412' || state() === 'partial'
+            ? 'warning'
+            : 'info'
+      "
+      [actionLabel]="copy[action]"
+      [actionDisabled]="action !== 'clear'"
+      (action)="selectFilter('all')"
+    >
+      @if (action !== 'clear') {
+        <p class="m-0">{{ copy.previewOnly }}</p>
+      }
+    </app-inline-feedback>
+  } @else if (snapshot()) {
+    <app-inline-feedback [title]="notice.title" [description]="notice.description" />
+  } @else {
+    <app-empty-pattern [title]="notice.title" [description]="notice.description" />
+  }
+}
+
+@if (state() === 'loading') {
+  <app-loading-pattern [layout]="'cards'" [label]="copy.loading" />
+} @else if (state() === 'failure' || state() === 'waived') {
+  @let run = view.separateRun;
+  <section hlmCard aria-labelledby="separate-run">
+    <header hlmCardHeader>
+      <app-section-header [title]="copy.separateRun" [titleId]="'separate-run'" />
+    </header>
+    <div hlmCardContent class="grid min-w-0 gap-4">
+      <bdi class="font-mono font-semibold">{{ run.reference }}</bdi>
+      <dl class="m-0 grid gap-3 sm:grid-cols-3">
+        <div>
+          <dt class="eg-type-caption">{{ copy.evidence }}</dt>
+          <dd class="m-0">
+            <app-evidence-badge [compact]="true" [completeness]="run.completeness" />
+          </dd>
+        </div>
+        <div>
+          <dt class="eg-type-caption">{{ copy.outcome }}</dt>
+          <dd class="m-0"><app-outcome-pill [compact]="true" [outcome]="run.outcome" /></dd>
+        </div>
+        <div>
+          <dt class="eg-type-caption">{{ copy.decision }}</dt>
+          <dd class="m-0"><app-decision-chip [compact]="true" [decision]="run.decision" /></dd>
+        </div>
+      </dl>
+      @if (state() === 'waived') {
+        <app-waiver-banner [approver]="run.approver" [expiresAt]="run.expires" />
+        <p class="m-0">{{ copy.waivedNote }}</p>
+      }
+      <div class="grid justify-items-start gap-1">
+        <button hlmBtn type="button" disabled [attr.aria-describedby]="'release-disabled'">
+          {{ copy.openDecision }}
+        </button>
+        <p id="release-disabled" class="eg-type-caption m-0">{{ copy.previewOnly }}</p>
+      </div>
+    </div>
+  </section>
+} @else if (snapshot()) {
+  <div class="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    @for (metric of view.metrics; track metric.title; let first = $first) {
+      <section hlmCard class="min-w-0 gap-3 p-4" [attr.data-assessment]="first ? '' : null">
+        <h2 class="m-0 flex items-center gap-2 text-sm font-semibold">
+          <span
+            class="grid size-(--eg-control-sm) shrink-0 place-items-center rounded-md bg-secondary text-secondary-foreground"
+          >
+            <hlm-icon class="size-4" [name]="metric.icon" /> </span
+          >{{ metric.title }}
+        </h2>
+        <div>
+          <p
+            class="m-0 font-(family-name:--eg-font-display) text-2xl font-bold tabular-nums"
+            [class.text-xl]="first"
+          >
+            {{ metric.value }}
+          </p>
+          <p class="eg-type-caption m-0 text-muted-foreground">{{ metric.note }}</p>
+        </div>
+      </section>
+    }
+  </div>
+  <app-release-binding-matrix
+    [rows]="view.bindings"
+    [filter]="filter()"
+    [state]="state()"
+    (filterChanged)="selectFilter($event)"
+    (inspect)="context()?.focus($event)"
+  />
+  <app-release-evidence-context [view]="view" [state]="state()" (openFailure)="showFailure()" />
+}
+<p class="eg-type-caption m-0 text-muted-foreground">{{ copy.watermark }}</p>
