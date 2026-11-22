@@ -1,0 +1,158 @@
+<section
+  class="grid min-w-0 justify-items-start gap-3 border-0 border-t border-solid border-(--eg-border) py-4"
+  aria-labelledby="gallery-refusal"
+>
+  <h3
+    id="gallery-refusal"
+    class="eg-type-section-title m-0"
+    i18n="@@shared.gallery.refusal.heading"
+  >
+    Refusal dialog specimen
+  </h3>
+  <p class="m-0 text-(--eg-text-muted)" i18n="@@shared.gallery.refusal.specimen">
+    Preview a refusal using the sample evidence. No decision or notification is sent.
+  </p>
+  <hlm-dialog
+    #dialog
+    [role]="'alertdialog'"
+    [restoreFocus]="opener"
+    [aria-modal]="true"
+    [autoFocus]="'#gallery-refusal-cancel'"
+  >
+    <button
+      #opener
+      hlmBtn
+      hlmDialogTrigger
+      type="button"
+      [variant]="'outline'"
+      (click)="prepare()"
+      i18n="@@shared.gallery.refusal.open"
+    >
+      Open refusal example
+    </button>
+    <hlm-dialog-content *hlmDialogPortal [size]="'md'" [closeLabel]="copy.close">
+      <header hlmDialogHeader>
+        <h2 hlmDialogTitle class="flex items-center gap-2">
+          <hlm-icon name="lucideOctagonX" class="size-5 text-(--eg-danger-fg)" />{{ title }}
+        </h2>
+        <p hlmDialogDescription class="m-0 flex flex-wrap items-baseline gap-2">
+          <strong>{{ copy.queueTitle }}</strong
+          ><span>{{ copy.original }}</span
+          ><bdi
+            class="rounded-(--eg-radius-sm) border border-solid border-(--eg-border-control) px-2 py-1"
+            >{{ runId }}</bdi
+          >
+        </p>
+      </header>
+      <div class="grid min-w-0 gap-4">
+        <fieldset class="m-0 grid min-w-0 gap-2 border-0 p-0">
+          <legend class="mb-2 font-semibold" i18n="@@shared.gallery.refusal.reason">
+            Reason for refusal
+          </legend>
+          @for (item of reasons(); track item.code) {
+            <label
+              hlmLabel
+              [for]="'gallery-refusal-' + item.code"
+              class="flex min-h-(--eg-control-touch) items-start gap-3 rounded-(--eg-radius-md) border border-solid border-(--eg-border-control) p-3 has-checked:border-(--eg-accent) has-checked:bg-(--eg-accent-soft)"
+            >
+              <input
+                type="radio"
+                name="gallery-refusal-reason"
+                [id]="'gallery-refusal-' + item.code"
+                [value]="item.code"
+                [checked]="reason() === item.code"
+                (change)="reason.set(item.code)"
+              />
+              <span class="grid min-w-0 gap-1">
+                <strong>{{ reasonLabels[item.code]?.title ?? item.code }}</strong>
+                <span class="text-xs text-(--eg-text-muted)">{{
+                  reasonLabels[item.code]?.hint ?? item.text
+                }}</span>
+              </span>
+            </label>
+          }
+        </fieldset>
+        <div class="grid min-w-0 gap-2">
+          <label hlmLabel for="gallery-refusal-message" i18n="@@shared.gallery.refusal.message"
+            >Message to requester (optional)</label
+          >
+          <textarea
+            hlmInput
+            #message
+            id="gallery-refusal-message"
+            rows="3"
+            [value]="note()"
+            (input)="note.set(message.value)"
+          ></textarea>
+        </div>
+        <div class="grid gap-2">
+          <label
+            hlmLabel
+            for="gallery-refusal-notify"
+            class="flex min-h-(--eg-control-touch) items-center gap-2"
+            ><hlm-checkbox
+              [inputId]="'gallery-refusal-notify'"
+              [aria-label]="notifyLabel"
+              [checked]="notify()"
+              (checkedChange)="notify.set($event)"
+            />{{ notifyLabel }}</label
+          >
+          <p class="m-0 text-xs text-(--eg-text-muted)" i18n="@@shared.gallery.refusal.notify-hint">
+            Email to the sample requester, shown in the preview only.
+          </p>
+          <label
+            hlmLabel
+            for="gallery-refusal-resubmit"
+            class="flex min-h-(--eg-control-touch) items-center gap-2"
+            ><hlm-checkbox
+              [inputId]="'gallery-refusal-resubmit'"
+              [aria-label]="resubmitLabel"
+              [checked]="resubmit()"
+              (checkedChange)="resubmit.set($event)"
+            />{{ resubmitLabel }}</label
+          >
+        </div>
+      </div>
+      <footer hlmDialogFooter>
+        <button
+          hlmBtn
+          hlmDialogClose
+          id="gallery-refusal-cancel"
+          type="button"
+          [variant]="'outline'"
+        >
+          {{ copy.cancel }}
+        </button>
+        <button
+          hlmBtn
+          type="button"
+          [variant]="'destructive'"
+          data-decline
+          [disabled]="!reason()"
+          (click)="decline(dialog)"
+        >
+          {{ title }}
+        </button>
+      </footer>
+    </hlm-dialog-content>
+  </hlm-dialog>
+  <div role="status" class="min-w-0 text-sm wrap-anywhere">
+    @if (result(); as preview) {
+      <strong i18n="@@shared.gallery.refusal.outcome">Refusal preview. Nothing was sent.</strong>
+      <p class="m-0">
+        <code>{{ preview.code }}</code>
+      </p>
+      @if (preview.note) {
+        <p class="m-0 whitespace-pre-wrap">
+          <bdi>{{ preview.note }}</bdi>
+        </p>
+      }
+      @if (preview.notify) {
+        <p class="m-0">{{ notifyLabel }}</p>
+      }
+      @if (preview.resubmit) {
+        <p class="m-0">{{ resubmitLabel }}</p>
+      }
+    }
+  </div>
+</section>

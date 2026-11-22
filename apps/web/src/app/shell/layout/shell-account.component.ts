@@ -23,14 +23,14 @@ import { ShellIconComponent } from './shell-icon.component';
       type="button"
       hlmBtn
       [variant]="'ghost'"
-      class="min-h-(--eg-control-touch) min-w-(--eg-control-touch) gap-(--eg-space-3) px-(--eg-space-2)"
+      class="min-h-(--eg-control-touch) min-w-(--eg-control-touch) gap-(--eg-space-3) px-(--eg-space-2) text-xs"
       [hlmDropdownMenuTrigger]="accountMenu"
       [align]="'end'"
       aria-label="Account menu"
       i18n-aria-label="@@shell.account.menu"
     >
       <span
-        class="grid size-(--eg-control-sm) place-items-center rounded-full bg-accent text-accent-foreground"
+        class="grid size-(--eg-control-sm) shrink-0 place-items-center rounded-full bg-secondary text-foreground"
       >
         <app-shell-icon [name]="'account'" />
       </span>

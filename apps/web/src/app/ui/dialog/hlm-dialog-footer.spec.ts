@@ -106,4 +106,54 @@ describe('HlmDialogFooter responsive action order', () => {
       expect(await actions.allTextContents()).toEqual(domOrder);
     },
   );
+
+  it.each([
+    { width: 390, size: 'lg', expectedWidth: 390 },
+    { width: 599, size: 'md', expectedWidth: 599 },
+    { width: 600, size: 'lg', expectedWidth: 568 },
+    { width: 900, size: 'md', expectedWidth: 560 },
+    { width: 900, size: 'lg', expectedWidth: 760 },
+  ])('keeps $size chrome visible while only the dialog scrolls at $width px', async (scenario) => {
+    const { width, size, expectedWidth } = scenario;
+    const height = 700;
+    await page.setViewportSize({ width, height });
+    await page.setContent(`<!doctype html><html lang="vi"><head><style>
+      ${source('src/styles/tokens.css')}
+      ${source('src/styles/helm/dialog.css')}
+      ${source('src/app/ui/dialog/lib/hlm-dialog-content.css')}
+      body { margin: 0; min-height: 100dvh; display: grid; place-items: center; }
+    </style></head><body>
+      <hlm-dialog-content class="spartan-dialog-content spartan-dialog-${size}" data-size="${size}">
+        <header class="spartan-dialog-header" data-slot="dialog-header"><span hlmDialogStatusIcon aria-hidden="true">!</span>
+          <h2>Đổi vai trò</h2><p hlmDialogSubject>Yêu cầu đang chờ xử lý</p></header>
+        <div>${'<p>Chi tiết yêu cầu</p>'.repeat(80)}</div>
+        <footer class="spartan-dialog-footer" data-slot="dialog-footer"><button>Hủy</button></footer>
+      </hlm-dialog-content>
+    </body></html>`);
+    const surface = page.locator('hlm-dialog-content');
+    const header = surface.locator('header');
+    const footer = surface.locator('footer');
+    const rect = await surface.boundingBox();
+    expect(rect?.width).toBe(expectedWidth);
+    expect(rect?.height).toBe(width < 600 ? height : height - 32);
+    const beforeHeader = await header.boundingBox();
+    const beforeFooter = await footer.boundingBox();
+    expect(
+      await header.locator('[hlmDialogStatusIcon]').evaluate((icon) => {
+        const subject = icon.parentElement?.querySelector('[hlmDialogSubject]');
+        return (
+          !!subject && icon.getBoundingClientRect().right < subject.getBoundingClientRect().left
+        );
+      }),
+    ).toBe(true);
+    const scrolled = await surface.evaluate((dialog) => {
+      dialog.scrollTop = dialog.scrollHeight;
+      return dialog.scrollTop;
+    });
+    expect(scrolled).toBeGreaterThan(0);
+    expect(await header.boundingBox()).toEqual(beforeHeader);
+    expect(await footer.boundingBox()).toEqual(beforeFooter);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  });
 });

@@ -249,6 +249,26 @@
           <context context-type="linenumber">29,34</context>
         </context-group>
       </trans-unit>
+<trans-unit id="shell.overview.title" datatype="html">
+        <source>Project overview</source>
+        <target>Tổng quan dự án</target>
+      </trans-unit>
+<trans-unit id="shell.overview.scope-line" datatype="html">
+        <source><x id="slug" equiv-text="project.slug"/> · Case prefix: <x id="prefix" equiv-text="project.case_prefix"/></source>
+        <target><x id="slug" equiv-text="project.slug"/> · Tiền tố ca kiểm thử: <x id="prefix" equiv-text="project.case_prefix"/></target>
+      </trans-unit>
+<trans-unit id="shell.overview.no-shortcuts" datatype="html">
+        <source>No shortcuts available for this project</source>
+        <target>Không có lối tắt cho dự án này</target>
+      </trans-unit>
+<trans-unit id="shell.overview.setup-guide" datatype="html">
+        <source>Follow the workspace setup steps.</source>
+        <target>Làm theo các bước thiết lập không gian làm việc.</target>
+      </trans-unit>
+<trans-unit id="shell.overview.authoring-guide" datatype="html">
+        <source>Browse features and their test cases.</source>
+        <target>Xem các tính năng và ca kiểm thử tương ứng.</target>
+      </trans-unit>
 <trans-unit id="shared.label-chip.flaky" datatype="html">
         <source>Flaky</source>
         <target>Chập chờn</target>
@@ -10740,6 +10760,82 @@
       <trans-unit id="shared.gallery.sheet.copy-policy" datatype="html"><source>Review policy</source><target>Chính sách xét duyệt</target></trans-unit>
       <trans-unit id="shared.gallery.sheet.copy-policy-hint" datatype="html"><source>Approval authorizes a shadow run, not a release.</source><target>Phê duyệt cho phép chạy mô phỏng, không phải phát hành.</target></trans-unit>
       <trans-unit id="shared.gallery.sheet.copy-reviewer" datatype="html"><source>Reviewer</source><target>Người xét duyệt</target></trans-unit>
+      <trans-unit id="shared.gallery.members.title" datatype="html"><source>Member directory specimen</source><target>Mẫu danh sách thành viên</target></trans-unit>
+      <trans-unit id="shared.gallery.members.specimen" datatype="html"><source>Sample data. Changes apply only to this example.</source><target>Đây là dữ liệu mẫu. Các thay đổi chỉ áp dụng trong ví dụ này.</target></trans-unit>
+      <trans-unit id="shared.gallery.members.caption" datatype="html"><source>Sample members</source><target>Danh sách thành viên mẫu</target></trans-unit>
+      <trans-unit id="shared.gallery.members.email" datatype="html"><source>Member email</source><target>Email thành viên</target></trans-unit>
+      <trans-unit id="shared.gallery.members.roles" datatype="html"><source>Roles</source><target>Vai trò</target></trans-unit>
+      <trans-unit id="shared.gallery.members.projects" datatype="html"><source>Projects</source><target>Dự án</target></trans-unit>
+      <trans-unit id="shared.gallery.members.actions" datatype="html"><source>Actions</source><target>Thao tác</target></trans-unit>
+      <trans-unit id="shared.gallery.members.active" datatype="html"><source>Active</source><target>Đang hoạt động</target></trans-unit>
+      <trans-unit id="shared.gallery.members.pending" datatype="html"><source>Invite pending</source><target>Chờ nhận lời mời</target></trans-unit>
+      <trans-unit id="shared.gallery.members.all" datatype="html"><source>All</source><target>Tất cả</target></trans-unit>
+      <trans-unit id="shared.gallery.members.viewer" datatype="html"><source>Viewer</source><target>Người xem</target></trans-unit>
+      <trans-unit id="shared.gallery.members.view" datatype="html"><source>View</source><target>Xem</target></trans-unit>
+      <trans-unit id="shared.gallery.members.edit" datatype="html"><source>Edit</source><target>Sửa</target></trans-unit>
+      <trans-unit id="shared.gallery.members.details" datatype="html"><source>Member details</source><target>Chi tiết thành viên</target></trans-unit>
+      <trans-unit id="shared.gallery.members.edit-roles" datatype="html"><source>Edit organization roles</source><target>Sửa vai trò trong tổ chức</target></trans-unit>
+      <trans-unit id="shared.gallery.members.save" datatype="html"><source>Save roles</source><target>Lưu vai trò</target></trans-unit>
+      <trans-unit id="shared.gallery.members.keep" datatype="html"><source>Keep editing</source><target>Tiếp tục chỉnh sửa</target></trans-unit>
+      <trans-unit id="shared.gallery.members.discard" datatype="html"><source>Discard changes</source><target>Bỏ thay đổi</target></trans-unit>
+      <trans-unit id="shared.gallery.members.confirm" datatype="html"><source>Discard unsaved changes?</source><target>Bỏ các thay đổi chưa lưu?</target></trans-unit>
+      <trans-unit id="shared.gallery.members.discard-hint" datatype="html"><source>The sample member will keep their previous roles.</source><target>Thành viên mẫu sẽ giữ các vai trò trước đó.</target></trans-unit>
+      <trans-unit id="shared.gallery.members.narrow" datatype="html"><source>View only on this screen. Use a desktop to edit roles.</source><target>Chỉ có thể xem trên màn hình này. Dùng máy tính để sửa vai trò.</target></trans-unit>
+      <trans-unit id="shared.gallery.members.base-role" datatype="html"><source>Every sample member has the Viewer role.</source><target>Mọi thành viên mẫu đều có vai trò Người xem.</target></trans-unit>
+      <trans-unit id="shared.gallery.members.subtitle" datatype="html"><source>Members: <x id="members" equiv-text="this.counts().all"/> · Pending invitations: <x id="pending" equiv-text="this.counts().pending"/></source><target>Thành viên: <x id="members" equiv-text="this.counts().all"/> · Lời mời đang chờ: <x id="pending" equiv-text="this.counts().pending"/></target></trans-unit>
+      <trans-unit id="shared.gallery.members.range" datatype="html"><source>Showing <x id="first" equiv-text="first"/>–<x id="last" equiv-text="last"/> of <x id="total" equiv-text="this.filtered().length"/></source><target>Hiển thị <x id="first" equiv-text="first"/>–<x id="last" equiv-text="last"/> trong số <x id="total" equiv-text="this.filtered().length"/></target></trans-unit>
+      <trans-unit id="shared.gallery.members.view-label" datatype="html"><source>View <x id="email" equiv-text="email"/></source><target>Xem <x id="email" equiv-text="email"/></target></trans-unit>
+      <trans-unit id="shared.gallery.members.edit-label" datatype="html"><source>Edit roles for <x id="email" equiv-text="email"/></source><target>Sửa vai trò cho <x id="email" equiv-text="email"/></target></trans-unit>
+      <trans-unit id="shared.gallery.members.more-label" datatype="html"><source>More actions for <x id="email" equiv-text="email"/></source><target>Thao tác khác cho <x id="email" equiv-text="email"/></target></trans-unit>
+      <trans-unit id="shared.gallery.members.find" datatype="html"><source>Find member</source><target>Tìm thành viên</target></trans-unit>
+      <trans-unit id="shared.gallery.members.no-match" datatype="html"><source>No sample members match. Clear the search or change the filters.</source><target>Không tìm thấy thành viên mẫu phù hợp. Hãy xóa nội dung tìm kiếm hoặc đổi bộ lọc.</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.title" datatype="html"><source>Quality snapshot</source><target>Tổng quan chất lượng</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.subtitle" datatype="html"><source>Static specimen · storefront-web · develop · Complete runs only</source><target>Ví dụ tĩnh · storefront-web · develop · Chỉ gồm lượt chạy đủ bằng chứng</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.period" datatype="html"><source>11–12 Oct 2026 · UTC</source><target>11–12/10/2026 · UTC</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.rate-title" datatype="html"><source>Failure rate · 12 Oct</source><target>Tỷ lệ không đạt · 12/10</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.delta" datatype="html"><source>Down 5 percentage points</source><target>Giảm 5 điểm phần trăm</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.comparison" datatype="html"><source>2 of 20 complete runs failed, compared with 3 of 20 on 11 Oct. Lower is better.</source><target>Có 2 trong 20 lượt chạy đủ bằng chứng không đạt, so với 3 trong 20 lượt vào ngày 11/10. Tỷ lệ càng thấp càng tốt.</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.chart-title" datatype="html"><source>Complete runs by day</source><target>Lượt chạy đủ bằng chứng theo ngày</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.pass" datatype="html"><source>Pass</source><target>Đạt</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.fail" datatype="html"><source>Fail</source><target>Không đạt</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.other" datatype="html"><source>Other · unspecified</source><target>Khác · chưa xác định</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.axis" datatype="html"><source>UTC day · number of complete runs. Other is not a pass.</source><target>Ngày theo UTC · số lượt chạy đủ bằng chứng. Nhóm Khác không được tính là Đạt.</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.table-toggle" datatype="html"><source>View as table</source><target>Xem dạng bảng</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.table-title" datatype="html"><source>Runs by UTC day</source><target>Lượt chạy theo ngày UTC</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.day" datatype="html"><source>Day</source><target>Ngày</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.outcomes" datatype="html"><source>Outcome breakdown</source><target>Phân bố kết quả</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.flake-title" datatype="html"><source>Cases ranked by flake rate</source><target>Xếp hạng ca kiểm thử theo tỷ lệ không ổn định</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.postcode" datatype="html"><source>Address formats postcode</source><target>Định dạng mã bưu chính của địa chỉ</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.search" datatype="html"><source>Search products by phrase</source><target>Tìm sản phẩm theo cụm từ</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.runs" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ item.runs }}"/> runs</source><target><x id="INTERPOLATION" equiv-text="{{ item.runs }}"/> lượt chạy</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.failure-reasons" datatype="html"><source>Top failure reasons · <x id="INTERPOLATION" equiv-text="{{ runId }}"/></source><target>Các lý do không đạt thường gặp · <x id="INTERPOLATION" equiv-text="{{ runId }}"/></target></trans-unit>
+      <trans-unit id="shared.gallery.quality.defect" datatype="html"><source>Product defect</source><target>Lỗi sản phẩm</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.drift" datatype="html"><source>Test drift</source><target>Kiểm thử lệch so với giao diện</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.limits" datatype="html"><source>INCONCLUSIVE and Pending counts were not supplied. Their neutral series are shown in the key only.</source><target>Không có số liệu cho trạng thái INCONCLUSIVE (chưa thể kết luận) và Đang chờ. Hai trạng thái trung tính này chỉ xuất hiện trong chú giải.</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.inconclusive" datatype="html"><source>INCONCLUSIVE</source><target>INCONCLUSIVE (chưa thể kết luận)</target></trans-unit>
+      <trans-unit id="shared.gallery.quality.pending" datatype="html"><source>Pending</source><target>Đang chờ</target></trans-unit>
+      <trans-unit id="shared.gallery.members.browse" datatype="html"><source>Browse members</source><target>Xem danh sách thành viên</target></trans-unit>
+      <trans-unit id="shared.gallery.members.review-invite" datatype="html"><source>Review sample invitation</source><target>Xem lời mời mẫu</target></trans-unit>
+      <trans-unit id="shared.gallery.members.total" datatype="html"><source>Members</source><target>Thành viên</target></trans-unit>
+      <trans-unit id="shared.gallery.members.total-context" datatype="html"><source>Records in this specimen</source><target>Bản ghi trong ví dụ này</target></trans-unit>
+      <trans-unit id="shared.gallery.members.active-context" datatype="html"><source>Accepted invitations</source><target>Đã nhận lời mời</target></trans-unit>
+      <trans-unit id="shared.gallery.members.invites" datatype="html"><source>Pending invitations</source><target>Lời mời đang chờ</target></trans-unit>
+      <trans-unit id="shared.gallery.members.pending-context" datatype="html"><source>Awaiting a response</source><target>Đang chờ phản hồi</target></trans-unit>
+      <trans-unit id="shared.gallery.members.filter-status" datatype="html"><source>Filter by this status</source><target>Lọc theo trạng thái này</target></trans-unit>
+      <trans-unit id="shared.gallery.refusal.title" datatype="html"><source>Decline sample request</source><target>Từ chối yêu cầu mẫu</target></trans-unit>
+      <trans-unit id="shared.gallery.refusal.heading" datatype="html"><source>Refusal dialog specimen</source><target>Mẫu hộp thoại từ chối</target></trans-unit>
+      <trans-unit id="shared.gallery.refusal.specimen" datatype="html"><source>Preview a refusal using the sample evidence. No decision or notification is sent.</source><target>Xem trước thao tác từ chối dựa trên bằng chứng mẫu. Không gửi quyết định hay thông báo nào.</target></trans-unit>
+      <trans-unit id="shared.gallery.refusal.open" datatype="html"><source>Open refusal example</source><target>Mở ví dụ từ chối</target></trans-unit>
+      <trans-unit id="shared.gallery.refusal.reason" datatype="html"><source>Reason for refusal</source><target>Lý do từ chối</target></trans-unit>
+      <trans-unit id="shared.gallery.refusal.message" datatype="html"><source>Message to requester (optional)</source><target>Lời nhắn cho người yêu cầu (không bắt buộc)</target></trans-unit>
+      <trans-unit id="shared.gallery.refusal.notify" datatype="html"><source>Include a requester notification</source><target>Thêm thông báo cho người yêu cầu</target></trans-unit>
+      <trans-unit id="shared.gallery.refusal.notify-hint" datatype="html"><source>Email to the sample requester, shown in the preview only.</source><target>Email cho người yêu cầu mẫu, chỉ hiển thị trong bản xem trước.</target></trans-unit>
+      <trans-unit id="shared.gallery.refusal.resubmit" datatype="html"><source>Allow resubmission</source><target>Cho phép gửi lại</target></trans-unit>
+      <trans-unit id="shared.gallery.refusal.outcome" datatype="html"><source>Refusal preview. Nothing was sent.</source><target>Bản xem trước thao tác từ chối. Chưa gửi nội dung nào.</target></trans-unit>
+      <trans-unit id="shared.gallery.refusal.missing-artifact" datatype="html"><source>Missing artifact</source><target>Thiếu hiện vật</target></trans-unit>
+      <trans-unit id="shared.gallery.refusal.missing-artifact-hint" datatype="html"><source>The expected artifact was not attached.</source><target>Chưa đính kèm hiện vật cần có.</target></trans-unit>
+      <trans-unit id="shared.gallery.refusal.missing-producer" datatype="html"><source>Missing producer evidence</source><target>Thiếu bằng chứng từ nguồn</target></trans-unit>
+      <trans-unit id="shared.gallery.members.applied" datatype="html"><source>Updated sample roles for <x id="email" equiv-text="member.email"/>. No account was changed.</source><target>Đã cập nhật vai trò mẫu cho <x id="email" equiv-text="member.email"/>. Không có tài khoản nào thay đổi.</target></trans-unit>
       <trans-unit id="shared.gallery.sheet.copy-project" datatype="html"><source>Project</source><target>Dự án</target></trans-unit>
       <trans-unit id="shared.gallery.sheet.copy-inspect" datatype="html"><source>Inspect record</source><target>Xem hồ sơ</target></trans-unit>
       <trans-unit id="shared.gallery.sheet.copy-quality" datatype="html"><source>Quality</source><target>Chất lượng</target></trans-unit>

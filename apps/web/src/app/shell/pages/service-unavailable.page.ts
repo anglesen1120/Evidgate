@@ -1,34 +1,53 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmCard, HlmCardTitle, HlmCardDescription } from '@evidgate/ui/card';
+import {
+  HlmCard,
+  HlmCardContent,
+  HlmCardDescription,
+  HlmCardHeader,
+  HlmCardTitle,
+} from '@evidgate/ui/card';
 import { SessionStore } from '../../core/session/session.store';
 
 @Component({
   selector: 'app-service-unavailable-page',
-  imports: [HlmButton, HlmCard, HlmCardTitle, HlmCardDescription],
+  imports: [HlmButton, HlmCard, HlmCardContent, HlmCardDescription, HlmCardHeader, HlmCardTitle],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0 font-sans text-foreground' },
   template: `<section
     hlmCard
-    class="min-w-0 items-start gap-(--eg-space-4) px-(--eg-space-4) py-(--eg-space-8) [overflow-wrap:anywhere] min-[768px]:px-(--eg-space-5)"
+    class="min-w-0 gap-(--eg-space-5) py-(--eg-space-6)"
     [attr.aria-busy]="retrying()"
     aria-labelledby="unavailable-heading"
   >
-    <h1 hlmCardTitle [size]="pageHeadingSize" id="unavailable-heading" [textContent]="heading"></h1>
-    <p hlmCardDescription class="m-0">{{ explanation }}</p>
-    <button
-      hlmBtn
-      class="h-auto min-h-(--eg-control-touch) max-w-full whitespace-normal"
-      type="button"
-      [disabled]="retrying()"
-      (click)="retry()"
-    >
-      {{ retrying() ? pendingLabel : action }}
-    </button>
-    <p class="m-0 min-h-(--eg-leading-sm) text-sm text-muted-foreground" role="status">
-      {{ failed() ? failureLabel : '' }}
-    </p>
+    <header hlmCardHeader>
+      <h1
+        hlmCardTitle
+        [size]="pageHeadingSize"
+        id="unavailable-heading"
+        [textContent]="heading"
+      ></h1>
+      <p hlmCardDescription class="max-w-prose text-sm">{{ explanation }}</p>
+    </header>
+    <div hlmCardContent class="grid justify-items-start gap-(--eg-space-3)">
+      <button
+        hlmBtn
+        class="h-auto min-h-(--eg-control-touch) max-w-full whitespace-normal"
+        type="button"
+        [disabled]="retrying()"
+        [attr.aria-busy]="retrying()"
+        (click)="retry()"
+      >
+        {{ retrying() ? pendingLabel : action }}
+      </button>
+      <p
+        class="m-0 min-h-(--eg-leading-sm) max-w-prose text-sm text-muted-foreground"
+        role="status"
+      >
+        {{ failed() ? failureLabel : '' }}
+      </p>
+    </div>
   </section>`,
 })
 export class ServiceUnavailablePage {

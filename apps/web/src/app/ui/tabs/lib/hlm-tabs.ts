@@ -1,5 +1,5 @@
 import { Directive, input } from '@angular/core';
-import { BrnTabs } from '@spartan-ng/brain/tabs';
+import { BrnTabs, type BrnTabsOrientation } from '@spartan-ng/brain/tabs';
 import { classes } from '@evidgate/ui/utils';
 
 @Directive({
@@ -8,7 +8,7 @@ import { classes } from '@evidgate/ui/utils';
   hostDirectives: [
     {
       directive: BrnTabs,
-      inputs: ['orientation', 'activationMode', 'brnTabs: tab'],
+      inputs: ['activationMode', 'brnTabs: tab'],
       outputs: ['tabActivated'],
     },
   ],
@@ -18,8 +18,12 @@ import { classes } from '@evidgate/ui/utils';
 })
 export class HlmTabs {
   public readonly tab = input.required<string>();
+  // Existing bindings remain valid, but Brain never receives a vertical orientation.
+  public readonly orientation = input<'horizontal', BrnTabsOrientation>('horizontal', {
+    transform: () => 'horizontal',
+  });
 
   constructor() {
-    classes(() => 'group/tabs flex gap-2 data-[orientation=horizontal]:flex-col');
+    classes(() => 'group/tabs flex min-w-0 flex-col gap-2');
   }
 }

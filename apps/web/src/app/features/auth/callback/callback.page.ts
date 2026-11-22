@@ -3,31 +3,50 @@
 
 import { ChangeDetectionStrategy, Component, inject, type OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { HlmCardTitle } from '@evidgate/ui/card';
+import { HlmCard, HlmCardContent, HlmCardHeader, HlmCardTitle } from '@evidgate/ui/card';
 
 import { SessionStore } from '../../../core/session/session.store';
 import { LoadingPatternComponent } from '../../../shared/ui/states';
 import { validateReturnUrl } from '../../../core/routing/return-url';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 
 @Component({
   selector: 'app-auth-callback',
-  imports: [LoadingPatternComponent, HlmCardTitle],
+  imports: [
+    HlmCard,
+    HlmCardHeader,
+    HlmCardTitle,
+    HlmCardContent,
+    LoadingPatternComponent,
+    ShellIconComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
     <main
-      class="callback box-border grid min-h-dvh content-center justify-items-center gap-(--eg-space-4) bg-card px-(--eg-space-5) py-(--eg-space-8) text-center font-sans text-foreground [overflow-wrap:anywhere]"
+      class="callback box-border grid min-h-dvh min-w-0 place-items-center bg-background px-(--eg-space-4) py-(--eg-space-8) font-sans text-foreground"
       aria-labelledby="auth-callback-heading"
     >
-      <h1 hlmCardTitle [size]="pageHeadingSize" id="auth-callback-heading">
-        {{ heading }}
-      </h1>
-      <p
-        class="callback__explanation m-0 max-w-[calc(2*var(--eg-rail-width))] text-sm text-muted-foreground"
-      >
-        {{ explanation }}
-      </p>
-      <app-loading-pattern [label]="loadingLabel" />
+      <article hlmCard class="box-border w-full max-w-md gap-0 py-0 wrap-anywhere">
+        <header
+          hlmCardHeader
+          class="grid-cols-[auto_minmax(0,1fr)] items-center gap-(--eg-space-4) border-0 border-b border-solid border-border p-(--eg-space-5) sm:p-(--eg-space-7)"
+        >
+          <span
+            aria-hidden="true"
+            class="grid size-(--eg-space-10) place-items-center rounded-(--eg-radius-md) bg-(--eg-accent-soft) text-primary"
+          >
+            <app-shell-icon class="size-(--eg-space-7)" [name]="'shield'" />
+          </span>
+          <div class="min-w-0">
+            <h1 hlmCardTitle [size]="pageHeadingSize" id="auth-callback-heading">{{ heading }}</h1>
+            <p class="callback__explanation m-0 text-sm text-muted-foreground">{{ explanation }}</p>
+          </div>
+        </header>
+        <div hlmCardContent class="p-(--eg-space-5) sm:p-(--eg-space-7)">
+          <app-loading-pattern [bare]="true" [label]="loadingLabel" />
+        </div>
+      </article>
     </main>
   `,
 })

@@ -1,0 +1,287 @@
+<section
+  class="grid min-w-0 gap-4 border-0 border-t border-solid border-(--eg-border) py-4"
+  aria-labelledby="gallery-member-directory"
+>
+  <app-section-header
+    [title]="copy.title"
+    [description]="subtitle()"
+    [headingLevel]="3"
+    [titleId]="'gallery-member-directory'"
+    class="[&_h3]:text-2xl"
+  >
+    <a hlmBtn appSectionHeaderActions [variant]="'outline'" href="#gallery-member-table"
+      ><hlm-icon name="lucideInfo" /><span i18n="@@shared.gallery.members.browse"
+        >Browse members</span
+      ></a
+    >
+    @if (pendingMember(); as pending) {
+      <button
+        #review
+        hlmBtn
+        appSectionHeaderActions
+        type="button"
+        (click)="dialog.open(pending, 'view', review, review)"
+        i18n="@@shared.gallery.members.review-invite"
+      >
+        Review sample invitation
+      </button>
+    }
+  </app-section-header>
+  <p class="m-0 text-sm text-(--eg-text-muted)">{{ copy.specimen }}</p>
+  <dl
+    class="metrics m-0 grid min-w-0 rounded-(--eg-radius-lg) border border-solid border-(--eg-border) bg-(--eg-surface) sm:grid-cols-3"
+  >
+    <div>
+      <dt>
+        <hlm-icon name="lucideActivity" /><span i18n="@@shared.gallery.members.total">Members</span>
+      </dt>
+      <dd>{{ counts().all }}</dd>
+      <dd class="context" i18n="@@shared.gallery.members.total-context">
+        Records in this specimen
+      </dd>
+    </div>
+    <div>
+      <dt><hlm-icon name="lucideCircleCheck" />{{ copy.active }}</dt>
+      <dd>{{ counts().active }}</dd>
+      <dd class="context" i18n="@@shared.gallery.members.active-context">Accepted invitations</dd>
+      <dd class="context" aria-hidden="true">
+        <progress
+          [value]="counts().active"
+          [max]="counts().all"
+          class="w-full accent-(--eg-accent)"
+        ></progress>
+      </dd>
+    </div>
+    <div>
+      <dt>
+        <hlm-icon name="lucideClock" /><span i18n="@@shared.gallery.members.invites"
+          >Pending invitations</span
+        >
+      </dt>
+      <dd>{{ counts().pending }}</dd>
+      <dd class="context" i18n="@@shared.gallery.members.pending-context">Awaiting a response</dd>
+      <dd class="context"><app-status-pill [tone]="'neutral'" [label]="copy.pending" /></dd>
+    </div>
+  </dl>
+  <div
+    class="min-w-0 rounded-(--eg-radius-lg) border border-solid border-(--eg-border) bg-(--eg-surface)"
+  >
+    <div
+      class="flex min-w-0 flex-wrap items-center justify-between gap-3 border-0 border-b border-solid border-(--eg-border) p-3"
+    >
+      <div
+        role="group"
+        [attr.aria-label]="copy.status"
+        class="flex min-w-0 max-w-full flex-nowrap gap-1 overflow-x-auto p-1"
+      >
+        @for (item of filters; track item) {
+          <button
+            hlmBtn
+            type="button"
+            class="shrink-0 whitespace-nowrap aria-pressed:border-(--eg-accent) aria-pressed:bg-(--eg-accent-soft) aria-pressed:text-(--eg-accent-fg)"
+            [variant]="filter() === item ? 'outline' : 'ghost'"
+            [attr.data-filter]="item"
+            [attr.aria-pressed]="filter() === item"
+            (click)="filter.set(item)"
+          >
+            {{ copy[item] }}
+            <span class="text-xs text-(--eg-text-muted) tabular-nums">{{ counts()[item] }}</span>
+          </button>
+        }
+      </div>
+      <div class="flex min-w-0 max-w-full flex-wrap items-end gap-3">
+        <div class="grid gap-1">
+          <label hlmLabel for="gallery-role-filter">{{ copy.roles }}</label>
+          <hlm-select [value]="role()" (valueChange)="chooseRole($event)">
+            <hlm-select-trigger [buttonId]="'gallery-role-filter'"
+              ><hlm-select-value
+            /></hlm-select-trigger>
+            <hlm-select-content *hlmSelectPortal [aria-label]="copy.roles">
+              <hlm-select-item value="all">{{ copy.all }}</hlm-select-item>
+              <hlm-select-item value="viewer">{{ copy.viewer }}</hlm-select-item>
+              <hlm-select-item value="reviewer">{{ copy.reviewer }}</hlm-select-item>
+            </hlm-select-content>
+          </hlm-select>
+        </div>
+        <div class="grid min-w-0 gap-1">
+          <label hlmLabel for="gallery-member-find" i18n="@@shared.gallery.members.find"
+            >Find member</label
+          >
+          <input
+            #find
+            hlmInput
+            type="search"
+            id="gallery-member-find"
+            class="w-44 max-w-full"
+            [value]="search()"
+            (input)="search.set(find.value)"
+          />
+        </div>
+      </div>
+    </div>
+    <div hlmTableContainer>
+      <table hlmTable class="member-table" role="table">
+        <caption hlmCaption id="gallery-member-table">
+          {{
+            copy.caption
+          }}
+        </caption>
+        <thead hlmTHead>
+          <tr hlmTr>
+            <th hlmTh scope="col">{{ copy.email }}</th>
+            <th hlmTh scope="col">{{ copy.status }}</th>
+            <th hlmTh scope="col">{{ copy.roles }}</th>
+            <th hlmTh scope="col" class="text-end!">{{ copy.projects }}</th>
+            <th hlmTh scope="col" class="text-end!">{{ copy.actions }}</th>
+          </tr>
+        </thead>
+        <tbody hlmTBody>
+          @for (row of visible(); track row.email) {
+            <tr hlmTr>
+              <th hlmTh scope="row">
+                <div class="flex min-w-0 items-center gap-2">
+                  <span
+                    class="avatar"
+                    [class.pending]="row.status === 'pending'"
+                    aria-hidden="true"
+                    >{{ row.initials }}</span
+                  >
+                  <div class="min-w-0">
+                    <strong class="block font-semibold"
+                      ><bdi>{{ row.name }}</bdi></strong
+                    ><bdi class="block text-xs text-(--eg-text-muted) wrap-anywhere">{{
+                      row.email
+                    }}</bdi>
+                  </div>
+                </div>
+              </th>
+              <td hlmTd>
+                <span class="cell-label" aria-hidden="true">{{ copy.status }}</span
+                ><app-status-pill
+                  [tone]="row.status === 'active' ? 'success' : 'neutral'"
+                  [label]="copy[row.status]"
+                />
+              </td>
+              <td hlmTd>
+                <span class="cell-label" aria-hidden="true">{{ copy.roles }}</span
+                ><span
+                  >{{ copy.viewer }}
+                  @if (row.reviewer) {
+                    , {{ copy.reviewer }}
+                  }
+                </span>
+              </td>
+              <td hlmTd class="number text-end! tabular-nums">
+                <span class="cell-label" aria-hidden="true">{{ copy.projects }}</span
+                >{{ row.projects }}
+              </td>
+              <td hlmTd>
+                <span class="cell-label" aria-hidden="true">{{ copy.actions }}</span>
+                <div class="flex flex-wrap items-center justify-end gap-2">
+                  <button
+                    #view
+                    hlmBtn
+                    type="button"
+                    [variant]="'outline'"
+                    [attr.data-action]="'view'"
+                    [attr.aria-haspopup]="'dialog'"
+                    [attr.aria-label]="viewLabel(row.email)"
+                    (click)="dialog.open(row, 'view', view, view)"
+                  >
+                    {{ copy.view }}
+                  </button>
+                  @if (!policy.narrow()) {
+                    <button
+                      #edit
+                      hlmBtn
+                      type="button"
+                      [variant]="'ghost'"
+                      [attr.data-action]="'edit'"
+                      [attr.aria-haspopup]="'dialog'"
+                      [attr.aria-label]="editLabel(row.email)"
+                      (click)="dialog.open(row, 'edit', edit, view)"
+                    >
+                      {{ copy.edit }}
+                    </button>
+                  }
+                  <button
+                    hlmBtn
+                    type="button"
+                    [variant]="'ghost'"
+                    [size]="'icon'"
+                    [attr.aria-label]="moreLabel(row.email)"
+                    [hlmDropdownMenuTrigger]="more"
+                  >
+                    <span aria-hidden="true">⋯</span>
+                  </button>
+                  <ng-template #more
+                    ><div hlmDropdownMenu>
+                      <button
+                        hlmDropdownMenuItem
+                        (triggered)="filter.set(row.status)"
+                        i18n="@@shared.gallery.members.filter-status"
+                      >
+                        Filter by this status
+                      </button>
+                    </div></ng-template
+                  >
+                </div>
+              </td>
+            </tr>
+          } @empty {
+            <tr hlmTr>
+              <td
+                hlmTd
+                colspan="5"
+                class="text-center text-(--eg-text-muted)"
+                i18n="@@shared.gallery.members.no-match"
+              >
+                No sample members match. Clear the search or change the filters.
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    @if (policy.narrow()) {
+      <p class="m-0 text-sm text-(--eg-text-muted)">{{ copy.narrow }}</p>
+    }
+    <footer
+      class="flex flex-wrap items-center justify-between gap-2 border-0 border-t border-solid border-(--eg-border) p-3"
+    >
+      <p
+        class="m-0 text-sm text-(--eg-text-muted) tabular-nums"
+        data-range
+        [attr.aria-live]="'polite'"
+      >
+        {{ range() }}
+      </p>
+      <div class="flex gap-2">
+        <button
+          hlmBtn
+          type="button"
+          [variant]="'outline'"
+          [disabled]="page() === 0"
+          (click)="page.set(page() - 1)"
+        >
+          {{ previous }}
+        </button>
+        @if (visible().length) {
+          <span class="self-center px-1 text-sm tabular-nums">{{ page() + 1 }}</span>
+        }
+        <button
+          hlmBtn
+          type="button"
+          [variant]="'outline'"
+          data-next
+          [disabled]="atEnd()"
+          (click)="page.set(page() + 1)"
+        >
+          {{ next }}
+        </button>
+      </div>
+    </footer>
+  </div>
+  <app-gallery-member-dialog #dialog (rolesApplied)="applyRoles($event)" />
+  <app-live-status [text]="announcement()" />
+</section>

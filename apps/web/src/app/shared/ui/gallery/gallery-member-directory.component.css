@@ -1,0 +1,113 @@
+.metrics > div {
+  min-inline-size: 0;
+  padding: var(--eg-space-5);
+}
+
+.metrics > div + div {
+  border-block-start: var(--eg-border-width) solid var(--eg-border);
+}
+
+.metrics dt {
+  display: flex;
+  align-items: center;
+  gap: var(--eg-space-3);
+  font-size: var(--eg-text-sm);
+  font-weight: var(--eg-weight-semibold);
+}
+
+.metrics hlm-icon {
+  inline-size: var(--eg-space-5);
+  block-size: var(--eg-space-5);
+  color: var(--eg-text-muted);
+}
+
+.metrics dd {
+  margin: var(--eg-space-2) 0 0;
+  font: var(--eg-weight-bold) var(--eg-text-2xl) / var(--eg-leading-2xl) var(--eg-font-display);
+  font-variant-numeric: tabular-nums;
+}
+
+.metrics dd.context {
+  font: inherit;
+  font-size: var(--eg-text-xs);
+  line-height: var(--eg-leading-xs);
+  color: var(--eg-text-muted);
+}
+
+.avatar {
+  display: inline-grid;
+  place-content: center;
+  flex: none;
+  inline-size: var(--eg-control-sm);
+  block-size: var(--eg-control-sm);
+  border-radius: 50%;
+  background: var(--eg-accent-soft);
+  color: var(--eg-accent-fg);
+  font-size: var(--eg-text-xs);
+  font-weight: var(--eg-weight-semibold);
+}
+
+.avatar.pending {
+  background: var(--eg-neutral-bg);
+  color: var(--eg-neutral-fg);
+}
+
+.cell-label {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .metrics > div + div {
+    border-block-start: 0;
+    border-inline-start: var(--eg-border-width) solid var(--eg-border);
+  }
+}
+
+@media (min-width: 900px) {
+  .member-table tbody tr {
+    height: var(--eg-space-11);
+  }
+}
+
+@media (max-width: 899px) {
+  .member-table,
+  .member-table caption {
+    display: block;
+    inline-size: 100%;
+  }
+
+  .member-table thead {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .member-table tbody,
+  .member-table tbody tr {
+    display: grid;
+    min-inline-size: 0;
+  }
+
+  .member-table tbody tr {
+    gap: var(--eg-space-3);
+    padding: var(--eg-space-4);
+  }
+
+  .member-table tbody :is(td, th) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--eg-space-3);
+    block-size: auto;
+    padding: 0;
+    white-space: normal;
+  }
+
+  .cell-label {
+    display: inline;
+    color: var(--eg-text-muted);
+    font-size: var(--eg-text-xs);
+  }
+}

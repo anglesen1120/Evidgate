@@ -14,6 +14,7 @@ import { QuotaBadgeComponent } from './quota-badge.component';
 class QuotaBadgeHarness extends ComponentHarness {
   static hostSelector = 'app-quota-badge';
   readonly link = this.locatorForOptional('a');
+  readonly severityIcon = this.locatorFor('a > hlm-icon');
 }
 
 function summary(changes: Partial<UsageSummaryMetricDto> = {}): UsageSummaryDto {
@@ -85,8 +86,8 @@ describe('QuotaBadgeComponent', () => {
     const { harness } = await render();
     const link = await harness.link();
     expect(await link?.getAttribute('data-quota-severity')).toBe('warn');
-    expect(await link?.text()).toContain('Approaching quota limit:');
-    expect(await link?.text()).toContain('Results');
+    expect((await link?.text())?.replace(/\s+/g, ' ')).toBe('Approaching quota limit: Results');
+    expect(await (await harness.severityIcon()).getAttribute('aria-hidden')).toBe('true');
     expect(await link?.getAttribute('href')).toBe('/orgs/org-one/settings/quota-retention');
     const classes = (await link?.getAttribute('class')) ?? '';
     // The link is a control: its touch minimum must win over the domain badge's chip minimum.
@@ -107,6 +108,7 @@ describe('QuotaBadgeComponent', () => {
     expect(await link?.getAttribute('data-quota-severity')).toBe('blocked');
     expect(await link?.text()).toContain('Quota limit reached:');
     expect(await link?.text()).toContain('AI tokens');
+    expect(await (await harness.severityIcon()).getAttribute('aria-hidden')).toBe('true');
   });
 
   it('prioritizes a blocked metric over an earlier warned metric', async () => {
@@ -132,9 +134,9 @@ describe('QuotaBadgeComponent', () => {
     const link = await harness.link();
     expect(await link?.getAttribute('data-quota-severity')).toBe('warn');
     expect(await link?.getAttribute('data-quota-scope')).toBe('project');
-    expect(await link?.text()).toContain('Approaching quota limit:');
-    expect(await link?.text()).toContain('Results');
-    expect(await link?.text()).toContain('(project)');
+    expect((await link?.text())?.replace(/\s+/g, ' ')).toBe(
+      'Approaching quota limit: Results (project)',
+    );
   });
 
   it('names a blocked project counter without a tenant warning', async () => {

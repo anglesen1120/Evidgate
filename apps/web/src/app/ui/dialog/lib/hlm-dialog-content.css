@@ -1,0 +1,89 @@
+hlm-dialog-content.spartan-dialog-md {
+  width: 560px;
+}
+
+hlm-dialog-content.spartan-dialog-lg {
+  width: 760px;
+}
+
+hlm-dialog-content[data-size] {
+  --hlm-dialog-top: var(--eg-space-5);
+  --hlm-dialog-bottom: var(--eg-space-5);
+  display: flex;
+  flex-direction: column;
+  max-width: calc(100vw - var(--eg-space-8));
+  max-height: calc(100dvh - var(--eg-space-8));
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-block: var(--hlm-dialog-top) var(--hlm-dialog-bottom);
+}
+
+hlm-dialog-content[data-size] > * {
+  flex: none;
+}
+
+hlm-dialog-content[data-size] :is([data-slot='dialog-header'], [data-slot='dialog-footer']) {
+  position: sticky;
+  z-index: var(--eg-z-sticky);
+  background: var(--eg-surface);
+}
+
+hlm-dialog-content[data-size] [data-slot='dialog-header'] {
+  inset-block-start: var(--hlm-dialog-top);
+}
+
+hlm-dialog-content[data-size] [data-slot='dialog-footer'] {
+  inset-block-end: var(--hlm-dialog-bottom);
+}
+
+/* Keep the built-in Close above the heading, without moving its keyboard stop before the form. */
+hlm-dialog-content[data-size] > .spartan-dialog-close {
+  position: sticky;
+  order: -1;
+  align-self: flex-end;
+  inset: auto;
+  inset-block-start: var(--hlm-dialog-top);
+  z-index: calc(var(--eg-z-sticky) + 1);
+  block-size: var(--eg-control-touch);
+  min-inline-size: var(--eg-control-touch);
+  margin-block-end: calc(-1 * (var(--eg-control-touch) + var(--eg-space-4)));
+}
+
+hlm-dialog-content .spartan-dialog-header:has(> [hlmDialogStatusIcon]) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  column-gap: var(--eg-space-3);
+}
+
+hlm-dialog-content
+  .spartan-dialog-header:has(> [hlmDialogStatusIcon])
+  > :not([hlmDialogStatusIcon]) {
+  grid-column: 2;
+}
+
+hlm-dialog-content .spartan-dialog-header > [hlmDialogStatusIcon] {
+  grid-area: 1 / 1 / span 2 / 2;
+}
+
+hlm-dialog-content .spartan-dialog-header > [hlmDialogSubject] {
+  margin: 0;
+  color: var(--eg-text-muted);
+  overflow-wrap: anywhere;
+}
+
+@media (width < 600px) {
+  hlm-dialog-content.spartan-dialog-content[data-size] {
+    --hlm-dialog-top: max(var(--eg-space-5), env(safe-area-inset-top));
+    --hlm-dialog-bottom: max(var(--eg-space-5), env(safe-area-inset-bottom));
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    padding-right: max(var(--eg-space-5), env(safe-area-inset-right));
+    padding-left: max(var(--eg-space-5), env(safe-area-inset-left));
+    border: 0;
+    border-radius: 0;
+  }
+}

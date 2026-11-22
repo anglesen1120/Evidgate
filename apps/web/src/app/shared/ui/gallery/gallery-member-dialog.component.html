@@ -1,0 +1,123 @@
+@if (member(); as row) {
+  <hlm-dialog
+    [state]="'open'"
+    [restoreFocus]="opener ?? true"
+    [autoFocus]="mode() === 'edit' ? '[role=checkbox]' : 'first-heading'"
+    [aria-modal]="true"
+    (closed)="closed()"
+  >
+    <hlm-dialog-content
+      *hlmDialogPortal
+      #content
+      [size]="mode() === 'view' ? 'md' : 'lg'"
+      [class]="mode() === 'view' ? 'sm:max-w-[560px]' : 'sm:max-w-[760px]'"
+      [closeGuard]="canClose"
+      [closeLabel]="copy.close"
+    >
+      <header hlmDialogHeader>
+        <h2 hlmDialogTitle tabindex="-1">
+          {{
+            confirming() ? copy.discardTitle : mode() === 'view' ? copy.viewTitle : copy.editTitle
+          }}
+        </h2>
+        <div class="flex flex-wrap items-center gap-2">
+          <bdi
+            class="min-w-0 rounded-(--eg-radius-sm) border border-solid border-(--eg-border-control) px-2 py-1 text-sm wrap-anywhere"
+            >{{ row.email }}</bdi
+          >
+          <app-status-pill
+            [tone]="row.status === 'active' ? 'success' : 'neutral'"
+            [label]="copy[row.status]"
+          />
+        </div>
+      </header>
+      <div class="grid min-w-0 gap-4">
+        <p hlmDialogDescription>{{ confirming() ? copy.discardHint : copy.specimen }}</p>
+        @if (!confirming()) {
+          @if (mode() === 'view') {
+            <dl
+              class="m-0 grid grid-cols-[minmax(6rem,1fr)_minmax(0,2fr)] items-baseline gap-x-4 gap-y-2 [&_dt]:font-semibold [&_dd]:m-0 [&_dd]:text-sm [&_dd]:wrap-anywhere"
+            >
+              <dt>{{ copy.email }}</dt>
+              <dd>
+                <bdi>{{ row.email }}</bdi>
+              </dd>
+              <dt>{{ copy.status }}</dt>
+              <dd>{{ copy[row.status] }}</dd>
+              <dt>{{ copy.roles }}</dt>
+              <dd>
+                {{ copy.viewer }}
+                @if (row.reviewer) {
+                  , {{ copy.reviewer }}
+                }
+              </dd>
+              <dt>{{ copy.projects }}</dt>
+              <dd class="tabular-nums">{{ row.projects }}</dd>
+            </dl>
+          } @else {
+            <fieldset class="m-0 grid min-w-0 gap-2 border-0 p-0" [disabled]="policy.narrow()">
+              <legend class="font-semibold">{{ copy.roles }}</legend>
+              <p class="m-0 text-(--eg-text-muted)" i18n="@@shared.gallery.members.base-role">
+                Every sample member has the Viewer role.
+              </p>
+              <label
+                hlmLabel
+                for="gallery-member-reviewer"
+                class="inline-flex min-h-(--eg-control-touch) items-center gap-2 rounded-(--eg-radius-md) border border-solid border-(--eg-border-control) p-3 has-[[role=checkbox][aria-checked=true]]:border-(--eg-accent)"
+              >
+                <hlm-checkbox
+                  [inputId]="'gallery-member-reviewer'"
+                  [aria-label]="copy.reviewer"
+                  [disabled]="policy.narrow()"
+                  [checked]="reviewer()"
+                  (checkedChange)="reviewer.set($event)"
+                />{{ copy.reviewer }}
+              </label>
+            </fieldset>
+          }
+          @if (policy.narrow()) {
+            <p class="m-0 text-(--eg-text-muted)">{{ copy.narrow }}</p>
+          }
+        }
+      </div>
+      <footer hlmDialogFooter>
+        @if (confirming()) {
+          <button hlmBtn type="button" [variant]="'outline'" data-keep (click)="keepEditing()">
+            {{ copy.keep }}
+          </button>
+          <button hlmBtn type="button" [variant]="'destructive'" data-discard (click)="discard()">
+            {{ copy.discard }}
+          </button>
+        } @else if (mode() === 'view') {
+          <button hlmBtn hlmDialogClose type="button" [variant]="'outline'">
+            {{ copy.close }}
+          </button>
+          @if (!policy.narrow()) {
+            <button hlmBtn type="button" (click)="edit()">{{ copy.edit }}</button>
+          }
+        } @else {
+          <button
+            hlmBtn
+            hlmDialogClose
+            type="button"
+            [variant]="'outline'"
+            id="gallery-member-cancel"
+            data-cancel
+          >
+            {{ copy.cancel }}
+          </button>
+          <button
+            hlmBtn
+            type="button"
+            id="gallery-member-save"
+            data-save
+            [disabled]="!dirty() || policy.narrow()"
+            (click)="apply()"
+          >
+            {{ copy.save }}
+          </button>
+        }
+      </footer>
+    </hlm-dialog-content>
+  </hlm-dialog>
+}
