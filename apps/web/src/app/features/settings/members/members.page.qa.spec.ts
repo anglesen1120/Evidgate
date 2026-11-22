@@ -8,6 +8,7 @@ import type { MembershipView, RoleView } from '@evidgate/sdk';
 import { MembersDataService } from '../../../core/data/members-data.service';
 import { ApiRequestError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { MembersPage } from './members.page';
 import { MembersStore } from './members.store';
 
@@ -56,6 +57,7 @@ type PageSurface = {
 };
 
 describe('MembersPage paging through the real MembersStore (09.7.1-T2 QA)', () => {
+  provideLayoutTestStubs();
   let data: PagedData;
   let fixture: ComponentFixture<MembersPage>;
   let root: HTMLElement;

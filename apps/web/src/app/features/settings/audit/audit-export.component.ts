@@ -24,15 +24,25 @@ function revokeDeferred(url: string): void {
   imports: [HlmAlertImports, HlmButton, AbsoluteTimeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
-    class: 'block min-w-0 max-w-full',
+    class: 'contents',
     '[attr.data-audit-export-phase]': 'store.exportState().phase',
   },
   template: `
-    <div
-      class="grid min-w-0 items-start gap-x-4 gap-y-2 wrap-anywhere @xl:grid-cols-[minmax(0,1fr)_auto] [&_p]:m-0"
-      [attr.aria-busy]="running()"
-    >
-      <section aria-labelledby="audit-export-scope-title" class="grid min-w-0 gap-1">
+    <div class="contents" [attr.aria-busy]="running()">
+      <button
+        type="button"
+        hlmBtn
+        class="min-h-(--eg-control-touch) w-fit max-w-full whitespace-normal @xl:col-start-2 @xl:row-start-1"
+        data-audit-export
+        [disabled]="running() || !orgId() || hasDraftChanges()"
+        [attr.aria-describedby]="
+          hasDraftChanges() ? 'audit-export-draft-hint' : 'audit-export-scope-title'
+        "
+        (click)="download()"
+      >
+        {{ copy.export }}
+      </button>
+      <section aria-labelledby="audit-export-scope-title" class="col-span-full grid min-w-0 gap-1">
         <p id="audit-export-scope-title" class="m-0 text-xs font-semibold">{{ copy.scope }}</p>
         <dl
           class="m-0 flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-xs [&>div]:flex [&>div]:min-w-0 [&>div]:flex-wrap [&>div]:gap-x-1 [&_dt]:after:content-[':']"
@@ -84,20 +94,7 @@ function revokeDeferred(url: string): void {
           {{ copy.unapplied }}
         </p>
       }
-      <button
-        type="button"
-        hlmBtn
-        class="min-h-(--eg-control-touch) w-fit max-w-full whitespace-normal @xl:col-start-2 @xl:row-start-1"
-        data-audit-export
-        [disabled]="running() || !orgId() || hasDraftChanges()"
-        [attr.aria-describedby]="
-          hasDraftChanges() ? 'audit-export-draft-hint' : 'audit-export-scope-title'
-        "
-        (click)="download()"
-      >
-        {{ copy.export }}
-      </button>
-      <div class="col-span-full" [attr.aria-live]="'polite'" aria-atomic="true">
+      <div class="col-span-full empty:sr-only" [attr.aria-live]="'polite'" aria-atomic="true">
         @if (store.exportState(); as state) {
           @if (state.phase === 'running') {
             <p role="status">{{ progress(state.rows) }}</p>

@@ -1,6 +1,7 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { MembershipView, RoleView } from '@evidgate/sdk';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { MemberListComponent } from './member-list.component';
 import { RoleMatrixComponent } from './role-matrix.component';
 
@@ -43,6 +44,7 @@ function expectTableSemantics(root: HTMLElement): void {
 }
 
 describe('RoleMatrixComponent responsive records', () => {
+  provideLayoutTestStubs();
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [RoleMatrixComponent, MemberListComponent],
