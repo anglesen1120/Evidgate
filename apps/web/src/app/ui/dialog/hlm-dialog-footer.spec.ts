@@ -8,7 +8,7 @@ import { compile } from 'tailwindcss';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 function source(path: string): string {
-  const paths = [resolve(path), resolve('apps/web', path)];
+  const paths = [resolve(path), resolve('apps/web', path), resolve('../..', path)];
   const file = paths.find((candidate) => existsSync(candidate));
   if (!file) throw new Error(`Cannot locate dialog source: ${path}`);
   return readFileSync(file, 'utf8');
@@ -165,4 +165,71 @@ describe('HlmDialogFooter responsive action order', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
     expect(await page.evaluate(() => window.scrollY)).toBe(0);
   });
+
+  it.each(['no-preference', 'reduce'] as const)(
+    'keeps entering dialog text opaque with %s motion',
+    async (reducedMotion) => {
+      const require = createRequire(import.meta.url);
+      const theme = readFileSync(require.resolve('tailwindcss/theme.css'), 'utf8');
+      const animations = source('node_modules/tw-animate-css/dist/tw-animate.css');
+      const variants = source('src/styles/spartan-variants.css');
+      const rules: string[] = [];
+      footerRecipe.walkRules(/^\.spartan-dialog-(content|overlay)$/u, (rule) => {
+        rules.push(rule.toString());
+      });
+      const compiler = await compile(`${theme}\n${animations}\n${variants}\n${rules.join('\n')}`);
+      await page.emulateMedia({ reducedMotion });
+      await page.setContent(`<!doctype html><html lang="en"><head><style>
+        ${source('src/styles/tokens.css')}
+        ${compiler.build([])}
+      </style></head><body>
+        <div class="spartan-dialog-overlay" data-state="open"></div>
+        <section class="spartan-dialog-content" data-state="open"><p>Setup record</p></section>
+      </body></html>`);
+      const surface = page.locator('.spartan-dialog-content');
+      const overlay = page.locator('.spartan-dialog-overlay');
+      const count = await surface.evaluate((element) => element.getAnimations().length);
+      expect(count).toBe(reducedMotion === 'reduce' ? 0 : 1);
+      if (reducedMotion === 'reduce') {
+        expect(await overlay.evaluate((element) => element.getAnimations().length)).toBe(0);
+        expect(await surface.evaluate((element) => getComputedStyle(element).opacity)).toBe('1');
+        return;
+      }
+      const samples = await surface.evaluate((element) => {
+        const animation = element.getAnimations()[0];
+        if (!animation) {
+          throw new Error('Expected a dialog entry animation to sample.');
+        }
+        animation.pause();
+        const duration = Number(animation.effect?.getComputedTiming().duration);
+        return [0, 0.25, 0.5, 0.75, 1].map((progress) => {
+          animation.currentTime = duration * progress;
+          return {
+            opacity: getComputedStyle(element).opacity,
+            transform: getComputedStyle(element).transform,
+          };
+        });
+      });
+      expect(samples.map((sample) => sample.opacity)).toEqual(['1', '1', '1', '1', '1']);
+      const [firstSample, , , , lastSample] = samples;
+      if (!firstSample || !lastSample) {
+        throw new Error('Expected dialog entry samples at both animation endpoints.');
+      }
+      expect(firstSample.transform).not.toBe(lastSample.transform);
+      for (const layer of [overlay, surface]) {
+        const opacity = await layer.evaluate((element) => {
+          element.setAttribute('data-state', 'closed');
+          const animation = element.getAnimations()[0];
+          if (!animation) {
+            throw new Error('Expected a dialog exit animation to sample.');
+          }
+          animation.pause();
+          animation.currentTime = Number(animation.effect?.getComputedTiming().duration) / 2;
+          return Number(getComputedStyle(element).opacity);
+        });
+        expect(opacity).toBeGreaterThan(0);
+        expect(opacity).toBeLessThan(1);
+      }
+    },
+  );
 });
