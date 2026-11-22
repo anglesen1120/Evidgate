@@ -100,7 +100,7 @@ export class WaiverBanner {
       case 'revoked':
         return 'bg-(--eg-danger-bg) text-(--eg-danger-fg)';
       default:
-        return 'bg-muted text-(--eg-neutral-fg)';
+        return 'bg-(--eg-neutral-bg) text-(--eg-neutral-fg)';
     }
   });
 

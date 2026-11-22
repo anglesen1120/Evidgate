@@ -41,7 +41,7 @@ export class HlmSelectTrigger {
   public readonly userClass = input<ClassValue>('', { alias: 'class' });
   protected readonly _computedClass = computed(() =>
     hlm(
-      'spartan-select-trigger flex w-fit items-center justify-between whitespace-nowrap outline-none disabled:cursor-not-allowed disabled:opacity-50 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center [&_hlm-icon]:pointer-events-none [&_hlm-icon]:shrink-0',
+      'spartan-select-trigger flex w-fit min-w-0 max-w-full items-center justify-between *:data-[slot=select-value]:flex *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:items-center [&_hlm-icon]:pointer-events-none [&_hlm-icon]:shrink-0',
       this.userClass(),
     ),
   );

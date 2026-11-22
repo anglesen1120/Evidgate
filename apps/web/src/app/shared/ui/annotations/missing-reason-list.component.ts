@@ -21,12 +21,12 @@ export type MissingReason = {
     }
     @if (reasons().length) {
       <ul
-        class="reason-list m-0 flex flex-col gap-(--eg-space-3) ps-(--eg-space-5)"
+        class="reason-list m-0 flex flex-col gap-(--eg-space-3) ps-0"
         [attr.aria-label]="heading() || listLabel"
       >
         @for (reason of safeReasons(); track $index) {
           <li
-            class="reason flex min-w-0 flex-col items-start gap-(--eg-space-2) whitespace-normal wrap-anywhere"
+            class="reason rounded-(--eg-radius-md) bg-(--eg-surface-raised) p-(--eg-space-4) flex min-w-0 flex-col items-start gap-(--eg-space-2) whitespace-normal wrap-anywhere"
           >
             <app-copyable-identifier
               class="reason-code w-full"

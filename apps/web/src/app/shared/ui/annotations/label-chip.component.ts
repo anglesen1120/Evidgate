@@ -36,7 +36,9 @@ export type HealingMode = 'shadow' | 'official';
         ></div>
       }
     } @else if (kind() === 'healed') {
-      <div class="original-block flex min-w-0 max-w-full flex-col gap-(--eg-space-1)">
+      <div
+        class="original-block border-s-2 border-(--eg-danger-fg) ps-(--eg-space-4) flex min-w-0 max-w-full flex-col gap-(--eg-space-1)"
+      >
         <strong i18n="@@shared.label-chip.original-failure">Original failure</strong>
         @if (originalFailure().trim()) {
           <div

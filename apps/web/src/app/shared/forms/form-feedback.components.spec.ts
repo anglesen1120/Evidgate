@@ -169,7 +169,8 @@ describe('shared form feedback composition', () => {
       await submit();
       const correction = root.querySelector<HTMLElement>('#feedback-repository-error')!;
       expect(correction.textContent).toBe(message);
-      expect(correction.classList.contains('text-[var(--eg-danger-fg)]')).toBe(true);
+      expect(correction.classList.contains('text-(--eg-danger-fg)')).toBe(true);
+      expect(correction.querySelector('hlm-icon[aria-hidden="true"] svg')).not.toBeNull();
       expect(root.querySelector('a')?.textContent).toContain(message);
       expect(root.querySelector('[title], .truncate, .line-clamp-2')).toBeNull();
     });

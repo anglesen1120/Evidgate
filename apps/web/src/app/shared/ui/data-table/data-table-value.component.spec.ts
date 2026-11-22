@@ -111,8 +111,8 @@ describe('DataTableValueComponent', () => {
     expect(value.textContent).toBe(String(fixture.componentInstance.value()));
     const popover = root.querySelector('[popover]');
     expect(popover?.getAttribute('popover')).toBe('manual');
-    expect(popover?.classList.contains('bg-card')).toBe(true);
-    expect(popover?.classList.contains('text-foreground')).toBe(true);
+    expect(popover?.classList.contains('bg-(--eg-surface)')).toBe(true);
+    expect(popover?.classList.contains('text-(--eg-text)')).toBe(true);
     expect(value.classList.contains('pointer-coarse:min-h-[var(--eg-control-touch)]')).toBe(true);
     expect(popover?.getAttribute('aria-hidden')).toBe('true');
     expect(popover?.textContent).toBe(fixture.componentInstance.value());

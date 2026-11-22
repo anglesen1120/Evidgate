@@ -11277,6 +11277,112 @@
       <trans-unit id="shared.gallery.live-status.clear" datatype="html"><source>Clear the message</source></trans-unit>
       <trans-unit id="shared.gallery.live-status.first" datatype="html"><source>Showing the loaded cases. Refine the filters to find a specific case.</source></trans-unit>
       <trans-unit id="shared.gallery.live-status.changed" datatype="html"><source>The filters changed. Showing the matching loaded cases.</source></trans-unit>
+      <trans-unit id="shared.review-status.waiting" datatype="html"><source>Awaiting review</source></trans-unit>
+      <trans-unit id="shared.review-status.overdue" datatype="html"><source>Over SLA</source></trans-unit>
+      <trans-unit id="shared.review-status.validated" datatype="html"><source>Validated</source></trans-unit>
+      <trans-unit id="shared.review-status.approved" datatype="html"><source>Approved</source></trans-unit>
+      <trans-unit id="shared.review-status.unavailable" datatype="html"><source>Unavailable</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.workspace" datatype="html"><source>Workspace and navigation</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.shell" datatype="html"><source>Shell, sidebar and topbar</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.breadcrumb" datatype="html"><source>Breadcrumb and avatar</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.header" datatype="html"><source>Page header</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.evidence" datatype="html"><source>Queue and evidence</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.kpi" datatype="html"><source>KPI card</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.queue" datatype="html"><source>Queue card, filter and sort</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.detail" datatype="html"><source>Master–detail and action footer</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.failure" datatype="html"><source>Original failure and code diff</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.chart" datatype="html"><source>Bar chart</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.history" datatype="html"><source>Safety checks and history</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.forms" datatype="html"><source>Controls and forms</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.buttons" datatype="html"><source>Buttons</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.badges" datatype="html"><source>Badge and status chip</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.fields" datatype="html"><source>Input, select and textarea</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.choices" datatype="html"><source>Checkbox, radio and switch</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.dialog" datatype="html"><source>Dialog and popover</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.feedback" datatype="html"><source>Data and feedback</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.table" datatype="html"><source>Dense table and sparkline</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.tabs" datatype="html"><source>Tabs and segments</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.tooltip" datatype="html"><source>Tooltip</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.notices" datatype="html"><source>Loading, empty, error and toast</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.pagination" datatype="html"><source>Pagination</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.state-hover" datatype="html"><source>Hover</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.state-focus" datatype="html"><source>Keyboard focus</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.state-active" datatype="html"><source>Pressed or selected</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.state-disabled" datatype="html"><source>Read only</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.state-loading" datatype="html"><source>Loading</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.state-empty" datatype="html"><source>No records</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.state-error" datatype="html"><source>Request failed</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.state-success" datatype="html"><source>Saved</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-kpi-label" datatype="html"><source>Shadow pass rate</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-kpi-caption" datatype="html"><source>24 of 24 shadow runs · not a release decision</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-no-samples" datatype="html"><source>No samples received</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-loading" datatype="html"><source>Retrieving review records…</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-error" datatype="html"><source>Could not load evidence</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-saved" datatype="html"><source>Review note saved. The original outcome is unchanged.</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-read-only" datatype="html"><source>Read only. Changes are unavailable in this example.</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-empty" datatype="html"><source>No records match this view.</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-policy" datatype="html"><source>Review policy</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-policy-hint" datatype="html"><source>Approval authorizes a shadow run, not a release.</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-reviewer" datatype="html"><source>Reviewer</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-project" datatype="html"><source>Project</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-inspect" datatype="html"><source>Inspect record</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-quality" datatype="html"><source>Quality</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-queue" datatype="html"><source>Review queue</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-queue-title" datatype="html"><source>Delivery address</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-other-title" datatype="html"><source>Cart wait</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-sort" datatype="html"><source>Sort order</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-oldest" datatype="html"><source>Oldest first</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-newest" datatype="html"><source>Newest first</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-overdue" datatype="html"><source>Over SLA</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-review" datatype="html"><source>Healing review</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-instructions" datatype="html"><source>Select a record to inspect its evidence.</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-original" datatype="html"><source>Original failure</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-original-message" datatype="html"><source>Required delivery address field not found before timeout.</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-before" datatype="html"><source>Before</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-after" datatype="html"><source>After</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-sandbox" datatype="html"><source>Shadow samples</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-batches" datatype="html"><source>Passed per batch: 2, 5, 3, 4. Oldest first.</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-safety" datatype="html"><source>Original run</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-evidence-label" datatype="html"><source>Evidence</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-failure-recorded" datatype="html"><source>Failure recorded</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-case-id" datatype="html"><source>Case ID</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-assignee" datatype="html"><source>Assignee</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-unassigned" datatype="html"><source>Unassigned</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-note" datatype="html"><source>Review note</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-notify" datatype="html"><source>Notify reviewer</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-scope" datatype="html"><source>Scope</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-workspace-label" datatype="html"><source>Workspace</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-resubmit" datatype="html"><source>Allow resubmission</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-cancel" datatype="html"><source>Cancel</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-discard" datatype="html"><source>Discard example note</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-consequence" datatype="html"><source>The local example note will be removed. No review decision is changed.</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-discarded" datatype="html"><source>Example note discarded.</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-help" datatype="html"><source>Help</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-close" datatype="html"><source>Close</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-run" datatype="html"><source>Run</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-outcome" datatype="html"><source>Outcome</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-duration" datatype="html"><source>Duration</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-trend" datatype="html"><source>Duration rose from 2 to 5 seconds.</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-history-label" datatype="html"><source>History</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-previous" datatype="html"><source>Previous</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-next" datatype="html"><source>Next</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-save" datatype="html"><source>Save example note</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-approval-time" datatype="html"><source>Recorded human decision at 10:00 UTC</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-navigation-label" datatype="html"><source>Gallery destinations</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-nav-toggle" datatype="html"><source>Show or hide example navigation</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-section-links" datatype="html"><source>Component sections</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-more-states" datatype="html"><source>Compare states</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-component-library" datatype="html"><source>Component library</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-introduction-text" datatype="html"><source>The shell, controls and evidence patterns used across Evidgate.</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.preview-toast" datatype="html"><source>Preview notification</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-search" datatype="html"><source>Search navigation</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-notifications" datatype="html"><source>Notifications</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-no-notifications" datatype="html"><source>No new notifications</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-release" datatype="html"><source>Release gates</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-unavailable" datatype="html"><source>Not evaluated</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-missing-shard" datatype="html"><source>Missing shard:</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-breadcrumb-label" datatype="html"><source>Example breadcrumb</source></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-repair-note" datatype="html"><source>A repair proposal never replaces the failed run.</source></trans-unit>
 <trans-unit id="review.quality.flaky" datatype="html">
         <source>Most flaky cases</source>
         <context-group purpose="location">
