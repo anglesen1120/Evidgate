@@ -255,7 +255,11 @@ describe('ConflictDialogComponent', () => {
     ]) {
       expect(dialog().textContent).toContain(value);
     }
-    expect(dialog().querySelector('script, img, svg, b')).toBeNull();
+    expect(dialog().querySelector('script, img, b')).toBeNull();
+    const icons = Array.from(dialog().querySelectorAll('svg'));
+    expect(icons.length).toBeGreaterThan(0);
+    expect(icons.every((svg) => svg.parentElement?.matches('hlm-icon'))).toBe(true);
+    expect(dialog().querySelector('.local-value svg, .server-value svg')).toBeNull();
     expect(dialog().querySelector('.body')?.getAttribute('aria-busy')).toBe('false');
     expect(reload).not.toHaveBeenCalled();
   });

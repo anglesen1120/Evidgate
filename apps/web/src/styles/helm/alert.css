@@ -1,34 +1,63 @@
 @layer components {
   .spartan-alert {
-    @apply grid gap-0.5 rounded-lg border px-4 py-3 text-start text-sm has-data-[slot=alert-action]:relative has-data-[slot=alert-action]:pr-18 has-[>hlm-icon]:grid-cols-[auto_1fr] has-[>hlm-icon]:gap-x-2.5 *:[hlm-icon]:row-span-2 *:[hlm-icon]:translate-y-0.5 *:[hlm-icon]:text-current *:[hlm-icon:not([class*='text-'])]:text-[length:--spacing(4)];
+    display: grid;
+    gap: var(--eg-space-2) var(--eg-space-3);
+    padding: var(--eg-space-4);
+    border: var(--eg-border-width) solid var(--eg-border);
+    border-radius: var(--eg-radius-md);
+    text-align: start;
+    font-size: var(--eg-text-sm);
+    line-height: var(--eg-leading-sm);
+    overflow-wrap: anywhere;
+  }
+
+  .spartan-alert:has(> hlm-icon) {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .spartan-alert > hlm-icon {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    align-self: start;
+  }
+
+  .spartan-alert:has(> hlm-icon) > :not(hlm-icon) {
+    grid-column: 2;
   }
 
   .spartan-alert-variant-default {
-    @apply bg-card text-card-foreground;
+    background: var(--eg-surface-raised);
+    color: var(--eg-text);
   }
 
   .spartan-alert-variant-destructive {
-    @apply text-destructive bg-card *:data-[slot=alert-description]:text-destructive/90 *:[hlm-icon]:text-current;
+    background: var(--eg-danger-bg);
+    color: var(--eg-danger-fg);
+    border-inline-start: calc(var(--eg-border-width) * 3) solid currentColor;
   }
 
   .spartan-alert-title {
-    @apply font-medium group-has-[>hlm-icon]/alert:col-start-2;
+    margin: 0;
+    font-weight: var(--eg-weight-semibold);
   }
 
   .spartan-alert-description {
-    @apply text-muted-foreground text-sm text-balance md:text-pretty [&_p:not(:last-child)]:mb-4;
+    min-inline-size: 0;
+    font-size: var(--eg-text-sm);
+    line-height: var(--eg-leading-sm);
   }
 
   .spartan-alert-action {
-    @apply absolute end-3 top-2.5;
+    justify-self: start;
+    max-inline-size: 100%;
   }
 
   .spartan-alert.spartan-inline-feedback {
     grid-template-columns: auto minmax(0, 1fr);
     gap: var(--eg-space-2) var(--eg-space-3);
     min-inline-size: 0;
-    padding: var(--eg-space-5);
-    border-color: currentColor;
+    padding: var(--eg-space-4);
+    border-inline-start: calc(var(--eg-border-width) * 3) solid currentColor;
     border-radius: var(--eg-radius-md);
     overflow-wrap: anywhere;
   }

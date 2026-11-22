@@ -21,8 +21,8 @@
 
   .spartan-badge > hlm-icon {
     flex-shrink: 0;
-    inline-size: var(--eg-space-4);
-    block-size: var(--eg-space-4);
+    inline-size: var(--eg-text-sm);
+    block-size: var(--eg-text-sm);
   }
 
   .spartan-badge--clipped {
@@ -30,7 +30,11 @@
   }
 
   .spartan-badge__full-value {
-    @apply box-border m-auto overflow-auto rounded-(--eg-radius-sm) border border-input bg-card text-foreground;
+    @apply box-border m-auto overflow-auto;
+    background: var(--eg-surface);
+    color: var(--eg-text);
+    border: var(--eg-border-width) solid var(--eg-border-control);
+    border-radius: var(--eg-radius-md);
     max-inline-size: calc(100% - var(--eg-space-5) * 2);
     max-block-size: calc(100% - var(--eg-space-5) * 2);
     padding: var(--eg-space-4);
@@ -49,27 +53,38 @@
     }
   }
 
-  .spartan-badge-variant-default {
-    @apply bg-primary text-primary-foreground [a]:hover:underline;
-  }
-
+  .spartan-badge-variant-default,
   .spartan-badge-variant-secondary {
-    @apply bg-secondary text-secondary-foreground [a]:hover:underline;
+    background: var(--eg-neutral-bg);
+    color: var(--eg-neutral-fg);
   }
 
   .spartan-badge-variant-outline {
-    @apply border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground;
+    background: var(--eg-surface);
+    color: var(--eg-text);
+    border-color: var(--eg-border-control);
   }
 
   .spartan-badge-variant-destructive {
-    @apply bg-destructive/10 [a]:hover:bg-destructive/20 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 text-destructive dark:bg-destructive/20;
+    background: var(--eg-danger-bg);
+    color: var(--eg-danger-fg);
   }
 
   .spartan-badge-variant-ghost {
-    @apply hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50;
+    background: transparent;
+    color: var(--eg-text-muted);
   }
 
   .spartan-badge-variant-link {
-    @apply text-primary underline-offset-4 hover:underline;
+    background: transparent;
+    color: var(--eg-accent);
+  }
+
+  :is(a, button).spartan-badge:hover {
+    text-decoration: underline;
+  }
+
+  .spartan-badge[aria-invalid='true'] {
+    border-color: var(--eg-danger-fg);
   }
 }

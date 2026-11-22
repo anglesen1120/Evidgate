@@ -26,12 +26,7 @@ const summaryCards = [0, 1, 2, 3] as const;
     } @else {
       <section
         hlmCard
-        class="state-panel state-panel--loading min-w-0 gap-(--eg-space-3) px-(--eg-space-5) py-(--eg-space-8) wrap-anywhere"
-        [class]="
-          layout() === 'summary'
-            ? 'min-h-[calc(var(--eg-space-12)*3+var(--eg-space-8))] items-center justify-center text-center'
-            : ''
-        "
+        class="state-panel state-panel--loading min-w-0 gap-(--eg-space-3) p-(--eg-space-5) wrap-anywhere"
         role="status"
         [attr.aria-live]="'polite'"
         aria-busy="true"
@@ -43,7 +38,7 @@ const summaryCards = [0, 1, 2, 3] as const;
       @if (layout() === 'summary') {
         <span
           hlmSkeleton
-          class="loading-pattern__skeleton size-(--eg-control-touch) rounded-full"
+          class="loading-pattern__skeleton h-(--eg-space-3) w-1/3 max-w-40 rounded-(--eg-radius-pill)"
           aria-hidden="true"
         ></span>
       }

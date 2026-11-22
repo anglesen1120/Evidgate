@@ -4630,6 +4630,112 @@
       <trans-unit id="shared.gallery.live-status.clear" datatype="html"><source>Clear the message</source><target>Xóa nội dung thông báo</target></trans-unit>
       <trans-unit id="shared.gallery.live-status.first" datatype="html"><source>Showing the loaded cases. Refine the filters to find a specific case.</source><target>Đang hiển thị các ca đã tải. Thu hẹp bộ lọc để tìm một ca cụ thể.</target></trans-unit>
       <trans-unit id="shared.gallery.live-status.changed" datatype="html"><source>The filters changed. Showing the matching loaded cases.</source><target>Bộ lọc đã thay đổi. Đang hiển thị các ca đã tải phù hợp.</target></trans-unit>
+      <trans-unit id="shared.review-status.waiting" datatype="html"><source>Awaiting review</source><target>Chờ xét duyệt</target></trans-unit>
+      <trans-unit id="shared.review-status.overdue" datatype="html"><source>Over SLA</source><target>Quá hạn xét duyệt</target></trans-unit>
+      <trans-unit id="shared.review-status.validated" datatype="html"><source>Validated</source><target>Đã kiểm chứng</target></trans-unit>
+      <trans-unit id="shared.review-status.approved" datatype="html"><source>Approved</source><target>Đã phê duyệt</target></trans-unit>
+      <trans-unit id="shared.review-status.unavailable" datatype="html"><source>Unavailable</source><target>Không khả dụng</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.workspace" datatype="html"><source>Workspace and navigation</source><target>Không gian làm việc và điều hướng</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.shell" datatype="html"><source>Shell, sidebar and topbar</source><target>Khung ứng dụng, thanh bên và thanh trên</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.breadcrumb" datatype="html"><source>Breadcrumb and avatar</source><target>Đường dẫn và ảnh đại diện</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.header" datatype="html"><source>Page header</source><target>Tiêu đề trang</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.evidence" datatype="html"><source>Queue and evidence</source><target>Hàng chờ và bằng chứng</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.kpi" datatype="html"><source>KPI card</source><target>Thẻ chỉ số</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.queue" datatype="html"><source>Queue card, filter and sort</source><target>Thẻ hàng chờ, bộ lọc và sắp xếp</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.detail" datatype="html"><source>Master–detail and action footer</source><target>Danh sách, chi tiết và thanh thao tác</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.failure" datatype="html"><source>Original failure and code diff</source><target>Lỗi gốc và thay đổi mã</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.chart" datatype="html"><source>Bar chart</source><target>Biểu đồ cột</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.history" datatype="html"><source>Safety checks and history</source><target>Kiểm tra an toàn và lịch sử</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.forms" datatype="html"><source>Controls and forms</source><target>Điều khiển và biểu mẫu</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.buttons" datatype="html"><source>Buttons</source><target>Nút thao tác</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.badges" datatype="html"><source>Badge and status chip</source><target>Nhãn và trạng thái</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.fields" datatype="html"><source>Input, select and textarea</source><target>Ô nhập, danh sách chọn và vùng văn bản</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.choices" datatype="html"><source>Checkbox, radio and switch</source><target>Hộp kiểm, nút chọn và công tắc</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.dialog" datatype="html"><source>Dialog and popover</source><target>Hộp thoại và bảng bật lên</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.feedback" datatype="html"><source>Data and feedback</source><target>Dữ liệu và phản hồi</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.table" datatype="html"><source>Dense table and sparkline</source><target>Bảng thu gọn và biểu đồ đường nhỏ</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.tabs" datatype="html"><source>Tabs and segments</source><target>Thẻ và nhóm lựa chọn</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.tooltip" datatype="html"><source>Tooltip</source><target>Chú thích công cụ</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.notices" datatype="html"><source>Loading, empty, error and toast</source><target>Đang tải, trống, lỗi và thông báo</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.pagination" datatype="html"><source>Pagination</source><target>Phân trang</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.state-hover" datatype="html"><source>Hover</source><target>Di chuột</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.state-focus" datatype="html"><source>Keyboard focus</source><target>Tiêu điểm bàn phím</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.state-active" datatype="html"><source>Pressed or selected</source><target>Đang nhấn hoặc đã chọn</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.state-disabled" datatype="html"><source>Read only</source><target>Chỉ đọc</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.state-loading" datatype="html"><source>Loading</source><target>Đang tải</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.state-empty" datatype="html"><source>No records</source><target>Không có hồ sơ</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.state-error" datatype="html"><source>Request failed</source><target>Yêu cầu thất bại</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.state-success" datatype="html"><source>Saved</source><target>Đã lưu</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-kpi-label" datatype="html"><source>Shadow pass rate</source><target>Tỷ lệ mô phỏng đạt</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-kpi-caption" datatype="html"><source>24 of 24 shadow runs · not a release decision</source><target>24 trong 24 lượt mô phỏng đạt · không phải quyết định phát hành</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-no-samples" datatype="html"><source>No samples received</source><target>Chưa nhận mẫu nào</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-loading" datatype="html"><source>Retrieving review records…</source><target>Đang tải hồ sơ xét duyệt…</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-error" datatype="html"><source>Could not load evidence</source><target>Không tải được bằng chứng</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-saved" datatype="html"><source>Review note saved. The original outcome is unchanged.</source><target>Đã lưu ghi chú. Kết quả gốc không đổi.</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-read-only" datatype="html"><source>Read only. Changes are unavailable in this example.</source><target>Chỉ đọc. Ví dụ này không cho phép thay đổi.</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-empty" datatype="html"><source>No records match this view.</source><target>Không có hồ sơ phù hợp.</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-policy" datatype="html"><source>Review policy</source><target>Chính sách xét duyệt</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-policy-hint" datatype="html"><source>Approval authorizes a shadow run, not a release.</source><target>Phê duyệt cho phép chạy mô phỏng, không phải phát hành.</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-reviewer" datatype="html"><source>Reviewer</source><target>Người xét duyệt</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-project" datatype="html"><source>Project</source><target>Dự án</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-inspect" datatype="html"><source>Inspect record</source><target>Xem hồ sơ</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-quality" datatype="html"><source>Quality</source><target>Chất lượng</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-queue" datatype="html"><source>Review queue</source><target>Hàng chờ xét duyệt</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-queue-title" datatype="html"><source>Delivery address</source><target>Địa chỉ giao hàng</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-other-title" datatype="html"><source>Cart wait</source><target>Chờ giỏ hàng</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-sort" datatype="html"><source>Sort order</source><target>Thứ tự sắp xếp</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-oldest" datatype="html"><source>Oldest first</source><target>Cũ nhất trước</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-newest" datatype="html"><source>Newest first</source><target>Mới nhất trước</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-overdue" datatype="html"><source>Over SLA</source><target>Quá hạn xét duyệt</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-review" datatype="html"><source>Healing review</source><target>Xét duyệt sửa lỗi</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-instructions" datatype="html"><source>Select a record to inspect its evidence.</source><target>Chọn hồ sơ để xem bằng chứng.</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-original" datatype="html"><source>Original failure</source><target>Lỗi gốc</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-original-message" datatype="html"><source>Required delivery address field not found before timeout.</source><target>Không tìm thấy trường địa chỉ giao hàng bắt buộc trong thời gian chờ.</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-before" datatype="html"><source>Before</source><target>Trước</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-after" datatype="html"><source>After</source><target>Sau</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-sandbox" datatype="html"><source>Shadow samples</source><target>Mẫu mô phỏng</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-batches" datatype="html"><source>Passed per batch: 2, 5, 3, 4. Oldest first.</source><target>Số mẫu đạt theo lô: 2, 5, 3, 4. Cũ nhất trước.</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-safety" datatype="html"><source>Original run</source><target>Lượt chạy gốc</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-evidence-label" datatype="html"><source>Evidence</source><target>Bằng chứng</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-failure-recorded" datatype="html"><source>Failure recorded</source><target>Đã ghi nhận lỗi</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-case-id" datatype="html"><source>Case ID</source><target>Mã ca kiểm thử</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-assignee" datatype="html"><source>Assignee</source><target>Người phụ trách</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-unassigned" datatype="html"><source>Unassigned</source><target>Chưa phân công</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-note" datatype="html"><source>Review note</source><target>Ghi chú xét duyệt</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-notify" datatype="html"><source>Notify reviewer</source><target>Thông báo cho người xét duyệt</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-scope" datatype="html"><source>Scope</source><target>Phạm vi</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-workspace-label" datatype="html"><source>Workspace</source><target>Không gian làm việc</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-resubmit" datatype="html"><source>Allow resubmission</source><target>Cho phép gửi lại</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-cancel" datatype="html"><source>Cancel</source><target>Hủy</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-discard" datatype="html"><source>Discard example note</source><target>Bỏ ghi chú ví dụ</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-consequence" datatype="html"><source>The local example note will be removed. No review decision is changed.</source><target>Ghi chú ví dụ cục bộ sẽ bị xóa. Quyết định xét duyệt không thay đổi.</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-discarded" datatype="html"><source>Example note discarded.</source><target>Đã bỏ ghi chú ví dụ.</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-help" datatype="html"><source>Help</source><target>Trợ giúp</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-close" datatype="html"><source>Close</source><target>Đóng</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-run" datatype="html"><source>Run</source><target>Lượt chạy</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-outcome" datatype="html"><source>Outcome</source><target>Kết quả</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-duration" datatype="html"><source>Duration</source><target>Thời lượng</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-trend" datatype="html"><source>Duration rose from 2 to 5 seconds.</source><target>Thời lượng tăng từ 2 lên 5 giây.</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-history-label" datatype="html"><source>History</source><target>Lịch sử</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-previous" datatype="html"><source>Previous</source><target>Trước đó</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-next" datatype="html"><source>Next</source><target>Tiếp theo</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-save" datatype="html"><source>Save example note</source><target>Lưu ghi chú ví dụ</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-approval-time" datatype="html"><source>Recorded human decision at 10:00 UTC</source><target>Quyết định được ghi nhận lúc 10:00 UTC</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-navigation-label" datatype="html"><source>Gallery destinations</source><target>Các mục trong thư viện</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-nav-toggle" datatype="html"><source>Show or hide example navigation</source><target>Hiện hoặc ẩn điều hướng ví dụ</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-section-links" datatype="html"><source>Component sections</source><target>Các nhóm thành phần</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-more-states" datatype="html"><source>Compare states</source><target>So sánh trạng thái</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-component-library" datatype="html"><source>Component library</source><target>Thư viện thành phần</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-introduction-text" datatype="html"><source>The shell, controls and evidence patterns used across Evidgate.</source><target>Khung ứng dụng, điều khiển và các mẫu bằng chứng dùng trong Evidgate.</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.preview-toast" datatype="html"><source>Preview notification</source><target>Xem thử thông báo</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-search" datatype="html"><source>Search navigation</source><target>Tìm mục điều hướng</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-notifications" datatype="html"><source>Notifications</source><target>Thông báo</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-no-notifications" datatype="html"><source>No new notifications</source><target>Không có thông báo mới</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-release" datatype="html"><source>Release gates</source><target>Cổng phát hành</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-unavailable" datatype="html"><source>Not evaluated</source><target>Chưa đánh giá</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-missing-shard" datatype="html"><source>Missing shard:</source><target>Thiếu phân mảnh:</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-breadcrumb-label" datatype="html"><source>Example breadcrumb</source><target>Đường dẫn minh họa</target></trans-unit>
+      <trans-unit id="shared.gallery.sheet.copy-repair-note" datatype="html"><source>A repair proposal never replaces the failed run.</source><target>Đề xuất sửa lỗi không thay thế lượt chạy thất bại.</target></trans-unit>
     </body>
   </file>
 </xliff>

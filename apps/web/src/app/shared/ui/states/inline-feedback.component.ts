@@ -20,7 +20,7 @@ const icons = {
   template: `
     <div
       hlmAlert
-      class="spartan-inline-feedback"
+      class="spartan-inline-feedback rounded-(--eg-radius-md) p-(--eg-space-4) wrap-anywhere"
       [variant]="tone() === 'destructive' ? 'destructive' : 'default'"
       [attr.data-tone]="tone()"
       [attr.role]="live() === 'off' ? 'group' : live() === 'assertive' ? 'alert' : 'status'"

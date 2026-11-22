@@ -8,7 +8,11 @@ import { HlmButton } from '@evidgate/ui/button';
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
-    <section hlmAlert [attr.role]="'group'" class="retry-panel grid gap-3 wrap-anywhere">
+    <section
+      hlmAlert
+      [attr.role]="'group'"
+      class="retry-panel grid gap-(--eg-space-3) rounded-(--eg-radius-md) bg-(--eg-surface-raised) text-(--eg-text) wrap-anywhere"
+    >
       @if (kind() === 'unavailable') {
         <h2 hlmAlertTitle i18n="@@shared.retry-after.unavailable-title">
           503 · Service unavailable

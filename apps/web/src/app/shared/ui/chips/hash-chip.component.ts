@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { HlmBadge } from '@evidgate/ui/badge';
+import { HlmIcon } from '@evidgate/ui/icon';
 
 import { CopyValueButtonComponent } from '../values/copy-value-button.component';
 
@@ -7,7 +8,7 @@ import { IDENTITY_BADGE_CLASSES } from './badge-classes';
 
 @Component({
   selector: 'app-hash-chip',
-  imports: [HlmBadge, CopyValueButtonComponent],
+  imports: [HlmIcon, HlmBadge, CopyValueButtonComponent],
   host: {
     class: 'inline-flex min-w-0 max-w-full items-start gap-[var(--eg-space-2)]',
   },
@@ -20,6 +21,7 @@ import { IDENTITY_BADGE_CLASSES } from './badge-classes';
       [fullValue]="hasValue() ? value() : null"
       [attr.data-full-value]="hasValue() ? value() : null"
     >
+      <hlm-icon [name]="'lucideCopy'" />
       @if (hasValue()) {
         <span class="identity-chip__value min-w-0 whitespace-nowrap">{{ displayValue() }}</span>
       } @else {
