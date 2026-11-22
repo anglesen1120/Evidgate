@@ -8,32 +8,25 @@
 <link rel="stylesheet" href="assets/components-v3.css">
 <script defer src="assets/manifest-v3.js"></script>
 <script defer src="assets/shell.js"></script>
+<script defer src="assets/dialogs-v3.js"></script>
 <style>
 [hidden]{display:none!important}
 .v3-access-tools,.v3-access-scope{display:flex;align-items:end;justify-content:space-between;flex-wrap:wrap;gap:var(--eg-space-3)}
 .v3-access-scope{border-bottom:1px solid var(--eg-border);padding-bottom:var(--eg-space-4);margin-bottom:var(--eg-space-5);align-items:center}
 .v3-access-scope select,#review{max-width:min(100%,18rem)}
+.v3-access-scope>.v3-tabs{flex-basis:100%}
 .v3-access-body{display:grid;gap:var(--eg-space-5);min-width:0}
-.v3-access-grid{display:grid;align-items:start;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:var(--eg-space-5)}
-.v3-access-grid>*{min-width:0}
 .v3-access-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--eg-space-4)}
 .v3-access-facts dd{margin-top:var(--eg-space-1);font-size:var(--eg-text-sm)}
-.v3-access-list td{vertical-align:middle}.v3-access-list tr[aria-selected=true],.v3-access-list tr:has([aria-pressed=true]){background:var(--eg-accent-soft)}
-.v3-access-pick{padding:var(--eg-space-2) 0;text-align:left;justify-content:start;color:var(--eg-accent);font-weight:700;overflow-wrap:anywhere}
 .v3-detail__section>h3{display:flex}
-.v3-access-list small{display:block}.v3-access-grid .v3-table td,.v3-access-grid .v3-table th{overflow-wrap:anywhere}
 .v3-access-tools .v3-field{flex:1;min-width:min(8rem,100%)}
-.v3-access-grid .v3-detail__header .v3-badge{margin:0}
-.v3-access-grid .v3-action-footer{position:static}
+.v3-dialog form{display:flex;flex-direction:column;min-height:0}.v3-dialog form>.v3-body{overflow:auto;min-height:0}.v3-dialog form>footer{flex:none}
+.v3-table__person small{overflow-wrap:anywhere}
 .v3-access-block{min-height:22rem;align-content:start}
-.v3-access-review{display:flex;flex-wrap:wrap;align-items:center;gap:var(--eg-space-3);font-size:var(--eg-text-xs)}
 .v3-access-mobile{display:none}#notice:empty{display:none}
 .v3-access-footer{display:flex;justify-content:space-between;align-items:center;gap:var(--eg-space-3);flex-wrap:wrap}
-.v3-access-grid h2,.v3-access-grid code,.v3-dialog code,.v3-access-scope code{overflow-wrap:anywhere}
-@media(max-width:1024px){.v3-access-grid{grid-template-columns:minmax(0,1fr)}}
-@media(max-width:767px){.v3-access-mobile{display:block}.v3-write{display:none!important}.v3-access-matrix thead,.v3-access-list thead{position:absolute;clip-path:inset(50%);width:1px;height:1px;overflow:hidden}.v3-access-matrix :is(tbody,tr,td,th),.v3-access-list :is(tbody,tr,td,th){display:block}.v3-access-matrix tr,.v3-access-list tr{padding:var(--eg-space-3);border-bottom:1px solid var(--eg-border)}.v3-access-matrix :is(td,th),.v3-access-list :is(td,th){border:0;padding:var(--eg-space-1)}.v3-mobile-label{font-size:var(--eg-text-xs);color:var(--eg-text-muted);margin-inline-end:var(--eg-space-2)}.v3-access-scope select{min-height:44px}}
+@media(max-width:767px){.v3-access-mobile{display:block}.v3-write{display:none!important}.v3-access-matrix thead{position:absolute;clip-path:inset(50%);width:1px;height:1px;overflow:hidden}.v3-access-matrix :is(tbody,tr,td,th){display:block}.v3-access-matrix tr{padding:var(--eg-space-3);border-bottom:1px solid var(--eg-border)}.v3-access-matrix :is(td,th){border:0;padding:var(--eg-space-1)}.v3-mobile-label{font-size:var(--eg-text-xs);color:var(--eg-text-muted);margin-inline-end:var(--eg-space-2)}.v3-access-scope select{min-height:44px}}
 @media(min-width:768px){.v3-mobile-label{display:none}}
-@media(pointer:coarse){.v3-access-pick,.v3-field:has(input[type=checkbox]),.v3-access-scope a{min-height:44px}}
 </style>
 </head>
 <body data-page="28" data-scope="organization">
@@ -50,19 +43,20 @@
 <div class="v3-shell">
 <aside class="v3-sidebar" data-v3-sidebar></aside><div class="v3-workspace">
 <header class="v3-topbar" data-v3-topbar></header><main id="main" tabindex="-1">
-<header class="v3-page-header"><div class="v3-page-header__title"><span class="v3-page-header__icon"><svg class="v3-icon" aria-hidden="true"><use href="#i-people"/></svg></span><div><h1><span data-en="Members and roles" data-vi="Thành viên và vai trò">Members and roles</span></h1><p class="v3-muted"><span data-en="Review who can access each project before changing membership." data-vi="Kiểm tra ai có quyền vào từng dự án trước khi thay đổi thành viên.">Review who can access each project before changing membership.</span></p></div></div><div class="v3-actions" id="header-action"></div></header>
-<div class="v3-access-scope" id="scopebar"><div class="v3-row"><span class="v3-meta"><span data-en="Organization settings" data-vi="Cài đặt tổ chức">Organization settings</span></span><strong>Lotus Commerce</strong><span class="v3-count"><code>membership:read</code></span></div><label class="v3-access-review"><span data-en="Settings section" data-vi="Mục cài đặt">Settings section</span><select id="settings-section"><option value="members" selected data-en="Members and roles" data-vi="Thành viên và vai trò">Members and roles</option><option value="consent" data-en="Organization AI opt-in" data-vi="Chấp thuận AI của tổ chức">Organization AI opt-in</option><option value="usage" data-en="AI usage" data-vi="Mức sử dụng AI">AI usage</option><option value="audit" data-en="Audit log" data-vi="Nhật ký kiểm toán">Audit log</option><option value="security" data-en="Security events" data-vi="Sự kiện bảo mật">Security events</option><option value="support" data-en="Support access" data-vi="Quyền truy cập hỗ trợ">Support access</option></select></label></div>
+<header class="v3-page-head v3-page-header"><div class="v3-page-header__title"><span class="v3-page-header__icon"><svg class="v3-icon" aria-hidden="true"><use href="#i-people"/></svg></span><div><h1><span data-en="Members and roles" data-vi="Thành viên và vai trò">Members and roles</span></h1><p class="v3-page-head__facts"><span data-en="Lotus Commerce · Organization directory" data-vi="Lotus Commerce · Danh bạ tổ chức">Lotus Commerce · Organization directory</span></p></div></div><div class="v3-page-head__actions v3-actions" id="header-action"></div></header>
+<div class="v3-access-scope" id="scopebar"><div class="v3-row"><span class="v3-meta"><span data-en="Organization settings" data-vi="Cài đặt tổ chức">Organization settings</span></span><strong>Lotus Commerce</strong><span class="v3-count"><code>membership:read</code></span></div>
+<nav class="v3-tabs" aria-label="Settings sections" data-label-en="Settings sections" data-label-vi="Các mục cài đặt"><a href="28-members-roles.html" aria-current="page"><span data-en="Members and roles" data-vi="Thành viên và vai trò">Members and roles</span></a><a href="27-settings-shell.html?tab=consent"><span data-en="Organization AI opt-in" data-vi="Chấp thuận AI của tổ chức">Organization AI opt-in</span></a><a href="27-settings-shell.html?tab=usage"><span data-en="AI usage" data-vi="Mức sử dụng AI">AI usage</span></a><a href="27-settings-shell.html?tab=audit"><span data-en="Audit log" data-vi="Nhật ký kiểm toán">Audit log</span></a><a href="27-settings-shell.html?tab=security"><span data-en="Security events" data-vi="Sự kiện bảo mật">Security events</span></a><a href="36-support-access.html"><span data-en="Support access" data-vi="Quyền truy cập hỗ trợ">Support access</span></a></nav></div>
 <div id="actor-note" class="v3-access-scope v3-caption"></div>
 <div class="v3-access-body"><p class="v3-note v3-access-mobile"><span data-en="Use a desktop to make changes." data-vi="Sử dụng máy tính để thay đổi dữ liệu.">Use a desktop to make changes.</span></p>
 <section id="block" class="v3-panel v3-pad v3-stack v3-access-block" hidden></section>
 <div class="v3-stack" id="live"><div id="response" role="status"></div><div class="v3-kpi-strip" id="kpis"></div>
-<div class="v3-access-grid"><section class="v3-panel"><header class="v3-panel__header"><h2><span data-en="Members and invitations" data-vi="Thành viên và lời mời">Members and invitations</span></h2><div class="v3-access-tools"><label class="v3-field"><span data-en="Find a member" data-vi="Tìm thành viên">Find a member</span><input type="search" class="v3-input" id="search"></label><label class="v3-field"><span data-en="Status" data-vi="Trạng thái">Status</span><select id="status-filter"></select></label></div></header>
-<div class="v3-table-wrap"><table class="v3-table v3-access-list"><caption class="v3-sr-only"><span data-en="Members and invitations" data-vi="Thành viên và lời mời">Members and invitations</span></caption><thead><tr><th scope="col"><span data-en="Member" data-vi="Thành viên">Member</span></th><th scope="col"><span data-en="Organization role" data-vi="Vai trò tổ chức">Organization role</span></th><th scope="col"><span data-en="Status" data-vi="Trạng thái">Status</span></th></tr></thead><tbody id="grid-rows"></tbody></table></div><div class="v3-pad v3-stack" id="no-match" hidden><strong><span data-en="No results match these filters" data-vi="Không có kết quả phù hợp với bộ lọc">No results match these filters</span></strong><div><button class="v3-btn" data-act="clear"><span data-en="Clear filters" data-vi="Xóa bộ lọc">Clear filters</span></button></div></div><footer class="v3-queue__footer v3-access-footer"><span id="pager" role="status"></span><div class="v3-pagination"><button disabled class="v3-btn v3-btn--ghost"><span data-en="Previous" data-vi="Trước">Previous</span></button><button disabled class="v3-btn v3-btn--ghost"><span data-en="Next" data-vi="Sau">Next</span></button></div></footer></section>
-<article class="v3-panel" id="detail"></article></div><div id="extra"></div></div>
+<div class="v3-rail"><section class="v3-panel"><header class="v3-panel__header"><h2><span data-en="Members and invitations" data-vi="Thành viên và lời mời">Members and invitations</span></h2></header><div class="v3-table-toolbar"><div role="group" id="status-filter" class="v3-segment" aria-label="Filter by status" data-label-en="Filter by status" data-label-vi="Lọc theo trạng thái"></div><label class="v3-field"><span data-en="Find a member" data-vi="Tìm thành viên">Find a member</span><input type="search" class="v3-input" id="search"></label></div>
+<div class="v3-table-wrap"><table class="v3-table v3-table--stack"><caption class="v3-sr-only"><span data-en="Members and invitations" data-vi="Thành viên và lời mời">Members and invitations</span></caption><thead><tr><th scope="col"><span data-en="Member email" data-vi="Email thành viên">Member email</span></th><th scope="col"><span data-en="Status" data-vi="Trạng thái">Status</span></th><th scope="col"><span data-en="Organization roles" data-vi="Vai trò tổ chức">Organization roles</span></th><th scope="col" class="v3-table__action-head"><span data-en="Actions" data-vi="Thao tác">Actions</span></th></tr></thead><tbody id="grid-rows"></tbody></table></div><div class="v3-pad v3-stack" id="no-match" hidden><strong><span data-en="No results match these filters" data-vi="Không có kết quả phù hợp với bộ lọc">No results match these filters</span></strong><div><button class="v3-btn" data-act="clear"><span data-en="Clear filters" data-vi="Xóa bộ lọc">Clear filters</span></button></div></div><footer class="v3-table-foot"><span id="pager" role="status"></span><div class="v3-pagination"><button disabled class="v3-btn v3-btn--ghost"><span data-en="Previous" data-vi="Trước">Previous</span></button><button disabled class="v3-btn v3-btn--ghost"><span data-en="Next" data-vi="Sau">Next</span></button></div></footer></section>
+<aside class="v3-panel v3-pad v3-stack"><h2><span data-en="Access safeguards" data-vi="Điều kiện bảo vệ quyền truy cập">Access safeguards</span></h2><p class="v3-note"><span data-en="The last organization administrator cannot be removed." data-vi="Không thể xóa quản trị viên cuối cùng của tổ chức.">The last organization administrator cannot be removed.</span></p><p><span data-en="Pending invitations do not grant project access. Compare current assignments below." data-vi="Lời mời đang chờ không cấp quyền vào dự án. So sánh các vai trò hiện tại bên dưới.">Pending invitations do not grant project access. Compare current assignments below.</span></p><a href="#extra" class="v3-btn"><span data-en="Compare roles" data-vi="So sánh vai trò">Compare roles</span></a></aside></div><div id="extra"></div><dialog id="view" class="v3-dialog v3-dialog--view" aria-labelledby="view-title" hidden><header class="v3-dialog__header"><div class="v3-dialog__identity"><h2 id="view-title" tabindex="-1" autofocus><span data-en="Member details" data-vi="Chi tiết thành viên">Member details</span></h2><div data-view-identity></div></div><button type="button" class="v3-btn" data-dialog-close><span data-en="Close" data-vi="Đóng">Close</span></button></header><div class="v3-body" data-view-body></div><footer class="v3-form__footer" data-view-footer></footer></dialog></div>
 <div id="notice" role="status"></div><footer class="v3-footnote v3-access-footer"><small><span data-en="Illustrative data · no live requests" data-vi="Dữ liệu minh họa · không gửi yêu cầu thật">Illustrative data · no live requests</span></small></footer><span class="v3-sr-only" id="status" role="status"></span></div>
-<dialog class="v3-dialog" id="modal" aria-labelledby="modal-title"><form id="form"><header class="v3-dialog__header"><span class="v3-tile v3-teal"><svg class="v3-icon" aria-hidden="true"><use href="#i-people"/></svg></span><h2 id="modal-title" tabindex="-1"></h2></header><div class="v3-body" id="modal-body"></div><footer class="v3-form__footer" id="modal-foot"></footer></form></dialog>
+<dialog class="v3-dialog v3-dialog--edit" id="workflow" hidden aria-labelledby="modal-title"><form id="form"><header class="v3-dialog__header"><span class="v3-tile v3-teal"><svg class="v3-icon" aria-hidden="true"><use href="#i-people"/></svg></span><h2 id="modal-title" tabindex="-1"></h2><button type="button" class="v3-btn" data-dialog-close><span data-en="Close" data-vi="Đóng">Close</span></button></header><div class="v3-body" id="modal-body"></div><footer class="v3-form__footer" id="modal-foot"></footer></form></dialog>
 <details class="v3-review-controls" id="review-controls"><summary><span data-en="Design review controls" data-vi="Trạng thái bản mẫu">Design review controls</span></summary>
-<div class="v3-review-controls__body"><label class="v3-field"><span data-en="Prototype state" data-vi="Trạng thái bản mẫu">Prototype state</span><select id="review"><option value="401" data-en="401 · Session expired" data-vi="401 · Hết phiên">401 · Session expired</option><option value="403" data-en="403 · Write revoked" data-vi="403 · Mất quyền ghi">403 · Write revoked</option><option value="404" data-en="404 · Not found" data-vi="404 · Không tìm thấy">404 · Not found</option><option value="412" data-en="412 · Linked configuration conflict" data-vi="412 · Xung đột cấu hình liên quan">412 · Linked configuration conflict</option><option value="429" data-en="429 · Rate limited" data-vi="429 · Giới hạn tần suất">429 · Rate limited</option><option value="default" data-en="Populated" data-vi="Có dữ liệu">Populated</option><option value="loading" data-en="Loading" data-vi="Đang tải">Loading</option><option value="empty" data-en="No resources" data-vi="Chưa có dữ liệu">No resources</option><option value="filtered" data-en="No filter matches" data-vi="Không khớp bộ lọc">No filter matches</option><option value="error" data-en="Request failed" data-vi="Lỗi yêu cầu">Request failed</option><option value="denied" data-en="403 · List inaccessible" data-vi="403 · Không thể xem danh sách">403 · List inaccessible</option><option value="pending" data-en="Submission pending" data-vi="Đang gửi">Submission pending</option><option value="long" data-en="Long content" data-vi="Nội dung dài">Long content</option><option value="guard" data-en="Last admin refusal" data-vi="Từ chối xóa quản trị viên cuối">Last admin refusal</option><option value="accepted" data-en="Invitation accepted" data-vi="Đã nhận lời mời">Invitation accepted</option><option value="expired" data-en="Invitation expired" data-vi="Lời mời hết hạn">Invitation expired</option><option value="revoked" data-en="Invitation revoked" data-vi="Đã thu hồi lời mời">Invitation revoked</option><option value="removed" data-en="Member removed" data-vi="Đã xóa thành viên">Member removed</option><option value="unavailable" data-en="Scope changes unavailable" data-vi="Không thể đổi phạm vi">Scope changes unavailable</option><option value="draft" data-en="Invitation error · draft retained" data-vi="Lỗi lời mời · giữ bản nháp">Invitation error · draft retained</option><option value="saved" data-en="Role change confirmed" data-vi="Đã xác nhận đổi vai trò">Role change confirmed</option></select></label>
+<div class="v3-review-controls__body"><p class="v3-caption"><span data-en="Dialog previews" data-vi="Bản xem trước hộp thoại">Dialog previews</span> · <a href="?dialog=view&amp;object=linh"><span data-en="View member" data-vi="Xem thành viên">View member</span></a> · <a href="?dialog=edit&amp;section=admin-preview&amp;object=linh"><span data-en="Edit roles as Hà" data-vi="Sửa vai trò với tư cách Hà">Edit roles as Hà</span></a> · <a href="?dialog=decline&amp;section=admin-preview&amp;object=linh"><span data-en="Review removal as Hà" data-vi="Xem xét thu hồi với tư cách Hà">Review removal as Hà</span></a> · <a href="?dialog=role-removal&amp;section=admin-preview&amp;object=linh"><span data-en="Review role removal as Hà" data-vi="Xem xét thu hồi vai trò với tư cách Hà">Review role removal as Hà</span></a></p><label class="v3-field"><span data-en="Prototype state" data-vi="Trạng thái bản mẫu">Prototype state</span><select id="review"><option value="401" data-en="401 · Session expired" data-vi="401 · Hết phiên">401 · Session expired</option><option value="403" data-en="403 · Write revoked" data-vi="403 · Mất quyền ghi">403 · Write revoked</option><option value="404" data-en="404 · Not found" data-vi="404 · Không tìm thấy">404 · Not found</option><option value="412" data-en="412 · Linked configuration conflict" data-vi="412 · Xung đột cấu hình liên quan">412 · Linked configuration conflict</option><option value="429" data-en="429 · Rate limited" data-vi="429 · Giới hạn tần suất">429 · Rate limited</option><option value="default" data-en="Populated" data-vi="Có dữ liệu">Populated</option><option value="loading" data-en="Loading" data-vi="Đang tải">Loading</option><option value="empty" data-en="No resources" data-vi="Chưa có dữ liệu">No resources</option><option value="filtered" data-en="No filter matches" data-vi="Không khớp bộ lọc">No filter matches</option><option value="error" data-en="Request failed" data-vi="Lỗi yêu cầu">Request failed</option><option value="denied" data-en="403 · List inaccessible" data-vi="403 · Không thể xem danh sách">403 · List inaccessible</option><option value="pending" data-en="Submission pending" data-vi="Đang gửi">Submission pending</option><option value="long" data-en="Long content" data-vi="Nội dung dài">Long content</option><option value="guard" data-en="Last admin refusal" data-vi="Từ chối xóa quản trị viên cuối">Last admin refusal</option><option value="accepted" data-en="Invitation accepted" data-vi="Đã nhận lời mời">Invitation accepted</option><option value="expired" data-en="Invitation expired" data-vi="Lời mời hết hạn">Invitation expired</option><option value="revoked" data-en="Invitation revoked" data-vi="Đã thu hồi lời mời">Invitation revoked</option><option value="removed" data-en="Member removed" data-vi="Đã xóa thành viên">Member removed</option><option value="unavailable" data-en="Scope changes unavailable" data-vi="Không thể đổi phạm vi">Scope changes unavailable</option><option value="draft" data-en="Invitation error · draft retained" data-vi="Lỗi lời mời · giữ bản nháp">Invitation error · draft retained</option><option value="saved" data-en="Role change confirmed" data-vi="Đã xác nhận đổi vai trò">Role change confirmed</option></select></label>
 <div><a class="v3-btn" id="persona-link" href="28-members-roles.html?section=admin-preview"><span data-en="Preview as Hà Lê · Tenant administrator" data-vi="Xem trước với vai trò Hà Lê · Quản trị viên tổ chức">Preview as Hà Lê · Tenant administrator</span></a></div></div></details>
 </main></div></div>
 <script>
@@ -71,20 +65,22 @@
 const route = new URLSearchParams(location.search);
 const adminPreview = route.get('section') === 'admin-preview';
 if (adminPreview) document.body.dataset.persona = 'ha';
+const workflow=document.getElementById('workflow');
 const requestedObject = route.get('object');
 const requestedProject = route.get('project');
 const routeRow = id => C.rows.find(row => row[0] === id);
-const C={"id":"28-members-roles","tab":"members","scope":"org","icon":"people","name":"Members and roles|Thành viên và vai trò","sub":"Review who can access each project before changing membership.|Kiểm tra ai có quyền vào từng dự án trước khi thay đổi thành viên.","list":"Members and invitations|Thành viên và lời mời","search":"Find a member|Tìm thành viên","permit":"membership:write","read":"membership:read","states":{"401":"401 · Session expired|401 · Hết phiên","403":"403 · Write revoked|403 · Mất quyền ghi","404":"404 · Not found|404 · Không tìm thấy","412":"412 · Linked configuration conflict|412 · Xung đột cấu hình liên quan","429":"429 · Rate limited|429 · Giới hạn tần suất","default":"Populated|Có dữ liệu","loading":"Loading|Đang tải","empty":"No resources|Chưa có dữ liệu","filtered":"No filter matches|Không khớp bộ lọc","error":"Request failed|Lỗi yêu cầu","denied":"403 · List inaccessible|403 · Không thể xem danh sách","pending":"Submission pending|Đang gửi","long":"Long content|Nội dung dài","guard":"Last admin refusal|Từ chối xóa quản trị viên cuối","accepted":"Invitation accepted|Đã nhận lời mời","expired":"Invitation expired|Lời mời hết hạn","revoked":"Invitation revoked|Đã thu hồi lời mời","removed":"Member removed|Đã xóa thành viên","unavailable":"Scope changes unavailable|Không thể đổi phạm vi","draft":"Invitation error · draft retained|Lỗi lời mời · giữ bản nháp","saved":"Role change confirmed|Đã xác nhận đổi vai trò"},"columns":["Member|Thành viên","Organization role|Vai trò tổ chức","Status|Trạng thái"],"rows":[["ha","Hà Lê","ha@example.test","tenant_admin","active"],["linh","Linh Nguyễn","linh@example.test","qa_engineer","active"],["minh","Minh Trần","minh@example.test","test_maintainer","active"],["an","An Phạm","an@example.test","release_approver","active"],["vy","Vy Đỗ","vy@example.test","qa_engineer","invited"]]};
+const C={"id":"28-members-roles","tab":"members","scope":"org","icon":"people","name":"Members and roles|Thành viên và vai trò","sub":"Review who can access each project before changing membership.|Kiểm tra ai có quyền vào từng dự án trước khi thay đổi thành viên.","list":"Members and invitations|Thành viên và lời mời","search":"Find a member|Tìm thành viên","permit":"membership:write","read":"membership:read","states":{"401":"401 · Session expired|401 · Hết phiên","403":"403 · Write revoked|403 · Mất quyền ghi","404":"404 · Not found|404 · Không tìm thấy","412":"412 · Linked configuration conflict|412 · Xung đột cấu hình liên quan","429":"429 · Rate limited|429 · Giới hạn tần suất","default":"Populated|Có dữ liệu","loading":"Loading|Đang tải","empty":"No resources|Chưa có dữ liệu","filtered":"No filter matches|Không khớp bộ lọc","error":"Request failed|Lỗi yêu cầu","denied":"403 · List inaccessible|403 · Không thể xem danh sách","pending":"Submission pending|Đang gửi","long":"Long content|Nội dung dài","guard":"Last admin refusal|Từ chối xóa quản trị viên cuối","accepted":"Invitation accepted|Đã nhận lời mời","expired":"Invitation expired|Lời mời hết hạn","revoked":"Invitation revoked|Đã thu hồi lời mời","removed":"Member removed|Đã xóa thành viên","unavailable":"Scope changes unavailable|Không thể đổi phạm vi","draft":"Invitation error · draft retained|Lỗi lời mời · giữ bản nháp","saved":"Role change confirmed|Đã xác nhận đổi vai trò"},"columns":["Member email|Email thành viên","Status|Trạng thái","Organization roles|Vai trò tổ chức"],"rows":[["ha","Hà Lê","ha@example.test","tenant_admin","active"],["linh","Linh Nguyễn","linh@example.test","qa_engineer","active"],["minh","Minh Trần","minh@example.test","test_maintainer","active"],["an","An Phạm","an@example.test","release_approver","active"],["vy","Vy Đỗ","vy@example.test","qa_engineer","invited"]]};
 const $ = (id) => document.getElementById(id), $$ = (s, el = document) => [...el.querySelectorAll(s)], esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]), split = (s) => String(s).split("|"), tr = (s) => split(s)[document.documentElement.lang === "vi" && split(s).length > 1 ? 1 : 0], att = (s) => {
     const [e, v = e] = split(s);
     return `data-en="${esc(e)}" data-vi="${esc(v)}"`;
-  }, w = (s) => String(s).includes("|") ? `<span ${att(s)}>${esc(tr(s))}</span>` : esc(s), ico = (s) => `<svg class="v3-icon" aria-hidden="true"><use href="#i-${s}"/></svg>`, code = (s) => `<code>${w(s)}</code>`, btn = (a, t, kind = "", off = false) => `<button type="button" data-act="${a}" class="v3-btn ${kind}"${off ? " disabled" : ""}>${w(t)}</button>`, writeBtn = (a, t, kind = "") => btn(a, t, "v3-write " + kind, locked()), note = (s) => `<p class="v3-note">${w(s)}</p>`, facts = (arr) => `<dl class="v3-access-facts">${arr.map(([label, value]) => `<div><dt>${w(label)}</dt><dd>${value}</dd></div>`).join("")}</dl>`, section = (title, body) => `<section class="v3-detail__section"><h3>${w(title)}</h3>${body}</section>`, opt = (id, s, sel = false) => `<option value="${esc(id)}" ${att(s)}${sel ? " selected" : ""}>${esc(tr(s))}</option>`, field = (label, input) => `<label class="v3-field">${w(label)}${input}</label>`, chk = (name, value, label, checked = false, required = false) => `<label class="v3-choice"><input type="checkbox" name="${name}" value="${esc(value)}"${checked ? " checked" : ""}${required ? " required" : ""}>${w(label)}</label>`, input = (id, type, value = "", req = true) => `<input id="${id}" class="v3-input" type="${type}" value="${esc(value)}" ${req ? "required" : ""}>`, sel = (id, values, value) => `<select id="${id}">${values.map((v) => opt(v, v, v === value)).join("")}</select>`, audit = (id) => `<a class="v3-btn" href="32-audit-log.html?object=${encodeURIComponent(id)}">${w("Audit events|Sự kiện kiểm toán")} · ${esc(id)}</a>`;
+  }, w = (s) => String(s).includes("|") ? `<span ${att(s)}>${esc(tr(s))}</span>` : esc(s), ico = (s) => `<svg class="v3-icon" aria-hidden="true"><use href="#i-${s}"/></svg>`, code = (s) => `<code>${w(s)}</code>`, btn = (a, t, kind = "", off = false) => `<button type="button" data-act="${a}"${({edit:1,remove:1,revoke:1,create:1,rotate:1,invite:1})[a]?` data-dialog-open="${({remove:"decline",revoke:"decline"})[a]||a}"`:""} class="v3-btn ${kind}"${off ? " disabled" : ""}>${w(t)}</button>`, writeBtn = (a, t, kind = "") => btn(a, t, "v3-write " + kind, locked()), note = (s) => `<p class="v3-note">${w(s)}</p>`, facts = (arr) => `<dl class="v3-access-facts">${arr.map(([label, value]) => `<div><dt>${w(label)}</dt><dd>${value}</dd></div>`).join("")}</dl>`, section = (title, body) => `<section class="v3-detail__section"><h3>${w(title)}</h3>${body}</section>`, opt = (id, s, sel = false) => `<option value="${esc(id)}" ${att(s)}${sel ? " selected" : ""}>${esc(tr(s))}</option>`, field = (label, input) => `<label class="v3-field">${w(label)}${input}</label>`, chk = (name, value, label, checked = false, required = false) => `<label class="v3-choice"><input type="checkbox" name="${name}" value="${esc(value)}"${checked ? " checked" : ""}${required ? " required" : ""}>${w(label)}</label>`, input = (id, type, value = "", req = true) => `<input id="${id}" class="v3-input" type="${type}" value="${esc(value)}" ${req ? "required" : ""}>`, sel = (id, values, value) => `<select id="${id}">${values.map((v) => opt(v, v, v === value)).join("")}</select>`, audit = (id) => `<a class="v3-btn" href="32-audit-log.html?object=${encodeURIComponent(id)}">${w("Audit events|Sự kiện kiểm toán")} · ${esc(id)}</a>`;
   const labels = { active: "Active|Đang hoạt động", soon: "Expires soon|Sắp hết hạn", expired: "Expired|Đã hết hạn", revoked: "Revoked|Đã thu hồi", requested: "Requested|Chờ xét duyệt", approved: "Approved|Đã phê duyệt", invited: "Invitation pending|Lời mời đang chờ", removed: "Removed|Đã xóa", accepted: "Accepted|Đã chấp nhận", rotated: "Rotated|Đã luân chuyển", unknown: "Unavailable|Không có dữ liệu" };
   const badge = id => {
     const waiting = id === 'requested' || id === 'invited';
     const cls = waiting ? 'v3-badge--waiting' : id === 'approved' ? 'v3-badge--approved' : ['active','rotated','accepted','soon'].includes(id) ? 'v3-badge--info' : '';
-    return '<span class="v3-badge '+cls+'">'+(waiting?ico('clock'):id==='approved'?ico('check'):'')+w(labels[id])+'</span>';
+    return '<span class="v3-badge '+cls+'">'+(waiting?ico('clock'):id==='approved'?ico('check'):ico('shield'))+w(labels[id])+'</span>';
   }, na = 'Unavailable|Không có dữ liệu';
+  let rowTrigger=null;
   let state = "default", project = "storefront-web", rows = [], selected = C.rows[0][0], query = "", filter = "", intent = "", draft = {}, detailAction = "", prevFocus = null;
   const current = () => rows.find((a) => a[0] === selected), locked = () => !adminPreview || ["403", "readonly", "pending", "lost", "gone", "stale", "self", "unavailable"].includes(state), stateIs = (...v) => v.includes(state);
   function msg(s) {
@@ -97,8 +93,8 @@ const $ = (id) => document.getElementById(id), $$ = (s, el = document) => [...el
     return `<div class="${kind}"><div class="v3-stack"><strong>${w(title)}</strong><p>${w(body)}</p>${action}</div></div>`;
   }
   function setState(next, keep = false) {
-    if ($("modal").open)
-      $("modal").close();
+    if (workflow.open)
+      workflow.close();
     const returnHref = next === "401" ? recordHref(false) : "";
     state = next;
     $("review").value = next;
@@ -133,26 +129,26 @@ const $ = (id) => document.getElementById(id), $$ = (s, el = document) => [...el
     $("scopebar").hidden = stateIs("401", "404", "denied");
     $("header-action").innerHTML = hide ? "" : headerAction();
     if (hide) {
+      document.querySelector(".v3-page-head__facts").textContent="";
+      $("view").hidden=true;
       if (unknown && !stateIs('401','404','denied')) {
         $('block').innerHTML='<h2>'+w('Record unavailable|Bản ghi không khả dụng')+'</h2><p>'+esc([requestedObject,requestedProject].filter(Boolean).join(' · '))+'</p>';
       } else paintBlock();
       return;
     }
     const scoped = rows.filter((a) => C.tab !== "secrets" || a[2] === project), vis = filterRows();
+    document.querySelector('.v3-page-head__facts').innerHTML=w('Lotus Commerce · '+scoped.filter(a=>['active','accepted'].includes(a[4])).length+' active · '+scoped.filter(a=>a[4]==='invited').length+' pending|Lotus Commerce · '+scoped.filter(a=>['active','accepted'].includes(a[4])).length+' đang hoạt động · '+scoped.filter(a=>a[4]==='invited').length+' đang chờ');
     if (!vis.some((a) => a[0] === selected))
       selected = vis[0]?.[0] || "";
-    $("status-filter").innerHTML = opt("", "All statuses|Tất cả trạng thái") + [...new Set(scoped.map((a) => a[4]))].map((v) => opt(v, labels[v], v === filter)).join("");
+    $("status-filter").innerHTML=['',...new Set(scoped.map(a=>a[4]))].map(key=>{const count=key?scoped.filter(a=>a[4]===key).length:scoped.length;return `<button type="button" class="v3-btn" data-filter-status="${esc(key)}" aria-pressed="${key===filter}">${w(key?labels[key]:'All|Tất cả')} <span class="v3-count">${count}</span></button>`}).join('');
     $("kpis").innerHTML = metrics(scoped).map(([title, value, hint, icon], i) => `<article class="v3-kpi"><h2><span class="v3-tile ${/^(Pending|Requested)/.test(title) ? "v3-tile--waiting" : ["v3-teal", "v3-blue", "", ""][i]}">${ico(/^(Pending|Requested)/.test(title) ? "clock" : icon)}</span>${w(title)}</h2><p class="v3-kpi__value">${w(value)}</p><small>${w(hint)}</small></article>`).join("");
-    $("grid-rows").innerHTML = vis.map((a) => `<tr>${cells(a).map((v, i) => i ? `<td><span class="v3-mobile-label">${w(C.columns[i])}</span>${v}</td>` : `<th scope="row"><button class="v3-btn v3-btn--ghost v3-access-pick" data-pick="${esc(a[0])}" aria-pressed="${a[0] === selected}">${v[0]}</button><small>${v[1]}</small></th>`).join("")}</tr>`).join("");
+    const rowAction=(a,id,label,kind='')=>`<button type="button" class="v3-btn ${kind}" data-record="${esc(a[0])}" data-dialog-open="${id}">${w(label)}<span class="v3-sr-only"> · ${w(a[1])}</span></button>`;
+    $("grid-rows").innerHTML=vis.map(a=>`<tr${a[4]==='invited'?' class="v3-table__pending"':''}>${cells(a).map((v,k)=>k?`<td><span class="v3-cell-label">${w(C.columns[k])}</span>${v}</td>`:`<th scope="row"><div class="v3-table__person"><span class="v3-tile" aria-hidden="true">${ico(C.icon)}</span><div><b>${v[0]}</b><small>${v[1]}</small></div></div></th>`).join('')}<td><div class="v3-table__actions">${rowAction(a,'view','View|Xem')}${!frozen()&&a[0]!=='ha'&&['active','accepted'].includes(a[4])?rowAction(a,'edit','Edit roles|Sửa vai trò','v3-write'):''}</div></td></tr>`).join('');
     $("no-match").hidden = !!vis.length;
-    $("pager").innerHTML = w(`${vis.length} of ${scoped.length} · 50 per page|${vis.length} trên ${scoped.length} · 50 mỗi trang`);
+    $('pager').innerHTML=w(vis.length?`Showing 1–${vis.length} of ${scoped.length} · 50 per page|Hiển thị 1–${vis.length} trong ${scoped.length} · 50 mỗi trang`:`Showing 0 of ${scoped.length}|Hiển thị 0 trong ${scoped.length}`);
     syncPreviewLink();
     const a = current();
-    $("detail").hidden = !a;
-    if (a) {
-      const [title, id, body, actions] = detail(a);
-      $("detail").innerHTML = `<header class="v3-detail__header v3-stack"><div class="v3-spread"><span class="v3-meta">${id}</span>${badge(a[4])}</div><h2>${title}</h2></header>${body}<footer class="v3-action-footer">${actions}</footer>`;
-    }
+    $("view").hidden=!a;
     $("extra").innerHTML = extra();
     $("response").innerHTML = response() || genericResponse();
   }
@@ -189,34 +185,39 @@ const $ = (id) => document.getElementById(id), $$ = (s, el = document) => [...el
     $("block").setAttribute("aria-busy", String(state === "loading"));
   }
   function openForm(action, title, body, submit = "", danger = false) {
-    const dialog = $("modal");
+    const dialog = workflow;
+    const previous=document.querySelector("dialog[open]"); if(previous && previous!==dialog) previous.close();
+    dialog.id=({remove:"decline",revoke:"decline"})[action]||action;
+    dialog.classList.toggle("v3-dialog--edit", !!submit && !danger);dialog.classList.toggle("v3-dialog--view",!submit || danger);
+    dialog.hidden=false; dialog.querySelector(".v3-tile").classList.toggle("v3-rejecttone",danger);
     if (!dialog.open)
-      prevFocus = document.activeElement;
+      prevFocus = rowTrigger || document.activeElement;
     detailAction = action;
     $('modal-title').innerHTML=w(title);
     if (submit) body='<p class="v3-caption">'+w('Organization settings|Cài đặt tổ chức')+' · '+esc('Lotus Commerce')+'</p>'+body;
     $("modal-body").innerHTML = body;
-    $("modal-foot").innerHTML = btn("close", submit ? "Cancel|Hủy" : "Close|Đóng") + (submit ? `<button type="submit" class="v3-btn v3-write ${danger ? "v3-btn--destructive" : "v3-btn--primary"}">${w(submit)}</button>` : "");
+    $("modal-foot").innerHTML = `<button type="button" class="v3-btn" data-dialog-close>${w(submit?"Cancel|Hủy":"Close|Đóng")}</button>` + (submit ? `<button type="submit" class="v3-btn v3-write ${danger ? "v3-btn--destructive" : "v3-btn--primary"}">${w(submit)}</button>` : "");
     if (!dialog.open)
       dialog.showModal();
-    $("modal-title").focus();
+    if(danger) $('modal-foot').querySelector('button').focus(); else $('modal-title').focus();
     updateDraft();
   }
   function closeModal() {
-    if ($("modal").open)
-      $("modal").close();
+    if (workflow.open)
+      workflow.close();
   }
   function frozen() {
     return matchMedia("(max-width:767px)").matches || locked();
   }
-  $("modal").addEventListener("close", () => {
-    if ($("modal").open)
+  workflow.addEventListener("close", () => {
+    if (workflow.open)
       return;
     $("modal-body").replaceChildren();
     detailAction = "";
+    workflow.hidden=true;workflow.id='workflow';rowTrigger=null;
     const restored = prevFocus?.isConnected && !prevFocus.disabled ? prevFocus :
-      $$('button[data-act]').find(b => b.dataset.act === prevFocus?.dataset.act && !b.disabled && b.offsetWidth) ||
-      $$('[data-pick]').find(b => b.dataset.pick === selected && b.offsetWidth) || $('review-controls').querySelector('summary');
+      $$('[data-record]').find(b=>b.dataset.record===selected && b.dataset.dialogOpen==='view') ||
+      $$('[data-record]').find(b => b.dataset.record === selected && b.offsetWidth) || $('review-controls').querySelector('summary');
     restored.focus();
   });
   window.addEventListener("pagehide", () => {
@@ -235,25 +236,30 @@ const $ = (id) => document.getElementById(id), $$ = (s, el = document) => [...el
       submitForm();
   });
   $("form").addEventListener("input", updateDraft);
+  workflow.addEventListener('cancel',e=>{
+    if(detailAction!=='edit')return;
+    const changed=$$('input[name=org-role]').some(el=>el.checked!==current()[3].split(', ').includes(el.value));
+    if(!changed)return;e.preventDefault();
+    if($('discard-guard')){$('keep-editing').focus();return;}
+    const guard=document.createElement('section');guard.id='discard-guard';guard.className='v3-body';
+    guard.innerHTML=`<h2 id="guard-title">${w('Discard unsaved changes?|Bỏ thay đổi chưa lưu?')}</h2><div class="v3-actions"><button type="button" id="keep-editing" class="v3-btn v3-btn--primary">${w('Keep editing|Tiếp tục sửa')}</button><button type="button" id="discard-edit" class="v3-btn">${w('Discard changes|Bỏ thay đổi')}</button></div>`;
+    $('form').hidden=true;workflow.append(guard);workflow.setAttribute('aria-labelledby','guard-title');$('keep-editing').focus();
+    const restore=()=>{guard.remove();$('form').hidden=false;workflow.setAttribute('aria-labelledby','modal-title');};
+    $('keep-editing').onclick=()=>{restore();$('form').querySelector('input').focus()};$('discard-edit').onclick=()=>{restore();workflow.close()};
+  });
   $("review").onchange = (e) => setState(e.target.value);
   $("search").oninput = (e) => {
     query = e.target.value;
     update();
   };
-  $("status-filter").onchange = (e) => {
-    filter = e.target.value;
-    update();
+  $("status-filter").onclick = e => {
+    const b=e.target.closest('[data-filter-status]');if(!b)return;filter=b.dataset.filterStatus;
+    update();$("status-filter").querySelector('[aria-pressed=true]').focus();
   };
   document.addEventListener("click", (e) => {
-    let el = e.target.closest("[data-act],[data-pick]");
+    let el = e.target.closest("[data-act]");
     if (!el || el.disabled)
       return;
-    if (el.dataset.pick) {
-      selected = el.dataset.pick;
-      update();
-      $$("[data-pick]").find((x) => x.dataset.pick === selected)?.focus();
-      return;
-    }
     const a = el.dataset.act;
     if (a === "close") {
       closeModal();
@@ -273,30 +279,61 @@ const $ = (id) => document.getElementById(id), $$ = (s, el = document) => [...el
     if (!el.classList.contains("v3-write") || !frozen())
       action(a);
   });
-
 const emptyTitle='No members or invitations|Chưa có thành viên hoặc lời mời',emptyAction=()=>writeBtn('invite','Invite member|Mời thành viên','v3-btn--primary'),headerAction=emptyAction;const rolePerm={tenant_admin:'Manage membership and integrations|Quản lý thành viên và tích hợp',qa_engineer:'Run tests, draft and triage failures|Chạy kiểm thử, soạn bản nháp và phân loại lỗi',test_maintainer:'Review tests and healing proposals|Duyệt kiểm thử và đề xuất sửa',release_approver:'Review policies and waivers|Duyệt chính sách và miễn trừ',viewer:'Read project data|Đọc dữ liệu dự án'};let assigned={},pendingIntent='';
-function prepare(){assigned={ha:['—','—'],linh:['qa_engineer','—'],minh:['test_maintainer','—'],an:['release_approver','viewer'],vy:['qa_engineer','—']};if(state==='saved'){selected=draft.id||'linh';assigned[selected]=draft.roles||['test_maintainer','viewer']}if(state==='removed'){selected=draft.id||'linh';rows.find(a=>a[0]===selected)[4]='removed'}if(stateIs('accepted','expired','revoked')){selected='vy';rows[4][4]=state}if(state==='guard')selected='ha';if(state==='long')rows[1][1]='Linh Nguyễn · '+ 'Quality Engineering / Customer Experience / Storefront';if(state==='draft'&&!draft.email)draft={email:'vy@example.test',role:'qa_engineer',scopes:['storefront-web']}}
+function prepare(){assigned={ha:['—','—'],linh:['qa_engineer','—'],minh:['test_maintainer','—'],an:['release_approver','viewer'],vy:['qa_engineer','—']};if(state==='saved'){selected=draft.id||'linh';rows.find(a=>a[0]===selected)[3]=(draft.roles||['test_maintainer','viewer']).join(', ')}if(state==='removed'){selected=draft.id||'linh';rows.find(a=>a[0]===selected)[4]='removed'}if(stateIs('accepted','expired','revoked')){selected='vy';rows[4][4]=state}if(state==='guard')selected='ha';if(state==='long')rows[1][1]='Linh Nguyễn · '+ 'Quality Engineering / Customer Experience / Storefront';if(state==='draft'&&!draft.email)draft={email:'vy@example.test',role:'qa_engineer',scopes:['storefront-web']}}
 function metrics(a){return [['Active members|Thành viên hoạt động',a.filter(x=>['active','accepted'].includes(x[4])).length,'Organization directory|Danh bạ tổ chức','people'],['Pending invitations|Lời mời đang chờ',a.filter(x=>x[4]==='invited').length,'Awaiting acceptance|Chờ chấp nhận','inbox'],['Projects|Dự án','2','Scoped assignments|Phân quyền theo dự án','folder'],['Organization admins|Quản trị viên tổ chức','1','Last admin protected|Bảo vệ quản trị viên cuối','shield']]}
-function cells(a){return [[w(a[1]),w(a[2])],code(a[3]),badge(a[4])]}
+function cells(a){return [[w(a[2]),w(a[1])],badge(a[4]),a[3].split(', ').map(code).join(' · ')]}
 function matrixEntries(a){const inactive=['removed','revoked','expired','invited'].includes(a[4]);if(a[0]==='ha')return note('Organization-wide · last organization admin|Toàn tổ chức · quản trị viên cuối cùng');return facts(assigned[a[0]].map((role,i)=>[[ 'storefront-web','evidgate-e2e'][i],role==='—'?w('Not assigned|Chưa được cấp'):inactive?code(role)+`<small> · ${w(a[4]==='invited'?'Proposed only|Chỉ đề xuất':'Historical only|Chỉ còn trong lịch sử')}</small>`:code(role)+'<br>'+w(rolePerm[role])]))}
-function detail(a){let body=section('Project scope|Phạm vi dự án',matrixEntries(a))+section('Effective permissions|Quyền có hiệu lực',a[4]==='invited'?note('Not active. Invitation expires 2026-10-20T12:00Z.|Chưa có hiệu lực. Lời mời hết hạn lúc 2026-10-20T12:00Z.'):w(['removed','expired','revoked'].includes(a[4])?'No current access from this record.|Bản ghi này không cấp quyền hiện tại.':rolePerm[a[0]==='ha'?a[3]:assigned[a[0]][0]]||'Read assigned project only|Chỉ đọc dự án được cấp'));let actions=a[0]==='ha'?writeBtn('guard','Review removal guard|Xem điều kiện xóa'):['active','accepted'].includes(a[4])?writeBtn('edit','Edit access|Sửa quyền truy cập')+writeBtn('remove','Remove member|Xóa thành viên'):w('No lifecycle action supplied.|Không có thao tác vòng đời được cấp.');return [w(a[1]),w(a[2]),body,actions]}
+function detail(a){let body=section('Membership|Tư cách thành viên',facts([['Organization|Tổ chức','Lotus Commerce'],['Member ID|Mã thành viên',code(a[0])],['Organization roles|Vai trò tổ chức',code(a[3])]]))+section('Project scope|Phạm vi dự án',matrixEntries(a))+section('Effective permissions|Quyền có hiệu lực',a[4]==='invited'?note('Not active. Invitation expires 2026-10-20T12:00Z.|Chưa có hiệu lực. Lời mời hết hạn lúc 2026-10-20T12:00Z.'):w(['removed','expired','revoked'].includes(a[4])?'No current access from this record.|Bản ghi này không cấp quyền hiện tại.':rolePerm[a[0]==='ha'?a[3]:assigned[a[0]][0]]||'Read assigned project only|Chỉ đọc dự án được cấp'));let actions=a[0]==='ha'?writeBtn('guard','Review removal guard|Xem điều kiện xóa'):['active','accepted'].includes(a[4])?writeBtn('edit','Edit roles|Sửa vai trò','v3-btn--primary')+writeBtn('remove','Remove member|Xóa thành viên'):w('No lifecycle action supplied.|Không có thao tác vòng đời được cấp.');return [w(a[1]),w(a[2]),body,actions]}
 function extra(){const active=rows.filter(a=>['active','accepted'].includes(a[4]));return `<section class="v3-panel"><header class="v3-panel__header"><h2>${w('Per-project role matrix|Ma trận vai trò theo dự án')}</h2><p class="v3-muted">${w('Built-in roles only. QA cannot approve waivers; release approvers cannot approve healing.|Chỉ dùng vai trò có sẵn. QA không duyệt miễn trừ; người duyệt phát hành không duyệt đề xuất sửa.')}</p></header><table class="v3-table v3-access-matrix"><thead><tr>${['Member|Thành viên','storefront-web','evidgate-e2e'].map(x=>`<th scope="col">${w(x)}</th>`).join('')}</tr></thead><tbody>${active.map(a=>`<tr><th scope="row">${w(a[1])}</th>${assigned[a[0]].map((v,i)=>`<td><span class="v3-mobile-label">${['storefront-web','evidgate-e2e'][i]}</span>${code(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></section>`}
-function response(){const messages={guard:['Last organization admin|Quản trị viên cuối cùng của tổ chức','last_admin_guard · Hà Lê cannot be removed. Appoint another admin first.|last_admin_guard · Không thể xóa Hà Lê. Hãy bổ nhiệm quản trị viên khác trước.'],removed:['Member removed|Đã xóa thành viên','Server result: access removed; authored history remains attributed.|Kết quả máy chủ: đã thu hồi quyền; lịch sử vẫn ghi người thực hiện.'],saved:['Access saved|Đã lưu quyền','The role matrix reflects the supplied result.|Ma trận vai trò đã cập nhật theo kết quả được cung cấp.'],unavailable:['Scope changes unavailable|Không thể đổi phạm vi','Read access remains available; no write endpoint is supplied.|Vẫn có thể xem; không có thao tác ghi khả dụng.'],draft:['Invitation failed · req-invite-503|Gửi lời mời thất bại · req-invite-503','The email, role and project selection were retained. Review before retrying.|Đã giữ email, vai trò và dự án. Kiểm tra trước khi thử lại.']};return messages[state]?outcome(...messages[state],'v3-note',state==='draft'?writeBtn('invite','Review draft|Xem bản nháp'):''):''}
-function action(v){let a=current();if(v==='guard'){openForm(v,'Remove member?|Xóa thành viên?',facts([['Member|Thành viên',w('Hà Lê · ha@example.test')],['Role|Vai trò',code('tenant_admin')]])+outcome('Last organization admin|Quản trị viên cuối cùng của tổ chức','last_admin_guard · Server refuses removal. There is no override.|last_admin_guard · Máy chủ từ chối xóa. Không thể bỏ qua.'));return}if(v==='remove'){openForm(v,'Remove member?|Xóa thành viên?',facts([['Member|Thành viên',w(a[1]+' · '+a[2])],['Project scope|Phạm vi dự án',matrixEntries(a)]])+note('Removing this membership revokes access across the listed projects. Authored history stays attributed.|Xóa thành viên sẽ thu hồi quyền trong các dự án đã nêu. Lịch sử vẫn ghi người thực hiện.'),'Remove member|Xóa thành viên',true);return}if(v==='edit'){openForm(v,'Edit project access|Sửa quyền dự án',`<strong>${w(a[1])}</strong>`+['storefront-web','evidgate-e2e'].map((p,i)=>field(p,sel('role-'+i,['—','viewer','qa_engineer','test_maintainer','release_approver'],assigned[a[0]][i]))).join('')+'<div class="v3-note" id="preview"></div>','Save access|Lưu quyền');return}if(v==='invite'){if(!intent)intent='idem-invite-fixture-01';openForm(v,'Invite member|Mời thành viên',field('Email|Địa chỉ email',input('email','email',draft.email||''))+field('Built-in role|Vai trò có sẵn',sel('role',Object.keys(rolePerm).filter(s=>s!=='tenant_admin'),draft.role||'qa_engineer'))+`<fieldset><legend>${w('Project scope|Phạm vi dự án')}</legend>${['storefront-web','evidgate-e2e'].map(p=>chk('project',p,p,(draft.scopes||['storefront-web']).includes(p))).join('')}</fieldset><div id="preview" class="v3-note"></div>`,'Preview invitation|Xem trước lời mời');return}if(v==='back'){action('invite')}}
+function response(){const messages={guard:['Last organization admin|Quản trị viên cuối cùng của tổ chức','last_admin_guard · Hà Lê cannot be removed. Appoint another admin first.|last_admin_guard · Không thể xóa Hà Lê. Hãy bổ nhiệm quản trị viên khác trước.'],removed:['Member removed|Đã xóa thành viên','Server result: access removed; authored history remains attributed.|Kết quả máy chủ: đã thu hồi quyền; lịch sử vẫn ghi người thực hiện.'],saved:['Access saved|Đã lưu quyền','The directory shows the updated organization roles. Project assignments are unchanged.|Danh bạ đã cập nhật vai trò tổ chức. Phân quyền dự án không đổi.'],unavailable:['Scope changes unavailable|Không thể đổi phạm vi','Read access remains available; no write endpoint is supplied.|Vẫn có thể xem; không có thao tác ghi khả dụng.'],draft:['Invitation failed · req-invite-503|Gửi lời mời thất bại · req-invite-503','The email, role and project selection were retained. Review before retrying.|Đã giữ email, vai trò và dự án. Kiểm tra trước khi thử lại.']};return messages[state]?outcome(...messages[state],'v3-note',state==='draft'?writeBtn('invite','Review draft|Xem bản nháp'):''):''}
+function action(v){let a=current();if(v==='guard'){openForm(v,'Remove member?|Xóa thành viên?',facts([['Member|Thành viên',w('Hà Lê · ha@example.test')],['Role|Vai trò',code('tenant_admin')]])+outcome('Last organization admin|Quản trị viên cuối cùng của tổ chức','last_admin_guard · Server refuses removal. There is no override.|last_admin_guard · Máy chủ từ chối xóa. Không thể bỏ qua.'));return}if(v==='remove'){openForm(v,'Remove member?|Xóa thành viên?',facts([['Member|Thành viên',w(a[1]+' · '+a[2])],['Project scope|Phạm vi dự án',matrixEntries(a)]])+note('Removing this membership revokes access across the listed projects. Authored history stays attributed.|Xóa thành viên sẽ thu hồi quyền trong các dự án đã nêu. Lịch sử vẫn ghi người thực hiện.'),'Remove member|Xóa thành viên',true);return}if(v==='edit'){openForm(v,'Edit organization roles|Sửa vai trò tổ chức',facts([['Member email|Email thành viên',w(a[2])],['Member ID|Mã thành viên',code(a[0])]])+`<fieldset><legend>${w('Organization roles|Vai trò tổ chức')}</legend>${Object.entries(rolePerm).filter(([k])=>k!=='tenant_admin').map(([k,h])=>`<label class="v3-choice"><input type="checkbox" name="org-role" value="${k}" ${a[3].split(', ').includes(k)?'checked':''}><span>${code(k)}<small>${w(h)}</small></span></label>`).join('')}</fieldset><div class="v3-note" id="preview"></div>`,'Save roles|Lưu vai trò');return}if(v==='invite'){if(!intent)intent='idem-invite-fixture-01';openForm(v,'Invite member|Mời thành viên',field('Email|Địa chỉ email',input('email','email',draft.email||''))+field('Built-in role|Vai trò có sẵn',sel('role',Object.keys(rolePerm).filter(s=>s!=='tenant_admin'),draft.role||'qa_engineer'))+`<fieldset><legend>${w('Project scope|Phạm vi dự án')}</legend>${['storefront-web','evidgate-e2e'].map(p=>chk('project',p,p,(draft.scopes||['storefront-web']).includes(p))).join('')}</fieldset><div id="preview" class="v3-note"></div>`,'Preview invitation|Xem trước lời mời');return}if(v==='back'){action('invite')}}
 function updateDraft(){
   if(detailAction==='edit'&&$('preview')){
-    $('preview').innerHTML=['storefront-web','evidgate-e2e'].map((p,i)=>p+' · '+w(rolePerm[$('role-'+i).value]||'No access|Không có quyền')).join('<br>');
+    const chosen=$$('input[name=org-role]:checked').map(el=>el.value),before=current()[3].split(', ');
+    $('preview').innerHTML=w('Role change|Thay đổi vai trò')+': '+code(before.join(', '))+' → '+(chosen.length?code(chosen.join(', ')):w('Choose at least one role.|Chọn ít nhất một vai trò.'));
+    $('modal-foot').querySelector('[type=submit]').disabled=!chosen.length||(chosen.length===before.length&&chosen.every(v=>before.includes(v)));
   }else if(detailAction==='invite'&&$('preview')){
     draft={email:$('email').value,role:$('role').value,scopes:$$('input[name=project]:checked').map(x=>x.value)};
     $('preview').innerHTML=w('Access preview|Xem trước quyền')+': '+draft.scopes.map(esc).join(', ')+' · '+w(rolePerm[draft.role]);
     $('modal-foot').querySelector('[type=submit]').disabled=!draft.scopes.length;
   }
 }
-function submitForm(){if(detailAction==='invite'){updateDraft();openForm('confirm','Review invitation|Xem lại lời mời',facts([['Identity|Danh tính',esc(draft.email)],['Project scope|Phạm vi dự án',draft.scopes.map(esc).join(', ')],['Role|Vai trò',code(draft.role)],['Effective permissions|Quyền có hiệu lực',w(rolePerm[draft.role])]])+note('Fixture only. Delivery requires a confirmed invitation endpoint.|Chỉ minh họa. Việc gửi cần có dịch vụ lời mời đã xác nhận.'),'Confirm intent|Xác nhận ý định');return}if(detailAction==='confirm'){closeModal();msg('Invitation intent recorded locally; no invitation was delivered.|Đã ghi nhận ý định mời trong bản mẫu; chưa gửi lời mời.');return}if(detailAction==='edit'){draft={id:selected,roles:[$('role-0').value,$('role-1').value]};setState('saved',true)}else if(detailAction==='remove'){draft={id:selected};setState('removed',true)}}
-$('settings-section').onchange=e=>{const key=e.target.value;const local={"members":"28-members-roles.html","secrets":"29-secret-references.html","support":"36-support-access.html","tokens":"37-api-tokens.html"};location.href=local[key]||'27-settings-shell.html?tab='+encodeURIComponent(key)};
-
+function submitForm(){if(detailAction==='invite'){updateDraft();openForm('confirm','Review invitation|Xem lại lời mời',facts([['Identity|Danh tính',esc(draft.email)],['Project scope|Phạm vi dự án',draft.scopes.map(esc).join(', ')],['Role|Vai trò',code(draft.role)],['Effective permissions|Quyền có hiệu lực',w(rolePerm[draft.role])]])+note('Fixture only. Delivery requires a confirmed invitation endpoint.|Chỉ minh họa. Việc gửi cần có dịch vụ lời mời đã xác nhận.'),'Confirm intent|Xác nhận ý định');return}if(detailAction==='confirm'){closeModal();msg('Invitation intent recorded locally; no invitation was delivered.|Đã ghi nhận ý định mời trong bản mẫu; chưa gửi lời mời.');return}if(detailAction==='edit'){draft={id:selected,roles:$$('input[name=org-role]:checked').map(el=>el.value)};const removed=current()[3].split(', ').filter(k=>!draft.roles.includes(k));if(removed.length){openForm('role-removal','Remove assigned roles?|Thu hồi vai trò đã cấp?',facts([['Member|Thành viên',w(current()[2])],['Roles to remove|Vai trò sẽ thu hồi',code(removed.join(', '))],['Remaining roles|Vai trò sau thay đổi',code(draft.roles.join(', '))]])+note('The member loses permissions from the removed roles. Project assignments are unchanged.|Thành viên mất quyền từ vai trò bị thu hồi. Phân quyền dự án không đổi.'),'Confirm role change|Xác nhận thay đổi vai trò',true);return}setState('saved',true)}else if(detailAction==='role-removal'){setState('saved',true)}else if(detailAction==='remove'){draft={id:selected};setState('removed',true)}}
+function prepareView(a,id='view'){
+  const panel=$(id); if(!a||!panel||$('live').hidden)return;
+  const [title,identity,body,actions]=detail(a);
+  panel.querySelector('[data-view-identity]').innerHTML=`<b>${title}</b> · ${identity} ${badge(a[4])}`;
+  panel.querySelector('[data-view-body]').innerHTML=body;
+  panel.querySelector('[data-view-footer]').innerHTML=actions;
+  panel.hidden=false;
+}
+function openRow(trigger){
+ const id=trigger.dataset.dialogOpen;
+ if(trigger.dataset.record){selected=trigger.dataset.record;rowTrigger=trigger;syncPreviewLink();}
+ const a=current(); if(!a||$('live').hidden)return;
+ if(id==='view'){prepareView(a);return;}
+ 
+ if(!frozen() && id==='edit' && a[0]!=='ha' && ['active','accepted'].includes(a[4]))action('edit');
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-dialog-open][data-record]');if(b)openRow(b);});
 const initial = route.get('state');
 setState(initial && Object.hasOwn(C.states,initial) ? initial : 'default');
+const modalKey=route.get('dialog');
+if(modalKey && !$('live').hidden){
+ if(modalKey==='role-removal' && !frozen() && (!requestedObject||requestedObject==='linh')){
+ selected='linh';draft={id:selected,roles:['test_maintainer','viewer']};openForm('role-removal','Remove assigned roles?|Thu hồi vai trò đã cấp?',facts([['Member|Thành viên',w(current()[2])],['Roles to remove|Vai trò sẽ thu hồi',code('qa_engineer')],['Remaining roles|Vai trò sau thay đổi',code(draft.roles.join(', '))]])+note('Review fixture only. Project assignments are unchanged.|Chỉ là tình huống mẫu. Phân quyền dự án không đổi.'),'Confirm role change|Xác nhận thay đổi vai trò',true);
+ }else if(modalKey==='view')prepareView(current());
+ 
+ else {const verb={edit:'edit',decline:'remove',invite:'invite'}[modalKey];if(verb){
+  let target=current();
+  if(!requestedObject && ['edit','remove'].includes(verb))target=rows.find(a=>a[0]==='linh');
+  if(target){selected=target[0];syncPreviewLink();prepareView(target);const actionButton=verb==='create'||verb==='invite'?$('header-action').querySelector('[data-act="'+verb+'"]'):$('view').querySelector('[data-act="'+verb+'"]');
+   if(actionButton && !frozen())action(verb);
+   else if(!adminPreview && actionButton){openForm(modalKey,'Administrative preview|Bản xem trước quản trị',note('Read-only as Minh Trần. No changes have been made.|Chỉ đọc với vai trò Minh Trần. Chưa có thay đổi nào.')+`<a class="v3-btn" href="${esc(recordHref(true).split('#')[0])}&amp;dialog=${modalKey}">${w('Preview as Hà Lê · Tenant administrator|Xem trước với vai trò Hà Lê · Quản trị viên tổ chức')}</a>`);}
+  }
+ }}
+}
 })();
 </script>
 </body></html>

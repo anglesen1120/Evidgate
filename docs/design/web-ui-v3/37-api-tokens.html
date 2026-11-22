@@ -8,31 +8,24 @@
 <link rel="stylesheet" href="assets/components-v3.css">
 <script defer src="assets/manifest-v3.js"></script>
 <script defer src="assets/shell.js"></script>
+<script defer src="assets/dialogs-v3.js"></script>
 <style>
 [hidden]{display:none!important}
 .v3-access-tools,.v3-access-scope{display:flex;align-items:end;justify-content:space-between;flex-wrap:wrap;gap:var(--eg-space-3)}
 .v3-access-scope{border-bottom:1px solid var(--eg-border);padding-bottom:var(--eg-space-4);margin-bottom:var(--eg-space-5);align-items:center}
 .v3-access-scope select,#review{max-width:min(100%,18rem)}
+.v3-access-scope>.v3-tabs{flex-basis:100%}
 .v3-access-body{display:grid;gap:var(--eg-space-5);min-width:0}
-.v3-access-grid{display:grid;align-items:start;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:var(--eg-space-5)}
-.v3-access-grid>*{min-width:0}
 .v3-access-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--eg-space-4)}
 .v3-access-facts dd{margin-top:var(--eg-space-1);font-size:var(--eg-text-sm)}
-.v3-access-list td{vertical-align:middle}.v3-access-list tr[aria-selected=true],.v3-access-list tr:has([aria-pressed=true]){background:var(--eg-accent-soft)}
-.v3-access-pick{padding:var(--eg-space-2) 0;text-align:left;justify-content:start;color:var(--eg-accent);font-weight:700;overflow-wrap:anywhere}
-.v3-access-list small{display:block}.v3-access-grid .v3-table td,.v3-access-grid .v3-table th{overflow-wrap:anywhere}
 .v3-access-tools .v3-field{flex:1;min-width:min(8rem,100%)}
-.v3-access-grid .v3-detail__header .v3-badge{margin:0}
-.v3-access-grid .v3-action-footer{position:static}
+.v3-dialog form{display:flex;flex-direction:column;min-height:0}.v3-dialog form>.v3-body{overflow:auto;min-height:0}.v3-dialog form>footer{flex:none}
+.v3-table__person small{overflow-wrap:anywhere}
 .v3-access-block{min-height:22rem;align-content:start}
-.v3-access-review{display:flex;flex-wrap:wrap;align-items:center;gap:var(--eg-space-3);font-size:var(--eg-text-xs)}
 .v3-access-mobile{display:none}#notice:empty{display:none}
 .v3-access-footer{display:flex;justify-content:space-between;align-items:center;gap:var(--eg-space-3);flex-wrap:wrap}
-.v3-access-grid h2,.v3-access-grid code,.v3-dialog code,.v3-access-scope code{overflow-wrap:anywhere}
-@media(max-width:1024px){.v3-access-grid{grid-template-columns:minmax(0,1fr)}}
-@media(max-width:767px){.v3-access-mobile{display:block}.v3-write{display:none!important}.v3-access-matrix thead,.v3-access-list thead{position:absolute;clip-path:inset(50%);width:1px;height:1px;overflow:hidden}.v3-access-matrix :is(tbody,tr,td,th),.v3-access-list :is(tbody,tr,td,th){display:block}.v3-access-matrix tr,.v3-access-list tr{padding:var(--eg-space-3);border-bottom:1px solid var(--eg-border)}.v3-access-matrix :is(td,th),.v3-access-list :is(td,th){border:0;padding:var(--eg-space-1)}.v3-mobile-label{font-size:var(--eg-text-xs);color:var(--eg-text-muted);margin-inline-end:var(--eg-space-2)}.v3-access-scope select{min-height:44px}}
+@media(max-width:767px){.v3-access-mobile{display:block}.v3-write{display:none!important}.v3-access-matrix thead{position:absolute;clip-path:inset(50%);width:1px;height:1px;overflow:hidden}.v3-access-matrix :is(tbody,tr,td,th){display:block}.v3-access-matrix tr{padding:var(--eg-space-3);border-bottom:1px solid var(--eg-border)}.v3-access-matrix :is(td,th){border:0;padding:var(--eg-space-1)}.v3-mobile-label{font-size:var(--eg-text-xs);color:var(--eg-text-muted);margin-inline-end:var(--eg-space-2)}.v3-access-scope select{min-height:44px}}
 @media(min-width:768px){.v3-mobile-label{display:none}}
-@media(pointer:coarse){.v3-access-pick,.v3-field:has(input[type=checkbox]),.v3-access-scope a{min-height:44px}}
 </style>
 </head>
 <body data-page="37">
@@ -49,19 +42,20 @@
 <div class="v3-shell">
 <aside class="v3-sidebar" data-v3-sidebar></aside><div class="v3-workspace">
 <header class="v3-topbar" data-v3-topbar></header><main id="main" tabindex="-1">
-<header class="v3-page-header"><div class="v3-page-header__title"><span class="v3-page-header__icon"><svg class="v3-icon" aria-hidden="true"><use href="#i-shield"/></svg></span><div><h1><span data-en="API tokens" data-vi="Mã truy cập API">API tokens</span></h1><p class="v3-muted"><span data-en="Review project credentials by purpose, permission subset and expiry." data-vi="Xem mã truy cập theo mục đích, tập quyền và hạn dùng trong dự án.">Review project credentials by purpose, permission subset and expiry.</span></p></div></div><div class="v3-actions" id="header-action"></div></header>
-<div class="v3-access-scope" id="scopebar"><div class="v3-row"><span class="v3-meta"><span data-en="Project scope" data-vi="Phạm vi dự án">Project scope</span></span><strong>storefront-web</strong><span class="v3-count"><code>api_token:read</code></span></div><label class="v3-access-review"><span data-en="Settings section" data-vi="Mục cài đặt">Settings section</span><select id="settings-section"><option value="project" data-en="Project" data-vi="Dự án">Project</option><option value="ai" data-en="AI settings" data-vi="Cài đặt AI">AI settings</option><option value="secrets" data-en="Secret references" data-vi="Tham chiếu bí mật">Secret references</option><option value="policy" data-en="Policy" data-vi="Chính sách">Policy</option><option value="quota" data-en="Quota and retention" data-vi="Hạn mức và thời gian lưu giữ">Quota and retention</option><option value="integrations" data-en="Integrations" data-vi="Tích hợp">Integrations</option><option value="tokens" selected data-en="API tokens" data-vi="Mã API">API tokens</option><option value="deploy" data-en="Deploy targets" data-vi="Đích triển khai">Deploy targets</option></select></label></div>
+<header class="v3-page-head v3-page-header"><div class="v3-page-header__title"><span class="v3-page-header__icon"><svg class="v3-icon" aria-hidden="true"><use href="#i-shield"/></svg></span><div><h1><span data-en="API tokens" data-vi="Mã truy cập API">API tokens</span></h1><p class="v3-page-head__facts"><span data-en="storefront-web · Project credentials" data-vi="storefront-web · Thông tin xác thực dự án">storefront-web · Project credentials</span></p></div></div><div class="v3-page-head__actions v3-actions" id="header-action"></div></header>
+<div class="v3-access-scope" id="scopebar"><div class="v3-row"><span class="v3-meta"><span data-en="Project scope" data-vi="Phạm vi dự án">Project scope</span></span><strong>storefront-web</strong><span class="v3-count"><code>api_token:read</code></span></div>
+<nav class="v3-tabs" aria-label="Settings sections" data-label-en="Settings sections" data-label-vi="Các mục cài đặt"><a href="27-settings-shell.html?tab=project"><span data-en="Project" data-vi="Dự án">Project</span></a><a href="27-settings-shell.html?tab=ai"><span data-en="AI settings" data-vi="Cài đặt AI">AI settings</span></a><a href="29-secret-references.html"><span data-en="Secret references" data-vi="Tham chiếu bí mật">Secret references</span></a><a href="27-settings-shell.html?tab=policy"><span data-en="Policy" data-vi="Chính sách">Policy</span></a><a href="27-settings-shell.html?tab=quota"><span data-en="Quota and retention" data-vi="Hạn mức và thời gian lưu giữ">Quota and retention</span></a><a href="27-settings-shell.html?tab=integrations"><span data-en="Integrations" data-vi="Tích hợp">Integrations</span></a><a href="37-api-tokens.html" aria-current="page"><span data-en="API tokens" data-vi="Mã API">API tokens</span></a><a href="27-settings-shell.html?tab=deploy"><span data-en="Deploy targets" data-vi="Đích triển khai">Deploy targets</span></a></nav></div>
 <div id="actor-note" class="v3-access-scope v3-caption"></div>
 <div class="v3-access-body"><p class="v3-note v3-access-mobile"><span data-en="Use a desktop to make changes." data-vi="Sử dụng máy tính để thay đổi dữ liệu.">Use a desktop to make changes.</span></p>
 <section id="block" class="v3-panel v3-pad v3-stack v3-access-block" hidden></section>
 <div class="v3-stack" id="live"><div id="response" role="status"></div><div class="v3-kpi-strip" id="kpis"></div>
-<div class="v3-access-grid"><section class="v3-panel"><header class="v3-panel__header"><h2><span data-en="Project tokens" data-vi="Mã truy cập của dự án">Project tokens</span></h2><div class="v3-access-tools"><label class="v3-field"><span data-en="Find a token" data-vi="Tìm mã truy cập">Find a token</span><input type="search" class="v3-input" id="search"></label><label class="v3-field"><span data-en="Status" data-vi="Trạng thái">Status</span><select id="status-filter"></select></label></div></header>
-<div class="v3-table-wrap"><table class="v3-table v3-access-list"><caption class="v3-sr-only"><span data-en="Project tokens" data-vi="Mã truy cập của dự án">Project tokens</span></caption><thead><tr><th scope="col"><span data-en="Token" data-vi="Mã truy cập">Token</span></th><th scope="col"><span data-en="Prefix" data-vi="Tiền tố">Prefix</span></th><th scope="col"><span data-en="Status" data-vi="Trạng thái">Status</span></th></tr></thead><tbody id="grid-rows"></tbody></table></div><div class="v3-pad v3-stack" id="no-match" hidden><strong><span data-en="No results match these filters" data-vi="Không có kết quả phù hợp với bộ lọc">No results match these filters</span></strong><div><button class="v3-btn" data-act="clear"><span data-en="Clear filters" data-vi="Xóa bộ lọc">Clear filters</span></button></div></div><footer class="v3-queue__footer v3-access-footer"><span id="pager" role="status"></span><div class="v3-pagination"><button disabled class="v3-btn v3-btn--ghost"><span data-en="Previous" data-vi="Trước">Previous</span></button><button disabled class="v3-btn v3-btn--ghost"><span data-en="Next" data-vi="Sau">Next</span></button></div></footer></section>
-<article class="v3-panel" id="detail"></article></div><div id="extra"></div></div>
+<div class="v3-stack"><section class="v3-panel"><header class="v3-panel__header"><h2><span data-en="Project tokens" data-vi="Mã truy cập của dự án">Project tokens</span></h2></header><div class="v3-table-toolbar"><div role="group" id="status-filter" class="v3-segment" aria-label="Filter by status" data-label-en="Filter by status" data-label-vi="Lọc theo trạng thái"></div><label class="v3-field"><span data-en="Find a token" data-vi="Tìm mã truy cập">Find a token</span><input type="search" class="v3-input" id="search"></label></div>
+<div class="v3-table-wrap"><table class="v3-table v3-table--stack"><caption class="v3-sr-only"><span data-en="Project tokens" data-vi="Mã truy cập của dự án">Project tokens</span></caption><thead><tr><th scope="col"><span data-en="Token" data-vi="Mã truy cập">Token</span></th><th scope="col"><span data-en="Prefix" data-vi="Tiền tố">Prefix</span></th><th scope="col"><span data-en="Status" data-vi="Trạng thái">Status</span></th><th scope="col" class="v3-table__action-head"><span data-en="Actions" data-vi="Thao tác">Actions</span></th></tr></thead><tbody id="grid-rows"></tbody></table></div><div class="v3-pad v3-stack" id="no-match" hidden><strong><span data-en="No results match these filters" data-vi="Không có kết quả phù hợp với bộ lọc">No results match these filters</span></strong><div><button class="v3-btn" data-act="clear"><span data-en="Clear filters" data-vi="Xóa bộ lọc">Clear filters</span></button></div></div><footer class="v3-table-foot"><span id="pager" role="status"></span><div class="v3-pagination"><button disabled class="v3-btn v3-btn--ghost"><span data-en="Previous" data-vi="Trước">Previous</span></button><button disabled class="v3-btn v3-btn--ghost"><span data-en="Next" data-vi="Sau">Next</span></button></div></footer></section>
+</div><div id="extra"></div><dialog id="view" class="v3-dialog v3-dialog--view" aria-labelledby="view-title" hidden><header class="v3-dialog__header"><div class="v3-dialog__identity"><h2 id="view-title" tabindex="-1" autofocus><span data-en="Token details" data-vi="Chi tiết mã truy cập">Token details</span></h2><div data-view-identity></div></div><button type="button" class="v3-btn" data-dialog-close><span data-en="Close" data-vi="Đóng">Close</span></button></header><div class="v3-body" data-view-body></div><footer class="v3-form__footer" data-view-footer></footer></dialog></div>
 <div id="notice" role="status"></div><footer class="v3-footnote v3-access-footer"><small><span data-en="Illustrative data · no live requests" data-vi="Dữ liệu minh họa · không gửi yêu cầu thật">Illustrative data · no live requests</span></small></footer><span class="v3-sr-only" id="status" role="status"></span></div>
-<dialog class="v3-dialog" id="modal" aria-labelledby="modal-title"><form id="form"><header class="v3-dialog__header"><span class="v3-tile v3-teal"><svg class="v3-icon" aria-hidden="true"><use href="#i-shield"/></svg></span><h2 id="modal-title" tabindex="-1"></h2></header><div class="v3-body" id="modal-body"></div><footer class="v3-form__footer" id="modal-foot"></footer></form></dialog>
+<dialog class="v3-dialog v3-dialog--edit" id="workflow" hidden aria-labelledby="modal-title"><form id="form"><header class="v3-dialog__header"><span class="v3-tile v3-teal"><svg class="v3-icon" aria-hidden="true"><use href="#i-shield"/></svg></span><h2 id="modal-title" tabindex="-1"></h2><button type="button" class="v3-btn" data-dialog-close><span data-en="Close" data-vi="Đóng">Close</span></button></header><div class="v3-body" id="modal-body"></div><footer class="v3-form__footer" id="modal-foot"></footer></form></dialog>
 <details class="v3-review-controls" id="review-controls"><summary><span data-en="Design review controls" data-vi="Trạng thái bản mẫu">Design review controls</span></summary>
-<div class="v3-review-controls__body"><label class="v3-field"><span data-en="Prototype state" data-vi="Trạng thái bản mẫu">Prototype state</span><select id="review"><option value="401" data-en="401 · Session expired" data-vi="401 · Hết phiên">401 · Session expired</option><option value="403" data-en="403 · Write revoked" data-vi="403 · Mất quyền ghi">403 · Write revoked</option><option value="404" data-en="404 · Not found" data-vi="404 · Không tìm thấy">404 · Not found</option><option value="412" data-en="412 · Linked configuration conflict" data-vi="412 · Xung đột cấu hình liên quan">412 · Linked configuration conflict</option><option value="429" data-en="429 · Rate limited" data-vi="429 · Giới hạn tần suất">429 · Rate limited</option><option value="default" data-en="Populated" data-vi="Có dữ liệu">Populated</option><option value="loading" data-en="Loading" data-vi="Đang tải">Loading</option><option value="empty" data-en="No resources" data-vi="Chưa có dữ liệu">No resources</option><option value="filtered" data-en="No filter matches" data-vi="Không khớp bộ lọc">No filter matches</option><option value="error" data-en="Request failed" data-vi="Lỗi yêu cầu">Request failed</option><option value="denied" data-en="403 · List inaccessible" data-vi="403 · Không thể xem danh sách">403 · List inaccessible</option><option value="pending" data-en="Submission pending" data-vi="Đang gửi">Submission pending</option><option value="long" data-en="Long content" data-vi="Nội dung dài">Long content</option><option value="created" data-en="Redacted creation receipt" data-vi="Biên nhận tạo mã đã che">Redacted creation receipt</option><option value="revoked" data-en="Revocation confirmed" data-vi="Đã xác nhận thu hồi">Revocation confirmed</option><option value="draft" data-en="Create error · draft retained" data-vi="Lỗi tạo mã · giữ bản nháp">Create error · draft retained</option><option value="escalation" data-en="422 · Permission escalation" data-vi="422 · Vượt quyền">422 · Permission escalation</option><option value="bounds" data-en="422 · Expiry bounds" data-vi="422 · Hạn dùng ngoài giới hạn">422 · Expiry bounds</option><option value="gone" data-en="404 · Revoke refused" data-vi="404 · Từ chối thu hồi">404 · Revoke refused</option><option value="stale" data-en="409 · Revoke conflict" data-vi="409 · Xung đột thu hồi">409 · Revoke conflict</option><option value="lost" data-en="Create response lost" data-vi="Mất phản hồi tạo mã">Create response lost</option><option value="clipboard" data-en="Clipboard denied" data-vi="Không thể sao chép">Clipboard denied</option><option value="copy" data-en="Redacted demo copied" data-vi="Đã mô phỏng sao chép">Redacted demo copied</option><option value="readonly" data-en="Read only" data-vi="Chỉ đọc">Read only</option><option value="unavailable" data-en="Metadata unavailable" data-vi="Thiếu thông tin mô tả">Metadata unavailable</option></select></label>
+<div class="v3-review-controls__body"><p class="v3-caption"><span data-en="Dialog previews" data-vi="Bản xem trước hộp thoại">Dialog previews</span> · <a href="?dialog=view"><span data-en="View token" data-vi="Xem mã truy cập">View token</span></a> · <a href="?dialog=create&amp;section=admin-preview"><span data-en="Create as Hà" data-vi="Tạo với tư cách Hà">Create as Hà</span></a> · <a href="?dialog=decline&amp;section=admin-preview"><span data-en="Review revocation as Hà" data-vi="Xem xét thu hồi với tư cách Hà">Review revocation as Hà</span></a></p><label class="v3-field"><span data-en="Prototype state" data-vi="Trạng thái bản mẫu">Prototype state</span><select id="review"><option value="401" data-en="401 · Session expired" data-vi="401 · Hết phiên">401 · Session expired</option><option value="403" data-en="403 · Write revoked" data-vi="403 · Mất quyền ghi">403 · Write revoked</option><option value="404" data-en="404 · Not found" data-vi="404 · Không tìm thấy">404 · Not found</option><option value="412" data-en="412 · Linked configuration conflict" data-vi="412 · Xung đột cấu hình liên quan">412 · Linked configuration conflict</option><option value="429" data-en="429 · Rate limited" data-vi="429 · Giới hạn tần suất">429 · Rate limited</option><option value="default" data-en="Populated" data-vi="Có dữ liệu">Populated</option><option value="loading" data-en="Loading" data-vi="Đang tải">Loading</option><option value="empty" data-en="No resources" data-vi="Chưa có dữ liệu">No resources</option><option value="filtered" data-en="No filter matches" data-vi="Không khớp bộ lọc">No filter matches</option><option value="error" data-en="Request failed" data-vi="Lỗi yêu cầu">Request failed</option><option value="denied" data-en="403 · List inaccessible" data-vi="403 · Không thể xem danh sách">403 · List inaccessible</option><option value="pending" data-en="Submission pending" data-vi="Đang gửi">Submission pending</option><option value="long" data-en="Long content" data-vi="Nội dung dài">Long content</option><option value="created" data-en="Redacted creation receipt" data-vi="Biên nhận tạo mã đã che">Redacted creation receipt</option><option value="revoked" data-en="Revocation confirmed" data-vi="Đã xác nhận thu hồi">Revocation confirmed</option><option value="draft" data-en="Create error · draft retained" data-vi="Lỗi tạo mã · giữ bản nháp">Create error · draft retained</option><option value="escalation" data-en="422 · Permission escalation" data-vi="422 · Vượt quyền">422 · Permission escalation</option><option value="bounds" data-en="422 · Expiry bounds" data-vi="422 · Hạn dùng ngoài giới hạn">422 · Expiry bounds</option><option value="gone" data-en="404 · Revoke refused" data-vi="404 · Từ chối thu hồi">404 · Revoke refused</option><option value="stale" data-en="409 · Revoke conflict" data-vi="409 · Xung đột thu hồi">409 · Revoke conflict</option><option value="lost" data-en="Create response lost" data-vi="Mất phản hồi tạo mã">Create response lost</option><option value="clipboard" data-en="Clipboard denied" data-vi="Không thể sao chép">Clipboard denied</option><option value="copy" data-en="Redacted demo copied" data-vi="Đã mô phỏng sao chép">Redacted demo copied</option><option value="readonly" data-en="Read only" data-vi="Chỉ đọc">Read only</option><option value="unavailable" data-en="Metadata unavailable" data-vi="Thiếu thông tin mô tả">Metadata unavailable</option></select></label>
 <div><a class="v3-btn" id="persona-link" href="37-api-tokens.html?section=admin-preview"><span data-en="Preview as Hà Lê · Tenant administrator" data-vi="Xem trước với vai trò Hà Lê · Quản trị viên tổ chức">Preview as Hà Lê · Tenant administrator</span></a></div><p class="v3-caption"><span data-en="Q1 / Q7 · One-time plaintext, token permissions and maximum expiry await server confirmation." data-vi="Q1 / Q7 · Việc hiển thị rõ một lần, quyền của mã và hạn dùng tối đa cần máy chủ xác nhận.">Q1 / Q7 · One-time plaintext, token permissions and maximum expiry await server confirmation.</span></p></div></details>
 </main></div></div>
 <script>
@@ -70,6 +64,7 @@
 const route = new URLSearchParams(location.search);
 const adminPreview = route.get('section') === 'admin-preview';
 if (adminPreview) document.body.dataset.persona = 'ha';
+const workflow=document.getElementById('workflow');
 const requestedObject = route.get('object');
 const requestedProject = route.get('project');
 const routeRow = id => C.rows.find(row => row[0] === id);
@@ -77,13 +72,14 @@ const C={"id":"37-api-tokens","tab":"tokens","scope":"project","icon":"shield","
 const $ = (id) => document.getElementById(id), $$ = (s, el = document) => [...el.querySelectorAll(s)], esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]), split = (s) => String(s).split("|"), tr = (s) => split(s)[document.documentElement.lang === "vi" && split(s).length > 1 ? 1 : 0], att = (s) => {
     const [e, v = e] = split(s);
     return `data-en="${esc(e)}" data-vi="${esc(v)}"`;
-  }, w = (s) => String(s).includes("|") ? `<span ${att(s)}>${esc(tr(s))}</span>` : esc(s), ico = (s) => `<svg class="v3-icon" aria-hidden="true"><use href="#i-${s}"/></svg>`, code = (s) => `<code>${w(s)}</code>`, btn = (a, t, kind = "", off = false) => `<button type="button" data-act="${a}" class="v3-btn ${kind}"${off ? " disabled" : ""}>${w(t)}</button>`, writeBtn = (a, t, kind = "") => btn(a, t, "v3-write " + kind, locked()), note = (s) => `<p class="v3-note">${w(s)}</p>`, facts = (arr) => `<dl class="v3-access-facts">${arr.map(([label, value]) => `<div><dt>${w(label)}</dt><dd>${value}</dd></div>`).join("")}</dl>`, section = (title, body) => `<section class="v3-detail__section"><h3>${w(title)}</h3>${body}</section>`, opt = (id, s, sel = false) => `<option value="${esc(id)}" ${att(s)}${sel ? " selected" : ""}>${esc(tr(s))}</option>`, field = (label, input) => `<label class="v3-field">${w(label)}${input}</label>`, chk = (name, value, label, checked = false, required = false) => `<label class="v3-choice"><input type="checkbox" name="${name}" value="${esc(value)}"${checked ? " checked" : ""}${required ? " required" : ""}>${w(label)}</label>`, input = (id, type, value = "", req = true) => `<input id="${id}" class="v3-input" type="${type}" value="${esc(value)}" ${req ? "required" : ""}>`, sel = (id, values, value) => `<select id="${id}">${values.map((v) => opt(v, v, v === value)).join("")}</select>`, audit = (id) => `<a class="v3-btn" href="32-audit-log.html?${new URLSearchParams({object:id,project})}">${w("Audit events|Sự kiện kiểm toán")} · ${esc(id)}</a>`;
+  }, w = (s) => String(s).includes("|") ? `<span ${att(s)}>${esc(tr(s))}</span>` : esc(s), ico = (s) => `<svg class="v3-icon" aria-hidden="true"><use href="#i-${s}"/></svg>`, code = (s) => `<code>${w(s)}</code>`, btn = (a, t, kind = "", off = false) => `<button type="button" data-act="${a}"${({edit:1,remove:1,revoke:1,create:1,rotate:1,invite:1})[a]?` data-dialog-open="${({remove:"decline",revoke:"decline"})[a]||a}"`:""} class="v3-btn ${kind}"${off ? " disabled" : ""}>${w(t)}</button>`, writeBtn = (a, t, kind = "") => btn(a, t, "v3-write " + kind, locked()), note = (s) => `<p class="v3-note">${w(s)}</p>`, facts = (arr) => `<dl class="v3-access-facts">${arr.map(([label, value]) => `<div><dt>${w(label)}</dt><dd>${value}</dd></div>`).join("")}</dl>`, section = (title, body) => `<section class="v3-detail__section"><h3>${w(title)}</h3>${body}</section>`, opt = (id, s, sel = false) => `<option value="${esc(id)}" ${att(s)}${sel ? " selected" : ""}>${esc(tr(s))}</option>`, field = (label, input) => `<label class="v3-field">${w(label)}${input}</label>`, chk = (name, value, label, checked = false, required = false) => `<label class="v3-choice"><input type="checkbox" name="${name}" value="${esc(value)}"${checked ? " checked" : ""}${required ? " required" : ""}>${w(label)}</label>`, input = (id, type, value = "", req = true) => `<input id="${id}" class="v3-input" type="${type}" value="${esc(value)}" ${req ? "required" : ""}>`, sel = (id, values, value) => `<select id="${id}">${values.map((v) => opt(v, v, v === value)).join("")}</select>`, audit = (id) => `<a class="v3-btn" href="32-audit-log.html?${new URLSearchParams({object:id,project})}">${w("Audit events|Sự kiện kiểm toán")} · ${esc(id)}</a>`;
   const labels = { active: "Active|Đang hoạt động", soon: "Expires soon|Sắp hết hạn", expired: "Expired|Đã hết hạn", revoked: "Revoked|Đã thu hồi", requested: "Requested|Chờ xét duyệt", approved: "Approved|Đã phê duyệt", invited: "Invitation pending|Lời mời đang chờ", removed: "Removed|Đã xóa", accepted: "Accepted|Đã chấp nhận", rotated: "Rotated|Đã luân chuyển", unknown: "Unavailable|Không có dữ liệu" };
   const badge = id => {
     const waiting = id === 'requested' || id === 'invited';
     const cls = waiting ? 'v3-badge--waiting' : id === 'approved' ? 'v3-badge--approved' : ['active','rotated','accepted','soon'].includes(id) ? 'v3-badge--info' : '';
-    return '<span class="v3-badge '+cls+'">'+(waiting?ico('clock'):id==='approved'?ico('check'):'')+w(labels[id])+'</span>';
+    return '<span class="v3-badge '+cls+'">'+(waiting?ico('clock'):id==='approved'?ico('check'):ico('shield'))+w(labels[id])+'</span>';
   }, na = 'Unavailable|Không có dữ liệu';
+  let rowTrigger=null;
   let state = "default", project = "storefront-web", rows = [], selected = C.rows[0][0], query = "", filter = "", intent = "", draft = {}, detailAction = "", prevFocus = null;
   const current = () => rows.find((a) => a[0] === selected), locked = () => !adminPreview || ["403", "readonly", "pending", "lost", "gone", "stale", "self", "unavailable"].includes(state), stateIs = (...v) => v.includes(state);
   function msg(s) {
@@ -96,8 +92,8 @@ const $ = (id) => document.getElementById(id), $$ = (s, el = document) => [...el
     return `<div class="${kind}"><div class="v3-stack"><strong>${w(title)}</strong><p>${w(body)}</p>${action}</div></div>`;
   }
   function setState(next, keep = false) {
-    if ($("modal").open)
-      $("modal").close();
+    if (workflow.open)
+      workflow.close();
     const returnHref = next === "401" ? recordHref(false) : "";
     state = next;
     $("review").value = next;
@@ -132,26 +128,26 @@ const $ = (id) => document.getElementById(id), $$ = (s, el = document) => [...el
     $("scopebar").hidden = stateIs("401", "404", "denied");
     $("header-action").innerHTML = hide ? "" : headerAction();
     if (hide) {
+      document.querySelector(".v3-page-head__facts").textContent="";
+      $("view").hidden=true;
       if (unknown && !stateIs('401','404','denied')) {
         $('block').innerHTML='<h2>'+w('Record unavailable|Bản ghi không khả dụng')+'</h2><p>'+esc([requestedObject,requestedProject].filter(Boolean).join(' · '))+'</p>';
       } else paintBlock();
       return;
     }
     const scoped = rows.filter((a) => C.tab !== "secrets" || a[2] === project), vis = filterRows();
+    document.querySelector('.v3-page-head__facts').innerHTML=w(project+' · '+scoped.length+' tokens · Prefix metadata only|'+project+' · '+scoped.length+' mã truy cập · Chỉ siêu dữ liệu tiền tố');
     if (!vis.some((a) => a[0] === selected))
       selected = vis[0]?.[0] || "";
-    $("status-filter").innerHTML = opt("", "All statuses|Tất cả trạng thái") + [...new Set(scoped.map((a) => a[4]))].map((v) => opt(v, labels[v], v === filter)).join("");
+    $("status-filter").innerHTML=['',...new Set(scoped.map(a=>a[4]))].map(key=>{const count=key?scoped.filter(a=>a[4]===key).length:scoped.length;return `<button type="button" class="v3-btn" data-filter-status="${esc(key)}" aria-pressed="${key===filter}">${w(key?labels[key]:'All|Tất cả')} <span class="v3-count">${count}</span></button>`}).join('');
     $("kpis").innerHTML = metrics(scoped).map(([title, value, hint, icon], i) => `<article class="v3-kpi"><h2><span class="v3-tile ${/^(Pending|Requested)/.test(title) ? "v3-tile--waiting" : ["v3-teal", "v3-blue", "", ""][i]}">${ico(/^(Pending|Requested)/.test(title) ? "clock" : icon)}</span>${w(title)}</h2><p class="v3-kpi__value">${w(value)}</p><small>${w(hint)}</small></article>`).join("");
-    $("grid-rows").innerHTML = vis.map((a) => `<tr>${cells(a).map((v, i) => i ? `<td><span class="v3-mobile-label">${w(C.columns[i])}</span>${v}</td>` : `<th scope="row"><button class="v3-btn v3-btn--ghost v3-access-pick" data-pick="${esc(a[0])}" aria-pressed="${a[0] === selected}">${v[0]}</button><small>${v[1]}</small></th>`).join("")}</tr>`).join("");
+    const rowAction=(a,id,label,kind='')=>`<button type="button" class="v3-btn ${kind}" data-record="${esc(a[0])}" data-dialog-open="${id}">${w(label)}<span class="v3-sr-only"> · ${w(a[1])}</span></button>`;
+    $("grid-rows").innerHTML=vis.map(a=>`<tr${a[4]==='invited'?' class="v3-table__pending"':''}>${cells(a).map((v,k)=>k?`<td><span class="v3-cell-label">${w(C.columns[k])}</span>${v}</td>`:`<th scope="row"><div class="v3-table__person"><span class="v3-tile" aria-hidden="true">${ico(C.icon)}</span><div><b>${v[0]}</b><small>${v[1]}</small></div></div></th>`).join('')}<td><div class="v3-table__actions">${rowAction(a,'view','View|Xem')}</div></td></tr>`).join('');
     $("no-match").hidden = !!vis.length;
-    $("pager").innerHTML = w(`${vis.length} of ${scoped.length} · 50 per page|${vis.length} trên ${scoped.length} · 50 mỗi trang`);
+    $('pager').innerHTML=w(vis.length?`Showing 1–${vis.length} of ${scoped.length} · 50 per page|Hiển thị 1–${vis.length} trong ${scoped.length} · 50 mỗi trang`:`Showing 0 of ${scoped.length}|Hiển thị 0 trong ${scoped.length}`);
     syncPreviewLink();
     const a = current();
-    $("detail").hidden = !a;
-    if (a) {
-      const [title, id, body, actions] = detail(a);
-      $("detail").innerHTML = `<header class="v3-detail__header v3-stack"><div class="v3-spread"><span class="v3-meta">${id}</span>${badge(a[4])}</div><h2>${title}</h2></header>${body}<footer class="v3-action-footer">${actions}</footer>`;
-    }
+    $("view").hidden=!a;
     $("extra").innerHTML = extra();
     $("response").innerHTML = response() || genericResponse();
   }
@@ -188,34 +184,39 @@ const $ = (id) => document.getElementById(id), $$ = (s, el = document) => [...el
     $("block").setAttribute("aria-busy", String(state === "loading"));
   }
   function openForm(action, title, body, submit = "", danger = false) {
-    const dialog = $("modal");
+    const dialog = workflow;
+    const previous=document.querySelector("dialog[open]"); if(previous && previous!==dialog) previous.close();
+    dialog.id=({remove:"decline",revoke:"decline"})[action]||action;
+    dialog.classList.toggle("v3-dialog--edit", !!submit && !danger);dialog.classList.toggle("v3-dialog--view",!submit || danger);
+    dialog.hidden=false; dialog.querySelector(".v3-tile").classList.toggle("v3-rejecttone",danger);
     if (!dialog.open)
-      prevFocus = document.activeElement;
+      prevFocus = rowTrigger || document.activeElement;
     detailAction = action;
     $('modal-title').innerHTML=w(title);
     if (submit) body='<p class="v3-caption">'+w('Project scope|Phạm vi dự án')+' · '+esc(project)+'</p>'+body;
     $("modal-body").innerHTML = body;
-    $("modal-foot").innerHTML = btn("close", submit ? "Cancel|Hủy" : "Close|Đóng") + (submit ? `<button type="submit" class="v3-btn v3-write ${danger ? "v3-btn--destructive" : "v3-btn--primary"}">${w(submit)}</button>` : "");
+    $("modal-foot").innerHTML = `<button type="button" class="v3-btn" data-dialog-close>${w(submit?"Cancel|Hủy":"Close|Đóng")}</button>` + (submit ? `<button type="submit" class="v3-btn v3-write ${danger ? "v3-btn--destructive" : "v3-btn--primary"}">${w(submit)}</button>` : "");
     if (!dialog.open)
       dialog.showModal();
-    $("modal-title").focus();
+    if(danger) $('modal-foot').querySelector('button').focus(); else $('modal-title').focus();
     updateDraft();
   }
   function closeModal() {
-    if ($("modal").open)
-      $("modal").close();
+    if (workflow.open)
+      workflow.close();
   }
   function frozen() {
     return matchMedia("(max-width:767px)").matches || locked();
   }
-  $("modal").addEventListener("close", () => {
-    if ($("modal").open)
+  workflow.addEventListener("close", () => {
+    if (workflow.open)
       return;
     $("modal-body").replaceChildren();
     detailAction = "";
+    workflow.hidden=true;workflow.id='workflow';rowTrigger=null;
     const restored = prevFocus?.isConnected && !prevFocus.disabled ? prevFocus :
-      $$('button[data-act]').find(b => b.dataset.act === prevFocus?.dataset.act && !b.disabled && b.offsetWidth) ||
-      $$('[data-pick]').find(b => b.dataset.pick === selected && b.offsetWidth) || $('review-controls').querySelector('summary');
+      $$('[data-record]').find(b=>b.dataset.record===selected && b.dataset.dialogOpen==='view') ||
+      $$('[data-record]').find(b => b.dataset.record === selected && b.offsetWidth) || $('review-controls').querySelector('summary');
     restored.focus();
   });
   window.addEventListener("pagehide", () => {
@@ -239,20 +240,14 @@ const $ = (id) => document.getElementById(id), $$ = (s, el = document) => [...el
     query = e.target.value;
     update();
   };
-  $("status-filter").onchange = (e) => {
-    filter = e.target.value;
-    update();
+  $("status-filter").onclick = e => {
+    const b=e.target.closest('[data-filter-status]');if(!b)return;filter=b.dataset.filterStatus;
+    update();$("status-filter").querySelector('[aria-pressed=true]').focus();
   };
   document.addEventListener("click", (e) => {
-    let el = e.target.closest("[data-act],[data-pick]");
+    let el = e.target.closest("[data-act]");
     if (!el || el.disabled)
       return;
-    if (el.dataset.pick) {
-      selected = el.dataset.pick;
-      update();
-      $$("[data-pick]").find((x) => x.dataset.pick === selected)?.focus();
-      return;
-    }
     const a = el.dataset.act;
     if (a === "close") {
       closeModal();
@@ -280,7 +275,7 @@ function cells(a){return [[w(a[1]),code(a[0])],code(a[2]),badge(a[4])]}
 function detail(a){return [w(a[1]),code(a[0])+' · storefront-web',section('Token metadata|Thông tin mã truy cập',facts([['Token prefix|Tiền tố mã truy cập',code(a[2])],['Last used · UTC|Sử dụng gần nhất · UTC',w(a[6])],['Expires · UTC|Hết hạn · UTC',w(a[5])],['Created by|Người tạo',w(na)],['Created at · UTC|Ngày tạo · UTC',w(na)],...(a[0]==='t-33'?[['Revoked · UTC|Thu hồi · UTC','2026-10-11']]:[])]))+section('Permission subset|Tập quyền được cấp',`<ul class="v3-checks">${a[3].split(', ').map(p=>`<li>${code(p)}<b>${w(perms[p])}</b></li>`).join('')}</ul>`)+(a[4]==='active'?'':note(a[4]==='revoked'?'Revocation is irreversible. The prefix and audit history remain visible.|Thu hồi không thể hoàn tác. Tiền tố và lịch sử kiểm toán vẫn hiển thị.':'Expired is not revoked. This token can no longer authenticate.|Hết hạn khác với bị thu hồi. Không còn dùng mã này để xác thực được.')),(a[4]==='active'?writeBtn('revoke','Revoke token|Thu hồi mã truy cập'):'')+audit(a[0])]}
 function extra(){return ''}
 function response(){if(stateIs('clipboard','copy'))return receiptNotice();const messages={created:['Create intent prepared · no token issued|Đã chuẩn bị ý định tạo · chưa cấp mã','The one-time view is a redacted lifecycle specimen, not a successful create response.|Chế độ xem một lần chỉ minh họa vòng đời đã che, không phải phản hồi tạo mã thành công.'],revoked:['Revocation confirmed · t-31|Đã xác nhận thu hồi · t-31','The supplied server result marks nightly-report-reader revoked. Its prefix and audit history remain.|Kết quả máy chủ xác nhận đã thu hồi nightly-report-reader. Tiền tố và lịch sử kiểm toán vẫn được giữ.'],lost:['Create result unknown|Chưa biết kết quả tạo mã','Check the token list and revoke an unseen token. Never retry with a fresh intent key.|Kiểm tra danh sách và thu hồi mã chưa từng xem. Không thử lại với khóa ý định mới.'],draft:['Creation failed · req-token-503|Tạo mã thất bại · req-token-503','Safe fields were retained; review before retrying with the same intent key.|Đã giữ các trường an toàn; xem lại trước khi thử với cùng khóa ý định.'],escalation:['422 · Permission escalation refused|422 · Từ chối vượt quyền','Requested permissions exceed the creator grant. Choose only the supplied subset.|Các quyền yêu cầu vượt quyền của người tạo. Chỉ chọn trong tập quyền được cấp.'],bounds:['422 · Expiry outside server bounds|422 · Hạn dùng ngoài giới hạn máy chủ','Adjust the retained expiry. No numeric maximum was supplied by the server.|Sửa hạn dùng trong bản nháp. Máy chủ không cung cấp giới hạn bằng số.'],gone:['404 · Revoke refused|404 · Từ chối thu hồi','Requested token not found. Do not infer a cross-tenant resource.|Không tìm thấy mã được yêu cầu. Không suy ra tài nguyên thuộc tổ chức khác.'],stale:['409 · Revoke refused|409 · Từ chối thu hồi','The snapshot changed. Reload current token metadata before any further action.|Thông tin đã thay đổi. Tải lại dữ liệu hiện tại trước khi tiếp tục.'],unavailable:['Metadata unavailable|Thiếu thông tin mô tả','Creator and creation time were not supplied. Other metadata is shown as received.|Không có thông tin người tạo và ngày tạo. Các trường khác hiển thị theo dữ liệu nhận được.']};return messages[state]?outcome(...messages[state],'v3-note',stateIs('draft','bounds','escalation')?writeBtn('create','Review draft|Xem bản nháp'):stateIs('lost','stale','gone')?btn('reset','Check token list|Kiểm tra danh sách mã'):''):''}
-function action(v){const a=current();if(v==='copy-demo'){copyDemo();return}if(v==='create'){if(!intent)intent='idem-fixture-token-create-01';openForm('create','Create token|Tạo mã truy cập',field('Token name|Tên mã truy cập',input('token-name','text',draft.name||''))+field('Required expiry · UTC|Hạn dùng bắt buộc · UTC',input('expiry','datetime-local',draft.expiry||''))+`<fieldset><legend>${w('Permission subset|Tập quyền được cấp')}</legend>${Object.entries(perms).map(([p,s])=>chk('perm',p,p+' · '+s.split('|')[0]+'|'+p+' · '+s.split('|')[1],(draft.perms||['run:read','decision:read']).includes(p))).join('')}</fieldset><div class="v3-note" id="preview"></div><small>Idempotency-Key · ${esc(intent)}</small>`,'Review create intent|Xem lại ý định tạo');return}if(v==='revoke'&&a?.[4]==='active'){openForm('revoke','Revoke token?|Thu hồi mã truy cập?',note('Revocation is irreversible.|Thu hồi không thể hoàn tác.')+facts([['Token|Mã truy cập',w(a[1])+' · '+code(a[0])],['Project|Dự án','storefront-web'],['Prefix|Tiền tố',code(a[2])],['Permission subset|Tập quyền được cấp',code(a[3])],['Expires · UTC|Hết hạn · UTC',w(a[5])],['Intent key|Khóa ý định',code('intent-revoke-t-31-01')]])+chk('ack','yes','I confirm revocation of this token.|Tôi xác nhận thu hồi mã này.',false,true),'Revoke token|Thu hồi mã truy cập',true)}}
+function action(v){const a=current();if(v==='copy-demo'){copyDemo();return}if(v==='create'){if(!intent)intent='idem-fixture-token-create-01';openForm('create','Create token|Tạo mã truy cập',field('Token name|Tên mã truy cập',input('token-name','text',draft.name||''))+field('Required expiry · UTC|Hạn dùng bắt buộc · UTC',input('expiry','datetime-local',draft.expiry||''))+`<fieldset><legend>${w('Permission subset|Tập quyền được cấp')}</legend>${Object.entries(perms).map(([p,s])=>chk('perm',p,p+' · '+s.split('|')[0]+'|'+p+' · '+s.split('|')[1],(draft.perms||['run:read','decision:read']).includes(p))).join('')}</fieldset><div class="v3-note" id="preview"></div><small>Idempotency-Key · ${esc(intent)}</small>`,'Review create intent|Xem lại ý định tạo');return}if(v==='revoke'&&a?.[4]==='active'){openForm('revoke','Revoke token?|Thu hồi mã truy cập?',note('Revocation is irreversible. Clients using this token lose project access immediately; audit metadata remains.|Thu hồi không thể hoàn tác. Máy khách dùng mã này sẽ mất quyền vào dự án ngay; siêu dữ liệu kiểm toán được giữ lại.')+facts([['Token|Mã truy cập',w(a[1])+' · '+code(a[0])],['Project|Dự án','storefront-web'],['Prefix|Tiền tố',code(a[2])],['Permission subset|Tập quyền được cấp',code(a[3])],['Expires · UTC|Hết hạn · UTC',w(a[5])],['Intent key|Khóa ý định',code('intent-revoke-t-31-01')]])+chk('ack','yes','I confirm revocation of this token.|Tôi xác nhận thu hồi mã này.',false,true),'Revoke token|Thu hồi mã truy cập',true)}}
 function updateDraft(){
   if(detailAction!=='create'||!$('preview'))return;
   draft={name:$('token-name').value,expiry:$('expiry').value,perms:$$('[name=perm]:checked').map(x=>x.value)};
@@ -288,10 +283,37 @@ function updateDraft(){
   $('modal-foot').querySelector('[type=submit]').disabled=!draft.perms.length||!draft.expiry||!draft.name.trim();
 }
 function submitForm(){if(detailAction==='revoke'&&current()?.[4]==='active'){setState('revoked',true);return}if(detailAction==='create'){updateDraft();if(!draft.perms.length)return;openForm('confirm','Review create intent|Xem lại ý định tạo',facts([['Token name|Tên mã truy cập',esc(draft.name)],['Project scope|Phạm vi dự án','storefront-web'],['Permissions|Quyền',code(draft.perms.join(', '))],['Expires · UTC|Hết hạn · UTC',esc(draft.expiry)+'Z']])+note('No live request. Only the redacted copy-once lifecycle will be shown.|Không gửi yêu cầu thật. Chỉ minh họa vòng đời sao chép một lần đã che.'),'Preview one-time step|Xem trước bước một lần');return}if(detailAction==='confirm'){setState('created',true);receipt()}}
-$('settings-section').onchange=e=>{const key=e.target.value;const local={"members":"28-members-roles.html","secrets":"29-secret-references.html","support":"36-support-access.html","tokens":"37-api-tokens.html"};location.href=local[key]||'27-settings-shell.html?tab='+encodeURIComponent(key)};
-
+function prepareView(a,id='view'){
+  const panel=$(id); if(!a||!panel||$('live').hidden)return;
+  const [title,identity,body,actions]=detail(a);
+  panel.querySelector('[data-view-identity]').innerHTML=`<b>${title}</b> · ${identity} ${badge(a[4])}`;
+  panel.querySelector('[data-view-body]').innerHTML=body;
+  panel.querySelector('[data-view-footer]').innerHTML=actions;
+  panel.hidden=false;
+}
+function openRow(trigger){
+ const id=trigger.dataset.dialogOpen;
+ if(trigger.dataset.record){selected=trigger.dataset.record;rowTrigger=trigger;syncPreviewLink();}
+ const a=current(); if(!a||$('live').hidden)return;
+ if(id==='view'){prepareView(a);return;}
+ 
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-dialog-open][data-record]');if(b)openRow(b);});
 const initial = route.get('state');
 setState(initial && Object.hasOwn(C.states,initial) ? initial : 'default');
+const modalKey=route.get('dialog');
+if(modalKey && !$('live').hidden){
+ if(modalKey==='view')prepareView(current());
+ 
+ else {const verb={create:'create',decline:'revoke'}[modalKey];if(verb){
+  let target=current();
+  
+  if(target){selected=target[0];syncPreviewLink();prepareView(target);const actionButton=verb==='create'||verb==='invite'?$('header-action').querySelector('[data-act="'+verb+'"]'):$('view').querySelector('[data-act="'+verb+'"]');
+   if(actionButton && !frozen())action(verb);
+   else if(!adminPreview && actionButton){openForm(modalKey,'Administrative preview|Bản xem trước quản trị',note('Read-only as Minh Trần. No changes have been made.|Chỉ đọc với vai trò Minh Trần. Chưa có thay đổi nào.')+`<a class="v3-btn" href="${esc(recordHref(true).split('#')[0])}&amp;dialog=${modalKey}">${w('Preview as Hà Lê · Tenant administrator|Xem trước với vai trò Hà Lê · Quản trị viên tổ chức')}</a>`);}
+  }
+ }}
+}
 })();
 </script>
 </body></html>
