@@ -3,12 +3,14 @@ import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { SupportAccessReviewPage } from './support-access-review.page';
 import { supportAccessFixture } from './support-access-review.fixture';
 
 class PageHarness extends ComponentHarness {
   static hostSelector = 'app-support-access-review';
   readonly title = this.locatorFor('h1');
+  readonly snapshot = this.locatorFor('[data-snapshot-time] time');
   readonly badge = this.locatorFor('[data-inspect-status] app-status-pill');
   readonly badgeIcon = this.locatorFor('[data-inspect-status] app-status-pill hlm-icon');
   readonly pick = this.locatorFor('[data-second-record]');
@@ -18,6 +20,8 @@ class PageHarness extends ComponentHarness {
 }
 
 describe('SupportAccessReviewPage', () => {
+  provideLayoutTestStubs();
+
   async function render(state: string) {
     const params = new BehaviorSubject(convertToParamMap({ state }));
     TestBed.configureTestingModule({
@@ -59,6 +63,18 @@ describe('SupportAccessReviewPage', () => {
     const { page } = await render(state);
     expect(await (await page.title()).text()).toBe('Support access');
     expect(await page.content()).toContain(expected);
+  });
+  it.each([
+    ['ready', '2026-10-13T10:42:00Z'],
+    ['approved', '2026-10-13T10:50:00Z'],
+    ['banner', '2026-10-13T10:50:00Z'],
+    ['revoked', '2026-10-13T10:50:00Z'],
+    ['expired', '2026-10-13T11:00:00Z'],
+  ])('%s displays its own UTC snapshot time', async (state, expected) => {
+    const { page } = await render(state);
+    const time = await page.snapshot();
+    expect(await time.getAttribute('datetime')).toBe(expected);
+    expect(await time.text()).toContain('UTC');
   });
   it('selects a historical reference without enabling review actions', async () => {
     const { page } = await render('ready');

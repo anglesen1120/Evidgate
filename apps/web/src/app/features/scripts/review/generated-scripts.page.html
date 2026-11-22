@@ -36,7 +36,7 @@
       [variant]="'outline'"
       class="justify-self-start"
       routerLink="/login"
-      [queryParams]="{ returnUrl: router.url.split('?').at(0)?.split('#').at(0) }"
+      [queryParams]="{ returnUrl: returnUrl() }"
       >{{ c.signIn }}</a
     >
   }

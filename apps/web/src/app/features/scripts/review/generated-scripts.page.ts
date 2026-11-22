@@ -9,7 +9,7 @@ import {
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink, Router } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
@@ -31,7 +31,7 @@ import {
 } from './generated-scripts.fixture';
 import { scriptCopy } from './generated-scripts.copy';
 import { scriptNotices, type GeneratedScriptsState } from './generated-scripts.states';
-import { isNoticeKey, matchesReviewRecord } from './scripts-review-state';
+import { injectReviewReturnUrl, isNoticeKey, matchesReviewRecord } from './scripts-review-state';
 
 type SortColumn = 'id' | 'manualCase' | 'status' | 'stability' | 'pr';
 // Review-only until script inspection lands. The real data service will replace the fixture.
@@ -62,7 +62,7 @@ type SortColumn = 'id' | 'manualCase' | 'status' | 'stability' | 'pr';
 })
 export class GeneratedScriptsPage {
   private readonly route = inject(ActivatedRoute);
-  protected readonly router = inject(Router);
+  protected readonly returnUrl = injectReviewReturnUrl();
   readonly viewModel = input<GeneratedScriptsViewModel>(generatedScriptsFixture);
   private readonly params = toSignal(this.route.queryParamMap);
   private readonly requested = computed(() => {
@@ -137,24 +137,30 @@ export class GeneratedScriptsPage {
     { label: this.c.stability, key: 'stability' },
     { label: this.c.pr, key: 'pr' },
   ] as const;
-  protected readonly rows = computed(() => {
-    const term = this.search().trim().toLocaleLowerCase(),
-      status = this.statusFilter(),
-      pr = this.prFilter();
-    const rows = this.inventory().filter(
-      (r) =>
-        (!status || r.status === status) &&
-        (!pr || this.delivery(r) === pr) &&
-        [r.id, r.manualCase, r.automated, r.title].some((v) =>
-          v?.toLocaleLowerCase().includes(term),
-        ),
-    );
+  private readonly sortedRows = computed(() => {
+    const rows = this.inventory();
     const { column, ascending } = this.sort();
-    return rows.sort(
+    return [...rows].sort(
       (a, b) =>
         this.sortValue(a, column).localeCompare(this.sortValue(b, column), undefined, {
           numeric: true,
         }) * (ascending ? 1 : -1),
+    );
+  });
+  protected readonly rows = computed(() => {
+    const term = this.search().trim().toLocaleLowerCase();
+    const status = this.statusFilter();
+    const pr = this.prFilter();
+    const rows = this.sortedRows();
+    if (!term && !status && !pr) return rows;
+    return rows.filter(
+      (r) =>
+        (!status || r.status === status) &&
+        (!pr || this.delivery(r) === pr) &&
+        (!term ||
+          [r.id, r.manualCase, r.automated, r.title].some((v) =>
+            v?.toLocaleLowerCase().includes(term),
+          )),
     );
   });
   protected order(column: SortColumn): void {

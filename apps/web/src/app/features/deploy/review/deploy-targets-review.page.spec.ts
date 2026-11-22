@@ -3,6 +3,7 @@ import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { DeployTargetsReviewPage } from './deploy-targets-review.page';
 
 class PageHarness extends ComponentHarness {
@@ -17,6 +18,8 @@ class PageHarness extends ComponentHarness {
 }
 
 describe('DeployTargetsReviewPage', () => {
+  provideLayoutTestStubs();
+
   async function render(state: string) {
     const params = new BehaviorSubject(convertToParamMap({ state }));
     TestBed.configureTestingModule({

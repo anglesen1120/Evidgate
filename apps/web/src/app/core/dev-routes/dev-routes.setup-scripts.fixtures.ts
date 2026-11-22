@@ -1,14 +1,20 @@
 // Review-only mounts for the setup, settings-extended and scripts screens. Named only by
 // `dev-routes.fixtures.ts`, which `angular.json` swaps in for the `development` and `fixtures`
 // configurations, so the production bundle never contains these screens. Each address sits in the
-// normal shell under the org and project scope guards; no phase gate and no product route.
+// normal shell under the org and project scope guards; no phase gate and no product route. A
+// `null` permission means the default fixture session holds no grant for the screen's real gate;
+// the screen's own `?state=denied` shows the refusal instead.
 
 import type { LoadChildrenCallback, Route, Routes } from '@angular/router';
 
 import { authGuard, orgScopeGuard, permissionGuard, projectScopeGuard } from '../guards';
 import { ShellComponent } from '../../shell/layout/shell.component';
 
-function reviewMount(path: string, permission: string, loadChildren: LoadChildrenCallback): Route {
+function reviewMount(
+  path: string,
+  permission: string | null,
+  loadChildren: LoadChildrenCallback,
+): Route {
   return {
     path,
     component: ShellComponent,
@@ -19,7 +25,10 @@ function reviewMount(path: string, permission: string, loadChildren: LoadChildre
         children: [
           {
             path: 'projects/:projectId',
-            canMatch: [projectScopeGuard, permissionGuard(permission)],
+            canMatch:
+              permission === null
+                ? [projectScopeGuard]
+                : [projectScopeGuard, permissionGuard(permission)],
             loadChildren,
           },
         ],
@@ -42,17 +51,17 @@ export function setupScriptsReviewRoutes(): Routes {
         (m) => m.agentPoolsReviewRoutes,
       ),
     ),
-    reviewMount('dev/webhooks', 'webhook:read', () =>
+    reviewMount('dev/webhooks', null, () =>
       import('../../features/settings/review-webhooks/webhooks-review.routes').then(
         (m) => m.webhooksReviewRoutes,
       ),
     ),
-    reviewMount('dev/support-access', 'support:read', () =>
+    reviewMount('dev/support-access', null, () =>
       import('../../features/settings/review-support-access/support-access-review.routes').then(
         (m) => m.supportAccessReviewRoutes,
       ),
     ),
-    reviewMount('dev/deploy-targets', 'environment:write', () =>
+    reviewMount('dev/deploy-targets', null, () =>
       import('../../features/deploy/review/deploy-targets-review.routes').then(
         (m) => m.deployTargetsReviewRoutes,
       ),

@@ -1,10 +1,12 @@
 import { ComponentHarness } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { UiChangeProposalPage } from './ui-change-proposal.page';
 
 class ScreenHarness extends ComponentHarness {
@@ -19,6 +21,9 @@ class ScreenHarness extends ComponentHarness {
   readonly clock = this.locatorFor('[data-review-status] hlm-icon');
   readonly comparison = this.locatorForOptional('[data-comparison]');
   readonly actions = this.locatorForAll('button[hlmDialogTrigger]');
+  readonly signIn = this.locatorFor('a[routerLink="/login"]');
+  readonly dialogTitles = this.documentRootLocatorFactory().locatorForAll('[hlmDialogTitle]');
+  readonly cancel = this.documentRootLocatorFactory().locatorFor('button[data-cancel]');
 }
 
 describe('UiChangeProposalPage', () => {
@@ -30,6 +35,10 @@ describe('UiChangeProposalPage', () => {
       imports: [UiChangeProposalPage],
       providers: [
         provideRouter([]),
+        {
+          provide: NarrowMutationPolicy,
+          useValue: { canMutate: signal(true), narrow: signal(false), allowsMutation: () => true },
+        },
         { provide: ActivatedRoute, useValue: { queryParamMap: params } },
       ],
     });
@@ -41,6 +50,32 @@ describe('UiChangeProposalPage', () => {
     const screen = await TestbedHarnessEnvironment.harnessForFixture(fixture, ScreenHarness);
     return { fixture, screen };
   }
+  it('cancels each confirmation without changing the review decision', async () => {
+    const { screen } = await mount();
+    const triggers = await screen.actions();
+    expect(triggers).toHaveLength(2);
+    for (const trigger of triggers) {
+      const expectedTitle = await trigger.text();
+      await trigger.click();
+      const titles = await screen.dialogTitles();
+      expect(await Promise.all(titles.map((title) => title.text()))).toEqual([expectedTitle]);
+      await (await screen.cancel()).click();
+      expect(await screen.dialogTitles()).toHaveLength(0);
+      expect(await (await screen.waiting()).text()).toContain('Awaiting review');
+    }
+  });
+  it('returns to the proposal and its revision, release, and fragment but drops the expired review state', async () => {
+    const router = TestBed.inject(Router);
+    router.resetConfig([{ path: 'dev/ui-change-proposal', children: [] }]);
+    await router.navigateByUrl(
+      '/dev/ui-change-proposal?state=401&proposal=ucp-12&revision=v2&release=r-7#evidence',
+    );
+    const { screen } = await mount('401');
+    const href = await (await screen.signIn()).getProperty<string>('href');
+    expect(new URL(href).searchParams.get('returnUrl')).toBe(
+      '/dev/ui-change-proposal?proposal=ucp-12&revision=v2&release=r-7#evidence',
+    );
+  });
   it.each([
     ['loading', 'Loading'],
     ['error', 'Proposal could not be refreshed'],

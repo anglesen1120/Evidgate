@@ -8,7 +8,7 @@ import {
   signal,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
@@ -34,7 +34,7 @@ import {
 } from './ui-change-proposal.fixture';
 import { proposalCopy } from './ui-change-proposal.copy';
 import { proposalNotices, type UiChangeProposalState } from './ui-change-proposal.states';
-import { isNoticeKey, matchesReviewRecord } from './scripts-review-state';
+import { injectReviewReturnUrl, isNoticeKey, matchesReviewRecord } from './scripts-review-state';
 
 // Review-only until the proposal workflow lands. The real data service will replace the fixture.
 @Component({
@@ -66,8 +66,8 @@ import { isNoticeKey, matchesReviewRecord } from './scripts-review-state';
 })
 export class UiChangeProposalPage {
   private readonly route = inject(ActivatedRoute);
-  protected readonly router = inject(Router);
   protected readonly policy = inject(NarrowMutationPolicy);
+  protected readonly returnUrl = injectReviewReturnUrl();
   readonly viewModel = input<UiChangeProposalViewModel>(uiChangeProposalFixture);
   protected readonly c = proposalCopy;
   private readonly params = toSignal(this.route.queryParamMap);

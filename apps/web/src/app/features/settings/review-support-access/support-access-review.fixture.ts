@@ -43,6 +43,7 @@ export interface SupportAccessViewModel {
   readonly state: SupportState;
   readonly organization: string;
   readonly asOf: string;
+  readonly snapshotTimes: Readonly<Partial<Record<SupportState, string>>>;
   readonly grants: readonly GrantViewModel[];
   readonly approver: string;
   readonly selectedRef: string;
@@ -51,6 +52,12 @@ export const supportAccessFixture: SupportAccessViewModel = {
   state: 'ready',
   organization: 'Lotus Commerce',
   asOf: '2026-10-13T10:42:00Z',
+  snapshotTimes: {
+    approved: '2026-10-13T10:50:00Z',
+    banner: '2026-10-13T10:50:00Z',
+    revoked: '2026-10-13T10:50:00Z',
+    expired: '2026-10-13T11:00:00Z',
+  },
   approver: 'Hà Lê',
   selectedRef: 'sg-41',
   grants: [

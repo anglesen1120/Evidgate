@@ -1,7 +1,7 @@
 import { ComponentHarness } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
@@ -12,6 +12,7 @@ class ScreenHarness extends ComponentHarness {
   readonly headings = this.locatorForAll('h1');
   readonly text = async () => (await this.host()).text();
   readonly code = this.locatorFor('pre code');
+  readonly signIn = this.locatorFor('a[routerLink="/login"]');
   readonly injected = this.locatorForOptional('pre strong');
   readonly controls = this.locatorForAll('[data-code-action]');
   readonly statuses = this.locatorForAll('tbody app-status-pill');
@@ -47,6 +48,18 @@ describe('GeneratedScriptsPage', () => {
     const screen = await TestbedHarnessEnvironment.harnessForFixture(fixture, ScreenHarness);
     return { fixture, screen };
   }
+  it('returns to the selected script and filtered view after sign-in without replaying the simulated expiry', async () => {
+    const router = TestBed.inject(Router);
+    router.resetConfig([{ path: 'dev/generated-scripts', children: [] }]);
+    await router.navigateByUrl(
+      '/dev/generated-scripts?generated=gs-0051&state=401&revision=v2&filter=a&filter=b#source',
+    );
+    const { screen } = await mount('401');
+    const href = await (await screen.signIn()).getProperty<string>('href');
+    expect(new URL(href).searchParams.get('returnUrl')).toBe(
+      '/dev/generated-scripts?generated=gs-0051&revision=v2&filter=a&filter=b#source',
+    );
+  });
   it.each([
     ['loading', 'Loading'],
     ['empty', 'No generated scripts in this project'],

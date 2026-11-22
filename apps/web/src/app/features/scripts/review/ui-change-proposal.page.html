@@ -1,4 +1,5 @@
-@let v = viewModel(); ><app-page-header [title]="c.title" [description]="c.intro"
+@let v = viewModel();
+<app-page-header [title]="c.title" [description]="c.intro"
   ><div appPageHeaderActions class="text-xs text-muted-foreground">
     <span>{{ c.asOf }} <app-absolute-time [value]="viewModel().asOf" /></span
     ><code class="block">{{ viewModel().project }}</code>
@@ -28,7 +29,7 @@
       [variant]="'outline'"
       class="justify-self-start"
       routerLink="/login"
-      [queryParams]="{ returnUrl: router.url.split('?').at(0)?.split('#').at(0) }"
+      [queryParams]="{ returnUrl: returnUrl() }"
       >{{ c.signIn }}</a
     >
   }
@@ -201,7 +202,7 @@
           @if (canDecide()) {
             <footer class="flex flex-wrap justify-end gap-2 border-t border-(--eg-border) pt-3">
               <hlm-dialog
-                #modal
+                #rejectDialog
                 [role]="'alertdialog'"
                 [autoFocus]="'[data-cancel]'"
                 [restoreFocus]="true"
@@ -244,20 +245,20 @@
                       type="button"
                       hlmBtn
                       [variant]="'outline'"
-                      (click)="modal.close()"
+                      (click)="rejectDialog.close()"
                     >
                       {{ c.cancel }}</button
                     ><button
                       type="button"
                       hlmBtn
                       [variant]="'destructive'"
-                      (click)="previewDecision(true) ? modal.close() : why.focus()"
+                      (click)="previewDecision(true) ? rejectDialog.close() : why.focus()"
                     >
                       {{ c.reject }}
                     </button>
                   </footer></hlm-dialog-content
                 ></hlm-dialog
-              ><hlm-dialog #modal [autoFocus]="'[data-cancel]'" [restoreFocus]="true"
+              ><hlm-dialog #queueDialog [autoFocus]="'[data-cancel]'" [restoreFocus]="true"
                 ><button
                   type="button"
                   hlmBtn
@@ -296,14 +297,14 @@
                       type="button"
                       hlmBtn
                       [variant]="'outline'"
-                      (click)="modal.close()"
+                      (click)="queueDialog.close()"
                     >
                       {{ c.cancel }}</button
                     ><button
                       type="button"
                       hlmBtn
                       [variant]="'default'"
-                      (click)="previewDecision(false) && modal.close()"
+                      (click)="previewDecision(false) && queueDialog.close()"
                     >
                       {{ c.queue }}
                     </button>

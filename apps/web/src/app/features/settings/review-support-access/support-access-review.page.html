@@ -16,7 +16,8 @@
         ><span class="text-xs text-muted-foreground"
           >{{ copy.asOf }}
           <app-absolute-time
-            [value]="state() === 'expired' ? '2026-10-13T11:00:00Z' : viewModel().asOf"
+            data-snapshot-time
+            [value]="viewModel().snapshotTimes[state()] ?? viewModel().asOf"
         /></span>
       </div>
       <div>

@@ -3,6 +3,7 @@ import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { WebhooksReviewPage } from './webhooks-review.page';
 import { webhooksFixture } from './webhooks-review.fixture';
 
@@ -36,6 +37,7 @@ async function render(query: Record<string, string> = {}, model = webhooksFixtur
 }
 
 describe('Webhook integrations review', () => {
+  provideLayoutTestStubs();
   afterEach(() => TestBed.resetTestingModule());
   it('shows the supplied record, with an icon and text for each status', async () => {
     const { view } = await render();
