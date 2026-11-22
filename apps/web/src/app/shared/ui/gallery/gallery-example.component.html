@@ -1,0 +1,486 @@
+@switch (kind()) {
+  @case ('shell') {
+    <div class="mini-shell">
+      <header class="mini-topbar row">
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          type="button"
+          class="target"
+          [disabled]="locked()"
+          [attr.aria-label]="copy.navToggle"
+          [attr.aria-expanded]="navOpen()"
+          [attr.aria-controls]="id() + '-nav'"
+          (click)="navOpen.set(!navOpen())"
+        >
+          <hlm-icon [name]="'lucideChevronDown'" />
+        </button>
+        <div>
+          <strong>{{ copy.project }}</strong
+          ><br /><bdi>{{ record.project }}</bdi>
+        </div>
+        <button
+          hlmBtn
+          [variant]="'ghost'"
+          type="button"
+          [disabled]="locked()"
+          [attr.popovertarget]="id() + '-notifications'"
+        >
+          {{ copy.notifications }}
+        </button>
+        <div popover [id]="id() + '-notifications'">{{ copy.noNotifications }}</div>
+      </header>
+      <nav [id]="id() + '-nav'" [hidden]="!navOpen()" [attr.aria-label]="copy.navigationLabel">
+        <strong>{{ copy.quality }}</strong>
+        @for (destination of destinations(); track destination.href) {
+          <a [href]="destination.href">{{ destination.text }}</a>
+        } @empty {
+          <p>{{ copy.empty }}</p>
+        }
+      </nav>
+      <div class="mini-workspace">
+        <label hlmLabel [for]="id() + '-search'">{{ copy.search }}</label>
+        <input
+          #query
+          hlmInput
+          type="search"
+          [id]="id() + '-search'"
+          [disabled]="locked()"
+          [value]="search()"
+          (input)="search.set(query.value)"
+        />
+      </div>
+    </div>
+  }
+  @case ('breadcrumb') {
+    <nav [attr.aria-label]="copy.breadcrumb" class="row">
+      <a href="#workspace" class="target">{{ copy.workspaceLabel }}</a
+      ><span aria-hidden="true">/</span>
+      <span [attr.aria-current]="'location'">{{ copy.quality }}</span>
+    </nav>
+    <p class="row">
+      <span class="tile rounded-full" aria-hidden="true">{{ record.initials }}</span
+      ><bdi>{{ record.reviewer }}</bdi> · {{ copy.reviewer }}
+    </p>
+  }
+  @case ('header') {
+    <header class="row">
+      <span class="tile"><hlm-icon [name]="'lucideActivity'" /></span>
+      <div>
+        <h4 hlmCardTitle>{{ copy.review }}</h4>
+        <p hlmCardDescription>{{ copy.instructions }}</p>
+      </div>
+    </header>
+    @if (locked()) {
+      <button hlmBtn [variant]="'outline'" type="button" class="justify-self-start" disabled>
+        {{ copy.policy }}
+      </button>
+    } @else {
+      <a hlmBtn [variant]="'outline'" class="target justify-self-start" href="#gallery-decisions">{{
+        copy.policy
+      }}</a>
+    }
+  }
+  @case ('kpi') {
+    <article hlmCard class="eg-kpi-card">
+      <h4 hlmCardTitle><hlm-icon [name]="'lucideActivity'" />{{ copy.kpiLabel }}</h4>
+      <p hlmCardContent>{{ missing() ? '—' : '100%' }}</p>
+      <p hlmCardDescription>
+        {{ missing() ? (state() === 'empty' ? copy.noSamples : caption()) : copy.kpiCaption }}
+      </p>
+    </article>
+  }
+  @case ('queue') {
+    <div class="row">
+      <hlm-checkbox
+        [inputId]="id() + '-filter'"
+        [aria-label]="copy.overdue"
+        [disabled]="locked()"
+        [checked]="checked()"
+        (checkedChange)="checked.set($event)"
+      />
+      <label hlmLabel [for]="id() + '-filter'">{{ copy.overdue }}</label>
+    </div>
+    <label hlmLabel [for]="id() + '-sort'">{{ copy.sort }}</label>
+    <hlm-select
+      [value]="newest() ? 'new' : 'old'"
+      [disabled]="locked()"
+      (valueChange)="newest.set($event === 'new')"
+    >
+      <hlm-select-trigger class="target" [buttonId]="id() + '-sort'"
+        ><hlm-select-value
+      /></hlm-select-trigger>
+      <hlm-select-content *hlmSelectPortal [aria-label]="copy.sort">
+        <hlm-select-item value="old">{{ copy.oldest }}</hlm-select-item>
+        <hlm-select-item value="new">{{ copy.newest }}</hlm-select-item>
+      </hlm-select-content>
+    </hlm-select>
+    @for (record of records(); track record.id) {
+      <div hlmCard class="p-(--eg-space-4)">
+        <strong>{{ record.title }}</strong>
+        <div class="row justify-between">
+          <code>{{ record.id }}</code
+          ><app-review-status-chip [state]="record.status" />
+        </div>
+      </div>
+    } @empty {
+      @if (!missing()) {
+        <p>{{ copy.empty }}</p>
+      }
+    }
+    @if (active()) {
+      <p class="meta">{{ record.overdueAt }}</p>
+    }
+  }
+  @case ('detail') {
+    <div hlmCard class="gap-(--eg-space-3) p-(--eg-space-4)">
+      <strong hlmCardTitle>{{ copy.queueTitle }}</strong>
+      <code>{{ missing() ? '—' : record.candidate }}</code>
+      <app-outcome-pill [outcome]="missing() ? null : 'has_failures'" />
+      <footer hlmCardFooter>
+        @if (locked() || missing()) {
+          <button hlmBtn [variant]="'outline'" type="button" disabled>{{ copy.inspect }}</button>
+        } @else {
+          <a hlmBtn [variant]="'outline'" class="target" href="#gallery-labels">{{
+            copy.inspect
+          }}</a>
+        }
+      </footer>
+    </div>
+  }
+  @case ('failure') {
+    <app-inline-feedback
+      [tone]="'destructive'"
+      [announcement]="'off'"
+      [title]="copy.original"
+      [description]="copy.originalMessage"
+    />
+    <p class="meta">
+      <code>{{ record.incident }} · {{ record.runId }}</code>
+    </p>
+    <dl class="note grid gap-(--eg-space-3)">
+      <div class="diff-line">
+        <dt><span aria-hidden="true">−</span> {{ copy.before }}</dt>
+        <dd>
+          <code>{{ record.before }}</code>
+        </dd>
+      </div>
+      <div class="diff-line">
+        <dt><span aria-hidden="true">+</span> {{ copy.after }}</dt>
+        <dd>
+          <code>{{ record.after }}</code>
+        </dd>
+      </div>
+    </dl>
+    <p class="meta">{{ copy.repairNote }}</p>
+  }
+  @case ('chart') {
+    <figure>
+      <strong>{{ copy.sandbox }}</strong>
+      @if (!missing()) {
+        <svg class="chart bars" viewBox="0 0 150 50" aria-hidden="true" focusable="false">
+          <rect x="4" y="30" width="24" height="20" />
+          <rect x="40" y="0" width="24" height="50" />
+          <rect x="76" y="20" width="24" height="30" />
+          <rect x="112" y="10" width="24" height="40" />
+        </svg>
+      }
+      <figcaption>
+        {{ missing() ? (state() === 'empty' ? copy.noSamples : caption()) : copy.batches }}
+      </figcaption>
+    </figure>
+  }
+  @case ('history') {
+    <dl class="grid gap-(--eg-space-3)">
+      <div>
+        <dt>{{ copy.safety }}</dt>
+        <dd>
+          <code>{{ record.runId }} / {{ record.revision }}</code>
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.evidenceLabel }}</dt>
+        <dd class="row">
+          <app-evidence-badge [completeness]="'incomplete'" [compact]="true" /><span
+            >{{ copy.missingShard }} <code>{{ record.missingShard }}</code></span
+          >
+        </dd>
+      </div>
+    </dl>
+    <ol class="border-t border-(--eg-border) ps-(--eg-space-5)">
+      <li>
+        {{ copy.failureRecorded }} ·
+        <time [attr.datetime]="'2026-10-12T09:43:10Z'">{{ record.failureAt }}</time>
+      </li>
+    </ol>
+  }
+  @case ('buttons') {
+    @if (draft() !== null) {
+      <label hlmLabel [for]="id() + '-draft'">{{ copy.note }}</label>
+      <textarea
+        #note
+        hlmInput
+        [id]="id() + '-draft'"
+        [value]="draft() ?? ''"
+        [disabled]="locked()"
+        (input)="draft.set(note.value)"
+      ></textarea>
+    }
+    <div class="row">
+      <button
+        hlmBtn
+        class="target"
+        type="button"
+        [disabled]="locked() || !draft()?.trim()"
+        (click)="saveNote()"
+      >
+        {{ copy.save }}
+      </button>
+      <a hlmBtn [variant]="'outline'" href="#gallery-request-patterns">{{ copy.help }}</a>
+      <hlm-dialog [role]="'alertdialog'" [autoFocus]="'[data-cancel]'" [restoreFocus]="true">
+        <button
+          hlmBtn
+          [variant]="'ghost'"
+          type="button"
+          hlmDialogTrigger
+          [disabled]="locked() || draft() === null"
+        >
+          {{ copy.discard }}
+        </button>
+        <hlm-dialog-content *hlmDialogPortal [showCloseButton]="false">
+          <header hlmDialogHeader>
+            <h2 hlmDialogTitle>{{ copy.discard }}</h2>
+            <p hlmDialogDescription>{{ copy.consequence }}</p>
+          </header>
+          <footer hlmDialogFooter>
+            <button hlmBtn [variant]="'outline'" data-cancel hlmDialogClose>
+              {{ copy.cancel }}
+            </button>
+            <button
+              hlmBtn
+              [variant]="'destructive'"
+              hlmDialogClose
+              (click)="draft.set(null); saved.set(null)"
+            >
+              {{ copy.discard }}
+            </button>
+          </footer>
+        </hlm-dialog-content>
+      </hlm-dialog>
+    </div>
+    @if (draft() === null) {
+      <p role="status">{{ copy.discarded }}</p>
+    }
+    @if (saved(); as savedNote) {
+      <p class="note">
+        <strong>{{ copy.note }}</strong> · {{ savedNote }}
+      </p>
+    }
+  }
+  @case ('badges') {
+    <div class="row">
+      <app-review-status-chip [state]="missing() ? null : 'validated'" />
+      <app-review-status-chip [state]="'waiting'" />
+      <app-outcome-pill [outcome]="'has_failures'" [compact]="true" />
+      @if (active()) {
+        <app-review-status-chip [state]="'over-sla'" />
+      }
+    </div>
+    @if (state() === 'success') {
+      <div class="note grid gap-(--eg-space-2)">
+        <p class="meta">
+          {{ copy.approvalTime }} · {{ approval.approval.reviewer }} ·
+          <code>{{ approval.approval.candidateHash }}</code>
+        </p>
+        <app-review-status-chip [state]="approval" />
+      </div>
+    }
+    @if (active()) {
+      <p class="meta">
+        <time [attr.datetime]="'2026-10-13T16:00:00Z'">{{ record.overdueAt }}</time> ·
+        <code>{{ record.candidate }}</code>
+      </p>
+    }
+  }
+  @case ('fields') {
+    <label hlmLabel [for]="id() + '-case'">{{ copy.caseId }}</label>
+    <input
+      hlmInput
+      class="target"
+      [id]="id() + '-case'"
+      [disabled]="locked()"
+      [value]="missing() ? '' : record.caseId"
+    />
+    <label hlmLabel [for]="id() + '-assignee'">{{ copy.assignee }}</label>
+    <hlm-select [value]="assignee()" [disabled]="locked()" (valueChange)="assignee.set($event)">
+      <hlm-select-trigger [buttonId]="id() + '-assignee'"><hlm-select-value /></hlm-select-trigger>
+      <hlm-select-content *hlmSelectPortal [aria-label]="copy.assignee">
+        <hlm-select-item value="none">{{ copy.unassigned }}</hlm-select-item>
+        <hlm-select-item value="minh">{{ record.reviewer }}</hlm-select-item>
+      </hlm-select-content>
+    </hlm-select>
+    <label hlmLabel [for]="id() + '-note'">{{ copy.note }}</label>
+    <textarea hlmInput [id]="id() + '-note'" [disabled]="locked()" rows="2"></textarea>
+  }
+  @case ('choices') {
+    <div class="row">
+      <hlm-checkbox
+        [inputId]="id() + '-notify'"
+        [aria-label]="copy.notify"
+        [disabled]="locked()"
+        [checked]="checked()"
+        (checkedChange)="checked.set($event)"
+      />
+      <label hlmLabel [for]="id() + '-notify'">{{ copy.notify }}</label>
+    </div>
+    <fieldset class="row border-0 p-0" [disabled]="locked()">
+      <legend>{{ copy.scope }}</legend>
+      <label
+        ><input type="radio" class="target" [name]="id()" [checked]="!active()" />
+        {{ copy.project }}</label
+      >
+      <label
+        ><input type="radio" [name]="id()" [checked]="active()" /> {{ copy.workspaceLabel }}</label
+      >
+    </fieldset>
+    <label
+      ><input type="checkbox" role="switch" [disabled]="locked()" [checked]="active()" />
+      {{ copy.resubmit }}</label
+    >
+  }
+  @case ('dialog') {
+    <div class="row">
+      <hlm-dialog [restoreFocus]="true">
+        <button
+          hlmBtn
+          class="target"
+          [variant]="'outline'"
+          hlmDialogTrigger
+          type="button"
+          [disabled]="locked()"
+        >
+          {{ copy.inspect }}
+        </button>
+        <hlm-dialog-content *hlmDialogPortal [closeLabel]="copy.close">
+          <header hlmDialogHeader>
+            <h2 hlmDialogTitle>{{ copy.queueTitle }}</h2>
+            <p hlmDialogDescription>{{ copy.originalMessage }}</p>
+          </header>
+          <code>{{ record.candidate }} · {{ record.runId }}</code>
+          <footer hlmDialogFooter>
+            <button hlmBtn hlmDialogClose>{{ copy.close }}</button>
+          </footer>
+        </hlm-dialog-content>
+      </hlm-dialog>
+      <button
+        hlmBtn
+        [variant]="'ghost'"
+        type="button"
+        [disabled]="locked()"
+        [attr.popovertarget]="id() + '-policy'"
+      >
+        {{ copy.policy }}
+      </button>
+      <div popover [id]="id() + '-policy'">
+        <strong>{{ copy.policy }}</strong>
+        <p>{{ copy.policyHint }}</p>
+      </div>
+    </div>
+  }
+  @case ('table') {
+    <app-gallery-evidence-table [unavailableMessage]="missing() ? caption() : null" />
+  }
+  @case ('tabs') {
+    <hlm-tabs [tab]="active() ? 'history' : 'evidence'">
+      <hlm-tabs-list [variant]="'line'" [attr.aria-label]="copy.inspect">
+        <button type="button" class="target" [hlmTabsTrigger]="'evidence'" [disabled]="locked()">
+          {{ copy.evidenceLabel }}
+        </button>
+        <button type="button" [hlmTabsTrigger]="'history'" [disabled]="locked()">
+          {{ copy.historyLabel }}
+        </button>
+      </hlm-tabs-list>
+      <div [hlmTabsContent]="'evidence'">
+        <app-evidence-badge [completeness]="missing() ? null : 'incomplete'" />
+      </div>
+      <div [hlmTabsContent]="'history'">{{ copy.failureRecorded }} · {{ record.failureAt }}</div>
+    </hlm-tabs>
+  }
+  @case ('tooltip') {
+    @if (locked()) {
+      <button hlmBtn [variant]="'ghost'" type="button" disabled class="justify-self-start">
+        {{ copy.policy }}
+      </button>
+    } @else {
+      <a
+        hlmBtn
+        [variant]="'ghost'"
+        class="target justify-self-start"
+        href="#gallery-decisions"
+        [hlmTooltip]="copy.policyHint"
+        ><hlm-icon [name]="'lucideInfo'" />{{ copy.policy }}</a
+      >
+    }
+  }
+  @case ('notices') {
+    @if (state() === 'loading') {
+      <span hlmSkeleton class="h-(--eg-space-3) w-1/2" aria-hidden="true"></span>
+    } @else if (state() === 'error') {
+      <app-inline-feedback [tone]="'destructive'" [title]="copy.error" [announcement]="'off'" />
+    } @else if (state() === 'empty') {
+      <p class="note">{{ copy.empty }}</p>
+    } @else {
+      <app-inline-feedback
+        [tone]="state() === 'success' ? 'success' : 'info'"
+        [title]="state() === 'success' ? copy.saved : copy.instructions"
+        [announcement]="'off'"
+      />
+    }
+    <button
+      hlmBtn
+      [variant]="'outline'"
+      type="button"
+      class="target justify-self-start"
+      [disabled]="locked()"
+      (click)="showNotification()"
+      i18n="@@shared.gallery.sheet.preview-toast"
+    >
+      Preview notification
+    </button>
+  }
+  @case ('pagination') {
+    <nav class="row" [attr.aria-label]="copy.queue">
+      <button
+        hlmBtn
+        type="button"
+        [variant]="'outline'"
+        [disabled]="locked() || !lastPage() || missing()"
+        (click)="lastPage.set(false)"
+      >
+        {{ copy.previous }}
+      </button>
+      <output>{{ missing() ? '—' : lastPage() ? '2 / 2' : '1 / 2' }}</output>
+      <button
+        hlmBtn
+        class="target"
+        type="button"
+        [variant]="'outline'"
+        [disabled]="locked() || lastPage() || missing()"
+        (click)="lastPage.set(true)"
+      >
+        {{ copy.next }}
+      </button>
+    </nav>
+    @if (!missing()) {
+      <code>{{ lastPage() ? record.nextCandidate : record.candidate }}</code>
+    }
+  }
+}
+@if (
+  caption() &&
+  !(kind() === 'kpi' && missing()) &&
+  !(kind() === 'table' && missing()) &&
+  !(kind() === 'notices' && (state() === 'empty' || state() === 'error' || state() === 'success'))
+) {
+  <p class="meta">{{ caption() }}</p>
+}

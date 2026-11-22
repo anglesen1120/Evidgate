@@ -1,6 +1,7 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { HlmAlert, HlmAlertTitle } from '@evidgate/ui/alert';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCard, HlmCardDescription, HlmCardTitle } from '@evidgate/ui/card';
 
@@ -10,6 +11,7 @@ import type { ApiError } from '../../../core/http/api-error';
   selector: 'app-error-pattern',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    HlmIcon,
     NgTemplateOutlet,
     HlmAlert,
     HlmAlertTitle,
@@ -22,26 +24,28 @@ import type { ApiError } from '../../../core/http/api-error';
   template: `
     @if (bare()) {
       <section
-        class="state-panel state-panel--error state-panel--bare grid min-w-0 justify-items-start gap-(--eg-space-3) wrap-anywhere"
+        class="state-panel state-panel--error state-panel--bare grid min-w-0 justify-items-start gap-(--eg-space-3) text-start wrap-anywhere"
       >
         <ng-container [ngTemplateOutlet]="content" />
       </section>
     } @else {
       <section
         hlmCard
-        class="state-panel state-panel--error min-w-0 min-h-[calc(var(--eg-space-12)*3+var(--eg-space-8))] items-center justify-center gap-(--eg-space-3) px-(--eg-space-5) py-(--eg-space-8) text-center wrap-anywhere"
+        class="state-panel state-panel--error min-w-0 items-start gap-(--eg-space-3) rounded-(--eg-radius-md) p-(--eg-space-5) text-start wrap-anywhere border-s-4 border-s-current bg-(--eg-danger-bg) text-(--eg-danger-fg)"
       >
         <ng-container [ngTemplateOutlet]="content" />
       </section>
     }
     <ng-template #content>
+      <hlm-icon
+        [name]="'lucideTriangleAlert'"
+        class="size-(--eg-control-sm) text-(--eg-danger-fg)"
+      />
       @for (failure of failures(); track failure) {
         <div
           hlmAlert
           [variant]="'destructive'"
           class="w-auto max-w-full border-0 bg-transparent p-0"
-          [class.text-center]="!bare()"
-          [class.text-start]="bare()"
           aria-atomic="true"
         >
           @switch (headingLevel()) {

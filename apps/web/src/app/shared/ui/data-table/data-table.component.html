@@ -1,5 +1,5 @@
 <p
-  class="caption m-0 px-[var(--eg-space-4)] py-[var(--eg-space-3)] text-muted-foreground [overflow-wrap:anywhere]"
+  class="caption m-0 px-[var(--eg-space-4)] py-[var(--eg-space-3)] font-semibold text-(--eg-text) [overflow-wrap:anywhere]"
   [id]="captionId"
 >
   {{ caption() }}
@@ -121,7 +121,7 @@
           *cdkHeaderCellDef
           role="columnheader"
           scope="col"
-          class="cell text-xs font-semibold text-muted-foreground"
+          class="cell bg-(--eg-surface-raised) text-xs font-semibold text-(--eg-text-muted)"
           [class]="cellClasses"
           [class.numeric]="column.role === 'number' || column.align === 'end'"
           [hlmTableColumn]="column.role"
@@ -173,7 +173,7 @@
       <tr
         cdk-row
         hlmTr
-        class="border-0 hover:bg-secondary"
+        class="border-0 hover:bg-(--eg-surface-raised)"
         *cdkRowDef="let row; columns: columnIds(); let index = index"
         role="row"
         [style.height.px]="virtual() ? itemSize() : null"

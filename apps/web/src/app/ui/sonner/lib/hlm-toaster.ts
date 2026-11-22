@@ -113,10 +113,10 @@ export class HlmToaster {
   public readonly userClass = input<ClassValue>('', { alias: 'class' });
   public readonly userStyle = input<Record<string, string>>(
     {
-      '--normal-bg': 'var(--popover)',
-      '--normal-text': 'var(--popover-foreground)',
-      '--normal-border': 'var(--border)',
-      '--border-radius': 'var(--radius)',
+      '--normal-bg': 'var(--eg-surface)',
+      '--normal-text': 'var(--eg-text)',
+      '--normal-border': 'var(--eg-border-control)',
+      '--border-radius': 'var(--eg-radius-md)',
     },
     { alias: 'style' },
   );

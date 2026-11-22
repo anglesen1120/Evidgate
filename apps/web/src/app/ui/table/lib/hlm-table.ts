@@ -63,7 +63,7 @@ export class HlmTFoot {
 })
 export class HlmTr {
   constructor() {
-    classes(() => 'spartan-table-row has-aria-expanded:bg-muted/50');
+    classes(() => 'spartan-table-row');
   }
 }
 
