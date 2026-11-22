@@ -4722,6 +4722,14 @@
           <context context-type="linenumber">440</context>
         </context-group>
       </trans-unit>
+<trans-unit id="shell.layout.brand-link" datatype="html">
+        <source>Evidgate Quality workspace</source>
+        <target>Evidgate Không gian chất lượng</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shell/layout/shell.component.ts</context>
+          <context context-type="linenumber">97</context>
+        </context-group>
+      </trans-unit>
     </body>
   </file>
 </xliff>

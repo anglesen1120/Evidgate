@@ -94,6 +94,7 @@ export class ShellComponent {
   );
   readonly drawerOpen = signal(false);
   readonly brandLabel = $localize`:@@shell.layout.workspace:Evidgate workspace`;
+  readonly brandLinkLabel = $localize`:@@shell.layout.brand-link:Evidgate Quality workspace`;
   readonly closeLabel = $localize`:@@shell.layout.close-navigation:Close navigation`;
   readonly openLabel = $localize`:@@shell.layout.open-navigation:Open navigation`;
   readonly collapseLabel = $localize`:@@shell.layout.collapse-navigation:Collapse navigation`;

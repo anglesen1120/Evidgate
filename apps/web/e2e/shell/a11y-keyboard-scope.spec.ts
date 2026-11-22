@@ -136,7 +136,7 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
     await page.keyboard.press('Tab');
     const brand = page.locator('a.brand');
     await expectFocusVisible(page, brand);
-    await expect(brand).toHaveAccessibleName('Evidgate workspace');
+    await expect(brand).toHaveAccessibleName('Evidgate Quality workspace');
     // The desktop sidebar is not inert, so its rows really are the next stops.
     await expect(page.locator('#shell-navigation')).not.toHaveAttribute('inert', '');
 
