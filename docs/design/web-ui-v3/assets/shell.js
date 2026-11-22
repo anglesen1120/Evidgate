@@ -39,10 +39,12 @@
     };
     const icon = id => '<svg viewBox="0 0 24 24" class="v3-icon" aria-hidden="true" focusable="false">'+shapes[id]+'</svg>';
     function navigation() {
-      return groups.map(([en,vi,items]) => '<div class="v3-nav__group"><p class="v3-nav__heading">'+copy(en,vi)+'<span>'+items.length+'</span></p>'+items.map(([id,symbol]) => {
+      return groups.map(([en,vi,items]) => '<div class="v3-nav__group"><p class="v3-nav__heading">'+copy(en,vi)+'<span class="v3-count">'+items.length+'</span></p>'+items.map(([id,symbol]) => {
         const item = byId.get(id), active = page.section === id;
         const current = active ? ' aria-current="'+(page.id === id ? 'page' : 'location')+'"' : '';
-        return '<a href="'+item.file+'" class="v3-nav__item'+(active?' v3-active':'')+'" '+name(item.en,item.vi)+' '+tip(item.en,item.vi)+current+'>'+icon(symbol)+'<span class="v3-nav__label">'+copy(item.en,item.vi)+'</span></a>';
+        const related = screens.filter(screen => screen.id !== id && screen.section === id).length;
+        const count = related ? '<span aria-hidden="true" class="v3-count" '+tip(related+' contextual screens',related+' màn hình liên quan')+'>'+related+'</span>' : '';
+        return '<a href="'+item.file+'" class="v3-nav__item'+(active?' v3-active':'')+'" '+name(item.en,item.vi)+' '+tip(item.en,item.vi)+current+'>'+icon(symbol)+'<span class="v3-nav__label">'+copy(item.en,item.vi)+'</span>'+count+'</a>';
       }).join('')+'</div>').join('');
     }
     const orgScope = document.body.dataset.scope === 'organization';
@@ -55,9 +57,11 @@
     const titleCopy = copy(short(title?.dataset.en,page.en),short(title?.dataset.vi,page.vi));
     const button = (attrs, label, symbol, classes='v3-btn--icon v3-btn--ghost') => '<button type="button" class="v3-btn '+classes+'" '+attrs+' '+name(...label)+' '+tip(...label)+'>'+icon(symbol)+'</button>';
     const navLabel = ['Navigation','Điều hướng'];
-    header.innerHTML = '<div class="v3-inline">'+button('data-v3-collapse aria-controls="sidebar" aria-expanded="true"',navLabel,'nav','v3-btn--icon v3-btn--ghost v3-collapse')+button('popovertarget="nav-pop"',navLabel,'nav','v3-btn--icon v3-btn--ghost v3-mobilemenu')+'<nav class="v3-breadcrumbs" '+name('Breadcrumb','Đường dẫn')+'><span>'+fixture.org+'</span><span aria-hidden="true">/</span>'+(orgScope?copy('Organization settings','Cài đặt tổ chức'):fixture.project)+'<span aria-hidden="true">/</span><b aria-current="page">'+titleCopy+'</b></nav></div>'
-      + '<div class="v3-topbar__tools"><label><span class="v3-sr-only">'+copy('Project','Dự án')+'</span><select><option>'+fixture.project+'</option></select></label><button type="button" class="v3-btn v3-topbar__search" popovertarget="search-pop">'+icon('search')+copy('Search','Tìm kiếm')+'</button>'
-      + button('popovertarget="alerts-pop"',['Notifications','Thông báo'],'bell')+button('id="theme" aria-pressed="false"',['Dark theme','Giao diện tối'],'moon')+'<button type="button" id="lang" class="v3-btn" lang="vi" aria-label="Tiếng Việt">'+icon('globe')+'<b>VI</b></button><button type="button" class="v3-btn v3-btn--ghost v3-account" popovertarget="account-pop" '+name('Signed in as '+person[0],'Đang đăng nhập: '+person[0])+'><span class="v3-avatar" aria-hidden="true">'+person[1]+'</span><span class="v3-account__name">'+person[0]+'</span></button></div>';
+    const scope = (en, vi, value) => '<label><span class="v3-sr-only">'+copy(en,vi)+'</span><select class="v3-scope-switch"><option data-en="'+escape(value)+'" data-vi="'+escape(value)+'">'+escape(value)+'</option></select></label>';
+    header.innerHTML = '<div class="v3-inline">'+button('data-v3-collapse aria-controls="sidebar" aria-expanded="true"',navLabel,'nav','v3-btn--icon v3-btn--ghost v3-collapse')+button('popovertarget="nav-pop"',navLabel,'nav','v3-btn--icon v3-btn--ghost v3-mobilemenu')+'<nav class="v3-breadcrumbs" '+name('Breadcrumb','Đường dẫn')+'>'+copy(...fixture.subtitle)+'<span aria-hidden="true">/</span>'+(orgScope?copy('Organization settings','Cài đặt tổ chức')+'<span aria-hidden="true">/</span>':'')+'<b aria-current="page">'+titleCopy+'</b></nav></div>'
+      + '<div class="v3-topbar__tools">'+scope('Organization','Tổ chức',fixture.org)+scope('Project','Dự án',fixture.project)
+      + '<form role="search" class="v3-shell-search"><button type="submit" '+name('Find a screen','Tìm màn hình')+'>'+icon('search')+'</button><label>'+copy('Search','Tìm kiếm')+'<input type="search" data-shell-query></label><kbd>/</kbd></form>'
+      + button('id="theme" aria-pressed="false"',['Dark theme','Giao diện tối'],'moon')+button('popovertarget="alerts-pop"',['Notifications','Thông báo'],'bell')+'<button type="button" id="lang" class="v3-btn" lang="vi" aria-label="Tiếng Việt">'+icon('globe')+'<b>VI</b></button><button type="button" class="v3-btn v3-btn--ghost v3-account" popovertarget="account-pop" '+name('Signed in as '+person[0],'Đang đăng nhập: '+person[0])+'><span class="v3-avatar" aria-hidden="true">'+person[1]+'</span><span class="v3-account__name">'+person[0]+'</span></button></div>';
     const pop = (id, en, vi, body) => '<aside popover id="'+id+'" aria-labelledby="'+id+'-title"><h2 id="'+id+'-title">'+copy(en,vi)+'</h2>'+body+'<button type="button" class="v3-btn" popovertarget="'+id+'" popovertargetaction="hide">'+copy('Close','Đóng')+'</button></aside>';
     header.insertAdjacentHTML('afterend',pop('nav-pop',...navLabel,'<nav class="v3-navpop" '+name(...navLabel)+'>'+nav+'</nav>')
       + pop('alerts-pop','Notifications','Thông báo','<p>'+copy('No new notifications.','Không có thông báo mới.')+'</p>')
@@ -125,6 +129,19 @@
 
   const find = document.querySelector('[data-v3-find]');
   if (find) {
+    const queryField = header.querySelector('[data-shell-query]');
+    queryField.form.addEventListener('submit', event => {
+      event.preventDefault();
+      document.getElementById('search-pop').showPopover({source: queryField});
+      find.value = queryField.value;
+      find.dispatchEvent(new Event('input'));
+      find.focus();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key !== '/' || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || !queryField.getClientRects().length || document.querySelector('dialog[open],:popover-open') || event.target.closest('input,select,textarea,[contenteditable]')) return;
+      event.preventDefault();
+      queryField.focus();
+    });
     find.addEventListener('input', () => {
       const query = find.value.trim().toLocaleLowerCase(root.lang);
       const links = document.querySelectorAll('#screen-links a');
