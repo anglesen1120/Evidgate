@@ -26463,6 +26463,15 @@
           <context context-type="linenumber">210</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="suites.composition.description" datatype="html">
+        <source>Inspect pinned case revisions, their variants and the inputs used to plan execution.</source>
+      </trans-unit>
+      <trans-unit id="suites.composition.identity" datatype="html">
+        <source>Composition identity</source>
+      </trans-unit>
+      <trans-unit id="suites.composition.suite" datatype="html">
+        <source>Suite</source>
+      </trans-unit>
     </body>
   </file>
 </xliff>
