@@ -117,11 +117,16 @@ export class StudioGalleryReviewPage {
     () => !this.picked() || ['403', '412', '429', 'success', 'busy'].includes(this.state()),
   );
   protected readonly dialog = linkedSignal<
-    { state: GalleryState; narrow: boolean },
+    { state: GalleryState; narrow: boolean; scope: string },
     GalleryDraftMode | null
   >({
-    source: () => ({ state: this.state(), narrow: this.policy.narrow() }),
-    computation: ({ state, narrow }, previous) => {
+    source: () => ({
+      state: this.state(),
+      narrow: this.policy.narrow(),
+      scope: this.viewModel().scope,
+    }),
+    computation: ({ state, narrow, scope }, previous) => {
+      if (previous && previous.source.scope !== scope) return null;
       // Keep an already-open form on resize; the dialog becomes read-only without erasing local edits.
       if (previous?.source.state === state && previous.value) return previous.value;
       if (narrow) return null;

@@ -22,6 +22,7 @@ import type { PromotionCheckViewModel } from './deploy-targets-review.fixture';
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'grid min-w-0 gap-3 border-t border-border pt-4' },
   templateUrl: './deploy-promotion-history.component.html',
+  styleUrl: './deploy-promotion-history.component.css',
 })
 export class DeployPromotionHistoryComponent {
   readonly checks = input.required<readonly PromotionCheckViewModel[]>();

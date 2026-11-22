@@ -64,10 +64,10 @@
             <app-status-pill [tone]="'neutral'" [label]="copy.pending" />
             @if (preview(); as decision) {
               <p role="status">
-                <bdi>{{ decision.mapping }}</bdi> ·
+                <bdi>{{ display(decision.mapping) }}</bdi> ·
                 {{ decision.mode === 'bind' ? copy.bindSelected : copy.dismiss }}
                 @if (decision.candidate) {
-                  → <bdi>{{ decision.candidate }}</bdi>
+                  → <bdi>{{ display(decision.candidate) }}</bdi>
                 }
               </p>
             }
@@ -117,13 +117,15 @@
     aria-labelledby="mapping-import-title"
   >
     <div class="flex flex-wrap items-center gap-2">
-      <app-status-pill [tone]="'info'" [label]="copy.filteredImport" /><bdi>{{ item.id }}</bdi
+      <app-status-pill [tone]="'info'" [label]="copy.filteredImport" /><bdi>{{
+        display(item.id)
+      }}</bdi
       ><button hlmBtn [variant]="'outline'" type="button" (click)="changeFilter('all')">
         {{ copy.fullQueue }}
       </button>
     </div>
     <h2 hlmCardTitle id="mapping-import-title">
-      <bdi>{{ item.name }}</bdi>
+      <bdi>{{ display(item.name) }}</bdi>
     </h2>
     <dl class="grid gap-4 text-sm sm:grid-cols-2">
       @for (
@@ -139,7 +141,7 @@
         <div>
           <dt class="text-muted-foreground">{{ fact[0] }}</dt>
           <dd class="font-semibold">
-            <bdi>{{ fact[1] }}</bdi>
+            <bdi>{{ display(fact[1] ?? '') }}</bdi>
           </dd>
         </div>
       }
@@ -158,7 +160,7 @@
         <div>
           <dt class="text-muted-foreground">{{ fact[0] }}</dt>
           <dd>
-            <bdi>{{ fact[1] }}</bdi>
+            <bdi>{{ display(fact[1] ?? '') }}</bdi>
           </dd>
         </div>
       }
@@ -182,9 +184,11 @@
           >{{ metric.label }}
         </h2>
         <p class="font-(family-name:--eg-font-display) text-2xl font-bold tabular-nums">
-          {{ metric.value }}
+          <bdi>{{ display('' + metric.value) }}</bdi>
         </p>
-        <p class="text-xs text-muted-foreground">{{ metric.detail }}</p>
+        <p class="text-xs text-muted-foreground">
+          <bdi>{{ display(metric.detail) }}</bdi>
+        </p>
       </article>
     }
   </div>

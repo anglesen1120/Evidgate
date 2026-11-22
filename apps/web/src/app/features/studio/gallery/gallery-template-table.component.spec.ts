@@ -8,6 +8,7 @@ import { GalleryTemplateTableComponent } from './gallery-template-table.componen
 class TableHarness extends ComponentHarness {
   static hostSelector = 'app-gallery-template-table';
   readonly view = this.locatorFor('[data-gallery-view]');
+  readonly views = this.locatorForAll('[data-gallery-view]');
   readonly badge = this.locatorFor('[data-template-source]');
   readonly badgeIcon = this.locatorFor('[data-template-source] hlm-icon');
   readonly injected = this.locatorForOptional('img');
@@ -38,6 +39,26 @@ describe('GalleryTemplateTableComponent', () => {
       expect(chosen).toHaveBeenCalledWith(item.id);
       fixture.componentRef.setInput('selected', item.id);
       expect(await table.selected()).not.toBeNull();
+    },
+  );
+
+  it.each([0, 1, 2])(
+    'returns focus to the retained row position after removing row %s',
+    async (index) => {
+      const fixture = TestBed.createComponent(GalleryTemplateTableComponent);
+      fixture.componentRef.setInput('rows', galleryFixture.templates);
+      const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, TableHarness);
+      const trigger = (await table.views())[index];
+      const item = galleryFixture.templates[index];
+      if (!trigger || !item) throw new Error('Missing template row');
+      await trigger.click();
+      fixture.componentRef.setInput(
+        'rows',
+        galleryFixture.templates.filter((row) => row.id !== item.id),
+      );
+      const remaining = await table.views();
+      expect(fixture.componentInstance.focusView(item.id)).toBe(true);
+      expect(await remaining[Math.min(index, remaining.length - 1)]?.isFocused()).toBe(true);
     },
   );
 });

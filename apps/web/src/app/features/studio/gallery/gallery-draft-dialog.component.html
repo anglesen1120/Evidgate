@@ -124,7 +124,9 @@
         <dl class="flex flex-wrap gap-4">
           <div>
             <dt>{{ copy.variant }}</dt>
-            <dd>{{ item().variant }}</dd>
+            <dd>
+              <bdi>{{ escapeFormatChars(item().variant) }}</bdi>
+            </dd>
           </div>
           <div>
             <dt>{{ copy.author }}</dt>

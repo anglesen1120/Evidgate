@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   afterNextRender,
+  afterRenderEffect,
   ElementRef,
   Injector,
   viewChild,
@@ -217,6 +218,7 @@ export class MappingResolutionPage {
     return $localize`:@@review.mapping.showing-loaded:Loaded records · Showing ${shown}:shown: of ${total}:total:`;
   });
   protected readonly selected = linkedSignal(() => this.records().at(0));
+  private viewFocusReturn: { id: string; index: number } | null = null;
   // Revoke the read-only overlay when its loaded records, route scope or access state change.
   protected readonly viewOpener = linkedSignal((): HTMLButtonElement | null => {
     this.records();
@@ -285,6 +287,21 @@ export class MappingResolutionPage {
     ] as const;
   });
 
+  constructor() {
+    afterRenderEffect(() => {
+      if (this.viewOpener()) return;
+      const previous = this.viewFocusReturn;
+      this.viewFocusReturn = null;
+      if (!previous || !this.visibleQueue()) return;
+      const rows = this.records();
+      if (rows.some((row) => row.id === previous.id)) return;
+      const nearest = rows[Math.min(previous.index, rows.length - 1)];
+      if (!nearest || !this.queueTable()?.focusView(nearest.id)) {
+        this.queueHeading()?.nativeElement.focus();
+      }
+    });
+  }
+
   protected changeFilter(key: unknown): void {
     if (!filters.some((item) => item.key === key)) return;
     void this.router.navigate([], {
@@ -314,6 +331,10 @@ export class MappingResolutionPage {
   }
 
   protected openView(row: MappingRowViewModel, opener: HTMLButtonElement): void {
+    this.viewFocusReturn = {
+      id: row.id,
+      index: this.records().findIndex((record) => record.id === row.id),
+    };
     this.selected.set(row);
     this.viewOpener.set(opener);
   }

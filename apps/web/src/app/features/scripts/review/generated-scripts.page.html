@@ -180,7 +180,7 @@
                       hlmBtn
                       [variant]="'ghost'"
                       type="button"
-                      class="px-0"
+                      class="wrap-normal break-normal px-0"
                       (click)="order(key)"
                     >
                       {{ h.label }}
@@ -193,7 +193,7 @@
                   }
                 </th>
               }
-              <th hlmTh scope="col" class="text-end">{{ c.actions }}</th>
+              <th hlmTh scope="col" class="script-actions text-end">{{ c.actions }}</th>
             </tr>
           </thead>
           <tbody hlmTBody>
@@ -211,9 +211,9 @@
                       <hlm-icon name="lucideActivity" class="size-4" />
                     </span>
                     <div class="min-w-0">
-                      <strong class="block text-sm font-semibold wrap-anywhere">{{
-                        r.title
-                      }}</strong>
+                      <strong class="block text-sm font-semibold wrap-anywhere"
+                        ><bdi>{{ escapeFormatChars(r.title) }}</bdi></strong
+                      >
                       <bdi class="font-mono text-xs text-muted-foreground">{{ r.id }}</bdi>
                     </div>
                   </div>
@@ -221,19 +221,28 @@
                 <td hlmTd>
                   <bdi>{{ r.manualCase }}</bdi> · {{ r.revision }}
                 </td>
-                <td hlmTd>{{ r.automated ?? c.notLinked }}</td>
+                <td hlmTd>
+                  <bdi>{{ escapeFormatChars(r.automated ?? c.notLinked) }}</bdi>
+                </td>
                 <td hlmTd><app-status-pill [tone]="r.tone" [label]="r.status" /></td>
                 <td hlmTd>{{ stability(r) }}</td>
                 <td hlmTd>{{ r.prNumber }} {{ delivery(r) }}</td>
-                <td hlmTd class="text-end">
+                <td hlmTd class="script-actions text-end">
                   <button
                     #opener
                     type="button"
                     hlmBtn
                     [variant]="'outline'"
                     [attr.aria-haspopup]="'dialog'"
-                    class="pointer-coarse:min-h-(--eg-control-touch) pointer-coarse:min-w-(--eg-control-touch)"
-                    [attr.aria-label]="c.view + ' ' + r.title + ' (' + r.id + ')'"
+                    class="shrink-0 whitespace-nowrap pointer-coarse:min-h-(--eg-control-touch) pointer-coarse:min-w-(--eg-control-touch)"
+                    [attr.aria-label]="
+                      c.view +
+                      ' ' +
+                      escapeFormatChars(r.title) +
+                      ' (' +
+                      escapeFormatChars(r.id) +
+                      ')'
+                    "
                     (click)="viewScript(r.id, opener)"
                   >
                     {{ c.view }}
@@ -326,11 +335,13 @@
         </header>
         <div
           role="region"
-          [attr.aria-label]="r.title"
+          [attr.aria-label]="escapeFormatChars(r.title)"
           tabindex="0"
-          class="grid min-h-0 min-w-0 content-start gap-3 overflow-y-auto overscroll-contain pe-1"
+          class="grid min-h-0 min-w-0 auto-rows-max content-start gap-3 overflow-y-auto overscroll-contain pe-1"
         >
-          <p hlmDialogDescription>{{ r.title }}</p>
+          <p hlmDialogDescription>
+            <bdi>{{ escapeFormatChars(r.title) }}</bdi>
+          </p>
           <dl
             class="m-0 grid min-w-0 text-sm [&>div]:grid [&>div]:items-baseline [&>div]:gap-x-3 [&>div]:gap-y-1 [&>div]:border-b [&>div]:border-(--eg-border) [&>div]:py-2 sm:[&>div]:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:wrap-anywhere [&_dd]:font-semibold"
           >
@@ -341,8 +352,11 @@
             <div>
               <dt>{{ c.annotation }}</dt>
               <dd>
-                <code>{{ viewModel().annotationKey }}</code> ·
-                {{ r.automated ?? c.notSupplied }}
+                <code
+                  ><bdi>{{ escapeFormatChars(viewModel().annotationKey) }}</bdi></code
+                >
+                ·
+                <bdi>{{ escapeFormatChars(r.automated ?? c.notSupplied) }}</bdi>
               </dd>
             </div>
             <div>

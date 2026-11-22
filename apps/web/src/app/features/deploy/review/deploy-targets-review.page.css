@@ -24,6 +24,30 @@
   overscroll-behavior: contain;
 }
 
+.record-dialog > *,
+.record-facts > div > * {
+  min-width: 0;
+}
+
+.record-facts dd,
+.target-directory th[scope='row'] {
+  overflow-wrap: anywhere;
+}
+
+.record-header h2 {
+  overflow-wrap: anywhere;
+}
+
+.target-directory th[scope='col'] {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.target-directory th:last-child,
+.target-directory td:last-child {
+  min-width: 8rem;
+}
+
 .record-facts > div {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);

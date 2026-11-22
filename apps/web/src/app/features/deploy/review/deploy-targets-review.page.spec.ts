@@ -8,6 +8,7 @@ import { BehaviorSubject } from 'rxjs';
 import { vi } from 'vitest';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
+import { deployTargetsFixture } from './deploy-targets-review.fixture';
 import { DeployTargetsReviewPage } from './deploy-targets-review.page';
 
 class PageHarness extends ComponentHarness {
@@ -130,6 +131,29 @@ describe('DeployTargetsReviewPage', () => {
     } else {
       expect(await page.content()).toContain(expected);
     }
+  });
+  it('shows format controls visibly in names, project context, and action labels', async () => {
+    const { fixture, page, record } = await render('ready', true);
+    fixture.componentRef.setInput('viewModel', {
+      ...deployTargetsFixture,
+      project: 'store\u202Efront',
+      targets: deployTargetsFixture.targets.map((target) =>
+        target.key === 'production' ? { ...target, name: 'Prod\u2066uction' } : target,
+      ),
+    });
+    expect(await page.content()).toContain('store⟨U+202E⟩front');
+    const view = await page.view();
+    expect(await view.getAttribute('aria-label')).toBe('View Prod⟨U+2066⟩uction');
+    expect(await view.getAttribute('data-second-record')).toBeNull();
+    expect(await (await page.edit()).getAttribute('aria-label')).toBe(
+      'Edit target Prod⟨U+2066⟩uction',
+    );
+    await view.click();
+    const dialog = await record();
+    expect(await (await dialog.heading()).text()).toBe('Prod⟨U+2066⟩uction');
+    expect(await (await dialog.details()).text()).toContain('store⟨U+202E⟩front');
+    expect(await (await dialog.details()).text()).toContain('Prod⟨U+2066⟩uction');
+    expect(await dialog.content()).not.toMatch(/[\u202E\u2066]/u);
   });
   it('keeps pending neutral and separate from a recorded release decision', async () => {
     const { page, record } = await render('default');
@@ -290,16 +314,20 @@ describe('DeployTargetsReviewPage', () => {
     expect(await dialog.content()).not.toContain('pc-91');
   });
 
-  it('drops an edit on losing desktop eligibility and returns to the readable target', async () => {
+  it('retains a dirty edit read-only when desktop eligibility is lost', async () => {
     const { page, record, hasRecord, desktop } = await render('ready', true);
     await (await page.edit()).click();
     await (await record()).changeOrder('4');
     desktop.set(false);
-    expect(await hasRecord()).toBe(false);
-    const view = await page.view();
-    expect(await view.isFocused()).toBe(true);
-    await view.click();
-    expect(await (await record()).content()).toContain('Desktop required');
+    expect(await hasRecord()).toBe(true);
+    const dialog = await record();
+    expect(await dialog.content()).toContain('Desktop required');
+    expect(await (await dialog.order()).getProperty('value')).toBe('4');
+    expect(await (await dialog.order()).getProperty('readOnly')).toBe(true);
+    expect(await (await dialog.submit()).getProperty('disabled')).toBe(true);
+    desktop.set(true);
+    expect(await (await dialog.order()).getProperty('value')).toBe('4');
+    expect(await (await dialog.order()).getProperty('readOnly')).toBe(false);
     expect(await page.content()).not.toContain('Draft reviewed');
   });
 });

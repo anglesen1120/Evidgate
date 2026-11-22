@@ -6,6 +6,7 @@ import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow';
+import { galleryFixture } from './studio-gallery.fixture';
 import { StudioGalleryReviewPage } from './studio-gallery-review.page';
 import { DraftHarness, GalleryHarness, ViewHarness } from './studio-gallery.testing';
 
@@ -26,6 +27,7 @@ async function render(state?: string, desktop = true) {
   const fixture = TestBed.createComponent(StudioGalleryReviewPage);
   await fixture.whenStable();
   return {
+    fixture,
     page: await TestbedHarnessEnvironment.harnessForFixture(fixture, GalleryHarness),
     overlay: TestbedHarnessEnvironment.documentRootLoader(fixture),
     narrow,
@@ -153,6 +155,36 @@ describe('StudioGalleryReviewPage', () => {
     await title.sendKeys(TestKey.ESCAPE);
     expect(await overlay.hasHarness(ViewHarness)).toBe(false);
     expect(await api.isFocused()).toBe(true);
+  });
+
+  it('escapes invisible format characters and isolates each template fact', async () => {
+    const { fixture, page, overlay } = await render();
+    const item = galleryFixture.templates[0];
+    if (!item) throw new Error('Missing checkout template');
+    const values = {
+      intent: 'Intent\u202Evalue',
+      precondition: 'Before\u2066value',
+      action: 'Action\u200Dvalue',
+      assertion: 'Assert\u202Cvalue',
+      engine: 'Engine\u200Bvalue',
+      variant: 'Variant\u2069value',
+    };
+    fixture.componentRef.setInput('viewModel', {
+      ...galleryFixture,
+      templates: [{ ...item, ...values }],
+    });
+    const [trigger] = await page.pick();
+    if (!trigger) throw new Error('Missing template View');
+    await trigger.click();
+    const view = await overlay.getHarness(ViewHarness);
+    expect(await Promise.all((await view.isolatedFacts()).map((fact) => fact.text()))).toEqual([
+      'Engine⟨U+200B⟩value',
+      'Variant⟨U+2069⟩value',
+      'Intent⟨U+202E⟩value',
+      'Before⟨U+2066⟩value',
+      'Action⟨U+200D⟩value',
+      'Assert⟨U+202C⟩value',
+    ]);
   });
 
   it('replaces a populated page on a route change without stale rows or details', async () => {

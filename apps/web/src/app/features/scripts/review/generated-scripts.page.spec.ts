@@ -31,6 +31,12 @@ class ScreenHarness extends ComponentHarness {
   readonly footerCount = this.locatorFor('footer [role="status"]');
   private readonly input = this.locatorFor('input[type=search]');
   readonly dialog = this.documentRootLocatorFactory().locatorFor('[role="dialog"]');
+  readonly titles = this.locatorForAll('tbody strong bdi');
+  readonly automated = this.locatorForAll('tbody tr > td:nth-child(3) bdi');
+  readonly detailRegion = this.overlay.locatorFor('[role="dialog"] [role="region"]');
+  readonly detailValues = this.overlay.locatorForAll('[role="dialog"] bdi');
+  readonly detailTables = this.overlay.locatorForAll('[role="dialog"] table');
+  readonly detailRows = this.overlay.locatorForAll('[role="dialog"] tbody tr');
 
   async searchFor(term: string): Promise<void> {
     const input = await this.input();
@@ -116,6 +122,39 @@ describe('GeneratedScriptsPage', () => {
     const actions = await screen.controls();
     expect(actions).toHaveLength(2);
     for (const action of actions) expect(await action.getProperty('disabled')).toBe(true);
+  });
+  it('escapes format controls and isolates script labels in the list and details', async () => {
+    const { fixture, screen } = await mount();
+    fixture.componentRef.setInput('viewModel', {
+      ...generatedScriptsFixture,
+      annotationKey: 'annotation\u200Bkey',
+      scripts: generatedScriptsFixture.scripts.map((row) => ({
+        ...row,
+        title: 'Script\u202Ename',
+        automated: 'case\u2066id',
+      })),
+    });
+    const [title] = await screen.titles();
+    const [automated] = await screen.automated();
+    const [view] = await screen.views();
+    if (!title || !automated || !view) throw new Error('Missing script labels');
+    expect(await title.text()).toBe('Script⟨U+202E⟩name');
+    expect(await automated.text()).toBe('case⟨U+2066⟩id');
+    expect(await view.getAttribute('aria-label')).toContain('Script⟨U+202E⟩name');
+    expect(await view.hasClass('whitespace-nowrap')).toBe(true);
+    expect(await view.hasClass('shrink-0')).toBe(true);
+    await view.click();
+    const region = await screen.detailRegion();
+    expect(await region.getAttribute('aria-label')).toBe('Script⟨U+202E⟩name');
+    expect(await region.hasClass('auto-rows-max')).toBe(true);
+    const values = await Promise.all((await screen.detailValues()).map((value) => value.text()));
+    expect(values).toEqual(
+      expect.arrayContaining(['Script⟨U+202E⟩name', 'case⟨U+2066⟩id', 'annotation⟨U+200B⟩key']),
+    );
+    expect(await screen.detailTables()).toHaveLength(3);
+    const row = generatedScriptsFixture.scripts[0];
+    if (!row) throw new Error('Missing fixture script');
+    expect(await screen.detailRows()).toHaveLength(row.steps.length * 2 + row.attempts.length);
   });
   it('filters locally and renders an honest zero-match instead of an empty project', async () => {
     const { screen } = await mount();

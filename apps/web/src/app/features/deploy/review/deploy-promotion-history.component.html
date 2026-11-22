@@ -31,8 +31,14 @@
       </hlm-select-content>
     </hlm-select>
   </div>
-  <div hlmTableContainer role="region" tabindex="0" [attr.aria-label]="copy.history">
-    <table hlmTable class="eg-table-layout">
+  <div
+    hlmTableContainer
+    class="min-w-0"
+    role="region"
+    tabindex="0"
+    [attr.aria-label]="copy.history"
+  >
+    <table hlmTable class="eg-table-layout promotion-history">
       <caption hlmCaption class="sr-only">
         {{
           copy.history
@@ -41,14 +47,14 @@
       <thead hlmTHead>
         <tr hlmTr>
           @for (label of columns; track label) {
-            <th hlmTh scope="col" class="whitespace-normal">{{ label }}</th>
+            <th hlmTh scope="col" class="whitespace-normal break-normal">{{ label }}</th>
           }
         </tr>
       </thead>
       <tbody hlmTBody>
         @for (check of visibleChecks(); track check.ref) {
           <tr hlmTr>
-            <th hlmTh scope="row" class="whitespace-normal">
+            <th hlmTh scope="row" class="whitespace-normal" [attr.data-label]="copy.check">
               <bdi class="font-mono">{{ check.ref }}</bdi>
               @if (check.checkedAt) {
                 <div class="text-xs font-normal text-muted-foreground">
@@ -56,18 +62,26 @@
                 </div>
               }
             </th>
-            <td hlmTd class="whitespace-normal">
+            <td hlmTd class="whitespace-normal" [attr.data-label]="copy.release">
               <bdi>{{ check.release }}</bdi>
             </td>
-            <td hlmTd [attr.data-inspect-status]="check.result === 'pending' ? '' : null">
+            <td
+              hlmTd
+              [attr.data-label]="copy.result"
+              [attr.data-inspect-status]="check.result === 'pending' ? '' : null"
+            >
               <app-status-pill [tone]="tones[check.result]" [label]="copy[check.result]" />
               <span class="block font-mono text-xs text-muted-foreground">{{ check.result }}</span>
             </td>
-            <td hlmTd class="whitespace-normal">{{ check.decisionRef ?? copy.noDecision }}</td>
-            <td hlmTd class="whitespace-normal">
+            <td hlmTd class="whitespace-normal" [attr.data-label]="copy.decision">
+              {{ check.decisionRef ?? copy.noDecision }}
+            </td>
+            <td hlmTd class="whitespace-normal" [attr.data-label]="copy.policy">
               <bdi>{{ check.policy }}</bdi>
             </td>
-            <td hlmTd class="whitespace-normal">{{ check.reason }}</td>
+            <td hlmTd class="whitespace-normal" [attr.data-label]="copy.reasons">
+              {{ check.reason }}
+            </td>
           </tr>
         }
       </tbody>

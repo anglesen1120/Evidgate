@@ -17,6 +17,7 @@ export class ViewHarness extends ComponentHarness {
   readonly title = this.locatorFor('[data-gallery-view-title]');
   readonly close = this.locatorFor('footer button');
   readonly terms = this.locatorForAll('dl dt');
+  readonly isolatedFacts = this.locatorForAll('dl dd bdi');
 }
 
 export class BackdropHarness extends ComponentHarness {
@@ -37,4 +38,5 @@ export class DraftHarness extends ComponentHarness {
   readonly close = this.locatorFor('header button');
   readonly keep = this.locatorFor('[data-gallery-keep]');
   readonly discard = this.locatorFor('[data-gallery-discard]');
+  readonly variant = this.locatorFor('dl dd bdi');
 }

@@ -22,6 +22,7 @@ import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
 import { DesktopRequiredNoticeComponent } from '../../../shared/ui/narrow';
 import { InlineFeedbackComponent } from '../../../shared/ui/states/inline-feedback.component';
+import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
 import { galleryCopy } from './studio-gallery.copy';
 import { type GalleryTemplateViewModel } from './studio-gallery.fixture';
 
@@ -56,6 +57,7 @@ export class GalleryDraftDialogComponent {
   readonly dismissed = output<void>();
   readonly historical = output<void>();
   protected readonly copy = galleryCopy;
+  protected readonly escapeFormatChars = escapeFormatChars;
   protected readonly confirmation = signal<'close' | GalleryTemplateViewModel['id'] | null>(null);
   private previousFieldId = 'gallery-draft-name';
   private closing = false;
@@ -170,6 +172,7 @@ export class GalleryDraftDialogComponent {
       this.intent() === item.intent &&
       this.assertion() === item.assertion
     ) {
+      this.closing = true;
       this.historical.emit();
     } else {
       this.noResult.set(true);

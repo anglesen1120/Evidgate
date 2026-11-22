@@ -1,4 +1,4 @@
-<article class="grid min-w-0 gap-4 wrap-anywhere" [attr.aria-label]="copy.title">
+<article class="grid min-w-0 gap-4" [attr.aria-label]="copy.title">
   <div class="flex items-start gap-3">
     <span
       class="hidden size-12 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground md:flex"
@@ -29,7 +29,8 @@
       <div class="grid gap-1">
         <span class="text-xs text-muted-foreground">{{ copy.context }}</span
         ><strong
-          >{{ viewModel().project }} · {{ viewModel().code }} · {{ viewModel().projectRef }}</strong
+          ><bdi>{{ displayText(viewModel().project) }}</bdi> · <bdi>{{ viewModel().code }}</bdi> ·
+          <bdi>{{ viewModel().projectRef }}</bdi></strong
         ><span class="text-xs text-muted-foreground"
           >{{ copy.asOf }} <app-absolute-time [value]="viewModel().asOf"
         /></span>
@@ -118,10 +119,12 @@
                 </td>
               </tr>
             } @else {
-              @for (t of viewModel().targets; track t.key; let idx = $index) {
+              @for (t of viewModel().targets; track t.key) {
                 <tr hlmTr [attr.data-state]="key() === t.key ? 'selected' : null">
                   <th hlmTh scope="row" class="whitespace-normal">
-                    <strong>{{ t.name }}</strong>
+                    <strong
+                      ><bdi>{{ displayText(t.name) }}</bdi></strong
+                    >
                     @if (key() === t.key) {
                       <hlm-icon
                         name="lucideCheck"
@@ -162,12 +165,12 @@
                         hlmBtn
                         #viewButton
                         type="button"
+                        class="shrink-0 whitespace-nowrap"
                         [variant]="'outline'"
                         [size]="'sm'"
                         [attr.data-view]="t.key"
                         [attr.aria-haspopup]="'dialog'"
-                        [attr.data-second-record]="idx === 1 ? '' : null"
-                        [attr.aria-label]="copy.view + ' ' + t.name"
+                        [attr.aria-label]="copy.view + ' ' + displayText(t.name)"
                         (click)="openRecord(t.key, 'view', viewButton)"
                       >
                         {{ copy.view }}
@@ -177,11 +180,12 @@
                           hlmBtn
                           #editButton
                           type="button"
+                          class="shrink-0 whitespace-nowrap"
                           [variant]="'ghost'"
                           [size]="'sm'"
                           [attr.data-edit]="t.key"
                           [attr.aria-haspopup]="'dialog'"
-                          [attr.aria-label]="copy.edit + ' ' + t.name"
+                          [attr.aria-label]="copy.edit + ' ' + displayText(t.name)"
                           (click)="openRecord(t.key, 'edit', editButton)"
                         >
                           {{ copy.edit }}
@@ -234,13 +238,11 @@
           <div class="flex items-start justify-between gap-3">
             <div class="grid min-w-0 gap-2">
               <h2 hlmDialogTitle data-dialog-heading tabindex="-1">
-                {{
-                  mode() === 'view'
-                    ? t.name
-                    : mode() === 'edit'
-                      ? copy.editPreview
-                      : copy.discardTitle
-                }}
+                @if (mode() === 'view') {
+                  <bdi>{{ displayText(t.name) }}</bdi>
+                } @else {
+                  {{ mode() === 'edit' ? copy.editPreview : copy.discardTitle }}
+                }
               </h2>
               <div class="flex min-w-0 flex-wrap items-center gap-2">
                 <bdi class="font-mono text-xs">{{ displayKey() }}</bdi>
@@ -271,7 +273,9 @@
             <dl data-record-detail class="record-facts m-0 grid min-w-0 gap-3 text-sm">
               <div class="min-w-0">
                 <dt class="text-xs text-muted-foreground">{{ copy.target }}</dt>
-                <dd class="m-0 mt-1 font-semibold">{{ t.name }}</dd>
+                <dd class="m-0 mt-1 font-semibold">
+                  <bdi>{{ displayText(t.name) }}</bdi>
+                </dd>
               </div>
               <div class="min-w-0">
                 <dt class="text-xs text-muted-foreground">{{ copy.order }}</dt>
@@ -302,7 +306,9 @@
               </div>
               <div class="min-w-0">
                 <dt class="text-xs text-muted-foreground">{{ copy.project }}</dt>
-                <dd class="m-0 mt-1 font-semibold wrap-anywhere">{{ viewModel().project }}</dd>
+                <dd class="m-0 mt-1 font-semibold wrap-anywhere">
+                  <bdi>{{ displayText(viewModel().project) }}</bdi>
+                </dd>
               </div>
               <div class="min-w-0">
                 <dt class="text-xs text-muted-foreground">{{ copy.revision }}</dt>
@@ -333,9 +339,12 @@
             (focusin)="rememberField($event)"
           >
             <p class="m-0 font-semibold">
-              {{ t.name }} · <bdi>{{ t.revision }}</bdi>
+              <bdi>{{ displayText(t.name) }}</bdi> · <bdi>{{ t.revision }}</bdi>
             </p>
             <p class="m-0 text-sm text-muted-foreground">{{ copy.draftHint }}</p>
+            @if (!viewport.canMutate()) {
+              <app-desktop-required-notice />
+            }
             <label hlmLabel for="target-order">{{ copy.order }}</label
             ><input
               hlmInput
@@ -348,6 +357,7 @@
               required
               [attr.inputmode]="'numeric'"
               [value]="order() ?? ''"
+              [readOnly]="!canEdit()"
               [attr.aria-invalid]="!validOrder()"
               [attr.aria-describedby]="!validOrder() ? 'draft-order-feedback' : null"
               (input)="order.set(orderInput.value ? orderInput.valueAsNumber : null)"
@@ -364,12 +374,14 @@
               required
               maxlength="64"
               [value]="pin()"
+              [readOnly]="!canEdit()"
               (input)="pin.set(pinInput.value)"
             />
             <div class="flex items-start gap-2">
               <hlm-checkbox
                 [inputId]="'draft-ack'"
                 [checked]="acknowledged()"
+                [disabled]="!canEdit()"
                 (checkedChange)="acknowledged.set($event)"
               /><label hlmLabel for="draft-ack">{{ copy.ack }}</label>
             </div>

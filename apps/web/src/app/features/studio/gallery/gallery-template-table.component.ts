@@ -80,6 +80,7 @@ type Cell = TemplateRef<DataTableCellContext<Template>>;
         type="button"
         [variant]="'outline'"
         [size]="'sm'"
+        class="shrink-0 whitespace-nowrap"
         [attr.data-gallery-view]="item.id"
         [attr.aria-haspopup]="'dialog'"
         (click)="choose(item, trigger)"
@@ -94,6 +95,7 @@ type Cell = TemplateRef<DataTableCellContext<Template>>;
 })
 export class GalleryTemplateTableComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private returnIndex = 0;
   readonly rows = input.required<readonly Template[]>();
   readonly selected = input<Template['id']>();
   readonly picked = output<Template['id']>();
@@ -129,6 +131,7 @@ export class GalleryTemplateTableComponent {
       {
         id: 'actions',
         role: 'actions',
+        width: { min: 'max-content', preferred: '1%' },
         header: this.copy.actions,
         cell: () => this.copy.view,
         cellTemplate: actions,
@@ -137,15 +140,20 @@ export class GalleryTemplateTableComponent {
   });
 
   protected choose(item: Template, trigger: HTMLButtonElement): void {
+    this.returnIndex = Math.max(
+      0,
+      this.rows().findIndex((row) => row.id === item.id),
+    );
     trigger.focus();
     this.picked.emit(item.id);
   }
 
   focusView(id: Template['id']): boolean {
     const root = this.host.nativeElement;
+    const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-gallery-view]'));
     const button =
-      root.querySelector<HTMLButtonElement>(`[data-gallery-view="${id}"]`) ??
-      root.querySelector<HTMLButtonElement>('[data-gallery-view]');
+      buttons.find((candidate) => candidate.dataset['galleryView'] === id) ??
+      buttons[Math.min(this.returnIndex, buttons.length - 1)];
     button?.focus();
     return !!button;
   }

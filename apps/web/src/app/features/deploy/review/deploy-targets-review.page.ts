@@ -1,6 +1,7 @@
 import { Dialog } from '@angular/cdk/dialog';
 import {
   afterNextRender,
+  afterRenderEffect,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -10,6 +11,7 @@ import {
   input,
   linkedSignal,
   signal,
+  untracked,
   viewChild,
   viewChildren,
 } from '@angular/core';
@@ -36,6 +38,7 @@ import {
   NotFoundPatternComponent,
 } from '../../../shared/ui/states';
 import { HlmCheckbox } from '@evidgate/ui/checkbox';
+import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
 import { DeployPromotionHistoryComponent } from './deploy-promotion-history.component';
 import { copy, notices } from './deploy-targets-review.copy';
 import {
@@ -86,9 +89,11 @@ export class DeployTargetsReviewPage {
   readonly viewModel = input<DeployTargetsViewModel>(deployTargetsFixture);
   private readonly query = toSignal(this.route.queryParamMap);
   protected readonly copy = copy;
+  protected readonly displayText = escapeFormatChars;
   private readonly viewButtons = viewChildren<ElementRef<HTMLButtonElement>>('viewButton');
   private readonly pageHeader = viewChild(PageHeaderComponent);
   private opener: HTMLButtonElement | null = null;
+  private openerIndex = 0;
   private previousField = 'target-order';
   protected readonly validationHint = notices.validation.title;
   protected readonly displayKey = computed(() =>
@@ -118,7 +123,7 @@ export class DeployTargetsReviewPage {
   );
   protected readonly subtitle = computed(() =>
     this.visible()
-      ? `${this.viewModel().project} · ${copy.ordered}: ${this.viewModel().targets.length}`
+      ? `${escapeFormatChars(this.viewModel().project)} · ${copy.ordered}: ${this.viewModel().targets.length}`
       : copy.intro,
   );
   protected readonly preview = linkedSignal(() => this.query()?.get('section') === 'admin-preview');
@@ -144,7 +149,12 @@ export class DeployTargetsReviewPage {
     const pins = [...new Set(targets.map((t) => t.policy).filter((p) => p !== null))];
     const partial = ['empty-history', 'error'].includes(this.state());
     return [
-      { title: copy.ordered, value: targets.length, hint: project, icon: 'lucideActivity' },
+      {
+        title: copy.ordered,
+        value: targets.length,
+        hint: escapeFormatChars(project),
+        icon: 'lucideActivity',
+      },
       {
         title: copy.policies,
         value: pins.length,
@@ -181,10 +191,19 @@ export class DeployTargetsReviewPage {
   protected readonly mode = linkedSignal({
     source: () => ({ record: this.recordScope(), editable: this.canEdit() }),
     computation: (current, previous): RecordMode | null => {
-      // A resize can revoke editing but should not dismiss a readable View.
-      return previous?.source.record === current.record && previous.value === 'view'
-        ? 'view'
-        : null;
+      if (!previous) return null;
+      if (previous.source.record === current.record) return previous.value;
+      const before = previous.source.record;
+      const after = current.record;
+      if (
+        before.model === after.model &&
+        before.key === after.key &&
+        before.state === after.state &&
+        (previous.value === 'edit' || previous.value === 'discard') &&
+        untracked(this.dirty)
+      )
+        return 'discard';
+      return null;
     },
   });
   protected readonly order = signal<number | null>(null);
@@ -200,6 +219,17 @@ export class DeployTargetsReviewPage {
       this.acknowledged(),
   );
 
+  constructor() {
+    afterRenderEffect(() => {
+      if (this.mode() === 'discard') {
+        this.dialogs
+          .getDialogById('deploy-target-record')
+          ?.overlayRef.overlayElement.querySelector<HTMLElement>('#draft-keep')
+          ?.focus();
+      }
+    });
+  }
+
   protected openRecord(key: string, mode: 'view' | 'edit', opener: HTMLButtonElement): void {
     if (this.mode()) {
       this.requestClose();
@@ -213,6 +243,7 @@ export class DeployTargetsReviewPage {
       return;
     this.key.set(key);
     this.opener = opener;
+    this.openerIndex = this.viewModel().targets.findIndex((target) => target.key === key);
     if (mode === 'edit') this.beginEdit();
     else this.mode.set('view');
   }
@@ -286,8 +317,10 @@ export class DeployTargetsReviewPage {
     const views = this.viewButtons();
     const next = this.opener?.isConnected
       ? this.opener
-      : (views.find((button) => button.nativeElement.dataset['view'] === this.key()) ?? views[0])
-          ?.nativeElement;
+      : (
+          views.find((button) => button.nativeElement.dataset['view'] === this.key()) ??
+          views[Math.min(this.openerIndex, views.length - 1)]
+        )?.nativeElement;
     if (next) next.focus();
     else this.pageHeader()?.focusTitle();
     this.opener = null;

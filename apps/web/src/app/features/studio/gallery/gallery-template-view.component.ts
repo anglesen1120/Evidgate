@@ -3,6 +3,7 @@ import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmIcon } from '@evidgate/ui/icon';
+import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
 import { galleryCopy } from './studio-gallery.copy';
 import type { GalleryTemplateViewModel } from './studio-gallery.fixture';
 
@@ -38,27 +39,36 @@ import type { GalleryTemplateViewModel } from './studio-gallery.fixture';
           <div>
             <dt>{{ copy.engineVariant }}</dt>
             <dd>
-              <span class="block">{{ item().engine }}</span
+              <span class="block"
+                ><bdi>{{ escapeFormatChars(item().engine) }}</bdi></span
               ><code
-                ><bdi>{{ item().variant }}</bdi></code
+                ><bdi>{{ escapeFormatChars(item().variant) }}</bdi></code
               >
             </dd>
           </div>
           <div>
             <dt>{{ copy.intent }}</dt>
-            <dd>{{ item().intent }}</dd>
+            <dd>
+              <bdi>{{ escapeFormatChars(item().intent) }}</bdi>
+            </dd>
           </div>
           <div>
             <dt>{{ copy.precondition }}</dt>
-            <dd>{{ item().precondition }}</dd>
+            <dd>
+              <bdi>{{ escapeFormatChars(item().precondition) }}</bdi>
+            </dd>
           </div>
           <div>
             <dt>{{ copy.action }}</dt>
-            <dd>{{ item().action }}</dd>
+            <dd>
+              <bdi>{{ escapeFormatChars(item().action) }}</bdi>
+            </dd>
           </div>
           <div>
             <dt>{{ copy.assertions }}</dt>
-            <dd>{{ item().assertion }}</dd>
+            <dd>
+              <bdi>{{ escapeFormatChars(item().assertion) }}</bdi>
+            </dd>
           </div>
           <div>
             <dt>{{ copy.cleanup }}</dt>
@@ -78,4 +88,5 @@ export class GalleryTemplateViewComponent {
   readonly item = input.required<GalleryTemplateViewModel>();
   readonly dismissed = output<void>();
   protected readonly copy = galleryCopy;
+  protected readonly escapeFormatChars = escapeFormatChars;
 }

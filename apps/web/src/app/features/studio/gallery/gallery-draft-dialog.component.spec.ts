@@ -134,4 +134,39 @@ describe('GalleryDraftDialogComponent', () => {
     await (await dialog.submit()).click();
     expect(success).toHaveBeenCalledOnce();
   });
+
+  it('allows historical completion after switching from another template to checkout', async () => {
+    const { fixture, dialog } = await render('preview');
+    fixture.componentRef.setInput('initial', galleryFixture.templates[1]);
+    const root = TestbedHarnessEnvironment.documentRootLoader(fixture);
+    await (await dialog.template()).click();
+    const [checkout] = await root.getAllHarnesses(TemplateOptionHarness);
+    if (!checkout) throw new Error('Missing checkout template option');
+    await (await checkout.host()).click();
+    let guardedDuringCompletion = true;
+    const historical = vi.fn(() => {
+      const unloading = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(unloading);
+      guardedDuringCompletion = unloading.defaultPrevented;
+    });
+    fixture.componentInstance.historical.subscribe(historical);
+    await (await dialog.submit()).click();
+    expect(historical).toHaveBeenCalledOnce();
+    expect(guardedDuringCompletion).toBe(false);
+    await (await dialog.title()).sendKeys(TestKey.ESCAPE);
+    expect(await root.hasHarness(DraftHarness)).toBe(false);
+  });
+
+  it('escapes and isolates the read-only variant without changing editable input', async () => {
+    const { fixture, dialog } = await render('preview');
+    const item = galleryFixture.templates[0];
+    if (!item) throw new Error('Missing checkout template');
+    fixture.componentRef.setInput('initial', {
+      ...item,
+      variant: 'chromium\u202Evi',
+      assertion: 'Keep\u200Doriginal',
+    });
+    expect(await (await dialog.variant()).text()).toBe('chromium⟨U+202E⟩vi');
+    expect(await (await dialog.assertion()).getProperty('value')).toBe('Keep\u200Doriginal');
+  });
 });

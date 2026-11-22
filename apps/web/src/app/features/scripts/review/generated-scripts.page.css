@@ -1,3 +1,13 @@
+th[hlmTh] {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.script-actions {
+  min-inline-size: calc(var(--eg-control-touch) + var(--eg-space-4) * 2);
+  white-space: nowrap;
+}
+
 .script-details {
   inline-size: min(560px, calc(100vw - var(--eg-space-8)));
   max-inline-size: 100vw;

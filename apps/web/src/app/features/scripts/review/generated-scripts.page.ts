@@ -29,6 +29,7 @@ import { PageHeaderComponent, HeaderActionsDirective } from '../../../shared/ui/
 import { EmptyPatternComponent } from '../../../shared/ui/states/empty-pattern.component';
 import { LoadingPatternComponent } from '../../../shared/ui/states/loading-pattern.component';
 import { InlineFeedbackComponent } from '../../../shared/ui/states/inline-feedback.component';
+import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
 import {
   generatedScriptsFixture,
   type GeneratedScriptsViewModel,
@@ -113,6 +114,7 @@ export class GeneratedScriptsPage {
     return isNoticeKey(key, scriptNotices) ? key : '404';
   });
   protected readonly c = scriptCopy;
+  protected readonly escapeFormatChars = escapeFormatChars;
   protected readonly notice = computed(() => {
     const k = this.state();
     return k === 'ready' ? null : scriptNotices[k];

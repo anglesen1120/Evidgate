@@ -29,7 +29,7 @@ type Cell = TemplateRef<DataTableCellContext<MappingRowViewModel>>;
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class:
-      'block min-w-0 [&_tr[data-row-id]]:h-(--eg-space-11) [&_[data-row-id]:has([aria-current=true])]:bg-(--eg-accent-soft)',
+      'block min-w-0 [&_th]:wrap-normal [&_th]:break-normal [&_tr[data-row-id]]:h-(--eg-space-11) [&_[data-row-id]:has([aria-current=true])]:bg-(--eg-accent-soft)',
   },
   template: `
     <app-data-table
@@ -63,6 +63,7 @@ type Cell = TemplateRef<DataTableCellContext<MappingRowViewModel>>;
         hlmBtn
         #opener
         type="button"
+        class="shrink-0 whitespace-nowrap"
         [variant]="'outline'"
         [size]="'sm'"
         [attr.aria-haspopup]="'dialog'"
@@ -109,12 +110,14 @@ export class MappingQueueTableComponent {
       id: 'candidates',
       header: this.copy.candidateCases,
       role: 'number',
+      width: { min: '12ch', preferred: '12ch' },
       cell: (row) => row.candidates.length,
     },
     {
       id: 'actions',
       header: this.copy.actions,
       role: 'actions',
+      width: { min: '9ch', preferred: '9ch' },
       cell: () => this.copy.view,
       cellTemplate: this.actions(),
     },
