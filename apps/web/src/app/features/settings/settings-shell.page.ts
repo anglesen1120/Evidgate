@@ -4,20 +4,13 @@ import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterOutlet } from 
 import { filter, map } from 'rxjs';
 
 import { PageHeaderComponent } from '../../shared/ui/page-header';
-import { ShellIconComponent } from '../../shell/layout/shell-icon.component';
 import { SessionStore } from '../../core/session/session.store';
 import { availableSettingsTabs } from './settings-tabs';
 import { RetentionFormComponent } from './quota-retention/retention-form.component';
 
 @Component({
   selector: 'app-settings-shell',
-  imports: [
-    RouterLink,
-    RouterOutlet,
-    PageHeaderComponent,
-    ShellIconComponent,
-    RetentionFormComponent,
-  ],
+  imports: [RouterLink, RouterOutlet, PageHeaderComponent, RetentionFormComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './settings-shell.page.html',
   host: { class: 'grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 font-sans text-foreground' },

@@ -143,13 +143,9 @@ export const MEMBERS_COPY = {
             [truncate]="!stacked"
           />
           <small class="text-xs text-muted-foreground">
-            @if (member.status === 'pending') {
-              {{ copy.pending }}
-            } @else {
-              <span i18n="@@settings.members.created-date"
-                >Created {{ member.created_at | date: calendarFormat : 'UTC' }} UTC</span
-              >
-            }
+            <span i18n="@@settings.members.created-date"
+              >Created {{ member.created_at | date: calendarFormat : 'UTC' }} UTC</span
+            >
           </small>
         </div>
       </div>

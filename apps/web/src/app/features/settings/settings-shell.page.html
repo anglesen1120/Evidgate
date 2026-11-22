@@ -1,11 +1,5 @@
-<header class="settings-header flex min-w-0 items-start gap-3">
-  <span
-    class="grid size-12 shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent)"
-  >
-    <app-shell-icon [name]="'sliders'" />
-  </span>
-  <app-page-header class="min-w-0 grow" [title]="title" [description]="description" />
-</header>
+<!-- The routed section renders its own visible title; the shell keeps the page's single h1 for assistive technology. -->
+<app-page-header class="sr-only" [title]="title" [description]="description" />
 @if (session.currentOrg(); as org) {
   <p class="settings-scope m-0 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
     <span class="text-muted-foreground" i18n="@@settings.scope-label">Organization settings</span>
