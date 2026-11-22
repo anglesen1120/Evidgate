@@ -136,11 +136,17 @@ export const CI_BINDINGS_COPY = {
           </div>
         }
         @if (rows().length > 0) {
-          <div hlmTableContainer>
+          <div
+            hlmTableContainer
+            class="min-w-0 max-w-full overflow-visible"
+            role="region"
+            aria-label="CI binding records"
+            i18n-aria-label="@@settings.secrets.ci.records"
+          >
             <table
               hlmTable
               [attr.role]="'table'"
-              class="w-full table-fixed max-md:block [&_td]:align-top [&_td]:whitespace-normal [&_th]:whitespace-normal"
+              class="w-full min-w-0 table-fixed max-md:block [&_td]:min-w-0 [&_td]:align-top [&_td]:whitespace-normal [&_th]:whitespace-normal"
               aria-labelledby="ci-bindings-heading"
             >
               <thead
@@ -162,7 +168,7 @@ export const CI_BINDINGS_COPY = {
                   <tr
                     hlmTr
                     [attr.role]="'row'"
-                    class="border-0 border-t border-solid border-border max-md:grid max-md:p-(--eg-space-4)"
+                    class="border-0 border-t border-solid border-border max-md:grid max-md:grid-cols-1 max-md:p-(--eg-space-4)"
                     data-ci-binding
                   >
                     <td hlmTd [attr.role]="'cell'">

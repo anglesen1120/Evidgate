@@ -22250,6 +22250,7 @@
 <trans-unit id="settings.secrets.page-shown" datatype="html"><source>Showing <x id="INTERPOLATION"/> of <x id="INTERPOLATION_1"/> on this page</source><target>Đang hiển thị <x id="INTERPOLATION"/> trong số <x id="INTERPOLATION_1"/> trên trang này</target></trans-unit>
 <trans-unit id="settings.policy.loaded-revisions" datatype="html"><source>Loaded revisions</source><target>Phiên bản đã tải</target></trans-unit>
 <trans-unit id="settings.policy.history-range" datatype="html"><source>Showing 1–<x id="INTERPOLATION"/> loaded revisions</source><target>Đang hiển thị 1–<x id="INTERPOLATION"/> trong số các phiên bản đã tải</target></trans-unit>
+<trans-unit id="settings.secrets.ci.records" datatype="html"><source>CI binding records</source><target>Bản ghi liên kết CI</target></trans-unit>
 </body>
   </file>
 </xliff>
