@@ -15,7 +15,6 @@ import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
 import { HlmSkeleton } from '@evidgate/ui/skeleton';
-import { HlmTableImports } from '@evidgate/ui/table';
 import { HlmTabsImports } from '@evidgate/ui/tabs';
 import { HlmTooltip } from '@evidgate/ui/tooltip';
 import { toast } from '@spartan-ng/brain/sonner';
@@ -23,6 +22,7 @@ import { ReviewStatusChipComponent, type ReviewStatus } from '../chips';
 import { InlineFeedbackComponent } from '../states';
 import { EvidenceBadgeComponent, OutcomePillComponent } from '../verdict';
 import { GALLERY_COPY } from './gallery-example-copy';
+import { GalleryEvidenceTableComponent } from './gallery-evidence-table.component';
 import type { GallerySpecimen, GalleryState } from './gallery-sections';
 
 const samples = [
@@ -46,13 +46,11 @@ const record = {
   initials: 'MT',
   candidate: samples[0].id,
   nextCandidate: samples[1].id,
-  run: 1842,
   revision: 'ev-3',
   incident: 'inc-92',
   runId: 'run-1842',
   caseId: 'SHOP-TC-0043',
   missingShard: 'shard-3',
-  unavailableRun: 1843,
   before: "getByTestId('delivery-address-required')",
   after: "getByRole('textbox', { name: 'Required delivery address' })",
   failureAt: '09:43:10 UTC',
@@ -75,7 +73,7 @@ const approval = {
     HlmLabel,
     HlmSelectImports,
     HlmSkeleton,
-    HlmTableImports,
+    GalleryEvidenceTableComponent,
     HlmTabsImports,
     HlmTooltip,
     ReviewStatusChipComponent,

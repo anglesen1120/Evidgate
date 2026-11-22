@@ -388,49 +388,7 @@
     </div>
   }
   @case ('table') {
-    <div hlmTableContainer>
-      <table hlmTable>
-        <caption hlmCaption>
-          {{
-            copy.evidenceLabel
-          }}
-        </caption>
-        <thead hlmTHead>
-          <tr hlmTr>
-            <th hlmTh scope="col">{{ copy.run }}</th>
-            <th hlmTh scope="col">{{ copy.outcome }}</th>
-            <th hlmTh scope="col">{{ copy.duration }}</th>
-          </tr>
-        </thead>
-        <tbody hlmTBody>
-          @if (!missing()) {
-            <tr hlmTr>
-              <td hlmTd>{{ record.run }}</td>
-              <td hlmTd><app-outcome-pill [outcome]="'has_failures'" [compact]="true" /></td>
-              <td hlmTd>
-                <svg class="trend" viewBox="0 0 40 16" aria-hidden="true" focusable="false">
-                  <polyline
-                    [attr.points]="'0,14 14,11 25,12 39,2'"
-                    fill="none"
-                    stroke="currentColor"
-                  />
-                </svg>
-                <span>{{ copy.trend }}</span>
-              </td>
-            </tr>
-            <tr hlmTr>
-              <td hlmTd>{{ record.unavailableRun }}</td>
-              <td hlmTd>{{ copy.unavailable }}</td>
-              <td hlmTd>—</td>
-            </tr>
-          } @else {
-            <tr hlmTr>
-              <td hlmTd colspan="3">{{ caption() }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
+    <app-gallery-evidence-table [unavailableMessage]="missing() ? caption() : null" />
   }
   @case ('tabs') {
     <hlm-tabs [tab]="active() ? 'history' : 'evidence'">

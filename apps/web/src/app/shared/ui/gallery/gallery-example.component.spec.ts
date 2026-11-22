@@ -14,6 +14,8 @@ class ExampleHarness extends ComponentHarness {
   readonly record = this.locatorFor('code');
   readonly next = this.locatorFor('nav button:last-child');
   readonly previous = this.locatorFor('nav button:first-child');
+  readonly tableRows = this.locatorForAll('table tbody tr');
+  readonly sparkline = this.locatorForOptional('table svg.trend[aria-hidden="true"]');
 }
 
 async function render(kind: GallerySpecimen['id'], state: GalleryState) {
@@ -25,6 +27,24 @@ async function render(kind: GallerySpecimen['id'], state: GalleryState) {
 
 describe('GalleryExampleComponent', () => {
   provideGalleryLayout();
+
+  it('shows the evidence rows and accessible trend text until the table has no samples', async () => {
+    const fixture = TestBed.createComponent(GalleryExampleComponent);
+    fixture.componentRef.setInput('kind', 'table');
+    fixture.componentRef.setInput('state', 'default');
+    const sample = await TestbedHarnessEnvironment.harnessForFixture(fixture, ExampleHarness);
+    const rows = await sample.tableRows();
+    expect(rows).toHaveLength(2);
+    expect(await rows[0]?.text()).toContain('Duration rose from 2 to 5 seconds.');
+    expect(await rows[1]?.text()).toContain('Not evaluated');
+    expect(await sample.sparkline()).not.toBeNull();
+
+    fixture.componentRef.setInput('state', 'empty');
+    const emptyRows = await sample.tableRows();
+    expect(emptyRows).toHaveLength(1);
+    expect(await emptyRows[0]?.text()).toBe('No records match this view.');
+    expect(await sample.sparkline()).toBeNull();
+  });
 
   it('filters the miniature navigation without changing its real destinations', async () => {
     const sample = await render('shell', 'default');

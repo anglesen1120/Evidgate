@@ -76,11 +76,6 @@
 :host .bars rect {
   fill: currentColor;
 }
-:host .trend {
-  inline-size: var(--eg-space-9);
-  block-size: var(--eg-space-5);
-  color: var(--eg-accent);
-}
 :host .note {
   background: var(--eg-surface-raised);
   border-radius: var(--eg-radius-md);

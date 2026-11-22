@@ -68,6 +68,23 @@ export class GallerySpecimenComponent {
 
   protected closeComparison(event: Event): void {
     if (event.defaultPrevented || !this.expanded()) return;
+    const target = event.target;
+    if (
+      target instanceof Element &&
+      target.closest(
+        '[aria-haspopup]:not([aria-haspopup="false"])[aria-expanded="true"], [role="listbox"], [role="menu"], [role="dialog"], [role="alertdialog"], dialog[open]',
+      )
+    ) {
+      return;
+    }
+    // A native popover may leave focus on its invoker. Let the browser dismiss it first.
+    if (
+      event.currentTarget instanceof HTMLElement &&
+      globalThis.CSS?.supports?.('selector(:popover-open)') &&
+      event.currentTarget.querySelector('[popover]:popover-open')
+    ) {
+      return;
+    }
     event.stopPropagation();
     this.expanded.set(false);
     this.trigger()?.nativeElement.focus();
