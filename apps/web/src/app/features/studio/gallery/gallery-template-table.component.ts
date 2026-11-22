@@ -127,7 +127,12 @@ export class GalleryTemplateTableComponent {
         cellTemplate: engine,
       },
       { id: 'source', header: this.copy.source, cell: (item) => item.source, cellTemplate: source },
-      { id: 'assertions', header: this.copy.assertions, cell: (item) => item.assertion },
+      {
+        id: 'assertions',
+        header: this.copy.assertions,
+        cell: (item) => item.assertion,
+        width: { min: '12rem', preferred: '24%' },
+      },
       {
         id: 'actions',
         role: 'actions',
