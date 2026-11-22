@@ -184,7 +184,7 @@ describe('Spartan theme contract', () => {
       ['input', '.spartan-input'],
       ['select', '.spartan-select-trigger'],
       ['tabs', '.spartan-tabs-trigger'],
-    ]) {
+    ] as const) {
       expect(declarations(source(`helm/${family}.css`), selector).get('border-radius')).toBe(
         'var(--eg-radius-md)',
       );

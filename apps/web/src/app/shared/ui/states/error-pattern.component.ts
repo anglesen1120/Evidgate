@@ -24,7 +24,7 @@ import type { ApiError } from '../../../core/http/api-error';
   template: `
     @if (bare()) {
       <section
-        class="state-panel state-panel--error state-panel--bare grid min-w-0 justify-items-start gap-(--eg-space-3) wrap-anywhere"
+        class="state-panel state-panel--error state-panel--bare grid min-w-0 justify-items-start gap-(--eg-space-3) text-start wrap-anywhere"
       >
         <ng-container [ngTemplateOutlet]="content" />
       </section>
