@@ -27,7 +27,7 @@ const NEXT_STEP_IDS = ['runs', 'onboarding', 'authoring'];
   template: `
     @let current = project();
     <section
-      class="grid min-w-0 gap-(--eg-space-6) wrap-anywhere"
+      class="grid min-w-0 gap-(--eg-space-7) wrap-anywhere"
       aria-labelledby="project-overview-heading"
     >
       <div class="flex min-w-0 items-start gap-(--eg-space-4)">
@@ -52,24 +52,26 @@ const NEXT_STEP_IDS = ['runs', 'onboarding', 'authoring'];
       @if (current && shortcuts().length) {
         <nav
           hlmCard
-          class="w-full min-w-0 max-w-prose gap-0 rounded-(--eg-radius-lg) py-0"
+          class="w-full min-w-0 max-w-3xl gap-0 rounded-(--eg-radius-lg) py-0"
           aria-labelledby="project-next-steps"
         >
           <app-section-header
-            class="border-b border-border px-(--eg-space-6) py-(--eg-space-5)"
+            class="border-b border-border px-(--eg-space-5) py-(--eg-space-5) md:px-(--eg-space-6)"
             [titleId]="'project-next-steps'"
             title="Next steps"
             i18n-title="@@shell.overview.next-steps"
             description="Choose a next step for this project."
             i18n-description="@@shell.overview.choose-next-step"
           />
-          <ul class="m-0 grid list-none divide-y divide-border px-(--eg-space-6) py-(--eg-space-3)">
+          <ul
+            class="m-0 flex min-w-0 list-none flex-wrap gap-(--eg-space-3) px-(--eg-space-5) py-(--eg-space-5) md:px-(--eg-space-6)"
+          >
             @for (step of shortcuts(); track step.id) {
               <li class="min-w-0">
                 <a
                   hlmBtn
-                  [variant]="'link'"
-                  class="h-auto min-h-(--eg-control-touch) max-w-full justify-start gap-(--eg-space-3) px-0 text-start whitespace-normal underline"
+                  [variant]="'outline'"
+                  class="eg-header-action gap-(--eg-space-3) text-start"
                   [routerLink]="step.link"
                 >
                   <app-shell-icon [name]="step.icon" />{{ step.label }}

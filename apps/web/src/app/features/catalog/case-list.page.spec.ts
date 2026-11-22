@@ -168,6 +168,19 @@ describe('CaseListPage', () => {
     expect(await harness.more()).toBeNull();
   });
 
+  it('shows the local match count separately from loaded rows in the pagination footer', async () => {
+    const { fixture, harness } = await render();
+    const footerCount = await harness.loaded();
+    expect(await footerCount.text()).not.toContain('Matches in loaded results:');
+    query.next(convertToParamMap({ q: firstCase.annotation_id }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await footerCount.text()).toContain('2 loaded');
+    expect(await footerCount.text()).toContain('Matches in loaded results: 1');
+    expect(await harness.more()).not.toBeNull();
+    expect(list).toHaveBeenCalledTimes(1);
+  });
+
   it('searches only accumulated rows and keeps Load more available for a no-match', async () => {
     const { fixture, harness } = await render();
     const summary = await harness.summary();
@@ -179,6 +192,7 @@ describe('CaseListPage', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     expect(await summary.text()).toContain('2 loaded');
+    expect(await (await harness.loaded()).text()).toContain('Matches in loaded results: 0');
     expect(await summary.text()).toContain('No matching identities in loaded results.');
     expect(list).toHaveBeenCalledTimes(1);
     expect(await harness.text()).toContain('No matching identities in loaded results');
