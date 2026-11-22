@@ -286,14 +286,13 @@ export class RunDetailPage {
   protected showEvidence(): void {
     const focus = () => {
       const target = this.host.nativeElement.querySelector<HTMLElement>('#evidence-title');
-      if (target) this.focusEvidenceTarget(target);
+      if (!target) return false;
+      this.focusEvidenceTarget(target);
+      return true;
     };
-    if (this.detailTab() === 'evidence') {
-      focus();
-      return;
-    }
+    if (this.detailTab() === 'evidence' && focus()) return;
     this.detailTab.set('evidence');
-    // The destination must be visible before focus leaves the now-hidden decision panel.
+    // Wait for the destination to mount or become visible before moving focus.
     afterNextRender(focus, { injector: this.injector });
   }
   /**
