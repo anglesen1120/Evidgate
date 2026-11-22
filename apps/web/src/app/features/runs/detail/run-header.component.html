@@ -20,7 +20,11 @@
           <span class="text-muted-foreground">{{ copy.notProvided }}</span>
         }
         @if (run().unverified_ref) {
-          <app-status-pill [tone]="'warning'" [label]="copy.unverified" />
+          <app-status-pill
+            class="[&_.spartan-badge]:max-w-full"
+            [tone]="'warning'"
+            [label]="copy.unverified"
+          />
         }
       </div>
     </div>
@@ -147,7 +151,12 @@
             <span class="text-muted-foreground">{{ copy.notProvided }}</span>
           }
           @if (run().unverified_ref) {
-            <app-status-pill [tone]="'warning'" [label]="copy.unverified" data-run-unverified />
+            <app-status-pill
+              class="[&_.spartan-badge]:max-w-full"
+              [tone]="'warning'"
+              [label]="copy.unverified"
+              data-run-unverified
+            />
           }
         </dd>
       </div>

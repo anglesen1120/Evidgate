@@ -83,7 +83,7 @@ for (const locale of LOCALES) {
             document.documentElement.dataset['theme'] = value;
           }, theme);
           await page.evaluate(() => document.fonts.ready);
-          const header = page.locator('app-run-detail-page > app-page-header');
+          const header = page.locator('app-run-detail-page app-page-header');
           const back = header.locator('a[appPageHeaderActions]');
           const label = await back.innerText();
           const fonts = await doubleHeaderText(header, spaced);

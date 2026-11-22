@@ -3,7 +3,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import readyFixture from '../../../../fixtures/web-api/run-detail/input.json';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
-import { activeElement, LOCALES, type ShellLocale } from './support';
+import { LOCALES, type ShellLocale } from './support';
 import { runDetailPath, type RunStateVariant } from './run-detail.support';
 
 /** The two slots the unmodified `run-detail` document declares, in shard-index order. */
@@ -178,22 +178,25 @@ for (const locale of LOCALES) {
     expect(
       await scroller.evaluate((element) => element.scrollHeight <= element.clientHeight + 1),
     ).toBe(true);
+    // The producer table precedes the evidence tabs in the page flow.
     const producerCopies = producers.locator('app-copy-value-button button');
     await expect(producerCopies).toHaveCount(50);
-    for (const copy of await producerCopies.all()) {
+    await producerCopies.first().focus();
+    await expect(producerCopies.first()).toBeFocused();
+    for (const copy of (await producerCopies.all()).slice(1)) {
       await page.keyboard.press('Tab');
       await expect(copy).toBeFocused();
       await expect(copy).toHaveAccessibleName(/^(Copy|Sao chép) /);
     }
     await page.keyboard.press('Tab');
-    expect((await activeElement(page)).tag).toBe('body');
+    await expect(page.getByRole('tab', { name: /^(Evidence|Bằng chứng)/ })).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
     for (const copy of (await producerCopies.all()).reverse()) {
-      await page.keyboard.press('Shift+Tab');
       await expect(copy).toBeFocused();
+      await page.keyboard.press('Shift+Tab');
     }
     // Page flow deliberately has no inner scrolling-region stop in either direction.
-    await page.keyboard.press('Shift+Tab');
-    await expect(manifestCopies.last()).toBeFocused();
+    await expect(scroller).not.toBeFocused();
 
     // `#producer-<slot>` is the documented anchor: a deep link lands on, and focuses, that row.
     await page.goto(`${runDetailPath({ locale, run: 'many-producers' })}#producer-shard-42`);
