@@ -78,6 +78,12 @@ describe('ArtifactViewerReviewPage', () => {
       expect(text).toContain(value);
     expect(text).not.toMatch(/inc-92|\bPASS\b/);
     expect(await page.find('app-decision-chip hlm-icon')).not.toBeNull();
+    expect(await (await page.find('app-page-header p'))?.text()).toContain(
+      'art-shot-92 · image/png · 248 KiB · ev-3',
+    );
+    expect(
+      await (await page.find('table a[aria-current="page"]'))?.getAttribute('aria-label'),
+    ).toContain('art-shot-92');
     expect(await page.find('iframe, object, embed, img[src], a[download]')).toBeNull();
   });
   it('does not substitute official metadata for unavailable Studio content', async () => {
@@ -85,6 +91,7 @@ describe('ArtifactViewerReviewPage', () => {
     expect(await page.text()).toContain('Sandbox artifact ev-s1 unavailable');
     expect(await page.text()).toContain('run-sandbox-88');
     expect(await page.text()).not.toMatch(/run-1842|art-shot-92|248 KiB|FAIL/);
+    expect(await page.find('app-page-header a, table a[aria-current]')).toBeNull();
   });
   it('keeps a pending upload neutral and closes both content actions', async () => {
     const { page } = await mount('pending_upload');

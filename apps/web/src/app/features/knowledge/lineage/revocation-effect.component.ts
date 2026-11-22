@@ -5,6 +5,7 @@ import { RouterLink } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
@@ -24,6 +25,7 @@ import { RevocationPreviewStore } from './revocation-preview.store';
     HlmButton,
     HlmCardImports,
     HlmDialogImports,
+    HlmIcon,
     HlmInput,
     HlmLabel,
     InlineFeedbackComponent,

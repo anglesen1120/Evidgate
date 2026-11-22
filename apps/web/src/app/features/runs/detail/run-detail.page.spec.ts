@@ -1,8 +1,10 @@
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { TestBed } from '@angular/core/testing';
 import { RouterTestingHarness } from '@angular/router/testing';
 import type { RunStateDto } from '@evidgate/sdk';
 import { ApiRequestError } from '../../../core/http/api-error';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
+import { HeaderHarness } from '../../../shared/ui/page-header/header.harness';
 import { RunDetailPage } from './run-detail.page';
 import {
   attemptPage,
@@ -19,7 +21,11 @@ describe('RunDetailPage', () => {
   beforeEach(() => configureRunDetailTestBed());
   afterEach(() => TestBed.resetTestingModule());
   it('loads a lazy deep link with its own heading, localized purpose and verbatim identifiers, no derived verdict', async () => {
-    const { root } = await open();
+    const { harness, root } = await open();
+    const header = await TestbedHarnessEnvironment.loader(harness.fixture).getHarness(
+      HeaderHarness,
+    );
+    expect(await header.getDescription()).toBe(`Replay · Version ${run.version}`);
     expect(get).toHaveBeenCalledWith(run.run_id);
     expect(root.querySelectorAll('h1')).toHaveLength(1);
     expect(root.querySelector('[data-run-id] bdi')?.textContent).toBe(run.run_id);
@@ -208,6 +214,10 @@ describe('RunDetailPage', () => {
     await harness.fixture.whenStable();
     expect(harness.routeNativeElement?.querySelector('app-forbidden-pattern')).not.toBeNull();
     expect(harness.routeNativeElement?.querySelector('app-run-header')).toBeNull();
+    const header = await TestbedHarnessEnvironment.loader(harness.fixture).getHarness(
+      HeaderHarness,
+    );
+    expect(await header.getDescription()).toBeNull();
   });
   it('ignores a late response after the route changes', async () => {
     let resolveOld!: (value: RunStateDto) => void;

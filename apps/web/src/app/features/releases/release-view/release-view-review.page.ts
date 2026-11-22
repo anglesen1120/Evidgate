@@ -17,6 +17,7 @@ import {
   EvidenceBadgeComponent,
   OutcomePillComponent,
 } from '../../../shared/ui/verdict';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { ReleaseBindingMatrixComponent } from './release-binding-matrix.component';
 import { ReleaseEvidenceContextComponent } from './release-evidence-context.component';
 import { RELEASE_COPY } from './release-view-copy';
@@ -37,6 +38,7 @@ import {
     HlmCardContent,
     HlmCardHeader,
     HlmIcon,
+    ShellIconComponent,
     PageHeaderImports,
     SectionHeaderComponent,
     EmptyPatternComponent,

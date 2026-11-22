@@ -1,18 +1,30 @@
-<app-page-header [title]="c.history" [description]="c.intro">
-  <a appPageHeaderActions hlmBtn [variant]="'outline'" [routerLink]="inbox()">{{ c.inbox }}</a>
-  @if (
-    valid() &&
-    id() === r.id &&
-    !['401', '403', '404', 'empty', 'retention', 'error', 'loading', '429'].includes(state())
-  ) {
-    <a appPageHeaderActions hlmBtn [routerLink]="detail()" [queryParams]="{ id: r.incident }">{{
-      text.originalLink
-    }}</a>
-  }
-</app-page-header>
-<p class="text-xs text-muted-foreground">
-  {{ text.snapshot }}
-</p>
+@let hasSnapshot =
+  valid() &&
+  !['401', '403', '404', 'empty', 'retention', 'error', 'loading', '429'].includes(state());
+<div class="flex min-w-0 items-start gap-3">
+  <span
+    aria-hidden="true"
+    class="hidden size-12 shrink-0 items-center justify-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent-fg) sm:flex"
+  >
+    <hlm-icon name="lucideClock" />
+  </span>
+  <app-page-header
+    class="min-w-0 flex-1 [&_h1]:text-2xl"
+    [title]="c.history"
+    [description]="
+      hasSnapshot && state() !== '412' && state() !== 'nomatch' ? text.snapshot : c.intro
+    "
+  >
+    <a appPageHeaderActions hlmBtn [variant]="'outline'" [routerLink]="inbox()"
+      ><hlm-icon name="lucideChevronLeft" />{{ c.inbox }}</a
+    >
+    @if (hasSnapshot && id() === r.id) {
+      <a appPageHeaderActions hlmBtn [routerLink]="detail()" [queryParams]="{ id: r.incident }">{{
+        text.originalLink
+      }}</a>
+    }
+  </app-page-header>
+</div>
 @switch (state()) {
   @case ('loading') {
     <app-loading-pattern [label]="c.loading" />
@@ -77,21 +89,19 @@
     } @else if (id() === 'case-search-4') {
       <app-empty-pattern [title]="id() + ' · ' + c.search" [description]="c.noAttempts" />
     } @else {
-      <div class="grid min-w-0 gap-(--eg-space-4) sm:grid-cols-2 xl:grid-cols-4">
+      <div class="grid min-w-0 gap-3 min-[390px]:grid-cols-2 md:grid-cols-4">
         @for (tile of tiles(); track tile.label) {
-          <section hlmCard class="min-w-0 gap-(--eg-space-3) p-(--eg-space-5)">
-            <h2 class="flex items-center gap-2 font-semibold">
-              <hlm-icon class="size-4" [name]="tile.icon" />{{ tile.label }}
-            </h2>
-            <strong class="font-(family-name:--eg-font-display) text-2xl">{{ tile.value }}</strong>
-            <p class="text-xs text-muted-foreground">{{ tile.hint }}</p>
+          <section hlmCard class="eg-kpi-card min-w-0">
+            <h2 hlmCardTitle><hlm-icon class="size-4" [name]="tile.icon" />{{ tile.label }}</h2>
+            <strong hlmCardContent>{{ tile.value }}</strong>
+            <p class="m-0 text-xs text-muted-foreground">{{ tile.hint }}</p>
           </section>
         }
       </div>
-      <section hlmCard class="grid min-w-0 gap-(--eg-space-3) p-(--eg-space-6)">
+      <section hlmCard class="grid min-w-0 gap-2 p-4">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <p class="text-xs text-muted-foreground">
+            <p class="m-0 text-xs text-muted-foreground">
               {{ text.attemptPath }}
             </p>
             <h2 hlmCardTitle [size]="'section'">{{ c.original }}</h2>
@@ -110,9 +120,7 @@
           <p>{{ text.build }}</p>
         </details>
       </section>
-      <div
-        class="grid min-w-0 items-start gap-(--eg-space-5) lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]"
-      >
+      <div class="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <div class="grid min-w-0 gap-(--eg-space-4)">
           <app-history-comparison
             [state]="state()"
@@ -124,7 +132,7 @@
             <header hlmCardHeader class="border-b">
               <h2 hlmCardTitle [size]="'section'">{{ c.attempts }}</h2>
             </header>
-            <ol hlmCardContent class="grid gap-3">
+            <ol hlmCardContent class="m-0 grid list-none gap-3">
               <li>
                 <code>{{ text.firstAttempt }}</code>
                 <app-status-pill [tone]="'danger'" [label]="c.failed" />
@@ -157,12 +165,15 @@
             <header hlmCardHeader class="border-b">
               <h2 hlmCardTitle [size]="'section'">{{ c.timeline }}</h2>
             </header>
-            <ol hlmCardContent class="grid gap-3">
+            <ol hlmCardContent class="m-0 grid list-none gap-3">
               @for (event of events(); track event.revision) {
-                <li class="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2">
-                  <strong>{{ event.revision }}</strong
-                  ><time class="text-xs">{{ event.time }}</time>
-                  <p class="col-span-2 text-muted-foreground">{{ event.description }}</p>
+                <li class="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-2">
+                  <hlm-icon name="lucideClock" class="size-3 text-muted-foreground" />
+                  <strong>{{ event.revision }}</strong>
+                  <time class="text-xs text-muted-foreground tabular-nums">{{ event.time }}</time>
+                  <p class="col-span-2 col-start-2 m-0 text-muted-foreground">
+                    {{ event.description }}
+                  </p>
                 </li>
               }
             </ol>
@@ -171,7 +182,7 @@
             <header hlmCardHeader class="border-b">
               <h2 hlmCardTitle [size]="'section'">{{ c.identity }}</h2>
             </header>
-            <div hlmCardContent class="grid gap-2">
+            <div hlmCardContent class="grid gap-2 [&_p]:m-0">
               <strong>{{ r.id }}</strong>
               <p>{{ text.authored }}</p>
               <code>{{ r.key }}</code>

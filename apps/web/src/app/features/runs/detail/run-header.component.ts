@@ -1,9 +1,10 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
-import type { RunStateDto } from '@evidgate/sdk';
+import type { EvidenceRevision, RunStateDto } from '@evidgate/sdk';
 import { HlmAlert } from '@evidgate/ui/alert';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
 import { HlmIcon } from '@evidgate/ui/icon';
+import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { RunStatePillComponent } from '../../../shared/ui/chips/run-state-pill.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
@@ -20,6 +21,7 @@ import type { DecisionViewModel } from './decision/decision-view-model';
 @Component({
   selector: 'app-run-header',
   imports: [
+    AbsoluteTimeComponent,
     RunStatePillComponent,
     StatusPillComponent,
     EvidenceBadgeComponent,
@@ -51,6 +53,7 @@ export class RunHeaderComponent {
    * to.
    */
   readonly runCompleteness = input<Completeness | null>(null);
+  readonly latestSnapshot = input<EvidenceRevision | null>(null);
   readonly decision = input<DecisionViewModel | null>(null);
   readonly decisionLoading = input(false);
   protected readonly display = escapeFormatChars;
@@ -61,6 +64,8 @@ export class RunHeaderComponent {
     version: $localize`:@@runs.detail.version:Version`,
     purpose: $localize`:@@runs.detail.purpose:Purpose`,
     notProvided: RUN_DETAIL_NOT_PROVIDED,
+    missing: $localize`:@@runs.evidence.missing-title:Missing evidence reasons`,
+    latestFreeze: $localize`:@@runs.detail.latest-freeze:Latest loaded freeze`,
     ref: $localize`:@@runs.detail.ref:Ref`,
     refKind: $localize`:@@runs.detail.ref-kind:Ref kind`,
     pr: $localize`:@@runs.detail.pr:Pull request number`,

@@ -23,7 +23,10 @@
     class="max-h-[90dvh] min-w-0 overflow-y-auto wrap-anywhere"
   >
     <header hlmDialogHeader>
-      <h2 hlmDialogTitle>{{ title() }}</h2>
+      <div class="flex min-w-0 items-center gap-2">
+        <app-shell-icon [name]="destructive() ? 'shield-alert' : 'shield-check'" />
+        <h2 hlmDialogTitle>{{ title() }}</h2>
+      </div>
       <p hlmDialogDescription>{{ description() }}</p>
     </header>
     <form #form class="grid min-w-0 gap-4" (submit)="finish($event, form, dialog)">
@@ -69,7 +72,9 @@
         <button hlmBtn hlmDialogClose data-cancel type="button" [variant]="'outline'">
           {{ copy.cancel }}
         </button>
-        <button hlmBtn type="submit">{{ copy.previewApply }}</button>
+        <button hlmBtn type="submit" [variant]="destructive() ? 'destructive' : 'default'">
+          {{ copy.previewApply }}
+        </button>
       </footer>
     </form>
   </hlm-dialog-content>

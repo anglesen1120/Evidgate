@@ -16,6 +16,10 @@ export const QUEUE_COPY = {
   sla: $localize`:@@repairs.queue.sla:Over SLA`,
   slaNote: $localize`:@@repairs.queue.sla-note:Known proposal age exceeds 24 hours`,
   queue: $localize`:@@repairs.queue.queue:Candidate queue`,
+  candidate: $localize`:@@repairs.queue.candidate:Candidate`,
+  status: $localize`:@@repairs.queue.status:Review status`,
+  view: $localize`:@@repairs.queue.view:View`,
+  viewSummary: $localize`:@@repairs.queue.view-summary:View summary`,
   sort: $localize`:@@repairs.queue.sort:Sort candidates`,
   old: $localize`:@@repairs.queue.old:Oldest first`,
   new: $localize`:@@repairs.queue.new:Newest first`,
@@ -94,3 +98,12 @@ export const QUEUE_COPY = {
   safety: $localize`:@@repairs.queue.safety:Safety checks`,
   preserved: $localize`:@@repairs.queue.preserved:Original failure preserved`,
 } as const;
+
+export const viewCandidate = (title: string): string =>
+  $localize`:@@repairs.queue.view-candidate:View ${title}:subject:`;
+
+export const viewCandidateSummary = (title: string): string =>
+  $localize`:@@repairs.queue.view-candidate-summary:View summary for ${title}:subject:`;
+
+export const showingCandidates = (visible: number, total: number): string =>
+  $localize`:@@repairs.queue.showing:Showing ${visible}:visible: of ${total}:total:`;

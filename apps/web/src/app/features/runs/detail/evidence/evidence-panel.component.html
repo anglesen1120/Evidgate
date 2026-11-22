@@ -5,28 +5,43 @@
   aria-labelledby="evidence-title"
   [attr.aria-busy]="busy() ? 'true' : null"
 >
-  <header class="grid min-w-0 gap-(--eg-space-3) border-b border-border pb-(--eg-space-5)">
-    <div class="flex flex-wrap items-center justify-between gap-(--eg-space-3)">
-      <h2
-        hlmCardTitle
-        [size]="sectionSize"
-        id="evidence-title"
-        tabindex="-1"
-        class="m-0 scroll-mt-[calc(var(--eg-topbar-height,calc(2*var(--eg-space-12)))+var(--eg-space-4))] focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
-        [textContent]="copy.title"
-      ></h2>
-      <p class="m-0" data-evidence-completeness>
-        <app-evidence-badge [completeness]="completeness()" />
-      </p>
-    </div>
-    @if (pinnedRevision(); as revision) {
-      <div class="flex flex-wrap items-baseline gap-x-(--eg-space-4) gap-y-(--eg-space-1)">
-        <p class="m-0 font-semibold" data-evidence-selected>{{ selectedLabel(revision) }}</p>
-        @if (pinned(); as snapshot) {
-          <app-absolute-time class="text-xs text-muted-foreground" [value]="snapshot.created_at" />
-        }
+  <header
+    class="flex min-w-0 items-start gap-(--eg-space-4) border-b border-border pb-(--eg-space-5)"
+  >
+    <span
+      class="grid size-(--eg-space-9) shrink-0 place-items-center rounded-(--eg-radius-md) bg-(--eg-accent-soft) text-(--eg-accent-fg)"
+    >
+      <app-shell-icon class="size-(--eg-space-6)" [name]="'folder'" />
+    </span>
+    <div class="min-w-0 flex-1">
+      <div class="flex flex-wrap items-center justify-between gap-(--eg-space-3)">
+        <h2
+          hlmCardTitle
+          [size]="sectionSize"
+          id="evidence-title"
+          tabindex="-1"
+          class="m-0 scroll-mt-[calc(var(--eg-topbar-height,calc(2*var(--eg-space-12)))+var(--eg-space-4))] focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+          [textContent]="copy.title"
+        ></h2>
+        <p class="m-0" data-evidence-completeness>
+          <app-evidence-badge [completeness]="completeness()" />
+        </p>
       </div>
-    }
+      @if (pinnedRevision(); as revision) {
+        <div
+          class="flex flex-wrap items-baseline gap-x-(--eg-space-2) gap-y-(--eg-space-1) text-xs text-muted-foreground"
+        >
+          <p class="m-0" data-evidence-selected>{{ selectedLabel(revision) }}</p>
+          @if (pinned(); as snapshot) {
+            <span aria-hidden="true">·</span>
+            <app-absolute-time
+              class="text-xs text-muted-foreground"
+              [value]="snapshot.created_at"
+            />
+          }
+        </div>
+      }
+    </div>
   </header>
 
   @if (revisionsStatus() === 'loading') {
@@ -113,8 +128,12 @@
     <p class="m-0 text-(--eg-text-muted)" data-evidence-state>{{ copy.noEvaluation }}</p>
   }
 
-  <div class="grid min-w-0 items-start gap-(--eg-space-5) @2xl:has-[section+section]:grid-cols-2">
-    <section class="min-w-0" aria-labelledby="evidence-missing-title" data-evidence-missing>
+  <div class="grid min-w-0 gap-(--eg-space-4) @2xl:has-[section+section]:grid-cols-2">
+    <section
+      class="min-w-0 rounded-(--eg-radius-md) border border-border p-(--eg-space-4)"
+      aria-labelledby="evidence-missing-title"
+      data-evidence-missing
+    >
       @let codes = missing();
       <h3
         hlmCardTitle
@@ -141,7 +160,7 @@
 
     @if (pinned(); as revision) {
       <section
-        class="grid min-w-0 gap-(--eg-space-3)"
+        class="grid min-w-0 content-start gap-(--eg-space-3) rounded-(--eg-radius-md) border border-border p-(--eg-space-4)"
         aria-labelledby="evidence-evaluation-title"
         data-evidence-evaluation
       >

@@ -2,7 +2,8 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
-import { PageHeaderComponent } from '../../../shared/ui/page-header';
+import { HlmIcon } from '@evidgate/ui/icon';
+import { PageHeaderImports } from '../../../shared/ui/page-header';
 import { InlineFeedbackComponent } from '../../../shared/ui/states';
 import { ProposalStatusComponent } from './proposal-status.component';
 import { RepairEvidenceComponent } from './repair-evidence.component';
@@ -17,7 +18,8 @@ import { SHADOW_COPY } from './shadow.copy';
   selector: 'app-shadow-detail-review-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    PageHeaderComponent,
+    PageHeaderImports,
+    HlmIcon,
     InlineFeedbackComponent,
     HlmButton,
     HlmCardImports,

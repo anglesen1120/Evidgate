@@ -1,6 +1,7 @@
-import { DOCUMENT } from '@angular/common';
+import { DOCUMENT, formatNumber } from '@angular/common';
 import {
   afterNextRender,
+  afterRenderEffect,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -9,8 +10,10 @@ import {
   inject,
   Injector,
   linkedSignal,
+  LOCALE_ID,
   signal,
   type Signal,
+  viewChild,
   type WritableSignal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -22,6 +25,7 @@ import { combineLatest } from 'rxjs';
 import type { ApiError } from '../../../core/http/api-error';
 import { PageHeaderImports } from '../../../shared/ui/page-header';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { CancelRunActionComponent } from '../actions/cancel/cancel-run-action.component';
 import { AttemptsTableComponent } from './attempts/attempts-table.component';
 import { DecisionViewComponent } from './decision/decision-view.component';
@@ -36,6 +40,7 @@ import { parsePinnedRevision } from './revision-pin';
 import { RunHeaderComponent } from './run-header.component';
 import { RunDetailStore } from './run-detail.store';
 import { RunTimelineComponent } from './timeline/run-timeline.component';
+import { runValueLabel } from './run-value-label';
 
 @Component({
   selector: 'app-run-detail-page',
@@ -54,6 +59,7 @@ import { RunTimelineComponent } from './timeline/run-timeline.component';
     HlmButton,
     HlmIcon,
     HlmTabsImports,
+    ShellIconComponent,
     PageHeaderImports,
   ],
   providers: [RunDetailStore],
@@ -77,8 +83,24 @@ export class RunDetailPage {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   private readonly injector = inject(Injector);
+  private readonly locale = inject(LOCALE_ID);
 
   protected readonly detailTab = signal('evidence');
+  private readonly tabStrip = viewChild<ElementRef<HTMLElement>>('tabStrip');
+
+  private revealSelectedTab(): void {
+    const selected = this.detailTab();
+    const strip = this.tabStrip()?.nativeElement;
+    if (!strip || strip.scrollWidth <= strip.clientWidth) return;
+    const tab = strip.querySelector<HTMLElement>(`[data-run-tab="${selected}"]`);
+    if (!tab) return;
+    const box = strip.getBoundingClientRect();
+    const inset = strip.clientLeft + Number.parseFloat(getComputedStyle(strip).paddingInlineStart);
+    const { left, right } = tab.getBoundingClientRect();
+    const delta = Math.min(0, left - box.left - inset) || Math.max(0, right - box.right + inset);
+    if (delta) strip.scrollLeft += delta;
+  }
+
   // The header describes the current collection, not every decision this run has ever had.
   // Never place an older or differently pinned evaluation next to its completeness badge.
   protected readonly summaryDecision = computed(() => {
@@ -138,6 +160,16 @@ export class RunDetailPage {
         ? 'ready'
         : 'error';
   });
+  protected readonly subtitle = computed(() => {
+    const run = this.store.run();
+    if (this.requestStatus() !== 'ready' || !run) return undefined;
+    const version = formatNumber(run.version, this.locale);
+    return `${runValueLabel('purpose', run.purpose)} · ${$localize`:@@runs.detail.header-version:Version ${version}:version:`}`;
+  });
+  protected readonly latestSnapshot = computed(() => {
+    const latest = this.store.latestRevisionNo();
+    return this.store.revisions()?.find((revision) => revision.revision_no === latest) ?? null;
+  });
   protected readonly attemptsStatus = computed<'loading' | 'ready' | 'error'>(() => {
     const status = this.store.attemptsStatus();
     return status === 'idle' || status === 'loading' ? 'loading' : status;
@@ -183,6 +215,7 @@ export class RunDetailPage {
     decisionTab: $localize`:@@runs.detail.decision-tab-compact:Live decision`,
   };
   constructor() {
+    afterRenderEffect(() => this.revealSelectedTab());
     this.route.fragment.pipe(takeUntilDestroyed()).subscribe((fragment) => {
       this.fragment.set(fragment);
       this.landed = false;

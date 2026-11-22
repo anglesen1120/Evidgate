@@ -10,7 +10,9 @@ import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
 import { PageHeaderImports } from '../../../shared/ui/page-header';
 import { InlineFeedbackComponent } from '../../../shared/ui/states/inline-feedback.component';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { QualityBreakdownComponent } from './quality-breakdown.component';
+import { QualityOutcomeMixComponent } from './quality-outcome-mix.component';
 import { QualityHistoryComponent } from './quality-history.component';
 import { qualityFixture, type QualityOverviewViewModel } from './quality-overview.fixture';
 import { noticeFor, qualityState, showsSnapshot, type QualityState } from './quality-review-states';
@@ -25,6 +27,7 @@ import { noticeFor, qualityState, showsSnapshot, type QualityState } from './qua
     HlmButton,
     HlmCardImports,
     HlmIcon,
+    ShellIconComponent,
     HlmInput,
     HlmLabel,
     HlmSelectImports,
@@ -32,11 +35,9 @@ import { noticeFor, qualityState, showsSnapshot, type QualityState } from './qua
     InlineFeedbackComponent,
     QualityHistoryComponent,
     QualityBreakdownComponent,
+    QualityOutcomeMixComponent,
   ],
-  host: {
-    class:
-      'mx-auto box-border grid w-full grid-cols-[minmax(0,1fr)] min-w-0 max-w-[1440px] gap-4 p-3 wrap-anywhere sm:p-5 xl:p-6',
-  },
+  host: { class: 'grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 wrap-anywhere' },
   templateUrl: './quality-overview-review.page.html',
 })
 export class QualityOverviewReviewPage {
@@ -79,7 +80,6 @@ export class QualityOverviewReviewPage {
   );
   protected readonly copy = {
     title: $localize`:@@review.quality.title:Quality overview`,
-    subtitle: $localize`:@@review.quality.subtitle:storefront-web · Historical outcomes and collection health`,
     completeRuns: $localize`:@@review.quality.view-runs:View complete runs`,
     preview: $localize`:@@review.quality.preview-note:Drill-downs are unavailable in this review.`,
     actionUnavailable: $localize`:@@review.quality.action-unavailable:This action is unavailable in this review.`,
