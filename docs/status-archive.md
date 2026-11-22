@@ -1727,3 +1727,9 @@ Replaced or removed by the S655 recount (through #1315, `4750af76`); text verbat
 | 03.5.1-T1 | M | `template` registry + web template. Partial: T1.1 landed by S616 (#1247, 5d9a86b8, migration 0118: `public.template`, `GET /v1/templates`, `GET /v1/templates/{t}`, no seed rows); T1.2 landed by S626 (#1270, ca9f8837, migration 0119: the built-in `web/playwright-page` v1 row, `templates/web/playwright-page/1/`, `TemplateBodyHasher`, `TemplateConformance`, `TemplateLiteralScanner`, `TemplateRenderer`, golden fixture `fixtures/template-conformance/web-playwright-page-1/`); both defined sub-rows are landed, so the parent counts at the next recount (not counted in the S599 figures above). | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | yes |
 
 The rows above were replaced by the S655 recount (249 / 247.5); the three partial-table rows left the list and 04.8.1-T2 joined it (48 partial parents).
+
+## STATUS replaced text (S655 close-out, 2026-11-22)
+
+Replaced by the withdrawal of the 13.2.2-T1 credit (248 / 246.5); text verbatim.
+
+13.2.2-T1 stays credited as at S189 (memo accepted by PR review) although its Done-when test is not built (carried row 'Role-prompt memo check'); the roster is the table rows, not an audit of every credited task.
