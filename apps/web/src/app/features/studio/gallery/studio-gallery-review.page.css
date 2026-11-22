@@ -1,0 +1,123 @@
+:host {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--eg-space-4);
+  min-width: 0;
+  padding: var(--eg-space-7);
+  overflow-wrap: anywhere;
+  color: var(--eg-text);
+}
+.context,
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eg-space-3);
+  align-items: center;
+}
+.context code {
+  font: var(--eg-text-xs)/var(--eg-leading-xs) var(--eg-font-mono);
+}
+.filters[hlmCard] {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: end;
+  gap: var(--eg-space-5);
+  padding: var(--eg-space-5) var(--eg-space-6);
+}
+.field {
+  display: grid;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  gap: var(--eg-space-2);
+}
+.query-field {
+  width: min(100%, 19rem);
+}
+.templates {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--eg-space-4);
+}
+.preview[hlmCard] {
+  display: grid;
+  gap: 0;
+  padding: 0;
+}
+.preview:focus-visible {
+  outline: var(--eg-space-1) solid var(--eg-focus);
+  outline-offset: var(--eg-space-1);
+}
+.preview header,
+.preview-body {
+  padding: var(--eg-space-5) var(--eg-space-6);
+}
+.preview header {
+  border-bottom: var(--eg-border-width) solid var(--eg-border);
+}
+h2,
+h3,
+dl,
+dd {
+  margin: 0;
+}
+h3 {
+  font: var(--eg-weight-bold) var(--eg-text-lg)/var(--eg-leading-lg) var(--eg-font-display);
+}
+.facts {
+  align-items: flex-start;
+  margin-top: var(--eg-space-3);
+  gap: var(--eg-space-4) var(--eg-space-7);
+}
+.facts div {
+  min-width: 0;
+}
+dt,
+dd,
+footer {
+  font-size: var(--eg-text-xs);
+  line-height: var(--eg-leading-xs);
+}
+dt,
+footer {
+  color: var(--eg-text-muted);
+}
+dd {
+  margin-top: var(--eg-space-2);
+  font-weight: var(--eg-weight-semibold);
+}
+footer {
+  border-top: var(--eg-border-width) solid var(--eg-border);
+  margin-top: var(--eg-space-3);
+  padding-top: var(--eg-space-4);
+}
+@media (width < 1024px) {
+  :host {
+    padding: var(--eg-space-6);
+  }
+  .templates {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (width < 768px) {
+  :host {
+    padding: var(--eg-space-5);
+  }
+  .templates {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .query-field {
+    width: 100%;
+  }
+}
+@media (width <= 420px) {
+  :host {
+    padding: var(--eg-space-4);
+  }
+}
+@media (pointer: coarse) {
+  :is(button, input, hlm-select-trigger) {
+    min-height: var(--eg-control-touch);
+  }
+}
