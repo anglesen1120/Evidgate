@@ -24,7 +24,9 @@ import {
 class RunDetailHarness extends ComponentHarness {
   static hostSelector = 'app-run-detail-page';
   private readonly facts = this.locatorForAll('.run-summary dl > div > dd');
-  private readonly inspect = this.locatorFor('app-page-header button[appPageHeaderActions]');
+  private readonly inspect = this.locatorFor(
+    'app-page-header .header-actions > button:last-of-type',
+  );
   private readonly decisionTab = this.locatorFor('[role="tab"][aria-label]');
   private readonly evidenceTitle = this.locatorFor('#evidence-title');
 
