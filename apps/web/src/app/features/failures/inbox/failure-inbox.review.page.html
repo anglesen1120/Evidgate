@@ -1,0 +1,64 @@
+<div class="mx-auto grid max-w-[1440px] min-w-0 gap-4">
+  <div class="flex items-start gap-3">
+    <span
+      class="mt-1 hidden size-12 shrink-0 items-center justify-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent-fg) sm:flex"
+      ><hlm-icon name="lucideActivity"
+    /></span>
+    <app-page-header class="min-w-0 flex-1" [title]="c.title" [description]="c.description">
+      <div appPageHeaderActions class="flex flex-wrap gap-2">
+        @if (store.showQueue()) {
+          <a hlmBtn [variant]="'outline'" [routerLink]="store.path('healing-queue')">{{
+            c.proposals
+          }}</a>
+          @if (nextIncident(); as id) {
+            <a hlmBtn [routerLink]="store.path('failure-detail')" [queryParams]="{ id }">{{
+              c.nextIncident
+            }}</a>
+          }
+        }
+      </div>
+    </app-page-header>
+  </div>
+  @if (store.state() !== '401' && store.state() !== '403' && store.state() !== '404') {
+    <p class="m-0 text-xs text-muted-foreground">
+      {{ c.asOf }} <app-absolute-time [value]="asOf" />{{ projectContext }}
+    </p>
+  }
+  @if (store.state() !== 'default') {
+    <app-inbox-state />
+  }
+  @if (store.showQueue()) {
+    <div class="grid min-w-0 gap-4" [attr.aria-busy]="store.state() === 'submitting'">
+      <section
+        [attr.aria-label]="c.incidents"
+        class="grid grid-cols-1 gap-3 min-[390px]:grid-cols-2 md:grid-cols-4"
+      >
+        @for (kpi of kpis; track kpi.label) {
+          <article hlmCard class="min-w-0 gap-2 p-4">
+            <h2 class="m-0 flex items-center gap-2 text-sm font-semibold">
+              <hlm-icon [name]="kpi.icon" />{{ kpi.label }}
+            </h2>
+            <strong class="text-2xl tabular-nums">{{ kpi.value }}</strong
+            ><span class="text-xs text-muted-foreground">{{ kpi.hint }}</span>
+          </article>
+        }
+      </section>
+      <app-desktop-required-notice class="md:hidden" />
+      @if (store.confirmation(); as confirmation) {
+        <p role="status" class="m-0 rounded-md border border-border bg-muted p-3">
+          {{ confirmation }}
+        </p>
+      }
+      <app-inbox-review-dialog class="contents" #dialog />
+      <div
+        class="grid min-w-0 items-start gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.08fr)] lg:grid-cols-[minmax(0,1.04fr)_minmax(0,1fr)]"
+      >
+        <app-inbox-queue (review)="dialog.open($event)" />
+        @if (store.active(); as row) {
+          <app-inbox-preview [record]="row" (review)="dialog.open($event)" />
+        }
+      </div>
+      <app-inbox-summary />
+    </div>
+  }
+</div>
