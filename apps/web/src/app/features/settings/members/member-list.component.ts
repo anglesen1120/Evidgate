@@ -24,6 +24,9 @@ import type { DataTableCellContext } from '../../../shared/ui/data-table/data-ta
 export const MEMBERS_COPY = {
   title: $localize`:@@settings.members.title:Members and roles`,
   directory: $localize`:@@settings.members.directory:Members and invitations`,
+  activeMembers: $localize`:@@settings.members-active-count:Active members`,
+  pendingInvitations: $localize`:@@settings.members-pending-count:Pending invitations`,
+  organizationAdmins: $localize`:@@settings.members-admin-count:Organization admins`,
   loading: $localize`:@@settings.members.loading:Loading members…`,
   description: $localize`:@@settings.members.description:Manage organization membership. The server decides actual access.`,
   member: $localize`:@@settings.members.member:Member`,
@@ -170,7 +173,7 @@ export const MEMBERS_COPY = {
           #actionsButton
           [variant]="'ghost'"
           type="button"
-          class="mutation min-h-[var(--eg-control-touch)]"
+          class="mutation min-h-[var(--eg-control-touch)] min-w-max whitespace-nowrap"
           [hlmDropdownMenuTrigger]="actionsMenu"
           data-members-actions
           [attr.data-members-status]="member.status"
@@ -224,6 +227,7 @@ export const MEMBERS_COPY = {
       }
     </ng-template>
     <app-data-table
+      class="[&_[data-column-role=actions]]:whitespace-nowrap [&_[data-column-role=actions]]:wrap-normal"
       [columns]="columns()"
       [rows]="members()"
       [rowId]="rowId"
@@ -284,6 +288,7 @@ export class MemberListComponent {
         id: 'actions',
         header: this.copy.actions,
         role: 'actions',
+        width: { min: 'max-content' },
         mutates: true,
         cell: () => this.copy.actions,
         cellTemplate: actions,

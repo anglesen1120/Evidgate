@@ -90,7 +90,6 @@ export class RetentionFormComponent {
   protected readonly mutationPolicy = inject(NarrowMutationPolicy);
 
   protected readonly copy = RETENTION_COPY;
-  protected readonly sectionSize = 'section' as const;
   protected readonly subsectionSize = 'subsection' as const;
   protected readonly loadingLayout = 'form' as const;
   protected readonly destructive = 'destructive' as const;

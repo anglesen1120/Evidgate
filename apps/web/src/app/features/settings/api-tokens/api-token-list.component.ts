@@ -13,6 +13,11 @@ import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
+import { HlmTableImports } from '@evidgate/ui/table';
+import {
+  SettingsPageCountsComponent,
+  type SettingsPageCount,
+} from '../settings-page-counts.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
 import { DesktopMutationDirective } from '../../../shared/ui/narrow/desktop-mutation.directive';
@@ -26,6 +31,8 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
 @Component({
   selector: 'app-api-token-list',
   imports: [
+    HlmTableImports,
+    SettingsPageCountsComponent,
     HlmCardImports,
     HlmButton,
     HlmInput,
@@ -38,16 +45,22 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
     EmptyPatternComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'block min-w-0' },
+  host: { class: '@container block min-w-0' },
   template: `
-    <div class="grid min-w-0 gap-[var(--eg-space-7)] xl:grid-cols-2">
-      <section hlmCard class="min-w-0" aria-labelledby="api-directory-title">
-        <header hlmCardHeader>
-          <h3 hlmCardTitle id="api-directory-title">{{ copy.directory }}</h3>
-          <p hlmCardDescription>{{ loadedOnly }}</p>
-        </header>
-        <div hlmCardContent class="grid min-w-0 gap-[var(--eg-space-5)]">
-          <div class="grid min-w-0 gap-[var(--eg-space-2)]">
+    <app-settings-page-counts
+      class="mb-6"
+      [attr.data-token-page-count]="''"
+      [metrics]="pageCounts()"
+    />
+    <div
+      class="grid min-w-0 grid-cols-[minmax(0,1fr)] items-start gap-4 min-[1025px]:@min-[45rem]:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]"
+    >
+      <section hlmCard class="min-w-0 gap-0 rounded-xl p-0" aria-labelledby="api-directory-title">
+        <header hlmCardHeader class="min-w-0 gap-3 border-b border-border px-5 py-4">
+          <h3 hlmCardTitle [size]="'subsection'" id="api-directory-title" class="m-0">
+            {{ copy.directory }}
+          </h3>
+          <div class="grid min-w-0 gap-1">
             <label hlmLabel for="api-token-search">{{ searchLabel }}</label>
             <input
               hlmInput
@@ -57,89 +70,116 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
               [aria-describedby]="'api-token-search-hint'"
               (input)="search($event)"
             />
-            <p id="api-token-search-hint" class="m-0 text-muted-foreground">{{ loadedOnly }}</p>
+            <p id="api-token-search-hint" class="m-0 text-xs text-muted-foreground">
+              {{ loadedOnly }}
+            </p>
           </div>
-          <ul
-            class="m-0 grid min-w-0 list-none gap-[var(--eg-space-4)] p-0"
-            [attr.aria-label]="copy.directory"
-          >
-            @for (row of filtered(); track row.id) {
-              <li
-                hlmCard
-                [size]="'sm'"
-                class="min-w-0 gap-[var(--eg-space-3)] p-[var(--eg-space-4)]"
-                data-api-token-row
-                [attr.data-state]="row.status"
-                [attr.data-selected]="selected()?.id === row.id"
-              >
-                <div class="flex min-w-0 items-center gap-[var(--eg-space-3)]">
-                  <app-data-table-value
-                    class="min-w-0 flex-1"
-                    [value]="row.name"
-                    [truncate]="true"
-                  />
-                  <app-status-pill
-                    [tone]="row.status === 'active' ? 'success' : 'neutral'"
-                    [label]="stateLabel(row.status)"
-                  />
-                </div>
-                <code class="wrap-anywhere">{{ row.prefix }}</code>
-                <app-api-token-permission-tags [permissions]="row.permissions" [name]="row.name" />
-                <div class="flex flex-wrap gap-[var(--eg-space-3)]">
-                  <button
-                    hlmBtn
-                    [variant]="'outline'"
-                    type="button"
-                    data-api-inspect
-                    [attr.aria-pressed]="selected()?.id === row.id"
-                    [attr.aria-label]="inspectLabel(row.name)"
-                    (click)="selectedId.set(row.id)"
-                  >
-                    {{ inspect }}
-                  </button>
-                  @if (canWrite() && row.status !== 'revoked') {
-                    <button
-                      *appDesktopMutation
-                      hlmBtn
-                      [variant]="'ghost'"
-                      type="button"
-                      data-api-revoke
-                      [attr.data-row-id]="row.id"
-                      [attr.aria-label]="writeCopy.revoke + ': ' + row.name"
-                      [disabled]="busy()"
-                      (click)="requestRevoke(row)"
-                    >
-                      {{ writeCopy.revoke }}
-                    </button>
+        </header>
+        @if (filtered().length) {
+          @let narrow = viewport.narrow();
+          <div hlmTableContainer>
+            <table
+              hlmTable
+              class="w-full table-fixed border-collapse"
+              aria-labelledby="api-directory-title"
+            >
+              <thead hlmTHead class="bg-(--eg-surface-raised) text-xs">
+                <tr hlmTr class="max-md:border-0">
+                  <th hlmTh scope="col" class="max-md:h-0 max-md:p-0">
+                    <span class="max-md:sr-only">{{ copy.name }}</span>
+                  </th>
+                  @if (!narrow) {
+                    <th hlmTh scope="col" class="w-[24%] whitespace-normal">{{ copy.prefix }}</th>
+                    <th hlmTh scope="col" class="w-[24%] whitespace-normal">{{ copy.state }}</th>
                   }
-                </div>
-                @if (viewport.narrow()) {
-                  <app-api-token-facts [row]="row" />
+                </tr>
+              </thead>
+              <tbody hlmTBody>
+                @for (row of filtered(); track row.id) {
+                  <tr
+                    hlmTr
+                    class="data-[selected=true]:bg-(--eg-accent-soft)"
+                    data-api-token-row
+                    [attr.data-state]="row.status"
+                    [attr.data-selected]="selected()?.id === row.id"
+                  >
+                    <td hlmTd class="whitespace-normal max-md:p-4">
+                      <button
+                        hlmBtn
+                        [variant]="'link'"
+                        class="h-auto max-w-full justify-start px-0 py-1 text-start whitespace-normal pointer-coarse:min-h-(--eg-control-touch)"
+                        type="button"
+                        data-api-inspect
+                        [attr.aria-pressed]="selected()?.id === row.id"
+                        [attr.aria-label]="inspectLabel(row.name)"
+                        (click)="selectedId.set(row.id)"
+                      >
+                        <app-data-table-value class="min-w-0 font-bold" [value]="row.name" />
+                      </button>
+                      <app-api-token-permission-tags
+                        [permissions]="row.permissions"
+                        [name]="row.name"
+                      />
+                      @if (canWrite() && row.status !== 'revoked') {
+                        <button
+                          *appDesktopMutation
+                          hlmBtn
+                          [variant]="'ghost'"
+                          type="button"
+                          data-api-revoke
+                          [attr.data-row-id]="row.id"
+                          [attr.aria-label]="writeCopy.revoke + ': ' + row.name"
+                          [disabled]="busy()"
+                          (click)="requestRevoke(row)"
+                        >
+                          {{ writeCopy.revoke }}
+                        </button>
+                      }
+                      @if (narrow) {
+                        <app-api-token-facts class="mt-3" [row]="row" />
+                      }
+                    </td>
+                    @if (!narrow) {
+                      <td hlmTd class="font-mono text-xs whitespace-normal wrap-anywhere">
+                        {{ row.prefix }}
+                      </td>
+                      <td hlmTd>
+                        <app-status-pill
+                          [tone]="row.status === 'active' ? 'success' : 'neutral'"
+                          [label]="stateLabel(row.status)"
+                        />
+                      </td>
+                    }
+                  </tr>
                 }
-              </li>
-            } @empty {
-              <li>
-                <app-empty-pattern [bare]="true" [title]="noMatches" [description]="loadedOnly" />
-                <button hlmBtn [variant]="'outline'" type="button" (click)="query.set('')">
-                  {{ clearSearch }}
-                </button>
-              </li>
-            }
-          </ul>
-        </div>
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <div class="grid justify-items-start gap-3 px-5 py-4">
+            <app-empty-pattern [bare]="true" [title]="noMatches" [description]="loadedOnly" />
+            <button hlmBtn [variant]="'outline'" type="button" (click)="query.set('')">
+              {{ clearSearch }}
+            </button>
+          </div>
+        }
+        <ng-content />
       </section>
       @if (selected(); as row) {
         <section
           hlmCard
-          class="min-w-0 self-start"
+          class="min-w-0 gap-0 rounded-xl p-0"
           aria-labelledby="api-detail-title"
           data-api-token-detail
         >
-          <header hlmCardHeader>
-            <h3 hlmCardTitle id="api-detail-title" class="wrap-anywhere">{{ row.name }}</h3>
-            <p hlmCardDescription>{{ metadataOnly }}</p>
+          <header hlmCardHeader class="min-w-0 gap-2 border-b border-border px-5 py-4">
+            <code class="text-xs text-muted-foreground wrap-anywhere">{{ row.id }}</code>
+            <h3 hlmCardTitle [size]="'section'" id="api-detail-title" class="m-0 wrap-anywhere">
+              {{ row.name }}
+            </h3>
+            <p hlmCardDescription class="m-0 text-xs">{{ metadataOnly }}</p>
           </header>
-          <div hlmCardContent><app-api-token-facts [row]="row" /></div>
+          <div hlmCardContent class="px-5 py-4"><app-api-token-facts [row]="row" /></div>
         </section>
       }
     </div>
@@ -155,6 +195,23 @@ export class ApiTokenListComponent {
   protected readonly copy = API_TOKENS_COPY;
   protected readonly writeCopy = API_TOKENS_WRITE_COPY;
   protected readonly stateLabel = apiTokenStateLabel;
+  protected readonly pageCounts = computed<readonly SettingsPageCount[]>(() => {
+    const rows = this.rows();
+    let active = 0;
+    let expired = 0;
+    let revoked = 0;
+    for (const row of rows) {
+      if (row.status === 'active') active++;
+      else if (row.status === 'expired') expired++;
+      else if (row.status === 'revoked') revoked++;
+    }
+    return [
+      { label: this.copy.directory, icon: 'key', value: rows.length },
+      { label: this.copy.active, icon: 'shield-check', value: active },
+      { label: this.copy.expired, icon: 'scroll', value: expired },
+      { label: this.copy.revoked, icon: 'shield-alert', value: revoked },
+    ];
+  });
   protected readonly query = linkedSignal(() => {
     this.rows();
     return '';
@@ -171,7 +228,6 @@ export class ApiTokenListComponent {
   );
   protected readonly searchLabel = $localize`:@@settings.api-tokens.search:Search name or prefix`;
   protected readonly loadedOnly = $localize`:@@settings.api-tokens.loaded-only:Search applies to this loaded page only. Complete project totals are not available.`;
-  protected readonly inspect = $localize`:@@settings.api-tokens.inspect:Inspect`;
   protected readonly metadataOnly = $localize`:@@settings.api-tokens.metadata-only:Metadata only. Existing token values cannot be retrieved.`;
   protected readonly noMatches = $localize`:@@settings.api-tokens.no-matches:No tokens match this search`;
   protected readonly clearSearch = $localize`:@@settings.api-tokens.clear-search:Clear search`;

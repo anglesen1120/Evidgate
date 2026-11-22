@@ -12,7 +12,9 @@ class TokenListHarness extends ComponentHarness {
   static hostSelector = 'app-api-token-list';
   readonly search = this.locatorFor('#api-token-search');
   readonly inspectButtons = this.locatorForAll('[data-api-inspect]');
+  readonly rowFacts = this.locatorForAll('[data-api-token-row] app-api-token-facts');
   readonly detail = this.locatorForOptional('[data-api-token-detail]');
+  readonly selectedTokenId = this.locatorFor('[data-api-token-detail] header code');
 }
 
 describe('ApiTokenListComponent', () => {
@@ -46,7 +48,7 @@ describe('ApiTokenListComponent', () => {
     return { fixture, root: fixture.nativeElement as HTMLElement, harness, wide };
   }
 
-  it('renders twenty metadata scan records and never a full credential or equal-width table', async () => {
+  it('renders twenty metadata rows in a labelled directory and never a full credential', async () => {
     const full = 'credential-that-must-not-be-rendered';
     const { root } = await render(
       Array.from({ length: 20 }, (_, index) => ({
@@ -61,7 +63,9 @@ describe('ApiTokenListComponent', () => {
     expect(root.textContent).toContain(ROW.prefix);
     expect(root.textContent).toContain('run:read');
     expect(root.outerHTML).not.toContain(full);
-    expect(root.querySelector('table')).toBeNull();
+    const table = root.querySelector('table[aria-labelledby="api-directory-title"]');
+    const headings = Array.from(table?.querySelectorAll('th[scope="col"]') ?? []);
+    expect(headings.map((th) => th.textContent?.trim())).toEqual(['Name', 'Token prefix', 'State']);
     expect(root.querySelector('[data-api-token-detail]')).not.toBeNull();
   });
 
@@ -70,6 +74,8 @@ describe('ApiTokenListComponent', () => {
     const { root, harness } = await render([ROW, { ...ROW, id: 'used', last_used_at: used }]);
     expect(await (await harness.detail())?.text()).toContain('Never');
     await (await harness.inspectButtons())[1]?.click();
+    expect(await (await harness.selectedTokenId()).text()).toBe('used');
+    expect(await (await harness.inspectButtons())[1]?.getAttribute('aria-pressed')).toBe('true');
     const time = root.querySelector(`time[datetime="${used}"]`);
     expect(time?.textContent).toContain('UTC');
     expect(root.textContent).toContain('Created by');
@@ -103,6 +109,9 @@ describe('ApiTokenListComponent', () => {
     await (await harness.search()).setInputValue('alternate');
     await (await harness.search()).dispatchEvent('input');
     expect(root.querySelectorAll('[data-api-token-row]')).toHaveLength(1);
+    expect(
+      root.querySelector('[data-token-page-count] app-number-value')?.textContent?.trim(),
+    ).toBe('2');
     expect(await (await harness.detail())?.text()).toContain('Other');
     await (await harness.search()).setInputValue('not-here');
     await (await harness.search()).dispatchEvent('input');
@@ -131,6 +140,22 @@ describe('ApiTokenListComponent', () => {
     await fixture.whenStable();
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement).toBe(more);
+  });
+
+  it('keeps focus on the same unselected Inspect button when narrowing and widening', async () => {
+    const { fixture, harness, wide } = await render([ROW, { ...ROW, id: 'other', name: 'Other' }]);
+    const [, other] = await harness.inspectButtons();
+    await other?.focus();
+
+    for (const isWide of [false, true]) {
+      wide.set(isWide);
+      await fixture.whenStable();
+      expect(await harness.rowFacts()).toHaveLength(isWide ? 0 : 2);
+      const [, focused] = await harness.inspectButtons();
+      expect(await focused?.isFocused()).toBe(true);
+      expect(await focused?.getAttribute('aria-label')).toBe('Inspect token Other');
+      expect(await (await harness.selectedTokenId()).text()).toBe(ROW.id);
+    }
   });
 
   it('gates revoke by permission, busy state and viewport while narrow keeps every metadata fact', async () => {

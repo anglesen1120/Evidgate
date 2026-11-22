@@ -14,6 +14,8 @@ import { FormsModule } from '@angular/forms';
 import { rxResource } from '@angular/core/rxjs-interop';
 import { map, of, startWith, timer } from 'rxjs';
 import { HlmButton } from '@evidgate/ui/button';
+import { HlmCardImports } from '@evidgate/ui/card';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
@@ -25,7 +27,11 @@ import { SectionHeaderComponent } from '../../../shared/ui/page-header/section-h
 import { PageHeaderComponent } from '../../../shared/ui/page-header/page-header.component';
 import { clampTimerDelay } from '../../../shared/time/timer-delay';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
-import { SECURITY_SEVERITY_LABELS, SECURITY_TYPE_LABELS } from './security-events.config';
+import {
+  SECURITY_EVENTS_VERSION,
+  SECURITY_SEVERITY_LABELS,
+  SECURITY_TYPE_LABELS,
+} from './security-events.config';
 import { SecurityEventsTableComponent } from './security-events-table.component';
 import { securityEventRange } from './security-events-range';
 import {
@@ -39,6 +45,8 @@ import {
   imports: [
     FormsModule,
     HlmButton,
+    HlmCardImports,
+    HlmIcon,
     HlmInput,
     HlmLabel,
     HlmSelectImports,
@@ -51,7 +59,10 @@ import {
   ],
   providers: [SecurityEventsStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'block min-w-0', '[attr.data-security-phase]': 'store.phase()' },
+  host: {
+    class: '@container grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 wrap-anywhere',
+    '[attr.data-security-phase]': 'store.phase()',
+  },
   templateUrl: './security-events.page.html',
 })
 export class SecurityEventsPage {
@@ -93,6 +104,8 @@ export class SecurityEventsPage {
     title: $localize`:@@settings.security.title:Security events`,
     description: $localize`:@@settings.security.description:Inspect authorized security metadata across the organization. Event records are read-only; times are shown in UTC.`,
     boundary: $localize`:@@settings.security.boundary:Metadata only. Severity is supplied by the server, not a security certification. Cross-tenant targets and attempted secrets are not disclosed.`,
+    activity: $localize`:@@settings.security-activity:Recent activity`,
+    safeData: $localize`:@@settings.security-safe-data:Safe event data`,
     filters: $localize`:@@settings.security.filters:Filter activity`,
     project: $localize`:@@settings.security.project:Project id`,
     projectHint: $localize`:@@settings.security.project-hint:Optional exact project UUID. Leave blank for all projects.`,
@@ -118,6 +131,37 @@ export class SecurityEventsPage {
     capped: $localize`:@@settings.security.capped:Browsing limit reached. Narrow the filters to review older activity.`,
     hidden: $localize`:@@settings.security.hidden:Injection-attempt events are not displayed in this V1 view. A page may contain no visible V1 events; continue to the next page when available.`,
   };
+  protected readonly summary = computed(() => {
+    const rows = this.store.rows();
+    let critical = 0;
+    let support = 0;
+    for (const row of rows) {
+      if (row.severity === 'critical') critical++;
+      if (row.type === 'support_access') support++;
+    }
+    return [
+      {
+        label: $localize`:@@settings.security-visible-events:Visible events on this page`,
+        value: formatNumber(rows.length, this.locale),
+        icon: 'lucideClock',
+      },
+      {
+        label: $localize`:@@settings.security-page-critical:Critical events on this page`,
+        value: formatNumber(critical, this.locale),
+        icon: 'lucideTriangleAlert',
+      },
+      {
+        label: $localize`:@@settings.security-page-support:Support events on this page`,
+        value: formatNumber(support, this.locale),
+        icon: 'lucideActivity',
+      },
+      {
+        label: $localize`:@@settings.security-event-catalog:Event catalog`,
+        value: SECURITY_EVENTS_VERSION,
+        icon: 'lucideInfo',
+      },
+    ] as const;
+  });
   protected readonly feedback = computed(() => {
     this.session.currentOrg();
     return createFormFeedback([

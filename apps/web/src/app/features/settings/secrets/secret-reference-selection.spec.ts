@@ -5,12 +5,14 @@ import { TestBed } from '@angular/core/testing';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { SecretReferenceListComponent } from './secret-reference-list.component';
 import { base } from './secrets-page.testing';
+import { ROTATION_CLOCK } from './rotation-reminder-chip.component';
 
 class ReferenceListHarness extends ComponentHarness {
   static hostSelector = 'app-secret-reference-list';
   readonly search = this.locatorFor('#secret-reference-search');
   readonly inspect = this.locatorForAll('[data-secret-inspect]');
   readonly detail = this.locatorForOptional('[data-secret-detail]');
+  readonly counts = this.locatorForAll('[data-page-count] dd');
 }
 
 describe('Secret reference list and selected lifecycle', () => {
@@ -19,6 +21,7 @@ describe('Secret reference list and selected lifecycle', () => {
     const wide = signal(!narrow);
     TestBed.configureTestingModule({
       providers: [
+        { provide: ROTATION_CLOCK, useValue: () => new Date('2026-11-01T00:00:00Z') },
         {
           provide: NarrowMutationPolicy,
           useValue: {
@@ -51,6 +54,30 @@ describe('Secret reference list and selected lifecycle', () => {
     );
     return { fixture, root: fixture.nativeElement as HTMLElement, harness, wide };
   }
+
+  it('summarizes the loaded page independently of the directory filters', async () => {
+    const { fixture, harness } = await render();
+    fixture.componentRef.setInput('rows', [
+      {
+        ...base,
+        id: 'near',
+        name: 'Production',
+        status: 'active',
+        expires_at: '2026-11-15T00:00:00Z',
+      },
+      { ...base, id: 'past', status: 'expired' },
+      { ...base, id: 'revoked', status: 'revoked' },
+    ]);
+    await fixture.whenStable();
+    const counts = async () => Promise.all((await harness.counts()).map((node) => node.text()));
+    expect(await counts()).toEqual(['3', '1', '1', '1']);
+    await (await harness.search()).setInputValue('Production');
+    await (await harness.search()).dispatchEvent('input');
+    expect(await harness.inspect()).toHaveLength(1);
+    expect(await counts()).toEqual(['3', '1', '1', '1']);
+    fixture.componentRef.setInput('rows', [{ ...base, status: 'revoked' }]);
+    expect(await counts()).toEqual(['1', '0', '0', '0']);
+  });
 
   it('selects a complete metadata lifecycle with explicit missing values and UTC instants', async () => {
     const { root, harness } = await render();

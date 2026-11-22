@@ -1,3 +1,5 @@
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { computed, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
@@ -47,6 +49,13 @@ const head: PolicyRevisionSummaryDto = {
   created_at: revision.created_at,
   version: revision.version,
 };
+
+class PolicyOverviewHarness extends ComponentHarness {
+  static hostSelector = 'app-policy-page';
+  readonly mode = this.locatorForOptional('[data-overview-mode] dd');
+  readonly head = this.locatorForOptional('[data-overview-head] dd');
+  readonly activeNumber = this.locatorForOptional('[data-overview-active] app-number-value');
+}
 
 class FakePolicyStore {
   readonly phase = signal<'idle' | 'ready' | 'loading' | 'not_found' | 'error'>('ready');
@@ -185,6 +194,28 @@ describe('PolicyPage', () => {
     expect(root.querySelector('[data-policy-mode]')?.getAttribute('data-mode')).toBe('advisory');
     expect(root.querySelector('[data-policy-publish-open]')).not.toBeNull();
   });
+  it('shows only independently readable facts in the revision overview', async () => {
+    const { fixture } = await render();
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      PolicyOverviewHarness,
+    );
+    expect(await (await harness.mode())?.text()).toContain('advisory');
+    expect(await (await harness.head())?.text()).toContain('2');
+    expect(await (await harness.activeNumber())?.text()).toBe('2');
+    store.reads.activation.set({
+      phase: 'ready',
+      value: { ...activation, policy_revision_id: 'outside-the-loaded-page' },
+      error: null,
+    });
+    expect(await harness.activeNumber()).toBeNull();
+    store.reads.activation.set({ phase: 'forbidden', value: null, error: null });
+    expect(await harness.mode()).toBeNull();
+    expect(await harness.head()).not.toBeNull();
+    store.reads.head.set({ phase: 'empty', value: null, error: null });
+    expect(await harness.head()).toBeNull();
+  });
+
   it('shows the no-activation state without hiding the revisions', async () => {
     store.reads.activation.set({ phase: 'empty', value: null, error: null });
     const { root } = await render();

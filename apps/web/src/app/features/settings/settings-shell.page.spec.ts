@@ -5,6 +5,7 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import { BrnSelect } from '@spartan-ng/brain/select';
 
 import { SessionStore } from '../../core/session/session.store';
+import { provideLayoutTestStubs } from '../../shared/testing/layout.testing';
 import { SettingsShellPage } from './settings-shell.page';
 import { SettingsTabPlaceholderPage } from './settings-tab-placeholder.page';
 import { SETTINGS_TABS } from './settings-tabs';
@@ -48,6 +49,7 @@ async function choices(root: HTMLElement): Promise<string[]> {
 }
 
 describe('SettingsShellPage', () => {
+  provideLayoutTestStubs();
   beforeEach(() => {
     permissions.set(new Set());
     currentOrg.set({ name: 'Example organization' });
@@ -100,7 +102,9 @@ describe('SettingsShellPage', () => {
     expect(root.querySelector('label[hlmLabel]')?.getAttribute('for')).toBe('settings-destination');
     expect(root.querySelector('select')).toBeNull();
     expect(root.querySelector('button[role="combobox"]')?.id).toBe('settings-destination');
-    expect(root.querySelector('.settings-mobile')?.classList.contains('md:hidden')).toBe(true);
+    expect(root.querySelector('.settings-mobile')?.classList.contains('min-[1025px]:hidden')).toBe(
+      true,
+    );
     expect(root.querySelector('.settings-content[hlmCard]')).toBeNull();
     expect(root.querySelector('h1[hlmCardTitle]')).not.toBeNull();
     expect(root.querySelector('[hidden]')).toBeNull();
@@ -149,7 +153,7 @@ describe('SettingsShellPage', () => {
     expect(root.querySelector('img')).toBeNull();
     currentOrg.set(null);
     await fixture.whenStable();
-    expect(root.querySelector('.settings-header p')).toBeNull();
+    expect(root.querySelector('.settings-scope')).toBeNull();
   });
 
   it('marks the routed link current and synchronizes mobile navigation and browser history', async () => {
@@ -169,6 +173,16 @@ describe('SettingsShellPage', () => {
     expect(TestBed.inject(Router).url).toBe('/settings/members');
     await harness.navigateByUrl('/settings/audit');
     expect(select.value()).toBe('audit');
+  });
+
+  it('shows the active destination permission only while the server still grants it', async () => {
+    permissions.set(new Set(['audit:read', 'membership:read']));
+    const harness = await RouterTestingHarness.create('/settings/audit');
+    const root = harness.routeNativeElement!;
+    expect(root.querySelector('.settings-scope code')?.textContent?.trim()).toBe('audit:read');
+    permissions.set(new Set(['membership:read']));
+    harness.fixture.detectChanges();
+    expect(root.querySelector('.settings-scope code')).toBeNull();
   });
 
   it('keeps the mobile select on the router segment when the navigation is refused', async () => {

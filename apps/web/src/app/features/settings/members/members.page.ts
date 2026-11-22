@@ -12,11 +12,16 @@ import {
 import { ActivatedRoute } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmAlertImports } from '@evidgate/ui/alert';
-import { HlmCardTitle } from '@evidgate/ui/card';
+import { HlmCardImports } from '@evidgate/ui/card';
 import type { MembershipView } from '@evidgate/sdk';
 import { SessionStore } from '../../../core/session/session.store';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
+import {
+  SettingsPageCountsComponent,
+  type SettingsPageCount,
+} from '../settings-page-counts.component';
 import { EditRolesDialogComponent } from './edit-roles-dialog.component';
 import { InviteDialogComponent } from './invite-dialog.component';
 import { MemberListComponent, MEMBERS_COPY } from './member-list.component';
@@ -32,7 +37,9 @@ import { CancelInviteDialogComponent } from './cancel-invite-dialog.component';
   imports: [
     HlmButton,
     HlmAlertImports,
-    HlmCardTitle,
+    HlmCardImports,
+    ShellIconComponent,
+    SettingsPageCountsComponent,
     RequestStateComponent,
     MemberListComponent,
     RoleMatrixComponent,
@@ -73,6 +80,24 @@ export class MembersPage {
   protected readonly visibleMembers = computed(() =>
     this.store.members().slice(this.offset(), this.offset() + 200),
   );
+  protected readonly pageCounts = computed<readonly SettingsPageCount[]>(() => {
+    let active = 0;
+    let pending = 0;
+    let admins = 0;
+    for (const member of this.visibleMembers()) {
+      if (member.status === 'active') {
+        active++;
+        if (member.roles.some((role) => role.is_builtin && role.code === 'tenant_admin')) admins++;
+      } else if (member.status === 'pending') {
+        pending++;
+      }
+    }
+    return [
+      { label: this.copy.activeMembers, icon: 'users', value: active },
+      { label: this.copy.pendingInvitations, icon: 'scroll', value: pending },
+      { label: this.copy.organizationAdmins, icon: 'shield-check', value: admins },
+    ];
+  });
   protected readonly visibleMatrix = computed(() => {
     const ids = new Set(this.visibleMembers().map((member) => member.id));
     const matrix = this.store.matrix();

@@ -67,6 +67,7 @@ describe('ApiTokensPage states', () => {
     h.permissions.set(new Set(['api_token:read']));
     await h.settle();
     expect(h.root.querySelector('[data-api-create]')).toBeNull();
+    expect(h.root.textContent).toContain('Read-only');
     expect(h.root.textContent).toContain('No API tokens yet');
   });
 
@@ -76,6 +77,7 @@ describe('ApiTokensPage states', () => {
     expect(h.root.querySelector('app-not-found-pattern')).not.toBeNull();
     expect(h.root.querySelector('app-forbidden-pattern')).toBeNull();
     expect(h.root.querySelector('table')).toBeNull();
+    expect(h.root.textContent).not.toContain('Read-only');
     expect(h.root.querySelector('[data-api-create]')).toBeNull();
   });
 

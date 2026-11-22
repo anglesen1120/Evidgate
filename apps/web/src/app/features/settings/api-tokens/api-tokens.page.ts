@@ -32,6 +32,7 @@ import { ApiTokenRevokeDialogComponent } from './api-token-revoke-dialog.compone
 import { API_TOKENS_WRITE_COPY } from './api-tokens-write.copy';
 import { retryReadyFor } from './api-token-retry';
 import { SectionHeaderImports } from '../../../shared/ui/page-header';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { DesktopMutationDirective } from '../../../shared/ui/narrow/desktop-mutation.directive';
 import { DesktopRequiredNoticeComponent } from '../../../shared/ui/narrow/desktop-required-notice.component';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
@@ -42,6 +43,7 @@ import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-
     HlmButton,
     HlmSelectImports,
     SectionHeaderImports,
+    ShellIconComponent,
     DesktopMutationDirective,
     DesktopRequiredNoticeComponent,
     HlmLabel,
@@ -55,27 +57,47 @@ import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0 text-sm text-foreground wrap-anywhere' },
   template: `
-    <app-section-header tabindex="-1" [title]="copy.title" [description]="copy.description">
-      @if (store.canWrite() && store.scope() && store.phase() !== 'forbidden') {
-        <button
-          *appDesktopMutation
-          appSectionHeaderActions
-          hlmBtn
-          type="button"
-          data-api-create
-          [disabled]="store.creating() || store.revoking()"
-          (click)="openCreate()"
-        >
-          {{ copy.create }}
-        </button>
-      }
-    </app-section-header>
+    <header class="flex min-w-0 items-start gap-3">
+      <span
+        class="grid size-12 shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent)"
+      >
+        <app-shell-icon [name]="'shield-check'" />
+      </span>
+      <app-section-header
+        class="min-w-0 grow"
+        tabindex="-1"
+        [title]="copy.title"
+        [description]="copy.description"
+      >
+        @if (store.canWrite() && store.scope() && store.phase() !== 'forbidden') {
+          <button
+            *appDesktopMutation
+            appSectionHeaderActions
+            hlmBtn
+            type="button"
+            data-api-create
+            [disabled]="store.creating() || store.revoking()"
+            (click)="openCreate()"
+          >
+            {{ copy.create }}
+          </button>
+        }
+      </app-section-header>
+    </header>
     @if (store.session.projects().length > 0) {
       <div
-        class="my-[var(--eg-space-7)] grid min-w-0 max-w-full gap-[var(--eg-space-2)] sm:max-w-lg"
+        class="my-4 flex min-w-0 flex-wrap items-end justify-between gap-3 border-y border-border py-3"
       >
-        <label hlmLabel for="api-tokens-project">{{ copy.project }}</label>
+        <div class="grid min-w-0 gap-1">
+          <label hlmLabel for="api-tokens-project">{{ copy.project }}</label>
+          <p
+            id="api-tokens-project-value"
+            class="m-0 font-semibold wrap-anywhere"
+            [textContent]="projectLabel(store.selectedProject())"
+          ></p>
+        </div>
         <hlm-select
+          class="w-full min-w-0 max-w-full sm:w-64"
           [value]="store.selectedProject()"
           [itemToString]="projectLabel"
           (valueChange)="selectProject($event)"
@@ -83,7 +105,7 @@ import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-
           <hlm-select-trigger
             [buttonId]="'api-tokens-project'"
             [aria-describedby]="'api-tokens-project-value'"
-            class="w-full min-h-[var(--eg-control-touch)]"
+            class="min-h-(--eg-control-md) w-full min-w-0 whitespace-normal pointer-coarse:min-h-(--eg-control-touch)"
           >
             <hlm-select-value [placeholder]="copy.project" />
           </hlm-select-trigger>
@@ -95,15 +117,21 @@ import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-
             }
           </hlm-select-content>
         </hlm-select>
-        <p
-          id="api-tokens-project-value"
-          class="m-0 wrap-anywhere"
-          [textContent]="projectLabel(store.selectedProject())"
-        ></p>
       </div>
     }
     @if (store.canWrite() && store.scope() && store.phase() !== 'forbidden') {
       <app-desktop-required-notice />
+    } @else if (
+      !store.canWrite() &&
+      store.scope() &&
+      (store.phase() === 'success' || store.phase() === 'empty')
+    ) {
+      <p
+        class="my-4 border-b border-border pb-3 text-xs text-muted-foreground"
+        i18n="@@settings.read-only"
+      >
+        Read-only. You don’t have permission to make changes here.
+      </p>
     }
     @if (store.phase() === 'forbidden') {
       <app-not-found-pattern />
@@ -122,33 +150,39 @@ import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-
           [canWrite]="store.canWrite()"
           [busy]="store.creating() || store.revoking()"
           (revoke)="revokeSelection.set($event)"
-        />
-        <nav class="mt-3 flex flex-wrap gap-2" [attr.aria-label]="copy.pages">
-          @if (store.cursor()) {
-            <button
-              hlmBtn
-              [variant]="'outline'"
-              type="button"
-              class="min-h-[var(--eg-control-touch)]"
-              data-api-first
-              (click)="first()"
+        >
+          @if (store.cursor() || store.hasNext()) {
+            <nav
+              class="flex flex-wrap justify-end gap-2 border-t border-border px-4 py-3"
+              [attr.aria-label]="copy.pages"
             >
-              {{ copy.first }}
-            </button>
+              @if (store.cursor()) {
+                <button
+                  hlmBtn
+                  [variant]="'outline'"
+                  type="button"
+                  class="min-h-[var(--eg-control-touch)]"
+                  data-api-first
+                  (click)="first()"
+                >
+                  {{ copy.first }}
+                </button>
+              }
+              @if (store.hasNext()) {
+                <button
+                  hlmBtn
+                  [variant]="'outline'"
+                  type="button"
+                  class="min-h-[var(--eg-control-touch)]"
+                  data-api-next
+                  (click)="next()"
+                >
+                  {{ copy.next }}
+                </button>
+              }
+            </nav>
           }
-          @if (store.hasNext()) {
-            <button
-              hlmBtn
-              [variant]="'outline'"
-              type="button"
-              class="min-h-[var(--eg-control-touch)]"
-              data-api-next
-              (click)="next()"
-            >
-              {{ copy.next }}
-            </button>
-          }
-        </nav>
+        </app-api-token-list>
       </app-request-state>
     }
     <p role="status">{{ revoked() ? writeCopy.revoked : '' }}</p>

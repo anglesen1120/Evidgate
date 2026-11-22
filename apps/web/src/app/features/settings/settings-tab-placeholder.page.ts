@@ -11,9 +11,11 @@ import { SETTINGS_TABS } from './settings-tabs';
   host: { class: 'block min-w-0', '[attr.data-settings-tab-body]': 'tab?.id ?? null' },
   template: `
     @if (tab; as tab) {
-      <section hlmCard class="gap-3 p-4 wrap-anywhere">
-        <h2 hlmCardTitle>{{ tab.label }}</h2>
-        <p hlmCardDescription i18n="@@settings.placeholder.body">
+      <section hlmCard class="min-w-0 gap-0 rounded-xl p-0 wrap-anywhere">
+        <header hlmCardHeader class="border-b border-border px-5 py-4">
+          <h2 hlmCardTitle [size]="'section'" class="m-0">{{ tab.label }}</h2>
+        </header>
+        <p hlmCardDescription class="m-0 px-5 py-4" i18n="@@settings.placeholder.body">
           This tab arrives with its own feature story.
         </p>
       </section>

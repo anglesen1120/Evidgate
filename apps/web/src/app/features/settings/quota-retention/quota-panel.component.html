@@ -1,17 +1,25 @@
 <section
-  class="grid min-w-0 gap-(--eg-space-7)"
+  class="@container grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 wrap-anywhere"
   aria-labelledby="quota-title"
   [attr.aria-busy]="quota.loadState() === 'loading'"
 >
-  <header class="grid min-w-0 gap-(--eg-space-3)">
-    <h2 hlmCardTitle [size]="sectionSize" id="quota-title">{{ copy.title }}</h2>
-    <p class="eg-type-body m-0 max-w-[65ch] text-muted-foreground">{{ copy.description }}</p>
+  <header class="flex min-w-0 items-start gap-3">
+    <span
+      class="grid size-12 shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent)"
+    >
+      <hlm-icon [name]="'lucideActivity'" class="size-6" />
+    </span>
+    <div class="grid min-w-0 gap-1">
+      <h2 hlmCardTitle [size]="sectionSize" id="quota-title">{{ copy.title }}</h2>
+      <p class="m-0 max-w-[65ch] text-sm text-muted-foreground">{{ copy.description }}</p>
+    </div>
   </header>
   @if (quota.loadState() === 'loading' || quota.loadState() === 'idle') {
     <app-loading-pattern [label]="copy.loading" [layout]="loadingLayout" [bare]="true" />
   } @else if (quota.usageSummary(); as summary) {
-    <p class="m-0 text-muted-foreground">
-      {{ copy.period }}: <span data-quota-period>{{ summary.period }}</span>
+    <p class="m-0 text-xs text-muted-foreground">
+      {{ copy.period }}:
+      <strong class="font-semibold text-foreground" data-quota-period>{{ summary.period }}</strong>
     </p>
     @if (summary.next_cursor) {
       <app-inline-feedback
@@ -23,23 +31,32 @@
     @if (summary.metrics.length === 0) {
       <p class="m-0" role="status" data-quota-empty>{{ copy.empty }}</p>
     }
-    <div class="grid min-w-0 gap-(--eg-space-7)">
+    <div class="grid min-w-0 gap-3 @sm:grid-cols-2 @4xl:grid-cols-4">
       @for (metric of summary.metrics; track metric.metric; let index = $index) {
         <section
           hlmCard
-          class="min-w-0 gap-(--eg-space-5) p-(--eg-space-5)"
+          class="min-w-0 gap-3 rounded-xl p-4"
           [attr.data-quota-metric]="metric.metric"
           [attr.aria-labelledby]="'quota-metric-' + index"
         >
-          <h3 hlmCardTitle [size]="subsectionSize" [id]="'quota-metric-' + index">
+          <h3
+            class="m-0 flex items-center gap-2 text-sm font-semibold"
+            [id]="'quota-metric-' + index"
+          >
+            <span
+              class="grid size-7 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
+            >
+              <hlm-icon [name]="'lucideActivity'" class="size-4" />
+            </span>
             {{ metricLabel(metric.metric) }}
           </h3>
-          <dl
-            class="m-0 grid min-w-0 gap-(--eg-space-5) [grid-template-columns:repeat(auto-fit,minmax(min(100%,30ch),1fr))]"
-          >
-            <div class="grid min-w-0 gap-(--eg-space-2) md:text-end">
-              <dt class="text-muted-foreground">{{ copy.used }}</dt>
-              <dd class="m-0 font-semibold tabular-nums" data-quota-used>
+          <dl class="m-0 grid min-w-0 gap-1">
+            <div class="flex flex-wrap items-baseline gap-x-2">
+              <dt class="text-xs text-muted-foreground">{{ copy.used }}</dt>
+              <dd
+                class="m-0 font-(family-name:--eg-font-display) text-2xl font-bold tabular-nums"
+                data-quota-used
+              >
                 @if (metric.used === null) {
                   {{ copy.unavailable }}
                 } @else {
@@ -47,9 +64,9 @@
                 }
               </dd>
             </div>
-            <div class="grid min-w-0 gap-(--eg-space-2) md:text-end">
-              <dt class="text-muted-foreground">{{ copy.limit }}</dt>
-              <dd class="m-0 font-semibold tabular-nums" data-quota-limit>
+            <div class="flex flex-wrap items-baseline gap-x-1 text-sm text-muted-foreground">
+              <dt>{{ copy.limit }}:</dt>
+              <dd class="m-0 tabular-nums" data-quota-limit>
                 @if (metric.limit === null) {
                   {{ copy.unavailable }}
                 } @else {
@@ -59,7 +76,9 @@
             </div>
           </dl>
           @if (metric.used === null) {
-            <p data-quota-reason class="m-0 text-muted-foreground">{{ copy.notMeasured }}</p>
+            <p data-quota-reason class="m-0 text-xs text-muted-foreground">
+              {{ copy.notMeasured }}
+            </p>
           } @else if (metric.blocked_at) {
             <app-status-pill [tone]="dangerTone" [label]="copy.blocked" />
           } @else if (metric.warned_at) {
@@ -81,17 +100,6 @@
               }
             </dl>
           }
-          @if (metric.projects.length > 0) {
-            <section class="grid min-w-0 gap-(--eg-space-4)" data-quota-projects>
-              <h4 class="m-0 text-sm font-semibold">{{ copy.projects }}</h4>
-              <app-data-table
-                [columns]="columns()"
-                [rows]="metric.projects"
-                [rowId]="projectId"
-                [caption]="metricLabel(metric.metric) + ' · ' + copy.projectCaption"
-              />
-            </section>
-          }
         </section>
       }
     </div>
@@ -104,25 +112,63 @@
       (action)="quota.reload()"
     />
   }
-  <section
-    hlmCard
-    class="grid min-w-0 gap-(--eg-space-5) p-(--eg-space-5)"
-    aria-labelledby="quota-storage-title"
-    data-quota-storage
+  <div
+    class="grid min-w-0 items-start gap-4"
+    [class]="
+      quota.loadState() === 'ready' && projectMetrics()?.length
+        ? '@4xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]'
+        : ''
+    "
   >
-    <h3 hlmCardTitle [size]="subsectionSize" id="quota-storage-title">{{ copy.storageTitle }}</h3>
-    <p class="m-0 max-w-[65ch] text-muted-foreground">{{ copy.storageReason }}</p>
-    <dl class="m-0 grid gap-(--eg-space-4) md:grid-cols-2">
-      <div>
-        <dt class="text-muted-foreground">{{ copy.storedBytes }}</dt>
-        <dd class="m-0">{{ copy.unavailable }}</dd>
+    @if (quota.loadState() === 'ready' && projectMetrics()?.length) {
+      <div class="grid min-w-0 gap-4">
+        @for (metric of projectMetrics(); track metric.metric) {
+          <section
+            hlmCard
+            class="min-w-0 gap-0 overflow-visible rounded-xl p-0"
+            data-quota-projects
+          >
+            <header class="grid min-w-0 gap-1 border-b border-border px-5 py-4">
+              <h3 hlmCardTitle [size]="subsectionSize">{{ metricLabel(metric.metric) }}</h3>
+              <p class="m-0 text-sm text-muted-foreground">{{ copy.projects }}</p>
+            </header>
+            <app-data-table
+              [columns]="columns()"
+              [rows]="metric.projects"
+              [rowId]="projectId"
+              [fitToContainer]="true"
+              [caption]="metricLabel(metric.metric) + ' · ' + copy.projectCaption"
+            />
+          </section>
+        }
       </div>
-      <div>
-        <dt class="text-muted-foreground">{{ copy.egressBytes }}</dt>
-        <dd class="m-0">{{ copy.unavailable }}</dd>
-      </div>
-    </dl>
-  </section>
+    }
+    <section
+      hlmCard
+      class="min-w-0 gap-0 rounded-xl p-0"
+      aria-labelledby="quota-storage-title"
+      data-quota-storage
+    >
+      <header class="border-b border-border px-5 py-4">
+        <h3 hlmCardTitle [size]="subsectionSize" id="quota-storage-title">
+          {{ copy.storageTitle }}
+        </h3>
+      </header>
+      <dl class="m-0 grid min-w-0 gap-0 px-5 pt-2 text-sm">
+        <div class="flex flex-wrap justify-between gap-2 border-b border-border py-2">
+          <dt class="text-muted-foreground">{{ copy.storedBytes }}</dt>
+          <dd class="m-0 font-semibold">{{ copy.unavailable }}</dd>
+        </div>
+        <div class="flex flex-wrap justify-between gap-2 border-b border-border py-2">
+          <dt class="text-muted-foreground">{{ copy.egressBytes }}</dt>
+          <dd class="m-0 font-semibold">{{ copy.unavailable }}</dd>
+        </div>
+      </dl>
+      <p class="m-0 max-w-[65ch] px-5 py-4 text-sm text-muted-foreground">
+        {{ copy.storageReason }}
+      </p>
+    </section>
+  </div>
 </section>
 <ng-template #usedCell let-row>
   <span data-quota-project-used><app-number-value [value]="row.used" /></span>
