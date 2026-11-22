@@ -1,0 +1,112 @@
+@if (points().length === 0) {
+  <app-empty-pattern [title]="copy.noData" [description]="copy.description" />
+} @else {
+  <section hlmCard [size]="'sm'" aria-labelledby="quality-trend">
+    <header hlmCardHeader class="border-b border-border">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 hlmCardTitle [size]="'subsection'" id="quality-trend">{{ copy.title }}</h2>
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          type="button"
+          [attr.aria-controls]="'quality-observations'"
+          class="pointer-coarse:min-h-(--eg-control-touch)"
+          (click)="display.toggle()"
+        >
+          {{ display.tableVisible() ? copy.chart : copy.table }}
+        </button>
+      </div>
+      <p hlmCardDescription>{{ copy.description }}</p>
+    </header>
+    <div hlmCardContent id="quality-observations">
+      @if (display.tableVisible()) {
+        <app-data-table
+          [columns]="columns"
+          [rows]="days()"
+          [rowId]="rowId"
+          [caption]="copy.title"
+          [flow]="'page'"
+          [fitToContainer]="true"
+        />
+      } @else {
+        <figure class="m-0 grid min-w-0 gap-2">
+          <div class="plot" [attr.aria-hidden]="'true'">
+            <div class="flex flex-col justify-between text-xs text-muted-foreground">
+              @for (tick of scale; track tick) {
+                <span [textContent]="tick + '%'"></span>
+              }
+            </div>
+            <svg
+              [attr.viewBox]="'0 0 600 150'"
+              [attr.preserveAspectRatio]="'none'"
+              class="h-full w-full overflow-visible"
+            >
+              @for (tick of scale; track tick) {
+                <line
+                  class="gridline"
+                  x1="0"
+                  x2="600"
+                  [attr.y1]="(100 - tick) * 3"
+                  [attr.y2]="(100 - tick) * 3"
+                />
+              }
+              @for (segment of segments(); track segment.id) {
+                <polygon class="area" [attr.points]="segment.fill" />
+                <polyline class="series" [attr.points]="segment.line" />
+              }
+              @for (point of points(); track point.day.date) {
+                @if (point.y === null) {
+                  <line class="missing" [attr.x1]="point.x" [attr.x2]="point.x" y1="0" y2="150" />
+                } @else {
+                  <circle class="sample" [attr.cx]="point.x" [attr.cy]="point.y" r="4" />
+                }
+              }
+            </svg>
+          </div>
+          <figcaption>
+            <dl class="points m-0 flex justify-around gap-1 text-center text-xs">
+              @for (day of days(); track day.date) {
+                <div class="min-w-0 flex-1">
+                  <dt>
+                    <time [attr.datetime]="day.date">{{
+                      day.date + 'T00:00:00Z' | date: dateFormat : 'UTC'
+                    }}</time>
+                  </dt>
+                  <dd class="m-0 font-semibold">
+                    {{ day.observation ? day.observation.percent + '%' : copy.noData }}
+                  </dd>
+                </div>
+              }
+            </dl>
+            <p class="mb-0 mt-3 text-xs text-muted-foreground">{{ copy.gap }}</p>
+          </figcaption>
+        </figure>
+      }
+    </div>
+  </section>
+  <section hlmCard [size]="'sm'" data-outcomes aria-labelledby="quality-outcomes">
+    <header hlmCardHeader class="border-b border-border">
+      <h2 hlmCardTitle [size]="'subsection'" id="quality-outcomes">{{ copy.outcomes }}</h2>
+      <p hlmCardDescription>{{ copy.counts }}</p>
+    </header>
+    <dl hlmCardContent class="m-0 grid gap-3">
+      @for (day of latestFirst(); track day.date) {
+        @if (day.observation; as result) {
+          <div class="grid min-w-0 items-center gap-2 sm:grid-cols-[auto_minmax(0,1fr)]">
+            <dt class="text-xs tabular-nums">
+              <time [attr.datetime]="day.date">{{ day.date }}</time>
+            </dt>
+            <dd class="m-0 grid min-w-0 gap-1 text-xs">
+              <span class="pipeline" [attr.aria-hidden]="'true'">
+                <span class="passed" [style.flex-grow]="result.passed"></span>
+                <span class="failed" [style.flex-grow]="result.failed"></span>
+                <span class="other" [style.flex-grow]="result.other"></span>
+              </span>
+              {{ result.summary }}
+            </dd>
+          </div>
+        }
+      }
+    </dl>
+  </section>
+}

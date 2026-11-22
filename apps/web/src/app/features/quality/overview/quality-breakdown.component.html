@@ -1,0 +1,45 @@
+<section hlmCard [size]="'sm'" aria-labelledby="quality-flaky">
+  <header hlmCardHeader class="border-b border-border">
+    <h2 hlmCardTitle [size]="'subsection'" id="quality-flaky">{{ copy.flaky }}</h2>
+  </header>
+  <div hlmCardContent>
+    <app-data-table
+      [rows]="model().cases"
+      [columns]="columns()"
+      [rowId]="rowId"
+      [caption]="copy.limit"
+      [flow]="'page'"
+      [fitToContainer]="true"
+    />
+  </div>
+</section>
+<section hlmCard [size]="'sm'" aria-labelledby="quality-bindings">
+  <header hlmCardHeader class="border-b border-border">
+    <h2 hlmCardTitle [size]="'subsection'" id="quality-bindings">{{ copy.bindings }}</h2>
+    <p hlmCardDescription>{{ copy.scope }}</p>
+  </header>
+  <ul hlmCardContent class="m-0 list-none divide-y divide-border">
+    @for (row of model().bindings; track row.label) {
+      <li [attr.data-binding]="row.label" class="grid min-w-0 gap-2 py-3 first:pt-0 last:pb-0">
+        <div class="flex flex-wrap items-baseline gap-x-3">
+          <strong>{{ row.label }}</strong>
+          @if (row.revision) {
+            <span class="font-mono text-xs">{{ row.revision }}</span>
+          }
+        </div>
+        @if (row.revision) {
+          <div class="flex min-w-0 flex-wrap gap-x-4 gap-y-2">
+            <app-evidence-badge [completeness]="row.completeness" />
+            <app-outcome-pill [outcome]="row.outcome" />
+            <app-decision-chip [decision]="row.decision" />
+          </div>
+        } @else {
+          <span class="inline-flex items-center gap-2"
+            ><hlm-icon name="lucideInfo" class="size-4" />{{ copy.unbound }}</span
+          >
+        }
+        <p class="m-0 text-xs text-muted-foreground">{{ row.context }}</p>
+      </li>
+    }
+  </ul>
+</section>

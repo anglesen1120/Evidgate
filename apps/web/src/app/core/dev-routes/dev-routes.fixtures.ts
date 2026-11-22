@@ -42,11 +42,41 @@
 // (`revisions/:revisionId`), so `/dev/suite-composition/orgs/:orgId/projects/:projectId/suites/
 // revisions/:revisionId` mounts it under the identical guard chain with only the phase gate omitted.
 
+import type { Type } from '@angular/core';
 import type { Routes } from '@angular/router';
 
 import { authGuard, orgScopeGuard, permissionGuard, projectScopeGuard } from '../guards';
 import { ShellComponent } from '../../shell/layout/shell.component';
 import { setupScriptsReviewRoutes } from './dev-routes.setup-scripts.fixtures';
+
+/**
+ * Review-only v3 screens fed by static view models, no HTTP: mounted under the project scope with
+ * the permission the owning nav entry uses. Absent from production like every `dev/*` address.
+ */
+function reviewScreen(
+  path: string,
+  permission: string,
+  load: () => Promise<Type<unknown>>,
+): Routes[number] {
+  return {
+    path,
+    component: ShellComponent,
+    children: [
+      {
+        path: 'orgs/:orgId',
+        canMatch: [authGuard, orgScopeGuard],
+        children: [
+          {
+            path: 'projects/:projectId',
+            canMatch: [projectScopeGuard, permissionGuard(permission)],
+            data: { pageHeadingLevel: 1 },
+            loadComponent: load,
+          },
+        ],
+      },
+    ],
+  };
+}
 
 /** The review-only routes, mounted first so a product path can never shadow one. */
 export function devRoutes(): Routes {
@@ -280,6 +310,42 @@ export function devRoutes(): Routes {
         },
       ],
     },
+    reviewScreen('dev/release-decision', 'run:read', () =>
+      // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph.
+      import('../../features/releases/decision/decision-review.page').then(
+        (m) => m.ReleaseDecisionReviewPage,
+      ),
+    ),
+    reviewScreen('dev/studio-gallery', 'run:read', () =>
+      // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph.
+      import('../../features/studio/gallery/studio-gallery-review.page').then(
+        (m) => m.StudioGalleryReviewPage,
+      ),
+    ),
+    reviewScreen('dev/studio-draft-editor', 'run:read', () =>
+      // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph.
+      import('../../features/studio/draft-editor/studio-draft-editor-review.page').then(
+        (m) => m.StudioDraftEditorReviewPage,
+      ),
+    ),
+    reviewScreen('dev/studio-review-merge', 'run:read', () =>
+      // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph.
+      import('../../features/studio/review-merge/studio-review-merge-review.page').then(
+        (m) => m.StudioReviewMergeReviewPage,
+      ),
+    ),
+    reviewScreen('dev/release-view', 'run:read', () =>
+      // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph.
+      import('../../features/releases/release-view/release-view-review.page').then(
+        (m) => m.ReleaseViewReviewPage,
+      ),
+    ),
+    reviewScreen('dev/quality-overview', 'run:read', () =>
+      // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph.
+      import('../../features/quality/overview/quality-overview-review.page').then(
+        (m) => m.QualityOverviewReviewPage,
+      ),
+    ),
     ...setupScriptsReviewRoutes(),
   ];
 }
