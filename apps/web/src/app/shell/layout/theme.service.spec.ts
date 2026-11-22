@@ -85,4 +85,22 @@ describe('ThemeService', () => {
     expect(() => service.toggle()).not.toThrow();
     expect(document.documentElement.getAttribute('data-theme')).not.toBeNull();
   });
+
+  it('follows prefers-color-scheme without a stored choice and leaves data-theme to the CSS', () => {
+    vi.stubGlobal('matchMedia', (query: string) =>
+      Object.assign(new EventTarget(), {
+        matches: query === '(prefers-color-scheme: dark)',
+        media: query,
+        onchange: null,
+        addListener: () => undefined,
+        removeListener: () => undefined,
+      }),
+    );
+    const service = TestBed.inject(ThemeService);
+    expect(service.isDark()).toBe(true);
+    expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+    service.toggle();
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+    expect(localStorage.getItem('evidgate-theme')).toBe('light');
+  });
 });

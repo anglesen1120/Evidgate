@@ -159,6 +159,15 @@ Planned (not yet referenced) — DECISIONS §4.1–§4.3 choices that no project
 
 "Registered" means the name appears as the first cell of a matrix-table row in this Decision section (including the Planned table); rows in *Alternatives rejected* below are **not** registrations — a dependency whose name matches a rejected row fails `check-adr-matrix.sh` with "rejected in ADR-0002".
 
+## Self-hosted assets (not packages)
+
+Fonts of the web theme sit in `apps/web/src/styles/fonts/` (bundled and content-hashed by the Angular build, served from the app origin, so `font-src 'self'` holds and no font CDN is contacted). Both are SIL Open Font License 1.1, which allows bundling and embedding in a closed-source commercial product. The licence texts sit beside the files and are copied into each locale output as `fonts-licences/*.txt`. Each file is the upstream variable TTF (taken from `docs/design/web-ui-v3/assets/fonts/`) converted to WOFF2 without subsetting (Vietnamese needs the Latin Extended Additional block), with `python -m fontTools.ttLib.woff2 compress` (fonttools 4.68.0, brotli 1.2.1).
+
+| Asset | Upstream | Licence | SHA-256 of source TTF / shipped WOFF2 |
+| --- | --- | --- | --- |
+| Manrope-variable.woff2 | Manrope (The Manrope Project Authors, github.com/googlefonts/manrope) | OFL-1.1, `Manrope-OFL.txt` | `3ae11c49…6ae6` / `30b83738…f21f` |
+| PublicSans-variable.woff2 | Public Sans (The Public Sans Project Authors, github.com/uswds/public-sans) | OFL-1.1, `PublicSans-OFL.txt` | `d75a7dc1…30a8` / `82d45c7f…98ca` |
+
 ## Alternatives rejected
 
 | Package | Version checked | Rejection reason (DECISIONS §4 licence rule) |

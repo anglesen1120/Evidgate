@@ -1,0 +1,17 @@
+/* Self-hosted variable fonts (SIL OFL 1.1; licence texts sit next to the files). Full glyph sets
+   are kept on purpose: Vietnamese needs the Latin Extended Additional block. */
+@font-face {
+  font-family: 'Manrope';
+  src: url('./fonts/Manrope-variable.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Public Sans';
+  src: url('./fonts/PublicSans-variable.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
