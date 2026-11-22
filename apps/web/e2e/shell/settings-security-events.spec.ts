@@ -40,6 +40,9 @@ for (const locale of LOCALES) {
         await page.locator(`${rows} [data-security-view]`).last().focus();
         await page.keyboard.press('Enter');
         await expect(page.getByRole('dialog')).toHaveCount(1);
+        const dialog = page.locator('[data-security-dialog]');
+        await expect(dialog).toHaveCSS('width', width === 360 ? '360px' : '560px');
+        if (width === 360) await expect(dialog).toHaveCSS('height', '900px');
         await expect(page.getByRole('dialog')).toContainText(
           '018f4350-0000-7000-8000-000000000500',
         );

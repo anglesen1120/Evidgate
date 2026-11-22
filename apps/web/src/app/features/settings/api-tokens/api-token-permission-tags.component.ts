@@ -27,7 +27,7 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
           >
             +{{ permissions().length - 2 }}
           </button>
-          <hlm-dialog-content *hlmDialogPortal [closeLabel]="closeLabel">
+          <hlm-dialog-content *hlmDialogPortal [size]="'md'" [closeLabel]="closeLabel">
             <h3 hlmDialogTitle>{{ title }}</h3>
             <p hlmDialogDescription class="wrap-anywhere">{{ name() }}</p>
             <ul class="m-0 grid min-w-0 gap-[var(--eg-space-2)] ps-[var(--eg-space-6)]">

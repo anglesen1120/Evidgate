@@ -258,11 +258,7 @@
     [autoFocus]="'first-heading'"
     (closed)="inspected.set(null)"
   >
-    <hlm-dialog-content
-      *hlmDialogPortal
-      class="max-w-[min(35rem,calc(100vw-var(--eg-space-8)))]"
-      data-quota-dialog
-    >
+    <hlm-dialog-content *hlmDialogPortal [size]="'md'" data-quota-dialog>
       <header hlmDialogHeader>
         <h2 hlmDialogTitle>{{ copy.counter }}</h2>
         <p hlmDialogDescription>{{ metricLabel(selection.metric) }}</p>

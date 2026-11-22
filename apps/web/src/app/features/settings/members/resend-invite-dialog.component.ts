@@ -49,7 +49,8 @@ import { MembersStore } from './members.store';
         #dialog
         [attr.data-members-dialog]="'resend'"
         [showCloseButton]="false"
-        class="max-h-[calc(100dvh-var(--eg-space-10))] overflow-y-auto wrap-anywhere [&_p]:m-0 [&_code]:font-mono"
+        [size]="'lg'"
+        class="wrap-anywhere [&_p]:m-0 [&_code]:font-mono"
         (keydown.escape)="cancel($event)"
       >
         @if (revealing()) {

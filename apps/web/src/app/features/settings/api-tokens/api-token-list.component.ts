@@ -118,11 +118,7 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
                         <app-shell-icon [name]="'key'" class="size-4" />
                         <bdi class="min-w-0 truncate font-bold">{{ display(row.name) }}</bdi>
                       </button>
-                      <hlm-dialog-content
-                        *hlmDialogPortal
-                        [showCloseButton]="false"
-                        class="max-w-[35rem] max-[599px]:h-dvh max-[599px]:max-h-dvh max-[599px]:w-screen max-[599px]:max-w-none max-[599px]:rounded-none grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden"
-                      >
+                      <hlm-dialog-content *hlmDialogPortal [showCloseButton]="false" [size]="'md'">
                         <header hlmDialogHeader>
                           <h2 hlmDialogTitle>
                             <bdi>{{ display(row.name) }}</bdi>
@@ -132,7 +128,7 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
                           >
                           <p hlmDialogDescription>{{ metadataOnly }}</p>
                         </header>
-                        <div class="grid content-start gap-3 overflow-y-auto">
+                        <div class="grid content-start gap-3">
                           <app-status-pill
                             [tone]="row.status === 'active' ? 'info' : 'neutral'"
                             [label]="stateLabel(row.status)"

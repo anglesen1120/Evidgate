@@ -55,6 +55,9 @@ class PolicyOverviewHarness extends ComponentHarness {
   readonly mode = this.locatorForOptional('[data-overview-mode] dd');
   readonly head = this.locatorForOptional('[data-overview-head] dd');
   readonly activeNumber = this.locatorForOptional('[data-overview-active] app-number-value');
+  readonly more = this.locatorFor('[data-policy-more]');
+  readonly viewRevision = this.locatorFor('[data-policy-view]');
+  readonly viewDialog = this.documentRootLocatorFactory().locatorFor('[data-policy-view-dialog]');
 }
 
 class FakePolicyStore {
@@ -389,6 +392,23 @@ describe('PolicyPage', () => {
     expect(store.loadMore).toHaveBeenCalledTimes(1);
     fixture.destroy();
     expect(store.reset).toHaveBeenCalledTimes(1);
+  });
+  it('opens an already loaded revision after loading the next page fails', async () => {
+    store.hasMore.set(true);
+    store.loadMore.mockImplementationOnce(() => {
+      store.phase.set('error');
+      return Promise.resolve();
+    });
+    const { fixture } = await render();
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      PolicyOverviewHarness,
+    );
+    await (await harness.more()).click();
+    expect(await (await harness.host()).getAttribute('data-policy-phase')).toBe('error');
+    await (await harness.viewRevision()).click();
+    expect(await (await harness.viewDialog()).text()).toContain(revision.id);
+    expect(store.loadBody).toHaveBeenCalledWith(revision.id);
   });
   it('announces loading, labels the revision field and disables actions until the read completes', async () => {
     store.phase.set('loading');

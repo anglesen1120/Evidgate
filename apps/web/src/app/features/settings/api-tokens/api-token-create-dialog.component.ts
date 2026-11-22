@@ -39,10 +39,7 @@ import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-
 /** Keep a refused expiry blocked until that field changes, even when other fields are edited. */
 const EXPIRY_REFUSALS: Record<string, true> = { past: true, out_of_range: true, required: true };
 
-/**
- * A `datetime-local` value carries no zone and the field is labelled UTC, so read it as UTC.
- * Returns `null` for an empty or impossible value, which `toISOString` would throw on.
- */
+/** Parse the UTC-labelled datetime-local field without assuming the browser's zone. */
 export function expiryInstant(value: string): number | null {
   const instant = value ? Date.parse(`${value}Z`) : Number.NaN;
   return Number.isFinite(instant) ? instant : null;
@@ -56,11 +53,7 @@ function refusesExpiry(failure: ApiError): boolean {
 
 type ExpiryMaximum = { readonly instant: number } | { readonly lifetimeMs: number };
 
-/**
- * The last instant `datetime-local` and `toISOString` can both spell, 9999-12-31T23:59:59.999Z.
- * A later one is a valid `Date` but prints in the expanded six-digit year form, which the picker
- * cannot read — and an unbounded lifetime ("36500000 days") lands beyond it.
- */
+/** Later valid Dates print six-digit years, which datetime-local cannot represent. */
 const LAST_SPELLABLE_INSTANT = 253_402_300_799_999;
 
 /**
@@ -123,7 +116,8 @@ function parseExpiryMaximum(message: string): ExpiryMaximum | null {
         #dialog
         [showCloseButton]="false"
         data-api-create-dialog
-        class="max-h-[calc(100dvh-var(--eg-space-10))] overflow-y-auto wrap-anywhere"
+        [size]="'lg'"
+        class="wrap-anywhere"
         (keydown.escape)="escape($event)"
       >
         <header hlmDialogHeader>

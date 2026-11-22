@@ -2365,7 +2365,6 @@
 <trans-unit id="settings.secrets.pages-label" datatype="html"><source>Secret references pages</source><target>Các trang tham chiếu bí mật</target></trans-unit>
 <trans-unit id="settings.secrets.rotate-unavailable-hint" datatype="html"><source>The rotation may have been applied. Reload the list and check the status before rotating again.</source><target>Việc xoay có thể đã được áp dụng. Hãy tải lại danh sách và kiểm tra trạng thái trước khi xoay lần nữa.</target></trans-unit>
 <trans-unit id="settings.secrets.reload" datatype="html"><source>Reload</source><target>Tải lại</target></trans-unit>
-<trans-unit id="settings.policy.title" datatype="html"><source>Policy</source><target>Chính sách</target></trans-unit>
 <trans-unit id="settings.policy.description" datatype="html"><source>Inspect policy revisions and compare their fields. Open a revision using its identifier.</source><target>Xem các phiên bản chính sách và so sánh từng trường. Mở một phiên bản bằng mã định danh.</target></trans-unit>
 <trans-unit id="settings.policy.revision-id" datatype="html"><source>Revision ID</source><target>Mã phiên bản</target></trans-unit>
 <trans-unit id="settings.policy.open" datatype="html"><source>Open revision</source><target>Mở phiên bản</target></trans-unit>
@@ -3330,7 +3329,6 @@
       <trans-unit id="settings.secrets.confirm-warning" datatype="html"><source>Rotation creates a replacement credential. The previous credential stops working according to the server&apos;s rotation policy; an overlap window is not guaranteed. Update downstream CI and verify the replacement there; rotation does not update CI for you.</source><target>Việc xoay tạo thông tin xác thực thay thế. Thông tin xác thực cũ ngừng hoạt động theo chính sách xoay của máy chủ; không đảm bảo có thời gian chồng lấn. Hãy cập nhật CI phía sau và xác minh thông tin thay thế tại đó; thao tác xoay không tự cập nhật CI cho bạn.</target></trans-unit>
       <trans-unit id="settings.secrets.inspect" datatype="html"><source>Inspect</source><target>Kiểm tra</target></trans-unit>
       <trans-unit id="settings.secrets.inspect-named" datatype="html"><source>Inspect reference <x id="name" equiv-text="name"/></source><target>Kiểm tra tham chiếu <x id="name" equiv-text="name"/></target></trans-unit>
-      <trans-unit id="settings.secrets.lifecycle" datatype="html"><source>Lifecycle details</source><target>Chi tiết vòng đời</target></trans-unit>
       <trans-unit id="settings.secrets.loaded-only" datatype="html"><source>Search and state filters apply to this loaded page only. Complete project totals are not available.</source><target>Chỉ tìm kiếm và lọc trạng thái trong trang đã tải này. Chưa có tổng số đầy đủ của dự án.</target></trans-unit>
       <trans-unit id="settings.secrets.metadata" datatype="html"><source>Metadata only. A prefix identifies a reference; it does not authenticate.</source><target>Chỉ có siêu dữ liệu. Tiền tố dùng để nhận diện tham chiếu, không dùng để xác thực.</target></trans-unit>
       <trans-unit id="settings.secrets.no-matches" datatype="html"><source>No references match these filters</source><target>Không có tham chiếu khớp với các bộ lọc này</target></trans-unit>
@@ -3341,7 +3339,6 @@
       <trans-unit id="runs.detail.producers.expected-unset" datatype="html"><source>Expected unset</source><target>Chưa có dự kiến</target></trans-unit>
       <trans-unit id="runs.detail.release.digest-for" datatype="html"><source>Digest for component <x id="key" equiv-text="componentKey"/></source><target>Mã băm của thành phần <x id="key" equiv-text="componentKey"/></target></trans-unit>
       <trans-unit id="settings.policy.tab.compare" datatype="html"><source>Compare</source><target>So sánh</target></trans-unit>
-      <trans-unit id="settings.policy.tab.values" datatype="html"><source>Values</source><target>Giá trị</target></trans-unit>
       <trans-unit id="shell.nav.quota-short" datatype="html"><source>AI credits</source><target>Tín dụng AI</target></trans-unit>
       <trans-unit id="settings.security.type-auth" datatype="html"><source>Authentication failure</source><target>Lỗi xác thực</target></trans-unit>
       <trans-unit id="settings.security.type-cross-tenant" datatype="html"><source>Cross-tenant access probe</source><target>Thử truy cập chéo tổ chức</target></trans-unit>
@@ -3353,7 +3350,6 @@
       <trans-unit id="settings.security.severity-critical" datatype="html"><source>Critical</source><target>Nghiêm trọng</target></trans-unit>
       <trans-unit id="settings.security.page-summary" datatype="html"><source>Page <x id="page" equiv-text="formatNumber(this.store.pageIndex() + 1, this.locale)"/> · <x id="rows" equiv-text="formatNumber(this.store.rows().length, this.locale)"/> visible events on this page.</source><target>Trang <x id="page"/> · <x id="rows"/> sự kiện hiển thị trên trang này.</target></trans-unit>
       <trans-unit id="settings.security.title" datatype="html"><source>Security events</source><target>Sự kiện bảo mật</target></trans-unit>
-      <trans-unit id="settings.security.description" datatype="html"><source>Inspect authorized security metadata across the organization. Event records are read-only; times are shown in UTC.</source><target>Xem siêu dữ liệu bảo mật được cấp quyền trong tổ chức. Bản ghi chỉ đọc; thời gian hiển thị theo UTC.</target></trans-unit>
       <trans-unit id="settings.security.boundary" datatype="html"><source>Metadata only. Severity is supplied by the server, not a security certification. Cross-tenant targets and attempted secrets are not disclosed.</source><target>Chỉ siêu dữ liệu. Mức độ do máy chủ cung cấp, không phải chứng nhận bảo mật. Không tiết lộ đối tượng chéo tổ chức và bí mật bị thử truy cập.</target></trans-unit>
       <trans-unit id="settings.security.filters" datatype="html"><source>Filter activity</source><target>Lọc hoạt động</target></trans-unit>
       <trans-unit id="settings.security.project" datatype="html"><source>Project id</source><target>Mã dự án</target></trans-unit>
@@ -22275,7 +22271,6 @@
 <trans-unit id="settings.security.newest-first" datatype="html"><source>Newest first</source><target>Mới nhất trước</target></trans-unit>
 <trans-unit id="settings.security.read-only" datatype="html"><source>Read only</source><target>Chỉ đọc</target></trans-unit>
 <trans-unit id="settings.api-tokens.intro" datatype="html"><source>Review project credentials by purpose, permission subset and expiry.</source><target>Xem thông tin xác thực của dự án theo mục đích, tập quyền và hạn dùng.</target></trans-unit>
-<trans-unit id="settings.api-tokens.metadata-heading" datatype="html"><source>Token metadata</source><target>Siêu dữ liệu mã truy cập</target></trans-unit>
 <trans-unit id="settings.api-tokens.page-prefixes" datatype="html"><source>Prefixes on this page</source><target>Tiền tố trên trang này</target></trans-unit>
 <trans-unit id="settings.api-tokens.served-state" datatype="html"><source>Server-reported state</source><target>Trạng thái do máy chủ báo cáo</target></trans-unit>
 <trans-unit id="settings.api-tokens.not-usable" datatype="html"><source>Not usable</source><target>Không dùng được</target></trans-unit>

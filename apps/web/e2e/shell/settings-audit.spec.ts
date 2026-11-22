@@ -278,6 +278,7 @@ test.describe('AC8: the support-access chip marks exactly the flagged rows', () 
           has: page.locator(`time[datetime="${row.created_at}"]`),
         });
         await record.locator('[data-audit-view]').click();
+        await expect(page.locator('[data-audit-dialog]')).toHaveCSS('width', '560px');
         const chip = page.getByRole('dialog').locator('.support-access');
         await expect(chip).toHaveClass(/support-access/);
         await expect(chip).toHaveAccessibleName(/\S/);
@@ -467,6 +468,8 @@ test.describe('at 360px the page does not scroll sideways', () => {
       await page.keyboard.press('Enter');
       const details = page.getByRole('dialog');
       await expect(details).toBeVisible();
+      await expect(details.locator('[data-audit-dialog]')).toHaveCSS('width', '360px');
+      await expect(details.locator('[data-audit-dialog]')).toHaveCSS('height', '740px');
       const description = details.locator('.support-access + span');
       await expect(description).toBeVisible();
       const grantId = supportMarker(row)?.grantId;

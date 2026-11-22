@@ -112,8 +112,9 @@
                   type="button"
                   [variant]="'outline'"
                   [size]="'sm'"
-                  data-view-record
+                  [attr.data-view-record]="'pool'"
                   [attr.aria-haspopup]="'dialog'"
+                  [attr.aria-expanded]="choice() === pool.name"
                   class="pointer-coarse:min-h-11"
                   [attr.aria-labelledby]="'view-pool-' + idx + ' pool-' + idx"
                   (click)="choice.set(pool.name)"
@@ -183,18 +184,15 @@
   </section>
   <hlm-dialog
     [state]="selected() ? 'open' : 'closed'"
-    [aria-labelledby]="'pool-detail'"
     [aria-modal]="true"
-    [autoFocus]="'#pool-detail'"
-    (stateChanged)="$event === 'closed' && choice.set(null)"
+    [autoFocus]="'first-heading'"
+    [restoreFocus]="'[data-view-record=pool][aria-expanded=true]'"
+    (closed)="choice.set(null)"
   >
-    <hlm-dialog-content
-      *hlmDialogPortal
-      class="max-h-[90dvh] max-w-[min(35rem,calc(100vw-var(--eg-space-8)))] overflow-y-auto wrap-anywhere"
-    >
+    <hlm-dialog-content *hlmDialogPortal [size]="'md'" class="wrap-anywhere">
       @if (selected(); as pool) {
         <header hlmDialogHeader>
-          <h2 hlmDialogTitle id="pool-detail" tabindex="-1">{{ pool.name }}</h2>
+          <h2 hlmDialogTitle tabindex="-1">{{ pool.name }}</h2>
           <p hlmDialogDescription>{{ pool.description }}</p>
           @if (pool.poolId; as id) {
             <app-copyable-identifier [value]="id" [label]="l.poolId" [truncate]="false" />

@@ -54,10 +54,11 @@ const MAX_CONFLICT_FIELDS = 100;
     >
       <hlm-dialog-content
         *hlmDialogPortal
+        [size]="'lg'"
         [showCloseButton]="false"
         data-policy-publish-dialog
         [attr.aria-busy]="busy()"
-        class="max-h-[calc(100dvh-var(--eg-space-8))] overflow-y-auto [&_p]:m-0"
+        class="[&_p]:m-0"
       >
         <header hlmDialogHeader>
           <h2 hlmDialogTitle>{{ copy.title }}</h2>

@@ -87,7 +87,7 @@ for (const locale of LOCALES) {
           const back = header.locator('a[appPageHeaderActions]');
           const label = await back.innerText();
           const fonts = await doubleHeaderText(header, spaced);
-          expect(fonts.map((font) => font.tag)).toEqual(['H1', 'A']);
+          expect(fonts.map((font) => font.tag)).toEqual(['H1', 'P', 'A']);
           for (const font of fonts) {
             expect(font.before).toBeGreaterThan(0);
             expect(font.after).toBeCloseTo(font.before * 2, 4);

@@ -133,11 +133,7 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
         [autoFocus]="'first-heading'"
         (closed)="inspected.set(null)"
       >
-        <hlm-dialog-content
-          *hlmDialogPortal
-          class="max-w-[min(35rem,calc(100vw-var(--eg-space-8)))]"
-          data-audit-dialog
-        >
+        <hlm-dialog-content *hlmDialogPortal [size]="'md'" data-audit-dialog>
           <header hlmDialogHeader>
             <h2 hlmDialogTitle>{{ copy.details }}</h2>
             <p hlmDialogDescription>

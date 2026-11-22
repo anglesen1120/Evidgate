@@ -101,8 +101,9 @@
                   type="button"
                   [variant]="'outline'"
                   [size]="'sm'"
-                  data-view-record
+                  [attr.data-view-record]="'endpoint'"
                   [attr.aria-haspopup]="'dialog'"
+                  [attr.aria-expanded]="viewing() && choice() === ep.id"
                   class="pointer-coarse:min-h-11"
                   [attr.aria-labelledby]="'view-endpoint-' + idx + ' endpoint-' + idx"
                   (click)="selectEndpoint(ep.id)"
@@ -128,18 +129,15 @@
   </section>
   <hlm-dialog
     [state]="viewing() && selected() ? 'open' : 'closed'"
-    [aria-labelledby]="'endpoint-detail'"
     [aria-modal]="true"
-    [autoFocus]="'#endpoint-detail'"
-    (stateChanged)="$event === 'closed' && viewing.set(false)"
+    [autoFocus]="'first-heading'"
+    [restoreFocus]="'[data-view-record=endpoint][aria-expanded=true]'"
+    (closed)="viewing.set(false)"
   >
-    <hlm-dialog-content
-      *hlmDialogPortal
-      class="max-h-[90dvh] max-w-[min(35rem,calc(100vw-var(--eg-space-8)))] overflow-y-auto wrap-anywhere"
-    >
+    <hlm-dialog-content *hlmDialogPortal [size]="'md'" class="wrap-anywhere">
       @if (selected(); as ep) {
         <header hlmDialogHeader>
-          <h2 hlmDialogTitle tabindex="-1" id="endpoint-detail">{{ ep.name }}</h2>
+          <h2 hlmDialogTitle tabindex="-1">{{ ep.name }}</h2>
           <p hlmDialogDescription>{{ l.endpoint }} · {{ ep.id }}</p>
         </header>
         <dl
@@ -155,7 +153,7 @@
             <dt>{{ l.state }}</dt>
             <dd><app-status-pill [label]="ep.status" [tone]="ep.tone" /></dd>
           </div>
-          <div>
+          <div class="sm:col-span-2">
             <dt>{{ l.events }}</dt>
             <dd>
               @for (event of ep.events; track event) {
@@ -165,9 +163,9 @@
               }
             </dd>
           </div>
-          <div>
+          <div class="sm:col-span-2">
             <dt>{{ l.rotation }}</dt>
-            <dd>
+            <dd class="[&_.spartan-badge]:max-w-full">
               @if (ep.overlapEnd; as end) {
                 <app-status-pill [tone]="'info'" [label]="l.overlap" /><span class="block"
                   >{{ l.end }} <app-absolute-time [value]="end"

@@ -118,7 +118,8 @@ describe('ApiTokenListComponent', () => {
     const { root, harness } = await render([{ ...ROW, name }]);
     await harness.open();
     expect(await (await harness.detail())?.text()).toContain(name);
-    expect(document.querySelector('[role="dialog"] img')).toBeNull();
+    expect(document.querySelector('img')).toBeNull();
+    expect(root.querySelector('img')).toBeNull();
     expect(root.querySelector('app-data-table-value')).not.toBeNull();
   });
 
@@ -181,8 +182,24 @@ describe('ApiTokenListComponent', () => {
     }
   });
 
-  it('gates revoke by permission, busy state and viewport while narrow keeps every metadata fact', async () => {
-    const { root, fixture, wide, harness } = await render(
+  it('keeps every metadata fact reachable from the narrow token row', async () => {
+    const { root, harness } = await render([ROW], false, true);
+    const row = root.querySelector('[data-api-token-row]');
+    expect(row?.textContent).toContain(ROW.prefix);
+    expect(row?.querySelector('app-status-pill')?.textContent?.trim()).toBe('Active');
+    expect(await harness.rowFacts()).toHaveLength(0);
+    await harness.open();
+    const detail = await (await harness.detail())?.text();
+    for (const fact of [ROW.name, ROW.id, ROW.created_by, ...ROW.permissions, 'Never']) {
+      expect(detail).toContain(fact);
+    }
+    expect(document.querySelector('[role="dialog"] time')?.getAttribute('datetime')).toBe(
+      ROW.expires_at,
+    );
+  });
+
+  it('gates revoke by permission, busy state and viewport', async () => {
+    const { root, fixture, wide } = await render(
       [ROW, { ...ROW, id: 'old', status: 'revoked' }],
       true,
     );
@@ -200,11 +217,7 @@ describe('ApiTokenListComponent', () => {
     wide.set(false);
     await fixture.whenStable();
     expect(root.querySelector('[data-api-revoke]')).toBeNull();
-    expect(await harness.rowFacts()).toHaveLength(0);
     for (const fact of [ROW.prefix, 'Active', 'Revoked']) expect(root.textContent).toContain(fact);
-    await harness.open();
-    expect(await (await harness.detail())?.text()).toContain('Never');
-    escapeDialog();
     fixture.componentRef.setInput('canWrite', false);
     wide.set(true);
     await fixture.whenStable();

@@ -114,11 +114,7 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
         [autoFocus]="'first-heading'"
         (closed)="inspected.set(null)"
       >
-        <hlm-dialog-content
-          *hlmDialogPortal
-          class="max-w-[min(35rem,calc(100vw-var(--eg-space-8)))]"
-          data-security-dialog
-        >
+        <hlm-dialog-content *hlmDialogPortal [size]="'md'" data-security-dialog>
           <header hlmDialogHeader>
             <h2 hlmDialogTitle>{{ typeLabel(row.type) }}</h2>
             <div class="flex flex-wrap items-center gap-2">

@@ -152,17 +152,13 @@ export const MEMBERS_COPY = {
                 display(member.invited_email)
               }}</bdi>
             </button>
-            <hlm-dialog-content
-              *hlmDialogPortal
-              [showCloseButton]="false"
-              class="max-w-[35rem] max-[599px]:h-dvh max-[599px]:max-h-dvh max-[599px]:w-screen max-[599px]:max-w-none max-[599px]:rounded-none grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden"
-            >
+            <hlm-dialog-content *hlmDialogPortal [showCloseButton]="false" [size]="'md'">
               <header hlmDialogHeader>
                 <h2 hlmDialogTitle>{{ copy.member }}</h2>
                 <p hlmDialogDescription>{{ copy.directory }}</p>
               </header>
               <dl
-                class="m-0 grid content-start gap-4 overflow-y-auto sm:grid-cols-2 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:mt-1 [&_dd]:wrap-anywhere"
+                class="m-0 grid content-start gap-4 sm:grid-cols-2 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:mt-1 [&_dd]:wrap-anywhere"
               >
                 <div>
                   <dt>{{ copy.email }}</dt>
@@ -185,7 +181,7 @@ export const MEMBERS_COPY = {
                       <ul class="m-0 list-none p-0">
                         @for (role of member.roles; track role.id) {
                           <li>
-                            <bdi>{{ role.name }}</bdi>
+                            <bdi>{{ display(role.name) }}</bdi>
                           </li>
                         }
                       </ul>
@@ -232,7 +228,9 @@ export const MEMBERS_COPY = {
     <ng-template #rolesCell let-member let-stacked="stacked">
       <div class="flex min-w-0 items-center gap-2" [class.flex-wrap]="stacked">
         @for (role of member.roles.slice(0, 2); track role.id) {
-          <span hlmBadge [variant]="'secondary'" class="role-name min-w-0">{{ role.name }}</span>
+          <span hlmBadge [variant]="'secondary'" class="role-name min-w-0">{{
+            display(role.name)
+          }}</span>
         } @empty {
           {{ copy.noRoles }}
         }
@@ -249,14 +247,16 @@ export const MEMBERS_COPY = {
             >
               +{{ member.roles.length - 2 }}
             </button>
-            <hlm-dialog-content *hlmDialogPortal [closeLabel]="copy.cancel">
+            <hlm-dialog-content *hlmDialogPortal [size]="'md'" [closeLabel]="copy.cancel">
               <header hlmDialogHeader>
                 <h2 hlmDialogTitle>{{ copy.roles }}</h2>
-                <p hlmDialogDescription class="m-0 wrap-anywhere">{{ member.invited_email }}</p>
+                <p hlmDialogDescription class="m-0 wrap-anywhere">
+                  {{ display(member.invited_email) }}
+                </p>
               </header>
               <ul class="m-0 grid min-w-0 gap-2 ps-4">
                 @for (role of member.roles; track role.id) {
-                  <li class="wrap-anywhere">{{ role.name }}</li>
+                  <li class="wrap-anywhere">{{ display(role.name) }}</li>
                 }
               </ul>
               <footer hlmDialogFooter>

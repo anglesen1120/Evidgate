@@ -28,6 +28,16 @@ async function labelGeometry(tab: Locator) {
 }
 
 for (const locale of LOCALES) {
+  for (const width of [360, 1440]) {
+    test(`revision details fit the ${width}px viewport (${locale})`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await visit(page, locale);
+      await page.locator('[data-policy-selected] [data-policy-view]').click();
+      const dialog = page.locator('[data-policy-view-dialog]');
+      await expect(dialog).toHaveCSS('width', width === 360 ? '360px' : '560px');
+      if (width === 360) await expect(dialog).toHaveCSS('height', '800px');
+    });
+  }
   for (const width of [1024, 1280]) {
     test(`UUID lookup is bounded at ${width}px (${locale})`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });

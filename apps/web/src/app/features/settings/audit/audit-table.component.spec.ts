@@ -130,7 +130,11 @@ describe('AuditTableComponent', () => {
       row('ordinary'),
       row('operator', {
         actor_type: 'platform_operator',
-        metadata: { support_grant_id: 'grant-42', private_note: 'not for display' },
+        metadata: {
+          support_grant_id: 'grant-42',
+          private_note: 'not for display',
+          expiry: 'private expiry',
+        },
       }),
     ]);
     const rows = Array.from(root.querySelectorAll('tbody tr'));
@@ -141,6 +145,8 @@ describe('AuditTableComponent', () => {
     expect(first.querySelector('[data-audit-support="true"]')).toBeNull();
     expect(first.querySelector('.support-access')).toBeNull();
     expect(second.querySelector('[data-audit-support="true"]')).not.toBeNull();
+    expect(root.textContent).not.toContain('not for display');
+    expect(root.textContent).not.toContain('expiry');
     const chip = await supportTrigger(second);
     expect(chip.textContent).toContain('Support access');
     expect(chip.tabIndex).toBe(0);
@@ -335,10 +341,11 @@ describe('AuditTableComponent', () => {
       row('with-request', { request_id: 'request-visible-in-details' }),
       row('empty', { request_id: null, object_type: null, object_id: null }),
     ]);
-    const rows = root.querySelectorAll('tbody tr');
+    const [withRequest, withoutRequest] = root.querySelectorAll('tbody tr');
+    if (!withRequest || !withoutRequest) throw new Error('Expected both audit rows');
     expect(document.querySelector('[role="dialog"]')).toBeNull();
-    const trigger = rows[0]?.querySelector('[data-audit-view]');
-    const dialog = await openAuditView(rows[0]!);
+    const trigger = withRequest.querySelector('[data-audit-view]');
+    const dialog = await openAuditView(withRequest);
     expect(dialog.textContent).toContain('request-visible-in-details');
     expect(dialog.textContent).toContain('project.updated');
     expect(dialog.textContent).not.toContain('Support access');
@@ -347,11 +354,11 @@ describe('AuditTableComponent', () => {
     );
     await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
     expect(document.activeElement).toBe(trigger);
-    const empty = await openAuditView(rows[1]!);
+    const empty = await openAuditView(withoutRequest);
     expect(empty.textContent).not.toContain('Request id');
     expect(empty.textContent).not.toContain('Support access');
-    expect(rows[1]?.textContent).toContain('—');
-    expect(rows[1]?.querySelector('[hidden]')).toBeNull();
+    expect(withoutRequest.textContent).toContain('—');
+    expect(withoutRequest.querySelector('[hidden]')).toBeNull();
     expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(2);
   });
 });

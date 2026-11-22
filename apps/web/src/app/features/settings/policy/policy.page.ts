@@ -184,7 +184,7 @@ export class PolicyPage {
     this.targetId.set(result.revision.id);
   }
   protected viewRevision(selection: { id: string; trigger: HTMLButtonElement }): void {
-    if (this.store.publishing() || this.store.phase() !== 'ready') return;
+    if (this.store.publishing() || this.store.phase() === 'loading') return;
     this.selectRevision(selection.id);
     this.viewed.set(selection);
   }

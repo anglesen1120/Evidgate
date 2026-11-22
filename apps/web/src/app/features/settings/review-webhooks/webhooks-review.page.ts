@@ -121,7 +121,10 @@ export class WebhooksReviewPage {
       ? this.deliveries().find((d) => d.tone === 'danger')
       : undefined,
   );
-  protected readonly preview = linkedSignal({ source: this.query, computation: () => false });
+  protected readonly preview = linkedSignal({
+    source: () => (this.viewing() ? this.choice() : undefined),
+    computation: () => false,
+  });
   protected readonly canPreview = computed(
     () => this.showRecords() && !['read-only', 'submitting', '412'].includes(this.state()),
   );

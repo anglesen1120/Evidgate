@@ -431,6 +431,7 @@ for (const locale of LOCALES) {
     await expect(opener).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveCSS('width', '760px');
     await expect(dialog.locator(BODY)).toHaveValue(SEED);
     await expect.poll(() => focusInside(page, DIALOG)).toBe(true);
     // Two full cycles over the dialog's three stops (body, Cancel, Publish) prove the wrapping edge.

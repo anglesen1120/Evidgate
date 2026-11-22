@@ -65,7 +65,7 @@ describe('MemberListComponent', () => {
   }
 
   it('opens the read-only member facts and returns focus on Escape', async () => {
-    const membership = { ...member('pending'), roles: [role('Auditor', 0)] };
+    const membership = { ...member('pending'), roles: [role('Audit\u202Eor', 0)] };
     await render([membership]);
     const harness = await TestbedHarnessEnvironment.harnessForFixture(
       fixture,
@@ -77,7 +77,8 @@ describe('MemberListComponent', () => {
     const dialog = document.querySelector('[role="dialog"]');
     expect(dialog?.textContent).toContain(membership.invited_email);
     expect(dialog?.textContent).toContain('Invitation pending');
-    expect(dialog?.textContent).toContain('Auditor');
+    expect(dialog?.textContent).toContain('Audit⟨U+202E⟩or');
+    expect(dialog?.textContent).not.toContain('\u202E');
     expect(dialog?.querySelector('time')?.getAttribute('datetime')).toBe(membership.created_at);
     dialog?.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }),

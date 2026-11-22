@@ -1,10 +1,12 @@
 import { InteractivityChecker } from '@angular/cdk/a11y';
 import { ComponentHarness, TestKey } from '@angular/cdk/testing';
+import { signal } from '@angular/core';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { WebhooksReviewPage } from './webhooks-review.page';
 import { webhooksFixture } from './webhooks-review.fixture';
 
@@ -13,6 +15,12 @@ class ReviewHarness extends ComponentHarness {
   readonly title = this.locatorFor('h1');
   readonly choices = this.locatorForAll('[data-view-record]');
   readonly dialog = this.documentRootLocatorFactory().locatorForOptional('[role="dialog"]');
+  readonly previewToggle = this.documentRootLocatorFactory().locatorFor(
+    'footer button[aria-expanded]',
+  );
+  readonly previewPanel = this.documentRootLocatorFactory().locatorForOptional(
+    'app-webhook-intent-preview',
+  );
   async open(index = 0) {
     const trigger = (await this.choices())[index];
     if (!trigger) throw new Error('Missing View button');
@@ -38,6 +46,10 @@ async function render(query: Record<string, string> = {}, model = webhooksFixtur
   TestBed.configureTestingModule({
     providers: [
       provideRouter([]),
+      {
+        provide: NarrowMutationPolicy,
+        useValue: { canMutate: signal(true), allowsMutation: () => true },
+      },
       { provide: ActivatedRoute, useValue: { queryParamMap: params.asObservable() } },
     ],
   });
@@ -72,6 +84,26 @@ describe('Webhook integrations review', () => {
     expect(pills.length).toBeGreaterThan(0);
     expect((await view.icons()).length).toBe(pills.length);
     for (const pill of pills) expect((await pill.text()).trim()).not.toBe('');
+  });
+  it('collapses the preview when reopening the same endpoint or switching to another one', async () => {
+    const { view, params } = await render();
+    await view.open();
+    await (await view.previewToggle()).click();
+    expect(await view.previewPanel()).not.toBeNull();
+    const dialog = await view.dialog();
+    if (!dialog) throw new Error('Missing webhook detail');
+    await dialog.sendKeys(TestKey.ESCAPE);
+    expect(await view.dialog()).toBeNull();
+    await view.open();
+    expect(await (await view.previewToggle()).getAttribute('aria-expanded')).toBe('false');
+    expect(await view.previewPanel()).toBeNull();
+
+    await (await view.previewToggle()).click();
+    expect(await view.previewPanel()).not.toBeNull();
+    params.next(convertToParamMap({ endpoint: 'wh-20' }));
+    expect(await (await view.dialog())?.text()).toContain('https://audit.example.test/evidgate');
+    expect(await (await view.previewToggle()).getAttribute('aria-expanded')).toBe('false');
+    expect(await view.previewPanel()).toBeNull();
   });
   it.each([
     ['loading', 'Loading the snapshot…'],

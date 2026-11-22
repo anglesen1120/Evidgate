@@ -152,8 +152,9 @@
                       type="button"
                       [variant]="'outline'"
                       [size]="'sm'"
-                      data-view-record
+                      [attr.data-view-record]="'grant'"
                       [attr.aria-haspopup]="'dialog'"
+                      [attr.aria-expanded]="viewing() && selection() === grant.ref"
                       class="pointer-coarse:min-h-11"
                       [attr.aria-labelledby]="'view-grant-' + idx + ' grant-' + idx"
                       (click)="openView(grant.ref)"
@@ -199,18 +200,15 @@
     </section>
     <hlm-dialog
       [state]="viewing() && selected() ? 'open' : 'closed'"
-      [aria-labelledby]="'grant-view-title'"
       [aria-modal]="true"
-      [autoFocus]="'#grant-view-title'"
-      (stateChanged)="$event === 'closed' && viewing.set(false)"
+      [autoFocus]="'first-heading'"
+      [restoreFocus]="'[data-view-record=grant][aria-expanded=true]'"
+      (closed)="viewing.set(false)"
     >
-      <hlm-dialog-content
-        *hlmDialogPortal
-        class="max-h-[90dvh] max-w-[min(35rem,calc(100vw-var(--eg-space-8)))] overflow-y-auto wrap-anywhere"
-      >
+      <hlm-dialog-content *hlmDialogPortal [size]="'md'" class="wrap-anywhere">
         @if (selected(); as g) {
           <header hlmDialogHeader>
-            <h2 hlmDialogTitle id="grant-view-title" tabindex="-1">{{ g.subject }}</h2>
+            <h2 hlmDialogTitle tabindex="-1">{{ g.subject }}</h2>
             <div class="flex flex-wrap items-center gap-2">
               <app-copyable-identifier [value]="g.ref" [label]="copy.grant" /><app-status-pill
                 [label]="copy[g.status]"
@@ -339,10 +337,7 @@
     [aria-label]="draft() === 'revoke' ? copy.revoke : copy.approve"
     [autoFocus]="'#grant-cancel'"
     (closed)="draft.set(null)"
-    ><hlm-dialog-content
-      *hlmDialogPortal
-      [showCloseButton]="false"
-      class="max-h-[85dvh] max-w-[min(47.5rem,calc(100vw-var(--eg-space-8)))] overflow-y-auto"
+    ><hlm-dialog-content *hlmDialogPortal [showCloseButton]="false" [size]="'lg'"
       ><header hlmDialogHeader>
         <h2 hlmDialogTitle>{{ draft() === 'revoke' ? copy.revoke : copy.approve }}</h2>
         <p hlmDialogDescription>{{ copy.localOnly }}</p>
