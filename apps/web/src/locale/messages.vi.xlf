@@ -189,13 +189,13 @@
         <source> Organization: <x id="INTERPOLATION" equiv-text="{{ org.name }}"/> </source>
         <target>Tổ chức: <x id="INTERPOLATION" equiv-text="{{ org.name }}"/></target>
       </trans-unit>
+<trans-unit id="settings.scope-label" datatype="html">
+        <source>Organization settings</source>
+        <target>Cài đặt tổ chức</target>
+      </trans-unit>
 <trans-unit id="settings.navigation" datatype="html">
         <source>Settings destinations</source>
         <target>Đích cài đặt</target>
-      </trans-unit>
-<trans-unit id="settings.choose" datatype="html">
-        <source>Choose a settings destination</source>
-        <target>Chọn đích cài đặt</target>
       </trans-unit>
 <trans-unit id="settings.placeholder.body" datatype="html">
         <source> This tab arrives with its own feature story. </source>
@@ -22055,7 +22055,6 @@
 <trans-unit id="suites.composition.identity" datatype="html"><source>Composition identity</source><target>Thông tin cấu hình</target></trans-unit>
 <trans-unit id="suites.composition.suite" datatype="html"><source>Suite</source><target>Bộ kiểm thử</target></trans-unit>
         <trans-unit id="settings.shell-intro" datatype="html"><source>Open a section to manage settings for your organization or project.</source><target>Chọn một mục để quản lý cài đặt của tổ chức hoặc dự án.</target></trans-unit>
-<trans-unit id="settings.shell-sections" datatype="html"><source>Sections</source><target>Các mục</target></trans-unit>
 <trans-unit id="settings.read-only" datatype="html"><source>Read-only. You don’t have permission to make changes here.</source><target>Chỉ đọc. Bạn không có quyền thay đổi cài đặt ở đây.</target></trans-unit>
 <trans-unit id="settings.count-on-page" datatype="html"><source>On this page</source><target>Trên trang này</target></trans-unit>
 <trans-unit id="settings.members-active-count" datatype="html"><source>Active members</source><target>Thành viên đang hoạt động</target></trans-unit>

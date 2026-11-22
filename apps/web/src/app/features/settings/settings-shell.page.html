@@ -7,83 +7,41 @@
   <app-page-header class="min-w-0 grow" [title]="title" [description]="description" />
 </header>
 @if (session.currentOrg(); as org) {
-  <div
-    hlmCard
-    class="settings-scope flex-row flex-wrap items-center justify-between gap-3 rounded-xl px-5 py-4"
-  >
-    <p class="m-0 text-sm font-semibold wrap-anywhere" i18n="@@settings.scope">
-      Organization: {{ org.name }}
-    </p>
+  <p class="settings-scope m-0 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+    <span class="text-muted-foreground" i18n="@@settings.scope-label">Organization settings</span>
+    <strong class="font-semibold wrap-anywhere">{{ org.name }}</strong>
     @if (activeTab(); as tab) {
-      <code class="text-xs text-muted-foreground wrap-anywhere">{{ tab.permission }}</code>
+      <code class="rounded-md border border-border bg-muted px-2 py-0.5 text-xs wrap-anywhere">{{
+        tab.permission
+      }}</code>
     }
-  </div>
+  </p>
 }
-<div
-  class="settings-layout grid min-w-0 grid-cols-[minmax(0,1fr)] items-start gap-4"
-  [class]="tabs().length > 0 ? 'min-[1025px]:grid-cols-[minmax(13rem,1fr)_minmax(0,3fr)]' : ''"
->
-  @if (tabs().length > 0) {
-    <nav
-      hlmCard
-      class="settings-nav min-w-0 gap-2 rounded-xl px-5 py-4"
-      aria-label="Settings destinations"
-      i18n-aria-label="@@settings.navigation"
-    >
-      <div class="settings-mobile grid min-w-0 gap-2 min-[1025px]:hidden">
-        <label hlmLabel for="settings-destination" i18n="@@settings.choose"
-          >Choose a settings destination</label
-        >
-        <hlm-select
-          [value]="activeSegment()"
-          [itemToString]="destinationLabel"
-          (valueChange)="selectDestination($event)"
-        >
-          <hlm-select-trigger
-            [buttonId]="'settings-destination'"
-            class="w-full min-w-0 min-h-[var(--eg-control-touch)] whitespace-normal"
+@if (tabs().length > 0) {
+  <nav
+    class="settings-tabs min-w-0 overflow-x-auto border-b border-border"
+    aria-label="Settings destinations"
+    i18n-aria-label="@@settings.navigation"
+  >
+    <ul class="settings-links m-0 flex w-max min-w-full list-none flex-nowrap gap-1 p-0">
+      @for (tab of tabs(); track tab.id) {
+        <li class="shrink-0">
+          <a
+            class="-mb-px flex min-h-(--eg-control-sm) items-center border-b-[3px] border-transparent px-4 py-2 text-sm font-medium whitespace-nowrap text-muted-foreground no-underline hover:text-foreground focus-visible:outline-(length:--eg-focus-width) focus-visible:-outline-offset-2 focus-visible:outline-(--eg-focus) pointer-coarse:min-h-(--eg-control-touch) aria-[current=page]:border-(--eg-accent) aria-[current=page]:font-bold aria-[current=page]:text-(--eg-accent)"
+            [routerLink]="[tab.segment]"
+            [attr.aria-current]="tab.segment === activeSegment() ? 'page' : null"
+            [attr.data-settings-tab]="tab.id"
           >
-            <hlm-select-value [placeholder]="choose" />
-          </hlm-select-trigger>
-          <hlm-select-content *hlmSelectPortal [aria-label]="choose">
-            @for (tab of tabs(); track tab.id) {
-              <hlm-select-item [value]="tab.segment">{{ tab.label }}</hlm-select-item>
-            }
-          </hlm-select-content>
-        </hlm-select>
-      </div>
-      <h2
-        hlmCardTitle
-        [size]="'subsection'"
-        class="m-0 hidden min-[1025px]:block"
-        i18n="@@settings.shell-sections"
-      >
-        Sections
-      </h2>
-      <ul class="settings-links m-0 hidden list-none gap-1 p-0 min-[1025px]:grid">
-        @for (tab of tabs(); track tab.id) {
-          <li class="min-w-0">
-            <a
-              hlmBtn
-              [variant]="'ghost'"
-              class="box-border h-auto min-h-(--eg-control-sm) w-full justify-start border-s-[3px] border-s-transparent px-3 py-1 text-start whitespace-normal pointer-coarse:min-h-(--eg-control-touch) aria-[current=page]:border-s-(--eg-accent) aria-[current=page]:bg-(--eg-accent-soft) aria-[current=page]:font-bold aria-[current=page]:text-(--eg-accent)"
-              [routerLink]="[tab.segment]"
-              routerLinkActive="settings-link--active"
-              [routerLinkActiveOptions]="{ exact: true }"
-              [ariaCurrentWhenActive]="'page'"
-              [attr.data-settings-tab]="tab.id"
-            >
-              {{ tab.label }}
-            </a>
-          </li>
-        }
-      </ul>
-    </nav>
+            {{ tab.label }}
+          </a>
+        </li>
+      }
+    </ul>
+  </nav>
+}
+<div class="settings-content min-w-0">
+  <router-outlet />
+  @if (activeSegment() === 'quota-retention') {
+    <app-retention-form />
   }
-  <div class="settings-content min-w-0">
-    <router-outlet />
-    @if (activeSegment() === 'quota-retention') {
-      <app-retention-form />
-    }
-  </div>
 </div>

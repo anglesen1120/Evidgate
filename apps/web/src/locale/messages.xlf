@@ -6992,6 +6992,13 @@
           <context context-type="linenumber">5,8</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="settings.scope-label" datatype="html">
+        <source>Organization settings</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/settings-shell.page.html</context>
+          <context context-type="linenumber">10</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="settings.navigation" datatype="html">
         <source>Settings destinations</source>
         <context-group purpose="location">
@@ -6999,18 +7006,7 @@
           <context context-type="linenumber">16,19</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="settings.choose" datatype="html">
-        <source>Choose a settings destination</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/settings-shell.page.html</context>
-          <context context-type="linenumber">21,25</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/settings-shell.page.ts</context>
-          <context context-type="linenumber">45</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="settings.placeholder.body" datatype="html">
+            <trans-unit id="settings.placeholder.body" datatype="html">
         <source> This tab arrives with its own feature story. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/settings-tab-placeholder.page.ts</context>
@@ -26575,7 +26571,6 @@
       <trans-unit id="settings.policy.activation-mode" datatype="html"><source>Activation mode</source></trans-unit>
       <trans-unit id="settings.policy.diff-field" datatype="html"><source>Field</source></trans-unit>
       <trans-unit id="settings.shell-intro" datatype="html"><source>Open a section to manage settings for your organization or project.</source></trans-unit>
-      <trans-unit id="settings.shell-sections" datatype="html"><source>Sections</source></trans-unit>
       <trans-unit id="settings.read-only" datatype="html"><source>Read-only. You don’t have permission to make changes here.</source></trans-unit>
       <trans-unit id="settings.count-on-page" datatype="html"><source>On this page</source></trans-unit>
       <trans-unit id="settings.members-active-count" datatype="html"><source>Active members</source></trans-unit>
