@@ -21,6 +21,8 @@ import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
 import { SessionStore } from '../../../core/session/session.store';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
+import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { SectionHeaderComponent } from '../../../shared/ui/page-header/section-header.component';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
 import { AUDIT_ACTOR_TYPE_LABELS } from './actor-type-labels';
@@ -44,6 +46,8 @@ const VISIBLE_ROW_LIMIT = 25;
     HlmButton,
     HlmCardImports,
     HlmIcon,
+    ShellIconComponent,
+    StatusPillComponent,
     SectionHeaderComponent,
     HlmInput,
     HlmLabel,
@@ -84,7 +88,6 @@ export class AuditPage {
       : value;
   };
   protected readonly pageHeadingSize = 'page' as const;
-  protected readonly sectionHeadingSize = 'section' as const;
   protected readonly subsectionHeadingSize = 'subsection' as const;
   protected readonly draft = signal<AuditFilters>({ ...EMPTY_AUDIT_FILTERS });
   protected readonly invalidRange = signal(false);
@@ -131,7 +134,8 @@ export class AuditPage {
   protected readonly copy = {
     title: $localize`:@@settings.audit.title:Audit log`,
     loading: $localize`:@@settings.audit.loading:Loading audit activity…`,
-    description: $localize`:@@settings.audit.description:Review organization activity and support access. Audit records cannot be edited here.`,
+    description: $localize`:@@settings.audit.description:Trace administrative changes to an actor, request and immutable audit record.`,
+    newestFirst: $localize`:@@settings.audit.newest-first:Newest first`,
     filters: $localize`:@@settings.audit.filters:Filter activity`,
     actorType: $localize`:@@settings.audit.actor-type:Actor type`,
     anyActor: $localize`:@@settings.audit.any-actor:Any actor`,
@@ -168,24 +172,28 @@ export class AuditPage {
     const supportCount = rows.reduce((n, row) => n + Number(supportAccessOf(row) !== null), 0);
     return [
       {
-        label: $localize`:@@settings.audit-loaded-records:Loaded records`,
+        label: $localize`:@@settings.audit.recorded-activity:Recorded activity`,
+        caption: $localize`:@@settings.audit-loaded-records:Loaded records`,
         value: formatNumber(rows.length, this.locale),
-        icon: 'lucideClock',
+        icon: 'clock',
       },
       {
-        label: $localize`:@@settings.audit-loaded-support:Loaded support records`,
+        label: $localize`:@@settings.audit.support:Support access`,
+        caption: $localize`:@@settings.audit-loaded-support:Loaded support records`,
         value: formatNumber(supportCount, this.locale),
-        icon: 'lucideActivity',
+        icon: 'people',
       },
       {
-        label: $localize`:@@settings.audit-export-limit:Maximum rows per export`,
+        label: $localize`:@@settings.audit.export-bound:Export bound`,
+        caption: $localize`:@@settings.audit-export-limit:Maximum rows per export`,
         value: formatNumber(AUDIT_EXPORT_CAP, this.locale),
-        icon: 'lucideCopy',
+        icon: 'folder',
       },
       {
         label: $localize`:@@settings.audit-record-scope:Record scope`,
+        caption: this.session.currentOrg()?.name,
         value: $localize`:@@settings.audit.export-organization:Organization`,
-        icon: 'lucideInfo',
+        icon: 'shield',
       },
     ] as const;
   });

@@ -15,7 +15,7 @@ provideLayoutTestStubs();
 
 class AuditSummaryHarness extends ComponentHarness {
   static hostSelector = 'app-audit-page';
-  readonly values = this.locatorForAll('[data-audit-summary] dd');
+  readonly values = this.locatorForAll('[data-audit-summary] [data-audit-value]');
 }
 
 function entry(id: string, changes: Partial<AuditEntryDto> = {}): AuditEntryDto {

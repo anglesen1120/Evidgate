@@ -46,4 +46,9 @@ export class SettingsShellPage {
   protected readonly activeTab = computed(() =>
     this.tabs().find((tab) => tab.segment === this.activeSegment()),
   );
+
+  /** Keyboard focus must bring a clipped tab fully into the scrolling strip. */
+  protected reveal(event: FocusEvent): void {
+    (event.target as HTMLElement).scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
 }

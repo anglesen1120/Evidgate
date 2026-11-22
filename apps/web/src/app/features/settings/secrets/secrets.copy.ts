@@ -42,6 +42,12 @@ export const SECRETS_COPY = {
   reference: $localize`:@@settings.secrets.reference-column:Reference`,
   expiresSoon: $localize`:@@settings.secrets.expires-soon:Expires soon`,
   expired: $localize`:@@settings.secrets.expired:Expired`,
+  references: $localize`:@@settings.secrets.references:References`,
+  readOnly: $localize`:@@settings.secrets.read-only:Read-only access`,
+  activeHint: $localize`:@@settings.secrets.active-hint:Source-reported state`,
+  soonHint: $localize`:@@settings.secrets.soon-hint:Within 14 days`,
+  expiredHint: $localize`:@@settings.secrets.expired-hint:Expired state or past expiry`,
+  actions: $localize`:@@settings.secrets.actions:Actions`,
 };
 
 export function secretStatusLabel(status: IngestTokenView['status']): string {

@@ -10,6 +10,8 @@ import { PageHeaderComponent } from '../../shared/ui/page-header';
 import { escapeFormatChars } from '../../shared/ui/values/ref-name-display';
 import { ShellIconComponent } from '../../shell/layout/shell-icon.component';
 import { NotFoundPatternComponent } from '../../shared/ui/states/not-found-pattern.component';
+import { EmptyPatternComponent } from '../../shared/ui/states/empty-pattern.component';
+import { LoadingPatternComponent } from '../../shared/ui/states/loading-pattern.component';
 import { DesktopRequiredNoticeComponent } from '../../shared/ui/narrow/desktop-required-notice.component';
 import { NarrowMutationPolicy } from '../../shared/ui/narrow/narrow-mutation-policy';
 import {
@@ -37,6 +39,8 @@ import { SwitchScopeHierarchy } from './switch-scope-hierarchy.component';
     PageHeaderComponent,
     ShellIconComponent,
     NotFoundPatternComponent,
+    EmptyPatternComponent,
+    LoadingPatternComponent,
     SwitchScopeControl,
     SwitchScopeHierarchy,
     DesktopRequiredNoticeComponent,

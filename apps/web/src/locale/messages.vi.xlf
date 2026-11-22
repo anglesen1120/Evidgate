@@ -132,7 +132,7 @@
       </trans-unit>
 <trans-unit id="settings.members.title" datatype="html"><source>Members and roles</source><target>Thành viên và vai trò</target></trans-unit>
 <trans-unit id="settings.members.directory" datatype="html"><source>Members and invitations</source><target>Thành viên và lời mời</target></trans-unit>
-<trans-unit id="settings.members.description" datatype="html"><source>Manage organization membership. The server decides actual access.</source><target>Quản lý thành viên tổ chức. Máy chủ quyết định quyền truy cập thực tế.</target></trans-unit>
+<trans-unit id="settings.members.description" datatype="html"><source>Review organization roles and invitations before changing membership.</source><target>Xem lại vai trò trong tổ chức và lời mời trước khi thay đổi tư cách thành viên.</target></trans-unit>
 <trans-unit id="settings.members.member" datatype="html"><source>Member</source><target>Thành viên</target></trans-unit>
 <trans-unit id="settings.members.status" datatype="html"><source>Status</source><target>Trạng thái</target></trans-unit>
 <trans-unit id="settings.members.roles" datatype="html"><source>Organization roles</source><target>Vai trò tổ chức</target></trans-unit>
@@ -176,7 +176,7 @@
 <trans-unit id="settings.members.saved" datatype="html"><source>Membership updated.</source><target>Đã cập nhật thành viên.</target></trans-unit>
 <trans-unit id="settings.members.load-more-failed" datatype="html"><source>The next members page could not be loaded. The members already shown are unchanged.</source><target>Không tải được trang thành viên tiếp theo. Các thành viên đang hiển thị vẫn giữ nguyên.</target></trans-unit>
 <trans-unit id="settings.members.narrow" datatype="html"><source>Use a wider screen to invite, edit or remove members.</source><target>Dùng màn hình rộng hơn để mời, sửa vai trò hoặc xoá thành viên.</target></trans-unit>
-<trans-unit id="settings.members.pending" datatype="html"><source>Invited</source><target>Đã mời</target></trans-unit>
+<trans-unit id="settings.members.pending" datatype="html"><source>Invitation pending</source><target>Lời mời đang chờ</target></trans-unit>
 <trans-unit id="settings.members.active" datatype="html"><source>Active</source><target>Đang hoạt động</target></trans-unit>
 <trans-unit id="settings.members.removed" datatype="html"><source>Removed</source><target>Đã xoá</target></trans-unit>
 <trans-unit id="settings.members.revoked" datatype="html"><source>Revoked</source><target>Đã thu hồi</target></trans-unit>
@@ -2269,7 +2269,7 @@
 <trans-unit id="settings.audit.export-progress" datatype="html"><source>Exporting… <x id="rows" equiv-text="formatNumber(rows, this.locale)"/> rows</source><target>Đang xuất… <x id="rows" equiv-text="rows"/> dòng</target></trans-unit>
 <trans-unit id="settings.audit.export-done" datatype="html"><source>Exported <x id="rows" equiv-text="formatNumber(rows, this.locale)"/> rows.</source><target>Đã xuất <x id="rows" equiv-text="rows"/> dòng.</target></trans-unit>
 <trans-unit id="settings.audit.title" datatype="html"><source>Audit log</source><target>Nhật ký kiểm toán</target></trans-unit>
-<trans-unit id="settings.audit.description" datatype="html"><source>Review organization activity and support access. Audit records cannot be edited here.</source><target>Xem hoạt động của tổ chức và truy cập hỗ trợ. Không thể chỉnh sửa bản ghi kiểm toán tại đây.</target></trans-unit>
+<trans-unit id="settings.audit.description" datatype="html"><source>Trace administrative changes to an actor, request and immutable audit record.</source><target>Truy vết thay đổi quản trị đến người thực hiện, yêu cầu và bản ghi kiểm toán bất biến.</target></trans-unit>
 <trans-unit id="settings.audit.filters" datatype="html"><source>Filter activity</source><target>Lọc hoạt động</target></trans-unit>
 <trans-unit id="settings.audit.actor-type" datatype="html"><source>Actor type</source><target>Loại chủ thể</target></trans-unit>
 <trans-unit id="settings.audit.any-actor" datatype="html"><source>Any actor</source><target>Tất cả chủ thể</target></trans-unit>
@@ -2912,8 +2912,8 @@
 <trans-unit id="quota.metric.device-minutes" datatype="html"><source>Device minutes</source><target>Phút sử dụng thiết bị</target></trans-unit>
 <trans-unit id="quota.badge.blocked" datatype="html"><source>Quota limit reached:</source><target>Đã đạt hạn mức:</target></trans-unit>
 <trans-unit id="quota.badge.warned" datatype="html"><source>Approaching quota limit:</source><target>Sắp đạt hạn mức:</target></trans-unit>
-<trans-unit id="quota.panel.title" datatype="html"><source>Quota &amp; retention</source><target>Hạn mức và lưu giữ</target></trans-unit>
-<trans-unit id="quota.panel.description" datatype="html"><source>Organization-wide counters and limits supplied by the service. Quota state does not change recorded test outcomes.</source><target>Số liệu và giới hạn toàn tổ chức do dịch vụ cung cấp. Trạng thái hạn mức không thay đổi kết quả kiểm thử đã ghi nhận.</target></trans-unit>
+<trans-unit id="quota.panel.title" datatype="html"><source>Usage and AI credits</source><target>Mức sử dụng và tín dụng AI</target></trans-unit>
+<trans-unit id="quota.panel.description" datatype="html"><source>Review organization usage, quota limits and project retention windows.</source><target>Xem mức sử dụng của tổ chức, hạn mức và thời gian lưu giữ của dự án.</target></trans-unit>
 <trans-unit id="quota.panel.loading" datatype="html"><source>Loading usage summary…</source><target>Đang tải tổng hợp mức sử dụng…</target></trans-unit>
 <trans-unit id="quota.panel.period" datatype="html"><source>Billing period</source><target>Kỳ tính phí</target></trans-unit>
 <trans-unit id="quota.panel.empty" datatype="html"><source>No usage counters were supplied for this period.</source><target>Chưa có số liệu sử dụng được cung cấp cho kỳ này.</target></trans-unit>
@@ -22214,6 +22214,42 @@
         <source>Matches in loaded results: <x id="INTERPOLATION" equiv-text="{{ store.visibleRows().length | number }}"/></source>
         <target>Số định danh khớp trong kết quả đã tải: <x id="INTERPOLATION" equiv-text="{{ store.visibleRows().length | number }}"/></target>
       </trans-unit>
+<trans-unit id="settings.members.active-hint" datatype="html"><source>On this page · organization directory</source><target>Trên trang này · danh bạ tổ chức</target></trans-unit>
+<trans-unit id="settings.members.pending-hint" datatype="html"><source>On this page · awaiting acceptance</source><target>Trên trang này · chờ chấp nhận</target></trans-unit>
+<trans-unit id="settings.members.admin-hint" datatype="html"><source>On this page · last admin protected</source><target>Trên trang này · bảo vệ quản trị viên cuối cùng</target></trans-unit>
+<trans-unit id="settings.members.visible-range" datatype="html"><source>Showing <x id="INTERPOLATION"/>–<x id="INTERPOLATION_1"/></source><target>Đang hiển thị <x id="INTERPOLATION"/>–<x id="INTERPOLATION_1"/></target></trans-unit>
+<trans-unit id="settings.security.intro" datatype="html"><source>Inspect authorized event metadata without exposing request bodies or foreign targets.</source><target>Xem siêu dữ liệu sự kiện được phép mà không tiết lộ nội dung yêu cầu hay đối tượng của tổ chức khác.</target></trans-unit>
+<trans-unit id="settings.security.visible" datatype="html"><source>Visible events</source><target>Sự kiện hiển thị</target></trans-unit>
+<trans-unit id="settings.security.critical" datatype="html"><source>Critical events</source><target>Sự kiện nghiêm trọng</target></trans-unit>
+<trans-unit id="settings.security.support-scoped" datatype="html"><source>Support-scoped</source><target>Trong phạm vi hỗ trợ</target></trans-unit>
+<trans-unit id="settings.security.metadata-only" datatype="html"><source>Metadata only</source><target>Chỉ siêu dữ liệu</target></trans-unit>
+<trans-unit id="settings.security.newest-first" datatype="html"><source>Newest first</source><target>Mới nhất trước</target></trans-unit>
+<trans-unit id="settings.security.read-only" datatype="html"><source>Read only</source><target>Chỉ đọc</target></trans-unit>
+<trans-unit id="settings.api-tokens.intro" datatype="html"><source>Review project credentials by purpose, permission subset and expiry.</source><target>Xem thông tin xác thực của dự án theo mục đích, tập quyền và hạn dùng.</target></trans-unit>
+<trans-unit id="settings.api-tokens.metadata-heading" datatype="html"><source>Token metadata</source><target>Siêu dữ liệu mã truy cập</target></trans-unit>
+<trans-unit id="settings.api-tokens.page-prefixes" datatype="html"><source>Prefixes on this page</source><target>Tiền tố trên trang này</target></trans-unit>
+<trans-unit id="settings.api-tokens.served-state" datatype="html"><source>Server-reported state</source><target>Trạng thái do máy chủ báo cáo</target></trans-unit>
+<trans-unit id="settings.api-tokens.not-usable" datatype="html"><source>Not usable</source><target>Không dùng được</target></trans-unit>
+<trans-unit id="settings.api-tokens.revocation-recorded" datatype="html"><source>Revocation recorded</source><target>Đã ghi nhận thu hồi</target></trans-unit>
+<trans-unit id="settings.api-tokens.showing-page" datatype="html"><source>Showing <x id="range"/> of <x id="count"/> tokens on this page.</source><target>Đang hiển thị <x id="range"/> trong số <x id="count"/> mã truy cập trên trang này.</target></trans-unit>
+<trans-unit id="settings.members.header-facts" datatype="html"><source>On this page: <x id="INTERPOLATION"/> active · <x id="INTERPOLATION_1"/> pending</source><target>Trên trang này: <x id="INTERPOLATION"/> đang hoạt động · <x id="INTERPOLATION_1"/> đang chờ</target></trans-unit>
+<trans-unit id="settings.members.complete-range" datatype="html"><source>Showing <x id="INTERPOLATION"/>–<x id="INTERPOLATION_1"/> of <x id="INTERPOLATION_2"/></source><target>Đang hiển thị <x id="INTERPOLATION"/>–<x id="INTERPOLATION_1"/> trên <x id="INTERPOLATION_2"/></target></trans-unit>
+<trans-unit id="settings.members.created-date" datatype="html"><source>Created <x id="INTERPOLATION"/> UTC</source><target>Ngày tạo: <x id="INTERPOLATION"/> UTC</target></trans-unit>
+<trans-unit id="quota.panel.counters" datatype="html"><source>Usage counters</source><target>Bộ đếm mức sử dụng</target></trans-unit>
+<trans-unit id="quota.panel.metric" datatype="html"><source>Metric</source><target>Chỉ số</target></trans-unit>
+<trans-unit id="quota.panel.state-description" datatype="html"><source>Warnings and blocks are reported by the service, not inferred from usage.</source><target>Dịch vụ ghi nhận cảnh báo và trạng thái chặn; các trạng thái này không được suy ra từ mức sử dụng.</target></trans-unit>
+<trans-unit id="settings.audit.newest-first" datatype="html"><source>Newest first</source><target>Mới nhất trước</target></trans-unit>
+<trans-unit id="settings.audit.recorded-activity" datatype="html"><source>Recorded activity</source><target>Hoạt động được ghi nhận</target></trans-unit>
+<trans-unit id="settings.audit.export-bound" datatype="html"><source>Export bound</source><target>Giới hạn xuất</target></trans-unit>
+<trans-unit id="settings.secrets.references" datatype="html"><source>References</source><target>Tham chiếu</target></trans-unit>
+<trans-unit id="settings.secrets.read-only" datatype="html"><source>Read-only access</source><target>Quyền chỉ đọc</target></trans-unit>
+<trans-unit id="settings.secrets.active-hint" datatype="html"><source>Source-reported state</source><target>Trạng thái do nguồn cung cấp</target></trans-unit>
+<trans-unit id="settings.secrets.soon-hint" datatype="html"><source>Within 14 days</source><target>Trong vòng 14 ngày</target></trans-unit>
+<trans-unit id="settings.secrets.expired-hint" datatype="html"><source>Expired state or past expiry</source><target>Đã hết hạn hoặc đã quá ngày hết hạn</target></trans-unit>
+<trans-unit id="settings.secrets.actions" datatype="html"><source>Actions</source><target>Thao tác</target></trans-unit>
+<trans-unit id="settings.secrets.page-shown" datatype="html"><source>Showing <x id="INTERPOLATION"/> of <x id="INTERPOLATION_1"/> on this page</source><target>Đang hiển thị <x id="INTERPOLATION"/> trong số <x id="INTERPOLATION_1"/> trên trang này</target></trans-unit>
+<trans-unit id="settings.policy.loaded-revisions" datatype="html"><source>Loaded revisions</source><target>Phiên bản đã tải</target></trans-unit>
+<trans-unit id="settings.policy.history-range" datatype="html"><source>Showing 1–<x id="INTERPOLATION"/> loaded revisions</source><target>Đang hiển thị 1–<x id="INTERPOLATION"/> trong số các phiên bản đã tải</target></trans-unit>
 </body>
   </file>
 </xliff>

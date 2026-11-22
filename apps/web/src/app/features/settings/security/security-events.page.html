@@ -2,43 +2,54 @@
   <span
     class="grid size-12 shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent)"
   >
-    <hlm-icon [name]="'lucideActivity'" class="size-6" />
+    <app-shell-icon [name]="'shield-check'" class="size-6" />
   </span>
   @if (ownsPageHeading) {
-    <app-page-header class="min-w-0" [title]="copy.title" [description]="copy.description" />
+    <app-page-header class="min-w-0" [title]="copy.title" [description]="subtitle()" />
   } @else {
-    <app-section-header class="min-w-0" [title]="copy.title" [description]="copy.description" />
+    <app-section-header class="min-w-0" [title]="copy.title" [description]="subtitle()" />
   }
 </header>
 @if (store.phase() === 'ready') {
-  <dl data-security-summary class="m-0 grid min-w-0 gap-3 @sm:grid-cols-2 @4xl:grid-cols-4">
-    @for (card of summary(); track card.label; let first = $first) {
+  <dl
+    data-security-summary
+    class="m-0 grid min-w-0 grid-cols-1 gap-3 @xs:grid-cols-2 @2xl:grid-cols-4"
+  >
+    @for (card of summary(); track card.label; let first = $first; let last = $last) {
       <div hlmCard class="min-w-0 gap-3 rounded-xl p-4">
         <dt class="flex items-center gap-2 text-sm font-semibold">
           <span
             class="grid size-7 shrink-0 place-items-center rounded-lg"
             [class]="
-              first ? 'bg-(--eg-accent-soft) text-(--eg-accent)' : 'bg-muted text-muted-foreground'
+              first
+                ? 'bg-(--eg-accent-soft) text-(--eg-accent)'
+                : last
+                  ? 'bg-muted text-muted-foreground'
+                  : 'bg-(--eg-info-bg) text-(--eg-info-fg)'
             "
           >
-            <hlm-icon [name]="card.icon" class="size-4" />
+            <app-shell-icon [name]="card.icon" class="size-4" />
           </span>
           {{ card.label }}
         </dt>
-        <dd class="m-0 font-(family-name:--eg-font-display) text-2xl font-bold tabular-nums">
-          {{ card.value }}
+        <dd class="m-0 grid gap-1">
+          <strong class="eg-type-page-title tabular-nums">{{ card.value }}</strong>
+          <span class="text-xs text-muted-foreground">{{ card.hint }}</span>
         </dd>
       </div>
     }
   </dl>
 }
 <div hlmCard class="min-w-0 gap-0 overflow-visible rounded-xl p-0">
-  <header class="border-b border-border px-5 py-4">
+  <header class="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
     <app-section-header
       [title]="copy.activity"
       [size]="'subsection'"
       [headingLevel]="ownsPageHeading ? 2 : 3"
     />
+    <span hlmBadge [variant]="'secondary'" class="shrink-0 gap-1">
+      <hlm-icon [name]="'lucideClock'" /> {{ copy.newest }}
+    </span>
   </header>
   <form
     class="grid min-w-0 gap-3 border-b border-border px-5 py-4"
@@ -47,8 +58,37 @@
   >
     <span id="security-filters-heading" class="sr-only">{{ copy.filters }}</span>
     <app-form-error-summary [summaryId]="'security-filter-errors'" [feedback]="feedback()" />
+    @let counted = store.phase() === 'ready' && !store.filters().severity;
+    <fieldset class="m-0 min-w-0 border-0 p-0">
+      <legend class="mb-1 text-xs font-semibold">
+        {{ copy.severity }}
+        @if (counted) {
+          <span class="font-normal text-muted-foreground">· {{ copy.onPage }}</span>
+        }
+      </legend>
+      <div class="flex flex-wrap items-center gap-1">
+        @for (option of severityOptions; track option.value) {
+          <button
+            hlmBtn
+            type="button"
+            [size]="'sm'"
+            [variant]="draft().severity === option.value ? 'secondary' : 'ghost'"
+            class="max-w-full whitespace-normal aria-pressed:bg-(--eg-accent-soft) aria-pressed:text-(--eg-accent) pointer-coarse:min-h-(--eg-control-touch)"
+            [attr.aria-pressed]="draft().severity === option.value"
+            (click)="updateDraft({ severity: option.value })"
+          >
+            {{ option.label }}
+            @if (counted) {
+              <span class="text-xs tabular-nums text-muted-foreground">{{
+                option.value ? pageCounts().severity[option.value] : pageCounts().total
+              }}</span>
+            }
+          </button>
+        }
+      </div>
+    </fieldset>
     <div
-      class="grid min-w-0 items-start gap-3 @xl:grid-cols-2 @5xl:grid-cols-[repeat(3,minmax(0,1fr))_repeat(2,minmax(0,1.4fr))] [&_input]:box-border [&_input]:min-w-0 [&_input]:w-full"
+      class="grid min-w-0 items-start gap-3 @sm:grid-cols-2 @3xl:grid-cols-[repeat(2,minmax(0,1fr))_repeat(2,minmax(0,1.55fr))] [&_input]:box-border [&_input]:min-w-0 [&_input]:w-full"
     >
       <div class="grid min-w-0 gap-2">
         <label hlmLabel for="security-project">{{ copy.project }}</label>
@@ -57,14 +97,11 @@
           id="security-project"
           name="projectId"
           maxlength="36"
-          class="min-h-[var(--eg-control-touch)]"
+          class="pointer-coarse:min-h-(--eg-control-touch)"
           [ngModel]="draft().projectId"
           (ngModelChange)="updateDraft({ projectId: $event })"
           [aria-describedby]="'security-project-hint'"
         />
-        <p id="security-project-hint" class="m-0 text-xs text-muted-foreground">
-          {{ copy.projectHint }}
-        </p>
       </div>
       <div class="grid min-w-0 content-start gap-2">
         <label hlmLabel for="security-type">{{ copy.type }}</label>
@@ -75,33 +112,13 @@
         >
           <hlm-select-trigger
             [buttonId]="'security-type'"
-            class="w-full min-h-[var(--eg-control-touch)] whitespace-normal"
+            class="w-full whitespace-normal pointer-coarse:min-h-(--eg-control-touch)"
             ><hlm-select-value [placeholder]="copy.allTypes"
           /></hlm-select-trigger>
           <hlm-select-content *hlmSelectPortal [aria-label]="copy.type">
             <hlm-select-item [value]="''">{{ copy.allTypes }}</hlm-select-item>
             @for (type of types; track type.value) {
               <hlm-select-item [value]="type.value">{{ type.label }}</hlm-select-item>
-            }
-          </hlm-select-content>
-        </hlm-select>
-      </div>
-      <div class="grid min-w-0 content-start gap-2">
-        <label hlmLabel for="security-severity">{{ copy.severity }}</label>
-        <hlm-select
-          name="severity"
-          [ngModel]="draft().severity"
-          (ngModelChange)="updateDraft({ severity: $event })"
-        >
-          <hlm-select-trigger
-            [buttonId]="'security-severity'"
-            class="w-full min-h-[var(--eg-control-touch)] whitespace-normal"
-            ><hlm-select-value [placeholder]="copy.allSeverities"
-          /></hlm-select-trigger>
-          <hlm-select-content *hlmSelectPortal [aria-label]="copy.severity">
-            <hlm-select-item [value]="''">{{ copy.allSeverities }}</hlm-select-item>
-            @for (severity of severities; track severity.value) {
-              <hlm-select-item [value]="severity.value">{{ severity.label }}</hlm-select-item>
             }
           </hlm-select-content>
         </hlm-select>
@@ -115,7 +132,7 @@
             [name]="field.id"
             type="datetime-local"
             step="1"
-            class="min-h-[var(--eg-control-touch)]"
+            class="pointer-coarse:min-h-(--eg-control-touch)"
             [ngModel]="field.id === 'security-from' ? draft().from : draft().to"
             (ngModelChange)="
               updateDraft(field.id === 'security-from' ? { from: $event } : { to: $event })
@@ -129,27 +146,32 @@
         </div>
       }
     </div>
-    <p id="security-time-hint" class="m-0 text-xs text-muted-foreground">{{ copy.timeHint }}</p>
-    <div class="flex flex-wrap items-end gap-2">
-      <button
-        hlmBtn
-        [variant]="'default'"
-        type="submit"
-        class="min-h-[var(--eg-control-touch)] whitespace-normal"
-        data-security-apply
-      >
-        {{ copy.apply }}
-      </button>
-      <button
-        hlmBtn
-        [variant]="'outline'"
-        type="button"
-        class="min-h-[var(--eg-control-touch)] whitespace-normal"
-        data-security-clear
-        (click)="clear()"
-      >
-        {{ copy.clear }}
-      </button>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="grid gap-1 text-xs text-muted-foreground">
+        <p id="security-project-hint" class="m-0">{{ copy.projectHint }}</p>
+        <p id="security-time-hint" class="m-0">{{ copy.timeHint }}</p>
+      </div>
+      <div class="flex flex-wrap items-end gap-2">
+        <button
+          hlmBtn
+          [variant]="'default'"
+          type="submit"
+          class="whitespace-normal pointer-coarse:min-h-(--eg-control-touch)"
+          data-security-apply
+        >
+          {{ copy.apply }}
+        </button>
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          type="button"
+          class="whitespace-normal pointer-coarse:min-h-(--eg-control-touch)"
+          data-security-clear
+          (click)="clear()"
+        >
+          {{ copy.clear }}
+        </button>
+      </div>
     </div>
   </form>
   <section
@@ -175,21 +197,21 @@
       <app-security-events-table [rows]="store.rows()" />
     </app-request-state>
     <footer
-      class="flex min-w-0 flex-wrap items-end justify-between gap-3 border-t border-border px-4 py-3"
+      class="flex min-w-0 flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3"
     >
       @if (store.phase() === 'ready') {
         <p role="status" class="m-0 text-xs text-muted-foreground">{{ pageSummary() }}</p>
       }
       <nav
-        class="ms-auto flex min-w-0 flex-wrap items-end gap-2"
+        class="ms-auto flex min-w-0 flex-wrap items-center gap-2"
         [attr.aria-label]="copy.pagination"
       >
-        <div class="grid gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <label hlmLabel for="security-page-size">{{ copy.pageSize }}</label>
           <hlm-select [value]="store.pageSize()" (valueChange)="store.setPageSize(+($event ?? 0))">
             <hlm-select-trigger
               [buttonId]="'security-page-size'"
-              class="min-h-[var(--eg-control-touch)]"
+              class="pointer-coarse:min-h-(--eg-control-touch)"
               ><hlm-select-value
             /></hlm-select-trigger>
             <hlm-select-content *hlmSelectPortal [aria-label]="copy.pageSize">
@@ -203,7 +225,7 @@
           hlmBtn
           [variant]="'outline'"
           type="button"
-          class="min-h-[var(--eg-control-touch)] whitespace-normal"
+          class="whitespace-normal pointer-coarse:min-h-(--eg-control-touch)"
           [disabled]="store.phase() !== 'ready' || store.pageIndex() === 0"
           (click)="move(false)"
         >
@@ -213,7 +235,7 @@
           hlmBtn
           [variant]="'outline'"
           type="button"
-          class="min-h-[var(--eg-control-touch)] whitespace-normal"
+          class="whitespace-normal pointer-coarse:min-h-(--eg-control-touch)"
           [disabled]="store.phase() !== 'ready' || !store.canNext()"
           (click)="move(true)"
         >
@@ -229,13 +251,16 @@
   </section>
 </div>
 <section hlmCard class="min-w-0 gap-0 rounded-xl p-0" aria-labelledby="security-safe-data-title">
-  <header class="border-b border-border px-5 py-4">
+  <header class="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
     <app-section-header
       [titleId]="'security-safe-data-title'"
       [title]="copy.safeData"
       [size]="'subsection'"
       [headingLevel]="ownsPageHeading ? 2 : 3"
     />
+    <span hlmBadge [variant]="'secondary'" class="shrink-0 gap-1">
+      <hlm-icon [name]="'lucideInfo'" /> {{ copy.readOnly }}
+    </span>
   </header>
   <div class="grid min-w-0 gap-2 px-5 py-4 text-sm text-muted-foreground">
     <p class="m-0">{{ copy.boundary }}</p>

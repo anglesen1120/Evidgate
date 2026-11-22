@@ -238,6 +238,12 @@ test.describe('the Settings shell is WCAG 2.2 AA clean (AC1, 00 §5.6 W9)', () =
     // Keyboard focus reaches a tab and keeps a visible outline inside the scroll box.
     await links.last().focus();
     await expect(links.last()).toBeFocused();
+    const contained = await links.last().evaluate((link) => {
+      const nav = link.closest('nav')!.getBoundingClientRect();
+      const box = link.getBoundingClientRect();
+      return box.left >= nav.left - 1 && box.right <= nav.right + 1;
+    });
+    expect(contained, 'focused tab is fully inside the strip').toBe(true);
     await expectNoA11yViolations(page, 'settings 360px en/light');
 
     const overflow = await page.evaluate(

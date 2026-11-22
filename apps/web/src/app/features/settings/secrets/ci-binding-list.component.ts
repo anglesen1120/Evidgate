@@ -17,6 +17,7 @@ import { HlmAlert } from '@evidgate/ui/alert';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCard } from '@evidgate/ui/card';
 import { HlmSkeleton } from '@evidgate/ui/skeleton';
+import { HlmTableImports } from '@evidgate/ui/table';
 import type { ApiError } from '../../../core/http/api-error';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
@@ -51,7 +52,15 @@ export const CI_BINDINGS_COPY = {
 /** Read-only projection: bind named CiBindingView metadata, never enumerate/spread API fields. */
 @Component({
   selector: 'app-ci-binding-list',
-  imports: [StatusPillComponent, HlmAlert, HlmButton, HlmCard, HlmSkeleton, AbsoluteTimeComponent],
+  imports: [
+    StatusPillComponent,
+    HlmAlert,
+    HlmButton,
+    HlmCard,
+    HlmSkeleton,
+    HlmTableImports,
+    AbsoluteTimeComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class:
@@ -59,11 +68,15 @@ export const CI_BINDINGS_COPY = {
   },
   template: `
     <section
+      hlmCard
+      class="min-w-0 gap-0 rounded-lg py-0"
       data-ci-bindings
       aria-labelledby="ci-bindings-heading"
       [attr.aria-busy]="loading() || loadingMore()"
     >
-      <header class="mb-4 grid min-w-0 gap-2">
+      <header
+        class="grid min-w-0 gap-(--eg-space-2) border-0 border-b border-solid border-border p-(--eg-space-5)"
+      >
         <h2
           #heading
           id="ci-bindings-heading"
@@ -92,7 +105,9 @@ export const CI_BINDINGS_COPY = {
             ><span hlmSkeleton class="h-6"></span>
           </div>
         } @else if (phase() === 'empty' || (phase() === 'ready' && rows().length === 0)) {
-          <p role="status" data-ci-empty>{{ copy.empty }}</p>
+          <p role="status" class="p-(--eg-space-5) text-muted-foreground" data-ci-empty>
+            {{ copy.empty }}
+          </p>
         }
         @if (error() || phase() === 'error' || phase() === 'unavailable' || pagingFailure()) {
           <div
@@ -121,105 +136,139 @@ export const CI_BINDINGS_COPY = {
           </div>
         }
         @if (rows().length > 0) {
-          <ul class="m-0 grid list-none gap-3 p-0" [attr.aria-label]="copy.title">
-            @for (row of rows(); track row.id) {
-              <li hlmCard class="min-w-0 gap-3 p-3 md:p-4" data-ci-binding>
-                <div class="flex flex-wrap items-start gap-2 md:items-center">
-                  <h3
-                    class="min-w-0 basis-full text-base md:basis-auto md:grow"
-                    [title]="row.repository_full_name"
+          <div hlmTableContainer>
+            <table
+              hlmTable
+              [attr.role]="'table'"
+              class="w-full table-fixed max-md:block [&_td]:align-top [&_td]:whitespace-normal [&_th]:whitespace-normal"
+              aria-labelledby="ci-bindings-heading"
+            >
+              <thead
+                hlmTHead
+                [attr.role]="'rowgroup'"
+                class="bg-(--eg-surface-raised) text-xs max-md:sr-only"
+              >
+                <tr hlmTr [attr.role]="'row'">
+                  <th hlmTh [attr.role]="'columnheader'" scope="col" class="w-1/3">
+                    {{ copy.title }}
+                  </th>
+                  <th hlmTh [attr.role]="'columnheader'" scope="col">{{ copy.status }}</th>
+                  <th hlmTh [attr.role]="'columnheader'" scope="col">{{ copy.refs }}</th>
+                  <th hlmTh [attr.role]="'columnheader'" scope="col">{{ copy.workflows }}</th>
+                </tr>
+              </thead>
+              <tbody hlmTBody [attr.role]="'rowgroup'" class="max-md:block">
+                @for (row of rows(); track row.id) {
+                  <tr
+                    hlmTr
+                    [attr.role]="'row'"
+                    class="border-0 border-t border-solid border-border max-md:grid max-md:p-(--eg-space-4)"
+                    data-ci-binding
                   >
-                    {{ row.repository_full_name }}
-                  </h3>
-                  <app-status-pill
-                    [tone]="row.status === 'active' ? 'success' : 'neutral'"
-                    [dimension]="copy.status"
-                    [label]="statusLabel(row.status)"
-                  />
-                </div>
-                @if (row.status === 'pending_verification') {
-                  <p>{{ copy.pendingHint }}</p>
-                }
-                <dl class="m-0 grid gap-3 md:grid-cols-2 [&>div]:min-w-0">
-                  <div>
-                    <dt>{{ copy.provider }}</dt>
-                    <dd>{{ row.provider }}</dd>
-                  </div>
-                  <div>
-                    <dt>{{ copy.activated }}</dt>
-                    <dd>
-                      @if (row.activated_at; as date) {
-                        <app-absolute-time [value]="date" />
-                      } @else {
-                        {{ copy.notActivated }}
+                    <td hlmTd [attr.role]="'cell'">
+                      <h3 class="min-w-0 text-sm font-semibold" [title]="row.repository_full_name">
+                        {{ row.repository_full_name }}
+                      </h3>
+                      <dl class="m-0 grid gap-(--eg-space-2)">
+                        <div>
+                          <dt>{{ copy.provider }}</dt>
+                          <dd>{{ row.provider }}</dd>
+                        </div>
+                        <div>
+                          <dt>{{ copy.activated }}</dt>
+                          <dd>
+                            @if (row.activated_at; as date) {
+                              <app-absolute-time [value]="date" />
+                            } @else {
+                              {{ copy.notActivated }}
+                            }
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>{{ copy.created }}</dt>
+                          <dd>
+                            <app-absolute-time [value]="row.created_at" />
+                          </dd>
+                        </div>
+                      </dl>
+                    </td>
+                    <td hlmTd [attr.role]="'cell'">
+                      <span class="block text-xs text-muted-foreground md:hidden">{{
+                        copy.status
+                      }}</span>
+                      <app-status-pill
+                        class="[overflow-wrap:anywhere] [&_.spartan-badge]:max-w-full [&_.status-pill__label]:whitespace-normal"
+                        [tone]="row.status === 'active' ? 'success' : 'neutral'"
+                        [label]="statusLabel(row.status)"
+                      />
+                      @if (row.status === 'pending_verification') {
+                        <p class="text-xs text-muted-foreground">{{ copy.pendingHint }}</p>
                       }
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>{{ copy.created }}</dt>
-                    <dd>
-                      <app-absolute-time [value]="row.created_at" />
-                    </dd>
-                  </div>
-                  @for (group of ['refs', 'workflows']; track group) {
-                    <div class="col-span-full">
-                      <dt [id]="'ci-label-' + row.id + '-' + group">
-                        {{ group === 'refs' ? copy.refs : copy.workflows }}
-                      </dt>
-                      <dd>
-                        <ul
-                          class="patterns m-0 grid min-w-0 list-none gap-1 p-0 focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
-                          [id]="'ci-patterns-' + row.id + '-' + group"
-                          [class]="
-                            isExpanded(row.id, group)
-                              ? 'max-h-[calc(var(--eg-space-12)*3)] overflow-y-auto'
-                              : ''
-                          "
-                          [attr.tabindex]="isExpanded(row.id, group) ? 0 : null"
-                          [attr.aria-labelledby]="'ci-label-' + row.id + '-' + group"
-                        >
-                          @for (
-                            pattern of patterns(row, group).slice(
-                              0,
-                              isExpanded(row.id, group) ? undefined : 3
-                            );
-                            track $index
-                          ) {
-                            <li>
-                              <code
-                                class="inline-block max-w-full rounded-sm bg-muted px-1 py-[var(--eg-space-1)] text-muted-foreground"
-                                >{{ pattern }}</code
+                    </td>
+                    @for (group of ['refs', 'workflows']; track group) {
+                      <td hlmTd [attr.role]="'cell'">
+                        <dl class="m-0">
+                          <dt class="md:sr-only" [id]="'ci-label-' + row.id + '-' + group">
+                            {{ group === 'refs' ? copy.refs : copy.workflows }}
+                          </dt>
+                          <dd>
+                            <ul
+                              class="patterns m-0 grid min-w-0 list-none gap-1 p-0 focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
+                              [id]="'ci-patterns-' + row.id + '-' + group"
+                              [class]="
+                                isExpanded(row.id, group)
+                                  ? 'max-h-[calc(var(--eg-space-12)*3)] overflow-y-auto'
+                                  : ''
+                              "
+                              [attr.tabindex]="isExpanded(row.id, group) ? 0 : null"
+                              [attr.aria-labelledby]="'ci-label-' + row.id + '-' + group"
+                            >
+                              @for (
+                                pattern of patterns(row, group).slice(
+                                  0,
+                                  isExpanded(row.id, group) ? undefined : 3
+                                );
+                                track $index
+                              ) {
+                                <li>
+                                  <code
+                                    class="inline-block max-w-full rounded-sm bg-muted px-1 py-[var(--eg-space-1)] text-muted-foreground"
+                                    >{{ pattern }}</code
+                                  >
+                                </li>
+                              } @empty {
+                                <li>{{ copy.none }}</li>
+                              }
+                            </ul>
+                            @if (patterns(row, group).length > 3) {
+                              <button
+                                hlmBtn
+                                [variant]="'outline'"
+                                class="mt-2"
+                                type="button"
+                                data-ci-show-all
+                                [attr.aria-expanded]="isExpanded(row.id, group)"
+                                [attr.aria-controls]="'ci-patterns-' + row.id + '-' + group"
+                                [attr.aria-describedby]="'ci-label-' + row.id + '-' + group"
+                                (click)="toggle(row.id, group)"
                               >
-                            </li>
-                          } @empty {
-                            <li>{{ copy.none }}</li>
-                          }
-                        </ul>
-                        @if (patterns(row, group).length > 3) {
-                          <button
-                            hlmBtn
-                            [variant]="'outline'"
-                            class="mt-2"
-                            type="button"
-                            data-ci-show-all
-                            [attr.aria-expanded]="isExpanded(row.id, group)"
-                            [attr.aria-controls]="'ci-patterns-' + row.id + '-' + group"
-                            [attr.aria-describedby]="'ci-label-' + row.id + '-' + group"
-                            (click)="toggle(row.id, group)"
-                          >
-                            {{ isExpanded(row.id, group) ? copy.showFewer : copy.showAll }}
-                          </button>
-                        }
-                      </dd>
-                    </div>
-                  }
-                </dl>
-              </li>
-            }
-          </ul>
+                                {{ isExpanded(row.id, group) ? copy.showFewer : copy.showAll }}
+                              </button>
+                            }
+                          </dd>
+                        </dl>
+                      </td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
         }
         @if (hasMore() && !error() && !pagingFailure()) {
-          <div class="mt-3 flex flex-wrap items-center gap-2">
+          <div
+            class="flex flex-wrap items-center justify-end border-0 border-t border-solid border-border p-(--eg-space-5)"
+          >
             <button
               hlmBtn
               [variant]="'outline'"

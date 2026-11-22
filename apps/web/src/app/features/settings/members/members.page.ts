@@ -1,3 +1,4 @@
+import { DecimalPipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -35,6 +36,7 @@ import { CancelInviteDialogComponent } from './cancel-invite-dialog.component';
 @Component({
   selector: 'app-members-page',
   imports: [
+    DecimalPipe,
     HlmButton,
     HlmAlertImports,
     HlmCardImports,
@@ -69,7 +71,6 @@ export class MembersPage {
 
   protected readonly copy = MEMBERS_COPY;
   protected readonly pageHeadingSize = 'page' as const;
-  protected readonly sectionHeadingSize = 'section' as const;
   protected readonly canWrite = computed(() => this.session.has('membership:write'));
   protected readonly status = computed<'loading' | 'ready' | 'error'>(() => {
     const phase = this.store.phase();
@@ -80,7 +81,7 @@ export class MembersPage {
   protected readonly visibleMembers = computed(() =>
     this.store.members().slice(this.offset(), this.offset() + 200),
   );
-  protected readonly pageCounts = computed<readonly SettingsPageCount[]>(() => {
+  protected readonly counts = computed(() => {
     let active = 0;
     let pending = 0;
     let admins = 0;
@@ -92,10 +93,29 @@ export class MembersPage {
         pending++;
       }
     }
+    return { active, pending, admins };
+  });
+  protected readonly pageCounts = computed<readonly SettingsPageCount[]>(() => {
+    const { active, pending, admins } = this.counts();
     return [
-      { label: this.copy.activeMembers, icon: 'users', value: active },
-      { label: this.copy.pendingInvitations, icon: 'scroll', value: pending },
-      { label: this.copy.organizationAdmins, icon: 'shield-check', value: admins },
+      {
+        label: this.copy.activeMembers,
+        icon: 'people',
+        value: active,
+        hint: $localize`:@@settings.members.active-hint:On this page · organization directory`,
+      },
+      {
+        label: this.copy.pendingInvitations,
+        icon: 'clock',
+        value: pending,
+        hint: $localize`:@@settings.members.pending-hint:On this page · awaiting acceptance`,
+      },
+      {
+        label: this.copy.organizationAdmins,
+        icon: 'shield',
+        value: admins,
+        hint: $localize`:@@settings.members.admin-hint:On this page · last admin protected`,
+      },
     ];
   });
   protected readonly visibleMatrix = computed(() => {

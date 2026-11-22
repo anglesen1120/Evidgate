@@ -16,7 +16,7 @@ import { ActivatedRoute } from '@angular/router';
 import { HlmAlertImports } from '@evidgate/ui/alert';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
-import { HlmIcon } from '@evidgate/ui/icon';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSkeleton } from '@evidgate/ui/skeleton';
@@ -45,7 +45,7 @@ import { RevisionDetailComponent } from './revision-detail.component';
     HlmAlertImports,
     HlmButton,
     HlmCardImports,
-    HlmIcon,
+    ShellIconComponent,
     CopyableIdentifierComponent,
     NumberValueComponent,
     PolicyModeChipComponent,
@@ -107,6 +107,7 @@ export class PolicyPage {
     title: $localize`:@@settings.policy.release-title:Release policy`,
     activeRevision: $localize`:@@settings.policy.active-revision:Active revision`,
     head: $localize`:@@settings.policy.head-revision:Head revision`,
+    loaded: $localize`:@@settings.policy.loaded-revisions:Loaded revisions`,
     mode: $localize`:@@settings.policy.activation-mode:Activation mode`,
     description: $localize`:@@settings.policy.description:Inspect policy revisions and compare their fields. Open a revision using its identifier.`,
     revisionId: $localize`:@@settings.policy.revision-id:Revision ID`,

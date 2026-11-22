@@ -27,10 +27,11 @@
       @for (tab of tabs(); track tab.id) {
         <li class="shrink-0">
           <a
-            class="-mb-px flex min-h-(--eg-control-sm) items-center border-b-[3px] border-transparent px-4 py-2 text-sm font-medium whitespace-nowrap text-muted-foreground no-underline hover:text-foreground focus-visible:outline-(length:--eg-focus-width) focus-visible:-outline-offset-2 focus-visible:outline-(--eg-focus) pointer-coarse:min-h-(--eg-control-touch) aria-[current=page]:border-(--eg-accent) aria-[current=page]:font-bold aria-[current=page]:text-(--eg-accent)"
+            class="flex min-h-(--eg-control-sm) items-center border-b-[3px] border-transparent px-4 py-2 text-sm font-medium whitespace-nowrap text-muted-foreground no-underline hover:text-foreground focus-visible:outline-(length:--eg-focus-width) focus-visible:-outline-offset-2 focus-visible:outline-(--eg-focus) pointer-coarse:min-h-(--eg-control-touch) aria-[current=page]:border-(--eg-accent) aria-[current=page]:font-bold aria-[current=page]:text-(--eg-accent)"
             [routerLink]="[tab.segment]"
             [attr.aria-current]="tab.segment === activeSegment() ? 'page' : null"
             [attr.data-settings-tab]="tab.id"
+            (focus)="reveal($event)"
           >
             {{ tab.label }}
           </a>

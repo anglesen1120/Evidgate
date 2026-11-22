@@ -3,17 +3,15 @@
   class="min-w-0 gap-0 overflow-visible rounded-xl p-0 text-sm"
   aria-labelledby="retention-title"
 >
-  <header class="grid min-w-0 gap-2 border-b border-border px-5 py-4">
-    <h2 hlmCardTitle [size]="subsectionSize" id="retention-title">{{ copy.title }}</h2>
-    <p class="m-0 max-w-[65ch] text-sm text-muted-foreground">{{ copy.description }}</p>
-  </header>
-  <div class="grid min-w-0 gap-4 px-5 py-4">
-    @if (!store.readable()) {
-      <p role="status" class="m-0" data-retention-forbidden>{{ copy.forbidden }}</p>
-    } @else if (store.session.projects().length === 0) {
-      <p role="status" class="m-0">{{ copy.noProject }}</p>
-    } @else {
-      <div class="grid min-w-0 max-w-sm gap-2">
+  <header
+    class="flex min-w-0 flex-wrap items-end justify-between gap-4 border-b border-border px-5 py-4"
+  >
+    <div class="grid min-w-0 gap-1">
+      <h2 hlmCardTitle [size]="subsectionSize" id="retention-title">{{ copy.title }}</h2>
+      <p class="m-0 max-w-[65ch] text-sm text-muted-foreground">{{ copy.description }}</p>
+    </div>
+    @if (store.readable() && store.session.projects().length) {
+      <div class="grid w-full min-w-0 gap-2 sm:w-auto sm:min-w-52">
         <label hlmLabel for="retention-project">{{ copy.project }}</label>
         <hlm-select
           [value]="store.selectedProject()"
@@ -34,13 +32,18 @@
           </hlm-select-content>
         </hlm-select>
       </div>
+    }
+  </header>
+  <div class="grid min-w-0 gap-4 px-5 py-4">
+    @if (!store.readable()) {
+      <app-inline-feedback data-retention-forbidden [title]="copy.forbidden" />
+    } @else if (store.session.projects().length === 0) {
+      <app-inline-feedback [title]="copy.noProject" />
+    } @else {
       @if (store.loading()) {
         <app-loading-pattern [label]="copy.loading" [layout]="loadingLayout" [bare]="true" />
       } @else if (store.policy(); as policy) {
-        <dl
-          class="m-0 flex min-w-0 flex-wrap gap-x-8 gap-y-2 border-y border-border py-3"
-          data-retention-current
-        >
+        <dl class="m-0 grid min-w-0 gap-3 sm:grid-cols-2" data-retention-current>
           <div class="flex flex-wrap items-baseline gap-2">
             <dt class="text-muted-foreground">{{ copy.artifact }}</dt>
             <dd class="m-0 font-semibold tabular-nums">

@@ -1,3 +1,4 @@
+import { formatNumber } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -5,6 +6,7 @@ import {
   inject,
   input,
   linkedSignal,
+  LOCALE_ID,
   output,
   signal,
 } from '@angular/core';
@@ -14,6 +16,7 @@ import { HlmButton } from '@evidgate/ui/button';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmTableImports } from '@evidgate/ui/table';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import {
   SettingsPageCountsComponent,
   type SettingsPageCount,
@@ -32,6 +35,7 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
   selector: 'app-api-token-list',
   imports: [
     HlmTableImports,
+    ShellIconComponent,
     SettingsPageCountsComponent,
     HlmCardImports,
     HlmButton,
@@ -53,16 +57,20 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
       [metrics]="pageCounts()"
     />
     <div
-      class="grid min-w-0 grid-cols-[minmax(0,1fr)] items-start gap-4 min-[1025px]:@min-[45rem]:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]"
+      class="grid min-w-0 grid-cols-[minmax(0,1fr)] items-start gap-4 xl:@min-[45rem]:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]"
     >
       <section hlmCard class="min-w-0 gap-0 rounded-xl p-0" aria-labelledby="api-directory-title">
-        <header hlmCardHeader class="min-w-0 gap-3 border-b border-border px-5 py-4">
+        <header
+          hlmCardHeader
+          class="flex min-w-0 flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4"
+        >
           <h3 hlmCardTitle [size]="'subsection'" id="api-directory-title" class="m-0">
             {{ copy.directory }}
           </h3>
-          <div class="grid min-w-0 gap-1">
+          <div class="grid min-w-0 flex-1 basis-64 gap-1">
             <label hlmLabel for="api-token-search">{{ searchLabel }}</label>
             <input
+              class="min-w-0 w-full"
               hlmInput
               id="api-token-search"
               type="search"
@@ -83,18 +91,18 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
               class="w-full table-fixed border-collapse"
               aria-labelledby="api-directory-title"
             >
-              <thead hlmTHead class="bg-(--eg-surface-raised) text-xs">
+              <thead hlmTHead class="bg-(--eg-surface-raised) text-xs [&_th]:h-(--eg-control-md)">
                 <tr hlmTr class="max-md:border-0">
                   <th hlmTh scope="col" class="max-md:h-0 max-md:p-0">
                     <span class="max-md:sr-only">{{ copy.name }}</span>
                   </th>
                   @if (!narrow) {
-                    <th hlmTh scope="col" class="w-[24%] whitespace-normal">{{ copy.prefix }}</th>
-                    <th hlmTh scope="col" class="w-[24%] whitespace-normal">{{ copy.state }}</th>
+                    <th hlmTh scope="col" class="w-[32%] whitespace-normal">{{ copy.prefix }}</th>
+                    <th hlmTh scope="col" class="w-[20%] whitespace-normal">{{ copy.state }}</th>
                   }
                 </tr>
               </thead>
-              <tbody hlmTBody>
+              <tbody hlmTBody class="md:[&_td]:py-1">
                 @for (row of filtered(); track row.id) {
                   <tr
                     hlmTr
@@ -114,12 +122,20 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
                         [attr.aria-label]="inspectLabel(row.name)"
                         (click)="selectedId.set(row.id)"
                       >
+                        <app-shell-icon [name]="'key'" class="size-4" />
                         <app-data-table-value class="min-w-0 font-bold" [value]="row.name" />
                       </button>
-                      <app-api-token-permission-tags
-                        [permissions]="row.permissions"
-                        [name]="row.name"
+                      <app-data-table-value
+                        class="text-xs text-muted-foreground font-mono"
+                        [value]="row.id"
+                        [truncate]="!narrow"
                       />
+                      @if (narrow) {
+                        <app-api-token-permission-tags
+                          [permissions]="row.permissions"
+                          [name]="row.name"
+                        />
+                      }
                       @if (canWrite() && row.status !== 'revoked') {
                         <button
                           *appDesktopMutation
@@ -141,11 +157,16 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
                     </td>
                     @if (!narrow) {
                       <td hlmTd class="font-mono text-xs whitespace-normal wrap-anywhere">
-                        {{ row.prefix }}
+                        <bdi>{{ row.prefix }}</bdi>
+                        <app-api-token-permission-tags
+                          class="mt-1 block"
+                          [permissions]="row.permissions"
+                          [name]="row.name"
+                        />
                       </td>
                       <td hlmTd>
                         <app-status-pill
-                          [tone]="row.status === 'active' ? 'success' : 'neutral'"
+                          [tone]="row.status === 'active' ? 'info' : 'neutral'"
                           [label]="stateLabel(row.status)"
                         />
                       </td>
@@ -163,7 +184,12 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
             </button>
           </div>
         }
-        <ng-content />
+        <footer
+          class="flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3"
+        >
+          <p class="m-0 text-xs tabular-nums text-muted-foreground">{{ pageSummary() }}</p>
+          <ng-content />
+        </footer>
       </section>
       @if (selected(); as row) {
         <section
@@ -173,13 +199,24 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
           data-api-token-detail
         >
           <header hlmCardHeader class="min-w-0 gap-2 border-b border-border px-5 py-4">
-            <code class="text-xs text-muted-foreground wrap-anywhere">{{ row.id }}</code>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <code class="text-xs text-muted-foreground wrap-anywhere">{{ row.id }}</code>
+              <app-status-pill
+                [tone]="row.status === 'active' ? 'info' : 'neutral'"
+                [label]="stateLabel(row.status)"
+              />
+            </div>
             <h3 hlmCardTitle [size]="'section'" id="api-detail-title" class="m-0 wrap-anywhere">
               {{ row.name }}
             </h3>
             <p hlmCardDescription class="m-0 text-xs">{{ metadataOnly }}</p>
           </header>
-          <div hlmCardContent class="px-5 py-4"><app-api-token-facts [row]="row" /></div>
+          <div hlmCardContent class="grid gap-3 px-5 py-4">
+            <h4 class="m-0 text-sm font-semibold" i18n="@@settings.api-tokens.metadata-heading">
+              Token metadata
+            </h4>
+            <app-api-token-facts [row]="row" [showIdentity]="false" />
+          </div>
         </section>
       }
     </div>
@@ -187,6 +224,7 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
 })
 export class ApiTokenListComponent {
   protected readonly viewport = inject(NarrowMutationPolicy);
+  private readonly locale = inject(LOCALE_ID);
 
   readonly rows = input<readonly ApiTokenView[]>([]);
   readonly canWrite = input(false);
@@ -206,10 +244,30 @@ export class ApiTokenListComponent {
       else if (row.status === 'revoked') revoked++;
     }
     return [
-      { label: this.copy.directory, icon: 'key', value: rows.length },
-      { label: this.copy.active, icon: 'shield-check', value: active },
-      { label: this.copy.expired, icon: 'scroll', value: expired },
-      { label: this.copy.revoked, icon: 'shield-alert', value: revoked },
+      {
+        label: this.copy.directory,
+        icon: 'folder',
+        value: rows.length,
+        hint: $localize`:@@settings.api-tokens.page-prefixes:Prefixes on this page`,
+      },
+      {
+        label: this.copy.active,
+        icon: 'shield-check',
+        value: active,
+        hint: $localize`:@@settings.api-tokens.served-state:Server-reported state`,
+      },
+      {
+        label: this.copy.expired,
+        icon: 'clock',
+        value: expired,
+        hint: $localize`:@@settings.api-tokens.not-usable:Not usable`,
+      },
+      {
+        label: this.copy.revoked,
+        icon: 'inbox',
+        value: revoked,
+        hint: $localize`:@@settings.api-tokens.revocation-recorded:Revocation recorded`,
+      },
     ];
   });
   protected readonly query = linkedSignal(() => {
@@ -221,6 +279,14 @@ export class ApiTokenListComponent {
     return this.rows().filter((row) =>
       `${row.name} ${row.prefix}`.toLocaleLowerCase().includes(query),
     );
+  });
+  protected readonly pageSummary = computed(() => {
+    const filtered = this.filtered().length;
+    const range =
+      filtered > 1
+        ? `${formatNumber(1, this.locale)}–${formatNumber(filtered, this.locale)}`
+        : formatNumber(filtered, this.locale);
+    return $localize`:@@settings.api-tokens.showing-page:Showing ${range}:range: of ${formatNumber(this.rows().length, this.locale)}:count: tokens on this page.`;
   });
   protected readonly selectedId = signal<string | null>(null);
   protected readonly selected = computed(
