@@ -5,6 +5,7 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import { BrnSelect } from '@spartan-ng/brain/select';
 
 import { SessionStore } from '../../core/session/session.store';
+import { provideLayoutTestStubs } from '../../shared/testing/layout.testing';
 import { SettingsShellPage } from './settings-shell.page';
 import { SettingsTabPlaceholderPage } from './settings-tab-placeholder.page';
 import { SETTINGS_TABS } from './settings-tabs';
@@ -48,6 +49,7 @@ async function choices(root: HTMLElement): Promise<string[]> {
 }
 
 describe('SettingsShellPage', () => {
+  provideLayoutTestStubs();
   beforeEach(() => {
     permissions.set(new Set());
     currentOrg.set({ name: 'Example organization' });
