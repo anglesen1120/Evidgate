@@ -36,10 +36,8 @@
 <header class="v3-topbar" data-v3-topbar></header>
 <main id="main" tabindex="-1">
 <div class="v3-studio__bar"><div class="v3-line"><span class="v3-badge "><span  data-en="G4 reference" data-vi="Tài liệu G4">G4 reference</span></span><code>SHOP · p-storefront</code></div></div>
-<header class="v3-page-header"><div class="v3-page-header__title"><span class="v3-page-header__icon"><svg class="v3-icon" aria-hidden="true"><use href="#i-queue"/></svg></span><div>
-<h1  data-en="Suite composition" data-vi="Cấu hình bộ kiểm thử">Suite composition</h1>
-<p class="v3-muted" data-en="Pin immutable revisions to explicit variants and inspect the server’s planning inputs." data-vi="Ghim phiên bản bất biến vào từng biến thể và xem dữ liệu lập kế hoạch từ máy chủ.">Pin immutable revisions to explicit variants and inspect the server’s planning inputs.</p></div></div>
-<button type="button" class="v3-btn v3-btn--primary v3-studio__write" id="save" disabled aria-describedby="save-hint"><span  data-en="Save composition" data-vi="Lưu cấu hình">Save composition</span></button></header>
+<header class="v3-page-head"><div class=""><h1 data-en="Suite composition" data-vi="Cấu hình bộ kiểm thử">Suite composition</h1><p class="v3-page-head__facts"><span data-en="storefront-regression · Pinned case revisions × execution variants" data-vi="storefront-regression · Bản sửa đổi ca đã ghim × biến thể thực thi">storefront-regression · Pinned case revisions × execution variants</span></p></div>
+<button aria-describedby="save-hint" class="v3-btn v3-btn--primary v3-studio__write" disabled="" id="save" type="button"><span data-en="Save composition" data-vi="Lưu cấu hình">Save composition</span></button></header>
 <p id="save-hint" class="v3-meta v3-studio__notice"><span data-en="Add or reorder a variant to enable Save composition. Published revisions cannot be edited." data-vi="Thêm hoặc đổi thứ tự biến thể để bật nút Lưu cấu hình. Không thể sửa phiên bản đã công bố.">Add or reorder a variant to enable Save composition. Published revisions cannot be edited.</span></p>
 <p class="v3-note v3-studio__mobile v3-studio__notice" data-en="Use a desktop to make changes." data-vi="Sử dụng máy tính để thay đổi dữ liệu.">Use a desktop to make changes.</p><div hidden data-scene="loading" class="v3-empty v3-studio__notice v3-studio__preview" role="status"><span  data-en="Loading the supplied fixture…" data-vi="Đang tải dữ liệu mẫu…">Loading the supplied fixture…</span><span class="v3-skeleton" aria-hidden="true"><i></i><i></i></span></div>
 <div hidden data-scene="empty" class="v3-empty v3-studio__notice " role="status"><span  data-en="No case variants in this suite. No run, evaluation or release decision exists." data-vi="Bộ kiểm thử chưa có biến thể ca. Không có lượt chạy, đánh giá hay quyết định phát hành.">No case variants in this suite. No run, evaluation or release decision exists.</span></div>
@@ -55,11 +53,12 @@
 <div class="v3-note v3-studio__notice" role="status" hidden data-scene="busy"><span  data-en="Saving composition. Duplicate submission disabled." data-vi="Đang lưu cấu hình. Không thể gửi lặp lại.">Saving composition. Duplicate submission disabled.</span> </div>
 <div class="v3-note v3-studio__notice" role="status" hidden data-scene="saved"><span  data-en="Composition saved as a draft, not published." data-vi="Đã lưu cấu hình dưới dạng bản nháp, chưa công bố.">Composition saved as a draft, not published.</span> </div>
 <div id="region" class="v3-stack">
-<section class="v3-panel" >
+<nav class="v3-tabs" aria-label="Composition sections" data-label-en="Composition sections" data-label-vi="Các phần của cấu hình bộ kiểm thử"><a href="#composition"><span data-en="Identity" data-vi="Định danh">Identity</span></a><a href="#matrix"><span data-en="Case matrix" data-vi="Ma trận ca">Case matrix</span></a><a href="#dependencies"><span data-en="Dependencies" data-vi="Phụ thuộc">Dependencies</span></a><a href="#suite-warnings"><span data-en="Warnings" data-vi="Cảnh báo">Warnings</span></a><a href="#planning"><span data-en="Planning" data-vi="Kế hoạch">Planning</span></a></nav>
+<section id="composition" class="v3-panel" >
 <header class="v3-panel__header">
 <h2  data-en="Composition identity" data-vi="Thông tin cấu hình">Composition identity</h2></header><div class="v3-pad v3-stack">
 <dl class="v3-studio__facts"><div><dt  data-en="Suite" data-vi="Bộ kiểm thử">Suite</dt><dd><code>storefront-regression</code></dd></div><div><dt  data-en="Revision" data-vi="Phiên bản">Revision</dt><dd><code id="srev">sr-28</code></dd></div><div><dt  data-en="Compared with" data-vi="So với">Compared with</dt><dd><code>sr-27</code></dd></div><div><dt  data-en="Base commit" data-vi="Commit gốc">Base commit</dt><dd><code>9af317c</code></dd></div><div><dt  data-en="Suite hash" data-vi="Băm bộ kiểm thử">Suite hash</dt><dd><code>su-55ac…019f</code></dd></div></dl></div></section>
-<section class="v3-panel" >
+<section id="matrix" class="v3-panel" >
 <header class="v3-panel__header">
 <h2  data-en="Case revisions × variants" data-vi="Phiên bản ca × biến thể">Case revisions × variants</h2></header><div class="v3-pad v3-stack"><div class="v3-spread"><div class="v3-field">
 <label class="v3-field" for="filter"><span  data-en="Filter case or variant" data-vi="Lọc theo ca hoặc biến thể">Filter case or variant</span></label><input type="text" class="v3-input" id="filter" data-val-en="" data-val-vi=""  value=""></div><div class="v3-actions">
@@ -83,14 +82,14 @@
 <button type="button" class="v3-btn " data-move="1"><span  data-en="↓" data-vi="↓">↓</span></button></div></td></tr>
 </tbody></table></div><div id="move-live" class="v3-meta" role="status"></div></div></section>
 <div class="v3-gallery">
-<section class="v3-panel" >
+<section id="dependencies" class="v3-panel" >
 <header class="v3-panel__header">
 <h2  data-en="Dependency order" data-vi="Thứ tự phụ thuộc">Dependency order</h2></header><div class="v3-pad v3-stack"><ol class="v3-flow"><li><span class="v3-tile">1</span><div><code>case-login-3</code>
 <p class="v3-muted" data-en="Authentication fixture" data-vi="Dữ liệu xác thực">Authentication fixture</p></div></li><li><span class="v3-tile">2</span><div><code>case-checkout-17</code>
 <p class="v3-muted" data-en="Checkout confirmation" data-vi="Xác nhận thanh toán">Checkout confirmation</p></div></li><li><span class="v3-tile">3</span><div><code>case-address-8</code>
 <p class="v3-muted" data-en="Address persistence" data-vi="Lưu địa chỉ">Address persistence</p></div></li></ol>
 <p class="v3-muted" data-en="Server order: login → checkout → address. Reordering matrix rows does not recompute dependencies." data-vi="Thứ tự máy chủ: đăng nhập → thanh toán → địa chỉ. Đổi thứ tự dòng không tính lại phụ thuộc.">Server order: login → checkout → address. Reordering matrix rows does not recompute dependencies.</p></div></section>
-<section class="v3-panel" >
+<section id="suite-warnings" class="v3-panel" >
 <header class="v3-panel__header">
 <h2  data-en="Server warnings" data-vi="Cảnh báo từ máy chủ">Server warnings</h2></header><div class="v3-pad v3-stack"><div id="warnings" class="v3-stack"><div><span class="v3-badge v3-badge--info"><span  data-en="Coverage gap" data-vi="Khoảng trống phạm vi kiểm thử">Coverage gap</span></span>
 <p class="v3-muted" data-en="Required variant firefox/vi is not covered." data-vi="Biến thể bắt buộc firefox/vi chưa được bao phủ.">Required variant firefox/vi is not covered.</p></div><div><span class="v3-badge v3-badge--info"><span  data-en="Dependency warning" data-vi="Cảnh báo phụ thuộc">Dependency warning</span></span>
@@ -103,7 +102,7 @@
 <dl class="v3-studio__facts"><div><dt  data-en="Shard strategy" data-vi="Chiến lược chia shard">Shard strategy</dt><dd><span  data-en="Balanced by recorded duration" data-vi="Cân bằng theo thời lượng đã ghi nhận">Balanced by recorded duration</span></dd></div><div><dt  data-en="Declared shards" data-vi="Số shard khai báo">Declared shards</dt><dd>3</dd></div><div><dt  data-en="Environment" data-vi="Môi trường">Environment</dt><dd><code>staging / env-6</code></dd></div></dl>
 <p class="v3-muted" data-en="Supplied planning inputs only. No run is scheduled here." data-vi="Chỉ là đầu vào lập kế hoạch được cung cấp. Không lập lịch chạy tại đây.">Supplied planning inputs only. No run is scheduled here.</p></div></section>
 </div>
-<dialog class="v3-dialog" id="picker" aria-labelledby="picker-h">
+<dialog class="v3-dialog v3-dialog--edit" id="picker" aria-labelledby="picker-h">
 <header class="v3-dialog__header">
 <h2 id=picker-h data-en="Add a case variant" data-vi="Thêm biến thể ca kiểm thử">Add a case variant</h2></header><div class="v3-body">
 <label class="v3-field"><span  data-en="Pinned case revision" data-vi="Phiên bản ca cố định">Pinned case revision</span><select id="case" >
@@ -152,7 +151,7 @@ function label(el,en,vi){el.dataset.en=en;el.dataset.vi=vi;el.textContent=lang()
 function values(){for(const el of all('[data-val-en]')){if(!el.dataset.edited)el.value=lang()==='vi'?el.dataset.valVi:el.dataset.valEn;}}
 document.addEventListener('input',e=>{if(e.target.matches('[data-val-en]'))e.target.dataset.edited='1'});
 const route=new URLSearchParams(location.search);
-const accepted={"suite": ["storefront-regression"], "revision": ["sr-27", "sr-28"], "project": ["p-storefront"]};
+const accepted={"dialog":["picker"],"suite": ["storefront-regression"], "revision": ["sr-27", "sr-28"], "project": ["p-storefront"]};
 const identity={"suite": "storefront-regression", "revision": "sr-28"};
 const target=EvidgateV3.byId.get(document.body.dataset.page).file;
 const invalid=[...route].some(([key,value])=>!Object.hasOwn(accepted,key)||!accepted[key].includes(value)||route.getAll(key).length!==1);
@@ -198,6 +197,7 @@ $('add').onclick=()=>{$('browser').value='firefox';$('locale').value='vi';$('pic
 
 start();
 if(route.get('revision')==='sr-27'){$('scenario').value='published';$('scenario').dispatchEvent(new Event('change'))}
+if(route.get('dialog')==='picker'&&!$('add').disabled&&$('add').getClientRects().length)$('add').click();
 });
 </script>
 </body></html>

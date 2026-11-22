@@ -35,10 +35,15 @@
 <header class="v3-topbar" data-v3-topbar></header>
 <main id="main" tabindex="-1">
 <div class="v3-studio__bar"><div class="v3-line"><span class="v3-badge "><span  data-en="Historical reference · G4" data-vi="Tài liệu lịch sử · G4">Historical reference · G4</span></span><code>SHOP · p-storefront</code></div></div>
-<header class="v3-page-header"><div class="v3-page-header__title"><span class="v3-page-header__icon"><svg class="v3-icon" aria-hidden="true"><use href="#i-folder"/></svg></span><div>
+<header class="v3-page-head v3-page-header"><div class="v3-page-header__title"><span class="v3-page-header__icon"><svg class="v3-icon" aria-hidden="true"><use href="#i-folder"/></svg></span><div>
 <h1  data-en="Draft editor" data-vi="Trình sửa bản nháp">Draft editor</h1>
-<p class="v3-muted" data-en="Edit Linh’s test definition, then inspect lint and sandbox evidence." data-vi="Sửa định nghĩa ca kiểm thử của Linh, rồi xem kiểm tra và bằng chứng thử nghiệm.">Edit Linh’s test definition, then inspect lint and sandbox evidence.</p></div></div>
+<p class="v3-page-head__facts" data-en="d-114 · case-checkout-17 · Sandbox only" data-vi="d-114 · case-checkout-17 · Chỉ trong môi trường mô phỏng">d-114 · case-checkout-17 · Sandbox only</p></div></div>
 <button type="button" class="v3-btn v3-btn--primary v3-studio__write" id="save"><span  data-en="Save draft" data-vi="Lưu bản nháp">Save draft</span></button></header>
+<nav class="v3-tabs" aria-label="Studio" data-label-en="Studio" data-label-vi="Studio">
+<a href="17-studio-template-gallery.html"><span data-en="Templates" data-vi="Mẫu">Templates</span></a>
+<a href="18-studio-draft-editor.html?draft=d-114&amp;case=case-checkout-17&amp;revision=dr-5" aria-current="page"><span data-en="Draft editor" data-vi="Soạn bản nháp">Draft editor</span></a>
+<a href="19-studio-review-merge.html?draft=d-114&amp;case=case-checkout-17&amp;revision=dr-5"><span data-en="Review and merge" data-vi="Duyệt và hợp nhất">Review and merge</span></a>
+</nav>
 <p class="v3-note v3-studio__mobile v3-studio__notice" data-en="Use a desktop to make changes." data-vi="Sử dụng máy tính để thay đổi dữ liệu.">Use a desktop to make changes.</p><div hidden data-scene="loading" class="v3-empty v3-studio__notice v3-studio__preview" role="status"><span  data-en="Loading the supplied fixture…" data-vi="Đang tải dữ liệu mẫu…">Loading the supplied fixture…</span><span class="v3-skeleton" aria-hidden="true"><i></i><i></i></span></div>
 <div hidden data-scene="empty" class="v3-empty v3-studio__notice " role="status"><span  data-en="No historical draft resource. No lint or sandbox result is available." data-vi="Không có bản nháp lịch sử. Chưa có kết quả kiểm tra hay chạy thử.">No historical draft resource. No lint or sandbox result is available.</span></div>
 <div hidden data-scene="404" class="v3-empty v3-studio__notice " role="status"><span  data-en="Not found. Unknown and out-of-scope resources have the same response." data-vi="Không tìm thấy. Phản hồi giống nhau cho tài nguyên không tồn tại và ngoài phạm vi.">Not found. Unknown and out-of-scope resources have the same response.</span></div>
@@ -81,7 +86,7 @@
 <button type="button" class="v3-btn " data-rename><span  data-en="Rename" data-vi="Đổi tên">Rename</span></button>
 <button type="button" class="v3-btn " data-remove><span  data-en="Remove" data-vi="Xóa">Remove</span></button></div></div></div>
 <button type="button" class="v3-btn v3-studio__write" id="addvar"><span  data-en="Add variant" data-vi="Thêm biến thể">Add variant</span></button>
-<dialog class="v3-dialog" id="varmodal" aria-labelledby="varmodal-h">
+<dialog class="v3-dialog v3-dialog--edit" id="varmodal" aria-labelledby="varmodal-h">
 <header class="v3-dialog__header">
 <h2 id=varmodal-h data-en="Variant settings" data-vi="Thông tin biến thể">Variant settings</h2></header><div class="v3-body">
 <label class="v3-field" for="varname"><span  data-en="Variant name" data-vi="Tên biến thể">Variant name</span></label><input type="text" class="v3-input" id="varname" data-val-en="" data-val-vi=""  value="">
@@ -150,7 +155,9 @@
 <option value="failed" data-en="Sandbox failed" data-vi="Chạy thử thất bại">Sandbox failed</option>
 <option value="passed" data-en="Sandbox passed · review eligible" data-vi="Chạy thử đạt · có thể gửi duyệt">Sandbox passed · review eligible</option>
 <option value="aiempty" data-en="No AI suggestion" data-vi="Không có đề xuất AI">No AI suggestion</option>
-<option value="aiout" data-en="AI unavailable" data-vi="AI không khả dụng">AI unavailable</option></select></label></div></details>
+<option value="aiout" data-en="AI unavailable" data-vi="AI không khả dụng">AI unavailable</option></select></label>
+<section class="v3-stack"><h3 data-en="Dialog previews" data-vi="Bản xem trước hộp thoại">Dialog previews</h3><div class="v3-actions"><a href="18-studio-draft-editor.html?dialog=varmodal"><span data-en="Variant settings" data-vi="Thông tin biến thể">Variant settings</span></a></div></section>
+</div></details>
 </main></div></div>
 <script>
 addEventListener("DOMContentLoaded",()=>{
@@ -160,7 +167,7 @@ function label(el,en,vi){el.dataset.en=en;el.dataset.vi=vi;el.textContent=lang()
 function values(){for(const el of all('[data-val-en]')){if(!el.dataset.edited)el.value=lang()==='vi'?el.dataset.valVi:el.dataset.valEn;}}
 document.addEventListener('input',e=>{if(e.target.matches('[data-val-en]'))e.target.dataset.edited='1'});
 const route=new URLSearchParams(location.search);
-const accepted={"draft": ["d-114"], "case": ["case-checkout-17"], "revision": ["dr-4", "dr-5"], "run": ["run-sandbox-88"], "state": ["passed", "failed"], "scope": ["sandbox"], "project": ["p-storefront"]};
+const accepted={"dialog":["varmodal"],"draft": ["d-114"], "case": ["case-checkout-17"], "revision": ["dr-4", "dr-5"], "run": ["run-sandbox-88"], "state": ["passed", "failed"], "scope": ["sandbox"], "project": ["p-storefront"]};
 const identity={"draft": "d-114", "case": "case-checkout-17", "revision": "dr-4"};
 const target=EvidgateV3.byId.get(document.body.dataset.page).file;
 const invalid=[...route].some(([key,value])=>!Object.hasOwn(accepted,key)||!accepted[key].includes(value)||route.getAll(key).length!==1)||(route.get('state')==='passed'&&route.get('revision')!=='dr-5');
@@ -197,6 +204,7 @@ $('addvar').onclick=()=>openVar(null);$('variants').onclick=e=>{const row=e.targ
 
 start();
 if(route.has('state')){$('scenario').value=route.get('state');$('scenario').dispatchEvent(new Event('change'))}
+const trigger=document.querySelector(({'varmodal': '#addvar'})[route.get('dialog')]||'noscript button');if(!invalid&&trigger&&!trigger.disabled&&trigger.getClientRects().length)trigger.click();
 });
 </script>
 </body></html>
