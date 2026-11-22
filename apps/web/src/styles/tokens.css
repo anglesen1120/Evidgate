@@ -113,9 +113,9 @@
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme='light']) {
       color-scheme: dark;
-      --eg-bg: #10202b;
-      --eg-surface: #14232d;
-      --eg-surface-raised: #192d39;
+      --eg-bg: #101416;
+      --eg-surface: #191e21;
+      --eg-surface-raised: #20272b;
       --eg-text: #e5eef4;
       --eg-text-muted: #a8bac7;
       --eg-border: #334a59;
@@ -153,9 +153,9 @@
   html[data-theme='dark'] {
     /* [DECISION] Explicit user dark choice wins regardless of the OS preference. */
     color-scheme: dark;
-    --eg-bg: #10202b;
-    --eg-surface: #14232d;
-    --eg-surface-raised: #192d39;
+    --eg-bg: #101416;
+    --eg-surface: #191e21;
+    --eg-surface-raised: #20272b;
     --eg-text: #e5eef4;
     --eg-text-muted: #a8bac7;
     --eg-border: #334a59;
