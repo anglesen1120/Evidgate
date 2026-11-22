@@ -260,7 +260,7 @@ describe('RunDetailPage release and timeline regions', () => {
     expect([...current].map((step) => step.dataset['step'])).toEqual(['complete']);
     expect(timeline.querySelector('[data-after-cancel-note]')).toBeNull();
   });
-  it('uses one shared page heading and places timeline and context as peers after evidence', async () => {
+  it('uses one shared page heading and places the timeline, execution context and manifest beside the workbench', async () => {
     const { root } = await open();
     const titles = root.querySelectorAll('h1');
     expect(titles).toHaveLength(1);
@@ -270,12 +270,15 @@ describe('RunDetailPage release and timeline regions', () => {
     expect([...(pair?.children ?? [])].map((node) => node.tagName.toLowerCase())).toEqual([
       'app-run-timeline',
       'app-run-header',
+      'app-manifest-panel',
     ]);
-    expect(pair?.classList.contains('min-[1280px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]')).toBe(
-      true,
-    );
+    expect(
+      pair?.parentElement?.classList.contains(
+        'min-[1280px]:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]',
+      ),
+    ).toBe(true);
     expect(pair?.previousElementSibling?.querySelector('app-evidence-panel')).not.toBeNull();
-    expect(pair?.nextElementSibling?.tagName.toLowerCase()).toBe('app-manifest-panel');
+    expect(pair?.previousElementSibling?.querySelector('app-attempts-table')).not.toBeNull();
     for (const heading of root.querySelectorAll('h2[hlmCardTitle]')) {
       expect(heading.getAttribute('data-title-size')).toBe('section');
     }

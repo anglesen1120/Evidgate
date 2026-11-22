@@ -1,11 +1,15 @@
-<section hlmCard class="gap-(--eg-space-4) p-(--eg-space-5)" aria-labelledby="attempts-title">
+<section
+  hlmCard
+  class="min-w-0 gap-(--eg-space-4) rounded-(--eg-radius-lg) p-(--eg-space-5) shadow-none"
+  aria-labelledby="attempts-title"
+>
   <h2
     hlmCardTitle
     [size]="sectionSize"
     #heading
     id="attempts-title"
     tabindex="-1"
-    class="m-0 scroll-mt-[calc(var(--eg-topbar-height,calc(2*var(--eg-space-12)))+var(--eg-space-4))] focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+    class="m-0 scroll-mt-[calc(var(--eg-topbar-height,calc(2*var(--eg-space-12)))+var(--eg-space-4))] border-b border-border pb-(--eg-space-4) focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
   >
     {{ copy.title }}
   </h2>
@@ -20,10 +24,10 @@
   } @else {
     @if (healingUnavailable()) {
       <p
-        class="flex flex-wrap items-center gap-(--eg-space-2) text-muted-foreground"
+        class="flex flex-wrap items-baseline gap-(--eg-space-3) rounded-(--eg-radius-md) bg-(--eg-surface-raised) p-(--eg-space-4) text-xs text-muted-foreground"
         data-attempts-healing-unavailable
       >
-        <span>{{ copy.healing }}</span>
+        <strong>{{ copy.healing }}</strong>
         <span>{{ copy.notProvided }}</span>
       </p>
     }
@@ -49,7 +53,11 @@
             copy.title
           }}
         </caption>
-        <thead hlmTHead role="rowgroup" class="[@media(max-width:767px)]:sr-only">
+        <thead
+          hlmTHead
+          role="rowgroup"
+          class="bg-(--eg-surface-raised) text-muted-foreground [@media(max-width:767px)]:sr-only"
+        >
           <tr hlmTr role="row">
             <th
               hlmTh
@@ -119,7 +127,7 @@
                     data-attempt-identity
                   >
                     <div class="flex min-w-0 w-full items-center gap-(--eg-space-2)">
-                      <bdi class="min-w-0 max-w-full flex-1"
+                      <bdi class="min-w-0 max-w-full flex-1 font-mono font-medium"
                         ><app-data-table-value
                           [value]="display(attempt.executionKey)"
                           [truncate]="true"
@@ -130,21 +138,21 @@
                         [label]="copy.execution"
                       />
                     </div>
-                    <span class="attempt-number block text-muted-foreground"
+                    <span class="attempt-number block text-xs text-muted-foreground tabular-nums"
                       >{{ copy.attempt }} {{ attempt.attemptNo }}</span
                     >
                   </div>
                   @if (attempt === group.preHealingFailure) {
                     <div
                       hlmAlert
-                      class="pre-healing-block mt-(--eg-space-3) block border-(--eg-warning-fg) bg-(--eg-warning-bg) p-(--eg-space-3) text-(--eg-warning-fg)"
+                      class="pre-healing-block mt-(--eg-space-3) block border-s-2 border-(--eg-warning-fg) bg-(--eg-warning-bg) p-(--eg-space-3) text-(--eg-warning-fg)"
                     >
                       <strong>{{ copy.preHealing }}</strong>
                     </div>
                   }
                   @if (attempt.healingCandidate; as candidate) {
                     <div
-                      class="mt-(--eg-space-3) grid gap-(--eg-space-2) rounded-(--eg-radius-sm) bg-muted p-(--eg-space-3)"
+                      class="mt-(--eg-space-3) grid min-w-0 gap-(--eg-space-2) border-s border-border ps-(--eg-space-4) text-xs"
                       data-healing-candidate
                     >
                       <strong>{{ copy.candidate }}</strong>
@@ -173,7 +181,7 @@
                     class="mb-(--eg-space-2) block font-(weight:--eg-weight-semibold) text-muted-foreground [@media(min-width:768px)]:hidden"
                     >{{ copy.raw }}</span
                   >
-                  <bdi>{{ display(attempt.rawStatus) }}</bdi>
+                  <bdi class="font-mono">{{ display(attempt.rawStatus) }}</bdi>
                 </td>
                 <td
                   hlmTd

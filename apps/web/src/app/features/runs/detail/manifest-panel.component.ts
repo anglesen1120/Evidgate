@@ -11,10 +11,7 @@ import { RUN_DETAIL_NOT_PROVIDED } from './run-value-label';
   imports: [CopyValueButtonComponent, NumberValueComponent, HlmCard, HlmCardTitle],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './manifest-panel.component.html',
-  host: {
-    class:
-      'block min-w-0 text-foreground wrap-anywhere [&_dl]:m-0 [&_dl]:grid [&_dl]:gap-(--eg-space-5) [&_dl]:grid-cols-1 min-[768px]:[&_dl]:grid-cols-2 [&_dl>div]:min-w-0 [&_dt]:mb-(--eg-space-2) [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:grid [&_dd]:justify-items-start [&_dd]:gap-(--eg-space-2) [&_bdi]:max-w-full [&_bdi]:font-mono',
-  },
+  host: { class: 'block min-w-0 text-foreground wrap-anywhere' },
 })
 export class ManifestPanelComponent {
   readonly summary = input.required<ManifestSummary>();

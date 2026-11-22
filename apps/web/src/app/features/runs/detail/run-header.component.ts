@@ -3,14 +3,19 @@ import type { RunStateDto } from '@evidgate/sdk';
 import { HlmAlert } from '@evidgate/ui/alert';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { RunStatePillComponent } from '../../../shared/ui/chips/run-state-pill.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
+import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
 import { CopyValueButtonComponent } from '../../../shared/ui/values/copy-value-button.component';
 import { NumberValueComponent } from '../../../shared/ui/values/number-value.component';
 import { EvidenceBadgeComponent } from '../../../shared/ui/verdict/evidence-badge.component';
+import { DecisionChipComponent } from '../../../shared/ui/verdict/decision-chip.component';
+import { OutcomePillComponent } from '../../../shared/ui/verdict/outcome-pill.component';
 import type { Completeness } from '../../../shared/ui/verdict/verdict-values';
 import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
 import { RUN_DETAIL_NOT_PROVIDED, runValueLabel } from './run-value-label';
+import type { DecisionViewModel } from './decision/decision-view-model';
 
 @Component({
   selector: 'app-run-header',
@@ -18,6 +23,10 @@ import { RUN_DETAIL_NOT_PROVIDED, runValueLabel } from './run-value-label';
     RunStatePillComponent,
     StatusPillComponent,
     EvidenceBadgeComponent,
+    DecisionChipComponent,
+    OutcomePillComponent,
+    CopyableIdentifierComponent,
+    HlmIcon,
     HlmAlert,
     HlmButton,
     HlmCard,
@@ -28,8 +37,7 @@ import { RUN_DETAIL_NOT_PROVIDED, runValueLabel } from './run-value-label';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './run-header.component.html',
   host: {
-    class:
-      'block min-w-0 text-foreground wrap-anywhere [&_dl]:m-0 [&_dl]:grid [&_dl]:gap-(--eg-space-5) [&_dl]:grid-cols-1 min-[768px]:[&_dl]:grid-cols-2 [&_dl>div]:min-w-0 [&_dt]:mb-(--eg-space-2) [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:grid [&_dd]:justify-items-start [&_dd]:gap-(--eg-space-2) [&_bdi]:max-w-full',
+    class: 'block min-w-0 text-foreground wrap-anywhere',
   },
 })
 export class RunHeaderComponent {
@@ -43,6 +51,8 @@ export class RunHeaderComponent {
    * to.
    */
   readonly runCompleteness = input<Completeness | null>(null);
+  readonly decision = input<DecisionViewModel | null>(null);
+  readonly decisionLoading = input(false);
   protected readonly display = escapeFormatChars;
   protected readonly valueLabel = runValueLabel;
   protected readonly copy = {
@@ -65,6 +75,10 @@ export class RunHeaderComponent {
     viewEvidence: $localize`:@@runs.detail.view-evidence:View evidence`,
     evidence: $localize`:@@runs.detail.evidence:Evidence revision`,
     completeness: $localize`:@@runs.detail.evidence-completeness:Evidence completeness`,
+    outcome: $localize`:@@runs.detail.test-outcome:Test outcome`,
+    decision: $localize`:@@runs.detail.stored-decision:Stored run decision`,
+    unavailable: $localize`:@@runs.value.decision-unavailable:Unavailable`,
+    loading: $localize`:@@runs.decision.loading:Loading live decision`,
     none: $localize`:@@runs.detail.none:None recorded`,
     context: $localize`:@@runs.detail.context:Execution context`,
     environment: $localize`:@@runs.detail.environment:Environment`,

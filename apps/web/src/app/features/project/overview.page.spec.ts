@@ -77,12 +77,14 @@ describe('ProjectOverviewPage', () => {
       'section',
     );
     expect(root.querySelector('h1')?.textContent?.trim()).toBe(PROJECT.name);
-    expect(root.querySelector('.slug')?.textContent?.trim()).toBe(PROJECT.slug);
+    expect(root.querySelector('app-page-header p')?.textContent?.trim()).toBe(PROJECT.slug);
   });
 
   it('links to the existing permitted next steps without development-status prose or invented metrics', () => {
     const root = renderWith(PROJECT);
-    const links = Array.from(root.querySelectorAll<HTMLAnchorElement>('nav a'));
+    const links = Array.from(root.querySelectorAll<HTMLAnchorElement>('a'));
+    expect(root.querySelector('app-page-header a')).toBe(links[0]);
+    expect(Array.from(root.querySelectorAll('nav a'))).toEqual(links.slice(1));
     expect(links.map((link) => link.textContent?.trim())).toEqual([
       'Runs',
       'Onboarding',
@@ -103,8 +105,9 @@ describe('ProjectOverviewPage', () => {
       PROJECT,
       NEXT_STEPS.filter((item) => item.id === 'runs'),
     );
-    expect(root.querySelectorAll('nav a')).toHaveLength(1);
-    expect(root.querySelector('nav a')?.textContent?.trim()).toBe('Runs');
+    expect(root.querySelectorAll('a')).toHaveLength(1);
+    expect(root.querySelector('app-page-header a')?.textContent?.trim()).toBe('Runs');
+    expect(root.querySelector('nav')).toBeNull();
     expect(root.textContent).not.toContain('Onboarding');
     expect(root.textContent).not.toContain('Feature tree');
   });
@@ -114,7 +117,7 @@ describe('ProjectOverviewPage', () => {
       PROJECT,
       NEXT_STEPS.filter((item) => item.id !== 'runs'),
     );
-    const links = Array.from(root.querySelectorAll<HTMLAnchorElement>('nav a'));
+    const links = Array.from(root.querySelectorAll<HTMLAnchorElement>('a'));
     expect(links.map((link) => link.textContent?.trim())).toEqual(['Onboarding', 'Feature tree']);
     expect(links[0]?.classList.contains('spartan-button-variant-default')).toBe(true);
     expect(root.querySelectorAll('.spartan-button-variant-default')).toHaveLength(1);
@@ -127,12 +130,12 @@ describe('ProjectOverviewPage', () => {
     expect(root.textContent).not.toContain('Next steps');
   });
 
-  it.each([PROJECT, null])('labels the card section with its h1 for project %j', (project) => {
+  it.each([PROJECT, null])('labels the overview section with its h1 for project %j', (project) => {
     const root = renderWith(project);
     const section = root.querySelector('section');
     const heading = root.querySelector('h1');
 
-    expect(section?.getAttribute('data-slot')).toBe('card');
+    expect(section?.querySelector('app-page-header h1')).toBe(heading);
     expect(heading?.getAttribute('data-slot')).toBe('card-title');
     expect(heading?.tagName).toBe('H1');
     expect(heading?.id).toBeTruthy();
@@ -163,7 +166,7 @@ describe('ProjectOverviewPage', () => {
 
     expect(root.querySelector('h1')?.textContent?.trim()).not.toBe('');
     expect(root.querySelector('h1')?.textContent).not.toContain(PROJECT.name);
-    expect(root.querySelector('.slug')).toBeNull();
+    expect(root.querySelector('app-page-header p')).toBeNull();
     expect(root.querySelector('nav')).toBeNull();
   });
 });

@@ -89,6 +89,10 @@ describe('DecisionViewComponent', () => {
     const { root } = render({ decision: EVALUATED });
     expect(text(root, '[data-decision-summary] app-decision-chip')).toContain('FAIL');
     expect(text(root, '[data-decision-summary] app-outcome-pill')).toContain('Has failures');
+    expect(text(root, '[data-decision-summary] app-evidence-badge')).toContain('Incomplete');
+    expect(
+      [...root.querySelectorAll('[data-decision-summary] dt')].map((dt) => dt.textContent),
+    ).toEqual(['Evidence completeness', 'Test outcome', 'Stored run decision']);
     expect(
       Array.from(root.querySelectorAll('.decision-reason-list li > bdi')).map(
         (it) => it.textContent,

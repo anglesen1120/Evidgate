@@ -25,6 +25,7 @@ import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
 import { SessionStore } from '../../../core/session/session.store';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { CreateRunDialogComponent } from '../actions/create/create-run-dialog.component';
 import { CREATE_RUN_COPY } from '../actions/create/create-run.copy';
 import { PageHeaderComponent, PageHeaderImports } from '../../../shared/ui/page-header';
@@ -44,6 +45,7 @@ import { EMPTY_RUN_LIST_FILTERS, RunListStore } from './run-list.store';
     HlmLabel,
     HlmSelectImports,
     PageHeaderImports,
+    ShellIconComponent,
     RequestStateComponent,
     RunListTableComponent,
     CreateRunDialogComponent,
@@ -107,6 +109,7 @@ export class RunListPage {
   protected readonly copy = {
     title: $localize`:@@runs.list.title:Runs`,
     description: $localize`:@@runs.list.description:Review collection state and the latest stored decision. Open a run for evidence completeness.`,
+    register: $localize`:@@runs.list.table-caption:Project runs`,
     filters: $localize`:@@runs.list.filters:Filter runs`,
     filterHint: $localize`:@@runs.list.filter-hint:Decision and ref name filter the server list. State and run scope filter loaded runs only. Load more to search older runs.`,
     state: $localize`:@@runs.list.state-filter:State in loaded runs`,

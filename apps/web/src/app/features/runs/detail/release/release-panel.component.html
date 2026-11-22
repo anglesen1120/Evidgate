@@ -1,10 +1,16 @@
 <section
   hlmCard
-  class="gap-(--eg-space-5) p-(--eg-space-5)"
+  class="min-w-0 gap-(--eg-space-5) rounded-(--eg-radius-lg) p-(--eg-space-5) shadow-none"
   aria-labelledby="release-title"
   data-release-panel
 >
-  <h2 hlmCardTitle [size]="sectionSize" id="release-title" class="m-0">{{ copy.title }}</h2>
+  <h2
+    hlmCardTitle
+    [size]="sectionSize"
+    id="release-title"
+    class="m-0 border-b border-border pb-(--eg-space-4)"
+    [textContent]="copy.title"
+  ></h2>
 
   @if (releases().length === 0) {
     <p class="m-0 text-muted-foreground" data-release-unbound>{{ copy.unbound }}</p>
@@ -76,10 +82,12 @@
       @case ('ready') {
         @if (release(); as loaded) {
           @if (boundToRun()) {
-            <dl>
+            <dl
+              class="m-0 grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-(--eg-space-4) [&>div]:min-w-0 [&_dt]:mb-(--eg-space-1) [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0"
+            >
               <div>
                 <dt>{{ copy.name }}</dt>
-                <dd data-release-name>
+                <dd class="font-semibold" data-release-name>
                   <bdi>{{ display(loaded.name) }}</bdi>
                 </dd>
               </div>
@@ -98,7 +106,7 @@
               </div>
               <div>
                 <dt>{{ copy.boundRun }}</dt>
-                <dd data-release-bound-run>
+                <dd class="font-mono" data-release-bound-run>
                   <bdi>{{ display(runId()) }}</bdi>
                 </dd>
               </div>
@@ -128,7 +136,7 @@
 
 <ng-template #componentCell let-component>
   <div class="flex min-w-0 flex-wrap items-center gap-(--eg-space-2)" data-release-component>
-    <bdi>{{ display(component.componentKey) }}</bdi>
+    <bdi class="max-w-full font-mono">{{ display(component.componentKey) }}</bdi>
     @if (boundKeys().has(component.componentKey)) {
       <app-status-pill [tone]="'info'" [label]="copy.bound" />
     }
