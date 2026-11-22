@@ -130,6 +130,7 @@ describe('EvidencePanelComponent', () => {
     expect(root.textContent).toContain('No live evaluation recorded for this revision');
     expect(root.textContent).toContain('Missing evidence reasons unavailable');
     expect(root.querySelector('ul.reason-list')).toBeNull();
+    expect(root.querySelector('[data-missing-count], time')).toBeNull();
     expect(root.querySelector('app-decision-chip')).toBeNull();
     expect(root.textContent).not.toMatch(/PASS|FAIL|INCONCLUSIVE/);
   });
@@ -140,6 +141,7 @@ describe('EvidencePanelComponent', () => {
     expect(badge(root)?.textContent).toContain('Completeness: Incomplete');
     expect(root.querySelector('[data-evidence-missing]')?.textContent).toContain('count_mismatch');
     expect(root.querySelector('[data-evidence-evaluation]')?.textContent).toContain('evaluation-3');
+    expect(root.querySelector('time')?.getAttribute('datetime')).toBe(pinned.created_at);
     // The pending line belongs to "no revision data at all", not to a loaded historical row.
     expect(root.textContent).not.toContain('No live evaluation recorded for this revision');
   });
@@ -169,6 +171,7 @@ describe('EvidencePanelComponent', () => {
       pinned,
     });
     expect(badge(root)?.textContent).toContain('Completeness: Complete');
+    expect(root.querySelector('[data-missing-count]')?.textContent?.trim()).toBe('0');
     expect(root.querySelector('.reason-empty')?.textContent?.trim()).toBe(
       'No missing evidence reasons reported',
     );
@@ -402,6 +405,7 @@ describe('EvidencePanelComponent', () => {
         confirmedTargets,
       });
       const link = root.querySelector<HTMLAnchorElement>('a.reason-link')!;
+      expect(root.querySelector('[data-missing-count]')?.textContent?.trim()).toBe('1');
       expect(link.getAttribute('href')).toBe('/#attempt-exec_42-2');
       const event = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
       link.dispatchEvent(event);

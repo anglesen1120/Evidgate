@@ -2156,6 +2156,15 @@
           <context context-type="linenumber">70,76</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="runs.detail.test-outcome" datatype="html">
+        <source>Test outcome</source>
+      </trans-unit>
+      <trans-unit id="runs.detail.stored-decision" datatype="html">
+        <source>Stored run decision</source>
+      </trans-unit>
+      <trans-unit id="runs.detail.inspect-evidence" datatype="html">
+        <source>Inspect evidence</source>
+      </trans-unit>
       <trans-unit id="runs.detail.attempts.page" datatype="html">
         <source>Page <x id="page" equiv-text="page"/> / <x id="pages" equiv-text="pages"/></source>
         <context-group purpose="location">

@@ -2823,6 +2823,9 @@
 <trans-unit id="runs.detail.timeline.after-cancel-events" datatype="html"><source>After-cancel events</source><target>Sự kiện sau khi hủy</target></trans-unit>
 <trans-unit id="runs.detail.timeline.after-cancel-none" datatype="html"><source>No events after cancel</source><target>Không có sự kiện nào sau khi hủy</target></trans-unit>
 <trans-unit id="runs.detail.timeline.after-cancel-count" datatype="html"><source><x id="count" equiv-text="count"/> events arrived after cancel (informational)</source><target><x id="count"/> sự kiện đến sau khi hủy (chỉ mang tính thông tin)</target></trans-unit>
+<trans-unit id="runs.detail.test-outcome" datatype="html"><source>Test outcome</source><target>Kết quả kiểm thử</target></trans-unit>
+<trans-unit id="runs.detail.stored-decision" datatype="html"><source>Stored run decision</source><target>Quyết định đã lưu của lượt chạy</target></trans-unit>
+<trans-unit id="runs.detail.inspect-evidence" datatype="html"><source>Inspect evidence</source><target>Kiểm tra bằng chứng</target></trans-unit>
 <trans-unit id="runs.detail.attempts.title" datatype="html"><source>Attempts</source><target>Các lần thử</target></trans-unit>
 <trans-unit id="runs.detail.attempts.scroll-region" datatype="html"><source>Attempts table</source><target>Bảng các lần thử</target></trans-unit>
 <trans-unit id="runs.detail.attempts.pagination" datatype="html"><source>Attempts pagination</source><target>Phân trang các lần thử</target></trans-unit>

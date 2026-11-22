@@ -12,6 +12,7 @@ import { HlmCardImports } from '@evidgate/ui/card';
 
 import type { ApiError } from '../../../../core/http/api-error';
 import { DecisionChipComponent } from '../../../../shared/ui/verdict/decision-chip.component';
+import { EvidenceBadgeComponent } from '../../../../shared/ui/verdict/evidence-badge.component';
 import { OutcomePillComponent } from '../../../../shared/ui/verdict/outcome-pill.component';
 import { RetryAfterComponent } from '../../../../shared/ui/conflict';
 import { ErrorPatternComponent } from '../../../../shared/ui/states/error-pattern.component';
@@ -38,6 +39,7 @@ import { decisionReasonExplanation } from '../reason-explanation';
     HlmButton,
     HlmCardImports,
     DecisionChipComponent,
+    EvidenceBadgeComponent,
     OutcomePillComponent,
     RetryAfterComponent,
     ErrorPatternComponent,
@@ -70,6 +72,9 @@ export class DecisionViewComponent {
 
   protected readonly copy = {
     title: $localize`:@@runs.decision.title:Latest live decision`,
+    completeness: $localize`:@@runs.detail.evidence-completeness:Evidence completeness`,
+    outcome: $localize`:@@runs.detail.test-outcome:Test outcome`,
+    decision: $localize`:@@runs.detail.stored-decision:Stored run decision`,
     loading: $localize`:@@runs.decision.loading:Loading live decision`,
     updating: $localize`:@@runs.decision.updating:Updating decision`,
     pending: $localize`:@@runs.decision.pending-description:No live evaluation is available yet.`,
