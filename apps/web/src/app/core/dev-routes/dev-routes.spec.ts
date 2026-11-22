@@ -36,7 +36,7 @@ describe('dev routes (review only)', () => {
   it('mounts the shared UI gallery on one lazy route', () => {
     const table = devRoutes();
 
-    expect(table).toHaveLength(10);
+    expect(table).toHaveLength(17);
     expect(table[0]?.path).toBe('dev/ui-gallery');
     // A lazy boundary, so the production graph never reaches the gallery through this file.
     expect(table[0]?.component).toBeUndefined();

@@ -51,7 +51,6 @@ import { setupScriptsReviewRoutes } from './dev-routes.setup-scripts.fixtures';
 /** The review-only routes, mounted first so a product path can never shadow one. */
 export function devRoutes(): Routes {
   return [
-    ...setupScriptsReviewRoutes(),
     {
       path: 'dev/ui-gallery',
       loadComponent: () => import('../../shared/ui/gallery').then((m) => m.UiGalleryComponent),
@@ -281,5 +280,6 @@ export function devRoutes(): Routes {
         },
       ],
     },
+    ...setupScriptsReviewRoutes(),
   ];
 }
