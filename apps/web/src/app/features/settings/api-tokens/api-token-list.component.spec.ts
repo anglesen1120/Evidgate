@@ -12,6 +12,7 @@ class TokenListHarness extends ComponentHarness {
   static hostSelector = 'app-api-token-list';
   readonly search = this.locatorFor('#api-token-search');
   readonly inspectButtons = this.locatorForAll('[data-api-inspect]');
+  readonly rowFacts = this.locatorForAll('[data-api-token-row] app-api-token-facts');
   readonly detail = this.locatorForOptional('[data-api-token-detail]');
   readonly selectedTokenId = this.locatorFor('[data-api-token-detail] header code');
 }
@@ -139,6 +140,22 @@ describe('ApiTokenListComponent', () => {
     await fixture.whenStable();
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement).toBe(more);
+  });
+
+  it('keeps focus on the same unselected Inspect button when narrowing and widening', async () => {
+    const { fixture, harness, wide } = await render([ROW, { ...ROW, id: 'other', name: 'Other' }]);
+    const [, other] = await harness.inspectButtons();
+    await other?.focus();
+
+    for (const isWide of [false, true]) {
+      wide.set(isWide);
+      await fixture.whenStable();
+      expect(await harness.rowFacts()).toHaveLength(isWide ? 0 : 2);
+      const [, focused] = await harness.inspectButtons();
+      expect(await focused?.isFocused()).toBe(true);
+      expect(await focused?.getAttribute('aria-label')).toBe('Inspect token Other');
+      expect(await (await harness.selectedTokenId()).text()).toBe(ROW.id);
+    }
   });
 
   it('gates revoke by permission, busy state and viewport while narrow keeps every metadata fact', async () => {

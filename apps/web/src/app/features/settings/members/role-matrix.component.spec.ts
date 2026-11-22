@@ -117,6 +117,12 @@ describe('RoleMatrixComponent responsive records', () => {
       rows: [{ membership: MEMBER, granted: new Set(['comparison-0']) }],
     });
     await fixture.whenStable();
+    const region = root.querySelector('table')?.closest<HTMLElement>('[role="region"]');
+    if (!region) throw new Error('Expected the matrix inside its named scroll region');
+    expect(region.getAttribute('aria-label')).toBe('Organization-wide role matrix');
+    expect(region.tabIndex).toBe(0);
+    region.focus();
+    expect(document.activeElement).toBe(region);
     const headers = [...root.querySelectorAll<HTMLElement>('thead th[data-column-role="status"]')];
     expect(headers.map((header) => header.textContent)).toEqual(roles.map((role) => role.name));
     expect(root.querySelectorAll('tbody td')).toHaveLength(9);

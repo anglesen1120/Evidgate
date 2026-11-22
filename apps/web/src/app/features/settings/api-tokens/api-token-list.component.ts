@@ -1,4 +1,3 @@
-import { NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -32,7 +31,6 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
 @Component({
   selector: 'app-api-token-list',
   imports: [
-    NgTemplateOutlet,
     HlmTableImports,
     SettingsPageCountsComponent,
     HlmCardImports,
@@ -54,36 +52,6 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
       [attr.data-token-page-count]="''"
       [metrics]="pageCounts()"
     />
-    <ng-template #scanName let-row>
-      <button
-        hlmBtn
-        [variant]="'link'"
-        class="h-auto max-w-full justify-start px-0 py-1 text-start whitespace-normal pointer-coarse:min-h-(--eg-control-touch)"
-        type="button"
-        data-api-inspect
-        [attr.aria-pressed]="selected()?.id === row.id"
-        [attr.aria-label]="inspectLabel(row.name)"
-        (click)="selectedId.set(row.id)"
-      >
-        <app-data-table-value class="min-w-0 font-bold" [value]="row.name" />
-      </button>
-      <app-api-token-permission-tags [permissions]="row.permissions" [name]="row.name" />
-      @if (canWrite() && row.status !== 'revoked') {
-        <button
-          *appDesktopMutation
-          hlmBtn
-          [variant]="'ghost'"
-          type="button"
-          data-api-revoke
-          [attr.data-row-id]="row.id"
-          [attr.aria-label]="writeCopy.revoke + ': ' + row.name"
-          [disabled]="busy()"
-          (click)="requestRevoke(row)"
-        >
-          {{ writeCopy.revoke }}
-        </button>
-      }
-    </ng-template>
     <div
       class="grid min-w-0 grid-cols-[minmax(0,1fr)] items-start gap-4 min-[1025px]:@min-[45rem]:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]"
     >
@@ -108,52 +76,70 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
           </div>
         </header>
         @if (filtered().length) {
-          @if (viewport.narrow()) {
-            <ul class="m-0 grid min-w-0 list-none p-0" [attr.aria-label]="copy.directory">
-              @for (row of filtered(); track row.id) {
-                <li
-                  class="min-w-0 border-b border-border p-4 last:border-0 data-[selected=true]:bg-(--eg-accent-soft)"
-                  data-api-token-row
-                  [attr.data-state]="row.status"
-                  [attr.data-selected]="selected()?.id === row.id"
-                >
-                  <ng-container
-                    [ngTemplateOutlet]="scanName"
-                    [ngTemplateOutletContext]="{ $implicit: row }"
-                  />
-                  <app-api-token-facts class="mt-3" [row]="row" />
-                </li>
-              }
-            </ul>
-          } @else {
-            <div hlmTableContainer>
-              <table
-                hlmTable
-                class="w-full table-fixed border-collapse"
-                aria-labelledby="api-directory-title"
-              >
-                <thead hlmTHead class="bg-(--eg-surface-raised) text-xs">
-                  <tr hlmTr>
-                    <th hlmTh scope="col">{{ copy.name }}</th>
+          @let narrow = viewport.narrow();
+          <div hlmTableContainer>
+            <table
+              hlmTable
+              class="w-full table-fixed border-collapse"
+              aria-labelledby="api-directory-title"
+            >
+              <thead hlmTHead class="bg-(--eg-surface-raised) text-xs">
+                <tr hlmTr class="max-md:border-0">
+                  <th hlmTh scope="col" class="max-md:h-0 max-md:p-0">
+                    <span class="max-md:sr-only">{{ copy.name }}</span>
+                  </th>
+                  @if (!narrow) {
                     <th hlmTh scope="col" class="w-[24%] whitespace-normal">{{ copy.prefix }}</th>
                     <th hlmTh scope="col" class="w-[24%] whitespace-normal">{{ copy.state }}</th>
-                  </tr>
-                </thead>
-                <tbody hlmTBody>
-                  @for (row of filtered(); track row.id) {
-                    <tr
-                      hlmTr
-                      class="data-[selected=true]:bg-(--eg-accent-soft)"
-                      data-api-token-row
-                      [attr.data-state]="row.status"
-                      [attr.data-selected]="selected()?.id === row.id"
-                    >
-                      <td hlmTd class="whitespace-normal">
-                        <ng-container
-                          [ngTemplateOutlet]="scanName"
-                          [ngTemplateOutletContext]="{ $implicit: row }"
-                        />
-                      </td>
+                  }
+                </tr>
+              </thead>
+              <tbody hlmTBody>
+                @for (row of filtered(); track row.id) {
+                  <tr
+                    hlmTr
+                    class="data-[selected=true]:bg-(--eg-accent-soft)"
+                    data-api-token-row
+                    [attr.data-state]="row.status"
+                    [attr.data-selected]="selected()?.id === row.id"
+                  >
+                    <td hlmTd class="whitespace-normal max-md:p-4">
+                      <button
+                        hlmBtn
+                        [variant]="'link'"
+                        class="h-auto max-w-full justify-start px-0 py-1 text-start whitespace-normal pointer-coarse:min-h-(--eg-control-touch)"
+                        type="button"
+                        data-api-inspect
+                        [attr.aria-pressed]="selected()?.id === row.id"
+                        [attr.aria-label]="inspectLabel(row.name)"
+                        (click)="selectedId.set(row.id)"
+                      >
+                        <app-data-table-value class="min-w-0 font-bold" [value]="row.name" />
+                      </button>
+                      <app-api-token-permission-tags
+                        [permissions]="row.permissions"
+                        [name]="row.name"
+                      />
+                      @if (canWrite() && row.status !== 'revoked') {
+                        <button
+                          *appDesktopMutation
+                          hlmBtn
+                          [variant]="'ghost'"
+                          type="button"
+                          data-api-revoke
+                          [attr.data-row-id]="row.id"
+                          [attr.aria-label]="writeCopy.revoke + ': ' + row.name"
+                          [disabled]="busy()"
+                          (click)="requestRevoke(row)"
+                        >
+                          {{ writeCopy.revoke }}
+                        </button>
+                      }
+                      @if (narrow) {
+                        <app-api-token-facts class="mt-3" [row]="row" />
+                      }
+                    </td>
+                    @if (!narrow) {
                       <td hlmTd class="font-mono text-xs whitespace-normal wrap-anywhere">
                         {{ row.prefix }}
                       </td>
@@ -163,12 +149,12 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
                           [label]="stateLabel(row.status)"
                         />
                       </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
-          }
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
         } @else {
           <div class="grid justify-items-start gap-3 px-5 py-4">
             <app-empty-pattern [bare]="true" [title]="noMatches" [description]="loadedOnly" />

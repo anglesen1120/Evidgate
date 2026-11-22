@@ -53,7 +53,7 @@ const ROLE_VALUE_WIDTH: DataTableColumnWidth = { min: '0px', max: 'none' };
       </section>
       <div
         hlmTableContainer
-        class="table-scroll min-w-0 max-w-full rounded-xl border border-solid border-border bg-card max-md:overflow-visible focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
+        class="table-scroll min-w-0 max-w-full rounded-xl border border-solid border-border bg-card max-md:overflow-visible md:overflow-x-auto md:overscroll-x-contain md:[contain:inline-size] focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-solid focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
         id="members-full-matrix"
         [class.max-md:hidden]="!fullMatrix()"
         tabindex="0"
