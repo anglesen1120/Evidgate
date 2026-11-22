@@ -39,7 +39,7 @@
             "tsConfig": "tsconfig.app.json",
             "polyfills": ["@angular/localize/init"],
             "styles": ["src/styles.css"],
-            "assets": [],
+            "assets": [{ "glob": "theme-init.js", "input": "src" }],
             "outputPath": "dist",
             "i18nMissingTranslation": "error"
           },

@@ -159,6 +159,15 @@ Planned (not yet referenced) — DECISIONS §4.1–§4.3 choices that no project
 
 "Registered" means the name appears as the first cell of a matrix-table row in this Decision section (including the Planned table); rows in *Alternatives rejected* below are **not** registrations — a dependency whose name matches a rejected row fails `check-adr-matrix.sh` with "rejected in ADR-0002".
 
+## Self-hosted assets (not packages)
+
+Fonts of the web theme are copied into `apps/web/src/styles/fonts/` (bundled by the Angular build, served from the app origin, so `font-src 'self'` holds and no font CDN is contacted). Both are SIL Open Font License 1.1, which allows bundling and embedding in a closed-source commercial product; the licence text sits next to each file. The files are the upstream variable TTFs converted to WOFF2 without subsetting (Vietnamese needs the Latin Extended Additional block).
+
+| Asset | Upstream | Licence | Evidence |
+| --- | --- | --- | --- |
+| Manrope-variable.woff2 | Manrope (Mikhail Sharanda) | OFL-1.1 | `apps/web/src/styles/fonts/Manrope-OFL.txt` |
+| PublicSans-variable.woff2 | Public Sans (USWDS) | OFL-1.1 | `apps/web/src/styles/fonts/PublicSans-OFL.txt` |
+
 ## Alternatives rejected
 
 | Package | Version checked | Rejection reason (DECISIONS §4 licence rule) |
