@@ -36,11 +36,16 @@
 <header class="v3-topbar" data-v3-topbar></header>
 <main id="main" tabindex="-1">
 <div class="v3-studio__bar"><div class="v3-line"><span class="v3-badge "><span  data-en="Historical reference · G4" data-vi="Tài liệu lịch sử · G4">Historical reference · G4</span></span><code>SHOP · p-storefront</code></div></div>
-<header class="v3-page-header"><div class="v3-page-header__title"><span class="v3-page-header__icon"><svg class="v3-icon" aria-hidden="true"><use href="#i-branch"/></svg></span><div>
+<header class="v3-page-head v3-page-header"><div class="v3-page-header__title"><span class="v3-page-header__icon"><svg class="v3-icon" aria-hidden="true"><use href="#i-branch"/></svg></span><div>
 <h1  data-en="Review draft" data-vi="Xem xét bản nháp">Review draft</h1>
-<p class="v3-muted" data-en="Inspect the assertion change and its evidence before independent review." data-vi="Kiểm tra thay đổi assertion và bằng chứng trước khi gửi duyệt độc lập.">Inspect the assertion change and its evidence before independent review.</p></div></div><div class="v3-actions v3-studio__write">
+<p class="v3-page-head__facts" data-en="d-114 · dr-5 · Independent review" data-vi="d-114 · dr-5 · Xét duyệt độc lập">d-114 · dr-5 · Independent review</p></div></div><div class="v3-actions v3-studio__write">
 <button type="button" class="v3-btn v3-btn--primary" id="submit"><span  data-en="Submit for review" data-vi="Gửi để xem xét">Submit for review</span></button>
 <button type="button" class="v3-btn v3-btn--primary" id="mergebtn" hidden><span  data-en="Merge reviewed draft" data-vi="Hợp nhất bản nháp đã được xem xét">Merge reviewed draft</span></button></div></header>
+<nav class="v3-tabs" aria-label="Studio" data-label-en="Studio" data-label-vi="Studio">
+<a href="17-studio-template-gallery.html"><span data-en="Templates" data-vi="Mẫu">Templates</span></a>
+<a href="18-studio-draft-editor.html?draft=d-114&amp;case=case-checkout-17&amp;revision=dr-5"><span data-en="Draft editor" data-vi="Soạn bản nháp">Draft editor</span></a>
+<a href="19-studio-review-merge.html?draft=d-114&amp;case=case-checkout-17&amp;revision=dr-5" aria-current="page"><span data-en="Review and merge" data-vi="Duyệt và hợp nhất">Review and merge</span></a>
+</nav>
 <p class="v3-note v3-studio__mobile v3-studio__notice" data-en="Use a desktop to make changes." data-vi="Sử dụng máy tính để thay đổi dữ liệu.">Use a desktop to make changes.</p><div hidden data-scene="loading" class="v3-empty v3-studio__notice v3-studio__preview" role="status"><span  data-en="Loading the supplied fixture…" data-vi="Đang tải dữ liệu mẫu…">Loading the supplied fixture…</span><span class="v3-skeleton" aria-hidden="true"><i></i><i></i></span></div>
 <div hidden data-scene="empty" class="v3-empty v3-studio__notice " role="status"><span  data-en="No resource in this fixture." data-vi="Không có dữ liệu trong mẫu này.">No resource in this fixture.</span></div>
 <div hidden data-scene="404" class="v3-empty v3-studio__notice " role="status"><span  data-en="Not found. Unknown and out-of-scope resources have the same response." data-vi="Không tìm thấy. Phản hồi giống nhau cho tài nguyên không tồn tại và ngoài phạm vi.">Not found. Unknown and out-of-scope resources have the same response.</span></div>
@@ -101,7 +106,7 @@
 <small id="ext" hidden data-en="Repository URL unavailable in the historical record." data-vi="Bản ghi lịch sử không cung cấp URL kho mã.">Repository URL unavailable in the historical record.</small>
 <p class="v3-muted" data-en="Proposed fixture only. No repository action is sent from this page." data-vi="Chỉ là dữ liệu minh họa. Trang này không gửi thao tác tới kho mã.">Proposed fixture only. No repository action is sent from this page.</p></div></section>
 <p class="v3-note" data-en="Runtime auto-apply is off. This historical reference has no direct merge API or healing action." data-vi="Không tự áp dụng khi chạy. Tài liệu lịch sử này không có API hợp nhất trực tiếp hay thao tác sửa kiểm thử.">Runtime auto-apply is off. This historical reference has no direct merge API or healing action.</p></aside></div>
-<dialog class="v3-dialog" id="request" aria-labelledby="request-h">
+<dialog class="v3-dialog v3-dialog--edit" id="request" aria-labelledby="request-h">
 <header class="v3-dialog__header">
 <h2 id=request-h data-en="Submit for independent review" data-vi="Gửi để xem xét độc lập">Submit for independent review</h2></header><div class="v3-body">
 <p class="v3-muted" data-en="Request review of d-114, dr-5 against cr-9. This does not approve or merge the draft." data-vi="Yêu cầu duyệt d-114, dr-5 so với cr-9. Thao tác này không duyệt hay hợp nhất bản nháp.">Request review of d-114, dr-5 against cr-9. This does not approve or merge the draft.</p>
@@ -109,7 +114,7 @@
 <footer class="v3-form__footer">
 <button type="button" class="v3-btn " data-close><span  data-en="Cancel" data-vi="Hủy">Cancel</span></button>
 <button type="button" class="v3-btn v3-btn--primary" id="requestok" disabled><span  data-en="Request review" data-vi="Yêu cầu duyệt">Request review</span></button></footer></dialog>
-<dialog class="v3-dialog" id="merge" aria-labelledby="merge-h">
+<dialog class="v3-dialog v3-dialog--edit" id="merge" aria-labelledby="merge-h">
 <header class="v3-dialog__header">
 <h2 id=merge-h data-en="Merge reviewed draft?" data-vi="Hợp nhất bản nháp đã duyệt?">Merge reviewed draft?</h2></header><div class="v3-body">
 <p class="v3-muted" data-en="Review the exact item before continuing. This preview changes no live pull request." data-vi="Kiểm tra đúng mục trước khi tiếp tục. Bản xem trước không thay đổi pull request thật.">Review the exact item before continuing. This preview changes no live pull request.</p>
@@ -143,7 +148,9 @@
 <option value="withdrawn" data-en="PR withdrawn" data-vi="Đã rút PR">PR withdrawn</option>
 <option value="closed" data-en="PR closed" data-vi="PR đã đóng">PR closed</option>
 <option value="merged" data-en="Merged result" data-vi="Kết quả hợp nhất">Merged result</option>
-<option value="prout" data-en="PR unavailable" data-vi="PR không khả dụng">PR unavailable</option></select></label></div></details>
+<option value="prout" data-en="PR unavailable" data-vi="PR không khả dụng">PR unavailable</option></select></label>
+<section class="v3-stack"><h3 data-en="Dialog previews" data-vi="Bản xem trước hộp thoại">Dialog previews</h3><div class="v3-actions"><a href="19-studio-review-merge.html?dialog=request"><span data-en="Request review" data-vi="Yêu cầu xét duyệt">Request review</span></a><a href="19-studio-review-merge.html?state=eligible&amp;dialog=merge"><span data-en="Merge · eligible draft" data-vi="Hợp nhất · bản nháp đủ điều kiện">Merge · eligible draft</span></a></div></section>
+</div></details>
 </main></div></div>
 <script>
 addEventListener("DOMContentLoaded",()=>{
@@ -153,7 +160,7 @@ function label(el,en,vi){el.dataset.en=en;el.dataset.vi=vi;el.textContent=lang()
 function values(){for(const el of all('[data-val-en]')){if(!el.dataset.edited)el.value=lang()==='vi'?el.dataset.valVi:el.dataset.valEn;}}
 document.addEventListener('input',e=>{if(e.target.matches('[data-val-en]'))e.target.dataset.edited='1'});
 const route=new URLSearchParams(location.search);
-const accepted={"draft": ["d-114"], "case": ["case-checkout-17"], "revision": ["dr-5"], "project": ["p-storefront"]};
+const accepted={"dialog":["request", "merge"],"state":["eligible"],"draft": ["d-114"], "case": ["case-checkout-17"], "revision": ["dr-5"], "project": ["p-storefront"]};
 const identity={"draft": "d-114", "case": "case-checkout-17", "revision": "dr-5"};
 const target=EvidgateV3.byId.get(document.body.dataset.page).file;
 const invalid=[...route].some(([key,value])=>!Object.hasOwn(accepted,key)||!accepted[key].includes(value)||route.getAll(key).length!==1);
@@ -196,6 +203,8 @@ $('reload').onclick=()=>{
 };
 
 start();
+if(!invalid&&route.get('state')==='eligible')setState('eligible');
+const trigger=document.querySelector(({'request': '#submit', 'merge': '#mergebtn'})[route.get('dialog')]||'noscript button');if(!invalid&&trigger&&!trigger.disabled&&trigger.getClientRects().length)trigger.click();
 });
 </script>
 </body></html>

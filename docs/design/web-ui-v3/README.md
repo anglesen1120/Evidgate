@@ -117,3 +117,26 @@ Source: the 48-page review (findings A01–A20, B01–B08, R01–R05; 33 rows) a
 - Closed in the re-check: 31 of 33 rows, including the release bindings, the sandbox viewer, the rejected-proposal path, the AI-consent snapshot, table header wrapping, prompt-state coverage (12, 06, 35) and narrow-viewport overflow.
 - Open at the re-check, fixed afterwards by the page owners and self-reported, not re-run by the reviewer: B01 (an already-queued item must keep its receipt when its link is followed) and the revision-role labels (a case revision attached to a run or script must say its role: executed, approved or awaiting review).
 - Open by design: none of the mockups submit data, and every screen shows fixture values (FIXTURE.md). Contract questions the screens raise are listed in `plans/features/09-web-ui/09.10.1-adopt-ui-design-v3.md` §3.
+
+## Revision 2026-11-22b
+
+Binding inputs: the owner rules (record lists are tables with row View and, where an edit action exists, Edit dialogs; horizontal tabs only, one row, scrolling at 900 px; page interiors follow the reference addendum P1-P8) and the 39-screen decisions A (table + View/Edit dialog), B (View is a link to the full page) and C (horizontal tabs and header parity only). Evidgate invariants win over every pattern. Shots `shots/NN-*-1440.png` (dark, en) are regenerated for all 48 pages.
+
+**Superseded layouts** (kept only as marked history, do not build): master-detail split record panels, the settings left rail, selects used as navigation, wrapping tab strips.
+
+**Shared patterns** (dialog contract: `assets/dialogs-v3.js`, trigger `data-dialog-open`, static state `?dialog=<id>`; View 560 px, Edit 760 px, full-screen below 600 px):
+
+| Files | Rule(s) applied |
+| --- | --- |
+| assets/components-v3.css, components-v3-table.css, components-v3-dialog.css, components-v3-analytics.css, assets/dialogs-v3.js, 00-components.html | P2 page header, horizontal tab strip, P3 KPI strip, P4 table template, P5 context rail, P6 View/Edit/decline/bulk dialogs and popover, P8 analytics blocks |
+| assets/shell.js, 01-app-shell.html | P1 header (breadcrumb, search with shortcut hint, compact scope switchers) and grouped sidebar with counts; P2/P3 overview |
+| 27 | Horizontal settings tab strip, rail and select removed |
+| 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38 | Class A: table + View dialog; Edit only where an edit exists (28 roles, 38 labelled draft); verb-specific confirmations for 36 and 37; 31 also P8 |
+| 25, 26, 17, 23, 42, 44, 45, 46 | Class A tables with View (25 owner Edit, 42 bulk dialog, 23 tables inside a horizontal stepper) |
+| 03, 08, 12, 40 | Class B tables with a View link to the full page; non-linkable rows show a loaded summary only |
+| 06 | Class A exceptions table; P6 decline, approve and revoke states |
+| 14, 15, 21 | Class C; P6 dialogs as extra states, approval bound to the pinned hash |
+| 22, 07 | P8 analytics; inconclusive and pending stay neutral series; table alternative |
+| 04, 05, 09, 10, 11, 13, 16, 18, 19, 20, 24, 39, 41, 43, 47 | Class C: P2 header and single-row horizontal tabs only |
+
+Mockup data limits recorded by the pages: no prior-period totals (usage deltas show "no prior value"), no per-suite denominators on 22, no recent-version feed on 24.
