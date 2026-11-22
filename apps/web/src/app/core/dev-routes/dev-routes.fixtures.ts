@@ -47,6 +47,7 @@ import type { Routes } from '@angular/router';
 
 import { authGuard, orgScopeGuard, permissionGuard, projectScopeGuard } from '../guards';
 import { ShellComponent } from '../../shell/layout/shell.component';
+import { setupScriptsReviewRoutes } from './dev-routes.setup-scripts.fixtures';
 
 /**
  * Review-only v3 screens fed by static view models, no HTTP: mounted under the project scope with
@@ -387,5 +388,6 @@ export function devRoutes(): Routes {
       ),
     ),
     /* eslint-enable evidgate/no-feature-cross-import */
+    ...setupScriptsReviewRoutes(),
   ];
 }
