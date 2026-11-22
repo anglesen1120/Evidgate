@@ -30,6 +30,21 @@ describe('DecisionExceptions', () => {
     const loader = TestbedHarnessEnvironment.documentRootLoader(fixture);
     return { h, loader };
   }
+  it.each([
+    ['default', 'revoke'],
+    ['requested', 'approve'],
+    ['requested', 'decline'],
+  ])('keeps the failure visible beside the %s preview action %s', async (state, action) => {
+    const { h, loader } = await render(state);
+    expect(await loader.getAllHarnesses(DecisionDialogHarness)).toHaveLength(0);
+    expect(await h.all(`footer [data-action="${action}"]`)).toHaveLength(1);
+    const notice = await h.find('footer [data-retained-failure]');
+    const text = await notice.text();
+    expect(text).toContain('Original failure retained');
+    expect(text).toContain('run-1842 remains FAIL');
+    expect(await notice.getAttribute('role')).toBeNull();
+    expect(await notice.getAttribute('aria-live')).toBeNull();
+  });
   it('lists every record and restores focus to its View button without replacing the failure', async () => {
     const { h, loader } = await render('default');
     const table = await h.find('[role=table]');

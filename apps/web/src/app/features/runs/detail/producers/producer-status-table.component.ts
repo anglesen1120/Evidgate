@@ -153,7 +153,7 @@ export class ProducerStatusTableComponent {
       priority: 'primary',
       overflow: 'wrap',
       width: {
-        min: 'calc(13ch + 2 * var(--eg-space-4))',
+        min: 'calc(16ch + 2 * var(--eg-space-4))',
         preferred: '1%',
         max: 'calc(24ch + 2 * var(--eg-space-4))',
       },
@@ -167,7 +167,7 @@ export class ProducerStatusTableComponent {
       priority: 'primary',
       overflow: 'wrap',
       width: {
-        min: 'calc(13ch + 2 * var(--eg-space-4))',
+        min: 'calc(16ch + 2 * var(--eg-space-4))',
         preferred: '1%',
         max: 'calc(24ch + 2 * var(--eg-space-4))',
       },
@@ -180,7 +180,7 @@ export class ProducerStatusTableComponent {
       role: 'number',
       priority: 'secondary',
       overflow: 'wrap',
-      width: { min: '9ch', preferred: '1%' },
+      width: { min: '14ch', preferred: '1%' },
       cellTemplate: this.sequenceCell(),
     },
     {
@@ -200,7 +200,7 @@ export class ProducerStatusTableComponent {
       role: 'text',
       priority: 'secondary',
       overflow: 'wrap',
-      width: { min: 'calc(12ch + 2 * var(--eg-space-4))', preferred: 'auto' },
+      width: { min: 'calc(18ch + 2 * var(--eg-space-4))', preferred: 'auto' },
       cellTemplate: this.eventsCell(),
     },
   ]);

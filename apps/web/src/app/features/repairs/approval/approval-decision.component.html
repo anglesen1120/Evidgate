@@ -1,5 +1,6 @@
 @let ctx = context();
 @let state = ctx.state();
+@let replacement = state === '412' || state === 'reloaded';
 <section hlmCard [size]="'sm'">
   <header hlmCardHeader>
     <h2 hlmCardTitle [size]="'section'">{{ copy.human }}</h2>
@@ -29,9 +30,9 @@
         </dd>
       </div>
       <div class="col-span-full border-s-2 border-border ps-3">
-        <dt>{{ ctx.revision().revision === 7 ? copy.exact : labels.hash }}</dt>
+        <dt>{{ replacement ? labels.hash : copy.exact }}</dt>
         <dd class="select-all">
-          <code>{{ ctx.revision().revision === 7 ? record.fullHash : ctx.revision().hash }}</code>
+          <code>{{ replacement ? ctx.revision().hash : record.fullHash }}</code>
         </dd>
       </div>
       <div>

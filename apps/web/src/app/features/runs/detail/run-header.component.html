@@ -54,10 +54,6 @@
         <dd>
           @if (live && live.kind === 'evaluated') {
             <app-outcome-pill [outcome]="live.outcome" [compact]="true" />
-            <bdi
-              class="eg-type-caption mt-(--eg-space-2) block font-mono font-normal text-muted-foreground"
-              >{{ live.outcome }}</bdi
-            >
           } @else {
             <span class="text-muted-foreground">{{
               decisionLoading() ? copy.loading : copy.unavailable

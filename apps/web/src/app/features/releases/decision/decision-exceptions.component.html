@@ -17,6 +17,13 @@
   />
   @if (current(); as record) {
     <footer class="flex min-w-0 flex-wrap items-center justify-between gap-3 p-4">
+      <p
+        data-retained-failure
+        class="m-0 basis-full border-s-4 border-(--eg-danger-fg) bg-(--eg-danger-bg) p-3 text-sm text-(--eg-danger-fg)"
+      >
+        <strong class="block">{{ copy.originalFailure }}</strong>
+        {{ copy.originalFailureHelp }}
+      </p>
       <div class="grid gap-1">
         <span class="text-xs tabular-nums text-muted-foreground"
           >{{ copy.showing(vm.records.length) }} · {{ copy.caseScoped }}</span
