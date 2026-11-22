@@ -22,7 +22,8 @@ import { SECRETS_COPY } from './secrets.copy';
       <hlm-dialog-content
         *hlmDialogPortal
         [showCloseButton]="false"
-        class="max-h-[calc(100dvh-var(--eg-space-10))] overflow-y-auto wrap-anywhere"
+        [size]="'lg'"
+        class="wrap-anywhere"
         data-rotation-confirm
       >
         <header hlmDialogHeader>

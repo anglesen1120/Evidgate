@@ -13,8 +13,20 @@ class TokenListHarness extends ComponentHarness {
   readonly search = this.locatorFor('#api-token-search');
   readonly inspectButtons = this.locatorForAll('[data-api-inspect]');
   readonly rowFacts = this.locatorForAll('[data-api-token-row] app-api-token-facts');
-  readonly detail = this.locatorForOptional('[data-api-token-detail]');
-  readonly selectedTokenId = this.locatorFor('[data-api-token-detail] header code');
+  readonly detail = this.documentRootLocatorFactory().locatorForOptional('[role="dialog"]');
+  async open(index = 0) {
+    const trigger = (await this.inspectButtons())[index];
+    if (!trigger) throw new Error('Missing token trigger');
+    await trigger.focus();
+    await trigger.click();
+    return trigger;
+  }
+}
+
+function escapeDialog(): void {
+  document
+    .querySelector('[role="dialog"]')
+    ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
 }
 
 describe('ApiTokenListComponent', () => {
@@ -66,20 +78,28 @@ describe('ApiTokenListComponent', () => {
     const table = root.querySelector('table[aria-labelledby="api-directory-title"]');
     const headings = Array.from(table?.querySelectorAll('th[scope="col"]') ?? []);
     expect(headings.map((th) => th.textContent?.trim())).toEqual(['Name', 'Token prefix', 'State']);
-    expect(root.querySelector('[data-api-token-detail]')).not.toBeNull();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 
   it('keeps never distinct from a served last-use instant and displays UTC in selected detail', async () => {
     const used = '2026-11-06T12:00:00Z';
-    const { root, harness } = await render([ROW, { ...ROW, id: 'used', last_used_at: used }]);
+    const { fixture, harness } = await render([ROW, { ...ROW, id: 'used', last_used_at: used }]);
+    const first = await harness.open();
     expect(await (await harness.detail())?.text()).toContain('Never');
-    await (await harness.inspectButtons())[1]?.click();
-    expect(await (await harness.selectedTokenId()).text()).toBe('used');
-    expect(await (await harness.inspectButtons())[1]?.getAttribute('aria-pressed')).toBe('true');
-    const time = root.querySelector(`time[datetime="${used}"]`);
-    expect(time?.textContent).toContain('UTC');
-    expect(root.textContent).toContain('Created by');
-    expect(root.textContent).toContain(ROW.created_by);
+    escapeDialog();
+    await fixture.whenStable();
+    expect(await harness.detail()).toBeNull();
+    expect(await first.isFocused()).toBe(true);
+    const second = await harness.open(1);
+    const detail = document.querySelector('[role="dialog"]');
+    expect(detail?.querySelector('header code')?.textContent).toBe('used');
+    expect(detail?.querySelector(`time[datetime="${used}"]`)?.textContent).toContain('UTC');
+    for (const fact of [ROW.name, ROW.prefix, 'Created by', ROW.created_by, ...ROW.permissions]) {
+      expect(detail?.textContent).toContain(fact);
+    }
+    escapeDialog();
+    await fixture.whenStable();
+    expect(await second.isFocused()).toBe(true);
   });
 
   it.each(['active', 'expired', 'revoked'] as const)(
@@ -96,7 +116,9 @@ describe('ApiTokenListComponent', () => {
   it('keeps full long untrusted names in selected detail without parsing markup', async () => {
     const name = 'Tên mã mở rộng '.repeat(30) + '<img src=x onerror=alert(1)>';
     const { root, harness } = await render([{ ...ROW, name }]);
+    await harness.open();
     expect(await (await harness.detail())?.text()).toContain(name);
+    expect(document.querySelector('img')).toBeNull();
     expect(root.querySelector('img')).toBeNull();
     expect(root.querySelector('app-data-table-value')).not.toBeNull();
   });
@@ -112,7 +134,9 @@ describe('ApiTokenListComponent', () => {
     expect(
       root.querySelector('[data-token-page-count] app-number-value')?.textContent?.trim(),
     ).toBe('2');
+    await harness.open();
     expect(await (await harness.detail())?.text()).toContain('Other');
+    escapeDialog();
     await (await harness.search()).setInputValue('not-here');
     await (await harness.search()).dispatchEvent('input');
     expect(await harness.detail()).toBeNull();
@@ -150,15 +174,31 @@ describe('ApiTokenListComponent', () => {
     for (const isWide of [false, true]) {
       wide.set(isWide);
       await fixture.whenStable();
-      expect(await harness.rowFacts()).toHaveLength(isWide ? 0 : 2);
+      expect(await harness.rowFacts()).toHaveLength(0);
       const [, focused] = await harness.inspectButtons();
       expect(await focused?.isFocused()).toBe(true);
       expect(await focused?.getAttribute('aria-label')).toBe('Inspect token Other');
-      expect(await (await harness.selectedTokenId()).text()).toBe(ROW.id);
+      expect(await harness.detail()).toBeNull();
     }
   });
 
-  it('gates revoke by permission, busy state and viewport while narrow keeps every metadata fact', async () => {
+  it('keeps every metadata fact reachable from the narrow token row', async () => {
+    const { root, harness } = await render([ROW], false, true);
+    const row = root.querySelector('[data-api-token-row]');
+    expect(row?.textContent).toContain(ROW.prefix);
+    expect(row?.querySelector('app-status-pill')?.textContent?.trim()).toBe('Active');
+    expect(await harness.rowFacts()).toHaveLength(0);
+    await harness.open();
+    const detail = await (await harness.detail())?.text();
+    for (const fact of [ROW.name, ROW.id, ROW.created_by, ...ROW.permissions, 'Never']) {
+      expect(detail).toContain(fact);
+    }
+    expect(document.querySelector('[role="dialog"] time')?.getAttribute('datetime')).toBe(
+      ROW.expires_at,
+    );
+  });
+
+  it('gates revoke by permission, busy state and viewport', async () => {
     const { root, fixture, wide } = await render(
       [ROW, { ...ROW, id: 'old', status: 'revoked' }],
       true,
@@ -177,8 +217,7 @@ describe('ApiTokenListComponent', () => {
     wide.set(false);
     await fixture.whenStable();
     expect(root.querySelector('[data-api-revoke]')).toBeNull();
-    expect(root.querySelectorAll('[data-api-token-row] app-api-token-facts')).toHaveLength(2);
-    expect(root.textContent).toContain('Never');
+    for (const fact of [ROW.prefix, 'Active', 'Revoked']) expect(root.textContent).toContain(fact);
     fixture.componentRef.setInput('canWrite', false);
     wide.set(true);
     await fixture.whenStable();

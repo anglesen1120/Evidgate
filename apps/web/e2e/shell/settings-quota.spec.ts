@@ -45,6 +45,18 @@ for (const locale of LOCALES) {
       await expect(page.locator('[data-quota-storage] dd')).toHaveText([unavailable, unavailable]);
     });
 
+    for (const width of [360, 1440]) {
+      test(`counter details fit the ${width}px viewport`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 800 });
+        await page.goto(path(locale, 'warn'));
+        await ready(page);
+        await page.locator(`${PANEL} [data-quota-view]`).first().click();
+        const dialog = page.locator('[data-quota-dialog]');
+        await expect(dialog).toHaveCSS('width', width === 360 ? '360px' : '560px');
+        if (width === 360) await expect(dialog).toHaveCSS('height', '800px');
+      });
+    }
+
     for (const severity of ['warn', 'blocked'] as const) {
       test(`${severity} badge is keyboard-focusable and links to the quota tab`, async ({
         page,

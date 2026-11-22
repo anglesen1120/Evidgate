@@ -27,18 +27,17 @@ import { MembersStore } from './members.store';
     <hlm-dialog
       [state]="opened() ? 'open' : 'closed'"
       [closeOnOutsidePointerEvents]="false"
-      [disableClose]="true"
       [restoreFocus]="false"
       [aria-modal]="true"
       [aria-label]="copy.cancelInviteTitle"
+      (stateChanged)="$event === 'closed' && opened() && close()"
     >
       <hlm-dialog-content
         *hlmDialogPortal
-        #dialog
         [attr.data-members-dialog]="'cancel-invite'"
         [showCloseButton]="false"
-        class="max-h-[calc(100dvh-var(--eg-space-10))] overflow-y-auto wrap-anywhere [&_p]:m-0 [&_code]:font-mono"
-        (keydown.escape)="cancel($event)"
+        [size]="'lg'"
+        class="wrap-anywhere [&_p]:m-0 [&_code]:font-mono"
       >
         <header hlmDialogHeader>
           <h2 hlmDialogTitle id="members-cancel-invite-title">{{ copy.cancelInviteTitle }}</h2>
@@ -136,11 +135,6 @@ export class CancelInviteDialogComponent {
     this.intent = null;
     if (this.opener?.isConnected) this.opener.focus();
     this.opener = null;
-  }
-
-  protected cancel(event: Event): void {
-    event.preventDefault();
-    this.close();
   }
 
   protected async submit(): Promise<void> {

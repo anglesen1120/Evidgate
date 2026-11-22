@@ -27,7 +27,8 @@
   <hlm-dialog-content
     *hlmDialogPortal
     [showCloseButton]="false"
-    class="max-h-[85dvh] min-w-0 overflow-y-auto wrap-anywhere"
+    [size]="'lg'"
+    class="min-w-0 wrap-anywhere"
     ><header hlmDialogHeader>
       <h2 hlmDialogTitle>
         {{ intent() === 'create' ? l.create : intent() === 'rotate' ? l.rotate : l.redeliver }}

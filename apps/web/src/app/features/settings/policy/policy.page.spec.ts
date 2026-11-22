@@ -55,6 +55,9 @@ class PolicyOverviewHarness extends ComponentHarness {
   readonly mode = this.locatorForOptional('[data-overview-mode] dd');
   readonly head = this.locatorForOptional('[data-overview-head] dd');
   readonly activeNumber = this.locatorForOptional('[data-overview-active] app-number-value');
+  readonly more = this.locatorFor('[data-policy-more]');
+  readonly viewRevision = this.locatorFor('[data-policy-view]');
+  readonly viewDialog = this.documentRootLocatorFactory().locatorFor('[data-policy-view-dialog]');
 }
 
 class FakePolicyStore {
@@ -145,9 +148,8 @@ describe('PolicyPage', () => {
   it('keeps compact authored tab labels with complete accessible names and unbroken targets', async () => {
     const { fixture, root } = await render();
     const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
-    expect(tabs.map((tab) => tab.textContent?.trim())).toEqual(['Values', 'Compare', 'Activation']);
+    expect(tabs.map((tab) => tab.textContent?.trim())).toEqual(['Compare', 'Activation']);
     expect(tabs.map((tab) => tab.getAttribute('aria-label') ?? tab.textContent?.trim())).toEqual([
-      'Policy values',
       'Compare revisions',
       'Activation',
     ]);
@@ -156,7 +158,7 @@ describe('PolicyPage', () => {
       expect(tab.classList.contains('min-w-max')).toBe(true);
       expect(tab.classList.contains('flex-auto')).toBe(true);
     }
-    const compareTab = tabs[1];
+    const compareTab = tabs[0];
     if (!compareTab) throw new Error('Expected the policy comparison tab');
     compareTab.click();
     await fixture.whenStable();
@@ -273,6 +275,10 @@ describe('PolicyPage', () => {
     expect(root.querySelector('#policy-publish-body')).toBeNull();
     expect(root.querySelector('[data-policy-publish-submit]')).toBeNull();
     expect(root.querySelector('app-policy-publish-dialog')).toBeNull();
+    root.querySelector<HTMLButtonElement>('[data-policy-view]')?.click();
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-policy-view-dialog]')).not.toBeNull(),
+    );
     expect(store.loadBody).toHaveBeenCalledWith(revision.id);
   });
   it('forwards initial revision query parameter to the store validator', async () => {
@@ -387,6 +393,23 @@ describe('PolicyPage', () => {
     fixture.destroy();
     expect(store.reset).toHaveBeenCalledTimes(1);
   });
+  it('opens an already loaded revision after loading the next page fails', async () => {
+    store.hasMore.set(true);
+    store.loadMore.mockImplementationOnce(() => {
+      store.phase.set('error');
+      return Promise.resolve();
+    });
+    const { fixture } = await render();
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      PolicyOverviewHarness,
+    );
+    await (await harness.more()).click();
+    expect(await (await harness.host()).getAttribute('data-policy-phase')).toBe('error');
+    await (await harness.viewRevision()).click();
+    expect(await (await harness.viewDialog()).text()).toContain(revision.id);
+    expect(store.loadBody).toHaveBeenCalledWith(revision.id);
+  });
   it('announces loading, labels the revision field and disables actions until the read completes', async () => {
     store.phase.set('loading');
     store.revisions.set([]);
@@ -417,19 +440,26 @@ describe('PolicyPage', () => {
       Promise.resolve(args[0] === previous.id ? previous : revision),
     );
     const { fixture, root } = await render();
-    root
-      .querySelector<HTMLButtonElement>(
-        '[data-policy-revision][data-revision-no="1"] [data-policy-select]',
-      )
-      ?.click();
+    const trigger = root.querySelector<HTMLButtonElement>(
+      '[data-revision-no="1"] [data-policy-view]',
+    );
+    trigger?.focus();
+    trigger?.click();
     await fixture.whenStable();
-    expect(
-      root.querySelector('[data-policy-revision][data-revision-no="1"] [aria-pressed="true"]'),
-    ).not.toBeNull();
-    expect(root.querySelector('[data-policy-selected-metadata]')?.textContent).toContain(
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+    expect(root.querySelector('[data-revision-no="1"][data-policy-selected]')).not.toBeNull();
+    expect(dialog?.querySelector('[data-policy-selected-metadata]')?.textContent).toContain(
       previous.id,
     );
-    expect(root.querySelector('[data-policy-field="flaky_budget"]')?.textContent).toContain('0');
+    expect(dialog?.textContent).toContain(previous.hash);
+    expect(dialog?.textContent).toContain('Retired');
+    expect(dialog?.querySelector('time')?.getAttribute('datetime')).toBe(previous.created_at);
+    expect(dialog?.querySelector('[data-policy-field="flaky_budget"]')?.textContent).toContain('0');
+    dialog?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }),
+    );
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+    expect(document.activeElement).toBe(trigger);
     expect(store.open).not.toHaveBeenCalled();
   });
   it('retains narrow inspection and refuses a publish opener captured before resize', async () => {
@@ -443,8 +473,9 @@ describe('PolicyPage', () => {
       'Desktop required',
     );
     expect(root.querySelector('[data-policy-open]')).not.toBeNull();
-    expect(root.querySelector('[data-policy-select]')).not.toBeNull();
-    expect(root.querySelector('[data-policy-values]')).not.toBeNull();
+    root.querySelector<HTMLButtonElement>('[data-policy-view]')?.click();
+    await fixture.whenStable();
+    expect(document.querySelector('[role="dialog"] [data-policy-values]')).not.toBeNull();
     expect(document.querySelector('[data-policy-publish-dialog]')).toBeNull();
     expect(store.publish).not.toHaveBeenCalled();
   });

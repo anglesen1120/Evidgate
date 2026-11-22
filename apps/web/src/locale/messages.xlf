@@ -5450,13 +5450,6 @@
           <context context-type="linenumber">224</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="settings.policy.title" datatype="html">
-        <source>Policy</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/policy/policy.page.ts</context>
-          <context context-type="linenumber">91</context>
-        </context-group>
-      </trans-unit>
       <trans-unit id="settings.policy.description" datatype="html">
         <source>Inspect policy revisions and compare their fields. Open a revision using its identifier.</source>
         <context-group purpose="location">
@@ -5573,13 +5566,6 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/policy/revision-diff.component.ts</context>
           <context context-type="linenumber">175</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="settings.policy.tab.values" datatype="html">
-        <source>Values</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/policy/policy.page.ts</context>
-          <context context-type="linenumber">107</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.policy.tab.compare" datatype="html">
@@ -6892,13 +6878,6 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
           <context context-type="linenumber">36</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="settings.secrets.lifecycle" datatype="html">
-        <source>Lifecycle details</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/secrets/secrets.copy.ts</context>
-          <context context-type="linenumber">37</context>
         </context-group>
       </trans-unit>
       <trans-unit id="settings.secrets.all-states" datatype="html">
@@ -9478,7 +9457,6 @@
       <trans-unit id="settings.security.severity-critical" datatype="html"><source>Critical</source></trans-unit>
       <trans-unit id="settings.security.page-summary" datatype="html"><source>Page <x id="page" equiv-text="formatNumber(this.store.pageIndex() + 1, this.locale)"/> · <x id="rows" equiv-text="formatNumber(this.store.rows().length, this.locale)"/> visible events on this page.</source></trans-unit>
       <trans-unit id="settings.security.title" datatype="html"><source>Security events</source></trans-unit>
-      <trans-unit id="settings.security.description" datatype="html"><source>Inspect authorized security metadata across the organization. Event records are read-only; times are shown in UTC.</source></trans-unit>
       <trans-unit id="settings.security.boundary" datatype="html"><source>Metadata only. Severity is supplied by the server, not a security certification. Cross-tenant targets and attempted secrets are not disclosed.</source></trans-unit>
       <trans-unit id="settings.security.filters" datatype="html"><source>Filter activity</source></trans-unit>
       <trans-unit id="settings.security.project" datatype="html"><source>Project id</source></trans-unit>
@@ -26712,7 +26690,6 @@
       <trans-unit id="settings.security.newest-first" datatype="html"><source>Newest first</source></trans-unit>
       <trans-unit id="settings.security.read-only" datatype="html"><source>Read only</source></trans-unit>
       <trans-unit id="settings.api-tokens.intro" datatype="html"><source>Review project credentials by purpose, permission subset and expiry.</source></trans-unit>
-      <trans-unit id="settings.api-tokens.metadata-heading" datatype="html"><source>Token metadata</source></trans-unit>
       <trans-unit id="settings.api-tokens.page-prefixes" datatype="html"><source>Prefixes on this page</source></trans-unit>
       <trans-unit id="settings.api-tokens.served-state" datatype="html"><source>Server-reported state</source></trans-unit>
       <trans-unit id="settings.api-tokens.not-usable" datatype="html"><source>Not usable</source></trans-unit>
@@ -27137,6 +27114,16 @@
       <trans-unit id="authoring.import-export.showing-range" datatype="html"><source>Showing 1–<x id="end"/> of <x id="loaded"/> loaded versions</source></trans-unit>
       <trans-unit id="authoring.case-table.count-unverified" datatype="html"><source>Count unavailable with the current filter</source></trans-unit>
       <trans-unit id="catalog.case-list.count-unverified" datatype="html"><source>Count unavailable with the current filter</source></trans-unit>
+      <trans-unit id="settings.members.view" datatype="html"><source>View member</source></trans-unit>
+      <trans-unit id="settings.members.created" datatype="html"><source>Created</source></trans-unit>
+      <trans-unit id="settings.row.view" datatype="html"><source>View</source></trans-unit>
+      <trans-unit id="settings.row.actions" datatype="html"><source>Actions</source></trans-unit>
+      <trans-unit id="quota.panel.counter-details" datatype="html"><source>Quota counter</source></trans-unit>
+      <trans-unit id="quota.panel.retry-after-seconds" datatype="html"><source>Retry after (seconds)</source></trans-unit>
+      <trans-unit id="review.directory.actions" datatype="html"><source>Actions</source></trans-unit>
+      <trans-unit id="review.directory.view" datatype="html"><source>View</source></trans-unit>
+      <trans-unit id="review.agent-pools.pool" datatype="html"><source>Pool</source></trans-unit>
+      <trans-unit id="review.agent-pools.capacity" datatype="html"><source>Reported capacity</source></trans-unit>
 </body>
   </file>
 </xliff>

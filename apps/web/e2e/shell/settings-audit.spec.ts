@@ -119,8 +119,7 @@ const AUDIT_ROWS = 'app-audit-table [data-row-id]';
 const SUPPORT_ROWS_SELECTOR = `${AUDIT_ROWS}:has([data-audit-support="true"])`;
 const PLAIN_ROWS_SELECTOR = `${AUDIT_ROWS}:has([data-audit-support="false"])`;
 
-/** The support-access chip is inside each record's explicit event-details disclosure. */
-const SUPPORT_CHIPS = `${AUDIT_ROWS} .support-access`;
+const SUPPORT_CHIPS = `${AUDIT_ROWS} [data-audit-support-chip]`;
 
 /** The tab's own phase hook, awaited before any content claim (loading → ready). */
 async function expectAuditReady(page: Page): Promise<void> {
@@ -267,7 +266,7 @@ test.describe('AC8: the support-access chip marks exactly the flagged rows', () 
           has: page.locator(`time[datetime="${row.created_at}"]`),
         });
         await expect(plain).toHaveCount(1);
-        await expect(plain.locator('.support-access')).toHaveCount(0);
+        await expect(plain.locator('[data-audit-support-chip]')).toHaveCount(0);
       }
 
       // The description names the grant the row records — never a grant derived from the actor or
@@ -278,8 +277,9 @@ test.describe('AC8: the support-access chip marks exactly the flagged rows', () 
         const record = page.locator(AUDIT_ROWS, {
           has: page.locator(`time[datetime="${row.created_at}"]`),
         });
-        await record.locator('[data-audit-details] summary').click();
-        const chip = record.locator('.support-access');
+        await record.locator('[data-audit-view]').click();
+        await expect(page.locator('[data-audit-dialog]')).toHaveCSS('width', '560px');
+        const chip = page.getByRole('dialog').locator('.support-access');
         await expect(chip).toHaveClass(/support-access/);
         await expect(chip).toHaveAccessibleName(/\S/);
         await chip.focus();
@@ -292,6 +292,8 @@ test.describe('AC8: the support-access chip marks exactly the flagged rows', () 
         );
         await page.keyboard.press('Escape');
         await expect(tooltip).not.toBeVisible();
+        await page.keyboard.press('Escape');
+        await expect(record.locator('[data-audit-view]')).toBeFocused();
       }
       await expect(page.getByRole('tooltip')).toHaveCount(0);
     });
@@ -307,22 +309,22 @@ test.describe('AC8: the support-access chip marks exactly the flagged rows', () 
       );
       await expectAuditReady(page);
 
-      // Event details is a keyboard disclosure; Request Copy then Support access are its exact stops.
+      // From the dialog heading, Request Copy and Support access are the first two stops.
       for (const row of FLAGGED_ROWS) {
         const record = page.locator(AUDIT_ROWS, {
           has: page.locator(`time[datetime="${row.created_at}"]`),
         });
-        const details = record.locator('[data-audit-details]');
-        const summary = details.locator('summary');
-        await summary.focus();
+        const trigger = record.locator('[data-audit-view]');
+        await trigger.focus();
         await page.keyboard.press('Enter');
-        await expect(details).toHaveAttribute('open', '');
+        const details = page.getByRole('dialog');
+        await expect(details).toBeVisible();
         await page.keyboard.press('Tab');
         const requestCopy = details.locator('app-copyable-identifier').first().getByRole('button');
         await expect(requestCopy).toHaveCount(1);
         await expect(requestCopy).toBeFocused();
         await page.keyboard.press('Tab');
-        const chip = record.locator('.support-access');
+        const chip = page.getByRole('dialog').locator('.support-access');
         await expect(chip).toBeFocused();
         await expect(chip).toHaveClass(/support-access/);
         await expect(chip).toHaveAccessibleName(/\S/);
@@ -337,6 +339,8 @@ test.describe('AC8: the support-access chip marks exactly the flagged rows', () 
         await page.keyboard.press('Escape');
         await expect(tooltip).not.toBeVisible();
         await expect(chip).toBeFocused();
+        await page.keyboard.press('Escape');
+        await expect(trigger).toBeFocused();
       }
     });
   }
@@ -459,15 +463,20 @@ test.describe('at 360px the page does not scroll sideways', () => {
       const supportRow = page.locator(AUDIT_ROWS, {
         has: page.locator(`time[datetime="${row.created_at}"]`),
       });
-      const details = supportRow.locator('[data-audit-details]');
-      await details.locator('summary').focus();
+      const trigger = supportRow.locator('[data-audit-view]');
+      await trigger.focus();
       await page.keyboard.press('Enter');
-      await expect(details).toHaveAttribute('open', '');
-      const description = supportRow.locator('.support-access + span');
+      const details = page.getByRole('dialog');
+      await expect(details).toBeVisible();
+      await expect(details.locator('[data-audit-dialog]')).toHaveCSS('width', '360px');
+      await expect(details.locator('[data-audit-dialog]')).toHaveCSS('height', '740px');
+      const description = details.locator('.support-access + span');
       await expect(description).toBeVisible();
       const grantId = supportMarker(row)?.grantId;
       if (grantId === undefined || grantId === null) throw new Error('flagged row has no grant id');
       await expect(description).toContainText(grantId);
+      await page.keyboard.press('Escape');
+      await expect(trigger).toBeFocused();
     }
 
     // Narrow inspection needs no overflow region: disclosures remain keyboard-operable above.

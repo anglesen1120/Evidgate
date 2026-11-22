@@ -34,7 +34,6 @@ export const SECRETS_COPY = {
   clear: $localize`:@@settings.secrets.clear:Clear filters`,
   inspect: $localize`:@@settings.secrets.inspect:Inspect`,
   metadata: $localize`:@@settings.secrets.metadata:Metadata only. A prefix identifies a reference; it does not authenticate.`,
-  lifecycle: $localize`:@@settings.secrets.lifecycle:Lifecycle details`,
   allStates: $localize`:@@settings.secrets.all-states:All states`,
   countHint: $localize`:@@settings.secrets.count-hint:Counts use this page before filtering. An active reference can be past its expiry date.`,
   pageSummary: $localize`:@@settings.secrets.page-summary:References on this page`,

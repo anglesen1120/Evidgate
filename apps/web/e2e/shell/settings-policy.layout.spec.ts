@@ -4,12 +4,10 @@ import { HEAD_ID, PAGE, visit } from './settings-policy.support';
 
 const LABELS = {
   en: [
-    { visible: 'Values', accessible: 'Policy values' },
     { visible: 'Compare', accessible: 'Compare revisions' },
     { visible: 'Activation', accessible: 'Activation' },
   ],
   vi: [
-    { visible: 'Giá trị', accessible: 'Giá trị chính sách' },
     { visible: 'So sánh', accessible: 'So sánh các phiên bản' },
     { visible: 'Kích hoạt', accessible: 'Kích hoạt' },
   ],
@@ -30,6 +28,16 @@ async function labelGeometry(tab: Locator) {
 }
 
 for (const locale of LOCALES) {
+  for (const width of [360, 1440]) {
+    test(`revision details fit the ${width}px viewport (${locale})`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await visit(page, locale);
+      await page.locator('[data-policy-selected] [data-policy-view]').click();
+      const dialog = page.locator('[data-policy-view-dialog]');
+      await expect(dialog).toHaveCSS('width', width === 360 ? '360px' : '560px');
+      if (width === 360) await expect(dialog).toHaveCSS('height', '800px');
+    });
+  }
   for (const width of [1024, 1280]) {
     test(`UUID lookup is bounded at ${width}px (${locale})`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
@@ -57,7 +65,7 @@ for (const locale of LOCALES) {
         await visit(page, locale);
         await page.evaluate(() => document.fonts.ready);
         const tabs = page.locator(`${PAGE} hlm-tabs-list [role="tab"]`);
-        await expect(tabs).toHaveCount(3);
+        await expect(tabs).toHaveCount(2);
         for (const [index, label] of LABELS[locale].entries()) {
           const tab = tabs.nth(index);
           await expect(tab).toHaveText(label.visible);

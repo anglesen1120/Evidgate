@@ -297,6 +297,10 @@ for (const locale of LOCALES) {
         action === 'resend' ? resendNotPending.body.error : cancelNotPending.body.error,
       );
       await expect(page.locator('app-members-page > p[role="status"]')).toBeEmpty();
+      if (action === 'cancel') {
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('dialog')).toHaveCount(0);
+      }
       await expectNoRetainedToken(page);
     });
   }

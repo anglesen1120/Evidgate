@@ -10,7 +10,7 @@ class TokenSummaryHarness extends ComponentHarness {
   readonly values = this.locatorForAll('app-settings-page-counts app-number-value');
   readonly search = this.locatorFor('#api-token-search');
   readonly inspect = this.locatorForAll('[data-api-inspect]');
-  readonly detail = this.locatorForOptional('[data-api-token-detail]');
+  readonly detail = this.documentRootLocatorFactory().locatorForOptional('[role="dialog"]');
 
   async counts(): Promise<string[]> {
     return Promise.all((await this.values()).map((value) => value.text()));
@@ -74,11 +74,14 @@ describe('API token loaded-page summary boundaries', () => {
       { ...ROW, id: 'old-expired', status: 'expired' },
     ]);
     expect(await harness.counts()).toEqual(['2', '1', '1', '0']);
+    await (await harness.inspect())[0]?.click();
     expect(await (await harness.detail())?.text()).toContain('nightly-reader');
     fixture.componentRef.setInput('rows', [
       { ...ROW, id: 'new-revoked', name: 'New page reader', status: 'revoked' },
     ]);
     expect(await harness.counts()).toEqual(['1', '0', '0', '1']);
+    expect(await harness.detail()).toBeNull();
+    await (await harness.inspect())[0]?.click();
     const detail = await (await harness.detail())?.text();
     expect(detail).toContain('New page reader');
     expect(detail).not.toContain('nightly-reader');

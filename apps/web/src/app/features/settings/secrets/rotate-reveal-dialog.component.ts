@@ -29,7 +29,7 @@ import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.compon
         *hlmDialogPortal
         [showCloseButton]="false"
         (keydown.escape)="escape($event)"
-        class="max-h-[calc(100dvh-var(--eg-space-10))] overflow-y-auto"
+        [size]="'md'"
       >
         <header hlmDialogHeader>
           <h2 hlmDialogTitle>{{ title }}</h2>

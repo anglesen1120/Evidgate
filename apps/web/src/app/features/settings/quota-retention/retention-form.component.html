@@ -171,8 +171,9 @@
 >
   <hlm-dialog-content
     *hlmDialogPortal
+    [size]="'lg'"
     [showCloseButton]="false"
-    class="max-h-[calc(100dvh-var(--eg-space-10))] min-w-0 overflow-y-auto wrap-anywhere"
+    class="wrap-anywhere"
   >
     <header hlmDialogHeader>
       <h2 hlmDialogTitle>{{ copy.warning }}</h2>

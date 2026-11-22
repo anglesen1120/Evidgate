@@ -51,6 +51,9 @@ import { HlmTableImports } from '@evidgate/ui/table';
               </th>
               <th hlmTh [attr.role]="'columnheader'" scope="col">{{ copy.state }}</th>
               <th hlmTh [attr.role]="'columnheader'" scope="col">{{ copy.created }}</th>
+              <th hlmTh [attr.role]="'columnheader'" scope="col" class="text-end">
+                {{ copy.actions }}
+              </th>
             </tr>
           </thead>
           <tbody hlmTBody [attr.role]="'rowgroup'" class="max-md:block">
@@ -67,19 +70,9 @@ import { HlmTableImports } from '@evidgate/ui/table';
               >
                 <td hlmTd [attr.role]="'cell'" class="min-w-0 py-(--eg-space-1)">
                   <div class="flex flex-wrap items-center gap-(--eg-space-3)">
-                    <button
-                      hlmBtn
-                      [variant]="'link'"
-                      type="button"
-                      class="min-h-(--eg-space-7) max-w-full whitespace-normal px-0 py-0 font-semibold tabular-nums"
-                      data-policy-select
-                      [attr.aria-pressed]="row.id === selectedId()"
-                      [attr.aria-controls]="'policy-selected-detail'"
-                      [disabled]="busy()"
-                      (click)="select(row.id)"
+                    <span class="font-semibold tabular-nums"
+                      >{{ copy.revision }} {{ row.revision_no }}</span
                     >
-                      {{ copy.revision }} {{ row.revision_no }}
-                    </button>
                     @if (row.id === headId()) {
                       <app-status-pill [tone]="headTone" [label]="copy.head" />
                     }
@@ -103,10 +96,26 @@ import { HlmTableImports } from '@evidgate/ui/table';
                   }}</span>
                   <app-absolute-time [value]="row.created_at" />
                 </td>
+                <td hlmTd [attr.role]="'cell'" class="text-end">
+                  <button
+                    hlmBtn
+                    #trigger
+                    [variant]="'outline'"
+                    type="button"
+                    [attr.aria-haspopup]="'dialog'"
+                    data-policy-view
+                    class="min-h-(--eg-control-touch)"
+                    [attr.aria-label]="copy.view + ' · ' + copy.revision + ' ' + row.revision_no"
+                    [disabled]="busy()"
+                    (click)="select(row.id, trigger)"
+                  >
+                    {{ copy.view }}
+                  </button>
+                </td>
               </tr>
             } @empty {
               <tr hlmTr [attr.role]="'row'">
-                <td hlmTd [attr.role]="'cell'" colspan="3">
+                <td hlmTd [attr.role]="'cell'" colspan="4">
                   <p class="m-0 text-muted-foreground">{{ copy.empty }}</p>
                 </td>
               </tr>
@@ -148,17 +157,20 @@ export class RevisionListComponent {
   readonly rows = input<readonly PolicyRevisionSummaryDto[]>([]);
   readonly headId = input<string | null>(null);
   readonly selectedId = input<string | null>(null);
-  readonly selected = output<string>();
+  readonly selected = output<{ id: string; trigger: HTMLButtonElement }>();
   protected readonly subsectionSize = 'subsection' as const;
   protected readonly headTone = 'info' as const;
   readonly hasMore = input(false);
   readonly busy = input(false);
   readonly loadMore = output<void>();
-  protected select(id: string): void {
-    if (!this.busy() && this.rows().some((row) => row.id === id)) this.selected.emit(id);
+  protected select(id: string, trigger: HTMLButtonElement): void {
+    if (!this.busy() && this.rows().some((row) => row.id === id))
+      this.selected.emit({ id, trigger });
   }
   protected readonly copy = {
     title: $localize`:@@settings.policy.revision-history:Revision history`,
+    view: $localize`:@@settings.row.view:View`,
+    actions: $localize`:@@settings.row.actions:Actions`,
     empty: $localize`:@@settings.policy.revisions-empty:No revisions available.`,
     revision: $localize`:@@settings.policy.revision:Revision`,
     state: $localize`:@@settings.policy.state:Revision state`,

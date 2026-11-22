@@ -5,11 +5,13 @@ import {
   computed,
   inject,
   input,
+  linkedSignal,
   type TemplateRef,
   viewChild,
 } from '@angular/core';
 import type { AuditEntryDto } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
+import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmTooltip } from '@evidgate/ui/tooltip';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
@@ -52,6 +54,7 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
     CopyableIdentifierComponent,
     HlmButton,
     HlmTooltip,
+    HlmDialogImports,
     StatusPillComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -69,7 +72,7 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
         <div class="flex min-w-0 flex-wrap items-center gap-1">
           <app-status-pill [tone]="'neutral'" [label]="actorLabel(row.actor_type)" />
           @if (supportOf(row)) {
-            <app-status-pill [tone]="'warning'" [label]="copy.support" />
+            <app-status-pill data-audit-support-chip [tone]="'warning'" [label]="copy.support" />
           }
         </div>
         @if (row.actor_id) {
@@ -107,16 +110,36 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
       </div>
     </ng-template>
     <ng-template #detailsCell let-row let-stacked="stacked">
-      @if (row.request_id || supportOf(row)) {
-        <details class="min-w-0" data-audit-details>
-          <summary
-            class="min-h-[var(--eg-control-touch)] cursor-pointer content-center text-sm focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring hover:underline"
-          >
-            <span [class.whitespace-nowrap]="!stacked">{{ copy.details }}</span>
-            @if (supportOf(row)) {
-              <app-status-pill [tone]="'warning'" [label]="copy.support" />
-            }
-          </summary>
+      <button
+        hlmBtn
+        #trigger
+        [variant]="'outline'"
+        type="button"
+        data-audit-view
+        [attr.aria-haspopup]="'dialog'"
+        class="min-h-(--eg-control-touch)"
+        [class.whitespace-nowrap]="!stacked"
+        [attr.aria-label]="copy.view + ' · ' + row.action"
+        (click)="inspected.set({ row, trigger })"
+      >
+        {{ copy.view }}
+      </button>
+    </ng-template>
+    @if (inspected(); as selection) {
+      @let row = selection.row;
+      <hlm-dialog
+        [state]="'open'"
+        [restoreFocus]="selection.trigger"
+        [autoFocus]="'first-heading'"
+        (closed)="inspected.set(null)"
+      >
+        <hlm-dialog-content *hlmDialogPortal [size]="'md'" data-audit-dialog>
+          <header hlmDialogHeader>
+            <h2 hlmDialogTitle>{{ copy.details }}</h2>
+            <p hlmDialogDescription>
+              <bdi>{{ row.action }}</bdi> · <app-absolute-time [value]="row.created_at" />
+            </p>
+          </header>
           <dl class="m-0 grid min-w-0 gap-2 text-sm">
             @if (row.request_id) {
               <div class="min-w-0">
@@ -157,12 +180,38 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
                 </dd>
               </div>
             }
+            <div>
+              <dt class="text-xs text-muted-foreground">{{ copy.actor }}</dt>
+              <dd class="m-0">
+                {{ actorLabel(row.actor_type) }}
+                @if (row.actor_id) {
+                  <app-copyable-identifier
+                    [value]="row.actor_id"
+                    [label]="copy.actorId"
+                    [truncate]="false"
+                  />
+                }
+              </dd>
+            </div>
+            @if (row.object_type || row.object_id) {
+              <div>
+                <dt class="text-xs text-muted-foreground">{{ copy.object }}</dt>
+                <dd class="m-0">
+                  <bdi>{{ row.object_type }}</bdi>
+                  @if (row.object_id) {
+                    <app-copyable-identifier
+                      [value]="row.object_id"
+                      [label]="copy.objectId"
+                      [truncate]="false"
+                    />
+                  }
+                </dd>
+              </div>
+            }
           </dl>
-        </details>
-      } @else {
-        <span>{{ copy.absent }}</span>
-      }
-    </ng-template>
+        </hlm-dialog-content>
+      </hlm-dialog>
+    }
     <app-data-table
       class="[&_td]:py-(--eg-space-1)! [&_td.cdk-column-action]:font-mono [&_td.cdk-column-action]:font-semibold"
       [columns]="columns()"
@@ -179,6 +228,13 @@ export class AuditTableComponent {
   private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly rows = input.required<readonly AuditEntryDto[]>();
+  protected readonly inspected = linkedSignal<
+    readonly AuditEntryDto[],
+    { row: AuditEntryDto; trigger: HTMLButtonElement } | null
+  >({
+    source: this.rows,
+    computation: () => null,
+  });
   protected readonly supportOf = supportAccessOf;
   protected readonly copy = {
     caption: $localize`:@@settings.audit.caption:Audit activity`,
@@ -191,6 +247,7 @@ export class AuditTableComponent {
     object: $localize`:@@settings.audit.object:Object`,
     request: $localize`:@@settings.audit.request:Request id`,
     support: $localize`:@@settings.audit.support:Support access`,
+    view: $localize`:@@settings.row.view:View`,
     details: $localize`:@@settings.audit.details:Event details`,
     absent: $localize`:@@settings.audit.absent:—`,
   };

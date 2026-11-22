@@ -66,9 +66,11 @@ describe('SecretReferenceList reminder wiring and metadata branches (09.7.1-T3 Q
   it('renders an empty scope list as unavailable instead of an empty cell', () => {
     const root = mount([row('no-scopes', { scopes: [] })]);
 
-    const detail = root.querySelector('[data-secret-detail]');
+    root.querySelector<HTMLButtonElement>('[data-secret-inspect]')?.click();
+    TestBed.tick();
+    const detail = document.querySelector('[role="dialog"]');
     expect(detail?.textContent).toContain('Unavailable');
-    expect(root.querySelector('code.scope')).toBeNull();
+    expect(detail?.querySelector('code.scope')).toBeNull();
   });
 
   it('renders a server-supplied name and prefix carrying markup as text, creating no element', () => {

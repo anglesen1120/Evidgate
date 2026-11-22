@@ -151,6 +151,7 @@ for (const locale of LOCALES) {
         await page.keyboard.press('Enter');
         const dialog = page.getByRole('alertdialog');
         await expect(dialog).toBeVisible();
+        await expect(dialog.locator('hlm-dialog-content')).toHaveCSS('width', '760px');
         await waitForDialogAnimations(page, '[role="alertdialog"]');
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),

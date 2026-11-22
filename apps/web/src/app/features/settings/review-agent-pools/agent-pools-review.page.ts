@@ -10,8 +10,14 @@ import {
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
+import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
-import { HlmIcon } from '@evidgate/ui/icon';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
+import {
+  SettingsPageCountsComponent,
+  type SettingsPageCount,
+} from '../settings-page-counts.component';
+import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmTableImports } from '@evidgate/ui/table';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
@@ -35,9 +41,12 @@ import { notices } from './agent-pools-review.states';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     DecimalPipe,
+    HlmButton,
     ...HlmCardImports,
-    HlmIcon,
+    ShellIconComponent,
+    SettingsPageCountsComponent,
     HlmLabel,
+    HlmDialogImports,
     ...HlmTableImports,
     AbsoluteTimeComponent,
     PageHeaderComponent,
@@ -54,6 +63,21 @@ import { notices } from './agent-pools-review.states';
 export class AgentPoolsReviewPage {
   private readonly route = inject(ActivatedRoute);
   readonly model = input<AgentPoolsViewModel>(agentPoolsFixture);
+  protected readonly pageCounts = computed<readonly SettingsPageCount[]>(() =>
+    this.model().metrics.map((metric) => ({
+      label: metric.label,
+      value: metric.value,
+      hint: metric.detail,
+      icon: (
+        {
+          lucideCircle: 'server',
+          lucideActivity: 'bot',
+          lucideClock: 'clock',
+          lucideInfo: 'queue',
+        } as const
+      )[metric.icon],
+    })),
+  );
   protected readonly query = toSignal(this.route.queryParamMap);
   protected readonly l = labels;
   protected readonly noMatches = notices.get('no-match') ?? {
@@ -92,13 +116,9 @@ export class AgentPoolsReviewPage {
         !term || [p.name, p.description, p.badge].some((v) => v.toLocaleLowerCase().includes(term)),
     );
   });
-  protected readonly choice = linkedSignal(() =>
-    this.state() === 'unschedulable'
-      ? 'mobile-lab'
-      : (this.query()?.get('pool') ?? this.model().directory[0]?.name),
-  );
-  protected readonly selected = computed(
-    () => this.matches().find((p) => p.name === this.choice()) ?? this.matches()[0],
+  protected readonly choice = linkedSignal(() => this.query()?.get('pool') ?? null);
+  protected readonly selected = computed(() =>
+    this.matches().find((pool) => pool.name === this.choice()),
   );
   protected recover(): void {
     this.filter.set('');

@@ -4,10 +4,14 @@ import {
   Component,
   computed,
   inject,
+  linkedSignal,
   TemplateRef,
   viewChild,
 } from '@angular/core';
-import type { UsageSummaryProjectDto } from '@evidgate/sdk';
+import type { UsageSummaryDto, UsageSummaryMetricDto, UsageSummaryProjectDto } from '@evidgate/sdk';
+import { HlmDialogImports } from '@evidgate/ui/dialog';
+import { HlmButton } from '@evidgate/ui/button';
+import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmTableImports } from '@evidgate/ui/table';
 import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
@@ -31,6 +35,9 @@ type ProjectCell = TemplateRef<DataTableCellContext<UsageSummaryProjectDto>>;
   selector: 'app-quota-panel',
   imports: [
     HlmCardImports,
+    HlmDialogImports,
+    HlmButton,
+    CopyableIdentifierComponent,
     HlmTableImports,
     ShellIconComponent,
     NgTemplateOutlet,
@@ -51,6 +58,14 @@ export class QuotaPanelComponent {
   protected readonly projectMetrics = computed(() =>
     this.quota.usageSummary()?.metrics.filter((metric) => metric.projects.length > 0),
   );
+  protected readonly inspected = linkedSignal<
+    UsageSummaryDto | null,
+    {
+      row: UsageSummaryMetricDto | UsageSummaryProjectDto;
+      metric: string;
+      trigger: HTMLButtonElement;
+    } | null
+  >({ source: this.quota.usageSummary, computation: () => null });
   protected readonly pageSize = 'page' as const;
   protected readonly subsectionSize = 'subsection' as const;
   protected readonly loadingLayout = 'cards' as const;
@@ -96,6 +111,10 @@ export class QuotaPanelComponent {
     },
   ]);
   protected readonly copy = {
+    view: $localize`:@@settings.row.view:View`,
+    actions: $localize`:@@settings.row.actions:Actions`,
+    counter: $localize`:@@quota.panel.counter-details:Quota counter`,
+    retryAfter: $localize`:@@quota.panel.retry-after-seconds:Retry after (seconds)`,
     counters: $localize`:@@quota.panel.counters:Usage counters`,
     title: $localize`:@@quota.panel.title:Usage and AI credits`,
     description: $localize`:@@quota.panel.description:Review organization usage, quota limits and project retention windows.`,
@@ -124,6 +143,13 @@ export class QuotaPanelComponent {
     storageReason: $localize`:@@quota.panel.storage-reason:Daily storage and egress counters are unavailable because the service does not expose a read for them.`,
     storedBytes: $localize`:@@quota.panel.storage-bytes:Stored bytes`,
     egressBytes: $localize`:@@quota.panel.egress-bytes:Egress bytes`,
+  };
+
+  protected readonly viewColumn: DataTableColumn<UsageSummaryProjectDto> = {
+    id: 'actions',
+    header: this.copy.actions,
+    role: 'actions',
+    cell: () => this.copy.view,
   };
 
   constructor() {
