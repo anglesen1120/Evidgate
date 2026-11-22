@@ -13,6 +13,8 @@ class MatrixHarness extends ComponentHarness {
     return this.locatorFor(`[data-row-id="${name}"]`)();
   }
   readonly rows = this.locatorForAll('[data-row-id]');
+  readonly footer = this.locatorFor('footer');
+  readonly activeFilter = this.locatorFor('#release-component-filter button[aria-pressed=true]');
   readonly workerIcon = this.locatorFor('[data-row-id="worker"] app-status-pill hlm-icon');
   readonly pending = this.locatorFor('[data-row-id="worker"] [data-tone="pending"]');
   readonly openDigests = this.locatorForAll('details[open]');
@@ -68,6 +70,8 @@ describe('ReleaseBindingMatrixComponent', () => {
   it('narrows the component selection without losing the stale qualification', async () => {
     const matrix = await render('default', 'api');
     expect(await matrix.rows()).toHaveLength(1);
+    expect(await (await matrix.footer()).text()).toContain('Showing 1 of 3');
+    expect(await (await matrix.activeFilter()).text()).toMatch(/api\s+1/);
     expect(await (await matrix.row('api')).text()).toContain('Predates build');
   });
 });

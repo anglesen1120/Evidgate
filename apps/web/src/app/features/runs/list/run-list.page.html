@@ -2,9 +2,13 @@
   <span
     class="grid size-(--eg-space-9) shrink-0 place-items-center rounded-(--eg-radius-md) border border-border bg-(--eg-accent-soft) text-primary md:size-(--eg-space-10)"
   >
-    <app-shell-icon [name]="'play'" />
+    <app-shell-icon class="size-(--eg-space-6)" [name]="'run'" />
   </span>
-  <app-page-header class="min-w-0 flex-1" [title]="copy.title" [description]="copy.description">
+  <app-page-header
+    class="min-w-0 flex-1 [&_h1]:text-(length:--eg-space-7) [&_.header-description]:text-sm"
+    [title]="copy.title"
+    [description]="subtitle()"
+  >
     <div
       appPageHeaderActions
       class="grid min-w-0 justify-items-start gap-(--eg-space-2) md:justify-items-end"
@@ -32,6 +36,37 @@
     </div>
   </app-page-header>
 </div>
+@if (status() === 'ready') {
+  <dl
+    hlmCard
+    [attr.aria-label]="copy.loadedRuns"
+    data-run-metrics
+    class="mb-(--eg-space-4) grid min-w-0 grid-cols-2 gap-px overflow-hidden rounded-(--eg-radius-lg) bg-border p-0 sm:grid-cols-4"
+  >
+    @for (metric of loadedSummary().metrics; track metric.icon) {
+      <div class="grid min-w-0 content-between gap-(--eg-space-4) bg-card p-(--eg-space-5)">
+        <dt class="flex min-w-0 items-center gap-(--eg-space-3) font-semibold">
+          <span
+            class="grid size-(--eg-control-sm) shrink-0 place-items-center rounded-(--eg-radius-md) bg-(--eg-accent-soft) text-(--eg-accent-fg)"
+          >
+            <app-shell-icon class="size-(--eg-space-5)" [name]="metric.icon" />
+          </span>
+          {{ metric.label }}
+        </dt>
+        <dd
+          class="m-0 font-(family-name:--eg-font-display) text-(length:--eg-text-2xl) leading-(--eg-leading-2xl) font-bold tabular-nums"
+        >
+          <app-number-value [value]="metric.value" />
+          <span
+            class="eg-type-caption block font-(family-name:--eg-font-body) text-muted-foreground font-normal"
+          >
+            {{ metric.icon === 'run' ? showing() : ofLoaded() }}
+          </span>
+        </dd>
+      </div>
+    }
+  </dl>
+}
 <section
   hlmCard
   class="min-w-0 gap-0 overflow-visible rounded-(--eg-radius-lg) py-0"
@@ -79,9 +114,28 @@
               @for (option of stateOptions; track option.value) {
                 <hlm-select-item
                   [value]="option.value"
-                  class="min-h-[var(--eg-control-touch)] whitespace-normal"
-                  >{{ option.label }}</hlm-select-item
+                  [attr.aria-label]="option.label"
+                  [attr.aria-describedby]="
+                    status() === 'ready' ? 'run-state-count-' + option.value : null
+                  "
+                  class="min-h-[var(--eg-control-touch)] gap-(--eg-space-3) whitespace-normal"
                 >
+                  {{ option.label }}
+                  @if (status() === 'ready') {
+                    <span
+                      [id]="'run-state-count-' + option.value"
+                      class="ms-auto text-xs text-muted-foreground tabular-nums"
+                    >
+                      <app-number-value
+                        [value]="
+                          option.value
+                            ? (loadedSummary().byState.get(option.value) ?? 0)
+                            : store.loadedCount()
+                        "
+                      />
+                    </span>
+                  }
+                </hlm-select-item>
               }
             </hlm-select-content>
           </hlm-select>
@@ -205,7 +259,7 @@
         data-run-loaded-count
         [attr.data-run-loaded-filtered]="store.isFiltered()"
       >
-        {{ loadedText() }}
+        {{ showing() }} · {{ loadedText() }}
       </p>
       @if (store.autoLoadCapped() || store.browseCapped()) {
         <p

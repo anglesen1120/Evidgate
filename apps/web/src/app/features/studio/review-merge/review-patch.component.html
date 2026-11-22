@@ -19,7 +19,9 @@
             data-patch-pane
             class="min-w-0 rounded-(--eg-radius-sm) border border-border md:row-span-5 md:grid md:grid-rows-subgrid"
           >
-            <div class="flex flex-wrap items-center justify-between gap-2 bg-muted p-2">
+            <div
+              class="flex flex-wrap items-center justify-between gap-2 bg-(--eg-surface-raised) p-2"
+            >
               <h3 class="m-0 text-sm font-semibold">{{ pane.label }}</h3>
               <code class="text-xs">{{ pane.revision }}</code>
             </div>
@@ -31,7 +33,7 @@
               >
                 <span>{{ line.number }}</span>
                 @if (line.added) {
-                  <ins
+                  <ins class="no-underline"
                     ><code>{{ line.source }}</code></ins
                   >
                 } @else {
@@ -42,7 +44,7 @@
           </section>
         }
       </div>
-      <p class="m-0 rounded-(--eg-radius-sm) bg-muted p-3 text-sm">
+      <p class="m-0 rounded-(--eg-radius-sm) bg-(--eg-surface-raised) p-3 text-sm">
         {{ view().record === 'studio' ? copy.patchNote : copy.locatorNote }}
       </p>
       @if (view().fullPatch) {
@@ -53,7 +55,7 @@
             {{ copy.full }}
           </summary>
           <pre
-            class="m-0 rounded-(--eg-radius-sm) bg-muted p-3 text-xs leading-relaxed whitespace-pre-wrap wrap-anywhere"
+            class="m-0 rounded-(--eg-radius-sm) bg-(--eg-surface-raised) p-3 text-xs leading-relaxed whitespace-pre-wrap wrap-anywhere"
           ><code>{{ view().fullPatch }}</code></pre>
         </details>
       }

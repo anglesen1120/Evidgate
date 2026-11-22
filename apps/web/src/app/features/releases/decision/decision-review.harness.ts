@@ -12,4 +12,5 @@ export class DecisionDialogHarness extends ComponentHarness {
   static hostSelector = '[role=dialog]';
   readonly text = async () => (await this.host()).text();
   readonly find = (selector: string) => this.locatorFor(selector)();
+  readonly all = (selector: string) => this.locatorForAll(selector)();
 }

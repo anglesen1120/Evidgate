@@ -31,6 +31,7 @@ import { CREATE_RUN_COPY } from '../actions/create/create-run.copy';
 import { PageHeaderComponent, PageHeaderImports } from '../../../shared/ui/page-header';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
 import { RunListTableComponent } from './run-list-table.component';
+import { NumberValueComponent } from '../../../shared/ui/values/number-value.component';
 import { EMPTY_RUN_LIST_FILTERS, RunListStore } from './run-list.store';
 
 @Component({
@@ -46,6 +47,7 @@ import { EMPTY_RUN_LIST_FILTERS, RunListStore } from './run-list.store';
     HlmSelectImports,
     PageHeaderImports,
     ShellIconComponent,
+    NumberValueComponent,
     RequestStateComponent,
     RunListTableComponent,
     CreateRunDialogComponent,
@@ -109,6 +111,9 @@ export class RunListPage {
   protected readonly copy = {
     title: $localize`:@@runs.list.title:Runs`,
     description: $localize`:@@runs.list.description:Review collection state and the latest stored decision. Open a run for evidence completeness.`,
+    loadedRuns: $localize`:@@runs.list.loaded-runs:Loaded runs`,
+    failedDecisions: $localize`:@@runs.list.failed-decisions:Stored FAIL decisions`,
+    reruns: $localize`:@@runs.list.labeled-reruns:Labeled reruns`,
     register: $localize`:@@runs.list.table-caption:Project runs`,
     filters: $localize`:@@runs.list.filters:Filter runs`,
     filterHint: $localize`:@@runs.list.filter-hint:Decision and ref name filter the server list. State and run scope filter loaded runs only. Load more to search older runs.`,
@@ -142,6 +147,39 @@ export class RunListPage {
     retryMore: $localize`:@@runs.list.retry-more:Retry loading more`,
     refRejected: $localize`:@@runs.list.ref-invalid:Ref name not applied: use 1 to 255 characters with no control characters.`,
   };
+  protected readonly loadedSummary = computed(() => {
+    const rows = this.store.rows();
+    const byState = new Map<string, number>();
+    let failed = 0;
+    let reruns = 0;
+    for (const row of rows) {
+      byState.set(row.state, (byState.get(row.state) ?? 0) + 1);
+      if (row.decision === 'FAIL') failed++;
+      if (row.rerun_label) reruns++;
+    }
+    return {
+      byState,
+      metrics: [
+        { label: this.copy.loadedRuns, value: rows.length, icon: 'run' },
+        { label: this.copy.collecting, value: byState.get('collecting') ?? 0, icon: 'queue' },
+        { label: this.copy.failedDecisions, value: failed, icon: 'shield' },
+        { label: this.copy.reruns, value: reruns, icon: 'layers' },
+      ] as const,
+    };
+  });
+  protected readonly showing = computed(() => {
+    const shown = formatNumber(this.store.visibleRows().length, this.locale);
+    return $localize`:@@runs.list.showing:Showing ${shown}:shown:`;
+  });
+  protected readonly ofLoaded = computed(() => {
+    const count = formatNumber(this.store.loadedCount(), this.locale);
+    return $localize`:@@runs.list.of-loaded:Of ${count}:count: loaded runs`;
+  });
+  protected readonly subtitle = computed(() =>
+    this.status() === 'ready'
+      ? `${this.copy.loadedRuns}: ${formatNumber(this.store.loadedCount(), this.locale)} · ${this.activeFilterLabel()}`
+      : this.copy.description,
+  );
   protected readonly stateOptions = [
     { value: '', label: this.copy.any },
     { value: 'created', label: this.copy.created },

@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCard } from '@evidgate/ui/card';
 import { HlmIcon } from '@evidgate/ui/icon';
+import { HlmTableImports } from '@evidgate/ui/table';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { DecisionChipComponent } from '../../../shared/ui/verdict';
 import { QUEUE_COPY } from './healing-queue.copy';
@@ -23,6 +24,7 @@ import { QueueStatusComponent } from './queue-status.component';
     HlmButton,
     HlmCard,
     HlmIcon,
+    HlmTableImports,
     AbsoluteTimeComponent,
     DecisionChipComponent,
     QueueStatusComponent,

@@ -93,6 +93,9 @@ export class QualityHistoryComponent {
     gap: $localize`:@@review.quality.gap:Only supplied days are shown. The gap on 10 October has no value; it is not a 0% observation.`,
     outcomes: $localize`:@@review.quality.outcomes:Complete-run outcomes`,
     counts: $localize`:@@review.quality.counts:Passed, failed and other · counts, not a release verdict.`,
+    passed: $localize`:@@review.quality.passed:Passed`,
+    failed: $localize`:@@review.quality.failed:Failed`,
+    other: $localize`:@@review.quality.other:Other`,
   };
   protected readonly points = computed(() => {
     const days = this.days();
@@ -118,5 +121,8 @@ export class QualityHistoryComponent {
     });
   });
   protected readonly latestFirst = computed(() => [...this.days()].reverse());
+  protected readonly largestDay = computed(() =>
+    this.days().reduce((largest, day) => Math.max(largest, day.observation?.complete ?? 0), 0),
+  );
   protected readonly scale = [100, 75, 50] as const;
 }

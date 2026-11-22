@@ -1,4 +1,5 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import {
@@ -12,6 +13,7 @@ import type { RunSummary } from '@evidgate/sdk';
 import { BehaviorSubject } from 'rxjs';
 import type { ApiError } from '../../../core/http/api-error';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
+import { HeaderHarness } from '../../../shared/ui/page-header/header.harness';
 import { RunListPage } from './run-list.page';
 import { RunListStore } from './run-list.store';
 import {
@@ -139,6 +141,33 @@ describe('RunListPage', () => {
     expect(loaded.textContent).toContain('Filtered from 1 loaded runs');
     expect(loaded.getAttribute('data-run-loaded-filtered')).toBe('true');
     expect(root.querySelector('[name="completeness"]')).toBeNull();
+  });
+  it('summarizes only loaded runs, keeping stored FAIL separate from collection state', async () => {
+    store.rows.set([
+      { ...run, state: 'collecting', decision: null },
+      { ...run, run_id: 'second', state: 'complete', decision: 'FAIL', rerun_label: 'retry' },
+      { ...run, run_id: 'third', state: 'incomplete', decision: 'INCONCLUSIVE' },
+    ]);
+    const { fixture, root } = await render();
+    const header = await TestbedHarnessEnvironment.loader(fixture).getHarness(HeaderHarness);
+    expect(await header.getDescription()).toBe('Loaded runs: 3 · Active filters: 0');
+    const metrics = root.querySelector('[data-run-metrics]')!;
+    const values = [...metrics.querySelectorAll('dd > app-number-value')];
+    expect(values.map((cell) => cell.textContent?.trim())).toEqual(['3', '1', '1', '1']);
+    expect(root.querySelector('[data-run-loaded-count]')?.textContent).toContain('Showing 3');
+    root.querySelector<HTMLButtonElement>('#run-state')?.click();
+    await fixture.whenStable();
+    expect(document.querySelector('#run-state-count-collecting')?.textContent?.trim()).toBe('1');
+    expect(document.querySelector('#run-state-count-running')?.textContent?.trim()).toBe('0');
+    root.querySelector<HTMLButtonElement>('#run-state')?.click();
+    store.status.set('loading');
+    await fixture.whenStable();
+    expect(root.querySelector('[data-run-metrics]')).toBeNull();
+    store.status.set('error');
+    store.loadError.set(failure);
+    await fixture.whenStable();
+    expect(root.querySelector('[data-run-metrics]')).toBeNull();
+    expect(await header.getDescription()).not.toContain('Loaded runs:');
   });
   it('offers not evaluated separately from verdicts and explains server filtering', async () => {
     const { fixture, root } = await render();
