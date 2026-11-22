@@ -1,7 +1,8 @@
 import { ComponentHarness } from '@angular/cdk/testing';
 
 export class QualityReviewHarness extends ComponentHarness {
-  static hostSelector = 'app-quality-overview-review, app-quality-history, app-quality-breakdown';
+  static hostSelector =
+    'app-quality-overview-review, app-quality-history, app-quality-breakdown, app-quality-outcome-mix';
 
   async content(): Promise<string> {
     return (await this.host()).text();

@@ -3,6 +3,7 @@ import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmDialog, HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmInput } from '@evidgate/ui/input';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { decisionCopy as copy } from './decision-review.copy';
 import { runFacts, type PreviewAction } from './decision-review.fixture';
 
@@ -26,7 +27,7 @@ const PreviewStatus = signalStore(
 @Component({
   selector: 'app-decision-preview',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HlmButton, HlmDialogImports, HlmInput],
+  imports: [HlmButton, HlmDialogImports, HlmInput, ShellIconComponent],
   providers: [PreviewStatus],
   templateUrl: './decision-preview.component.html',
   host: { class: 'block min-w-0 max-w-full' },
@@ -39,6 +40,9 @@ export class DecisionPreview {
   protected readonly facts = runFacts;
   protected readonly title = computed(() => copy[this.action()]);
   protected readonly description = computed(() => help[this.action()]);
+  protected readonly destructive = computed(
+    () => this.action() === 'decline' || this.action() === 'revoke' || this.action() === 'remove',
+  );
   protected readonly withExpiry = computed(
     () => this.action() === 'add' || this.action() === 'request',
   );

@@ -1,7 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow';
@@ -17,9 +19,11 @@ import { ApprovalPreviewStore } from './approval-preview.store';
   selector: 'app-approval-decision',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    FormsModule,
     HlmButton,
     HlmCardImports,
     HlmDialogImports,
+    HlmIcon,
     HlmInput,
     HlmLabel,
     InlineFeedbackComponent,
@@ -36,6 +40,7 @@ export class ApprovalDecisionComponent {
   protected readonly copy = APPROVAL_COPY;
   protected readonly labels = SHADOW_COPY;
   protected readonly record = REPAIR;
+  protected readonly nonblank = /\S/;
   protected readonly eligible = computed(
     () =>
       ['default', '422', 'prepared'].includes(this.context().state()) && this.viewport.canMutate(),

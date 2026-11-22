@@ -66,7 +66,9 @@ describe('RunDetailPage evidence and decision tabs', () => {
     expect(tablist?.getAttribute('aria-label')).not.toBe(root.querySelector('h1')?.textContent);
     expect(decision.textContent?.trim()).toBe('Live decision');
     expect(decision.getAttribute('aria-label')).toBe('Latest live decision');
-    expect(tablist?.classList.contains('flex-wrap')).toBe(true);
+    expect(tablist?.classList.contains('flex-wrap')).toBe(false);
+    expect(tablist?.classList.contains('flex-nowrap')).toBe(true);
+    expect(tablist?.classList.contains('overflow-x-auto')).toBe(true);
     for (const tab of [evidence, decision]) {
       expect(tab.classList.contains('whitespace-nowrap')).toBe(true);
       expect(tab.classList.contains('flex-none')).toBe(true);

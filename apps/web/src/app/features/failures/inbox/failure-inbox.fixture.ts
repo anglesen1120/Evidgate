@@ -18,6 +18,7 @@ export interface IncidentViewModel {
   readonly revision: string;
   readonly captured?: string;
   readonly caseRef?: string;
+  readonly candidateId?: string;
   readonly reason: string;
   readonly next: string;
 }
@@ -56,6 +57,7 @@ export const INCIDENTS: readonly IncidentViewModel[] = [
     revision: 'ev-3',
     captured: '2026-10-13T09:43:10Z',
     caseRef: 'SHOP-TC-0043 · case-address-8',
+    candidateId: 'cand-73',
     reason: c.whyAddress,
     next: c.candidate,
   },
@@ -136,7 +138,6 @@ export const RUN_EVIDENCE = {
 } as const;
 export const TRIAGE_PRECONDITION = { original: 'If-Match: 7', updated: 'If-Match: 8' } as const;
 export const ORIGINAL = 'att-1842-01 · POST /orders → HTTP 500 · req-901';
-export const CANDIDATE = '1 · cand-73';
 export const LABELS = [
   'product_defect',
   'test_drift',

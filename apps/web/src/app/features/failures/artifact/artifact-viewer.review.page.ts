@@ -4,9 +4,11 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { combineLatest } from 'rxjs';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
+import { HlmIcon } from '@evidgate/ui/icon';
+import { HlmTableImports } from '@evidgate/ui/table';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
-import { PageHeaderComponent } from '../../../shared/ui/page-header/page-header.component';
+import { PageHeaderImports } from '../../../shared/ui/page-header';
 import {
   EmptyPatternComponent,
   InlineFeedbackComponent,
@@ -26,9 +28,11 @@ import { ArtifactPreviewComponent } from './artifact-preview.component';
     RouterLink,
     HlmButton,
     HlmCardImports,
+    HlmIcon,
+    HlmTableImports,
     AbsoluteTimeComponent,
     StatusPillComponent,
-    PageHeaderComponent,
+    PageHeaderImports,
     EmptyPatternComponent,
     InlineFeedbackComponent,
     LoadingPatternComponent,
@@ -39,7 +43,7 @@ import { ArtifactPreviewComponent } from './artifact-preview.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class:
-      'grid min-w-0 gap-4 wrap-anywhere [&_dl]:grid [&_dl]:gap-4 [&_dt]:text-sm [&_dt]:text-muted-foreground [&_dd]:m-0',
+      'grid min-w-0 gap-4 text-sm wrap-anywhere [&_dl]:grid [&_dl]:gap-4 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:font-medium',
   },
   templateUrl: './artifact-viewer.review.page.html',
 })
