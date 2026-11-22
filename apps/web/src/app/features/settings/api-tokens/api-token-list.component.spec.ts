@@ -13,6 +13,7 @@ class TokenListHarness extends ComponentHarness {
   readonly search = this.locatorFor('#api-token-search');
   readonly inspectButtons = this.locatorForAll('[data-api-inspect]');
   readonly detail = this.locatorForOptional('[data-api-token-detail]');
+  readonly selectedTokenId = this.locatorFor('[data-api-token-detail] header code');
 }
 
 describe('ApiTokenListComponent', () => {
@@ -46,7 +47,7 @@ describe('ApiTokenListComponent', () => {
     return { fixture, root: fixture.nativeElement as HTMLElement, harness, wide };
   }
 
-  it('renders twenty metadata scan records and never a full credential or equal-width table', async () => {
+  it('renders twenty metadata rows in a labelled directory and never a full credential', async () => {
     const full = 'credential-that-must-not-be-rendered';
     const { root } = await render(
       Array.from({ length: 20 }, (_, index) => ({
@@ -61,7 +62,9 @@ describe('ApiTokenListComponent', () => {
     expect(root.textContent).toContain(ROW.prefix);
     expect(root.textContent).toContain('run:read');
     expect(root.outerHTML).not.toContain(full);
-    expect(root.querySelector('table')).toBeNull();
+    const table = root.querySelector('table[aria-labelledby="api-directory-title"]');
+    const headings = Array.from(table?.querySelectorAll('th[scope="col"]') ?? []);
+    expect(headings.map((th) => th.textContent?.trim())).toEqual(['Name', 'Token prefix', 'State']);
     expect(root.querySelector('[data-api-token-detail]')).not.toBeNull();
   });
 
@@ -70,6 +73,8 @@ describe('ApiTokenListComponent', () => {
     const { root, harness } = await render([ROW, { ...ROW, id: 'used', last_used_at: used }]);
     expect(await (await harness.detail())?.text()).toContain('Never');
     await (await harness.inspectButtons())[1]?.click();
+    expect(await (await harness.selectedTokenId()).text()).toBe('used');
+    expect(await (await harness.inspectButtons())[1]?.getAttribute('aria-pressed')).toBe('true');
     const time = root.querySelector(`time[datetime="${used}"]`);
     expect(time?.textContent).toContain('UTC');
     expect(root.textContent).toContain('Created by');
@@ -103,6 +108,9 @@ describe('ApiTokenListComponent', () => {
     await (await harness.search()).setInputValue('alternate');
     await (await harness.search()).dispatchEvent('input');
     expect(root.querySelectorAll('[data-api-token-row]')).toHaveLength(1);
+    expect(
+      root.querySelector('[data-token-page-count] app-number-value')?.textContent?.trim(),
+    ).toBe('2');
     expect(await (await harness.detail())?.text()).toContain('Other');
     await (await harness.search()).setInputValue('not-here');
     await (await harness.search()).dispatchEvent('input');

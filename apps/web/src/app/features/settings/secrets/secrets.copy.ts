@@ -36,7 +36,12 @@ export const SECRETS_COPY = {
   metadata: $localize`:@@settings.secrets.metadata:Metadata only. A prefix identifies a reference; it does not authenticate.`,
   lifecycle: $localize`:@@settings.secrets.lifecycle:Lifecycle details`,
   allStates: $localize`:@@settings.secrets.all-states:All states`,
-  summary: $localize`:@@settings.secrets.summary:Reference summary`,
+  countHint: $localize`:@@settings.secrets.count-hint:Counts use this page before filtering. An active reference can be past its expiry date.`,
+  pageSummary: $localize`:@@settings.secrets.page-summary:References on this page`,
+  directory: $localize`:@@settings.secrets.directory:Reference directory`,
+  reference: $localize`:@@settings.secrets.reference-column:Reference`,
+  expiresSoon: $localize`:@@settings.secrets.expires-soon:Expires soon`,
+  expired: $localize`:@@settings.secrets.expired:Expired`,
 };
 
 export function secretStatusLabel(status: IngestTokenView['status']): string {

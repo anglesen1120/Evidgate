@@ -30,15 +30,15 @@ interface ScopeFact {
   host: { class: 'block min-w-0' },
   template: `
     <ng-template #scopeCell let-item>
-      <div class="grid min-w-0 gap-(--eg-space-3)" [attr.data-healing-scope]="item.scope">
-        <span>{{ item.name }}</span>
+      <div class="grid min-w-0 gap-(--eg-space-1)" [attr.data-healing-scope]="item.scope">
+        <strong class="font-semibold">{{ item.name }}</strong>
         @if (item.scope === 'system') {
-          <p class="m-0 text-sm text-muted-foreground" data-healing-system-note>
+          <p class="m-0 text-xs text-muted-foreground" data-healing-system-note>
             {{ copy.systemReadOnly }}
           </p>
         }
         @if (item.row === null) {
-          <p class="m-0 text-sm text-muted-foreground" data-healing-no-row>{{ copy.noRow }}</p>
+          <p class="m-0 text-xs text-muted-foreground" data-healing-no-row>{{ copy.noRow }}</p>
         }
       </div>
     </ng-template>
@@ -60,8 +60,17 @@ interface ScopeFact {
       [columns]="columns()"
       [rows]="rows()"
       [rowId]="rowId"
+      [flow]="'page'"
       [caption]="copy.hierarchyDescription"
     />
+    <dl
+      class="m-0 flex min-w-0 flex-wrap items-baseline gap-x-(--eg-space-6) gap-y-(--eg-space-1) bg-(--eg-surface-raised) px-(--eg-space-4) py-(--eg-space-3)"
+    >
+      <dt class="text-xs font-semibold text-muted-foreground">{{ copy.posture }}</dt>
+      <dd class="m-0 font-semibold" data-healing-hierarchy-result>
+        {{ modeLabel(resolution().resolved) }}
+      </dd>
+    </dl>
   `,
 })
 export class SwitchScopeHierarchy {
@@ -69,6 +78,7 @@ export class SwitchScopeHierarchy {
 
   readonly resolution = input.required<HealingSwitchResolutionView>();
   protected readonly copy = HEALING_SWITCH_COPY;
+  protected readonly modeLabel = modeLabel;
   private readonly scopeCell = viewChild<TemplateRef<DataTableCellContext<ScopeFact>>>('scopeCell');
   private readonly timeCell = viewChild<TemplateRef<DataTableCellContext<ScopeFact>>>('timeCell');
   private readonly versionCell =

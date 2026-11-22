@@ -17,6 +17,7 @@ import { HlmAlert } from '@evidgate/ui/alert';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmSelectImports } from '@evidgate/ui/select';
 import { HlmCardImports } from '@evidgate/ui/card';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmLabel } from '@evidgate/ui/label';
 import { SessionStore } from '../../../core/session/session.store';
 import { RetryAfterComponent } from '../../../shared/ui/conflict/retry-after.component';
@@ -50,6 +51,7 @@ type RotationTarget = {
     HlmButton,
     HlmSelectImports,
     HlmCardImports,
+    HlmIcon,
     RotateConfirmDialogComponent,
     DesktopRequiredNoticeComponent,
     HlmLabel,
@@ -76,7 +78,6 @@ export class SecretsPage {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   protected readonly copy = SECRETS_COPY;
-  protected readonly sectionSize = 'section' as const;
   protected readonly projectLabel = (value: unknown): string =>
     this.session.projects().find((project) => project.id === value)?.name ?? '';
   protected readonly rotationTarget = signal<RotationTarget | null>(null);

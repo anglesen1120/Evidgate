@@ -28,10 +28,15 @@ function revokeDeferred(url: string): void {
     '[attr.data-audit-export-phase]': 'store.exportState().phase',
   },
   template: `
-    <div class="grid min-w-0 gap-3 wrap-anywhere [&_p]:m-0" [attr.aria-busy]="running()">
-      <section aria-labelledby="audit-export-scope-title" class="grid min-w-0 gap-2">
-        <h3 id="audit-export-scope-title" class="m-0 text-sm font-semibold">{{ copy.scope }}</h3>
-        <dl class="m-0 grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-3 text-sm">
+    <div
+      class="grid min-w-0 items-start gap-x-4 gap-y-2 wrap-anywhere @xl:grid-cols-[minmax(0,1fr)_auto] [&_p]:m-0"
+      [attr.aria-busy]="running()"
+    >
+      <section aria-labelledby="audit-export-scope-title" class="grid min-w-0 gap-1">
+        <p id="audit-export-scope-title" class="m-0 text-xs font-semibold">{{ copy.scope }}</p>
+        <dl
+          class="m-0 flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-xs [&>div]:flex [&>div]:min-w-0 [&>div]:flex-wrap [&>div]:gap-x-1 [&_dt]:after:content-[':']"
+        >
           <div>
             <dt class="text-muted-foreground">{{ copy.organization }}</dt>
             <dd class="m-0">{{ orgId() }}</dd>
@@ -71,14 +76,18 @@ function revokeDeferred(url: string): void {
         </dl>
       </section>
       @if (hasDraftChanges()) {
-        <p id="audit-export-draft-hint" role="status" class="text-sm text-muted-foreground">
+        <p
+          id="audit-export-draft-hint"
+          role="status"
+          class="col-span-full text-sm text-muted-foreground"
+        >
           {{ copy.unapplied }}
         </p>
       }
       <button
         type="button"
         hlmBtn
-        class="min-h-[var(--eg-control-touch)] w-fit max-w-full justify-self-start whitespace-normal"
+        class="min-h-(--eg-control-touch) w-fit max-w-full whitespace-normal @xl:col-start-2 @xl:row-start-1"
         data-audit-export
         [disabled]="running() || !orgId() || hasDraftChanges()"
         [attr.aria-describedby]="
@@ -88,7 +97,7 @@ function revokeDeferred(url: string): void {
       >
         {{ copy.export }}
       </button>
-      <div [attr.aria-live]="'polite'" aria-atomic="true">
+      <div class="col-span-full" [attr.aria-live]="'polite'" aria-atomic="true">
         @if (store.exportState(); as state) {
           @if (state.phase === 'running') {
             <p role="status">{{ progress(state.rows) }}</p>
@@ -114,7 +123,7 @@ function revokeDeferred(url: string): void {
           <div
             hlmAlert
             [variant]="'destructive'"
-            class="grid gap-3"
+            class="col-span-full grid gap-3"
             role="alert"
             data-audit-export-error
           >

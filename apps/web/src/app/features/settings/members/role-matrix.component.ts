@@ -53,7 +53,7 @@ const ROLE_VALUE_WIDTH: DataTableColumnWidth = { min: '0px', max: 'none' };
       </section>
       <div
         hlmTableContainer
-        class="table-scroll min-w-0 max-w-full rounded-md border border-solid border-border bg-card max-md:overflow-visible focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
+        class="table-scroll min-w-0 max-w-full rounded-xl border border-solid border-border bg-card max-md:overflow-visible focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
         id="members-full-matrix"
         [class.max-md:hidden]="!fullMatrix()"
         tabindex="0"
@@ -66,7 +66,10 @@ const ROLE_VALUE_WIDTH: DataTableColumnWidth = { min: '0px', max: 'none' };
           class="eg-table-layout caption-top border-collapse max-md:block max-md:min-w-0 max-md:max-w-full [&_tbody]:max-md:block [&_tr]:max-md:block [&_thead]:max-md:sr-only [&_th]:break-normal [&_td]:break-normal [&_tbody_th]:max-md:grid [&_tbody_td]:max-md:grid [&_tbody_th]:max-md:gap-1 [&_tbody_td]:max-md:gap-1 [&_tbody_th]:max-md:whitespace-normal [&_tbody_td]:max-md:whitespace-normal [&_tbody_th]:max-md:wrap-anywhere [&_tbody_td]:max-md:wrap-anywhere [&_tbody_th]:max-md:min-h-[var(--eg-control-touch)] [&_tbody_td]:max-md:min-h-[var(--eg-control-touch)] [&_tbody_tr]:max-md:border-t"
           data-members-matrix
         >
-          <caption hlmCaption class="m-0 p-3 text-start font-semibold text-foreground max-md:block">
+          <caption
+            hlmCaption
+            class="m-0 border-b border-border px-5 py-4 text-start font-(family-name:--eg-font-display) text-lg font-bold text-foreground max-md:block"
+          >
             {{
               copy.matrix
             }}

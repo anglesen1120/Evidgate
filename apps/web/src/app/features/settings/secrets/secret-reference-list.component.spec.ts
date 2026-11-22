@@ -135,7 +135,9 @@ describe('SecretReferenceListComponent metadata boundary (AC3)', () => {
     const button = root.querySelector<HTMLButtonElement>('[data-rotate]');
     const rotate = vi.fn();
     fixture.componentInstance.rotate.subscribe(rotate);
-    expect(root.querySelector('[data-secret-reference]')?.getAttribute('data-slot')).toBe('card');
+    expect(root.querySelector('[data-secret-reference]')?.getAttribute('data-slot')).toBe(
+      'table-row',
+    );
     expect(button?.getAttribute('data-slot')).toBe('button');
     expect(button?.type).toBe('button');
     expect(root.querySelector('[data-secret-reference] h3')?.textContent).toBe(

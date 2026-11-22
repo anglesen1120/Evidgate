@@ -35,7 +35,7 @@ describe('SecretReferenceList reminder wiring and metadata branches (09.7.1-T3 Q
 
   /** Rows render in input order, so the position names the row without a rotate-button lookup. */
   function reminderAt(root: HTMLElement, index: number): string | null {
-    const items = root.querySelectorAll('li[data-secret-reference]');
+    const items = root.querySelectorAll('tr[data-secret-reference]');
     return items[index]?.querySelector('[data-reminder]')?.getAttribute('data-reminder') ?? null;
   }
 
