@@ -57,7 +57,12 @@
         [truncate]="!stacked"
     /></bdi>
     @if (row.unverified_ref) {
-      <app-status-pill [tone]="'warning'" [label]="copy.unverified" data-run-unverified />
+      <app-status-pill
+        class="[&_.spartan-badge]:max-w-full"
+        [tone]="'warning'"
+        [label]="copy.unverified"
+        data-run-unverified
+      />
     }
   </div>
 </ng-template>

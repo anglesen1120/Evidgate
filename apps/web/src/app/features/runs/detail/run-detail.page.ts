@@ -139,6 +139,8 @@ export class RunDetailPage {
   );
   /** The fragment landed once: a polling update never moves focus a second time. */
   private landed = false;
+  /** The producer landing was re-applied once the attempts read settled. */
+  private settled = false;
   protected readonly retryEligible = signal(false);
   /** The decision region's own retry window: a decision failure never gates the run's retry. */
   protected readonly decisionRetryEligible = signal(false);
@@ -202,6 +204,7 @@ export class RunDetailPage {
     this.route.fragment.pipe(takeUntilDestroyed()).subscribe((fragment) => {
       this.fragment.set(fragment);
       this.landed = false;
+      this.settled = false;
       if (fragment?.startsWith('producer-')) this.detailTab.set('evidence');
     });
     combineLatest([this.route.paramMap, this.route.queryParamMap])
@@ -230,6 +233,26 @@ export class RunDetailPage {
         replaceUrl: true,
         preserveFragment: true,
       });
+    });
+    // The attempts table sits above the producer table, so its height arriving displaces a row that
+    // was landed on first. Re-landing happens once, when that read settles, and only while the
+    // visitor has not moved focus elsewhere.
+    effect(() => {
+      if (this.attemptsStatus() === 'loading' || this.settled) return;
+      const fragment = this.fragment();
+      if (!this.landed || !fragment?.startsWith('producer-')) return;
+      this.settled = true;
+      afterNextRender(
+        () => {
+          if (this.fragment() !== fragment) return;
+          const target = resolveEvidenceAnchor(fragment, this.document);
+          const active = this.document.activeElement;
+          if (target && (active === target || active === this.document.body)) {
+            this.focusEvidenceTarget(target);
+          }
+        },
+        { injector: this.injector },
+      );
     });
     this.watchRetryWindow(this.store.loadError, this.retryEligible);
     this.watchRetryWindow(this.store.decisionError, this.decisionRetryEligible);

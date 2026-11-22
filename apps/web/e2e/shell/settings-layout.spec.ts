@@ -77,8 +77,8 @@ for (const locale of LOCALES) {
           parseFloat(style.borderRightWidth);
         return {
           width: bounds.width,
-          left: bounds.left,
-          parentLeft: parent.left,
+          right: bounds.right,
+          parentRight: parent.right,
           content: text.width + insets,
           textHeight: text.height,
           lineHeight: parseFloat(style.lineHeight),
@@ -86,7 +86,8 @@ for (const locale of LOCALES) {
       });
       expect(size.width).toBeLessThanOrEqual(size.content + 2);
       expect(size.textHeight).toBeLessThanOrEqual(size.lineHeight + 1);
-      expect(Math.abs(size.left - size.parentLeft)).toBeLessThanOrEqual(1);
+      // At this width the export row is two columns: the action fills the trailing auto column.
+      expect(Math.abs(size.right - size.parentRight)).toBeLessThanOrEqual(1);
     }
   });
 

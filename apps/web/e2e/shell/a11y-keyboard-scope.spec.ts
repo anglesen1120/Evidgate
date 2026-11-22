@@ -154,7 +154,10 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
     });
     await expect(primaryNavigation).toHaveCount(1);
     await expect(primaryNavigation).toHaveAccessibleName('Primary navigation');
-    await expect(page.getByRole('navigation', { name: 'Next steps', exact: true })).toHaveCount(1);
+    // The limited session holds one next step, which the overview promotes to the header action;
+    // only a second permitted step renders the named "Next steps" landmark.
+    await expect(page.locator('app-page-header a.eg-header-action')).toHaveCount(1);
+    await expect(page.getByRole('navigation', { name: 'Next steps', exact: true })).toHaveCount(0);
 
     // The scope controls precede the trailing theme action in both paint and Tab order.
     const navToggle = page.locator('button.nav-toggle');
