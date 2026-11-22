@@ -1,3 +1,4 @@
+import { formatNumber } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -5,6 +6,7 @@ import {
   effect,
   inject,
   linkedSignal,
+  LOCALE_ID,
   untracked,
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
@@ -36,6 +38,7 @@ import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { DesktopMutationDirective } from '../../../shared/ui/narrow/desktop-mutation.directive';
 import { DesktopRequiredNoticeComponent } from '../../../shared/ui/narrow/desktop-required-notice.component';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
+import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
 
 @Component({
   selector: 'app-api-tokens-page',
@@ -61,13 +64,13 @@ import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-
       <span
         class="grid size-12 shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent)"
       >
-        <app-shell-icon [name]="'shield-check'" />
+        <app-shell-icon [name]="'shield-check'" class="size-6" />
       </span>
       <app-section-header
         class="min-w-0 grow"
         tabindex="-1"
         [title]="copy.title"
-        [description]="copy.description"
+        [description]="subtitle()"
       >
         @if (store.canWrite() && store.scope() && store.phase() !== 'forbidden') {
           <button
@@ -79,6 +82,7 @@ import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-
             [disabled]="store.creating() || store.revoking()"
             (click)="openCreate()"
           >
+            <app-shell-icon [name]="'key'" />
             {{ copy.create }}
           </button>
         }
@@ -86,9 +90,9 @@ import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-
     </header>
     @if (store.session.projects().length > 0) {
       <div
-        class="my-4 flex min-w-0 flex-wrap items-end justify-between gap-3 border-y border-border py-3"
+        class="my-4 flex min-w-0 flex-wrap items-center justify-between gap-3 border-b border-border py-3"
       >
-        <div class="grid min-w-0 gap-1">
+        <div class="flex min-w-0 flex-wrap items-baseline gap-2">
           <label hlmLabel for="api-tokens-project">{{ copy.project }}</label>
           <p
             id="api-tokens-project-value"
@@ -152,16 +156,13 @@ import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-
           (revoke)="revokeSelection.set($event)"
         >
           @if (store.cursor() || store.hasNext()) {
-            <nav
-              class="flex flex-wrap justify-end gap-2 border-t border-border px-4 py-3"
-              [attr.aria-label]="copy.pages"
-            >
+            <nav class="ms-auto flex flex-wrap justify-end gap-2" [attr.aria-label]="copy.pages">
               @if (store.cursor()) {
                 <button
                   hlmBtn
                   [variant]="'outline'"
                   type="button"
-                  class="min-h-[var(--eg-control-touch)]"
+                  class="pointer-coarse:min-h-(--eg-control-touch)"
                   data-api-first
                   (click)="first()"
                 >
@@ -173,7 +174,7 @@ import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-
                   hlmBtn
                   [variant]="'outline'"
                   type="button"
-                  class="min-h-[var(--eg-control-touch)]"
+                  class="pointer-coarse:min-h-(--eg-control-touch)"
                   data-api-next
                   (click)="next()"
                 >
@@ -206,6 +207,7 @@ export class ApiTokensPage {
   private readonly router = inject(Router);
 
   private readonly route = inject(ActivatedRoute);
+  private readonly locale = inject(LOCALE_ID);
 
   protected readonly projectLabel = (value: unknown): string =>
     this.store.session.projects().find((project) => project.id === value)?.name ?? '';
@@ -248,6 +250,17 @@ export class ApiTokensPage {
     return activated !== null && resolved !== activated;
   });
   protected readonly copy = API_TOKENS_COPY;
+  protected readonly subtitle = computed(() => {
+    if (this.store.phase() !== 'success' && this.store.phase() !== 'empty')
+      return this.copy.description;
+    return [
+      escapeFormatChars(this.projectLabel(this.store.selectedProject())),
+      `${this.copy.directory}: ${formatNumber(this.store.rows().length, this.locale)}`,
+      $localize`:@@settings.count-on-page:On this page`,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  });
   protected readonly status = computed<'loading' | 'ready' | 'error'>(() => {
     const phase = this.store.phase();
     return phase === 'loading' ? 'loading' : phase === 'error' ? 'error' : 'ready';

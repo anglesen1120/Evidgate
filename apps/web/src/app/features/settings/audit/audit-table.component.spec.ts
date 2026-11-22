@@ -2,9 +2,12 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import type { AuditEntryDto } from '@evidgate/sdk';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { DataTableComponent } from '../../../shared/ui/data-table/data-table.component';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
 import { AuditTableComponent } from './audit-table.component';
+
+provideLayoutTestStubs();
 
 function row(id: string, changes: Partial<AuditEntryDto> = {}): AuditEntryDto {
   return {
@@ -204,13 +207,13 @@ describe('AuditTableComponent', () => {
     const table = fixture.debugElement.query(By.directive(DataTableComponent))
       .componentInstance as DataTableComponent<AuditEntryDto>;
     const idWidth = {
-      min: 'calc(28ch + var(--eg-space-4) * 2)',
+      min: 'calc(13ch + var(--eg-space-4) * 2)',
       preferred: 'auto',
-      max: 'calc(40ch + var(--eg-space-4) * 2)',
+      max: 'calc(28ch + var(--eg-space-4) * 2)',
     };
     expect(table.columns().map(({ id, width }) => ({ id, width }))).toEqual([
       { id: 'actor', width: idWidth },
-      { id: 'action', width: { min: '12ch', preferred: '1%', max: '20ch' } },
+      { id: 'action', width: { min: '12ch', preferred: 'auto', max: '24ch' } },
       { id: 'object', width: idWidth },
       {
         id: 'time',
@@ -223,7 +226,7 @@ describe('AuditTableComponent', () => {
       {
         id: 'details',
         width: {
-          min: 'calc(18ch + var(--eg-space-4) * 2)',
+          min: 'calc(14ch + var(--eg-space-4) * 2)',
           preferred: '1%',
           max: 'calc(22ch + var(--eg-space-4) * 2)',
         },
@@ -231,9 +234,9 @@ describe('AuditTableComponent', () => {
     ]);
     const headers = root.querySelectorAll<HTMLElement>('thead th');
     expect(headers[0]?.style.inlineSize).toBe('auto');
-    expect(headers[1]?.style.inlineSize).toBe('1%');
+    expect(headers[1]?.style.inlineSize).toBe('auto');
     expect(headers[3]?.style.minInlineSize).toBe('calc(24ch + var(--eg-space-4) * 2)');
-    expect(headers[4]?.style.minInlineSize).toBe('calc(18ch + var(--eg-space-4) * 2)');
+    expect(headers[4]?.style.minInlineSize).toBe('calc(14ch + var(--eg-space-4) * 2)');
   });
   it('uses page flow, compact inline ids and one-line scan utilities for a bounded audit page', async () => {
     const actor = '0198a000-0000-7000-8000-000000000001';

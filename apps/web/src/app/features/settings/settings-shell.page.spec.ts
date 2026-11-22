@@ -1,8 +1,7 @@
-import { getDebugNode, provideZonelessChangeDetection, signal } from '@angular/core';
+import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { BrnSelect } from '@spartan-ng/brain/select';
 
 import { SessionStore } from '../../core/session/session.store';
 import { provideLayoutTestStubs } from '../../shared/testing/layout.testing';
@@ -12,9 +11,6 @@ import { SETTINGS_TABS } from './settings-tabs';
 
 const permissions = signal<ReadonlySet<string>>(new Set());
 const currentOrg = signal<{ name: string } | null>({ name: 'Example organization' });
-
-/** Segments whose child route refuses to match, so the router aborts that navigation. */
-const refusedSegments = new Set<string>();
 
 function tabIds(root: HTMLElement): (string | null)[] {
   return Array.from(root.querySelectorAll('[data-settings-tab]'), (link) =>
@@ -27,33 +23,11 @@ async function render(): Promise<HTMLElement> {
   await fixture.whenStable();
   return fixture.nativeElement as HTMLElement;
 }
-function picker(root: HTMLElement): BrnSelect<unknown> {
-  const host = root.querySelector('hlm-select');
-  const debug = host ? getDebugNode(host) : null;
-  if (!debug) throw new Error('Expected Helm settings chooser');
-  return debug.injector.get(BrnSelect);
-}
-
-async function choices(root: HTMLElement): Promise<string[]> {
-  root.querySelector<HTMLButtonElement>('#settings-destination')!.click();
-  await vi.waitFor(() =>
-    expect(document.body.querySelectorAll('[role="option"]')).toHaveLength(tabIds(root).length),
-  );
-  expect(document.body.querySelector('[role="listbox"]')?.getAttribute('aria-label')).toBe(
-    root.querySelector('label[for="settings-destination"]')?.textContent?.trim(),
-  );
-  return Array.from(
-    document.body.querySelectorAll('[role="option"]'),
-    (item) => item.textContent?.trim() ?? '',
-  );
-}
-
 describe('SettingsShellPage', () => {
   provideLayoutTestStubs();
   beforeEach(() => {
     permissions.set(new Set());
     currentOrg.set({ name: 'Example organization' });
-    refusedSegments.clear();
     TestBed.configureTestingModule({
       imports: [SettingsShellPage],
       providers: [
@@ -66,7 +40,6 @@ describe('SettingsShellPage', () => {
               path: tab.segment,
               component: SettingsTabPlaceholderPage,
               data: { settingsTabId: tab.id },
-              canMatch: [() => !refusedSegments.has(tab.segment)],
             })),
           },
         ]),
@@ -83,41 +56,29 @@ describe('SettingsShellPage', () => {
   });
   afterEach(() => TestBed.resetTestingModule());
 
-  it('renders only Audit and no forbidden destination element, label or option', async () => {
+  it('renders only Audit and no forbidden destination element or label', async () => {
     permissions.set(new Set(['audit:read']));
     const root = await render();
     expect(tabIds(root)).toEqual(['audit']);
-    expect(root.querySelectorAll('a')).toHaveLength(1);
+    expect(root.querySelectorAll('nav a')).toHaveLength(1);
     expect(root.querySelector('nav')?.getAttribute('aria-label')).toBe('Settings destinations');
-    expect(await choices(root)).toEqual(['Audit']);
     for (const tab of SETTINGS_TABS.filter((tab) => tab.id !== 'audit')) {
       expect(root.querySelector(`[data-settings-tab="${tab.id}"]`)).toBeNull();
       expect(root.textContent).not.toContain(tab.label);
-      expect(document.body.querySelectorAll('[role="option"]')[0]?.textContent).not.toContain(
-        tab.label,
-      );
     }
-    expect(root.querySelector('[role="tablist"]')).toBeNull();
-    expect(root.querySelector('a[hlmBtn]')).not.toBeNull();
-    expect(root.querySelector('label[hlmLabel]')?.getAttribute('for')).toBe('settings-destination');
-    expect(root.querySelector('select')).toBeNull();
-    expect(root.querySelector('button[role="combobox"]')?.id).toBe('settings-destination');
-    expect(root.querySelector('.settings-mobile')?.classList.contains('min-[1025px]:hidden')).toBe(
-      true,
-    );
+    // Route-linked destinations are links with aria-current, not ARIA tabs, in one scrolling row.
+    expect(root.querySelector('[role="tablist"], [role="tab"]')).toBeNull();
+    expect(root.querySelector('hlm-select, select')).toBeNull();
+    expect(root.querySelector('nav')?.classList.contains('overflow-x-auto')).toBe(true);
+    expect(root.querySelector('nav ul')?.classList.contains('flex-nowrap')).toBe(true);
     expect(root.querySelector('.settings-content[hlmCard]')).toBeNull();
-    expect(root.querySelector('h1[hlmCardTitle]')).not.toBeNull();
     expect(root.querySelector('[hidden]')).toBeNull();
   });
 
-  it('preserves Members, Quota & retention, Audit order in links and mobile choices', async () => {
+  it('preserves Members, Quota & retention, Audit order in the tab links', async () => {
     permissions.set(new Set(['membership:read', 'audit:read', 'usage:read']));
     const root = await render();
-    const expected = ['members', 'quota-retention', 'audit'];
-    expect(tabIds(root)).toEqual(expected);
-    expect(await choices(root)).toEqual(
-      SETTINGS_TABS.filter((tab) => expected.includes(tab.id)).map((tab) => tab.label),
-    );
+    expect(tabIds(root)).toEqual(['members', 'quota-retention', 'audit']);
     expect(root.querySelectorAll('[role="tab"]')).toHaveLength(0);
   });
 
@@ -149,14 +110,14 @@ describe('SettingsShellPage', () => {
     const fixture = TestBed.createComponent(SettingsShellPage);
     await fixture.whenStable();
     const root = fixture.nativeElement as HTMLElement;
-    expect(root.textContent).toContain('Organization: <img src=x onerror=alert(1)>');
+    expect(root.textContent).toContain('<img src=x onerror=alert(1)>');
     expect(root.querySelector('img')).toBeNull();
     currentOrg.set(null);
     await fixture.whenStable();
     expect(root.querySelector('.settings-scope')).toBeNull();
   });
 
-  it('marks the routed link current and synchronizes mobile navigation and browser history', async () => {
+  it('marks the routed link current and follows browser history', async () => {
     permissions.set(new Set(['membership:read', 'audit:read']));
     const harness = await RouterTestingHarness.create('/settings/audit');
     const root = harness.routeNativeElement!;
@@ -166,13 +127,16 @@ describe('SettingsShellPage', () => {
     expect(root.querySelector('[data-settings-tab="members"]')?.hasAttribute('aria-current')).toBe(
       false,
     );
-    const select = picker(root);
-    expect(select.value()).toBe('audit');
-    select.select('members');
+    root.querySelector<HTMLAnchorElement>('[data-settings-tab="members"]')!.click();
     await harness.fixture.whenStable();
     expect(TestBed.inject(Router).url).toBe('/settings/members');
+    expect(root.querySelector('[data-settings-tab="members"]')?.getAttribute('aria-current')).toBe(
+      'page',
+    );
     await harness.navigateByUrl('/settings/audit');
-    expect(select.value()).toBe('audit');
+    expect(root.querySelector('[data-settings-tab="audit"]')?.getAttribute('aria-current')).toBe(
+      'page',
+    );
   });
 
   it('shows the active destination permission only while the server still grants it', async () => {
@@ -183,39 +147,5 @@ describe('SettingsShellPage', () => {
     permissions.set(new Set(['membership:read']));
     harness.fixture.detectChanges();
     expect(root.querySelector('.settings-scope code')).toBeNull();
-  });
-
-  it('keeps the mobile select on the router segment when the navigation is refused', async () => {
-    permissions.set(new Set(['membership:read', 'audit:read']));
-    refusedSegments.add('audit');
-    const harness = await RouterTestingHarness.create('/settings/members');
-    const root = harness.routeNativeElement!;
-    const select = picker(root);
-    expect(select.value()).toBe('members');
-
-    // The router refuses this pick and the URL never moves, so the control may not keep showing it.
-    select.select('audit');
-    await vi.waitFor(() => expect(select.value()).toBe('members'));
-
-    expect(TestBed.inject(Router).url).toBe('/settings/members');
-    expect(root.querySelector('#settings-destination')?.textContent).toContain('Members');
-  });
-
-  it('keeps the mobile select on the URL segment when the pick stopped being a destination', async () => {
-    permissions.set(new Set(['membership:read', 'audit:read']));
-    const harness = await RouterTestingHarness.create('/settings/audit');
-    const root = harness.routeNativeElement!;
-    const select = picker(root);
-    expect(select.value()).toBe('audit');
-
-    // A stale pick is rejected by the current permission-filtered registry, not the open overlay.
-    permissions.set(new Set(['audit:read']));
-    select.select('members');
-
-    // Refused before any navigation starts, so the control returns to the URL in the same turn.
-    expect(TestBed.inject(Router).url).toBe('/settings/audit');
-    expect(select.value()).toBe('audit');
-    await harness.fixture.whenStable();
-    expect(select.value()).toBe('audit');
   });
 });

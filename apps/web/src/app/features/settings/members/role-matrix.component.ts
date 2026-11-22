@@ -2,7 +2,8 @@ import { ChangeDetectionStrategy, Component, computed, input, signal } from '@an
 import type { MembershipView, RoleView } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmTableImports, type DataTableColumnWidth } from '@evidgate/ui/table';
-import { HlmCardTitle } from '@evidgate/ui/card';
+import { HlmCardImports } from '@evidgate/ui/card';
+import { HlmAlert } from '@evidgate/ui/alert';
 import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
 import { MEMBERS_COPY } from './member-list.component';
 
@@ -16,139 +17,148 @@ const ROLE_VALUE_WIDTH: DataTableColumnWidth = { min: '0px', max: 'none' };
 
 @Component({
   selector: 'app-role-matrix',
-  imports: [HlmButton, HlmTableImports, HlmCardTitle, DataTableValueComponent],
+  imports: [HlmButton, HlmTableImports, HlmCardImports, HlmAlert, DataTableValueComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
     @if (matrix().columns.length) {
-      <section class="mb-3 grid min-w-0 gap-3 md:hidden" [attr.aria-label]="copy.matrix">
-        <h3 hlmCardTitle [size]="subsectionHeadingSize" class="m-0">{{ copy.matrix }}</h3>
-        @if (!fullMatrix()) {
-          <dl class="m-0 grid min-w-0 gap-3" data-members-granted-summary>
-            @for (row of grantedRows(); track row.membership.id) {
-              <div class="grid min-w-0 gap-1">
-                <dt class="font-semibold wrap-anywhere">{{ row.membership.invited_email }}</dt>
-                <dd class="m-0 flex flex-wrap gap-2 wrap-anywhere">
-                  @for (role of row.roles; track role.id) {
-                    <span>{{ role.name }}</span>
-                  } @empty {
-                    {{ copy.noRoles }}
-                  }
-                </dd>
-              </div>
-            }
-          </dl>
-        }
-        <button
-          hlmBtn
-          [variant]="'outline'"
-          type="button"
-          class="min-h-[var(--eg-control-touch)] w-fit max-w-full whitespace-normal"
-          [attr.aria-expanded]="fullMatrix()"
-          [attr.aria-controls]="'members-full-matrix'"
-          (click)="fullMatrix.set(!fullMatrix())"
-        >
-          {{ fullMatrix() ? grantedOnly : showFullMatrix }}
-        </button>
-      </section>
-      <div
-        hlmTableContainer
-        class="table-scroll min-w-0 max-w-full rounded-xl border border-solid border-border bg-card max-md:overflow-visible md:overflow-x-auto md:overscroll-x-contain md:[contain:inline-size] focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-solid focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
-        id="members-full-matrix"
-        [class.max-md:hidden]="!fullMatrix()"
-        tabindex="0"
-        role="region"
-        [attr.aria-label]="copy.matrix"
-      >
-        <table
-          hlmTable
-          role="table"
-          class="eg-table-layout caption-top border-collapse max-md:block max-md:min-w-0 max-md:max-w-full [&_tbody]:max-md:block [&_tr]:max-md:block [&_thead]:max-md:sr-only [&_th]:break-normal [&_td]:break-normal [&_tbody_th]:max-md:grid [&_tbody_td]:max-md:grid [&_tbody_th]:max-md:gap-1 [&_tbody_td]:max-md:gap-1 [&_tbody_th]:max-md:whitespace-normal [&_tbody_td]:max-md:whitespace-normal [&_tbody_th]:max-md:wrap-anywhere [&_tbody_td]:max-md:wrap-anywhere [&_tbody_th]:max-md:min-h-[var(--eg-control-touch)] [&_tbody_td]:max-md:min-h-[var(--eg-control-touch)] [&_tbody_tr]:max-md:border-t"
-          data-members-matrix
-        >
-          <caption
-            hlmCaption
-            class="m-0 border-b border-border px-5 py-4 text-start font-(family-name:--eg-font-display) text-lg font-bold text-foreground max-md:block"
-          >
-            {{
-              copy.matrix
-            }}
-          </caption>
-          <thead hlmTHead role="rowgroup" class="bg-secondary">
-            <tr hlmTr role="row">
-              <th
-                hlmTh
-                [hlmTableColumn]="identityRole"
-                [columnKind]="emailKind"
-                [columnPriority]="primaryPriority"
-                role="columnheader"
-                scope="col"
-              >
-                {{ copy.member }}
-              </th>
-              @for (role of matrix().columns; track role.id) {
-                <th
-                  hlmTh
-                  [hlmTableColumn]="statusRole"
-                  [width]="roleHeaderWidth"
-                  role="columnheader"
-                  scope="col"
-                  class="md:whitespace-nowrap"
-                  [id]="'matrix-role-' + role.id"
-                  [textContent]="role.name"
-                ></th>
+      <section hlmCard class="min-w-0 gap-0 rounded-xl p-0">
+        <div hlmCardHeader class="border-b border-border px-5 py-4">
+          @if (headingLevel() === 2) {
+            <h2 hlmCardTitle [size]="subsectionHeadingSize" class="m-0">{{ copy.matrix }}</h2>
+          } @else {
+            <h3 hlmCardTitle [size]="subsectionHeadingSize" class="m-0">{{ copy.matrix }}</h3>
+          }
+          <p class="m-0 text-sm text-muted-foreground">{{ copy.authority }}</p>
+        </div>
+        <div class="grid min-w-0 gap-3 p-4 md:hidden">
+          @if (!fullMatrix()) {
+            <dl class="m-0 grid min-w-0 gap-3" data-members-granted-summary>
+              @for (row of grantedRows(); track row.membership.id) {
+                <div class="grid min-w-0 gap-1">
+                  <dt class="font-semibold wrap-anywhere">{{ row.membership.invited_email }}</dt>
+                  <dd class="m-0 flex flex-wrap gap-2 wrap-anywhere">
+                    @for (role of row.roles; track role.id) {
+                      <span>{{ role.name }}</span>
+                    } @empty {
+                      {{ copy.noRoles }}
+                    }
+                  </dd>
+                </div>
               }
-            </tr>
-          </thead>
-          <tbody hlmTBody role="rowgroup">
-            @for (row of matrix().rows; track row.membership.id) {
+            </dl>
+          }
+          <button
+            hlmBtn
+            [variant]="'outline'"
+            type="button"
+            class="min-h-[var(--eg-control-touch)] w-fit max-w-full whitespace-normal"
+            [attr.aria-expanded]="fullMatrix()"
+            [attr.aria-controls]="'members-full-matrix'"
+            (click)="fullMatrix.set(!fullMatrix())"
+          >
+            {{ fullMatrix() ? grantedOnly : showFullMatrix }}
+          </button>
+        </div>
+        <div
+          hlmTableContainer
+          class="table-scroll min-w-0 max-w-full rounded-b-xl max-md:overflow-visible md:overflow-x-auto md:overscroll-x-contain md:[contain:inline-size] focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-solid focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
+          id="members-full-matrix"
+          [class.max-md:hidden]="!fullMatrix()"
+          tabindex="0"
+          role="region"
+          [attr.aria-label]="copy.matrix"
+        >
+          <table
+            hlmTable
+            role="table"
+            class="eg-table-layout caption-top border-collapse max-md:block max-md:min-w-0 max-md:max-w-full [&_tbody]:max-md:block [&_tr]:max-md:block [&_thead]:max-md:sr-only [&_th]:break-normal [&_td]:break-normal [&_tbody_th]:max-md:grid [&_tbody_td]:max-md:grid [&_tbody_th]:max-md:gap-1 [&_tbody_td]:max-md:gap-1 [&_tbody_th]:max-md:whitespace-normal [&_tbody_td]:max-md:whitespace-normal [&_tbody_th]:max-md:wrap-anywhere [&_tbody_td]:max-md:wrap-anywhere [&_tbody_th]:max-md:min-h-[var(--eg-control-touch)] [&_tbody_td]:max-md:min-h-[var(--eg-control-touch)] [&_tbody_tr]:max-md:border-t"
+            data-members-matrix
+          >
+            <caption hlmCaption class="sr-only">
+              {{
+                copy.matrix
+              }}
+            </caption>
+            <thead hlmTHead role="rowgroup" class="bg-secondary">
               <tr hlmTr role="row">
                 <th
                   hlmTh
                   [hlmTableColumn]="identityRole"
                   [columnKind]="emailKind"
                   [columnPriority]="primaryPriority"
-                  role="rowheader"
-                  scope="row"
-                  class="member-identity px-3 py-2 max-md:w-full max-md:min-w-0 max-md:max-w-full"
-                  [id]="'matrix-member-' + row.membership.id"
+                  role="columnheader"
+                  scope="col"
                 >
-                  <span
-                    class="record-label block text-xs font-medium text-muted-foreground whitespace-normal md:hidden"
-                    >{{ copy.member }}</span
-                  >
-                  <app-data-table-value [value]="row.membership.invited_email" [truncate]="true" />
+                  {{ copy.member }}
                 </th>
                 @for (role of matrix().columns; track role.id) {
-                  <td
-                    hlmTd
+                  <th
+                    hlmTh
                     [hlmTableColumn]="statusRole"
-                    [width]="roleValueWidth"
-                    role="cell"
-                    class="role-grant px-3 py-2 max-md:w-full max-md:min-w-0 max-md:max-w-full"
-                    [attr.headers]="
-                      'matrix-member-' + row.membership.id + ' matrix-role-' + role.id
-                    "
+                    [width]="roleHeaderWidth"
+                    role="columnheader"
+                    scope="col"
+                    class="md:whitespace-nowrap"
+                    [id]="'matrix-role-' + role.id"
+                    [textContent]="role.name"
+                  ></th>
+                }
+              </tr>
+            </thead>
+            <tbody hlmTBody role="rowgroup">
+              @for (row of matrix().rows; track row.membership.id) {
+                <tr hlmTr role="row">
+                  <th
+                    hlmTh
+                    [hlmTableColumn]="identityRole"
+                    [columnKind]="emailKind"
+                    [columnPriority]="primaryPriority"
+                    role="rowheader"
+                    scope="row"
+                    class="member-identity px-3 py-2 max-md:w-full max-md:min-w-0 max-md:max-w-full"
+                    [id]="'matrix-member-' + row.membership.id"
                   >
                     <span
                       class="record-label block text-xs font-medium text-muted-foreground whitespace-normal md:hidden"
-                      >{{ role.name }}</span
+                      >{{ copy.member }}</span
                     >
-                    <span
-                      class="data-[granted=true]:font-semibold md:whitespace-nowrap"
-                      [attr.data-granted]="row.granted.has(role.id) ? 'true' : null"
+                    <app-data-table-value
+                      [value]="row.membership.invited_email"
+                      [truncate]="true"
+                    />
+                  </th>
+                  @for (role of matrix().columns; track role.id) {
+                    <td
+                      hlmTd
+                      [hlmTableColumn]="statusRole"
+                      [width]="roleValueWidth"
+                      role="cell"
+                      class="role-grant px-3 py-2 max-md:w-full max-md:min-w-0 max-md:max-w-full"
+                      [attr.headers]="
+                        'matrix-member-' + row.membership.id + ' matrix-role-' + role.id
+                      "
                     >
-                      {{ row.granted.has(role.id) ? copy.granted : copy.notGranted }}
-                    </span>
-                  </td>
-                }
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
+                      <span
+                        class="record-label block text-xs font-medium text-muted-foreground whitespace-normal md:hidden"
+                        >{{ role.name }}</span
+                      >
+                      <span
+                        class="text-muted-foreground data-[granted=true]:font-semibold data-[granted=true]:text-foreground md:whitespace-nowrap"
+                        [attr.data-granted]="row.granted.has(role.id) ? 'true' : null"
+                      >
+                        {{ row.granted.has(role.id) ? copy.granted : copy.notGranted }}
+                      </span>
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
     } @else {
-      <p role="status">{{ copy.rolesUnavailable }}</p>
+      <p hlmAlert role="status">{{ copy.rolesUnavailable }}</p>
     }
   `,
 })
@@ -157,6 +167,7 @@ export class RoleMatrixComponent {
     columns: readonly RoleView[];
     rows: readonly { membership: MembershipView; granted: ReadonlySet<string> }[];
   }>();
+  readonly headingLevel = input<2 | 3>(3);
   protected readonly copy = MEMBERS_COPY;
   protected readonly subsectionHeadingSize = 'subsection' as const;
   protected readonly identityRole = 'identity' as const;

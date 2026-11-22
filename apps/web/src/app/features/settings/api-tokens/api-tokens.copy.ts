@@ -1,6 +1,6 @@
 export const API_TOKENS_COPY = {
   title: $localize`:@@settings.api-tokens.title:API tokens`,
-  description: $localize`:@@settings.api-tokens.description:Manage expiring, least-privilege credentials for this project. Token values cannot be read again.`,
+  description: $localize`:@@settings.api-tokens.intro:Review project credentials by purpose, permission subset and expiry.`,
   project: $localize`:@@settings.api-tokens.project:Project`,
   create: $localize`:@@settings.api-tokens.create:Create token`,
   directory: $localize`:@@settings.api-tokens.directory:Project API tokens`,

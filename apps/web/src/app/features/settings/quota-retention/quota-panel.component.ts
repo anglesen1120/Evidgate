@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -8,7 +9,9 @@ import {
 } from '@angular/core';
 import type { UsageSummaryProjectDto } from '@evidgate/sdk';
 import { HlmCardImports } from '@evidgate/ui/card';
-import { HlmIcon } from '@evidgate/ui/icon';
+import { HlmTableImports } from '@evidgate/ui/table';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
+import type { NavIconName } from '../../../shell/nav/nav.models';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { DataTableComponent } from '../../../shared/ui/data-table/data-table.component';
@@ -28,7 +31,9 @@ type ProjectCell = TemplateRef<DataTableCellContext<UsageSummaryProjectDto>>;
   selector: 'app-quota-panel',
   imports: [
     HlmCardImports,
-    HlmIcon,
+    HlmTableImports,
+    ShellIconComponent,
+    NgTemplateOutlet,
     AbsoluteTimeComponent,
     StatusPillComponent,
     DataTableComponent,
@@ -46,7 +51,7 @@ export class QuotaPanelComponent {
   protected readonly projectMetrics = computed(() =>
     this.quota.usageSummary()?.metrics.filter((metric) => metric.projects.length > 0),
   );
-  protected readonly sectionSize = 'section' as const;
+  protected readonly pageSize = 'page' as const;
   protected readonly subsectionSize = 'subsection' as const;
   protected readonly loadingLayout = 'cards' as const;
   protected readonly destructive = 'destructive' as const;
@@ -91,8 +96,9 @@ export class QuotaPanelComponent {
     },
   ]);
   protected readonly copy = {
-    title: $localize`:@@quota.panel.title:Quota & retention`,
-    description: $localize`:@@quota.panel.description:Organization-wide counters and limits supplied by the service. Quota state does not change recorded test outcomes.`,
+    counters: $localize`:@@quota.panel.counters:Usage counters`,
+    title: $localize`:@@quota.panel.title:Usage and AI credits`,
+    description: $localize`:@@quota.panel.description:Review organization usage, quota limits and project retention windows.`,
     loading: $localize`:@@quota.panel.loading:Loading usage summary…`,
     period: $localize`:@@quota.panel.period:Billing period`,
     empty: $localize`:@@quota.panel.empty:No usage counters were supplied for this period.`,
@@ -108,6 +114,8 @@ export class QuotaPanelComponent {
     projects: $localize`:@@quota.panel.projects:Per project`,
     projectCaption: $localize`:@@quota.panel.project-caption:Returned project counters. Organization totals are supplied separately, not calculated from these rows.`,
     recordedState: $localize`:@@quota.panel.recorded-state:Recorded quota state`,
+    metric: $localize`:@@quota.panel.metric:Metric`,
+    stateDescription: $localize`:@@quota.panel.state-description:Warnings and blocks are reported by the service, not inferred from usage.`,
     noAlert: $localize`:@@quota.panel.no-alert:No alert recorded`,
     incomplete: $localize`:@@quota.panel.incomplete:More project counters exist on the service. All counters returned in this response are available below; this is not the complete organization breakdown.`,
     failed: $localize`:@@quota.panel.summary-unavailable:Usage summary unavailable. Try loading it again.`,
@@ -120,5 +128,21 @@ export class QuotaPanelComponent {
 
   constructor() {
     this.quota.load();
+  }
+
+  protected metricIcon(metric: string): NavIconName {
+    switch (metric) {
+      case 'ai_tokens':
+        return 'credit';
+      case 'artifact_gb_month':
+        return 'folder';
+      case 'runner_minutes':
+      case 'device_minutes':
+        return 'play';
+      case 'support_hours':
+        return 'people';
+      default:
+        return 'chart';
+    }
   }
 }

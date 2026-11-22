@@ -30,4 +30,23 @@ describe('SettingsPageCountsComponent', () => {
     expect(await active!.text()).toMatch(/1\.234\s*On this page/u);
     expect(await expired!.text()).toMatch(/0\s*On this page/u);
   });
+
+  it('shows the supplied hint for a waiting count without changing other qualifiers', async () => {
+    const fixture = TestBed.createComponent(SettingsPageCountsComponent);
+    fixture.componentRef.setInput('metrics', [
+      {
+        label: 'Pending invitations',
+        icon: 'clock',
+        value: 2,
+        hint: 'Awaiting acceptance on this page',
+      },
+      { label: 'Active', value: 4 },
+    ]);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, PageCountsHarness);
+    const definitions = await Promise.all((await harness.definitions()).map((item) => item.text()));
+    expect(definitions).toEqual([
+      expect.stringMatching(/2\s*Awaiting acceptance on this page/u),
+      expect.stringMatching(/4\s*On this page/u),
+    ]);
+  });
 });

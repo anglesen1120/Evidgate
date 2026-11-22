@@ -1,3 +1,4 @@
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { InteractivityChecker } from '@angular/cdk/a11y';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
@@ -28,6 +29,7 @@ async function submit(fixture: ComponentFixture<MembersPage>) {
 }
 
 describe('Members invitation feedback and contextual loading', () => {
+  provideLayoutTestStubs();
   let store: FakeMembersStore;
 
   beforeEach(() => {

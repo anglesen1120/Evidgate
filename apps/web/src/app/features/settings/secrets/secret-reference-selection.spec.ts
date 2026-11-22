@@ -12,7 +12,8 @@ class ReferenceListHarness extends ComponentHarness {
   readonly search = this.locatorFor('#secret-reference-search');
   readonly inspect = this.locatorForAll('[data-secret-inspect]');
   readonly detail = this.locatorForOptional('[data-secret-detail]');
-  readonly counts = this.locatorForAll('[data-page-count] dd');
+  readonly counts = this.locatorForAll('[data-page-count] dd app-number-value');
+  readonly filters = this.locatorForAll('[role="group"] button[aria-pressed]');
 }
 
 describe('Secret reference list and selected lifecycle', () => {
@@ -71,6 +72,22 @@ describe('Secret reference list and selected lifecycle', () => {
     await fixture.whenStable();
     const counts = async () => Promise.all((await harness.counts()).map((node) => node.text()));
     expect(await counts()).toEqual(['3', '1', '1', '1']);
+    const filters = await harness.filters();
+    const labels = await Promise.all(filters.map((filter) => filter.text()));
+    expect(labels.map((label) => label.replace(/\s*(\d+)$/, ':$1'))).toEqual([
+      'All states:3',
+      'Active:1',
+      'Rotated:0',
+      'Revoked:1',
+      'Expired:1',
+    ]);
+    const [all, active] = filters;
+    if (!all || !active) throw new Error('Expected all and active status filters');
+    await active.click();
+    expect(await active.getAttribute('aria-pressed')).toBe('true');
+    expect(await harness.inspect()).toHaveLength(1);
+    expect(await counts()).toEqual(['3', '1', '1', '1']);
+    await all.click();
     await (await harness.search()).setInputValue('Production');
     await (await harness.search()).dispatchEvent('input');
     expect(await harness.inspect()).toHaveLength(1);
