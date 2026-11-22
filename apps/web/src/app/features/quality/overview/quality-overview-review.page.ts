@@ -34,7 +34,8 @@ import { noticeFor, qualityState, showsSnapshot, type QualityState } from './qua
     QualityBreakdownComponent,
   ],
   host: {
-    class: 'mx-auto grid w-full min-w-0 max-w-[1440px] gap-4 p-3 wrap-anywhere sm:p-5 xl:p-6',
+    class:
+      'mx-auto box-border grid w-full grid-cols-[minmax(0,1fr)] min-w-0 max-w-[1440px] gap-4 p-3 wrap-anywhere sm:p-5 xl:p-6',
   },
   templateUrl: './quality-overview-review.page.html',
 })
