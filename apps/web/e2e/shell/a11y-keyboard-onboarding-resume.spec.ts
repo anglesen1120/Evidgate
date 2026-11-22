@@ -1,7 +1,5 @@
-// The resume walk: a fresh document that lands on step 3, Back into step 2, then Next again, with
-// the keyboard only. It proves the two panels between the stepper and the forms — the health panel
-// and the CLI quickstart — add no Tab stop of their own, and that the step heading takes focus on
-// every move.
+// The resume walk: Back into step 2, through its credential View and quickstart controls,
+// then Next to step 3. Every move uses the keyboard; neither panel adds a redundant stop.
 import { expect, test } from '@playwright/test';
 
 import {
@@ -12,7 +10,11 @@ import {
   stepButton,
   STEP_TITLE,
 } from './onboarding-keyboard';
-import { TOKEN_USED_LAST_USED_AT, TOKEN_USED_NAME } from './onboarding-connection-support';
+import {
+  TOKEN_USED_LAST_USED_AT,
+  TOKEN_USED_NAME,
+  TOKEN_USED_PREFIX,
+} from './onboarding-connection-support';
 import {
   backButton,
   expectCurrentStep,
@@ -55,18 +57,33 @@ test.describe('W4 — resume at step 3, Back into step 2, health panel and quick
     await expectKeyboardFocus(page, page.locator(STEP_TITLE), 'the step-2 heading after Back');
     await expectCurrentStep(page, 2);
 
-    // 3. The health panel is static text a screen reader reads in place: no Tab stop at all.
+    // 3. The row's named View is the only health stop; the table and its panel are not stops.
     const health = page.locator('[data-testid="connection-health"]');
     await expect(health).toHaveAttribute('data-health-state', 'healthy');
+    const viewToken = { name: `View ${TOKEN_USED_NAME}`, exact: true };
+    const healthView = health.getByRole('button', {
+      name: `View ${TOKEN_USED_NAME} (${TOKEN_USED_PREFIX})`,
+      exact: true,
+    });
+    await expect(health).not.toHaveAttribute('tabindex', '0');
     await expect(
-      health.locator('button, a, input, textarea, select, [tabindex="0"]'),
-      'the health panel added a Tab stop between the stepper and the quickstart',
-    ).toHaveCount(0);
+      health.locator('button, a[href], input, textarea, select, [tabindex]:not([tabindex="-1"])'),
+    ).toHaveCount(1);
+    await pressTab(page);
+    await expectKeyboardFocus(page, healthView, 'the health row View after the step-2 heading');
+    await page.keyboard.press('Shift+Tab');
+    await expectKeyboardFocus(
+      page,
+      stepButton(page, 5),
+      'the last step before the health row View',
+    );
+    await pressTab(page);
+    await expectKeyboardFocus(page, healthView, 'the sole health stop after the stepper');
 
     // 4. Its rows are the server's metadata: the token name, its status pill and the recorded use.
     const credentialRow = health.locator('[data-testid="connection-health-credential"]');
     await expect(credentialRow).toHaveCount(1);
-    await expect(credentialRow.locator('strong')).toContainText(TOKEN_USED_NAME);
+    await expect(credentialRow.getByRole('rowheader')).toContainText(TOKEN_USED_NAME);
     await expect(
       credentialRow.locator('.status-pill__label'),
       'the credential row renders a status label',
@@ -105,10 +122,21 @@ test.describe('W4 — resume at step 3, Back into step 2, health panel and quick
       'the first OIDC field after the quickstart',
     );
 
-    // Next is enabled on this seed (its step 2 is done), and Enter advances to step 3 with focus on
-    // the step heading. From the first OIDC field the remaining stops are: 3 more fields, the OIDC
-    // submit, the token name, the token submit, the row's Rotate, Back, then Next.
-    await pressTab(page, 9);
+    // 7. From the first OIDC field: three other fields, OIDC submit, token name and token submit.
+    // The token table has its own metadata View and Rotate, followed by Back and Next.
+    await pressTab(page, 6);
+    await expectKeyboardFocus(page, page.getByTestId('connect-token-submit'), 'create token');
+    await pressTab(page);
+    await expectKeyboardFocus(
+      page,
+      page.getByTestId('connect-token-row').getByRole('button', viewToken),
+      'the token table row View',
+    );
+    await pressTab(page);
+    await expectKeyboardFocus(page, page.getByTestId('connect-token-rotate'), 'Rotate token');
+    await pressTab(page);
+    await expectKeyboardFocus(page, backButton(page), 'Back after the token row');
+    await pressTab(page);
     await expectKeyboardFocus(page, nextButton(page), 'Next at the end of the step-2 tab order');
     await expect(nextButton(page)).toBeEnabled();
     await page.keyboard.press('Enter');
