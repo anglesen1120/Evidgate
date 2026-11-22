@@ -3327,7 +3327,7 @@
       <trans-unit id="runs.detail.release.digest-for" datatype="html"><source>Digest for component <x id="key" equiv-text="componentKey"/></source><target>Mã băm của thành phần <x id="key" equiv-text="componentKey"/></target></trans-unit>
       <trans-unit id="settings.policy.tab.compare" datatype="html"><source>Compare</source><target>So sánh</target></trans-unit>
       <trans-unit id="settings.policy.tab.values" datatype="html"><source>Values</source><target>Giá trị</target></trans-unit>
-      <trans-unit id="shell.nav.quota-short" datatype="html"><source>Usage &amp; credits</source><target>Sử dụng và tín dụng AI</target></trans-unit>
+      <trans-unit id="shell.nav.quota-short" datatype="html"><source>AI credits</source><target>Tín dụng AI</target></trans-unit>
       <trans-unit id="settings.security.type-auth" datatype="html"><source>Authentication failure</source><target>Lỗi xác thực</target></trans-unit>
       <trans-unit id="settings.security.type-cross-tenant" datatype="html"><source>Cross-tenant access probe</source><target>Thử truy cập chéo tổ chức</target></trans-unit>
       <trans-unit id="settings.security.type-scanner" datatype="html"><source>Secret scanner alert</source><target>Cảnh báo quét bí mật</target></trans-unit>

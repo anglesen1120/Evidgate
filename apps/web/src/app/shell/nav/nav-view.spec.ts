@@ -231,7 +231,7 @@ describe('NavViewService (09.1.1-T4.1)', () => {
       .find((item) => item.id === 'quota');
     const registryRow = NAV_ENTRIES.find((entry) => entry.id === 'quota');
     expect(quota?.label).toBe(registryRow?.label);
-    expect(quota?.shortLabel).toBe('Usage & credits');
+    expect(quota?.shortLabel).toBe('AI credits');
     expect(quota?.shortLabel).toBe(registryRow?.shortLabel);
     expect(quota?.link).toEqual(['/orgs', 'o-1', 'usage']);
   });
