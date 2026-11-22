@@ -95,6 +95,28 @@ const READY: Readonly<Record<string, string>> = {
   ImportExportPage: 'app-authoring-import-export-page [data-impex-import-tab]',
   AiSettingsPage: 'app-ai-settings-page [data-ai-save]',
   EditorPage: 'app-authoring-editor #case-title',
+  // Review-only screens fed by static view models: the host element is their ready contract.
+  ReleaseDecisionReviewPage: 'app-release-decision-review',
+  StudioGalleryReviewPage: 'app-studio-gallery-review',
+  StudioDraftEditorReviewPage: 'app-studio-draft-editor-review',
+  StudioReviewMergeReviewPage: 'app-studio-review-merge-review',
+  ReleaseViewReviewPage: 'app-release-view-review',
+  QualityOverviewReviewPage: 'app-quality-overview-review',
+  FailureInboxReviewPage: 'app-failure-inbox-review',
+  FailureDetailReviewPage: 'app-failure-detail-review',
+  InvestigationHistoryReviewPage: 'app-investigation-history-review',
+  ArtifactViewerReviewPage: 'app-artifact-viewer-review',
+  HealingQueueReviewPage: 'app-healing-queue-review',
+  ShadowDetailReviewPage: 'app-shadow-detail-review-page',
+  HealingApprovalReviewPage: 'app-healing-approval-review-page',
+  KnowledgeLineageReviewPage: 'app-knowledge-lineage-review',
+  MappingResolutionPage: 'app-mapping-resolution-review',
+  AgentPoolsReviewPage: 'app-agent-pools-review',
+  WebhooksReviewPage: 'app-webhooks-review',
+  SupportAccessReviewPage: 'app-support-access-review',
+  DeployTargetsReviewPage: 'app-deploy-targets-review',
+  GeneratedScriptsPage: 'app-generated-scripts-review',
+  UiChangeProposalPage: 'app-ui-change-proposal-review',
 };
 
 /** The fields of a catalogue document the walk reads; the corpus rows carry more than this. */
@@ -127,6 +149,12 @@ const GRANTS: readonly GrantSet[] = [
     codes: grantedCodes(secretsGrants),
   },
   { query: USAGE_READ_GRANTS, codes: grantedCodes(usageGrants) },
+  {
+    // The default catalogue plus `healing:triage`, merged in dev-fixtures for the learn-and-repair
+    // review screens.
+    query: '?fixture.variant.listPermissions=healing-triage',
+    codes: [...grantedCodes(defaultGrants), 'healing:triage'],
+  },
   {
     // A TypeScript specimen (dev-fixtures), not a corpus directory: the admin rows plus the
     // API token codes, so the dev-only token screen is walked as a rendered page.

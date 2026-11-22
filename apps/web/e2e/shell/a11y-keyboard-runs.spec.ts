@@ -117,12 +117,18 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await expect(back).toBeFocused();
   expect((await back.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
 
+  // The header's inspect-evidence action sits between the back link and the run summary.
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Inspect evidence' })).toBeFocused();
   await tabThroughRunControls(page, page.locator('app-run-header').first(), 2);
   await page.keyboard.press('Tab');
   const attemptsRegion = page.getByRole('region', { name: 'Attempts table' });
   await expect(attemptsRegion).toBeFocused();
   await expect(page.locator('app-attempts-table [data-attempt-row]')).toHaveCount(7);
   await tabThroughRunControls(page, page.locator('app-attempts-table tbody'), 7);
+  // The producer table follows the attempts table in the page flow.
+  await tabThroughTableScroller(page, page.locator('#producers'));
+  await tabThroughRunControls(page, page.locator('#producers'), 2);
 
   // Evidence and the latest live decision are tabs: only the selected tab is a Tab stop, the arrow
   // keys move inside the list, and the selected panel is the next stop. The hidden panel leaves the
@@ -163,8 +169,6 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await tabThroughRunControls(page, page.locator('app-manifest-panel'), 3);
   const copy = page.getByRole('button', { name: 'Copy full manifest hash' });
   expect((await copy.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
-  await tabThroughTableScroller(page, page.locator('#producers'));
-  await tabThroughRunControls(page, page.locator('#producers'), 2);
   const release = page.locator('app-release-panel');
   await expect(release.locator('.actions button')).toHaveCount(4);
   for (const [hook, label, value] of [

@@ -167,6 +167,78 @@ function tabSurfaces(prefix: string, inherited: readonly string[]): Surface[] {
     });
 }
 
+/** The array a zero-argument route helper returns, found in `file` or in the module it imports. */
+function helperTable(call: ts.CallExpression, file: string): { table: ts.Node; file: string } {
+  const name = call.expression.getText();
+  const find = (target: string): ts.Node | undefined =>
+    source(target)
+      .statements.find(
+        (statement): statement is ts.FunctionDeclaration =>
+          ts.isFunctionDeclaration(statement) && statement.name?.text === name,
+      )
+      ?.body?.statements.find(ts.isReturnStatement)?.expression;
+  const local = find(file);
+  if (local !== undefined) return { table: local, file };
+  for (const statement of source(file).statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier)) {
+      continue;
+    }
+    const names = statement.importClause?.namedBindings;
+    if (names === undefined || !ts.isNamedImports(names)) continue;
+    if (!names.elements.some((element) => element.name.text === name)) continue;
+    const target = resolve(dirname(file), `${statement.moduleSpecifier.text}.ts`);
+    const table = find(target);
+    if (table !== undefined) return { table, file: target };
+  }
+  throw new Error(`The route walk cannot resolve the helper ${name}() in ${file}`);
+}
+
+/** The export a `loadChildren` arrow returns (`(m) => m.mappingReviewRoutes`). */
+function lazyExport(node: ts.Node): string {
+  let name = '';
+  const visit = (child: ts.Node): void => {
+    if (ts.isPropertyAccessExpression(child) && ts.isIdentifier(child.expression)) {
+      name = child.name.text;
+    }
+    ts.forEachChild(child, visit);
+  };
+  visit(node);
+  if (name === '') throw new Error(`A route loader names no export: ${node.getText()}`);
+  return name;
+}
+
+/**
+ * The review-only route builders: `reviewScreen(path, permission, loadComponent)` mounts one page
+ * and `reviewMount(path, permission | null, loadChildren)` mounts a child route table, both
+ * inside the shell under the org and project scope.
+ */
+function builderSurfaces(
+  call: ts.CallExpression,
+  file: string,
+  prefix: string,
+  inherited: readonly string[],
+): Surface[] {
+  const [segment, permission, loader] = call.arguments;
+  if (segment === undefined || !ts.isStringLiteralLike(segment) || loader === undefined) {
+    throw new Error(`A review route in ${file} is not a literal call: extend the route walk`);
+  }
+  const path = `${prefix}/${segment.text}/orgs/:orgId/projects/:projectId`;
+  // `null` (or no argument) is the documented "no extra permission"; anything else must be a literal.
+  const permissions = [...inherited];
+  if (permission !== undefined && permission.kind !== ts.SyntaxKind.NullKeyword) {
+    if (!ts.isStringLiteralLike(permission)) {
+      throw new Error(
+        `A review route permission in ${file} is not a literal: extend the route walk`,
+      );
+    }
+    permissions.push(permission.text);
+  }
+  const name = call.expression.getText();
+  if (name === 'reviewScreen') return [{ path, component: lazyComponent(loader), permissions }];
+  const childFile = importedModule(loader, file);
+  return routeSurfaces(declaration(childFile, lazyExport(loader)), childFile, path, permissions);
+}
+
 function spreadSurfaces(
   node: ts.Expression,
   file: string,
@@ -182,6 +254,10 @@ function spreadSurfaces(
     const table = factory?.body?.statements.find(ts.isReturnStatement)?.expression;
     if (table === undefined) throw new Error('The fixture route table returns nothing');
     return routeSurfaces(table, DEV_ROUTES, prefix, inherited);
+  }
+  if (ts.isCallExpression(node) && node.arguments.length === 0 && name !== 'devRoutes()') {
+    const helper = helperTable(node, file);
+    return routeSurfaces(helper.table, helper.file, prefix, inherited);
   }
   if (name === 'AUTH_ROUTES') {
     const authFile = resolve(APP, 'features/auth/auth.routes.ts');
@@ -205,6 +281,12 @@ function routeSurfaces(
         ? spreadSurfaces(child.expression, file, prefix, inherited)
         : routeSurfaces(child, file, prefix, inherited),
     );
+  }
+  if (
+    ts.isCallExpression(node) &&
+    ['reviewScreen', 'reviewMount'].includes(node.expression.getText())
+  ) {
+    return builderSurfaces(node, file, prefix, inherited);
   }
   if (!ts.isObjectLiteralExpression(node)) throw new Error(`Unsupported route table in ${file}`);
   if (property(node, 'redirectTo') !== undefined) return [];

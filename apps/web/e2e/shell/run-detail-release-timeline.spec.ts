@@ -159,12 +159,18 @@ test('the unbound regions add no keyboard stops', async ({ page }) => {
     await page.keyboard.press('Tab');
     await expect(copy).toBeFocused();
   }
+  // Nothing in the unbound timeline or release panel adds a stop after the manifest.
+  await page.keyboard.press('Tab');
+  expect((await activeElement(page)).tag).toBe('body');
   const producers = page.locator('#producers');
+  const producerCopies = producers.locator('app-copy-value-button button');
+  // The producer table precedes the evidence tabs; start from the stop before it.
+  await producerCopies.first().focus();
+  await page.keyboard.press('Shift+Tab');
   await tabThroughTableScroller(page, producers);
   await tabThroughRunControls(page, producers, 2);
   await page.keyboard.press('Tab');
-  expect((await activeElement(page)).tag).toBe('body');
-  const producerCopies = producers.locator('app-copy-value-button button');
+  await expect(page.getByRole('tab', { name: 'Evidence' })).toBeFocused();
   for (const copy of (await producerCopies.all()).reverse()) {
     await page.keyboard.press('Shift+Tab');
     await expect(copy).toBeFocused();
@@ -174,8 +180,6 @@ test('the unbound regions add no keyboard stops', async ({ page }) => {
     await page.keyboard.press('Shift+Tab');
     await expect(scroller).toBeFocused();
   }
-  await page.keyboard.press('Shift+Tab');
-  await expect(copies.last()).toBeFocused();
   await expectNoA11yViolations(page, 'unbound release and timeline');
 });
 
@@ -194,8 +198,13 @@ test('the compact release chooser and both identifier actions preserve keyboard 
     await page.keyboard.press('Tab');
     await expect(copy).toBeFocused();
   }
+  // The producer table precedes the evidence tabs; the release panel follows the manifest.
+  const producerStops = page.locator('#producers app-copy-value-button button');
+  await producerStops.first().focus();
+  await page.keyboard.press('Shift+Tab');
   await tabThroughTableScroller(page, page.locator('#producers'));
   await tabThroughRunControls(page, page.locator('#producers'), 2);
+  await manifestCopies.last().focus();
   await page.keyboard.press('Tab');
   await expect(selector).toBeFocused();
   await openReleaseChooser(page, selector);
