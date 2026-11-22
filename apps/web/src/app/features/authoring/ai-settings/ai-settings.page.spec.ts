@@ -25,6 +25,9 @@ class SettingsHarness extends ComponentHarness {
   readonly retryButton = this.locatorFor('app-retry-after button');
   readonly dialog = this.documentRootLocatorFactory().locatorForOptional('[role="dialog"]');
   readonly dialogTitle = this.documentRootLocatorFactory().locatorFor('[role="dialog"] h2');
+  readonly dialogContent = this.documentRootLocatorFactory().locatorFor('hlm-dialog-content');
+  readonly dialogSubject = this.documentRootLocatorFactory().locatorFor('[hlmDialogSubject]');
+  readonly dialogStatusIcon = this.documentRootLocatorFactory().locatorFor('[hlmDialogStatusIcon]');
   readonly view = this.locatorFor('[data-ai-version-view]');
   readonly settingsTab = this.locatorFor('[role="tab"]:first-child');
   readonly historyTab = this.locatorFor('[data-ai-history-tab]');
@@ -187,6 +190,8 @@ describe('AiSettingsPage', () => {
     expect(data.version).toHaveBeenCalledWith('p1', 1, expect.any(AbortSignal));
   });
   it('opens the loaded snapshot without selecting a comparison or retrieving its document', async () => {
+    const reason = 'Long reason '.repeat(50).slice(0, 500);
+    data.versions.mockResolvedValue({ items: [{ ...version, reason }], next_cursor: null });
     const { harness } = await mount();
     await harness.click('[data-ai-history-tab]');
     const opener = await harness.view();
@@ -197,7 +202,10 @@ describe('AiSettingsPage', () => {
     const dialog = await harness.dialog();
     expect(await dialog?.getAttribute('aria-labelledby')).toBe(await title.getAttribute('id'));
     expect(await dialog?.text()).toContain('general-en');
-    expect(await dialog?.text()).toContain(version.reason);
+    expect(await dialog?.text()).toContain(reason);
+    expect(await (await harness.dialogContent()).getAttribute('data-size')).toBe('md');
+    expect(await (await harness.dialogSubject()).text()).toBe('Version 1');
+    expect(await (await harness.dialogStatusIcon()).getAttribute('aria-hidden')).toBe('true');
     await vi.waitFor(async () => expect(await title.isFocused()).toBe(true));
     await title.sendKeys(TestKey.ESCAPE);
     await vi.waitFor(async () => expect(await harness.dialog()).toBeNull());
@@ -422,6 +430,9 @@ describe('AiSettingsPage', () => {
         readonly after = this.locatorFor('[data-ai-languages-after]');
       },
     );
+    expect(await (await harness.dialogContent()).getAttribute('data-size')).toBe('lg');
+    expect(await (await harness.dialogSubject()).text()).toContain(template?.name);
+    expect(await (await harness.dialogStatusIcon()).getAttribute('aria-hidden')).toBe('true');
     expect(await (await dialog.before()).text()).toContain('Before');
     expect(await (await dialog.before()).text()).toContain('vi');
     expect(await (await dialog.after()).text()).toContain('After');

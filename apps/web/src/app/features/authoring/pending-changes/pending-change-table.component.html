@@ -58,7 +58,7 @@
   [autoFocus]="'[data-pending-view-title]'"
   (closed)="restoreOpener()"
 >
-  <hlm-dialog-content *hlmDialogPortal class="change-view" data-pending-preview-content>
+  <hlm-dialog-content *hlmDialogPortal [size]="'md'" data-pending-preview-content>
     @if (active(); as row) {
       <header hlmDialogHeader>
         <h2
@@ -69,7 +69,7 @@
         >
           Change details
         </h2>
-        <p hlmDialogDescription>{{ operationLabel(row.change_type) }}</p>
+        <p hlmDialogDescription hlmDialogSubject>{{ operationLabel(row.change_type) }}</p>
         <span data-pending-preview-state
           ><ng-container [ngTemplateOutlet]="state" [ngTemplateOutletContext]="{ $implicit: row }"
         /></span>

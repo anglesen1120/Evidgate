@@ -1,31 +1,6 @@
-.catalog-dialog {
-  width: min(560px, calc(100vw - var(--eg-space-8)));
-  max-width: none;
-  max-height: calc(100dvh - var(--eg-space-8));
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  overflow: hidden;
-}
-.catalog-dialog.editing {
-  width: min(760px, calc(100vw - var(--eg-space-8)));
-}
 .body {
   min-inline-size: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
   padding: var(--eg-space-2);
-}
-@media (width < 600px) {
-  .catalog-dialog,
-  .catalog-dialog.editing {
-    width: 100vw;
-    height: 100dvh;
-    max-height: none;
-    border-radius: 0;
-    padding: max(var(--eg-space-4), env(safe-area-inset-top))
-      max(var(--eg-space-4), env(safe-area-inset-right))
-      max(var(--eg-space-4), env(safe-area-inset-bottom))
-      max(var(--eg-space-4), env(safe-area-inset-left));
-  }
 }
 @media (pointer: coarse) {
   button {

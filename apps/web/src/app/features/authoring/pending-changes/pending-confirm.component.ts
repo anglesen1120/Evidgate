@@ -25,15 +25,18 @@ import { operationLabel, PENDING_UI } from './pending-changes.ui-copy';
       <hlm-dialog-content
         *hlmDialogPortal
         [showCloseButton]="false"
-        class="max-h-[calc(100dvh-var(--eg-space-8))] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden wrap-anywhere"
+        [size]="'md'"
+        class="wrap-anywhere"
       >
         <header hlmDialogHeader class="border-b border-border pb-(--eg-space-4)">
-          <h2 hlmDialogTitle class="flex items-center gap-(--eg-space-2)">
-            <hlm-icon [name]="destructive() ? 'lucideTriangleAlert' : 'lucideInfo'" />{{ title() }}
-          </h2>
-          <p hlmDialogDescription>{{ description() }}</p>
+          <hlm-icon
+            hlmDialogStatusIcon
+            [name]="destructive() ? 'lucideTriangleAlert' : 'lucideInfo'"
+          />
+          <h2 hlmDialogTitle>{{ title() }}</h2>
+          <p hlmDialogDescription hlmDialogSubject>{{ description() }}</p>
         </header>
-        <div class="grid min-w-0 gap-(--eg-space-4) overflow-auto p-(--eg-space-2)">
+        <div class="grid min-w-0 gap-(--eg-space-4) p-(--eg-space-2)">
           <section class="grid min-w-0 gap-(--eg-space-3)">
             <h3 class="m-0 text-lg font-semibold">{{ idsLabel() }}</h3>
             @if (changes().length === 0) {

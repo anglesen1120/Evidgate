@@ -42,6 +42,8 @@ for (const locale of LOCALES) {
       await page
         .locator('#ai-writing_style')
         .fill('Concise updated review-only checkout guidance.');
+      const reason = 'Long reason '.repeat(50).slice(0, 500);
+      await page.locator('#ai-reason').fill(reason);
       await page.locator('[data-ai-save]').focus();
       await page.keyboard.press('Enter');
       await expect(page.locator('[data-ai-saved]')).toBeVisible();
@@ -61,6 +63,22 @@ for (const locale of LOCALES) {
       await expect(page.locator('[data-ai-version-detail]')).toContainText(
         'Concise updated review-only checkout guidance.',
       );
+      await page.setViewportSize({ width: 320, height: 800 });
+      await page.locator('[data-ai-version-view]').first().click();
+      await waitForDialogAnimations(page, '[role="dialog"]');
+      const dialog = page.getByRole('dialog');
+      await expect(dialog.locator('[hlmDialogSubject]')).toContainText('3');
+      await expect(dialog.locator('[hlmDialogSubject]')).not.toContainText(reason);
+      await expect(dialog.locator('dl').first()).toContainText(reason);
+      const content = dialog.locator('hlm-dialog-content');
+      const header = dialog.locator('header');
+      const contentBounds = await content.boundingBox();
+      const headerBounds = await header.boundingBox();
+      expect(headerBounds).not.toBeNull();
+      expect(contentBounds).not.toBeNull();
+      expect(headerBounds?.height).toBeLessThan((contentBounds?.height ?? 0) / 2);
+      await content.evaluate((element) => element.scrollTo(0, element.scrollHeight));
+      await expect(dialog.locator('footer button')).toBeInViewport();
     });
     test('412 fetches server snapshot and keeps the unsaved draft after Escape', async ({
       page,

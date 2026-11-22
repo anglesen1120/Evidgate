@@ -26,6 +26,7 @@ import { HlmLabel } from '@evidgate/ui/label';
 import { HlmCheckbox } from '@evidgate/ui/checkbox';
 import { HlmTabsImports } from '@evidgate/ui/tabs';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { createFormFeedback } from '../../../shared/forms/form-feedback';
 import { FieldFeedbackComponent } from '../../../shared/forms/field-feedback.component';
 import { FormErrorSummaryComponent } from '../../../shared/forms/form-error-summary.component';
@@ -94,6 +95,7 @@ function headingLevel(data: Record<string, unknown>): number {
     HlmCheckbox,
     HlmTabsImports,
     HlmDialogImports,
+    HlmIcon,
     FieldFeedbackComponent,
     FormErrorSummaryComponent,
     PageHeaderComponent,

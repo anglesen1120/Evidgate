@@ -145,7 +145,7 @@
                                   [rows]="
                                     field.key === 'environment_url' || field.key === 'reason'
                                       ? 1
-                                      : 2
+                                      : 3
                                   "
                                   class="h-auto w-full min-w-0 resize-y"
                                   [id]="'ai-' + field.key"
@@ -400,22 +400,25 @@
   (closed)="templateClosed()"
   (stateChanged)="$event === 'closed' && preview.set(null)"
 >
-  <hlm-dialog-content
-    *hlmDialogPortal
-    [showCloseButton]="false"
-    class="max-h-[calc(100dvh-var(--eg-space-8))] max-w-[760px] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden"
-  >
+  <hlm-dialog-content *hlmDialogPortal [showCloseButton]="false" [size]="'lg'">
     <header hlmDialogHeader>
+      <hlm-icon
+        hlmDialogStatusIcon
+        [name]="'lucideInfo'"
+        class="size-(--eg-space-6) text-(--eg-info-fg)"
+      />
       <h2 hlmDialogTitle i18n="@@authoring.ai-settings.preview-title">
         Preview template replacement
       </h2>
+      @if (preview(); as template) {
+        <p hlmDialogSubject>{{ template.name }} · {{ template.locale }} · {{ template.version }}</p>
+      }
       <p hlmDialogDescription i18n="@@authoring.ai-settings.preview-description">
         Replace every guidance field in the draft only. Nothing is saved until Save new version.
       </p>
     </header>
-    <div class="min-h-0 overflow-y-auto overscroll-contain p-(--eg-space-2)">
+    <div class="min-h-0 p-(--eg-space-2)">
       @if (preview(); as template) {
-        <p>{{ template.name }} · {{ template.locale }} · {{ template.version }}</p>
         <dl class="grid min-w-0 gap-4 wrap-anywhere">
           @for (field of fields; track field.key) {
             @if (field.key !== 'reason') {

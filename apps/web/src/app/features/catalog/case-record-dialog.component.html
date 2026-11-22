@@ -1,7 +1,5 @@
 <hlm-dialog
   [state]="'open'"
-  [disableClose]="true"
-  [closeOnOutsidePointerEvents]="false"
   [restoreFocus]="false"
   [aria-modal]="true"
   [aria-labelledby]="'catalog-record-title'"
@@ -10,8 +8,8 @@
   <hlm-dialog-content
     *hlmDialogPortal
     [showCloseButton]="false"
-    class="catalog-dialog"
-    [class.editing]="editing()"
+    [size]="editing() ? 'lg' : 'md'"
+    [closeGuard]="allowClose"
     (keydown.escape)="escape($event)"
     [attr.aria-busy]="busy() || saving()"
   >
@@ -21,7 +19,7 @@
           confirming() ? copy.discardTitle : editing() ? copy.edit : copy.viewTitle
         }}</span>
       </h2>
-      <p hlmDialogDescription>
+      <p hlmDialogDescription hlmDialogSubject>
         <bdi>{{ display(row().name || row().id) }}</bdi>
       </p>
       @if (!confirming()) {

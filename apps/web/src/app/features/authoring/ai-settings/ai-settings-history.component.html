@@ -224,11 +224,13 @@
     (stateChanged)="$event === 'closed' && viewedNo.set(null)"
     (closed)="restoreFocus()"
   >
-    <hlm-dialog-content
-      *hlmDialogPortal
-      class="max-h-[calc(100dvh-var(--eg-space-8))] max-w-[560px] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden max-[600px]:h-dvh max-[600px]:max-h-dvh max-[600px]:w-screen max-[600px]:max-w-full max-[600px]:rounded-none max-[600px]:border-0 max-[600px]:pt-[max(var(--eg-space-5),env(safe-area-inset-top))] max-[600px]:pb-[max(var(--eg-space-5),env(safe-area-inset-bottom))]"
-    >
+    <hlm-dialog-content *hlmDialogPortal [size]="'md'">
       <header hlmDialogHeader>
+        <hlm-icon
+          hlmDialogStatusIcon
+          [name]="'lucideInfo'"
+          class="size-(--eg-space-6) text-(--eg-info-fg)"
+        />
         <h2
           hlmDialogTitle
           tabindex="-1"
@@ -237,12 +239,17 @@
         >
           Settings version details
         </h2>
+        <p hlmDialogSubject>
+          <span i18n="@@authoring.ai-settings.version-column">Version</span>&ngsp;{{
+            viewed()?.version_no
+          }}
+        </p>
         <p hlmDialogDescription i18n="@@authoring.ai-settings.restore-unavailable">
           Restore is unavailable: this screen provides read-only history.
         </p>
       </header>
       <div
-        class="grid min-h-0 gap-(--eg-space-4) overflow-y-auto overscroll-contain p-(--eg-space-2) [&_dl]:m-0 [&_dl]:grid [&_dl]:min-w-0 [&_dl]:divide-y [&_dl]:divide-border [&_dl>div]:grid [&_dl>div]:items-baseline [&_dl>div]:gap-(--eg-space-2) [&_dl>div]:py-(--eg-space-3) sm:[&_dl>div]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] [&_dt]:text-sm [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:wrap-anywhere"
+        class="grid min-h-0 gap-(--eg-space-4) p-(--eg-space-2) [&_dl]:m-0 [&_dl]:grid [&_dl]:min-w-0 [&_dl]:divide-y [&_dl]:divide-border [&_dl>div]:grid [&_dl>div]:items-baseline [&_dl>div]:gap-(--eg-space-2) [&_dl>div]:py-(--eg-space-3) sm:[&_dl>div]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] [&_dt]:text-sm [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:wrap-anywhere"
       >
         @if (viewed(); as row) {
           <h3 class="m-0 text-sm font-semibold" i18n="@@authoring.history.summary">Summary</h3>

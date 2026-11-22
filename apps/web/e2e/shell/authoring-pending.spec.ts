@@ -12,6 +12,7 @@ import {
   PROJECT_STOREFRONT,
   seedStoredTheme,
   THEMES,
+  waitForDialogAnimations,
   withVariant,
 } from './support';
 
@@ -83,6 +84,7 @@ for (const locale of LOCALES) {
         );
         const view = page.getByRole('dialog');
         await expect(view.locator('[data-pending-view-title]')).toBeFocused();
+        await waitForDialogAnimations(page, '[role="dialog"]');
         await expectNoA11yViolations(page, `change details ${locale} ${theme} ${width}`);
         await page.keyboard.press('Escape');
         await expect(view).toHaveCount(0);
@@ -103,6 +105,7 @@ for (const locale of LOCALES) {
           const dialog = page.getByRole('alertdialog');
           await expect(dialog).toContainText(COMMENT);
           await expect(dialog).toContainText(DELETE);
+          await waitForDialogAnimations(page, '[role="alertdialog"]');
           await expectNoA11yViolations(page, `pending consent ${locale} ${theme}`);
           expect(await calls(page)).toEqual([]);
           await page.keyboard.press('Escape');

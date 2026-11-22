@@ -12,6 +12,7 @@ import {
 import type { AiSettingsVersionSummary } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmCard, HlmCardContent, HlmCardHeader, HlmCardTitle } from '@evidgate/ui/card';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
@@ -35,6 +36,7 @@ import { AiSettingsSnapshotFieldsComponent } from './ai-settings-snapshot-fields
   imports: [
     HlmButton,
     HlmDialogImports,
+    HlmIcon,
     AiSettingsSnapshotFieldsComponent,
     HlmCard,
     HlmCardContent,

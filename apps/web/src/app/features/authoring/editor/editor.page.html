@@ -467,10 +467,10 @@
   [autoFocus]="'[data-leave-cancel]'"
   (stateChanged)="$event === 'closed' && resolveLeave(false)"
 >
-  <hlm-dialog-content *hlmDialogPortal [showCloseButton]="false">
+  <hlm-dialog-content *hlmDialogPortal [showCloseButton]="false" [size]="'md'">
     <header hlmDialogHeader>
       <h2 hlmDialogTitle i18n="@@authoring.editor.leave-title">Discard unsaved changes?</h2>
-      <p hlmDialogDescription i18n="@@authoring.editor.leave-description">
+      <p hlmDialogDescription hlmDialogSubject i18n="@@authoring.editor.leave-description">
         Your draft is only in this tab. Leaving discards it without saving a version.
       </p>
     </header>

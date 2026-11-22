@@ -13,6 +13,7 @@ import {
 } from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { StatusPillComponent, type StatusTone } from '../../shared/ui/chips/status-pill.component';
 import type { OnboardingProgress } from './data/onboarding-progress.service';
 import type { StepNumber } from './data/step-derivation';
@@ -91,7 +92,7 @@ export class OnboardingRecordButtonComponent {
 
 @Component({
   selector: 'app-onboarding-record-dialog',
-  imports: [HlmDialogImports, HlmButton, NgTemplateOutlet, StatusPillComponent],
+  imports: [HlmDialogImports, HlmIcon, HlmButton, NgTemplateOutlet, StatusPillComponent],
   host: { class: 'contents' },
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -103,13 +104,15 @@ export class OnboardingRecordButtonComponent {
         [restoreFocus]="record.opener"
         (closed)="selection.set(null)"
       >
-        <hlm-dialog-content
-          *hlmDialogPortal
-          class="w-[min(560px,calc(100vw-var(--eg-space-8)))] max-w-[560px] max-h-[calc(100dvh-var(--eg-space-8))] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden pointer-coarse:[&_.spartan-dialog-close]:size-(--eg-control-touch) max-[599.98px]:w-screen max-[599.98px]:max-w-none max-[599.98px]:h-dvh max-[599.98px]:max-h-dvh max-[599.98px]:rounded-none max-[599.98px]:border-0 max-[599.98px]:pt-[max(env(safe-area-inset-top),var(--eg-space-5))] max-[599.98px]:pb-[max(env(safe-area-inset-bottom),var(--eg-space-5))] max-[599.98px]:ps-[max(env(safe-area-inset-left),var(--eg-space-5))] max-[599.98px]:pe-[max(env(safe-area-inset-right),var(--eg-space-5))]"
-        >
+        <hlm-dialog-content *hlmDialogPortal [size]="'md'">
           <header hlmDialogHeader>
+            <hlm-icon
+              hlmDialogStatusIcon
+              [name]="'lucideInfo'"
+              class="size-(--eg-space-6) text-(--eg-info-fg)"
+            />
             <h2 hlmDialogTitle data-record-heading tabindex="-1">{{ record.title }}</h2>
-            <p hlmDialogDescription class="wrap-anywhere">
+            <p hlmDialogDescription hlmDialogSubject>
               <bdi>{{ record.subject }}</bdi>
             </p>
             @if (record.id; as id) {
@@ -123,7 +126,7 @@ export class OnboardingRecordButtonComponent {
             <p class="m-0 text-xs text-muted-foreground">{{ copy.readOnly }}</p>
           </header>
           <div
-            class="min-w-0 overflow-y-auto overscroll-contain wrap-anywhere [&_dl]:m-0 [&_dl]:grid [&_dl]:gap-(--eg-space-4) [&_dl>div]:grid [&_dl>div]:gap-(--eg-space-2) min-[400px]:[&_dl>div]:grid-cols-[minmax(8rem,36%)_minmax(0,1fr)] [&_dt]:text-muted-foreground [&_dd]:m-0"
+            class="min-w-0 wrap-anywhere [&_dl]:m-0 [&_dl]:grid [&_dl]:gap-(--eg-space-4) [&_dl>div]:grid [&_dl>div]:gap-(--eg-space-2) min-[400px]:[&_dl>div]:grid-cols-[minmax(8rem,36%)_minmax(0,1fr)] [&_dt]:text-muted-foreground [&_dd]:m-0"
           >
             <h3 class="mb-(--eg-space-4) text-sm font-semibold">{{ copy.summary }}</h3>
             <ng-container [ngTemplateOutlet]="record.details" />

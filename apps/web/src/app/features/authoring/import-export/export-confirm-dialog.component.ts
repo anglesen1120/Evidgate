@@ -19,17 +19,16 @@ import { IMPEX_COPY } from './import-export.copy';
       <hlm-dialog-content
         *hlmDialogPortal
         [showCloseButton]="false"
-        class="max-h-[calc(100dvh-var(--eg-space-8))] max-w-[560px] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden wrap-anywhere"
+        [size]="'md'"
+        class="wrap-anywhere"
       >
         <header hlmDialogHeader>
           <h2 hlmDialogTitle>{{ copy.confirmDownload }}</h2>
-        </header>
-        <div
-          class="grid min-h-0 content-start gap-(--eg-space-4) overflow-y-auto overscroll-contain"
-        >
-          <p hlmDialogDescription class="m-0 font-medium wrap-anywhere">
+          <p hlmDialogDescription hlmDialogSubject class="font-medium">
             <bdi>{{ scope() }}</bdi>
           </p>
+        </header>
+        <div class="grid min-w-0 content-start gap-(--eg-space-4)">
           <dl
             class="m-0 grid min-w-0 divide-y divide-border [&>div]:grid [&>div]:gap-(--eg-space-2) [&>div]:py-(--eg-space-3) sm:[&>div]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:font-medium"
           >

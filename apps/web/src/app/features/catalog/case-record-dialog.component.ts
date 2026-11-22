@@ -60,7 +60,7 @@ export type SaveCatalogOwner = (row: CaseDto, membershipId: string) => Promise<b
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './case-record-dialog.component.html',
   styleUrl: './case-record-dialog.component.css',
-  host: { '(document:click)': 'outside($event)', '(window:beforeunload)': 'beforeUnload($event)' },
+  host: { '(window:beforeunload)': 'beforeUnload($event)' },
 })
 export class CaseRecordDialogComponent {
   private readonly document = inject(DOCUMENT);
@@ -136,20 +136,13 @@ export class CaseRecordDialogComponent {
     this.confirming.set(false);
     leave?.();
   }
+  protected readonly allowClose = (): boolean => !this.confirming() && this.requestLeave();
+
   protected escape(event: Event): void {
-    if (event.defaultPrevented) return;
+    if (event.defaultPrevented || !this.confirming()) return;
     event.preventDefault();
     event.stopPropagation();
-    if (this.confirming()) this.keepEditing();
-    else this.requestLeave();
-  }
-  protected outside(event: Event): void {
-    if (
-      event.target instanceof Element &&
-      event.target.matches('.cdk-overlay-backdrop.spartan-dialog-overlay') &&
-      !this.confirming()
-    )
-      this.requestLeave();
+    this.keepEditing();
   }
   protected beforeUnload(event: BeforeUnloadEvent): void {
     if (this.dirty()) event.preventDefault();

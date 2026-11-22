@@ -300,74 +300,73 @@
   <hlm-dialog-content
     *hlmDialogPortal
     [showCloseButton]="false"
-    class="max-h-[calc(100dvh-var(--eg-space-8))] overflow-y-auto"
+    [size]="'md'"
+    [attr.aria-busy]="store.restoring()"
   >
-    <div class="grid min-w-0 gap-4" [attr.aria-busy]="store.restoring()">
-      <header hlmDialogHeader>
-        <h2 hlmDialogTitle i18n="@@authoring.editor.restore-title">Restore as a new version?</h2>
-        <p hlmDialogDescription i18n="@@authoring.editor.restore-description">
-          This replaces the live case content with the selected stored snapshot and appends a
-          version. Earlier versions remain unchanged.
-        </p>
-      </header>
-      <p #restoreStatus class="m-0 min-h-(--eg-leading-sm) text-sm" role="status" tabindex="-1">
-        @if (store.restoring()) {
-          <span i18n="@@authoring.editor.restoring">Restoring version…</span>
-        }
+    <header hlmDialogHeader>
+      <h2 hlmDialogTitle i18n="@@authoring.editor.restore-title">Restore as a new version?</h2>
+      <p hlmDialogDescription hlmDialogSubject i18n="@@authoring.editor.restore-description">
+        This replaces the live case content with the selected stored snapshot and appends a version.
+        Earlier versions remain unchanged.
       </p>
-      @if (store.versionDetail(); as detail) {
-        <p i18n="@@authoring.editor.restore-source">Source version {{ detail.view.version_no }}</p>
-        <app-copyable-identifier [value]="detail.view.version_id" [label]="versionLabel" />
-        <pre
-          class="max-h-[30vh] overflow-y-auto whitespace-pre-wrap text-sm wrap-anywhere"
-          tabindex="0"
-          [attr.aria-label]="contentLabel"
-          >{{ snapshot(detail.view.content) }}</pre>
+    </header>
+    <p #restoreStatus class="m-0 min-h-(--eg-leading-sm) text-sm" role="status" tabindex="-1">
+      @if (store.restoring()) {
+        <span i18n="@@authoring.editor.restoring">Restoring version…</span>
       }
-      <div class="grid min-w-0 gap-2">
-        <label hlmLabel for="case-restore-reason" i18n="@@authoring.editor.restore-reason"
-          >Restore reason</label
-        >
-        <input
-          hlmInput
-          id="case-restore-reason"
-          disabled
-          [aria-describedby]="'case-restore-reason-unavailable'"
-        />
-        <p id="case-restore-reason-unavailable" class="m-0 text-sm text-muted-foreground">
-          {{ reasonUnavailable }}
-        </p>
-      </div>
-      @if (store.failure(); as failure) {
-        <app-request-state
-          [status]="'error'"
-          [error]="failure"
-          [retryEligible]="!blocked()"
-          (retry)="restore()"
-        />
-      }
-      <footer hlmDialogFooter>
-        <button
-          hlmBtn
-          [variant]="'outline'"
-          type="button"
-          data-restore-cancel
-          (click)="confirmation.set(null)"
-          i18n="@@authoring.editor.cancel"
-        >
-          Cancel
-        </button>
-        <button
-          hlmBtn
-          type="button"
-          data-restore-confirm
-          [disabled]="blocked()"
-          (click)="restore()"
-          i18n="@@authoring.editor.restore-confirm"
-        >
-          Restore as new version
-        </button>
-      </footer>
+    </p>
+    @if (store.versionDetail(); as detail) {
+      <p i18n="@@authoring.editor.restore-source">Source version {{ detail.view.version_no }}</p>
+      <app-copyable-identifier [value]="detail.view.version_id" [label]="versionLabel" />
+      <pre
+        class="max-h-[30vh] overflow-y-auto whitespace-pre-wrap text-sm wrap-anywhere"
+        tabindex="0"
+        [attr.aria-label]="contentLabel"
+        >{{ snapshot(detail.view.content) }}</pre>
+    }
+    <div class="grid min-w-0 gap-2">
+      <label hlmLabel for="case-restore-reason" i18n="@@authoring.editor.restore-reason"
+        >Restore reason</label
+      >
+      <input
+        hlmInput
+        id="case-restore-reason"
+        disabled
+        [aria-describedby]="'case-restore-reason-unavailable'"
+      />
+      <p id="case-restore-reason-unavailable" class="m-0 text-sm text-muted-foreground">
+        {{ reasonUnavailable }}
+      </p>
     </div>
+    @if (store.failure(); as failure) {
+      <app-request-state
+        [status]="'error'"
+        [error]="failure"
+        [retryEligible]="!blocked()"
+        (retry)="restore()"
+      />
+    }
+    <footer hlmDialogFooter>
+      <button
+        hlmBtn
+        [variant]="'outline'"
+        type="button"
+        data-restore-cancel
+        (click)="confirmation.set(null)"
+        i18n="@@authoring.editor.cancel"
+      >
+        Cancel
+      </button>
+      <button
+        hlmBtn
+        type="button"
+        data-restore-confirm
+        [disabled]="blocked()"
+        (click)="restore()"
+        i18n="@@authoring.editor.restore-confirm"
+      >
+        Restore as new version
+      </button>
+    </footer>
   </hlm-dialog-content>
 </hlm-dialog>
