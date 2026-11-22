@@ -6,6 +6,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { HlmBadge } from '@evidgate/ui/badge';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmCard, HlmCardContent, HlmCardHeader } from '@evidgate/ui/card';
 
 import { HashChipComponent, StatusPillComponent } from '../chips';
@@ -40,6 +41,7 @@ function records(count: number): readonly GalleryRecord[] {
 @Component({
   selector: 'app-gallery-tables',
   imports: [
+    HlmIcon,
     HlmBadge,
     HlmCard,
     HlmCardContent,
@@ -90,8 +92,12 @@ function records(count: number): readonly GalleryRecord[] {
           </h3>
         </div>
         <div hlmCardContent class="grid min-w-0 gap-2">
-          <span hlmBadge [variant]="'secondary'">{{ longRoleLabel }}</span>
-          <span hlmBadge [variant]="'outline'">{{ shortRoleLabel }}</span>
+          <span hlmBadge [variant]="'secondary'"
+            ><hlm-icon [name]="'lucideInfo'" />{{ longRoleLabel }}</span
+          >
+          <span hlmBadge [variant]="'outline'"
+            ><hlm-icon [name]="'lucideCircle'" />{{ shortRoleLabel }}</span
+          >
         </div>
       </section>
     </section>

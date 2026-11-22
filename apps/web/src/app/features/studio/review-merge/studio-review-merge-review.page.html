@@ -1,0 +1,128 @@
+@let vm = view();
+<app-page-header
+  [title]="vm.record === 'studio' ? copy.title : copy.candidateTitle"
+  [description]="vm.record === 'studio' ? copy.subtitle : copy.candidateSub"
+>
+  <div pageHeaderContext class="flex min-w-0 flex-wrap items-center gap-2 pb-2">
+    <span hlmBadge [variant]="'secondary'">{{
+      vm.record === 'studio' ? copy.historical : copy.candidateSpecimen
+    }}</span>
+    <code class="text-xs">{{ vm.references.project }}</code>
+  </div>
+  <div appPageHeaderActions>
+    @if (vm.headerAction; as action) {
+      <app-review-action-preview [kind]="action" [view]="vm" [primary]="true" />
+      <small class="block text-xs text-muted-foreground">{{ copy.preview }}</small>
+    }
+  </div>
+</app-page-header>
+@switch (vm.state) {
+  @case ('loading') {
+    <app-loading-pattern [layout]="'cards'" [label]="copy.loading" />
+  }
+  @case ('empty') {
+    <app-empty-pattern [title]="copy.empty" />
+  }
+  @case ('404') {
+    <app-empty-pattern [title]="copy.notFound" />
+  }
+  @case ('401') {
+    <app-inline-feedback [tone]="'destructive'" [title]="copy.expired" />
+  }
+  @case ('error') {
+    <app-inline-feedback
+      [tone]="'destructive'"
+      [title]="copy.error"
+      [actionLabel]="copy.retry"
+      (action)="show('default')"
+    />
+  }
+  @default {
+    @if (vm.notice; as notice) {
+      @if (vm.state === '412') {
+        <app-inline-feedback
+          [tone]="'warning'"
+          [title]="notice"
+          [actionLabel]="copy.reload"
+          (action)="show('reloaded')"
+        />
+      } @else if (vm.state === 'conflict') {
+        <app-inline-feedback
+          [tone]="'warning'"
+          [title]="copy.candidateConflict"
+          [description]="notice"
+        >
+          <code>{{ vm.references.replacement }}</code>
+        </app-inline-feedback>
+      } @else {
+        <app-inline-feedback
+          [tone]="vm.state === 'failed' || vm.state === '403' ? 'destructive' : 'info'"
+          [title]="notice"
+        />
+      }
+    }
+    <section hlmCard>
+      <header hlmCardHeader class="border-b border-border">
+        <h2 hlmCardTitle>{{ copy.identity }}</h2>
+      </header>
+      <dl hlmCardContent class="m-0 flex min-w-0 flex-wrap gap-x-6 gap-y-3 text-sm">
+        @for (fact of vm.identity; track fact.label) {
+          <div class="min-w-0 max-w-full">
+            <dt class="mb-1 text-muted-foreground">{{ fact.label }}</dt>
+            <dd class="m-0">
+              @if (fact.identifier) {
+                <app-copyable-identifier
+                  [value]="fact.value"
+                  [label]="fact.label"
+                  [truncate]="false"
+                  [compact]="true"
+                />
+              } @else {
+                <strong>{{ fact.value }}</strong>
+              }
+            </dd>
+          </div>
+        }
+      </dl>
+    </section>
+    <div
+      class="grid min-w-0 items-start gap-(--eg-space-5) md:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]"
+    >
+      <div class="grid min-w-0 gap-(--eg-space-4)">
+        <app-review-patch [view]="vm" />
+        @if (vm.state !== 'reloaded') {
+          <app-review-history [view]="vm" />
+        }
+      </div>
+      <aside class="grid min-w-0 gap-(--eg-space-4)">
+        <app-review-approval [view]="vm" />
+        @if (vm.prStatus && vm.state !== 'reloaded') {
+          <section hlmCard>
+            <header hlmCardHeader class="border-b border-border">
+              <h2 hlmCardTitle>{{ copy.pullRequest }}</h2>
+            </header>
+            <div hlmCardContent class="grid min-w-0 gap-2 text-sm">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <strong>{{ vm.references.repository }}</strong
+                ><code>{{ vm.references.pullRequest }}</code>
+              </div>
+              <p class="m-0">{{ vm.prStatus }}</p>
+              @if (vm.prUrlMissing) {
+                <p class="m-0 text-xs">{{ copy.noPrUrl }}</p>
+              }
+              <p class="m-0 text-muted-foreground">{{ copy.prNote }}</p>
+            </div>
+          </section>
+        }
+        @if (vm.record === 'studio') {
+          <p class="m-0 rounded-sm bg-muted p-3 text-sm">{{ copy.runtime }}</p>
+        }
+      </aside>
+    </div>
+  }
+}
+@if (vm.record === 'studio') {
+  <footer class="border-t border-border pt-3 text-xs text-muted-foreground">
+    {{ copy.historicalFooter }}
+  </footer>
+}

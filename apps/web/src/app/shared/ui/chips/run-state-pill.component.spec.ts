@@ -57,6 +57,7 @@ describe('RunStatePillComponent', () => {
       );
       expect(root.querySelector(`.status-pill--${tone}`)).not.toBeNull();
       const badge = root.querySelector('[hlmBadge]');
+      expect(badge?.querySelector('hlm-icon[aria-hidden="true"] svg')).not.toBeNull();
       expect(badge?.getAttribute('data-slot')).toBe('badge');
       expect(badge?.classList.contains(`bg-[var(--eg-${tone}-bg)]`)).toBe(true);
       expect(root.querySelector('[tabindex], [role], [aria-disabled], button, a')).toBeNull();

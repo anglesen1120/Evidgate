@@ -1,0 +1,140 @@
+@let vm = view();
+<div class="grid min-w-0 items-start gap-4 lg:grid-cols-2">
+  <section hlmCard class="min-w-0 gap-0">
+    <header class="grid gap-2 border-b p-5">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 class="text-lg font-semibold">{{ copy.queue }}</h2>
+        <span class="text-xs text-muted-foreground">{{ copy.runScope }}</span>
+      </div>
+      <p class="text-sm text-muted-foreground">{{ copy.queueHelp }}</p>
+    </header>
+    <fieldset class="grid min-w-0 gap-2 p-3">
+      <legend class="sr-only">{{ copy.queueLabel }}</legend>
+      @for (record of vm.records; track record.id) {
+        <label
+          class="grid min-w-0 cursor-pointer gap-3 rounded-md border border-input p-3 hover:bg-muted has-checked:border-primary has-checked:bg-accent has-focus-visible:ring-2 has-focus-visible:ring-ring"
+        >
+          <span class="flex min-w-0 flex-wrap items-center gap-3">
+            <input
+              type="radio"
+              name="decision-record"
+              [value]="record.id"
+              [checked]="current()?.id === record.id"
+              (change)="selection.select(record.id)"
+              class="accent-primary"
+            />
+            <span class="min-w-0 grow"
+              ><strong class="block">{{ record.kind }}</strong
+              ><span class="text-xs text-muted-foreground"
+                >{{ record.id }} · {{ record.owner }}</span
+              ></span
+            >
+            <app-status-pill [label]="record.status" [tone]="record.tone" />
+          </span>
+          <span class="flex min-w-0 flex-wrap justify-between gap-2 text-sm"
+            ><bdi class="font-mono">{{ record.scope }}</bdi
+            ><span class="text-muted-foreground">{{
+              record.id === 'checkout-vi-chromium' ? copy.notQuarantinable : record.expiry
+            }}</span></span
+          >
+        </label>
+      }
+    </fieldset>
+  </section>
+  @if (current(); as record) {
+    <article hlmCard data-detail class="min-w-0 gap-0" [attr.aria-label]="record.id">
+      <header class="grid gap-2 border-b p-5">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <bdi class="text-sm text-muted-foreground">{{ record.id }}</bdi
+          ><app-status-pill [label]="record.status" [tone]="record.tone" />
+        </div>
+        <h2 class="text-xl font-semibold">{{ record.kind }}</h2>
+        <bdi class="font-mono text-sm">{{ record.scope }}</bdi>
+        <app-inline-feedback
+          [tone]="'destructive'"
+          [announcement]="'off'"
+          [title]="copy.originalFailure"
+          [description]="copy.originalFailureHelp"
+        />
+      </header>
+      <section class="grid gap-3 border-b p-5">
+        <h3 class="font-semibold">{{ copy.reasonScope }}</h3>
+        <p>{{ record.reason }}</p>
+        <dl
+          class="grid gap-3 sm:grid-cols-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:font-medium"
+        >
+          <div>
+            <dt>{{ copy.owner }}</dt>
+            <dd>{{ record.owner }}</dd>
+          </div>
+          <div>
+            <dt>{{ copy.expires }}</dt>
+            <dd>{{ record.expiry }}</dd>
+          </div>
+          <div>
+            <dt>{{ copy.policy }}</dt>
+            <dd>{{ facts.policy }}</dd>
+          </div>
+        </dl>
+      </section>
+      @if (record.id === 'w-28') {
+        <section class="grid gap-2 border-b p-5">
+          <h3 class="font-semibold">{{ copy.history }}</h3>
+          <dl>
+            <div class="flex flex-wrap justify-between gap-2">
+              <dt>{{ copy.requestedBy }}</dt>
+              <dd>{{ facts.requester }}</dd>
+            </div>
+          </dl>
+          <app-waiver-banner [approver]="facts.approver" [expiresAt]="record.expiry" />
+        </section>
+      }
+      <footer class="flex flex-wrap items-center justify-between gap-3 p-4">
+        <small class="text-xs text-muted-foreground">{{ copy.caseScoped }}</small>
+        @if (vm.allowPreview) {
+          <div *appDesktopMutation class="flex min-w-0 flex-wrap items-start gap-2">
+            @switch (record.id) {
+              @case ('w-28') {
+                <app-decision-preview [action]="'revoke'" />
+              }
+              @case ('q-19') {
+                <app-decision-preview
+                  [action]="'remove'"
+                  [disabledReason]="
+                    vm.state === 'q-removed' || vm.state === 'q-expired' ? copy.inactive : null
+                  "
+                />
+              }
+              @case ('checkout-vi-chromium') {
+                <div>
+                  <button hlmBtn type="button" [variant]="'outline'" disabled>
+                    {{ copy.quarantineBlocked }}
+                  </button>
+                  <p class="text-xs">{{ copy.criticalHelp }}</p>
+                </div>
+              }
+              @case ('w-29') {
+                <app-decision-preview [action]="'decline'" /><app-decision-preview
+                  [action]="'approve'"
+                  [disabledReason]="vm.state === 'self' ? copy.selfHelp : null"
+                />
+              }
+              @case ('w-27') {
+                <span class="text-sm">{{ copy.readonly }}</span>
+              }
+            }
+          </div>
+        } @else {
+          <span class="text-sm">{{ copy.readonly }}</span>
+        }
+      </footer>
+    </article>
+  }
+</div>
+@if (vm.state === 'q-removed' || vm.state === 'q-expired' || vm.state === 'removed404') {
+  <section hlmCard class="mt-4 items-start gap-3 p-5">
+    <h2 class="text-lg font-semibold">{{ copy.caseQuarantine }}</h2>
+    <p>{{ copy.addHelp }}</p>
+    <app-decision-preview *appDesktopMutation [action]="'add'" />
+  </section>
+}

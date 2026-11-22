@@ -210,10 +210,11 @@ describe('ErrorPatternComponent', () => {
     fixture.componentRef.setInput('headingLevel', 3);
     fixture.detectChanges();
     expect(root.querySelector('[data-slot="card"]')).toBeNull();
-    expect(root.querySelector('section')?.classList.contains('state-panel--bare')).toBe(true);
+    const panel = root.querySelector('section.state-panel--bare');
+    expect(panel?.classList.contains('text-start')).toBe(true);
     expect(root.querySelector('[role="alert"] h3')?.textContent).toBe('Service unavailable');
     expect(root.querySelector('.state-panel__description')?.textContent).toBe(failure.message);
-    expect(root.querySelector('[role="alert"]')?.classList.contains('text-start')).toBe(true);
+    expect(panel?.querySelector('hlm-icon[aria-hidden="true"] svg')).not.toBeNull();
     const retry = vi.fn();
     fixture.componentInstance.retry.subscribe(retry);
     const button = root.querySelector('button')!;

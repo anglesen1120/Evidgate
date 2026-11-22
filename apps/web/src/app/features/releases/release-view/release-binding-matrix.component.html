@@ -1,0 +1,108 @@
+<section hlmCard aria-labelledby="release-matrix" class="min-w-0">
+  <header hlmCardHeader class="flex min-w-0 flex-wrap items-end justify-between gap-4">
+    <app-section-header [title]="copy.matrix" [titleId]="'release-matrix'" />
+    <div class="grid min-w-0 gap-1">
+      <label hlmLabel for="release-component-filter">{{ copy.filter }}</label>
+      <hlm-select
+        [value]="filter()"
+        [itemToString]="filterLabel"
+        (valueChange)="filterChanged.emit(filterValue($event))"
+      >
+        <hlm-select-trigger
+          [buttonId]="'release-component-filter'"
+          class="min-h-(--eg-control-touch) max-w-full"
+        >
+          <hlm-select-value />
+        </hlm-select-trigger>
+        <hlm-select-content *hlmSelectPortal [aria-label]="copy.filter">
+          <hlm-select-item [value]="'all'">{{ copy.all }}</hlm-select-item>
+          @for (row of rows(); track row.component) {
+            <hlm-select-item [value]="row.component">{{ row.component }}</hlm-select-item>
+          }
+        </hlm-select-content>
+      </hlm-select>
+    </div>
+  </header>
+  <app-data-table
+    [rows]="selectedRows()"
+    [columns]="columns()"
+    [rowId]="rowId"
+    [caption]="copy.matrixHelp"
+    [flow]="'page'"
+    [fitToContainer]="true"
+  />
+  <p hlmCardContent class="eg-type-caption m-0 text-muted-foreground">{{ copy.matrixFooter }}</p>
+</section>
+
+<ng-template #componentCell let-row>
+  <button
+    hlmBtn
+    [variant]="'link'"
+    type="button"
+    class="p-0 pointer-coarse:min-h-(--eg-control-touch)"
+    (click)="inspect.emit(row.component)"
+  >
+    {{ row.component }}
+  </button>
+</ng-template>
+<ng-template #digestCell let-row>
+  @if (unavailable(row)) {
+    {{ copy.unavailable }}
+  } @else {
+    <details [open]="state() === 'long'">
+      <summary
+        class="cursor-pointer font-mono wrap-anywhere pointer-coarse:min-h-(--eg-control-touch)"
+      >
+        <bdi>{{ row.digest }}</bdi>
+      </summary>
+      <small class="eg-type-caption">{{ copy.noFullDigest }}</small>
+    </details>
+  }
+</ng-template>
+<ng-template #bindingCell let-row>
+  @if (unavailable(row)) {
+    {{ copy.unavailable }}
+  } @else if (row.evaluation; as evaluation) {
+    <bdi class="block font-mono">{{ evaluation.run }}</bdi>
+    <span class="block">{{
+      state() === 'restricted' ? copy.restricted : evaluation.evidence
+    }}</span>
+  } @else {
+    {{ copy.unbound }}
+  }
+</ng-template>
+<ng-template #freshnessCell let-row>
+  @if (unavailable(row)) {
+    {{ copy.unavailable }}
+  } @else if (row.evaluation; as evaluation) {
+    <app-status-pill
+      [tone]="evaluation.freshness === 'fresh' ? 'info' : 'warning'"
+      [label]="evaluation.freshness === 'fresh' ? copy.fresh : copy.stale"
+    />
+  } @else {
+    <app-status-pill [tone]="'neutral'" [label]="copy.missing" />
+  }
+</ng-template>
+<ng-template #evidenceCell let-row>
+  @if (unavailable(row)) {
+    {{ copy.unavailable }}
+  } @else if (row.evaluation; as evaluation) {
+    <app-evidence-badge [completeness]="evaluation.completeness" [compact]="true" />
+  } @else {
+    {{ copy.noEvidence }}
+  }
+</ng-template>
+<ng-template #outcomeCell let-row>
+  @if (unavailable(row)) {
+    {{ copy.unavailable }}
+  } @else {
+    <app-outcome-pill [outcome]="row.evaluation?.outcome" [compact]="true" />
+  }
+</ng-template>
+<ng-template #decisionCell let-row>
+  @if (unavailable(row)) {
+    {{ copy.unavailable }}
+  } @else {
+    <app-decision-chip [decision]="row.evaluation?.decision ?? 'pending'" [compact]="true" />
+  }
+</ng-template>

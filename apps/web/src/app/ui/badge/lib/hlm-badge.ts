@@ -15,7 +15,7 @@ import { classes } from '@evidgate/ui/utils';
 import { type VariantProps, cva } from 'class-variance-authority';
 
 const badgeVariants = cva(
-  'spartan-badge group/badge focus-visible:border-ring focus-visible:ring-ring aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 inline-flex w-fit min-w-0 shrink items-center justify-start focus-visible:ring-2 [&>hlm-icon]:pointer-events-none',
+  'spartan-badge group/badge inline-flex w-fit min-w-0 shrink items-center justify-start [&>hlm-icon]:pointer-events-none',
   {
     variants: {
       variant: {

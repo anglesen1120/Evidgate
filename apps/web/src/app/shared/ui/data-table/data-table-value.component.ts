@@ -54,7 +54,7 @@ import { escapeFormatChars } from '../values/ref-name-display';
         from the accessibility tree so an open popover never announces the value again. -->
       <span
         #popover
-        class="full-value box-border m-auto max-w-[calc(100%-var(--eg-space-5)*2)] max-h-[calc(100%-var(--eg-space-5)*2)] overflow-auto rounded-sm border border-input bg-card p-[var(--eg-space-4)] font-sans text-sm text-foreground whitespace-normal [overflow-wrap:anywhere]"
+        class="full-value box-border m-auto max-w-[calc(100%-var(--eg-space-5)*2)] max-h-[calc(100%-var(--eg-space-5)*2)] overflow-auto rounded-(--eg-radius-lg) border border-(--eg-border-control) bg-(--eg-surface) p-[var(--eg-space-4)] font-sans text-sm text-(--eg-text) whitespace-normal [overflow-wrap:anywhere]"
         popover="manual"
         aria-hidden="true"
         (mouseenter)="cancelHide()"

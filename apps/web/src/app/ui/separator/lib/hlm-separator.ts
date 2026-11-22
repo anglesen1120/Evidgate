@@ -3,7 +3,7 @@ import { BrnSeparator } from '@spartan-ng/brain/separator';
 import { classes } from '@evidgate/ui/utils';
 
 export const hlmSeparatorClass =
-  'inline-flex shrink-0 bg-border data-horizontal:h-px data-horizontal:w-full data-vertical:w-px data-vertical:self-stretch';
+  'inline-flex shrink-0 bg-[var(--eg-border)] data-horizontal:h-[var(--eg-border-width)] data-horizontal:w-full data-vertical:w-[var(--eg-border-width)] data-vertical:self-stretch';
 
 @Directive({
   selector: '[hlmSeparator],hlm-separator',
