@@ -10,6 +10,7 @@ import {
 } from '@angular/core';
 import type { IngestTokenView } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
+import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
@@ -32,6 +33,7 @@ import { SECRETS_COPY, secretStatusLabel } from './secrets.copy';
     StatusPillComponent,
     RotationReminderChipComponent,
     HlmButton,
+    HlmDialogImports,
     HlmCardImports,
     HlmTableImports,
     NumberValueComponent,
@@ -49,7 +51,7 @@ import { SECRETS_COPY, secretStatusLabel } from './secrets.copy';
   templateUrl: './secret-reference-list.component.html',
 })
 export class SecretReferenceListComponent {
-  protected readonly viewport = inject(NarrowMutationPolicy);
+  private readonly viewport = inject(NarrowMutationPolicy);
   private readonly clock = inject(ROTATION_CLOCK);
 
   readonly rows = input.required<readonly IngestTokenView[]>();
@@ -82,7 +84,6 @@ export class SecretReferenceListComponent {
       })),
     ];
   });
-  protected readonly selectedId = signal<string | null>(null);
   protected readonly pageCounts = computed(() => {
     const rows = this.rows();
     const now = this.clock();
@@ -132,9 +133,6 @@ export class SecretReferenceListComponent {
       ? this.searchMatches().filter((row) => row.status === state)
       : this.searchMatches();
   });
-  protected readonly selected = computed(
-    () => this.filtered().find((row) => row.id === this.selectedId()) ?? this.filtered()[0] ?? null,
-  );
   protected search(event: Event): void {
     if (event.target instanceof HTMLInputElement) this.query.set(event.target.value);
   }

@@ -1,4 +1,5 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import { InteractivityChecker } from '@angular/cdk/a11y';
+import { ComponentHarness, TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
@@ -11,11 +12,21 @@ class PageHarness extends ComponentHarness {
   static hostSelector = 'app-support-access-review';
   readonly title = this.locatorFor('h1');
   readonly snapshot = this.locatorFor('[data-snapshot-time] time');
-  readonly badge = this.locatorFor('[data-inspect-status] app-status-pill');
-  readonly badgeIcon = this.locatorFor('[data-inspect-status] app-status-pill hlm-icon');
-  readonly pick = this.locatorFor('[data-second-record]');
+  readonly choices = this.locatorForAll('[data-view-record]');
+  readonly dialog = this.documentRootLocatorFactory().locatorForOptional('[role="dialog"]');
+  async open(index = 0) {
+    const trigger = (await this.choices())[index];
+    if (!trigger) throw new Error('Missing View button');
+    await trigger.focus();
+    await trigger.click();
+    return trigger;
+  }
+  readonly badge = this.locatorFor('tbody app-status-pill');
+  readonly badgeIcon = this.locatorFor('tbody app-status-pill hlm-icon');
   readonly decision = this.locatorForOptional('[data-grant-action]');
-  readonly details = this.locatorFor('[data-record-detail]');
+  readonly historicalAction = this.locatorForOptional(
+    '[data-grant-row="sg-40"] [data-grant-action]',
+  );
   readonly content = async () => (await this.host()).text();
 }
 
@@ -28,6 +39,7 @@ describe('SupportAccessReviewPage', () => {
       imports: [SupportAccessReviewPage],
       providers: [{ provide: ActivatedRoute, useValue: { queryParamMap: params } }],
     });
+    vi.spyOn(TestBed.inject(InteractivityChecker), 'isVisible').mockReturnValue(true);
     const fixture = TestBed.createComponent(SupportAccessReviewPage);
     fixture.detectChanges();
     return {
@@ -62,7 +74,10 @@ describe('SupportAccessReviewPage', () => {
   ])('%s renders the scoped state', async (state, expected) => {
     const { page } = await render(state);
     expect(await (await page.title()).text()).toBe('Support access');
-    expect(await page.content()).toContain(expected);
+    if (state === 'default') {
+      await page.open();
+      expect(await (await page.dialog())?.text()).toContain(expected);
+    } else expect(await page.content()).toContain(expected);
   });
   it.each([
     ['ready', '2026-10-13T10:42:00Z'],
@@ -77,21 +92,31 @@ describe('SupportAccessReviewPage', () => {
     expect(await time.text()).toContain('UTC');
   });
   it('selects a historical reference without enabling review actions', async () => {
-    const { page } = await render('ready');
+    const { page, fixture } = await render('ready');
     expect(await (await page.badge()).text()).toContain('Requested');
     expect(await (await page.badgeIcon()).getAttribute('aria-hidden')).toBe('true');
     expect(await (await page.decision())?.getProperty('disabled')).toBe(true);
-    await (await page.pick()).click();
-    const text = await (await page.details()).text();
+    expect(await page.dialog()).toBeNull();
+    const trigger = await page.open(1);
+    const dialog = await page.dialog();
+    if (!dialog) throw new Error('Expected historical grant details');
+    const text = await dialog.text();
     expect(text).toContain('Read run metadata');
     expect(text).toContain('sg-40');
-    expect(await page.decision()).toBeNull();
+    expect(await page.historicalAction()).toBeNull();
+    expect(text).toContain('Support-03');
+    await dialog.sendKeys(TestKey.ESCAPE);
+    await fixture.whenStable();
+    expect(await page.dialog()).toBeNull();
+    expect(await trigger.isFocused()).toBe(true);
   });
   it('clears grant references on query-driven loss of read access', async () => {
     const { page, params } = await render('default');
-    expect(await page.content()).toContain('req-sg-41');
+    await page.open();
+    expect(await (await page.dialog())?.text()).toContain('req-sg-41');
     params.next(convertToParamMap({ state: 'denied' }));
     expect(await page.content()).not.toContain('sg-41');
+    expect(await page.dialog()).toBeNull();
   });
   it('renders only grant metadata even if a supplied record has extra fields', async () => {
     const { fixture, page } = await render('default');
@@ -103,6 +128,9 @@ describe('SupportAccessReviewPage', () => {
     fixture.componentRef.setInput('viewModel', { ...supportAccessFixture, grants });
     expect(await page.content()).toContain('INC-205');
     expect(await page.content()).not.toContain('unrendered-canary');
+    await page.open();
+    expect(await (await page.dialog())?.text()).toContain('INC-205');
+    expect(await (await page.dialog())?.text()).not.toContain('unrendered-canary');
   });
   it('does not turn an approval into an active session', async () => {
     const { page } = await render('approved');

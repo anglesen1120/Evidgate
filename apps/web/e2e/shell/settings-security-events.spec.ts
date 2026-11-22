@@ -37,15 +37,18 @@ for (const locale of LOCALES) {
         await page.locator('#security-project').focus();
         await page.keyboard.press('Tab');
         await expect(page.locator('#security-type')).toBeFocused();
-        await page.locator(`${rows} summary`).last().focus();
+        await page.locator(`${rows} [data-security-view]`).last().focus();
         await page.keyboard.press('Enter');
-        await expect(page.locator(`${rows} details[open]`)).toHaveCount(1);
-        await expect(page.locator(`${rows} details[open]`)).toContainText(
+        await expect(page.getByRole('dialog')).toHaveCount(1);
+        await expect(page.getByRole('dialog')).toContainText(
           '018f4350-0000-7000-8000-000000000500',
         );
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
         ).toBe(true);
+        await expectNoA11yViolations(page, `security dialog ${locale} ${theme} ${width}px`);
+        await page.keyboard.press('Escape');
+        await expect(page.locator(`${rows} [data-security-view]`).last()).toBeFocused();
         await expectNoA11yViolations(page, `security events ${locale} ${theme} ${width}px`);
         await page.screenshot({
           path: test.info().outputPath(`security-${locale}-${theme}-${width}.png`),
@@ -136,11 +139,11 @@ for (const locale of LOCALES) {
     await page.goto(path(locale));
     await ready(page);
     await expect(page.locator(`${host} [role="table"]`)).toHaveCount(1);
-    await page.locator(`${rows} summary`).last().focus();
+    await page.locator(`${rows} [data-security-view]`).last().focus();
     for (const width of [360, 1920]) {
       await page.setViewportSize({ width, height: 900 });
       await expect(page.locator(`${host} [role="table"]`)).toHaveCount(width === 1920 ? 1 : 0);
-      await expect(page.locator(`${rows} summary`).last()).toBeFocused();
+      await expect(page.locator(`${rows} [data-security-view]`).last()).toBeFocused();
     }
   });
 }

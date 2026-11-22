@@ -17,6 +17,7 @@ import { HlmAlertImports } from '@evidgate/ui/alert';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
+import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSkeleton } from '@evidgate/ui/skeleton';
@@ -50,6 +51,7 @@ import { RevisionDetailComponent } from './revision-detail.component';
     NumberValueComponent,
     PolicyModeChipComponent,
     HlmInput,
+    HlmDialogImports,
     HlmLabel,
     HlmSkeleton,
     HlmTabsImports,
@@ -81,7 +83,7 @@ export class PolicyPage {
   protected readonly mutationPolicy = inject(NarrowMutationPolicy);
 
   protected readonly canWrite = computed(() => this.session.has('policy:write'));
-  protected readonly valuesTab = 'values' as const;
+  protected readonly viewed = signal<{ id: string; trigger: HTMLButtonElement } | null>(null);
   protected readonly compareTab = 'compare' as const;
   protected readonly activationTab = 'activation' as const;
   protected readonly revisionId = signal(this.route.snapshot.queryParamMap.get('revision') ?? '');
@@ -122,9 +124,8 @@ export class PolicyPage {
     created: $localize`:@@settings.policy.published-new:New revision published.`,
     unchanged: $localize`:@@settings.policy.published-unchanged:Policy unchanged. Existing revision returned.`,
     revision: $localize`:@@settings.policy.revision:Revision`,
-    values: $localize`:@@settings.policy.values-title:Policy values`,
+    headBadge: $localize`:@@settings.policy.head:Head`,
     compare: $localize`:@@settings.policy.diff-title:Compare revisions`,
-    valuesTab: $localize`:@@settings.policy.tab.values:Values`,
     compareTab: $localize`:@@settings.policy.tab.compare:Compare`,
     activation: $localize`:@@settings.policy.activation:Activation`,
     detailTabs: $localize`:@@settings.policy.detail-tabs:Selected revision details`,
@@ -148,6 +149,7 @@ export class PolicyPage {
       ) {
         untracked(() => {
           this.dialog()?.close();
+          this.viewed.set(null);
           this.published.set(null);
           this.targetId.set(null);
           this.revisionId.set('');
@@ -180,6 +182,11 @@ export class PolicyPage {
   protected onPublished(result: PublishedRevision): void {
     this.published.set(result);
     this.targetId.set(result.revision.id);
+  }
+  protected viewRevision(selection: { id: string; trigger: HTMLButtonElement }): void {
+    if (this.store.publishing() || this.store.phase() !== 'ready') return;
+    this.selectRevision(selection.id);
+    this.viewed.set(selection);
   }
   protected selectRevision(id: string | null): void {
     if (this.store.publishing() || this.store.phase() === 'loading') return;

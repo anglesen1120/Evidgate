@@ -96,6 +96,18 @@ describe('QuotaPanelComponent', () => {
     );
     expect(root.textContent).not.toContain('egress producer');
     expect(root.querySelector('[data-quota-storage]')?.textContent).not.toContain('0');
+    root.querySelector<HTMLButtonElement>('[data-quota-view]')?.click();
+    await vi.waitFor(() => {
+      const dialog = document.querySelector('[data-quota-dialog]');
+      expect(dialog?.querySelector('[data-quota-detail-used]')?.textContent?.trim()).toBe(
+        'Unavailable',
+      );
+      expect(dialog?.querySelector('[data-quota-detail-limit]')?.textContent?.trim()).toBe(
+        'Unavailable',
+      );
+      expect(dialog?.textContent).not.toContain('egress producer');
+      expect(dialog?.textContent).not.toContain('No alert recorded');
+    });
   });
 
   it.each(['future_reason_code', 'Storage roll-up of 06.5.2 is not running.', null])(
@@ -207,6 +219,24 @@ describe('QuotaPanelComponent', () => {
     expect(unavailable).not.toContain('0');
     expect(root.querySelectorAll('[data-quota-project-used]')[1]?.textContent).toContain('0');
     expect(await rows[1]?.text()).toContain('Near limit');
+    const trigger = root.querySelector<HTMLButtonElement>(
+      '[data-row-id="project-two"] [data-quota-view]',
+    );
+    trigger?.focus();
+    trigger?.click();
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).not.toBeNull());
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+    expect(dialog?.textContent).toContain('project-two');
+    expect(dialog?.textContent).toContain('Egress (GB)');
+    expect(dialog?.textContent).not.toContain('project-one');
+    expect(dialog?.querySelector('[data-quota-detail-used]')?.textContent?.trim()).toBe('0');
+    expect(dialog?.querySelector('[data-quota-detail-limit]')?.textContent?.trim()).toBe('100');
+    expect(dialog?.querySelector('time')?.getAttribute('datetime')).toBe('2026-11-01T00:00:00Z');
+    dialog?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }),
+    );
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+    expect(document.activeElement).toBe(trigger);
   });
 
   it('makes all returned project rows inspectable through the shared table', async () => {

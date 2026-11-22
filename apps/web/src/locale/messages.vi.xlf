@@ -22251,6 +22251,16 @@
 <trans-unit id="settings.policy.loaded-revisions" datatype="html"><source>Loaded revisions</source><target>Phiên bản đã tải</target></trans-unit>
 <trans-unit id="settings.policy.history-range" datatype="html"><source>Showing 1–<x id="INTERPOLATION"/> loaded revisions</source><target>Đang hiển thị 1–<x id="INTERPOLATION"/> trong số các phiên bản đã tải</target></trans-unit>
 <trans-unit id="settings.secrets.ci.records" datatype="html"><source>CI binding records</source><target>Bản ghi liên kết CI</target></trans-unit>
+<trans-unit id="settings.members.view" datatype="html"><source>View member</source><target>Xem thành viên</target></trans-unit>
+<trans-unit id="settings.members.created" datatype="html"><source>Created</source><target>Ngày tạo</target></trans-unit>
+<trans-unit id="settings.row.view" datatype="html"><source>View</source><target>Xem</target></trans-unit>
+<trans-unit id="settings.row.actions" datatype="html"><source>Actions</source><target>Thao tác</target></trans-unit>
+<trans-unit id="quota.panel.counter-details" datatype="html"><source>Quota counter</source><target>Bộ đếm hạn mức</target></trans-unit>
+<trans-unit id="quota.panel.retry-after-seconds" datatype="html"><source>Retry after (seconds)</source><target>Thử lại sau (giây)</target></trans-unit>
+<trans-unit id="review.directory.actions" datatype="html"><source>Actions</source><target>Thao tác</target></trans-unit>
+<trans-unit id="review.directory.view" datatype="html"><source>View</source><target>Xem</target></trans-unit>
+<trans-unit id="review.agent-pools.pool" datatype="html"><source>Pool</source><target>Nhóm tác nhân</target></trans-unit>
+<trans-unit id="review.agent-pools.capacity" datatype="html"><source>Reported capacity</source><target>Công suất được báo cáo</target></trans-unit>
 </body>
   </file>
 </xliff>

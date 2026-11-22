@@ -26685,6 +26685,16 @@
       <trans-unit id="settings.policy.loaded-revisions" datatype="html"><source>Loaded revisions</source></trans-unit>
       <trans-unit id="settings.policy.history-range" datatype="html"><source>Showing 1–<x id="INTERPOLATION"/> loaded revisions</source></trans-unit>
       <trans-unit id="settings.secrets.ci.records" datatype="html"><source>CI binding records</source></trans-unit>
+      <trans-unit id="settings.members.view" datatype="html"><source>View member</source></trans-unit>
+      <trans-unit id="settings.members.created" datatype="html"><source>Created</source></trans-unit>
+      <trans-unit id="settings.row.view" datatype="html"><source>View</source></trans-unit>
+      <trans-unit id="settings.row.actions" datatype="html"><source>Actions</source></trans-unit>
+      <trans-unit id="quota.panel.counter-details" datatype="html"><source>Quota counter</source></trans-unit>
+      <trans-unit id="quota.panel.retry-after-seconds" datatype="html"><source>Retry after (seconds)</source></trans-unit>
+      <trans-unit id="review.directory.actions" datatype="html"><source>Actions</source></trans-unit>
+      <trans-unit id="review.directory.view" datatype="html"><source>View</source></trans-unit>
+      <trans-unit id="review.agent-pools.pool" datatype="html"><source>Pool</source></trans-unit>
+      <trans-unit id="review.agent-pools.capacity" datatype="html"><source>Reported capacity</source></trans-unit>
 </body>
   </file>
 </xliff>

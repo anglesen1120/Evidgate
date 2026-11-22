@@ -1,4 +1,5 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import { InteractivityChecker } from '@angular/cdk/a11y';
+import { ComponentHarness, TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
@@ -9,15 +10,19 @@ import { agentPoolsFixture } from './agent-pools-review.fixture';
 class ReviewHarness extends ComponentHarness {
   static hostSelector = 'app-agent-pools-review';
   readonly title = this.locatorFor('h1');
-  readonly choices = this.locatorForAll('input[type=radio]');
+  readonly choices = this.locatorForAll('[data-view-record]');
+  readonly dialog = this.documentRootLocatorFactory().locatorForOptional('[role="dialog"]');
+  async open(index = 0) {
+    const trigger = (await this.choices())[index];
+    if (!trigger) throw new Error('Missing View button');
+    await trigger.focus();
+    await trigger.click();
+    return trigger;
+  }
   readonly pills = this.locatorForAll('app-status-pill');
   readonly icons = this.locatorForAll('app-status-pill hlm-icon');
-  readonly neutral = this.locatorForAll('app-status-pill .status-pill--neutral');
   async text() {
     return (await this.host()).text();
-  }
-  async html() {
-    return (await this.host()).getProperty<string>('outerHTML');
   }
 }
 
@@ -29,18 +34,32 @@ async function render(query: Record<string, string> = {}, model = agentPoolsFixt
       { provide: ActivatedRoute, useValue: { queryParamMap: params.asObservable() } },
     ],
   });
+  vi.spyOn(TestBed.inject(InteractivityChecker), 'isVisible').mockReturnValue(true);
   const f = TestBed.createComponent(AgentPoolsReviewPage);
   f.componentRef.setInput('model', model);
   f.detectChanges();
-  return { view: await TestbedHarnessEnvironment.harnessForFixture(f, ReviewHarness), params };
+  return {
+    view: await TestbedHarnessEnvironment.harnessForFixture(f, ReviewHarness),
+    params,
+    fixture: f,
+  };
 }
 
 describe('Agent pools review', () => {
   afterEach(() => TestBed.resetTestingModule());
   it('shows the supplied record, with an icon and text for each status', async () => {
-    const { view } = await render();
+    const { view, fixture } = await render();
     expect(await (await view.title()).text()).toBe('Agent pools');
-    expect(await view.text()).toContain('pool_01HX6D3K9M');
+    expect(await view.dialog()).toBeNull();
+    const trigger = await view.open();
+    const dialog = await view.dialog();
+    if (!dialog) throw new Error('Expected the selected record in a dialog');
+    for (const fact of ['pool_01HX6D3K9M', 'sha256:5a73…90ce', 'web-linux-03'])
+      expect(await dialog.text()).toContain(fact);
+    await dialog.sendKeys(TestKey.ESCAPE);
+    await fixture.whenStable();
+    expect(await view.dialog()).toBeNull();
+    expect(await trigger.isFocused()).toBe(true);
     const pills = await view.pills();
     expect(pills.length).toBeGreaterThan(0);
     expect((await view.icons()).length).toBe(pills.length);
@@ -75,9 +94,11 @@ describe('Agent pools review', () => {
   });
   it('does not substitute a default record for an unknown identifier', async () => {
     const { view, params } = await render();
-    expect(await view.text()).toContain('pool_01HX6D3K9M');
+    await view.open();
+    expect(await (await view.dialog())?.text()).toContain('pool_01HX6D3K9M');
     params.next(convertToParamMap({ pool: 'unknown' }));
     expect(await view.text()).toContain('Not found');
+    expect(await view.dialog()).toBeNull();
     expect(await view.text()).not.toContain('pool_01HX6D3K9M');
   });
   it('selects an unmatched job without inventing registered capacity or a lease', async () => {
@@ -85,12 +106,13 @@ describe('Agent pools review', () => {
     const [, mobile] = await view.choices();
     if (!mobile) throw new Error('Missing mobile-lab pool choice');
     await mobile.click();
-    expect(await view.text()).toContain('No lease was supplied');
-    expect(await view.text()).not.toContain('pool_01HX6D3K9M');
+    expect(await (await view.dialog())?.text()).toContain('No lease was supplied');
+    expect(await (await view.dialog())?.text()).not.toContain('pool_01HX6D3K9M');
   });
   it('keeps registered agent history when the capability comparison is unavailable', async () => {
     const { view } = await render({ state: 'unavailable' });
-    expect(await view.text()).toContain('web-linux-02');
+    await view.open();
+    expect(await (await view.dialog())?.text()).toContain('web-linux-02');
     expect(await view.text()).not.toContain('xctest requested');
   });
 });

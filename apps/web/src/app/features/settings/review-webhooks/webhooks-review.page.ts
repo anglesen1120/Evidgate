@@ -11,7 +11,12 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
-import { HlmIcon } from '@evidgate/ui/icon';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
+import {
+  SettingsPageCountsComponent,
+  type SettingsPageCount,
+} from '../settings-page-counts.component';
+import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmTableImports } from '@evidgate/ui/table';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
@@ -38,8 +43,10 @@ import { notices } from './webhooks-review.states';
     DecimalPipe,
     HlmButton,
     ...HlmCardImports,
-    HlmIcon,
+    ShellIconComponent,
+    SettingsPageCountsComponent,
     HlmLabel,
+    HlmDialogImports,
     ...HlmTableImports,
     AbsoluteTimeComponent,
     PageHeaderComponent,
@@ -57,6 +64,21 @@ import { notices } from './webhooks-review.states';
 export class WebhooksReviewPage {
   private readonly route = inject(ActivatedRoute);
   readonly model = input<WebhooksViewModel>(webhooksFixture);
+  protected readonly pageCounts = computed<readonly SettingsPageCount[]>(() =>
+    this.model().metrics.map((metric) => ({
+      label: metric.label,
+      value: metric.value,
+      hint: metric.detail,
+      icon: (
+        {
+          lucideCircle: 'plug',
+          lucideActivity: 'shield-check',
+          lucideClock: 'scroll',
+          lucideInfo: 'alert',
+        } as const
+      )[metric.icon],
+    })),
+  );
   protected readonly query = toSignal(this.route.queryParamMap);
   protected readonly l = labels;
   protected readonly destination = computed(() => {
@@ -84,6 +106,7 @@ export class WebhooksReviewPage {
   protected readonly choice = linkedSignal(
     () => this.query()?.get('endpoint') ?? this.model().endpoints[0]?.id,
   );
+  protected readonly viewing = linkedSignal(() => !!this.query()?.get('endpoint'));
   protected readonly selected = computed(() =>
     this.model().endpoints.find((e) => e.id === this.choice()),
   );
@@ -112,7 +135,8 @@ export class WebhooksReviewPage {
     if (this.state() === 'no-match') this.state.set('ready');
   }
   protected selectEndpoint(id: string): void {
+    if (id !== this.choice()) this.filter.set('');
     this.choice.set(id);
-    this.filter.set('');
+    this.viewing.set(true);
   }
 }

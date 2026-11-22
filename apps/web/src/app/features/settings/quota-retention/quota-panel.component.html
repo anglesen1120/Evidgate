@@ -137,8 +137,25 @@
             <h3 hlmCardTitle [size]="subsectionSize">{{ metricLabel(metric.metric) }}</h3>
             <p class="m-0 text-sm text-muted-foreground">{{ copy.projects }}</p>
           </header>
+          <ng-template #projectAction let-row>
+            <button
+              hlmBtn
+              #trigger
+              [variant]="'outline'"
+              type="button"
+              data-quota-view
+              aria-haspopup="dialog"
+              class="min-h-(--eg-control-touch)"
+              [attr.aria-label]="
+                copy.view + ' · ' + metricLabel(metric.metric) + ' · ' + row.project_id
+              "
+              (click)="inspected.set({ row, metric: metric.metric, trigger })"
+            >
+              {{ copy.view }}
+            </button>
+          </ng-template>
           <app-data-table
-            [columns]="columns()"
+            [columns]="[...columns(), { ...viewColumn, cellTemplate: projectAction }]"
             [rows]="metric.projects"
             [rowId]="projectId"
             [rowHeight]="'compact'"
@@ -161,6 +178,7 @@
                 <tr hlmTr>
                   <th hlmTh scope="col">{{ copy.metric }}</th>
                   <th hlmTh scope="col">{{ copy.recordedState }}</th>
+                  <th hlmTh scope="col" class="text-end">{{ copy.actions }}</th>
                 </tr>
               </thead>
               <tbody hlmTBody>
@@ -181,6 +199,21 @@
                           [ngTemplateOutletContext]="{ $implicit: metric }"
                         />
                       }
+                    </td>
+                    <td hlmTd class="text-end">
+                      <button
+                        hlmBtn
+                        #trigger
+                        [variant]="'outline'"
+                        type="button"
+                        aria-haspopup="dialog"
+                        data-quota-view
+                        class="min-h-(--eg-control-touch)"
+                        [attr.aria-label]="copy.view + ' · ' + metricLabel(metric.metric)"
+                        (click)="inspected.set({ row: metric, metric: metric.metric, trigger })"
+                      >
+                        {{ copy.view }}
+                      </button>
                     </td>
                   </tr>
                 }
@@ -217,6 +250,79 @@
     </section>
   </div>
 </section>
+@if (inspected(); as selection) {
+  @let row = selection.row;
+  <hlm-dialog
+    [state]="'open'"
+    [restoreFocus]="selection.trigger"
+    [autoFocus]="'first-heading'"
+    (closed)="inspected.set(null)"
+  >
+    <hlm-dialog-content
+      *hlmDialogPortal
+      class="max-w-[min(35rem,calc(100vw-var(--eg-space-8)))]"
+      data-quota-dialog
+    >
+      <header hlmDialogHeader>
+        <h2 hlmDialogTitle>{{ copy.counter }}</h2>
+        <p hlmDialogDescription>{{ metricLabel(selection.metric) }}</p>
+      </header>
+      <dl class="m-0 grid min-w-0 gap-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0">
+        @if (row.scope === 'project') {
+          <div>
+            <dt>{{ copy.project }}</dt>
+            <dd>
+              <app-copyable-identifier
+                [value]="row.project_id"
+                [label]="copy.project"
+                [truncate]="false"
+              />
+            </dd>
+          </div>
+        }
+        <div>
+          <dt>{{ copy.used }}</dt>
+          <dd data-quota-detail-used>
+            @if (row.used !== null) {
+              <app-number-value [value]="row.used" />
+            } @else {
+              {{ copy.unavailable }}
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>{{ copy.limit }}</dt>
+          <dd data-quota-detail-limit>
+            @if (row.limit !== null) {
+              <app-number-value [value]="row.limit" />
+            } @else {
+              {{ copy.unavailable }}
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>{{ copy.recordedState }}</dt>
+          <dd>
+            @if (row.used === null && !row.warned_at && !row.blocked_at) {
+              {{ copy.unavailable }}
+            } @else {
+              <ng-container
+                [ngTemplateOutlet]="stateCell"
+                [ngTemplateOutletContext]="{ $implicit: row }"
+              />
+            }
+          </dd>
+        </div>
+        @if (row.retry_after_seconds !== null) {
+          <div>
+            <dt>{{ copy.retryAfter }}</dt>
+            <dd><app-number-value [value]="row.retry_after_seconds" /></dd>
+          </div>
+        }
+      </dl>
+    </hlm-dialog-content>
+  </hlm-dialog>
+}
 <ng-template #usedCell let-row>
   <span data-quota-project-used><app-number-value [value]="row.used" /></span>
 </ng-template>

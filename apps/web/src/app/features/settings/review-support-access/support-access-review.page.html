@@ -1,33 +1,29 @@
 <article class="grid min-w-0 gap-6 wrap-anywhere" [attr.aria-label]="copy.title">
-  <div class="flex items-start gap-3">
-    <span
-      class="flex size-12 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground"
-      ><hlm-icon name="lucideCircleCheck" class="size-6" /></span
-    ><app-page-header [title]="copy.title" [description]="copy.intro" />
-  </div>
-  @if (directory()) {
-    <section
-      class="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4"
-      [attr.aria-label]="copy.org"
-    >
-      <div class="grid gap-1">
-        <span class="text-xs text-muted-foreground">{{ copy.org }}</span
-        ><strong>{{ viewModel().organization }}</strong
-        ><span class="text-xs text-muted-foreground"
+  <header class="grid min-w-0 gap-1 border-b border-border pb-4">
+    <div class="flex min-w-0 items-center gap-3">
+      <span
+        aria-hidden="true"
+        class="grid size-11 shrink-0 place-items-center rounded-md bg-(--eg-accent-soft) text-(--eg-accent)"
+        ><app-shell-icon name="life" /></span
+      ><app-page-header [title]="copy.title" [description]="copy.intro" />
+    </div>
+    @if (directory()) {
+      <p class="m-0 flex flex-wrap items-baseline gap-x-2 text-sm text-muted-foreground">
+        <span>{{ viewModel().organization }}</span
+        ><span aria-hidden="true">·</span>
+        <span>{{ copy.list }}: {{ grants().length | number }}</span
+        ><span aria-hidden="true">·</span>
+        <span
           >{{ copy.asOf }}
           <app-absolute-time
             data-snapshot-time
             [value]="viewModel().snapshotTimes[state()] ?? viewModel().asOf"
         /></span>
-      </div>
-      <div>
-        <span class="block text-xs text-muted-foreground">{{ copy.section }}</span
-        ><strong>{{ copy.title }}</strong>
-      </div>
-    </section>
-    <p class="m-0 border-b border-border pb-3 text-xs text-muted-foreground">
-      {{ preview() ? copy.preview : copy.readOnly }}
-    </p>
+      </p>
+    }
+  </header>
+  @if (directory()) {
+    <p class="m-0 text-sm text-muted-foreground">{{ preview() ? copy.preview : copy.readOnly }}</p>
   }
   @switch (state()) {
     @case ('loading') {
@@ -67,137 +63,159 @@
     />
   }
   @if (directory()) {
-    <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      @for (metric of metrics(); track metric.status) {
-        <section hlmCard class="min-w-0 gap-2 p-4">
-          <h2 class="m-0 flex items-center gap-2 text-sm font-semibold">
-            <hlm-icon [name]="icons[metric.status]" class="size-6 rounded bg-muted p-1" />{{
-              copy[metric.status]
-            }}
-          </h2>
-          <strong class="text-2xl tabular-nums">{{ metric.count }}</strong
-          ><span class="text-xs text-muted-foreground">{{ hints[metric.status] }}</span>
-        </section>
-      }
-    </div>
-    <div class="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
-      <section hlmCard class="min-w-0 gap-0 p-0">
-        <header class="grid gap-3 border-b border-border p-4">
-          <h2 hlmCardTitle>{{ copy.list }}</h2>
-          <div class="grid gap-3 sm:grid-cols-2">
-            <div class="grid gap-1">
-              <label hlmLabel for="grant-search">{{ copy.search }}</label
-              ><input
-                hlmInput
-                id="grant-search"
-                #searchInput
-                type="search"
-                [value]="search()"
-                (input)="search.set(searchInput.value)"
-              />
-            </div>
-            <div class="grid min-w-0 content-end gap-1">
-              <label hlmLabel for="grant-status">{{ copy.status }}</label>
-              <hlm-select
-                [value]="filter()"
-                [itemToString]="filterLabel"
-                (valueChange)="setFilter($event)"
-              >
-                <hlm-select-trigger [buttonId]="'grant-status'" class="w-full"
-                  ><hlm-select-value [placeholder]="copy.all"
-                /></hlm-select-trigger>
-                <hlm-select-content *hlmSelectPortal [aria-label]="copy.status"
-                  ><hlm-select-item value="all">{{ copy.all }}</hlm-select-item>
-                  @for (s of statuses; track s) {
-                    <hlm-select-item [value]="s">{{ copy[s] }}</hlm-select-item>
-                  }
-                </hlm-select-content></hlm-select
-              >
-            </div>
+    <app-settings-page-counts [metrics]="metrics()" />
+    <section hlmCard class="min-w-0 gap-0 rounded-xl p-0">
+      <header class="grid gap-3 border-b border-border p-4">
+        <h2 hlmCardTitle>{{ copy.list }}</h2>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div class="grid gap-1">
+            <label hlmLabel for="grant-search">{{ copy.search }}</label
+            ><input
+              hlmInput
+              id="grant-search"
+              #searchInput
+              type="search"
+              [value]="search()"
+              (input)="search.set(searchInput.value)"
+            />
           </div>
-        </header>
-        <div hlmTableContainer>
-          <table hlmTable [attr.aria-label]="copy.list">
-            <thead hlmTHead>
-              <tr hlmTr>
-                @for (label of [copy.grant, copy.operator, copy.status]; track label) {
-                  <th hlmTh scope="col">{{ label }}</th>
+          <div class="grid min-w-0 content-end gap-1">
+            <label hlmLabel for="grant-status">{{ copy.status }}</label>
+            <hlm-select
+              [value]="filter()"
+              [itemToString]="filterLabel"
+              (valueChange)="setFilter($event)"
+            >
+              <hlm-select-trigger [buttonId]="'grant-status'" class="w-full"
+                ><hlm-select-value [placeholder]="copy.all"
+              /></hlm-select-trigger>
+              <hlm-select-content *hlmSelectPortal [aria-label]="copy.status"
+                ><hlm-select-item value="all">{{ copy.all }}</hlm-select-item>
+                @for (s of statuses; track s) {
+                  <hlm-select-item [value]="s">{{ copy[s] }}</hlm-select-item>
                 }
-              </tr>
-            </thead>
-            <tbody hlmTBody>
-              @for (grant of filtered(); track grant.ref; let idx = $index) {
-                <tr hlmTr [class.bg-accent]="selected()?.ref === grant.ref">
-                  <td hlmTd class="whitespace-normal">
+              </hlm-select-content></hlm-select
+            >
+          </div>
+        </div>
+      </header>
+      <div hlmTableContainer>
+        <table hlmTable class="max-sm:block" [attr.aria-label]="copy.list">
+          <thead hlmTHead class="sr-only sm:not-sr-only sm:table-header-group">
+            <tr hlmTr>
+              @for (label of [copy.grant, copy.operator, copy.status]; track label) {
+                <th hlmTh scope="col">{{ label }}</th>
+              }
+              <th hlmTh scope="col" class="text-end" i18n="@@review.directory.actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody hlmTBody class="max-sm:block">
+            @for (grant of filtered(); track grant.ref; let idx = $index) {
+              <tr
+                hlmTr
+                class="h-16 max-sm:grid max-sm:h-auto max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:items-center max-sm:gap-x-2 max-sm:gap-y-1 max-sm:p-3"
+                [attr.data-grant-row]="grant.ref"
+              >
+                <th
+                  hlmTh
+                  scope="row"
+                  class="min-w-0 whitespace-normal max-sm:col-span-2 max-sm:h-auto max-sm:p-0"
+                >
+                  <div class="flex min-w-0 items-center gap-3">
+                    <span
+                      class="grid size-8 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground"
+                      aria-hidden="true"
+                      ><app-shell-icon name="life" /></span
+                    ><span class="grid min-w-0 gap-0.5"
+                      ><strong [id]="'grant-' + idx" class="font-semibold text-foreground">{{
+                        grant.ref
+                      }}</strong
+                      ><small class="text-xs font-normal wrap-anywhere text-muted-foreground">{{
+                        grant.subject
+                      }}</small></span
+                    >
+                  </div>
+                </th>
+                <td hlmTd class="whitespace-normal max-sm:h-auto max-sm:p-0">
+                  {{ grant.operator ?? copy.unavailableValue }}
+                </td>
+                <td hlmTd class="whitespace-normal max-sm:h-auto max-sm:p-0">
+                  <app-status-pill
+                    [label]="copy[grant.status]"
+                    [tone]="grant.status === 'approved' ? 'info' : 'neutral'"
+                  />
+                </td>
+                <td hlmTd class="text-end max-sm:col-span-2 max-sm:h-auto max-sm:p-0">
+                  <div class="flex flex-wrap justify-end gap-2">
                     <button
                       hlmBtn
-                      [variant]="'link'"
                       type="button"
-                      class="min-h-11 px-0 font-mono"
-                      [attr.data-second-record]="idx === 1 ? '' : null"
-                      [attr.aria-pressed]="selected()?.ref === grant.ref"
-                      (click)="selection.set(grant.ref)"
+                      variant="outline"
+                      size="sm"
+                      data-view-record
+                      aria-haspopup="dialog"
+                      class="pointer-coarse:min-h-11"
+                      [attr.aria-labelledby]="'view-grant-' + idx + ' grant-' + idx"
+                      (click)="openView(grant.ref)"
                     >
-                      {{ grant.ref }}</button
-                    ><small class="block text-xs text-muted-foreground">{{ grant.subject }}</small>
-                  </td>
-                  <td hlmTd class="whitespace-normal">
-                    {{ grant.operator ?? copy.unavailableValue }}
-                  </td>
-                  <td hlmTd>
-                    <app-status-pill
-                      [label]="copy[grant.status]"
-                      [tone]="grant.status === 'approved' ? 'info' : 'neutral'"
-                    />
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-        @if (!filtered().length) {
-          <app-empty-pattern
-            [title]="copy.filtered"
-            [actionLabel]="copy.clear"
-            (action)="reset()"
-          />
-        }
-        <footer
-          class="flex flex-wrap items-center justify-between gap-2 border-t border-border p-3 text-xs text-muted-foreground"
+                      <span [id]="'view-grant-' + idx" i18n="@@review.directory.view">View</span>
+                    </button>
+                    @if (grant.status === 'requested' || grant.status === 'approved') {
+                      <button
+                        hlmBtn
+                        data-grant-action
+                        variant="outline"
+                        size="sm"
+                        type="button"
+                        class="pointer-coarse:min-h-11"
+                        [disabled]="!canEdit() || grant.ref !== viewModel().selectedRef"
+                        (click)="openDecision(grant.ref)"
+                      >
+                        {{ grant.status === 'requested' ? copy.approve : copy.revoke }}
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (!filtered().length) {
+        <app-empty-pattern [title]="copy.filtered" [actionLabel]="copy.clear" (action)="reset()" />
+      }
+      <footer
+        class="flex flex-wrap items-center justify-between gap-2 border-t border-border p-3 text-xs text-muted-foreground"
+      >
+        <span
+          >{{ filtered().length | number }} {{ copy.of }} {{ grants().length | number }} ·
+          {{ copy.pageSize }}</span
         >
-          <span
-            >{{ filtered().length }} {{ copy.of }} {{ grants().length }} · {{ copy.pageSize }}</span
-          >
-          <div class="flex gap-2">
-            <button hlmBtn [variant]="'outline'" type="button" disabled>{{ copy.previous }}</button
-            ><button hlmBtn [variant]="'outline'" type="button" disabled>{{ copy.next }}</button>
-          </div>
-        </footer>
-      </section>
-      @if (selected(); as g) {
-        <section hlmCard data-record-detail class="min-w-0 gap-0 p-0">
-          <header class="grid gap-2 p-4">
-            <div class="flex flex-wrap items-center justify-between gap-2" data-inspect-status>
-              <strong class="text-sm">{{ g.subject }}</strong
-              ><app-status-pill
+        <div class="flex gap-2">
+          <button hlmBtn [variant]="'outline'" type="button" disabled>{{ copy.previous }}</button
+          ><button hlmBtn [variant]="'outline'" type="button" disabled>{{ copy.next }}</button>
+        </div>
+      </footer>
+    </section>
+    <hlm-dialog
+      [state]="viewing() && selected() ? 'open' : 'closed'"
+      [aria-labelledby]="'grant-view-title'"
+      [aria-modal]="true"
+      [autoFocus]="'#grant-view-title'"
+      (stateChanged)="$event === 'closed' && viewing.set(false)"
+    >
+      <hlm-dialog-content
+        *hlmDialogPortal
+        class="max-h-[90dvh] max-w-[min(35rem,calc(100vw-var(--eg-space-8)))] overflow-y-auto wrap-anywhere"
+      >
+        @if (selected(); as g) {
+          <header hlmDialogHeader>
+            <h2 hlmDialogTitle id="grant-view-title" tabindex="-1">{{ g.subject }}</h2>
+            <div class="flex flex-wrap items-center gap-2">
+              <app-copyable-identifier [value]="g.ref" [label]="copy.grant" /><app-status-pill
                 [label]="copy[g.status]"
                 [tone]="g.status === 'approved' ? 'info' : 'neutral'"
               />
-            </div>
-            <div class="flex flex-wrap items-center justify-between gap-2">
-              <app-copyable-identifier [value]="g.ref" [label]="copy.grant" />
-              @if (g.status === 'requested' || g.status === 'approved') {
-                <button
-                  hlmBtn
-                  data-grant-action
-                  [variant]="'outline'"
-                  type="button"
-                  [disabled]="!canEdit() || g.ref !== viewModel().selectedRef"
-                  (click)="openDecision()"
-                >
-                  {{ g.status === 'requested' ? copy.approve : copy.revoke }}
-                </button>
-              }
             </div>
           </header>
           <section class="border-t border-border p-4">
@@ -290,9 +308,14 @@
             </dl>
           </section>
           <p class="m-0 border-t border-border bg-muted p-4 text-xs">{{ copy.excluded }}</p>
-        </section>
-      }
-    </div>
+        }
+        <footer hlmDialogFooter>
+          <button hlmBtn hlmDialogClose type="button" variant="outline" i18n="@@ui.close">
+            Close
+          </button>
+        </footer>
+      </hlm-dialog-content></hlm-dialog
+    >
     <details hlmCard class="min-w-0 p-4">
       <summary class="cursor-pointer font-semibold">{{ copy.how }}</summary>
       <p>{{ copy.bannerHelp }}</p>
@@ -319,7 +342,7 @@
     ><hlm-dialog-content
       *hlmDialogPortal
       [showCloseButton]="false"
-      class="max-h-[85dvh] overflow-y-auto"
+      class="max-h-[85dvh] max-w-[min(47.5rem,calc(100vw-var(--eg-space-8)))] overflow-y-auto"
       ><header hlmDialogHeader>
         <h2 hlmDialogTitle>{{ draft() === 'revoke' ? copy.revoke : copy.approve }}</h2>
         <p hlmDialogDescription>{{ copy.localOnly }}</p>

@@ -25,8 +25,7 @@ class SecurityPageHarness extends ComponentHarness {
   readonly content = async () => (await this.host()).text();
   readonly rows = this.locatorForAll('[data-row-id]');
   readonly summaryValues = this.locatorForAll('[data-security-summary] dd strong');
-  readonly images = this.locatorForAll('img');
-  readonly details = this.locatorFor('summary');
+  readonly details = this.locatorFor('[data-security-view]');
   readonly project = this.locatorFor('#security-project');
   readonly apply = this.locatorFor('[data-security-apply]');
   readonly clear = this.locatorFor('[data-security-clear]');
@@ -67,10 +66,19 @@ describe('SecurityEventsPage', () => {
     const { harness } = await render();
     expect(await harness.rows()).toHaveLength(1);
     expect(await harness.content()).toContain('Support access');
-    await (await harness.details()).click();
-    expect(await harness.content()).toContain('grant1');
-    expect(await harness.content()).toContain('<img src=x onerror=alert(1)>');
-    expect(await harness.images()).toHaveLength(0);
+    const trigger = await harness.details();
+    await trigger.focus();
+    await trigger.click();
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+    expect(dialog?.textContent).toContain('grant1');
+    expect(dialog?.textContent).toContain('actor1');
+    expect(dialog?.textContent).toContain('<img src=x onerror=alert(1)>');
+    expect(dialog?.querySelector('img')).toBeNull();
+    dialog?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }),
+    );
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+    expect(await trigger.isFocused()).toBe(true);
   });
   it('hides injection_attempt under V1 while preserving unknown future types verbatim', async () => {
     const future: SecurityEventRow = {

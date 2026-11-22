@@ -1,3 +1,4 @@
+import { DecimalPipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -12,7 +13,11 @@ import { ActivatedRoute } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
-import { HlmIcon } from '@evidgate/ui/icon';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
+import {
+  SettingsPageCountsComponent,
+  type SettingsPageCount,
+} from '../settings-page-counts.component';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
@@ -44,11 +49,13 @@ import {
 @Component({
   selector: 'app-support-access-review',
   imports: [
+    DecimalPipe,
     HlmButton,
     HlmCard,
     HlmCardTitle,
     HlmDialogImports,
-    HlmIcon,
+    ShellIconComponent,
+    SettingsPageCountsComponent,
     HlmInput,
     HlmLabel,
     HlmSelectImports,
@@ -128,24 +135,26 @@ export class SupportAccessReviewPage {
         return rows;
     }
   });
-  protected readonly metrics = computed(() =>
+  protected readonly metrics = computed<readonly SettingsPageCount[]>(() =>
     grantStatuses.map((status) => ({
-      status,
-      count: this.grants().filter((g) => g.status === status).length,
+      label: copy[status],
+      value: this.grants().filter((g) => g.status === status).length,
+      hint: {
+        requested: copy.requestedHint,
+        approved: copy.approvedHint,
+        expired: copy.expiredHint,
+        revoked: copy.revokedHint,
+      }[status],
+      icon: (
+        {
+          requested: 'clock',
+          approved: 'shield-check',
+          expired: 'clock',
+          revoked: 'shield-alert',
+        } as const
+      )[status],
     })),
   );
-  protected readonly hints = {
-    requested: copy.requestedHint,
-    approved: copy.approvedHint,
-    expired: copy.expiredHint,
-    revoked: copy.revokedHint,
-  };
-  protected readonly icons = {
-    requested: 'lucideClock',
-    approved: 'lucideCircleCheck',
-    expired: 'lucideClock',
-    revoked: 'lucideOctagonX',
-  } as const;
   protected readonly search = signal('');
   protected readonly filter = signal<GrantStatus | 'all'>('all');
   protected readonly filterLabel = (value: unknown) => {
@@ -162,14 +171,15 @@ export class SupportAccessReviewPage {
         ),
     );
   });
-  protected readonly selection = linkedSignal(
-    () =>
-      this.query()?.get('object') ??
-      (this.state() === 'long' ? longGrant.ref : this.viewModel().selectedRef),
+  protected readonly selection = linkedSignal(() => this.query()?.get('object') ?? null);
+  protected readonly selected = computed(() =>
+    this.filtered().find((g) => g.ref === this.selection()),
   );
-  protected readonly selected = computed(
-    () => this.filtered().find((g) => g.ref === this.selection()) ?? this.filtered()[0],
-  );
+  protected readonly viewing = linkedSignal(() => !!this.query()?.get('object'));
+  protected openView(ref: string): void {
+    this.selection.set(ref);
+    this.viewing.set(true);
+  }
   protected readonly draft = linkedSignal({
     source: () => ({ record: this.selected(), state: this.state(), editable: this.canEdit() }),
     computation: (): 'approve' | 'revoke' | null => null,
@@ -190,7 +200,8 @@ export class SupportAccessReviewPage {
     this.search.set('');
     this.state.set('ready');
   }
-  protected openDecision() {
+  protected openDecision(ref: string) {
+    this.selection.set(ref);
     const record = this.selected();
     if (
       !this.canEdit() ||

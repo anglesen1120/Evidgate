@@ -199,7 +199,7 @@ describe('RoleMatrixComponent responsive records', () => {
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelectorAll('[role="table"]')).toHaveLength(1);
     const identity = root.querySelector('td[data-column-kind="email"]');
-    expect(identity?.querySelector('app-data-table-value')?.textContent).toContain(
+    expect(identity?.querySelector('[data-member-view]')?.textContent).toContain(
       MEMBER.invited_email,
     );
     expect(identity?.getAttribute('data-column-priority')).toBe('primary');

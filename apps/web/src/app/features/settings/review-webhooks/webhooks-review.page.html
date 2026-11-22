@@ -1,24 +1,21 @@
-<header class="flex min-w-0 items-center gap-3">
-  <span
-    class="hidden size-12 shrink-0 items-center justify-center rounded-(--eg-radius-md) bg-(--eg-accent-soft) text-(--eg-accent) md:flex"
-    ><hlm-icon name="lucideActivity" /></span
-  ><app-page-header [title]="l.title" [description]="l.description" />
-</header>
-<section hlmCard class="min-w-0" [size]="'sm'">
-  <div hlmCardContent class="flex flex-wrap items-end justify-between gap-4">
-    <div class="grid gap-1">
-      <span class="text-xs text-muted-foreground">{{ l.scope }}</span
-      ><strong>{{ model().project }}</strong
-      ><span class="text-xs text-muted-foreground"
-        >{{ l.asOf }} <app-absolute-time [value]="model().capturedAt"
-      /></span>
-    </div>
-    <div class="grid gap-1">
-      <span class="text-xs text-muted-foreground">{{ l.section }}</span
-      ><strong class="text-sm">{{ l.title }}</strong>
-    </div>
+<header class="grid min-w-0 gap-1 border-b border-border pb-4">
+  <div class="flex min-w-0 items-center gap-3">
+    <span
+      aria-hidden="true"
+      class="grid size-11 shrink-0 place-items-center rounded-md bg-(--eg-accent-soft) text-(--eg-accent)"
+      ><app-shell-icon name="plug" /></span
+    ><app-page-header [title]="l.title" [description]="l.description" />
   </div>
-</section>
+  @if (showRecords()) {
+    <p class="m-0 flex flex-wrap items-baseline gap-x-2 text-sm text-muted-foreground">
+      <span>{{ l.scope }} · {{ model().project }}</span
+      ><span aria-hidden="true">·</span>
+      <span>{{ l.directory }}: {{ model().endpoints.length | number }}</span
+      ><span aria-hidden="true">·</span>
+      <span>{{ l.asOf }} <app-absolute-time [value]="model().capturedAt" /></span>
+    </p>
+  }
+</header>
 <div class="md:hidden">
   <app-inline-feedback [title]="l.mobile" [description]="l.mobileHint" [announcement]="'off'" />
 </div>
@@ -50,116 +47,158 @@
   }
 }
 @if (showRecords()) {
-  <dl class="m-0 grid min-w-0 grid-cols-2 gap-3 lg:grid-cols-4">
-    @for (metric of model().metrics; track metric.label) {
-      <div hlmCard [size]="'sm'" class="min-w-0">
-        <div hlmCardContent class="grid gap-1">
-          <dt class="mb-2 flex flex-wrap items-center gap-2 text-sm font-semibold">
-            <span
-              class="inline-flex size-7 shrink-0 items-center justify-center rounded-(--eg-radius-sm) bg-(--eg-info-bg) text-(--eg-info-fg)"
-              ><hlm-icon [name]="metric.icon" /></span
-            >{{ metric.label }}
-          </dt>
-          <dd class="m-0 text-3xl font-bold tabular-nums">{{ metric.value | number: '2.0-0' }}</dd>
-          <dd class="m-0 text-xs text-muted-foreground">{{ metric.detail }}</dd>
-        </div>
-      </div>
-    }
-  </dl>
-  <div class="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(13rem,0.55fr)_minmax(0,1.8fr)]">
-    <section hlmCard [size]="'sm'" aria-labelledby="endpoints">
-      <header class="grid min-w-0 gap-1 border-b border-(--eg-border) px-4 pb-3">
-        <h2 hlmCardTitle id="endpoints">{{ l.directory }}</h2>
-      </header>
-      <fieldset class="m-0 grid min-w-0 gap-2 border-0 px-3">
-        <legend class="sr-only">{{ l.directory }}</legend>
-        @for (ep of model().endpoints; track ep.id) {
-          <label
-            class="flex min-h-11 min-w-0 cursor-pointer items-baseline gap-3 rounded-(--eg-radius-md) border border-(--eg-border-control) px-3 py-3 has-checked:border-(--eg-accent) has-checked:bg-(--eg-accent-soft) focus-within:outline-2 focus-within:outline-(--eg-focus)"
-            ><input
-              name="review-endpoint"
-              type="radio"
-              [checked]="choice() === ep.id"
-              (change)="selectEndpoint(ep.id)"
-              class="accent-(--eg-accent)" /><span class="grid min-w-0 gap-1"
-              ><strong>{{ ep.name }}</strong
-              ><small class="wrap-anywhere text-xs text-muted-foreground"
-                >{{ ep.id }} · {{ ep.host }}</small
-              ><app-status-pill [label]="ep.status" [tone]="ep.tone" /></span
-          ></label>
-        }
-      </fieldset>
-      <footer
-        hlmCardFooter
-        class="border-t border-(--eg-border) pt-3 text-xs text-muted-foreground"
-      >
-        {{ l.directoryFooter }}
-      </footer>
-    </section>
-    @if (selected(); as ep) {
-      <div class="grid min-w-0 gap-4">
-        <section hlmCard [size]="'sm'" aria-labelledby="endpoint-detail">
-          <header class="grid min-w-0 gap-1 border-b border-(--eg-border) px-4 pb-3">
-            <h2 hlmCardTitle id="endpoint-detail">{{ ep.name }}</h2>
-            <p hlmCardDescription>{{ l.endpoint }} · {{ ep.id }}</p>
-          </header>
-          <div hlmCardContent class="grid gap-4">
-            <dl
-              class="m-0 grid min-w-0 grid-cols-2 gap-3 text-sm lg:grid-cols-4 [&>div]:min-w-0 [&>div]:border-s-2 [&>div]:border-(--eg-border) [&>div]:ps-2 [&_dt]:mb-1 [&_dt]:text-xs [&_dt]:font-semibold [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:wrap-anywhere"
+  <app-settings-page-counts [metrics]="pageCounts()" />
+  <section hlmCard class="min-w-0 gap-0 rounded-xl p-0" aria-labelledby="endpoint-title">
+    <header
+      hlmCardHeader
+      class="flex flex-wrap items-end justify-between gap-3 border-b border-border px-5 py-4"
+    >
+      <h2 hlmCardTitle size="subsection" id="endpoint-title">{{ l.directory }}</h2>
+    </header>
+    <div hlmTableContainer>
+      <table hlmTable class="max-sm:block" aria-labelledby="endpoint-title">
+        <thead hlmTHead class="sr-only sm:not-sr-only sm:table-header-group">
+          <tr hlmTr>
+            <th hlmTh scope="col">{{ l.endpoint }}</th>
+            <th hlmTh scope="col">{{ l.state }}</th>
+            <th hlmTh class="text-end" scope="col" i18n="@@review.directory.actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody hlmTBody class="max-sm:block">
+          @for (ep of model().endpoints; track ep.id; let idx = $index) {
+            <tr
+              hlmTr
+              class="h-16 max-sm:grid max-sm:h-auto max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:items-center max-sm:gap-x-2 max-sm:gap-y-1 max-sm:p-3"
             >
-              <div>
-                <dt>{{ l.url }}</dt>
-                <dd>
-                  <code>{{ destination() }}</code>
-                </dd>
-              </div>
-              <div>
-                <dt>{{ l.state }}</dt>
-                <dd><app-status-pill [label]="ep.status" [tone]="ep.tone" /></dd>
-              </div>
-              <div>
-                <dt>{{ l.events }}</dt>
-                <dd>
-                  @for (event of ep.events; track event) {
-                    <code class="block">{{ event }}</code>
-                  } @empty {
-                    {{ l.notSupplied }}
-                  }
-                </dd>
-              </div>
-              <div>
-                <dt>{{ l.rotation }}</dt>
-                <dd>
-                  @if (ep.overlapEnd; as end) {
-                    <app-status-pill [tone]="'info'" [label]="l.overlap" /><span class="block"
-                      >{{ l.end }} <app-absolute-time [value]="end"
-                    /></span>
-                  } @else {
-                    <app-status-pill [tone]="'neutral'" [label]="l.noOverlap" />
-                  }
-                </dd>
-              </div>
-            </dl>
-            <app-inline-feedback
-              [title]="ep.signingReference ? l.redacted : l.notSupplied"
-              [description]="ep.signingReference ? l.redactedDetail : l.auditHint"
-              [announcement]="'off'"
-            >
-              @if (ep.signingReference; as reference) {
-                <p>
-                  {{ l.ref }}: <code>{{ reference }}</code>
-                </p>
-              }
-            </app-inline-feedback>
+              <th
+                hlmTh
+                scope="row"
+                class="min-w-0 whitespace-normal max-sm:col-span-2 max-sm:h-auto max-sm:p-0"
+              >
+                <div class="flex min-w-0 items-center gap-3">
+                  <span
+                    aria-hidden="true"
+                    class="grid size-8 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground"
+                    ><app-shell-icon name="plug"
+                  /></span>
+                  <span class="grid min-w-0 gap-0.5"
+                    ><strong
+                      class="font-semibold wrap-anywhere text-foreground"
+                      [id]="'endpoint-' + idx"
+                      >{{ ep.name }}</strong
+                    ><span class="text-xs font-normal wrap-anywhere text-muted-foreground">{{
+                      ep.id + ' · ' + ep.host
+                    }}</span></span
+                  >
+                </div>
+              </th>
+              <td hlmTd class="whitespace-normal max-sm:h-auto max-sm:p-0">
+                <app-status-pill [tone]="ep.tone" [label]="ep.status" />
+              </td>
+              <td hlmTd class="text-end max-sm:h-auto max-sm:p-0">
+                <button
+                  hlmBtn
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  data-view-record
+                  aria-haspopup="dialog"
+                  class="pointer-coarse:min-h-11"
+                  [attr.aria-labelledby]="'view-endpoint-' + idx + ' endpoint-' + idx"
+                  (click)="selectEndpoint(ep.id)"
+                >
+                  <span [id]="'view-endpoint-' + idx" i18n="@@review.directory.view">View</span>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <footer
+      hlmCardFooter
+      class="justify-between gap-2 border-t border-border px-5 py-3 text-xs text-muted-foreground"
+    >
+      <span
+        ><span i18n="@@settings.count-on-page">On this page</span>:
+        <strong class="tabular-nums">{{ model().endpoints.length | number }}</strong></span
+      ><span>{{ l.directoryFooter }}</span>
+    </footer>
+  </section>
+  <hlm-dialog
+    [state]="viewing() && selected() ? 'open' : 'closed'"
+    [aria-labelledby]="'endpoint-detail'"
+    [aria-modal]="true"
+    [autoFocus]="'#endpoint-detail'"
+    (stateChanged)="$event === 'closed' && viewing.set(false)"
+  >
+    <hlm-dialog-content
+      *hlmDialogPortal
+      class="max-h-[90dvh] max-w-[min(35rem,calc(100vw-var(--eg-space-8)))] overflow-y-auto wrap-anywhere"
+    >
+      @if (selected(); as ep) {
+        <header hlmDialogHeader>
+          <h2 hlmDialogTitle tabindex="-1" id="endpoint-detail">{{ ep.name }}</h2>
+          <p hlmDialogDescription>{{ l.endpoint }} · {{ ep.id }}</p>
+        </header>
+        <dl
+          class="m-0 grid min-w-0 grid-cols-1 gap-3 text-sm sm:grid-cols-2 [&>div]:min-w-0 [&>div]:border-s-2 [&>div]:border-(--eg-border) [&>div]:ps-2 [&_dt]:mb-1 [&_dt]:text-xs [&_dt]:font-semibold [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:wrap-anywhere"
+        >
+          <div>
+            <dt>{{ l.url }}</dt>
+            <dd>
+              <code>{{ destination() }}</code>
+            </dd>
           </div>
-        </section>
-        <section hlmCard [size]="'sm'" aria-labelledby="delivery-history">
-          <header class="grid min-w-0 gap-1 border-b border-(--eg-border) px-4 pb-3">
-            <h2 hlmCardTitle id="delivery-history">{{ l.history }}</h2>
+          <div>
+            <dt>{{ l.state }}</dt>
+            <dd><app-status-pill [label]="ep.status" [tone]="ep.tone" /></dd>
+          </div>
+          <div>
+            <dt>{{ l.events }}</dt>
+            <dd>
+              @for (event of ep.events; track event) {
+                <code class="block">{{ event }}</code>
+              } @empty {
+                {{ l.notSupplied }}
+              }
+            </dd>
+          </div>
+          <div>
+            <dt>{{ l.rotation }}</dt>
+            <dd>
+              @if (ep.overlapEnd; as end) {
+                <app-status-pill [tone]="'info'" [label]="l.overlap" /><span class="block"
+                  >{{ l.end }} <app-absolute-time [value]="end"
+                /></span>
+              } @else {
+                <app-status-pill [tone]="'neutral'" [label]="l.noOverlap" />
+              }
+            </dd>
+          </div>
+        </dl>
+        <app-inline-feedback
+          [title]="ep.signingReference ? l.redacted : l.notSupplied"
+          [description]="ep.signingReference ? l.redactedDetail : l.auditHint"
+          [announcement]="'off'"
+        >
+          @if (ep.signingReference; as reference) {
+            <p>
+              {{ l.ref }}: <code>{{ reference }}</code>
+            </p>
+          }
+        </app-inline-feedback>
+        <section
+          class="grid min-w-0 gap-3 border-t border-border pt-3"
+          aria-labelledby="delivery-history"
+        >
+          <header class="grid min-w-0 gap-1">
+            <h3 hlmCardTitle size="subsection" id="delivery-history">{{ l.history }}</h3>
             <p hlmCardDescription>{{ l.historyHint }}</p>
             <app-status-pill [tone]="'neutral'" [label]="l.reported" />
           </header>
-          <div hlmCardContent class="grid min-w-0 gap-3">
+          <div class="grid min-w-0 gap-3">
             @if (!ep.events.length) {
               <app-empty-pattern [bare]="true" [title]="l.auditEmpty" />
             } @else if (state() === 'pending-delivery') {
@@ -193,13 +232,13 @@
               @if (deliveries().length) {
                 <p class="m-0 text-xs text-muted-foreground">{{ l.metadata }}</p>
                 <div hlmTableContainer>
-                  <table hlmTable>
+                  <table hlmTable class="block">
                     <caption class="sr-only">
                       {{
                         l.history
                       }}
                     </caption>
-                    <thead hlmTHead>
+                    <thead hlmTHead class="sr-only">
                       <tr hlmTr>
                         @for (
                           col of [
@@ -217,19 +256,47 @@
                         }
                       </tr>
                     </thead>
-                    <tbody hlmTBody>
+                    <tbody hlmTBody class="block">
                       @for (d of deliveries(); track d.id) {
-                        <tr hlmTr>
-                          <th hlmTh scope="row">
+                        <tr
+                          hlmTr
+                          class="grid min-w-0 grid-cols-1 gap-2 py-3 sm:grid-cols-2 [&_td]:h-auto [&_td]:min-w-0 [&_td]:px-2 [&_td]:py-0"
+                        >
+                          <th
+                            hlmTh
+                            scope="row"
+                            class="h-auto px-2 py-0 font-semibold text-foreground sm:col-span-2"
+                          >
                             <code>{{ d.id }}</code>
                           </th>
-                          <td hlmTd><app-absolute-time [value]="d.at" /></td>
+                          <td hlmTd>
+                            <span aria-hidden="true" class="block text-xs text-muted-foreground">{{
+                              l.time
+                            }}</span
+                            ><app-absolute-time [value]="d.at" />
+                          </td>
                           <td hlmTd class="wrap-anywhere">
+                            <span aria-hidden="true" class="block text-xs text-muted-foreground">{{
+                              l.eventType
+                            }}</span>
                             <code>{{ d.event }}</code>
                           </td>
-                          <td hlmTd><app-status-pill [tone]="d.tone" [label]="d.label" /></td>
-                          <td hlmTd class="text-end tabular-nums">{{ d.attempts | number }}</td>
                           <td hlmTd>
+                            <span aria-hidden="true" class="block text-xs text-muted-foreground">{{
+                              l.deliveryState
+                            }}</span
+                            ><app-status-pill [tone]="d.tone" [label]="d.label" />
+                          </td>
+                          <td hlmTd class="tabular-nums">
+                            <span aria-hidden="true" class="block text-xs text-muted-foreground">{{
+                              l.attempts
+                            }}</span
+                            >{{ d.attempts | number }}
+                          </td>
+                          <td hlmTd>
+                            <span aria-hidden="true" class="block text-xs text-muted-foreground">{{
+                              l.next
+                            }}</span>
                             @if (d.next) {
                               <app-absolute-time [value]="d.next" />
                             } @else {
@@ -237,6 +304,9 @@
                             }
                           </td>
                           <td hlmTd>
+                            <span aria-hidden="true" class="block text-xs text-muted-foreground">{{
+                              l.response
+                            }}</span>
                             <code>{{ d.response }}</code>
                           </td>
                         </tr>
@@ -256,28 +326,33 @@
             }
           </div>
         </section>
-        @if (canPreview()) {
-          <div *appDesktopMutation class="grid min-w-0 justify-items-start gap-3">
-            <button
-              hlmBtn
-              [variant]="'outline'"
-              type="button"
-              [attr.aria-expanded]="preview()"
-              (click)="preview.set(!preview())"
-            >
-              {{ preview() ? l.returnPreview : l.preview }}
-            </button>
-            @if (preview()) {
-              <app-webhook-intent-preview
-                [endpointId]="ep.id"
-                [rotationAllowed]="state() !== 'unavailable' && state() !== 'rotation-lost'"
-                [failedDelivery]="failedDelivery()"
-                (recorded)="state.set($event)"
-              />
-            }
-          </div>
-        }
-      </div>
-    }
-  </div>
+        <footer hlmDialogFooter class="items-end justify-between">
+          @if (canPreview()) {
+            <div *appDesktopMutation class="grid min-w-0 justify-items-start gap-3">
+              <button
+                hlmBtn
+                [variant]="'outline'"
+                type="button"
+                [attr.aria-expanded]="preview()"
+                (click)="preview.set(!preview())"
+              >
+                {{ preview() ? l.returnPreview : l.preview }}
+              </button>
+              @if (preview()) {
+                <app-webhook-intent-preview
+                  [endpointId]="ep.id"
+                  [rotationAllowed]="state() !== 'unavailable' && state() !== 'rotation-lost'"
+                  [failedDelivery]="failedDelivery()"
+                  (recorded)="state.set($event)"
+                />
+              }
+            </div>
+          }
+          <button hlmBtn hlmDialogClose type="button" variant="outline" i18n="@@ui.close">
+            Close
+          </button>
+        </footer>
+      }
+    </hlm-dialog-content></hlm-dialog
+  >
 }

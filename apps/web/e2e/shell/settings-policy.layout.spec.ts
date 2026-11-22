@@ -4,12 +4,10 @@ import { HEAD_ID, PAGE, visit } from './settings-policy.support';
 
 const LABELS = {
   en: [
-    { visible: 'Values', accessible: 'Policy values' },
     { visible: 'Compare', accessible: 'Compare revisions' },
     { visible: 'Activation', accessible: 'Activation' },
   ],
   vi: [
-    { visible: 'Giá trị', accessible: 'Giá trị chính sách' },
     { visible: 'So sánh', accessible: 'So sánh các phiên bản' },
     { visible: 'Kích hoạt', accessible: 'Kích hoạt' },
   ],
@@ -57,7 +55,7 @@ for (const locale of LOCALES) {
         await visit(page, locale);
         await page.evaluate(() => document.fonts.ready);
         const tabs = page.locator(`${PAGE} hlm-tabs-list [role="tab"]`);
-        await expect(tabs).toHaveCount(3);
+        await expect(tabs).toHaveCount(2);
         for (const [index, label] of LABELS[locale].entries()) {
           const tab = tabs.nth(index);
           await expect(tab).toHaveText(label.visible);

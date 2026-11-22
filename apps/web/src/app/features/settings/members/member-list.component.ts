@@ -29,7 +29,8 @@ import {
 } from '../../../shared/ui/data-table/data-table.component';
 import type { DataTableCellContext } from '../../../shared/ui/data-table/data-table-column';
 import { shortDateFormat } from '../../../shared/time/short-date-format';
-import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
+import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
+import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
 import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 
 export const MEMBERS_COPY = {
@@ -118,7 +119,7 @@ export const MEMBERS_COPY = {
     StatusPillComponent,
     DataTableComponent,
     DatePipe,
-    DataTableValueComponent,
+    AbsoluteTimeComponent,
     ShellIconComponent,
     HlmButton,
     HlmBadge,
@@ -137,11 +138,70 @@ export const MEMBERS_COPY = {
           <app-shell-icon [name]="member.status === 'pending' ? 'inbox' : 'account'" />
         </span>
         <div class="grid min-w-0 flex-1 gap-1">
-          <app-data-table-value
-            class="font-semibold"
-            [value]="member.invited_email"
-            [truncate]="!stacked"
-          />
+          <hlm-dialog [aria-modal]="true" class="min-w-0">
+            <button
+              hlmBtn
+              hlmDialogTrigger
+              [variant]="'link'"
+              type="button"
+              data-member-view
+              class="h-auto max-w-full justify-start px-0 py-1 text-start font-semibold pointer-coarse:min-h-(--eg-control-touch)"
+            >
+              <span class="sr-only" i18n="@@settings.members.view">View member</span>
+              <bdi [class.truncate]="!stacked" [class.whitespace-normal]="stacked">{{
+                display(member.invited_email)
+              }}</bdi>
+            </button>
+            <hlm-dialog-content
+              *hlmDialogPortal
+              [showCloseButton]="false"
+              class="max-w-[35rem] max-[599px]:h-dvh max-[599px]:max-h-dvh max-[599px]:w-screen max-[599px]:max-w-none max-[599px]:rounded-none grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden"
+            >
+              <header hlmDialogHeader>
+                <h2 hlmDialogTitle>{{ copy.member }}</h2>
+                <p hlmDialogDescription>{{ copy.directory }}</p>
+              </header>
+              <dl
+                class="m-0 grid content-start gap-4 overflow-y-auto sm:grid-cols-2 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:mt-1 [&_dd]:wrap-anywhere"
+              >
+                <div>
+                  <dt>{{ copy.email }}</dt>
+                  <dd>
+                    <bdi>{{ display(member.invited_email) }}</bdi>
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ copy.status }}</dt>
+                  <dd>{{ statusLabel(member.status) }}</dd>
+                </div>
+                <div>
+                  <dt i18n="@@settings.members.created">Created</dt>
+                  <dd><app-absolute-time [value]="member.created_at" /></dd>
+                </div>
+                <div>
+                  <dt>{{ copy.roles }}</dt>
+                  <dd>
+                    @if (member.roles.length) {
+                      <ul class="m-0 list-none p-0">
+                        @for (role of member.roles; track role.id) {
+                          <li>
+                            <bdi>{{ role.name }}</bdi>
+                          </li>
+                        }
+                      </ul>
+                    } @else {
+                      {{ copy.noRoles }}
+                    }
+                  </dd>
+                </div>
+              </dl>
+              <footer hlmDialogFooter>
+                <button hlmBtn hlmDialogClose [variant]="'outline'" type="button" i18n="@@ui.close">
+                  Close
+                </button>
+              </footer>
+            </hlm-dialog-content>
+          </hlm-dialog>
           <small class="text-xs text-muted-foreground">
             <span i18n="@@settings.members.created-date"
               >Created {{ member.created_at | date: calendarFormat : 'UTC' }} UTC</span
@@ -284,6 +344,7 @@ export const MEMBERS_COPY = {
 export class MemberListComponent {
   protected readonly viewport = inject(NarrowMutationPolicy);
   protected readonly calendarFormat = shortDateFormat(inject(LOCALE_ID));
+  protected readonly display = escapeFormatChars;
 
   readonly members = input.required<readonly MembershipView[]>();
   readonly canWrite = input(false);

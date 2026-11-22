@@ -84,12 +84,11 @@ describe('RevisionListComponent', () => {
     fixture.componentRef.setInput('rows', [row]);
     fixture.componentRef.setInput('selectedId', row.id);
     fixture.detectChanges();
-    const action = rootElement(fixture).querySelector<HTMLButtonElement>('[data-policy-select]');
+    const action = rootElement(fixture).querySelector<HTMLButtonElement>('[data-policy-view]');
     expect(action?.tagName).toBe('BUTTON');
-    expect(action?.getAttribute('aria-pressed')).toBe('true');
-    expect(action?.getAttribute('aria-controls')).toBe('policy-selected-detail');
+    expect(action?.getAttribute('aria-haspopup')).toBe('dialog');
     action?.click();
-    expect(selected).toHaveBeenCalledExactlyOnceWith(row.id);
+    expect(selected).toHaveBeenCalledExactlyOnceWith({ id: row.id, trigger: action });
     fixture.componentRef.setInput('busy', true);
     fixture.detectChanges();
     action?.click();

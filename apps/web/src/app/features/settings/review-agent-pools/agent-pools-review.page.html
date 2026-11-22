@@ -1,24 +1,21 @@
-<header class="flex min-w-0 items-center gap-3">
-  <span
-    class="hidden size-12 shrink-0 items-center justify-center rounded-(--eg-radius-md) bg-(--eg-accent-soft) text-(--eg-accent) md:flex"
-    ><hlm-icon name="lucideActivity" /></span
-  ><app-page-header [title]="l.title" [description]="l.description" />
-</header>
-<section hlmCard class="min-w-0" [size]="'sm'">
-  <div hlmCardContent class="flex flex-wrap items-end justify-between gap-4">
-    <div class="grid gap-1">
-      <span class="text-xs text-muted-foreground">{{ l.scope }}</span
-      ><strong>{{ model().project }}</strong
-      ><span class="text-xs text-muted-foreground"
-        >{{ l.asOf }} <app-absolute-time [value]="model().capturedAt"
-      /></span>
-    </div>
-    <div class="grid gap-1">
-      <span class="text-xs text-muted-foreground">{{ l.section }}</span
-      ><strong class="text-sm">{{ l.title }}</strong>
-    </div>
+<header class="grid min-w-0 gap-1 border-b border-border pb-4">
+  <div class="flex min-w-0 items-center gap-3">
+    <span
+      aria-hidden="true"
+      class="grid size-11 shrink-0 place-items-center rounded-md bg-(--eg-accent-soft) text-(--eg-accent)"
+      ><app-shell-icon name="server" /></span
+    ><app-page-header [title]="l.title" [description]="l.description" />
   </div>
-</section>
+  @if (showRecords()) {
+    <p class="m-0 flex flex-wrap items-baseline gap-x-2 text-sm text-muted-foreground">
+      <span>{{ l.scope }} · {{ model().project }}</span
+      ><span aria-hidden="true">·</span>
+      <span>{{ l.directory }}: {{ model().directory.length | number }}</span
+      ><span aria-hidden="true">·</span>
+      <span>{{ l.asOf }} <app-absolute-time [value]="model().capturedAt" /></span>
+    </p>
+  }
+</header>
 <div class="md:hidden">
   <app-inline-feedback [title]="l.mobile" [description]="l.mobileHint" [announcement]="'off'" />
 </div>
@@ -50,26 +47,14 @@
   }
 }
 @if (showRecords()) {
-  <dl class="m-0 grid min-w-0 grid-cols-2 gap-3 lg:grid-cols-4">
-    @for (metric of model().metrics; track metric.label) {
-      <div hlmCard [size]="'sm'" class="min-w-0">
-        <div hlmCardContent class="grid gap-1">
-          <dt class="mb-2 flex flex-wrap items-center gap-2 text-sm font-semibold">
-            <span
-              class="inline-flex size-7 shrink-0 items-center justify-center rounded-(--eg-radius-sm) bg-(--eg-info-bg) text-(--eg-info-fg)"
-              ><hlm-icon [name]="metric.icon" /></span
-            >{{ metric.label }}
-          </dt>
-          <dd class="m-0 text-3xl font-bold tabular-nums">{{ metric.value | number: '2.0-0' }}</dd>
-          <dd class="m-0 text-xs text-muted-foreground">{{ metric.detail }}</dd>
-        </div>
-      </div>
-    }
-  </dl>
-  <div class="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(13rem,0.68fr)_minmax(0,1.68fr)]">
-    <section hlmCard [size]="'sm'" class="min-w-0" aria-labelledby="pool-directory">
-      <header class="grid min-w-0 gap-1 border-b border-(--eg-border) px-4 pb-3">
-        <h2 hlmCardTitle id="pool-directory">{{ l.directory }}</h2>
+  <app-settings-page-counts [metrics]="pageCounts()" />
+  <section hlmCard class="min-w-0 gap-0 rounded-xl p-0" aria-labelledby="pool-title">
+    <header
+      hlmCardHeader
+      class="flex flex-wrap items-end justify-between gap-3 border-b border-border px-5 py-4"
+    >
+      <h2 hlmCardTitle size="subsection" id="pool-title">{{ l.directory }}</h2>
+      <div class="grid gap-1">
         <label hlmLabel for="pool-filter">{{ l.filter }}</label
         ><input
           hlmInput
@@ -79,45 +64,148 @@
           [value]="filter()"
           (input)="filter.set(filterBox.value)"
         />
-      </header>
-      <fieldset class="m-0 grid min-w-0 gap-2 border-0 px-3">
-        <legend class="sr-only">{{ l.directory }}</legend>
-        @for (pool of matches(); track pool.name) {
-          <label
-            class="flex min-h-11 min-w-0 cursor-pointer items-baseline gap-3 rounded-(--eg-radius-md) border border-(--eg-border-control) px-3 py-3 has-checked:border-(--eg-accent) has-checked:bg-(--eg-accent-soft) focus-within:outline-2 focus-within:outline-(--eg-focus)"
-            ><input
-              type="radio"
-              name="review-pool"
-              [checked]="selected()?.name === pool.name"
-              (change)="choice.set(pool.name)"
-              class="accent-(--eg-accent)" /><span class="grid min-w-0 gap-1"
-              ><strong>{{ pool.name }}</strong
-              ><small class="text-xs text-muted-foreground">{{ pool.description }}</small
-              ><app-status-pill [tone]="pool.tone" [label]="pool.badge" /></span
-          ></label>
-        }
-      </fieldset>
-      <footer
-        hlmCardFooter
-        class="border-t border-(--eg-border) pt-3 text-xs text-muted-foreground"
-      >
-        {{ l.directoryFooter }}
-      </footer>
-    </section>
-    @if (selected(); as pool) {
-      <section hlmCard [size]="'sm'" class="min-w-0" aria-labelledby="pool-detail">
-        <header class="grid min-w-0 gap-1 border-b border-(--eg-border) px-4 pb-3">
-          <h2 hlmCardTitle id="pool-detail">{{ pool.name }}</h2>
+      </div>
+    </header>
+    <div hlmTableContainer>
+      <table hlmTable class="max-sm:block" aria-labelledby="pool-title">
+        <thead hlmTHead class="sr-only sm:not-sr-only sm:table-header-group">
+          <tr hlmTr>
+            <th hlmTh scope="col" i18n="@@review.agent-pools.pool">Pool</th>
+            <th hlmTh scope="col" i18n="@@review.agent-pools.capacity">Reported capacity</th>
+            <th hlmTh class="text-end" scope="col" i18n="@@review.directory.actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody hlmTBody class="max-sm:block">
+          @for (pool of matches(); track pool.name; let idx = $index) {
+            <tr
+              hlmTr
+              class="h-16 max-sm:grid max-sm:h-auto max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:items-center max-sm:gap-x-2 max-sm:gap-y-1 max-sm:p-3"
+            >
+              <th
+                hlmTh
+                scope="row"
+                class="min-w-0 whitespace-normal max-sm:col-span-2 max-sm:h-auto max-sm:p-0"
+              >
+                <div class="flex min-w-0 items-center gap-3">
+                  <span
+                    aria-hidden="true"
+                    class="grid size-8 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground"
+                    ><app-shell-icon name="server"
+                  /></span>
+                  <span class="grid min-w-0 gap-0.5"
+                    ><strong
+                      class="font-semibold wrap-anywhere text-foreground"
+                      [id]="'pool-' + idx"
+                      >{{ pool.name }}</strong
+                    ><span class="text-xs font-normal wrap-anywhere text-muted-foreground">{{
+                      pool.description
+                    }}</span></span
+                  >
+                </div>
+              </th>
+              <td hlmTd class="whitespace-normal max-sm:h-auto max-sm:p-0">
+                <app-status-pill [tone]="pool.tone" [label]="pool.badge" />
+              </td>
+              <td hlmTd class="text-end max-sm:h-auto max-sm:p-0">
+                <button
+                  hlmBtn
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  data-view-record
+                  aria-haspopup="dialog"
+                  class="pointer-coarse:min-h-11"
+                  [attr.aria-labelledby]="'view-pool-' + idx + ' pool-' + idx"
+                  (click)="choice.set(pool.name)"
+                >
+                  <span [id]="'view-pool-' + idx" i18n="@@review.directory.view">View</span>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    @if (!matches().length) {
+      <app-empty-pattern
+        [title]="noMatches.title"
+        [description]="noMatches.description"
+        [actionLabel]="l.clear"
+        (action)="filter.set('')"
+      />
+    }
+    <footer
+      hlmCardFooter
+      class="justify-between gap-2 border-t border-border px-5 py-3 text-xs text-muted-foreground"
+    >
+      <span
+        ><span i18n="@@settings.count-on-page">On this page</span>:
+        <strong class="tabular-nums">{{ matches().length | number }}</strong></span
+      ><span>{{ l.directoryFooter }}</span>
+    </footer>
+  </section>
+  <section hlmCard class="min-w-0 gap-2 p-5">
+    <h2 hlmCardTitle size="subsection">{{ l.capabilities }}</h2>
+    @if (state() !== 'unavailable') {
+      <p class="m-0 text-xs text-muted-foreground">{{ l.capsHint }}</p>
+      <div hlmTableContainer>
+        <table hlmTable>
+          <caption class="sr-only">
+            {{
+              l.capabilities
+            }}
+          </caption>
+          <thead hlmTHead>
+            <tr hlmTr>
+              <th hlmTh scope="col">{{ l.capability }}</th>
+              @for (pool of model().directory; track pool.name) {
+                <th hlmTh scope="col">{{ pool.name }}</th>
+              }
+            </tr>
+          </thead>
+          <tbody hlmTBody>
+            @for (cap of model().capabilities; track cap.name) {
+              <tr hlmTr>
+                <th hlmTh scope="row">{{ cap.name }}</th>
+                <td hlmTd>{{ cap.browser }}</td>
+                <td hlmTd>{{ cap.mobile }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (state() === 'long') {
+        <code class="wrap-anywhere">{{ longCapability }}</code>
+      }
+    } @else {
+      <app-status-pill [tone]="'neutral'" [label]="l.unavailable" />
+    }
+  </section>
+  <hlm-dialog
+    [state]="selected() ? 'open' : 'closed'"
+    [aria-labelledby]="'pool-detail'"
+    [aria-modal]="true"
+    [autoFocus]="'#pool-detail'"
+    (stateChanged)="$event === 'closed' && choice.set(null)"
+  >
+    <hlm-dialog-content
+      *hlmDialogPortal
+      class="max-h-[90dvh] max-w-[min(35rem,calc(100vw-var(--eg-space-8)))] overflow-y-auto wrap-anywhere"
+    >
+      @if (selected(); as pool) {
+        <header hlmDialogHeader>
+          <h2 hlmDialogTitle id="pool-detail" tabindex="-1">{{ pool.name }}</h2>
+          <p hlmDialogDescription>{{ pool.description }}</p>
           @if (pool.poolId; as id) {
             <app-copyable-identifier [value]="id" [label]="l.poolId" [truncate]="false" />
           } @else {
             <p hlmCardDescription>{{ l.poolId }}: {{ l.unavailable }}</p>
           }
         </header>
-        <div hlmCardContent class="grid min-w-0 gap-4">
+        <div class="grid min-w-0 gap-4">
           @if (pool.poolId) {
             <dl
-              class="m-0 grid min-w-0 grid-cols-2 gap-3 text-sm lg:grid-cols-4 [&>div]:min-w-0 [&>div]:border-s-2 [&>div]:border-(--eg-border) [&>div]:ps-2 [&_dt]:mb-1 [&_dt]:text-xs [&_dt]:font-semibold [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:wrap-anywhere"
+              class="m-0 grid min-w-0 grid-cols-1 gap-3 text-sm sm:grid-cols-2 [&>div]:min-w-0 [&>div]:border-s-2 [&>div]:border-(--eg-border) [&>div]:ps-2 [&_dt]:mb-1 [&_dt]:text-xs [&_dt]:font-semibold [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:wrap-anywhere"
             >
               <div>
                 <dt>{{ l.registered }}</dt>
@@ -139,73 +227,54 @@
               </div>
             </dl>
             <section class="grid min-w-0 gap-2">
-              <h3 class="m-0 text-base font-semibold">{{ l.capabilities }}</h3>
-              @if (state() !== 'unavailable') {
-                <p class="m-0 text-xs text-muted-foreground">{{ l.capsHint }}</p>
-                <div hlmTableContainer>
-                  <table hlmTable>
-                    <caption class="sr-only">
-                      {{
-                        l.capabilities
-                      }}
-                    </caption>
-                    <thead hlmTHead>
-                      <tr hlmTr>
-                        <th hlmTh scope="col">{{ l.capability }}</th>
-                        @for (pool of model().directory; track pool.name) {
-                          <th hlmTh scope="col">{{ pool.name }}</th>
-                        }
-                      </tr>
-                    </thead>
-                    <tbody hlmTBody>
-                      @for (cap of model().capabilities; track cap.name) {
-                        <tr hlmTr>
-                          <th hlmTh scope="row">{{ cap.name }}</th>
-                          <td hlmTd>{{ cap.browser }}</td>
-                          <td hlmTd>{{ cap.mobile }}</td>
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
-                </div>
-                @if (state() === 'long') {
-                  <code class="wrap-anywhere">{{ longCapability }}</code>
-                }
-              } @else {
-                <app-status-pill [tone]="'neutral'" [label]="l.unavailable" />
-              }
-            </section>
-            <section class="grid min-w-0 gap-2">
               <h3 class="m-0 text-base font-semibold">{{ l.registered }}</h3>
               <p class="m-0 text-xs text-muted-foreground">{{ l.agentHint }}</p>
               <div hlmTableContainer>
-                <table hlmTable>
+                <table hlmTable class="block">
                   <caption class="sr-only">
                     {{
                       l.registered
                     }}
                   </caption>
-                  <thead hlmTHead>
+                  <thead hlmTHead class="sr-only">
                     <tr hlmTr>
                       @for (col of [l.agent, l.health, l.heartbeat, l.lease]; track col) {
                         <th hlmTh scope="col">{{ col }}</th>
                       }
                     </tr>
                   </thead>
-                  <tbody hlmTBody>
+                  <tbody hlmTBody class="block">
                     @for (agent of model().agents; track agent.name) {
-                      <tr hlmTr>
-                        <th hlmTh scope="row">
+                      <tr
+                        hlmTr
+                        class="grid min-w-0 grid-cols-1 gap-2 py-3 sm:grid-cols-2 [&_td]:h-auto [&_td]:min-w-0 [&_td]:px-2 [&_td]:py-0"
+                      >
+                        <th
+                          hlmTh
+                          scope="row"
+                          class="h-auto px-2 py-0 font-semibold text-foreground sm:col-span-2"
+                        >
                           <bdi>{{ agent.name }}</bdi
                           ><span class="block text-xs font-normal text-muted-foreground">{{
                             agent.detail
                           }}</span>
                         </th>
                         <td hlmTd>
+                          <span aria-hidden="true" class="block text-xs text-muted-foreground">{{
+                            l.health
+                          }}</span>
                           <app-status-pill [tone]="agent.tone" [label]="agent.health" />
                         </td>
-                        <td hlmTd><app-absolute-time [value]="agent.heartbeat" /></td>
                         <td hlmTd>
+                          <span aria-hidden="true" class="block text-xs text-muted-foreground">{{
+                            l.heartbeat
+                          }}</span
+                          ><app-absolute-time [value]="agent.heartbeat" />
+                        </td>
+                        <td hlmTd>
+                          <span aria-hidden="true" class="block text-xs text-muted-foreground">{{
+                            l.lease
+                          }}</span>
                           {{ agent.lease }} {{ agent.job }} · {{ l.epochLabel }} {{ agent.epoch }}
                         </td>
                       </tr>
@@ -235,7 +304,7 @@
             </section>
           } @else {
             <dl
-              class="m-0 grid min-w-0 grid-cols-2 gap-3 text-sm lg:grid-cols-4 [&>div]:min-w-0 [&>div]:border-s-2 [&>div]:border-(--eg-border) [&>div]:ps-2 [&_dt]:mb-1 [&_dt]:text-xs [&_dt]:font-semibold [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:wrap-anywhere"
+              class="m-0 grid min-w-0 grid-cols-1 gap-3 text-sm sm:grid-cols-2 [&>div]:min-w-0 [&>div]:border-s-2 [&>div]:border-(--eg-border) [&>div]:ps-2 [&_dt]:mb-1 [&_dt]:text-xs [&_dt]:font-semibold [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:wrap-anywhere"
             >
               <div>
                 <dt>{{ l.registered }}</dt>
@@ -262,14 +331,12 @@
             />
           }
         </div>
-      </section>
-    } @else {
-      <app-empty-pattern
-        [title]="noMatches.title"
-        [description]="noMatches.description"
-        [actionLabel]="l.clear"
-        (action)="filter.set('')"
-      />
-    }
-  </div>
+      }
+      <footer hlmDialogFooter>
+        <button hlmBtn hlmDialogClose type="button" variant="outline" i18n="@@ui.close">
+          Close
+        </button>
+      </footer>
+    </hlm-dialog-content></hlm-dialog
+  >
 }

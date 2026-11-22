@@ -64,8 +64,11 @@ for (const locale of LOCALES) {
       await page.evaluate(() => document.fonts.ready);
       const size = await action.evaluate((button) => {
         const bounds = button.getBoundingClientRect();
-        if (!button.parentElement) throw new Error('Expected the export action grid');
-        const parent = button.parentElement.getBoundingClientRect();
+        // The export host and its wrapper are display: contents and have no box of their own.
+        let grid = button.parentElement;
+        while (grid && getComputedStyle(grid).display === 'contents') grid = grid.parentElement;
+        if (!grid) throw new Error('Expected the export action grid');
+        const parent = grid.getBoundingClientRect();
         const range = document.createRange();
         range.selectNodeContents(button);
         const text = range.getBoundingClientRect();

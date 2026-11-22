@@ -226,25 +226,41 @@
       [headId]="store.headRevisionId()"
       [hasMore]="store.hasMore()"
       [selectedId]="selectedRevisionId()"
-      (selected)="selectRevision($event)"
+      (selected)="viewRevision($event)"
       [busy]="paging() || store.phase() === 'loading' || store.publishing()"
       (loadMore)="loadMore()"
     />
-    <div id="policy-selected-detail" class="min-w-0">
-      <hlm-tabs [tab]="valuesTab" class="min-w-0 gap-(--eg-space-5)">
+    @if (viewed(); as selection) {
+      <hlm-dialog
+        [state]="'open'"
+        [restoreFocus]="selection.trigger"
+        [autoFocus]="'first-heading'"
+        (closed)="viewed.set(null)"
+      >
+        <hlm-dialog-content
+          *hlmDialogPortal
+          class="max-w-[min(35rem,calc(100vw-var(--eg-space-8)))]"
+          data-policy-view-dialog
+        >
+          <header hlmDialogHeader>
+            <h2 hlmDialogTitle>
+              {{ copy.revision }} · <bdi>{{ selection.id }}</bdi>
+            </h2>
+            @if (selection.id === store.headRevisionId()) {
+              <p hlmDialogDescription>{{ copy.headBadge }}</p>
+            }
+          </header>
+          <app-policy-revision-detail [revisionId]="selection.id" />
+        </hlm-dialog-content>
+      </hlm-dialog>
+    }
+    <div class="min-w-0">
+      <hlm-tabs [tab]="compareTab" class="min-w-0 gap-(--eg-space-5)">
         <hlm-tabs-list
           [variant]="'line'"
           [attr.aria-label]="copy.detailTabs"
           class="h-auto max-w-full flex-wrap justify-start self-start"
         >
-          <button
-            type="button"
-            [hlmTabsTrigger]="valuesTab"
-            [attr.aria-label]="copy.values"
-            class="min-h-(--eg-control-touch) min-w-max flex-auto whitespace-nowrap"
-          >
-            {{ copy.valuesTab }}
-          </button>
           <button
             type="button"
             [hlmTabsTrigger]="compareTab"
@@ -261,9 +277,6 @@
             {{ copy.activation }}
           </button>
         </hlm-tabs-list>
-        <section [hlmTabsContent]="valuesTab" class="min-w-0">
-          <app-policy-revision-detail [revisionId]="selectedRevisionId()" />
-        </section>
         <section [hlmTabsContent]="compareTab" class="min-w-0">
           <app-revision-diff
             [selectedRevisionId]="selectedRevisionId()"

@@ -37,6 +37,7 @@ class MemberActionsHarness extends ComponentHarness {
   static hostSelector = 'app-member-list';
   readonly header = this.locatorFor('th[data-column-role="actions"]');
   readonly trigger = this.locatorFor('button[data-members-actions]');
+  readonly view = this.locatorFor('[data-member-view]');
 }
 
 describe('MemberListComponent', () => {
@@ -63,6 +64,28 @@ describe('MemberListComponent', () => {
     await fixture.whenStable();
   }
 
+  it('opens the read-only member facts and returns focus on Escape', async () => {
+    const membership = { ...member('pending'), roles: [role('Auditor', 0)] };
+    await render([membership]);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      MemberActionsHarness,
+    );
+    const trigger = await harness.view();
+    await trigger.focus();
+    await trigger.click();
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog?.textContent).toContain(membership.invited_email);
+    expect(dialog?.textContent).toContain('Invitation pending');
+    expect(dialog?.textContent).toContain('Auditor');
+    expect(dialog?.querySelector('time')?.getAttribute('datetime')).toBe(membership.created_at);
+    dialog?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }),
+    );
+    await fixture.whenStable();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(await trigger.isFocused()).toBe(true);
+  });
   it.each([
     ['pending', 'Invitation pending'],
     ['active', 'Active'],
