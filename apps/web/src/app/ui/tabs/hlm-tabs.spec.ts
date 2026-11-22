@@ -10,7 +10,7 @@ import { HlmTabsImports } from './index';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [HlmTabsImports],
   template: `
-    <hlm-tabs [tab]="selected()" [orientation]="'vertical'" [activationMode]="'manual'">
+    <hlm-tabs [tab]="selected()" [activationMode]="'manual'">
       <hlm-tabs-list [attr.aria-label]="label">
         @for (key of keys; track key) {
           <button [hlmTabsTrigger]="key">{{ key }}</button>
@@ -50,7 +50,7 @@ async function setup() {
 describe('horizontal Helm tab strip', () => {
   provideLayoutTestStubs();
 
-  it('keeps even a legacy vertical attribute horizontal and the strip on one local scroll row', async () => {
+  it('keeps the strip horizontal on one local scroll row', async () => {
     const { strip } = await setup();
     const list = await strip.list();
     expect(await (await strip.root()).getAttribute('data-orientation')).toBe('horizontal');

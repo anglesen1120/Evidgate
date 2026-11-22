@@ -7,7 +7,7 @@
     class="eg-type-section-title m-0"
     i18n="@@shared.gallery.refusal.heading"
   >
-    Refusal dialog specimen
+    Decision overlays
   </h3>
   <p class="m-0 text-(--eg-text-muted)" i18n="@@shared.gallery.refusal.specimen">
     Preview a refusal using the sample evidence. No decision or notification is sent.
@@ -32,10 +32,14 @@
     </button>
     <hlm-dialog-content *hlmDialogPortal [size]="'md'" [closeLabel]="copy.close">
       <header hlmDialogHeader>
-        <h2 hlmDialogTitle class="flex items-center gap-2">
-          <hlm-icon name="lucideOctagonX" class="size-5 text-(--eg-danger-fg)" />{{ title }}
-        </h2>
-        <p hlmDialogDescription class="m-0 flex flex-wrap items-baseline gap-2">
+        <hlm-icon
+          hlmDialogStatusIcon
+          name="lucideOctagonX"
+          aria-hidden="true"
+          class="size-5 text-(--eg-danger-fg)"
+        />
+        <h2 hlmDialogTitle>{{ title }}</h2>
+        <p hlmDialogSubject hlmDialogDescription class="m-0 flex flex-wrap items-baseline gap-2">
           <strong>{{ copy.queueTitle }}</strong
           ><span>{{ copy.original }}</span
           ><bdi

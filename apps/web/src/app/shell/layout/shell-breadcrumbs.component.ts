@@ -22,7 +22,7 @@ import { NavViewService } from '../nav/nav-view';
                 <hlm-icon [name]="'lucideChevronRight'" class="size-(--eg-text-xs) self-center" />
               }
               <bdi
-                class="min-w-0 rounded-sm [overflow-wrap:anywhere] aria-[current=page]:bg-secondary aria-[current=page]:px-(--eg-space-2) aria-[current=page]:font-bold aria-[current=page]:text-foreground"
+                class="min-w-0 [overflow-wrap:anywhere] aria-[current=page]:font-bold aria-[current=page]:text-foreground"
                 [attr.aria-current]="last && trail().hasPage ? 'page' : null"
                 >{{ part }}</bdi
               >

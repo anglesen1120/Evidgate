@@ -23,6 +23,7 @@ class DirectoryHarness extends ComponentHarness {
   readonly next = this.locatorFor('footer [data-next]');
   readonly pending = this.locatorFor('[data-filter="pending"]');
   readonly search = this.locatorFor('input[type="search"]');
+  readonly listHeading = this.locatorFor('#gallery-member-list');
   readonly roleFilter = this.locatorFor('#gallery-role-filter');
   readonly metrics = this.locatorForAll('dl.metrics dd:not(.context)');
   readonly context = this.locatorFor('app-section-header p');
@@ -113,24 +114,39 @@ describe('Member directory specimen', () => {
     expect(await (await table.range()).text()).toBe('Showing 1–2 of 3');
   });
 
-  it('returns focus to search when removing a role removes the opening row', async () => {
-    const { table, root } = await mount();
-    await (await table.roleFilter()).click();
-    const roles = await root.getHarness(RoleFilterOptions);
-    for (const option of await roles.options()) {
-      if ((await option.text()) === 'Reviewer') {
-        await option.click();
-        break;
+  it.each([false, true])(
+    'restores list focus when a saved role removes the row (last match: %s)',
+    async (lastMatch) => {
+      const { table, root } = await mount();
+      await (await table.roleFilter()).click();
+      const roles = await root.getHarness(RoleFilterOptions);
+      for (const option of await roles.options()) {
+        if ((await option.text()) === 'Reviewer') {
+          await option.click();
+          break;
+        }
       }
-    }
-    expect(await (await table.range()).text()).toBe('Showing 1–2 of 2');
-    await (await table.edit()).click();
-    const dialog = await root.getHarness(MemberDialogHarness);
-    await (await dialog.reviewer()).click();
-    await (await dialog.save()).click();
-    expect(await (await table.range()).text()).toBe('Showing 1–1 of 1');
-    expect(await (await table.search()).isFocused()).toBe(true);
-  });
+      if (lastMatch) await (await table.pending()).click();
+      expect(await (await table.range()).text()).toBe(
+        lastMatch ? 'Showing 1–1 of 1' : 'Showing 1–2 of 2',
+      );
+      await (await table.edit()).click();
+      const dialog = await root.getHarness(MemberDialogHarness);
+      await (await dialog.reviewer()).click();
+      await (await dialog.save()).click();
+      if (lastMatch) {
+        expect(await (await table.range()).text()).toBe('Showing 0–0 of 0');
+        const heading = await table.listHeading();
+        expect(await heading.getAttribute('tabindex')).toBe('-1');
+        expect(await heading.isFocused()).toBe(true);
+      } else {
+        expect(await (await table.range()).text()).toBe('Showing 1–1 of 1');
+        const nextView = await table.view();
+        expect(await nextView.getAttribute('aria-label')).toBe('View an@example.test');
+        expect(await nextView.isFocused()).toBe(true);
+      }
+    },
+  );
 
   it('opens a titled View for the selected email and returns focus to that row on Escape', async () => {
     const { table, root } = await mount();
@@ -160,8 +176,8 @@ describe('Member directory specimen', () => {
     await (await backdrop.host()).click();
     expect(await (await dialog.title()).text()).toBe('Discard unsaved changes?');
     await (await backdrop.host()).click();
-    expect(await (await dialog.title()).text()).toBe('Discard unsaved changes?');
-    await (await dialog.keep()).click();
+    expect(await (await dialog.title()).text()).toBe('Edit organization roles');
+    expect(await (await dialog.save()).getProperty('disabled')).toBe(false);
     await (await dialog.reviewer()).click();
     expect(await (await dialog.save()).getProperty('disabled')).toBe(true);
     await (await dialog.cancel()).click();
@@ -184,6 +200,10 @@ describe('Member directory specimen', () => {
     expect(await (await dialog.save()).getProperty('disabled')).toBe(false);
     await (await dialog.reviewer()).sendKeys(TestKey.ESCAPE);
     expect(await (await dialog.keep()).isFocused()).toBe(true);
+    await (await dialog.keep()).sendKeys(TestKey.ESCAPE);
+    expect(await (await dialog.title()).text()).toBe('Edit organization roles');
+    expect(await (await dialog.reviewer()).getAttribute('aria-checked')).toBe('true');
+    await (await dialog.cancel()).click();
     await (await dialog.keep()).click();
     expect(await (await dialog.reviewer()).getAttribute('aria-checked')).toBe('true');
     await (await dialog.cancel()).click();

@@ -2144,12 +2144,6 @@
       <trans-unit id="shell.overview.no-shortcuts" datatype="html">
         <source>No shortcuts available for this project</source>
       </trans-unit>
-      <trans-unit id="shell.overview.setup-guide" datatype="html">
-        <source>Follow the workspace setup steps.</source>
-      </trans-unit>
-      <trans-unit id="shell.overview.authoring-guide" datatype="html">
-        <source>Browse features and their test cases.</source>
-      </trans-unit>
       <trans-unit id="runs.detail.test-outcome" datatype="html">
         <source>Test outcome</source>
       </trans-unit>
@@ -16647,7 +16641,12 @@
       <trans-unit id="shared.gallery.sheet.copy-policy" datatype="html"><source>Review policy</source></trans-unit>
       <trans-unit id="shared.gallery.sheet.copy-policy-hint" datatype="html"><source>Approval authorizes a shadow run, not a release.</source></trans-unit>
       <trans-unit id="shared.gallery.sheet.copy-reviewer" datatype="html"><source>Reviewer</source></trans-unit>
-      <trans-unit id="shared.gallery.members.title" datatype="html"><source>Member directory specimen</source></trans-unit>
+      <trans-unit id="shared.gallery.members.title" datatype="html"><source>Members and roles</source></trans-unit>
+      <trans-unit id="shared.gallery.members.directory" datatype="html"><source>Directory</source></trans-unit>
+      <trans-unit id="shared.gallery.members.table-states" datatype="html"><source>Table examples</source></trans-unit>
+      <trans-unit id="shared.gallery.members.invitation-review" datatype="html"><source>Invitation review</source></trans-unit>
+      <trans-unit id="shared.gallery.members.invitation-summary" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ counts().active }}"/> active · <x id="INTERPOLATION_1" equiv-text="{{ counts().pending }}"/> awaiting acceptance</source></trans-unit>
+      <trans-unit id="shared.gallery.members.latest-change" datatype="html"><source>Latest sample change</source></trans-unit>
       <trans-unit id="shared.gallery.members.specimen" datatype="html"><source>Sample data. Changes apply only to this example.</source></trans-unit>
       <trans-unit id="shared.gallery.members.caption" datatype="html"><source>Sample members</source></trans-unit>
       <trans-unit id="shared.gallery.members.email" datatype="html"><source>Member email</source></trans-unit>
@@ -16678,10 +16677,12 @@
       <trans-unit id="shared.gallery.members.no-match" datatype="html"><source>No sample members match. Clear the search or change the filters.</source></trans-unit>
       <trans-unit id="shared.gallery.quality.title" datatype="html"><source>Quality snapshot</source></trans-unit>
       <trans-unit id="shared.gallery.quality.subtitle" datatype="html"><source>Static specimen · storefront-web · develop · Complete runs only</source></trans-unit>
-      <trans-unit id="shared.gallery.quality.period" datatype="html"><source>11–12 Oct 2026 · UTC</source></trans-unit>
-      <trans-unit id="shared.gallery.quality.rate-title" datatype="html"><source>Failure rate · 12 Oct</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.period" datatype="html"><source><x id="first" equiv-text="this.days[0].label"/>–<x id="last" equiv-text="this.days[1].label"/> · UTC</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.rate-title" datatype="html"><source>Failure rate · <x id="date" equiv-text="this.days[1].label"/></source></trans-unit>
       <trans-unit id="shared.gallery.quality.delta" datatype="html"><source>Down 5 percentage points</source></trans-unit>
-      <trans-unit id="shared.gallery.quality.comparison" datatype="html"><source>2 of 20 complete runs failed, compared with 3 of 20 on 11 Oct. Lower is better.</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.comparison" datatype="html"><source>Compared with 3 of 20 on <x id="date" equiv-text="this.days[0].label"/>.</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.compare-days" datatype="html"><source>Compare days</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.rate-context" datatype="html"><source>2 of 20 complete runs failed. Lower is better.</source></trans-unit>
       <trans-unit id="shared.gallery.quality.chart-title" datatype="html"><source>Complete runs by day</source></trans-unit>
       <trans-unit id="shared.gallery.quality.pass" datatype="html"><source>Pass</source></trans-unit>
       <trans-unit id="shared.gallery.quality.fail" datatype="html"><source>Fail</source></trans-unit>
@@ -16695,6 +16696,8 @@
       <trans-unit id="shared.gallery.quality.postcode" datatype="html"><source>Address formats postcode</source></trans-unit>
       <trans-unit id="shared.gallery.quality.search" datatype="html"><source>Search products by phrase</source></trans-unit>
       <trans-unit id="shared.gallery.quality.runs" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ item.runs }}"/> runs</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.run-unit" datatype="html"><source>runs</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.breakdown-summary" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ total }}"/> complete runs · <x id="INTERPOLATION_1" equiv-text="{{ days.length }}"/> days</source></trans-unit>
       <trans-unit id="shared.gallery.quality.failure-reasons" datatype="html"><source>Top failure reasons · <x id="INTERPOLATION" equiv-text="{{ runId }}"/></source></trans-unit>
       <trans-unit id="shared.gallery.quality.defect" datatype="html"><source>Product defect</source></trans-unit>
       <trans-unit id="shared.gallery.quality.drift" datatype="html"><source>Test drift</source></trans-unit>
@@ -16710,7 +16713,7 @@
       <trans-unit id="shared.gallery.members.pending-context" datatype="html"><source>Awaiting a response</source></trans-unit>
       <trans-unit id="shared.gallery.members.filter-status" datatype="html"><source>Filter by this status</source></trans-unit>
       <trans-unit id="shared.gallery.refusal.title" datatype="html"><source>Decline sample request</source></trans-unit>
-      <trans-unit id="shared.gallery.refusal.heading" datatype="html"><source>Refusal dialog specimen</source></trans-unit>
+      <trans-unit id="shared.gallery.refusal.heading" datatype="html"><source>Decision overlays</source></trans-unit>
       <trans-unit id="shared.gallery.refusal.specimen" datatype="html"><source>Preview a refusal using the sample evidence. No decision or notification is sent.</source></trans-unit>
       <trans-unit id="shared.gallery.refusal.open" datatype="html"><source>Open refusal example</source></trans-unit>
       <trans-unit id="shared.gallery.refusal.reason" datatype="html"><source>Reason for refusal</source></trans-unit>

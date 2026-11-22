@@ -31,12 +31,12 @@
   </div>
 </header>
 <main
-  class="box-border m-auto w-full min-w-0 px-(--eg-space-4) py-(--eg-space-8) text-sm min-[421px]:px-(--eg-space-7)"
+  class="box-border m-auto w-full min-w-0 max-w-[34em] px-(--eg-space-4) py-(--eg-space-8) text-sm min-[421px]:px-(--eg-space-7)"
   aria-labelledby="login-heading"
 >
   <article
     hlmCard
-    class="login-card mx-auto box-border w-full min-w-0 max-w-md gap-0 rounded-(--eg-radius-lg) py-0 wrap-anywhere"
+    class="login-card box-border w-full min-w-0 gap-0 rounded-(--eg-radius-lg) py-0 wrap-anywhere"
     aria-labelledby="login-heading"
   >
     <header
@@ -50,6 +50,7 @@
         <app-shell-icon class="size-(--eg-space-7)" [name]="'shield'" />
       </span>
       <div class="min-w-0">
+        <p class="m-0 text-xs text-muted-foreground">{{ organizationSignIn }}</p>
         <h1
           #loginHeading
           hlmCardTitle
@@ -59,7 +60,6 @@
           tabindex="-1"
           [textContent]="heading"
         ></h1>
-        <p class="m-0 text-xs text-muted-foreground">{{ organizationSignIn }}</p>
       </div>
     </header>
     <div
@@ -102,7 +102,6 @@
             [disabled]="auth.redirecting()"
             (click)="auth.start('google')"
           >
-            <app-shell-icon [name]="'key'" />
             {{ google }}
           </button>
           <button

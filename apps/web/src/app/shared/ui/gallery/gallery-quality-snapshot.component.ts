@@ -1,7 +1,10 @@
-import { ChangeDetectionStrategy, Component, inject, LOCALE_ID } from '@angular/core';
+import { formatDate } from '@angular/common';
+import { ChangeDetectionStrategy, Component, inject, LOCALE_ID, signal } from '@angular/core';
 import { HlmCardImports } from '@evidgate/ui/card';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmTableImports } from '@evidgate/ui/table';
 import { HlmTooltip } from '@evidgate/ui/tooltip';
+import { shortDateFormat } from '../../time/short-date-format';
 
 const series = [
   { key: 'pass', label: $localize`:@@shared.gallery.quality.pass:Pass` },
@@ -25,7 +28,7 @@ const counts = days.reduce(
 @Component({
   selector: 'app-gallery-quality-snapshot',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HlmCardImports, HlmTableImports, HlmTooltip],
+  imports: [HlmCardImports, HlmTableImports, HlmTooltip, HlmIcon],
   host: { class: 'block min-w-0' },
   templateUrl: './gallery-quality-snapshot.component.html',
   styleUrl: './gallery-quality-snapshot.component.css',
@@ -36,14 +39,16 @@ export class GalleryQualitySnapshotComponent {
     style: 'percent',
     maximumFractionDigits: 1,
   });
-  private readonly date = new Intl.DateTimeFormat(this.locale, {
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  });
+  private readonly dateFormat = shortDateFormat(this.locale);
   protected readonly keys = series;
-  protected readonly days = days.map((day) => {
-    const label = this.date.format(new Date(day.date));
+  protected readonly days = [this.describeDay(days[0]), this.describeDay(days[1])] as const;
+  protected readonly compare = signal(true);
+  protected readonly period = $localize`:@@shared.gallery.quality.period:${this.days[0].label}:first:–${this.days[1].label}:last: · UTC`;
+  protected readonly rateTitle = $localize`:@@shared.gallery.quality.rate-title:Failure rate · ${this.days[1].label}:date:`;
+  protected readonly comparison = $localize`:@@shared.gallery.quality.comparison:Compared with 3 of 20 on ${this.days[0].label}:date:.`;
+
+  private describeDay(day: (typeof days)[number]) {
+    const label = formatDate(day.date, this.dateFormat, this.locale);
     const values = series.map(({ key, label: outcome }) => `${outcome}: ${day[key]}`).join(' · ');
     return {
       ...day,
@@ -51,7 +56,7 @@ export class GalleryQualitySnapshotComponent {
       summary: `${label} · ${values}`,
       total: day.pass + day.fail + day.other,
     };
-  });
+  }
   protected readonly scale = Math.max(...this.days.map((day) => day.total));
   protected readonly total = counts.pass + counts.fail + counts.other;
   protected readonly breakdown = series.map(({ key, label }) => ({

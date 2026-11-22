@@ -70,7 +70,9 @@ export class GalleryMemberDialogComponent {
   // All dismissals, including the overlay's Close, backdrop and Escape, consult the same draft.
   protected readonly canClose = (): boolean => {
     if (!this.dirty()) return true;
-    if (!this.confirming()) {
+    if (this.confirming()) {
+      this.keepEditing();
+    } else {
       this.editFocusId = this.document.activeElement?.id ?? '';
       this.confirming.set(true);
       this.focusAfterRender('[data-keep]');

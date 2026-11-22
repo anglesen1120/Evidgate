@@ -2,7 +2,7 @@
   /* Leave the breadcrumb a readable measure even when a quota warning joins the tools. */
   grid-template-columns: auto minmax(0, 1fr) fit-content(75%);
   gap: var(--eg-space-3);
-  padding: var(--eg-space-3) var(--eg-space-7);
+  padding: var(--eg-space-4) var(--eg-space-7);
 }
 
 .topbar-scope {

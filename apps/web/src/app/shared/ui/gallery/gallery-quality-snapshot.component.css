@@ -118,11 +118,16 @@
 .donut strong {
   display: grid;
   place-items: center;
+  place-content: center;
   inline-size: 75%;
   aspect-ratio: 1;
   border-radius: inherit;
   background: var(--eg-surface);
   font-size: var(--eg-text-2xl);
+}
+.donut small {
+  font-size: var(--eg-text-xs);
+  font-weight: var(--eg-weight-regular);
 }
 
 .breakdown,

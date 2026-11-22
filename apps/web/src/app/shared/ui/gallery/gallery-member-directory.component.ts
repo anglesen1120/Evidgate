@@ -9,8 +9,10 @@ import {
   linkedSignal,
   signal,
   viewChild,
+  viewChildren,
 } from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard } from '@evidgate/ui/card';
 import { HlmDropdownMenuImports } from '@evidgate/ui/dropdown-menu';
 import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmInput } from '@evidgate/ui/input';
@@ -33,6 +35,7 @@ const PAGE_SIZE = 2;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     HlmButton,
+    HlmCard,
     HlmDropdownMenuImports,
     HlmIcon,
     HlmInput,
@@ -51,7 +54,8 @@ const PAGE_SIZE = 2;
 export class GalleryMemberDirectoryComponent {
   private readonly injector = inject(Injector);
   protected readonly policy = inject(NarrowMutationPolicy);
-  private readonly searchInput = viewChild.required<ElementRef<HTMLInputElement>>('find');
+  private readonly listHeading = viewChild.required<ElementRef<HTMLHeadingElement>>('listHeading');
+  private readonly viewButtons = viewChildren<ElementRef<HTMLButtonElement>>('view');
   protected readonly copy = MEMBER_COPY;
   protected readonly previous = GALLERY_COPY.previous;
   protected readonly next = GALLERY_COPY.next;
@@ -120,14 +124,26 @@ export class GalleryMemberDirectoryComponent {
   }
 
   protected applyRoles(member: GalleryMember): void {
+    const previousIndex = this.filtered().findIndex((row) => row.email === member.email);
     this.members.update((rows) =>
       rows.map((current) => (current.email === member.email ? member : current)),
     );
     const lastPage = Math.max(0, Math.ceil(this.filtered().length / PAGE_SIZE) - 1);
     if (this.page() > lastPage) this.page.set(lastPage);
-    // Removing the filtered role can also remove the dialog's focus-return target.
-    if (!this.visible().some((row) => row.email === member.email)) {
-      afterNextRender(() => this.searchInput().nativeElement.focus(), { injector: this.injector });
+    // When the role filter removes the opener, keep the user's position in the directory.
+    const remaining = this.filtered();
+    if (previousIndex !== -1 && !remaining.some((row) => row.email === member.email)) {
+      const neighbour = remaining[Math.min(previousIndex, remaining.length - 1)]?.email;
+      afterNextRender(
+        () => {
+          if (neighbour === undefined) this.listHeading().nativeElement.focus();
+          else
+            this.viewButtons()
+              .find(({ nativeElement }) => nativeElement.value === neighbour)
+              ?.nativeElement.focus();
+        },
+        { injector: this.injector },
+      );
     }
     this.announcement.set(
       $localize`:@@shared.gallery.members.applied:Updated sample roles for ${member.email}:email:. No account was changed.`,

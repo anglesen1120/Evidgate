@@ -67,6 +67,9 @@
   .member-table tbody tr {
     height: var(--eg-space-11);
   }
+  .member-table tbody tr:hover {
+    background: var(--eg-surface-raised);
+  }
 }
 
 @media (max-width: 899px) {
@@ -91,17 +94,17 @@
   }
 
   .member-table tbody tr {
-    gap: var(--eg-space-3);
+    gap: var(--eg-space-2);
     padding: var(--eg-space-4);
   }
 
   .member-table tbody :is(td, th) {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     justify-content: space-between;
     gap: var(--eg-space-3);
     block-size: auto;
-    padding: 0;
+    padding: var(--eg-space-2);
     white-space: normal;
   }
 

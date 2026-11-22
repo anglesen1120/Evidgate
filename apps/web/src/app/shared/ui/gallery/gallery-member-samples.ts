@@ -37,7 +37,7 @@ export const SAMPLE_MEMBERS: readonly GalleryMember[] = [
 ];
 
 export const MEMBER_COPY = {
-  title: $localize`:@@shared.gallery.members.title:Member directory specimen`,
+  title: $localize`:@@shared.gallery.members.title:Members and roles`,
   specimen: $localize`:@@shared.gallery.members.specimen:Sample data. Changes apply only to this example.`,
   caption: $localize`:@@shared.gallery.members.caption:Sample members`,
   email: $localize`:@@shared.gallery.members.email:Member email`,

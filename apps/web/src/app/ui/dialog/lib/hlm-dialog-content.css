@@ -7,19 +7,29 @@ hlm-dialog-content.spartan-dialog-lg {
 }
 
 hlm-dialog-content[data-size] {
-  --hlm-dialog-top: var(--eg-space-5);
-  --hlm-dialog-bottom: var(--eg-space-5);
+  --hlm-dialog-top: 0px;
+  --hlm-dialog-bottom: 0px;
   display: flex;
   flex-direction: column;
   max-width: calc(100vw - var(--eg-space-8));
   max-height: calc(100dvh - var(--eg-space-8));
   overflow: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   padding-block: var(--hlm-dialog-top) var(--hlm-dialog-bottom);
 }
 
 hlm-dialog-content[data-size] > * {
   flex: none;
+}
+
+/* Projection can contain several roots. Give the body its gutters without adding a wrapper. */
+hlm-dialog-content[data-size]:not(:has([data-slot='dialog-header'])) {
+  padding-block-start: calc(var(--hlm-dialog-top) + var(--eg-space-5));
+}
+
+hlm-dialog-content[data-size]:not(:has([data-slot='dialog-footer'])) {
+  padding-block-end: calc(var(--hlm-dialog-bottom) + var(--eg-space-5));
 }
 
 hlm-dialog-content[data-size] :is([data-slot='dialog-header'], [data-slot='dialog-footer']) {
@@ -28,12 +38,25 @@ hlm-dialog-content[data-size] :is([data-slot='dialog-header'], [data-slot='dialo
   background: var(--eg-surface);
 }
 
+hlm-dialog-content[data-size] > :is([data-slot='dialog-header'], [data-slot='dialog-footer']) {
+  margin-inline: calc(-1 * var(--eg-space-5));
+}
+
 hlm-dialog-content[data-size] [data-slot='dialog-header'] {
   inset-block-start: var(--hlm-dialog-top);
+  gap: var(--eg-space-3);
+  margin-block-end: calc(var(--eg-space-5) - var(--eg-space-4));
+  padding: var(--eg-space-5);
+}
+
+hlm-dialog-content[data-size]:has(> .spartan-dialog-close) [data-slot='dialog-header'] {
+  padding-inline-end: calc(var(--eg-space-5) + var(--eg-control-touch) + var(--eg-space-3));
 }
 
 hlm-dialog-content[data-size] [data-slot='dialog-footer'] {
   inset-block-end: var(--hlm-dialog-bottom);
+  margin-block-start: calc(var(--eg-space-5) - var(--eg-space-4));
+  padding: var(--eg-space-4) var(--eg-space-5);
 }
 
 /* Keep the built-in Close above the heading, without moving its keyboard stop before the form. */
@@ -42,7 +65,7 @@ hlm-dialog-content[data-size] > .spartan-dialog-close {
   order: -1;
   align-self: flex-end;
   inset: auto;
-  inset-block-start: var(--hlm-dialog-top);
+  inset-block-start: calc(var(--hlm-dialog-top) + var(--eg-space-5));
   z-index: calc(var(--eg-z-sticky) + 1);
   block-size: var(--eg-control-touch);
   min-inline-size: var(--eg-control-touch);
@@ -74,15 +97,15 @@ hlm-dialog-content .spartan-dialog-header > [hlmDialogSubject] {
 
 @media (width < 600px) {
   hlm-dialog-content.spartan-dialog-content[data-size] {
-    --hlm-dialog-top: max(var(--eg-space-5), env(safe-area-inset-top));
-    --hlm-dialog-bottom: max(var(--eg-space-5), env(safe-area-inset-bottom));
+    --hlm-dialog-top: env(safe-area-inset-top);
+    --hlm-dialog-bottom: env(safe-area-inset-bottom);
     width: 100vw;
     max-width: 100vw;
     height: 100dvh;
     max-height: 100dvh;
     margin: 0;
-    padding-right: max(var(--eg-space-5), env(safe-area-inset-right));
-    padding-left: max(var(--eg-space-5), env(safe-area-inset-left));
+    padding-right: calc(var(--eg-space-5) + env(safe-area-inset-right));
+    padding-left: calc(var(--eg-space-5) + env(safe-area-inset-left));
     border: 0;
     border-radius: 0;
   }

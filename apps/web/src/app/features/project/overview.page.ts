@@ -32,31 +32,17 @@ const NEXT_STEP_IDS = ['runs', 'onboarding', 'authoring'];
       class="grid min-w-0 gap-(--eg-space-7) wrap-anywhere"
       aria-labelledby="project-overview-heading"
     >
-      <div class="flex min-w-0 items-start gap-(--eg-space-4)">
-        <span
-          aria-hidden="true"
-          class="grid size-(--eg-space-9) shrink-0 place-items-center rounded-(--eg-radius-md) border border-border bg-(--eg-accent-soft) text-primary md:size-(--eg-space-10)"
-        >
-          <app-shell-icon class="size-(--eg-space-7)" [name]="'folder'" />
-        </span>
-        <app-page-header
-          class="min-w-0 flex-1"
-          [title]="current?.name ?? overviewTitle"
-          [titleId]="'project-overview-heading'"
-          [description]="projectContext()"
-        >
-          @if (current) {
-            <span pageHeaderContext class="text-xs font-semibold text-muted-foreground">
-              {{ overviewTitle }}
-            </span>
-          }
-          @if (current && nextSteps()[0]; as primary) {
-            <a appPageHeaderActions hlmBtn class="eg-header-action" [routerLink]="primary.link">
-              <app-shell-icon [name]="primary.icon" />{{ primary.label }}
-            </a>
-          }
-        </app-page-header>
-      </div>
+      <app-page-header
+        [title]="current?.name ?? overviewTitle"
+        [titleId]="'project-overview-heading'"
+        [description]="projectContext()"
+      >
+        @if (current && nextSteps()[0]; as primary) {
+          <a appPageHeaderActions hlmBtn class="eg-header-action" [routerLink]="primary.link">
+            <app-shell-icon [name]="primary.icon" />{{ primary.label }}
+          </a>
+        }
+      </app-page-header>
       @if (!current) {
         <app-empty-pattern [title]="noProject" />
       } @else if (!nextSteps().length) {
@@ -65,8 +51,13 @@ const NEXT_STEP_IDS = ['runs', 'onboarding', 'authoring'];
           i18n-title="@@shell.overview.no-shortcuts"
         />
       } @else if (shortcuts().length) {
-        <nav class="grid min-w-0 gap-(--eg-space-5)" aria-labelledby="project-next-steps">
+        <nav
+          hlmCard
+          class="box-border w-full min-w-0 max-w-3xl gap-0 rounded-(--eg-radius-lg) py-0"
+          aria-labelledby="project-next-steps"
+        >
           <app-section-header
+            class="border-0 border-b border-solid border-border px-(--eg-space-5) py-(--eg-space-4) md:px-(--eg-space-6)"
             [titleId]="'project-next-steps'"
             title="Next steps"
             i18n-title="@@shell.overview.next-steps"
@@ -74,37 +65,11 @@ const NEXT_STEP_IDS = ['runs', 'onboarding', 'authoring'];
             i18n-description="@@shell.overview.choose-next-step"
           />
           <ul
-            class="m-0 grid min-w-0 list-none gap-(--eg-space-5) p-0 min-[941px]:grid-cols-[repeat(auto-fit,minmax(min(18rem,100%),1fr))]"
+            class="m-0 flex min-w-0 list-none flex-wrap gap-(--eg-space-3) px-(--eg-space-5) py-(--eg-space-5) md:px-(--eg-space-6)"
           >
             @for (step of shortcuts(); track step.id) {
-              <li
-                hlmCard
-                class="min-w-0 justify-between gap-(--eg-space-4) rounded-(--eg-radius-lg) p-(--eg-space-5)"
-              >
-                @switch (step.id) {
-                  @case ('onboarding') {
-                    <p
-                      class="m-0 text-sm text-muted-foreground"
-                      i18n="@@shell.overview.setup-guide"
-                    >
-                      Follow the workspace setup steps.
-                    </p>
-                  }
-                  @case ('authoring') {
-                    <p
-                      class="m-0 text-sm text-muted-foreground"
-                      i18n="@@shell.overview.authoring-guide"
-                    >
-                      Browse features and their test cases.
-                    </p>
-                  }
-                }
-                <a
-                  hlmBtn
-                  [variant]="'outline'"
-                  class="eg-header-action w-full"
-                  [routerLink]="step.link"
-                >
+              <li class="min-w-0">
+                <a hlmBtn [variant]="'outline'" class="eg-header-action" [routerLink]="step.link">
                   <app-shell-icon [name]="step.icon" />{{ step.label }}
                 </a>
               </li>
