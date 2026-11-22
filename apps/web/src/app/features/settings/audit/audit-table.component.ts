@@ -116,7 +116,7 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
         [variant]="'outline'"
         type="button"
         data-audit-view
-        aria-haspopup="dialog"
+        [attr.aria-haspopup]="'dialog'"
         class="min-h-(--eg-control-touch)"
         [class.whitespace-nowrap]="!stacked"
         [attr.aria-label]="copy.view + ' · ' + row.action"

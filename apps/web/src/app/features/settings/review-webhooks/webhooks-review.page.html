@@ -53,7 +53,7 @@
       hlmCardHeader
       class="flex flex-wrap items-end justify-between gap-3 border-b border-border px-5 py-4"
     >
-      <h2 hlmCardTitle size="subsection" id="endpoint-title">{{ l.directory }}</h2>
+      <h2 hlmCardTitle [size]="'subsection'" id="endpoint-title">{{ l.directory }}</h2>
     </header>
     <div hlmTableContainer>
       <table hlmTable class="max-sm:block" aria-labelledby="endpoint-title">
@@ -99,10 +99,10 @@
                 <button
                   hlmBtn
                   type="button"
-                  variant="outline"
-                  size="sm"
+                  [variant]="'outline'"
+                  [size]="'sm'"
                   data-view-record
-                  aria-haspopup="dialog"
+                  [attr.aria-haspopup]="'dialog'"
                   class="pointer-coarse:min-h-11"
                   [attr.aria-labelledby]="'view-endpoint-' + idx + ' endpoint-' + idx"
                   (click)="selectEndpoint(ep.id)"
@@ -194,7 +194,7 @@
           aria-labelledby="delivery-history"
         >
           <header class="grid min-w-0 gap-1">
-            <h3 hlmCardTitle size="subsection" id="delivery-history">{{ l.history }}</h3>
+            <h3 hlmCardTitle [size]="'subsection'" id="delivery-history">{{ l.history }}</h3>
             <p hlmCardDescription>{{ l.historyHint }}</p>
             <app-status-pill [tone]="'neutral'" [label]="l.reported" />
           </header>
@@ -348,7 +348,7 @@
               }
             </div>
           }
-          <button hlmBtn hlmDialogClose type="button" variant="outline" i18n="@@ui.close">
+          <button hlmBtn hlmDialogClose type="button" [variant]="'outline'" i18n="@@ui.close">
             Close
           </button>
         </footer>

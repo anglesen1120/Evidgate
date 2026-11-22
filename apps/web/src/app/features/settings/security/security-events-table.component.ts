@@ -98,7 +98,7 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
         [variant]="'outline'"
         type="button"
         data-security-view
-        aria-haspopup="dialog"
+        [attr.aria-haspopup]="'dialog'"
         class="min-h-(--eg-control-touch)"
         [attr.aria-label]="copy.view + ' · ' + typeLabel(row.type) + ' · ' + row.id"
         (click)="inspected.set({ row, trigger })"

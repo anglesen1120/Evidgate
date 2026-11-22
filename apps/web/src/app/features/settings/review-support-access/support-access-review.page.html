@@ -150,10 +150,10 @@
                     <button
                       hlmBtn
                       type="button"
-                      variant="outline"
-                      size="sm"
+                      [variant]="'outline'"
+                      [size]="'sm'"
                       data-view-record
-                      aria-haspopup="dialog"
+                      [attr.aria-haspopup]="'dialog'"
                       class="pointer-coarse:min-h-11"
                       [attr.aria-labelledby]="'view-grant-' + idx + ' grant-' + idx"
                       (click)="openView(grant.ref)"
@@ -164,8 +164,8 @@
                       <button
                         hlmBtn
                         data-grant-action
-                        variant="outline"
-                        size="sm"
+                        [variant]="'outline'"
+                        [size]="'sm'"
                         type="button"
                         class="pointer-coarse:min-h-11"
                         [disabled]="!canEdit() || grant.ref !== viewModel().selectedRef"
@@ -310,7 +310,7 @@
           <p class="m-0 border-t border-border bg-muted p-4 text-xs">{{ copy.excluded }}</p>
         }
         <footer hlmDialogFooter>
-          <button hlmBtn hlmDialogClose type="button" variant="outline" i18n="@@ui.close">
+          <button hlmBtn hlmDialogClose type="button" [variant]="'outline'" i18n="@@ui.close">
             Close
           </button>
         </footer>

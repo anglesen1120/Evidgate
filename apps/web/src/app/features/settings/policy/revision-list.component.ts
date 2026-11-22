@@ -102,7 +102,7 @@ import { HlmTableImports } from '@evidgate/ui/table';
                     #trigger
                     [variant]="'outline'"
                     type="button"
-                    aria-haspopup="dialog"
+                    [attr.aria-haspopup]="'dialog'"
                     data-policy-view
                     class="min-h-(--eg-control-touch)"
                     [attr.aria-label]="copy.view + ' · ' + copy.revision + ' ' + row.revision_no"

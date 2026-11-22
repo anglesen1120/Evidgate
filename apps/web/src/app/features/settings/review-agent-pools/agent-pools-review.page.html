@@ -53,7 +53,7 @@
       hlmCardHeader
       class="flex flex-wrap items-end justify-between gap-3 border-b border-border px-5 py-4"
     >
-      <h2 hlmCardTitle size="subsection" id="pool-title">{{ l.directory }}</h2>
+      <h2 hlmCardTitle [size]="'subsection'" id="pool-title">{{ l.directory }}</h2>
       <div class="grid gap-1">
         <label hlmLabel for="pool-filter">{{ l.filter }}</label
         ><input
@@ -110,10 +110,10 @@
                 <button
                   hlmBtn
                   type="button"
-                  variant="outline"
-                  size="sm"
+                  [variant]="'outline'"
+                  [size]="'sm'"
                   data-view-record
-                  aria-haspopup="dialog"
+                  [attr.aria-haspopup]="'dialog'"
                   class="pointer-coarse:min-h-11"
                   [attr.aria-labelledby]="'view-pool-' + idx + ' pool-' + idx"
                   (click)="choice.set(pool.name)"
@@ -145,7 +145,7 @@
     </footer>
   </section>
   <section hlmCard class="min-w-0 gap-2 p-5">
-    <h2 hlmCardTitle size="subsection">{{ l.capabilities }}</h2>
+    <h2 hlmCardTitle [size]="'subsection'">{{ l.capabilities }}</h2>
     @if (state() !== 'unavailable') {
       <p class="m-0 text-xs text-muted-foreground">{{ l.capsHint }}</p>
       <div hlmTableContainer>
@@ -333,7 +333,7 @@
         </div>
       }
       <footer hlmDialogFooter>
-        <button hlmBtn hlmDialogClose type="button" variant="outline" i18n="@@ui.close">
+        <button hlmBtn hlmDialogClose type="button" [variant]="'outline'" i18n="@@ui.close">
           Close
         </button>
       </footer>
