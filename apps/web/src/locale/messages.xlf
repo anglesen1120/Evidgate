@@ -11110,7 +11110,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="shell.account.sign-out" datatype="html">
-        <source>Sign out</source>
+        <source>Sign out of this tab</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/layout/shell-account.component.ts</context>
           <context context-type="linenumber">29,34</context>

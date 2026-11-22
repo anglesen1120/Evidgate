@@ -30,7 +30,7 @@ describe('Shell account menu', () => {
       await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(AccountMenu);
     expect(logout).not.toHaveBeenCalled();
     const item = await menu.signOut();
-    expect(await item.text()).toBe('Sign out');
+    expect(await item.text()).toBe('Sign out of this tab');
     await item.click();
     expect(logout).toHaveBeenCalledExactlyOnceWith();
   });

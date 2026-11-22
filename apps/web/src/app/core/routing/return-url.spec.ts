@@ -36,6 +36,10 @@ const ACCEPTED: readonly string[] = [
 
 /** Values no navigation may receive: they all answer `/`. */
 const REFUSED: readonly string[] = [
+  // Encoded and double-encoded control or backslash characters.
+  '/%09/evil.example',
+  '/%2509/evil',
+  '/%255C%255Cevil',
   // Not a path at all.
   'foo',
   'foo/bar',

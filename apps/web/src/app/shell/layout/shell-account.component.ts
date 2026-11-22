@@ -45,7 +45,7 @@ import { ShellIconComponent } from './shell-icon.component';
           (triggered)="session.logout()"
           i18n="@@shell.account.sign-out"
         >
-          Sign out
+          Sign out of this tab
         </button>
       </hlm-dropdown-menu>
     </ng-template>
