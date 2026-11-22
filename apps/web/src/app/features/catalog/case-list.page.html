@@ -27,22 +27,10 @@
       </p>
     </div>
     <form
-      class="grid min-w-0 gap-(--eg-space-3) md:grid-cols-[minmax(0,1.5fr)_repeat(2,minmax(0,1fr))] xl:grid-cols-[minmax(0,1.7fr)_repeat(2,minmax(0,1fr))_auto]"
+      class="grid min-w-0 gap-(--eg-space-3) md:grid-cols-[repeat(2,minmax(0,1fr))_minmax(0,1.5fr)] xl:grid-cols-[repeat(2,minmax(0,1fr))_minmax(0,1.7fr)_auto]"
       (ngSubmit)="apply()"
       [attr.aria-describedby]="'catalog-filter-hint'"
     >
-      <div class="grid min-w-0 content-start gap-(--eg-space-2) md:row-span-3 md:grid-rows-subgrid">
-        <label hlmLabel for="catalog-search" class="whitespace-normal">{{ copy.search }}</label>
-        <input
-          hlmInput
-          type="search"
-          id="catalog-search"
-          name="search"
-          class="min-h-(--eg-control-touch) min-w-0 w-full"
-          [ngModel]="draft().search"
-          (ngModelChange)="updateDraft({ search: $event })"
-        />
-      </div>
       <div class="grid min-w-0 content-start gap-(--eg-space-2) md:row-span-3 md:grid-rows-subgrid">
         <label hlmLabel for="catalog-status" class="whitespace-normal">{{ copy.status }}</label>
         <hlm-select
@@ -84,6 +72,18 @@
         <p id="catalog-framework-hint" class="eg-type-caption text-muted-foreground">
           {{ copy.frameworkHint }}
         </p>
+      </div>
+      <div class="grid min-w-0 content-start gap-(--eg-space-2) md:row-span-3 md:grid-rows-subgrid">
+        <label hlmLabel for="catalog-search" class="whitespace-normal">{{ copy.search }}</label>
+        <input
+          hlmInput
+          type="search"
+          id="catalog-search"
+          name="search"
+          class="min-h-(--eg-control-touch) min-w-0 w-full"
+          [ngModel]="draft().search"
+          (ngModelChange)="updateDraft({ search: $event })"
+        />
       </div>
       <div
         class="flex min-w-0 flex-wrap items-start gap-(--eg-space-3) md:col-span-3 xl:col-span-1 xl:col-start-4 xl:row-start-2"

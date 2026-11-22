@@ -36,8 +36,7 @@ import { ForbiddenPatternComponent } from '../../../shared/ui/states/forbidden-p
 import { ConflictDialogComponent } from '../../../shared/ui/conflict/conflict-dialog.component';
 import { isApiRequestError } from '../../../core/http/api-error';
 import { AiSettingsHistoryComponent } from './ai-settings-history.component';
-import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
-import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
+import { AiSettingsVersionCardComponent } from './ai-settings-version-card.component';
 import { AiSettingsStore } from './ai-settings.store';
 import { count, FIELDS, replaceText, textOf, type TextField } from './ai-settings.model';
 
@@ -102,8 +101,7 @@ function headingLevel(data: Record<string, unknown>): number {
     ForbiddenPatternComponent,
     ConflictDialogComponent,
     AiSettingsHistoryComponent,
-    AbsoluteTimeComponent,
-    CopyableIdentifierComponent,
+    AiSettingsVersionCardComponent,
   ],
   providers: [AiSettingsStore],
   templateUrl: './ai-settings.page.html',
@@ -126,7 +124,6 @@ export class AiSettingsPage {
   protected readonly preview = signal<AiSettingsTemplateView | null>(null);
   protected readonly title = $localize`:@@authoring.ai-settings.title:AI settings`;
   protected readonly description = $localize`:@@authoring.ai-settings.intro:Project guidance for authored cases. Saving creates an immutable settings version.`;
-  protected readonly authorLabel = $localize`:@@authoring.ai-settings.author:Author membership`;
   private templateOpener: HTMLElement | null = null;
   private readonly compositionBands = new Map<TextField, number>();
   private readonly readOnlyHeading = viewChild<ElementRef<HTMLElement>>('readOnlyHeading');

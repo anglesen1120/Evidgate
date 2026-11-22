@@ -5,7 +5,7 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { of } from 'rxjs';
 import { SessionStore } from '../../../core/session/session.store';
-import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
+import { provideLayoutTestStubs, stubLayoutApis } from '../../../shared/testing/layout.testing';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { ImportExportDataService } from './import-export-data.service';
 import { ExportPanelComponent, downloadExportFile } from './export-panel.component';
@@ -55,6 +55,7 @@ describe('ExportPanelComponent', () => {
   const canMutate = signal(true);
   const download = vi.fn<ImportExportDataService['exportFile']>();
   let queryParams: Record<string, string> = {};
+  beforeEach(stubLayoutApis);
   afterEach(() => {
     TestBed.resetTestingModule();
     vi.restoreAllMocks();

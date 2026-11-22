@@ -329,54 +329,7 @@
             <aside
               class="grid min-w-0 items-start gap-(--eg-space-5) sm:grid-cols-2 xl:col-start-2 xl:row-start-1 xl:grid-cols-1"
             >
-              <div hlmCard>
-                <header hlmCardHeader class="border-b border-border">
-                  <h2
-                    hlmCardTitle
-                    [size]="'subsection'"
-                    i18n="@@authoring.ai-settings.version-in-use"
-                  >
-                    Version in use
-                  </h2>
-                </header>
-                <div hlmCardContent class="grid min-w-0 gap-(--eg-space-4)">
-                  <p class="m-0 font-semibold tabular-nums" i18n="@@authoring.ai-settings.version">
-                    Current version: {{ base.view.version_no }}
-                  </p>
-                  @if (base.view.version_no === 0) {
-                    <p class="m-0 text-muted-foreground" i18n="@@authoring.ai-settings.default">
-                      Using default guidance; no saved version exists yet.
-                    </p>
-                  }
-                  @if (base.view.author || base.view.created_at) {
-                    <dl class="m-0 grid min-w-0 gap-(--eg-space-3)">
-                      @if (base.view.author; as author) {
-                        <div
-                          class="grid min-w-0 gap-(--eg-space-2) border-t border-border pt-(--eg-space-3)"
-                        >
-                          <dt class="eg-type-caption text-muted-foreground">{{ authorLabel }}</dt>
-                          <dd class="m-0 min-w-0">
-                            <app-copyable-identifier [value]="author" [label]="authorLabel" />
-                          </dd>
-                        </div>
-                      }
-                      @if (base.view.created_at; as instant) {
-                        <div
-                          class="grid min-w-0 gap-(--eg-space-2) border-t border-border pt-(--eg-space-3)"
-                        >
-                          <dt
-                            class="eg-type-caption text-muted-foreground"
-                            i18n="@@authoring.ai-settings.time"
-                          >
-                            Saved at (UTC)
-                          </dt>
-                          <dd class="m-0"><app-absolute-time [value]="instant" /></dd>
-                        </div>
-                      }
-                    </dl>
-                  }
-                </div>
-              </div>
+              <app-ai-settings-version-card hlmCard [version]="base.view" />
               <div hlmCard>
                 <header hlmCardHeader class="border-b border-border">
                   <h2 hlmCardTitle [size]="'subsection'" i18n="@@authoring.ai-settings.org-consent">
