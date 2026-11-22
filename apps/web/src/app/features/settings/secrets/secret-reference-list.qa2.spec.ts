@@ -7,6 +7,7 @@ import fixtureData from '../../../../../../../fixtures/web-api/ingest-tokens-lis
 import { ROTATION_CLOCK } from './rotation-reminder-chip.component';
 import { SecretReferenceListComponent } from './secret-reference-list.component';
 import { SECRET_DESKTOP_PROVIDER } from './secrets-page.testing';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 
 const base = fixtureData.body.items[0] as IngestTokenView;
 const NOW = new Date('2026-10-25T00:00:00Z');
@@ -20,6 +21,7 @@ function row(id: string, patch: Partial<IngestTokenView>): IngestTokenView {
 }
 
 describe('SecretReferenceList reminder wiring and metadata branches (09.7.1-T3 QA2)', () => {
+  provideLayoutTestStubs();
   afterEach(() => TestBed.resetTestingModule());
 
   function mount(rows: readonly IngestTokenView[]): HTMLElement {
@@ -35,7 +37,7 @@ describe('SecretReferenceList reminder wiring and metadata branches (09.7.1-T3 Q
 
   /** Rows render in input order, so the position names the row without a rotate-button lookup. */
   function reminderAt(root: HTMLElement, index: number): string | null {
-    const items = root.querySelectorAll('li[data-secret-reference]');
+    const items = root.querySelectorAll('tr[data-secret-reference]');
     return items[index]?.querySelector('[data-reminder]')?.getAttribute('data-reminder') ?? null;
   }
 

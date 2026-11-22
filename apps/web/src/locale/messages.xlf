@@ -26547,6 +26547,73 @@
           <context context-type="linenumber">210</context>
         </context-group>
       </trans-unit>
-    </body>
+      <trans-unit id="suites.composition.description" datatype="html">
+        <source>Inspect pinned case revisions, their variants and the inputs used to plan execution.</source>
+      </trans-unit>
+      <trans-unit id="suites.composition.identity" datatype="html">
+        <source>Composition identity</source>
+      </trans-unit>
+      <trans-unit id="suites.composition.suite" datatype="html">
+        <source>Suite</source>
+      </trans-unit>
+              <trans-unit id="healingswitch.availability" datatype="html"><source>Healing availability</source></trans-unit>
+      <trans-unit id="healingswitch.inspect-scopes" datatype="html"><source>Inspect the most restrictive scope before changing a healing setting.</source></trans-unit>
+      <trans-unit id="healingswitch.effective-state" datatype="html"><source>Effective state</source></trans-unit>
+      <trans-unit id="healingswitch.server-snapshot" datatype="html"><source>Server snapshot</source></trans-unit>
+      <trans-unit id="healingswitch.project-setting" datatype="html"><source>Project setting</source></trans-unit>
+      <trans-unit id="healingswitch.stored-setting" datatype="html"><source>Stored setting</source></trans-unit>
+      <trans-unit id="healingswitch.runtime-approvals" datatype="html"><source>Runtime and approvals</source></trans-unit>
+      <trans-unit id="healingswitch.auto-apply-off" datatype="html"><source>Auto-apply off</source></trans-unit>
+      <trans-unit id="healingswitch.original-failure" datatype="html"><source>Healing never hides the original failure.</source></trans-unit>
+      <trans-unit id="settings.secrets.count-hint" datatype="html"><source>Counts use this page before filtering. An active reference can be past its expiry date.</source></trans-unit>
+      <trans-unit id="settings.secrets.page-summary" datatype="html"><source>References on this page</source></trans-unit>
+      <trans-unit id="settings.secrets.directory" datatype="html"><source>Reference directory</source></trans-unit>
+      <trans-unit id="settings.secrets.reference-column" datatype="html"><source>Reference</source></trans-unit>
+      <trans-unit id="settings.policy.release-title" datatype="html"><source>Release policy</source></trans-unit>
+      <trans-unit id="settings.policy.revision-history" datatype="html"><source>Revision history</source></trans-unit>
+      <trans-unit id="settings.policy.active-revision" datatype="html"><source>Active revision</source></trans-unit>
+      <trans-unit id="settings.policy.activation-mode" datatype="html"><source>Activation mode</source></trans-unit>
+      <trans-unit id="settings.policy.diff-field" datatype="html"><source>Field</source></trans-unit>
+      <trans-unit id="settings.shell-intro" datatype="html"><source>Open a section to manage settings for your organization or project.</source></trans-unit>
+      <trans-unit id="settings.shell-sections" datatype="html"><source>Sections</source></trans-unit>
+      <trans-unit id="settings.read-only" datatype="html"><source>Read-only. You don’t have permission to make changes here.</source></trans-unit>
+      <trans-unit id="settings.count-on-page" datatype="html"><source>On this page</source></trans-unit>
+      <trans-unit id="settings.members-active-count" datatype="html"><source>Active members</source></trans-unit>
+      <trans-unit id="settings.members-pending-count" datatype="html"><source>Pending invitations</source></trans-unit>
+      <trans-unit id="settings.members-admin-count" datatype="html"><source>Organization admins</source></trans-unit>
+      <trans-unit id="settings.audit-activity" datatype="html">
+        <source>Administrative activity</source>
+      </trans-unit>
+      <trans-unit id="settings.audit-loaded-records" datatype="html">
+        <source>Loaded records</source>
+      </trans-unit>
+      <trans-unit id="settings.audit-loaded-support" datatype="html">
+        <source>Loaded support records</source>
+      </trans-unit>
+      <trans-unit id="settings.audit-export-limit" datatype="html">
+        <source>Maximum rows per export</source>
+      </trans-unit>
+      <trans-unit id="settings.audit-record-scope" datatype="html">
+        <source>Record scope</source>
+      </trans-unit>
+      <trans-unit id="settings.security-activity" datatype="html">
+        <source>Recent activity</source>
+      </trans-unit>
+      <trans-unit id="settings.security-safe-data" datatype="html">
+        <source>Safe event data</source>
+      </trans-unit>
+      <trans-unit id="settings.security-visible-events" datatype="html">
+        <source>Visible events on this page</source>
+      </trans-unit>
+      <trans-unit id="settings.security-page-critical" datatype="html">
+        <source>Critical events on this page</source>
+      </trans-unit>
+      <trans-unit id="settings.security-page-support" datatype="html">
+        <source>Support events on this page</source>
+      </trans-unit>
+      <trans-unit id="settings.security-event-catalog" datatype="html">
+        <source>Event catalog</source>
+      </trans-unit>
+</body>
   </file>
 </xliff>

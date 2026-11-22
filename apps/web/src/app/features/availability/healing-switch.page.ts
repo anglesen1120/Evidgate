@@ -1,8 +1,14 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
+import { HlmIcon } from '@evidgate/ui/icon';
 
 import { SessionStore } from '../../core/session/session.store';
+import { AbsoluteTimeComponent } from '../../shared/time/absolute-time.component';
+import { PageHeaderComponent } from '../../shared/ui/page-header';
+import { escapeFormatChars } from '../../shared/ui/values/ref-name-display';
+import { ShellIconComponent } from '../../shell/layout/shell-icon.component';
 import { NotFoundPatternComponent } from '../../shared/ui/states/not-found-pattern.component';
 import { DesktopRequiredNoticeComponent } from '../../shared/ui/narrow/desktop-required-notice.component';
 import { NarrowMutationPolicy } from '../../shared/ui/narrow/narrow-mutation-policy';
@@ -23,8 +29,13 @@ import { SwitchScopeHierarchy } from './switch-scope-hierarchy.component';
 @Component({
   selector: 'app-healing-switch-page',
   imports: [
+    AbsoluteTimeComponent,
+    HlmBadge,
     HlmButton,
     HlmCardImports,
+    HlmIcon,
+    PageHeaderComponent,
+    ShellIconComponent,
     NotFoundPatternComponent,
     SwitchScopeControl,
     SwitchScopeHierarchy,
@@ -33,7 +44,9 @@ import { SwitchScopeHierarchy } from './switch-scope-hierarchy.component';
   providers: [HealingSwitchStore],
   templateUrl: './healing-switch.page.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'block min-w-0 text-sm text-foreground wrap-anywhere' },
+  host: {
+    class: 'grid min-w-0 grid-cols-1 gap-(--eg-space-3) text-sm text-foreground wrap-anywhere',
+  },
 })
 export class HealingSwitchPage {
   private readonly narrowPolicy = inject(NarrowMutationPolicy);
@@ -42,10 +55,19 @@ export class HealingSwitchPage {
 
   protected readonly session = inject(SessionStore);
 
-  protected readonly pageHeadingSize = 'page' as const;
-  protected readonly sectionHeadingSize = 'section' as const;
+  protected readonly heading = $localize`:@@healingswitch.availability:Healing availability`;
+  protected readonly introduction = $localize`:@@healingswitch.inspect-scopes:Inspect the most restrictive scope before changing a healing setting.`;
+  protected readonly sectionHeadingSize = 'subsection' as const;
   protected readonly copy = HEALING_SWITCH_COPY;
   protected readonly modeLabel = healingModeLabel;
+  protected readonly displayIdentifier = escapeFormatChars;
+  protected readonly scopeContext = computed(() => {
+    const project = this.session.currentProject();
+    return [this.session.currentOrg()?.name, project?.name, project?.id]
+      .filter((part): part is string => !!part)
+      .map(escapeFormatChars)
+      .join(' · ');
+  });
 
   /** The write controls need both the permission and a resolution whose modes are settable. */
   protected readonly canEdit = computed(

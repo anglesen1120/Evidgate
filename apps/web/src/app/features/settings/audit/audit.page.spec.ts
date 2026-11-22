@@ -1,3 +1,5 @@
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { ActivatedRoute } from '@angular/router';
@@ -10,6 +12,11 @@ import { AuditPage } from './audit.page';
 import { AUDIT_MAX_PAGES, AuditStore, EMPTY_AUDIT_FILTERS } from './audit.store';
 
 provideLayoutTestStubs();
+
+class AuditSummaryHarness extends ComponentHarness {
+  static hostSelector = 'app-audit-page';
+  readonly values = this.locatorForAll('[data-audit-summary] dd');
+}
 
 function entry(id: string, changes: Partial<AuditEntryDto> = {}): AuditEntryDto {
   return {
@@ -91,6 +98,21 @@ describe('AuditPage', () => {
     const store = fixture.debugElement.injector.get(AuditStore);
     return { fixture, store, root: fixture.nativeElement as HTMLElement };
   }
+  it('summarizes only loaded audit rows, separately from the export bound and scope', async () => {
+    data.list.mockResolvedValueOnce({
+      items: [entry('member'), entry('operator', { actor_type: 'platform_operator' })],
+      next_cursor: 'more',
+    });
+    const { fixture } = await render();
+    const summary = await TestbedHarnessEnvironment.harnessForFixture(fixture, AuditSummaryHarness);
+    expect(await Promise.all((await summary.values()).map((cell) => cell.text()))).toEqual([
+      '2',
+      '1',
+      '10,000',
+      'Organization',
+    ]);
+    expect(data.list).toHaveBeenCalledOnce();
+  });
   function input(root: HTMLElement, name: string, value: string): void {
     const field = root.querySelector<HTMLInputElement>(`input[name="${name}"]`);
     if (!field) throw new Error(`Expected input ${name}`);
@@ -280,6 +302,7 @@ describe('AuditPage', () => {
     expect(loading).not.toBeNull();
     expect(loading?.textContent).toContain('Loading audit activity…');
     expect(root.querySelector('[data-audit-row]')).toBeNull();
+    expect(root.querySelector('[data-audit-summary]')).toBeNull();
     pending.resolve({ items: [], next_cursor: null });
     await fixture.whenStable();
   });
@@ -336,7 +359,9 @@ describe('AuditPage', () => {
     const entryPage = await render();
     expect(entryPage.root.querySelectorAll('h1')).toHaveLength(1);
     expect(entryPage.root.querySelector('h1')?.textContent).toContain('Audit log');
-    expect(entryPage.root.querySelectorAll('h2')).toHaveLength(0);
+    expect(
+      [...entryPage.root.querySelectorAll('h2')].map((heading) => heading.textContent?.trim()),
+    ).toEqual(['Administrative activity']);
   });
   it('bounds rows to 25 and exposes one range and pager below the results', async () => {
     const entries = Array.from({ length: 51 }, (_, index) => entry(`row-${index}`));

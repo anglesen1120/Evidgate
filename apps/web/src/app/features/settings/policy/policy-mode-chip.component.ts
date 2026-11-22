@@ -11,19 +11,29 @@ import { policyModeView } from './policy-mode';
   imports: [StatusPillComponent],
   host: { class: 'inline-block min-w-0 max-w-full' },
   template: `
-    <span
-      data-policy-mode
-      [attr.data-mode]="view().kind === 'unavailable' ? 'unavailable' : mode()"
-    >
-      <app-status-pill [tone]="tone()" [label]="label()" />
+    @if (summary()) {
+      <span class="eg-type-page-title">{{ label() }}</span>
       @if (mode() && view().kind !== 'unavailable') {
-        <code class="block font-mono wrap-anywhere" data-policy-mode-raw>{{ mode() }}</code>
+        <code class="block font-mono text-xs text-muted-foreground wrap-anywhere">{{
+          mode()
+        }}</code>
       }
-    </span>
+    } @else {
+      <span
+        data-policy-mode
+        [attr.data-mode]="view().kind === 'unavailable' ? 'unavailable' : mode()"
+      >
+        <app-status-pill [tone]="tone()" [label]="label()" />
+        @if (mode() && view().kind !== 'unavailable') {
+          <code class="block font-mono wrap-anywhere" data-policy-mode-raw>{{ mode() }}</code>
+        }
+      </span>
+    }
   `,
 })
 export class PolicyModeChipComponent {
   readonly mode = input<string | null | undefined>(null);
+  readonly summary = input(false);
   protected readonly view = computed(() => policyModeView(this.mode()));
   protected readonly tone = computed<StatusTone>(() => {
     switch (this.view().kind) {

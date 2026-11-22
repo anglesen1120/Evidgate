@@ -16,6 +16,7 @@ import { ActivatedRoute } from '@angular/router';
 import { HlmAlertImports } from '@evidgate/ui/alert';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSkeleton } from '@evidgate/ui/skeleton';
@@ -27,6 +28,9 @@ import {
 } from '../../../shared/ui/narrow';
 import type { PublishedRevision } from '../../../core/data/policy-data.service';
 import { SessionStore } from '../../../core/session/session.store';
+import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
+import { NumberValueComponent } from '../../../shared/ui/values/number-value.component';
+import { PolicyModeChipComponent } from './policy-mode-chip.component';
 import { PolicyProjectReads } from './policy-reads';
 import { PolicyStore } from './policy.store';
 import { PolicySummaryComponent } from './policy-summary.component';
@@ -41,6 +45,10 @@ import { RevisionDetailComponent } from './revision-detail.component';
     HlmAlertImports,
     HlmButton,
     HlmCardImports,
+    HlmIcon,
+    CopyableIdentifierComponent,
+    NumberValueComponent,
+    PolicyModeChipComponent,
     HlmInput,
     HlmLabel,
     HlmSkeleton,
@@ -73,7 +81,6 @@ export class PolicyPage {
   protected readonly mutationPolicy = inject(NarrowMutationPolicy);
 
   protected readonly canWrite = computed(() => this.session.has('policy:write'));
-  protected readonly sectionSize = 'section' as const;
   protected readonly valuesTab = 'values' as const;
   protected readonly compareTab = 'compare' as const;
   protected readonly activationTab = 'activation' as const;
@@ -89,11 +96,18 @@ export class PolicyPage {
     const head = rows.find((row) => row.id === this.store.headRevisionId());
     return head?.id ?? rows.at(-1)?.id ?? null;
   });
+  protected readonly activeRevisionNo = computed(() => {
+    const id = this.store.reads.activation().value?.policy_revision_id;
+    return this.store.revisions().find((revision) => revision.id === id)?.revision_no;
+  });
   protected readonly paging = signal(false);
   private readonly dialog = viewChild(PublishDialogComponent);
   private readonly heading = viewChild.required<ElementRef<HTMLHeadingElement>>('heading');
   protected readonly copy = {
-    title: $localize`:@@settings.policy.title:Policy`,
+    title: $localize`:@@settings.policy.release-title:Release policy`,
+    activeRevision: $localize`:@@settings.policy.active-revision:Active revision`,
+    head: $localize`:@@settings.policy.head-revision:Head revision`,
+    mode: $localize`:@@settings.policy.activation-mode:Activation mode`,
     description: $localize`:@@settings.policy.description:Inspect policy revisions and compare their fields. Open a revision using its identifier.`,
     revisionId: $localize`:@@settings.policy.revision-id:Revision ID`,
     open: $localize`:@@settings.policy.open:Open revision`,

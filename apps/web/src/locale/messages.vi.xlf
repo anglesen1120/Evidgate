@@ -22051,6 +22051,78 @@
           <context context-type="linenumber">210</context>
         </context-group>
       </trans-unit>
-    </body>
+<trans-unit id="suites.composition.description" datatype="html"><source>Inspect pinned case revisions, their variants and the inputs used to plan execution.</source><target>Xem các phiên bản ca kiểm thử đã ghim, các biến thể tương ứng và dữ liệu đầu vào dùng để lập kế hoạch thực thi.</target></trans-unit>
+<trans-unit id="suites.composition.identity" datatype="html"><source>Composition identity</source><target>Thông tin cấu hình</target></trans-unit>
+<trans-unit id="suites.composition.suite" datatype="html"><source>Suite</source><target>Bộ kiểm thử</target></trans-unit>
+        <trans-unit id="settings.shell-intro" datatype="html"><source>Open a section to manage settings for your organization or project.</source><target>Chọn một mục để quản lý cài đặt của tổ chức hoặc dự án.</target></trans-unit>
+<trans-unit id="settings.shell-sections" datatype="html"><source>Sections</source><target>Các mục</target></trans-unit>
+<trans-unit id="settings.read-only" datatype="html"><source>Read-only. You don’t have permission to make changes here.</source><target>Chỉ đọc. Bạn không có quyền thay đổi cài đặt ở đây.</target></trans-unit>
+<trans-unit id="settings.count-on-page" datatype="html"><source>On this page</source><target>Trên trang này</target></trans-unit>
+<trans-unit id="settings.members-active-count" datatype="html"><source>Active members</source><target>Thành viên đang hoạt động</target></trans-unit>
+<trans-unit id="settings.members-pending-count" datatype="html"><source>Pending invitations</source><target>Lời mời đang chờ</target></trans-unit>
+<trans-unit id="settings.members-admin-count" datatype="html"><source>Organization admins</source><target>Quản trị viên tổ chức</target></trans-unit>
+<trans-unit id="healingswitch.availability" datatype="html"><source>Healing availability</source><target>Trạng thái tự sửa kiểm thử</target></trans-unit>
+<trans-unit id="healingswitch.inspect-scopes" datatype="html"><source>Inspect the most restrictive scope before changing a healing setting.</source><target>Xem phạm vi hạn chế nhất trước khi thay đổi cài đặt tự sửa kiểm thử.</target></trans-unit>
+<trans-unit id="healingswitch.effective-state" datatype="html"><source>Effective state</source><target>Trạng thái có hiệu lực</target></trans-unit>
+<trans-unit id="healingswitch.server-snapshot" datatype="html"><source>Server snapshot</source><target>Dữ liệu máy chủ</target></trans-unit>
+<trans-unit id="healingswitch.project-setting" datatype="html"><source>Project setting</source><target>Cài đặt dự án</target></trans-unit>
+<trans-unit id="healingswitch.stored-setting" datatype="html"><source>Stored setting</source><target>Cài đặt đã lưu</target></trans-unit>
+<trans-unit id="healingswitch.runtime-approvals" datatype="html"><source>Runtime and approvals</source><target>Thực thi và xét duyệt</target></trans-unit>
+<trans-unit id="healingswitch.auto-apply-off" datatype="html"><source>Auto-apply off</source><target>Tắt tự động áp dụng</target></trans-unit>
+<trans-unit id="healingswitch.original-failure" datatype="html"><source>Healing never hides the original failure.</source><target>Tự sửa kiểm thử không bao giờ che giấu lỗi gốc.</target></trans-unit>
+      <trans-unit id="settings.secrets.count-hint" datatype="html"><source>Counts use this page before filtering. An active reference can be past its expiry date.</source><target>Số liệu tính theo trang này trước khi lọc. Một tham chiếu đang hoạt động vẫn có thể đã quá hạn.</target></trans-unit>
+      <trans-unit id="settings.secrets.page-summary" datatype="html"><source>References on this page</source><target>Tham chiếu trên trang này</target></trans-unit>
+      <trans-unit id="settings.secrets.directory" datatype="html"><source>Reference directory</source><target>Danh sách tham chiếu</target></trans-unit>
+      <trans-unit id="settings.secrets.reference-column" datatype="html"><source>Reference</source><target>Tham chiếu</target></trans-unit>
+      <trans-unit id="settings.policy.release-title" datatype="html"><source>Release policy</source><target>Chính sách phát hành</target></trans-unit>
+      <trans-unit id="settings.policy.revision-history" datatype="html"><source>Revision history</source><target>Lịch sử phiên bản</target></trans-unit>
+      <trans-unit id="settings.policy.active-revision" datatype="html"><source>Active revision</source><target>Phiên bản đang áp dụng</target></trans-unit>
+      <trans-unit id="settings.policy.activation-mode" datatype="html"><source>Activation mode</source><target>Chế độ kích hoạt</target></trans-unit>
+      <trans-unit id="settings.policy.diff-field" datatype="html"><source>Field</source><target>Trường</target></trans-unit>
+      <trans-unit id="settings.audit-activity" datatype="html">
+        <source>Administrative activity</source>
+        <target>Hoạt động quản trị</target>
+      </trans-unit>
+      <trans-unit id="settings.audit-loaded-records" datatype="html">
+        <source>Loaded records</source>
+        <target>Bản ghi đã tải</target>
+      </trans-unit>
+      <trans-unit id="settings.audit-loaded-support" datatype="html">
+        <source>Loaded support records</source>
+        <target>Bản ghi hỗ trợ đã tải</target>
+      </trans-unit>
+      <trans-unit id="settings.audit-export-limit" datatype="html">
+        <source>Maximum rows per export</source>
+        <target>Số dòng tối đa mỗi lần xuất</target>
+      </trans-unit>
+      <trans-unit id="settings.audit-record-scope" datatype="html">
+        <source>Record scope</source>
+        <target>Phạm vi bản ghi</target>
+      </trans-unit>
+      <trans-unit id="settings.security-activity" datatype="html">
+        <source>Recent activity</source>
+        <target>Hoạt động gần đây</target>
+      </trans-unit>
+      <trans-unit id="settings.security-safe-data" datatype="html">
+        <source>Safe event data</source>
+        <target>Dữ liệu sự kiện an toàn</target>
+      </trans-unit>
+      <trans-unit id="settings.security-visible-events" datatype="html">
+        <source>Visible events on this page</source>
+        <target>Sự kiện hiển thị trên trang này</target>
+      </trans-unit>
+      <trans-unit id="settings.security-page-critical" datatype="html">
+        <source>Critical events on this page</source>
+        <target>Sự kiện nghiêm trọng trên trang này</target>
+      </trans-unit>
+      <trans-unit id="settings.security-page-support" datatype="html">
+        <source>Support events on this page</source>
+        <target>Sự kiện hỗ trợ trên trang này</target>
+      </trans-unit>
+      <trans-unit id="settings.security-event-catalog" datatype="html">
+        <source>Event catalog</source>
+        <target>Danh mục sự kiện</target>
+      </trans-unit>
+</body>
   </file>
 </xliff>

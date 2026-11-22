@@ -11,7 +11,7 @@ import { SECRETS_COPY, secretStatusLabel } from './secrets.copy';
   host: { class: 'block min-w-0' },
   template: `
     <dl
-      class="m-0 grid min-w-0 gap-[var(--eg-space-5)] sm:grid-cols-2 [&>div]:min-w-0 [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:wrap-anywhere"
+      class="m-0 grid min-w-0 gap-(--eg-space-4) sm:grid-cols-2 [&>div]:min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:mt-(--eg-space-1) [&_dd]:wrap-anywhere"
     >
       <div>
         <dt>{{ copy.scope }}</dt>

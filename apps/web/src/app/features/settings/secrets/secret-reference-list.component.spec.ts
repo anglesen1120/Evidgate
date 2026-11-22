@@ -5,9 +5,11 @@ import fixtureData from '../../../../../../../fixtures/web-api/ingest-tokens-lis
 import { SecretReferenceListComponent } from './secret-reference-list.component';
 import { ROTATION_CLOCK } from './rotation-reminder-chip.component';
 import { SECRET_DESKTOP_PROVIDER } from './secrets-page.testing';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 
 const base = fixtureData.body.items[0] as IngestTokenView;
 describe('SecretReferenceListComponent metadata boundary (AC3)', () => {
+  provideLayoutTestStubs();
   beforeEach(() => TestBed.configureTestingModule({ providers: [SECRET_DESKTOP_PROVIDER] }));
   afterEach(() => {
     TestBed.resetTestingModule();
@@ -135,7 +137,9 @@ describe('SecretReferenceListComponent metadata boundary (AC3)', () => {
     const button = root.querySelector<HTMLButtonElement>('[data-rotate]');
     const rotate = vi.fn();
     fixture.componentInstance.rotate.subscribe(rotate);
-    expect(root.querySelector('[data-secret-reference]')?.getAttribute('data-slot')).toBe('card');
+    expect(root.querySelector('[data-secret-reference]')?.getAttribute('data-slot')).toBe(
+      'table-row',
+    );
     expect(button?.getAttribute('data-slot')).toBe('button');
     expect(button?.type).toBe('button');
     expect(root.querySelector('[data-secret-reference] h3')?.textContent).toBe(
