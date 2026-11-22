@@ -7,6 +7,7 @@ import fixtureData from '../../../../../../../fixtures/web-api/ingest-tokens-lis
 import { ROTATION_CLOCK } from './rotation-reminder-chip.component';
 import { SecretReferenceListComponent } from './secret-reference-list.component';
 import { SECRET_DESKTOP_PROVIDER } from './secrets-page.testing';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 
 const base = fixtureData.body.items[0] as IngestTokenView;
 const NOW = new Date('2026-10-25T00:00:00Z');
@@ -20,6 +21,7 @@ function row(id: string, patch: Partial<IngestTokenView>): IngestTokenView {
 }
 
 describe('SecretReferenceList reminder wiring and metadata branches (09.7.1-T3 QA2)', () => {
+  provideLayoutTestStubs();
   afterEach(() => TestBed.resetTestingModule());
 
   function mount(rows: readonly IngestTokenView[]): HTMLElement {

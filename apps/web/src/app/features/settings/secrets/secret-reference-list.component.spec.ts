@@ -5,9 +5,11 @@ import fixtureData from '../../../../../../../fixtures/web-api/ingest-tokens-lis
 import { SecretReferenceListComponent } from './secret-reference-list.component';
 import { ROTATION_CLOCK } from './rotation-reminder-chip.component';
 import { SECRET_DESKTOP_PROVIDER } from './secrets-page.testing';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 
 const base = fixtureData.body.items[0] as IngestTokenView;
 describe('SecretReferenceListComponent metadata boundary (AC3)', () => {
+  provideLayoutTestStubs();
   beforeEach(() => TestBed.configureTestingModule({ providers: [SECRET_DESKTOP_PROVIDER] }));
   afterEach(() => {
     TestBed.resetTestingModule();
