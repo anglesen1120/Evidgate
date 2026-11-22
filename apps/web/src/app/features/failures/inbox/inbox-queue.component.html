@@ -62,6 +62,7 @@
             #search
             id="inbox-search"
             type="search"
+            maxlength="200"
             [value]="store.query().get('q') || ''"
             (input)="store.filter('q', search.value)"
           />

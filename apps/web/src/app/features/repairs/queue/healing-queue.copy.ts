@@ -61,6 +61,7 @@ export const QUEUE_COPY = {
   reviewer: $localize`:@@repairs.queue.reviewer:Assigned reviewer`,
   inspect: $localize`:@@repairs.queue.inspect:Inspect shadow detail`,
   approval: $localize`:@@repairs.queue.approval:Review healing proposal`,
+  detailUnavailable: $localize`:@@repairs.queue.detail-unavailable:Detail not available in this review specimen.`,
   preview: $localize`:@@repairs.queue.preview:Preview only. No decision or notification will be sent.`,
   cancel: $localize`:@@repairs.queue.cancel:Cancel`,
   close: $localize`:@@repairs.queue.close:Close`,

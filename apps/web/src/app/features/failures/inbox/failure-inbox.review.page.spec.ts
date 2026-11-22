@@ -125,8 +125,10 @@ describe('Failure inbox review', () => {
     expect(await (await inbox.bulk()).text()).toContain('inc-92');
     expect(await (await inbox.bulk()).text()).not.toContain('inc-91');
     await (await inbox.more()).click();
-    await (await inbox.search()).setInputValue('HTTP 500');
-    await (await inbox.search()).dispatchEvent('input');
+    const search = await inbox.search();
+    expect(await search.getProperty('maxLength')).toBe(200);
+    await search.setInputValue('HTTP 500');
+    await search.dispatchEvent('input');
     expect(await inbox.rows()).toHaveLength(1);
     expect(await inbox.text()).not.toContain('inc-92');
   });

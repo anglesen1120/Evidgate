@@ -22,6 +22,10 @@ class QueueHarness extends ComponentHarness {
   readonly search = this.locatorFor('input[type="search"]');
   readonly filters = this.locatorForAll('button[data-filter]');
   readonly shadowLink = this.locatorFor('[data-record="cand-73"] a[data-shadow]');
+  readonly destinations = this.locatorForAll(
+    'a[href*="/dev/shadow-detail/"], a[href*="/dev/healing-approval/"]',
+  );
+  readonly detailDestinations = this.locatorForAll('app-queue-detail footer a[href]');
 }
 class DialogHarness extends ComponentHarness {
   static hostSelector = 'hlm-dialog-content';
@@ -93,6 +97,27 @@ describe('HealingQueueReviewPage', () => {
       '/dev/shadow-detail/orgs/org-a/projects/proj-b?id=cand-73',
     );
   });
+
+  it.each(['cand-73', 'cand-77', 'cand-74', 'cand-75'])(
+    'links only to supported records in the queue and the %s detail footer',
+    async (id) => {
+      const { queue } = await mount('default', id);
+      const links = await queue.destinations();
+      const supported = id === 'cand-73';
+      expect(links).toHaveLength(supported ? 4 : 2);
+      expect(await queue.detailDestinations()).toHaveLength(supported ? 2 : 0);
+      for (const link of links) {
+        expect(await link.getAttribute('href')).toMatch(
+          /^\/dev\/(?:shadow-detail|healing-approval)\/orgs\/org-a\/projects\/proj-b\?id=cand-73$/,
+        );
+      }
+      if (!supported) {
+        const note = 'Detail not available in this review specimen.';
+        expect(await (await queue.record(id)).text()).toContain(note);
+        expect(await (await queue.detail()).text()).toContain(note);
+      }
+    },
+  );
 
   it.each(['cand-74', 'cand-75'])(
     'does not offer approval or a rate for unsampled %s',

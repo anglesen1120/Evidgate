@@ -9734,7 +9734,15 @@
           <context context-type="linenumber">93</context>
         </context-group>
       </trans-unit>
-<trans-unit id="repairs.queue.preserved" datatype="html">
+<trans-unit id="repairs.queue.detail-unavailable" datatype="html">
+        <source>Detail not available in this review specimen.</source>
+        <target>Bản mẫu xét duyệt này không có trang chi tiết cho đề xuất này.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/repairs/queue/healing-queue.copy.ts</context>
+          <context context-type="linenumber">64</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="repairs.queue.preserved" datatype="html">
         <source>Original failure preserved</source>
         <target>Lỗi gốc được giữ nguyên</target>
         <context-group purpose="location">

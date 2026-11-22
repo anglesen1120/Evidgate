@@ -124,6 +124,7 @@ describe('HealingApprovalReviewPage', () => {
       const reason = dialog?.querySelector('textarea');
       expect(prepare?.disabled).toBe(true);
       if (!reason || !prepare) throw new Error('Missing decision controls');
+      expect(reason.maxLength).toBe(2000);
       reason.value = 'Reviewed the original timeout';
       reason.dispatchEvent(new Event('input'));
       await harness.fixture.whenStable();

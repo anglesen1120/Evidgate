@@ -152,6 +152,7 @@
       id="proposal-review-reason"
       #reason
       required
+      maxlength="2000"
       [value]="store.reason()"
       (input)="store.edit(reason.value)"
       [attr.aria-describedby]="'preview-impact'"

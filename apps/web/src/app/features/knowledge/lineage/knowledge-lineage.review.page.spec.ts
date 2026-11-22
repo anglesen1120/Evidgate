@@ -122,6 +122,7 @@ describe('KnowledgeLineageReviewPage', () => {
       '9af317c',
     ])
       expect(await dialog.text()).toContain(value);
+    expect(await (await dialog.reason()).getProperty('maxLength')).toBe(2000);
     await dialog.enterReason('   ');
     expect(await (await dialog.confirm()).getProperty('disabled')).toBe(true);
     await dialog.enterReason('Locator changed');

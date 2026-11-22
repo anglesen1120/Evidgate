@@ -160,15 +160,19 @@
                 <p>{{ c.unsampled }} · {{ c.noRate }}. {{ c.noApproval }}.</p>
               }
               <div class="actions">
-                <a
-                  hlmBtn
-                  [variant]="'link'"
-                  data-shadow
-                  [routerLink]="shadowRoute()"
-                  [queryParams]="{ id: row.id }"
-                  >{{ c.inspect }} <hlm-icon name="lucideChevronRight"
-                /></a>
-                @if (canReview(row)) {
+                @if (row.linkable) {
+                  <a
+                    hlmBtn
+                    [variant]="'link'"
+                    data-shadow
+                    [routerLink]="shadowRoute()"
+                    [queryParams]="{ id: row.id }"
+                    >{{ c.inspect }} <hlm-icon name="lucideChevronRight"
+                  /></a>
+                } @else {
+                  <small>{{ c.detailUnavailable }}</small>
+                }
+                @if (row.linkable && canReview(row)) {
                   <a
                     hlmBtn
                     [variant]="'outline'"

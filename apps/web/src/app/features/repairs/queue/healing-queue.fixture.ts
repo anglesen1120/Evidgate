@@ -10,6 +10,7 @@ export interface QueueCandidateViewModel {
   readonly createdAt: string | null;
   readonly samples: { readonly passed: number; readonly total: number } | null;
   readonly validated: boolean;
+  readonly linkable: boolean;
 }
 
 export const SNAPSHOT = '2026-10-13T09:59:00Z';
@@ -24,6 +25,7 @@ export const ADDRESS = {
   createdAt: '2026-10-13T09:50:00Z',
   samples: { passed: 24, total: 24 },
   validated: true,
+  linkable: true,
 } as const satisfies QueueCandidateViewModel;
 
 const decision = 'FAIL';
@@ -56,6 +58,7 @@ export const CANDIDATES: readonly QueueCandidateViewModel[] = [
     createdAt: null,
     samples: { passed: 8, total: 8 },
     validated: true,
+    linkable: false,
   },
   {
     id: 'cand-74',
@@ -67,6 +70,7 @@ export const CANDIDATES: readonly QueueCandidateViewModel[] = [
     createdAt: null,
     samples: null,
     validated: false,
+    linkable: false,
   },
   {
     id: 'cand-75',
@@ -78,6 +82,7 @@ export const CANDIDATES: readonly QueueCandidateViewModel[] = [
     createdAt: null,
     samples: null,
     validated: false,
+    linkable: false,
   },
 ];
 

@@ -112,10 +112,14 @@
     </section>
   }
   <footer class="actions section divider">
-    <a hlmBtn [variant]="'outline'" [routerLink]="shadowRoute()" [queryParams]="{ id: row.id }">{{
-      c.inspect
-    }}</a>
-    @if (canReview(row)) {
+    @if (row.linkable) {
+      <a hlmBtn [variant]="'outline'" [routerLink]="shadowRoute()" [queryParams]="{ id: row.id }">{{
+        c.inspect
+      }}</a>
+    } @else {
+      <small>{{ c.detailUnavailable }}</small>
+    }
+    @if (row.linkable && canReview(row)) {
       <a
         hlmBtn
         [variant]="'outline'"
