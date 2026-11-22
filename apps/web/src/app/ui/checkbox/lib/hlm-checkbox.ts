@@ -70,11 +70,7 @@ export class HlmCheckbox implements ControlValueAccessor {
   public readonly userClass = input<ClassValue>('', { alias: 'class' });
 
   protected readonly _computedClass = computed(() =>
-    hlm(
-      'spartan-checkbox peer shrink-0 cursor-default outline-none disabled:cursor-not-allowed disabled:opacity-50',
-      this.userClass(),
-      this._errorStateClass(),
-    ),
+    hlm('spartan-checkbox peer shrink-0', this.userClass(), this._errorStateClass()),
   );
 
   public readonly inputId = input<string | null>(null);
@@ -113,9 +109,7 @@ export class HlmCheckbox implements ControlValueAccessor {
     () => this.forceInvalid() || this._brnCheckbox().spartanInvalid?.(),
   );
   protected readonly _errorStateClass = computed(() =>
-    this._spartanInvalid()
-      ? 'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40'
-      : '',
+    this._spartanInvalid() ? 'spartan-checkbox-invalid' : '',
   );
 
   protected _onChange?: ChangeFn<boolean>;

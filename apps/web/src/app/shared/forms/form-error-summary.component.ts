@@ -29,7 +29,7 @@ import type { FormFeedback } from './form-feedback';
         tabindex="-1"
         [attr.aria-labelledby]="summaryId() + '-title'"
         [attr.aria-describedby]="summaryId() + '-errors'"
-        class="min-w-0 wrap-anywhere focus:outline-[length:var(--eg-focus-width)] focus:outline-ring focus:outline-offset-[var(--eg-focus-offset)]"
+        class="min-w-0 border-s-4 border-s-current rounded-(--eg-radius-md) wrap-anywhere focus:outline-[length:var(--eg-focus-width)] focus:outline-ring focus:outline-offset-[var(--eg-focus-offset)]"
       >
         <h2 hlmAlertTitle [id]="summaryId() + '-title'">{{ title }}</h2>
         <ul

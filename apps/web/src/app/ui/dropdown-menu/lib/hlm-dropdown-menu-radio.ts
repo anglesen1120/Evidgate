@@ -44,7 +44,7 @@ export class HlmDropdownMenuRadio {
   constructor() {
     classes(
       () =>
-        'spartan-dropdown-menu-radio-item group/dropdown-menu-radio relative flex w-full cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_hlm-icon]:pointer-events-none [&_hlm-icon]:shrink-0',
+        'spartan-dropdown-menu-radio-item group/dropdown-menu-radio relative flex w-full items-center select-none data-disabled:pointer-events-none [&_hlm-icon]:pointer-events-none [&_hlm-icon]:shrink-0',
     );
   }
 }

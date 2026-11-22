@@ -1,38 +1,67 @@
 @layer components {
   .spartan-table-container {
-    @apply relative w-full overflow-x-auto;
+    @apply relative w-full overflow-auto;
+    max-inline-size: 100%;
+    scroll-padding: var(--eg-space-3);
   }
 
   .spartan-table {
-    @apply w-full caption-bottom text-sm;
+    width: 100%;
+    border-collapse: collapse;
+    color: var(--eg-text);
+    font-size: var(--eg-text-sm);
+    line-height: var(--eg-leading-sm);
+    text-align: start;
+    font-variant-numeric: tabular-nums;
   }
 
   .spartan-table-header {
-    @apply [&_tr]:border-b;
+    background: var(--eg-surface-raised);
+    color: var(--eg-text-muted);
   }
 
   .spartan-table-body {
-    @apply [&_tr:last-child]:border-0;
+    background: var(--eg-surface);
   }
 
   .spartan-table-footer {
-    @apply bg-muted/50 border-t font-medium [&>tr]:last:border-b-0;
+    background: var(--eg-surface-raised);
+    color: var(--eg-text);
+    font-weight: var(--eg-weight-semibold);
   }
 
   .spartan-table-row {
-    @apply hover:bg-muted/50 data-[state=selected]:bg-muted border-b transition-colors;
+    border-block-end: var(--eg-border-width) solid var(--eg-border);
+  }
+
+  .spartan-table-body .spartan-table-row:hover {
+    background: var(--eg-surface-raised);
+  }
+
+  .spartan-table-body .spartan-table-row:is([data-state='selected'], :has([aria-expanded='true'])) {
+    background: var(--eg-accent-soft);
   }
 
   .spartan-table-head {
-    @apply text-foreground h-10 px-2 text-start align-middle font-medium whitespace-nowrap [&:has([role=checkbox])]:pe-0;
+    color: var(--eg-text-muted);
+    font-weight: var(--eg-weight-semibold);
   }
 
-  .spartan-table-cell {
-    @apply p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pe-0;
+  .spartan-table-cell,
+  .spartan-table-head {
+    block-size: var(--eg-row-default);
+    padding: var(--eg-space-3) var(--eg-space-4);
+    text-align: start;
+    vertical-align: middle;
   }
 
   .spartan-table-caption {
-    @apply text-muted-foreground mt-4 text-sm;
+    padding: var(--eg-space-3);
+    text-align: start;
+    font-size: var(--eg-text-xs);
+    line-height: var(--eg-leading-xs);
+    font-weight: var(--eg-weight-semibold);
+    color: var(--eg-text-muted);
   }
 
   .eg-table-layout {

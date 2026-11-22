@@ -1,10 +1,13 @@
 // State sheet: docs/design/web/state-sheet.md#how-the-specs-link-here
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { toast } from '@spartan-ng/brain/sonner';
 
+import { provideGalleryLayout } from './gallery-layout.testing';
 import { UiGalleryComponent } from './ui-gallery.component';
 
 describe('UiGalleryComponent', () => {
+  provideGalleryLayout();
   let root: HTMLElement;
   let fixture: ComponentFixture<UiGalleryComponent>;
 
@@ -61,7 +64,42 @@ describe('UiGalleryComponent', () => {
 
   it('renders every component group and both regular and virtual typed table fixtures', () => {
     expect(root.querySelectorAll('h1')).toHaveLength(1);
-    expect(root.querySelectorAll('main > section > h2')).toHaveLength(17);
+    const sections = Array.from(root.querySelectorAll('main > section'));
+    expect(sections.map((section) => section.getAttribute('aria-labelledby'))).toEqual([
+      'workspace',
+      'evidence',
+      'forms',
+      'feedback',
+    ]);
+    expect(
+      sections.map((section) =>
+        Array.from(section.querySelectorAll('app-gallery-specimen h3'), (heading) => heading.id),
+      ),
+    ).toEqual([
+      ['specimen-shell', 'specimen-breadcrumb', 'specimen-header'],
+      [
+        'specimen-kpi',
+        'specimen-queue',
+        'specimen-detail',
+        'specimen-failure',
+        'specimen-chart',
+        'specimen-history',
+      ],
+      [
+        'specimen-buttons',
+        'specimen-badges',
+        'specimen-fields',
+        'specimen-choices',
+        'specimen-dialog',
+      ],
+      [
+        'specimen-table',
+        'specimen-tabs',
+        'specimen-tooltip',
+        'specimen-notices',
+        'specimen-pagination',
+      ],
+    ]);
     expect(root.querySelectorAll('app-run-state-pill')).toHaveLength(8);
     expect(
       root
@@ -103,6 +141,28 @@ describe('UiGalleryComponent', () => {
     expect(
       root.querySelectorAll('[data-demo="table-small"] cdk-virtual-scroll-viewport'),
     ).toHaveLength(0);
+  });
+
+  it('shows a note notification without changing the pending review', async () => {
+    const article = root.querySelector('#specimen-notices')?.closest('article');
+    const preview = article?.querySelector<HTMLButtonElement>('app-gallery-example button');
+    if (!preview) throw new Error('Expected the notification preview control');
+    preview.click();
+    try {
+      await fixture.whenStable();
+      const notice = root.querySelector('[data-sonner-toast]');
+      expect(notice?.textContent).toContain('Review note saved');
+      const badges = root.querySelector('#specimen-badges')?.closest('article');
+      expect(badges?.querySelector('[data-tone="pending"]')?.textContent).toContain(
+        'Awaiting review',
+      );
+      expect(badges?.querySelector('[data-tone="success"]')).toBeNull();
+      expect(
+        root.querySelector('[data-demo="evaluation-pending"] app-decision-chip')?.textContent,
+      ).toContain('Not evaluated');
+    } finally {
+      toast.dismiss();
+    }
   });
 
   it('includes every request pattern and both native retry eligibility states', async () => {

@@ -1,5 +1,13 @@
 @layer components {
   .spartan-label {
-    @apply gap-2 text-sm leading-none font-medium group-data-[disabled=true]:opacity-50 peer-disabled:opacity-50;
+    gap: var(--eg-space-3);
+    color: var(--eg-text);
+    font: var(--eg-weight-semibold) var(--eg-text-xs) / var(--eg-leading-xs) var(--eg-font-body);
+    overflow-wrap: anywhere;
+  }
+
+  .spartan-label[data-disabled='true'],
+  .spartan-label:has(:disabled) {
+    color: var(--eg-text-muted);
   }
 }

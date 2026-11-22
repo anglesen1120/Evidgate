@@ -4,12 +4,12 @@ import { classes } from '@evidgate/ui/utils';
 import { type VariantProps, cva } from 'class-variance-authority';
 
 export const listVariants = cva(
-  'spartan-tabs-list group/tabs-list text-muted-foreground inline-flex w-fit items-center justify-center group-data-[orientation=vertical]/tabs:h-fit group-data-[orientation=vertical]/tabs:flex-col',
+  'spartan-tabs-list group/tabs-list inline-flex w-fit items-center group-data-[orientation=vertical]/tabs:h-fit group-data-[orientation=vertical]/tabs:flex-col',
   {
     variants: {
       variant: {
-        default: 'bg-muted',
-        line: 'gap-1 bg-transparent',
+        default: 'spartan-tabs-list-default',
+        line: 'spartan-tabs-list-line',
       },
     },
     defaultVariants: {
