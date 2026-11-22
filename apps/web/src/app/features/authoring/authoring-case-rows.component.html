@@ -1,3 +1,21 @@
+<div
+  role="region"
+  tabindex="0"
+  [attr.aria-label]="copy.caption"
+  class="min-w-0 max-w-full overflow-x-auto focus-visible:outline-ring"
+>
+  <app-data-table
+    class="min-[900px]:min-w-[768px] [--eg-table-row:calc(var(--eg-row-default)_+_var(--eg-space-3))]!"
+    [columns]="columns()"
+    [rows]="rows()"
+    [rowId]="rowId"
+    [caption]="copy.caption"
+    [virtualThreshold]="200"
+    [fitToContainer]="false"
+    [fixedHeightCells]="true"
+    [flow]="'page'"
+  />
+</div>
 @if (desktop()) {
   <div class="selection-bar" data-select-visible>
     <label
@@ -25,16 +43,6 @@
 } @else {
   <p class="help" data-selection-notice tabindex="-1">{{ copy.narrowHelp }}</p>
 }
-<app-data-table
-  [columns]="columns()"
-  [rows]="rows()"
-  [rowId]="rowId"
-  [caption]="copy.caption"
-  [virtualThreshold]="200"
-  [fitToContainer]="true"
-  [fixedHeightCells]="true"
-  [flow]="'page'"
-/>
 @if (desktop()) {
   <div class="export-bar">
     <a
@@ -70,27 +78,30 @@
   </label>
 </ng-template>
 <ng-template #codeCell let-row let-stacked="stacked">
-  <app-copyable-identifier
-    [value]="row.code"
-    [label]="copy.code"
-    [truncate]="!stacked"
-    [compact]="virtual()"
-    [copySize]="'lg'"
-  />
+  <div class="coverage" [class.virtual-cell]="virtual()">
+    <bdi class="font-semibold"
+      ><app-data-table-value [value]="row.title" [truncate]="!stacked" [fixedRow]="virtual()"
+    /></bdi>
+    <app-copyable-identifier
+      [value]="row.code"
+      [label]="copy.code"
+      [truncate]="!stacked"
+      [compact]="virtual()"
+      [copySize]="'lg'"
+    />
+  </div>
 </ng-template>
 <ng-template #idCell let-row let-stacked="stacked">
-  <app-copyable-identifier
-    [value]="row.case_id"
-    [label]="copy.id"
-    [truncate]="!stacked"
-    [compact]="virtual()"
-    [copySize]="'lg'"
-  />
-</ng-template>
-<ng-template #titleCell let-row let-stacked="stacked">
-  <bdi
-    ><app-data-table-value [value]="row.title" [truncate]="!stacked" [fixedRow]="virtual()"
-  /></bdi>
+  <div class="coverage" [class.virtual-cell]="virtual()">
+    <app-copyable-identifier
+      [value]="row.case_id"
+      [label]="copy.id"
+      [truncate]="!stacked"
+      [compact]="virtual()"
+      [copySize]="'lg'"
+    />
+    <app-revision-chip [revision]="row.version" [label]="copy.version" />
+  </div>
 </ng-template>
 <ng-template #parentCell let-row let-stacked="stacked">
   <app-copyable-identifier
@@ -102,16 +113,16 @@
   />
 </ng-template>
 <ng-template #priorityCell let-row>
-  <app-status-pill
-    [label]="priorityLabel(row)"
-    [tone]="row.priority === 'critical' || row.priority === 'high' ? 'warning' : 'neutral'"
-  />
-</ng-template>
-<ng-template #stateCell let-row>
-  <app-status-pill
-    [label]="stateLabel(row)"
-    [tone]="row.state === 'approved' ? 'info' : 'neutral'"
-  />
+  <div class="coverage" [class.virtual-cell]="virtual()">
+    <app-status-pill
+      [label]="priorityLabel(row)"
+      [tone]="row.priority === 'critical' || row.priority === 'high' ? 'warning' : 'neutral'"
+    />
+    <app-status-pill
+      [label]="stateLabel(row)"
+      [tone]="row.state === 'approved' ? 'info' : 'neutral'"
+    />
+  </div>
 </ng-template>
 <ng-template #coverageCell let-row let-stacked="stacked">
   <div class="coverage" [class.virtual-cell]="virtual()">
@@ -119,6 +130,10 @@
       [label]="row.linked_live_count > 0 ? copy.covered : copy.uncovered"
       [tone]="row.linked_live_count > 0 ? 'info' : 'neutral'"
     />
+    <span class="text-end text-xs tabular-nums text-muted-foreground"
+      ><span i18n="@@authoring.case-table.live-links">Live links</span>:
+      {{ row.linked_live_count | number }}</span
+    >
     @if (row.linked_case_ids.length > 0) {
       <span class="sr-only">{{ copy.links }}</span>
       <app-data-table-value
@@ -129,9 +144,21 @@
     }
   </div>
 </ng-template>
-<ng-template #versionCell let-row>
-  <app-revision-chip [revision]="row.version" [label]="copy.version" />
-</ng-template>
-<ng-template #pendingCell>
-  <span [attr.aria-describedby]="'authoring-case-pending-help'">—</span>
+<ng-template #viewCell let-row>
+  @if (editorScope(); as scope) {
+    <a
+      hlmBtn
+      [variant]="'outline'"
+      [size]="'sm'"
+      data-case-view
+      class="pointer-coarse:min-h-(--eg-control-touch)"
+      [routerLink]="scope.concat(row.case_id)"
+      [queryParamsHandling]="'preserve'"
+      [preserveFragment]="true"
+      [attr.aria-label]="viewName(row)"
+      >{{ copy.view }}</a
+    >
+  } @else {
+    <span class="help">{{ copy.unavailableEditor }}</span>
+  }
 </ng-template>

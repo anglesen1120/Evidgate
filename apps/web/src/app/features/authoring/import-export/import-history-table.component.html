@@ -1,0 +1,142 @@
+<ng-template #revision let-row
+  ><app-revision-chip [revision]="row.version_no" [label]="copy.version"
+/></ng-template>
+<ng-template #entity let-row
+  ><div class="grid min-w-0 gap-(--eg-space-1)">
+    <bdi class="font-semibold">{{ row.entity_kind }}</bdi
+    ><app-copyable-identifier [value]="row.entity_id" [label]="copy.entity" /></div
+></ng-template>
+<ng-template #author let-row>
+  @if (row.author; as membership) {
+    <app-copyable-identifier [value]="membership" [label]="copy.author" />
+  } @else {
+    {{ copy.notSupplied }}
+  }
+</ng-template>
+<ng-template #time let-row><app-absolute-time [value]="row.created_at" /></ng-template>
+<ng-template #action let-row>
+  <button
+    hlmBtn
+    [variant]="'outline'"
+    #opener
+    type="button"
+    [hlmDialogTriggerFor]="dialog"
+    [attr.aria-label]="name(row)"
+    (click)="inspect(row, opener)"
+    [attr.data-import-version-view]="row.version_id"
+    i18n="@@authoring.history.view"
+  >
+    View
+  </button>
+</ng-template>
+<app-data-table
+  class="[--eg-row-default:var(--eg-space-11)]"
+  [caption]="copy.history"
+  [rows]="rows()"
+  [rowId]="rowId"
+  [columns]="columns()"
+/>
+<hlm-dialog
+  #dialog="hlmDialog"
+  [aria-modal]="true"
+  [autoFocus]="'[data-import-version-title]'"
+  [restoreFocus]="false"
+  [state]="selected() ? 'open' : 'closed'"
+  (stateChanged)="$event === 'closed' && selectedId.set(null)"
+  (closed)="restoreFocus()"
+>
+  <hlm-dialog-content *hlmDialogPortal [size]="'md'">
+    <header hlmDialogHeader>
+      <h2
+        hlmDialogTitle
+        tabindex="-1"
+        data-import-version-title
+        i18n="@@authoring.import-export.version-details"
+      >
+        Authoring version details
+      </h2>
+      <p hlmDialogDescription hlmDialogSubject i18n="@@authoring.import-export.version-readonly">
+        This historical version is read-only.
+      </p>
+    </header>
+    <div
+      class="min-w-0 p-(--eg-space-2) [&_dl]:m-0 [&_dl]:grid [&_dl]:min-w-0 [&_dl]:divide-y [&_dl]:divide-border [&_dl>div]:grid [&_dl>div]:items-baseline [&_dl>div]:gap-(--eg-space-2) [&_dl>div]:py-(--eg-space-3) sm:[&_dl>div]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] [&_dt]:text-sm [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:wrap-anywhere"
+    >
+      @if (selected(); as row) {
+        <h3 class="m-0 text-sm font-semibold" i18n="@@authoring.history.summary">Summary</h3>
+        <dl>
+          <div>
+            <dt>{{ copy.version }}</dt>
+            <dd><app-revision-chip [revision]="row.version_no" [label]="copy.version" /></dd>
+          </div>
+          <div>
+            <dt i18n="@@authoring.import-export.version-id">Version ID</dt>
+            <dd><app-copyable-identifier [value]="row.version_id" [label]="copy.version" /></dd>
+          </div>
+          <div>
+            <dt>{{ copy.entity }}</dt>
+            <dd>
+              <bdi>{{ row.entity_kind }}</bdi
+              ><app-copyable-identifier [value]="row.entity_id" [label]="copy.entity" />
+            </dd>
+          </div>
+          <div>
+            <dt>{{ copy.batch }}</dt>
+            <dd><app-copyable-identifier [value]="row.batch_id" [label]="copy.batch" /></dd>
+          </div>
+          <div>
+            <dt>{{ copy.source }}</dt>
+            <dd>{{ row.source }}</dd>
+          </div>
+          <div>
+            <dt>{{ copy.change }}</dt>
+            <dd>{{ row.change_kind }}</dd>
+          </div>
+        </dl>
+        <h3
+          class="mt-(--eg-space-4) mb-0 text-sm font-semibold"
+          i18n="@@authoring.history.provenance"
+        >
+          Version provenance
+        </h3>
+        <dl>
+          <div>
+            <dt>{{ copy.author }}</dt>
+            <dd>
+              @if (row.author; as membership) {
+                <app-copyable-identifier [value]="membership" [label]="copy.author" />
+              } @else {
+                {{ copy.notSupplied }}
+              }
+            </dd>
+          </div>
+          <div>
+            <dt>{{ copy.reason }}</dt>
+            <dd>
+              <bdi>{{ row.reason ?? copy.notSupplied }}</bdi>
+            </dd>
+          </div>
+          <div>
+            <dt>{{ utc }}</dt>
+            <dd><app-absolute-time [value]="row.created_at" /></dd>
+          </div>
+          <div>
+            <dt>{{ hash }}</dt>
+            <dd><app-copyable-identifier [value]="row.content_hash" [label]="hash" /></dd>
+          </div>
+          @if (row.ai_run_id; as id) {
+            <div>
+              <dt>{{ run }}</dt>
+              <dd><app-copyable-identifier [value]="id" [label]="run" /></dd>
+            </div>
+          }
+        </dl>
+      }
+    </div>
+    <footer hlmDialogFooter>
+      <button hlmBtn type="button" [variant]="'outline'" hlmDialogClose i18n="@@ui.close">
+        Close
+      </button>
+    </footer>
+  </hlm-dialog-content>
+</hlm-dialog>

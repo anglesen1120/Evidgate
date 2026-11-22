@@ -3,6 +3,7 @@ import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
+import { provideRouter } from '@angular/router';
 import type { ManualCaseListItemDto } from '@evidgate/sdk';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { provideLayoutTestStubs } from '../../shared/testing/layout.testing';
@@ -17,6 +18,7 @@ class RowsHarness extends ComponentHarness {
   readonly summary = this.locatorFor('[data-selection-summary]');
   readonly exportAction = this.locatorFor('[data-export-selection]');
   readonly selectionNotice = this.locatorFor('[data-selection-notice]');
+  readonly links = this.locatorForAll('a[data-case-view]');
 }
 const row = (id: number): ManualCaseListItemDto => ({
   case_id: `018f0000-0000-7000-8000-${String(id).padStart(12, '0')}`,
@@ -39,6 +41,7 @@ describe('AuthoringCaseRowsComponent', () => {
     TestBed.configureTestingModule({
       imports: [AuthoringCaseRowsComponent],
       providers: [
+        provideRouter([]),
         {
           provide: NarrowMutationPolicy,
           useValue: {
@@ -61,6 +64,25 @@ describe('AuthoringCaseRowsComponent', () => {
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, RowsHarness);
     return { fixture, harness };
   }
+
+  it('links each readable case to its scoped editor without changing selection', async () => {
+    const { fixture, harness } = await mount();
+    fixture.componentRef.setInput('editorScope', [
+      '/orgs',
+      'O',
+      'projects',
+      'P',
+      'authoring',
+      'cases',
+    ]);
+    const links = await harness.links();
+    expect(links).toHaveLength(2);
+    expect(await links[1]?.getAttribute('href')).toBe(
+      '/orgs/O/projects/P/authoring/cases/' + row(2).case_id,
+    );
+    expect(await links[1]?.getAttribute('aria-label')).toContain(row(2).title);
+    expect(await (await harness.summary()).text()).toContain('0 of 2 loaded selected');
+  });
 
   it('selects one row, exposes mixed select-visible, and selects or clears visible rows only', async () => {
     const { harness } = await mount();

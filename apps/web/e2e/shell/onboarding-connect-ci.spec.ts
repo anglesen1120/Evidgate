@@ -252,6 +252,19 @@ test.describe('the resume is metadata-only (AC2, AC7)', () => {
     await expect(row).toHaveAttribute('data-status', 'active');
     // The server's metadata only: the prefix it stores, never a value it has already handed out.
     await expect(row.locator('code')).toHaveText('egt_fixture');
+    const view = row.getByRole('button', { name: /View / });
+    await view.click();
+    const dialog = page.getByRole('dialog', { name: 'Ingest token details' });
+    const title = dialog.getByRole('heading', { name: 'Ingest token details' });
+    await expect(title).toBeFocused();
+    await expect(dialog).toHaveAttribute('aria-labelledby', (await title.getAttribute('id')) ?? '');
+    await expect(dialog).toContainText('egt_fixture');
+    await expect(dialog).toContainText('Scopes');
+    await expectSecretAbsent(page, FIXTURE_TOKEN_SECRET, 'the token metadata dialog');
+    await expectSecretAbsent(page, FIXTURE_ROTATED_TOKEN_SECRET, 'the token metadata dialog');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(view).toBeFocused();
     await expectSecretAbsent(page, FIXTURE_TOKEN_SECRET, 'the resumed step 2');
     await expectSecretAbsent(page, FIXTURE_ROTATED_TOKEN_SECRET, 'the resumed step 2');
     await expectNoReveal(page);
@@ -272,6 +285,15 @@ test.describe('the resume is metadata-only (AC2, AC7)', () => {
     await expect(row).toHaveAttribute('data-status', 'active');
     await expect(row).toContainText(REPOSITORY_NAME);
     await expect(row.locator('time')).toHaveAttribute('datetime', '2026-10-20T07:30:00Z');
+    const view = row.getByRole('button', { name: `View ${REPOSITORY_NAME}` });
+    await view.click();
+    const dialog = page.getByRole('dialog', { name: 'CI binding details' });
+    await expect(dialog).toContainText(REPOSITORY_NAME);
+    await expect(dialog).toContainText('Allowed workflow refs');
+    await expectSecretAbsent(page, FIXTURE_BINDING_CHALLENGE, 'the binding metadata dialog');
+    await dialog.getByRole('button', { name: 'Close', exact: true }).last().click();
+    await expect(dialog).toHaveCount(0);
+    await expect(view).toBeFocused();
     await expectSecretAbsent(page, FIXTURE_BINDING_CHALLENGE, 'the resumed step 2');
     await expectNoReveal(page);
     await expect(nextButton(page)).toBeEnabled();

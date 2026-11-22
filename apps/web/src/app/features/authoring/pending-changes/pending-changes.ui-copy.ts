@@ -12,7 +12,10 @@ export const PENDING_UI = {
   structural: $localize`:@@authoring.pending-changes.structural-unavailable:Unavailable until structural apply lands. Merge and split changes stay queued and block Apply when selected.`,
   staleQueue: $localize`:@@authoring.pending-changes.stale-queue:Refresh failed. These are previously loaded changes, not a confirmed current queue.`,
   select: $localize`:@@authoring.pending-changes.select-change:Select change`,
-  preview: $localize`:@@authoring.pending-changes.preview-action:Preview`,
+  view: $localize`:@@authoring.pending-changes.view:View`,
+  loaded: $localize`:@@authoring.pending-changes.loaded:Loaded changes`,
+  blockedCount: $localize`:@@authoring.pending-changes.blocked-count:Blocked changes`,
+  actions: $localize`:@@authoring.pending-changes.actions:Actions`,
   changeId: $localize`:@@authoring.pending-changes.change-id:Change id`,
   loadMore: $localize`:@@authoring.pending-changes.load-more:Load more changes`,
   batchSummary: $localize`:@@authoring.pending-changes.batch-summary:Batch summary`,
@@ -21,11 +24,6 @@ export const PENDING_UI = {
   batchEtag: $localize`:@@authoring.pending-changes.batch-etag:Batch ETag`,
   etagNotRead: $localize`:@@authoring.pending-changes.etag-not-read:The exact-selection ETag is read immediately before applying. No batch token has been read for this selection yet.`,
   idempotency: $localize`:@@authoring.pending-changes.idempotency-note:The same apply intent reuses one idempotency key. The batch ETag comes from the exact-selection read, never from an individual item version.`,
-  manual: $localize`:@@authoring.pending-changes.manual-source:Manual`,
-  ai: $localize`:@@authoring.pending-changes.ai-source:AI`,
-  imported: $localize`:@@authoring.pending-changes.import-source:Import`,
-  baseVersion: $localize`:@@authoring.pending-changes.base-version:Target base version`,
-  queuedAt: $localize`:@@authoring.pending-changes.queued-at:Queued at (UTC)`,
   appliedIds: $localize`:@@authoring.pending-changes.applied-ids:Applied change ids`,
   entity: $localize`:@@authoring.pending-changes.entity:Entity`,
   commentHint: $localize`:@@authoring.pending-changes.comment-hint:Queue a plain-text comment for review. This does not apply it.`,
@@ -50,11 +48,4 @@ export function operationLabel(kind: AuthoringChangeListItem['change_type']): st
       : kind === 'merge'
         ? PENDING_COPY.mergeLabel
         : PENDING_COPY.splitLabel;
-}
-export function sourceLabel(source: AuthoringChangeListItem['source']): string {
-  return source === 'manual'
-    ? PENDING_UI.manual
-    : source === 'ai'
-      ? PENDING_UI.ai
-      : PENDING_UI.imported;
 }

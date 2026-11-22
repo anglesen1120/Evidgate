@@ -106,14 +106,39 @@ describe('PendingChangesPage dialog accessibility', () => {
       ui: await TestbedHarnessEnvironment.harnessForFixture(fixture, PendingUiHarness),
     };
   }
+  it('opens one labelled read-only View, focuses the heading and restores its exact row on Escape', async () => {
+    const { fixture, ui } = await setup();
+    const opener = `[data-pending-change-id="${ITEM}"]`;
+    await ui.focusControl(opener);
+    await ui.click(opener);
+    const dialogs = document.querySelectorAll<HTMLElement>('[role="dialog"]');
+    expect(dialogs).toHaveLength(1);
+    const dialog = dialogs[0];
+    if (!dialog) throw new Error('Expected the pending change View dialog');
+    const title = dialog.querySelector<HTMLElement>('[data-pending-view-title]');
+    expect(title?.textContent?.trim()).toBe('Change details');
+    expect(dialog.getAttribute('aria-labelledby')).toBe(title?.id);
+    expect(document.activeElement).toBe(title);
+    expect(dialog.textContent).toContain(ITEM);
+    expect(
+      dialog.querySelector('[data-pending-apply], [data-pending-discard], textarea'),
+    ).toBeNull();
+    expect(listPending).toHaveBeenCalledTimes(1);
+    escapeFrom(dialog);
+    await fixture.whenStable();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(await ui.focused(opener)).toBe(true);
+    expect(apply).not.toHaveBeenCalled();
+    expect(discard).not.toHaveBeenCalled();
+  });
   it.each(['apply', 'discard'] as const)(
     '%s consent is a modal trap and Escape restores its opener',
     async (action) => {
       const { fixture, ui } = await setup();
-      if (action === 'discard') await ui.click('[data-pending-preview]');
-      const opener = `[data-pending-${action}]`;
+      const opener = action === 'discard' ? '[data-pending-more]' : '[data-pending-apply]';
       await ui.focusControl(opener);
       await ui.click(opener);
+      if (action === 'discard') await ui.overlayClick('[data-pending-discard]');
       const dialog = consentDialog();
       expect(dialog.getAttribute('aria-modal')).toBe('true');
       const anchors = document.querySelectorAll<HTMLElement>('.cdk-focus-trap-anchor');
@@ -149,12 +174,13 @@ describe('PendingChangesPage dialog accessibility', () => {
       expect(await ui.count('[data-pending-receipt]')).toBe(1);
       // The contract applies the whole selection, so both queued rows appear in the receipt.
       expect(await ui.count('[data-pending-applied-id]')).toBe(2);
-      expect(await ui.focused('[data-pending-preview-content]')).toBe(true);
-      const emptyRegion = document.querySelector<HTMLElement>('[data-pending-preview-content]');
+      expect(await ui.focused('[data-pending-empty]')).toBe(true);
+      const emptyRegion = document.querySelector<HTMLElement>('[data-pending-empty]');
       expect(emptyRegion?.getAttribute('aria-label')).toBe('No pending changes');
       expect(await ui.count('app-empty-pattern')).toBe(1);
       expect(await ui.text()).not.toContain('Choose a queued change');
-      expect(await ui.text()).not.toContain('Selected change');
+      expect(await ui.count('[data-pending-preview]')).toBe(0);
+      expect(await ui.overlayCount('[data-pending-preview-content]')).toBe(0);
       // An emptied queue either removes the Apply control or leaves it disabled; never focused.
       if ((await ui.count('[data-pending-apply]')) > 0) {
         expect(await ui.disabled('[data-pending-apply]')).toBe(true);
@@ -162,11 +188,11 @@ describe('PendingChangesPage dialog accessibility', () => {
       }
     });
   });
-  it('moves focus to the preview region after discard removes its opener', async () => {
+  it('moves focus to the remaining View after discard removes its row', async () => {
     const { fixture, ui } = await setup();
-    await ui.click('[data-pending-preview]');
-    await ui.focusControl('[data-pending-discard]');
-    await ui.click('[data-pending-discard]');
+    await ui.focusControl('[data-pending-more]');
+    await ui.click('[data-pending-more]');
+    await ui.overlayClick('[data-pending-discard]');
     const confirm = consentDialog().querySelector<HTMLElement>('[data-pending-confirm]');
     if (!confirm) throw new Error('Expected the consent commit control');
     confirm.click();
@@ -174,8 +200,8 @@ describe('PendingChangesPage dialog accessibility', () => {
     await manualChangeDetection(async () => {
       expect(discard).toHaveBeenCalledTimes(1);
       expect(discard.mock.calls[0]).toContain(CHANGE);
-      expect(await ui.count('[data-pending-discard]')).toBe(0);
-      expect(await ui.focused('[data-pending-preview-content]')).toBe(true);
+      expect(await ui.count(`[data-pending-change-id="${CHANGE}"]`)).toBe(0);
+      expect(await ui.focused(`[data-pending-change-id="${ITEM}"]`)).toBe(true);
     });
   });
   it('reloads away a blocked replay after a discard removes part of its selection', async () => {
@@ -192,8 +218,8 @@ describe('PendingChangesPage dialog accessibility', () => {
     await confirm();
     expect(apply).toHaveBeenCalledTimes(1);
     expect(store.applyRequest()?.ids).toEqual([CHANGE, ITEM]);
-    await ui.click('[data-pending-preview]');
-    await ui.click('[data-pending-discard]');
+    await ui.click('[data-pending-more]');
+    await ui.overlayClick('[data-pending-discard]');
     await confirm();
     expect(discard).toHaveBeenCalledTimes(1);
     expect(store.rows().map((row) => row.change_id)).toEqual([ITEM]);

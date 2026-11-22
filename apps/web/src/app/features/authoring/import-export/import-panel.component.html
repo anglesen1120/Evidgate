@@ -3,7 +3,7 @@
 @let showHistory = store.work().file && store.canReadHistory();
 <app-desktop-required-notice #desktopNotice [attr.tabindex]="-1" class="empty:hidden" />
 <div
-  class="grid min-w-0 items-start gap-(--eg-space-5) xl:has-[aside]:grid-cols-[minmax(0,1.8fr)_minmax(0,.85fr)]"
+  class="grid min-w-0 items-start gap-(--eg-space-5) min-[1051px]:has-[aside]:grid-cols-[minmax(0,1.8fr)_minmax(0,.85fr)]"
 >
   <div class="grid min-w-0 gap-(--eg-space-5)">
     <section hlmCard aria-labelledby="import-intake-title">
@@ -11,10 +11,44 @@
         hlmCardHeader
         class="border-b border-border"
         [titleId]="'import-intake-title'"
-        [title]="copy.intake"
+        [title]="copy.file"
         [size]="'subsection'"
       />
-      <div hlmCardContent class="grid min-w-0 gap-(--eg-space-4)">
+      <div
+        hlmCardContent
+        class="grid min-w-0 items-start gap-(--eg-space-4) sm:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"
+      >
+        @if (store.work().file; as file) {
+          <section
+            #snapshot
+            tabindex="-1"
+            [attr.aria-label]="copy.snapshot"
+            class="grid min-w-0 gap-(--eg-space-3) rounded-(--eg-radius-md) bg-muted p-(--eg-space-4) text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+            data-import-snapshot
+          >
+            <app-section-header [title]="copy.snapshot" [headingLevel]="3" [size]="'subsection'" />
+            <dl
+              class="m-0 grid min-w-0 gap-(--eg-space-3) sm:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"
+            >
+              <div class="min-w-0">
+                <dt class="text-sm text-muted-foreground">{{ copy.file }}</dt>
+                <dd class="m-0 font-mono text-sm wrap-anywhere" data-import-filename>
+                  <bdi>{{ file.name }}</bdi>
+                </dd>
+              </div>
+              <div>
+                <dt class="text-sm text-muted-foreground">{{ copy.format }}</dt>
+                <dd class="m-0">{{ store.work().format.toUpperCase() }}</dd>
+              </div>
+            </dl>
+          </section>
+        } @else {
+          <app-inline-feedback
+            [title]="copy.noFile"
+            [description]="copy.noFileHint"
+            [announcement]="'off'"
+          />
+        }
         @if (store.canWrite()) {
           <form
             *appDesktopMutation
@@ -22,13 +56,13 @@
             (submit)="submit($event)"
             data-import-mutation
           >
-            <div
-              class="grid min-w-0 items-start gap-(--eg-space-4) md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"
-            >
-              <div class="grid min-w-0 gap-(--eg-space-2)">
+            <div class="grid min-w-0 items-start gap-(--eg-space-3)">
+              <div class="sr-only">
                 <label hlmLabel for="authoring-import-file">{{ copy.file }}</label>
                 <input
                   hlmInput
+                  #filePicker
+                  tabindex="-1"
                   id="authoring-import-file"
                   type="file"
                   [accept]="'.csv,.json,.xlsx,text/csv,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'"
@@ -72,69 +106,47 @@
                   />
                 }
               </div>
-              <div class="flex flex-wrap items-center gap-(--eg-space-3) md:col-span-2">
-                <button
-                  hlmBtn
-                  [variant]="store.canConfirm() ? 'outline' : 'default'"
-                  type="submit"
-                  class="min-h-(--eg-control-touch) whitespace-normal"
-                  data-import-preview
-                  [disabled]="
-                    !store.work().file ||
-                    store.work().pending ||
-                    !store.retryReady() ||
-                    store.work().stage === 'confirm'
-                  "
-                >
-                  {{ copy.preview }}
-                </button>
-                @if (store.work().pending && store.work().stage === 'preview') {
+              @if (store.work().file) {
+                <div class="flex min-w-0 flex-wrap items-center gap-(--eg-space-3)">
                   <button
                     hlmBtn
-                    [variant]="'ghost'"
-                    type="button"
+                    [variant]="store.canConfirm() ? 'outline' : 'default'"
+                    type="submit"
                     class="min-h-(--eg-control-touch) whitespace-normal"
-                    (click)="store.cancel()"
+                    data-import-preview
+                    [disabled]="
+                      !store.work().file ||
+                      store.work().pending ||
+                      !store.retryReady() ||
+                      store.work().stage === 'confirm'
+                    "
                   >
-                    {{ copy.cancelPreview }}
+                    {{ copy.preview }}
                   </button>
-                }
-              </div>
+                  @if (store.work().pending && store.work().stage === 'preview') {
+                    <button
+                      hlmBtn
+                      [variant]="'ghost'"
+                      type="button"
+                      class="min-h-(--eg-control-touch) whitespace-normal"
+                      (click)="store.cancel()"
+                    >
+                      {{ copy.cancelPreview }}
+                    </button>
+                  }
+                </div>
+              }
             </div>
           </form>
         } @else {
           <app-inline-feedback [title]="copy.denied" [tone]="'warning'" />
         }
-        <p id="import-file-hint" class="m-0 text-sm text-muted-foreground wrap-anywhere">
+        <p
+          id="import-file-hint"
+          class="col-span-full m-0 text-sm text-muted-foreground wrap-anywhere"
+        >
           {{ copy.limits }}
         </p>
-        @if (store.work().file; as file) {
-          <section
-            #snapshot
-            tabindex="-1"
-            [attr.aria-label]="copy.snapshot"
-            class="grid min-w-0 gap-(--eg-space-3) rounded-(--eg-radius-md) bg-muted p-(--eg-space-4) text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-            data-import-snapshot
-          >
-            <app-section-header [title]="copy.snapshot" [headingLevel]="3" [size]="'subsection'" />
-            <dl
-              class="m-0 grid min-w-0 gap-(--eg-space-3) sm:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"
-            >
-              <div class="min-w-0">
-                <dt class="text-sm text-muted-foreground">{{ copy.file }}</dt>
-                <dd class="m-0 font-mono text-sm wrap-anywhere" data-import-filename>
-                  <bdi>{{ file.name }}</bdi>
-                </dd>
-              </div>
-              <div>
-                <dt class="text-sm text-muted-foreground">{{ copy.format }}</dt>
-                <dd class="m-0">{{ store.work().format.toUpperCase() }}</dd>
-              </div>
-            </dl>
-          </section>
-        } @else {
-          <app-request-state [status]="'ready'" [empty]="true" [emptyTitle]="copy.noFile" />
-        }
       </div>
     </section>
     @if (store.work().error; as error) {
@@ -266,215 +278,172 @@
       </section>
     }
   </div>
-  @if (showScope || showHistory) {
+  @if (showScope) {
     <aside class="grid min-w-0 gap-(--eg-space-5)">
-      @if (showScope) {
-        <section hlmCard aria-labelledby="import-scope-title" data-import-confirm-region>
-          <app-section-header
-            hlmCardHeader
-            class="border-b border-border"
-            [titleId]="'import-scope-title'"
-            [size]="'subsection'"
-            [title]="store.work().error ? copy.errors : copy.confirmTitle"
-            [description]="copy.confirmHint"
-          />
-          <div hlmCardContent class="grid min-w-0 gap-(--eg-space-4)">
-            <dl
-              class="m-0 grid min-w-0 divide-y divide-border [&>div]:grid sm:[&>div]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] [&>div]:items-baseline [&>div]:gap-x-(--eg-space-3) [&>div]:py-(--eg-space-3) [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:font-medium"
-            >
-              <div class="min-w-0">
-                <dt>{{ copy.file }}</dt>
-                <dd class="m-0 wrap-anywhere">
-                  <bdi>{{ store.work().file?.name }}</bdi>
-                </dd>
-              </div>
-              <div>
-                <dt>{{ copy.format }}</dt>
-                <dd class="m-0">{{ store.work().format.toUpperCase() }}</dd>
-              </div>
-              <div class="min-w-0">
-                <dt>{{ copy.project }}</dt>
-                <dd class="m-0 wrap-anywhere">
-                  <bdi>{{ session.currentProject()?.name }}</bdi>
-                </dd>
-              </div>
-              <div class="min-w-0">
-                <dt>{{ copy.prefix }}</dt>
-                <dd class="m-0 wrap-anywhere">
-                  <bdi>{{ session.currentProject()?.case_prefix }}</bdi>
-                </dd>
-              </div>
-              @if (report(); as summary) {
-                @if (!store.work().error) {
-                  <div>
-                    <dt>{{ copy.inspected }}</dt>
-                    <dd class="m-0" data-import-inspected>
-                      <app-number-value [value]="summary.rows.length" />
-                    </dd>
-                  </div>
-                }
-              }
-            </dl>
+      <section hlmCard aria-labelledby="import-scope-title" data-import-confirm-region>
+        <app-section-header
+          hlmCardHeader
+          class="border-b border-border"
+          [titleId]="'import-scope-title'"
+          [size]="'subsection'"
+          [title]="store.work().error ? copy.errors : copy.confirmTitle"
+          [description]="copy.confirmHint"
+        />
+        <div hlmCardContent class="grid min-w-0 gap-(--eg-space-4)">
+          <dl
+            class="m-0 grid min-w-0 divide-y divide-border [&>div]:grid sm:[&>div]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] [&>div]:items-baseline [&>div]:gap-x-(--eg-space-3) [&>div]:py-(--eg-space-3) [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:font-medium"
+          >
+            <div class="min-w-0">
+              <dt>{{ copy.file }}</dt>
+              <dd class="m-0 wrap-anywhere">
+                <bdi>{{ store.work().file?.name }}</bdi>
+              </dd>
+            </div>
+            <div>
+              <dt>{{ copy.format }}</dt>
+              <dd class="m-0">{{ store.work().format.toUpperCase() }}</dd>
+            </div>
+            <div class="min-w-0">
+              <dt>{{ copy.project }}</dt>
+              <dd class="m-0 wrap-anywhere">
+                <bdi>{{ session.currentProject()?.name }}</bdi>
+              </dd>
+            </div>
+            <div class="min-w-0">
+              <dt>{{ copy.prefix }}</dt>
+              <dd class="m-0 wrap-anywhere">
+                <bdi>{{ session.currentProject()?.case_prefix }}</bdi>
+              </dd>
+            </div>
             @if (report(); as summary) {
               @if (!store.work().error) {
-                <dl
-                  class="m-0 grid min-w-0 grid-cols-2 gap-(--eg-space-4) rounded-(--eg-radius-md) bg-muted p-(--eg-space-4) text-foreground [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:font-semibold [&_dd]:tabular-nums"
-                  data-import-outcome-totals
-                >
-                  <div>
-                    <dt>{{ store.work().committed ? copy.created : copy.wouldCreate }}</dt>
-                    <dd class="m-0"><app-number-value [value]="summary.counts.created" /></dd>
-                  </div>
-                  <div>
-                    <dt>{{ store.work().committed ? copy.updated : copy.wouldUpdate }}</dt>
-                    <dd class="m-0"><app-number-value [value]="summary.counts.updated" /></dd>
-                  </div>
-                  <div>
-                    <dt>{{ store.work().committed ? copy.restored : copy.wouldRestore }}</dt>
-                    <dd class="m-0"><app-number-value [value]="summary.counts.restored" /></dd>
-                  </div>
-                  <div>
-                    <dt>{{ store.work().committed ? copy.unchanged : copy.wouldUnchanged }}</dt>
-                    <dd class="m-0"><app-number-value [value]="summary.counts.unchanged" /></dd>
-                  </div>
-                </dl>
+                <div>
+                  <dt>{{ copy.inspected }}</dt>
+                  <dd class="m-0" data-import-inspected>
+                    <app-number-value [value]="summary.rows.length" />
+                  </dd>
+                </div>
               }
             }
-            @if (store.canWrite() && !store.work().committed) {
-              <div *appDesktopMutation class="grid min-w-0 gap-(--eg-space-3)" data-import-mutation>
-                @if (!store.canConfirm()) {
-                  <p id="import-confirm-hint" class="m-0 text-sm text-muted-foreground">
-                    {{ copy.blocked }}
-                  </p>
-                }
-                <button
-                  hlmBtn
-                  [variant]="store.canConfirm() ? 'default' : 'outline'"
-                  type="button"
-                  class="min-h-(--eg-control-touch) w-full whitespace-normal"
-                  data-import-confirm
-                  [disabled]="!store.canConfirm()"
-                  [attr.aria-describedby]="!store.canConfirm() ? 'import-confirm-hint' : null"
-                  (click)="submit(undefined, true)"
-                >
-                  {{ copy.confirm }}
-                </button>
-              </div>
+          </dl>
+          @if (report(); as summary) {
+            @if (!store.work().error) {
+              <dl
+                class="m-0 grid min-w-0 grid-cols-2 gap-px overflow-hidden rounded-(--eg-radius-md) border border-border bg-border [&>div]:bg-card [&>div]:p-(--eg-space-3) [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:text-end [&_dd]:text-2xl [&_dd]:font-semibold [&_dd]:tabular-nums"
+                data-import-outcome-totals
+              >
+                <div>
+                  <dt>{{ store.work().committed ? copy.created : copy.wouldCreate }}</dt>
+                  <dd class="m-0"><app-number-value [value]="summary.counts.created" /></dd>
+                </div>
+                <div>
+                  <dt>{{ store.work().committed ? copy.updated : copy.wouldUpdate }}</dt>
+                  <dd class="m-0"><app-number-value [value]="summary.counts.updated" /></dd>
+                </div>
+                <div>
+                  <dt>{{ store.work().committed ? copy.restored : copy.wouldRestore }}</dt>
+                  <dd class="m-0"><app-number-value [value]="summary.counts.restored" /></dd>
+                </div>
+                <div>
+                  <dt>{{ store.work().committed ? copy.unchanged : copy.wouldUnchanged }}</dt>
+                  <dd class="m-0"><app-number-value [value]="summary.counts.unchanged" /></dd>
+                </div>
+              </dl>
             }
-          </div>
-        </section>
-      }
-      @if (showHistory) {
-        <section
-          hlmCard
-          aria-labelledby="import-history-title"
-          [attr.aria-busy]="store.history.isLoading()"
-          data-import-history
-        >
-          <app-section-header
-            hlmCardHeader
-            class="border-b border-border"
-            [size]="'subsection'"
-            [titleId]="'import-history-title'"
-            [title]="copy.history"
-            [description]="copy.historyHint"
-          />
-          <div hlmCardContent class="grid min-w-0 gap-(--eg-space-4)">
-            @if (store.history.isLoading()) {
-              <app-request-state [status]="'loading'" />
-            }
-            @if (history()?.error; as error) {
-              <app-request-state [status]="'error'" [error]="error" />
-            } @else if (store.history.error()) {
-              <app-inline-feedback [title]="copy.historyFailed" [tone]="'warning'" />
-            }
-            @if (history()?.page; as page) {
-              @if (page.items.length) {
-                <ol class="m-0 grid min-w-0 list-none divide-y divide-border p-0">
-                  @for (version of page.items; track version.version_id) {
-                    <li
-                      class="grid min-w-0 gap-(--eg-space-3) py-(--eg-space-4) first:pt-0 last:pb-0"
-                    >
-                      <app-revision-chip [revision]="version.version_no" [label]="copy.version" />
-                      <app-copyable-identifier
-                        [value]="version.version_id"
-                        [label]="copy.version"
-                      />
-                      <app-copyable-identifier [value]="version.entity_id" [label]="copy.entity" />
-                      <app-copyable-identifier [value]="version.batch_id" [label]="copy.batch" />
-                      <dl
-                        class="m-0 grid min-w-0 gap-(--eg-space-3) [&_dt]:text-xs [&_dt]:text-muted-foreground"
-                      >
-                        <div>
-                          <dt>{{ copy.source }}</dt>
-                          <dd class="m-0">
-                            <bdi>{{ version.source }}</bdi>
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>{{ copy.change }}</dt>
-                          <dd class="m-0">
-                            <bdi>{{ version.change_kind }}</bdi>
-                          </dd>
-                        </div>
-                        <div class="min-w-0">
-                          <dt>{{ copy.author }}</dt>
-                          <dd class="m-0">
-                            @if (version.author; as author) {
-                              <app-copyable-identifier [value]="author" [label]="copy.author" />
-                            } @else {
-                              {{ copy.notSupplied }}
-                            }
-                          </dd>
-                        </div>
-                        <div class="min-w-0">
-                          <dt>{{ copy.reason }}</dt>
-                          <dd class="m-0 wrap-anywhere">
-                            <bdi>{{ version.reason ?? copy.notSupplied }}</bdi>
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>{{ copy.changedAt }}</dt>
-                          <dd class="m-0"><app-absolute-time [value]="version.created_at" /></dd>
-                        </div>
-                      </dl>
-                    </li>
-                  }
-                </ol>
-              } @else {
-                <app-request-state
-                  [status]="'ready'"
-                  [empty]="true"
-                  [emptyTitle]="copy.historyEmpty"
-                />
+          }
+          @if (store.canWrite() && !store.work().committed) {
+            <div *appDesktopMutation class="grid min-w-0 gap-(--eg-space-3)" data-import-mutation>
+              @if (!store.canConfirm()) {
+                <p id="import-confirm-hint" class="m-0 text-sm text-muted-foreground">
+                  {{ copy.blocked }}
+                </p>
               }
-              @if (page.next_cursor) {
-                <button
-                  hlmBtn
-                  [variant]="'outline'"
-                  type="button"
-                  class="min-h-(--eg-control-touch) w-fit whitespace-normal"
-                  [disabled]="store.history.isLoading() || !store.historyRetryReady()"
-                  (click)="store.olderHistory()"
-                >
-                  {{ copy.historyOlder }}
-                </button>
-              }
-            }
-            <button
-              hlmBtn
-              [variant]="'outline'"
-              type="button"
-              class="min-h-(--eg-control-touch) w-fit whitespace-normal"
-              data-history-refresh
-              [disabled]="store.history.isLoading() || !store.historyRetryReady()"
-              (click)="store.refreshHistory()"
-            >
-              {{ store.historyCursor() ? copy.historyLatest : copy.historyRefresh }}
-            </button>
-          </div>
-        </section>
-      }
+              <button
+                hlmBtn
+                [variant]="store.canConfirm() ? 'default' : 'outline'"
+                type="button"
+                class="min-h-(--eg-control-touch) w-full whitespace-normal"
+                data-import-confirm
+                [disabled]="!store.canConfirm()"
+                [attr.aria-describedby]="!store.canConfirm() ? 'import-confirm-hint' : null"
+                (click)="submit(undefined, true)"
+              >
+                {{ copy.confirm }}
+              </button>
+            </div>
+          }
+        </div>
+      </section>
     </aside>
+  }
+  @if (showHistory) {
+    <section
+      hlmCard
+      class="col-span-full min-w-0"
+      aria-labelledby="import-history-title"
+      [attr.aria-busy]="store.history.isLoading()"
+      data-import-history
+    >
+      <app-section-header
+        hlmCardHeader
+        class="border-b border-border"
+        [size]="'subsection'"
+        [titleId]="'import-history-title'"
+        [title]="copy.history"
+        [description]="copy.historyHint"
+      />
+      <div hlmCardContent class="grid min-w-0 gap-(--eg-space-4)">
+        <app-import-history-table [rows]="history()?.page?.items ?? []" />
+        @if (store.history.isLoading()) {
+          <app-request-state [status]="'loading'" />
+        }
+        @if (history()?.error; as error) {
+          <app-request-state [status]="'error'" [error]="error" />
+        } @else if (store.history.error()) {
+          <app-inline-feedback [title]="copy.historyFailed" [tone]="'warning'" />
+        }
+        <footer
+          class="flex min-w-0 flex-wrap items-center gap-(--eg-space-3) border-t border-border pt-(--eg-space-3)"
+        >
+          @if (history()?.page; as page) {
+            @if (page.items.length) {
+              <span data-history-range class="me-auto text-sm text-muted-foreground tabular-nums">{{
+                historyRange()
+              }}</span>
+            }
+            @if (!page.items.length) {
+              <app-request-state
+                [status]="'ready'"
+                [empty]="true"
+                [emptyTitle]="copy.historyEmpty"
+              />
+            }
+            @if (page.next_cursor) {
+              <button
+                hlmBtn
+                [variant]="'outline'"
+                type="button"
+                class="min-h-(--eg-control-touch) w-fit whitespace-normal"
+                [disabled]="store.history.isLoading() || !store.historyRetryReady()"
+                (click)="store.olderHistory()"
+              >
+                {{ copy.historyOlder }}
+              </button>
+            }
+          }
+          <button
+            hlmBtn
+            [variant]="'outline'"
+            type="button"
+            class="min-h-(--eg-control-touch) w-fit whitespace-normal"
+            data-history-refresh
+            [disabled]="store.history.isLoading() || !store.historyRetryReady()"
+            (click)="store.refreshHistory()"
+          >
+            {{ store.historyCursor() ? copy.historyLatest : copy.historyRefresh }}
+          </button>
+        </footer>
+      </div>
+    </section>
   }
 </div>

@@ -62,6 +62,11 @@ export const CASE_TABLE_COPY = {
   version: $localize`:@@authoring.case-table.version:Case version`,
   pending: $localize`:@@authoring.case-table.pending:Pending changes`,
   pendingHelp: $localize`:@@authoring.case-table.pending-help:Pending change count unavailable; this list does not supply it.`,
+  manualCase: $localize`:@@authoring.case-table.manual-case:Manual case`,
+  priorityState: $localize`:@@authoring.case-table.priority-state:Priority / lifecycle`,
+  view: $localize`:@@authoring.case-table.view:View`,
+  actions: $localize`:@@authoring.case-table.actions:Actions`,
+  unavailableEditor: $localize`:@@authoring.case-table.editor-unavailable:Project scope unavailable`,
 };
 
 /**

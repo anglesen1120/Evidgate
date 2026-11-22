@@ -8,7 +8,7 @@
   <!-- The disabled confirm hands focus to this persistent status line until its answer arrives. -->
   <p
     class="min-h-(--eg-leading-sm) focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
-    [class.sr-only]="!busy() && !reading() && enabled() !== null"
+    [class.sr-only]="!busy() && !reading()"
     data-testid="enable-collection-busy"
     role="status"
     tabindex="-1"

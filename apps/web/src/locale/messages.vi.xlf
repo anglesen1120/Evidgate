@@ -22626,6 +22626,112 @@
           <context context-type="linenumber">8</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="catalog.case-view.name" datatype="html"><source>Case name</source><target>Tên ca kiểm thử</target></trans-unit>
+      <trans-unit id="catalog.case-view.labels" datatype="html"><source>Labels</source><target>Nhãn</target></trans-unit>
+      <trans-unit id="catalog.case-view.actions" datatype="html"><source>Actions</source><target>Thao tác</target></trans-unit>
+      <trans-unit id="catalog.case-view.view" datatype="html"><source>View</source><target>Xem</target></trans-unit>
+      <trans-unit id="catalog.case-view.edit" datatype="html"><source>Edit owner</source><target>Sửa người phụ trách</target></trans-unit>
+      <trans-unit id="catalog.case-view.save" datatype="html"><source>Save owner</source><target>Lưu người phụ trách</target></trans-unit>
+      <trans-unit id="catalog.case-view.title" datatype="html"><source>Case details</source><target>Chi tiết ca kiểm thử</target></trans-unit>
+      <trans-unit id="catalog.case-view.cancel" datatype="html"><source>Cancel</source><target>Hủy</target></trans-unit>
+      <trans-unit id="catalog.case-view.not-supplied" datatype="html"><source>Not supplied</source><target>Chưa cung cấp</target></trans-unit>
+      <trans-unit id="catalog.case-view.organization" datatype="html"><source>Organization ID</source><target>ID tổ chức</target></trans-unit>
+      <trans-unit id="catalog.case-view.project" datatype="html"><source>Project ID</source><target>ID dự án</target></trans-unit>
+      <trans-unit id="catalog.case-view.language" datatype="html"><source>Language</source><target>Ngôn ngữ</target></trans-unit>
+      <trans-unit id="catalog.case-view.file-path" datatype="html"><source>File path</source><target>Đường dẫn tệp</target></trans-unit>
+      <trans-unit id="catalog.case-view.first-commit" datatype="html"><source>First seen commit</source><target>Commit ghi nhận lần đầu</target></trans-unit>
+      <trans-unit id="catalog.case-view.last-commit" datatype="html"><source>Last seen commit</source><target>Commit ghi nhận gần nhất</target></trans-unit>
+      <trans-unit id="catalog.case-view.created" datatype="html"><source>Created (UTC)</source><target>Thời điểm tạo (UTC)</target></trans-unit>
+      <trans-unit id="catalog.case-view.updated" datatype="html"><source>Updated (UTC)</source><target>Thời điểm cập nhật (UTC)</target></trans-unit>
+      <trans-unit id="catalog.case-view.version" datatype="html"><source>Version</source><target>Phiên bản</target></trans-unit>
+      <trans-unit id="catalog.case-view.requirement" datatype="html"><source>Requirement reference</source><target>Tham chiếu yêu cầu</target></trans-unit>
+      <trans-unit id="catalog.case-view.discard-title" datatype="html"><source>Discard unsaved changes?</source><target>Bỏ thay đổi chưa lưu?</target></trans-unit>
+      <trans-unit id="catalog.case-view.discard-description" datatype="html"><source>The owner change has not been saved.</source><target>Thay đổi người phụ trách chưa được lưu.</target></trans-unit>
+      <trans-unit id="catalog.case-view.keep" datatype="html"><source>Keep editing</source><target>Tiếp tục chỉnh sửa</target></trans-unit>
+      <trans-unit id="catalog.case-view.discard" datatype="html"><source>Discard changes</source><target>Bỏ thay đổi</target></trans-unit>
+      <trans-unit id="catalog.case-view.owner-id" datatype="html"><source>Owner membership ID</source><target>ID thành viên phụ trách</target></trans-unit>
+      <trans-unit id="catalog.case-view.unavailable" datatype="html"><source>Record not available in this list.</source><target>Bản ghi không có trong danh sách này.</target></trans-unit>
+      <trans-unit id="catalog.case-view.view-name" datatype="html"><source>View <x id="name"/></source><target>Xem <x id="name"/></target></trans-unit>
+      <trans-unit id="catalog.case-view.edit-name" datatype="html"><source>Edit owner for <x id="name"/></source><target>Sửa người phụ trách cho <x id="name"/></target></trans-unit>
+      <trans-unit id="authoring.case-table.manual-case" datatype="html"><source>Manual case</source><target>Ca kiểm thử thủ công</target></trans-unit>
+      <trans-unit id="authoring.case-table.priority-state" datatype="html"><source>Priority / lifecycle</source><target>Ưu tiên / vòng đời</target></trans-unit>
+      <trans-unit id="authoring.case-table.view" datatype="html"><source>View</source><target>Xem</target></trans-unit>
+      <trans-unit id="authoring.case-table.actions" datatype="html"><source>Actions</source><target>Thao tác</target></trans-unit>
+      <trans-unit id="authoring.case-table.editor-unavailable" datatype="html"><source>Project scope unavailable</source><target>Không xác định được phạm vi dự án</target></trans-unit>
+      <trans-unit id="authoring.case-table.view-name" datatype="html"><source>View <x id="name"/></source><target>Xem <x id="name"/></target></trans-unit>
+      <trans-unit id="catalog.case-view.loaded-count" datatype="html"><source>Loaded identities: <x id="count"/></source><target>Số định danh đã tải: <x id="count"/></target></trans-unit>
+      <trans-unit id="catalog.case-view.loaded-status" datatype="html"><source>Status in loaded identities</source><target>Trạng thái của các định danh đã tải</target></trans-unit>
+      <trans-unit id="catalog.case-view.summary" datatype="html"><source>Summary</source><target>Tóm tắt</target></trans-unit>
+      <trans-unit id="catalog.case-view.history" datatype="html"><source>Recorded history</source><target>Lịch sử đã ghi nhận</target></trans-unit>
+      <trans-unit id="authoring.tree.loaded-roots" datatype="html"><source>Loaded roots: <x id="count"/></source><target>Số nút gốc đã tải: <x id="count"/></target></trans-unit>
+      <trans-unit id="authoring.case-table.live-links" datatype="html"><source>Live links</source><target>Liên kết còn hiệu lực</target></trans-unit>
+      <trans-unit id="authoring.case-table.loaded-states" datatype="html"><source>Lifecycle of loaded cases</source><target>Vòng đời của các ca kiểm thử đã tải</target></trans-unit>
+      <trans-unit id="authoring.history.view" datatype="html"><source>View</source><target>Xem</target></trans-unit>
+      <trans-unit id="authoring.history.summary" datatype="html"><source>Summary</source><target>Tóm tắt</target></trans-unit>
+      <trans-unit id="authoring.history.provenance" datatype="html"><source>Version provenance</source><target>Nguồn gốc phiên bản</target></trans-unit>
+      <trans-unit id="authoring.import-export.version-time" datatype="html"><source>Created at (UTC)</source><target>Thời điểm tạo (UTC)</target></trans-unit>
+      <trans-unit id="authoring.import-export.ai-run" datatype="html"><source>AI run</source><target>Lượt chạy AI</target></trans-unit>
+      <trans-unit id="authoring.import-export.version-actions" datatype="html"><source>Actions</source><target>Thao tác</target></trans-unit>
+      <trans-unit id="authoring.import-export.view-version" datatype="html"><source>View version <x id="VERSION"/> of <x id="ENTITY"/></source><target>Xem phiên bản <x id="VERSION"/> của <x id="ENTITY"/></target></trans-unit>
+      <trans-unit id="authoring.import-export.version-details" datatype="html"><source>Authoring version details</source><target>Chi tiết phiên bản soạn thảo</target></trans-unit>
+      <trans-unit id="authoring.import-export.version-readonly" datatype="html"><source>This historical version is read-only.</source><target>Phiên bản này chỉ dùng để xem.</target></trans-unit>
+      <trans-unit id="authoring.import-export.version-id" datatype="html"><source>Version ID</source><target>Mã phiên bản</target></trans-unit>
+      <trans-unit id="authoring.import-export.field-name" datatype="html"><source>Field name</source><target>Tên trường</target></trans-unit>
+      <trans-unit id="authoring.import-export.meaning" datatype="html"><source>Meaning</source><target>Ý nghĩa</target></trans-unit>
+      <trans-unit id="authoring.import-export.loaded-versions" datatype="html"><source>Versions on this page: <x id="INTERPOLATION"/></source><target>Số phiên bản trên trang này: <x id="INTERPOLATION"/></target></trans-unit>
+      <trans-unit id="authoring.ai-settings.select-first" datatype="html"><source>Select a first version, then choose another version to compare.</source><target>Chọn phiên bản thứ nhất, sau đó chọn một phiên bản khác để so sánh.</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.select-baseline" datatype="html"><source>Select version <x id="INTERPOLATION"/></source><target>Chọn phiên bản <x id="INTERPOLATION"/></target></trans-unit>
+      <trans-unit id="authoring.ai-settings.snapshot-title" datatype="html"><source>Settings version details</source><target>Chi tiết phiên bản cài đặt</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.template-source" datatype="html"><source>Source template</source><target>Mẫu nguồn</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.comparison" datatype="html"><source>Comparison</source><target>So sánh</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.view-version" datatype="html"><source>View version <x id="VERSION"/></source><target>Xem phiên bản <x id="VERSION"/></target></trans-unit>
+      <trans-unit id="authoring.ai-settings.configured-languages" datatype="html"><source>Configured output languages</source><target>Ngôn ngữ đầu ra đã cấu hình</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.loaded-templates" datatype="html"><source>Loaded templates</source><target>Số mẫu đã tải</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.versions-on-page" datatype="html"><source>Versions on this page</source><target>Số phiên bản trên trang này</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.visible-versions" datatype="html"><source>Showing <x id="INTERPOLATION"/> of <x id="INTERPOLATION_1"/> loaded versions</source><target>Đang hiển thị <x id="INTERPOLATION"/> trong số <x id="INTERPOLATION_1"/> phiên bản đã tải</target></trans-unit>
+      <trans-unit id="onboarding.record.actions" datatype="html"><source>Actions</source><target>Thao tác</target></trans-unit>
+      <trans-unit id="onboarding.record.binding" datatype="html"><source>CI binding details</source><target>Chi tiết liên kết CI</target></trans-unit>
+      <trans-unit id="onboarding.record.token" datatype="html"><source>Ingest token details</source><target>Chi tiết mã thông báo tiếp nhận</target></trans-unit>
+      <trans-unit id="onboarding.record.health" datatype="html"><source>Credential health details</source><target>Chi tiết tình trạng thông tin xác thực</target></trans-unit>
+      <trans-unit id="onboarding.record.resource" datatype="html"><source>Resource details</source><target>Chi tiết tài nguyên</target></trans-unit>
+      <trans-unit id="onboarding.record.identifier" datatype="html"><source>Identifier</source><target>Mã định danh</target></trans-unit>
+      <trans-unit id="onboarding.record.source" datatype="html"><source>Source</source><target>Nguồn</target></trans-unit>
+      <trans-unit id="onboarding.record.credential" datatype="html"><source>Credential</source><target>Thông tin xác thực</target></trans-unit>
+      <trans-unit id="onboarding.record.view" datatype="html"><source>View</source><target>Xem</target></trans-unit>
+      <trans-unit id="onboarding.record.view-named" datatype="html"><source>View <x id="SUBJECT"/></source><target>Xem <x id="SUBJECT"/></target></trans-unit>
+      <trans-unit id="onboarding.record.summary" datatype="html"><source>Summary</source><target>Tóm tắt</target></trans-unit>
+      <trans-unit id="onboarding.record.history" datatype="html"><source>History</source><target>Lịch sử</target></trans-unit>
+      <trans-unit id="onboarding.record.range-partial" datatype="html"><source>Showing <x id="COUNT"/> records · more records are available</source><target>Đang hiển thị <x id="COUNT"/> bản ghi · vẫn còn bản ghi khác</target></trans-unit>
+      <trans-unit id="onboarding.record.no-rows" datatype="html"><source>0 records</source><target>0 bản ghi</target></trans-unit>
+      <trans-unit id="onboarding.record.range" datatype="html"><source>Showing 1–<x id="LAST"/> of <x id="TOTAL"/></source><target>Hiển thị từ 1 đến <x id="LAST"/> trong tổng số <x id="TOTAL"/> bản ghi</target></trans-unit>
+      <trans-unit id="onboarding.record.health-caption" datatype="html"><source>Credential health</source><target>Tình trạng thông tin xác thực</target></trans-unit>
+      <trans-unit id="onboarding.record.binding-kind" datatype="html"><source>CI binding</source><target>Liên kết CI</target></trans-unit>
+      <trans-unit id="onboarding.record.resource-kind" datatype="html"><source>Resource</source><target>Tài nguyên</target></trans-unit>
+      <trans-unit id="onboarding.record.confirmed-value" datatype="html"><source>Confirmed value</source><target>Giá trị đã xác nhận</target></trans-unit>
+      <trans-unit id="suites.composition.case-count" datatype="html"><source>Case revisions</source><target>Phiên bản ca kiểm thử</target></trans-unit>
+      <trans-unit id="suites.composition.variants" datatype="html"><source>Variants</source><target>Biến thể</target></trans-unit>
+      <trans-unit id="suites.composition.members" datatype="html"><source>Pinned members</source><target>Thành phần đã ghim</target></trans-unit>
+      <trans-unit id="onboarding.record.read-only" datatype="html"><source>Read-only setup details. This view cannot change the record.</source><target>Chi tiết thiết lập chỉ để xem. Bạn không thể thay đổi bản ghi tại đây.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.view" datatype="html"><source>View</source><target>Xem</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.actions" datatype="html"><source>Actions</source><target>Thao tác</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.view-title" datatype="html"><source>Change details</source><target>Chi tiết thay đổi</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.payload-preview" datatype="html"><source>Change preview</source><target>Xem trước thay đổi</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.view-instructions" datatype="html"><source>View a change to inspect its details. Use the checkboxes to select the changes to apply.</source><target>Chọn Xem để đọc chi tiết từng thay đổi. Đánh dấu vào ô của những thay đổi cần áp dụng.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.more-actions" datatype="html"><source>More actions</source><target>Thao tác khác</target></trans-unit>
+      <trans-unit id="authoring.editor.content-hint" datatype="html"><source>Expected results change only through explicit manual edits.</source><target>Kết quả mong đợi chỉ thay đổi khi bạn trực tiếp chỉnh sửa.</target></trans-unit>
+      <trans-unit id="authoring.editor.version-column" datatype="html"><source>Version</source><target>Phiên bản</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.loaded" datatype="html"><source>Loaded changes</source><target>Thay đổi đã tải</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.blocked-count" datatype="html"><source>Blocked changes</source><target>Thay đổi bị chặn</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.summary-heading" datatype="html"><source>Summary</source><target>Tổng quan</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.history-heading" datatype="html"><source>History</source><target>Lịch sử</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.apply-checks" datatype="html"><source>Apply checks</source><target>Kiểm tra trước khi áp dụng</target></trans-unit>
+      <trans-unit id="authoring.case-table.filter-guidance" datatype="html"><source>Filter availability and help</source><target>Bộ lọc khả dụng và hướng dẫn</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.select-column" datatype="html"><source>Select</source><target>Chọn</target></trans-unit>
+      <trans-unit id="authoring.import-export.choose-file" datatype="html"><source>Choose file</source><target>Chọn tệp</target></trans-unit>
+      <trans-unit id="authoring.import-export.no-file-hint" datatype="html"><source>No rows have been validated or imported.</source><target>Chưa có dòng nào được kiểm tra hoặc nhập.</target></trans-unit>
+      <trans-unit id="authoring.import-export.showing-range" datatype="html"><source>Showing 1–<x id="end"/> of <x id="loaded"/> loaded versions</source><target>Đang hiển thị từ 1 đến <x id="end"/> trong số <x id="loaded"/> phiên bản đã tải</target></trans-unit>
+      <trans-unit id="authoring.case-table.count-unverified" datatype="html"><source>Count unavailable with the current filter</source><target>Không xác định được số lượng với bộ lọc hiện tại</target></trans-unit>
+      <trans-unit id="catalog.case-list.count-unverified" datatype="html"><source>Count unavailable with the current filter</source><target>Không xác định được số lượng với bộ lọc hiện tại</target></trans-unit>
 <trans-unit id="settings.members.view" datatype="html"><source>View member</source><target>Xem thành viên</target></trans-unit>
 <trans-unit id="settings.members.created" datatype="html"><source>Created</source><target>Ngày tạo</target></trans-unit>
 <trans-unit id="settings.row.view" datatype="html"><source>View</source><target>Xem</target></trans-unit>

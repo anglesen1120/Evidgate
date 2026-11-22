@@ -11,7 +11,7 @@ class CatalogTableHarness extends ComponentHarness {
   static hostSelector = 'app-case-list-table';
   readonly rows = this.locatorForAll('[data-row-id]');
   readonly viewport = this.locatorForOptional('cdk-virtual-scroll-viewport');
-  readonly picker = this.locatorFor('hlm-select-trigger button');
+  readonly edit = this.locatorForOptional('[data-catalog-edit]');
   readonly fallback = this.locatorFor('[data-catalog-owner] > app-data-table-value');
   readonly copyStable = this.locatorFor(
     '[data-row-id] app-copy-value-button button[aria-label="Copy Stable identity"]',
@@ -58,7 +58,7 @@ describe('Catalog table readable owners and stable row identities', () => {
     return { fixture, harness };
   }
 
-  it('keeps a known inactive owner readable outside the disabled no-choices picker', async () => {
+  it('keeps a known inactive owner readable without offering an edit when no choices exist', async () => {
     const inactive: MembershipView = {
       id: ownerId,
       invited_email: 'inactive.owner@example.test',
@@ -70,7 +70,7 @@ describe('Catalog table readable owners and stable row identities', () => {
       version: 1,
     };
     const { harness } = await render([ownedCase], new Map([[inactive.id, inactive]]));
-    expect(await (await harness.picker()).getProperty('disabled')).toBe(true);
+    expect(await harness.edit()).toBeNull();
     expect(await (await harness.fallback()).text()).toContain(inactive.invited_email);
   });
 

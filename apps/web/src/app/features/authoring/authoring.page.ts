@@ -1,4 +1,4 @@
-import { NgTemplateOutlet } from '@angular/common';
+import { formatNumber, NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -111,6 +111,15 @@ export class AuthoringPage {
     return node && !path.some((ancestor) => ancestor.node_id === node.node_id)
       ? [...path, node]
       : path;
+  });
+  protected readonly subtitle = computed(() => {
+    if (this.viewStatus() !== 'ready') return this.copy.description;
+    const roots = formatNumber(this.store.roots().items.length, this.locale);
+    return (
+      (this.store.selectedNode()?.title ?? this.copy.all) +
+      ' · ' +
+      $localize`:@@authoring.tree.loaded-roots:Loaded roots: ${roots}:count:`
+    );
   });
   /**
    * One polite line per settled read: the scope now shown, then every cap notice on screen. A

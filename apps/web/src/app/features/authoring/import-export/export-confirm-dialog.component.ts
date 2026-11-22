@@ -13,34 +13,36 @@ import { IMPEX_COPY } from './import-export.copy';
       [autoFocus]="'[data-export-cancel]'"
       [restoreFocus]="true"
       [closeOnOutsidePointerEvents]="false"
-      [aria-label]="copy.confirmDownload"
       (stateChanged)="opened.set($event === 'open')"
       (closed)="finish()"
     >
       <hlm-dialog-content
         *hlmDialogPortal
         [showCloseButton]="false"
-        class="max-h-[calc(100dvh-var(--eg-space-10))] overflow-y-auto wrap-anywhere"
+        [size]="'md'"
+        class="wrap-anywhere"
       >
         <header hlmDialogHeader>
           <h2 hlmDialogTitle>{{ copy.confirmDownload }}</h2>
+          <p hlmDialogDescription hlmDialogSubject class="font-medium">
+            <bdi>{{ scope() }}</bdi>
+          </p>
         </header>
-        <p hlmDialogDescription class="m-0 font-medium wrap-anywhere">
-          <bdi>{{ scope() }}</bdi>
-        </p>
-        <dl
-          class="m-0 grid min-w-0 divide-y divide-border [&>div]:grid [&>div]:gap-(--eg-space-2) [&>div]:py-(--eg-space-3) sm:[&>div]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:font-medium"
-        >
-          <div>
-            <dt>{{ copy.format }}</dt>
-            <dd class="m-0 font-mono">{{ format() }}</dd>
-          </div>
-          <div>
-            <dt>{{ copy.include }}</dt>
-            <dd class="m-0">{{ included() }}</dd>
-          </div>
-        </dl>
-        <p class="m-0 text-sm text-muted-foreground">{{ copy.countUnavailable }}</p>
+        <div class="grid min-w-0 content-start gap-(--eg-space-4)">
+          <dl
+            class="m-0 grid min-w-0 divide-y divide-border [&>div]:grid [&>div]:gap-(--eg-space-2) [&>div]:py-(--eg-space-3) sm:[&>div]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:font-medium"
+          >
+            <div>
+              <dt>{{ copy.format }}</dt>
+              <dd class="m-0 font-mono">{{ format() }}</dd>
+            </div>
+            <div>
+              <dt>{{ copy.include }}</dt>
+              <dd class="m-0">{{ included() }}</dd>
+            </div>
+          </dl>
+          <p class="m-0 text-sm text-muted-foreground">{{ copy.countUnavailable }}</p>
+        </div>
         <footer hlmDialogFooter>
           <button
             hlmBtn

@@ -27008,6 +27008,112 @@
           <context context-type="linenumber">8</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="catalog.case-view.name" datatype="html"><source>Case name</source></trans-unit>
+      <trans-unit id="catalog.case-view.labels" datatype="html"><source>Labels</source></trans-unit>
+      <trans-unit id="catalog.case-view.actions" datatype="html"><source>Actions</source></trans-unit>
+      <trans-unit id="catalog.case-view.view" datatype="html"><source>View</source></trans-unit>
+      <trans-unit id="catalog.case-view.edit" datatype="html"><source>Edit owner</source></trans-unit>
+      <trans-unit id="catalog.case-view.save" datatype="html"><source>Save owner</source></trans-unit>
+      <trans-unit id="catalog.case-view.title" datatype="html"><source>Case details</source></trans-unit>
+      <trans-unit id="catalog.case-view.cancel" datatype="html"><source>Cancel</source></trans-unit>
+      <trans-unit id="catalog.case-view.not-supplied" datatype="html"><source>Not supplied</source></trans-unit>
+      <trans-unit id="catalog.case-view.organization" datatype="html"><source>Organization ID</source></trans-unit>
+      <trans-unit id="catalog.case-view.project" datatype="html"><source>Project ID</source></trans-unit>
+      <trans-unit id="catalog.case-view.language" datatype="html"><source>Language</source></trans-unit>
+      <trans-unit id="catalog.case-view.file-path" datatype="html"><source>File path</source></trans-unit>
+      <trans-unit id="catalog.case-view.first-commit" datatype="html"><source>First seen commit</source></trans-unit>
+      <trans-unit id="catalog.case-view.last-commit" datatype="html"><source>Last seen commit</source></trans-unit>
+      <trans-unit id="catalog.case-view.created" datatype="html"><source>Created (UTC)</source></trans-unit>
+      <trans-unit id="catalog.case-view.updated" datatype="html"><source>Updated (UTC)</source></trans-unit>
+      <trans-unit id="catalog.case-view.version" datatype="html"><source>Version</source></trans-unit>
+      <trans-unit id="catalog.case-view.requirement" datatype="html"><source>Requirement reference</source></trans-unit>
+      <trans-unit id="catalog.case-view.discard-title" datatype="html"><source>Discard unsaved changes?</source></trans-unit>
+      <trans-unit id="catalog.case-view.discard-description" datatype="html"><source>The owner change has not been saved.</source></trans-unit>
+      <trans-unit id="catalog.case-view.keep" datatype="html"><source>Keep editing</source></trans-unit>
+      <trans-unit id="catalog.case-view.discard" datatype="html"><source>Discard changes</source></trans-unit>
+      <trans-unit id="catalog.case-view.owner-id" datatype="html"><source>Owner membership ID</source></trans-unit>
+      <trans-unit id="catalog.case-view.unavailable" datatype="html"><source>Record not available in this list.</source></trans-unit>
+      <trans-unit id="catalog.case-view.view-name" datatype="html"><source>View <x id="name"/></source></trans-unit>
+      <trans-unit id="catalog.case-view.edit-name" datatype="html"><source>Edit owner for <x id="name"/></source></trans-unit>
+      <trans-unit id="authoring.case-table.manual-case" datatype="html"><source>Manual case</source></trans-unit>
+      <trans-unit id="authoring.case-table.priority-state" datatype="html"><source>Priority / lifecycle</source></trans-unit>
+      <trans-unit id="authoring.case-table.view" datatype="html"><source>View</source></trans-unit>
+      <trans-unit id="authoring.case-table.actions" datatype="html"><source>Actions</source></trans-unit>
+      <trans-unit id="authoring.case-table.editor-unavailable" datatype="html"><source>Project scope unavailable</source></trans-unit>
+      <trans-unit id="authoring.case-table.view-name" datatype="html"><source>View <x id="name"/></source></trans-unit>
+      <trans-unit id="catalog.case-view.loaded-count" datatype="html"><source>Loaded identities: <x id="count"/></source></trans-unit>
+      <trans-unit id="catalog.case-view.loaded-status" datatype="html"><source>Status in loaded identities</source></trans-unit>
+      <trans-unit id="catalog.case-view.summary" datatype="html"><source>Summary</source></trans-unit>
+      <trans-unit id="catalog.case-view.history" datatype="html"><source>Recorded history</source></trans-unit>
+      <trans-unit id="authoring.tree.loaded-roots" datatype="html"><source>Loaded roots: <x id="count"/></source></trans-unit>
+      <trans-unit id="authoring.case-table.live-links" datatype="html"><source>Live links</source></trans-unit>
+      <trans-unit id="authoring.case-table.loaded-states" datatype="html"><source>Lifecycle of loaded cases</source></trans-unit>
+      <trans-unit id="authoring.history.view" datatype="html"><source>View</source></trans-unit>
+      <trans-unit id="authoring.history.summary" datatype="html"><source>Summary</source></trans-unit>
+      <trans-unit id="authoring.history.provenance" datatype="html"><source>Version provenance</source></trans-unit>
+      <trans-unit id="authoring.import-export.version-time" datatype="html"><source>Created at (UTC)</source></trans-unit>
+      <trans-unit id="authoring.import-export.ai-run" datatype="html"><source>AI run</source></trans-unit>
+      <trans-unit id="authoring.import-export.version-actions" datatype="html"><source>Actions</source></trans-unit>
+      <trans-unit id="authoring.import-export.view-version" datatype="html"><source>View version <x id="VERSION"/> of <x id="ENTITY"/></source></trans-unit>
+      <trans-unit id="authoring.import-export.version-details" datatype="html"><source>Authoring version details</source></trans-unit>
+      <trans-unit id="authoring.import-export.version-readonly" datatype="html"><source>This historical version is read-only.</source></trans-unit>
+      <trans-unit id="authoring.import-export.version-id" datatype="html"><source>Version ID</source></trans-unit>
+      <trans-unit id="authoring.import-export.field-name" datatype="html"><source>Field name</source></trans-unit>
+      <trans-unit id="authoring.import-export.meaning" datatype="html"><source>Meaning</source></trans-unit>
+      <trans-unit id="authoring.import-export.loaded-versions" datatype="html"><source>Versions on this page: <x id="INTERPOLATION"/></source></trans-unit>
+      <trans-unit id="authoring.ai-settings.select-first" datatype="html"><source>Select a first version, then choose another version to compare.</source></trans-unit>
+      <trans-unit id="authoring.ai-settings.select-baseline" datatype="html"><source>Select version <x id="INTERPOLATION"/></source></trans-unit>
+      <trans-unit id="authoring.ai-settings.snapshot-title" datatype="html"><source>Settings version details</source></trans-unit>
+      <trans-unit id="authoring.ai-settings.template-source" datatype="html"><source>Source template</source></trans-unit>
+      <trans-unit id="authoring.ai-settings.comparison" datatype="html"><source>Comparison</source></trans-unit>
+      <trans-unit id="authoring.ai-settings.view-version" datatype="html"><source>View version <x id="VERSION"/></source></trans-unit>
+      <trans-unit id="authoring.ai-settings.configured-languages" datatype="html"><source>Configured output languages</source></trans-unit>
+      <trans-unit id="authoring.ai-settings.loaded-templates" datatype="html"><source>Loaded templates</source></trans-unit>
+      <trans-unit id="authoring.ai-settings.versions-on-page" datatype="html"><source>Versions on this page</source></trans-unit>
+      <trans-unit id="authoring.ai-settings.visible-versions" datatype="html"><source>Showing <x id="INTERPOLATION"/> of <x id="INTERPOLATION_1"/> loaded versions</source></trans-unit>
+      <trans-unit id="onboarding.record.actions" datatype="html"><source>Actions</source></trans-unit>
+      <trans-unit id="onboarding.record.binding" datatype="html"><source>CI binding details</source></trans-unit>
+      <trans-unit id="onboarding.record.token" datatype="html"><source>Ingest token details</source></trans-unit>
+      <trans-unit id="onboarding.record.health" datatype="html"><source>Credential health details</source></trans-unit>
+      <trans-unit id="onboarding.record.resource" datatype="html"><source>Resource details</source></trans-unit>
+      <trans-unit id="onboarding.record.identifier" datatype="html"><source>Identifier</source></trans-unit>
+      <trans-unit id="onboarding.record.source" datatype="html"><source>Source</source></trans-unit>
+      <trans-unit id="onboarding.record.credential" datatype="html"><source>Credential</source></trans-unit>
+      <trans-unit id="onboarding.record.view" datatype="html"><source>View</source></trans-unit>
+      <trans-unit id="onboarding.record.view-named" datatype="html"><source>View <x id="SUBJECT"/></source></trans-unit>
+      <trans-unit id="onboarding.record.summary" datatype="html"><source>Summary</source></trans-unit>
+      <trans-unit id="onboarding.record.history" datatype="html"><source>History</source></trans-unit>
+      <trans-unit id="onboarding.record.range-partial" datatype="html"><source>Showing <x id="COUNT"/> records · more records are available</source></trans-unit>
+      <trans-unit id="onboarding.record.no-rows" datatype="html"><source>0 records</source></trans-unit>
+      <trans-unit id="onboarding.record.range" datatype="html"><source>Showing 1–<x id="LAST"/> of <x id="TOTAL"/></source></trans-unit>
+      <trans-unit id="onboarding.record.health-caption" datatype="html"><source>Credential health</source></trans-unit>
+      <trans-unit id="onboarding.record.binding-kind" datatype="html"><source>CI binding</source></trans-unit>
+      <trans-unit id="onboarding.record.resource-kind" datatype="html"><source>Resource</source></trans-unit>
+      <trans-unit id="onboarding.record.confirmed-value" datatype="html"><source>Confirmed value</source></trans-unit>
+      <trans-unit id="suites.composition.case-count" datatype="html"><source>Case revisions</source></trans-unit>
+      <trans-unit id="suites.composition.variants" datatype="html"><source>Variants</source></trans-unit>
+      <trans-unit id="suites.composition.members" datatype="html"><source>Pinned members</source></trans-unit>
+      <trans-unit id="onboarding.record.read-only" datatype="html"><source>Read-only setup details. This view cannot change the record.</source></trans-unit>
+      <trans-unit id="authoring.pending-changes.view" datatype="html"><source>View</source></trans-unit>
+      <trans-unit id="authoring.pending-changes.actions" datatype="html"><source>Actions</source></trans-unit>
+      <trans-unit id="authoring.pending-changes.view-title" datatype="html"><source>Change details</source></trans-unit>
+      <trans-unit id="authoring.pending-changes.payload-preview" datatype="html"><source>Change preview</source></trans-unit>
+      <trans-unit id="authoring.pending-changes.view-instructions" datatype="html"><source>View a change to inspect its details. Use the checkboxes to select the changes to apply.</source></trans-unit>
+      <trans-unit id="authoring.pending-changes.more-actions" datatype="html"><source>More actions</source></trans-unit>
+      <trans-unit id="authoring.editor.content-hint" datatype="html"><source>Expected results change only through explicit manual edits.</source></trans-unit>
+      <trans-unit id="authoring.editor.version-column" datatype="html"><source>Version</source></trans-unit>
+      <trans-unit id="authoring.pending-changes.loaded" datatype="html"><source>Loaded changes</source></trans-unit>
+      <trans-unit id="authoring.pending-changes.blocked-count" datatype="html"><source>Blocked changes</source></trans-unit>
+      <trans-unit id="authoring.pending-changes.summary-heading" datatype="html"><source>Summary</source></trans-unit>
+      <trans-unit id="authoring.pending-changes.history-heading" datatype="html"><source>History</source></trans-unit>
+      <trans-unit id="authoring.pending-changes.apply-checks" datatype="html"><source>Apply checks</source></trans-unit>
+      <trans-unit id="authoring.case-table.filter-guidance" datatype="html"><source>Filter availability and help</source></trans-unit>
+      <trans-unit id="authoring.pending-changes.select-column" datatype="html"><source>Select</source></trans-unit>
+      <trans-unit id="authoring.import-export.choose-file" datatype="html"><source>Choose file</source></trans-unit>
+      <trans-unit id="authoring.import-export.no-file-hint" datatype="html"><source>No rows have been validated or imported.</source></trans-unit>
+      <trans-unit id="authoring.import-export.showing-range" datatype="html"><source>Showing 1–<x id="end"/> of <x id="loaded"/> loaded versions</source></trans-unit>
+      <trans-unit id="authoring.case-table.count-unverified" datatype="html"><source>Count unavailable with the current filter</source></trans-unit>
+      <trans-unit id="catalog.case-list.count-unverified" datatype="html"><source>Count unavailable with the current filter</source></trans-unit>
       <trans-unit id="settings.members.view" datatype="html"><source>View member</source></trans-unit>
       <trans-unit id="settings.members.created" datatype="html"><source>Created</source></trans-unit>
       <trans-unit id="settings.row.view" datatype="html"><source>View</source></trans-unit>

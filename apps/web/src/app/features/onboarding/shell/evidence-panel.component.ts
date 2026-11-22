@@ -6,16 +6,40 @@ import {
   inject,
   input,
   LOCALE_ID,
+  output,
 } from '@angular/core';
 import { HlmCardImports } from '@evidgate/ui/card';
+import { HlmTableImports } from '@evidgate/ui/table';
+import {
+  OnboardingRecordButtonComponent,
+  OnboardingTableRangeComponent,
+  RECORD_COPY,
+  type OnboardingRecordView,
+} from '../onboarding-record-view.component';
 
 import { shortDateFormat } from '../../../shared/time/short-date-format';
 import type { OnboardingProgress } from '../data/onboarding-progress.service';
 import { activationInstantLabel } from '../steps/default-policy';
 
+interface LedgerRow {
+  key: string;
+  resource: string;
+  value: string | number;
+  identifier?: string;
+  truncated?: boolean;
+  activated?: boolean;
+}
+
 @Component({
   selector: 'app-onboarding-evidence-panel',
-  imports: [DatePipe, DecimalPipe, HlmCardImports],
+  imports: [
+    DatePipe,
+    DecimalPipe,
+    HlmCardImports,
+    HlmTableImports,
+    OnboardingRecordButtonComponent,
+    OnboardingTableRangeComponent,
+  ],
   host: { class: 'block min-w-0' },
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -38,73 +62,112 @@ import { activationInstantLabel } from '../steps/default-policy';
       >
         @if (progress(); as resources) {
           @if (resources.project; as createdProject) {
-            <dl
-              class="m-0 grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] gap-(--eg-space-5) [&>div]:min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mx-0 [&_dd]:mb-0 [&_dd]:mt-(--eg-space-2) [&_dd]:text-sm [&_dd]:font-semibold [&_dd]:wrap-anywhere"
-            >
-              <div>
-                <dt>{{ projectLabel }}</dt>
-                <dd>{{ createdProject.name }}</dd>
-              </div>
-              <div>
-                <dt>{{ identifierLabel }}</dt>
-                <dd class="font-mono text-sm">
-                  <bdi>{{ createdProject.id }}</bdi>
-                </dd>
-              </div>
-              @if (resources.bindings.length) {
-                <div>
-                  <dt>{{ bindingsLabel }}</dt>
-                  <dd>
-                    {{ resources.bindings.length | number
-                    }}{{ resources.bindingsTruncated ? '+' : '' }}
-                  </dd>
-                </div>
-              }
-              @if (resources.tokens.length) {
-                <div>
-                  <dt>{{ tokensLabel }}</dt>
-                  <dd>
-                    {{ resources.tokens.length | number }}{{ resources.tokensTruncated ? '+' : '' }}
-                  </dd>
-                </div>
-              }
-              @if (resources.sampleRun; as run) {
-                <div>
-                  <dt>{{ sampleLabel }}</dt>
-                  <dd class="font-mono text-sm">
-                    <bdi>{{ run.run_id }}</bdi>
-                  </dd>
-                </div>
-                @if (run.current_evidence_revision_id; as revision) {
-                  <div>
-                    <dt>{{ evidenceLabel }}</dt>
-                    <dd class="font-mono text-sm">
-                      <bdi>{{ revision }}</bdi>
-                    </dd>
-                  </div>
-                }
-              }
-              @if (activation(); as active) {
-                <div>
-                  <dt>{{ activationLabel }}</dt>
-                  <dd class="font-mono text-sm">
-                    <bdi>{{ active.policy_revision_id }}</bdi>
-                  </dd>
-                </div>
-                <div>
-                  <dt>{{ activatedAtLabel }}</dt>
-                  <dd>
-                    @if (activatedAt(); as instant) {
-                      <time [attr.datetime]="instant">{{
-                        instant | date: dateTimeFormat : '+0000'
-                      }}</time>
-                    } @else {
-                      {{ unavailable }}
-                    }
-                  </dd>
-                </div>
-              }
-            </dl>
+            <div hlmTableContainer class="min-w-0 max-w-full">
+              <table hlmTable class="[&_th]:whitespace-normal [&_td]:whitespace-normal">
+                <caption hlmCaption class="caption-top text-start">
+                  {{
+                    title
+                  }}
+                </caption>
+                <thead hlmTHead>
+                  <tr hlmTr>
+                    <th hlmTh scope="col">{{ resourceLabel }}</th>
+                    <th hlmTh scope="col">{{ confirmedLabel }}</th>
+                    <th hlmTh scope="col">{{ copy.actions }}</th>
+                  </tr>
+                </thead>
+                <tbody hlmTBody>
+                  @for (row of ledgerRows(); track row.key) {
+                    <tr hlmTr class="h-(--eg-space-11)">
+                      <th hlmTh scope="row" class="font-semibold text-foreground">
+                        {{ row.resource }}
+                      </th>
+                      <td hlmTd [class.text-end]="typeof row.value === 'number'">
+                        @if (typeof row.value === 'number') {
+                          <span class="tabular-nums"
+                            >{{ row.value | number }}{{ row.truncated ? '+' : '' }}</span
+                          >
+                        } @else {
+                          <bdi>{{ row.value }}</bdi>
+                        }
+                        @if (row.identifier) {
+                          <bdi class="block font-mono text-xs text-muted-foreground">{{
+                            row.identifier
+                          }}</bdi>
+                        }
+                        @if (row.activated) {
+                          <div class="text-xs text-muted-foreground">
+                            {{ activatedAtLabel }}:
+                            @if (activatedAt(); as at) {
+                              <time [attr.datetime]="at">{{
+                                at | date: dateTimeFormat : '+0000'
+                              }}</time>
+                            } @else {
+                              {{ unavailable }}
+                            }
+                          </div>
+                        }
+                      </td>
+                      <td hlmTd>
+                        <app-onboarding-record
+                          [subject]="typeof row.value === 'number' ? row.resource : row.value"
+                          [appOnboardingRecord]="facts"
+                          [recordTitle]="copy.resource"
+                          [recordId]="row.identifier"
+                          (inspect)="viewRecord.emit($event)"
+                        />
+                        <ng-template #facts
+                          ><dl>
+                            <div>
+                              <dt>{{ projectLabel }}</dt>
+                              <dd>
+                                <bdi>{{ createdProject.name }}</bdi>
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>{{ identifierLabel }}</dt>
+                              <dd>
+                                <bdi class="font-mono">{{ createdProject.id }}</bdi>
+                              </dd>
+                            </div>
+                            @if (row.key !== 'project') {
+                              <div>
+                                <dt>{{ row.resource }}</dt>
+                                <dd>
+                                  @if (typeof row.value === 'number') {
+                                    {{ row.value | number }}{{ row.truncated ? '+' : '' }}
+                                  } @else {
+                                    <bdi class="font-mono">{{ row.value }}</bdi>
+                                  }
+                                </dd>
+                              </div>
+                            }
+                            @if (row.activated) {
+                              <div>
+                                <dt>{{ activatedAtLabel }}</dt>
+                                <dd>
+                                  @if (activatedAt(); as at) {
+                                    <time [attr.datetime]="at">{{
+                                      at | date: dateTimeFormat : '+0000'
+                                    }}</time>
+                                  } @else {
+                                    {{ unavailable }}
+                                  }
+                                </dd>
+                              </div>
+                            }
+                          </dl>
+                          @if (refreshFailed()) {
+                            <p>{{ stale }}</p>
+                          }
+                        </ng-template>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            <app-onboarding-table-range [appOnboardingTableRange]="ledgerRows().length" />
             @if (resources.activation.kind === 'forbidden') {
               <p
                 class="m-0 text-sm text-muted-foreground"
@@ -141,6 +204,53 @@ export class EvidencePanelComponent {
 
   readonly progress = input<OnboardingProgress | null>(null);
   readonly refreshFailed = input(false);
+  readonly viewRecord = output<OnboardingRecordView>();
+  protected readonly copy = RECORD_COPY;
+  protected readonly resourceLabel = $localize`:@@onboarding.record.resource-kind:Resource`;
+  protected readonly confirmedLabel = $localize`:@@onboarding.record.confirmed-value:Confirmed value`;
+  protected readonly ledgerRows = computed<LedgerRow[]>(() => {
+    const data = this.progress();
+    if (!data?.project) return [];
+    const rows: LedgerRow[] = [
+      {
+        key: 'project',
+        resource: this.projectLabel,
+        value: data.project.name,
+        identifier: data.project.id,
+      },
+    ];
+    if (data.bindings.length)
+      rows.push({
+        key: 'bindings',
+        resource: this.bindingsLabel,
+        value: data.bindings.length,
+        truncated: data.bindingsTruncated,
+      });
+    if (data.tokens.length)
+      rows.push({
+        key: 'tokens',
+        resource: this.tokensLabel,
+        value: data.tokens.length,
+        truncated: data.tokensTruncated,
+      });
+    if (data.sampleRun) {
+      rows.push({ key: 'run', resource: this.sampleLabel, value: data.sampleRun.run_id });
+      if (data.sampleRun.current_evidence_revision_id)
+        rows.push({
+          key: 'evidence',
+          resource: this.evidenceLabel,
+          value: data.sampleRun.current_evidence_revision_id,
+        });
+    }
+    if (data.activation.kind === 'active')
+      rows.push({
+        key: 'activation',
+        resource: this.activationLabel,
+        value: data.activation.state.policy_revision_id,
+        activated: true,
+      });
+    return rows;
+  });
   protected readonly sectionHeadingSize = 'section' as const;
   protected readonly sourceLabel = $localize`:@@onboarding.evidence.source:Read from server-confirmed resources, not browser completion flags.`;
   protected readonly activatedAt = computed(() =>

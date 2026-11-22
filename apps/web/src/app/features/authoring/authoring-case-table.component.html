@@ -1,10 +1,45 @@
+@if (hasRows() && !store.invalidLink()) {
+  <div role="group" aria-labelledby="authoring-case-loaded-states" class="lifecycle-strip">
+    <p
+      id="authoring-case-loaded-states"
+      class="m-0 shrink-0 text-xs font-semibold text-muted-foreground"
+      i18n="@@authoring.case-table.loaded-states"
+    >
+      Lifecycle of loaded cases
+    </p>
+    @for (state of states; track state) {
+      <button
+        hlmBtn
+        type="button"
+        [variant]="'ghost'"
+        [attr.aria-pressed]="draft().state === state"
+        [disabled]="searchTooLong() || itemInvalid()"
+        (click)="quickState(draft().state === state ? '' : state)"
+        class="lifecycle-option rounded-none border-s border-border aria-pressed:bg-(--eg-accent-soft)"
+      >
+        <span class="text-xs text-muted-foreground">{{ copy[state] }}</span>
+        @let count = loadedStates()[state];
+        <span class="text-sm font-semibold tabular-nums">
+          @if (count === null) {
+            <span aria-hidden="true">&mdash;</span>
+            <span class="sr-only" i18n="@@authoring.case-table.count-unverified"
+              >Count unavailable with the current filter</span
+            >
+          } @else {
+            {{ count | number }}
+          }
+        </span>
+      </button>
+    }
+  </div>
+}
 <form
   class="filters"
   (ngSubmit)="apply()"
   [attr.aria-label]="copy.filters"
   [attr.aria-describedby]="'authoring-case-scope-help'"
 >
-  <div class="grid gap-(--eg-space-1)">
+  <div class="filter-heading">
     <p class="m-0 font-(weight:--eg-weight-semibold)">{{ copy.filters }}</p>
     <p id="authoring-case-scope-help" class="help">{{ copy.scopeHelp }}</p>
   </div>
@@ -29,25 +64,6 @@
         </hlm-select>
       </div>
     }
-    @for (field of unavailableFilters; track field.id) {
-      <div class="field">
-        <label hlmLabel [for]="'authoring-case-' + field.id">{{ field.label }}</label>
-        <hlm-select [disabled]="true">
-          <hlm-select-trigger
-            [buttonId]="'authoring-case-' + field.id"
-            [aria-describedby]="'authoring-' + field.id + '-help'"
-          >
-            <hlm-select-value [placeholder]="copy.unavailable" />
-          </hlm-select-trigger>
-          <hlm-select-content *hlmSelectPortal [aria-label]="field.label">
-            <hlm-select-item [value]="'unavailable'">{{ copy.unavailable }}</hlm-select-item>
-          </hlm-select-content>
-        </hlm-select>
-        <p [id]="'authoring-' + field.id + '-help'" class="help" role="note">{{ field.help }}</p>
-      </div>
-    }
-  </div>
-  <div class="query-fields">
     <div class="field">
       <label hlmLabel for="authoring-case-item">{{ copy.item }}</label>
       <input
@@ -63,7 +79,6 @@
         "
         [attr.aria-invalid]="itemInvalid()"
       />
-      <p id="authoring-case-item-help" class="help">{{ copy.itemHelp }}</p>
       @if (itemInvalid()) {
         <p id="authoring-case-item-error" class="error" role="alert">{{ copy.itemError }}</p>
       }
@@ -84,32 +99,59 @@
         "
         [attr.aria-invalid]="searchTooLong()"
       />
-      <p id="authoring-case-search-help" class="help">{{ copy.searchHelp }}</p>
       @if (searchTooLong()) {
         <p id="authoring-case-search-error" class="error" role="alert">{{ copy.searchError }}</p>
       }
     </div>
   </div>
-  <div class="actions">
-    <button hlmBtn type="submit" [disabled]="searchTooLong() || itemInvalid()" data-case-apply>
-      {{ copy.apply }}
-    </button>
-    <button hlmBtn [variant]="'outline'" type="button" (click)="clear()" data-case-clear>
-      {{ copy.clear }}
-    </button>
-    <button
-      hlmBtn
-      [variant]="'ghost'"
-      type="button"
-      [disabled]="busy() || store.loadingMore() || !store.retryReady()"
-      [attr.aria-describedby]="'authoring-case-refresh-help'"
-      (click)="refresh()"
-      data-case-refresh
-    >
-      {{ copy.refresh }}
-    </button>
+  <div class="filter-footer">
+    <div class="actions">
+      <button hlmBtn type="submit" [disabled]="searchTooLong() || itemInvalid()" data-case-apply>
+        {{ copy.apply }}
+      </button>
+      <button hlmBtn [variant]="'outline'" type="button" (click)="clear()" data-case-clear>
+        {{ copy.clear }}
+      </button>
+      <button
+        hlmBtn
+        [variant]="'ghost'"
+        type="button"
+        [disabled]="busy() || store.loadingMore() || !store.retryReady()"
+        [attr.aria-describedby]="'authoring-case-refresh-help'"
+        (click)="refresh()"
+        data-case-refresh
+      >
+        {{ copy.refresh }}
+      </button>
+    </div>
+    <details data-case-filter-help>
+      <summary i18n="@@authoring.case-table.filter-guidance">Filter availability and help</summary>
+      <div class="filter-details">
+        @for (field of unavailableFilters; track field.id) {
+          <div class="field">
+            <label hlmLabel [for]="'authoring-case-' + field.id">{{ field.label }}</label>
+            <hlm-select [disabled]="true">
+              <hlm-select-trigger
+                [buttonId]="'authoring-case-' + field.id"
+                [aria-describedby]="'authoring-' + field.id + '-help'"
+              >
+                <hlm-select-value [placeholder]="copy.unavailable" />
+              </hlm-select-trigger>
+              <hlm-select-content *hlmSelectPortal [aria-label]="field.label">
+                <hlm-select-item [value]="'unavailable'">{{ copy.unavailable }}</hlm-select-item>
+              </hlm-select-content>
+            </hlm-select>
+            <p [id]="'authoring-' + field.id + '-help'" class="help" role="note">
+              {{ field.help }}
+            </p>
+          </div>
+        }
+        <p id="authoring-case-item-help" class="help">{{ copy.itemHelp }}</p>
+        <p id="authoring-case-search-help" class="help">{{ copy.searchHelp }}</p>
+        <p id="authoring-case-refresh-help" class="help">{{ copy.refreshHelp }}</p>
+      </div>
+    </details>
   </div>
-  <p id="authoring-case-refresh-help" class="help">{{ copy.refreshHelp }}</p>
 </form>
 
 <app-live-status [text]="capAnnouncement()" />
@@ -158,7 +200,7 @@
       (retry)="store.retry()"
       (emptyAction)="clear()"
     >
-      <app-authoring-case-rows [rows]="store.rows()" />
+      <app-authoring-case-rows [rows]="store.rows()" [editorScope]="editorScope()" />
     </app-request-state>
     @if (store.browseCapped()) {
       <app-inline-feedback

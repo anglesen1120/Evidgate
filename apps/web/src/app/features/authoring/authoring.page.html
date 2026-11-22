@@ -9,7 +9,7 @@
     <app-page-header
       class="min-w-0 flex-1"
       [title]="copy.title"
-      [description]="copy.description"
+      [description]="subtitle()"
       [titleId]="'authoring-page-title'"
     >
       <div appPageHeaderActions>
@@ -20,7 +20,7 @@
     <app-section-header
       class="min-w-0 flex-1"
       [title]="copy.title"
-      [description]="copy.description"
+      [description]="subtitle()"
       [titleId]="'authoring-page-title'"
     >
       <div appSectionHeaderActions>
@@ -50,7 +50,7 @@
     aria-labelledby="authoring-hierarchy-title"
     [attr.aria-busy]="busy()"
   >
-    <div hlmCardHeader class="border-b border-border">
+    <div hlmCardHeader class="border-b border-border pb-(--eg-space-4)">
       <app-section-header
         [title]="copy.hierarchy"
         [description]="copy.hierarchyDescription"
@@ -105,7 +105,7 @@
   </section>
 
   <section hlmCard class="case-pane" data-authoring-cases aria-labelledby="authoring-cases-title">
-    <div hlmCardHeader class="border-b border-border">
+    <div hlmCardHeader class="case-heading border-b border-border">
       <app-section-header
         [title]="copy.table"
         [titleId]="'authoring-cases-title'"
@@ -150,7 +150,7 @@
         }
       }
     </div>
-    <div hlmCardContent>
+    <div hlmCardContent class="px-0!">
       @if (!denied()) {
         <app-authoring-case-table />
       }

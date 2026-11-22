@@ -1,5 +1,5 @@
 import { computed, signal } from '@angular/core';
-import { ComponentHarness, TestKey } from '@angular/cdk/testing';
+import { TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
@@ -11,6 +11,7 @@ import { ApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { ImportExportPage } from './import-export.page';
+import { ImportPageHarness, ImportOptionHarness } from './import-export-page.harness';
 import { ImportExportDataService } from './import-export-data.service';
 import { ImportStore } from './import.store';
 import { ExportStore } from './export.store';
@@ -59,50 +60,6 @@ function refusal(details: ApiError['details'], kind: ApiError['kind'] = 'validat
     retryAfterSeconds: null,
     details,
   });
-}
-
-class ImportPageHarness extends ComponentHarness {
-  static hostSelector = 'app-authoring-import-export-page';
-  text() {
-    return this.host().then((host) => host.text());
-  }
-  async count(selector: string) {
-    return (await this.locatorForAll(selector)()).length;
-  }
-  async has(selector: string) {
-    return (await this.locatorForOptional(selector)()) !== null;
-  }
-  async textAt(selector: string) {
-    return (await this.locatorFor(selector)()).text();
-  }
-  async attr(selector: string, attribute: string) {
-    return (await this.locatorFor(selector)()).getAttribute(attribute);
-  }
-  async click(selector: string) {
-    await (await this.locatorFor(selector)()).click();
-  }
-  async key(selector: string, key: TestKey) {
-    await (await this.locatorFor(selector)()).sendKeys(key);
-  }
-  async focus(selector: string) {
-    await (await this.locatorFor(selector)()).focus();
-  }
-  async focused(selector: string) {
-    return (await this.locatorFor(selector)()).isFocused();
-  }
-}
-
-class ImportOptionHarness extends ComponentHarness {
-  static hostSelector = '[role="option"]';
-  text() {
-    return this.host().then((host) => host.text());
-  }
-  async attr(name: string) {
-    return (await this.host()).getAttribute(name);
-  }
-  async click() {
-    await (await this.host()).click();
-  }
 }
 
 describe('ImportExportPage presentation and route heading contract', () => {
@@ -188,6 +145,59 @@ describe('ImportExportPage presentation and route heading contract', () => {
     expect(await harness.has('[data-import-confirm-region]')).toBe(false);
     expect(await harness.has('[data-import-confirm]')).toBe(false);
     expect(await harness.text()).toContain('No file has been selected');
+    expect(await harness.attr('header [data-choose-import-file]', 'aria-controls')).toBe(
+      'authoring-import-file',
+    );
+    expect(await harness.has('[data-import-preview]')).toBe(false);
+    const openingPicker = vi.spyOn(HTMLInputElement.prototype, 'click');
+    try {
+      await harness.click('header [data-choose-import-file]');
+      expect(openingPicker).toHaveBeenCalledOnce();
+      expect(upload).not.toHaveBeenCalled();
+    } finally {
+      openingPicker.mockRestore();
+    }
+  });
+
+  it('links a single horizontal tab stop to its panel and keeps Back outside the strip', async () => {
+    const { harness } = await setup();
+    const first = '[data-impex-import-tab]',
+      last = '[data-impex-export-tab]';
+    expect(await harness.attr('[role="tablist"]', 'aria-orientation')).toBe('horizontal');
+    expect(await harness.has('[role="tablist"] a')).toBe(false);
+    await harness.focus(first);
+    await harness.key(first, TestKey.END);
+    expect(await harness.focused(last)).toBe(true);
+    expect(await harness.attr(last, 'aria-selected')).toBe('true');
+    expect(
+      await harness.attr('#' + (await harness.attr(last, 'aria-controls')), 'aria-labelledby'),
+    ).toBe(await harness.attr(last, 'id'));
+    await harness.key(last, TestKey.LEFT_ARROW);
+    expect(await harness.focused(first)).toBe(true);
+    expect(await harness.attr(last, 'tabindex')).toBe('-1');
+  });
+
+  it('views a loaded version in one labelled dialog and returns focus without a request', async () => {
+    const { harness } = await setup(file());
+    const opener = '[data-import-version-view]';
+    expect(await harness.textAt('[data-import-history] .caption')).toBe(IMPEX_COPY.history);
+    expect(await harness.textAt('[data-history-range]')).toBe('Showing 1–1 of 1 loaded versions');
+    expect(await harness.attr(opener, 'aria-label')).toContain(
+      'View version 3 of ' + history.items[0]?.entity_id,
+    );
+    await harness.focus(opener);
+    await harness.click(opener);
+    const title = await harness.dialogTitle();
+    expect(await (await harness.dialog())?.getAttribute('aria-labelledby')).toBe(
+      await title.getAttribute('id'),
+    );
+    expect(await (await harness.dialog())?.text()).toContain('feature_node');
+    await vi.waitFor(async () => expect(await title.isFocused()).toBe(true));
+    await title.sendKeys(TestKey.ESCAPE);
+    await vi.waitFor(async () => expect(await harness.dialog()).toBeNull());
+    expect(await harness.focused(opener)).toBe(true);
+    expect(versions).toHaveBeenCalledTimes(1);
+    expect(upload).not.toHaveBeenCalled();
   });
 
   it('renders display-only local text without creating a version before explicit confirmation', async () => {
@@ -359,7 +369,7 @@ describe('ImportExportPage presentation and route heading contract', () => {
 
   it('hands removed mutation focus to the desktop-required notice when no file is selected', async () => {
     const { fixture, harness } = await setup();
-    await harness.focus('[data-import-file]');
+    await harness.focus('header [data-choose-import-file]');
     desktop.set(false);
     await settle(fixture);
     expect(await harness.has('[data-import-file]')).toBe(false);

@@ -117,6 +117,7 @@
       [tokens]="store.tokens()"
       [bindingsTruncated]="store.bindingsTruncated()"
       [tokensTruncated]="store.tokensTruncated()"
+      (viewRecord)="viewRecord.emit($event)"
     />
     <app-cli-quickstart
       class="block min-w-0"
@@ -281,33 +282,11 @@
           {{ bindingSubmit }}
         </button>
       </form>
-      <h4>{{ bindingsLabel }}</h4>
-      <ul
-        class="m-0 grid min-w-0 list-none gap-(--eg-space-4) p-0 [&>li]:grid [&>li]:min-w-0 [&>li]:gap-(--eg-space-3) [&>li]:border-t [&>li]:border-solid [&>li]:border-border [&>li]:py-(--eg-space-3) [&_strong]:text-foreground"
-      >
-        @for (binding of store.bindings(); track binding.id) {
-          <li data-testid="connect-binding-row" [attr.data-status]="binding.status">
-            <strong>{{ binding.repository_full_name }}</strong>
-            <app-status-pill
-              [tone]="'neutral'"
-              [dimension]="statusLabel"
-              [label]="statusLabels[binding.status]"
-            />
-            <dl>
-              <div>
-                <dt>{{ createdLabel }}</dt>
-                <dd>
-                  <time [attr.datetime]="binding.created_at">{{
-                    binding.created_at | date: dateTimeFormat : '+0000'
-                  }}</time>
-                </dd>
-              </div>
-            </dl>
-          </li>
-        } @empty {
-          <li>{{ emptyBindings }}</li>
-        }
-      </ul>
+      <app-connect-ci-binding-table
+        [bindings]="store.bindings()"
+        [truncated]="store.bindingsTruncated()"
+        (viewRecord)="viewRecord.emit($event)"
+      />
       @if (store.bindingsTruncated()) {
         <app-inline-feedback
           [tone]="'warning'"
@@ -388,75 +367,91 @@
           {{ tokenSubmit }}
         </button>
       </form>
-      <h4>{{ tokensLabel }}</h4>
-      <ul
-        class="m-0 grid min-w-0 list-none gap-(--eg-space-4) p-0 [&>li]:grid [&>li]:min-w-0 [&>li]:gap-(--eg-space-3) [&>li]:border-t [&>li]:border-solid [&>li]:border-border [&>li]:py-(--eg-space-3) [&_strong]:text-foreground"
-      >
-        @for (token of store.tokens(); track token.id) {
-          <li data-testid="connect-token-row" [attr.data-status]="token.status">
-            <strong [id]="'connect-token-name-' + token.id">{{ token.name }}</strong>
-            <app-status-pill
-              [tone]="'neutral'"
-              [dimension]="statusLabel"
-              [label]="statusLabels[token.status]"
-            />
-            <dl>
-              <div>
-                <dt>{{ prefixLabel }}</dt>
-                <dd>
-                  <code>{{ token.prefix }}</code>
-                </dd>
-              </div>
-              <div>
-                <dt>{{ scopesLabel }}</dt>
-                <dd>{{ token.scopes.join(', ') || noneLabel }}</dd>
-              </div>
-              <div>
-                <dt>{{ expiresLabel }}</dt>
-                <dd>
-                  @if (token.expires_at; as expiry) {
-                    <time [attr.datetime]="expiry">{{
-                      expiry | date: dateTimeFormat : '+0000'
-                    }}</time>
-                  } @else {
-                    {{ noneLabel }}
-                  }
-                </dd>
-              </div>
-              <div>
-                <dt>{{ usedLabel }}</dt>
-                <dd>
-                  @if (token.last_used_at; as used) {
-                    <time [attr.datetime]="used">{{ used | date: dateTimeFormat : '+0000' }}</time>
-                  } @else {
-                    {{ noneLabel }}
-                  }
-                </dd>
-              </div>
-            </dl>
-            @if (token.status === 'active') {
-              <app-connect-ci-rotate-confirm
-                [token]="token"
-                [projectName]="store.project()?.slug ?? noneLabel"
-                [scope]="draftScope()"
-                [label]="rotateLabel"
-                [triggerLabel]="rotateNamed(token.name)"
-                [describedBy]="
-                  'connect-token-name-' +
-                  token.id +
-                  (!tokenPermitted() ? ' connect-token-permission' : '')
-                "
-                [revealWarning]="revealWarning"
-                [active]="active()"
-                [disabled]="busy() || !tokenPermitted()"
-                (confirmed)="rotate(token, $event)"
-              />
+      <div hlmTableContainer class="min-w-0 max-w-full">
+        <table hlmTable class="[&_th]:whitespace-normal [&_td]:whitespace-normal">
+          <caption hlmCaption class="caption-top text-start">
+            {{
+              tokensLabel
+            }}
+          </caption>
+          <thead hlmTHead>
+            <tr hlmTr>
+              <th hlmTh scope="col">{{ tokenNameField.label }}</th>
+              <th hlmTh scope="col">{{ statusLabel }}</th>
+              <th hlmTh scope="col">{{ prefixLabel }}</th>
+              <th hlmTh scope="col">{{ recordCopy.actions }}</th>
+            </tr>
+          </thead>
+          <tbody hlmTBody>
+            @for (token of store.tokens(); track token.id) {
+              <tr
+                hlmTr
+                class="h-(--eg-space-11)"
+                data-testid="connect-token-row"
+                [attr.data-status]="token.status"
+              >
+                <th hlmTh scope="row">
+                  <strong class="text-foreground" [id]="'connect-token-name-' + token.id"
+                    ><bdi>{{ token.name }}</bdi></strong
+                  ><bdi
+                    class="block max-w-[24ch] truncate font-mono text-xs font-normal text-muted-foreground"
+                    >{{ token.id }}</bdi
+                  >
+                </th>
+                <td hlmTd>
+                  <app-status-pill [tone]="'neutral'" [label]="statusLabels[token.status]" />
+                </td>
+                <td hlmTd>
+                  <code
+                    ><bdi>{{ token.prefix }}</bdi></code
+                  >
+                </td>
+                <td hlmTd>
+                  <div class="flex flex-wrap items-center gap-(--eg-space-2)">
+                    <app-onboarding-record
+                      [appOnboardingRecord]="facts"
+                      [recordTitle]="recordCopy.token"
+                      [subject]="token.name"
+                      [recordId]="token.id"
+                      [recordStatus]="statusLabels[token.status]"
+                      (inspect)="viewRecord.emit($event)"
+                    />
+                    <ng-template #facts
+                      ><app-onboarding-credential-record [credential]="token"
+                    /></ng-template>
+                    @if (token.status === 'active') {
+                      <app-connect-ci-rotate-confirm
+                        [token]="token"
+                        [projectName]="store.project()?.slug ?? noneLabel"
+                        [scope]="draftScope()"
+                        [label]="rotateLabel"
+                        [triggerLabel]="rotateNamed(token.name)"
+                        [describedBy]="
+                          'connect-token-name-' +
+                          token.id +
+                          (!tokenPermitted() ? ' connect-token-permission' : '')
+                        "
+                        [revealWarning]="revealWarning"
+                        [active]="active()"
+                        [disabled]="busy() || !tokenPermitted()"
+                        (confirmed)="rotate(token, $event)"
+                      />
+                    }
+                  </div>
+                </td>
+              </tr>
+            } @empty {
+              <tr hlmTr>
+                <td hlmTd colspan="4">{{ emptyTokens }}</td>
+              </tr>
             }
-          </li>
-        } @empty {
-          <li>{{ emptyTokens }}</li>
-        }
-      </ul>
+          </tbody>
+        </table>
+      </div>
+      <app-onboarding-table-range
+        [appOnboardingTableRange]="store.tokens().length"
+        [truncated]="store.tokensTruncated()"
+      />
       @if (store.tokensTruncated()) {
         <app-inline-feedback
           [tone]="'warning'"

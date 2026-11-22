@@ -40,6 +40,7 @@ import {
 } from '../../../shared/ui/states';
 import type { StepNumber } from '../data/step-derivation';
 import { OnboardingStore } from '../onboarding.store';
+import { OnboardingRecordDialogComponent } from '../onboarding-record-view.component';
 import { CreateProjectPage } from '../steps/create-project.page';
 import { ConnectCiPage } from '../steps/connect-ci.page';
 import { EnableCollectionPage } from '../steps/enable-collection.page';
@@ -54,6 +55,7 @@ import {
   viewedSummary,
 } from './onboarding-summaries';
 import { StepPendingComponent } from './step-pending.component';
+import { revealViewedStep } from './viewed-step-scroll';
 
 @Component({
   selector: 'app-onboarding-shell',
@@ -68,6 +70,7 @@ import { StepPendingComponent } from './step-pending.component';
     ConnectCiPage,
     EnableCollectionPage,
     EvidencePanelComponent,
+    OnboardingRecordDialogComponent,
     StepPendingComponent,
     ErrorPatternComponent,
     ForbiddenPatternComponent,
@@ -102,6 +105,13 @@ export class OnboardingShellComponent {
   );
   protected readonly progressText = computed(() =>
     completionSummary(this.completedCount(), this.steps.length),
+  );
+  protected readonly bindingsMetric = $localize`:@@onboarding.evidence.bindings:CI bindings`;
+  protected readonly tokensMetric = $localize`:@@onboarding.evidence.tokens:Ingest tokens`;
+  protected readonly headerFacts = computed(() =>
+    [this.store.project()?.name, this.viewedSummary(), this.progressText()]
+      .filter(Boolean)
+      .join(' · '),
   );
   private readonly heading = viewChild<ElementRef<HTMLHeadingElement>>('stepHeading');
   private readonly stepButtons = viewChildren<ElementRef<HTMLButtonElement>>('stepButton');
@@ -217,6 +227,7 @@ export class OnboardingShellComponent {
       stepButtons: () => this.stepButtons().map(({ nativeElement }) => nativeElement),
       viewedButton: () => this.viewedStepButton(),
     });
+    revealViewedStep(() => this.viewedStepButton());
     afterRenderEffect(() => this.focusMovedStep());
     afterRenderEffect(() => this.focusReloadFailure());
     effect((onCleanup) => {

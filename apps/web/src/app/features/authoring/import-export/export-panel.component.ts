@@ -16,6 +16,7 @@ import { HlmCheckbox } from '@evidgate/ui/checkbox';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
+import { HlmTableImports } from '@evidgate/ui/table';
 import { DesktopMutationDirective } from '../../../shared/ui/narrow/desktop-mutation.directive';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { DesktopRequiredNoticeComponent } from '../../../shared/ui/narrow/desktop-required-notice.component';
@@ -71,6 +72,7 @@ export function downloadExportFile(
     HlmInput,
     HlmLabel,
     HlmSelectImports,
+    HlmTableImports,
     DesktopMutationDirective,
     DesktopRequiredNoticeComponent,
     SectionHeaderComponent,

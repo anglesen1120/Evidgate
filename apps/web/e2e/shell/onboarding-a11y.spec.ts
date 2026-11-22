@@ -86,6 +86,41 @@ test.describe('the wizard shell is WCAG 2.2 AA clean (09.1.1 AC6, plan §8)', ()
         await expect(page.locator('[data-testid="connect-token-rotate"]')).toBeVisible();
 
         await expectNoA11yViolations(page, `onboarding step 2 metadata ${locale}/${theme}`);
+        for (const row of [
+          page.getByTestId('connect-token-row'),
+          page.getByTestId('connection-health-credential'),
+          page.getByTestId('onboarding-evidence-panel').locator('tbody tr').first(),
+        ]) {
+          const trigger = row.locator('button[data-onboarding-record]');
+          await trigger.click();
+          const modal = page.getByRole('dialog');
+          await expect(modal).toHaveCount(1);
+          await expect(modal.getByRole('heading', { level: 2 })).toBeFocused();
+          await expectNoA11yViolations(page, `setup record ${locale}/${theme}`);
+          await page.keyboard.press('Escape');
+          await expect(trigger).toBeFocused();
+        }
+        for (const width of [599, 600]) {
+          await page.setViewportSize({ width, height: 800 });
+          const trigger = page
+            .getByTestId('connect-token-row')
+            .locator('button[data-onboarding-record]');
+          await trigger.click();
+          const modal = page.getByRole('dialog');
+          const content = modal.locator('hlm-dialog-content');
+          await expect(content).toBeVisible();
+          await expect
+            .poll(async () => Math.round((await content.boundingBox())?.width ?? 0))
+            .toBe(width < 600 ? width : 560);
+          if (width < 600)
+            await expect
+              .poll(async () => Math.round((await content.boundingBox())?.height ?? 0))
+              .toBe(800);
+          await page.keyboard.press('Tab');
+          await expect(modal.locator('button:focus')).toHaveCount(1);
+          await page.keyboard.press('Escape');
+          await expect(trigger).toBeFocused();
+        }
       });
     }
   }
