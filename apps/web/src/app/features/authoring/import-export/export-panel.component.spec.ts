@@ -27,6 +27,8 @@ class PanelHarness extends ComponentHarness {
   readonly notice = this.locatorForOptional('[data-export-narrow-notice]');
   readonly scopeTrigger = this.locatorFor('#authoring-export-scope');
   readonly formatTrigger = this.locatorFor('#authoring-export-format');
+  readonly summary = this.locatorFor('section[aria-labelledby="export-summary-title"]');
+  readonly fields = this.locatorFor('section[aria-labelledby="export-fields-title"]');
   async scopeText(): Promise<string> {
     return (await this.scope()).text();
   }
@@ -107,6 +109,19 @@ describe('ExportPanelComponent', () => {
     expect(await panel.scopeText()).toContain('Whole project');
     expect(await panel.notice()).toBeNull();
     expect(error).not.toHaveBeenCalled();
+  });
+
+  it('shows the current format and kinds beside the download action without requesting a file', async () => {
+    const { panel, fixture } = await render();
+    TestBed.inject(ExportStore).edit({ format: 'json', kinds: ['cases'] });
+    await fixture.whenStable();
+    const summary = await (await panel.summary()).text();
+    expect(summary).toContain('Whole project');
+    expect(summary).toContain('JSON');
+    expect(summary).toContain('Test cases');
+    expect(summary).not.toContain('Checklist items');
+    expect(await (await panel.fields()).text()).toContain('Action and expected-result steps');
+    expect(download).not.toHaveBeenCalled();
   });
 
   it('offers XLSX through the existing selectable format picker without a request before confirmation', async () => {
