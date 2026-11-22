@@ -129,23 +129,26 @@ describe('NavViewService (09.1.1-T4.1)', () => {
     expect(view.groups()).toEqual([]);
   });
 
-  it('renders only the G1 entries, in the two groups that hold them', async () => {
+  it('renders only the G1 entries, in the groups that hold them', async () => {
     await authenticatedWithProject();
 
-    expect(view.groups().map((group) => group.id)).toEqual(['design', 'settings']);
-    expect(idsOf(view.groups(), 'design')).toEqual([
+    expect(view.groups().map((group) => group.id)).toEqual([
+      'workspace',
       'authoring',
-      'generation',
-      'pending-changes',
-      'overview',
-      'onboarding',
+      'administration',
     ]);
-    expect(idsOf(view.groups(), 'settings')).toEqual([
-      'settings',
-      'ai-settings',
+    expect(idsOf(view.groups(), 'workspace')).toEqual(['overview', 'onboarding']);
+    expect(idsOf(view.groups(), 'authoring')).toEqual([
+      'authoring',
+      'pending-changes',
+      'generation',
+    ]);
+    expect(idsOf(view.groups(), 'administration')).toEqual([
       'members',
+      'settings',
       'quota',
       'audit',
+      'ai-settings',
     ]);
   });
 
@@ -156,9 +159,8 @@ describe('NavViewService (09.1.1-T4.1)', () => {
     for (const id of laterPhase) {
       expect(linkOf(view, id)).toBeUndefined();
     }
-    expect(view.groups().map((group) => group.id)).not.toContain('runs');
-    expect(view.groups().map((group) => group.id)).not.toContain('learn');
-    expect(view.groups().map((group) => group.id)).not.toContain('release');
+    expect(view.groups().map((group) => group.id)).not.toContain('quality');
+    expect(view.groups().map((group) => group.id)).not.toContain('healing');
   });
 
   it('hides an entry whose permission the set lacks', async () => {
@@ -166,12 +168,7 @@ describe('NavViewService (09.1.1-T4.1)', () => {
     await authenticatedWithProject();
 
     expect(linkOf(view, 'pending-changes')).toBeUndefined();
-    expect(idsOf(view.groups(), 'design')).toEqual([
-      'authoring',
-      'generation',
-      'overview',
-      'onboarding',
-    ]);
+    expect(idsOf(view.groups(), 'authoring')).toEqual(['authoring', 'generation']);
   });
 
   it('drops a whole group when none of its entries survive', async () => {
@@ -179,8 +176,8 @@ describe('NavViewService (09.1.1-T4.1)', () => {
     source.granted = new Set(['authoring:generate']);
     await authenticatedWithProject();
 
-    expect(view.groups().map((group) => group.id)).toEqual(['design']);
-    expect(idsOf(view.groups(), 'design')).toEqual(['generation']);
+    expect(view.groups().map((group) => group.id)).toEqual(['authoring']);
+    expect(idsOf(view.groups(), 'authoring')).toEqual(['generation']);
   });
 
   it('gates the AI settings entry on authoring:read, not project:read', async () => {
@@ -201,8 +198,13 @@ describe('NavViewService (09.1.1-T4.1)', () => {
     await session.bootstrap();
     await session.resolveScope(ORG.id, null);
 
-    expect(idsOf(view.groups(), 'design')).toEqual(['onboarding']);
-    expect(idsOf(view.groups(), 'settings')).toEqual(['settings', 'members', 'quota', 'audit']);
+    expect(idsOf(view.groups(), 'workspace')).toEqual(['onboarding']);
+    expect(idsOf(view.groups(), 'administration')).toEqual([
+      'members',
+      'settings',
+      'quota',
+      'audit',
+    ]);
     expect(linkOf(view, 'ai-settings')).toBeUndefined();
   });
 
@@ -245,7 +247,7 @@ describe('NavViewService (09.1.1-T4.1)', () => {
 
     expect(authoring?.label).toBe(registryRow?.label);
     expect(authoring?.icon).toBe(registryRow?.icon);
-    expect(view.groups()[0]?.label).toBe('Test design');
+    expect(view.groups()[0]?.label).toBe('Workspace');
   });
 
   it('recomputes when the resolved project changes', async () => {

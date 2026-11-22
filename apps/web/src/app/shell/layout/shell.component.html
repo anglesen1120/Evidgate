@@ -54,26 +54,26 @@
       </button>
     }
     <a
-      class="brand box-border flex min-h-(--eg-space-12) shrink-0 items-center gap-(--eg-space-3) border-0 border-b-(length:--eg-border-width) border-solid border-border px-(--eg-space-5) font-(family-name:--eg-font-display) text-lg font-(weight:--eg-weight-bold) text-foreground no-underline focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring group-[.rail]/shell:justify-center group-[.rail]/shell:px-0 group-[.mobile]/shell:pe-(--eg-space-12)"
+      class="brand flex shrink-0 items-center gap-(--eg-space-4) p-(--eg-space-6) text-foreground no-underline group-[.rail]/shell:justify-center group-[.rail]/shell:px-0 group-[.mobile]/shell:pe-(--eg-space-12)"
       routerLink="/"
       [attr.aria-label]="brandLabel"
     >
-      <app-shell-icon class="text-primary" [name]="'shield-check'" />
-      <span class="group-[.rail]/shell:hidden" i18n="@@shell.layout.brand">Evidgate</span>
-    </a>
-    @if (!collapsed() && !mobile()) {
-      <div
-        hlmCard
-        class="nav-scope m-(--eg-space-4) grid gap-(--eg-space-1) bg-secondary p-(--eg-space-3) text-xs text-muted-foreground [overflow-wrap:anywhere]"
+      <span
+        class="grid size-(--eg-control-md) shrink-0 place-items-center rounded-md bg-primary text-primary-foreground"
       >
-        <span i18n="@@shell.layout.organization">Organization</span>
-        <strong class="text-sm text-foreground">{{ session.currentOrg()?.name }}</strong>
-        @if (session.currentProject(); as project) {
-          <span i18n="@@shell.layout.project">Project</span>
-          <strong class="text-sm text-foreground">{{ project.name }}</strong>
-        }
-      </div>
-    }
+        <app-shell-icon class="size-(--eg-space-6)" [name]="'logo'" />
+      </span>
+      <span class="min-w-0 group-[.rail]/shell:hidden">
+        <strong
+          class="block font-(family-name:--eg-font-display) text-xl tracking-tight"
+          i18n="@@shell.layout.brand"
+          >Evidgate</strong
+        >
+        <small class="block text-xs text-muted-foreground" i18n="@@shell.brand.subtitle"
+          >Quality workspace</small
+        >
+      </span>
+    </a>
     @if (mobile()) {
       @defer (on idle) {
         <app-scope-switcher
@@ -120,7 +120,7 @@
   <div class="main-stack flex min-w-0 flex-col" [attr.inert]="mobile() && drawerOpen() ? '' : null">
     <header
       #topbar
-      class="topbar box-border sticky top-0 z-(--eg-z-sticky) flex min-h-(--eg-space-12) flex-wrap items-center gap-(--eg-space-4) border-0 border-b-(length:--eg-border-width) border-solid border-border bg-card px-(--eg-space-4) py-(--eg-space-3) min-[768px]:px-(--eg-space-5)"
+      class="topbar sticky top-0 z-(--eg-z-sticky) box-border grid min-h-(--eg-space-12) min-w-0 items-center border-0 border-b-(length:--eg-border-width) border-solid border-border bg-card"
     >
       <button
         #toggleButton
@@ -136,48 +136,53 @@
       >
         <app-shell-icon [name]="'menu'" />
       </button>
-      @if (!mobile()) {
-        @defer (on idle) {
-          <app-scope-switcher
-            class="topbar-scope min-w-0 max-w-[calc(1.5*var(--eg-rail-width))] flex-1 basis-0 grid-cols-2"
-            [compact]="true"
-            [organizations]="session.organizations()"
-            [projects]="session.projects()"
-            [currentOrg]="session.currentOrg()"
-            [currentProject]="session.currentProject()"
-            (orgSelected)="selectOrganization($event)"
-            (projectSelected)="selectProject($event)"
-          />
-        } @placeholder {
-          <div
-            class="topbar-scope grid min-w-0 max-w-[calc(1.5*var(--eg-rail-width))] flex-1 basis-0 grid-cols-2 gap-(--eg-space-3)"
-            aria-hidden="true"
-          >
-            @for (scope of [session.currentOrg(), session.currentProject()]; track $index) {
-              <span
-                class="box-border flex h-(--eg-control-touch) min-w-0 items-center rounded-sm bg-muted px-(--eg-space-3)"
-                ><span class="truncate">{{ scope?.name }}</span></span
-              >
-            }
-          </div>
+      <app-shell-breadcrumbs />
+      <div class="topbar-tools flex min-w-0 flex-wrap items-center justify-end gap-(--eg-space-2)">
+        @if (!mobile()) {
+          @defer (on idle) {
+            <app-scope-switcher
+              class="topbar-scope min-w-0 grid-cols-2"
+              [compact]="true"
+              [organizations]="session.organizations()"
+              [projects]="session.projects()"
+              [currentOrg]="session.currentOrg()"
+              [currentProject]="session.currentProject()"
+              (orgSelected)="selectOrganization($event)"
+              (projectSelected)="selectProject($event)"
+            />
+          } @placeholder {
+            <div
+              class="topbar-scope grid min-w-0 grid-cols-2 gap-(--eg-space-3)"
+              aria-hidden="true"
+            >
+              @for (scope of [session.currentOrg(), session.currentProject()]; track $index) {
+                <span
+                  class="box-border flex h-(--eg-control-touch) min-w-0 items-center rounded-sm bg-muted px-(--eg-space-3)"
+                  ><span class="truncate">{{ scope?.name }}</span></span
+                >
+              }
+            </div>
+          }
         }
-      }
-      <app-quota-badge class="min-w-0 max-w-full" />
-      @if (!mobile() && canSwitchLocale) {
-        <app-locale-switcher (switchRequested)="switchLocale()" />
-      }
-      <button
-        type="button"
-        hlmBtn
-        [variant]="'ghost'"
-        [size]="'icon'"
-        class="icon-button theme-toggle ms-auto min-h-(--eg-control-touch) min-w-(--eg-control-touch) aria-pressed:bg-accent aria-pressed:text-accent-foreground"
-        [attr.aria-label]="darkLabel"
-        [attr.aria-pressed]="theme.isDark()"
-        (click)="theme.toggle()"
-      >
-        <app-shell-icon [name]="theme.isDark() ? 'moon' : 'sun'" />
-      </button>
+        <app-quota-badge class="min-w-0 max-w-full" />
+        <app-shell-search />
+        <button
+          type="button"
+          hlmBtn
+          [variant]="'ghost'"
+          [size]="'icon'"
+          class="icon-button theme-toggle min-h-(--eg-control-touch) min-w-(--eg-control-touch) aria-pressed:bg-accent aria-pressed:text-accent-foreground"
+          [attr.aria-label]="darkLabel"
+          [attr.aria-pressed]="dark()"
+          (click)="toggleTheme()"
+        >
+          <app-shell-icon [name]="dark() ? 'moon' : 'sun'" />
+        </button>
+        @if (!mobile() && canSwitchLocale) {
+          <app-locale-switcher (switchRequested)="switchLocale()" />
+        }
+        <app-shell-account />
+      </div>
     </header>
     <main
       #mainContent

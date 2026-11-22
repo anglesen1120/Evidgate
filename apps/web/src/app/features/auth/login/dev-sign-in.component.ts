@@ -15,19 +15,19 @@ type SignInState = 'idle' | 'submitting' | 'wrong-secret' | 'unavailable' | 'fai
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class:
-      'block min-w-0 border-0 border-t-(length:--eg-border-width) border-solid border-border pt-(--eg-space-5)',
+      'block min-w-0 border-0 border-t-(length:--eg-border-width) border-solid border-border pt-(--eg-space-3)',
   },
   template: `
     <details #disclosure (toggle)="expanded.set(disclosure.open)">
       <summary
         id="dev-sign-in-heading"
-        class="min-h-(--eg-control-touch) cursor-pointer content-center text-base font-(weight:--eg-weight-semibold) [overflow-wrap:anywhere] hover:underline focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring active:text-primary"
+        class="min-h-(--eg-control-touch) cursor-pointer content-center rounded-sm text-sm font-(weight:--eg-weight-semibold) text-muted-foreground [overflow-wrap:anywhere] hover:text-foreground hover:underline focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-offset-(--eg-focus-offset) focus-visible:outline-ring active:text-primary"
       >
         {{ heading }}
       </summary>
       @if (expanded()) {
         <form
-          class="grid min-w-0 gap-(--eg-space-3) pt-(--eg-space-3)"
+          class="grid min-w-0 gap-(--eg-space-3) rounded-md bg-secondary p-(--eg-space-4) text-secondary-foreground"
           (submit)="submit($event, secret)"
           aria-labelledby="dev-sign-in-heading"
           [attr.aria-busy]="state() === 'submitting'"
