@@ -340,7 +340,7 @@ describe('AiSettingsPage', () => {
       next_cursor: null,
     });
     const { fixture, harness } = await mount();
-    await harness.click('form section button');
+    await harness.click('[data-ai-template]');
     const dialog = await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(
       class extends ComponentHarness {
         static hostSelector = '[role="dialog"]';
