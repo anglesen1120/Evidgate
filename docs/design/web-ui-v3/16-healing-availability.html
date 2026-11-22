@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title data-en="Healing availability · Evidgate" data-vi="Trạng thái sửa cơ chế kiểm thử · Evidgate">Healing availability · Evidgate</title>
+<link rel="stylesheet" href="assets/tokens-v3.css">
+<link rel="stylesheet" href="assets/components-v3.css">
+<script defer src="assets/manifest-v3.js"></script>
+<script defer src="assets/shell.js"></script>
+<style>
+[hidden]{display:none!important}
+.v3-local-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,10rem),1fr));gap:var(--eg-space-4)}
+.v3-local-facts dt{color:var(--eg-text-muted);font-size:var(--eg-text-xs)}
+.v3-local-facts dd{margin-top:var(--eg-space-1);font-weight:600}
+.v3-local-state{min-height:12rem;align-content:center}
+.v3-local-mobile{display:none}
+@media(max-width:767px){.v3-local-write{display:none!important}.v3-local-mobile{display:block}}
+@media(pointer:coarse){summary{min-height:var(--eg-control-touch)}}
+
+</style>
+</head>
+<body data-page="16" data-scope="organization"><a class="v3-skip" href="#main"><span data-en="Skip to content" data-vi="Đến nội dung">Skip to content</span></a>
+<noscript><nav><a href="01-app-shell.html">Overview / Tổng quan</a> · <a href="03-run-list.html">Test runs / Lượt kiểm thử</a></nav></noscript>
+<svg class="v3-sprites" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+
+
+
+
+
+
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-4 9-8 11-4-2-8-6-8-11V5z M8 12l3 3 5-6"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h10m4 0h2M4 17h2m4 0h10 M14 4v6M8 14v6"/></symbol>
+
+
+
+
+
+
+
+
+</svg>
+<div class="v3-shell"><aside class="v3-sidebar" data-v3-sidebar></aside><div class="v3-workspace">
+<header class="v3-topbar" data-v3-topbar></header><main id="main" tabindex="-1">
+<section id="record-unavailable" hidden class="v3-panel v3-pad v3-stack" role="status"><h1><span data-en="Requested record unavailable" data-vi="Không có bản ghi được yêu cầu">Requested record unavailable</span></h1><p><span data-en="No matching fixture is available. No other record has been substituted." data-vi="Không có bản mẫu khớp yêu cầu. Không thay bằng bản ghi khác.">No matching fixture is available. No other record has been substituted.</span></p><code id="requested-identity"></code></section>
+
+<header class="v3-page-header"><div class="v3-page-header__title"><span class="v3-page-header__icon"><svg class="v3-icon" aria-hidden="true"><use href="#i-settings"/></svg></span><div><h1><span data-en="Healing availability" data-vi="Trạng thái sửa cơ chế kiểm thử">Healing availability</span></h1><p class="v3-muted"><span data-en="Inspect the most restrictive scope before changing a healing setting." data-vi="Xem phạm vi hạn chế nhất trước khi thay đổi cài đặt sửa kiểm thử.">Inspect the most restrictive scope before changing a healing setting.</span></p></div></div></header>
+<div class="v3-stack"><p class="v3-meta"><code>Lotus Commerce · storefront-web · p-storefront</code></p><div class="v3-panel v3-pad v3-stack" id="persona-choice"><strong><span data-en="Organization settings · Lotus Commerce" data-vi="Cài đặt tổ chức · Lotus Commerce">Organization settings · Lotus Commerce</span></strong><p><span data-en="The default maintainer can inspect scope settings. Switch explicitly to the administrator preview to edit them." data-vi="Người bảo trì mặc định có thể xem cấu hình phạm vi. Chuyển sang bản xem trước quản trị viên để chỉnh sửa.">The default maintainer can inspect scope settings. Switch explicitly to the administrator preview to edit them.</span></p><a class="v3-btn" href="16-healing-availability.html?project=p-storefront&amp;state=administrator"><span data-en="Preview as Hà Lê · Tenant administrator" data-vi="Xem trước với vai trò Hà Lê · Quản trị viên tổ chức">Preview as Hà Lê · Tenant administrator</span></a></div><div hidden id="persona-return" class="v3-panel v3-pad v3-stack"><strong><span data-en="Preview as Hà Lê · Tenant administrator" data-vi="Xem trước với vai trò Hà Lê · Quản trị viên tổ chức">Preview as Hà Lê · Tenant administrator</span></strong><a class="v3-btn" href="16-healing-availability.html?project=p-storefront"><span data-en="Return to Minh Trần · Test maintainer" data-vi="Trở về Minh Trần · Người bảo trì kiểm thử">Return to Minh Trần · Test maintainer</span></a></div><div data-only="loading" hidden><section class="v3-panel v3-pad v3-stack v3-local-state" role="status"><h2><span data-en="Loading" data-vi="Đang tải">Loading</span></h2><p><span data-en="Waiting for a supplied snapshot. No result yet." data-vi="Đang chờ bản dữ liệu. Chưa có kết quả.">Waiting for a supplied snapshot. No result yet.</span></p><div class="v3-skeleton" aria-hidden="true"><i></i><i></i></div><code>storefront-web · p-storefront</code></section></div>
+<div data-only="empty" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="Configuration unavailable" data-vi="Không có cấu hình">Configuration unavailable</span></h2><p><span data-en="No record was supplied; no outcome can be inferred." data-vi="Không có bản ghi; không thể suy ra kết quả.">No record was supplied; no outcome can be inferred.</span></p></section></div>
+<div data-only="404" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="Not found" data-vi="Không tìm thấy">Not found</span></h2><p><span data-en="This resource is not available at this address." data-vi="Không tìm thấy tài nguyên ở địa chỉ này.">This resource is not available at this address.</span></p></section></div>
+<div data-only="filtered" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="No results match these filters" data-vi="Không có kết quả phù hợp với bộ lọc">No results match these filters</span></h2><p><span data-en="The scoped record is unchanged." data-vi="Bản ghi trong phạm vi này không thay đổi.">The scoped record is unchanged.</span></p><div class="v3-actions"><button type="button" class="v3-btn " data-to="default"><span data-en="Clear preview filter" data-vi="Xóa bộ lọc xem trước">Clear preview filter</span></button></div></section></div>
+<div data-only="error" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="Unable to refresh" data-vi="Không thể làm mới">Unable to refresh</span></h2><p><span data-en="Pinned context is retained. Retrying does not submit a decision." data-vi="Ngữ cảnh đã ghim được giữ lại. Thử lại không gửi quyết định.">Pinned context is retained. Retrying does not submit a decision.</span></p><code>storefront-web · p-storefront · req-scope-16</code><div class="v3-actions"><button type="button" class="v3-btn " data-to="default"><span data-en="Retry preview" data-vi="Thử lại bản xem trước">Retry preview</span></button></div></section></div>
+<div data-only="403" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="Permissions changed" data-vi="Quyền truy cập đã thay đổi">Permissions changed</span></h2><p><span data-en="Not authorized for this action. No change was made." data-vi="Bạn không có quyền thực hiện thao tác này. Không có thay đổi.">Not authorized for this action. No change was made.</span></p><code>req-scope-16</code></section></div>
+<div data-only="401" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="Session expired" data-vi="Phiên đăng nhập đã hết hạn">Session expired</span></h2><p><span data-en="Sign in again to resume at the safe return route. Sensitive content is closed." data-vi="Đăng nhập lại để trở về đường dẫn an toàn. Nội dung nhạy cảm đã đóng.">Sign in again to resume at the safe return route. Sensitive content is closed.</span></p><a class="v3-btn" id="safe-login" href="02-login.html"><span data-en="Sign in again" data-vi="Đăng nhập lại">Sign in again</span></a></section></div>
+<div data-only="429" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="Too many requests" data-vi="Quá nhiều yêu cầu">Too many requests</span></h2><p><span data-en="Server fixture: Retry-After: 30 s. No automatic retry." data-vi="Dữ liệu mẫu từ máy chủ: Retry-After: 30 giây. Không tự động thử lại.">Server fixture: Retry-After: 30 s. No automatic retry.</span></p><code>req-scope-16</code></section></div>
+<div data-only="412" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="Someone else changed this — reload" data-vi="Người khác đã thay đổi dữ liệu — tải lại">Someone else changed this — reload</span></h2><p><span data-en="Shared write-conflict specimen, not an ETag contract. Revision 7 → 8; scope context changed. Retained draft below; reload explicitly." data-vi="Minh họa xung đột ghi, không khẳng định hợp đồng ETag. Phiên bản 7 → 8; ngữ cảnh phạm vi thay đổi. Giữ bản nháp bên dưới; tải lại rõ ràng.">Shared write-conflict specimen, not an ETag contract. Revision 7 → 8; scope context changed. Retained draft below; reload explicitly.</span></p><code>req-scope-16</code><div class="v3-actions"><button type="button" class="v3-btn " data-to="reloaded"><span data-en="Reload current revision" data-vi="Tải lại phiên bản hiện tại">Reload current revision</span></button></div></section></div><div data-except="loading empty 404 401"><div class="v3-stack">
+<div class="v3-master-detail">
+<section class="v3-panel"><header class="v3-panel__header"><div class="v3-spread"><h2><span data-en="Effective state" data-vi="Trạng thái có hiệu lực">Effective state</span></h2><span class="v3-badge v3-badge--info"><span data-en="Server snapshot" data-vi="Dữ liệu máy chủ">Server snapshot</span></span></div></header>
+<div class="v3-pad v3-stack"><div class="v3-stack">
+<div data-only="default inherited long error 403 412 reloaded filtered 429 submitting prepared"><div class="v3-kpi__value"><span data-en="Disabled by organization" data-vi="Bị tổ chức vô hiệu hóa">Disabled by organization</span></div></div>
+<div data-only="shadow" hidden><div class="v3-kpi__value"><span data-en="Shadow only" data-vi="Chỉ mô phỏng">Shadow only</span></div></div>
+<div data-only="enabled saved" hidden><div class="v3-kpi__value"><span data-en="Enabled" data-vi="Đã bật">Enabled</span></div></div>
+<div data-only="unavailable" hidden><div class="v3-kpi__value"><span data-en="Dependency unavailable" data-vi="Phụ thuộc không khả dụng">Dependency unavailable</span></div></div>
+<dl class="v3-local-facts"><div><dt><span data-en="Restrictive scope" data-vi="Phạm vi hạn chế">Restrictive scope</span></dt><dd><div data-only="default inherited long error 403 412 reloaded filtered 429 submitting prepared shadow"><code>Lotus Commerce · org-lotus-01</code></div><div data-only="enabled saved" hidden><span data-en="None" data-vi="Không có">None</span></div><div data-only="unavailable" hidden><span data-en="System dependency" data-vi="Phụ thuộc hệ thống">System dependency</span></div></dd></div>
+<div><dt><span data-en="Project setting" data-vi="Cài đặt dự án">Project setting</span></dt><dd><div data-only="default inherited long error 403 412 reloaded filtered 429 submitting prepared enabled saved unavailable"><span data-en="Enabled" data-vi="Đã bật">Enabled</span></div><div data-only="shadow" hidden><span data-en="Shadow only" data-vi="Chỉ mô phỏng">Shadow only</span></div></dd></div>
+<div><dt><span data-en="Updated by" data-vi="Người cập nhật">Updated by</span></dt><dd><code>Hà Lê · 2026-10-13T10:05Z</code></dd></div></dl>
+<p class="v3-muted"><span data-en="The server reports the effective state. A project cannot widen its organization’s setting." data-vi="Máy chủ cung cấp trạng thái có hiệu lực. Dự án không thể mở rộng cài đặt của tổ chức.">The server reports the effective state. A project cannot widen its organization’s setting.</span></p>
+</div></div></section>
+<section class="v3-panel"><header class="v3-panel__header"><div class="v3-spread"><h2><span data-en="Runtime and approvals" data-vi="Thực thi và xét duyệt">Runtime and approvals</span></h2></div></header>
+<div class="v3-pad v3-stack"><div class="v3-stack">
+<span class="v3-badge v3-pending"><span data-en="Runtime auto-apply is off" data-vi="Tự động áp dụng khi chạy đang tắt">Runtime auto-apply is off</span></span>
+<p><span data-en="Enabled makes review eligible. It does not apply repairs or approve a release. Tests and gates continue normally, including when healing is unavailable." data-vi="Bật chỉ cho phép xét duyệt. Không áp dụng sửa đổi hay chấp thuận phát hành. Kiểm thử và cổng kiểm soát vẫn chạy kể cả khi sửa kiểm thử không khả dụng.">Enabled makes review eligible. It does not apply repairs or approve a release. Tests and gates continue normally, including when healing is unavailable.</span></p>
+<div data-only="unavailable" hidden><div class="v3-pad v3-panel v3-stack "><strong><span data-en="Knowledge store unavailable" data-vi="Kho tri thức không khả dụng">Knowledge store unavailable</span></strong><p><span data-en="knowledge_store_unavailable · Configured values remain visible. This is not an administrator kill switch." data-vi="knowledge_store_unavailable · Vẫn hiển thị giá trị cấu hình. Đây không phải thao tác tắt của quản trị viên.">knowledge_store_unavailable · Configured values remain visible. This is not an administrator kill switch.</span></p></div></div>
+<div class="v3-actions"><a class="v3-btn" id="approval-link" href="14-healing-approval.html?candidate=cand-73&revision=7&incident=inc-92&state=disabled"><span data-en="Open healing approval" data-vi="Mở trang duyệt đề xuất">Open healing approval</span></a><a class="v3-btn " href="12-healing-queue.html?project=p-storefront"><span data-en="Review queue" data-vi="Hàng chờ duyệt">Review queue</span></a></div>
+</div></div></section>
+</div>
+<section class="v3-panel"><header class="v3-panel__header"><div class="v3-spread"><h2><span data-en="Scope hierarchy" data-vi="Thứ bậc phạm vi">Scope hierarchy</span></h2></div></header>
+<div class="v3-pad v3-stack"><div class="v3-table-wrap"><table class="v3-table"><thead><tr><th scope="col"><span data-en="Scope" data-vi="Phạm vi">Scope</span></th><th scope="col"><span data-en="Configured" data-vi="Đã cấu hình">Configured</span></th><th scope="col"><span data-en="Access" data-vi="Quyền truy cập">Access</span></th><th scope="col"><span data-en="Updated · UTC" data-vi="Cập nhật · UTC">Updated · UTC</span></th></tr></thead><tbody><tr><th scope="row"><span data-en="System" data-vi="Hệ thống">System</span></th><td><span data-en="Enabled" data-vi="Đã bật">Enabled</span></td><td><span data-en="Read-only · platform scope" data-vi="Chỉ đọc · phạm vi nền tảng">Read-only · platform scope</span></td><td><code>—</code></td></tr>
+<tr><th scope="row"><code>Lotus Commerce</code></th><td><div data-only="default inherited long error 403 412 reloaded filtered 429 submitting prepared"><span data-en="Disabled" data-vi="Đã tắt">Disabled</span></div><div data-only="enabled saved unavailable" hidden><span data-en="Enabled" data-vi="Đã bật">Enabled</span></div><div data-only="shadow" hidden><span data-en="Shadow only" data-vi="Chỉ mô phỏng">Shadow only</span></div></td><td><div data-except="403"><span data-en="Organization configuration" data-vi="Cấu hình tổ chức">Organization configuration</span></div><div data-only="403" hidden><span data-en="Read-only" data-vi="Chỉ đọc">Read-only</span></div></td><td><code>2026-10-13 10:05 · Hà Lê</code></td></tr>
+<tr><th scope="row"><code>storefront-web</code></th><td><div data-only="default inherited long error 403 412 reloaded filtered 429 submitting prepared enabled saved unavailable"><span data-en="Enabled" data-vi="Đã bật">Enabled</span></div><div data-only="shadow" hidden><span data-en="Shadow only" data-vi="Chỉ mô phỏng">Shadow only</span></div></td><td><div data-only="default inherited long error 403 412 reloaded filtered 429 submitting prepared"><span data-en="Inherited restriction" data-vi="Hạn chế kế thừa">Inherited restriction</span></div><div data-only="enabled saved shadow" hidden><span data-en="Within organization scope" data-vi="Trong phạm vi tổ chức">Within organization scope</span></div><div data-only="unavailable" hidden><span data-en="Blocked by dependency" data-vi="Bị phụ thuộc chặn">Blocked by dependency</span></div></td><td><code>2026-10-12 16:22</code></td></tr>
+<tr><th scope="row"><span data-en="Effective" data-vi="Có hiệu lực">Effective</span></th><td><div data-only="enabled saved" hidden><span data-en="Enabled" data-vi="Đã bật">Enabled</span></div><div data-only="shadow" hidden><span data-en="Shadow only" data-vi="Chỉ mô phỏng">Shadow only</span></div><div data-only="default inherited long error 403 412 reloaded filtered 429 submitting prepared"><span data-en="Disabled" data-vi="Đã tắt">Disabled</span></div><div data-only="unavailable" hidden><span data-en="Unavailable" data-vi="Không khả dụng">Unavailable</span></div></td><td><span data-en="Reported, not selectable" data-vi="Do máy chủ báo, không thể chọn">Reported, not selectable</span></td><td><code>—</code></td></tr></tbody></table></div></div></section>
+<section class="v3-panel"><header class="v3-panel__header"><div class="v3-spread"><h2><span data-en="Configure availability" data-vi="Cấu hình trạng thái khả dụng">Configure availability</span></h2></div></header>
+<div class="v3-pad v3-stack"><div class="v3-stack">
+<dl class="v3-local-facts"><div><dt><span data-en="Organization · stored" data-vi="Tổ chức · đã ghi">Organization · stored</span></dt><dd><div data-only="default inherited long error 403 412 reloaded filtered 429 submitting prepared"><span data-en="Disabled" data-vi="Đã tắt">Disabled</span></div><div data-only="enabled saved unavailable" hidden><span data-en="Enabled" data-vi="Đã bật">Enabled</span></div><div data-only="shadow" hidden><span data-en="Shadow only" data-vi="Chỉ mô phỏng">Shadow only</span></div></dd></div>
+<div><dt><span data-en="Project · stored" data-vi="Dự án · đã ghi">Project · stored</span></dt><dd><div data-only="default inherited long error 403 412 reloaded filtered 429 submitting prepared enabled saved unavailable"><span data-en="Enabled" data-vi="Đã bật">Enabled</span></div><div data-only="shadow" hidden><span data-en="Shadow only" data-vi="Chỉ mô phỏng">Shadow only</span></div></dd></div>
+<div><dt><span data-en="Permission" data-vi="Quyền">Permission</span></dt><dd><div data-except="403"><code><span id="permission-value">healing:triage</span></code></div><div data-only="403" hidden><span data-en="Revoked · read-only" data-vi="Đã thu hồi · chỉ đọc">Revoked · read-only</span></div></dd></div></dl>
+<p><span data-en="System is read-only for tenant administrators. Unavailable is derived from dependency health and cannot be selected." data-vi="Quản trị viên tổ chức chỉ được đọc phạm vi hệ thống. Trạng thái không khả dụng bắt nguồn từ tình trạng phụ thuộc và không thể chọn.">System is read-only for tenant administrators. Unavailable is derived from dependency health and cannot be selected.</span></p>
+<div data-only="long" hidden><p><span data-en="The reported value considers system, organization, project and inherited restrictions. Changing a draft never changes the published effective state or removes an ancestor restriction." data-vi="Giá trị được báo cáo xét phạm vi hệ thống, tổ chức, dự án và các hạn chế kế thừa. Sửa bản nháp không thay đổi trạng thái đã công bố hoặc loại bỏ hạn chế của phạm vi cha.">The reported value considers system, organization, project and inherited restrictions. Changing a draft never changes the published effective state or removes an ancestor restriction.</span></p></div>
+<div class="v3-local-write"><fieldset id="config" class="v3-stack"><legend><span data-en="Draft scope settings" data-vi="Cài đặt phạm vi nháp">Draft scope settings</span></legend><div class="v3-master-detail">
+<label class="v3-field" for="org"><span><span data-en="Organization · Lotus Commerce" data-vi="Tổ chức · Lotus Commerce">Organization · Lotus Commerce</span></span><select id="org"><option value="enabled" data-en="Enabled" data-vi="Đã bật">Enabled</option><option value="shadow" data-en="Shadow only" data-vi="Chỉ mô phỏng">Shadow only</option><option value="disabled" data-en="Disabled" data-vi="Đã tắt">Disabled</option></select></label>
+<label class="v3-field" for="project"><span><span data-en="Project · storefront-web" data-vi="Dự án · storefront-web">Project · storefront-web</span></span><select id="project"><option value="enabled" data-en="Enabled" data-vi="Đã bật">Enabled</option><option value="shadow" data-en="Shadow only" data-vi="Chỉ mô phỏng">Shadow only</option><option value="disabled" data-en="Disabled" data-vi="Đã tắt">Disabled</option></select></label>
+</div><div data-only="default inherited long error 403 412 reloaded filtered 429 submitting prepared"><p><span data-en="Project editing is locked by the stored organization kill switch. Save the organization first." data-vi="Khóa chỉnh sửa dự án do tổ chức đã tắt. Hãy lưu cấu hình tổ chức trước.">Project editing is locked by the stored organization kill switch. Save the organization first.</span></p></div><label class="v3-field" for="why"><span data-en="Reason / context" data-vi="Lý do / bối cảnh">Reason / context</span><textarea class="v3-input" rows="2" id="why" required></textarea></label><label class="v3-choice"><input type="checkbox" id="ack"><span data-en="I understand which organization and project this setting affects." data-vi="Tôi hiểu thay đổi này ảnh hưởng đến tổ chức và dự án nào.">I understand which organization and project this setting affects.</span></label><div class="v3-actions"><button type="button" class="v3-btn " id="discard"><span data-en="Discard draft" data-vi="Bỏ bản nháp">Discard draft</span></button><button type="button" class="v3-btn v3-btn--primary" id="save" disabled><span data-en="Save availability" data-vi="Lưu trạng thái khả dụng">Save availability</span></button></div></fieldset></div><p class="v3-local-mobile v3-muted"><span data-en="Read-only on this screen size. Use a desktop to make changes." data-vi="Chỉ đọc ở kích thước này. Sử dụng máy tính để thay đổi dữ liệu.">Read-only on this screen size. Use a desktop to make changes.</span></p>
+<div data-only="saved" hidden><div class="v3-pad v3-panel v3-stack "><strong><span data-en="Availability saved · supplied result" data-vi="Đã lưu trạng thái khả dụng · kết quả được cung cấp">Availability saved · supplied result</span></strong><p><span data-en="The returned snapshot reports enabled. Draft values are not used to compute the effective state." data-vi="Bản dữ liệu trả về báo đã bật. Không dùng giá trị nháp để tính trạng thái có hiệu lực.">The returned snapshot reports enabled. Draft values are not used to compute the effective state.</span></p></div></div>
+<div data-only="prepared" hidden><div class="v3-pad v3-panel v3-stack "><strong><span data-en="Request preview prepared · not submitted" data-vi="Đã chuẩn bị bản xem trước yêu cầu · chưa gửi">Request preview prepared · not submitted</span></strong><p><span data-en="No server response was supplied. The stored state has not changed." data-vi="Không có phản hồi từ máy chủ. Trạng thái đã lưu không thay đổi.">No server response was supplied. The stored state has not changed.</span></p></div></div>
+<div data-only="submitting" hidden><p><span data-en="Submitting · controls are locked until a server result arrives." data-vi="Đang gửi · khóa điều khiển cho đến khi nhận kết quả máy chủ.">Submitting · controls are locked until a server result arrives.</span></p></div>
+</div></div></section>
+</div></div></div>
+<details class="v3-review-controls"><summary><span data-en="Design review controls" data-vi="Trạng thái bản mẫu">Design review controls</span></summary><div class="v3-review-controls__body"><label class="v3-field"><span data-en="Prototype state" data-vi="Trạng thái bản mẫu">Prototype state</span><select id="review-state"><option value="default" data-en="Default" data-vi="Mặc định">Default</option>
+<option value="loading" data-en="Loading" data-vi="Đang tải">Loading</option>
+<option value="empty" data-en="No resource" data-vi="Không có tài nguyên">No resource</option>
+<option value="filtered" data-en="No matches" data-vi="Không có kết quả phù hợp">No matches</option>
+<option value="error" data-en="Refresh failed" data-vi="Làm mới thất bại">Refresh failed</option>
+<option value="403" data-en="403 · Permission changed" data-vi="403 · Quyền đã thay đổi">403 · Permission changed</option>
+<option value="404" data-en="404 · Not found" data-vi="404 · Không tìm thấy">404 · Not found</option>
+<option value="401" data-en="401 · Session expired" data-vi="401 · Phiên đã hết hạn">401 · Session expired</option>
+<option value="429" data-en="429 · Rate limited" data-vi="429 · Quá nhiều yêu cầu">429 · Rate limited</option>
+<option value="412" data-en="412 · Stale revision" data-vi="412 · Phiên bản đã cũ">412 · Stale revision</option>
+<option value="reloaded" data-en="Explicit reload" data-vi="Đã tải lại rõ ràng">Explicit reload</option>
+<option value="enabled" data-en="All scopes enabled" data-vi="Tất cả phạm vi đã bật">All scopes enabled</option>
+<option value="shadow" data-en="Shadow only" data-vi="Chỉ mô phỏng">Shadow only</option>
+<option value="inherited" data-en="Restrictive ancestor" data-vi="Phạm vi cha hạn chế">Restrictive ancestor</option>
+<option value="unavailable" data-en="Dependency unavailable" data-vi="Phụ thuộc không khả dụng">Dependency unavailable</option>
+<option value="submitting" data-en="Saving availability" data-vi="Đang lưu cấu hình">Saving availability</option>
+<option value="saved" data-en="Saved · server fixture" data-vi="Đã lưu · dữ liệu máy chủ mẫu">Saved · server fixture</option>
+<option value="long" data-en="Long explanation" data-vi="Diễn giải dài">Long explanation</option>
+<option value="prepared" data-en="Request preview · not submitted" data-vi="Xem trước yêu cầu · chưa gửi">Request preview · not submitted</option></select></label></div></details>
+</main></div></div>
+<dialog data-write id="confirm" class="v3-dialog" aria-labelledby="confirm-head"><header class="v3-dialog__header"><svg class="v3-icon" aria-hidden="true"><use href="#i-shield"/></svg><h2 id="confirm-head"><span data-en="Confirm scope change" data-vi="Xác nhận thay đổi phạm vi">Confirm scope change</span></h2></header><div class="v3-body"><dl class="v3-local-facts"><div><dt><span data-en="Organization" data-vi="Tổ chức">Organization</span></dt><dd><code>Lotus Commerce · org-lotus-01</code></dd></div>
+<div><dt><span data-en="Project" data-vi="Dự án">Project</span></dt><dd><code>storefront-web · p-storefront</code></dd></div>
+<div><dt><span data-en="Organization · current → draft" data-vi="Tổ chức · hiện tại → nháp">Organization · current → draft</span></dt><dd><output id="org-change"></output></dd></div>
+<div><dt><span data-en="Project · current → draft" data-vi="Dự án · hiện tại → nháp">Project · current → draft</span></dt><dd><output id="project-change"></output></dd></div>
+<div><dt><span data-en="Reason / context" data-vi="Lý do / bối cảnh">Reason / context</span></dt><dd><output id="why-change"></output></dd></div></dl><p><span data-en="Only the named settings change. The server returns the effective state." data-vi="Chỉ thay đổi các cài đặt đã nêu. Máy chủ trả về trạng thái có hiệu lực.">Only the named settings change. The server returns the effective state.</span></p></div><footer class="v3-form__footer"><button type="button" class="v3-btn " data-close><span data-en="Cancel" data-vi="Hủy">Cancel</span></button><button type="button" class="v3-btn v3-btn--primary" id="prepare-scope"><span data-en="Confirm settings preview" data-vi="Xác nhận bản xem trước">Confirm settings preview</span></button></footer></dialog>
+<script>
+(()=>{
+const $=s=>document.querySelector(s), all=s=>[...document.querySelectorAll(s)], pick=$('#review-state');
+let state='default';
+function showState(next){state=next;pick.value=next;document.querySelectorAll('dialog[open]').forEach(d=>d.close());for(const el of all('[data-only]'))el.hidden=!el.dataset.only.split(' ').includes(next);for(const el of all('[data-except]'))el.hidden=el.dataset.except.split(' ').includes(next);sync();}
+pick.addEventListener('change',()=>showState(pick.value));
+document.addEventListener('click',e=>{const n=e.target.closest('button');if(!n)return;if(n.hasAttribute('data-close'))n.closest('dialog')?.close();if(n.dataset.open)document.getElementById(n.dataset.open).showModal();if(n.dataset.to)showState(n.dataset.to);});
+const narrow=matchMedia('(max-width:767px)');
+narrow.addEventListener('change',()=>{if(narrow.matches&&$('#confirm').open)$('#confirm').close();lockControls();dirty()});
+const org=$('#org'),proj=$('#project'),why=$('#why'),ack=$('#ack'),save=$('#save'),config=$('#config');
+let storedOrg='disabled',storedProject='enabled';
+const preparedNotice=document.querySelector('[data-only="prepared"] .v3-pad')?.parentElement;
+function lockControls(){
+  config.disabled=document.body.dataset.persona!=='ha'||narrow.matches||!['default','inherited','long','enabled','shadow','saved','prepared','reloaded'].includes(state);
+  proj.disabled=storedOrg==='disabled'||state==='unavailable'||org.value!==storedOrg;
+  org.disabled=!proj.disabled&&proj.value!==storedProject;
+  proj.options[0].disabled=storedOrg==='shadow';
+}
+function resetDraft(){org.value=storedOrg;proj.value=storedProject;why.value='';ack.checked=false;dirty()}
+function dirty(){
+  lockControls();
+  const changed=org.value!==storedOrg||(!proj.disabled&&proj.value!==storedProject);
+  save.disabled=narrow.matches||config.disabled||!changed||!why.value.trim()||!ack.checked;
+}
+for(const el of [org,proj,why,ack])el.addEventListener('input',dirty);$('#discard').onclick=resetDraft;
+function summary(){const value=(s,v)=>s.querySelector('option[value="'+v+'"]').textContent;$('#org-change').value=value(org,storedOrg)+' → '+value(org,org.value);$('#project-change').value=value(proj,storedProject)+' → '+value(proj,proj.value);$('#why-change').value=why.value}
+save.onclick=()=>{if(!save.disabled){summary();$('#confirm').showModal()}};
+document.addEventListener('click',e=>{if(e.target.closest('#lang'))queueMicrotask(summary)});
+$('#prepare-scope').onclick=()=>{
+  if(save.disabled)return;
+  $('#confirm').close();
+  if(preparedNotice){preparedNotice.hidden=false;preparedNotice.setAttribute('role','status')}
+};
+function sync(){
+  storedOrg=['enabled','saved','unavailable'].includes(state)?'enabled':state==='shadow'?'shadow':'disabled';
+  storedProject=state==='shadow'?'shadow':'enabled';
+  if(!['412','reloaded','prepared'].includes(state)||!why.value)resetDraft();
+  if(state==='412'&&!why.value){
+    org.value='shadow';
+    why.value=document.documentElement.lang==='vi'?'Chỉ mô phỏng khi rà soát địa chỉ.':'Observe address changes in shadow only.';
+  }
+  const linkedState={enabled:'default',saved:'default',shadow:'shadowonly',unavailable:'unavailable'}[state]||'disabled';
+  $('#approval-link').href='14-healing-approval.html?candidate=cand-73&revision=7&incident=inc-92&state='+linkedState;
+  dirty();
+}
+const adminPreview=new URLSearchParams(location.search).get('state')==='administrator';
+if(adminPreview){document.body.dataset.persona='ha';const perm=$('#permission-value');if(perm)perm.textContent='healing:configure';}$('#persona-choice').hidden=adminPreview;$('#persona-return').hidden=!adminPreview;
+const returnParams=new URLSearchParams(location.search);returnParams.delete('state');if(!returnParams.size)for(const [k,v] of new URLSearchParams('project=p-storefront'))returnParams.set(k,v);const returnId='16-healing-availability.html'+(returnParams.size?'?'+returnParams.toString():'');const loginUrl=new URLSearchParams({returnTo:returnId});$('#safe-login').href='02-login.html?'+loginUrl.toString();
+const params=new URLSearchParams(location.search);const identityKeys=new Set('project scope run evidence evaluation case incident candidate revision artifact attempt object knowledge binding release'.split(' '));
+function mismatch(record){return [...params].some(([key,val])=>identityKeys.has(key)&&(params.getAll(key).length!==1||record[key]!==val))}
+function isolated(id){for(const child of document.querySelector('main').children)child.hidden=child.id!==id;document.getElementById(id).hidden=false;if(id==='record-unavailable')document.getElementById('requested-identity').textContent=[...params].map(([k,v])=>k+'='+v).join(' · ');}
+if(mismatch({"project":"p-storefront","scope":"organization"})){isolated('record-unavailable');return;}showState(['enabled','shadow','unavailable'].includes(params.get('state'))?params.get('state'):'default');
+})();
+</script>
+</body></html>

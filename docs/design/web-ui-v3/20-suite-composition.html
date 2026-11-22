@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title  data-en="Suite composition · Evidgate" data-vi="Cấu hình bộ kiểm thử · Evidgate">Suite composition · Evidgate</title>
+<link rel="stylesheet" href="assets/tokens-v3.css">
+<link rel="stylesheet" href="assets/components-v3.css">
+<script defer src="assets/manifest-v3.js"></script>
+<script defer src="assets/shell.js"></script>
+<style>
+[hidden]{display:none!important}
+.v3-studio__bar{display:flex;align-items:center;justify-content:space-between;gap:var(--eg-space-4);flex-wrap:wrap;margin-block-end:var(--eg-space-5)}
+.v3-studio__layout{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);align-items:start;gap:var(--eg-space-5)}
+.v3-studio__facts{display:flex;flex-wrap:wrap;gap:var(--eg-space-4) var(--eg-space-7)}
+.v3-studio__facts dd{margin-top:var(--eg-space-2)}
+.v3-studio__mobile{display:none}
+.v3-studio__preview{min-height:20rem;align-content:start}
+.v3-studio__notice{margin-block-end:var(--eg-space-5)}
+.v3-studio__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--eg-space-4)}
+.v3-studio__foot{margin-top:var(--eg-space-5)}
+.v3-studio__foot a{font-weight:600}
+.v3-studio__code{white-space:pre-wrap;overflow-wrap:anywhere;max-height:19rem;overflow:auto;margin:0;background:var(--eg-surface-raised);padding:var(--eg-space-4);border-radius:var(--eg-radius-md)}
+@media(max-width:1023px){.v3-studio__layout{grid-template-columns:minmax(0,1.45fr) minmax(0,1fr)}}
+@media(max-width:767px){.v3-studio__layout,.v3-studio__grid{grid-template-columns:minmax(0,1fr)}.v3-studio__mobile{display:block}.v3-studio__write{display:none!important}}
+.v3-matrix__key{display:none}.v3-matrix small{display:block}.v3-matrix [data-pos]{font-variant-numeric:tabular-nums;color:var(--eg-accent)}.v3-matrix .v3-btn{min-width:var(--eg-control-md)}.v3-flow{padding:0;list-style:none;display:grid;gap:var(--eg-space-4)}.v3-flow li{display:flex;align-items:center;gap:var(--eg-space-4)}.v3-flow .v3-tile{background:var(--eg-accent-soft);color:var(--eg-accent)}
+@media(max-width:767px){.v3-matrix thead{position:absolute;clip-path:inset(50%);width:1px;height:1px;overflow:hidden}.v3-matrix,.v3-matrix tbody,.v3-matrix caption{display:block}.v3-matrix tr{display:grid;gap:var(--eg-space-2);padding-block:var(--eg-space-4);border-bottom:1px solid var(--eg-border)}.v3-matrix td{display:grid;grid-template-columns:minmax(5rem,32%) minmax(0,1fr);gap:var(--eg-space-3);border:0;padding:0}.v3-matrix__key{display:block;color:var(--eg-text-muted)}}
+</style>
+</head>
+<body data-page="20">
+<a class="v3-skip" href="#main"><span data-en="Skip to content" data-vi="Đến nội dung">Skip to content</span></a>
+<noscript><nav><a href="01-app-shell.html">Overview / Tổng quan</a> · <a href="03-run-list.html">Test runs / Lượt kiểm thử</a></nav></noscript>
+<svg class="v3-sprites" aria-hidden="true"><symbol id="i-queue" viewBox="0 0 24 24"><path d="M4 6h13M4 12h10M4 18h7m6-5 3 3-3 3m-4-3h7"/></symbol></svg>
+<div class="v3-shell">
+<aside class="v3-sidebar" data-v3-sidebar></aside><div class="v3-workspace">
+<header class="v3-topbar" data-v3-topbar></header>
+<main id="main" tabindex="-1">
+<div class="v3-studio__bar"><div class="v3-line"><span class="v3-badge "><span  data-en="G4 reference" data-vi="Tài liệu G4">G4 reference</span></span><code>SHOP · p-storefront</code></div></div>
+<header class="v3-page-header"><div class="v3-page-header__title"><span class="v3-page-header__icon"><svg class="v3-icon" aria-hidden="true"><use href="#i-queue"/></svg></span><div>
+<h1  data-en="Suite composition" data-vi="Cấu hình bộ kiểm thử">Suite composition</h1>
+<p class="v3-muted" data-en="Pin immutable revisions to explicit variants and inspect the server’s planning inputs." data-vi="Ghim phiên bản bất biến vào từng biến thể và xem dữ liệu lập kế hoạch từ máy chủ.">Pin immutable revisions to explicit variants and inspect the server’s planning inputs.</p></div></div>
+<button type="button" class="v3-btn v3-btn--primary v3-studio__write" id="save" disabled aria-describedby="save-hint"><span  data-en="Save composition" data-vi="Lưu cấu hình">Save composition</span></button></header>
+<p id="save-hint" class="v3-meta v3-studio__notice"><span data-en="Add or reorder a variant to enable Save composition. Published revisions cannot be edited." data-vi="Thêm hoặc đổi thứ tự biến thể để bật nút Lưu cấu hình. Không thể sửa phiên bản đã công bố.">Add or reorder a variant to enable Save composition. Published revisions cannot be edited.</span></p>
+<p class="v3-note v3-studio__mobile v3-studio__notice" data-en="Use a desktop to make changes." data-vi="Sử dụng máy tính để thay đổi dữ liệu.">Use a desktop to make changes.</p><div hidden data-scene="loading" class="v3-empty v3-studio__notice v3-studio__preview" role="status"><span  data-en="Loading the supplied fixture…" data-vi="Đang tải dữ liệu mẫu…">Loading the supplied fixture…</span><span class="v3-skeleton" aria-hidden="true"><i></i><i></i></span></div>
+<div hidden data-scene="empty" class="v3-empty v3-studio__notice " role="status"><span  data-en="No case variants in this suite. No run, evaluation or release decision exists." data-vi="Bộ kiểm thử chưa có biến thể ca. Không có lượt chạy, đánh giá hay quyết định phát hành.">No case variants in this suite. No run, evaluation or release decision exists.</span></div>
+<div hidden data-scene="404" class="v3-empty v3-studio__notice " role="status"><span  data-en="Not found. Unknown and out-of-scope resources have the same response." data-vi="Không tìm thấy. Phản hồi giống nhau cho tài nguyên không tồn tại và ngoài phạm vi.">Not found. Unknown and out-of-scope resources have the same response.</span></div>
+<div hidden data-scene="error" class="v3-alert v3-studio__notice " role="status"><span  data-en="Request failed · req-114. Retry to load the supplied fixture." data-vi="Yêu cầu thất bại · req-114. Thử lại để tải dữ liệu mẫu.">Request failed · req-114. Retry to load the supplied fixture.</span>
+<button type="button" class="v3-btn " data-to="default"><span  data-en="Retry" data-vi="Thử lại">Retry</span></button></div>
+<div hidden data-scene="403" class="v3-alert v3-studio__notice " role="status"><span  data-en="Not authorized to make changes. Available details are read-only." data-vi="Bạn không có quyền thay đổi. Chỉ có thể đọc thông tin hiện có.">Not authorized to make changes. Available details are read-only.</span></div>
+<div hidden data-scene="401" class="v3-alert v3-studio__notice " role="status"><span  data-en="Session expired. Return to sign-in; this reference remains the return destination." data-vi="Phiên đã hết hạn. Đăng nhập lại để quay về tài liệu này.">Session expired. Return to sign-in; this reference remains the return destination.</span><a id="sign-in" href="02-login.html" class="v3-btn"><span  data-en="Sign in again" data-vi="Đăng nhập lại">Sign in again</span></a></div>
+<div hidden data-scene="429" class="v3-alert v3-studio__notice " role="status"><span  data-en="Too many requests · Retry-After: 30 s (server response). No change started." data-vi="Quá nhiều yêu cầu · Retry-After: 30 s (phản hồi máy chủ). Chưa thực hiện thay đổi.">Too many requests · Retry-After: 30 s (server response). No change started.</span></div>
+<div class="v3-alert v3-studio__notice" role="status" hidden data-scene="412"><span  data-en="Linked-edit example, not a suite endpoint contract: loaded revision 8 vs current 9. Variant order changed; unsaved order remains below until reload." data-vi="Ví dụ chỉnh sửa liên kết, không phải hợp đồng API bộ kiểm thử: phiên bản đã tải 8, hiện tại 9. Thứ tự biến thể đã đổi; giữ thứ tự chưa lưu cho đến khi tải lại.">Linked-edit example, not a suite endpoint contract: loaded revision 8 vs current 9. Variant order changed; unsaved order remains below until reload.</span> <button type="button" class="v3-btn " id="reload"><span  data-en="Reload" data-vi="Tải lại">Reload</span></button></div>
+<div class="v3-note v3-studio__notice" role="status" hidden data-scene="published"><span  data-en="Published sr-27 is immutable. No edit or publish action is available." data-vi="sr-27 đã công bố là bất biến. Không có thao tác sửa hay công bố.">Published sr-27 is immutable. No edit or publish action is available.</span> </div>
+<div class="v3-note v3-studio__notice" role="status" hidden data-scene="missing"><span  data-en="Pinned case-address-8 revision is missing. Saving is unavailable." data-vi="Thiếu phiên bản cố định của case-address-8. Không thể lưu.">Pinned case-address-8 revision is missing. Saving is unavailable.</span> </div>
+<div class="v3-note v3-studio__notice" role="status" hidden data-scene="busy"><span  data-en="Saving composition. Duplicate submission disabled." data-vi="Đang lưu cấu hình. Không thể gửi lặp lại.">Saving composition. Duplicate submission disabled.</span> </div>
+<div class="v3-note v3-studio__notice" role="status" hidden data-scene="saved"><span  data-en="Composition saved as a draft, not published." data-vi="Đã lưu cấu hình dưới dạng bản nháp, chưa công bố.">Composition saved as a draft, not published.</span> </div>
+<div id="region" class="v3-stack">
+<section class="v3-panel" >
+<header class="v3-panel__header">
+<h2  data-en="Composition identity" data-vi="Thông tin cấu hình">Composition identity</h2></header><div class="v3-pad v3-stack">
+<dl class="v3-studio__facts"><div><dt  data-en="Suite" data-vi="Bộ kiểm thử">Suite</dt><dd><code>storefront-regression</code></dd></div><div><dt  data-en="Revision" data-vi="Phiên bản">Revision</dt><dd><code id="srev">sr-28</code></dd></div><div><dt  data-en="Compared with" data-vi="So với">Compared with</dt><dd><code>sr-27</code></dd></div><div><dt  data-en="Base commit" data-vi="Commit gốc">Base commit</dt><dd><code>9af317c</code></dd></div><div><dt  data-en="Suite hash" data-vi="Băm bộ kiểm thử">Suite hash</dt><dd><code>su-55ac…019f</code></dd></div></dl></div></section>
+<section class="v3-panel" >
+<header class="v3-panel__header">
+<h2  data-en="Case revisions × variants" data-vi="Phiên bản ca × biến thể">Case revisions × variants</h2></header><div class="v3-pad v3-stack"><div class="v3-spread"><div class="v3-field">
+<label class="v3-field" for="filter"><span  data-en="Filter case or variant" data-vi="Lọc theo ca hoặc biến thể">Filter case or variant</span></label><input type="text" class="v3-input" id="filter" data-val-en="" data-val-vi=""  value=""></div><div class="v3-actions">
+<button type="button" class="v3-btn " id="clear"><span  data-en="Clear filter" data-vi="Xóa bộ lọc">Clear filter</span></button>
+<button type="button" class="v3-btn v3-studio__write" id="add"><span  data-en="Add case variant" data-vi="Thêm biến thể ca">Add case variant</span></button></div></div><div id="nofilter" hidden class="v3-empty"><span  data-en="No results match these filters. Clear the filter to restore records." data-vi="Không có kết quả phù hợp với bộ lọc. Xóa bộ lọc để xem lại các dòng.">No results match these filters. Clear the filter to restore records.</span></div><div class="v3-table-wrap">
+<table class="v3-table v3-matrix"><caption><span  data-en="Pinned case revisions × variants" data-vi="Phiên bản ca cố định × biến thể">Pinned case revisions × variants</span></caption>
+<thead>
+<tr><th scope="col" data-en="Position" data-vi="Vị trí">Position</th><th scope="col" data-en="Case / revision" data-vi="Ca / phiên bản">Case / revision</th><th scope="col" data-en="Variant" data-vi="Biến thể">Variant</th><th scope="col" data-en="Environment" data-vi="Môi trường">Environment</th><th scope="col" data-en="Order" data-vi="Thứ tự">Order</th></tr></thead>
+<tbody id="rows">
+<tr><td><span class="v3-matrix__key"><span  data-en="Position" data-vi="Vị trí">Position</span></span><b data-pos>01</b></td><td><span class="v3-matrix__key"><span  data-en="Case / revision" data-vi="Ca / phiên bản">Case / revision</span></span><div><strong data-id>case-login-3</strong><small data-desc><span  data-en="Authentication fixture" data-vi="Dữ liệu xác thực">Authentication fixture</span></small><code data-rev>cr-7</code> <small><span  data-en="Hash not supplied" data-vi="Chưa có mã băm">Hash not supplied</span></small></div></td><td><span class="v3-matrix__key"><span  data-en="Variant" data-vi="Biến thể">Variant</span></span><div><code data-v>chromium / vi</code><small><span  data-en="Variant hash not supplied" data-vi="Chưa có mã băm biến thể">Variant hash not supplied</span></small></div></td><td><span class="v3-matrix__key"><span  data-en="Environment" data-vi="Môi trường">Environment</span></span><code>staging · env-6</code></td><td><span class="v3-matrix__key"><span  data-en="Order" data-vi="Thứ tự">Order</span></span><div class="v3-actions--compact">
+<button type="button" class="v3-btn " data-move="-1"><span  data-en="↑" data-vi="↑">↑</span></button>
+<button type="button" class="v3-btn " data-move="1"><span  data-en="↓" data-vi="↓">↓</span></button></div></td></tr>
+<tr><td><span class="v3-matrix__key"><span  data-en="Position" data-vi="Vị trí">Position</span></span><b data-pos>02</b></td><td><span class="v3-matrix__key"><span  data-en="Case / revision" data-vi="Ca / phiên bản">Case / revision</span></span><div><strong data-id>case-checkout-17</strong><small data-desc><span  data-en="Checkout confirmation" data-vi="Xác nhận thanh toán">Checkout confirmation</span></small><code data-rev>cr-9</code> <small><span  data-en="Hash not supplied" data-vi="Chưa có mã băm">Hash not supplied</span></small></div></td><td><span class="v3-matrix__key"><span  data-en="Variant" data-vi="Biến thể">Variant</span></span><div><code data-v>chromium / vi</code><small><span  data-en="Variant hash not supplied" data-vi="Chưa có mã băm biến thể">Variant hash not supplied</span></small></div></td><td><span class="v3-matrix__key"><span  data-en="Environment" data-vi="Môi trường">Environment</span></span><code>staging · env-6</code></td><td><span class="v3-matrix__key"><span  data-en="Order" data-vi="Thứ tự">Order</span></span><div class="v3-actions--compact">
+<button type="button" class="v3-btn " data-move="-1"><span  data-en="↑" data-vi="↑">↑</span></button>
+<button type="button" class="v3-btn " data-move="1"><span  data-en="↓" data-vi="↓">↓</span></button></div></td></tr>
+<tr><td><span class="v3-matrix__key"><span  data-en="Position" data-vi="Vị trí">Position</span></span><b data-pos>03</b></td><td><span class="v3-matrix__key"><span  data-en="Case / revision" data-vi="Ca / phiên bản">Case / revision</span></span><div><strong data-id>case-checkout-17</strong><small data-desc><span  data-en="Checkout confirmation" data-vi="Xác nhận thanh toán">Checkout confirmation</span></small><code data-rev>cr-9</code> <small><span  data-en="Hash not supplied" data-vi="Chưa có mã băm">Hash not supplied</span></small></div></td><td><span class="v3-matrix__key"><span  data-en="Variant" data-vi="Biến thể">Variant</span></span><div><code data-v>firefox / en</code><small><span  data-en="Variant hash not supplied" data-vi="Chưa có mã băm biến thể">Variant hash not supplied</span></small></div></td><td><span class="v3-matrix__key"><span  data-en="Environment" data-vi="Môi trường">Environment</span></span><code>staging · env-6</code></td><td><span class="v3-matrix__key"><span  data-en="Order" data-vi="Thứ tự">Order</span></span><div class="v3-actions--compact">
+<button type="button" class="v3-btn " data-move="-1"><span  data-en="↑" data-vi="↑">↑</span></button>
+<button type="button" class="v3-btn " data-move="1"><span  data-en="↓" data-vi="↓">↓</span></button></div></td></tr>
+<tr><td><span class="v3-matrix__key"><span  data-en="Position" data-vi="Vị trí">Position</span></span><b data-pos>04</b></td><td><span class="v3-matrix__key"><span  data-en="Case / revision" data-vi="Ca / phiên bản">Case / revision</span></span><div><strong data-id>case-address-8</strong><small data-desc><span  data-en="Address persistence" data-vi="Lưu địa chỉ">Address persistence</span></small><code data-rev>cr-5</code> <small><span  data-en="Hash not supplied" data-vi="Chưa có mã băm">Hash not supplied</span></small></div></td><td><span class="v3-matrix__key"><span  data-en="Variant" data-vi="Biến thể">Variant</span></span><div><code data-v>chromium / vi</code><small><span  data-en="Variant hash not supplied" data-vi="Chưa có mã băm biến thể">Variant hash not supplied</span></small></div></td><td><span class="v3-matrix__key"><span  data-en="Environment" data-vi="Môi trường">Environment</span></span><code>staging · env-6</code></td><td><span class="v3-matrix__key"><span  data-en="Order" data-vi="Thứ tự">Order</span></span><div class="v3-actions--compact">
+<button type="button" class="v3-btn " data-move="-1"><span  data-en="↑" data-vi="↑">↑</span></button>
+<button type="button" class="v3-btn " data-move="1"><span  data-en="↓" data-vi="↓">↓</span></button></div></td></tr>
+</tbody></table></div><div id="move-live" class="v3-meta" role="status"></div></div></section>
+<div class="v3-gallery">
+<section class="v3-panel" >
+<header class="v3-panel__header">
+<h2  data-en="Dependency order" data-vi="Thứ tự phụ thuộc">Dependency order</h2></header><div class="v3-pad v3-stack"><ol class="v3-flow"><li><span class="v3-tile">1</span><div><code>case-login-3</code>
+<p class="v3-muted" data-en="Authentication fixture" data-vi="Dữ liệu xác thực">Authentication fixture</p></div></li><li><span class="v3-tile">2</span><div><code>case-checkout-17</code>
+<p class="v3-muted" data-en="Checkout confirmation" data-vi="Xác nhận thanh toán">Checkout confirmation</p></div></li><li><span class="v3-tile">3</span><div><code>case-address-8</code>
+<p class="v3-muted" data-en="Address persistence" data-vi="Lưu địa chỉ">Address persistence</p></div></li></ol>
+<p class="v3-muted" data-en="Server order: login → checkout → address. Reordering matrix rows does not recompute dependencies." data-vi="Thứ tự máy chủ: đăng nhập → thanh toán → địa chỉ. Đổi thứ tự dòng không tính lại phụ thuộc.">Server order: login → checkout → address. Reordering matrix rows does not recompute dependencies.</p></div></section>
+<section class="v3-panel" >
+<header class="v3-panel__header">
+<h2  data-en="Server warnings" data-vi="Cảnh báo từ máy chủ">Server warnings</h2></header><div class="v3-pad v3-stack"><div id="warnings" class="v3-stack"><div><span class="v3-badge v3-badge--info"><span  data-en="Coverage gap" data-vi="Khoảng trống phạm vi kiểm thử">Coverage gap</span></span>
+<p class="v3-muted" data-en="Required variant firefox/vi is not covered." data-vi="Biến thể bắt buộc firefox/vi chưa được bao phủ.">Required variant firefox/vi is not covered.</p></div><div><span class="v3-badge v3-badge--info"><span  data-en="Dependency warning" data-vi="Cảnh báo phụ thuộc">Dependency warning</span></span>
+<p class="v3-muted" data-en="Dependency cycle: checkout → seed-order → checkout." data-vi="Chu trình phụ thuộc: checkout → seed-order → checkout.">Dependency cycle: checkout → seed-order → checkout.</p></div></div>
+<p id="wnone" hidden><span  data-en="No warnings reported." data-vi="Không có cảnh báo được báo cáo.">No warnings reported.</span></p>
+<p id="wout" hidden><span  data-en="Coverage snapshot unavailable. Missing is not zero; no score or shard detail was returned." data-vi="Chưa có ảnh chụp phạm vi kiểm thử. Thiếu dữ liệu không phải bằng không; không có điểm hay chi tiết shard.">Coverage snapshot unavailable. Missing is not zero; no score or shard detail was returned.</span></p></div></section>
+<section class="v3-panel" id="planning">
+<header class="v3-panel__header">
+<h2  data-en="Execution planning" data-vi="Kế hoạch thực thi">Execution planning</h2></header><div class="v3-pad v3-stack">
+<dl class="v3-studio__facts"><div><dt  data-en="Shard strategy" data-vi="Chiến lược chia shard">Shard strategy</dt><dd><span  data-en="Balanced by recorded duration" data-vi="Cân bằng theo thời lượng đã ghi nhận">Balanced by recorded duration</span></dd></div><div><dt  data-en="Declared shards" data-vi="Số shard khai báo">Declared shards</dt><dd>3</dd></div><div><dt  data-en="Environment" data-vi="Môi trường">Environment</dt><dd><code>staging / env-6</code></dd></div></dl>
+<p class="v3-muted" data-en="Supplied planning inputs only. No run is scheduled here." data-vi="Chỉ là đầu vào lập kế hoạch được cung cấp. Không lập lịch chạy tại đây.">Supplied planning inputs only. No run is scheduled here.</p></div></section>
+</div>
+<dialog class="v3-dialog" id="picker" aria-labelledby="picker-h">
+<header class="v3-dialog__header">
+<h2 id=picker-h data-en="Add a case variant" data-vi="Thêm biến thể ca kiểm thử">Add a case variant</h2></header><div class="v3-body">
+<label class="v3-field"><span  data-en="Pinned case revision" data-vi="Phiên bản ca cố định">Pinned case revision</span><select id="case" >
+<option value="0" data-en="case-login-3 / cr-7" data-vi="case-login-3 / cr-7">case-login-3 / cr-7</option>
+<option value="1" data-en="case-checkout-17 / cr-9" data-vi="case-checkout-17 / cr-9">case-checkout-17 / cr-9</option>
+<option value="2" data-en="case-address-8 / cr-5" data-vi="case-address-8 / cr-5">case-address-8 / cr-5</option></select></label>
+<label class="v3-field"><span  data-en="Browser" data-vi="Trình duyệt">Browser</span><select id="browser" >
+<option value="chromium" data-en="Chromium" data-vi="Chromium">Chromium</option>
+<option value="firefox" data-en="Firefox" data-vi="Firefox">Firefox</option></select></label>
+<label class="v3-field"><span  data-en="Locale" data-vi="Ngôn ngữ">Locale</span><select id="locale" >
+<option value="vi" data-en="vi" data-vi="vi">vi</option>
+<option value="en" data-en="en" data-vi="en">en</option></select></label>
+<label class="v3-field" for="note"><span  data-en="Note · optional" data-vi="Ghi chú · tùy chọn">Note · optional</span></label><textarea rows="2" class="v3-input" id="note" data-val-en="" data-val-vi="" ></textarea>
+<p id="duplicate" role="status" hidden class="v3-field-error" data-en="This case revision and variant are already in the draft." data-vi="Phiên bản ca và biến thể này đã có trong bản nháp.">This case revision and variant are already in the draft.</p></div>
+<footer class="v3-form__footer">
+<button type="button" class="v3-btn " data-close><span  data-en="Cancel" data-vi="Hủy">Cancel</span></button>
+<button type="button" class="v3-btn v3-btn--primary" id="addok"><span  data-en="Add to draft" data-vi="Thêm vào bản nháp">Add to draft</span></button></footer></dialog>
+</div>
+<footer class="v3-footnote v3-spread v3-meta"><span  data-en="G4 reference only; hidden in G1–G3. Draft changes do not publish a suite or produce a release decision." data-vi="Chỉ là tài liệu G4; ẩn ở G1–G3. Thay đổi bản nháp không công bố bộ kiểm thử hay quyết định phát hành.">G4 reference only; hidden in G1–G3. Draft changes do not publish a suite or produce a release decision.</span><a href="40-authoring-tree.html" class=""><span  data-en="Open feature tree" data-vi="Mở cây chức năng">Open feature tree</span></a><a href="17-studio-template-gallery.html"><span data-en="Browse templates" data-vi="Xem thư viện mẫu">Browse templates</span></a></footer>
+<details class="v3-review-controls"><summary><span data-en="Design review controls" data-vi="Trạng thái bản mẫu">Design review controls</span></summary>
+<div class="v3-review-controls__body">
+<label class="v3-field"><span  data-en="Prototype state" data-vi="Trạng thái bản mẫu">Prototype state</span><select id="scenario" >
+<option value="default" data-en="Populated" data-vi="Có dữ liệu">Populated</option>
+<option value="loading" data-en="Loading" data-vi="Đang tải">Loading</option>
+<option value="empty" data-en="No resource" data-vi="Không có dữ liệu">No resource</option>
+<option value="error" data-en="Request failed" data-vi="Yêu cầu thất bại">Request failed</option>
+<option value="403" data-en="403 · Read only" data-vi="403 · Chỉ đọc">403 · Read only</option>
+<option value="404" data-en="404 · Not found" data-vi="404 · Không tìm thấy">404 · Not found</option>
+<option value="401" data-en="401 · Session expired" data-vi="401 · Phiên đã hết hạn">401 · Session expired</option>
+<option value="429" data-en="429 · Rate limited" data-vi="429 · Quá nhiều yêu cầu">429 · Rate limited</option>
+<option value="412" data-en="412 · Conflict specimen" data-vi="412 · Mẫu xung đột">412 · Conflict specimen</option>
+<option value="published" data-en="Published · read-only" data-vi="Đã công bố · chỉ đọc">Published · read-only</option>
+<option value="nomatch" data-en="No filter match" data-vi="Không khớp bộ lọc">No filter match</option>
+<option value="nowarn" data-en="No warnings reported" data-vi="Không có cảnh báo">No warnings reported</option>
+<option value="unavailable" data-en="Snapshot unavailable" data-vi="Thiếu ảnh chụp phạm vi">Snapshot unavailable</option>
+<option value="missing" data-en="Missing case revision" data-vi="Thiếu phiên bản ca">Missing case revision</option>
+<option value="long" data-en="Long variant" data-vi="Biến thể dài">Long variant</option>
+<option value="busy" data-en="Saving composition" data-vi="Đang lưu cấu hình">Saving composition</option>
+<option value="saved" data-en="Composition saved" data-vi="Đã lưu cấu hình">Composition saved</option></select></label></div></details>
+</main></div></div>
+<script>
+addEventListener("DOMContentLoaded",()=>{
+const $=id=>document.getElementById(id), all=(s,root=document)=>[...root.querySelectorAll(s)], lang=()=>document.documentElement.lang==='vi'?'vi':'en';
+const media=matchMedia('(max-width:767px)');let state='default';
+function label(el,en,vi){el.dataset.en=en;el.dataset.vi=vi;el.textContent=lang()==='vi'?vi:en;}
+function values(){for(const el of all('[data-val-en]')){if(!el.dataset.edited)el.value=lang()==='vi'?el.dataset.valVi:el.dataset.valEn;}}
+document.addEventListener('input',e=>{if(e.target.matches('[data-val-en]'))e.target.dataset.edited='1'});
+const route=new URLSearchParams(location.search);
+const accepted={"suite": ["storefront-regression"], "revision": ["sr-27", "sr-28"], "project": ["p-storefront"]};
+const identity={"suite": "storefront-regression", "revision": "sr-28"};
+const target=EvidgateV3.byId.get(document.body.dataset.page).file;
+const invalid=[...route].some(([key,value])=>!Object.hasOwn(accepted,key)||!accepted[key].includes(value)||route.getAll(key).length!==1);
+if(invalid){
+  const main=$('main'),title=document.createElement('h1'),note=document.createElement('p'),record=document.createElement('code');
+  label(title,'Studio record unavailable','Không có bản ghi Studio');
+  label(note,'The requested record is not in this fixture. No other record is shown.','Mẫu không có bản ghi được yêu cầu. Không hiển thị bản ghi khác thay thế.');
+  record.textContent=[...route].map(([key,value])=>key+'='+value).join(' · ');main.replaceChildren(title,note,record);return;
+}
+function loginTarget(){
+  const params=new URLSearchParams(identity);
+  for(const [key,value] of route)params.set(key,value);
+  if(state==='published'||state==='default'||!window.lastSuiteRevision)window.lastSuiteRevision=$('srev').textContent;params.set('revision',window.lastSuiteRevision);
+  const full=target+(params.size?'?'+params:'')+location.hash;
+  $('sign-in').href='02-login.html?'+new URLSearchParams({returnTo:full});
+}
+function setState(next){state=next;$('scenario').value=next;paint();}
+function paint(){const only=['loading','empty','404','401','error'].includes(state);$('region').hidden=only;for(const el of all('[data-scene]'))el.hidden=!el.dataset.scene.split(' ').includes(state);update();loginTarget();}
+function writeAllowed(){return !media.matches&&!['403','401','404','412','429','loading','error','empty','busy','published','merged','readonly'].includes(state);}
+function start(){values();$('scenario').onchange=e=>setState(e.target.value);$('lang').addEventListener('click',()=>{values();paint()});media.addEventListener('change',paint);document.addEventListener('click',e=>{const btn=e.target.closest('button');if(!btn)return;if(btn.hasAttribute('data-close'))btn.closest('dialog').close();if(btn.dataset.to)setState(btn.dataset.to);});paint();}
+
+const cases=[["case-login-3", "cr-7", "Authentication fixture", "Dữ liệu xác thực"], ["case-checkout-17", "cr-9", "Checkout confirmation", "Xác nhận thanh toán"], ["case-address-8", "cr-5", "Address persistence", "Lưu địa chỉ"]];let dirty=false,draft=null,initial=$('rows').innerHTML,timer;const rows=()=>all('tr',$('rows'));const missing=()=>state==='missing';
+function moveLabel(btn,r,up){const id=r.querySelector('[data-id]').textContent+' · '+r.querySelector('[data-v]').textContent;btn.dataset.labelEn='Move '+id+(up?' up':' down');btn.dataset.labelVi='Di chuyển '+id+(up?' lên':' xuống');btn.setAttribute('aria-label',lang()==='vi'?btn.dataset.labelVi:btn.dataset.labelEn);btn.title=btn.getAttribute('aria-label')}
+function update(){const ro=!writeAllowed()||state==='busy'||missing()||state==='published';const w=state==='unavailable';$('planning').hidden=w;$('wnone').hidden=state!=='nowarn';$('wout').hidden=!w;$('warnings').hidden=w||state==='nowarn';$('srev').textContent=state==='published'?'sr-27':'sr-28';$('save').hidden=ro&&state!=='busy';$('save').disabled=ro||!dirty;$('add').hidden=ro;const q=$('filter').value.toLocaleLowerCase().trim();let shown=0,rs=rows();rs.forEach((r,i)=>{let id=r.querySelector('[data-id]').textContent,v=r.querySelector('[data-v]').textContent,rv=r.querySelector('[data-rev]');if(!rv.dataset.pin)rv.dataset.pin=rv.textContent;rv.textContent=missing()&&id==='case-address-8'?(lang()==='vi'?'Thiếu phiên bản':'Revision missing'):rv.dataset.pin;r.querySelector('[data-pos]').textContent=String(i+1).padStart(2,'0');r.hidden=state==='nomatch'||![id,v,rv.textContent].some(x=>x.toLocaleLowerCase().includes(q));if(!r.hidden)shown++;for(const bt of all('[data-move]',r)){const up=+bt.dataset.move<0;bt.disabled=ro||!!q||(up?i===0:i===rs.length-1);moveLabel(bt,r,up)}r.lastElementChild.hidden=ro;});document.querySelector('thead th:last-child').hidden=ro;$('nofilter').hidden=shown!==0;document.querySelector('table').hidden=!shown;if(!writeAllowed()&&$('picker').open)$('picker').close();}
+function announce(en,vi){label($('move-live'),en,vi)}
+$('scenario').addEventListener('change',e=>{
+  clearTimeout(timer);
+  const long=rows().find(r=>r.hasAttribute('data-short'));
+  if(long){long.querySelector('[data-v]').textContent=long.dataset.short;delete long.dataset.short}
+  if(state==='published'&&draft!==null){$('rows').innerHTML=draft;draft=null}
+  if(e.target.value==='published'){draft=$('rows').innerHTML;$('rows').innerHTML=initial}
+  for(const el of all('[data-en]',$('rows')))el.textContent=el.dataset[lang()];
+  if(e.target.value==='long'){
+    const row=rows().at(-1),v=row.querySelector('[data-v]');
+    row.dataset.short=v.textContent;v.textContent='chromium / vi-VN / storefront-checkout-regression';
+  }
+  if(e.target.value==='saved')dirty=false;
+  announce('','');
+});
+$('rows').onclick=e=>{const btn=e.target.closest('[data-move]');if(!btn||btn.disabled||!writeAllowed())return;const r=btn.closest('tr'),up=+btn.dataset.move<0,target=up?r.previousElementSibling:r.nextElementSibling;if(!target)return;if(up)$('rows').insertBefore(r,target);else $('rows').insertBefore(target,r);dirty=true;update();(btn.disabled?r.querySelector('[data-move]:not(:disabled)'):btn)?.focus();const pos=r.querySelector('[data-pos]').textContent,id=r.querySelector('[data-id]').textContent;announce(id+' · position '+pos+' · unsaved',id+' · vị trí '+pos+' · chưa lưu')};$('clear').onclick=()=>{$('filter').value='';if(state==='nomatch')setState('default');else update()};$('filter').oninput=update;
+function validate(){const id=cases[+$('case').value][0],v=$('browser').value+' / '+$('locale').value,dupe=rows().some(r=>r.querySelector('[data-id]').textContent===id&&r.querySelector('[data-v]').textContent===v);$('duplicate').hidden=!dupe;$('addok').disabled=dupe||!writeAllowed()}
+$('add').onclick=()=>{$('browser').value='firefox';$('locale').value='vi';$('picker').showModal();validate()};$('picker').onchange=validate;$('addok').onclick=()=>{validate();if($('addok').disabled)return;const c=cases[+$('case').value],v=$('browser').value+' / '+$('locale').value,r=rows()[0].cloneNode(true);r.querySelector('[data-id]').textContent=c[0];let rv=r.querySelector('[data-rev]');rv.dataset.pin=rv.textContent=c[1];label(r.querySelector('[data-desc] span'),c[2],c[3]);r.querySelector('[data-v]').textContent=v;$('rows').append(r);$('picker').close();dirty=true;update();announce(c[0]+' · '+v+' · added to draft',c[0]+' · '+v+' · đã thêm vào bản nháp')};$('save').onclick=()=>{setState('busy');timer=setTimeout(()=>{if(state==='busy'){dirty=false;setState('saved');announce('Composition saved in the supplied fixture. No evaluation started.','Mẫu ghi nhận đã lưu cấu hình. Không bắt đầu đánh giá.')}},550)};$('reload').onclick=()=>{$('rows').innerHTML=initial;dirty=false;setState('default');announce('Reloaded supplied composition. Local changes discarded.','Đã tải lại cấu hình được cung cấp. Đã bỏ thay đổi cục bộ.')};
+
+start();
+if(route.get('revision')==='sr-27'){$('scenario').value='published';$('scenario').dispatchEvent(new Event('change'))}
+});
+</script>
+</body></html>

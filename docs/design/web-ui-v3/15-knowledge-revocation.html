@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title data-en="Knowledge lineage · Evidgate" data-vi="Nguồn gốc tri thức · Evidgate">Knowledge lineage · Evidgate</title>
+<link rel="stylesheet" href="assets/tokens-v3.css">
+<link rel="stylesheet" href="assets/components-v3.css">
+<script defer src="assets/manifest-v3.js"></script>
+<script defer src="assets/shell.js"></script>
+<style>
+[hidden]{display:none!important}
+.v3-local-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,10rem),1fr));gap:var(--eg-space-4)}
+.v3-local-facts dt{color:var(--eg-text-muted);font-size:var(--eg-text-xs)}
+.v3-local-facts dd{margin-top:var(--eg-space-1);font-weight:600}
+.v3-local-state{min-height:12rem;align-content:center}
+.v3-local-mobile{display:none}
+@media(max-width:767px){.v3-local-write{display:none!important}.v3-local-mobile{display:block}}
+@media(pointer:coarse){summary{min-height:var(--eg-control-touch)}}
+
+</style>
+</head>
+<body data-page="15"><a class="v3-skip" href="#main"><span data-en="Skip to content" data-vi="Đến nội dung">Skip to content</span></a>
+<noscript><nav><a href="01-app-shell.html">Overview / Tổng quan</a> · <a href="03-run-list.html">Test runs / Lượt kiểm thử</a></nav></noscript>
+<svg class="v3-sprites" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+
+
+
+
+
+
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-4 9-8 11-4-2-8-6-8-11V5z M8 12l3 3 5-6"/></symbol>
+
+
+
+
+
+
+
+
+<symbol id="i-history" viewBox="0 0 24 24"><path d="M4 9a8 8 0 1 1 0 7 M3 3v6h6 M12 8v5l3 1"/></symbol>
+</svg>
+<div class="v3-shell"><aside class="v3-sidebar" data-v3-sidebar></aside><div class="v3-workspace">
+<header class="v3-topbar" data-v3-topbar></header><main id="main" tabindex="-1">
+<section id="record-unavailable" hidden class="v3-panel v3-pad v3-stack" role="status"><h1><span data-en="Requested record unavailable" data-vi="Không có bản ghi được yêu cầu">Requested record unavailable</span></h1><p><span data-en="No matching fixture is available. No other record has been substituted." data-vi="Không có bản mẫu khớp yêu cầu. Không thay bằng bản ghi khác.">No matching fixture is available. No other record has been substituted.</span></p><code id="requested-identity"></code></section>
+
+<header class="v3-page-header"><div class="v3-page-header__title"><span class="v3-page-header__icon"><svg class="v3-icon" aria-hidden="true"><use href="#i-history"/></svg></span><div><h1><span data-en="Knowledge lineage" data-vi="Nguồn gốc tri thức">Knowledge lineage</span></h1><p class="v3-muted"><span data-en="Trace one approved locator repair and inspect the effect of stopping future reuse." data-vi="Theo dõi một sửa đổi bộ định vị đã duyệt và xem tác động khi ngừng tái sử dụng.">Trace one approved locator repair and inspect the effect of stopping future reuse.</span></p><p class="v3-meta"><span data-en="As of 2026-10-13 10:00 UTC · recorded approval" data-vi="Tính đến 10:00 UTC ngày 13/10/2026 · đã ghi nhận phê duyệt">As of 2026-10-13 10:00 UTC · recorded approval</span></p></div></div></header>
+<div class="v3-stack"><div data-only="loading" hidden><section class="v3-panel v3-pad v3-stack v3-local-state" role="status"><h2><span data-en="Loading" data-vi="Đang tải">Loading</span></h2><p><span data-en="Waiting for a supplied snapshot. No result yet." data-vi="Đang chờ bản dữ liệu. Chưa có kết quả.">Waiting for a supplied snapshot. No result yet.</span></p><div class="v3-skeleton" aria-hidden="true"><i></i><i></i></div><code>kr-22 · ev-3</code></section></div>
+<div data-only="empty" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="No knowledge record" data-vi="Không có bản ghi tri thức">No knowledge record</span></h2><p><span data-en="No record was supplied; no outcome can be inferred." data-vi="Không có bản ghi; không thể suy ra kết quả.">No record was supplied; no outcome can be inferred.</span></p></section></div>
+<div data-only="404" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="Not found" data-vi="Không tìm thấy">Not found</span></h2><p><span data-en="This resource is not available at this address." data-vi="Không tìm thấy tài nguyên ở địa chỉ này.">This resource is not available at this address.</span></p></section></div>
+<div data-only="filtered" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="No results match these filters" data-vi="Không có kết quả phù hợp với bộ lọc">No results match these filters</span></h2><p><span data-en="The scoped record is unchanged." data-vi="Bản ghi trong phạm vi này không thay đổi.">The scoped record is unchanged.</span></p><div class="v3-actions"><button type="button" class="v3-btn " data-to="default"><span data-en="Clear preview filter" data-vi="Xóa bộ lọc xem trước">Clear preview filter</span></button></div></section></div>
+<div data-only="error" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="Unable to refresh" data-vi="Không thể làm mới">Unable to refresh</span></h2><p><span data-en="Pinned context is retained. Retrying does not submit a decision." data-vi="Ngữ cảnh đã ghim được giữ lại. Thử lại không gửi quyết định.">Pinned context is retained. Retrying does not submit a decision.</span></p><code>kr-22 · ev-3 · req-knowledge-22</code><div class="v3-actions"><button type="button" class="v3-btn " data-to="default"><span data-en="Retry preview" data-vi="Thử lại bản xem trước">Retry preview</span></button></div></section></div>
+<div data-only="403" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="Permissions changed" data-vi="Quyền truy cập đã thay đổi">Permissions changed</span></h2><p><span data-en="Not authorized for this action. No change was made." data-vi="Bạn không có quyền thực hiện thao tác này. Không có thay đổi.">Not authorized for this action. No change was made.</span></p><code>req-knowledge-22</code></section></div>
+<div data-only="401" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="Session expired" data-vi="Phiên đăng nhập đã hết hạn">Session expired</span></h2><p><span data-en="Sign in again to resume at the safe return route. Sensitive content is closed." data-vi="Đăng nhập lại để trở về đường dẫn an toàn. Nội dung nhạy cảm đã đóng.">Sign in again to resume at the safe return route. Sensitive content is closed.</span></p><a class="v3-btn" id="safe-login" href="02-login.html"><span data-en="Sign in again" data-vi="Đăng nhập lại">Sign in again</span></a></section></div>
+<div data-only="429" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="Too many requests" data-vi="Quá nhiều yêu cầu">Too many requests</span></h2><p><span data-en="Server fixture: Retry-After: 30 s. No automatic retry." data-vi="Dữ liệu mẫu từ máy chủ: Retry-After: 30 giây. Không tự động thử lại.">Server fixture: Retry-After: 30 s. No automatic retry.</span></p><code>req-knowledge-22</code></section></div>
+<div data-only="412" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="Someone else changed this — reload" data-vi="Người khác đã thay đổi dữ liệu — tải lại">Someone else changed this — reload</span></h2><p><span data-en="Revision 7 → 8: dependency snapshot changed. Reload the counts explicitly; nothing is revoked." data-vi="Phiên bản 7 → 8: bản dữ liệu phụ thuộc thay đổi. Cần tự tải lại số lượng; chưa thu hồi gì.">Revision 7 → 8: dependency snapshot changed. Reload the counts explicitly; nothing is revoked.</span></p>
+<code>req-knowledge-22</code><div class="v3-actions"><button type="button" class="v3-btn" data-to="reloaded"><span data-en="Reload current revision" data-vi="Tải lại phiên bản hiện tại">Reload current revision</span></button></div></section></div>
+<div data-only="412 reloaded prepared" hidden><p class="v3-pad v3-panel"><strong data-en="Retained revocation reason" data-vi="Lý do thu hồi được giữ">Retained revocation reason</strong> · <span id="retained" data-en="Checkout locator changed." data-vi="Bộ định vị thanh toán thay đổi.">Checkout locator changed.</span></p></div><div data-except="loading empty 404 401"><div class="v3-stack">
+<div class="v3-master-detail">
+<section class="v3-panel"><header class="v3-panel__header"><div class="v3-spread"><h2><span data-en="Knowledge record" data-vi="Bản ghi tri thức">Knowledge record</span></h2><code>kr-22</code></div></header>
+<div class="v3-pad v3-stack"><div class="v3-stack">
+<div data-except="revoked refused historical ineligible"><span class="v3-badge v3-badge--info"><span data-en="Active reuse" data-vi="Đang tái sử dụng">Active reuse</span></span></div>
+<div data-only="revoked refused" hidden><span class="v3-badge v3-warning"><span data-en="Revoked · history retained" data-vi="Đã thu hồi · giữ lịch sử">Revoked · history retained</span></span></div>
+<div data-only="historical ineligible" hidden><span class="v3-badge v3-pending"><span data-en="Read-only" data-vi="Chỉ đọc">Read-only</span></span></div>
+<dl class="v3-local-facts"><div><dt><span data-en="Record / revision" data-vi="Bản ghi / phiên bản">Record / revision</span></dt><dd><div data-except="reloaded"><code>kr-22 · rev 7</code></div><div data-only="reloaded" hidden><code>kr-22 · rev 8</code></div></dd></div>
+<div><dt><span data-en="Scope" data-vi="Phạm vi">Scope</span></dt><dd><code>checkout · storefront-web</code></dd></div>
+<div><dt><span data-en="Source proposal" data-vi="Đề xuất nguồn">Source proposal</span></dt><dd><code>cand-73 · ch-8af2…3e20</code></dd></div>
+<div><dt><span data-en="Candidate state" data-vi="Trạng thái đề xuất">Candidate state</span></dt><dd><div data-except="revoked refused applied ineligible"><code>approved</code></div><div data-only="revoked refused" hidden><code>revoked</code></div><div data-only="applied" hidden><code>applied</code></div><div data-only="ineligible" hidden><code>proposed</code></div></dd></div>
+<div><dt><span data-en="Base" data-vi="Commit gốc">Base</span></dt><dd><code>9af317c</code></dd></div>
+<div><dt><span data-en="Authorization" data-vi="Quyền">Authorization</span></dt><dd><span data-except="403"><code>healing:triage · healing:revoke</code></span><span data-only="403" hidden><code>healing:triage</code> · <span data-en="Revocation not permitted" data-vi="Không có quyền thu hồi">Revocation not permitted</span></span></dd></div></dl>
+<div data-only="ineligible" hidden><p><span data-en="Only approved or applied candidates can be revoked." data-vi="Chỉ có thể thu hồi đề xuất đã duyệt hoặc đã áp dụng.">Only approved or applied candidates can be revoked.</span></p></div>
+<div data-only="revoked refused" hidden><p><span data-en="Removed from active reuse. Re-propose against the current base and revalidate." data-vi="Đã loại khỏi phạm vi tái sử dụng đang hoạt động. Đề xuất lại theo commit gốc hiện tại và kiểm chứng lại.">Removed from active reuse. Re-propose against the current base and revalidate.</span></p></div>
+<div data-only="refused" hidden><p><span data-en="Server refused a second revocation. The existing record is unchanged." data-vi="Máy chủ từ chối thu hồi lần hai. Bản ghi hiện tại không thay đổi.">Server refused a second revocation. The existing record is unchanged.</span></p></div>
+<div data-only="prepared" hidden><div class="v3-pad v3-panel v3-stack "><strong><span data-en="Request preview prepared · not submitted" data-vi="Đã chuẩn bị bản xem trước yêu cầu · chưa gửi">Request preview prepared · not submitted</span></strong><p><span data-en="No server response was supplied. The stored state has not changed." data-vi="Không có phản hồi từ máy chủ. Trạng thái đã lưu không thay đổi.">No server response was supplied. The stored state has not changed.</span></p></div></div>
+</div></div></section>
+<div data-except="403"><section class="v3-panel"><header class="v3-panel__header"><div class="v3-spread"><h2><span data-en="Effect preview" data-vi="Xem trước tác động">Effect preview</span></h2></div></header>
+<div class="v3-pad v3-stack"><div class="v3-stack">
+<div data-except="unavailable previewloading previewerror 412 reloaded"><div class="v3-stack">
+<div data-except="none"><dl class="v3-local-facts"><div><dt><span data-en="Active dependents to flag" data-vi="Phụ thuộc đang hoạt động sẽ đánh dấu">Active dependents to flag</span></dt><dd><code>2 · cand-81 / cand-82</code></dd></div>
+<div><dt><span data-en="Historical usage retained" data-vi="Lịch sử sử dụng được giữ">Historical usage retained</span></dt><dd><code>1 · cand-83</code></dd></div></dl></div>
+<div data-only="none" hidden><p><span data-en="Confirmed empty snapshot: 0 active dependents, 0 historical usages." data-vi="Bản dữ liệu xác nhận rỗng: 0 phụ thuộc đang hoạt động, 0 lần sử dụng trong lịch sử.">Confirmed empty snapshot: 0 active dependents, 0 historical usages.</span></p></div>
+</div></div>
+<div data-only="unavailable 412 reloaded" hidden><p><span data-en="Unavailable — dependency snapshot not returned. This is not a zero count." data-vi="Không khả dụng — không nhận được bản dữ liệu phụ thuộc. Không có nghĩa là số lượng bằng 0.">Unavailable — dependency snapshot not returned. This is not a zero count.</span></p></div>
+<div data-only="previewloading" hidden><p><span data-en="Loading the dependency snapshot. No count yet." data-vi="Đang tải bản dữ liệu phụ thuộc. Chưa có số lượng.">Loading the dependency snapshot. No count yet.</span></p></div>
+<div data-only="previewerror" hidden><div class="v3-stack">
+<p><span data-en="Unable to load the effect preview. No count or change is inferred." data-vi="Không thể tải tác động. Không suy ra số lượng hoặc thay đổi.">Unable to load the effect preview. No count or change is inferred.</span></p>
+<div class="v3-actions"><button type="button" class="v3-btn " data-to="default"><span data-en="Retry effect preview" data-vi="Thử tải lại tác động">Retry effect preview</span></button></div>
+</div></div>
+<p class="v3-muted"><span data-en="Stops future reuse and flags active dependents. Historical executions, evidence and official decisions are retained." data-vi="Ngừng tái sử dụng về sau và đánh dấu phụ thuộc đang hoạt động. Lượt chạy lịch sử, bằng chứng và quyết định chính thức được giữ.">Stops future reuse and flags active dependents. Historical executions, evidence and official decisions are retained.</span></p>
+<div class="v3-local-write"><div data-only="default applied 422 prepared none"><div class="v3-actions"><button type="button" class="v3-btn v3-btn--primary" data-open="revoke"><span data-en="Revoke healing approval" data-vi="Thu hồi chấp thuận sửa cơ chế kiểm thử">Revoke healing approval</span></button></div></div><div data-only="submitting" hidden><button type="button" class="v3-btn " disabled><span data-en="Recording revocation…" data-vi="Đang ghi thu hồi…">Recording revocation…</span></button></div></div><p class="v3-local-mobile v3-muted"><span data-en="Read-only on this screen size. Use a desktop to make changes." data-vi="Chỉ đọc ở kích thước này. Sử dụng máy tính để thay đổi dữ liệu.">Read-only on this screen size. Use a desktop to make changes.</span></p>
+</div></div></section></div>
+</div>
+<div class="v3-master-detail">
+<section class="v3-panel"><header class="v3-panel__header"><div class="v3-spread"><h2><span data-en="Original failure" data-vi="Lỗi gốc">Original failure</span></h2><span class="v3-badge v3-danger-tone"><span data-en="Failed · attempt #1" data-vi="Thất bại · lần thử #1">Failed · attempt #1</span></span></div></header>
+<div class="v3-pad v3-stack"><div class="v3-stack">
+<div class="v3-original-failure"><strong><span data-en="Required delivery address field not found before timeout." data-vi="Không tìm thấy trường địa chỉ giao hàng bắt buộc trong thời gian chờ.">Required delivery address field not found before timeout.</span></strong><p><span data-en="Attempt 1 timed out before an assertion ran. No product HTTP error was observed." data-vi="Lần thử 1 hết thời gian trước khi chạy assertion. Không ghi nhận lỗi HTTP của sản phẩm.">Attempt 1 timed out before an assertion ran. No product HTTP error was observed.</span></p></div><dl class="v3-evidence"><div><dt><span data-en="Evidence completeness" data-vi="Mức độ đầy đủ của bằng chứng">Evidence completeness</span></dt><dd><span data-en="Incomplete · shard-3 missing" data-vi="Chưa đầy đủ · thiếu shard-3">Incomplete · shard-3 missing</span></dd></div><div><dt><span data-en="Test outcome" data-vi="Kết quả kiểm thử">Test outcome</span></dt><dd><code>has_failures</code></dd></div><div><dt><span data-en="Stored run decision" data-vi="Quyết định đã lưu của lượt chạy">Stored run decision</span></dt><dd><code>FAIL · ev-3</code></dd></div></dl>
+<code>getByTestId('delivery-address-required') → timeout</code>
+<dl class="v3-local-facts"><div><dt><span data-en="Source" data-vi="Nguồn">Source</span></dt><dd><code>inc-92 · test_drift</code></dd></div>
+<div><dt><span data-en="Run / evidence" data-vi="Lượt chạy / bằng chứng">Run / evidence</span></dt><dd><code>run-1842 · ev-3</code></dd></div>
+<div><dt><span data-en="Raw outcome" data-vi="Kết quả thô">Raw outcome</span></dt><dd><code>failure / failed</code></dd></div>
+<div><dt><span data-en="Captured · UTC" data-vi="Ghi nhận · UTC">Captured · UTC</span></dt><dd><code>2026-10-13T09:43:10Z</code></dd></div></dl>
+<div class="v3-actions"><a class="v3-btn " href="04-run-detail.html?run=run-1842&amp;evidence=ev-3&amp;evaluation=FAIL"><span data-en="View unchanged official decision" data-vi="Xem quyết định chính thức được giữ nguyên">View unchanged official decision</span></a></div>
+</div></div></section>
+<section class="v3-panel"><header class="v3-panel__header"><div class="v3-spread"><h2><span data-en="Formation history" data-vi="Lịch sử hình thành">Formation history</span></h2></div></header>
+<div class="v3-pad v3-stack"><div class="v3-stack">
+<ul class="v3-history"><li><i class="v3-dot" aria-hidden="true"></i><span><span data-en="Linh Nguyễn labelled locator drift" data-vi="Linh Nguyễn phân loại thay đổi bộ định vị">Linh Nguyễn labelled locator drift</span></span><code>09:43:10Z</code></li>
+<li><i class="v3-dot" aria-hidden="true"></i><span><span data-en="Semantic match validated; broken control still failed" data-vi="Đã kiểm chứng khớp ngữ nghĩa; đối chứng lỗi vẫn thất bại">Semantic match validated; broken control still failed</span></span><code>cand-73</code></li>
+<li><i class="v3-dot" aria-hidden="true"></i><span><span data-en="Minh Trần approved the proposal" data-vi="Minh Trần chấp thuận đề xuất">Minh Trần approved the proposal</span></span><code>10:00:00Z</code></li>
+<li><i class="v3-dot" aria-hidden="true"></i><span><span data-en="Knowledge record created" data-vi="Đã tạo bản ghi tri thức">Knowledge record created</span></span><code>kr-22 · rev 7</code></li></ul>
+<div data-only="revoked refused" hidden><p><span data-en="Revocation recorded. Historical links are retained." data-vi="Đã ghi thu hồi. Các liên kết lịch sử được giữ.">Revocation recorded. Historical links are retained.</span></p></div>
+<p class="v3-muted"><span data-en="2026-10-13 · UTC · immutable history" data-vi="2026-10-13 · UTC · lịch sử bất biến">2026-10-13 · UTC · immutable history</span></p>
+</div></div></section>
+</div>
+<section class="v3-panel"><header class="v3-panel__header"><div class="v3-spread"><h2><span data-en="Candidate lineage" data-vi="Nguồn gốc đề xuất">Candidate lineage</span></h2></div></header>
+<div class="v3-pad v3-stack"><div class="v3-stack">
+<code>inc-92 → cand-73 → kr-22</code><p><span data-en="The approved revision had 24/24 passed in sandbox only. The original run retains its own stored FAIL." data-vi="Phiên bản được phê duyệt có 24/24 mẫu đạt chỉ trong môi trường mô phỏng. Lượt chạy gốc giữ quyết định FAIL đã lưu.">The approved revision had 24/24 passed in sandbox only. The original run retains its own stored FAIL.</span></p>
+<dl class="v3-local-facts"><div><dt><span data-en="Manual case" data-vi="Ca thủ công">Manual case</span></dt><dd><code>SHOP-TC-0043 · v2</code></dd></div>
+<div><dt><span data-en="Manifest / policy" data-vi="Bản kê / chính sách">Manifest / policy</span></dt><dd><code>mf-7d2c…91ab · pr-12</code></dd></div>
+<div><dt><span data-en="Build" data-vi="Bản dựng">Build</span></dt><dd><code>web · sha256:a72c…09de</code></dd></div>
+<div><dt><span data-en="Base commit" data-vi="Commit gốc">Base commit</span></dt><dd><code>9af317c</code></dd></div></dl>
+<p><span data-en="Human label: Linh Nguyễn · test_drift. Sensitive checkout mechanics require independent review. inc-91 is a separate product defect; inc-93 leads to ucp-12." data-vi="Linh Nguyễn gắn nhãn test_drift. Cơ chế thanh toán nhạy cảm cần người duyệt độc lập. inc-91 là lỗi sản phẩm riêng; inc-93 dẫn đến ucp-12.">Human label: Linh Nguyễn · test_drift. Sensitive checkout mechanics require independent review. inc-91 is a separate product defect; inc-93 leads to ucp-12.</span></p>
+</div></div></section>
+<section class="v3-panel"><header class="v3-panel__header"><div class="v3-spread"><h2><span data-en="Dependent candidates" data-vi="Đề xuất phụ thuộc">Dependent candidates</span></h2></div></header>
+<div class="v3-pad v3-stack"><div class="v3-stack">
+<div data-except="unavailable previewerror previewloading none reloaded 412"><div class="v3-table-wrap"><table class="v3-table"><thead><tr><th scope="col"><span data-en="Dependent candidate" data-vi="Đề xuất phụ thuộc">Dependent candidate</span></th><th scope="col"><span data-en="Case" data-vi="Ca kiểm thử">Case</span></th><th scope="col"><span data-en="Reuse context" data-vi="Ngữ cảnh tái sử dụng">Reuse context</span></th><th scope="col"><span data-en="State" data-vi="Trạng thái">State</span></th></tr></thead><tbody><tr><th scope="row"><code>cand-81 · ch-4b10…9d77</code></th><td><code>SHOP-TC-0042 v5</code></td><td><span data-en="Address label" data-vi="Nhãn địa chỉ">Address label</span></td><td><code>proposed</code><div data-only="revoked refused" hidden><span class="v3-badge v3-warning"><span data-en="Flagged · reuse blocked" data-vi="Đã đánh dấu · chặn tái sử dụng">Flagged · reuse blocked</span></span></div></td></tr>
+<tr><th scope="row"><code>cand-82 · ch-77e1…2c04</code></th><td><code>SHOP-TC-0043 v2</code></td><td><span data-en="Checkout locale en" data-vi="Thanh toán với ngôn ngữ en">Checkout locale en</span></td><td><code>validated</code><div data-only="revoked refused" hidden><span class="v3-badge v3-warning"><span data-en="Flagged · reuse blocked" data-vi="Đã đánh dấu · chặn tái sử dụng">Flagged · reuse blocked</span></span></div></td></tr>
+<tr><th scope="row"><code>cand-83 · ch-1d39…e6a8</code></th><td><code>SHOP-TC-0043 v2</code></td><td><span data-en="Historical use · retained" data-vi="Sử dụng trong lịch sử · được giữ">Historical use · retained</span></td><td><code>applied</code></td></tr></tbody></table></div></div>
+<div data-only="unavailable previewerror previewloading reloaded 412" hidden><p><span data-en="Snapshot unavailable. No dependency count is inferred." data-vi="Không có bản dữ liệu. Không suy ra số lượng phụ thuộc.">Snapshot unavailable. No dependency count is inferred.</span></p></div>
+<div data-only="none" hidden><p><span data-en="No dependent candidates in the supplied snapshot." data-vi="Không có đề xuất phụ thuộc trong bản dữ liệu đã cung cấp.">No dependent candidates in the supplied snapshot.</span></p></div>
+<p class="v3-muted"><span data-en="Where applied is historical metadata, never a command to apply or roll back a change." data-vi="Nơi đã áp dụng là siêu dữ liệu lịch sử, không phải lệnh áp dụng hoặc hoàn tác thay đổi.">Where applied is historical metadata, never a command to apply or roll back a change.</span></p>
+</div></div></section>
+<div class="v3-actions"><a class="v3-btn " href="13-healing-shadow-detail.html?candidate=cand-73&amp;revision=7&amp;incident=inc-92"><span data-en="Inspect source proposal" data-vi="Xem đề xuất nguồn">Inspect source proposal</span></a><a class="v3-btn " href="05-evidence-panel.html?run=run-1842&amp;evidence=ev-3&amp;evaluation=FAIL"><span data-en="Inspect original ev-3" data-vi="Xem bằng chứng gốc ev-3">Inspect original ev-3</span></a></div>
+</div></div></div>
+<details class="v3-review-controls"><summary><span data-en="Design review controls" data-vi="Trạng thái bản mẫu">Design review controls</span></summary><div class="v3-review-controls__body"><label class="v3-field"><span data-en="Prototype state" data-vi="Trạng thái bản mẫu">Prototype state</span><select id="review-state"><option value="default" data-en="Default" data-vi="Mặc định">Default</option>
+<option value="loading" data-en="Loading" data-vi="Đang tải">Loading</option>
+<option value="empty" data-en="No resource" data-vi="Không có tài nguyên">No resource</option>
+<option value="filtered" data-en="No matches" data-vi="Không có kết quả phù hợp">No matches</option>
+<option value="error" data-en="Refresh failed" data-vi="Làm mới thất bại">Refresh failed</option>
+<option value="403" data-en="403 · Permission changed" data-vi="403 · Quyền đã thay đổi">403 · Permission changed</option>
+<option value="404" data-en="404 · Not found" data-vi="404 · Không tìm thấy">404 · Not found</option>
+<option value="401" data-en="401 · Session expired" data-vi="401 · Phiên đã hết hạn">401 · Session expired</option>
+<option value="429" data-en="429 · Rate limited" data-vi="429 · Quá nhiều yêu cầu">429 · Rate limited</option>
+<option value="412" data-en="412 · Stale revision" data-vi="412 · Phiên bản đã cũ">412 · Stale revision</option>
+<option value="reloaded" data-en="Explicit reload" data-vi="Đã tải lại rõ ràng">Explicit reload</option>
+<option value="revoked" data-en="Revoked" data-vi="Đã thu hồi">Revoked</option>
+<option value="applied" data-en="Source candidate applied" data-vi="Đề xuất nguồn đã áp dụng">Source candidate applied</option>
+<option value="ineligible" data-en="Source candidate proposed" data-vi="Đề xuất nguồn chưa duyệt">Source candidate proposed</option>
+<option value="historical" data-en="Historical record" data-vi="Bản ghi lịch sử">Historical record</option>
+<option value="unavailable" data-en="Dependency count unavailable" data-vi="Không có số lượng phụ thuộc">Dependency count unavailable</option>
+<option value="none" data-en="No dependent candidates" data-vi="Không có đề xuất phụ thuộc">No dependent candidates</option>
+<option value="previewloading" data-en="Loading effect preview" data-vi="Đang tải tác động">Loading effect preview</option>
+<option value="previewerror" data-en="Effect preview error" data-vi="Lỗi xem trước tác động">Effect preview error</option>
+<option value="refused" data-en="Already revoked refusal" data-vi="Máy chủ từ chối vì đã thu hồi">Already revoked refusal</option>
+<option value="submitting" data-en="Submitting revocation" data-vi="Đang gửi yêu cầu thu hồi">Submitting revocation</option>
+<option value="422" data-en="422 · Blank reason" data-vi="422 · Lý do trống">422 · Blank reason</option>
+<option value="prepared" data-en="Request preview · not submitted" data-vi="Xem trước yêu cầu · chưa gửi">Request preview · not submitted</option></select></label></div></details>
+</main></div></div>
+<dialog data-write id="revoke" class="v3-dialog" aria-labelledby="revoke-head"><header class="v3-dialog__header"><svg class="v3-icon" aria-hidden="true"><use href="#i-shield"/></svg><h2 id="revoke-head"><span data-en="Revoke healing approval" data-vi="Thu hồi chấp thuận sửa cơ chế kiểm thử">Revoke healing approval</span></h2></header><div class="v3-body"><dl class="v3-local-facts"><div><dt><span data-en="Knowledge record" data-vi="Bản ghi tri thức">Knowledge record</span></dt><dd><code>kr-22 · rev 7</code></dd></div>
+<div><dt><span data-en="Source chain" data-vi="Chuỗi nguồn">Source chain</span></dt><dd><code>inc-92 → cand-73 → kr-22</code></dd></div>
+<div><dt><span data-en="Candidate hash" data-vi="Mã băm đề xuất">Candidate hash</span></dt><dd><code>sha256:ch-8af2c41e73b90d11c6e8f207b5343e20</code></dd></div>
+<div><dt><span data-en="Reviewed by" data-vi="Người đã duyệt">Reviewed by</span></dt><dd><code>Minh Trần · 2026-10-13T10:00Z</code></dd></div>
+<div><dt><span data-en="Base commit" data-vi="Commit gốc">Base commit</span></dt><dd><code>9af317c</code></dd></div></dl><div class="v3-stack">
+<div data-except="none"><dl class="v3-local-facts"><div><dt><span data-en="Active dependents to flag" data-vi="Phụ thuộc đang hoạt động sẽ đánh dấu">Active dependents to flag</span></dt><dd><code>2 · cand-81 / cand-82</code></dd></div>
+<div><dt><span data-en="Historical usage retained" data-vi="Lịch sử sử dụng được giữ">Historical usage retained</span></dt><dd><code>1 · cand-83</code></dd></div></dl></div>
+<div data-only="none" hidden><p><span data-en="Confirmed empty snapshot: 0 active dependents, 0 historical usages." data-vi="Bản dữ liệu xác nhận rỗng: 0 phụ thuộc đang hoạt động, 0 lần sử dụng trong lịch sử.">Confirmed empty snapshot: 0 active dependents, 0 historical usages.</span></p></div>
+</div><p><span data-en="Stop reuse of kr-22 only. Prior runs and official decisions stay unchanged." data-vi="Chỉ ngừng tái sử dụng kr-22. Lượt chạy và quyết định chính thức trước đây không đổi.">Stop reuse of kr-22 only. Prior runs and official decisions stay unchanged.</span></p><label class="v3-field" for="revoke-reason"><span data-en="Revocation reason" data-vi="Lý do thu hồi">Revocation reason</span></label><textarea class="v3-input" rows="3" id="revoke-reason" required aria-describedby="revoke-help"></textarea><small id="revoke-help"><span data-en="Required. Kept in this local preview until you leave the page." data-vi="Bắt buộc. Giữ trong bản xem trước đến khi rời trang.">Required. Kept in this local preview until you leave the page.</span></small><div class="v3-field-error" role="alert" id="revoke-error" hidden><span data-en="422 · A nonblank reason is required." data-vi="422 · Cần nhập lý do không trống.">422 · A nonblank reason is required.</span> <code>reason_required</code></div></div><footer class="v3-form__footer"><button type="button" class="v3-btn " data-close><span data-en="Cancel" data-vi="Hủy">Cancel</span></button><button type="button" class="v3-btn v3-btn--destructive" data-prepare="revoke" disabled><span data-en="Revoke future reuse" data-vi="Thu hồi quyền tái sử dụng về sau">Revoke future reuse</span></button></footer></dialog>
+<script>
+(()=>{
+const $=s=>document.querySelector(s), all=s=>[...document.querySelectorAll(s)], pick=$('#review-state');
+let state='default';
+function showState(next){state=next;pick.value=next;document.querySelectorAll('dialog[open]').forEach(d=>d.close());for(const el of all('[data-only]'))el.hidden=!el.dataset.only.split(' ').includes(next);for(const el of all('[data-except]'))el.hidden=el.dataset.except.split(' ').includes(next);sync();}
+pick.addEventListener('change',()=>showState(pick.value));
+document.addEventListener('click',e=>{const n=e.target.closest('button');if(!n)return;if(n.hasAttribute('data-close'))n.closest('dialog')?.close();if(n.dataset.open)document.getElementById(n.dataset.open).showModal();if(n.dataset.to)showState(n.dataset.to);});
+const narrow=matchMedia('(max-width:767px)');narrow.addEventListener('change',()=>{if(narrow.matches)document.querySelectorAll('dialog[data-write][open]').forEach(d=>d.close());sync()});
+const allowed=["default","applied","422","prepared","none"];const keys=["revoke"];function checkForm(){for(const key of keys){const f=document.getElementById(key+'-reason'),b=document.querySelector('[data-prepare="'+key+'"]');b.disabled=narrow.matches||!allowed.includes(state)||!f.value.trim();if(f.value.trim()){document.getElementById(key+'-error').hidden=true;f.removeAttribute('aria-invalid')}}}for(const key of keys){document.getElementById(key+'-reason').addEventListener('input',checkForm);document.querySelector('[data-prepare="'+key+'"]').addEventListener('click',e=>{if(e.currentTarget.disabled)return;showState('prepared');});}function sync(){checkForm();if(state==='422'&&!narrow.matches){const key=keys[0],f=document.getElementById(key+'-reason');f.value='';f.setAttribute('aria-invalid','true');document.getElementById(key+'-error').hidden=false;document.getElementById(key).showModal();f.focus();checkForm()}}
+$('#revoke-reason').addEventListener('input',e=>{
+  const n=$('#retained'), value=e.target.value.trim();
+  n.dataset.en=value||'No reason entered.';n.dataset.vi=value||'Chưa nhập lý do.';
+  n.textContent=n.dataset[document.documentElement.lang];
+});
+const returnParams=new URLSearchParams(location.search);returnParams.delete('state');if(!returnParams.size)for(const [k,v] of new URLSearchParams('object=kr-22&candidate=cand-73&revision=7'))returnParams.set(k,v);const returnId='15-knowledge-revocation.html'+(returnParams.size?'?'+returnParams.toString():'');const loginUrl=new URLSearchParams({returnTo:returnId});$('#safe-login').href='02-login.html?'+loginUrl.toString();
+const params=new URLSearchParams(location.search);const identityKeys=new Set('project scope run evidence evaluation case incident candidate revision artifact attempt object knowledge binding release'.split(' '));
+function mismatch(record){return [...params].some(([key,val])=>identityKeys.has(key)&&(params.getAll(key).length!==1||record[key]!==val))}
+function isolated(id){for(const child of document.querySelector('main').children)child.hidden=child.id!==id;document.getElementById(id).hidden=false;if(id==='record-unavailable')document.getElementById('requested-identity').textContent=[...params].map(([k,v])=>k+'='+v).join(' · ');}
+if(mismatch({"project":"p-storefront","case":"case-address-8","incident":"inc-92","run":"run-1842","evidence":"ev-3","evaluation":"FAIL","candidate":"cand-73","revision":"7","scope":"project","object":"kr-22","knowledge":"kr-22"})){isolated('record-unavailable');return;}showState('default');
+})();
+</script>
+</body></html>

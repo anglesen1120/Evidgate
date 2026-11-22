@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title data-en="Evidence viewer · Evidgate" data-vi="Trình xem bằng chứng · Evidgate">Evidence viewer · Evidgate</title>
+<link rel="stylesheet" href="assets/tokens-v3.css">
+<link rel="stylesheet" href="assets/components-v3.css">
+<script defer src="assets/manifest-v3.js"></script>
+<script defer src="assets/shell.js"></script>
+<style>
+[hidden]{display:none!important}
+.v3-local-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,10rem),1fr));gap:var(--eg-space-4)}
+.v3-local-facts dt{color:var(--eg-text-muted);font-size:var(--eg-text-xs)}
+.v3-local-facts dd{margin-top:var(--eg-space-1);font-weight:600}
+.v3-local-state{min-height:12rem;align-content:center}
+.v3-local-mobile{display:none}
+@media(max-width:767px){.v3-local-write{display:none!important}.v3-local-mobile{display:block}}
+@media(pointer:coarse){summary{min-height:var(--eg-control-touch)}}
+.v3-view-plate{display:grid;gap:var(--eg-space-4);padding:var(--eg-space-5);background:var(--eg-surface-raised);border:1px solid var(--eg-border);border-radius:var(--eg-radius-md)}
+.v3-view-paper{display:grid;gap:var(--eg-space-4);padding:var(--eg-space-5);background:var(--eg-surface);border:1px solid var(--eg-border)}
+.v3-view-paper .v3-local-facts{grid-template-columns:1fr}
+.v3-view-dialog{width:min(46rem,calc(100% - 2rem))}
+#capture-box{max-height:44dvh;overflow:auto}
+</style>
+</head>
+<body data-page="11"><a class="v3-skip" href="#main"><span data-en="Skip to content" data-vi="Đến nội dung">Skip to content</span></a>
+<noscript><nav><a href="01-app-shell.html">Overview / Tổng quan</a> · <a href="03-run-list.html">Test runs / Lượt kiểm thử</a></nav></noscript>
+<svg class="v3-sprites" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+
+
+
+
+<symbol id="i-run" viewBox="0 0 24 24"><path d="M5 3h14v18H5z M10 8l5 4-5 4z"/></symbol>
+
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-4 9-8 11-4-2-8-6-8-11V5z M8 12l3 3 5-6"/></symbol>
+
+
+
+
+
+
+
+
+
+</svg>
+<div class="v3-shell"><aside class="v3-sidebar" data-v3-sidebar></aside><div class="v3-workspace">
+<header class="v3-topbar" data-v3-topbar></header><main id="main" tabindex="-1">
+<section id="record-unavailable" hidden class="v3-panel v3-pad v3-stack" role="status"><h1><span data-en="Requested record unavailable" data-vi="Không có bản ghi được yêu cầu">Requested record unavailable</span></h1><p><span data-en="No matching fixture is available. No other record has been substituted." data-vi="Không có bản mẫu khớp yêu cầu. Không thay bằng bản ghi khác.">No matching fixture is available. No other record has been substituted.</span></p><code id="requested-identity"></code></section>
+<section id="sandbox-record" hidden class="v3-panel v3-pad v3-stack"><h1><span data-en="Studio sandbox evidence" data-vi="Bằng chứng mô phỏng Studio">Studio sandbox evidence</span></h1><p class="v3-badge"><span data-en="Sandbox only" data-vi="Chỉ trong môi trường mô phỏng">Sandbox only</span></p><code>ev-s1 · run-sandbox-88 · case-checkout-17</code><p><span data-en="Sandbox artifact ev-s1 unavailable for preview. This is not official CI evidence." data-vi="Hiện vật mô phỏng ev-s1 không có bản xem trước. Đây không phải bằng chứng CI chính thức.">Sandbox artifact ev-s1 unavailable for preview. This is not official CI evidence.</span></p></section>
+<header class="v3-page-header"><div class="v3-page-header__title"><span class="v3-page-header__icon"><svg class="v3-icon" aria-hidden="true"><use href="#i-run"/></svg></span><div><h1><span data-en="Evidence viewer" data-vi="Trình xem bằng chứng">Evidence viewer</span></h1><p class="v3-muted"><span data-en="Inspect one pinned artifact without changing the run outcome." data-vi="Xem một hiện vật đã ghim mà không thay đổi kết quả lượt chạy.">Inspect one pinned artifact without changing the run outcome.</span></p></div></div></header>
+<div class="v3-stack"><div data-only="loading" hidden><section class="v3-panel v3-pad v3-stack v3-local-state" role="status"><h2><span data-en="Loading" data-vi="Đang tải">Loading</span></h2><p><span data-en="Waiting for a supplied snapshot. No result yet." data-vi="Đang chờ bản dữ liệu. Chưa có kết quả.">Waiting for a supplied snapshot. No result yet.</span></p><div class="v3-skeleton" aria-hidden="true"><i></i><i></i></div><code>run-1842 · ev-3</code></section></div>
+<div data-only="empty" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="No artifact attached" data-vi="Không có hiện vật đính kèm">No artifact attached</span></h2><p><span data-en="No record was supplied; no outcome can be inferred." data-vi="Không có bản ghi; không thể suy ra kết quả.">No record was supplied; no outcome can be inferred.</span></p></section></div>
+<div data-only="404" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="Not found" data-vi="Không tìm thấy">Not found</span></h2><p><span data-en="This resource is not available at this address." data-vi="Không tìm thấy tài nguyên ở địa chỉ này.">This resource is not available at this address.</span></p></section></div>
+<div data-only="filtered" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="No results match these filters" data-vi="Không có kết quả phù hợp với bộ lọc">No results match these filters</span></h2><p><span data-en="The scoped record is unchanged." data-vi="Bản ghi trong phạm vi này không thay đổi.">The scoped record is unchanged.</span></p><div class="v3-actions"><button type="button" class="v3-btn " data-to="default"><span data-en="Clear preview filter" data-vi="Xóa bộ lọc xem trước">Clear preview filter</span></button></div></section></div>
+<div data-only="error" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="Unable to refresh" data-vi="Không thể làm mới">Unable to refresh</span></h2><p><span data-en="Pinned context is retained. Retrying does not submit a decision." data-vi="Ngữ cảnh đã ghim được giữ lại. Thử lại không gửi quyết định.">Pinned context is retained. Retrying does not submit a decision.</span></p><code>run-1842 · ev-3 · req-view-21</code><div class="v3-actions"><button type="button" class="v3-btn " data-to="default"><span data-en="Retry preview" data-vi="Thử lại bản xem trước">Retry preview</span></button></div></section></div>
+<div data-only="403" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="Permissions changed" data-vi="Quyền truy cập đã thay đổi">Permissions changed</span></h2><p><span data-en="Metadata only. Content access was not granted." data-vi="Chỉ có siêu dữ liệu. Chưa được cấp quyền xem nội dung.">Metadata only. Content access was not granted.</span></p><code>req-view-21</code></section></div>
+<div data-only="401" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="Session expired" data-vi="Phiên đăng nhập đã hết hạn">Session expired</span></h2><p><span data-en="Sign in again to resume at the safe return route. Sensitive content is closed." data-vi="Đăng nhập lại để trở về đường dẫn an toàn. Nội dung nhạy cảm đã đóng.">Sign in again to resume at the safe return route. Sensitive content is closed.</span></p><a class="v3-btn" id="safe-login" href="02-login.html"><span data-en="Sign in again" data-vi="Đăng nhập lại">Sign in again</span></a></section></div>
+<div data-only="429" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="Too many requests" data-vi="Quá nhiều yêu cầu">Too many requests</span></h2><p><span data-en="Server fixture: Retry-After: 30 s. No automatic retry." data-vi="Dữ liệu mẫu từ máy chủ: Retry-After: 30 giây. Không tự động thử lại.">Server fixture: Retry-After: 30 s. No automatic retry.</span></p><code>req-view-21</code></section></div>
+<div data-only="412" hidden><section class="v3-panel v3-pad v3-stack" role="status"><h2><span data-en="Someone else changed this — reload" data-vi="Người khác đã thay đổi dữ liệu — tải lại">Someone else changed this — reload</span></h2><p><span data-en="Linked review conflict, not a viewer GET: rv-12 → rv-13; note changed. Draft: inspect ev-3." data-vi="Xung đột ở thao tác duyệt liên kết, không phải GET của trình xem: rv-12 → rv-13; ghi chú đã đổi. Nháp: xem ev-3.">Linked review conflict, not a viewer GET: rv-12 → rv-13; note changed. Draft: inspect ev-3.</span></p><code>req-view-21</code><div class="v3-actions"><button type="button" class="v3-btn " data-to="reloaded"><span data-en="Reload current revision" data-vi="Tải lại phiên bản hiện tại">Reload current revision</span></button></div></section></div><div data-only="reloaded" hidden><div class="v3-pad v3-panel v3-stack "><strong><span data-en="Review revision rv-13" data-vi="Phiên bản duyệt rv-13">Review revision rv-13</span></strong><p><span data-en="Draft retained: inspect ev-3. Evidence stays pinned." data-vi="Giữ bản nháp: xem ev-3. Bằng chứng vẫn được ghim.">Draft retained: inspect ev-3. Evidence stays pinned.</span></p></div></div><div data-except="loading empty 404 401"><div class="v3-stack">
+<section class="v3-panel"><header class="v3-panel__header"><div class="v3-spread"><h2><span data-en="Pinned evidence" data-vi="Bằng chứng đã ghim">Pinned evidence</span></h2><span class="v3-badge v3-badge--info"><span data-en="GitHub Actions · CI" data-vi="GitHub Actions · CI">GitHub Actions · CI</span></span></div></header>
+<div class="v3-pad v3-stack"><dl class="v3-local-facts"><div><dt><span data-en="Run / evidence" data-vi="Lượt chạy / bằng chứng">Run / evidence</span></dt><dd><code>run-1842 · ev-3</code></dd></div>
+<div><dt><span data-en="Evidence completeness" data-vi="Mức độ đầy đủ của bằng chứng">Evidence completeness</span></dt><dd><span data-en="Incomplete · shard-3 missing" data-vi="Chưa đầy đủ · thiếu shard-3">Incomplete · shard-3 missing</span></dd></div>
+<div><dt><span data-en="Test outcome" data-vi="Kết quả kiểm thử">Test outcome</span></dt><dd><code>has_failures</code></dd></div>
+<div><dt><span data-en="Stored run decision" data-vi="Quyết định đã lưu của lượt chạy">Stored run decision</span></dt><dd><code>FAIL</code></dd></div><div data-only="default reloaded"><dt><span data-en="Original checkout attempt" data-vi="Lần thử thanh toán gốc">Original checkout attempt</span></dt><dd><code>att-1842-01 · case-checkout-17</code></dd></div><div><dt><span data-en="Attempt history" data-vi="Lịch sử lần thử">Attempt history</span></dt><dd><span data-en="Attempt 1 failed; attempt 2 passed on retry." data-vi="Lần 1 thất bại; lần 2 đạt khi thử lại.">Attempt 1 failed; attempt 2 passed on retry.</span></dd></div></dl></div></section>
+<div class="v3-master-detail">
+<section class="v3-panel"><header class="v3-panel__header"><div class="v3-spread"><h2><span data-en="Evidence viewer — isolated origin" data-vi="Trình xem bằng chứng — miền xem tách biệt">Evidence viewer — isolated origin</span></h2><span class="v3-badge v3-pending"><span data-en="Read-only" data-vi="Chỉ đọc">Read-only</span></span></div></header>
+<div class="v3-pad v3-stack"><div data-only="default trace reloaded"><div class="v3-stack">
+<figure class="v3-view-plate"><div class="v3-spread"><b>Storefront</b><code>checkout.local / order</code></div><div class="v3-view-paper"><small data-en="Order · 01" data-vi="Đơn hàng · 01">Order · 01</small><h2><span data-en="Review your order" data-vi="Xem lại đơn hàng">Review your order</span></h2><dl class="v3-local-facts"><div><dt><span data-en="Name" data-vi="Tên">Name</span></dt><dd><code>••••</code></dd></div>
+<div><dt><span data-en="Email" data-vi="Email">Email</span></dt><dd><code>••••</code></dd></div>
+<div><dt><span data-en="Delivery address" data-vi="Địa chỉ giao hàng">Delivery address</span></dt><dd><code>••••</code></dd></div></dl><div class="v3-spread"><b><span data-en="Everyday tote · Qty 1" data-vi="Túi tote · SL 1">Everyday tote · Qty 1</span></b><b>$24.00</b></div></div><figcaption><span data-en="Illustrative capture. No customer data or active artifact HTML." data-vi="Ảnh minh họa. Không có dữ liệu khách hàng hoặc HTML hiện vật thực thi.">Illustrative capture. No customer data or active artifact HTML.</span></figcaption></figure>
+<div class="v3-actions"><button type="button" class="v3-btn v3-btn--primary" data-open="inspect"><span data-en="Inspect capture" data-vi="Xem bản ghi">Inspect capture</span></button><button type="button" class="v3-btn " data-open="download"><span data-en="Download artifact" data-vi="Tải hiện vật">Download artifact</span></button></div>
+</div></div><div data-only="restricted" hidden><div class="v3-stack">
+<span class="v3-badge v3-pending"><span data-en="Sensitive · restricted" data-vi="Nhạy cảm · bị hạn chế">Sensitive · restricted</span></span>
+<p><span data-en="Access requires artifact:read_sensitive. No preview or download." data-vi="Cần quyền artifact:read_sensitive. Không xem trước hoặc tải xuống.">Access requires artifact:read_sensitive. No preview or download.</span></p>
+
+</div></div>
+<div data-only="scan" hidden><div class="v3-stack">
+<span class="v3-badge v3-badge--waiting"><svg class="v3-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0 M12 7v5l3 2"/></svg><span data-en="Scan pending" data-vi="Đang chờ quét">Scan pending</span></span>
+<p><span data-en="Scan pending. The log is not fetched." data-vi="Đang chờ quét. Không tải nội dung nhật ký.">Scan pending. The log is not fetched.</span></p>
+
+</div></div>
+<div data-only="pending_upload" hidden><div class="v3-stack">
+<span class="v3-badge v3-badge--waiting"><svg class="v3-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0 M12 7v5l3 2"/></svg><span data-en="Pending upload" data-vi="Chờ tải lên">Pending upload</span></span>
+<p><span data-en="Upload has not completed. Not evidence-ready." data-vi="Chưa tải lên xong. Chưa sẵn sàng làm bằng chứng.">Upload has not completed. Not evidence-ready.</span></p>
+
+</div></div>
+<div data-only="uploaded" hidden><div class="v3-stack">
+<span class="v3-badge v3-pending"><span data-en="Uploaded · not ready" data-vi="Đã tải lên · chưa sẵn sàng">Uploaded · not ready</span></span>
+<p><span data-en="Uploaded is not ready. Awaiting evidence processing." data-vi="Đã tải lên nhưng chưa sẵn sàng. Đang chờ xử lý bằng chứng.">Uploaded is not ready. Awaiting evidence processing.</span></p>
+
+</div></div>
+<div data-only="rejected" hidden><div class="v3-stack">
+<span class="v3-badge v3-danger-tone"><span data-en="Checksum mismatch" data-vi="Mã băm không khớp">Checksum mismatch</span></span>
+<p><span data-en="Rejected: checksum mismatch. Metadata retained." data-vi="Bị từ chối: mã băm không khớp. Giữ siêu dữ liệu.">Rejected: checksum mismatch. Metadata retained.</span></p>
+<code>req-view-21</code>
+</div></div>
+<div data-only="pending_delete" hidden><div class="v3-stack">
+<span class="v3-badge v3-badge--waiting"><svg class="v3-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0 M12 7v5l3 2"/></svg><span data-en="Pending deletion" data-vi="Đang chờ xóa">Pending deletion</span></span>
+<p><span data-en="Retention deletion scheduled. Content is closed." data-vi="Đã lên lịch xóa theo thời hạn lưu giữ. Nội dung đã đóng.">Retention deletion scheduled. Content is closed.</span></p>
+
+</div></div>
+<div data-only="deleted" hidden><div class="v3-stack">
+<span class="v3-badge v3-pending"><span data-en="Deleted" data-vi="Đã xóa">Deleted</span></span>
+<p><span data-en="Deleted by retention policy. No content remains available." data-vi="Đã xóa theo chính sách lưu giữ. Không còn nội dung để xem.">Deleted by retention policy. No content remains available.</span></p>
+
+</div></div>
+<div data-only="gated" hidden><div class="v3-stack">
+<span class="v3-badge v3-pending"><span data-en="Content gated" data-vi="Nội dung bị chặn">Content gated</span></span>
+<p><span data-en="content_gated = true. Metadata only." data-vi="content_gated = true. Chỉ có siêu dữ liệu.">content_gated = true. Metadata only.</span></p>
+
+</div></div>
+<div data-only="large" hidden><div class="v3-stack">
+<span class="v3-badge v3-pending"><span data-en="Large artifact" data-vi="Hiện vật dung lượng lớn">Large artifact</span></span>
+<p><span data-en="Too large for the bounded viewer. The authorized fixture permits a download preview only." data-vi="Vượt giới hạn trình xem. Mẫu được cấp quyền chỉ cho xem thông tin tải xuống.">Too large for the bounded viewer. The authorized fixture permits a download preview only.</span></p>
+<div class="v3-actions"><button type="button" class="v3-btn " data-open="download"><span data-en="Download artifact" data-vi="Tải hiện vật">Download artifact</span></button></div>
+</div></div>
+<div data-only="refresh" hidden><div class="v3-stack">
+<span class="v3-badge v3-danger-tone"><span data-en="Authorization refresh failed" data-vi="Làm mới quyền truy cập thất bại">Authorization refresh failed</span></span>
+<p><span data-en="Unable to refresh evidence after one silent refresh. No content is shown." data-vi="Không thể làm mới bằng chứng sau một lần thử ngầm. Không hiển thị nội dung.">Unable to refresh evidence after one silent refresh. No content is shown.</span></p>
+<code>req-view-21</code>
+</div></div><div data-only="historical" hidden><p><span data-en="ev-2 is historical; the selected artifact belongs to ev-3." data-vi="ev-2 là bản lịch sử; hiện vật đang chọn thuộc ev-3.">ev-2 is historical; the selected artifact belongs to ev-3.</span></p></div><div data-only="403 error 412 429 filtered" hidden><p><span data-en="Content is closed. No artifact request or download URL was generated." data-vi="Nội dung đã đóng. Không yêu cầu hiện vật hoặc tạo URL tải xuống.">Content is closed. No artifact request or download URL was generated.</span></p></div><p class="v3-muted"><span data-en="This is a presentation boundary, not a deployed security sandbox." data-vi="Đây là ranh giới trình bày, không phải vùng cách ly bảo mật đã triển khai.">This is a presentation boundary, not a deployed security sandbox.</span></p></div></section>
+<div class="v3-stack">
+<section class="v3-panel"><header class="v3-panel__header"><div class="v3-spread"><h2><span data-en="Safe metadata" data-vi="Siêu dữ liệu an toàn">Safe metadata</span></h2></div></header>
+<div class="v3-pad v3-stack"><div data-only="default reloaded historical error 429 412 filtered"><dl class="v3-local-facts"><div><dt><span data-en="Artifact" data-vi="Hiện vật">Artifact</span></dt><dd><code>art-shot-92</code></dd></div>
+<div><dt><span data-en="Type / size" data-vi="Loại / kích thước">Type / size</span></dt><dd><code>image/png · 248 KiB</code></dd></div>
+<div><dt><span data-en="Checksum" data-vi="Mã băm">Checksum</span></dt><dd><code>sha256:ad72…f18b</code></dd></div>
+<div><dt><span data-en="Sensitivity" data-vi="Độ nhạy">Sensitivity</span></dt><dd><span data-en="Standard · redacted" data-vi="Thông thường · đã ẩn dữ liệu">Standard · redacted</span></dd></div>
+<div><dt><span data-en="Captured" data-vi="Ghi nhận">Captured</span></dt><dd><code>2026-10-13T09:42:06.718Z</code></dd></div></dl></div><div data-only="trace large pending_upload uploaded rejected pending_delete deleted refresh" hidden><dl class="v3-local-facts"><div><dt><span data-en="Artifact" data-vi="Hiện vật">Artifact</span></dt><dd><code>art-trace-91</code></dd></div>
+<div><dt><span data-en="Type / size" data-vi="Loại / kích thước">Type / size</span></dt><dd><code>Playwright trace · 18.4 MiB</code></dd></div>
+<div><dt><span data-en="Checksum" data-vi="Mã băm">Checksum</span></dt><dd><code>sha256:f83d…621a</code></dd></div>
+<div><dt><span data-en="Sensitivity" data-vi="Độ nhạy">Sensitivity</span></dt><dd><span data-en="Sensitive" data-vi="Nhạy cảm">Sensitive</span></dd></div></dl></div><div data-only="restricted gated 403" hidden><dl class="v3-local-facts"><div><dt><span data-en="Artifact" data-vi="Hiện vật">Artifact</span></dt><dd><code>art-dom-93</code></dd></div>
+<div><dt><span data-en="Kind" data-vi="Loại">Kind</span></dt><dd><span data-en="DOM snapshot" data-vi="Ảnh chụp DOM">DOM snapshot</span></dd></div>
+<div><dt><span data-en="Sensitivity" data-vi="Độ nhạy">Sensitivity</span></dt><dd><span data-en="Sensitive · metadata only" data-vi="Nhạy cảm · chỉ siêu dữ liệu">Sensitive · metadata only</span></dd></div></dl></div><div data-only="scan" hidden><dl class="v3-local-facts"><div><dt><span data-en="Artifact" data-vi="Hiện vật">Artifact</span></dt><dd><code>art-log-94</code></dd></div>
+<div><dt><span data-en="Kind" data-vi="Loại">Kind</span></dt><dd><span data-en="Console log" data-vi="Nhật ký bảng điều khiển">Console log</span></dd></div>
+<div><dt><span data-en="Scan state" data-vi="Trạng thái quét">Scan state</span></dt><dd><span data-en="Scan pending" data-vi="Đang chờ quét">Scan pending</span></dd></div></dl></div></div></section>
+<section class="v3-panel"><header class="v3-panel__header"><div class="v3-spread"><h2><span data-en="Related artifacts" data-vi="Hiện vật liên quan">Related artifacts</span></h2></div></header>
+<div class="v3-pad v3-stack"><div class="v3-stack">
+<div class="v3-spread"><div><code>art-shot-92</code><p class="v3-muted"><span data-en="Screenshot · standard" data-vi="Ảnh chụp · thông thường">Screenshot · standard</span></p></div><a class="v3-btn" href="11-artifact-viewer.html?artifact=art-shot-92&amp;run=run-1842&amp;evidence=ev-3&amp;evaluation=FAIL"><span data-en="Metadata" data-vi="Siêu dữ liệu">Metadata</span></a></div>
+<div class="v3-spread"><div><code>art-trace-91</code><p class="v3-muted"><span data-en="Playwright trace · pending upload" data-vi="Vết Playwright · chờ tải lên">Playwright trace · pending upload</span></p></div><a class="v3-btn" href="11-artifact-viewer.html?artifact=art-trace-91&amp;run=run-1842&amp;evidence=ev-3&amp;evaluation=FAIL"><span data-en="Metadata" data-vi="Siêu dữ liệu">Metadata</span></a></div>
+<div class="v3-spread"><div><code>art-dom-93</code><p class="v3-muted"><span data-en="Sensitive · metadata only" data-vi="Nhạy cảm · chỉ siêu dữ liệu">Sensitive · metadata only</span></p></div><a class="v3-btn" href="11-artifact-viewer.html?artifact=art-dom-93&amp;run=run-1842&amp;evidence=ev-3&amp;evaluation=FAIL"><span data-en="Metadata" data-vi="Siêu dữ liệu">Metadata</span></a></div>
+<div class="v3-spread"><div><code>art-log-94</code><p class="v3-muted"><span data-en="Scan pending" data-vi="Đang chờ quét">Scan pending</span></p></div><a class="v3-btn" href="11-artifact-viewer.html?artifact=art-log-94&amp;run=run-1842&amp;evidence=ev-3&amp;evaluation=FAIL"><span data-en="Metadata" data-vi="Siêu dữ liệu">Metadata</span></a></div>
+</div></div></section>
+</div>
+</div>
+<div class="v3-actions"><a class="v3-btn " href="04-run-detail.html?run=run-1842&amp;evidence=ev-3&amp;evaluation=FAIL"><span data-en="Run detail" data-vi="Chi tiết lượt chạy">Run detail</span></a><a class="v3-btn " href="05-evidence-panel.html?run=run-1842&amp;evidence=ev-3&amp;evaluation=FAIL"><span data-en="Pinned evidence" data-vi="Bằng chứng đã chốt">Pinned evidence</span></a><a class="v3-btn " href="25-test-catalog.html?case=case-checkout-17&amp;revision=5"><span data-en="Test catalog" data-vi="Danh mục kiểm thử">Test catalog</span></a></div>
+</div></div></div>
+<details class="v3-review-controls"><summary><span data-en="Design review controls" data-vi="Trạng thái bản mẫu">Design review controls</span></summary><div class="v3-review-controls__body"><label class="v3-field"><span data-en="Prototype state" data-vi="Trạng thái bản mẫu">Prototype state</span><select id="review-state"><option value="default" data-en="Default" data-vi="Mặc định">Default</option>
+<option value="loading" data-en="Loading" data-vi="Đang tải">Loading</option>
+<option value="empty" data-en="No resource" data-vi="Không có tài nguyên">No resource</option>
+<option value="filtered" data-en="No matches" data-vi="Không có kết quả phù hợp">No matches</option>
+<option value="error" data-en="Refresh failed" data-vi="Làm mới thất bại">Refresh failed</option>
+<option value="403" data-en="403 · Permission changed" data-vi="403 · Quyền đã thay đổi">403 · Permission changed</option>
+<option value="404" data-en="404 · Not found" data-vi="404 · Không tìm thấy">404 · Not found</option>
+<option value="401" data-en="401 · Session expired" data-vi="401 · Phiên đã hết hạn">401 · Session expired</option>
+<option value="429" data-en="429 · Rate limited" data-vi="429 · Quá nhiều yêu cầu">429 · Rate limited</option>
+<option value="412" data-en="412 · Stale revision" data-vi="412 · Phiên bản đã cũ">412 · Stale revision</option>
+<option value="reloaded" data-en="Explicit reload" data-vi="Đã tải lại rõ ràng">Explicit reload</option>
+<option value="trace" data-en="Ready trace" data-vi="Vết sẵn sàng">Ready trace</option>
+<option value="restricted" data-en="Sensitive · restricted" data-vi="Nhạy cảm · bị hạn chế">Sensitive · restricted</option>
+<option value="scan" data-en="Scan pending" data-vi="Đang chờ quét">Scan pending</option>
+<option value="pending_upload" data-en="Pending upload" data-vi="Chờ tải lên">Pending upload</option>
+<option value="uploaded" data-en="Uploaded · not ready" data-vi="Đã tải lên · chưa sẵn sàng">Uploaded · not ready</option>
+<option value="rejected" data-en="Checksum mismatch" data-vi="Mã băm không khớp">Checksum mismatch</option>
+<option value="pending_delete" data-en="Pending deletion" data-vi="Đang chờ xóa">Pending deletion</option>
+<option value="deleted" data-en="Deleted" data-vi="Đã xóa">Deleted</option>
+<option value="gated" data-en="Content gated" data-vi="Nội dung bị chặn">Content gated</option>
+<option value="large" data-en="Large artifact" data-vi="Hiện vật dung lượng lớn">Large artifact</option>
+<option value="refresh" data-en="Authorization refresh failed" data-vi="Làm mới quyền truy cập thất bại">Authorization refresh failed</option>
+<option value="historical" data-en="Historical evidence" data-vi="Bằng chứng lịch sử">Historical evidence</option></select></label></div></details>
+</main></div></div>
+<dialog class="v3-dialog v3-view-dialog" id="inspect" aria-labelledby="inspect-h"><header class="v3-dialog__header"><h2 id="inspect-h"><span data-en="Isolated evidence viewer" data-vi="Trình xem bằng chứng tách biệt">Isolated evidence viewer</span></h2><button type="button" class="v3-btn" data-close><span data-en="Close" data-vi="Đóng">Close</span></button></header>
+<div class="v3-body"><label class="v3-field"><span data-en="Trace step" data-vi="Bước trong vết">Trace step</span><select id="step"><option value="0" data-en="01 · Click Place order" data-vi="01 · Nhấn Đặt hàng">01 · Click Place order</option><option value="1" data-en="02 · Wait for order confirmation" data-vi="02 · Chờ xác nhận đơn">02 · Wait for order confirmation</option><option value="2" data-en="03 · Assertion failed" data-vi="03 · Khẳng định thất bại">03 · Assertion failed</option></select></label>
+<div id="capture-box"><div id="capture"><figure class="v3-view-plate"><div class="v3-spread"><b>Storefront</b><code>checkout.local / order</code></div><div class="v3-view-paper"><small data-en="Order · 01" data-vi="Đơn hàng · 01">Order · 01</small><h2><span data-en="Review your order" data-vi="Xem lại đơn hàng">Review your order</span></h2><dl class="v3-local-facts"><div><dt><span data-en="Name" data-vi="Tên">Name</span></dt><dd><code>••••</code></dd></div>
+<div><dt><span data-en="Email" data-vi="Email">Email</span></dt><dd><code>••••</code></dd></div>
+<div><dt><span data-en="Delivery address" data-vi="Địa chỉ giao hàng">Delivery address</span></dt><dd><code>••••</code></dd></div></dl><div class="v3-spread"><b><span data-en="Everyday tote · Qty 1" data-vi="Túi tote · SL 1">Everyday tote · Qty 1</span></b><b>$24.00</b></div></div><figcaption><span data-en="Illustrative capture. No customer data or active artifact HTML." data-vi="Ảnh minh họa. Không có dữ liệu khách hàng hoặc HTML hiện vật thực thi.">Illustrative capture. No customer data or active artifact HTML.</span></figcaption></figure></div></div><div role="status"><p data-step="0"><span data-en="Order submitted." data-vi="Đã gửi đơn hàng.">Order submitted.</span></p><p data-step="1"><span data-en="Waiting for the confirmation heading." data-vi="Đang chờ tiêu đề xác nhận.">Waiting for the confirmation heading.</span></p><p data-step="2"><span data-en="POST /orders → HTTP 500. Expected confirmation heading." data-vi="POST /orders → HTTP 500. Không thấy tiêu đề xác nhận.">POST /orders → HTTP 500. Expected confirmation heading.</span></p></div><div class="v3-actions"><button type="button" class="v3-btn " id="zout"><span data-en="− 25%" data-vi="− 25%">− 25%</span></button><output id="zoom">100%</output><button type="button" class="v3-btn " id="zin"><span data-en="+ 25%" data-vi="+ 25%">+ 25%</span></button><button type="button" class="v3-btn " id="zreset"><span data-en="Reset zoom" data-vi="Đặt lại thu phóng">Reset zoom</span></button></div></div></dialog><dialog id="download" class="v3-dialog" aria-labelledby="download-head"><header class="v3-dialog__header"><svg class="v3-icon" aria-hidden="true"><use href="#i-shield"/></svg><h2 id="download-head"><span data-en="Download artifact" data-vi="Tải hiện vật">Download artifact</span></h2></header><div class="v3-body"><div class="v3-stack">
+<div data-only="default reloaded"><code>art-shot-92 · 248 KiB</code></div>
+<div data-only="large trace" hidden><code>art-trace-91 · 18.4 MiB</code></div>
+<p><span data-en="Authorized download handoff preview. This mockup contains no downloadable artifact bytes or signed URL." data-vi="Minh họa bước tải xuống được cấp quyền. Mẫu không chứa dữ liệu hiện vật để tải hoặc URL đã ký.">Authorized download handoff preview. This mockup contains no downloadable artifact bytes or signed URL.</span></p>
+</div></div><footer class="v3-form__footer"><button type="button" class="v3-btn " data-close><span data-en="Cancel" data-vi="Hủy">Cancel</span></button></footer></dialog>
+<script>
+(()=>{
+const $=s=>document.querySelector(s), all=s=>[...document.querySelectorAll(s)], pick=$('#review-state');
+let state='default';
+function showState(next){state=next;pick.value=next;document.querySelectorAll('dialog[open]').forEach(d=>d.close());for(const el of all('[data-only]'))el.hidden=!el.dataset.only.split(' ').includes(next);for(const el of all('[data-except]'))el.hidden=el.dataset.except.split(' ').includes(next);sync();}
+pick.addEventListener('change',()=>showState(pick.value));
+document.addEventListener('click',e=>{const n=e.target.closest('button');if(!n)return;if(n.hasAttribute('data-close'))n.closest('dialog')?.close();if(n.dataset.open)document.getElementById(n.dataset.open).showModal();if(n.dataset.to)showState(n.dataset.to);});
+const narrow=matchMedia('(max-width:767px)');narrow.addEventListener('change',()=>{if(narrow.matches)document.querySelectorAll('dialog[data-write][open]').forEach(d=>d.close());sync()});
+let zoom=100;function paint(){for(const n of all('[data-step]'))n.hidden=n.dataset.step!==$('#step').value;$('#capture').style.zoom=zoom+'%';$('#zoom').value=zoom+'%';$('#zout').disabled=zoom<=75;$('#zin').disabled=zoom>=150}$('#step').onchange=paint;$('#zout').onclick=()=>{zoom-=25;paint()};$('#zin').onclick=()=>{zoom+=25;paint()};$('#zreset').onclick=()=>{zoom=100;paint()};function sync(){zoom=100;$('#step').value='2';paint()}
+const returnParams=new URLSearchParams(location.search);returnParams.delete('state');if(!returnParams.size)for(const [k,v] of new URLSearchParams('artifact=art-shot-92&run=run-1842&evidence=ev-3&evaluation=FAIL&attempt=att-1842-01'))returnParams.set(k,v);const returnId='11-artifact-viewer.html'+(returnParams.size?'?'+returnParams.toString():'');const loginUrl=new URLSearchParams({returnTo:returnId});$('#safe-login').href='02-login.html?'+loginUrl.toString();
+const params=new URLSearchParams(location.search);const identityKeys=new Set('project scope run evidence evaluation case incident candidate revision artifact attempt object knowledge binding release'.split(' '));
+function mismatch(record){return [...params].some(([key,val])=>identityKeys.has(key)&&(params.getAll(key).length!==1||record[key]!==val))}
+function isolated(id){for(const child of document.querySelector('main').children)child.hidden=child.id!==id;document.getElementById(id).hidden=false;if(id==='record-unavailable')document.getElementById('requested-identity').textContent=[...params].map(([k,v])=>k+'='+v).join(' · ');}
+const artifact=params.get('artifact')||'art-shot-92';if(artifact==='ev-s1'){const context={...{"project":"p-storefront"},artifact,scope:'sandbox',run:'run-sandbox-88',case:'case-checkout-17'};isolated(mismatch(context)?'record-unavailable':'sandbox-record');return;}const mode={'art-shot-92':'default','art-dom-93':'restricted','art-log-94':'scan','art-trace-91':'pending_upload'}[artifact];if(!mode||mismatch({...{"project":"p-storefront","case":"case-checkout-17","incident":"inc-91","run":"run-1842","evidence":"ev-3","evaluation":"FAIL","attempt":"att-1842-01","scope":"official"},artifact})){isolated('record-unavailable');return;}showState(mode);
+})();
+</script>
+</body></html>

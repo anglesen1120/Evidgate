@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title  data-en="Review draft · Evidgate" data-vi="Xem xét bản nháp · Evidgate">Review draft · Evidgate</title>
+<link rel="stylesheet" href="assets/tokens-v3.css">
+<link rel="stylesheet" href="assets/components-v3.css">
+<script defer src="assets/manifest-v3.js"></script>
+<script defer src="assets/shell.js"></script>
+<style>
+[hidden]{display:none!important}
+.v3-studio__bar{display:flex;align-items:center;justify-content:space-between;gap:var(--eg-space-4);flex-wrap:wrap;margin-block-end:var(--eg-space-5)}
+.v3-studio__layout{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);align-items:start;gap:var(--eg-space-5)}
+.v3-studio__facts{display:flex;flex-wrap:wrap;gap:var(--eg-space-4) var(--eg-space-7)}
+.v3-studio__facts dd{margin-top:var(--eg-space-2)}
+.v3-studio__mobile{display:none}
+.v3-studio__preview{min-height:20rem;align-content:start}
+.v3-studio__notice{margin-block-end:var(--eg-space-5)}
+.v3-studio__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--eg-space-4)}
+.v3-studio__foot{margin-top:var(--eg-space-5)}
+.v3-studio__foot a{font-weight:600}
+.v3-studio__code{white-space:pre-wrap;overflow-wrap:anywhere;max-height:19rem;overflow:auto;margin:0;background:var(--eg-surface-raised);padding:var(--eg-space-4);border-radius:var(--eg-radius-md)}
+@media(max-width:1023px){.v3-studio__layout{grid-template-columns:minmax(0,1.45fr) minmax(0,1fr)}}
+@media(max-width:767px){.v3-studio__layout,.v3-studio__grid{grid-template-columns:minmax(0,1fr)}.v3-studio__mobile{display:block}.v3-studio__write{display:none!important}}
+.v3-patch{gap:var(--eg-space-2)}.v3-patch__pane{min-width:0;border:1px solid var(--eg-border);border-radius:var(--eg-radius-md);overflow:hidden}.v3-patch__pane>.v3-pad{background:var(--eg-surface-raised);padding:var(--eg-space-3)}.v3-patch__line{display:grid;grid-template-columns:3ch minmax(0,1fr);gap:var(--eg-space-2);padding:var(--eg-space-3)}.v3-patch__line code:first-child{color:var(--eg-text-muted)}.v3-patch__added{background:var(--eg-accent-soft);color:var(--eg-accent)}
+@media(min-width:768px){.v3-patch{grid-template-rows:auto repeat(4,auto)}.v3-patch__pane,.v3-patch__lines{display:grid;grid-template-rows:subgrid;grid-row:span 5}.v3-patch__lines{grid-row:span 4}}
+</style>
+</head>
+<body data-page="19">
+<a class="v3-skip" href="#main"><span data-en="Skip to content" data-vi="Đến nội dung">Skip to content</span></a>
+<noscript><nav><a href="01-app-shell.html">Overview / Tổng quan</a> · <a href="03-run-list.html">Test runs / Lượt kiểm thử</a></nav></noscript>
+<svg class="v3-sprites" aria-hidden="true"><symbol id="i-branch" viewBox="0 0 24 24"><path d="M6 3v12a4 4 0 0 0 4 4h7 M6 11h4a6 6 0 0 0 6-6 M14 4h4v4"/></symbol></svg>
+<div class="v3-shell">
+<aside class="v3-sidebar" data-v3-sidebar></aside><div class="v3-workspace">
+<header class="v3-topbar" data-v3-topbar></header>
+<main id="main" tabindex="-1">
+<div class="v3-studio__bar"><div class="v3-line"><span class="v3-badge "><span  data-en="Historical reference · G4" data-vi="Tài liệu lịch sử · G4">Historical reference · G4</span></span><code>SHOP · p-storefront</code></div></div>
+<header class="v3-page-header"><div class="v3-page-header__title"><span class="v3-page-header__icon"><svg class="v3-icon" aria-hidden="true"><use href="#i-branch"/></svg></span><div>
+<h1  data-en="Review draft" data-vi="Xem xét bản nháp">Review draft</h1>
+<p class="v3-muted" data-en="Inspect the assertion change and its evidence before independent review." data-vi="Kiểm tra thay đổi assertion và bằng chứng trước khi gửi duyệt độc lập.">Inspect the assertion change and its evidence before independent review.</p></div></div><div class="v3-actions v3-studio__write">
+<button type="button" class="v3-btn v3-btn--primary" id="submit"><span  data-en="Submit for review" data-vi="Gửi để xem xét">Submit for review</span></button>
+<button type="button" class="v3-btn v3-btn--primary" id="mergebtn" hidden><span  data-en="Merge reviewed draft" data-vi="Hợp nhất bản nháp đã được xem xét">Merge reviewed draft</span></button></div></header>
+<p class="v3-note v3-studio__mobile v3-studio__notice" data-en="Use a desktop to make changes." data-vi="Sử dụng máy tính để thay đổi dữ liệu.">Use a desktop to make changes.</p><div hidden data-scene="loading" class="v3-empty v3-studio__notice v3-studio__preview" role="status"><span  data-en="Loading the supplied fixture…" data-vi="Đang tải dữ liệu mẫu…">Loading the supplied fixture…</span><span class="v3-skeleton" aria-hidden="true"><i></i><i></i></span></div>
+<div hidden data-scene="empty" class="v3-empty v3-studio__notice " role="status"><span  data-en="No resource in this fixture." data-vi="Không có dữ liệu trong mẫu này.">No resource in this fixture.</span></div>
+<div hidden data-scene="404" class="v3-empty v3-studio__notice " role="status"><span  data-en="Not found. Unknown and out-of-scope resources have the same response." data-vi="Không tìm thấy. Phản hồi giống nhau cho tài nguyên không tồn tại và ngoài phạm vi.">Not found. Unknown and out-of-scope resources have the same response.</span></div>
+<div hidden data-scene="error" class="v3-alert v3-studio__notice " role="status"><span  data-en="Request failed · req-114. Retry to load the supplied fixture." data-vi="Yêu cầu thất bại · req-114. Thử lại để tải dữ liệu mẫu.">Request failed · req-114. Retry to load the supplied fixture.</span>
+<button type="button" class="v3-btn " data-to="default"><span  data-en="Retry" data-vi="Thử lại">Retry</span></button></div>
+<div hidden data-scene="403" class="v3-alert v3-studio__notice " role="status"><span  data-en="Not authorized to make changes. Available details are read-only." data-vi="Bạn không có quyền thay đổi. Chỉ có thể đọc thông tin hiện có.">Not authorized to make changes. Available details are read-only.</span></div>
+<div hidden data-scene="401" class="v3-alert v3-studio__notice " role="status"><span  data-en="Session expired. Return to sign-in; this reference remains the return destination." data-vi="Phiên đã hết hạn. Đăng nhập lại để quay về tài liệu này.">Session expired. Return to sign-in; this reference remains the return destination.</span><a id="sign-in" href="02-login.html" class="v3-btn"><span  data-en="Sign in again" data-vi="Đăng nhập lại">Sign in again</span></a></div>
+<div hidden data-scene="429" class="v3-alert v3-studio__notice " role="status"><span  data-en="Too many requests · Retry-After: 30 s (server response). No change started." data-vi="Quá nhiều yêu cầu · Retry-After: 30 s (phản hồi máy chủ). Chưa thực hiện thay đổi.">Too many requests · Retry-After: 30 s (server response). No change started.</span></div>
+<div class="v3-alert v3-studio__notice" role="status" hidden data-scene="412"><span  data-en="Stale dr-5 / cr-9 → current dr-6 / cr-10. The base and assertion changed. The local patch is retained until reload, never merged." data-vi="dr-5 / cr-9 đã cũ → hiện tại dr-6 / cr-10. Phiên bản gốc và assertion đã đổi. Giữ bản vá cục bộ cho đến khi tải lại, không hợp nhất.">Stale dr-5 / cr-9 → current dr-6 / cr-10. The base and assertion changed. The local patch is retained until reload, never merged.</span> <button type="button" class="v3-btn " id="reload"><span  data-en="Reload" data-vi="Tải lại">Reload</span></button></div>
+<div class="v3-note v3-studio__notice" role="status" hidden data-scene="failed"><span  data-en="Sandbox failed. Submission is not authorized for this result." data-vi="Chạy thử thất bại. Kết quả này không được phép gửi duyệt.">Sandbox failed. Submission is not authorized for this result.</span> </div>
+<div class="v3-note v3-studio__notice" role="status" hidden data-scene="eligible"><span  data-en="Design specimen: independent approval and merge eligibility are both explicitly supplied." data-vi="Mẫu thiết kế: có cả phê duyệt độc lập và quyền hợp nhất được cung cấp rõ ràng.">Design specimen: independent approval and merge eligibility are both explicitly supplied.</span> </div>
+<div id="region" class="v3-stack">
+<section class="v3-panel" >
+<header class="v3-panel__header">
+<h2  data-en="Review identity" data-vi="Thông tin bản duyệt">Review identity</h2></header><div class="v3-pad v3-stack">
+<dl class="v3-studio__facts">
+<div><dt data-en="Case" data-vi="Ca kiểm thử">Case</dt><dd><code>case-checkout-17</code></dd></div>
+<div><dt data-en="Draft" data-vi="Bản nháp">Draft</dt><dd><code>d-114</code></dd></div>
+<div><dt data-en="Authored by" data-vi="Tác giả">Authored by</dt><dd>Linh Nguyễn</dd></div>
+<div><dt data-en="Base revision" data-vi="Phiên bản gốc">Base revision</dt><dd><code>cr-9 / 9af317c</code></dd></div>
+<div><dt data-en="Draft revision" data-vi="Phiên bản nháp">Draft revision</dt><dd><code id="dr">dr-5</code></dd></div>
+<div><dt data-en="Sandbox" data-vi="Chạy thử">Sandbox</dt><dd><code>dry-114</code></dd></div></dl></div></section>
+<div class="v3-studio__layout"><div class="v3-stack">
+<section class="v3-panel" id="patch">
+<header class="v3-panel__header">
+<h2  data-en="Assertion patch" data-vi="Bản vá assertion">Assertion patch</h2></header><div class="v3-pad v3-stack"><div class="v3-spread"><span class="v3-badge v3-badge--info"><span  data-en="Assertion changed" data-vi="Assertion đã thay đổi">Assertion changed</span></span><code>ah-92fd…6241 → ah-1f9b…473a</code></div><div class="v3-studio__grid v3-patch">
+<section class="v3-patch__pane"><div class="v3-spread v3-pad">
+<h3  data-en="Base revision" data-vi="Phiên bản gốc">Base revision</h3><code>cr-9</code></div><div class="v3-patch__lines"><div class="v3-patch__line"><code>22</code><code>const receipt = page.getByTestId(&#x27;order-receipt&#x27;);</code></div><div class="v3-patch__line"><code>23</code><code>await expect(receipt).toBeVisible();</code></div><div class="v3-patch__line"><code>—</code><code></code></div><div class="v3-patch__line"><code>24</code><code>await expect(receipt).toContainText(orderTotal);</code></div></div></section>
+<section class="v3-patch__pane"><div class="v3-spread v3-pad">
+<h3  data-en="Draft revision" data-vi="Phiên bản nháp">Draft revision</h3><code>dr-5</code></div><div class="v3-patch__lines"><div class="v3-patch__line"><code>22</code><code>const receipt = page.getByTestId(&#x27;order-receipt&#x27;);</code></div><div class="v3-patch__line"><code>23</code><code>await expect(receipt).toBeVisible();</code></div><div class="v3-patch__line v3-patch__added"><code>+24</code><code>await expect(receipt).toContainText(orderId);</code></div><div class="v3-patch__line"><code>25</code><code>await expect(receipt).toContainText(orderTotal);</code></div></div></section></div>
+<p class="v3-note" data-en="The receipt must still be visible. The new order-ID requirement changes the test intent; it is not healing." data-vi="Biên nhận vẫn phải hiển thị. Yêu cầu mới về mã đơn hàng thay đổi mục đích kiểm thử; đây không phải sửa kiểm thử.">The receipt must still be visible. The new order-ID requirement changes the test intent; it is not healing.</p>
+<details><summary><span  data-en="Inspect full patch" data-vi="Xem toàn bộ bản vá">Inspect full patch</span></summary><pre tabindex="0" class="v3-studio__code"><code>test(&#x27;checkout receipt shows the total&#x27;, async ({ page }) =&gt; {
+  await page.goto(&#x27;/checkout&#x27;);
+  await page.getByTestId(&#x27;place-order&#x27;).click();
+  const receipt = page.getByTestId(&#x27;order-receipt&#x27;);
+  await expect(receipt).toBeVisible();
+  await expect(receipt).toContainText(orderTotal);
+  await expect(receipt).toContainText(orderId);
+});</code></pre></details></div></section>
+<div hidden id="nopatch" class="v3-empty"></div>
+<section class="v3-panel" >
+<header class="v3-panel__header">
+<h2  data-en="Dry-run and delivery history" data-vi="Lịch sử chạy thử và chuyển giao">Dry-run and delivery history</h2></header><div class="v3-pad v3-stack"><div class="v3-original-failure"><strong><span  data-en="Original sandbox failure · attempt #1" data-vi="Lỗi gốc trong môi trường mô phỏng · lần #1">Original sandbox failure · attempt #1</span></strong>
+<p><span  data-en="Order receipt missing. Original evidence remains accessible." data-vi="Thiếu biên nhận. Bằng chứng ban đầu vẫn có thể truy cập.">Order receipt missing. Original evidence remains accessible.</span></p></div><a href="18-studio-draft-editor.html?draft=d-114&amp;case=case-checkout-17&amp;revision=dr-5&amp;run=run-sandbox-88&amp;state=passed#evidence" class=""><span  data-en="Inspect original sandbox artifact · ev-s1" data-vi="Xem hiện vật gốc trong môi trường mô phỏng · ev-s1">Inspect original sandbox artifact · ev-s1</span></a>
+<dl class="v3-studio__facts"><div><dt  data-en="Evidence completeness" data-vi="Mức độ đầy đủ của bằng chứng">Evidence completeness</dt><dd><span  data-en="Screenshot ready; trace restricted" data-vi="Có ảnh chụp; trace hạn chế">Screenshot ready; trace restricted</span></dd></div><div><dt  data-en="Latest sandbox outcome" data-vi="Kết quả chạy thử mới nhất">Latest sandbox outcome</dt><dd><code id="dry">dry_passed</code></dd></div><div><dt  data-en="Release decision" data-vi="Quyết định phát hành">Release decision</dt><dd><span  data-en="Not evaluated" data-vi="Chưa đánh giá">Not evaluated</span></dd></div></dl><a href="18-studio-draft-editor.html?draft=d-114&amp;case=case-checkout-17&amp;revision=dr-5&amp;run=run-sandbox-88&amp;state=passed#evidence" class=""><span  data-en="Inspect sandbox evidence · dry-114" data-vi="Xem bằng chứng thử nghiệm · dry-114">Inspect sandbox evidence · dry-114</span></a><div class="v3-note v3-studio__notice" role="status" hidden data-scene="merged"><span  data-en="Merge recorded · c31f072. Catalog sync queued; not a test result." data-vi="Đã ghi nhận hợp nhất · c31f072. Đồng bộ danh mục đang chờ; không phải kết quả kiểm thử.">Merge recorded · c31f072. Catalog sync queued; not a test result.</span> </div>
+</div></section>
+</div>
+<aside class="v3-stack">
+<section class="v3-panel" >
+<header class="v3-panel__header">
+<h2  data-en="Independent approval" data-vi="Phê duyệt độc lập">Independent approval</h2></header><div class="v3-pad v3-stack"><div class="v3-line"><span class="v3-avatar">MT</span><div><b>Minh Trần</b>
+<p class="v3-muted" data-en="Assigned reviewer" data-vi="Người được phân công duyệt">Assigned reviewer</p></div></div><div class="v3-line"><span id="validation" class="v3-badge v3-badge--validated"><svg viewBox="0 0 24 24" class="v3-icon" aria-hidden="true"><path d="m4 12 5 5L20 6"/></svg><span data-en="Validated · sandbox only" data-vi="Đã kiểm chứng · chỉ trong môi trường mô phỏng">Validated · sandbox only</span></span><span id="approval" class="v3-badge v3-badge--waiting"><span id="wait-icon"><svg viewBox="0 0 24 24" class="v3-icon" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></svg></span><span id="approved-icon" hidden><svg viewBox="0 0 24 24" class="v3-icon" aria-hidden="true"><path d="m4 12 5 5L20 6"/></svg></span><span id="approval-text"></span></span></div>
+<p class="v3-muted" data-en="Linh authored this patch and cannot satisfy independent approval. Approval alone does not authorize a merge." data-vi="Linh là tác giả nên không thể phê duyệt độc lập. Việc phê duyệt không tự cấp quyền hợp nhất.">Linh authored this patch and cannot satisfy independent approval. Approval alone does not authorize a merge.</p>
+<dl class="v3-studio__facts"><div><dt  data-en="Review scope" data-vi="Phạm vi duyệt">Review scope</dt><dd><code>draft:merge_request</code></dd></div></dl></div></section>
+<section class="v3-panel" >
+<header class="v3-panel__header">
+<h2 data-en="Pull request" data-vi="Pull request">Pull request</h2></header><div class="v3-pad v3-stack"><div class="v3-spread"><strong>lotus-commerce/storefront</strong><code>#128</code></div><span id="prstatus" role="status"></span>
+<small id="ext" hidden data-en="Repository URL unavailable in the historical record." data-vi="Bản ghi lịch sử không cung cấp URL kho mã.">Repository URL unavailable in the historical record.</small>
+<p class="v3-muted" data-en="Proposed fixture only. No repository action is sent from this page." data-vi="Chỉ là dữ liệu minh họa. Trang này không gửi thao tác tới kho mã.">Proposed fixture only. No repository action is sent from this page.</p></div></section>
+<p class="v3-note" data-en="Runtime auto-apply is off. This historical reference has no direct merge API or healing action." data-vi="Không tự áp dụng khi chạy. Tài liệu lịch sử này không có API hợp nhất trực tiếp hay thao tác sửa kiểm thử.">Runtime auto-apply is off. This historical reference has no direct merge API or healing action.</p></aside></div>
+<dialog class="v3-dialog" id="request" aria-labelledby="request-h">
+<header class="v3-dialog__header">
+<h2 id=request-h data-en="Submit for independent review" data-vi="Gửi để xem xét độc lập">Submit for independent review</h2></header><div class="v3-body">
+<p class="v3-muted" data-en="Request review of d-114, dr-5 against cr-9. This does not approve or merge the draft." data-vi="Yêu cầu duyệt d-114, dr-5 so với cr-9. Thao tác này không duyệt hay hợp nhất bản nháp.">Request review of d-114, dr-5 against cr-9. This does not approve or merge the draft.</p>
+<label class="v3-field" for="note"><span  data-en="Review note · required" data-vi="Ghi chú duyệt · bắt buộc">Review note · required</span></label><textarea rows="2" class="v3-input" id="note" data-val-en="" data-val-vi="" required></textarea></div>
+<footer class="v3-form__footer">
+<button type="button" class="v3-btn " data-close><span  data-en="Cancel" data-vi="Hủy">Cancel</span></button>
+<button type="button" class="v3-btn v3-btn--primary" id="requestok" disabled><span  data-en="Request review" data-vi="Yêu cầu duyệt">Request review</span></button></footer></dialog>
+<dialog class="v3-dialog" id="merge" aria-labelledby="merge-h">
+<header class="v3-dialog__header">
+<h2 id=merge-h data-en="Merge reviewed draft?" data-vi="Hợp nhất bản nháp đã duyệt?">Merge reviewed draft?</h2></header><div class="v3-body">
+<p class="v3-muted" data-en="Review the exact item before continuing. This preview changes no live pull request." data-vi="Kiểm tra đúng mục trước khi tiếp tục. Bản xem trước không thay đổi pull request thật.">Review the exact item before continuing. This preview changes no live pull request.</p>
+<dl class="v3-studio__facts"><div><dt  data-en="Pull request" data-vi="Pull request">Pull request</dt><dd><code>lotus-commerce/storefront#128</code></dd></div><div><dt  data-en="Draft" data-vi="Bản nháp">Draft</dt><dd><code>d-114 / dr-5</code></dd></div><div><dt  data-en="Base" data-vi="Phiên bản gốc">Base</dt><dd><code>cr-9 / 9af317c</code></dd></div><div><dt  data-en="Assertion" data-vi="Assertion">Assertion</dt><dd><code>ah-1f9b…473a</code></dd></div><div><dt  data-en="Approved by" data-vi="Được duyệt bởi">Approved by</dt><dd>Minh Trần</dd></div></dl>
+<p class="v3-note" data-en="Only this reviewed source patch is in scope. Catalog sync and release evaluation stay separate." data-vi="Chỉ bản vá mã nguồn đã duyệt này trong phạm vi. Đồng bộ danh mục và đánh giá phát hành vẫn riêng biệt.">Only this reviewed source patch is in scope. Catalog sync and release evaluation stay separate.</p></div>
+<footer class="v3-form__footer">
+<button type="button" class="v3-btn " data-close><span  data-en="Cancel" data-vi="Hủy">Cancel</span></button>
+<button type="button" class="v3-btn v3-btn--primary" id="mergeok"><span  data-en="Confirm merge preview" data-vi="Xác nhận xem trước hợp nhất">Confirm merge preview</span></button></footer></dialog>
+</div>
+<footer class="v3-footnote v3-spread v3-meta"><span  data-en="Superseded by authoring (CR-D-2). These G4 specimens do not change evidence, open a PR or approve a release." data-vi="Đã được thay bằng luồng soạn kiểm thử (CR-D-2). Các mẫu G4 không thay đổi bằng chứng, mở PR hay phê duyệt phát hành.">Superseded by authoring (CR-D-2). These G4 specimens do not change evidence, open a PR or approve a release.</span><a href="42-pending-changes.html" class=""><span  data-en="Open pending changes" data-vi="Mở thay đổi chờ áp dụng">Open pending changes</span></a><a href="18-studio-draft-editor.html?draft=d-114&amp;case=case-checkout-17&amp;revision=dr-5&amp;run=run-sandbox-88&amp;state=passed#evidence"><span data-en="Inspect reviewed draft · dr-5" data-vi="Xem bản nháp được duyệt · dr-5">Inspect reviewed draft · dr-5</span></a></footer>
+<details class="v3-review-controls"><summary><span data-en="Design review controls" data-vi="Trạng thái bản mẫu">Design review controls</span></summary>
+<div class="v3-review-controls__body">
+<label class="v3-field"><span  data-en="Prototype state" data-vi="Trạng thái bản mẫu">Prototype state</span><select id="scenario" >
+<option value="default" data-en="Populated" data-vi="Có dữ liệu">Populated</option>
+<option value="loading" data-en="Loading" data-vi="Đang tải">Loading</option>
+<option value="empty" data-en="No resource" data-vi="Không có dữ liệu">No resource</option>
+<option value="error" data-en="Request failed" data-vi="Yêu cầu thất bại">Request failed</option>
+<option value="403" data-en="403 · Read only" data-vi="403 · Chỉ đọc">403 · Read only</option>
+<option value="404" data-en="404 · Not found" data-vi="404 · Không tìm thấy">404 · Not found</option>
+<option value="401" data-en="401 · Session expired" data-vi="401 · Phiên đã hết hạn">401 · Session expired</option>
+<option value="429" data-en="429 · Rate limited" data-vi="429 · Quá nhiều yêu cầu">429 · Rate limited</option>
+<option value="412" data-en="412 · Conflict specimen" data-vi="412 · Mẫu xung đột">412 · Conflict specimen</option>
+<option value="nodiff" data-en="No diff changes" data-vi="Không có bản vá">No diff changes</option>
+<option value="unchanged" data-en="Assertion unchanged" data-vi="Assertion không đổi">Assertion unchanged</option>
+<option value="long" data-en="Long patch" data-vi="Bản vá dài">Long patch</option>
+<option value="failed" data-en="Sandbox failed" data-vi="Chạy thử thất bại">Sandbox failed</option>
+<option value="requested" data-en="Review requested" data-vi="Đã yêu cầu duyệt">Review requested</option>
+<option value="open" data-en="PR open · author cannot approve" data-vi="PR đang mở · tác giả không thể duyệt">PR open · author cannot approve</option>
+<option value="approved" data-en="Approved · no merge authority" data-vi="Đã duyệt · chưa có quyền hợp nhất">Approved · no merge authority</option>
+<option value="eligible" data-en="Eligible merge preview" data-vi="Xem trước hợp nhất đủ điều kiện">Eligible merge preview</option>
+<option value="withdrawn" data-en="PR withdrawn" data-vi="Đã rút PR">PR withdrawn</option>
+<option value="closed" data-en="PR closed" data-vi="PR đã đóng">PR closed</option>
+<option value="merged" data-en="Merged result" data-vi="Kết quả hợp nhất">Merged result</option>
+<option value="prout" data-en="PR unavailable" data-vi="PR không khả dụng">PR unavailable</option></select></label></div></details>
+</main></div></div>
+<script>
+addEventListener("DOMContentLoaded",()=>{
+const $=id=>document.getElementById(id), all=(s,root=document)=>[...root.querySelectorAll(s)], lang=()=>document.documentElement.lang==='vi'?'vi':'en';
+const media=matchMedia('(max-width:767px)');let state='default';
+function label(el,en,vi){el.dataset.en=en;el.dataset.vi=vi;el.textContent=lang()==='vi'?vi:en;}
+function values(){for(const el of all('[data-val-en]')){if(!el.dataset.edited)el.value=lang()==='vi'?el.dataset.valVi:el.dataset.valEn;}}
+document.addEventListener('input',e=>{if(e.target.matches('[data-val-en]'))e.target.dataset.edited='1'});
+const route=new URLSearchParams(location.search);
+const accepted={"draft": ["d-114"], "case": ["case-checkout-17"], "revision": ["dr-5"], "project": ["p-storefront"]};
+const identity={"draft": "d-114", "case": "case-checkout-17", "revision": "dr-5"};
+const target=EvidgateV3.byId.get(document.body.dataset.page).file;
+const invalid=[...route].some(([key,value])=>!Object.hasOwn(accepted,key)||!accepted[key].includes(value)||route.getAll(key).length!==1);
+if(invalid){
+  const main=$('main'),title=document.createElement('h1'),note=document.createElement('p'),record=document.createElement('code');
+  label(title,'Studio record unavailable','Không có bản ghi Studio');
+  label(note,'The requested record is not in this fixture. No other record is shown.','Mẫu không có bản ghi được yêu cầu. Không hiển thị bản ghi khác thay thế.');
+  record.textContent=[...route].map(([key,value])=>key+'='+value).join(' · ');main.replaceChildren(title,note,record);return;
+}
+function loginTarget(){
+  const params=new URLSearchParams(identity);
+  for(const [key,value] of route)params.set(key,value);
+  params.set('revision',$('dr').textContent);
+  const full=target+(params.size?'?'+params:'')+location.hash;
+  $('sign-in').href='02-login.html?'+new URLSearchParams({returnTo:full});
+}
+function setState(next){state=next;$('scenario').value=next;paint();}
+function paint(){const only=['loading','empty','404','401','error'].includes(state);$('region').hidden=only;for(const el of all('[data-scene]'))el.hidden=!el.dataset.scene.split(' ').includes(state);update();loginTarget();}
+function writeAllowed(){return !media.matches&&!['403','401','404','412','429','loading','error','empty','busy','published','merged','readonly'].includes(state);}
+function start(){values();$('scenario').onchange=e=>setState(e.target.value);$('lang').addEventListener('click',()=>{values();paint()});media.addEventListener('change',paint);document.addEventListener('click',e=>{const btn=e.target.closest('button');if(!btn)return;if(btn.hasAttribute('data-close'))btn.closest('dialog').close();if(btn.dataset.to)setState(btn.dataset.to);});paint();}
+
+let reloaded=false,pending=false;const approved=()=>['approved','eligible','merged'].includes(state);
+function update(){const pr=({open:['Open · waiting for review','Đang mở · chờ duyệt'],requested:['Review requested · no PR opened by this preview','Đã yêu cầu duyệt · bản xem trước không mở PR'],approved:['Open · independent approval recorded','Đang mở · đã có phê duyệt độc lập'],eligible:['Open · merge action supplied','Đang mở · có thao tác hợp nhất'],merged:['Merged · c31f072','Đã hợp nhất · c31f072'],withdrawn:['PR withdrawn · back to draft','Đã rút PR · trở lại bản nháp'],closed:['Closed without merge','Đã đóng mà chưa hợp nhất'],prout:['PR unavailable · no link supplied','PR không khả dụng · không có liên kết']})[state]||['Proposed · not submitted','Đề xuất · chưa gửi'];label($('prstatus'),...pr);$('ext').hidden=!['open','approved','eligible','merged','closed'].includes(state);$('dr').textContent=reloaded?'dr-6':'dr-5';$('dry').textContent=state==='failed'?'dry_failed':'dry_passed';label($('approval-text'),...(approved()?['Approved · Minh Trần · ah-1f9b…473a (decision time unavailable)','Đã phê duyệt · Minh Trần · ah-1f9b…473a (không có thời điểm quyết định)']:['Awaiting review','Chờ xét duyệt']));$('approval').classList.toggle('v3-badge--waiting',!approved());$('approval').classList.toggle('v3-badge--approved',approved());$('approved-icon').hidden=!approved();$('wait-icon').hidden=approved();$('validation').hidden=state==='failed'||reloaded;$('submit').hidden=!['default','long','withdrawn'].includes(state)||reloaded;$('submit').disabled=!writeAllowed()||pending;$('mergebtn').hidden=state!=='eligible';$('mergebtn').disabled=!writeAllowed()||pending;const no=['nodiff','unchanged'].includes(state);$('patch').hidden=no;$('nopatch').hidden=!no;label($('nopatch'),...(state==='nodiff'?['No draft changes. No patch is attached.','Bản nháp không thay đổi. Không có bản vá.']:['Assertion unchanged · ah-92fd…6241 → ah-92fd…6241. No changed assertion hunk.','Assertion không thay đổi · ah-92fd…6241 → ah-92fd…6241. Không có đoạn assertion thay đổi.']));$('patch').querySelector('details').open=state==='long';if(!writeAllowed())all('dialog[open]').forEach(d=>d.close());}
+$('scenario').addEventListener('change',()=>{reloaded=false});
+$('submit').onclick=()=>{$('request').showModal()};
+$('note').oninput=()=>{$('requestok').disabled=!$('note').value.trim()};
+$('requestok').onclick=()=>{
+  if(!$('note').value.trim()||!writeAllowed())return;
+  $('request').close();setState('requested');$('main').focus();
+};
+$('mergebtn').onclick=()=>{if(state==='eligible'&&writeAllowed())$('merge').showModal()};
+$('mergeok').onclick=()=>{
+  if(state!=='eligible'||!writeAllowed())return;
+  $('merge').close();setState('merged');$('main').focus();
+};
+$('reload').onclick=()=>{
+  reloaded=true;setState('nodiff');
+  label($('nopatch'),'Current revision dr-6 loaded. A replacement patch was not supplied; review is unavailable.',
+    'Đã tải phiên bản hiện tại dr-6. Chưa có bản vá thay thế; không thể gửi duyệt.');
+};
+
+start();
+});
+</script>
+</body></html>
