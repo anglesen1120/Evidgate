@@ -162,28 +162,28 @@ export class AuditPage {
     retry: $localize`:@@settings.audit.paging-retry:Retry loading more`,
     pagingFailed: $localize`:@@settings.audit.paging-failed:The next audit page could not be loaded. The rows already shown are unchanged.`,
   };
-  protected readonly activity = $localize`:@@settings-audit-activity:Administrative activity`;
+  protected readonly activity = $localize`:@@settings.audit-activity:Administrative activity`;
   protected readonly summary = computed(() => {
     const rows = this.store.rows();
     const supportCount = rows.reduce((n, row) => n + Number(supportAccessOf(row) !== null), 0);
     return [
       {
-        label: $localize`:@@settings-audit-loaded-records:Loaded records`,
+        label: $localize`:@@settings.audit-loaded-records:Loaded records`,
         value: formatNumber(rows.length, this.locale),
         icon: 'lucideClock',
       },
       {
-        label: $localize`:@@settings-audit-loaded-support:Loaded support records`,
+        label: $localize`:@@settings.audit-loaded-support:Loaded support records`,
         value: formatNumber(supportCount, this.locale),
         icon: 'lucideActivity',
       },
       {
-        label: $localize`:@@settings-audit-export-limit:Maximum rows per export`,
+        label: $localize`:@@settings.audit-export-limit:Maximum rows per export`,
         value: formatNumber(AUDIT_EXPORT_CAP, this.locale),
         icon: 'lucideCopy',
       },
       {
-        label: $localize`:@@settings-audit-record-scope:Record scope`,
+        label: $localize`:@@settings.audit-record-scope:Record scope`,
         value: $localize`:@@settings.audit.export-organization:Organization`,
         icon: 'lucideInfo',
       },

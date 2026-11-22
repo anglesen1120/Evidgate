@@ -104,8 +104,8 @@ export class SecurityEventsPage {
     title: $localize`:@@settings.security.title:Security events`,
     description: $localize`:@@settings.security.description:Inspect authorized security metadata across the organization. Event records are read-only; times are shown in UTC.`,
     boundary: $localize`:@@settings.security.boundary:Metadata only. Severity is supplied by the server, not a security certification. Cross-tenant targets and attempted secrets are not disclosed.`,
-    activity: $localize`:@@settings-security-activity:Recent activity`,
-    safeData: $localize`:@@settings-security-safe-data:Safe event data`,
+    activity: $localize`:@@settings.security-activity:Recent activity`,
+    safeData: $localize`:@@settings.security-safe-data:Safe event data`,
     filters: $localize`:@@settings.security.filters:Filter activity`,
     project: $localize`:@@settings.security.project:Project id`,
     projectHint: $localize`:@@settings.security.project-hint:Optional exact project UUID. Leave blank for all projects.`,
@@ -141,22 +141,22 @@ export class SecurityEventsPage {
     }
     return [
       {
-        label: $localize`:@@settings-security-visible-events:Visible events on this page`,
+        label: $localize`:@@settings.security-visible-events:Visible events on this page`,
         value: formatNumber(rows.length, this.locale),
         icon: 'lucideClock',
       },
       {
-        label: $localize`:@@settings-security-page-critical:Critical events on this page`,
+        label: $localize`:@@settings.security-page-critical:Critical events on this page`,
         value: formatNumber(critical, this.locale),
         icon: 'lucideTriangleAlert',
       },
       {
-        label: $localize`:@@settings-security-page-support:Support events on this page`,
+        label: $localize`:@@settings.security-page-support:Support events on this page`,
         value: formatNumber(support, this.locale),
         icon: 'lucideActivity',
       },
       {
-        label: $localize`:@@settings-security-event-catalog:Event catalog`,
+        label: $localize`:@@settings.security-event-catalog:Event catalog`,
         value: SECURITY_EVENTS_VERSION,
         icon: 'lucideInfo',
       },

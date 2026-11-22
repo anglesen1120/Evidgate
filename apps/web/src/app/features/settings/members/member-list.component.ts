@@ -24,9 +24,9 @@ import type { DataTableCellContext } from '../../../shared/ui/data-table/data-ta
 export const MEMBERS_COPY = {
   title: $localize`:@@settings.members.title:Members and roles`,
   directory: $localize`:@@settings.members.directory:Members and invitations`,
-  activeMembers: $localize`:@@settings-members-active-count:Active members`,
-  pendingInvitations: $localize`:@@settings-members-pending-count:Pending invitations`,
-  organizationAdmins: $localize`:@@settings-members-admin-count:Organization admins`,
+  activeMembers: $localize`:@@settings.members-active-count:Active members`,
+  pendingInvitations: $localize`:@@settings.members-pending-count:Pending invitations`,
+  organizationAdmins: $localize`:@@settings.members-admin-count:Organization admins`,
   loading: $localize`:@@settings.members.loading:Loading members…`,
   description: $localize`:@@settings.members.description:Manage organization membership. The server decides actual access.`,
   member: $localize`:@@settings.members.member:Member`,

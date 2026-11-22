@@ -46,7 +46,7 @@ export class SettingsShellPage {
 
   private readonly destination = viewChild(BrnSelect);
   protected readonly title = $localize`:@@settings.title:Settings`;
-  protected readonly description = $localize`:@@settings-shell-intro:Open a section to manage settings for your organization or project.`;
+  protected readonly description = $localize`:@@settings.shell-intro:Open a section to manage settings for your organization or project.`;
   protected readonly choose = $localize`:@@settings.choose:Choose a settings destination`;
   protected readonly destinationLabel = (value: unknown): string =>
     this.tabs().find((tab) => tab.segment === value)?.label ?? this.choose;
