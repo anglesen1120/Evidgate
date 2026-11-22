@@ -1,5 +1,13 @@
-<p class="scope-help">{{ copy.scopeHelp }}</p>
-<form class="filters" (ngSubmit)="apply()" [attr.aria-label]="copy.filters">
+<form
+  class="filters"
+  (ngSubmit)="apply()"
+  [attr.aria-label]="copy.filters"
+  [attr.aria-describedby]="'authoring-case-scope-help'"
+>
+  <div class="grid gap-(--eg-space-1)">
+    <p class="m-0 font-(weight:--eg-weight-semibold)">{{ copy.filters }}</p>
+    <p id="authoring-case-scope-help" class="help">{{ copy.scopeHelp }}</p>
+  </div>
   <div class="filter-fields">
     @for (field of filterFields; track field.key) {
       <div class="field">
@@ -38,6 +46,8 @@
         <p [id]="'authoring-' + field.id + '-help'" class="help" role="note">{{ field.help }}</p>
       </div>
     }
+  </div>
+  <div class="query-fields">
     <div class="field">
       <label hlmLabel for="authoring-case-item">{{ copy.item }}</label>
       <input
@@ -58,7 +68,7 @@
         <p id="authoring-case-item-error" class="error" role="alert">{{ copy.itemError }}</p>
       }
     </div>
-    <div class="field search-field">
+    <div class="field">
       <label hlmLabel for="authoring-case-search">{{ copy.search }}</label>
       <input
         hlmInput

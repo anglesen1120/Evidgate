@@ -64,7 +64,15 @@ type CaseCell = TemplateRef<DataTableCellContext<CaseDto>>;
         [class.items-center]="virtualRows()"
         data-catalog-identity
       >
-        <bdi class="min-w-0 flex-1 font-(weight:--eg-weight-semibold)">
+        <app-copyable-identifier
+          class="min-w-0 flex-1 font-(weight:--eg-weight-semibold) text-primary"
+          [value]="row.annotation_id"
+          [label]="copy.stableId"
+          [truncate]="!stacked"
+          [compact]="virtualRows()"
+          [copySize]="'lg'"
+        />
+        <bdi class="min-w-0 flex-1">
           <app-data-table-value
             [value]="display(row.name)"
             [truncate]="!stacked"
@@ -72,15 +80,7 @@ type CaseCell = TemplateRef<DataTableCellContext<CaseDto>>;
           />
         </bdi>
         <app-copyable-identifier
-          class="min-w-0 flex-1"
-          [value]="row.annotation_id"
-          [label]="copy.stableId"
-          [truncate]="!stacked"
-          [compact]="virtualRows()"
-          [copySize]="'lg'"
-        />
-        <app-copyable-identifier
-          class="min-w-0 flex-1"
+          class="min-w-0 flex-1 text-muted-foreground"
           [value]="row.id"
           [label]="copy.id"
           [truncate]="!stacked"

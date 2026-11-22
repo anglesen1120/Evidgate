@@ -26,7 +26,7 @@ import { operationLabel, PENDING_UI } from './pending-changes.ui-copy';
         [showCloseButton]="false"
         class="max-h-[calc(100dvh-var(--eg-space-10))] overflow-y-auto wrap-anywhere"
       >
-        <header hlmDialogHeader>
+        <header hlmDialogHeader class="border-b border-border pb-(--eg-space-4)">
           <h2 hlmDialogTitle>{{ title() }}</h2>
           <p hlmDialogDescription>{{ description() }}</p>
         </header>
@@ -38,8 +38,11 @@ import { operationLabel, PENDING_UI } from './pending-changes.ui-copy';
             }
           }
           @for (change of changes(); track change.change_id) {
-            <div class="grid min-w-0 gap-(--eg-space-2)" data-pending-consent-operation>
-              <h3 class="m-0 text-lg font-semibold">{{ operationLabel(change.change_type) }}</h3>
+            <div
+              class="grid min-w-0 gap-(--eg-space-2) rounded-(--eg-radius-md) bg-(--eg-surface-raised) p-(--eg-space-4) text-foreground"
+              data-pending-consent-operation
+            >
+              <h4 class="m-0 text-base font-semibold">{{ operationLabel(change.change_type) }}</h4>
               <app-copyable-identifier [value]="change.change_id" [label]="ui.changeId" />
               <app-copyable-identifier [value]="change.target_id" [label]="copy.targetLabel" />
               @if (targetTitles()[change.target_id]; as title) {
@@ -55,15 +58,15 @@ import { operationLabel, PENDING_UI } from './pending-changes.ui-copy';
           }
         </section>
         @if (note()) {
-          <dl class="min-w-0 [&_dd]:m-0">
-            <dt>{{ noteLabel() }}</dt>
+          <dl class="m-0 grid min-w-0 gap-(--eg-space-2) [&_dd]:m-0">
+            <dt class="text-sm font-semibold text-muted-foreground">{{ noteLabel() }}</dt>
             <dd class="whitespace-pre-wrap wrap-anywhere">{{ note() }}</dd>
           </dl>
           @if (noteHint()) {
             <p class="text-sm text-muted-foreground">{{ noteHint() }}</p>
           }
         }
-        <footer hlmDialogFooter>
+        <footer hlmDialogFooter class="border-t border-border pt-(--eg-space-4)">
           <button
             hlmBtn
             [variant]="'outline'"

@@ -142,6 +142,7 @@ describe('AuthoringPage', () => {
     expect(await (await harness.table()).text()).toContain('Case table');
     expect(await (await harness.table()).getAttribute('aria-busy')).not.toBe('true');
     expect(await harness.path()).toEqual(['Project roots', 'Module', 'Selected feature']);
+    expect(await (await harness.table()).text()).toContain('Selected feature');
     expect(await (await harness.selectedId())?.text()).toContain(selected.node_id);
   });
 

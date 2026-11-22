@@ -1,9 +1,9 @@
 <section
-  class="grid min-w-0 gap-(--eg-space-5) text-sm text-muted-foreground wrap-anywhere [&_p]:m-0 [&_dl]:m-0 [&_dl>div]:grid [&_dl>div]:min-w-0 [&_dl>div]:gap-(--eg-space-2) [&_dt]:font-(weight:--eg-weight-semibold) [&_dd]:m-0 [&_code]:font-mono [&_code]:text-xs"
+  class="grid min-w-0 gap-(--eg-space-5) text-sm text-muted-foreground wrap-anywhere [&_p]:m-0 [&_dl]:m-0 [&_dl>div]:min-w-0 [&_dt]:text-xs [&_dd]:m-0 [&_dd]:mt-(--eg-space-1) [&_dd]:font-semibold [&_code]:font-mono [&_code]:text-xs"
   data-testid="enable-collection"
   [attr.aria-busy]="busy()"
 >
-  <p>{{ intro }}</p>
+  <p class="max-w-[65ch]">{{ intro }}</p>
 
   <!-- The disabled confirm hands focus to this persistent status line until its answer arrives. -->
   <p
@@ -51,7 +51,7 @@
         />
       }
       <dl
-        class="grid min-w-0 gap-(--eg-space-4) p-0 min-[768px]:grid-cols-2 min-[1280px]:grid-cols-3"
+        class="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] gap-(--eg-space-5) border-t border-current pt-(--eg-space-4)"
       >
         <div>
           <dt>{{ projectLabel }}</dt>
@@ -138,14 +138,14 @@
   @if (enabled() === null && readFailure() === null) {
     <section
       hlmCard
-      class="min-w-0 gap-(--eg-space-3) overflow-visible p-(--eg-space-4) min-[768px]:p-(--eg-space-5)"
+      class="min-w-0 gap-(--eg-space-4) overflow-visible p-(--eg-space-4) md:p-(--eg-space-5)"
       aria-labelledby="enable-preview-heading"
       data-testid="enable-collection-policy-preview"
     >
       <h3
         hlmCardTitle
         [size]="subsectionHeadingSize"
-        class="m-0 text-inherit focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
+        class="m-0 border-b border-border pb-(--eg-space-4) text-foreground focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
         id="enable-preview-heading"
       >
         {{ previewHeading }}
@@ -165,7 +165,7 @@
         data-testid="enable-collection-replaces-active"
       />
       <dl
-        class="grid min-w-0 gap-(--eg-space-4) p-0 min-[768px]:grid-cols-2 min-[1280px]:grid-cols-3"
+        class="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] gap-(--eg-space-5) [&_dt]:text-muted-foreground [&_dd]:text-foreground"
       >
         <div>
           <dt>{{ lateWindowLabel }}</dt>

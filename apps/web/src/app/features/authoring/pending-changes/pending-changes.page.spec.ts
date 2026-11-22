@@ -119,6 +119,29 @@ describe('PendingChangesPage', () => {
     expect(await ui.count('script')).toBe(0);
     expect(await ui.count('[data-pending-apply]')).toBe(1);
   });
+  it('keeps the loaded count separate from the batch selection when inspecting a change', async () => {
+    listPending.mockResolvedValue({ items: [pendingRow()], next_cursor: 'more' });
+    const { ui } = await setup();
+    await ui.click('[data-pending-clear-selection]');
+    await ui.click('[data-pending-preview]');
+    expect(await ui.textAt('[data-pending-loaded-count]')).toBe('1');
+    expect(await ui.textAt('[data-pending-selected-count]')).toBe('0');
+    expect(await ui.disabled('[data-pending-apply]')).toBe(true);
+  });
+  it.each([
+    { kind: 'comment', stale: false, state: 'Queued' },
+    { kind: 'comment', stale: true, state: 'Stale' },
+    { kind: 'merge', stale: false, state: 'Unavailable' },
+  ] as const)(
+    'shows $state on the inspected $kind without applying it',
+    async ({ kind, stale, state }) => {
+      listPending.mockResolvedValue({ items: [{ ...pendingRow(kind), stale }], next_cursor: null });
+      const { ui } = await setup();
+      await ui.click('[data-pending-preview]');
+      expect(await ui.textAt('[data-pending-preview-state]')).toContain(state);
+      expect(apply).not.toHaveBeenCalled();
+    },
+  );
   it.each(['comment', 'delete', 'merge', 'split'] as const)(
     'shows the %s plain-text preview and supplied lineage',
     async (kind) => {

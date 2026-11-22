@@ -11,7 +11,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { DOCUMENT } from '@angular/common';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmCard, HlmCardContent } from '@evidgate/ui/card';
+import { HlmCard, HlmCardContent, HlmCardHeader } from '@evidgate/ui/card';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
@@ -45,6 +45,7 @@ import { ImportStore } from './import.store';
     HlmButton,
     HlmCard,
     HlmCardContent,
+    HlmCardHeader,
     RevisionChipComponent,
     AbsoluteTimeComponent,
     HlmInput,

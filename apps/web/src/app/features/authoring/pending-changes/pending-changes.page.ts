@@ -1,4 +1,4 @@
-import { DOCUMENT } from '@angular/common';
+import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
 import {
   afterRenderEffect,
   ChangeDetectionStrategy,
@@ -17,7 +17,9 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import type { AuthoringChangeListItem } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard } from '@evidgate/ui/card';
 import { HlmCheckbox } from '@evidgate/ui/checkbox';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { SessionStore } from '../../../core/session/session.store';
@@ -63,6 +65,9 @@ interface Consent {
     RouterLink,
     FormsModule,
     HlmButton,
+    HlmCard,
+    HlmIcon,
+    NgTemplateOutlet,
     HlmCheckbox,
     HlmInput,
     HlmLabel,

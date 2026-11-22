@@ -3,18 +3,18 @@
   data-testid="onboarding-shell"
   aria-labelledby="onboarding-title"
 >
-  <header class="grid gap-(--eg-space-3)">
-    <h1
-      hlmCardTitle
-      [size]="pageHeadingSize"
-      #pageHeading
-      id="onboarding-title"
-      tabindex="-1"
-      class="m-0 focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+  <header class="flex min-w-0 items-start gap-(--eg-space-4)">
+    <span
+      class="grid size-(--eg-space-9) shrink-0 place-items-center rounded-(--eg-radius-md) border border-border bg-(--eg-accent-soft) text-primary md:size-(--eg-space-10)"
     >
-      {{ title }}
-    </h1>
-    <p class="m-0 text-sm text-muted-foreground">{{ description }}</p>
+      <app-shell-icon [name]="'rocket'" />
+    </span>
+    <app-page-header
+      class="min-w-0 flex-1"
+      [titleId]="'onboarding-title'"
+      [title]="title"
+      [description]="description"
+    />
   </header>
 
   @switch (store.status()) {
@@ -44,24 +44,43 @@
       }
     }
     @case ('ready') {
-      <section
-        hlmCard
-        class="min-w-0 gap-(--eg-space-5) p-(--eg-space-6)"
-        aria-labelledby="onboarding-progress-title"
-      >
-        <div class="flex min-w-0 flex-wrap items-start justify-between gap-(--eg-space-4)">
+      <section class="grid min-w-0 gap-(--eg-space-4)" aria-labelledby="onboarding-progress-title">
+        <div class="flex min-w-0 flex-wrap items-center justify-between gap-(--eg-space-3)">
           <h2 hlmCardTitle [size]="sectionHeadingSize" id="onboarding-progress-title">
             {{ progressLabel }}
           </h2>
-          <p class="m-0 text-sm tabular-nums" data-testid="onboarding-progress-count">
+          <p
+            class="m-0 text-sm font-semibold text-muted-foreground tabular-nums"
+            data-testid="onboarding-progress-count"
+          >
             {{ progressText() }}
           </p>
         </div>
-        <div class="grid min-w-0 gap-(--eg-space-3)">
-          <p class="m-0 text-sm min-[768px]:hidden" data-testid="onboarding-viewed-summary">
+        <div
+          class="h-(--eg-space-3) overflow-hidden rounded-sm bg-(--eg-neutral-bg)"
+          role="progressbar"
+          [attr.aria-label]="progressLabel"
+          [attr.aria-valuemin]="0"
+          [attr.aria-valuemax]="steps.length"
+          [attr.aria-valuenow]="completedCount()"
+          [attr.aria-valuetext]="progressText()"
+        >
+          <div
+            class="h-full bg-primary"
+            [style.width.%]="(completedCount() / steps.length) * 100"
+          ></div>
+        </div>
+        <div class="grid min-w-0 gap-(--eg-space-2) md:contents">
+          <p
+            class="m-0 text-sm font-semibold min-[768px]:hidden"
+            data-testid="onboarding-viewed-summary"
+          >
             {{ viewedSummary() }}
           </p>
-          <p class="m-0 text-sm min-[768px]:hidden" data-testid="onboarding-next-summary">
+          <p
+            class="m-0 text-sm text-muted-foreground min-[768px]:hidden"
+            data-testid="onboarding-next-summary"
+          >
             {{ nextSummary() }}
           </p>
           @if (store.project()) {
@@ -117,7 +136,7 @@
                   #stepButton
                   [variant]="outlineVariant"
                   type="button"
-                  class="grid h-auto min-h-(--eg-control-touch) w-full min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start justify-start gap-x-(--eg-space-3) gap-y-(--eg-space-2) whitespace-normal p-(--eg-space-3) text-start focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset) aria-[current=step]:border-primary aria-[current=step]:bg-(--eg-accent-soft) aria-[current=step]:text-foreground aria-[disabled=true]:cursor-not-allowed min-[768px]:h-full min-[768px]:content-start min-[768px]:p-(--eg-space-4)"
+                  class="group grid h-full min-h-(--eg-control-touch) w-full min-w-0 grid-cols-[auto_minmax(0,1fr)] content-start items-start justify-start gap-x-(--eg-space-3) gap-y-(--eg-space-1) rounded-(--eg-radius-md) border-b-2 p-(--eg-space-4) text-start whitespace-normal focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset) aria-[current=step]:border-b-primary aria-[current=step]:bg-(--eg-accent-soft) aria-[current=step]:text-foreground aria-[disabled=true]:cursor-not-allowed md:max-xl:grid-cols-1"
                   [attr.data-testid]="'onboarding-select-step-' + step.number"
                   [attr.aria-current]="store.viewStep() === step.number ? 'step' : null"
                   [attr.aria-disabled]="!canSelect(step.number)"
@@ -129,17 +148,15 @@
                   (click)="selectStep(step.number)"
                 >
                   <span
-                    class="row-span-2 grid size-(--eg-control-sm) shrink-0 place-items-center rounded-full bg-(--eg-neutral-bg) text-sm font-(weight:--eg-weight-semibold) text-(--eg-neutral-fg) min-[768px]:row-span-1"
+                    class="row-span-2 grid size-(--eg-control-sm) shrink-0 place-items-center rounded-(--eg-radius-sm) bg-(--eg-neutral-bg) text-sm font-semibold text-(--eg-neutral-fg) tabular-nums group-aria-[current=step]:bg-primary group-aria-[current=step]:text-primary-foreground md:max-xl:row-span-1"
                     aria-hidden="true"
                     >{{ step.number }}</span
                   >
+                  <span data-step-label class="min-w-0 text-sm font-semibold wrap-anywhere">{{
+                    step.label
+                  }}</span>
                   <span
-                    data-step-label
-                    class="min-w-0 self-center wrap-break-word text-sm font-(weight:--eg-weight-semibold) min-[768px]:col-span-2 min-[768px]:row-start-2"
-                    >{{ step.label }}</span
-                  >
-                  <span
-                    class="col-start-2 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-(--eg-space-2) text-xs wrap-break-word text-muted-foreground min-[768px]:col-span-2 min-[768px]:col-start-1 [&_hlm-icon]:shrink-0"
+                    class="col-start-2 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-(--eg-space-2) text-xs wrap-anywhere text-muted-foreground md:max-xl:col-start-1 [&_hlm-icon]:shrink-0"
                     [attr.data-step-status]="
                       store.done()[step.number]
                         ? 'complete'
@@ -174,44 +191,35 @@
           <p
             id="onboarding-locked-reason"
             [class.hidden]="!stepsExpanded()"
-            class="m-0 text-sm text-muted-foreground min-[768px]:block"
+            class="m-0 text-xs text-muted-foreground min-[768px]:block"
           >
             {{ lockedStepReason }}
           </p>
         }
-        <div
-          class="h-(--eg-space-3) overflow-hidden rounded-sm bg-(--eg-neutral-bg)"
-          role="progressbar"
-          [attr.aria-label]="progressLabel"
-          [attr.aria-valuemin]="0"
-          [attr.aria-valuemax]="steps.length"
-          [attr.aria-valuenow]="completedCount()"
-          [attr.aria-valuetext]="progressText()"
-        >
-          <div
-            class="h-full bg-primary"
-            [style.width.%]="(completedCount() / steps.length) * 100"
-          ></div>
-        </div>
       </section>
 
       <section
         hlmCard
         [id]="stepBodyId"
-        class="min-w-0 gap-(--eg-space-5) p-(--eg-space-6)"
+        class="min-w-0 gap-0 py-0"
         aria-labelledby="onboarding-step-title"
       >
-        <div class="min-w-0">
+        <header
+          hlmCardHeader
+          class="min-w-0 border-b border-border p-(--eg-space-5) md:px-(--eg-space-6)"
+        >
           <h2
             hlmCardTitle
             [size]="sectionHeadingSize"
             #stepHeading
             id="onboarding-step-title"
             tabindex="-1"
-            class="mb-(--eg-space-5)"
+            class="m-0 wrap-anywhere focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
           >
             {{ steps[store.viewStep() - 1]?.label }}
           </h2>
+        </header>
+        <div hlmCardContent class="min-w-0 p-(--eg-space-5) md:px-(--eg-space-6)">
           @if (store.project(); as project) {
             <div [hidden]="store.viewStep() !== 2">
               <app-onboarding-connect-ci
@@ -248,50 +256,55 @@
               [step]="store.viewStep()"
             />
           }
-          <footer class="mt-(--eg-space-7) border-t border-border pt-(--eg-space-5)">
-            @if (!store.canGoNext() && completionLink() === null) {
-              <p id="onboarding-next-reason" class="m-0 text-sm text-muted-foreground">
-                {{ store.viewStep() === 5 ? finalReason : gatedReason }}
-              </p>
-            }
-            <div class="mt-(--eg-space-4) flex flex-wrap justify-end gap-(--eg-space-3)">
+        </div>
+        <footer
+          class="grid min-w-0 gap-(--eg-space-3) border-t border-border p-(--eg-space-5) sm:flex sm:flex-wrap sm:items-center sm:justify-end md:px-(--eg-space-6)"
+        >
+          @if (!store.canGoNext() && completionLink() === null) {
+            <p
+              id="onboarding-next-reason"
+              class="m-0 max-w-[65ch] text-sm text-muted-foreground sm:me-auto"
+            >
+              {{ store.viewStep() === 5 ? finalReason : gatedReason }}
+            </p>
+          }
+          <div class="flex flex-wrap justify-end gap-(--eg-space-3)">
+            <button
+              type="button"
+              hlmBtn
+              [variant]="outlineVariant"
+              class="min-h-(--eg-control-touch) max-w-full whitespace-normal"
+              data-testid="onboarding-back"
+              [disabled]="!store.canGoBack()"
+              (click)="store.back()"
+            >
+              {{ backLabel }}
+            </button>
+            @if (completionLink(); as link) {
+              <a
+                hlmBtn
+                class="h-auto min-h-(--eg-control-touch) max-w-full whitespace-normal"
+                data-testid="onboarding-complete"
+                [routerLink]="link"
+              >
+                {{ openProjectLabel }}
+              </a>
+            } @else {
               <button
                 type="button"
                 hlmBtn
-                [variant]="outlineVariant"
+                [variant]="store.canGoNext() ? 'default' : outlineVariant"
                 class="min-h-(--eg-control-touch) max-w-full whitespace-normal"
-                data-testid="onboarding-back"
-                [disabled]="!store.canGoBack()"
-                (click)="store.back()"
+                data-testid="onboarding-next"
+                [disabled]="!store.canGoNext()"
+                [attr.aria-describedby]="!store.canGoNext() ? 'onboarding-next-reason' : null"
+                (click)="store.next()"
               >
-                {{ backLabel }}
+                {{ nextLabel }}
               </button>
-              @if (completionLink(); as link) {
-                <a
-                  hlmBtn
-                  class="h-auto min-h-(--eg-control-touch) max-w-full whitespace-normal"
-                  data-testid="onboarding-complete"
-                  [routerLink]="link"
-                >
-                  {{ openProjectLabel }}
-                </a>
-              } @else {
-                <button
-                  type="button"
-                  hlmBtn
-                  [variant]="store.canGoNext() ? 'default' : outlineVariant"
-                  class="min-h-(--eg-control-touch) max-w-full whitespace-normal"
-                  data-testid="onboarding-next"
-                  [disabled]="!store.canGoNext()"
-                  [attr.aria-describedby]="!store.canGoNext() ? 'onboarding-next-reason' : null"
-                  (click)="store.next()"
-                >
-                  {{ nextLabel }}
-                </button>
-              }
-            </div>
-          </footer>
-        </div>
+            }
+          </div>
+        </footer>
       </section>
       <app-onboarding-evidence-panel
         #resourcesLedger
