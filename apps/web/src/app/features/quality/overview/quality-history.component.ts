@@ -1,8 +1,18 @@
-import { ChangeDetectionStrategy, Component, computed, input, inject } from '@angular/core';
+import { DatePipe } from '@angular/common';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  LOCALE_ID,
+} from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
+import { shortDateFormat } from '../../../shared/time/short-date-format';
 import { DataTableComponent, type DataTableColumn } from '../../../shared/ui/data-table';
+import { EmptyPatternComponent } from '../../../shared/ui/states/empty-pattern.component';
 import type { QualityDayViewModel } from './quality-overview.fixture';
 
 const ChartDisplay = signalStore(
@@ -61,7 +71,7 @@ const columns: readonly DataTableColumn<QualityDayViewModel>[] = [
 
 @Component({
   selector: 'app-quality-history',
-  imports: [DataTableComponent, HlmButton, HlmCardImports],
+  imports: [DatePipe, DataTableComponent, EmptyPatternComponent, HlmButton, HlmCardImports],
   providers: [ChartDisplay],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'grid min-w-0 gap-4 wrap-anywhere' },
@@ -70,6 +80,7 @@ const columns: readonly DataTableColumn<QualityDayViewModel>[] = [
 })
 export class QualityHistoryComponent {
   protected readonly display = inject(ChartDisplay);
+  protected readonly dateFormat = shortDateFormat(inject(LOCALE_ID));
   readonly days = input.required<readonly QualityDayViewModel[]>();
   protected readonly columns = columns;
   protected readonly rowId = (day: QualityDayViewModel) => day.date;
@@ -85,6 +96,7 @@ export class QualityHistoryComponent {
   };
   protected readonly points = computed(() => {
     const days = this.days();
+    if (days.length === 0) return [];
     return days.map((day, index) => ({
       day,
       x: ((index + 0.5) * 600) / days.length,

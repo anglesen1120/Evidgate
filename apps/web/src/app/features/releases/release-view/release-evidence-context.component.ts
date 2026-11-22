@@ -40,7 +40,13 @@ import type { ComponentKey, ReleaseViewModel } from './release-view.fixture';
               <h3 class="eg-type-body m-0 font-semibold">{{ copy.partialWorker }}</h3>
             } @else {
               <h3 class="eg-type-body m-0 font-semibold">{{ entry.title }}</h3>
-              <p class="m-0 text-sm">{{ entry.description }}</p>
+              <p class="m-0 text-sm">
+                {{
+                  state() === 'restricted' && entry.component !== 'worker'
+                    ? copy.restricted
+                    : entry.description
+                }}
+              </p>
             }
           </article>
         }

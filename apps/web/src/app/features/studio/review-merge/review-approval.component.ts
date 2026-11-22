@@ -1,6 +1,6 @@
-import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { HlmCard, HlmCardContent, HlmCardHeader, HlmCardTitle } from '@evidgate/ui/card';
+import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { ReviewActionPreviewComponent } from './review-action-preview.component';
 import { MERGE_COPY } from './studio-review-merge.copy';
@@ -10,7 +10,7 @@ import type { StudioReviewMergeViewModel } from './studio-review-merge.fixture';
   selector: 'app-review-approval',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    DatePipe,
+    AbsoluteTimeComponent,
     HlmCard,
     HlmCardContent,
     HlmCardHeader,

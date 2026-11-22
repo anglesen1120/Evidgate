@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  LOCALE_ID,
+} from '@angular/core';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmIcon } from '@evidgate/ui/icon';
 import { DataTableComponent, type DataTableColumn } from '../../../shared/ui/data-table';
@@ -24,6 +31,10 @@ import type { QualityCaseViewModel, QualityOverviewViewModel } from './quality-o
   templateUrl: './quality-breakdown.component.html',
 })
 export class QualityBreakdownComponent {
+  private readonly percent = new Intl.NumberFormat(inject(LOCALE_ID), {
+    style: 'percent',
+    maximumFractionDigits: 3,
+  });
   readonly model = input.required<QualityOverviewViewModel>();
   readonly longNames = input(false);
   protected readonly rowId = (row: QualityCaseViewModel) => row.id;
@@ -49,7 +60,7 @@ export class QualityBreakdownComponent {
         header: $localize`:@@review.quality.flake-rate:Flake rate`,
         role: 'number',
         align: 'end',
-        cell: (row) => `${row.flakePercent}%`,
+        cell: (row) => this.percent.format(row.flakePercent / 100),
       },
       {
         id: 'runs',

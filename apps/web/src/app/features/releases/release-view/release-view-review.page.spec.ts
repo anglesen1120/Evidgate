@@ -68,6 +68,20 @@ describe('ReleaseViewReviewPage', () => {
     }
   });
 
+  it('withholds bound evidence revisions across the page when metadata is restricted', async () => {
+    const route = await RouterTestingHarness.create('/release');
+    const page = await TestbedHarnessEnvironment.loader(route.fixture).getHarness(ReleaseHarness);
+    const visible = await page.allText();
+    expect(visible).toContain('ev-4');
+    expect(visible).toContain('ev-2');
+
+    await route.navigateByUrl('/release?state=restricted', ReleaseViewReviewPage);
+    const restricted = await page.allText();
+    expect(restricted).toContain('Restricted evidence metadata');
+    expect(restricted).not.toContain('ev-4');
+    expect(restricted).not.toContain('ev-2');
+  });
+
   it('withdraws the previous snapshot when the query changes to forbidden', async () => {
     const route = await RouterTestingHarness.create('/release');
     const page = await TestbedHarnessEnvironment.loader(route.fixture).getHarness(ReleaseHarness);

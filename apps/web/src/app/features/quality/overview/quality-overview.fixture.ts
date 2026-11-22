@@ -2,7 +2,6 @@ import type { Completeness, DecisionValue, Outcome } from '../../../shared/ui/ve
 
 export interface QualityDayViewModel {
   readonly date: string;
-  readonly dayLabel: string;
   readonly observation: {
     readonly percent: number;
     readonly passed: number;
@@ -96,10 +95,9 @@ export const qualityFixture: QualityOverviewViewModel = {
     },
   ],
   days: [
-    { date: '2026-10-10', dayLabel: $localize`:@@review.quality.day-10:10 Oct`, observation: null },
+    { date: '2026-10-10', observation: null },
     {
       date: '2026-10-11',
-      dayLabel: $localize`:@@review.quality.day-11:11 Oct`,
       observation: {
         percent: 80,
         passed: 16,
@@ -111,7 +109,6 @@ export const qualityFixture: QualityOverviewViewModel = {
     },
     {
       date: '2026-10-12',
-      dayLabel: $localize`:@@review.quality.day-12:12 Oct`,
       observation: {
         percent: 90,
         passed: 18,

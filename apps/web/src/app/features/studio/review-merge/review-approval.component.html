@@ -42,7 +42,7 @@
             <dt>{{ copy.when }}</dt>
             <dd>
               @if (decision.at; as at) {
-                <time [attr.datetime]="at">{{ at | date: 'medium' : 'UTC' }}</time>
+                <app-absolute-time [value]="at" />
                 <details>
                   <summary
                     class="min-h-(--eg-control-touch) cursor-pointer content-center focus-visible:outline-2 focus-visible:outline-(--eg-focus)"

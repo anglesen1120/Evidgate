@@ -1,4 +1,5 @@
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
+import { LOCALE_ID } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { QualityBreakdownComponent } from './quality-breakdown.component';
 import { qualityFixture } from './quality-overview.fixture';
@@ -6,6 +7,25 @@ import { QualityReviewHarness } from './quality-review.harness';
 
 describe('QualityBreakdownComponent', () => {
   afterEach(() => TestBed.resetTestingModule());
+
+  it.each([
+    ['vi', '12,5%', '8,3%'],
+    ['en-US', '12.5%', '8.3%'],
+  ])(
+    'formats supplied case percentages in %s without rounding to whole numbers',
+    async (locale, address, search) => {
+      TestBed.configureTestingModule({ providers: [{ provide: LOCALE_ID, useValue: locale }] });
+      const fixture = TestBed.createComponent(QualityBreakdownComponent);
+      fixture.componentRef.setInput('model', qualityFixture);
+      const panel = await TestbedHarnessEnvironment.harnessForFixture(
+        fixture,
+        QualityReviewHarness,
+      );
+      const table = await panel.text('app-data-table');
+      expect(table).toContain(address);
+      expect(table).toContain(search);
+    },
+  );
 
   it('keeps suite failure and the unbound worker visible independently of pass rate', async () => {
     const fixture = TestBed.createComponent(QualityBreakdownComponent);

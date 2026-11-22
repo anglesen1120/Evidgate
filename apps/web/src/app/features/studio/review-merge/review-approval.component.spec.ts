@@ -1,11 +1,16 @@
+import { registerLocaleData } from '@angular/common';
+import localeVi from '@angular/common/locales/vi';
+import { LOCALE_ID } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { mergeReviewView } from './studio-review-merge.fixture';
 import { ReviewApprovalComponent } from './review-approval.component';
 
 describe('ReviewApprovalComponent', () => {
-  function render(state: string) {
-    TestBed.configureTestingModule({ providers: [provideRouter([])] });
+  function render(state: string, locale = 'en-US') {
+    TestBed.configureTestingModule({
+      providers: [provideRouter([]), { provide: LOCALE_ID, useValue: locale }],
+    });
     const fixture = TestBed.createComponent(ReviewApprovalComponent);
     fixture.componentRef.setInput('view', mergeReviewView(state));
     fixture.detectChanges();
@@ -39,6 +44,19 @@ describe('ReviewApprovalComponent', () => {
       }
     },
   );
+
+  it.each([
+    ['vi', '13/10/2026'],
+    ['en-US', '10/13/2026'],
+  ])('shows the recorded decision time in UTC using the %s calendar format', (locale, date) => {
+    registerLocaleData(localeVi);
+    const root = render('candidate-approved', locale);
+    const time = root.querySelector('time');
+    expect(time?.textContent).toContain(date);
+    expect(time?.textContent).toContain('10:00:00');
+    expect(time?.textContent).toContain('UTC');
+    expect(time?.dateTime).toBe('2026-10-13T10:00:00Z');
+  });
 
   it.each(['failed', '412', 'conflict', 'reloaded'])(
     'does not display stale validation for %s',
