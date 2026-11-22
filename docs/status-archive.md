@@ -1739,3 +1739,9 @@ Replaced by the withdrawal of the 13.2.2-T1 credit (248 / 246.5); text verbatim.
 | Mockup 20 suite composition re-skin pending (S660) | Screen 20 was not built as a review screen because production `features/suites/composition` already exists; its v3 re-skin against the mockup is still open. No plan credit was taken by S660. | receiver: 09.10 screen re-skin lane for `features/suites/composition` |
 
 Closed by S665 (#1332, `969a647a`): the v3 re-skin of `features/suites/composition` landed on the wave; the mockup elements with no production behaviour are carried in the row 'Mockup 20 elements without behaviour (S665)'.
+
+## Moved from status-carried.md by S663 (2026-11-22)
+
+| Screen 16 availability re-skin (09.10.1, S659) | Screen 16 already ships as the production availability page and was skipped by the failures/healing review lane. | receiver: S663 re-skin lane (09.10.1) |
+
+Closed by S663 (#1334, `86a08601`): screen 16 was re-skinned with the other settings screens; its browser capture is carried in 'Availability browser capture (S663)'.
