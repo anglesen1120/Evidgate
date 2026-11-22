@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { stubLayoutApis } from '../../../shared/testing/layout.testing';
-import { DecisionReviewHarness } from './decision-review.harness';
+import { DecisionDialogHarness, DecisionReviewHarness } from './decision-review.harness';
 import { ReleaseDecisionReviewPage } from './decision-review.page';
 
 const examples = {
@@ -88,8 +88,20 @@ describe('ReleaseDecisionReviewPage', () => {
       expect(text).not.toContain('An Phạm');
       expect(await harness.all('app-decision-preview')).toHaveLength(0);
     }
-    if (state === 'removed404') expect(await harness.all('input[value="q-19"]')).toHaveLength(0);
+    if (state === 'removed404') expect(await harness.all('[data-view="q-19"]')).toHaveLength(0);
     if (state === 'shadow') expect(text).toContain('Original run-1842 / ev-3: FAIL');
+  });
+  it('drops the open exception dialog when read permission is revoked', async () => {
+    route.next(convertToParamMap({ state: 'default' }));
+    const fixture = TestBed.createComponent(ReleaseDecisionReviewPage);
+    const h = await TestbedHarnessEnvironment.harnessForFixture(fixture, DecisionReviewHarness);
+    const loader = TestbedHarnessEnvironment.documentRootLoader(fixture);
+    await (await h.find('[data-view="w-28"]')).click();
+    expect(await (await loader.getHarness(DecisionDialogHarness)).text()).toContain('An Phạm');
+    route.next(convertToParamMap({ state: 'after-load' }));
+    expect(await h.text()).toContain('403 · policy:read');
+    expect(await loader.getAllHarnesses(DecisionDialogHarness)).toHaveLength(0);
+    expect(await h.all('[data-view]')).toHaveLength(0);
   });
   it('reacts to the query changing in place and falls back for unknown values', async () => {
     route.next(convertToParamMap({ state: 'pass' }));

@@ -78,7 +78,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
         expect(cell.style.getPropertyValue('min-inline-size')).toBe(minimum);
       }
     }
-    expect(root.querySelectorAll('[role="columnheader"]')).toHaveLength(7);
+    expect(root.querySelectorAll('[role="columnheader"]')).toHaveLength(8);
     const identity = root.querySelector('[data-run-row] a');
     expect(identity?.textContent?.trim()).toBe('018f0000…00000001');
     expect(identity?.getAttribute('aria-label')).toContain(run(1).run_id);
@@ -94,6 +94,10 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     const { root } = await render([run(1)]);
     const link = root.querySelector<HTMLAnchorElement>('.identifier a')!;
     expect(link.getAttribute('href')).toBe(`/${run(1).run_id}?state=complete&ref=main`);
+    const view = root.querySelector<HTMLAnchorElement>('td.cdk-column-actions a');
+    expect(view?.textContent?.trim()).toBe('View');
+    expect(view?.getAttribute('aria-label')).toBe(`View ${run(1).run_id}`);
+    expect(view?.getAttribute('href')).toBe(link.getAttribute('href'));
     expect(link.textContent).toContain(run(1).run_id.slice(0, 8));
     expect(link.getAttribute('aria-label')).toBe(`${link.textContent?.trim()} (${run(1).run_id})`);
     expect(link.classList.contains('whitespace-nowrap')).toBe(true);
@@ -111,7 +115,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     ]);
     expect(
       [...root.querySelectorAll('[role="columnheader"]')].map((cell) => cell.textContent?.trim()),
-    ).toEqual(['Run id', 'State', 'Evidence', 'Decision', 'Ref', 'Run scope', 'Created (UTC)']);
+    ).toEqual(['Run id', 'State', 'Evidence', 'Decision', 'Ref', 'Run scope', 'Created (UTC)', 'Actions']);
     expect(root.querySelectorAll('[data-run-evidence] .status-pill--neutral')).toHaveLength(5);
     expect(root.querySelector('[data-run-evidence] .status-pill--success')).toBeNull();
     expect(root.querySelectorAll('[data-run-evidence-hint]')).toHaveLength(1);
@@ -196,6 +200,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
       'identity',
       'text',
       'date',
+      'actions',
     ]);
     expect(headers[0]?.getAttribute('data-column-priority')).toBe('primary');
     expect(headers[4]?.getAttribute('data-column-kind')).toBe('branch');
@@ -205,8 +210,8 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
       .narrow.set(true);
     await fixture.whenStable();
     const record = root.querySelector('.eg-table-record');
-    expect(record?.querySelectorAll('dt')).toHaveLength(7);
-    expect(record?.querySelectorAll('dd')).toHaveLength(7);
+    expect(record?.querySelectorAll('dt')).toHaveLength(8);
+    expect(record?.querySelectorAll('dd')).toHaveLength(8);
     expect(record?.querySelector('a')?.textContent).toBe(run(1).run_id);
     expect(record?.querySelector('a')?.getAttribute('aria-label')).toBe(run(1).run_id);
     expect(record?.querySelector('a')?.classList.contains('whitespace-nowrap')).toBe(false);

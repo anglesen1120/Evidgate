@@ -87,3 +87,12 @@
 <ng-template #createdCell let-row>
   <app-absolute-time [value]="row.created_at" />
 </ng-template>
+<ng-template #viewCell let-row>
+  <a
+    class="inline-flex min-h-(--eg-control-touch) min-w-(--eg-control-touch) items-center justify-center text-primary underline underline-offset-(--eg-space-1) hover:text-foreground focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring"
+    [routerLink]="[row.run_id]"
+    queryParamsHandling="preserve"
+    [attr.aria-label]="viewLabel(row.run_id)"
+    >{{ copy.view }}</a
+  >
+</ng-template>

@@ -1,96 +1,27 @@
 @let vm = view();
-<div class="grid min-w-0 items-start gap-4 lg:grid-cols-2">
-  <section hlmCard class="min-w-0 gap-0">
-    <header class="grid gap-2 border-b p-5">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <h2 class="text-lg font-semibold">{{ copy.queue }}</h2>
-        <span class="text-xs text-muted-foreground">{{ copy.runScope }}</span>
-      </div>
-      <p class="text-sm text-muted-foreground">{{ copy.queueHelp }}</p>
-    </header>
-    <fieldset class="grid min-w-0 gap-2 p-3">
-      <legend class="sr-only">{{ copy.queueLabel }}</legend>
-      @for (record of vm.records; track record.id) {
-        <label
-          class="grid min-w-0 cursor-pointer gap-3 rounded-md border border-input p-3 hover:bg-muted has-checked:border-primary has-checked:bg-accent has-focus-visible:ring-2 has-focus-visible:ring-ring"
-        >
-          <span class="flex min-w-0 flex-wrap items-center gap-3">
-            <input
-              type="radio"
-              name="decision-record"
-              [value]="record.id"
-              [checked]="current()?.id === record.id"
-              (change)="selection.select(record.id)"
-              class="accent-primary"
-            />
-            <span class="min-w-0 grow"
-              ><strong class="block">{{ record.kind }}</strong
-              ><span class="text-xs text-muted-foreground"
-                >{{ record.id }} · {{ record.owner }}</span
-              ></span
-            >
-            <app-status-pill [label]="record.status" [tone]="record.tone" />
-          </span>
-          <span class="flex min-w-0 flex-wrap justify-between gap-2 text-sm"
-            ><bdi class="font-mono">{{ record.scope }}</bdi
-            ><span class="text-muted-foreground">{{
-              record.id === 'checkout-vi-chromium' ? copy.notQuarantinable : record.expiry
-            }}</span></span
-          >
-        </label>
-      }
-    </fieldset>
-  </section>
+<section hlmCard class="min-w-0 gap-0 py-0">
+  <header class="grid gap-2 border-b p-5">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h2 tabindex="-1" class="text-lg font-semibold">{{ copy.queue }}</h2>
+      <span class="text-xs text-muted-foreground">{{ copy.runScope }}</span>
+    </div>
+    <p class="text-sm text-muted-foreground">{{ copy.queueHelp }}</p>
+  </header>
+  <app-data-table
+    class="[&_tr:has([aria-current=true])]:bg-accent"
+    [rows]="vm.records"
+    [columns]="columns()"
+    [rowId]="rowId"
+    [caption]="copy.queueLabel"
+    [flow]="'page'"
+    [fitToContainer]="true"
+  />
   @if (current(); as record) {
-    <article hlmCard data-detail class="min-w-0 gap-0" [attr.aria-label]="record.id">
-      <header class="grid gap-2 border-b p-5">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <bdi class="text-sm text-muted-foreground">{{ record.id }}</bdi
-          ><app-status-pill [label]="record.status" [tone]="record.tone" />
-        </div>
-        <h2 class="text-xl font-semibold">{{ record.kind }}</h2>
-        <bdi class="font-mono text-sm">{{ record.scope }}</bdi>
-        <app-inline-feedback
-          [tone]="'destructive'"
-          [announcement]="'off'"
-          [title]="copy.originalFailure"
-          [description]="copy.originalFailureHelp"
-        />
-      </header>
-      <section class="grid gap-3 border-b p-5">
-        <h3 class="font-semibold">{{ copy.reasonScope }}</h3>
-        <p>{{ record.reason }}</p>
-        <dl
-          class="grid gap-3 sm:grid-cols-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:font-medium"
-        >
-          <div>
-            <dt>{{ copy.owner }}</dt>
-            <dd>{{ record.owner }}</dd>
-          </div>
-          <div>
-            <dt>{{ copy.expires }}</dt>
-            <dd>{{ record.expiry }}</dd>
-          </div>
-          <div>
-            <dt>{{ copy.policy }}</dt>
-            <dd>{{ facts.policy }}</dd>
-          </div>
-        </dl>
-      </section>
-      @if (record.id === 'w-28') {
-        <section class="grid gap-2 border-b p-5">
-          <h3 class="font-semibold">{{ copy.history }}</h3>
-          <dl>
-            <div class="flex flex-wrap justify-between gap-2">
-              <dt>{{ copy.requestedBy }}</dt>
-              <dd>{{ facts.requester }}</dd>
-            </div>
-          </dl>
-          <app-waiver-banner [approver]="facts.approver" [expiresAt]="record.expiry" />
-        </section>
-      }
-      <footer class="flex flex-wrap items-center justify-between gap-3 p-4">
-        <small class="text-xs text-muted-foreground">{{ copy.caseScoped }}</small>
+    <footer class="flex min-w-0 flex-wrap items-center justify-between gap-3 border-t p-4">
+      <div class="grid gap-1">
+        <span class="text-xs text-muted-foreground">{{ copy.caseScoped }}</span>
+        <strong class="text-sm">{{ record.kind }} · <bdi>{{ record.id }}</bdi></strong>
+      </div>
         @if (vm.allowPreview) {
           <div *appDesktopMutation class="flex min-w-0 flex-wrap items-start gap-2">
             @switch (record.id) {
@@ -127,10 +58,116 @@
         } @else {
           <span class="text-sm">{{ copy.readonly }}</span>
         }
-      </footer>
-    </article>
+    </footer>
   }
-</div>
+</section>
+
+<ng-template #statusCell let-record>
+  <app-status-pill [label]="record.status" [tone]="record.tone" />
+</ng-template>
+<ng-template #scopeCell let-record>
+  <bdi class="block wrap-anywhere">{{ record.scope }}</bdi>
+  <span class="block text-xs text-muted-foreground">
+    {{ record.owner === '—' ? copy.notSupplied : record.owner }}
+  </span>
+</ng-template>
+<ng-template #expiryCell let-record>
+  @if (record.expiry === '—') {
+    {{ copy.notQuarantinable }}
+  } @else {
+    <time [attr.datetime]="record.expiry">{{ record.expiry | date: dateFormat : 'UTC' }}</time>
+  }
+</ng-template>
+<ng-template #viewCell let-record>
+  <button
+    [attr.aria-current]="current()?.id === record.id ? 'true' : null"
+    #opener
+    hlmBtn
+    type="button"
+    variant="outline"
+    class="min-h-(--eg-control-touch) min-w-(--eg-control-touch)"
+    aria-haspopup="dialog"
+    [attr.aria-label]="copy.viewLabel(record.id)"
+    [attr.data-view]="record.id"
+    (click)="openRecord(record, opener)"
+  >
+    {{ copy.view }}
+  </button>
+</ng-template>
+
+<hlm-dialog [autoFocus]="'[data-slot=dialog-title]'" (closed)="restoreFocusAfterReflow()">
+  <hlm-dialog-content
+    *hlmDialogPortal
+    class="exception-dialog [&_.spartan-dialog-close]:min-h-(--eg-control-touch) [&_.spartan-dialog-close]:min-w-(--eg-control-touch)"
+  >
+    @if (current(); as record) {
+      <header hlmDialogHeader class="grid gap-2">
+        <h2 hlmDialogTitle tabindex="-1">{{ copy.details }}</h2>
+        <div class="flex min-w-0 flex-wrap items-center gap-2">
+          <bdi class="font-mono">{{ record.id }}</bdi>
+          <app-status-pill [label]="record.status" [tone]="record.tone" />
+        </div>
+        <p hlmDialogDescription>{{ copy.originalFailureHelp }}</p>
+      </header>
+      <div data-detail class="grid min-h-0 content-start gap-4 overflow-y-auto overscroll-contain">
+        <h3 class="font-semibold">{{ copy.reasonScope }}</h3>
+        <dl class="grid gap-3 [&_dd]:font-medium [&_dt]:text-muted-foreground">
+          <div class="grid gap-1 sm:grid-cols-[1fr_2fr]">
+            <dt>{{ copy.kind }}</dt>
+            <dd>{{ record.kind }}</dd>
+          </div>
+          <div class="grid gap-1 sm:grid-cols-[1fr_2fr]">
+            <dt>{{ copy.caseLabel }}</dt>
+            <dd><bdi>{{ record.scope }}</bdi></dd>
+          </div>
+          <div class="grid gap-1 sm:grid-cols-[1fr_2fr]">
+            <dt>{{ copy.owner }}</dt>
+            <dd>{{ record.owner === '—' ? copy.notSupplied : record.owner }}</dd>
+          </div>
+          <div class="grid gap-1 sm:grid-cols-[1fr_2fr]">
+            <dt>{{ copy.reason }}</dt>
+            <dd>{{ record.reason }}</dd>
+          </div>
+          <div class="grid gap-1 sm:grid-cols-[1fr_2fr]">
+            <dt>{{ copy.expires }}</dt>
+            <dd>
+              @if (record.expiry === '—') {
+                {{ copy.notQuarantinable }}
+              } @else {
+                <time [attr.datetime]="record.expiry">{{ record.expiry | date: dateFormat : 'UTC' }}</time>
+                <bdi class="block text-xs text-muted-foreground">{{ record.expiry }}</bdi>
+              }
+            </dd>
+          </div>
+          <div class="grid gap-1 sm:grid-cols-[1fr_2fr]">
+            <dt>{{ copy.policy }}</dt>
+            <dd><bdi>{{ facts.policy }}</bdi></dd>
+          </div>
+        </dl>
+        @if (record.id === 'w-28') {
+          <section class="grid gap-2 border-t pt-4">
+            <h3 class="font-semibold">{{ copy.history }}</h3>
+            <dl>
+              <div class="grid gap-1 sm:grid-cols-[1fr_2fr]">
+                <dt>{{ copy.requestedBy }}</dt>
+                <dd>{{ facts.requester }}</dd>
+              </div>
+            </dl>
+            <app-waiver-banner [approver]="facts.approver" [expiresAt]="record.expiry" />
+          </section>
+        }
+      </div>
+      <footer hlmDialogFooter>
+        <span class="me-auto self-center text-xs text-muted-foreground">
+          {{ copy.readonly }} · {{ copy.caseScoped }}
+        </span>
+        <button hlmBtn hlmDialogClose data-close variant="outline" type="button" class="min-h-(--eg-control-touch)">
+          {{ copy.close }}
+        </button>
+      </footer>
+    }
+  </hlm-dialog-content>
+</hlm-dialog>
 @if (vm.state === 'q-removed' || vm.state === 'q-expired' || vm.state === 'removed404') {
   <section hlmCard class="mt-4 items-start gap-3 p-5">
     <h2 class="text-lg font-semibold">{{ copy.caseQuarantine }}</h2>

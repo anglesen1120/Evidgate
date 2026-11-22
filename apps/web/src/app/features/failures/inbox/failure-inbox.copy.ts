@@ -135,8 +135,12 @@ export const INBOX_COPY = {
   choose: $localize`:@@failures.inbox.choose:Select at least one incident to review.`,
   preview: $localize`:@@failures.inbox.preview:Preview incident`,
   select: $localize`:@@failures.inbox.select:Select incident`,
+  view: $localize`:@@failures.inbox.view:View`,
   confirmedPreview: $localize`:@@failures.inbox.confirmed-preview:Preview confirmed. No incident changed.`,
   decision: $localize`:@@failures.inbox.decision:Stored run decision`,
   testOutcome: $localize`:@@failures.inbox.test-outcome:Test outcome`,
   completeness: $localize`:@@failures.inbox.completeness:Evidence completeness`,
 } as const;
+
+export const viewIncident = (title: string): string =>
+  $localize`:@@failures.inbox.view-incident:View ${title}:subject:`;

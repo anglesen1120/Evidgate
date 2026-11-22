@@ -1,6 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import {
   afterNextRender,
+  afterRenderEffect,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -11,6 +12,7 @@ import {
   linkedSignal,
   signal,
   type Signal,
+  viewChild,
   type WritableSignal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -79,6 +81,21 @@ export class RunDetailPage {
   private readonly injector = inject(Injector);
 
   protected readonly detailTab = signal('evidence');
+  private readonly tabStrip = viewChild<ElementRef<HTMLElement>>('tabStrip');
+
+  private revealSelectedTab(): void {
+    const selected = this.detailTab();
+    const strip = this.tabStrip()?.nativeElement;
+    if (!strip || strip.scrollWidth <= strip.clientWidth) return;
+    const tab = strip.querySelector<HTMLElement>(`[data-run-tab="${selected}"]`);
+    if (!tab) return;
+    const box = strip.getBoundingClientRect();
+    const inset = strip.clientLeft + Number.parseFloat(getComputedStyle(strip).paddingInlineStart);
+    const { left, right } = tab.getBoundingClientRect();
+    const delta = Math.min(0, left - box.left - inset) || Math.max(0, right - box.right + inset);
+    if (delta) strip.scrollLeft += delta;
+  }
+
   // The header describes the current collection, not every decision this run has ever had.
   // Never place an older or differently pinned evaluation next to its completeness badge.
   protected readonly summaryDecision = computed(() => {
@@ -181,6 +198,7 @@ export class RunDetailPage {
     decisionTab: $localize`:@@runs.detail.decision-tab-compact:Live decision`,
   };
   constructor() {
+    afterRenderEffect(() => this.revealSelectedTab());
     this.route.fragment.pipe(takeUntilDestroyed()).subscribe((fragment) => {
       this.fragment.set(fragment);
       this.landed = false;

@@ -80,9 +80,11 @@
               hlmTabsList
               [variant]="'line'"
               [attr.aria-label]="copy.sections"
-              class="h-auto w-full flex-wrap justify-start border-b border-(--eg-border)"
+              #tabStrip
+              class="h-auto w-full min-w-0 flex-nowrap justify-start overflow-x-auto border-b border-(--eg-border) p-(--eg-space-2) [scrollbar-width:thin]"
             >
               <button
+                data-run-tab="evidence"
                 type="button"
                 [hlmTabsTrigger]="'evidence'"
                 class="h-auto min-h-(--eg-control-touch) flex-none whitespace-nowrap"
@@ -90,6 +92,7 @@
                 {{ copy.evidence }}
               </button>
               <button
+                data-run-tab="decision"
                 type="button"
                 [hlmTabsTrigger]="'decision'"
                 class="h-auto min-h-(--eg-control-touch) flex-none whitespace-nowrap"

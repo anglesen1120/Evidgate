@@ -56,9 +56,15 @@ export class RunListTableComponent {
   private readonly refCell = viewChild.required<RunCell>('refCell');
   private readonly scopeCell = viewChild.required<RunCell>('scopeCell');
   private readonly createdCell = viewChild.required<RunCell>('createdCell');
+  private readonly viewCell = viewChild.required<RunCell>('viewCell');
+  protected viewLabel(id: string): string {
+    return $localize`:@@runs.list.view-run:View ${id}:runId:`;
+  }
   protected readonly copy = {
     caption: $localize`:@@runs.list.table-caption:Project runs`,
     id: $localize`:@@runs.list.column-id:Run id`,
+    actions: $localize`:@@runs.list.column-actions:Actions`,
+    view: $localize`:@@runs.list.view:View`,
     state: $localize`:@@runs.list.column-state:State`,
     evidence: $localize`:@@runs.list.column-evidence:Evidence`,
     evidenceUnavailable: $localize`:@@runs.list.evidence-unavailable:Unavailable`,
@@ -145,6 +151,13 @@ export class RunListTableComponent {
       overflow: 'wrap',
       width: { min: '18ch' },
       cellTemplate: this.createdCell(),
+    },
+    {
+      id: 'actions',
+      header: this.copy.actions,
+      cell: () => this.copy.view,
+      role: 'actions',
+      cellTemplate: this.viewCell(),
     },
   ]);
 }

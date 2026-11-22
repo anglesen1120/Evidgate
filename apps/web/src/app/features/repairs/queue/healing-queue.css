@@ -5,10 +5,9 @@
 .queue-page,
 .workspace,
 .kpis,
-.record-list,
 .section,
 .facts,
-.record-title {
+.queue-row-actions {
   display: grid;
   min-width: 0;
 }
@@ -26,11 +25,6 @@
 }
 .workspace {
   align-items: start;
-}
-@media (min-width: 1100px) {
-  .workspace {
-    grid-template-columns: minmax(0, 1.04fr) minmax(0, 1fr);
-  }
 }
 .panel {
   gap: 0;
@@ -85,7 +79,6 @@ ol {
 small,
 .muted,
 .meta,
-.origin-line,
 .eyeline,
 dt,
 figcaption {
@@ -135,28 +128,23 @@ input {
 .divider {
   border-block-start: var(--eg-border-width) solid var(--eg-border);
 }
-.record-list {
-  list-style: none;
-  gap: var(--eg-space-3);
-  padding: var(--eg-space-4);
+.queue-row-actions {
+  justify-items: start;
+  gap: var(--eg-space-2);
 }
-.record-list li {
-  padding: var(--eg-space-4);
-  gap: var(--eg-space-3);
-  align-items: flex-start;
+.candidate-subject {
+  border-inline-start: var(--eg-focus-width) solid transparent;
+  padding-inline-start: var(--eg-space-3);
 }
-.record-list .inspected {
+.candidate-subject.inspected {
   border-color: var(--eg-accent);
+  background: var(--eg-accent-soft);
+  color: var(--eg-accent-fg);
 }
 .record-link {
   font-weight: bold;
   color: inherit;
   text-underline-offset: var(--eg-space-2);
-}
-.record-title {
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--eg-space-4);
-  align-items: center;
 }
 .record-link:focus-visible {
   outline: var(--eg-focus-width) solid var(--eg-focus);

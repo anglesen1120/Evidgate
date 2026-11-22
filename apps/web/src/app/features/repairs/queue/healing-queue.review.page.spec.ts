@@ -2,6 +2,7 @@ import { ComponentHarness } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
 import { BehaviorSubject, of } from 'rxjs';
 import { describe, expect, it } from 'vitest';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
@@ -10,18 +11,21 @@ import { HealingQueueReviewPage } from './healing-queue.review.page';
 class QueueHarness extends ComponentHarness {
   static hostSelector = 'app-healing-queue-review';
   readonly text = async () => (await this.host()).text();
-  readonly record = (id: string) => this.locatorFor('[data-record="' + id + '"]')();
+  readonly record = (id: string) => this.locatorFor('[data-row-id="' + id + '"]')();
   readonly disabledReview = (id: string) =>
-    this.locatorFor('[data-record="' + id + '"] button[disabled]')();
-  readonly pendingIcon = this.locatorFor('[data-record="cand-73"] .pending hlm-icon');
-  readonly pending = this.locatorFor('[data-record="cand-73"] .pending');
+    this.locatorFor('[data-row-id="' + id + '"] button[disabled]')();
+  readonly summaryLink = (id: string) =>
+    this.locatorFor('[data-row-id="' + id + '"] a[data-summary]')();
+  readonly pendingIcon = this.locatorFor('[data-row-id="cand-73"] .pending hlm-icon');
+  readonly pending = this.locatorFor('[data-row-id="cand-73"] .pending');
+  readonly headers = this.locatorForAll('app-data-table [role="columnheader"]');
   readonly detail = this.locatorFor('app-queue-detail');
-  readonly bytes = this.locatorForAll('li[data-record]');
+  readonly bytes = this.locatorForAll('app-data-table [data-row-id]');
   readonly bulk = this.locatorFor('button[data-review-selected]');
-  readonly cartChoice = this.locatorFor('[data-record="cand-77"] [role="checkbox"]');
+  readonly cartChoice = this.locatorFor('[data-row-id="cand-77"] [role="checkbox"]');
   readonly search = this.locatorFor('input[type="search"]');
   readonly filters = this.locatorForAll('button[data-filter]');
-  readonly shadowLink = this.locatorFor('[data-record="cand-73"] a[data-shadow]');
+  readonly shadowLink = this.locatorFor('[data-row-id="cand-73"] a[data-shadow]');
   readonly destinations = this.locatorForAll(
     'a[href*="/dev/shadow-detail/"], a[href*="/dev/healing-approval/"]',
   );
@@ -96,6 +100,34 @@ describe('HealingQueueReviewPage', () => {
     expect(await (await queue.shadowLink()).getAttribute('href')).toBe(
       '/dev/shadow-detail/orgs/org-a/projects/proj-b?id=cand-73',
     );
+    expect(await (await queue.shadowLink()).text()).toBe('View');
+    expect(await (await queue.shadowLink()).getAttribute('aria-label')).toContain(
+      'Required delivery address',
+    );
+    expect(await Promise.all((await queue.headers()).map((header) => header.text()))).toEqual([
+      'Select for review', 'Candidate', 'Original failure', 'Review status', 'Shadow evidence', 'View',
+    ]);
+  });
+
+  it('opens only the loaded summary for an unlinkable candidate and retains the queue query', async () => {
+    TestBed.configureTestingModule({
+      providers: [provideRouter([{
+        path: 'dev/healing-queue/orgs/:orgId/projects/:projectId',
+        component: HealingQueueReviewPage,
+      }])],
+    });
+    const path = '/dev/healing-queue/orgs/org-a/projects/proj-b';
+    const router = await RouterTestingHarness.create();
+    await router.navigateByUrl(`${path}?state=default&id=cand-73`, HealingQueueReviewPage);
+    const queue = await TestbedHarnessEnvironment.loader(router.fixture).getHarness(QueueHarness);
+    const summary = await queue.summaryLink('cand-77');
+    const url = new URL((await summary.getAttribute('href')) ?? '', 'https://example.test');
+    expect(url.pathname).toBe(path);
+    expect(url.searchParams.get('id')).toBe('cand-77');
+    expect(url.searchParams.get('state')).toBe('default');
+    await summary.click();
+    expect(await (await queue.detail()).text()).toContain('Cart total after refresh');
+    expect(await queue.detailDestinations()).toHaveLength(0);
   });
 
   it.each(['cand-73', 'cand-77', 'cand-74', 'cand-75'])(
@@ -113,6 +145,9 @@ describe('HealingQueueReviewPage', () => {
       }
       if (!supported) {
         const note = 'Detail not available in this review specimen.';
+        const summary = await queue.summaryLink(id);
+        expect(await summary.text()).toBe('View summary');
+        expect(await summary.getAttribute('href')).toContain(`id=${id}`);
         expect(await (await queue.record(id)).text()).toContain(note);
         expect(await (await queue.detail()).text()).toContain(note);
       }

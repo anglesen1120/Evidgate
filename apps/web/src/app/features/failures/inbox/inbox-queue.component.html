@@ -70,82 +70,76 @@
       </div>
     </details>
   </header>
-  <ol class="m-0 grid list-none gap-2 p-3">
-    @for (row of store.visible(); track row.id) {
-      @let current = store.active()?.id === row.id;
-      <li
-        hlmCard
-        [attr.data-current]="current"
-        class="min-w-0 gap-2 p-3 data-[current=true]:border-(--eg-accent) data-[current=true]:bg-(--eg-accent-soft)"
+  <app-data-table
+    [rows]="store.visible()"
+    [rowId]="rowId"
+    [columns]="columns()"
+    [caption]="c.incidents"
+    [fitToContainer]="true"
+    flow="page"
+  />
+  <ng-template #selectCell let-row>
+    <hlm-checkbox
+      *appDesktopMutation
+      [aria-label]="c.select + ': ' + row.id"
+      [checked]="store.checked().includes(row.id)"
+      [disabled]="store.state() === 'submitting'"
+      (checkedChange)="store.toggle(row.id, $event)"
+    />
+  </ng-template>
+  <ng-template #subjectCell let-row let-context="value">
+    @let current = store.active()?.id === row.id;
+    <div class="grid min-w-0 justify-items-start gap-1">
+      <button
+        hlmBtn
+        type="button"
+        variant="link"
+        [attr.aria-pressed]="current"
+        [attr.aria-label]="c.preview + ': ' + row.title"
+        class="h-auto max-w-full justify-start p-0 text-start font-semibold whitespace-normal aria-pressed:bg-(--eg-accent-soft) aria-pressed:text-(--eg-accent-fg)"
+        (click)="store.pick(row.id)"
       >
-        <div class="flex flex-wrap items-center gap-2">
-          <hlm-checkbox
-            *appDesktopMutation
-            [aria-label]="c.select + ': ' + row.id"
-            [checked]="store.checked().includes(row.id)"
-            [disabled]="store.state() === 'submitting'"
-            (checkedChange)="store.toggle(row.id, $event)"
-          />
-          <span
-            class="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-(--eg-accent-soft) text-(--eg-accent-fg)"
-          >
-            <hlm-icon
-              [name]="
-                row.source === 'pending'
-                  ? 'lucideClock'
-                  : row.id === 'inc-91'
-                    ? 'lucideOctagonX'
-                    : 'lucideActivity'
-              "
-            />
-          </span>
-          <div class="min-w-0 flex-1 basis-32">
-            <button
-              hlmBtn
-              type="button"
-              [variant]="'link'"
-              [attr.aria-pressed]="current"
-              [attr.aria-label]="c.preview + ': ' + row.title"
-              class="h-auto max-w-full justify-start p-0 text-start font-semibold whitespace-normal text-foreground"
-              (click)="store.pick(row.id)"
-            >
-              {{ row.title }}
-            </button>
-            <div class="text-xs text-muted-foreground">
-              <a
-                class="underline underline-offset-2 pointer-coarse:inline-flex pointer-coarse:min-h-(--eg-control-touch) pointer-coarse:items-center"
-                [routerLink]="store.path('failure-detail')"
-                [queryParams]="{ id: row.id }"
-                >{{ row.id }}</a
-              >
-              · {{ c[row.owner] }} · {{ row.revision }}
-            </div>
-          </div>
-          <app-status-pill
-            [tone]="row.severity === 'critical' ? 'danger' : 'neutral'"
-            [label]="c[row.severity]"
-          />
-        </div>
-        <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
-          <span hlmBadge [variant]="'secondary'">{{ row.label }}</span>
-          <span class="inline-flex flex-wrap items-center gap-1 text-muted-foreground"
-            ><hlm-icon [name]="row.status === 'triaged' ? 'lucideCheck' : 'lucideClock'" />
-            {{ c[row.status] }} · {{ c[row.context] }}</span
-          >
-        </div>
-      </li>
-    } @empty {
-      <li>
-        <app-empty-pattern
-          [bare]="true"
-          [title]="c.noMatch"
-          [description]="c.noMatchText"
-          [actionLabel]="c.clear"
-          (action)="store.clear()"
-        />
-      </li>
-    }
-  </ol>
+        {{ row.title }}
+      </button>
+      <span class="text-xs"><bdi class="font-mono">{{ row.id }}</bdi> · {{ c.original }}</span>
+      <span class="text-xs text-muted-foreground">{{ context }}</span>
+    </div>
+  </ng-template>
+  <ng-template #statusCell let-row let-label="value">
+    <span class="inline-flex items-center gap-1">
+      <hlm-icon [name]="row.status === 'triaged' ? 'lucideCheck' : 'lucideClock'" />
+      {{ label }}
+    </span>
+  </ng-template>
+  <ng-template #severityCell let-row let-label="value">
+    <app-status-pill [tone]="row.severity === 'critical' ? 'danger' : 'neutral'" [label]="label" />
+  </ng-template>
+  <ng-template #labelCell let-row let-label="value">
+    <span hlmBadge variant="secondary">
+      <hlm-icon [name]="row.source === 'pending' ? 'lucideClock' : 'lucideActivity'" />
+      {{ label }}
+    </span>
+  </ng-template>
+  <ng-template #actionCell let-row>
+    <a
+      hlmBtn
+      variant="outline"
+      data-view
+      [routerLink]="store.path('failure-detail')"
+      [queryParams]="{ id: row.id }"
+      [attr.aria-label]="viewLabel(row.title)"
+      >{{ c.view }}</a
+    >
+  </ng-template>
+  @if (!store.visible().length) {
+    <app-empty-pattern
+      [bare]="true"
+      [title]="c.noMatch"
+      [description]="c.noMatchText"
+      [actionLabel]="c.clear"
+      (action)="store.clear()"
+    />
+  }
   <footer
     class="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3"
   >

@@ -101,94 +101,14 @@
             (input)="store.find(find.value)"
           />
         </div>
-        <ul class="record-list">
-          @for (row of visible(); track row.id) {
-            <li
-              hlmCard
-              [attr.data-record]="row.id"
-              [class.inspected]="visibleDetail()?.id === row.id"
-            >
-              <div class="record-title">
-                <hlm-checkbox
-                  [checked]="store.checkedIds().includes(row.id)"
-                  [disabled]="!canReview(row)"
-                  [aria-label]="c.choose + ': ' + row.id"
-                  (checkedChange)="store.select(row, $event)"
-                />
-                <div>
-                  <a
-                    class="record-link"
-                    [routerLink]="[]"
-                    [queryParams]="{ id: row.id }"
-                    [queryParamsHandling]="'merge'"
-                    [attr.aria-current]="visibleDetail()?.id === row.id ? 'true' : null"
-                    [attr.aria-label]="c.focus + ': ' + row.title + ' · ' + row.id"
-                    >{{ row.title }}</a
-                  >
-                  <p class="identity">{{ row.id }} · {{ c[row.kind] }}</p>
-                </div>
-              </div>
-              <p class="origin-line">
-                <strong>{{ c.original }}</strong> · <bdi>{{ row.failureRef }}</bdi>
-              </p>
-              <div class="actions">
-                <app-queue-status [kind]="'pending'" />
-                @let minutes = age(row);
-                @if (minutes !== null) {
-                  <span>
-                    @if (minutes >= 60) {
-                      {{ (minutes - (minutes % 60)) / 60 }} {{ c.hours }}
-                    }
-                    {{ minutes % 60 }} {{ c.minutes }}</span
-                  >
-                } @else {
-                  <span>{{ c.noAge }}</span>
-                }
-                @if (matches(row, 'sla')) {
-                  <app-queue-status [kind]="'overdue'" />
-                }
-              </div>
-              @if (row.samples !== null) {
-                <div class="actions">
-                  <strong>{{ row.samples.passed }}/{{ row.samples.total }}</strong
-                  ><app-queue-status [kind]="'sandbox'" />
-                  @if (row.validated) {
-                    <app-queue-status [kind]="'validated'" />
-                  }
-                </div>
-              } @else {
-                <p>{{ c.unsampled }} · {{ c.noRate }}. {{ c.noApproval }}.</p>
-              }
-              <div class="actions">
-                @if (row.linkable) {
-                  <a
-                    hlmBtn
-                    [variant]="'link'"
-                    data-shadow
-                    [routerLink]="shadowRoute()"
-                    [queryParams]="{ id: row.id }"
-                    >{{ c.inspect }} <hlm-icon name="lucideChevronRight"
-                  /></a>
-                } @else {
-                  <small>{{ c.detailUnavailable }}</small>
-                }
-                @if (row.linkable && canReview(row)) {
-                  <a
-                    hlmBtn
-                    [variant]="'outline'"
-                    [routerLink]="approvalRoute()"
-                    [queryParams]="{ id: row.id }"
-                    >{{ c.approval }}</a
-                  >
-                } @else {
-                  <button hlmBtn type="button" [variant]="'outline'" disabled>
-                    {{ c.approval }}
-                  </button>
-                }
-              </div>
-            </li>
-          }
-        </ul>
+        <app-data-table
+          [rows]="visible()"
+          [rowId]="rowId"
+          [columns]="columns()"
+          [caption]="c.queue"
+          [fitToContainer]="true"
+          flow="page"
+        />
         @if (!visible().length) {
           <app-empty-pattern
             [bare]="true"
@@ -337,3 +257,93 @@
     </hlm-dialog>
   }
 </div>
+
+<ng-template #selectCell let-row>
+  <hlm-checkbox
+    [checked]="store.checkedIds().includes(row.id)"
+    [disabled]="!canReview(row)"
+    [aria-label]="c.choose + ': ' + row.id"
+    (checkedChange)="store.select(row, $event)"
+  />
+</ng-template>
+<ng-template #subjectCell let-row let-kind="value">
+  @let current = visibleDetail()?.id === row.id;
+  <div class="candidate-subject" [class.inspected]="current">
+    <a
+      class="record-link"
+      [routerLink]="[]"
+      [queryParams]="{ id: row.id }"
+      queryParamsHandling="merge"
+      [attr.aria-current]="current ? 'true' : null"
+      [attr.aria-label]="c.focus + ': ' + row.title + ' · ' + row.id"
+      >{{ row.title }}</a
+    >
+    <p class="identity"><bdi>{{ row.id }}</bdi> · {{ kind }}</p>
+  </div>
+</ng-template>
+<ng-template #statusCell let-row>
+  <app-queue-status kind="pending" />
+  @let minutes = age(row);
+  @if (minutes !== null) {
+    <p>
+      @if (minutes >= 60) {
+        {{ (minutes - (minutes % 60)) / 60 }} {{ c.hours }}
+      }
+      {{ minutes % 60 }} {{ c.minutes }}
+    </p>
+  } @else {
+    <p>{{ c.noAge }}</p>
+  }
+  @if (matches(row, 'sla')) {
+    <app-queue-status kind="overdue" />
+  }
+</ng-template>
+<ng-template #shadowCell let-row>
+  @if (row.samples !== null) {
+    <div class="actions">
+      <strong>{{ row.samples.passed }}/{{ row.samples.total }}</strong>
+      <app-queue-status kind="sandbox" />
+      @if (row.validated) {
+        <app-queue-status kind="validated" />
+      }
+    </div>
+  } @else {
+    <p>{{ c.unsampled }} · {{ c.noRate }}. {{ c.noApproval }}.</p>
+  }
+</ng-template>
+<ng-template #actionCell let-row>
+  <div class="queue-row-actions">
+    @if (row.linkable) {
+      <a
+        hlmBtn
+        variant="outline"
+        data-shadow
+        [routerLink]="shadowRoute()"
+        [queryParams]="{ id: row.id }"
+        [attr.aria-label]="viewLabel(row.title)"
+        >{{ c.view }}</a
+      >
+    } @else {
+      <a
+        hlmBtn
+        variant="outline"
+        data-summary
+        [routerLink]="[]"
+        [queryParams]="{ id: row.id }"
+        queryParamsHandling="merge"
+        [attr.aria-current]="visibleDetail()?.id === row.id ? 'true' : null"
+        [attr.aria-label]="summaryLabel(row.title)"
+        [attr.aria-describedby]="'queue-detail-note-' + row.id"
+        >{{ c.viewSummary }}</a
+      >
+      <small [id]="'queue-detail-note-' + row.id">{{ c.detailUnavailable }}</small>
+    }
+    @if (row.linkable && canReview(row)) {
+      <a hlmBtn variant="link" [routerLink]="approvalRoute()" [queryParams]="{ id: row.id }">{{
+        c.approval
+      }}</a>
+    } @else {
+      <button hlmBtn type="button" variant="link" disabled>{{ c.approval }}</button>
+    }
+  </div>
+</ng-template>
