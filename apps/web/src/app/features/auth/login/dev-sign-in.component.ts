@@ -1,9 +1,10 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 
+import { InlineFeedbackComponent } from '../../../shared/ui/states/inline-feedback.component';
 import { DevSession } from './dev-session';
 
 type SignInState = 'idle' | 'submitting' | 'wrong-secret' | 'unavailable' | 'failed';
@@ -11,7 +12,7 @@ type SignInState = 'idle' | 'submitting' | 'wrong-secret' | 'unavailable' | 'fai
 @Component({
   selector: 'app-dev-sign-in',
   providers: [DevSession],
-  imports: [HlmButton, HlmInput, HlmLabel],
+  imports: [HlmButton, HlmInput, HlmLabel, InlineFeedbackComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class:
@@ -21,35 +22,35 @@ type SignInState = 'idle' | 'submitting' | 'wrong-secret' | 'unavailable' | 'fai
     <details #disclosure (toggle)="expanded.set(disclosure.open)">
       <summary
         id="dev-sign-in-heading"
-        class="min-h-(--eg-control-touch) cursor-pointer content-center rounded-sm text-sm font-(weight:--eg-weight-semibold) text-muted-foreground [overflow-wrap:anywhere] hover:text-foreground hover:underline focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-offset-(--eg-focus-offset) focus-visible:outline-ring active:text-primary"
+        class="min-h-(--eg-control-touch) cursor-pointer content-center rounded-(--eg-radius-sm) text-sm font-(weight:--eg-weight-semibold) text-foreground wrap-anywhere hover:text-primary hover:underline focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-offset-(--eg-focus-offset) focus-visible:outline-ring active:text-primary"
       >
         {{ heading }}
       </summary>
       @if (expanded()) {
         <form
-          class="grid min-w-0 gap-(--eg-space-3) rounded-md bg-secondary p-(--eg-space-4) text-secondary-foreground"
+          class="grid min-w-0 gap-(--eg-space-4) rounded-(--eg-radius-md) bg-(--eg-surface-raised) p-(--eg-space-5) text-foreground"
           (submit)="submit($event, secret)"
           aria-labelledby="dev-sign-in-heading"
           [attr.aria-busy]="state() === 'submitting'"
         >
           <p class="m-0 text-sm text-muted-foreground" id="dev-sign-in-note">{{ note }}</p>
-          <label hlmLabel for="dev-sign-in-secret">{{ secretLabel }}</label>
-          <input
-            hlmInput
-            class="min-h-(--eg-control-touch) w-full min-w-0 read-only:bg-muted"
-            #secret
-            id="dev-sign-in-secret"
-            type="password"
-            autocomplete="off"
-            required
-            [readOnly]="state() === 'submitting'"
-            [attr.aria-invalid]="state() === 'wrong-secret' ? 'true' : null"
-            [aria-describedby]="
-              state() === 'wrong-secret' || state() === 'unavailable' || state() === 'failed'
-                ? 'dev-sign-in-note dev-sign-in-error'
-                : 'dev-sign-in-note'
-            "
-          />
+          <div class="grid min-w-0 gap-(--eg-space-3)">
+            <label hlmLabel for="dev-sign-in-secret">{{ secretLabel }}</label>
+            <input
+              hlmInput
+              class="min-h-(--eg-control-touch) w-full min-w-0 read-only:bg-muted"
+              #secret
+              id="dev-sign-in-secret"
+              type="password"
+              autocomplete="off"
+              required
+              [readOnly]="state() === 'submitting'"
+              [attr.aria-invalid]="state() === 'wrong-secret' ? 'true' : null"
+              [aria-describedby]="
+                errorMessage() ? 'dev-sign-in-note dev-sign-in-error' : 'dev-sign-in-note'
+              "
+            />
+          </div>
           <button
             hlmBtn
             [variant]="'outline'"
@@ -59,31 +60,30 @@ type SignInState = 'idle' | 'submitting' | 'wrong-secret' | 'unavailable' | 'fai
           >
             {{ heading }}
           </button>
-          <p
-            class="m-0 min-h-(--eg-leading-sm) text-sm text-muted-foreground"
-            role="status"
-            [attr.aria-live]="'polite'"
-            aria-atomic="true"
-          >
-            {{ state() === 'submitting' ? submitting : '' }}
-          </p>
-          <p
-            id="dev-sign-in-error"
-            class="error m-0 min-h-(--eg-leading-sm) rounded-sm text-sm not-empty:bg-(--eg-danger-bg) not-empty:p-(--eg-space-4) not-empty:text-(--eg-danger-fg)"
-            role="alert"
-            aria-atomic="true"
-          >
-            {{
-              state() === 'wrong-secret'
-                ? wrongSecret
-                : state() === 'unavailable'
-                  ? unavailable
-                  : state() === 'failed'
-                    ? failed
-                    : ''
-            }}
-          </p>
         </form>
+        <!-- Keep the live regions outside the busy form so its pending state is announced immediately. -->
+        <div
+          class="mt-(--eg-space-3)"
+          [class.sr-only]="state() !== 'submitting'"
+          role="status"
+          [attr.aria-live]="'polite'"
+          aria-atomic="true"
+        >
+          @if (state() === 'submitting') {
+            <app-inline-feedback [title]="submitting" [announcement]="'off'" />
+          }
+        </div>
+        <div
+          id="dev-sign-in-error"
+          class="mt-(--eg-space-3)"
+          [class.sr-only]="!errorMessage()"
+          role="alert"
+          aria-atomic="true"
+        >
+          @if (errorMessage(); as message) {
+            <app-inline-feedback [tone]="'destructive'" [title]="message" [announcement]="'off'" />
+          }
+        </div>
       }
     </details>
   `,
@@ -100,6 +100,19 @@ export class DevSignInComponent {
   readonly wrongSecret = $localize`:@@auth.dev.wrong-secret:The dev-login secret is incorrect. Try again.`;
   readonly unavailable = $localize`:@@auth.dev.unavailable:Dev sign-in is not enabled. Check the development server configuration.`;
   readonly failed = $localize`:@@auth.dev.failed:Sign-in could not be completed or your session could not be verified. Check your connection and try again.`;
+
+  protected readonly errorMessage = computed(() => {
+    switch (this.state()) {
+      case 'wrong-secret':
+        return this.wrongSecret;
+      case 'unavailable':
+        return this.unavailable;
+      case 'failed':
+        return this.failed;
+      default:
+        return null;
+    }
+  });
 
   async submit(event: Event, input: HTMLInputElement): Promise<void> {
     event.preventDefault();

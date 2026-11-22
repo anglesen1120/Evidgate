@@ -53,6 +53,7 @@ describe('NavComponent', () => {
     const renderedGroup = root.querySelector('[role="group"]');
     expect(renderedGroup?.getAttribute('aria-labelledby')).toBe('nav-group-workspace');
     expect(renderedGroup?.querySelector('h2')?.getAttribute('id')).toBe('nav-group-workspace');
+    expect(renderedGroup?.querySelector('h2 [data-slot="badge"]')?.textContent?.trim()).toBe('1');
     expect(root.textContent).toContain('Workspace');
     expect(root.textContent).not.toContain('Administration');
     expect(root.querySelectorAll('a')).toHaveLength(1);
@@ -82,6 +83,7 @@ describe('NavComponent', () => {
     expect(root.classList.contains('rail')).toBe(true);
     expect(root.querySelector('a')?.getAttribute('aria-label')).toBe('Overview');
     expect(root.getAttribute('data-collapsed')).toBe('true');
+    expect(root.querySelector('h2 [data-slot="badge"]')).toBeNull();
     expect(root.querySelector('a')?.hasAttribute('title')).toBe(false);
     fixture.componentRef.setInput('groups', []);
     await fixture.whenStable();

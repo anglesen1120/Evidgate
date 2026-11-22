@@ -1,11 +1,16 @@
 .topbar {
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  /* Leave the breadcrumb a readable measure even when a quota warning joins the tools. */
+  grid-template-columns: auto minmax(0, 1fr) fit-content(75%);
   gap: var(--eg-space-3);
   padding: var(--eg-space-4) var(--eg-space-7);
 }
 
 .topbar-scope {
-  width: min(22vw, var(--eg-rail-width));
+  width: min(20vw, var(--eg-rail-width));
+}
+
+app-quota-badge {
+  max-inline-size: min(100%, var(--eg-nav-width));
 }
 
 .brand:focus-visible {
@@ -16,7 +21,7 @@
 @media (min-width: 768px) and (max-width: 1023px) {
   .topbar {
     grid-template-columns: auto minmax(0, 1fr);
-    padding-inline: var(--eg-space-5);
+    padding-inline: var(--eg-space-6);
   }
 
   .topbar-tools {

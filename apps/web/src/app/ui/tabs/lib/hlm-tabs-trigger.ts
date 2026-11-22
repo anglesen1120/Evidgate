@@ -17,7 +17,7 @@ export class HlmTabsTrigger {
   constructor() {
     classes(
       () =>
-        'spartan-tabs-trigger relative inline-flex items-center justify-center group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:justify-start disabled:pointer-events-none [&_hlm-icon]:pointer-events-none [&_hlm-icon]:shrink-0',
+        'spartan-tabs-trigger relative inline-flex flex-none! items-center justify-center whitespace-nowrap! [max-inline-size:none] disabled:pointer-events-none [&_hlm-icon]:pointer-events-none [&_hlm-icon]:shrink-0',
     );
   }
 }

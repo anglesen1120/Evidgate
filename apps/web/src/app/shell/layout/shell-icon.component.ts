@@ -27,6 +27,11 @@ import type { NavIconName } from '../nav/nav.models';
         @case ('search') {
           <path [attr.d]="'M16 10a6 6 0 1 1-12 0 6 6 0 0 1 12 0 M15 15l6 6'" />
         }
+        @case ('globe') {
+          <circle cx="12" cy="12" r="9" />
+          <ellipse cx="12" cy="12" rx="4" ry="9" />
+          <path [attr.d]="'M3 12h18'" />
+        }
         @case ('grid') {
           <path [attr.d]="'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z'" />
         }
@@ -197,6 +202,15 @@ import type { NavIconName } from '../nav/nav.models';
 })
 export class ShellIconComponent {
   readonly name = input.required<
-    NavIconName | 'logo' | 'account' | 'search' | 'menu' | 'close' | 'sun' | 'moon' | 'chevron-down'
+    | NavIconName
+    | 'logo'
+    | 'account'
+    | 'search'
+    | 'globe'
+    | 'menu'
+    | 'close'
+    | 'sun'
+    | 'moon'
+    | 'chevron-down'
   >();
 }
