@@ -13,7 +13,7 @@ import { ShellIconComponent } from './shell-icon.component';
   templateUrl: './nav.component.html',
   host: {
     class:
-      'group/nav block min-h-0 overflow-y-auto px-(--eg-space-3) pt-(--eg-space-2) pb-(--eg-space-5) [scrollbar-width:thin]',
+      'group/nav block min-h-0 overflow-y-auto px-(--eg-space-4) data-[collapsed=true]:px-(--eg-space-3) pt-(--eg-space-2) pb-(--eg-space-5) [scrollbar-width:thin]',
     '[class.rail]': 'collapsed()',
     '[attr.data-collapsed]': 'collapsed()',
   },

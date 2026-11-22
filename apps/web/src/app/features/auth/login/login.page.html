@@ -1,0 +1,140 @@
+<header
+  class="login-topbar box-border flex flex-wrap items-center justify-between gap-(--eg-space-4) border-0 border-b-(length:--eg-border-width) border-solid border-border bg-card px-(--eg-space-4) py-(--eg-space-5) min-[421px]:px-(--eg-space-7)"
+  aria-labelledby="login-brand"
+>
+  <div
+    class="login-brand flex items-center gap-(--eg-space-4) font-(family-name:--eg-font-display) text-xl font-(weight:--eg-weight-bold) tracking-tight"
+  >
+    <span
+      class="grid size-(--eg-control-md) shrink-0 place-items-center rounded-md bg-primary text-primary-foreground"
+    >
+      <app-shell-icon class="size-(--eg-space-7)" [name]="'layers'" />
+    </span>
+    <span id="login-brand" i18n="@@shell.layout.brand">Evidgate</span>
+  </div>
+  <div class="login-preferences flex flex-wrap items-center gap-(--eg-space-3)">
+    @if (canSwitchLocale) {
+      <app-locale-switcher [disabled]="auth.redirecting()" (switchRequested)="switchLocale()" />
+    }
+    <button
+      type="button"
+      hlmBtn
+      [variant]="'ghost'"
+      [size]="'icon'"
+      class="theme-toggle min-h-(--eg-control-touch) min-w-(--eg-control-touch) aria-pressed:bg-accent aria-pressed:text-accent-foreground"
+      [attr.aria-label]="darkLabel"
+      [attr.aria-pressed]="isDark()"
+      (click)="toggleTheme()"
+    >
+      <app-shell-icon [name]="'moon'" />
+    </button>
+  </div>
+</header>
+<main
+  class="box-border m-auto w-full min-w-0 max-w-[34em] px-(--eg-space-4) py-(--eg-space-8) text-sm min-[421px]:px-(--eg-space-7)"
+  aria-labelledby="login-heading"
+>
+  <article
+    hlmCard
+    class="login-card min-w-0 gap-0 rounded-lg py-0 [overflow-wrap:anywhere]"
+    aria-labelledby="login-heading"
+  >
+    <header
+      hlmCardHeader
+      class="login-intro grid-cols-[auto_minmax(0,1fr)] items-center gap-(--eg-space-4) border-0 border-b-(length:--eg-border-width) border-solid border-border p-(--eg-space-5) min-[421px]:p-(--eg-space-7)"
+    >
+      <span
+        class="box-border grid size-(--eg-space-10) place-items-center rounded-md border-(length:--eg-border-width) border-solid border-border bg-accent text-accent-foreground"
+      >
+        <app-shell-icon class="size-(--eg-space-7)" [name]="'shield-check'" />
+      </span>
+      <div class="min-w-0">
+        <p class="m-0 text-xs text-muted-foreground">{{ organizationSignIn }}</p>
+        <h1
+          #loginHeading
+          hlmCardTitle
+          [size]="pageHeadingSize"
+          class="tracking-tight focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-offset-(--eg-focus-offset) focus-visible:outline-ring"
+          id="login-heading"
+          tabindex="-1"
+          [textContent]="heading"
+        ></h1>
+      </div>
+    </header>
+    <div
+      hlmCardContent
+      class="grid min-w-0 gap-(--eg-space-5) p-(--eg-space-5) min-[421px]:p-(--eg-space-7)"
+    >
+      <section class="grid min-w-0 gap-(--eg-space-3)" aria-labelledby="provider-heading">
+        <h2
+          hlmCardTitle
+          [size]="subsectionHeadingSize"
+          id="provider-heading"
+          [textContent]="welcome"
+        ></h2>
+        <p class="m-0 text-sm text-muted-foreground">{{ accountGuidance }}</p>
+        <!-- Keep the announcing region mounted even when it has no notice to display. -->
+        <div
+          class="login-notice"
+          [class.sr-only]="!notice()"
+          role="status"
+          [attr.aria-live]="'polite'"
+          aria-atomic="true"
+        >
+          @if (notice(); as message) {
+            <app-inline-feedback
+              [tone]="message.tone"
+              [title]="message.title"
+              [description]="message.description"
+              [announcement]="'off'"
+            />
+          }
+        </div>
+        <div
+          class="login-providers grid min-w-0 gap-(--eg-space-3)"
+          [attr.aria-busy]="auth.redirecting()"
+        >
+          <button
+            hlmBtn
+            class="primary-provider h-auto min-h-(--eg-control-touch) w-full whitespace-normal"
+            type="button"
+            [disabled]="auth.redirecting()"
+            (click)="auth.start('google')"
+          >
+            {{ google }}
+          </button>
+          <button
+            hlmBtn
+            [variant]="'outline'"
+            class="h-auto min-h-(--eg-control-touch) w-full whitespace-normal"
+            type="button"
+            [disabled]="auth.redirecting()"
+            (click)="auth.start('github')"
+          >
+            {{ github }}
+          </button>
+        </div>
+      </section>
+      <section
+        class="login-destination grid min-w-0 gap-(--eg-space-1) rounded-md bg-secondary p-(--eg-space-4) text-xs text-secondary-foreground"
+        aria-labelledby="destination-heading"
+      >
+        <h2 class="m-0 text-xs font-(weight:--eg-weight-semibold)" id="destination-heading">
+          {{ destinationHeading }}
+        </h2>
+        <p class="m-0">{{ auth.returnUrl() === '/' ? defaultDestination : savedDestination }}</p>
+        <p class="m-0 text-muted-foreground">{{ destinationPrivacy }}</p>
+      </section>
+      @if (extension.value(); as component) {
+        <ng-container *ngComponentOutlet="component" />
+      }
+    </div>
+    <footer
+      hlmCardFooter
+      class="flex-nowrap items-start gap-(--eg-space-3) border-0 border-t-(length:--eg-border-width) border-solid border-border px-(--eg-space-5) py-(--eg-space-4) text-xs text-muted-foreground min-[421px]:px-(--eg-space-7)"
+    >
+      <app-shell-icon class="size-(--eg-space-5) shrink-0" [name]="'users'" />
+      <p class="m-0 min-w-0">{{ credentialNote }}</p>
+    </footer>
+  </article>
+</main>

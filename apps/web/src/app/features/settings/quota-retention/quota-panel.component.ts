@@ -8,6 +8,7 @@ import {
 } from '@angular/core';
 import type { UsageSummaryProjectDto } from '@evidgate/sdk';
 import { HlmCardImports } from '@evidgate/ui/card';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { DataTableComponent } from '../../../shared/ui/data-table/data-table.component';
@@ -27,6 +28,7 @@ type ProjectCell = TemplateRef<DataTableCellContext<UsageSummaryProjectDto>>;
   selector: 'app-quota-panel',
   imports: [
     HlmCardImports,
+    HlmIcon,
     AbsoluteTimeComponent,
     StatusPillComponent,
     DataTableComponent,
@@ -41,6 +43,9 @@ type ProjectCell = TemplateRef<DataTableCellContext<UsageSummaryProjectDto>>;
 export class QuotaPanelComponent {
   protected readonly quota = inject(QuotaStore);
   protected readonly metricLabel = quotaMetricLabel;
+  protected readonly projectMetrics = computed(() =>
+    this.quota.usageSummary()?.metrics.filter((metric) => metric.projects.length > 0),
+  );
   protected readonly sectionSize = 'section' as const;
   protected readonly subsectionSize = 'subsection' as const;
   protected readonly loadingLayout = 'cards' as const;

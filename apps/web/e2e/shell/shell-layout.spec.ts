@@ -11,20 +11,38 @@ import {
 
 // Shell geometry stays consistent across translated bundles and permission-filtered navigation.
 for (const locale of LOCALES) {
-  for (const width of [768, 1024]) {
-    test(`toolbar utilities share one row at ${width}px in ${locale}`, async ({ page }) => {
+  for (const [width, colorScheme] of [
+    [768, 'light'],
+    [900, 'light'],
+    [900, 'dark'],
+    [1024, 'light'],
+    [1440, 'light'],
+    [1440, 'dark'],
+  ] as const) {
+    test(`toolbar fits at ${width}px in ${locale} (${colorScheme})`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme });
       await page.setViewportSize({ width, height: 900 });
       await page.goto(withVariant(overviewPath(locale), LIMITED_GRANTS));
       const header = page.locator('header.topbar');
       const scopes = header.getByRole('combobox');
       await expect(scopes).toHaveCount(2);
+      await expect(header.locator('.theme-toggle')).toHaveAttribute(
+        'aria-pressed',
+        String(colorScheme === 'dark'),
+      );
+      await expect(header.locator('.nav-toggle')).toHaveAttribute(
+        'aria-expanded',
+        String(width >= 1280),
+      );
       await page.evaluate(() => document.fonts.ready.then(() => undefined));
       const controls = [
         header.locator('.nav-toggle'),
         scopes.nth(0),
         scopes.nth(1),
-        header.locator('.locale-toggle'),
+        header.locator('.screen-search'),
         header.locator('.theme-toggle'),
+        header.locator('.locale-toggle'),
+        header.locator('app-shell-account button'),
       ];
       const boxes = [];
       for (const control of controls) {
@@ -37,12 +55,14 @@ for (const locale of LOCALES) {
       }
       const headerBox = await header.boundingBox();
       if (headerBox === null) throw new Error('The toolbar has no rendered box');
-      expect(headerBox.height).toBeCloseTo(64, 0);
+      const rows = new Set(boxes.map((box) => Math.round(box.y)));
+      expect(rows.size).toBeLessThanOrEqual(width < 1024 ? 2 : 1);
       for (const [index, box] of boxes.entries()) {
-        expect(Math.abs(box.y - boxes[0]!.y)).toBeLessThanOrEqual(1);
         expect(box.x).toBeGreaterThanOrEqual(headerBox.x);
         expect(box.x + box.width).toBeLessThanOrEqual(headerBox.x + headerBox.width);
-        if (index > 0) expect(box.x).toBeGreaterThan(boxes[index - 1]!.x);
+        if (index > 0 && Math.abs(box.y - boxes[index - 1]!.y) <= 1) {
+          expect(box.x).toBeGreaterThan(boxes[index - 1]!.x);
+        }
       }
       const scopeBox = await header.locator('app-scope-switcher').boundingBox();
       if (scopeBox === null) throw new Error('The loaded scope pair has no rendered box');
@@ -71,7 +91,7 @@ for (const locale of LOCALES) {
 
 async function expectUsageLabel(page: Page, locale: (typeof LOCALES)[number], active: boolean) {
   const link = page.locator('app-shell-nav a[href$="/usage"]');
-  const fullName = locale === 'vi' ? 'Mức sử dụng và tín dụng AI' : 'Usage & credits';
+  const fullName = locale === 'vi' ? 'Mức sử dụng và tín dụng AI' : 'Usage and AI credits';
   await expect(link).toBeVisible();
   await expect(link).toHaveAccessibleName(fullName);
   if (active) await expect(link).toHaveAttribute('aria-current', 'page');

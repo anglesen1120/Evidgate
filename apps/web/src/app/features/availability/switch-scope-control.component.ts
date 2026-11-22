@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 import type { HealingSwitchView } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmCardImports } from '@evidgate/ui/card';
+import { HlmCardTitle } from '@evidgate/ui/card';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
@@ -39,7 +39,7 @@ function isSettableMode(value: unknown): value is SettableMode {
   selector: 'app-switch-scope-control',
   imports: [
     HlmButton,
-    HlmCardImports,
+    HlmCardTitle,
     HlmInput,
     HlmLabel,
     HlmSelectImports,

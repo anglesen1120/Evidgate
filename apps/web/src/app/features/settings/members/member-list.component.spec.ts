@@ -1,3 +1,5 @@
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { MembershipView, RoleView } from '@evidgate/sdk';
@@ -28,6 +30,12 @@ function role(name: string, index: number): RoleView {
     created_at: '2026-10-25T00:00:00Z',
     version: 1,
   };
+}
+
+class MemberActionsHarness extends ComponentHarness {
+  static hostSelector = 'app-member-list';
+  readonly header = this.locatorFor('th[data-column-role="actions"]');
+  readonly trigger = this.locatorFor('button[data-members-actions]');
 }
 
 describe('MemberListComponent', () => {
@@ -85,6 +93,20 @@ describe('MemberListComponent', () => {
     expect(
       root.querySelector('th[data-column-kind="email"]')?.getAttribute('data-column-priority'),
     ).toBe('primary');
+  });
+
+  it('reserves room for the Actions header and its unbroken menu label', async () => {
+    await render([member('pending')], true);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      MemberActionsHarness,
+    );
+    const header = await harness.header();
+    expect(await header.text()).toBe('Actions');
+    expect(await header.hasClass('break-all')).toBe(false);
+    expect(await header.hasClass('break-words')).toBe(false);
+    expect(await header.getCssValue('min-inline-size')).toBe('max-content');
+    expect(await (await harness.trigger()).hasClass('whitespace-nowrap')).toBe(true);
   });
 
   it('uses role-based column budgets and one row menu instead of percentage widths and four actions', async () => {

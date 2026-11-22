@@ -17,6 +17,7 @@ const ACCEPTED: readonly string[] = [
   '/',
   '/orgs/018f0000-0000-7000-8000-000000000001',
   '/orgs/o-1/projects/p-1/overview',
+  '/orgs/o1/projects/p1/runs?x=1',
   '/ok/path?x=1#h',
   '/runs?status=failed&page=2',
   '/runs#top',
@@ -35,6 +36,10 @@ const ACCEPTED: readonly string[] = [
 
 /** Values no navigation may receive: they all answer `/`. */
 const REFUSED: readonly string[] = [
+  // Encoded and double-encoded control or backslash characters.
+  '/%09/evil.example',
+  '/%2509/evil',
+  '/%255C%255Cevil',
   // Not a path at all.
   'foo',
   'foo/bar',
@@ -44,12 +49,17 @@ const REFUSED: readonly string[] = [
   'http://evil.example/steal',
   'javascript:alert(document.title)',
   'JavaScript:alert(1)',
+  'javascript:alert(1)',
+  'JaVaScRiPt:...',
+  'https%3A%2F%2Fevil.example',
+  'javascript%3Aalert(1)',
   'data:text/html,<script>alert(1)</script>',
   'mailto:someone@evil.example',
   // Protocol-relative and backslash forms, raw and encoded, one to three layers deep.
   '//evil.example',
   '///evil.example',
   '/\\evil.example',
+  '/\\evil',
   '/\\\\evil.example',
   '/%2F%2Fevil.example',
   '/%2f%2fevil.example',
@@ -59,7 +69,13 @@ const REFUSED: readonly string[] = [
   '/%255Cevil.example',
   // An encoded leading slash tries to become a second one.
   '/%2Fevil.example',
+  '%2F%2Fevil.example',
+  '%252F%252Fevil.example',
+  '/%5Cevil',
+  '%5Cevil',
   // Control characters, raw and encoded: a CR/LF or NUL can split a header or a URL.
+  '/\t/evil.example',
+  '/\n/evil.example',
   '/ok\nx',
   '/ok\r\nx',
   '/ok\u0000x',

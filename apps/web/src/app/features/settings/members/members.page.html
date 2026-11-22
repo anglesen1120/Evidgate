@@ -1,5 +1,10 @@
-<header class="page-header mb-4 flex flex-wrap items-start justify-between gap-3">
-  <div class="min-w-0 flex-1">
+<header class="page-header flex min-w-0 flex-wrap items-start gap-3">
+  <span
+    class="grid size-12 shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent)"
+  >
+    <app-shell-icon [name]="'users'" />
+  </span>
+  <div class="min-w-0 flex-1 wrap-anywhere">
     @if (ownsPageHeading) {
       <h1 hlmCardTitle [size]="pageHeadingSize" class="m-0" #heading tabindex="-1">
         {{ copy.title }}
@@ -23,10 +28,25 @@
     </button>
   }
 </header>
-@if (canWrite()) {
-  <p hlmAlert class="narrow-notice mb-3 md:hidden">{{ copy.narrow }}</p>
+@if (ownsPageHeading && session.currentOrg()?.name; as organization) {
+  <p
+    class="my-4 border-y border-border py-3 text-sm font-semibold wrap-anywhere"
+    i18n="@@settings.scope"
+  >
+    Organization: {{ organization }}
+  </p>
 }
-<p class="m-0 min-h-[var(--eg-leading-sm)] text-muted-foreground" role="status">
+@if (canWrite()) {
+  <p hlmAlert class="narrow-notice mt-4 md:hidden">{{ copy.narrow }}</p>
+} @else if (store.phase() === 'ready') {
+  <p
+    class="my-4 border-y border-border py-3 text-xs text-muted-foreground"
+    i18n="@@settings.read-only"
+  >
+    Read-only. You don’t have permission to make changes here.
+  </p>
+}
+<p class="my-4 text-muted-foreground empty:m-0" role="status">
   @if (saved()) {
     {{ copy.saved }}
   }
@@ -41,8 +61,21 @@
   [retryEligible]="retryReady() && (store.loadError()?.retryable ?? false)"
   (retry)="reload()"
 >
-  <section class="members-content grid min-w-0 gap-6" [attr.aria-busy]="paging()">
+  <app-settings-page-counts
+    class="my-6"
+    [attr.data-members-page-count]="''"
+    [metrics]="pageCounts()"
+  />
+  <section hlmCard class="members-content min-w-0 gap-0 rounded-xl p-0" [attr.aria-busy]="paging()">
+    <div hlmCardHeader class="border-b border-border px-5 py-4">
+      @if (ownsPageHeading) {
+        <h2 hlmCardTitle [size]="'subsection'" class="m-0">{{ copy.directory }}</h2>
+      } @else {
+        <h3 hlmCardTitle [size]="'subsection'" class="m-0">{{ copy.directory }}</h3>
+      }
+    </div>
     <app-member-list
+      class="[&_.caption]:sr-only [&_.scroll]:rounded-none [&_.scroll]:border-0"
       [members]="visibleMembers()"
       [canWrite]="canWrite()"
       (remove)="openRemove($event)"
@@ -65,7 +98,7 @@
       </div>
     }
     <nav
-      class="pagination flex flex-wrap items-center justify-between gap-3"
+      class="pagination flex flex-wrap items-center justify-end gap-2 border-t border-border px-4 py-3"
       [attr.aria-label]="copy.directory"
     >
       <button
@@ -89,8 +122,8 @@
         {{ copy.next }}
       </button>
     </nav>
-    <app-role-matrix [matrix]="visibleMatrix()" />
   </section>
+  <app-role-matrix class="mt-6" [matrix]="visibleMatrix()" />
 </app-request-state>
 @if (canWrite()) {
   <app-invite-dialog (completed)="completed()" />

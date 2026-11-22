@@ -1,26 +1,38 @@
 <section
   hlmCard
-  class="min-w-0 gap-3 p-3 wrap-anywhere md:p-4 [&_p]:m-0"
+  class="min-w-0 gap-0 py-0 wrap-anywhere [&_p]:m-0"
   data-testid="suite-warnings"
   [attr.aria-label]="copy.title"
 >
-  <h2 hlmCardTitle [size]="sectionHeadingSize">{{ copy.title }}</h2>
-  @if (warnings(); as items) {
-    @if (items.length === 0) {
-      <p data-testid="suite-warnings-empty">{{ copy.empty }}</p>
+  <header hlmCardHeader class="border-b border-border px-(--eg-space-6) py-(--eg-space-5)">
+    <h2 hlmCardTitle [size]="sectionHeadingSize">{{ copy.title }}</h2>
+  </header>
+  <div hlmCardContent class="px-(--eg-space-6) py-(--eg-space-5)">
+    @if (warnings(); as items) {
+      @if (items.length === 0) {
+        <p data-testid="suite-warnings-empty">{{ copy.empty }}</p>
+      } @else {
+        <ul
+          class="m-0 grid gap-(--eg-space-4) ps-(--eg-space-5)"
+          data-testid="suite-warnings-items"
+        >
+          @for (warning of items; track $index) {
+            <li>
+              <bdi class="whitespace-pre-wrap">{{ warning }}</bdi>
+            </li>
+          }
+        </ul>
+      }
     } @else {
-      <ul class="m-0 grid gap-2 ps-4" data-testid="suite-warnings-items">
-        @for (warning of items; track $index) {
-          <li>
-            <bdi class="whitespace-pre-wrap">{{ warning }}</bdi>
-          </li>
-        }
-      </ul>
+      <div
+        hlmAlert
+        role="note"
+        class="grid gap-(--eg-space-2) bg-muted"
+        data-testid="suite-warnings-unavailable"
+      >
+        <p class="font-semibold">{{ copy.unavailable }}</p>
+        <p class="text-muted-foreground">{{ copy.unavailableReason }}</p>
+      </div>
     }
-  } @else {
-    <div hlmAlert role="note" class="grid gap-2 bg-muted" data-testid="suite-warnings-unavailable">
-      <p>{{ copy.unavailable }}</p>
-      <p>{{ copy.unavailableReason }}</p>
-    </div>
-  }
+  </div>
 </section>

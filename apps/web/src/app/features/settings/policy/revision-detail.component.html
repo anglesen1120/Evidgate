@@ -15,16 +15,52 @@
   }
   @case ('ready') {
     @if (revision(); as revision) {
+      <section hlmCard class="min-w-0 gap-0 rounded-lg py-0" aria-labelledby="policy-values-title">
+        <header hlmCardHeader class="border-0 border-b border-solid border-border p-(--eg-space-5)">
+          <h3 hlmCardTitle [size]="subsectionSize" id="policy-values-title">{{ copy.values }}</h3>
+        </header>
+        @if (fields().length === 0) {
+          <p class="m-0 p-(--eg-space-5) text-muted-foreground">{{ copy.noValues }}</p>
+        }
+        <dl class="m-0 grid min-w-0 px-(--eg-space-5)" data-policy-values>
+          @for (field of fields(); track field.key) {
+            <div
+              class="grid min-w-0 gap-(--eg-space-3) border-0 border-b border-solid border-border py-(--eg-space-4) last:border-b-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.45fr)]"
+              [attr.data-policy-field]="field.key"
+            >
+              <dt>
+                <span class="font-semibold">{{ field.label }}</span>
+                <code class="block font-mono text-xs text-muted-foreground wrap-anywhere">{{
+                  field.key
+                }}</code>
+              </dt>
+              <dd class="m-0 min-w-0">
+                @if (typeof field.value === 'number') {
+                  <app-number-value [value]="field.value" />
+                } @else {
+                  <pre class="m-0 whitespace-pre-wrap font-mono wrap-anywhere">{{
+                    field.value | json
+                  }}</pre>
+                }
+              </dd>
+            </div>
+          }
+        </dl>
+      </section>
       <section
         hlmCard
-        class="min-w-0 gap-(--eg-space-5) p-(--eg-space-5)"
+        class="min-w-0 gap-0 rounded-lg py-0"
         aria-labelledby="policy-selected-title"
         data-policy-selected-metadata
       >
-        <h3 hlmCardTitle [size]="subsectionSize" id="policy-selected-title">
-          {{ copy.title }} · {{ copy.revision }} {{ revision.revision_no }}
-        </h3>
-        <dl class="m-0 grid min-w-0 gap-(--eg-space-5) [&_dt]:text-muted-foreground [&_dd]:m-0">
+        <header hlmCardHeader class="border-0 border-b border-solid border-border p-(--eg-space-5)">
+          <h3 hlmCardTitle [size]="subsectionSize" id="policy-selected-title">
+            {{ copy.title }} · {{ copy.revision }} {{ revision.revision_no }}
+          </h3>
+        </header>
+        <dl
+          class="m-0 grid min-w-0 gap-(--eg-space-4) p-(--eg-space-5) sm:grid-cols-2 [&>div]:min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0"
+        >
           <div>
             <dt>{{ copy.id }}</dt>
             <dd>
@@ -66,43 +102,16 @@
             </dd>
           </div>
         </dl>
-        <p class="m-0 max-w-[65ch] text-muted-foreground">{{ copy.immutable }}</p>
-      </section>
-      <section
-        hlmCard
-        class="min-w-0 gap-(--eg-space-5) p-(--eg-space-5)"
-        aria-labelledby="policy-values-title"
-      >
-        <h3 hlmCardTitle [size]="subsectionSize" id="policy-values-title">{{ copy.values }}</h3>
-        @if (fields().length === 0) {
-          <p class="m-0 text-muted-foreground">{{ copy.noValues }}</p>
-        }
-        <dl class="m-0 grid min-w-0 gap-(--eg-space-5)" data-policy-values>
-          @for (field of fields(); track field.key) {
-            <div class="grid min-w-0 gap-(--eg-space-3)" [attr.data-policy-field]="field.key">
-              <dt>
-                <span class="font-semibold">{{ field.label }}</span>
-                <code class="block font-mono text-xs text-muted-foreground wrap-anywhere">{{
-                  field.key
-                }}</code>
-              </dt>
-              <dd class="m-0 min-w-0">
-                @if (typeof field.value === 'number') {
-                  <app-number-value [value]="field.value" />
-                } @else {
-                  <pre class="m-0 whitespace-pre-wrap font-mono wrap-anywhere">{{
-                    field.value | json
-                  }}</pre>
-                }
-              </dd>
-            </div>
-          }
-        </dl>
+        <p
+          class="m-0 border-0 border-t border-solid border-border bg-(--eg-surface-raised) px-(--eg-space-5) py-(--eg-space-4) text-xs text-muted-foreground"
+        >
+          {{ copy.immutable }}
+        </p>
       </section>
       @for (group of groups(); track group.key) {
         <section
           hlmCard
-          class="min-w-0 gap-(--eg-space-5) p-(--eg-space-5)"
+          class="min-w-0 gap-(--eg-space-4) rounded-lg p-(--eg-space-5)"
           [attr.aria-labelledby]="'policy-' + group.key"
           [attr.data-policy-reference-group]="group.key"
         >

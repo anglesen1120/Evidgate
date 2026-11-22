@@ -1,26 +1,36 @@
 <section
-  hlmCard
-  class="min-w-0 gap-(--eg-space-5) p-(--eg-space-5)"
+  class="grid min-w-0 content-start gap-(--eg-space-4) px-(--eg-space-6) py-(--eg-space-5)"
   [attr.aria-labelledby]="titleId()"
   [attr.data-healing-editor]="scope()"
 >
-  <header class="grid min-w-0 gap-(--eg-space-3)">
+  <header class="grid min-w-0 gap-(--eg-space-2)">
     <h3 hlmCardTitle [size]="subsectionHeadingSize" [id]="titleId()">{{ title() }}</h3>
+    <dl class="m-0 flex min-w-0 flex-wrap items-baseline gap-x-(--eg-space-3)">
+      <dt class="text-xs text-muted-foreground" i18n="@@healingswitch.stored-setting">
+        Stored setting
+      </dt>
+      <dd class="m-0 font-semibold" data-healing-stored-mode>
+        @if (row(); as stored) {
+          {{ modeLabel(stored.mode) }}
+        } @else {
+          {{ copy.notProvided }}
+        }
+      </dd>
+    </dl>
     @if (scope() === 'system') {
       <p class="m-0 text-sm text-muted-foreground" data-healing-system-note>
         {{ copy.systemReadOnly }}
+      </p>
+    } @else if (note().length > 0) {
+      <p [id]="noteId()" class="m-0 max-w-[65ch] text-sm text-muted-foreground" data-healing-note>
+        {{ note() }}
       </p>
     }
   </header>
 
   @if (scope() !== 'system') {
-    @if (note().length > 0) {
-      <p [id]="noteId()" class="m-0 text-sm text-muted-foreground" data-healing-note>
-        {{ note() }}
-      </p>
-    }
     <div *appDesktopMutation class="grid min-w-0 gap-(--eg-space-5)">
-      <div class="grid min-w-0 gap-(--eg-space-3)">
+      <div class="grid min-w-0 gap-(--eg-space-2)">
         <label hlmLabel [id]="modeId() + '-label'" [for]="modeId()">{{ copy.setMode }}</label>
         <hlm-select
           class="min-w-0"
@@ -30,9 +40,9 @@
         >
           <hlm-select-trigger
             [buttonId]="modeId()"
-            class="min-h-(--eg-control-touch) w-full min-w-0"
+            class="min-h-(--eg-control-touch) w-full min-w-0 sm:max-w-xs"
             [aria-describedby]="describedBy()"
-            data-healing-mode
+            [attr.data-healing-mode]="''"
           >
             <span class="min-w-0 truncate">{{ modeLabel(selectedMode()) }}</span>
           </hlm-select-trigger>
@@ -53,13 +63,13 @@
         </hlm-select>
       </div>
 
-      <div class="grid min-w-0 gap-(--eg-space-3)">
+      <div class="grid min-w-0 gap-(--eg-space-2)">
         <label hlmLabel [for]="reasonId()">{{ copy.reasonLabel }}</label>
         <textarea
           hlmInput
           [id]="reasonId()"
-          rows="3"
-          class="w-full min-w-0"
+          rows="2"
+          class="box-border w-full min-w-0 resize-y"
           data-healing-reason-input
           [value]="reason()"
           [readOnly]="!writable() || saving()"
@@ -68,7 +78,9 @@
           [aria-describedby]="reasonDescribedBy()"
           (input)="reasonChanged($event)"
         ></textarea>
-        <p [id]="reasonHintId()" class="m-0 text-sm text-muted-foreground">{{ copy.reasonHint }}</p>
+        <p [id]="reasonHintId()" class="m-0 max-w-[65ch] text-xs text-muted-foreground">
+          {{ copy.reasonHint }}
+        </p>
         @if (reasonTooLong()) {
           <p
             [id]="reasonTooLongId()"

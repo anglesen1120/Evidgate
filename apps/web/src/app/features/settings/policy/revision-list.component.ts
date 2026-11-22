@@ -22,18 +22,20 @@ import { HlmCardImports } from '@evidgate/ui/card';
   template: `
     <section
       hlmCard
-      class="gap-4 p-4"
+      class="min-w-0 gap-0 rounded-lg py-0"
       aria-labelledby="policy-revisions-title"
       [attr.aria-busy]="busy()"
     >
-      <h3 hlmCardTitle [size]="subsectionSize" id="policy-revisions-title">{{ copy.title }}</h3>
+      <header hlmCardHeader class="border-0 border-b border-solid border-border p-(--eg-space-5)">
+        <h3 hlmCardTitle [size]="subsectionSize" id="policy-revisions-title">{{ copy.title }}</h3>
+      </header>
       @if (rows().length === 0) {
-        <p class="m-0 text-muted-foreground">{{ copy.empty }}</p>
+        <p class="m-0 p-(--eg-space-5) text-muted-foreground">{{ copy.empty }}</p>
       } @else {
         <ol class="m-0 grid list-none gap-0 p-0">
           @for (row of rows(); track row.id) {
             <li
-              class="grid min-w-0 gap-3 border-0 border-t border-solid border-border py-4 first:border-t-0 first:pt-0 last:pb-0"
+              class="grid min-w-0 gap-(--eg-space-3) border-0 border-t border-solid border-border px-(--eg-space-5) py-(--eg-space-4) first:border-t-0 data-[policy-selected]:bg-(--eg-accent-soft)"
               data-policy-revision
               [attr.data-revision-no]="row.revision_no"
               [attr.data-revision-state]="row.state"
@@ -43,9 +45,9 @@ import { HlmCardImports } from '@evidgate/ui/card';
               <div class="flex flex-wrap items-center gap-2">
                 <button
                   hlmBtn
-                  [variant]="'outline'"
+                  [variant]="'link'"
                   type="button"
-                  class="min-h-(--eg-control-touch) max-w-full whitespace-normal"
+                  class="min-h-(--eg-control-touch) max-w-full whitespace-normal px-0 font-semibold"
                   data-policy-select
                   [attr.aria-pressed]="row.id === selectedId()"
                   [attr.aria-controls]="'policy-selected-detail'"
@@ -60,7 +62,7 @@ import { HlmCardImports } from '@evidgate/ui/card';
                 <app-policy-revision-state [state]="row.state" />
               </div>
               <dl
-                class="m-0 grid gap-3 [&_dd]:m-0 [&_dd]:wrap-anywhere [&_dt]:text-xs [&_dt]:text-muted-foreground"
+                class="m-0 grid min-w-0 gap-(--eg-space-3) [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:wrap-anywhere [&_dt]:text-xs [&_dt]:text-muted-foreground"
               >
                 <div>
                   <dt>{{ copy.hash }}</dt>
@@ -86,7 +88,7 @@ import { HlmCardImports } from '@evidgate/ui/card';
         <button
           hlmBtn
           [variant]="'outline'"
-          class="min-h-[var(--eg-control-touch)] whitespace-normal"
+          class="m-(--eg-space-4) min-h-(--eg-control-touch) self-start whitespace-normal"
           type="button"
           data-policy-more
           [disabled]="busy()"
@@ -112,7 +114,7 @@ export class RevisionListComponent {
     if (!this.busy() && this.rows().some((row) => row.id === id)) this.selected.emit(id);
   }
   protected readonly copy = {
-    title: $localize`:@@settings.policy.revisions:Revisions`,
+    title: $localize`:@@settings.policy.revision-history:Revision history`,
     empty: $localize`:@@settings.policy.revisions-empty:No revisions available.`,
     revision: $localize`:@@settings.policy.revision:Revision`,
     head: $localize`:@@settings.policy.head:Head`,

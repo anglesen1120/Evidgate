@@ -2,7 +2,9 @@ import { DOCUMENT } from '@angular/common';
 import { CdkTrapFocus } from '@angular/cdk/a11y';
 import { createBlockScrollStrategy } from '@angular/cdk/overlay';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmCard } from '@evidgate/ui/card';
+import { ShellAccountComponent } from './shell-account.component';
+import { ShellBreadcrumbsComponent } from './shell-breadcrumbs.component';
+import { ShellSearchComponent } from './shell-search.component';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -47,10 +49,13 @@ import { LocaleSwitcherComponent, localeBundlePath } from './locale-switcher.com
     QuotaBadgeComponent,
     LocaleSwitcherComponent,
     HlmButton,
-    HlmCard,
+    ShellAccountComponent,
+    ShellBreadcrumbsComponent,
+    ShellSearchComponent,
     CdkTrapFocus,
   ],
   templateUrl: './shell.component.html',
+  styleUrl: './shell.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class: 'block bg-background font-sans text-sm text-foreground',
@@ -62,7 +67,7 @@ export class ShellComponent {
 
   readonly nav = inject(NavViewService);
 
-  readonly theme = inject(ThemeService);
+  private readonly theme = inject(ThemeService);
 
   private readonly router = inject(Router);
 
@@ -89,10 +94,12 @@ export class ShellComponent {
   );
   readonly drawerOpen = signal(false);
   readonly brandLabel = $localize`:@@shell.layout.workspace:Evidgate workspace`;
+  readonly brandLinkLabel = $localize`:@@shell.layout.brand-link:Evidgate Quality workspace`;
   readonly closeLabel = $localize`:@@shell.layout.close-navigation:Close navigation`;
   readonly openLabel = $localize`:@@shell.layout.open-navigation:Open navigation`;
   readonly collapseLabel = $localize`:@@shell.layout.collapse-navigation:Collapse navigation`;
   readonly expandLabel = $localize`:@@shell.layout.expand-navigation:Expand navigation`;
+  readonly dark = this.theme.isDark;
   readonly darkLabel = $localize`:@@shell.theme.dark-mode:Dark mode`;
   /**
    * The drawer's own accessible name. The `<nav>` inside it already carries
@@ -198,6 +205,10 @@ export class ShellComponent {
     if (!this.mobile()) return;
     const destination = this.router.serializeUrl(this.router.createUrlTree(link));
     this.closeDrawer(this.pathOf(destination) === this.pathOf(this.router.url));
+  }
+
+  toggleTheme(): void {
+    this.theme.toggle();
   }
 
   switchLocale(): void {

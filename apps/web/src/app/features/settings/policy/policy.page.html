@@ -1,8 +1,17 @@
-<header class="mb-(--eg-space-7) grid min-w-0 gap-(--eg-space-5)">
-  <div class="grid min-w-0 gap-(--eg-space-3)">
+<header
+  class="mb-(--eg-space-6) flex min-w-0 flex-wrap items-center justify-between gap-(--eg-space-4)"
+>
+  <div
+    class="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-(--eg-space-4) gap-y-(--eg-space-1)"
+  >
+    <span
+      class="row-span-2 grid size-(--eg-space-10) place-items-center rounded-md bg-(--eg-accent-soft) text-(--eg-accent)"
+    >
+      <hlm-icon [name]="'lucideActivity'" class="size-(--eg-space-6)" />
+    </span>
     <h2
       hlmCardTitle
-      [size]="sectionSize"
+      [size]="'page'"
       #heading
       id="heading"
       tabindex="-1"
@@ -10,7 +19,7 @@
     >
       {{ copy.title }}
     </h2>
-    <p class="eg-type-body max-w-[65ch] text-muted-foreground">{{ copy.description }}</p>
+    <p class="max-w-[65ch] text-sm text-muted-foreground">{{ copy.description }}</p>
   </div>
   @if (canWrite()) {
     <app-desktop-required-notice data-policy-narrow-notice />
@@ -27,6 +36,65 @@
     </button>
   }
 </header>
+@let activation = store.reads.activation();
+@let head = store.reads.head();
+@if (store.phase() === 'ready' && (activation.phase === 'ready' || head.phase === 'ready')) {
+  <dl
+    class="m-0 mb-(--eg-space-5) grid min-w-0 gap-(--eg-space-4) sm:grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] [&>div]:min-w-0 [&>div]:gap-(--eg-space-4) [&>div]:rounded-lg [&>div]:p-(--eg-space-5) [&_dt]:flex [&_dt]:items-center [&_dt]:gap-(--eg-space-3) [&_dt]:font-semibold [&_dd]:m-0"
+  >
+    @if (activation.phase === 'ready' && activation.value; as current) {
+      <div hlmCard [size]="'sm'" data-overview-active>
+        <dt>
+          <hlm-icon
+            [name]="'lucideActivity'"
+            class="box-content size-(--eg-space-5) rounded-md bg-(--eg-accent-soft) p-(--eg-space-3) text-(--eg-accent)"
+          />
+          {{ copy.activeRevision }}
+        </dt>
+        <dd>
+          @let revisionNo = activeRevisionNo();
+          @if (revisionNo !== undefined) {
+            <span class="eg-type-page-title"><app-number-value [value]="revisionNo" /></span>
+          }
+          <app-copyable-identifier
+            [value]="current.policy_revision_id"
+            [label]="copy.activeRevision"
+            [compact]="true"
+          />
+        </dd>
+      </div>
+    }
+    @if (head.phase === 'ready' && head.value; as revision) {
+      <div hlmCard [size]="'sm'" data-overview-head>
+        <dt>
+          <hlm-icon
+            [name]="'lucideCopy'"
+            class="box-content size-(--eg-space-5) rounded-md bg-muted p-(--eg-space-3) text-muted-foreground"
+          />
+          {{ copy.head }}
+        </dt>
+        <dd>
+          <span class="eg-type-page-title"
+            ><app-number-value [value]="revision.revision_no"
+          /></span>
+          <app-copyable-identifier [value]="revision.id" [label]="copy.head" [compact]="true" />
+        </dd>
+      </div>
+    }
+    @if (activation.phase === 'ready' && activation.value; as current) {
+      <div hlmCard [size]="'sm'" data-overview-mode>
+        <dt>
+          <hlm-icon
+            [name]="'lucideInfo'"
+            class="box-content size-(--eg-space-5) rounded-md bg-(--eg-info-bg) p-(--eg-space-3) text-(--eg-info-fg)"
+          />
+          {{ copy.mode }}
+        </dt>
+        <dd><app-policy-mode-chip [summary]="true" [mode]="current.mode" /></dd>
+      </div>
+    }
+  </dl>
+}
 @if (store.phase() !== 'ready' && store.revisions().length === 0) {
   <app-policy-summary
     [activation]="store.reads.activation()"
@@ -37,7 +105,7 @@
   />
 }
 <form
-  class="mb-(--eg-space-7) flex min-w-0 flex-row flex-wrap items-end gap-(--eg-space-4)"
+  class="mb-(--eg-space-5) flex min-w-0 flex-row flex-wrap items-end gap-(--eg-space-4) border-0 border-y border-solid border-border py-(--eg-space-4)"
   (submit)="openRevision($event)"
 >
   <div class="grid w-full min-w-0 gap-2 md:w-auto md:max-w-full">
@@ -131,7 +199,7 @@
 }
 @if (store.phase() === 'ready' || store.revisions().length > 0) {
   <div
-    class="mt-6 grid min-w-0 items-start gap-6 xl:grid-cols-[var(--eg-rail-width)_minmax(0,1fr)]"
+    class="grid min-w-0 items-start gap-(--eg-space-5) lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
   >
     <app-policy-revision-list
       [rows]="store.revisions()"
@@ -142,12 +210,12 @@
       [busy]="paging() || store.phase() === 'loading' || store.publishing()"
       (loadMore)="loadMore()"
     />
-    <div id="policy-selected-detail" class="min-w-0">
+    <div id="policy-selected-detail" class="min-w-0 lg:order-first">
       <hlm-tabs [tab]="valuesTab" class="min-w-0 gap-(--eg-space-5)">
         <hlm-tabs-list
           [variant]="'line'"
           [attr.aria-label]="copy.detailTabs"
-          class="h-auto w-full flex-wrap justify-start"
+          class="h-auto max-w-full flex-wrap justify-start self-start"
         >
           <button
             type="button"

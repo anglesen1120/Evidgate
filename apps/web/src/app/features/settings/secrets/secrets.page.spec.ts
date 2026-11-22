@@ -156,7 +156,7 @@ describe('SecretsPage', () => {
   });
   it('names pagination distinctly from the reference list', async () => {
     const { root } = await render();
-    expect(root.querySelector('ul')?.getAttribute('aria-label')).toBe('Secret references');
+    expect(root.querySelector('table')?.getAttribute('aria-label')).toBe('Secret references');
     expect(root.querySelector('nav')?.getAttribute('aria-label')).toBe('Secret references pages');
   });
   it('preserves a pending one-time rotation when list Retry is invoked', async () => {
