@@ -1,0 +1,49 @@
+:host {
+  container-type: inline-size;
+}
+
+.promotion-history th[scope='col'] {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+@container (width < 680px) {
+  .promotion-history thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .promotion-history,
+  .promotion-history tbody,
+  .promotion-history tr {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .promotion-history tr {
+    padding-block: var(--eg-space-3);
+  }
+
+  .promotion-history [data-label] {
+    display: block;
+    min-width: 0;
+    height: auto;
+    padding-block: var(--eg-space-2);
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .promotion-history [data-label]::before {
+    display: block;
+    content: attr(data-label) / '';
+    margin-block-end: var(--eg-space-1);
+    color: var(--eg-text-muted);
+    font-size: var(--eg-text-xs);
+    font-weight: normal;
+    overflow-wrap: normal;
+  }
+}

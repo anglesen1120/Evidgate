@@ -1,4 +1,5 @@
 import {
+  afterRenderEffect,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -9,17 +10,16 @@ import {
   viewChild,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
+import { HlmCard } from '@evidgate/ui/card';
 import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
-import { HlmSelectImports } from '@evidgate/ui/select';
 import { DesktopRequiredNoticeComponent, NarrowMutationPolicy } from '../../../shared/ui/narrow';
-import { PageHeaderImports } from '../../../shared/ui/page-header';
+import { PageHeaderComponent, PageHeaderImports } from '../../../shared/ui/page-header';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import {
   EmptyPatternComponent,
   InlineFeedbackComponent,
@@ -29,7 +29,8 @@ import {
   GalleryDraftDialogComponent,
   type GalleryDraftMode,
 } from './gallery-draft-dialog.component';
-import { GalleryTemplateCardComponent } from './gallery-template-card.component';
+import { GalleryTemplateTableComponent } from './gallery-template-table.component';
+import { GalleryTemplateViewComponent } from './gallery-template-view.component';
 import { galleryCopy } from './studio-gallery.copy';
 import {
   galleryFixture,
@@ -66,21 +67,20 @@ function scenario(value: string | null | undefined): GalleryState {
   selector: 'app-studio-gallery-review',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    FormsModule,
     HlmBadge,
     HlmButton,
     HlmCard,
-    HlmCardTitle,
+    ShellIconComponent,
     HlmIcon,
     HlmInput,
     HlmLabel,
-    HlmSelectImports,
     PageHeaderImports,
     EmptyPatternComponent,
     InlineFeedbackComponent,
     LoadingPatternComponent,
     DesktopRequiredNoticeComponent,
-    GalleryTemplateCardComponent,
+    GalleryTemplateTableComponent,
+    GalleryTemplateViewComponent,
     GalleryDraftDialogComponent,
   ],
   providers: [GalleryReviewStore],
@@ -93,7 +93,10 @@ export class StudioGalleryReviewPage {
   protected readonly policy = inject(NarrowMutationPolicy);
   readonly viewModel = input<StudioGalleryViewModel>(galleryFixture);
   private readonly params = toSignal(this.route.queryParamMap);
-  private readonly previewPanel = viewChild<ElementRef<HTMLElement>>('preview');
+  private readonly table = viewChild(GalleryTemplateTableComponent);
+  private readonly header = viewChild.required(PageHeaderComponent);
+  private readonly createButton = viewChild<ElementRef<HTMLButtonElement>>('createButton');
+  private returnTo: GalleryTemplateViewModel['id'] | 'create' | null = null;
   private readonly queryBox = viewChild<ElementRef<HTMLInputElement>>('queryBox');
   protected readonly copy = galleryCopy;
   protected readonly state = linkedSignal(() => scenario(this.params()?.get('state')));
@@ -106,29 +109,73 @@ export class StudioGalleryReviewPage {
   protected readonly picked = computed(
     () => this.visible().find((t) => t.id === this.store.picked()) ?? this.visible()[0],
   );
+  protected readonly viewed = linkedSignal({
+    source: () => ({ rows: this.visible(), scope: this.viewModel().scope, params: this.params() }),
+    computation: (): GalleryTemplateViewModel | null => null,
+  });
   protected readonly locked = computed(
     () => !this.picked() || ['403', '412', '429', 'success', 'busy'].includes(this.state()),
   );
-  protected readonly dialog = linkedSignal<GalleryDraftMode | null>(() => {
-    const state = this.state();
-    if (this.policy.narrow()) return null;
-    return state === 'busy' || state === 'invalid' || state === 'createerror' ? state : null;
+  protected readonly dialog = linkedSignal<
+    { state: GalleryState; narrow: boolean; scope: string },
+    GalleryDraftMode | null
+  >({
+    source: () => ({
+      state: this.state(),
+      narrow: this.policy.narrow(),
+      scope: this.viewModel().scope,
+    }),
+    computation: ({ state, narrow, scope }, previous) => {
+      if (previous && previous.source.scope !== scope) return null;
+      // Keep an already-open form on resize; the dialog becomes read-only without erasing local edits.
+      if (previous?.source.state === state && previous.value) return previous.value;
+      if (narrow) return null;
+      return state === 'busy' || state === 'invalid' || state === 'createerror' ? state : null;
+    },
   });
-  protected readonly sources = [
-    { id: 'all', label: galleryCopy.all },
-    { id: 'built', label: galleryCopy.built },
-    { id: 'team', label: galleryCopy.team },
-  ] as const;
-  protected readonly sourceLabel = (id: unknown) =>
-    this.sources.find((source) => source.id === id)?.label ?? '';
+  protected readonly sources = computed(() => {
+    const rows = this.viewModel().templates;
+    const built = rows.reduce((count, row) => count + Number(row.source === 'built'), 0);
+    return [
+      { id: 'all', label: galleryCopy.all, count: rows.length, icon: 'grid' },
+      { id: 'built', label: galleryCopy.built, count: built, icon: 'layers' },
+      { id: 'team', label: galleryCopy.team, count: rows.length - built, icon: 'users' },
+    ] as const;
+  });
+  protected readonly shown = computed(() =>
+    galleryCopy.showing(this.visible().length, this.viewModel().templates.length),
+  );
+
+  constructor() {
+    afterRenderEffect(() => {
+      const viewed = this.viewed();
+      if (viewed) this.returnTo = viewed.id;
+      else if (this.dialog() && this.showGallery() && this.picked()) this.returnTo ??= 'create';
+      else if (this.returnTo) {
+        const target = this.returnTo;
+        this.returnTo = null;
+        if (target === 'create') {
+          const button = this.createButton()?.nativeElement;
+          if (button && !button.disabled) button.focus();
+          else this.header().focusTitle();
+        } else if (!this.table()?.focusView(target)) {
+          this.header().focusTitle();
+        }
+      }
+    });
+  }
 
   protected previewTemplate(id: GalleryTemplateViewModel['id']): void {
+    const row = this.visible().find((template) => template.id === id);
+    if (!row || !this.showGallery() || this.dialog()) return;
     this.store.choose(id);
-    this.previewPanel()?.nativeElement.focus();
+    this.viewed.set(row);
   }
 
   protected openDraft(): void {
-    if (!this.locked() && !this.policy.narrow()) this.dialog.set('preview');
+    if (this.locked() || this.policy.narrow()) return;
+    this.viewed.set(null);
+    this.dialog.set('preview');
   }
 
   protected closeDraft(): void {

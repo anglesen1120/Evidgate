@@ -20,9 +20,14 @@ class ScreenHarness extends ComponentHarness {
   readonly waiting = this.locatorFor('[data-review-status]');
   readonly clock = this.locatorFor('[data-review-status] hlm-icon');
   readonly comparison = this.locatorForOptional('[data-comparison]');
+  readonly comparisonHeaders = this.locatorForAll('[data-comparison] thead th');
+  readonly comparisonCaption = this.locatorFor('[data-comparison] caption');
+  readonly comparisonActions = this.locatorForAll('[data-comparison] button');
+  readonly sectionTabs = this.locatorForAll('[role="tablist"], hlm-tabs-list');
   readonly actions = this.locatorForAll('button[hlmDialogTrigger]');
   readonly signIn = this.locatorFor('a[routerLink="/login"]');
   readonly dialogTitles = this.documentRootLocatorFactory().locatorForAll('[hlmDialogTitle]');
+  readonly dialogSubject = this.documentRootLocatorFactory().locatorFor('[hlmDialogDescription]');
   readonly cancel = this.documentRootLocatorFactory().locatorFor('button[data-cancel]');
 }
 
@@ -59,6 +64,8 @@ describe('UiChangeProposalPage', () => {
       await trigger.click();
       const titles = await screen.dialogTitles();
       expect(await Promise.all(titles.map((title) => title.text()))).toEqual([expectedTitle]);
+      const subject = await (await screen.dialogSubject()).text();
+      for (const value of ['ucp-12', 'SHOP-TC-0051', 'v2']) expect(subject).toContain(value);
       await (await screen.cancel()).click();
       expect(await screen.dialogTitles()).toHaveLength(0);
       expect(await (await screen.waiting()).text()).toContain('Awaiting review');
@@ -155,5 +162,17 @@ describe('UiChangeProposalPage', () => {
     params.next(convertToParamMap({ state: 'comparison' }));
     expect(await screen.comparison()).toBeNull();
     expect(await screen.actions()).toHaveLength(0);
+  });
+  it('keeps the long comparison on the page, without a tab strip or row dialogs', async () => {
+    const { screen } = await mount('long');
+    expect(await (await screen.comparisonCaption()).text()).toBe('Step comparison');
+    const headers = await screen.comparisonHeaders();
+    expect(await Promise.all(headers.map((header) => header.text()))).toEqual([
+      'Step 7',
+      'Approved · v2',
+      'Proposed wording',
+    ]);
+    expect(await screen.sectionTabs()).toHaveLength(0);
+    expect(await screen.comparisonActions()).toHaveLength(0);
   });
 });

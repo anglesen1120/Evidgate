@@ -3,6 +3,8 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmCard, HlmCardContent, HlmCardHeader, HlmCardTitle } from '@evidgate/ui/card';
+import { HlmIcon } from '@evidgate/ui/icon';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { PageHeaderImports } from '../../../shared/ui/page-header';
 import { EmptyPatternComponent } from '../../../shared/ui/states/empty-pattern.component';
 import { InlineFeedbackComponent } from '../../../shared/ui/states/inline-feedback.component';
@@ -21,6 +23,8 @@ import { mergeReviewView } from './studio-review-merge.fixture';
   imports: [
     PageHeaderImports,
     HlmBadge,
+    HlmIcon,
+    ShellIconComponent,
     HlmCard,
     HlmCardHeader,
     HlmCardTitle,
@@ -47,6 +51,16 @@ export class StudioReviewMergeReviewPage {
   private readonly params = toSignal(this.route.queryParamMap);
   protected readonly view = computed(() => mergeReviewView(this.params()?.get('state') ?? null));
   protected readonly copy = MERGE_COPY;
+  protected readonly headerFacts = computed(() => {
+    const vm = this.view();
+    if (vm.record !== 'studio') return vm.references.project;
+    if (['loading', 'empty', '404', '401', 'error'].includes(vm.state)) return undefined;
+    return [this.copy.draft, this.copy.candidate]
+      .map((label) => vm.identity.find((fact) => fact.label === label)?.value)
+      .filter(Boolean)
+      .concat(this.copy.independent)
+      .join(' · ');
+  });
 
   protected show(state: 'default' | 'reloaded'): void {
     void this.router.navigate([], {
