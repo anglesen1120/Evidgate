@@ -30,7 +30,7 @@ export class HlmSelectItem {
   constructor() {
     classes(
       () =>
-        'spartan-select-item relative flex w-full cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_hlm-icon]:pointer-events-none [&_hlm-icon]:shrink-0',
+        'spartan-select-item relative flex w-full items-center select-none data-disabled:pointer-events-none [&_hlm-icon]:pointer-events-none [&_hlm-icon]:shrink-0',
     );
   }
 }

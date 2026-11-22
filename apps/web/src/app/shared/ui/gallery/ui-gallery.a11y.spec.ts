@@ -18,7 +18,9 @@ import {
   dataTableFixtureRows,
   type DataTableFixtureRow,
 } from '../data-table/data-table.fixture';
+import { provideGalleryLayout } from './gallery-layout.testing';
 import { UiGalleryComponent } from './ui-gallery.component';
+import { GallerySpecimenComponent } from './gallery-specimen.component';
 
 registerLocaleData(localeVi);
 
@@ -40,6 +42,7 @@ const cases = [
 ] as const;
 
 describe('UiGalleryComponent axe acceptance', () => {
+  provideGalleryLayout();
   let previousTheme: string | null;
   let previousLang: string | null;
 
@@ -63,10 +66,7 @@ describe('UiGalleryComponent axe acceptance', () => {
     document.documentElement.setAttribute('lang', locale);
     await TestBed.configureTestingModule({
       imports: [UiGalleryComponent],
-      providers: [
-        provideZonelessChangeDetection(),
-        ...(locale === 'vi' ? [{ provide: LOCALE_ID, useValue: 'vi' }] : []),
-      ],
+      providers: [provideZonelessChangeDetection(), { provide: LOCALE_ID, useValue: locale }],
     }).compileComponents();
     expect(TestBed.inject(LOCALE_ID)).toBe(locale);
     const fixture = TestBed.createComponent(UiGalleryComponent);
@@ -109,9 +109,9 @@ describe('UiGalleryComponent axe acceptance', () => {
   );
 
   // The gallery holds ~8.8k elements, ~80% of them in the stacked-records section, and a scan costs
-  // time per element. The root scan is split into three scans whose contexts partition the page:
-  // everything outside the gallery sections, the stacked-records section, and all other sections.
+  // time per element. Isolate the record stack and the v3 sheet from the smaller regression fixtures.
   const SECTION = 'section[aria-labelledby^="gallery-"]';
+  const SHEET = 'main > section[aria-labelledby]';
   const STACKED = 'section[aria-labelledby="gallery-stacked-records"]';
   const OTHERS = `${SECTION}:not([aria-labelledby="gallery-stacked-records"])`;
   const sections = (root: HTMLElement, selector: string): HTMLElement[] =>
@@ -122,8 +122,9 @@ describe('UiGalleryComponent axe acceptance', () => {
   }[] = [
     {
       name: 'page outside the sections',
-      context: (root) => ({ include: [root], exclude: sections(root, SECTION) }),
+      context: (root) => ({ include: [root], exclude: sections(root, `${SECTION}, ${SHEET}`) }),
     },
+    { name: 'v3 component sheet', context: (root) => ({ include: sections(root, SHEET) }) },
     { name: 'stacked records', context: (root) => ({ include: sections(root, STACKED) }) },
     {
       name: 'other sections',
@@ -137,6 +138,8 @@ describe('UiGalleryComponent axe acceptance', () => {
       const { root, dispose } = await mountGallery(locale, theme);
       try {
         expect(document.body.contains(root)).toBe(true);
+        expect(root.querySelectorAll('app-gallery-specimen')).toHaveLength(19);
+        expect(root.querySelector('.eg-kpi-card [hlmCardContent]')?.textContent).toContain('100%');
         // Three fixture specimens plus the column-role specimen in the tables group.
         expect(root.querySelectorAll('app-data-table')).toHaveLength(4);
         expect(root.querySelector('app-waiver-banner time')).not.toBeNull();
@@ -161,6 +164,37 @@ describe('UiGalleryComponent axe acceptance', () => {
         ).toBeGreaterThan(20);
       } finally {
         dispose();
+      }
+    },
+    30_000,
+  );
+
+  it.each(cases)(
+    'keeps the review status comparisons accessible: $locale / $theme',
+    async ({ locale, theme }) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      document.documentElement.setAttribute('lang', locale);
+      TestBed.configureTestingModule({ providers: [{ provide: LOCALE_ID, useValue: locale }] });
+      const fixture = TestBed.createComponent(GallerySpecimenComponent);
+      fixture.componentRef.setInput('specimen', { id: 'badges', title: 'Review' });
+      await fixture.whenStable();
+      const root = fixture.nativeElement as HTMLElement;
+      root.querySelector<HTMLButtonElement>('button[aria-controls]')?.click();
+      await fixture.whenStable();
+      try {
+        const preview = root.querySelector('[data-state="default"]');
+        const saved = root.querySelector('[data-state="success"]');
+        expect(preview?.querySelector('app-review-status-chip [data-tone="success"]')).toBeNull();
+        expect(saved?.querySelector('app-review-status-chip [data-tone="success"]')).not.toBeNull();
+        expect(saved?.textContent).toContain('Minh Trần');
+        expect(root.querySelectorAll('app-gallery-example')).toHaveLength(9);
+        const result = await axe.run(
+          { include: Array.from(root.querySelectorAll('app-gallery-example')) },
+          axeOptions,
+        );
+        expect(unexceptedLines(result)).toEqual([]);
+      } finally {
+        fixture.destroy();
       }
     },
     30_000,

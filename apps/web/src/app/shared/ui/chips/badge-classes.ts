@@ -4,11 +4,11 @@ import type { StatusTone } from './status-pill.component';
 
 /** Let the line box grow with enlarged text; only the inner label owns horizontal elision. */
 export const BADGE_CLASSES =
-  'h-auto min-h-[var(--eg-space-7)] max-w-[min(100%,24ch)] min-w-0 flex-nowrap justify-start gap-[var(--eg-space-1)] whitespace-nowrap rounded-(--eg-radius-sm) overflow-visible px-[var(--eg-space-3)] py-[var(--eg-space-1)] font-sans font-semibold text-[length:var(--eg-text-xs)] leading-(--eg-leading-xs)';
+  'h-auto min-h-[var(--eg-space-7)] max-w-[min(100%,24ch)] min-w-0 flex-nowrap justify-start gap-[var(--eg-space-2)] whitespace-nowrap rounded-(--eg-radius-sm) overflow-visible px-[var(--eg-space-3)] py-[var(--eg-space-1)] font-sans font-semibold text-[length:var(--eg-text-xs)] leading-(--eg-leading-xs)';
 
 export const IDENTITY_BADGE_CLASSES = hlm(
   BADGE_CLASSES,
-  'rounded-(--eg-radius-sm) bg-secondary font-mono font-normal',
+  'bg-[var(--eg-neutral-bg)] text-[var(--eg-neutral-fg)] font-mono font-normal',
 );
 
 export const BADGE_TONE_CLASSES = {

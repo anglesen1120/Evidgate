@@ -10,7 +10,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
       [attr.viewBox]="'0 0 24 24'"
       [attr.fill]="'none'"
       [attr.stroke]="'currentColor'"
-      [attr.stroke-width]="2"
+      [attr.stroke-width]="1.65"
       [attr.stroke-linecap]="'round'"
       [attr.stroke-linejoin]="'round'"
       [attr.focusable]="'false'"

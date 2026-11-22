@@ -225,7 +225,7 @@ describe('WaiverBanner (FR-09-2/7)', () => {
       const root = fixture.nativeElement as HTMLElement;
       expect(root.querySelector('h3')?.textContent?.trim()).toBe('Waiver state unavailable');
       expect(root.querySelector('section')?.classList.contains('waiver')).toBe(true);
-      expect(root.querySelector('section')?.classList.contains('bg-muted')).toBe(true);
+      expect(root.querySelector('section')?.classList.contains('bg-(--eg-neutral-bg)')).toBe(true);
       expect(root.textContent).not.toContain('Approved by waiver');
       expect(
         root.querySelector('[class*="success"], [class*="warning"], [class*="danger"]'),

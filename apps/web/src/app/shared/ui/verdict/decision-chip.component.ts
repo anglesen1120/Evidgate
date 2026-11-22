@@ -82,7 +82,7 @@ export class DecisionChipComponent {
     }
   });
   protected readonly badgeClasses = computed(
-    () => `${BADGE_CLASSES} border-current ${BADGE_TONE_CLASSES[this.tone()]}`,
+    () => `${BADGE_CLASSES} border-current border-s-2 ${BADGE_TONE_CLASSES[this.tone()]}`,
   );
 
   readonly value = computed(() => {
