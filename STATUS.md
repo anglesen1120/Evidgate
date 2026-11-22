@@ -9,8 +9,8 @@ Updated 2026-11-22. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 - Open PRs: dependabot PRs plus none from S385 (merged); S390 merged as #791 (b286d2f3); S387 merged as #786 (36a1c832); S385 merged as #781 (396004a8); S384 as #780 (df2998e5); S380 merged as #778 (392048eb); S383 as #776 (c11b8731); S379 as #774 (f3e7f9a4); S378 as #772 (2de254d4); S377 as #768 (4335f4e0); S375 as #769 (c70c3d94); S376 as #766 (6f0fda6a); S373 as #763 (57591934).
 - Wave layout (owner 2026-10-26): 1 backend + 2 web-only panels; a lane whose diff `python3 scripts/gate_scope.py` classifies `docs` or `no-dotnet` runs phase 1 (that tier's stages) + `npm run e2e -w apps/web` when `apps/web` changed, and never takes the Docker gate lock; a `full` tier needs phase 2 and the lock (`.omp/coordinator/PROJECT.md §Gate`).
 - Lanes in flight (2026-11-12): S389 (gate-LAN lane; the owner pauses the wave after it, none follows); merged: S390 REVIEW-INFRA-LAN #791 (b286d2f3), S388 PROJECT-FK #787 (2e5a144b), S387 RYUK-RETRY #786 (36a1c832), S386 GATE-STAGE-TIME #783 (f5d058ff), S385 PARSER-NO-EGRESS #781 (396004a8), S384 ORG-REVOKE #780 (df2998e5), S380 #778 (392048eb), S383 #776 (c11b8731), S379 #774 (f3e7f9a4), S378 #772, S377 #768, S375 #769, S376 #766, S373 #763, S374 #761, S371 #759; earlier lanes are merged and closed out (every STATUS.md line is <= 768 chars, history in `docs/status-archive.md`).
-- Fully landed on `wave/2026-11-20b` (recount S655 through #1315, `4750af76`; not yet merged to develop, which is at #1050): 249/660 tasks (≈37.7 %); 247.5/706.75 raw person-days (≈35.0 %); remaining 411 tasks / 459.25 d. Via merged PRs: 222 tasks / 222.5 d; the other 27 tasks / 25.0 d are direct commits on develop. 48 parents are partial and carry no credit (§2, recounted from scratch in S655). S655 credits 03.1.4-T2, 03.5.1-T1, 03.6.1-T1, 02.4.3-T2 and 07.5.1-T2; 04.8.1-T2 (AC3 open) and 05.2.1-T3 (run.log key borrowing open) stay partial. (archive: S655 item 1)
-- Landed by phase (done tasks / raw d): G1 155 / 161.75; G2 76 / 68.5; G3 5 / 4.5; G4 13 / 12.75. (archive: S655 item 2)
+- Fully landed on `wave/2026-11-20b` (recount S655 through #1315, `4750af76`; not yet merged to develop, which is at #1050): 248/660 tasks (≈37.6 %); 246.5/706.75 raw person-days (≈34.9 %); remaining 412 tasks / 460.25 d. Via merged PRs: 221 tasks / 221.5 d; the other 27 tasks / 25.0 d are direct commits on develop. 49 parents are partial and carry no credit (§2, recounted from scratch in S655; 13.2.2-T1 withdrawn after the merge, its Done-when test does not exist). S655 credits 03.1.4-T2, 03.5.1-T1, 03.6.1-T1, 02.4.3-T2 and 07.5.1-T2; 04.8.1-T2 (AC3 open) and 05.2.1-T3 (run.log key borrowing open) stay partial. (archive: S655 item 1)
+- Landed by phase (done tasks / raw d): G1 154 / 160.75; G2 76 / 68.5; G3 5 / 4.5; G4 13 / 12.75. (archive: S655 item 2)
 - Plan totals: 660 tasks / 706.75 raw / 848.1 buffered person-days (`plan_graph.py` on `41edd414`: errors 0, 205 stories; 04.2.2-T3 manifest generator added in S186, M; the S93 canonical figures were 655 / 702.75 / 843.3). `check_features.py` exits 0 since S370 (#755: 205 of 205 feature files, errors 0, warnings 0).
 - CI: `ci.yml` runs `verify.sh` stages; recent delivery records report CI refused for billing (owner treats as pass), not CI green.
 - Owner decisions: O1 (engine), O4, O8 and O10 decided; O3 deferred. O2 decided 2026-10-02 (one-person team; reviews by people or AI sessions against a standard plan and spec, DECISIONS §8). Open: O5, O6, O7, O9, O11, O12. B2 flow approval and product questions stay in §6.
@@ -25,10 +25,10 @@ Counted by expanding task ranges in merged PR bodies, close-out rows and plan No
 
 | Delivery scope | Tasks | Raw person-days |
 |---|---|---|
-| Fully landed on the wave branch (S655) | 249 | 247.5 |
-| Via merged PRs | 222 | 222.5 |
+| Fully landed on the wave branch (S655) | 248 | 246.5 |
+| Via merged PRs | 221 | 221.5 |
 | Direct commits on develop, no PR | 27 | 25.0 |
-| Remaining | 411 | 459.25 |
+| Remaining | 412 | 460.25 |
 | Plan total | 660 | 706.75 |
 
 The S655 recount (base 244 / 243.5 at `7d196b99`, through #1315) adds the five tasks in the table below for 249 / 247.5; G1 +1 / +0.5, G2 +3 / +2.5, G4 +1 / +1.0; areas 02 +1, 03 +3, 07 +1. Its partial-parent list was rebuilt from the plan sub-rows, the carried rows and the 2026-11-22 plan Notes, not carried forward by delta: 03.1.4-T2, 02.4.3-T2 and 07.5.1-T2 leave it, 04.8.1-T2 joins, 48 remain. The other PRs after #1206 (#1207–#1315 other than those below: file splits, test hardening, gate and docs) add no task credit. A carried row that only records wording, a hand-over or test hygiene does not withhold credit; a row naming an acceptance criterion or Done-when does.
@@ -42,6 +42,8 @@ The S655 recount (base 244 / 243.5 at `7d196b99`, through #1315) adds the five t
 | 07.5.1-T2 | S | 0.5 | G2 | #1211 (`d3d1dfbe`, T2.1); T2.2 earlier | Whole: `ReconcileRunTests.ReleaseConsumedDecision_ByteIdentical_AfterN1`, TRUNCATE denied and route scan; the row 'Consumed decision test: re-point at the real release-decision pointer (S601)' is test hygiene for 07.5.3 |
 
 Arithmetic: base 244 + 5 = 249 tasks; 243.5 + (0.5 + 1.0 + 1.0 + 1.0 + 0.5 = 4.0) = 247.5 d. Phases: G1 154 + 1 = 155 and 161.25 + 0.5 = 161.75; G2 73 + 3 = 76 and 66.0 + 2.5 = 68.5; G3 5 and 4.5; G4 12 + 1 = 13 and 11.75 + 1.0 = 12.75; 155 + 76 + 5 + 13 = 249 and 161.75 + 68.5 + 4.5 + 12.75 = 247.5. Areas (tasks / d): 01 49 / 55.0, 02 34 / 31.5, 03 13 / 11.5, 04 30 / 29.0, 05 27 / 29.5, 06 16 / 13.0, 07 14 / 10.75, 08 1 / 1.0, 09 33 / 34.0, 10 7 / 7.0, 11 13 / 10.25, 12 5 / 6.5, 13 7 / 8.5 sum to 249 / 247.5. Via PRs 217 + 5 = 222 and 218.5 + 4.0 = 222.5; 222 + 27 = 249; 222.5 + 25.0 = 247.5; remaining 660 − 249 = 411 and 706.75 − 247.5 = 459.25.
+
+S655 close-out correction (owner-delegated strict reading): 13.2.2-T1 (M, G1, area 13, 1.0 d, via PR #199) loses its credit, so the landed figures are 248 / 660 tasks (≈37.6 %) and 246.5 / 706.75 d (≈34.9 %); remaining 412 / 460.25 d; via PRs 221 / 221.5; G1 154 / 160.75 (G2, G3, G4 unchanged); area 13 6 / 7.5; size mix XS 4, S 75, M 131, L 37, XL 1 (248); 154 + 76 + 5 + 13 = 248 and 160.75 + 68.5 + 4.5 + 12.75 = 246.5.
 
 The S599 recount (base 240 / 240.0 at `41edd414`, through #1206) adds 05.2.2-T3 (G2, M, #528, #837, #854), 05.3.2-T3 (G2, M, #330, #344, #348, #1002), 09.7.1-T9 (G2, S, #896, #906) and 10.1.2-T1 (G1, M, #516, #820, #821) for 244 / 243.5; G1 +1 / +1.0, G2 +3 / +2.5; areas 05 +2, 09 +1, 10 +1.
 
@@ -104,10 +106,11 @@ The S599 recount (base 240 / 240.0 at `41edd414`, through #1206) adds 05.2.2-T3 
 | 13.4.1-T3 | T3.3 Apply for merge/split selections blocked | #915, #917 |
 | 13.4.1-T5 | T5.2 AC10 restore asks for a reason | #910, #915 |
 | 13.4.1-T7 | T7.2 org AI-credit balance and usage region | #908 |
+| 13.2.2-T1 | Done-when test `RolePromptResearchReviewTests.MemoAndLicenceLedgerComplete` is not built (S655 close-out) | #199 |
 
-The 43 table rows above represent 44 partial parents (the 10.7.1-T1/T2 row covers two); with 09.5.2-T3 (T3.2 open; T3.1 landed in #684), 10.7.1-T3 (drill open, #698), 10.7.1-T5 (T5.2 open; T5.1 landed in #696) and 10.7.1-T6 (T6.2 open; T6.1 landed in #696) they make 48 (S655: 03.1.4-T2, 02.4.3-T2 and 07.5.1-T2 left the table, 04.8.1-T2 joined). Rows 10.3.1-T2, 10.3.2-T1 and 11.2.1-T2 were withheld by S369; 03.4.1-T1 was counted partial at S372 and stays so (S599). They are excluded from done counts and dependency satisfaction; landed subrows and remainders are in the delivery table and §5.
+The 44 table rows above (13.2.2-T1 is the one added after the S655 merge) represent 45 partial parents (the 10.7.1-T1/T2 row covers two); with 09.5.2-T3 (T3.2 open; T3.1 landed in #684), 10.7.1-T3 (drill open, #698), 10.7.1-T5 (T5.2 open; T5.1 landed in #696) and 10.7.1-T6 (T6.2 open; T6.1 landed in #696) they make 49 (S655: 03.1.4-T2, 02.4.3-T2 and 07.5.1-T2 left the table, 04.8.1-T2 joined). Rows 10.3.1-T2, 10.3.2-T1 and 11.2.1-T2 were withheld by S369; 03.4.1-T1 was counted partial at S372 and stays so (S599). They are excluded from done counts and dependency satisfaction; landed subrows and remainders are in the delivery table and §5.
 
-13.2.2-T1 stays credited as at S189 (memo accepted by PR review) although its Done-when test is not built (carried row 'Role-prompt memo check'); the roster is the table rows, not an audit of every credited task.
+13.2.2-T1 (M, G1, #199) was credited from S189 to S655; its Done-when test `RolePromptResearchReviewTests.MemoAndLicenceLedgerComplete` does not exist (rg and graph find it only in plans), so the post-merge strict reading withdraws the credit (carried row 'Role-prompt memo check'); the roster is the table rows, not an audit of every credited task.
 
 ### Done by area
 
@@ -125,18 +128,18 @@ The 43 table rows above represent 44 partial parents (the 10.7.1-T1/T2 row cover
 | 10 | 7 | 0 | 2 | 4 | 1 | 0 | 7.0 |
 | 11 | 13 | 1 | 6 | 5 | 1 | 0 | 10.25 |
 | 12 | 5 | 0 | 1 | 2 | 2 | 0 | 6.5 |
-| 13 | 7 | 0 | 1 | 4 | 2 | 0 | 8.5 |
-| TOTAL | 249 | 4 | 75 | 132 | 37 | 1 | 247.5 |
+| 13 | 6 | 0 | 1 | 3 | 2 | 0 | 7.5 |
+| TOTAL | 248 | 4 | 75 | 131 | 37 | 1 | 246.5 |
 
 ### Done by phase
 
 | Group | Tasks | XS | S | M | L | XL | Person-days |
 |---|---|---|---|---|---|---|---|
-| G1 | 155 | 3 | 42 | 81 | 28 | 1 | 161.75 |
+| G1 | 154 | 3 | 42 | 80 | 28 | 1 | 160.75 |
 | G2 | 76 | 0 | 27 | 43 | 6 | 0 | 68.5 |
 | G3 | 5 | 0 | 3 | 1 | 1 | 0 | 4.5 |
 | G4 | 13 | 1 | 3 | 7 | 2 | 0 | 12.75 |
-| TOTAL | 249 | 4 | 75 | 132 | 37 | 1 | 247.5 |
+| TOTAL | 248 | 4 | 75 | 131 | 37 | 1 | 246.5 |
 
 ### Landed task groups
 
