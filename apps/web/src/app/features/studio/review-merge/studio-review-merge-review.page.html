@@ -1,21 +1,33 @@
 @let vm = view();
-<app-page-header
-  [title]="vm.record === 'studio' ? copy.title : copy.candidateTitle"
-  [description]="vm.record === 'studio' ? copy.subtitle : copy.candidateSub"
->
-  <div pageHeaderContext class="flex min-w-0 flex-wrap items-center gap-2 pb-2">
-    <span hlmBadge [variant]="'secondary'">{{
+<div class="flex min-w-0 flex-wrap items-center gap-2">
+  <span hlmBadge [variant]="'secondary'"
+    ><hlm-icon name="lucideInfo" />{{
       vm.record === 'studio' ? copy.historical : copy.candidateSpecimen
-    }}</span>
-    <code class="text-xs">{{ vm.references.project }}</code>
-  </div>
-  <div appPageHeaderActions>
-    @if (vm.headerAction; as action) {
-      <app-review-action-preview [kind]="action" [view]="vm" [primary]="true" />
-      <small class="block text-xs text-muted-foreground">{{ copy.preview }}</small>
-    }
-  </div>
-</app-page-header>
+    }}</span
+  >
+  <code class="text-xs"
+    ><bdi>{{ vm.references.project }}</bdi></code
+  >
+</div>
+<div class="flex min-w-0 items-start gap-(--eg-space-4)">
+  <span
+    class="grid size-(--eg-space-9) shrink-0 place-items-center rounded-(--eg-radius-md) border border-border bg-(--eg-accent-soft) text-primary md:size-(--eg-space-10)"
+  >
+    <app-shell-icon [name]="'tree'" />
+  </span>
+  <app-page-header
+    class="min-w-0 flex-1 [&_h1]:text-(length:--eg-leading-md)"
+    [title]="vm.record === 'studio' ? copy.title : copy.candidateTitle"
+    [description]="headerFacts()"
+  >
+    <div appPageHeaderActions>
+      @if (vm.headerAction; as action) {
+        <app-review-action-preview [kind]="action" [view]="vm" [primary]="true" />
+        <small class="block text-xs text-muted-foreground">{{ copy.preview }}</small>
+      }
+    </div>
+  </app-page-header>
+</div>
 @switch (vm.state) {
   @case ('loading') {
     <app-loading-pattern [layout]="'cards'" [label]="copy.loading" />
@@ -38,6 +50,9 @@
     />
   }
   @default {
+    <p class="m-0 text-sm text-muted-foreground">
+      {{ vm.record === 'studio' ? copy.subtitle : copy.candidateSub }}
+    </p>
     @if (vm.notice; as notice) {
       @if (vm.state === '412') {
         <app-inline-feedback
@@ -115,7 +130,7 @@
           </section>
         }
         @if (vm.record === 'studio') {
-          <p class="m-0 rounded-sm bg-muted p-3 text-sm">{{ copy.runtime }}</p>
+          <p class="m-0 rounded-sm bg-(--eg-surface-raised) p-3 text-sm">{{ copy.runtime }}</p>
         }
       </aside>
     </div>

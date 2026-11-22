@@ -1,9 +1,17 @@
-<app-page-header [title]="c.title" [description]="c.intro"
-  ><div appPageHeaderActions class="text-xs text-muted-foreground">
-    <span>{{ c.asOf }} <app-absolute-time [value]="viewModel().asOf" /></span
-    ><code class="block">{{ viewModel().project }}</code>
-  </div></app-page-header
->
+@let showRecords = !notice()?.replace;
+<div class="flex min-w-0 items-start gap-3">
+  <span
+    class="grid size-12 shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent)"
+  >
+    <hlm-icon name="lucideActivity" class="size-6" />
+  </span>
+  <app-page-header class="min-w-0 flex-1" [title]="c.title" [description]="c.intro">
+    <div appPageHeaderActions class="grid gap-1 text-xs text-muted-foreground">
+      <span>{{ c.asOf }} <app-absolute-time [value]="viewModel().asOf" /></span>
+      <bdi>{{ escapeFormatChars(viewModel().project) }}</bdi>
+    </div>
+  </app-page-header>
+</div>
 @if (notice(); as n) {
   @switch (state()) {
     @case ('loading') {
@@ -41,18 +49,23 @@
     >
   }
 }
-@if (!notice()?.replace) {
-  <div class="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+@if (showRecords) {
+  <div
+    hlmCard
+    class="grid min-w-0 grid-cols-1 gap-px overflow-hidden bg-border p-0 sm:grid-cols-2 md:grid-cols-4"
+  >
     @for (m of viewModel().metrics; track m.title) {
-      <section hlmCard [size]="'sm'" class="min-w-0 gap-3 p-4">
-        <h2 class="flex items-center gap-2 text-sm font-semibold">
+      <section class="grid min-w-0 content-start gap-3 bg-card p-4">
+        <h2 class="flex items-center gap-2 text-sm font-semibold wrap-normal break-normal">
           <span
             class="flex size-8 shrink-0 items-center justify-center rounded-md bg-(--eg-accent-soft) text-(--eg-accent)"
             ><hlm-icon class="size-4" [name]="m.icon" /></span
           >{{ m.title }}
         </h2>
         <div>
-          <p class="m-0 text-2xl font-bold tabular-nums">
+          <p
+            class="m-0 font-(family-name:--eg-font-display) text-2xl font-bold tracking-tight tabular-nums"
+          >
             {{
               state() === 'score' && m.title === c.testability
                 ? c.unavailable
@@ -74,57 +87,84 @@
       </section>
     }
   </div>
+}
+@if (showRecords || state() === 'loading' || state() === 'empty') {
   <section hlmCard class="min-w-0 gap-0">
     <header hlmCardHeader class="border-b border-(--eg-border)">
       <div class="flex flex-wrap items-start justify-between gap-2">
-        <h2 hlmCardTitle>{{ c.inventory }}</h2>
-        <span class="text-xs text-muted-foreground">{{ c.scope }}</span>
+        <h2 #inventoryHeading hlmCardTitle tabindex="-1">{{ c.inventory }}</h2>
+        <span hlmBadge [variant]="'secondary'" class="max-w-full">{{ c.scope }}</span>
       </div>
       <p hlmCardDescription>{{ c.inventoryHelp }}</p>
     </header>
     <div hlmCardContent class="grid min-w-0 gap-3 pt-4">
-      <div class="grid min-w-0 items-end gap-3 md:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_auto]">
-        <div>
-          <label hlmLabel for="script-search">{{ c.find }}</label
-          ><input
-            hlmInput
-            class="w-full"
-            type="search"
-            id="script-search"
-            [ngModel]="search()"
-            (ngModelChange)="search.set($event)"
-          />
-        </div>
-        <div>
-          <label hlmLabel for="statusFilter">{{ c.statusFilter }}</label
-          ><hlm-select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)"
-            ><hlm-select-trigger [buttonId]="'statusFilter'" class="w-full"
-              ><hlm-select-value [placeholder]="c.allStatuses" /></hlm-select-trigger
-            ><hlm-select-content *hlmSelectPortal [aria-label]="c.statusFilter"
-              ><hlm-select-item [value]="''">{{ c.allStatuses }}</hlm-select-item>
-              @for (option of statuses(); track option) {
-                <hlm-select-item [value]="option">{{ option }}</hlm-select-item>
+      @if (showRecords) {
+        <div
+          class="grid min-w-0 items-end gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
+        >
+          <div class="grid min-w-0 gap-1 sm:col-span-2 xl:col-span-1">
+            <span id="script-status-heading" class="text-xs font-semibold">{{
+              c.statusFilter
+            }}</span>
+            <div
+              role="group"
+              aria-labelledby="script-status-heading"
+              class="flex min-w-0 flex-nowrap gap-1 overflow-x-auto rounded-md bg-muted p-1"
+            >
+              @for (option of statusOptions(); track option.value) {
+                <button
+                  hlmBtn
+                  [size]="'sm'"
+                  type="button"
+                  [variant]="statusFilter() === option.value ? 'outline' : 'ghost'"
+                  [attr.aria-pressed]="statusFilter() === option.value"
+                  class="shrink-0 whitespace-nowrap pointer-coarse:min-h-(--eg-control-touch)"
+                  (click)="statusFilter.set(option.value)"
+                >
+                  {{ option.label }}
+                  <span class="text-xs tabular-nums text-muted-foreground">{{ option.count }}</span>
+                </button>
               }
-            </hlm-select-content></hlm-select
-          >
+            </div>
+          </div>
+          <div>
+            <label hlmLabel for="script-search">{{ c.find }}</label
+            ><input
+              hlmInput
+              class="w-full"
+              type="search"
+              id="script-search"
+              [ngModel]="search()"
+              (ngModelChange)="search.set($event)"
+            />
+          </div>
+          <div>
+            <label hlmLabel for="prFilter">{{ c.prFilter }}</label
+            ><hlm-select [ngModel]="prFilter()" (ngModelChange)="prFilter.set($event)"
+              ><hlm-select-trigger [buttonId]="'prFilter'" class="w-full"
+                ><hlm-select-value [placeholder]="c.allPrs" /></hlm-select-trigger
+              ><hlm-select-content *hlmSelectPortal [aria-label]="c.prFilter"
+                ><hlm-select-item [value]="''">{{ c.allPrs }}</hlm-select-item>
+                @for (option of prs; track option) {
+                  <hlm-select-item [value]="option">{{ option }}</hlm-select-item>
+                }
+              </hlm-select-content></hlm-select
+            >
+          </div>
+          <button hlmBtn [variant]="'outline'" type="button" (click)="reset()">
+            {{ c.reset }}
+          </button>
         </div>
-        <div>
-          <label hlmLabel for="prFilter">{{ c.prFilter }}</label
-          ><hlm-select [ngModel]="prFilter()" (ngModelChange)="prFilter.set($event)"
-            ><hlm-select-trigger [buttonId]="'prFilter'" class="w-full"
-              ><hlm-select-value [placeholder]="c.allPrs" /></hlm-select-trigger
-            ><hlm-select-content *hlmSelectPortal [aria-label]="c.prFilter"
-              ><hlm-select-item [value]="''">{{ c.allPrs }}</hlm-select-item>
-              @for (option of prs; track option) {
-                <hlm-select-item [value]="option">{{ option }}</hlm-select-item>
-              }
-            </hlm-select-content></hlm-select
-          >
-        </div>
-        <button hlmBtn [variant]="'outline'" type="button" (click)="reset()">{{ c.reset }}</button>
-      </div>
-      <div hlmTableContainer class="max-w-full min-w-0 overflow-x-auto">
-        <table hlmTable>
+      }
+      <div
+        hlmTableContainer
+        role="region"
+        [attr.aria-label]="c.inventory"
+        tabindex="0"
+        class="max-w-full min-w-0 overflow-x-auto"
+      >
+        <table hlmTable [attr.aria-busy]="state() === 'loading' ? 'true' : null">
+          <caption class="sr-only" [textContent]="c.inventory"></caption>
           <thead hlmTHead>
             <tr hlmTr>
               @for (h of columns; track h.label) {
@@ -135,12 +175,12 @@
                     h.key === sort().column ? (sort().ascending ? 'ascending' : 'descending') : null
                   "
                 >
-                  @if (h.key; as key) {
+                  @if (showRecords && h.key; as key) {
                     <button
                       hlmBtn
                       [variant]="'ghost'"
                       type="button"
-                      class="px-0"
+                      class="wrap-normal break-normal px-0"
                       (click)="order(key)"
                     >
                       {{ h.label }}
@@ -153,192 +193,67 @@
                   }
                 </th>
               }
+              <th hlmTh scope="col" class="script-actions text-end">{{ c.actions }}</th>
             </tr>
           </thead>
           <tbody hlmTBody>
-            @for (r of rows(); track r.id) {
-              <tr hlmTr>
+            @for (r of showRecords ? rows() : []; track r.id) {
+              <tr
+                hlmTr
+                class="h-(--eg-space-11)"
+                [attr.data-state]="selection().id === r.id ? 'selected' : null"
+              >
                 <td hlmTd>
-                  <hlm-dialog #drawer
-                    ><button
-                      type="button"
-                      hlmBtn
-                      hlmDialogTrigger
-                      [variant]="'outline'"
-                      class="min-h-(--eg-control-touch) font-mono"
-                      (click)="selectedId.set(r.id)"
+                  <div class="flex min-w-0 items-center gap-2">
+                    <span
+                      class="grid size-7 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground"
                     >
-                      {{ r.id }}</button
-                    ><hlm-dialog-content
-                      *hlmDialogPortal
-                      [showCloseButton]="false"
-                      class="max-h-[90dvh] min-w-0 overflow-y-auto sm:max-w-2xl"
-                      ><header hlmDialogHeader>
-                        <h2 hlmDialogTitle>{{ r.id }}</h2>
-                        <p hlmDialogDescription>{{ r.title }}</p>
-                      </header>
-                      <app-status-pill [tone]="r.tone" [label]="r.status" />
-                      <dl
-                        class="m-0 grid min-w-0 text-sm [&>div]:grid [&>div]:items-baseline [&>div]:gap-x-3 [&>div]:gap-y-1 [&>div]:border-b [&>div]:border-(--eg-border) [&>div]:py-2 sm:[&>div]:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:wrap-anywhere [&_dd]:font-semibold"
+                      <hlm-icon name="lucideActivity" class="size-4" />
+                    </span>
+                    <div class="min-w-0">
+                      <strong class="block text-sm font-semibold wrap-anywhere"
+                        ><bdi>{{ escapeFormatChars(r.title) }}</bdi></strong
                       >
-                        <div>
-                          <dt>{{ c.approved }}</dt>
-                          <dd>{{ r.manualCase }} · {{ r.revision }}</dd>
-                        </div>
-                        <div>
-                          <dt>{{ c.annotation }}</dt>
-                          <dd>
-                            <code>{{ viewModel().annotationKey }}</code> ·
-                            {{ r.automated ?? c.notSupplied }}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>{{ c.runEvidence }}</dt>
-                          <dd>
-                            <code>{{ viewModel().runContext }}</code>
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>{{ c.stability }}</dt>
-                          <dd>{{ stability(r) }}</dd>
-                        </div>
-                        <div>
-                          <dt>{{ c.prFilter }}</dt>
-                          <dd>{{ delivery(r) }}</dd>
-                        </div>
-                      </dl>
-                      <h3>{{ c.bindings }}</h3>
-                      <div hlmTableContainer class="min-w-0 max-w-full overflow-x-auto">
-                        <table hlmTable>
-                          <thead hlmTHead>
-                            <tr hlmTr>
-                              <th hlmTh scope="col">{{ c.step }}</th>
-                              <th hlmTh scope="col">{{ c.locator }}</th>
-                              <th hlmTh scope="col">{{ c.reason }}</th>
-                            </tr>
-                          </thead>
-                          <tbody hlmTBody>
-                            @for (s of r.steps; track s.number) {
-                              <tr hlmTr>
-                                <td hlmTd>{{ s.number }} · {{ s.action }}</td>
-                                <td hlmTd>{{ s.binding }}</td>
-                                <td hlmTd>{{ s.reason ?? '—' }}</td>
-                              </tr>
-                            }
-                          </tbody>
-                        </table>
-                      </div>
-                      <h3>{{ c.lint }}</h3>
-                      <p class="text-sm">{{ c.policy }}</p>
-                      <div hlmTableContainer class="min-w-0 max-w-full overflow-x-auto">
-                        <table hlmTable>
-                          <thead hlmTHead>
-                            <tr hlmTr>
-                              <th hlmTh scope="col">{{ c.step }}</th>
-                              <th hlmTh scope="col">{{ c.rule }}</th>
-                              <th hlmTh scope="col">{{ c.result }}</th>
-                            </tr>
-                          </thead>
-                          <tbody hlmTBody>
-                            @for (s of r.steps; track s.number) {
-                              <tr hlmTr>
-                                <td hlmTd>{{ s.number }}</td>
-                                <td hlmTd>
-                                  <code>{{ s.rule ?? c.notSupplied }}</code>
-                                </td>
-                                <td hlmTd>
-                                  {{
-                                    state() === 'nolint'
-                                      ? c.unavailable
-                                      : state() === 'reject' && s.number === '02'
-                                        ? c.rejectedLint
-                                        : s.lint
-                                  }}
-                                </td>
-                              </tr>
-                            }
-                          </tbody>
-                        </table>
-                      </div>
-                      <h3>{{ c.attempts }}</h3>
-                      @if (r.attempts.length) {
-                        <div hlmTableContainer class="min-w-0 max-w-full overflow-x-auto">
-                          <table hlmTable>
-                            <thead hlmTHead>
-                              <tr hlmTr>
-                                <th hlmTh scope="col">{{ c.attempt }}</th>
-                                <th hlmTh scope="col">{{ c.build }}</th>
-                                <th hlmTh scope="col">{{ c.result }}</th>
-                                <th hlmTh scope="col">{{ c.original }}</th>
-                              </tr>
-                            </thead>
-                            <tbody hlmTBody>
-                              @for (a of r.attempts; track a.number) {
-                                <tr hlmTr>
-                                  <td hlmTd>{{ a.number }}</td>
-                                  <td hlmTd>
-                                    {{
-                                      state() === 'mixed' && r.id === 'gs-0042' && a.number === '1'
-                                        ? viewModel().earlierBuild
-                                        : (a.build ?? c.unavailable)
-                                    }}
-                                  </td>
-                                  <td hlmTd>{{ a.result }}</td>
-                                  <td hlmTd>{{ a.detail }}</td>
-                                </tr>
-                              }
-                            </tbody>
-                          </table>
-                        </div>
-                      } @else {
-                        <p>{{ c.notEligible }}</p>
-                      }
-                      <h3>{{ c.source }}</h3>
-                      <pre
-                        class="m-0 min-w-0 whitespace-pre-wrap wrap-anywhere rounded-md bg-(--eg-surface-raised) p-4 font-mono text-sm"
-                      ><code>{{r.source}}</code></pre>
-                      <div class="flex flex-wrap gap-2">
-                        <button
-                          hlmBtn
-                          type="button"
-                          [variant]="'outline'"
-                          disabled
-                          data-code-action
-                        >
-                          {{ c.copy }}</button
-                        ><button
-                          hlmBtn
-                          type="button"
-                          [variant]="'outline'"
-                          disabled
-                          data-code-action
-                        >
-                          {{ c.download }}
-                        </button>
-                      </div>
-                      <p class="text-xs text-muted-foreground">{{ c.exportHint }}</p>
-                      <footer hlmDialogFooter>
-                        <button type="button" hlmBtn [variant]="'outline'" (click)="drawer.close()">
-                          {{ c.close }}
-                        </button>
-                      </footer></hlm-dialog-content
-                    ></hlm-dialog
-                  >
+                      <bdi class="font-mono text-xs text-muted-foreground">{{ r.id }}</bdi>
+                    </div>
+                  </div>
                 </td>
                 <td hlmTd>
-                  <strong>{{ r.manualCase }} · {{ r.revision }}</strong
-                  ><br />{{ r.title }}
+                  <bdi>{{ r.manualCase }}</bdi> · {{ r.revision }}
                 </td>
-                <td hlmTd>{{ r.automated ?? c.notLinked }}</td>
+                <td hlmTd>
+                  <bdi>{{ escapeFormatChars(r.automated ?? c.notLinked) }}</bdi>
+                </td>
                 <td hlmTd><app-status-pill [tone]="r.tone" [label]="r.status" /></td>
                 <td hlmTd>{{ stability(r) }}</td>
                 <td hlmTd>{{ r.prNumber }} {{ delivery(r) }}</td>
+                <td hlmTd class="script-actions text-end">
+                  <button
+                    #opener
+                    type="button"
+                    hlmBtn
+                    [variant]="'outline'"
+                    [attr.aria-haspopup]="'dialog'"
+                    class="shrink-0 whitespace-nowrap pointer-coarse:min-h-(--eg-control-touch) pointer-coarse:min-w-(--eg-control-touch)"
+                    [attr.aria-label]="
+                      c.view +
+                      ' ' +
+                      escapeFormatChars(r.title) +
+                      ' (' +
+                      escapeFormatChars(r.id) +
+                      ')'
+                    "
+                    (click)="viewScript(r.id, opener)"
+                  >
+                    {{ c.view }}
+                  </button>
+                </td>
               </tr>
             }
           </tbody>
         </table>
       </div>
-      @if (!rows().length && state() !== 'nomatch') {
+      @if (showRecords && !rows().length && state() !== 'nomatch') {
         <app-empty-pattern
           [title]="c.noMatches"
           [description]="c.noMatchesDetail"
@@ -346,14 +261,22 @@
           (action)="reset()"
         />
       }
-      <footer class="flex flex-wrap items-center gap-2">
-        <span role="status"
-          >{{ rows().length }} {{ c.count }} {{ viewModel().scripts.length }} {{ c.cursor }}</span
-        ><button hlmBtn [variant]="'outline'" type="button" disabled>{{ c.previous }}</button
-        ><button hlmBtn [variant]="'outline'" type="button" disabled>{{ c.next }}</button>
-      </footer>
+      @if (showRecords) {
+        <footer class="flex flex-wrap items-center justify-between gap-2">
+          <span role="status" class="text-xs tabular-nums text-muted-foreground">
+            {{ c.showing }} {{ rows().length }} {{ c.count }} {{ viewModel().scripts.length }}
+            {{ c.cursor }} · {{ c.sortedBy }} {{ sortedBy() }}
+          </span>
+          <div class="flex gap-2">
+            <button hlmBtn [variant]="'outline'" type="button" disabled>{{ c.previous }}</button>
+            <button hlmBtn [variant]="'outline'" type="button" disabled>{{ c.next }}</button>
+          </div>
+        </footer>
+      }
     </div>
   </section>
+}
+@if (showRecords) {
   <section hlmCard class="min-w-0 gap-0">
     <header hlmCardHeader class="border-b border-(--eg-border)">
       <div class="flex flex-wrap items-start justify-between gap-2">
@@ -382,28 +305,190 @@
       </dl>
     </div>
   </section>
-  @if (selected(); as current) {
-    <section hlmCard class="min-w-0 gap-0">
-      <header hlmCardHeader class="border-b border-(--eg-border)">
-        <div class="flex flex-wrap items-start justify-between gap-2">
-          <h2 hlmCardTitle>{{ c.source }}</h2>
-          <code>{{ current.id }}</code>
-        </div>
-      </header>
-      <div hlmCardContent class="grid min-w-0 gap-3 pt-4">
-        <pre
-          class="m-0 min-w-0 whitespace-pre-wrap wrap-anywhere rounded-md bg-(--eg-surface-raised) p-4 font-mono text-sm"
-        ><code>{{current.source}}</code></pre>
-        <div class="flex flex-wrap gap-2">
-          <button hlmBtn type="button" [variant]="'outline'" disabled data-code-action>
-            {{ c.copy }}</button
-          ><button hlmBtn type="button" [variant]="'outline'" disabled data-code-action>
-            {{ c.download }}
+  @if (viewed(); as r) {
+    <hlm-dialog
+      [state]="'open'"
+      [autoFocus]="'[hlmDialogTitle]'"
+      [restoreFocus]="true"
+      (closed)="closeView()"
+    >
+      <hlm-dialog-content *hlmDialogPortal class="script-details" [showCloseButton]="false">
+        <header hlmDialogHeader class="relative border-b border-border p-5 pe-16">
+          <h2 hlmDialogTitle tabindex="-1">{{ c.details }}</h2>
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
+            <bdi class="rounded border border-(--eg-border) px-2 py-1 font-mono text-xs">{{
+              r.id
+            }}</bdi>
+            <app-status-pill [tone]="r.tone" [label]="r.status" />
+          </div>
+          <button
+            type="button"
+            hlmBtn
+            hlmDialogClose
+            [variant]="'ghost'"
+            [size]="'icon'"
+            class="absolute end-3 top-3 pointer-coarse:size-(--eg-control-touch)"
+            [attr.aria-label]="c.close"
+          >
+            <hlm-icon name="lucideX" />
           </button>
+        </header>
+        <div
+          role="region"
+          [attr.aria-label]="escapeFormatChars(r.title)"
+          tabindex="0"
+          class="grid min-h-0 min-w-0 auto-rows-max content-start gap-3 overflow-y-auto overscroll-contain p-5"
+        >
+          <p hlmDialogDescription>
+            <bdi>{{ escapeFormatChars(r.title) }}</bdi>
+          </p>
+          <dl
+            class="m-0 grid min-w-0 text-sm [&>div]:grid [&>div]:items-baseline [&>div]:gap-x-3 [&>div]:gap-y-1 [&>div]:border-b [&>div]:border-(--eg-border) [&>div]:py-2 sm:[&>div]:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:wrap-anywhere [&_dd]:font-semibold"
+          >
+            <div>
+              <dt>{{ c.approved }}</dt>
+              <dd>{{ r.manualCase }} · {{ r.revision }}</dd>
+            </div>
+            <div>
+              <dt>{{ c.annotation }}</dt>
+              <dd>
+                <code
+                  ><bdi>{{ escapeFormatChars(viewModel().annotationKey) }}</bdi></code
+                >
+                ·
+                <bdi>{{ escapeFormatChars(r.automated ?? c.notSupplied) }}</bdi>
+              </dd>
+            </div>
+            <div>
+              <dt>{{ c.runEvidence }}</dt>
+              <dd>
+                <code>{{ viewModel().runContext }}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>{{ c.stability }}</dt>
+              <dd>{{ stability(r) }}</dd>
+            </div>
+            <div>
+              <dt>{{ c.prFilter }}</dt>
+              <dd>{{ r.prNumber }} {{ delivery(r) }}</dd>
+            </div>
+          </dl>
+          <h3 class="mt-2 text-sm font-semibold">{{ c.bindings }}</h3>
+          <div hlmTableContainer class="min-w-0 max-w-full overflow-x-auto">
+            <table hlmTable>
+              <caption class="sr-only" [textContent]="c.bindings"></caption>
+              <thead hlmTHead>
+                <tr hlmTr>
+                  <th hlmTh scope="col">{{ c.step }}</th>
+                  <th hlmTh scope="col">{{ c.locator }}</th>
+                  <th hlmTh scope="col">{{ c.reason }}</th>
+                </tr>
+              </thead>
+              <tbody hlmTBody>
+                @for (s of r.steps; track s.number) {
+                  <tr hlmTr>
+                    <td hlmTd>{{ s.number }} · {{ s.action }}</td>
+                    <td hlmTd>{{ s.binding }}</td>
+                    <td hlmTd>{{ s.reason ?? '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <h3 class="mt-2 text-sm font-semibold">{{ c.lint }}</h3>
+          <p class="text-sm">{{ c.policy }}</p>
+          <div hlmTableContainer class="min-w-0 max-w-full overflow-x-auto">
+            <table hlmTable>
+              <caption class="sr-only" [textContent]="c.lint"></caption>
+              <thead hlmTHead>
+                <tr hlmTr>
+                  <th hlmTh scope="col">{{ c.step }}</th>
+                  <th hlmTh scope="col">{{ c.rule }}</th>
+                  <th hlmTh scope="col">{{ c.result }}</th>
+                </tr>
+              </thead>
+              <tbody hlmTBody>
+                @for (s of r.steps; track s.number) {
+                  <tr hlmTr>
+                    <td hlmTd>{{ s.number }}</td>
+                    <td hlmTd>
+                      <code>{{ s.rule ?? c.notSupplied }}</code>
+                    </td>
+                    <td hlmTd>
+                      {{
+                        state() === 'nolint'
+                          ? c.unavailable
+                          : state() === 'reject' && s.number === '02'
+                            ? c.rejectedLint
+                            : s.lint
+                      }}
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <h3 class="mt-2 text-sm font-semibold">{{ c.attempts }}</h3>
+          @if (r.attempts.length) {
+            <div hlmTableContainer class="min-w-0 max-w-full overflow-x-auto">
+              <table hlmTable>
+                <caption class="sr-only" [textContent]="c.attempts"></caption>
+                <thead hlmTHead>
+                  <tr hlmTr>
+                    <th hlmTh scope="col">{{ c.attempt }}</th>
+                    <th hlmTh scope="col">{{ c.build }}</th>
+                    <th hlmTh scope="col">{{ c.result }}</th>
+                    <th hlmTh scope="col">{{ c.original }}</th>
+                  </tr>
+                </thead>
+                <tbody hlmTBody>
+                  @for (a of r.attempts; track a.number) {
+                    <tr hlmTr>
+                      <td hlmTd>{{ a.number }}</td>
+                      <td hlmTd>
+                        {{
+                          state() === 'mixed' && r.id === 'gs-0042' && a.number === '1'
+                            ? viewModel().earlierBuild
+                            : (a.build ?? c.unavailable)
+                        }}
+                      </td>
+                      <td hlmTd>{{ a.result }}</td>
+                      <td hlmTd>{{ a.detail }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else {
+            <p>{{ c.notEligible }}</p>
+          }
+          <h3 class="mt-2 text-sm font-semibold">{{ c.source }}</h3>
+          <pre
+            class="m-0 min-w-0 whitespace-pre-wrap wrap-anywhere rounded-md bg-(--eg-surface-raised) p-4 font-mono text-sm"
+          ><code>{{r.source}}</code></pre>
+          <div class="flex flex-wrap gap-2">
+            <button hlmBtn type="button" [variant]="'outline'" disabled data-code-action>
+              {{ c.copy }}</button
+            ><button hlmBtn type="button" [variant]="'outline'" disabled data-code-action>
+              {{ c.download }}
+            </button>
+          </div>
+          <p class="text-xs text-muted-foreground">{{ c.exportHint }}</p>
         </div>
-        <p class="text-xs text-muted-foreground">{{ c.exportHint }}</p>
-      </div>
-    </section>
+        <footer hlmDialogFooter class="border-t border-border p-4">
+          <button
+            type="button"
+            hlmBtn
+            hlmDialogClose
+            [variant]="'outline'"
+            class="pointer-coarse:min-h-(--eg-control-touch)"
+          >
+            {{ c.close }}
+          </button>
+        </footer>
+      </hlm-dialog-content>
+    </hlm-dialog>
   }
   <p class="text-xs text-muted-foreground">{{ c.preview }}</p>
 }

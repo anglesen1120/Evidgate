@@ -60,6 +60,10 @@ describe('StudioReviewMergeReviewPage', () => {
     const { fixture, root, params } = render('unrecognized');
     const header = await TestbedHarnessEnvironment.loader(fixture).getHarness(HeaderHarness);
     expect(await header.getTitle()).toBe('Review draft');
+    expect(root.querySelectorAll('[data-patch-pane]')).toHaveLength(2);
+    expect(root.querySelector('app-review-history')).not.toBeNull();
+    expect(root.querySelector('app-review-approval')).not.toBeNull();
+    expect(root.querySelector('[role="tablist"], [role="dialog"]')).toBeNull();
     expect(root.textContent).toContain('d-114');
     params.next(convertToParamMap({ state: 'conflict' }));
     fixture.detectChanges();

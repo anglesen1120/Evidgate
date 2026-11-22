@@ -12,7 +12,7 @@ import { editorCopy } from './editor-copy';
   host: { class: 'grid min-w-0 gap-3' },
   template: `
     <section hlmCard>
-      <header hlmCardHeader>
+      <header hlmCardHeader class="border-b border-border">
         <h2 hlmCardTitle>{{ c.lint }}</h2>
       </header>
       <ul hlmCardContent class="m-0 grid min-w-0 list-none gap-3">
@@ -28,7 +28,7 @@ import { editorCopy } from './editor-copy';
       </ul>
     </section>
     <section hlmCard>
-      <header hlmCardHeader>
+      <header hlmCardHeader class="border-b border-border">
         <h2 hlmCardTitle>{{ c.ai }}</h2>
       </header>
       <div hlmCardContent class="grid min-w-0 gap-2">
@@ -74,7 +74,7 @@ import { editorCopy } from './editor-copy';
       </div>
     </section>
     <section hlmCard>
-      <header hlmCardHeader>
+      <header hlmCardHeader class="border-b border-border">
         <h2 hlmCardTitle>{{ c.boundaries }}</h2>
       </header>
       <p hlmCardContent class="m-0 text-sm text-muted-foreground">{{ c.attribution }}</p>
