@@ -26,7 +26,7 @@ import type { GalleryTemplateViewModel } from './studio-gallery.fixture';
           </h2>
           <div class="flex flex-wrap items-center gap-2">
             <code hlmBadge [variant]="'outline'"
-              ><bdi>{{ item().id }}</bdi></code
+              ><bdi>{{ escapeFormatChars(item().engine) }}</bdi></code
             >
             <span hlmBadge [variant]="'secondary'"
               ><hlm-icon name="lucideInfo" />{{
@@ -79,6 +79,20 @@ import type { GalleryTemplateViewModel } from './studio-gallery.fixture';
           <button hlmBtn [variant]="'outline'" type="button" hlmDialogClose>
             {{ copy.close }}
           </button>
+          @if (!readOnly()) {
+            <button
+              hlmBtn
+              type="button"
+              data-gallery-view-create
+              [disabled]="createDisabled()"
+              (click)="createRequested.emit()"
+            >
+              {{ copy.create
+              }}<span class="sr-only"
+                >&ngsp;<bdi>{{ item().title }}</bdi></span
+              >
+            </button>
+          }
         </footer>
       </hlm-dialog-content>
     </hlm-dialog>
@@ -86,6 +100,9 @@ import type { GalleryTemplateViewModel } from './studio-gallery.fixture';
 })
 export class GalleryTemplateViewComponent {
   readonly item = input.required<GalleryTemplateViewModel>();
+  readonly readOnly = input(false);
+  readonly createDisabled = input(false);
+  readonly createRequested = output<void>();
   readonly dismissed = output<void>();
   protected readonly copy = galleryCopy;
   protected readonly escapeFormatChars = escapeFormatChars;

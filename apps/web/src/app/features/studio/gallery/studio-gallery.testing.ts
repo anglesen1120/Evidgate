@@ -18,6 +18,7 @@ export class ViewHarness extends ComponentHarness {
   readonly close = this.locatorFor('footer button');
   readonly terms = this.locatorForAll('dl dt');
   readonly isolatedFacts = this.locatorForAll('dl dd bdi');
+  readonly create = this.locatorForOptional('[data-gallery-view-create]');
 }
 
 export class BackdropHarness extends ComponentHarness {

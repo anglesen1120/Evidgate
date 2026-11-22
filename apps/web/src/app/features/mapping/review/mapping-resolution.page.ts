@@ -204,7 +204,9 @@ export class MappingResolutionPage {
   protected readonly subtitle = computed(() => {
     if (!this.visibleQueue() || this.exact() === 'unavailable') return undefined;
     const vm = this.viewModel();
-    return [vm.project, vm.producer, vm.report].map(escapeFormatChars).join(' · ');
+    return [vm.project, vm.producer, vm.report, vm.run, vm.evidence]
+      .map(escapeFormatChars)
+      .join(' · ');
   });
   protected readonly counts = computed(() => {
     const counts = { all: 0, unmapped: 0, conflicted: 0, resolved: 0 };

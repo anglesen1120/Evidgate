@@ -51,6 +51,16 @@ export class StudioReviewMergeReviewPage {
   private readonly params = toSignal(this.route.queryParamMap);
   protected readonly view = computed(() => mergeReviewView(this.params()?.get('state') ?? null));
   protected readonly copy = MERGE_COPY;
+  protected readonly headerFacts = computed(() => {
+    const vm = this.view();
+    if (vm.record !== 'studio') return vm.references.project;
+    if (['loading', 'empty', '404', '401', 'error'].includes(vm.state)) return undefined;
+    return [this.copy.draft, this.copy.candidate]
+      .map((label) => vm.identity.find((fact) => fact.label === label)?.value)
+      .filter(Boolean)
+      .concat(this.copy.independent)
+      .join(' · ');
+  });
 
   protected show(state: 'default' | 'reloaded'): void {
     void this.router.navigate([], {

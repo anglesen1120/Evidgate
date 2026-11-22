@@ -30,7 +30,7 @@ type Cell = TemplateRef<DataTableCellContext<Template>>;
   host: { class: 'block min-w-0 [&_tr[data-row-id]]:h-(--eg-space-11)' },
   template: `
     <app-data-table
-      [caption]="copy.title"
+      [caption]="copy.tableCaption"
       [columns]="columns()"
       [rows]="rows()"
       [rowId]="rowId"
@@ -47,10 +47,10 @@ type Cell = TemplateRef<DataTableCellContext<Template>>;
           <strong class="block text-sm font-semibold wrap-anywhere"
             ><bdi>{{ item.title }}</bdi></strong
           >
+          <span class="block text-sm text-muted-foreground"
+            ><bdi>{{ item.intent }}</bdi></span
+          >
           <span class="inline-flex items-center gap-1 text-xs text-muted-foreground">
-            <code
-              ><bdi>{{ item.id }}</bdi></code
-            >
             @if (item.id === selected()) {
               <span data-template-selected class="inline-flex items-center gap-1">
                 <hlm-icon name="lucideCheck" class="size-4" />{{ copy.selected }}
@@ -62,9 +62,6 @@ type Cell = TemplateRef<DataTableCellContext<Template>>;
     </ng-template>
     <ng-template #engine let-item>
       <span class="block">{{ item.engine }}</span>
-      <code class="text-xs text-muted-foreground"
-        ><bdi>{{ item.variant }}</bdi></code
-      >
     </ng-template>
     <ng-template #source let-item>
       <span hlmBadge [variant]="'secondary'" data-template-source>
@@ -122,17 +119,11 @@ export class GalleryTemplateTableComponent {
       },
       {
         id: 'engine',
-        header: this.copy.engineVariant,
+        header: this.copy.framework,
         cell: (item) => item.engine,
         cellTemplate: engine,
       },
       { id: 'source', header: this.copy.source, cell: (item) => item.source, cellTemplate: source },
-      {
-        id: 'assertions',
-        header: this.copy.assertions,
-        cell: (item) => item.assertion,
-        width: { min: '12rem', preferred: '24%' },
-      },
       {
         id: 'actions',
         role: 'actions',

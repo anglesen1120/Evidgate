@@ -150,7 +150,7 @@ export class StudioGalleryReviewPage {
     afterRenderEffect(() => {
       const viewed = this.viewed();
       if (viewed) this.returnTo = viewed.id;
-      else if (this.dialog() && this.showGallery() && this.picked()) this.returnTo = 'create';
+      else if (this.dialog() && this.showGallery() && this.picked()) this.returnTo ??= 'create';
       else if (this.returnTo) {
         const target = this.returnTo;
         this.returnTo = null;
@@ -173,7 +173,9 @@ export class StudioGalleryReviewPage {
   }
 
   protected openDraft(): void {
-    if (!this.locked() && !this.policy.narrow()) this.dialog.set('preview');
+    if (this.locked() || this.policy.narrow()) return;
+    this.viewed.set(null);
+    this.dialog.set('preview');
   }
 
   protected closeDraft(): void {

@@ -1,6 +1,10 @@
 export const galleryCopy = {
   historical: $localize`:@@review.gallery.historical:Historical reference · G4`,
   title: $localize`:@@review.gallery.title:Template gallery`,
+  facts: (count: number) =>
+    $localize`:@@review.gallery.header-facts:${count}:COUNT: templates · Historical Studio reference · Sandbox only`,
+  tableCaption: $localize`:@@review.gallery.table-caption:Studio templates`,
+  framework: $localize`:@@review.gallery.framework:Framework`,
   description: $localize`:@@review.gallery.description:Choose a template and define what the test must prove. Drafts are not gate-eligible.`,
   loading: $localize`:@@review.gallery.loading:Loading the supplied fixture…`,
   empty: $localize`:@@review.gallery.empty:No templates are available in this project.`,

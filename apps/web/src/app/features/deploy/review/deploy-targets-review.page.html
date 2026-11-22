@@ -65,13 +65,16 @@
     />
   }
   @if (visible()) {
-    <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+    <div
+      hlmCard
+      class="grid min-w-0 grid-cols-1 gap-px overflow-hidden bg-border p-0 sm:grid-cols-2 md:grid-cols-4"
+    >
       @for (metric of metrics(); track metric.title) {
-        <section hlmCard class="min-w-0 gap-2 p-4">
-          <h2 class="m-0 flex items-center gap-2 text-sm font-semibold">
+        <section class="grid min-w-0 content-start gap-2 bg-card p-4">
+          <h2 class="m-0 flex items-center gap-2 text-sm font-semibold wrap-normal break-normal">
             <hlm-icon [name]="metric.icon" class="size-6 rounded bg-muted p-1" />{{ metric.title }}
           </h2>
-          <strong class="text-end text-2xl tabular-nums">{{
+          <strong class="font-(family-name:--eg-font-display) text-2xl tabular-nums">{{
             metric.value === null ? copy.unavailableValue : metric.value.toString().padStart(2, '0')
           }}</strong
           ><span class="text-xs text-muted-foreground">{{ metric.hint }}</span>

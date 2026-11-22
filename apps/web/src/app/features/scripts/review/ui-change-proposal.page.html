@@ -5,9 +5,18 @@
   >
     <hlm-icon name="lucideActivity" class="size-6" />
   </span>
-  <app-page-header class="min-w-0 flex-1" [title]="c.title" [description]="v.project">
-    <div appPageHeaderActions class="text-xs text-muted-foreground">
+  <app-page-header
+    class="min-w-0 flex-1"
+    [title]="c.title"
+    [description]="
+      notice()?.replace
+        ? v.project
+        : v.id + ' · ' + v.incident + ' · ' + v.manualCase + ' ' + v.baseVersion
+    "
+  >
+    <div appPageHeaderActions class="grid gap-1 text-xs text-muted-foreground">
       <span>{{ c.asOf }} <app-absolute-time [value]="v.asOf" /></span>
+      <bdi>{{ v.project }}</bdi>
     </div>
   </app-page-header>
 </div>
@@ -47,10 +56,13 @@
   @if (policy.narrow()) {
     <p class="text-sm text-muted-foreground">{{ c.narrow }}</p>
   }
-  <div class="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-4">
+  <div
+    hlmCard
+    class="grid min-w-0 grid-cols-1 gap-px overflow-hidden bg-border p-0 sm:grid-cols-2 md:grid-cols-4"
+  >
     @for (m of viewModel().metrics; track m.title) {
-      <section hlmCard [size]="'sm'" class="min-w-0 gap-3 p-4 wrap-anywhere">
-        <h2 class="flex items-center gap-2 text-sm font-semibold">
+      <section class="grid min-w-0 content-start gap-3 bg-card p-4">
+        <h2 class="flex items-center gap-2 text-sm font-semibold wrap-normal break-normal">
           <span
             class="flex size-8 shrink-0 items-center justify-center rounded-md bg-(--eg-accent-soft) text-(--eg-accent)"
             ><hlm-icon class="size-4" [name]="m.icon" /></span
@@ -221,14 +233,14 @@
                   hlmBtn
                   hlmDialogTrigger
                   [variant]="'outline'"
-                  class="h-auto min-h-(--eg-control-touch) whitespace-normal"
+                  class="min-h-(--eg-control-touch) whitespace-nowrap"
                 >
                   {{ c.reject }}</button
                 ><hlm-dialog-content
                   *hlmDialogPortal
                   [showCloseButton]="false"
-                  class="max-h-[90dvh] min-w-0 overflow-y-auto"
-                  ><header hlmDialogHeader>
+                  class="grid max-h-[calc(100dvh-var(--eg-space-8))] w-[min(760px,calc(100vw-var(--eg-space-8)))] min-w-0 max-w-none grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 max-[599px]:h-dvh max-[599px]:max-h-dvh max-[599px]:w-screen max-[599px]:rounded-none"
+                  ><header hlmDialogHeader class="border-b border-border p-5">
                     <h2 hlmDialogTitle class="flex items-center gap-2">
                       <hlm-icon
                         name="lucideTriangleAlert"
@@ -241,24 +253,26 @@
                     </p>
                     <p class="text-sm text-muted-foreground">{{ c.rejectHelp }}</p>
                   </header>
-                  <label hlmLabel for="rejection-reason">{{ c.rejectReason }}</label
-                  ><textarea
-                    hlmInput
-                    id="rejection-reason"
-                    rows="3"
-                    required
-                    #why
-                    [value]="reason()"
-                    [attr.aria-invalid]="invalid()"
-                    [attr.aria-describedby]="invalid() ? 'reject-error' : null"
-                    (input)="reason.set(why.value); invalid.set(false)"
-                  ></textarea>
-                  @if (invalid()) {
-                    <p id="reject-error" role="alert" class="text-(--eg-danger-fg)">
-                      {{ c.required }}
-                    </p>
-                  }
-                  <footer hlmDialogFooter>
+                  <div class="grid min-h-0 gap-3 overflow-y-auto overscroll-contain p-5">
+                    <label hlmLabel for="rejection-reason">{{ c.rejectReason }}</label
+                    ><textarea
+                      hlmInput
+                      id="rejection-reason"
+                      rows="3"
+                      required
+                      #why
+                      [value]="reason()"
+                      [attr.aria-invalid]="invalid()"
+                      [attr.aria-describedby]="invalid() ? 'reject-error' : null"
+                      (input)="reason.set(why.value); invalid.set(false)"
+                    ></textarea>
+                    @if (invalid()) {
+                      <p id="reject-error" role="alert" class="text-(--eg-danger-fg)">
+                        {{ c.required }}
+                      </p>
+                    }
+                  </div>
+                  <footer hlmDialogFooter class="border-t border-border p-4">
                     <button
                       data-cancel
                       type="button"
@@ -283,14 +297,14 @@
                   hlmBtn
                   hlmDialogTrigger
                   [variant]="'default'"
-                  class="h-auto min-h-(--eg-control-touch) whitespace-normal"
+                  class="min-h-(--eg-control-touch) whitespace-nowrap"
                 >
                   {{ c.queue }}</button
                 ><hlm-dialog-content
                   *hlmDialogPortal
                   [showCloseButton]="false"
-                  class="max-h-[90dvh] min-w-0 overflow-y-auto"
-                  ><header hlmDialogHeader>
+                  class="grid max-h-[calc(100dvh-var(--eg-space-8))] w-[min(760px,calc(100vw-var(--eg-space-8)))] min-w-0 max-w-none grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 max-[599px]:h-dvh max-[599px]:max-h-dvh max-[599px]:w-screen max-[599px]:rounded-none"
+                  ><header hlmDialogHeader class="border-b border-border p-5">
                     <h2 hlmDialogTitle class="flex items-center gap-2">
                       <hlm-icon name="lucideClock" class="size-5 shrink-0 text-muted-foreground" />
                       {{ c.queue }}
@@ -300,23 +314,25 @@
                     </p>
                     <p class="text-sm text-muted-foreground">{{ c.queueHelp }}</p>
                   </header>
-                  <dl
-                    class="m-0 grid min-w-0 text-sm [&>div]:grid [&>div]:items-baseline [&>div]:gap-x-3 [&>div]:gap-y-1 [&>div]:border-b [&>div]:border-(--eg-border) [&>div]:py-2 sm:[&>div]:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:wrap-anywhere [&_dd]:font-semibold"
-                  >
-                    <div>
-                      <dt>{{ c.proposalIncident }}</dt>
-                      <dd>{{ v.id }} · {{ v.incident }}</dd>
-                    </div>
-                    <div>
-                      <dt>{{ c.caseBase }}</dt>
-                      <dd>{{ v.manualCase }} · {{ v.baseVersion }}</dd>
-                    </div>
-                    <div>
-                      <dt>{{ c.destination }}</dt>
-                      <dd>{{ c.batch }}</dd>
-                    </div>
-                  </dl>
-                  <footer hlmDialogFooter>
+                  <div class="min-h-0 overflow-y-auto overscroll-contain p-5">
+                    <dl
+                      class="m-0 grid min-w-0 text-sm [&>div]:grid [&>div]:items-baseline [&>div]:gap-x-3 [&>div]:gap-y-1 [&>div]:border-b [&>div]:border-(--eg-border) [&>div]:py-2 sm:[&>div]:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:wrap-anywhere [&_dd]:font-semibold"
+                    >
+                      <div>
+                        <dt>{{ c.proposalIncident }}</dt>
+                        <dd>{{ v.id }} · {{ v.incident }}</dd>
+                      </div>
+                      <div>
+                        <dt>{{ c.caseBase }}</dt>
+                        <dd>{{ v.manualCase }} · {{ v.baseVersion }}</dd>
+                      </div>
+                      <div>
+                        <dt>{{ c.destination }}</dt>
+                        <dd>{{ c.batch }}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                  <footer hlmDialogFooter class="border-t border-border p-4">
                     <button
                       data-cancel
                       type="button"
@@ -366,8 +382,14 @@
                   @for (row of v.comparison; track row.field) {
                     <tr hlmTr>
                       <th hlmTh scope="row">{{ row.field }}</th>
-                      <td hlmTd class="whitespace-normal wrap-anywhere">{{ row.approved }}</td>
-                      <td hlmTd class="whitespace-normal wrap-anywhere bg-(--eg-accent-soft)">
+                      <td hlmTd class="whitespace-normal wrap-normal break-normal">
+                        {{ row.approved }}
+                      </td>
+                      <td
+                        hlmTd
+                        class="whitespace-normal wrap-normal break-normal"
+                        [class.bg-(--eg-accent-soft)]="row.field !== c.data"
+                      >
                         {{ row.proposed }}
                       </td>
                     </tr>

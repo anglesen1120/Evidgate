@@ -7,9 +7,9 @@
   <hlm-dialog-content
     *hlmDialogPortal
     [showCloseButton]="false"
-    class="grid max-h-[calc(100dvh-var(--eg-space-8))] max-w-[min(560px,calc(100vw-var(--eg-space-8)))] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 wrap-anywhere"
+    class="grid max-h-[calc(100dvh-var(--eg-space-8))] w-[min(760px,calc(100vw-var(--eg-space-8)))] max-w-none grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 max-[599px]:h-dvh max-[599px]:max-h-dvh max-[599px]:w-screen max-[599px]:rounded-none"
   >
-    <header hlmDialogHeader class="p-5 text-start">
+    <header hlmDialogHeader class="border-b border-border p-5 text-start">
       <h2 hlmDialogTitle class="flex items-center gap-2">
         <hlm-icon
           [name]="mode() === 'dismiss' ? 'lucideTriangleAlert' : 'lucideActivity'"
@@ -24,7 +24,7 @@
       </p>
       <p hlmDialogDescription>{{ copy.unchanged }}</p>
     </header>
-    <div class="grid min-h-0 gap-4 overflow-y-auto p-5">
+    <div class="grid min-h-0 min-w-0 gap-4 overflow-y-auto overscroll-contain p-5 wrap-anywhere">
       @if (mode() === 'bind') {
         <div class="grid gap-2">
           <label hlmLabel for="mapping-case-search">{{ copy.search }}</label
@@ -71,7 +71,7 @@
         </bdi>
       </div>
     </div>
-    <footer hlmDialogFooter class="p-4">
+    <footer hlmDialogFooter class="border-t border-border p-4">
       <button hlmBtn [variant]="'outline'" type="button" data-cancel (click)="cancel()">
         {{ copy.cancel }}
       </button>

@@ -1,5 +1,10 @@
 <div class="flex flex-wrap items-center gap-2">
   <app-status-pill [tone]="'neutral'" [label]="c.history" />
+  @if (hasDraft()) {
+    <code class="text-xs"
+      ><bdi>{{ model().project }}</bdi></code
+    >
+  }
 </div>
 <div class="flex min-w-0 items-start gap-(--eg-space-4)">
   <span
@@ -10,7 +15,15 @@
   <app-page-header
     class="min-w-0 flex-1 [&_h1]:text-(length:--eg-leading-md)"
     [title]="c.title"
-    [description]="hasDraft() ? model().project + ' · ' + model().stableCase : undefined"
+    [description]="
+      hasDraft()
+        ? model().stableCase +
+          ' · ' +
+          (state() === 'passed' ? model().reviewed.revision : model().revision) +
+          ' · ' +
+          c.sandboxOnly
+        : undefined
+    "
   >
     @if (hasDraft()) {
       <button

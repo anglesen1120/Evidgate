@@ -7,8 +7,11 @@
   (stateChanged)="$event === 'closed' && dismissed.emit()"
 >
   <hlm-dialog-content *hlmDialogPortal [showCloseButton]="false" class="mapping-view">
-    <header hlmDialogHeader class="relative p-5 pe-16 text-start">
+    <header hlmDialogHeader class="relative border-b border-border p-5 pe-16 text-start">
       <h2 hlmDialogTitle data-mapping-view-title tabindex="-1">{{ copy.details }}</h2>
+      <p class="text-sm text-muted-foreground">
+        <bdi>{{ display(record.name) }}</bdi>
+      </p>
       <div class="flex min-w-0 flex-wrap items-center gap-2">
         <span hlmBadge [variant]="'outline'" class="max-w-full whitespace-normal font-mono">
           <bdi class="wrap-anywhere">{{ display(record.id) }}</bdi>
@@ -36,7 +39,9 @@
       </p>
       <dl class="m-0 grid gap-3">
         @for (fact of facts(); track fact[0]) {
-          <div class="grid min-w-0 gap-1 min-[480px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+          <div
+            class="grid min-w-0 gap-1 border-b border-border pb-3 min-[480px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]"
+          >
             <dt class="text-muted-foreground">{{ fact[0] }}</dt>
             <dd class="m-0 font-medium">
               <bdi>{{ display(fact[1] ?? '') }}</bdi>
@@ -61,7 +66,9 @@
         </div>
       </dl>
       <section class="grid gap-2 border-t border-border pt-4">
-        <h3 class="font-semibold">{{ copy.candidateCases }}</h3>
+        <h3 class="font-semibold">
+          {{ copy.candidateCases }} <span class="tabular-nums">{{ record.candidates.length }}</span>
+        </h3>
         @if (record.candidates.length) {
           <ul class="m-0 grid list-none divide-y divide-border p-0">
             @for (candidate of record.candidates; track candidate.id) {
@@ -82,7 +89,7 @@
       }
       <app-desktop-required-notice />
     </div>
-    <footer hlmDialogFooter class="p-4">
+    <footer hlmDialogFooter class="border-t border-border p-4">
       <button hlmBtn hlmDialogClose type="button" [variant]="'outline'">{{ copy.close }}</button>
     </footer>
   </hlm-dialog-content>

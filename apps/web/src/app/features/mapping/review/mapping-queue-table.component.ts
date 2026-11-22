@@ -108,10 +108,10 @@ export class MappingQueueTableComponent {
     },
     {
       id: 'candidates',
-      header: this.copy.candidateCases,
-      role: 'number',
-      width: { min: '12ch', preferred: '12ch' },
-      cell: (row) => row.candidates.length,
+      header: this.copy.suggestion,
+      role: 'text',
+      width: { min: '20ch', preferred: '32ch' },
+      cell: (row) => row.suggestion,
     },
     {
       id: 'actions',

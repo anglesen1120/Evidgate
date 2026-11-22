@@ -35,7 +35,8 @@
 }
 
 .record-header h2 {
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .target-directory th[scope='col'] {

@@ -5,9 +5,10 @@
   >
     <hlm-icon name="lucideActivity" class="size-6" />
   </span>
-  <app-page-header class="min-w-0 flex-1" [title]="c.title" [description]="viewModel().project">
-    <div appPageHeaderActions class="text-xs text-muted-foreground">
+  <app-page-header class="min-w-0 flex-1" [title]="c.title" [description]="c.intro">
+    <div appPageHeaderActions class="grid gap-1 text-xs text-muted-foreground">
       <span>{{ c.asOf }} <app-absolute-time [value]="viewModel().asOf" /></span>
+      <bdi>{{ escapeFormatChars(viewModel().project) }}</bdi>
     </div>
   </app-page-header>
 </div>
@@ -49,10 +50,13 @@
   }
 }
 @if (showRecords) {
-  <div class="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-4">
+  <div
+    hlmCard
+    class="grid min-w-0 grid-cols-1 gap-px overflow-hidden bg-border p-0 sm:grid-cols-2 md:grid-cols-4"
+  >
     @for (m of viewModel().metrics; track m.title) {
-      <section hlmCard [size]="'sm'" class="min-w-0 gap-3 p-4 wrap-anywhere">
-        <h2 class="flex items-center gap-2 text-sm font-semibold">
+      <section class="grid min-w-0 content-start gap-3 bg-card p-4">
+        <h2 class="flex items-center gap-2 text-sm font-semibold wrap-normal break-normal">
           <span
             class="flex size-8 shrink-0 items-center justify-center rounded-md bg-(--eg-accent-soft) text-(--eg-accent)"
             ><hlm-icon class="size-4" [name]="m.icon" /></span
@@ -160,11 +164,7 @@
         class="max-w-full min-w-0 overflow-x-auto"
       >
         <table hlmTable [attr.aria-busy]="state() === 'loading' ? 'true' : null">
-          <caption class="sr-only">
-            {{
-              c.inventory
-            }}
-          </caption>
+          <caption class="sr-only" [textContent]="c.inventory"></caption>
           <thead hlmTHead>
             <tr hlmTr>
               @for (h of columns; track h.label) {
@@ -313,7 +313,7 @@
       (closed)="closeView()"
     >
       <hlm-dialog-content *hlmDialogPortal class="script-details" [showCloseButton]="false">
-        <header hlmDialogHeader class="relative pe-(--eg-control-touch)">
+        <header hlmDialogHeader class="relative border-b border-border p-5 pe-16">
           <h2 hlmDialogTitle tabindex="-1">{{ c.details }}</h2>
           <div class="flex min-w-0 flex-wrap items-center gap-2">
             <bdi class="rounded border border-(--eg-border) px-2 py-1 font-mono text-xs">{{
@@ -327,7 +327,7 @@
             hlmDialogClose
             [variant]="'ghost'"
             [size]="'icon'"
-            class="absolute end-0 top-0 pointer-coarse:size-(--eg-control-touch)"
+            class="absolute end-3 top-3 pointer-coarse:size-(--eg-control-touch)"
             [attr.aria-label]="c.close"
           >
             <hlm-icon name="lucideX" />
@@ -337,7 +337,7 @@
           role="region"
           [attr.aria-label]="escapeFormatChars(r.title)"
           tabindex="0"
-          class="grid min-h-0 min-w-0 auto-rows-max content-start gap-3 overflow-y-auto overscroll-contain pe-1"
+          class="grid min-h-0 min-w-0 auto-rows-max content-start gap-3 overflow-y-auto overscroll-contain p-5"
         >
           <p hlmDialogDescription>
             <bdi>{{ escapeFormatChars(r.title) }}</bdi>
@@ -377,11 +377,7 @@
           <h3 class="mt-2 text-sm font-semibold">{{ c.bindings }}</h3>
           <div hlmTableContainer class="min-w-0 max-w-full overflow-x-auto">
             <table hlmTable>
-              <caption class="sr-only">
-                {{
-                  c.bindings
-                }}
-              </caption>
+              <caption class="sr-only" [textContent]="c.bindings"></caption>
               <thead hlmTHead>
                 <tr hlmTr>
                   <th hlmTh scope="col">{{ c.step }}</th>
@@ -404,11 +400,7 @@
           <p class="text-sm">{{ c.policy }}</p>
           <div hlmTableContainer class="min-w-0 max-w-full overflow-x-auto">
             <table hlmTable>
-              <caption class="sr-only">
-                {{
-                  c.lint
-                }}
-              </caption>
+              <caption class="sr-only" [textContent]="c.lint"></caption>
               <thead hlmTHead>
                 <tr hlmTr>
                   <th hlmTh scope="col">{{ c.step }}</th>
@@ -441,11 +433,7 @@
           @if (r.attempts.length) {
             <div hlmTableContainer class="min-w-0 max-w-full overflow-x-auto">
               <table hlmTable>
-                <caption class="sr-only">
-                  {{
-                    c.attempts
-                  }}
-                </caption>
+                <caption class="sr-only" [textContent]="c.attempts"></caption>
                 <thead hlmTHead>
                   <tr hlmTr>
                     <th hlmTh scope="col">{{ c.attempt }}</th>
@@ -488,7 +476,7 @@
           </div>
           <p class="text-xs text-muted-foreground">{{ c.exportHint }}</p>
         </div>
-        <footer hlmDialogFooter>
+        <footer hlmDialogFooter class="border-t border-border p-4">
           <button
             type="button"
             hlmBtn

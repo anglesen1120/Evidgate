@@ -1,16 +1,14 @@
 <div class="context flex flex-wrap items-center gap-2">
   <span hlmBadge [variant]="'secondary'"><hlm-icon name="lucideInfo" />{{ copy.historical }}</span>
+  <code class="text-xs"
+    ><bdi>{{ viewModel().scope }}</bdi></code
+  >
 </div>
 <div class="flex min-w-0 items-start gap-(--eg-space-4)">
-  <span
-    class="grid size-(--eg-space-9) shrink-0 place-items-center rounded-(--eg-radius-md) border border-border bg-(--eg-accent-soft) text-primary md:size-(--eg-space-10)"
-  >
-    <app-shell-icon [name]="'grid'" />
-  </span>
   <app-page-header
     class="min-w-0 flex-1 [&_h1]:text-(length:--eg-leading-md)"
     [title]="copy.title"
-    [description]="viewModel().scope"
+    [description]="showGallery() ? copy.facts(viewModel().templates.length) : undefined"
   >
     @if (showGallery() && !policy.narrow()) {
       <button
@@ -156,7 +154,13 @@
 }
 @if (showGallery()) {
   @if (viewed(); as item) {
-    <app-gallery-template-view [item]="item" (dismissed)="viewed.set(null)" />
+    <app-gallery-template-view
+      [item]="item"
+      [readOnly]="policy.narrow()"
+      [createDisabled]="locked()"
+      (createRequested)="openDraft()"
+      (dismissed)="viewed.set(null)"
+    />
   } @else if (picked(); as selected) {
     @if (dialog(); as mode) {
       <app-gallery-draft-dialog

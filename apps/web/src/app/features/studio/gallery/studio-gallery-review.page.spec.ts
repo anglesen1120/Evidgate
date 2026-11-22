@@ -39,8 +39,8 @@ describe('StudioGalleryReviewPage', () => {
   afterEach(() => TestBed.resetTestingModule());
 
   it.each([
-    ['default', 'Required assertions', 3],
-    ['unknown', 'Required assertions', 3],
+    ['default', 'Studio templates', 3],
+    ['unknown', 'Studio templates', 3],
     ['loading', 'Loading the supplied fixture', 0],
     ['empty', 'No templates are available', 0],
     ['no-match', 'No results match', 0],
@@ -119,16 +119,61 @@ describe('StudioGalleryReviewPage', () => {
     expect(await (await dialog.host()).text()).toContain('No draft ID has been assigned');
   });
 
+  it('opens draft preview for the viewed non-first template and returns to that row', async () => {
+    const { page, overlay } = await render();
+    const [, api] = await page.pick();
+    if (!api) throw new Error('Expected the API row');
+    await api.click();
+    const view = await overlay.getHarness(ViewHarness);
+    const create = await view.create();
+    if (!create) throw new Error('Expected View draft action');
+    await create.click();
+    expect(await overlay.hasHarness(ViewHarness)).toBe(false);
+    const draft = await overlay.getHarness(DraftHarness);
+    expect(await (await draft.assertion()).getProperty('value')).toBe(
+      galleryFixture.templates[1]?.assertion,
+    );
+    expect(await (await draft.template()).text()).toContain('API order authorization');
+    await (await draft.cancel()).click();
+    expect(await api.isFocused()).toBe(true);
+  });
+
+  it.each(['403', '412', '429', 'success'])(
+    'keeps the View draft action disabled in locked state %s',
+    async (state) => {
+      const { page, overlay } = await render(state);
+      const [, api] = await page.pick();
+      if (!api) throw new Error('Expected the API row');
+      await api.click();
+      const view = await overlay.getHarness(ViewHarness);
+      const create = await view.create();
+      if (!create) throw new Error('Expected View draft action');
+      expect(await create.getProperty('disabled')).toBe(true);
+    },
+  );
+
+  it('omits the View draft action on narrow viewports', async () => {
+    const { page, overlay } = await render(undefined, false);
+    const [, api] = await page.pick();
+    if (!api) throw new Error('Expected the API row');
+    await api.click();
+    const view = await overlay.getHarness(ViewHarness);
+    expect(await view.create()).toBeNull();
+  });
+
   it('opens one labelled View from the table, focuses its title and returns focus on Escape', async () => {
     const { page, overlay } = await render();
     expect(await (await page.table()).getAttribute('aria-labelledby')).toBeTruthy();
     expect(await Promise.all((await page.headers()).map((cell) => cell.text()))).toEqual([
       'Template',
-      'Engine / variant',
+      'Framework',
       'Template source',
-      'Required assertions',
       'Actions',
     ]);
+    const rows = await page.rows();
+    for (const [index, item] of galleryFixture.templates.entries()) {
+      expect(await rows[index]?.text()).toContain(item.intent);
+    }
     const [, api] = await page.pick();
     if (!api) throw new Error('Expected the API template');
     await api.focus();
@@ -150,8 +195,23 @@ describe('StudioGalleryReviewPage', () => {
         'Required assertions',
         'Cleanup',
         'Test intent',
+        'Engine / variant',
       ]),
     );
+    const details = await (await view.host()).text();
+    const template = galleryFixture.templates.find((item) => item.id === 'api');
+    if (!template) throw new Error('Expected the API fixture');
+    for (const value of [
+      template.intent,
+      template.precondition,
+      template.action,
+      template.assertion,
+      template.cleanup,
+      template.engine,
+      template.variant,
+    ]) {
+      expect(details).toContain(value);
+    }
     await title.sendKeys(TestKey.ESCAPE);
     expect(await overlay.hasHarness(ViewHarness)).toBe(false);
     expect(await api.isFocused()).toBe(true);

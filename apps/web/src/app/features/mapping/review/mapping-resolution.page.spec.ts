@@ -25,7 +25,7 @@ class MappingHarness extends ComponentHarness {
   readonly table = this.locatorFor('[role="table"]');
   readonly caption = this.locatorFor('app-data-table .caption');
   readonly columns = this.locatorForAll('[role="columnheader"]');
-  readonly candidateCount = (id: string) =>
+  readonly suggestion = (id: string) =>
     this.locatorFor(`[data-row-id="${id}"] [data-column-id="candidates"]`)();
   readonly modal = this.documentRootLocatorFactory().locatorForOptional('[role="dialog"]');
   readonly dialogTitle = this.documentRootLocatorFactory().locatorFor('[role="dialog"] h2');
@@ -97,11 +97,13 @@ describe('Mapping resolution review', () => {
     expect(await Promise.all((await page.columns()).map((column) => column.text()))).toEqual([
       'Imported identity',
       'Mapping state',
-      'Candidate cases',
+      'Suggested case',
       'Actions',
     ]);
-    expect(await (await page.candidateCount('map-62')).text()).toBe('5');
-    expect(await (await page.candidateCount('map-63')).text()).toBe('2');
+    expect(await (await page.suggestion('map-62')).text()).toBe('No proposed case');
+    expect(await (await page.suggestion('map-63')).text()).toBe(
+      'case-checkout-17 / case-checkout-22',
+    );
     const trigger = await page.pickConflict();
     expect(await trigger.text()).toContain('Checkout confirmation');
     const url = TestBed.inject(Router).url;
@@ -116,6 +118,7 @@ describe('Mapping resolution review', () => {
     const text = await dialog?.text();
     expect(text).toContain('Checkout confirms order');
     expect(text).toContain('Suggested stable identity');
+    expect(text).toContain('Candidate cases 2');
     expect(text).not.toContain('Address formats postcode');
     expect(text).toContain('failed · attempt 1');
     expect(text).toContain('case:write');
@@ -138,10 +141,11 @@ describe('Mapping resolution review', () => {
 
   it('shows resolved history without inventing candidates or offering an edit', async () => {
     const page = await open('?mapping=map-64');
-    expect(await (await page.candidateCount('map-64')).text()).toBe('0');
+    expect(await (await page.suggestion('map-64')).text()).toBe('SHOP-TC-0042 · v5');
     const trigger = await page.pickResolved();
     await trigger.click();
     expect(await (await page.modal())?.text()).toContain('No candidate cases supplied.');
+    expect(await (await page.modal())?.text()).toContain('Candidate cases 0');
     expect(await (await page.modal())?.text()).not.toContain('Confirm preview');
     await (await page.headerClose()).click();
     expect(await page.modal()).toBeNull();

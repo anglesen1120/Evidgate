@@ -169,10 +169,13 @@
   </section>
 } @else {
   <app-desktop-required-notice />
-  <div class="grid min-w-0 grid-cols-2 gap-(--eg-space-3) md:grid-cols-4 lg:gap-(--eg-space-4)">
+  <div
+    hlmCard
+    class="grid min-w-0 grid-cols-1 gap-px overflow-hidden bg-border p-0 sm:grid-cols-2 md:grid-cols-4"
+  >
     @for (metric of metrics(); track metric.key) {
-      <article hlmCard class="grid min-w-0 content-start gap-1 p-4 wrap-anywhere">
-        <h2 class="mb-2 flex items-center gap-2 text-sm font-semibold">
+      <article class="grid min-w-0 content-start gap-1 bg-card p-4">
+        <h2 class="mb-2 flex items-center gap-2 text-sm font-semibold wrap-normal break-normal">
           <span
             class="grid size-7 shrink-0 place-items-center rounded-md"
             [class]="
@@ -192,7 +195,7 @@
       </article>
     }
   </div>
-  <div class="mt-(--eg-space-8) grid min-w-0 gap-(--eg-space-7)">
+  <div class="mt-(--eg-space-7) grid min-w-0 gap-(--eg-space-7)">
     <section hlmCard data-queue aria-labelledby="mapping-queue-title" class="min-w-0 gap-0 py-0">
       <header class="grid min-w-0 gap-3 border-b border-border p-4">
         <h2 hlmCardTitle #queueHeading tabindex="-1" id="mapping-queue-title">{{ copy.queue }}</h2>
