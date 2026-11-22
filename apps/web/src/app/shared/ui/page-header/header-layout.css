@@ -62,9 +62,3 @@
     margin-inline-start: var(--eg-space-0);
   }
 }
-
-/* The design scale has no 24px step; the page title sits between the xl and 2xl tokens. */
-.header-copy h1 {
-  font-size: 1.5rem;
-  line-height: 2rem;
-}
