@@ -6,13 +6,16 @@ import {
   BrnDialogService,
   cssClassesToArray,
 } from '@spartan-ng/brain/dialog';
-import { HlmDialogContent } from './hlm-dialog-content';
+import { HlmDialogContent, type HlmDialogSize } from './hlm-dialog-content';
 import { hlmDialogOverlayClass } from './hlm-dialog-overlay';
 
 export type HlmDialogOptions<DialogContext = unknown> = BrnDialogOptions & {
   contentClass?: string;
   showCloseButton?: boolean;
   closeLabel?: string;
+  size?: HlmDialogSize;
+  /** Return false to keep the draft open. Force-close on teardown remains unconditional. */
+  closeGuard?: () => boolean;
   context?: DialogContext;
 };
 
@@ -39,6 +42,8 @@ export class HlmDialogService {
         $dynamicComponentClass: options?.contentClass,
         $showCloseButton: options?.showCloseButton,
         $closeLabel: options?.closeLabel,
+        $size: options?.size,
+        $closeGuard: options?.closeGuard,
       },
     };
 

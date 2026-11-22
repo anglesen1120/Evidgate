@@ -2135,6 +2135,15 @@
           <context context-type="linenumber">70,76</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="shell.overview.title" datatype="html">
+        <source>Project overview</source>
+      </trans-unit>
+      <trans-unit id="shell.overview.scope-line" datatype="html">
+        <source><x id="slug" equiv-text="project.slug"/> · Case prefix: <x id="prefix" equiv-text="project.case_prefix"/></source>
+      </trans-unit>
+      <trans-unit id="shell.overview.no-shortcuts" datatype="html">
+        <source>No shortcuts available for this project</source>
+      </trans-unit>
       <trans-unit id="runs.detail.test-outcome" datatype="html">
         <source>Test outcome</source>
       </trans-unit>
@@ -16598,6 +16607,91 @@
       <trans-unit id="shared.gallery.sheet.copy-policy" datatype="html"><source>Review policy</source></trans-unit>
       <trans-unit id="shared.gallery.sheet.copy-policy-hint" datatype="html"><source>Approval authorizes a shadow run, not a release.</source></trans-unit>
       <trans-unit id="shared.gallery.sheet.copy-reviewer" datatype="html"><source>Reviewer</source></trans-unit>
+      <trans-unit id="shared.gallery.members.title" datatype="html"><source>Members and roles</source></trans-unit>
+      <trans-unit id="shared.gallery.members.directory" datatype="html"><source>Directory</source></trans-unit>
+      <trans-unit id="shared.gallery.members.table-states" datatype="html"><source>Table examples</source></trans-unit>
+      <trans-unit id="shared.gallery.members.invitation-review" datatype="html"><source>Invitation review</source></trans-unit>
+      <trans-unit id="shared.gallery.members.invitation-summary" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ counts().active }}"/> active · <x id="INTERPOLATION_1" equiv-text="{{ counts().pending }}"/> awaiting acceptance</source></trans-unit>
+      <trans-unit id="shared.gallery.members.latest-change" datatype="html"><source>Latest sample change</source></trans-unit>
+      <trans-unit id="shared.gallery.members.specimen" datatype="html"><source>Sample data. Changes apply only to this example.</source></trans-unit>
+      <trans-unit id="shared.gallery.members.caption" datatype="html"><source>Sample members</source></trans-unit>
+      <trans-unit id="shared.gallery.members.email" datatype="html"><source>Member email</source></trans-unit>
+      <trans-unit id="shared.gallery.members.roles" datatype="html"><source>Roles</source></trans-unit>
+      <trans-unit id="shared.gallery.members.projects" datatype="html"><source>Projects</source></trans-unit>
+      <trans-unit id="shared.gallery.members.actions" datatype="html"><source>Actions</source></trans-unit>
+      <trans-unit id="shared.gallery.members.active" datatype="html"><source>Active</source></trans-unit>
+      <trans-unit id="shared.gallery.members.pending" datatype="html"><source>Invite pending</source></trans-unit>
+      <trans-unit id="shared.gallery.members.all" datatype="html"><source>All</source></trans-unit>
+      <trans-unit id="shared.gallery.members.viewer" datatype="html"><source>Viewer</source></trans-unit>
+      <trans-unit id="shared.gallery.members.view" datatype="html"><source>View</source></trans-unit>
+      <trans-unit id="shared.gallery.members.edit" datatype="html"><source>Edit</source></trans-unit>
+      <trans-unit id="shared.gallery.members.details" datatype="html"><source>Member details</source></trans-unit>
+      <trans-unit id="shared.gallery.members.edit-roles" datatype="html"><source>Edit organization roles</source></trans-unit>
+      <trans-unit id="shared.gallery.members.save" datatype="html"><source>Save roles</source></trans-unit>
+      <trans-unit id="shared.gallery.members.keep" datatype="html"><source>Keep editing</source></trans-unit>
+      <trans-unit id="shared.gallery.members.discard" datatype="html"><source>Discard changes</source></trans-unit>
+      <trans-unit id="shared.gallery.members.confirm" datatype="html"><source>Discard unsaved changes?</source></trans-unit>
+      <trans-unit id="shared.gallery.members.discard-hint" datatype="html"><source>The sample member will keep their previous roles.</source></trans-unit>
+      <trans-unit id="shared.gallery.members.narrow" datatype="html"><source>View only on this screen. Use a desktop to edit roles.</source></trans-unit>
+      <trans-unit id="shared.gallery.members.base-role" datatype="html"><source>Every sample member has the Viewer role.</source></trans-unit>
+      <trans-unit id="shared.gallery.members.subtitle" datatype="html"><source>Members: <x id="members" equiv-text="this.counts().all"/> · Pending invitations: <x id="pending" equiv-text="this.counts().pending"/></source></trans-unit>
+      <trans-unit id="shared.gallery.members.range" datatype="html"><source>Showing <x id="first" equiv-text="first"/>–<x id="last" equiv-text="last"/> of <x id="total" equiv-text="this.filtered().length"/></source></trans-unit>
+      <trans-unit id="shared.gallery.members.view-label" datatype="html"><source>View <x id="email" equiv-text="email"/></source></trans-unit>
+      <trans-unit id="shared.gallery.members.edit-label" datatype="html"><source>Edit roles for <x id="email" equiv-text="email"/></source></trans-unit>
+      <trans-unit id="shared.gallery.members.more-label" datatype="html"><source>More actions for <x id="email" equiv-text="email"/></source></trans-unit>
+      <trans-unit id="shared.gallery.members.find" datatype="html"><source>Find member</source></trans-unit>
+      <trans-unit id="shared.gallery.members.no-match" datatype="html"><source>No sample members match. Clear the search or change the filters.</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.title" datatype="html"><source>Quality snapshot</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.subtitle" datatype="html"><source>Static specimen · storefront-web · develop · Complete runs only</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.period" datatype="html"><source><x id="first" equiv-text="this.days[0].label"/>–<x id="last" equiv-text="this.days[1].label"/> · UTC</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.rate-title" datatype="html"><source>Failure rate · <x id="date" equiv-text="this.days[1].label"/></source></trans-unit>
+      <trans-unit id="shared.gallery.quality.delta" datatype="html"><source>Down 5 percentage points</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.comparison" datatype="html"><source>Compared with 3 of 20 on <x id="date" equiv-text="this.days[0].label"/>.</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.compare-days" datatype="html"><source>Compare days</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.rate-context" datatype="html"><source>2 of 20 complete runs failed. Lower is better.</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.chart-title" datatype="html"><source>Complete runs by day</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.pass" datatype="html"><source>Pass</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.fail" datatype="html"><source>Fail</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.other" datatype="html"><source>Other · unspecified</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.axis" datatype="html"><source>UTC day · number of complete runs. Other is not a pass.</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.table-toggle" datatype="html"><source>View as table</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.table-title" datatype="html"><source>Runs by UTC day</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.day" datatype="html"><source>Day</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.outcomes" datatype="html"><source>Outcome breakdown</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.flake-title" datatype="html"><source>Cases ranked by flake rate</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.postcode" datatype="html"><source>Address formats postcode</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.search" datatype="html"><source>Search products by phrase</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.runs" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ item.runs }}"/> runs</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.run-unit" datatype="html"><source>runs</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.breakdown-summary" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ total }}"/> complete runs · <x id="INTERPOLATION_1" equiv-text="{{ days.length }}"/> days</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.failure-reasons" datatype="html"><source>Top failure reasons · <x id="INTERPOLATION" equiv-text="{{ runId }}"/></source></trans-unit>
+      <trans-unit id="shared.gallery.quality.defect" datatype="html"><source>Product defect</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.drift" datatype="html"><source>Test drift</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.limits" datatype="html"><source>INCONCLUSIVE and Pending counts were not supplied. Their neutral series are shown in the key only.</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.inconclusive" datatype="html"><source>INCONCLUSIVE</source></trans-unit>
+      <trans-unit id="shared.gallery.quality.pending" datatype="html"><source>Pending</source></trans-unit>
+      <trans-unit id="shared.gallery.members.browse" datatype="html"><source>Browse members</source></trans-unit>
+      <trans-unit id="shared.gallery.members.review-invite" datatype="html"><source>Review sample invitation</source></trans-unit>
+      <trans-unit id="shared.gallery.members.total" datatype="html"><source>Members</source></trans-unit>
+      <trans-unit id="shared.gallery.members.total-context" datatype="html"><source>Records in this specimen</source></trans-unit>
+      <trans-unit id="shared.gallery.members.active-context" datatype="html"><source>Accepted invitations</source></trans-unit>
+      <trans-unit id="shared.gallery.members.invites" datatype="html"><source>Pending invitations</source></trans-unit>
+      <trans-unit id="shared.gallery.members.pending-context" datatype="html"><source>Awaiting a response</source></trans-unit>
+      <trans-unit id="shared.gallery.members.filter-status" datatype="html"><source>Filter by this status</source></trans-unit>
+      <trans-unit id="shared.gallery.refusal.title" datatype="html"><source>Decline sample request</source></trans-unit>
+      <trans-unit id="shared.gallery.refusal.heading" datatype="html"><source>Decision overlays</source></trans-unit>
+      <trans-unit id="shared.gallery.refusal.specimen" datatype="html"><source>Preview a refusal using the sample evidence. No decision or notification is sent.</source></trans-unit>
+      <trans-unit id="shared.gallery.refusal.open" datatype="html"><source>Open refusal example</source></trans-unit>
+      <trans-unit id="shared.gallery.refusal.reason" datatype="html"><source>Reason for refusal</source></trans-unit>
+      <trans-unit id="shared.gallery.refusal.message" datatype="html"><source>Message to requester (optional)</source></trans-unit>
+      <trans-unit id="shared.gallery.refusal.notify" datatype="html"><source>Include a requester notification</source></trans-unit>
+      <trans-unit id="shared.gallery.refusal.notify-hint" datatype="html"><source>Email to the sample requester, shown in the preview only.</source></trans-unit>
+      <trans-unit id="shared.gallery.refusal.resubmit" datatype="html"><source>Allow resubmission</source></trans-unit>
+      <trans-unit id="shared.gallery.refusal.outcome" datatype="html"><source>Refusal preview. Nothing was sent.</source></trans-unit>
+      <trans-unit id="shared.gallery.refusal.missing-artifact" datatype="html"><source>Missing artifact</source></trans-unit>
+      <trans-unit id="shared.gallery.refusal.missing-artifact-hint" datatype="html"><source>The expected artifact was not attached.</source></trans-unit>
+      <trans-unit id="shared.gallery.refusal.missing-producer" datatype="html"><source>Missing producer evidence</source></trans-unit>
+      <trans-unit id="shared.gallery.members.applied" datatype="html"><source>Updated sample roles for <x id="email" equiv-text="member.email"/>. No account was changed.</source></trans-unit>
       <trans-unit id="shared.gallery.sheet.copy-project" datatype="html"><source>Project</source></trans-unit>
       <trans-unit id="shared.gallery.sheet.copy-inspect" datatype="html"><source>Inspect record</source></trans-unit>
       <trans-unit id="shared.gallery.sheet.copy-quality" datatype="html"><source>Quality</source></trans-unit>

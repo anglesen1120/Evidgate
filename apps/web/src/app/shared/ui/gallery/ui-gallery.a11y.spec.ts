@@ -114,21 +114,43 @@ describe('UiGalleryComponent axe acceptance', () => {
   const SHEET = 'main > section[aria-labelledby]';
   const STACKED = 'section[aria-labelledby="gallery-stacked-records"]';
   const OTHERS = `${SECTION}:not([aria-labelledby="gallery-stacked-records"])`;
+  const COMPOUND_SPECIMENS = [
+    'app-gallery-member-directory',
+    'app-gallery-refusal',
+    'app-gallery-quality-snapshot',
+  ];
+  const compoundSelector = COMPOUND_SPECIMENS.join(', ');
   const sections = (root: HTMLElement, selector: string): HTMLElement[] =>
     Array.from(root.querySelectorAll<HTMLElement>(selector));
   const partitions: readonly {
     name: string;
     context: (root: HTMLElement) => axe.ElementContext;
+    timeout?: number;
   }[] = [
     {
       name: 'page outside the sections',
       context: (root) => ({ include: [root], exclude: sections(root, `${SECTION}, ${SHEET}`) }),
     },
-    { name: 'v3 component sheet', context: (root) => ({ include: sections(root, SHEET) }) },
+    {
+      name: 'v3 component sheet',
+      context: (root) => ({
+        include: sections(root, SHEET),
+        exclude: sections(root, compoundSelector),
+      }),
+    },
+    {
+      name: 'directory, decision overlays and quality snapshot',
+      context: (root) => ({ include: sections(root, compoundSelector) }),
+      timeout: 120_000,
+    },
     { name: 'stacked records', context: (root) => ({ include: sections(root, STACKED) }) },
     {
       name: 'other sections',
-      context: (root) => ({ include: sections(root, OTHERS) }),
+      context: (root) => ({
+        include: sections(root, OTHERS).filter((section) => !section.closest(compoundSelector)),
+        exclude: sections(root, compoundSelector),
+      }),
+      timeout: 120_000,
     },
   ];
 
@@ -145,6 +167,7 @@ describe('UiGalleryComponent axe acceptance', () => {
         expect(root.querySelector('app-waiver-banner time')).not.toBeNull();
         expect(sections(root, STACKED), 'stacked-records section').toHaveLength(1);
         for (const selector of [
+          ...COMPOUND_SPECIMENS,
           'app-loading-pattern',
           'app-empty-pattern',
           'app-error-pattern',
@@ -200,7 +223,7 @@ describe('UiGalleryComponent axe acceptance', () => {
     30_000,
   );
 
-  describe.each(partitions)('has zero WCAG violations: $name', ({ context }) => {
+  describe.each(partitions)('has zero WCAG violations: $name', ({ context, timeout = 30_000 }) => {
     it.each(cases)(
       '$locale / $theme',
       async ({ locale, theme }) => {
@@ -212,7 +235,7 @@ describe('UiGalleryComponent axe acceptance', () => {
           dispose();
         }
       },
-      30_000,
+      timeout,
     );
   });
 

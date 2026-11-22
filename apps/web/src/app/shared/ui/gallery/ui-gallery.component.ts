@@ -47,6 +47,9 @@ import { PageHeaderComponent } from '../page-header/page-header.component';
 import { GALLERY_COPY } from './gallery-example-copy';
 import { GALLERY_SECTIONS } from './gallery-sections';
 import { GallerySpecimenComponent } from './gallery-specimen.component';
+import { GalleryMemberDirectoryComponent } from './gallery-member-directory.component';
+import { GalleryQualitySnapshotComponent } from './gallery-quality-snapshot.component';
+import { GalleryRefusalComponent } from './gallery-refusal.component';
 import { GalleryCompositionComponent } from './gallery-composition.component';
 import { GalleryStatesComponent } from './gallery-states.component';
 import { GalleryTablesComponent } from './gallery-tables.component';
@@ -73,6 +76,9 @@ const SPECIMEN_COLUMN_WIDTHS: Readonly<Record<string, DataTableColumnWidth>> = {
     HlmDropdownMenuImports,
     HlmToaster,
     GallerySpecimenComponent,
+    GalleryMemberDirectoryComponent,
+    GalleryQualitySnapshotComponent,
+    GalleryRefusalComponent,
     ConnectStepRevealComponent,
     DecisionChipComponent,
     EvidenceBadgeComponent,

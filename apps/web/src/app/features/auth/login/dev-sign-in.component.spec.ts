@@ -1,3 +1,5 @@
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { BrowserPlatformLocation, PlatformLocation } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -10,6 +12,16 @@ import { provideApi } from '../../../core/http/api-client';
 import { SessionStore } from '../../../core/session/session.store';
 import { AuthFlow } from '../auth-flow';
 import { DevSignInComponent } from './dev-sign-in.component';
+
+class DevFeedbackHarness extends ComponentHarness {
+  static hostSelector = 'app-dev-sign-in';
+  readonly alert = this.locatorFor('[role="alert"]');
+  readonly status = this.locatorFor('[role="status"]');
+  readonly feedback = this.locatorFor('[data-tone]');
+  readonly nestedLive = this.locatorForAll(
+    '[role="alert"] [aria-live], [role="status"] [aria-live]',
+  );
+}
 
 describe('DevSignInComponent', () => {
   let fixture: ComponentFixture<DevSignInComponent>;
@@ -135,6 +147,22 @@ describe('DevSignInComponent', () => {
     request.flush(null, { status: 204, statusText: 'No Content' });
     await settle();
     expect(router.navigateByUrl).toHaveBeenCalledWith('/workspace', { replaceUrl: true });
+  });
+
+  it('replaces progress with one inline error without nesting live announcements', async () => {
+    open();
+    const form = await TestbedHarnessEnvironment.harnessForFixture(fixture, DevFeedbackHarness);
+    submit();
+    const request = http.expectOne('/v1/dev/session');
+    expect(element('[role="status"] [data-tone]').getAttribute('data-tone')).toBe('info');
+    expect(element('[role="status"]').textContent).toContain(fixture.componentInstance.submitting);
+    expect(element('[role="status"]').closest('[aria-busy="true"]')).toBeNull();
+    request.flush({}, { status: 401, statusText: 'Unauthorized' });
+    await settle();
+    expect(await (await form.feedback()).getAttribute('data-tone')).toBe('destructive');
+    expect(await (await form.alert()).text()).toContain(fixture.componentInstance.wrongSecret);
+    expect(await (await form.status()).text()).toBe('');
+    expect(await form.nestedLive()).toHaveLength(0);
   });
 
   it('wrong secret: announces 401 inline and accepts a new attempt', async () => {

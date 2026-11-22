@@ -1,4 +1,4 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import { ComponentHarness, TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { TestBed } from '@angular/core/testing';
 import { provideGalleryLayout } from './gallery-layout.testing';
@@ -16,6 +16,10 @@ class ExampleHarness extends ComponentHarness {
   readonly previous = this.locatorFor('nav button:first-child');
   readonly tableRows = this.locatorForAll('table tbody tr');
   readonly sparkline = this.locatorForOptional('table svg.trend[aria-hidden="true"]');
+  readonly evidence = this.locatorFor('[role="tab"]:first-child');
+  readonly history = this.locatorFor('[role="tab"]:last-child');
+  readonly firstPanel = this.locatorFor('[role="tabpanel"]:first-of-type');
+  readonly lastPanel = this.locatorFor('[role="tabpanel"]:last-of-type');
 }
 
 async function render(kind: GallerySpecimen['id'], state: GalleryState) {
@@ -27,6 +31,31 @@ async function render(kind: GallerySpecimen['id'], state: GalleryState) {
 
 describe('GalleryExampleComponent', () => {
   provideGalleryLayout();
+
+  it('moves selection and focus between the labelled Evidence and History panels', async () => {
+    const sample = await render('tabs', 'default');
+    const evidence = await sample.evidence();
+    const history = await sample.history();
+    const first = await sample.firstPanel();
+    const second = await sample.lastPanel();
+    expect(await evidence.text()).toBe('Evidence');
+    expect(await history.text()).toBe('History');
+    expect(await evidence.getAttribute('aria-selected')).toBe('true');
+    expect(await first.getAttribute('id')).toBe(await evidence.getAttribute('aria-controls'));
+    expect(await second.getAttribute('aria-labelledby')).toBe(await history.getAttribute('id'));
+    await evidence.focus();
+    await evidence.sendKeys(TestKey.RIGHT_ARROW);
+    expect(await history.isFocused()).toBe(true);
+    expect(await history.getAttribute('aria-selected')).toBe('true');
+    expect(await evidence.getAttribute('tabindex')).toBe('-1');
+    expect(await first.getProperty('hidden')).toBe(true);
+    expect(await second.getProperty('hidden')).toBe(false);
+    const activeComparison = await render('tabs', 'active');
+    const comparedHistory = await activeComparison.history();
+    expect(await comparedHistory.getAttribute('aria-controls')).not.toBe(
+      await history.getAttribute('aria-controls'),
+    );
+  });
 
   it('shows the evidence rows and accessible trend text until the table has no samples', async () => {
     const fixture = TestBed.createComponent(GalleryExampleComponent);

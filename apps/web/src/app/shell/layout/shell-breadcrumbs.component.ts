@@ -1,23 +1,25 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { PRIMARY_OUTLET, Router } from '@angular/router';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { SessionStore } from '../../core/session/session.store';
 import { NAV_ENTRIES } from '../nav/nav-registry';
 import { NavViewService } from '../nav/nav-view';
 
 @Component({
   selector: 'app-shell-breadcrumbs',
+  imports: [HlmIcon],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
     @if (trail().parts.length) {
       <nav aria-label="Breadcrumb" i18n-aria-label="@@shell.breadcrumb.label">
         <ol
-          class="m-0 flex min-w-0 list-none flex-wrap items-center gap-x-(--eg-space-3) p-0 text-xs text-muted-foreground"
+          class="m-0 flex min-w-0 list-none flex-wrap items-center gap-x-(--eg-space-2) gap-y-(--eg-space-1) p-0 text-xs leading-(--eg-leading-xs) text-muted-foreground"
         >
           @for (part of trail().parts; track $index; let first = $first, last = $last) {
-            <li class="flex min-w-0 items-baseline gap-(--eg-space-3)">
+            <li class="flex min-w-0 max-w-full items-baseline gap-(--eg-space-2)">
               @if (!first) {
-                <span aria-hidden="true">/</span>
+                <hlm-icon [name]="'lucideChevronRight'" class="size-(--eg-text-xs) self-center" />
               }
               <bdi
                 class="min-w-0 [overflow-wrap:anywhere] aria-[current=page]:font-bold aria-[current=page]:text-foreground"
