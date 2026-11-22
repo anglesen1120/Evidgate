@@ -117,6 +117,30 @@ describe('AiSettingsPage', () => {
       });
     }
   }
+  it('retains every field and its counter association in the grouped settings form', async () => {
+    const { harness } = await mount();
+    for (const section of ['context', 'guidance', 'priority', 'save']) {
+      expect(await harness.count('#ai-group-' + section)).toBe(1);
+    }
+    for (const field of FIELDS) {
+      const selector = '#ai-' + field.key;
+      expect(await harness.count(selector)).toBe(1);
+      expect(await harness.attribute(selector, 'aria-describedby')).toContain(
+        'ai-' + field.key + '-counter',
+      );
+    }
+    expect(await harness.count('#ai-languages')).toBe(1);
+  });
+  it('keeps a single unavailable consent status when inspecting another settings version', async () => {
+    const { harness } = await mount();
+    expect(await harness.count('#ai-consent-status')).toBe(1);
+    expect(await harness.text()).toContain('AI consent unavailable');
+    await harness.click('[data-ai-history-tab]');
+    await harness.click('[data-ai-inspect]');
+    expect(await harness.count('#ai-consent-status')).toBe(1);
+    expect(await harness.text()).toContain('AI consent unavailable');
+    expect(data.read).toHaveBeenCalledTimes(1);
+  });
   it('retains the entire draft after a failed save', async () => {
     data.save.mockRejectedValue(
       new ApiRequestError({
