@@ -1,6 +1,5 @@
 .record-dialog {
-  --record-width: 560px;
-  width: min(var(--record-width), calc(100vw - 2 * var(--eg-space-5)));
+  width: min(560px, calc(100vw - 2 * var(--eg-space-5)));
   max-width: none;
   max-height: calc(100dvh - 2 * var(--eg-space-5));
   grid-template-rows: auto minmax(0, 1fr) auto;
@@ -10,7 +9,7 @@
 }
 
 .record-edit {
-  --record-width: 760px;
+  width: min(760px, calc(100vw - 2 * var(--eg-space-5)));
 }
 
 .record-dialog > header,
