@@ -1745,3 +1745,9 @@ Closed by S665 (#1332, `969a647a`): the v3 re-skin of `features/suites/compositi
 | Screen 16 availability re-skin (09.10.1, S659) | Screen 16 already ships as the production availability page and was skipped by the failures/healing review lane. | receiver: S663 re-skin lane (09.10.1) |
 
 Closed by S663 (#1334, `86a08601`): screen 16 was re-skinned with the other settings screens; its browser capture is carried in 'Availability browser capture (S663)'.
+
+## Moved from status-carried.md by S666 (2026-11-22)
+
+| Shell e2e-a11y not LAN-green on fixed code (S657) | LAN round 2 on `c1b40c1b` ran `e2e-a11y` red with 16 `label-content-name-mismatch` violations (brand link, usage nav link). The fixes (`9f97657b`, `f0bc3dc7`) were verified on the Mac only (71 targeted shell e2e passed; core e2e incl. a11y 64 passed on an earlier tree) because no LAN round was left. | receiver: WAVE-GATE, confirm `e2e-a11y` green on the wave head |
+
+Closed by S666 (#1340, `716d6510`): `e2e-a11y` ran green on the wave head via the LAN round on `68bbe48a` (rc 0, 38 s), with the full shell (1223) and core (64) e2e green on the Mac.
