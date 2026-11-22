@@ -131,10 +131,10 @@
     </div>
     <footer
       hlmCardFooter
-      class="items-start gap-(--eg-space-3) border-0 border-t-(length:--eg-border-width) border-solid border-border px-(--eg-space-5) py-(--eg-space-4) text-xs text-muted-foreground min-[421px]:px-(--eg-space-7)"
+      class="flex-nowrap items-start gap-(--eg-space-3) border-0 border-t-(length:--eg-border-width) border-solid border-border px-(--eg-space-5) py-(--eg-space-4) text-xs text-muted-foreground min-[421px]:px-(--eg-space-7)"
     >
-      <app-shell-icon class="size-(--eg-space-5)" [name]="'users'" />
-      <p class="m-0">{{ credentialNote }}</p>
+      <app-shell-icon class="size-(--eg-space-5) shrink-0" [name]="'users'" />
+      <p class="m-0 min-w-0">{{ credentialNote }}</p>
     </footer>
   </article>
 </main>
