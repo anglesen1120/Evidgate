@@ -1,4 +1,5 @@
 import type { BooleanInput } from '@angular/cdk/coercion';
+import { DialogRef } from '@angular/cdk/dialog';
 import type { ComponentType } from '@angular/cdk/portal';
 import { NgComponentOutlet, NgTemplateOutlet } from '@angular/common';
 import {
@@ -6,17 +7,23 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
+  effect,
   inject,
   input,
   Injector,
   type TemplateRef,
+  ViewEncapsulation,
 } from '@angular/core';
 import { HlmIcon } from '@evidgate/ui/icon';
 import { BrnDialogRef, injectBrnDialogContext } from '@spartan-ng/brain/dialog';
 import { HlmButton } from '@evidgate/ui/button';
 
 import { classes } from '@evidgate/ui/utils';
+import { guardDialogClose } from './guard-dialog-close';
 import { HlmDialogClose } from './hlm-dialog-close';
+
+export type HlmDialogSize = 'md' | 'lg';
 
 type HlmDialogContentContext = {
   $component?: ComponentType<unknown>;
@@ -24,6 +31,8 @@ type HlmDialogContentContext = {
   $dynamicComponentClass?: string;
   $showCloseButton?: boolean;
   $closeLabel?: string;
+  $size?: HlmDialogSize;
+  $closeGuard?: () => boolean;
 };
 
 @Component({
@@ -31,10 +40,14 @@ type HlmDialogContentContext = {
   exportAs: 'hlmDialogContent',
   imports: [NgComponentOutlet, NgTemplateOutlet, HlmButton, HlmDialogClose, HlmIcon],
 
+  // Size-specific chrome styles reach both projected children and service outlets.
+  encapsulation: ViewEncapsulation.None,
+  styleUrl: './hlm-dialog-content.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     'data-slot': 'dialog-content',
     '[attr.data-state]': 'state()',
+    '[attr.data-size]': 'size()',
   },
   template: `
     @if (component) {
@@ -65,12 +78,19 @@ type HlmDialogContentContext = {
 })
 export class HlmDialogContent {
   private readonly _dialogRef = inject(BrnDialogRef);
+  private readonly _overlay = inject(DialogRef).overlayRef;
+  private readonly _destroyRef = inject(DestroyRef);
 
   public readonly templateInjector = inject(Injector);
 
   private readonly _dialogContext = injectBrnDialogContext<HlmDialogContentContext | null>({
     optional: true,
   });
+
+  /** Omit size to retain the original desktop width; md/lg opt into fixed record chrome. */
+  public readonly size = input<HlmDialogSize | undefined>(this._dialogContext?.$size);
+  /** All voluntary closes ask the same predicate. Release it after save/discard. */
+  public readonly closeGuard = input<() => boolean>();
 
   public readonly showCloseButton = input<boolean, BooleanInput>(
     this._dialogContext?.$showCloseButton ?? true,
@@ -92,7 +112,19 @@ export class HlmDialogContent {
   constructor() {
     classes(() => [
       'spartan-dialog-content relative mx-auto w-[calc(100vw-var(--eg-space-8))] outline-none sm:mx-0',
+      this.size() === 'md' && 'spartan-dialog-md',
+      this.size() === 'lg' && 'spartan-dialog-lg',
       this._dynamicComponentClass,
     ]);
+    const serviceGuard = this._dialogContext?.$closeGuard;
+    if (serviceGuard) {
+      // The service returns a live closeable ref before the first render.
+      this._destroyRef.onDestroy(guardDialogClose(this._dialogRef, this._overlay, serviceGuard));
+    } else {
+      effect((onCleanup) => {
+        const allow = this.closeGuard();
+        if (allow) onCleanup(guardDialogClose(this._dialogRef, this._overlay, allow));
+      });
+    }
   }
 }

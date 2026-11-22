@@ -391,19 +391,26 @@
     <app-gallery-evidence-table [unavailableMessage]="missing() ? caption() : null" />
   }
   @case ('tabs') {
-    <hlm-tabs [tab]="active() ? 'history' : 'evidence'">
+    <hlm-tabs [tab]="id() + (active() ? '-history' : '-evidence')">
       <hlm-tabs-list [variant]="'line'" [attr.aria-label]="copy.inspect">
-        <button type="button" class="target" [hlmTabsTrigger]="'evidence'" [disabled]="locked()">
+        <button
+          type="button"
+          class="target"
+          [hlmTabsTrigger]="id() + '-evidence'"
+          [disabled]="locked()"
+        >
           {{ copy.evidenceLabel }}
         </button>
-        <button type="button" [hlmTabsTrigger]="'history'" [disabled]="locked()">
+        <button type="button" [hlmTabsTrigger]="id() + '-history'" [disabled]="locked()">
           {{ copy.historyLabel }}
         </button>
       </hlm-tabs-list>
-      <div [hlmTabsContent]="'evidence'">
+      <div [hlmTabsContent]="id() + '-evidence'">
         <app-evidence-badge [completeness]="missing() ? null : 'incomplete'" />
       </div>
-      <div [hlmTabsContent]="'history'">{{ copy.failureRecorded }} · {{ record.failureAt }}</div>
+      <div [hlmTabsContent]="id() + '-history'">
+        {{ copy.failureRecorded }} · {{ record.failureAt }}
+      </div>
     </hlm-tabs>
   }
   @case ('tooltip') {

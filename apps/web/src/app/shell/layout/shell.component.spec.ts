@@ -90,6 +90,13 @@ describe('ShellComponent', () => {
     expect(root.textContent).not.toContain('QA engineer');
   });
 
+  it('keeps the sticky navigation viewport inside the full-height desktop sidebar', () => {
+    const sidebar = root.querySelector('aside#shell-navigation')!;
+    expect(sidebar.classList.contains('self-stretch')).toBe(true);
+    expect(sidebar.classList.contains('h-dvh')).toBe(false);
+    expect(sidebar.querySelector(':scope > .sticky.h-dvh > app-shell-nav')).not.toBeNull();
+  });
+
   it('keeps the topbar keyboard stops in the order the header reads', () => {
     const topbar = root.querySelector<HTMLElement>('header.topbar')!;
     const stops = Array.from(topbar.querySelectorAll<HTMLElement>('button'));

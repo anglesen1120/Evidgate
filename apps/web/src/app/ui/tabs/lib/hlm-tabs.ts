@@ -8,7 +8,7 @@ import { classes } from '@evidgate/ui/utils';
   hostDirectives: [
     {
       directive: BrnTabs,
-      inputs: ['orientation', 'activationMode', 'brnTabs: tab'],
+      inputs: ['activationMode', 'brnTabs: tab'],
       outputs: ['tabActivated'],
     },
   ],
@@ -20,6 +20,6 @@ export class HlmTabs {
   public readonly tab = input.required<string>();
 
   constructor() {
-    classes(() => 'group/tabs flex gap-2 data-[orientation=horizontal]:flex-col');
+    classes(() => 'group/tabs flex min-w-0 flex-col gap-2');
   }
 }

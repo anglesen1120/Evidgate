@@ -1,5 +1,7 @@
 // Keep the store isolated so these checks cover presentation, not project loading.
 
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
@@ -49,8 +51,14 @@ const NEXT_STEPS: readonly NavItemView[] = [
   },
 ];
 
+class OverviewHarness extends ComponentHarness {
+  static hostSelector = 'app-project-overview';
+  readonly emptyTitle = this.locatorForOptional('app-empty-pattern h2');
+  readonly emptyActions = this.locatorForAll('app-empty-pattern a, app-empty-pattern button');
+}
+
 /** Mount the page against a store whose current project is `project`. */
-function renderWith(project: ProjectDto | null, steps = NEXT_STEPS): HTMLElement {
+function mountWith(project: ProjectDto | null, steps = NEXT_STEPS) {
   TestBed.configureTestingModule({
     imports: [ProjectOverviewPage],
     providers: [
@@ -65,10 +73,26 @@ function renderWith(project: ProjectDto | null, steps = NEXT_STEPS): HTMLElement
   });
   const fixture = TestBed.createComponent(ProjectOverviewPage);
   fixture.detectChanges();
-  return fixture.nativeElement as HTMLElement;
+  return fixture;
+}
+
+function renderWith(project: ProjectDto | null, steps = NEXT_STEPS): HTMLElement {
+  return mountWith(project, steps).nativeElement as HTMLElement;
 }
 
 describe('ProjectOverviewPage', () => {
+  it.each([
+    { project: null, steps: NEXT_STEPS, title: 'No project selected' },
+    { project: PROJECT, steps: [], title: 'No shortcuts available for this project' },
+    { project: PROJECT, steps: NEXT_STEPS.slice(-1), title: null },
+  ])('distinguishes an absent project from an empty shortcut list: $title', async (example) => {
+    const fixture = mountWith(example.project, example.steps);
+    const overview = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+    const title = await overview.emptyTitle();
+    expect(title ? await title.text() : null).toBe(example.title);
+    expect(await overview.emptyActions()).toHaveLength(0);
+  });
+
   it('shows the current project name and slug exactly as the server sent them', () => {
     const root = renderWith(PROJECT);
 
@@ -77,7 +101,9 @@ describe('ProjectOverviewPage', () => {
       'section',
     );
     expect(root.querySelector('h1')?.textContent?.trim()).toBe(PROJECT.name);
-    expect(root.querySelector('app-page-header p')?.textContent?.trim()).toBe(PROJECT.slug);
+    expect(root.querySelector('app-page-header p')?.textContent?.trim()).toBe(
+      `${PROJECT.slug} · Case prefix: ${PROJECT.case_prefix}`,
+    );
   });
 
   it('links to the existing permitted next steps without development-status prose or invented metrics', () => {

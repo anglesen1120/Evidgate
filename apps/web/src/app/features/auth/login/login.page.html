@@ -8,7 +8,7 @@
     <span
       class="grid size-(--eg-control-md) shrink-0 place-items-center rounded-md bg-primary text-primary-foreground"
     >
-      <app-shell-icon class="size-(--eg-space-7)" [name]="'layers'" />
+      <app-shell-icon class="size-(--eg-space-7)" [name]="'logo'" />
     </span>
     <span id="login-brand" i18n="@@shell.layout.brand">Evidgate</span>
   </div>
@@ -36,7 +36,7 @@
 >
   <article
     hlmCard
-    class="login-card min-w-0 gap-0 rounded-lg py-0 [overflow-wrap:anywhere]"
+    class="login-card box-border w-full min-w-0 gap-0 rounded-(--eg-radius-lg) py-0 wrap-anywhere"
     aria-labelledby="login-heading"
   >
     <header
@@ -44,9 +44,10 @@
       class="login-intro grid-cols-[auto_minmax(0,1fr)] items-center gap-(--eg-space-4) border-0 border-b-(length:--eg-border-width) border-solid border-border p-(--eg-space-5) min-[421px]:p-(--eg-space-7)"
     >
       <span
-        class="box-border grid size-(--eg-space-10) place-items-center rounded-md border-(length:--eg-border-width) border-solid border-border bg-accent text-accent-foreground"
+        aria-hidden="true"
+        class="grid size-(--eg-space-10) place-items-center rounded-(--eg-radius-md) bg-(--eg-accent-soft) text-primary"
       >
-        <app-shell-icon class="size-(--eg-space-7)" [name]="'shield-check'" />
+        <app-shell-icon class="size-(--eg-space-7)" [name]="'shield'" />
       </span>
       <div class="min-w-0">
         <p class="m-0 text-xs text-muted-foreground">{{ organizationSignIn }}</p>
@@ -65,6 +66,23 @@
       hlmCardContent
       class="grid min-w-0 gap-(--eg-space-5) p-(--eg-space-5) min-[421px]:p-(--eg-space-7)"
     >
+      <!-- Keep the announcing region mounted even when it has no notice to display. -->
+      <div
+        class="login-notice"
+        [class.sr-only]="!notice()"
+        role="status"
+        [attr.aria-live]="'polite'"
+        aria-atomic="true"
+      >
+        @if (notice(); as message) {
+          <app-inline-feedback
+            [tone]="message.tone"
+            [title]="message.title"
+            [description]="message.description"
+            [announcement]="'off'"
+          />
+        }
+      </div>
       <section class="grid min-w-0 gap-(--eg-space-3)" aria-labelledby="provider-heading">
         <h2
           hlmCardTitle
@@ -73,23 +91,6 @@
           [textContent]="welcome"
         ></h2>
         <p class="m-0 text-sm text-muted-foreground">{{ accountGuidance }}</p>
-        <!-- Keep the announcing region mounted even when it has no notice to display. -->
-        <div
-          class="login-notice"
-          [class.sr-only]="!notice()"
-          role="status"
-          [attr.aria-live]="'polite'"
-          aria-atomic="true"
-        >
-          @if (notice(); as message) {
-            <app-inline-feedback
-              [tone]="message.tone"
-              [title]="message.title"
-              [description]="message.description"
-              [announcement]="'off'"
-            />
-          }
-        </div>
         <div
           class="login-providers grid min-w-0 gap-(--eg-space-3)"
           [attr.aria-busy]="auth.redirecting()"
@@ -111,18 +112,24 @@
             [disabled]="auth.redirecting()"
             (click)="auth.start('github')"
           >
+            <app-shell-icon [name]="'key'" />
             {{ github }}
           </button>
         </div>
       </section>
       <section
-        class="login-destination grid min-w-0 gap-(--eg-space-1) rounded-md bg-secondary p-(--eg-space-4) text-xs text-secondary-foreground"
+        class="login-destination grid min-w-0 gap-(--eg-space-2) rounded-(--eg-radius-md) bg-(--eg-surface-raised) p-(--eg-space-4) text-xs text-foreground"
         aria-labelledby="destination-heading"
       >
-        <h2 class="m-0 text-xs font-(weight:--eg-weight-semibold)" id="destination-heading">
+        <h2
+          class="m-0 text-xs font-(weight:--eg-weight-semibold) text-muted-foreground"
+          id="destination-heading"
+        >
           {{ destinationHeading }}
         </h2>
-        <p class="m-0">{{ auth.returnUrl() === '/' ? defaultDestination : savedDestination }}</p>
+        <p class="m-0 text-sm">
+          {{ auth.returnUrl() === '/' ? defaultDestination : savedDestination }}
+        </p>
         <p class="m-0 text-muted-foreground">{{ destinationPrivacy }}</p>
       </section>
       @if (extension.value(); as component) {

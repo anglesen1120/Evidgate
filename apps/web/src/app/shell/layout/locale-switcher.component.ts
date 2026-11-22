@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
+import { ShellIconComponent } from './shell-icon.component';
 
 /** Localized bundles are siblings; retain any deployment prefix and the entire route suffix. */
 export function localeBundlePath(baseURI: string, locale: string, route: string): string | null {
@@ -13,7 +14,7 @@ export function localeBundlePath(baseURI: string, locale: string, route: string)
 
 @Component({
   selector: 'app-locale-switcher',
-  imports: [HlmButton],
+  imports: [HlmButton, ShellIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'contents' },
   template: `
@@ -21,11 +22,13 @@ export function localeBundlePath(baseURI: string, locale: string, route: string)
       type="button"
       hlmBtn
       [variant]="'outline'"
-      class="locale-toggle min-h-(--eg-control-touch)"
+      [size]="'sm'"
+      class="locale-toggle min-h-(--eg-control-touch) min-w-(--eg-control-touch) gap-(--eg-space-2)"
       [disabled]="disabled()"
       [attr.aria-label]="localeLabel"
       (click)="requestSwitch()"
     >
+      <app-shell-icon [name]="'globe'" />
       <span lang="en" i18n="@@auth.login.locale-en">EN</span>
       <span aria-hidden="true"> / </span>
       <span lang="vi" i18n="@@auth.login.locale-vi">VI</span>

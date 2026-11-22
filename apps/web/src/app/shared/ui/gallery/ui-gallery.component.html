@@ -37,12 +37,12 @@
     </div>
   </ng-template>
   <nav
-    class="flex flex-wrap gap-x-(--eg-space-4) gap-y-(--eg-space-2)"
+    class="flex min-w-0 max-w-full flex-nowrap gap-x-(--eg-space-4) overflow-x-auto overscroll-x-contain p-1"
     [attr.aria-label]="copy.sectionLinks"
   >
     @for (group of sheet; track group.id) {
       <a
-        class="inline-flex min-h-(--eg-control-touch) items-center text-(--eg-accent-fg) underline focus-visible:outline-solid"
+        class="inline-flex min-h-(--eg-control-touch) shrink-0 items-center whitespace-nowrap text-(--eg-accent-fg) underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-(--eg-focus)"
         [href]="'#' + group.id"
         >{{ group.title }}</a
       >
@@ -58,6 +58,13 @@
           <app-gallery-specimen [specimen]="specimen" />
         }
       </div>
+      @if (group.id === 'feedback') {
+        <div class="mt-4 grid min-w-0 gap-4">
+          <app-gallery-member-directory />
+          <app-gallery-refusal [reasons]="reasons" />
+          <app-gallery-quality-snapshot />
+        </div>
+      }
     </section>
   }
   <hlm-toaster />
