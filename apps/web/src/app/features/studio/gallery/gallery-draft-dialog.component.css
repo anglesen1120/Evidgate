@@ -1,0 +1,47 @@
+.draft-dialog {
+  box-sizing: border-box;
+  max-inline-size: min(100%, 36rem);
+  max-block-size: calc(100dvh - var(--eg-space-8));
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+.fields,
+.field {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--eg-space-3);
+}
+.fields label:not(:first-child) {
+  margin-top: var(--eg-space-2);
+}
+.fields :is(input, textarea, hlm-select-trigger) {
+  width: 100%;
+  min-width: 0;
+}
+.fields textarea {
+  height: auto;
+}
+dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eg-space-7);
+}
+dt {
+  color: var(--eg-text-muted);
+  font-size: var(--eg-text-xs);
+}
+dd,
+p,
+dl {
+  margin: 0;
+}
+button {
+  white-space: normal;
+}
+@media (pointer: coarse) {
+  button,
+  input,
+  hlm-select-trigger {
+    min-height: var(--eg-control-touch);
+  }
+}

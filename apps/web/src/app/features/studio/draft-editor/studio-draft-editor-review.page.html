@@ -1,0 +1,138 @@
+<app-page-header [title]="c.title" [description]="hasDraft() ? c.summary : undefined">
+  <div pageHeaderContext class="flex flex-wrap items-center gap-2">
+    <app-status-pill [tone]="'neutral'" [label]="c.history" />
+    @if (hasDraft()) {
+      <code>{{ model().project }}</code>
+    }
+  </div>
+  @if (hasDraft()) {
+    <button
+      hlmBtn
+      appPageHeaderActions
+      type="button"
+      id="editor-save"
+      disabled
+      [attr.aria-describedby]="'editor-preview'"
+    >
+      {{ c.save }}
+    </button>
+  }
+</app-page-header>
+@switch (state()) {
+  @case ('loading') {
+    <app-loading-pattern [layout]="'form'" [label]="c.loading" />
+  }
+  @case ('empty') {
+    <app-empty-pattern [title]="c.empty" />
+  }
+  @case ('404') {
+    <app-not-found-pattern />
+  }
+  @case ('error') {
+    <app-inline-feedback
+      [tone]="'destructive'"
+      [title]="c.error"
+      [actionLabel]="c.retry"
+      (action)="retry()"
+    />
+  }
+  @case ('401') {
+    <app-inline-feedback
+      [title]="c.expired"
+      [description]="c.previewAction"
+      [actionLabel]="c.signIn"
+      [actionDisabled]="true"
+    />
+  }
+  @default {
+    <p id="editor-preview" class="m-0 text-sm text-muted-foreground">{{ c.preview }}</p>
+    <app-desktop-required-notice />
+    @if (notice(); as message) {
+      <app-inline-feedback
+        [title]="message"
+        [tone]="state() === 'failed' || state() === '412' ? 'destructive' : 'info'"
+        [description]="state() === '412' ? c.previewAction : undefined"
+        [actionLabel]="state() === '412' ? c.reload : undefined"
+        [actionDisabled]="true"
+      />
+    }
+    <section hlmCard>
+      <header hlmCardHeader>
+        <h2 hlmCardTitle>{{ c.identity }}</h2>
+      </header>
+      <dl
+        hlmCardContent
+        class="m-0 flex min-w-0 flex-wrap gap-x-6 gap-y-3 text-sm [&_dd]:m-0 [&_dt]:mb-1 [&_dt]:text-muted-foreground"
+      >
+        <div>
+          <dt>{{ c.caseId }}</dt>
+          <dd>
+            <code>{{ model().stableCase }}</code>
+          </dd>
+        </div>
+        <div>
+          <dt>{{ c.author }}</dt>
+          <dd>{{ model().author }}</dd>
+        </div>
+        <div>
+          <dt>{{ c.base }}</dt>
+          <dd>
+            <code>{{ model().base }}</code>
+          </dd>
+        </div>
+        <div>
+          <dt>{{ c.draft }}</dt>
+          <dd>
+            <code>{{ state() === 'passed' ? model().reviewed.revision : model().revision }}</code>
+          </dd>
+        </div>
+        <div>
+          <dt>{{ c.hash }}</dt>
+          <dd>
+            <code>{{ state() === 'passed' ? model().reviewed.hash : model().hash }}</code>
+          </dd>
+        </div>
+      </dl>
+    </section>
+    <div
+      class="grid min-w-0 items-start gap-4 md:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]"
+    >
+      <div class="grid min-w-0 gap-3">
+        @for (scene of editorScope(); track scene) {
+          <app-editor-definition [model]="model()" [state]="scene" />
+        }
+        <app-editor-sandbox [model]="model()" [state]="state()" />
+      </div>
+      <aside class="grid min-w-0 gap-3">
+        <app-editor-validation [model]="model()" [state]="state()" />
+      </aside>
+    </div>
+    <app-editor-versions [model]="model()" />
+    <div class="grid min-w-0 gap-2">
+      <div class="flex flex-wrap gap-2">
+        <button
+          hlmBtn
+          type="button"
+          [variant]="'outline'"
+          id="editor-discard"
+          disabled
+          [attr.aria-describedby]="'actions-preview'"
+        >
+          {{ c.discard }}
+        </button>
+        <button
+          hlmBtn
+          type="button"
+          [variant]="'outline'"
+          id="editor-submit"
+          disabled
+          [attr.aria-describedby]="'actions-preview'"
+        >
+          {{ c.submit }}
+        </button>
+      </div>
+      <p class="m-0 text-xs text-muted-foreground" id="actions-preview">{{ c.preview }}</p>
+    </div>
+    <footer class="text-xs text-muted-foreground">{{ c.superseded }}</footer>
+  }
+}

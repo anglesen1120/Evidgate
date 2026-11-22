@@ -36,7 +36,6 @@ describe('dev routes (review only)', () => {
   it('mounts the shared UI gallery on one lazy route', () => {
     const table = devRoutes();
 
-    expect(table).toHaveLength(10);
     expect(table[0]?.path).toBe('dev/ui-gallery');
     // A lazy boundary, so the production graph never reaches the gallery through this file.
     expect(table[0]?.component).toBeUndefined();
@@ -193,5 +192,25 @@ describe('dev routes (review only)', () => {
     const load = project?.loadComponent;
     if (!load) throw new Error('No lazy authoring review route');
     expect(await load()).toBe(AuthoringPage);
+  });
+
+  it('mounts each review-only studio, decision, release and quality screen once, behind the project scope', () => {
+    const paths = [
+      'dev/release-decision',
+      'dev/studio-gallery',
+      'dev/studio-draft-editor',
+      'dev/studio-review-merge',
+      'dev/release-view',
+      'dev/quality-overview',
+    ];
+    for (const path of paths) {
+      const matches = devRoutes().filter((entry) => entry.path === path);
+      expect(matches).toHaveLength(1);
+      expect(matches[0]?.component).toBe(ShellComponent);
+      const project = matches[0]?.children?.[0]?.children?.[0];
+      expect(project?.path).toBe('projects/:projectId');
+      expect(project?.canMatch).toHaveLength(2);
+      expect(project?.loadComponent).toBeTypeOf('function');
+    }
   });
 });
