@@ -35,9 +35,17 @@
           (click)="quickStatus(option.value)"
         >
           <span class="text-xs text-muted-foreground">{{ option.label }}</span>
-          <span class="self-end text-xl font-semibold tabular-nums">{{
-            loadedCounts()[option.value] | number
-          }}</span>
+          @let count = loadedCounts()[option.value];
+          <span class="self-end text-xl font-semibold tabular-nums">
+            @if (count === null) {
+              <span aria-hidden="true">&mdash;</span>
+              <span class="sr-only" i18n="@@shared.list.count-unverified"
+                >Count unavailable with the current filter</span
+              >
+            } @else {
+              {{ count | number }}
+            }
+          </span>
         </button>
       }
     </div>

@@ -26782,6 +26782,7 @@
       <trans-unit id="authoring.pending-changes.summary-heading" datatype="html"><source>Summary</source></trans-unit>
       <trans-unit id="authoring.pending-changes.history-heading" datatype="html"><source>History</source></trans-unit>
       <trans-unit id="authoring.pending-changes.apply-checks" datatype="html"><source>Apply checks</source></trans-unit>
+      <trans-unit id="shared.list.count-unverified" datatype="html"><source>Count unavailable with the current filter</source></trans-unit>
 </body>
   </file>
 </xliff>

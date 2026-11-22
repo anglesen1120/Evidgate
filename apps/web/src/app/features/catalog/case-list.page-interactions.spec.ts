@@ -2,7 +2,7 @@ import { manualChangeDetection, TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import type { CaseListResponse, MembershipView } from '@evidgate/sdk';
 import { BehaviorSubject, firstValueFrom, Subject } from 'rxjs';
 import { CaseListDataService } from '../../core/data/case-list-data.service';
@@ -32,6 +32,11 @@ const owner: MembershipView = {
 const nextOwner = { ...owner, id: 'next-owner', invited_email: 'next@example.test' };
 const appended = { ...ownedCase, id: 'appended-case', annotation_id: 'appended-identity' };
 
+class FilterHarness extends CatalogPageHarness {
+  readonly tiles = this.locatorForAll('[role="group"] button[aria-pressed]');
+  readonly framework = this.locatorFor('#catalog-framework');
+}
+
 describe('Catalog permission and asynchronous interaction boundaries', () => {
   provideLayoutTestStubs();
   const canRead = signal(true);
@@ -43,9 +48,11 @@ describe('Catalog permission and asynchronous interaction boundaries', () => {
     memberStatus.set('ready');
   });
   let list = vi.fn<CaseListDataService['list']>();
+  const query = new BehaviorSubject(convertToParamMap({}));
   let update = vi.fn<CaseListDataService['update']>();
 
   beforeEach(() => {
+    query.next(convertToParamMap({}));
     canRead.set(true);
     memberStatus.set('ready');
     memberInit.mockClear();
@@ -77,7 +84,7 @@ describe('Catalog permission and asynchronous interaction boundaries', () => {
           provide: ActivatedRoute,
           useValue: {
             pathFromRoot: [{ paramMap: params }],
-            queryParamMap: new BehaviorSubject(convertToParamMap({})),
+            queryParamMap: query,
           },
         },
       ],
@@ -106,10 +113,54 @@ describe('Catalog permission and asynchronous interaction boundaries', () => {
     const fixture = TestBed.createComponent(CaseListPage);
     fixture.detectChanges();
     await fixture.whenStable();
-    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, CatalogPageHarness);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, FilterHarness);
     const store = fixture.debugElement.injector.get(CaseListStore);
     return { fixture, harness, store };
   }
+
+  it('shows counts only for statuses covered by the applied catalog query', async () => {
+    list.mockResolvedValue({ items: [ownedCase], next_cursor: null });
+    const { harness, store } = await render();
+    const counts = async () => Promise.all((await harness.tiles()).map((button) => button.text()));
+    expect(await counts()).toEqual([
+      expect.stringMatching(/1$/),
+      expect.stringMatching(/1$/),
+      expect.stringMatching(/0$/),
+      expect.stringContaining('—'),
+    ]);
+    query.next(convertToParamMap({ status: 'active' }));
+    await vi.waitFor(() => expect(store.status()).toBe('ready'));
+    expect(await counts()).toEqual([
+      expect.stringContaining('—'),
+      expect.stringMatching(/1$/),
+      expect.stringContaining('—'),
+      expect.stringContaining('—'),
+    ]);
+  });
+
+  it('toggles an applied status without submitting the draft framework or search', async () => {
+    query.next(convertToParamMap({ status: 'active', framework: 'playwright', q: 'Checkout' }));
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    const { harness } = await render();
+    await (await harness.framework()).sendKeys('draft');
+    await (await harness.search()).sendKeys('unsent');
+    const tiles = await harness.tiles();
+    for (const [index, status] of [
+      [1, null],
+      [2, 'missing'],
+    ] as const) {
+      const tile = tiles[index];
+      if (!tile) throw new Error('Missing catalog status tile');
+      await tile.click();
+      expect(navigate).toHaveBeenLastCalledWith(
+        [],
+        expect.objectContaining({
+          queryParamsHandling: 'merge',
+          queryParams: { status, framework: 'playwright', q: 'Checkout', cursor: null },
+        }),
+      );
+    }
+  });
 
   it('does not request member choices or show a failure banner without membership read', async () => {
     canRead.set(false);

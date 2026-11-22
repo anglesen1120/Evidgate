@@ -74,7 +74,6 @@ export const PENDING_COPY = {
   newItemLabel: $localize`:@@authoring.pending-changes.new-item-label:New item`,
   lineageLabel: $localize`:@@authoring.pending-changes.lineage-label:Lineage`,
   authorLabel: $localize`:@@authoring.pending-changes.author-label:Author`,
-  sourceLabelQueued: $localize`:@@authoring.pending-changes.queued-source:Queued source`,
   impactUnavailable: $localize`:@@authoring.pending-changes.impact-unavailable:The affected cases and the full before/after impact are not supplied by this response.`,
   loadedScope: $localize`:@@authoring.pending-changes.loaded-scope:Loaded count, not the project total`,
 } as const;

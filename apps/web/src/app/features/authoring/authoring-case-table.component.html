@@ -22,9 +22,17 @@
         class="h-auto w-auto! min-h-(--eg-control-touch) shrink-0 flex-col items-start rounded-none border-e border-border px-(--eg-space-4) aria-pressed:bg-(--eg-accent-soft)"
       >
         <span class="text-xs text-muted-foreground">{{ copy[state] }}</span>
-        <span class="self-end text-xl font-semibold tabular-nums">{{
-          loadedStates()[state] | number
-        }}</span>
+        @let count = loadedStates()[state];
+        <span class="self-end text-xl font-semibold tabular-nums">
+          @if (count === null) {
+            <span aria-hidden="true">&mdash;</span>
+            <span class="sr-only" i18n="@@shared.list.count-unverified"
+              >Count unavailable with the current filter</span
+            >
+          } @else {
+            {{ count | number }}
+          }
+        </span>
       </button>
     }
   </div>

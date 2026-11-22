@@ -55,6 +55,7 @@ import {
   viewedSummary,
 } from './onboarding-summaries';
 import { StepPendingComponent } from './step-pending.component';
+import { revealViewedStep } from './viewed-step-scroll';
 
 @Component({
   selector: 'app-onboarding-shell',
@@ -226,6 +227,7 @@ export class OnboardingShellComponent {
       stepButtons: () => this.stepButtons().map(({ nativeElement }) => nativeElement),
       viewedButton: () => this.viewedStepButton(),
     });
+    revealViewedStep(() => this.viewedStepButton());
     afterRenderEffect(() => this.focusMovedStep());
     afterRenderEffect(() => this.focusReloadFailure());
     effect((onCleanup) => {

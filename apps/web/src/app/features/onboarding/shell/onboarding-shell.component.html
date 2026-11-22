@@ -151,7 +151,7 @@
             [id]="stepListId"
             [class.hidden]="viewport.narrow() && !stepsExpanded()"
             [class.flex]="!viewport.narrow() || stepsExpanded()"
-            class="m-0 min-w-0 max-w-full list-none flex-nowrap gap-(--eg-space-3) overflow-x-auto overscroll-x-contain p-(--eg-space-2)"
+            class="m-0 min-w-0 max-w-full list-none flex-nowrap gap-(--eg-space-3) overflow-x-auto overscroll-x-contain scroll-auto p-(--eg-space-2)"
             data-testid="onboarding-stepper"
           >
             @for (step of steps; track step.number) {

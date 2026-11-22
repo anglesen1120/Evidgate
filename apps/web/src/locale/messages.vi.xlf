@@ -22314,6 +22314,7 @@
       <trans-unit id="authoring.pending-changes.summary-heading" datatype="html"><source>Summary</source><target>Tổng quan</target></trans-unit>
       <trans-unit id="authoring.pending-changes.history-heading" datatype="html"><source>History</source><target>Lịch sử</target></trans-unit>
       <trans-unit id="authoring.pending-changes.apply-checks" datatype="html"><source>Apply checks</source><target>Kiểm tra trước khi áp dụng</target></trans-unit>
+      <trans-unit id="shared.list.count-unverified" datatype="html"><source>Count unavailable with the current filter</source><target>Không xác định được số lượng với bộ lọc hiện tại</target></trans-unit>
 </body>
   </file>
 </xliff>

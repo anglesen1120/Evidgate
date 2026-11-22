@@ -189,10 +189,16 @@ export class CaseListPage {
     { value: 'archived', label: this.copy.archived },
   ] as const;
   protected readonly loadedCounts = computed(() => {
-    const counts = { active: 0, missing: 0, archived: 0, '': 0 };
+    const counts = { active: 0, missing: 0, archived: 0 };
     for (const row of this.store.rows()) counts[row.status]++;
-    counts[''] = counts.active + counts.missing;
-    return counts;
+    const status = this.store.filters().status;
+    // Without an explicit status the catalog API returns active and missing, never archived.
+    return {
+      '': !status ? counts.active + counts.missing : null,
+      active: !status || status === 'active' ? counts.active : null,
+      missing: !status || status === 'missing' ? counts.missing : null,
+      archived: status === 'archived' ? counts.archived : null,
+    };
   });
   protected readonly subtitle = computed(() =>
     this.store.status() !== 'ready'
@@ -202,8 +208,8 @@ export class CaseListPage {
         $localize`:@@catalog.case-view.loaded-count:Loaded identities: ${formatNumber(this.store.rows().length, this.locale)}:count:`,
   );
   protected quickStatus(status: CaseListFilters['status']): void {
-    this.updateDraft({ status });
-    this.apply();
+    const applied = this.store.filters();
+    this.apply({ ...applied, status: applied.status === status ? '' : status });
   }
   protected readonly statusLabel = (value: unknown) =>
     this.statusOptions.find((option) => option.value === value)?.label ?? this.copy.all;
@@ -387,9 +393,9 @@ export class CaseListPage {
     );
   }
 
-  protected apply(): void {
+  protected apply(draft: CaseListFilters = this.draft()): void {
     // Only server filters invalidate a cursor; local search stays on loaded results.
-    const filters = caseFiltersFromQuery(caseFiltersToQuery(this.draft()));
+    const filters = caseFiltersFromQuery(caseFiltersToQuery(draft));
     const previous = this.store.filters();
     const serverChanged =
       filters.status !== previous.status || filters.framework !== previous.framework;

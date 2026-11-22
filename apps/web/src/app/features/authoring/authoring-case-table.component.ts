@@ -118,7 +118,12 @@ export class AuthoringCaseTableComponent {
   protected readonly loadedStates = computed(() => {
     const counts = { draft: 0, approved: 0, retired: 0 };
     for (const row of this.store.rows()) counts[row.state]++;
-    return counts;
+    const state = this.store.query().state;
+    return {
+      draft: !state || state === 'draft' ? counts.draft : null,
+      approved: !state || state === 'approved' ? counts.approved : null,
+      retired: !state || state === 'retired' ? counts.retired : null,
+    };
   });
   protected readonly states = ['draft', 'approved', 'retired'] as const;
   protected quickState(state: AuthoringCaseFilters['state']): void {

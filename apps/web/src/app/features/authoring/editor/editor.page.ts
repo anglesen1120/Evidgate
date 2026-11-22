@@ -101,7 +101,6 @@ function stepsSnapshot(
   host: {
     class: 'block min-w-0 text-foreground',
     '(focusin)': 'rememberFocus($event)',
-    '(window:resize)': 'revealActiveTab()',
     '(window:beforeunload)': 'beforeUnload($event)',
   },
 })
@@ -226,6 +225,13 @@ export class EditorPage {
   });
   constructor() {
     this.destroy.onDestroy(() => this.leaveDecision?.(false));
+    afterRenderEffect((onCleanup) => {
+      const strip = this.tabStrip()?.nativeElement;
+      if (!strip) return;
+      const observer = new ResizeObserver(() => this.revealActiveTab());
+      observer.observe(strip);
+      onCleanup(() => observer.disconnect());
+    });
     afterRenderEffect(() => {
       this.tab();
       this.revealActiveTab();
@@ -244,7 +250,7 @@ export class EditorPage {
         : null;
     });
   }
-  protected revealActiveTab(): void {
+  private revealActiveTab(): void {
     const strip = this.tabStrip()?.nativeElement;
     if (strip) this.revealTab(strip, strip.querySelector('[aria-selected="true"]'));
   }

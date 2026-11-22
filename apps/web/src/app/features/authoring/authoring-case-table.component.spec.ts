@@ -25,6 +25,7 @@ import { AuthoringCaseTableComponent } from './authoring-case-table.component';
 class TableHarness extends ComponentHarness {
   static hostSelector = 'app-authoring-case-table';
   readonly search = this.locatorFor('#authoring-case-search');
+  readonly tiles = this.locatorForAll('[aria-labelledby="authoring-case-loaded-states"] button');
   readonly item = this.locatorFor('#authoring-case-item');
   readonly itemError = this.locatorFor('#authoring-case-item-error');
   readonly searchError = this.locatorFor('#authoring-case-search-error');
@@ -106,6 +107,23 @@ describe('AuthoringCaseTableComponent', () => {
     await fixture.whenStable();
     return TestbedHarnessEnvironment.harnessForFixture(fixture, TableHarness);
   }
+
+  it('keeps real zeros for included lifecycles and marks excluded lifecycles unverified', async () => {
+    list.mockResolvedValue({ items: [caseRow('draft-1')], next_cursor: null });
+    const harness = await mount();
+    const counts = async () => Promise.all((await harness.tiles()).map((tile) => tile.text()));
+    expect(await counts()).toEqual([
+      expect.stringMatching(/1$/),
+      expect.stringMatching(/0$/),
+      expect.stringMatching(/0$/),
+    ]);
+    query.next(convertToParamMap({ state: 'draft' }));
+    expect(await counts()).toEqual([
+      expect.stringMatching(/1$/),
+      expect.stringContaining('—'),
+      expect.stringContaining('—'),
+    ]);
+  });
 
   it('renders loading while a real request remains pending', async () => {
     const pending = new Subject<ManualCaseListResponse>();
