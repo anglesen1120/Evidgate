@@ -134,10 +134,11 @@ describe('HlmDialogFooter responsive action order', () => {
     const header = surface.locator('header');
     const footer = surface.locator('footer');
     const rect = await surface.boundingBox();
-    expect(rect?.width).toBe(expectedWidth);
-    expect(rect?.height).toBe(width < 600 ? height : height - 32);
-    const beforeHeader = await header.boundingBox();
-    const beforeFooter = await footer.boundingBox();
+    if (!rect) throw new Error('Dialog has no layout box');
+    expect(rect.width).toBeCloseTo(expectedWidth, 0);
+    expect(rect.height).toBeCloseTo(width < 600 ? height : height - 32, 0);
+    const chrome = [header, footer];
+    const before = await Promise.all(chrome.map((part) => part.boundingBox()));
     expect(
       await header.locator('[hlmDialogStatusIcon]').evaluate((icon) => {
         const subject = icon.parentElement?.querySelector('[hlmDialogSubject]');
@@ -150,9 +151,17 @@ describe('HlmDialogFooter responsive action order', () => {
       dialog.scrollTop = dialog.scrollHeight;
       return dialog.scrollTop;
     });
-    expect(scrolled).toBeGreaterThan(0);
-    expect(await header.boundingBox()).toEqual(beforeHeader);
-    expect(await footer.boundingBox()).toEqual(beforeFooter);
+    expect(scrolled).toBeGreaterThan(rect.height);
+    for (const [index, part] of chrome.entries()) {
+      const start = before[index];
+      const end = await part.boundingBox();
+      if (!start || !end) throw new Error('Dialog chrome has no layout box');
+      for (const key of ['x', 'y', 'width', 'height'] as const) {
+        expect(end[key]).toBeCloseTo(start[key], 0);
+      }
+      expect(end.y).toBeGreaterThanOrEqual(rect.y - 1);
+      expect(end.y + end.height).toBeLessThanOrEqual(rect.y + rect.height + 1);
+    }
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
     expect(await page.evaluate(() => window.scrollY)).toBe(0);
   });
