@@ -13,16 +13,18 @@ import {
   inject,
   input,
   linkedSignal,
+  output,
   signal,
   viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import type { CiBindingView, IngestTokenView } from '@evidgate/sdk';
+import type { IngestTokenView } from '@evidgate/sdk';
 import { HlmAlertImports } from '@evidgate/ui/alert';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
+import { HlmTableImports } from '@evidgate/ui/table';
 import { OnboardingDataService } from '../../../core/data/onboarding-data.service';
 import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
@@ -58,6 +60,14 @@ import { deriveConnectionHealth, type ConnectionHealth } from '../health/connect
 import { CiRotateConfirmComponent, type RotateScope } from './connect-ci-rotate-confirm.component';
 import { HealthBoundaryClock } from '../health/health-boundary';
 import { OnboardingStore } from '../onboarding.store';
+import {
+  OnboardingRecordButtonComponent,
+  OnboardingTableRangeComponent,
+  RECORD_COPY,
+  type OnboardingRecordView,
+} from '../onboarding-record-view.component';
+import { CREDENTIAL_STATUS, CredentialRecordComponent } from './credential-record.component';
+import { ConnectCiBindingTableComponent } from './connect-ci-binding-table.component';
 import { createBindingFeedback, createTokenFeedback } from './connect-ci.form-feedback';
 import {
   connectionLines,
@@ -80,6 +90,11 @@ import {
     DatePipe,
     FormsModule,
     StatusPillComponent,
+    HlmTableImports,
+    OnboardingRecordButtonComponent,
+    OnboardingTableRangeComponent,
+    CredentialRecordComponent,
+    ConnectCiBindingTableComponent,
     ConnectStepRevealComponent,
     ConnectionHealthComponent,
     CliQuickstartComponent,
@@ -115,6 +130,8 @@ export class ConnectCiPage {
   readonly orgId = input.required<string>();
   readonly projectId = input.required<string>();
   readonly active = input(true);
+  readonly viewRecord = output<OnboardingRecordView>();
+  protected readonly recordCopy = RECORD_COPY;
   private scopeVersion = 0;
   private readonly healthClock = new HealthBoundaryClock(() => this.store.tokens());
   /** The place a re-read may take, held from the press until the pass that spends it. */
@@ -187,16 +204,10 @@ export class ConnectCiPage {
   protected readonly tokenSubmit = $localize`:@@onboarding.connect.token-submit:Create ingest token`;
   protected readonly tokenPermission = $localize`:@@onboarding.connect.token-permission:Ask your organisation owner for permission to create or rotate ingest tokens.`;
   protected readonly busyLabel = $localize`:@@onboarding.connect.busy:Saving connection…`;
-  protected readonly bindingsLabel = $localize`:@@onboarding.connect.bindings:CI bindings`;
   protected readonly tokensLabel = $localize`:@@onboarding.connect.tokens:Ingest tokens`;
-  protected readonly emptyBindings = $localize`:@@onboarding.connect.empty-bindings:No CI bindings yet.`;
   protected readonly emptyTokens = $localize`:@@onboarding.connect.empty-tokens:No ingest tokens yet.`;
   protected readonly statusLabel = $localize`:@@onboarding.connect.status:Status`;
-  protected readonly createdLabel = $localize`:@@onboarding.connect.created:Created (UTC)`;
   protected readonly prefixLabel = $localize`:@@onboarding.connect.prefix:Prefix`;
-  protected readonly scopesLabel = $localize`:@@onboarding.connect.scopes:Scopes`;
-  protected readonly expiresLabel = $localize`:@@onboarding.connect.expires:Expires (UTC)`;
-  protected readonly usedLabel = $localize`:@@onboarding.connect.last-used:Last used (UTC)`;
   protected readonly noneLabel = $localize`:@@onboarding.connect.not-set:Not set`;
   protected readonly rotateLabel = $localize`:@@onboarding.connect.rotate:Rotate token`;
   protected readonly overlapLabel = $localize`:@@onboarding.connect.overlap:The previous token continues verifying until (UTC):`;
@@ -210,12 +221,6 @@ export class ConnectCiPage {
   protected readonly failureHeading = $localize`:@@onboarding.connect.failure-heading:The connection was not saved`;
   protected readonly detailsLabel = $localize`:@@onboarding.connect.details-label:The server refused these values`;
   protected readonly refreshLabel = $localize`:@@onboarding.connect.refresh:Retry loading metadata`;
-  protected readonly pendingLabel = $localize`:@@onboarding.connect.awaiting-ci:Awaiting CI`;
-  protected readonly activeLabel = $localize`:@@onboarding.connect.active:Active`;
-  protected readonly disabledLabel = $localize`:@@onboarding.connect.disabled:Disabled`;
-  protected readonly rotatedLabel = $localize`:@@onboarding.connect.rotated:Rotated`;
-  protected readonly expiredLabel = $localize`:@@onboarding.connect.expired:Expired`;
-  protected readonly revokedLabel = $localize`:@@onboarding.connect.revoked:Revoked`;
   protected readonly uncertainLabel = $localize`:@@onboarding.connect.response-uncertain:It may have been saved. Reload the connection data before trying again.`;
   protected readonly revealShownLabel = $localize`:@@onboarding.connect.reveal-shown:A one-time value is shown. Save it before leaving this step.`;
   protected readonly truncatedLabel = $localize`:@@onboarding.connect.list-truncated:Showing the first ${CONNECT_LIST_LIMIT}:CONNECT_LIST_LIMIT: entries; more exist, so a newer entry may not appear here.`;
@@ -240,17 +245,7 @@ export class ConnectCiPage {
   protected readonly refsField = this.bindingFeedback.fields[2]!;
   protected readonly workflowsField = this.bindingFeedback.fields[3]!;
   protected readonly tokenNameField = this.tokenFeedback.fields[0]!;
-  protected readonly statusLabels: Record<
-    CiBindingView['status'] | IngestTokenView['status'],
-    string
-  > = {
-    pending_verification: this.pendingLabel,
-    active: this.activeLabel,
-    disabled: this.disabledLabel,
-    rotated: this.rotatedLabel,
-    expired: this.expiredLabel,
-    revoked: this.revokedLabel,
-  };
+  protected readonly statusLabels = CREDENTIAL_STATUS;
 
   /** Uses only metadata already read for this step, never one-time values. */
   protected readonly health = computed<ConnectionHealth>(() =>

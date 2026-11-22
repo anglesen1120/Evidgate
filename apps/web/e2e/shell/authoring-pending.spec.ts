@@ -12,6 +12,7 @@ import {
   PROJECT_STOREFRONT,
   seedStoredTheme,
   THEMES,
+  waitForDialogAnimations,
   withVariant,
 } from './support';
 
@@ -53,7 +54,7 @@ async function selectSupported(page: Page): Promise<void> {
 }
 for (const locale of LOCALES) {
   for (const theme of THEMES) {
-    for (const width of [360, 1280]) {
+    for (const width of [360, 900, 1280, 1440]) {
       test(`pending queue is readable and confirm-only (${locale}, ${theme}, ${width})`, async ({
         page,
       }) => {
@@ -65,12 +66,29 @@ for (const locale of LOCALES) {
         const beforeIds = await queuedIds(page);
         expect(beforeIds).toEqual([COMMENT, DELETE, MERGE, SPLIT]);
         expect(await calls(page)).toEqual([]);
+        if (width >= 900) {
+          const rows = page.locator('app-pending-change-table tr[data-row-id]');
+          await expect(rows).toHaveCount(4);
+          const heights = await rows.evaluateAll((items) =>
+            items.map((row) => row.getBoundingClientRect().height),
+          );
+          expect(heights.every((height) => height >= 56 && height <= 64)).toBe(true);
+          await expect(rows.first().locator('[data-pending-preview]')).toBeInViewport({ ratio: 1 });
+          if (width === 1440) await expect(rows.last()).toBeInViewport({ ratio: 1 });
+        }
         const preview = page.locator('[data-pending-preview]').first();
         await keyboardTo(page, preview);
         await page.keyboard.press('Enter');
         await expect(page.locator('[data-pending-preview-content]')).toContainText(
           'Please confirm the refund wording with support.',
         );
+        const view = page.getByRole('dialog');
+        await expect(view.locator('[data-pending-view-title]')).toBeFocused();
+        await waitForDialogAnimations(page, '[role="dialog"]');
+        await expectNoA11yViolations(page, `change details ${locale} ${theme} ${width}`);
+        await page.keyboard.press('Escape');
+        await expect(view).toHaveCount(0);
+        await expect(preview).toBeFocused();
         if (width === 360) {
           await expect(page.locator('[data-pending-apply]')).toHaveCount(0);
           await expect(page.locator('[data-pending-discard]')).toHaveCount(0);
@@ -87,6 +105,7 @@ for (const locale of LOCALES) {
           const dialog = page.getByRole('alertdialog');
           await expect(dialog).toContainText(COMMENT);
           await expect(dialog).toContainText(DELETE);
+          await waitForDialogAnimations(page, '[role="alertdialog"]');
           await expectNoA11yViolations(page, `pending consent ${locale} ${theme}`);
           expect(await calls(page)).toEqual([]);
           await page.keyboard.press('Escape');

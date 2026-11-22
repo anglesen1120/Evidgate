@@ -68,15 +68,17 @@ describe('EvidencePanelComponent', () => {
     expect(root.querySelector('[data-resource-state="empty"]')?.textContent).toContain(
       'No setup resources have been created yet',
     );
-    expect(root.querySelector('dl')).toBeNull();
+    expect(root.querySelector('table')).toBeNull();
     expect(root.querySelector('[data-resource-state="unavailable"]')).toBeNull();
   });
 
   it('shows a confirmed project even when the current step is still one', async () => {
     fixture.componentRef.setInput('progress', { ...EMPTY, project: PROJECT });
     await fixture.whenStable();
-    expect(root.querySelector('dl')?.textContent).toContain(PROJECT.name);
-    expect(root.querySelector('dl')?.textContent).toContain(PROJECT.id);
+    expect(root.querySelector('table caption')?.textContent).toContain('Created resources');
+    expect(root.querySelector('table')?.textContent).toContain(PROJECT.name);
+    expect(root.querySelector('table')?.textContent).toContain(PROJECT.id);
+    expect(root.querySelector('button')?.getAttribute('aria-label')).toContain(PROJECT.name);
     expect(root.querySelector('[data-resource-state="empty"]')).toBeNull();
     expect(root.textContent).not.toContain('will appear here');
     expect(root.querySelector('section')?.getAttribute('aria-labelledby')).toBe(

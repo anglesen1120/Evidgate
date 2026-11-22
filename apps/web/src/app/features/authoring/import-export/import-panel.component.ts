@@ -20,8 +20,7 @@ import { createFormFeedback } from '../../../shared/forms/form-feedback';
 import { DesktopMutationDirective } from '../../../shared/ui/narrow/desktop-mutation.directive';
 import { DesktopRequiredNoticeComponent } from '../../../shared/ui/narrow/desktop-required-notice.component';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
-import { RevisionChipComponent } from '../../../shared/ui/chips/revision-chip.component';
-import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
+import { ImportHistoryTableComponent } from './import-history-table.component';
 import { SessionStore } from '../../../core/session/session.store';
 import { SectionHeaderComponent } from '../../../shared/ui/page-header/section-header.component';
 import { InlineFeedbackComponent } from '../../../shared/ui/states/inline-feedback.component';
@@ -46,8 +45,7 @@ import { ImportStore } from './import.store';
     HlmCard,
     HlmCardContent,
     HlmCardHeader,
-    RevisionChipComponent,
-    AbsoluteTimeComponent,
+    ImportHistoryTableComponent,
     HlmInput,
     HlmLabel,
     HlmSelectImports,
@@ -91,6 +89,7 @@ export class ImportPanelComponent {
     }
   });
   private readonly previewRows = viewChild(ImportPreviewComponent);
+  private readonly filePicker = viewChild<ElementRef<HTMLInputElement>>('filePicker');
   private readonly snapshot = viewChild<ElementRef<HTMLElement>>('snapshot');
   private readonly desktopNotice = viewChild(DesktopRequiredNoticeComponent, { read: ElementRef });
   private focused: HTMLElement | null = null;
@@ -106,6 +105,10 @@ export class ImportPanelComponent {
   protected readonly history = computed(() =>
     this.store.history.hasValue() ? this.store.history.value() : null,
   );
+  protected readonly historyRange = computed(() => {
+    const count = this.history()?.page?.items.length ?? 0;
+    return $localize`:@@authoring.import-export.showing-range:Showing 1–${count}:end: of ${count}:loaded: loaded versions`;
+  });
   protected readonly report = computed(
     () => this.store.work().committed ?? this.store.work().report,
   );
@@ -123,10 +126,16 @@ export class ImportPanelComponent {
     });
   }
 
-  protected rememberFocus(event: FocusEvent): void {
+  rememberFocus(event: FocusEvent): void {
     const target = event.target;
     this.focused =
       target instanceof HTMLElement && target.closest('[data-import-mutation]') ? target : null;
+  }
+
+  chooseFile(): void {
+    if (this.store.canWrite() && this.policy.allowsMutation() && !this.store.work().pending) {
+      this.filePicker()?.nativeElement.click();
+    }
   }
 
   protected readonly formatLabel = (format: string): string => format.toUpperCase();

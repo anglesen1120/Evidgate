@@ -25,10 +25,13 @@ import { AuthoringCaseTableComponent } from './authoring-case-table.component';
 class TableHarness extends ComponentHarness {
   static hostSelector = 'app-authoring-case-table';
   readonly search = this.locatorFor('#authoring-case-search');
+  readonly tiles = this.locatorForAll('[aria-labelledby="authoring-case-loaded-states"] button');
   readonly item = this.locatorFor('#authoring-case-item');
   readonly itemError = this.locatorFor('#authoring-case-item-error');
   readonly searchError = this.locatorFor('#authoring-case-search-error');
   readonly apply = this.locatorFor('[data-case-apply]');
+  readonly filterHelp = this.locatorFor('[data-case-filter-help]');
+  readonly toggleHelp = this.locatorFor('[data-case-filter-help] summary');
   readonly source = this.locatorFor('#authoring-case-source');
   readonly owner = this.locatorFor('#authoring-case-owner');
   readonly loadMore = this.locatorFor('[data-case-load-more]');
@@ -107,6 +110,23 @@ describe('AuthoringCaseTableComponent', () => {
     return TestbedHarnessEnvironment.harnessForFixture(fixture, TableHarness);
   }
 
+  it('keeps real zeros for included lifecycles and marks excluded lifecycles unverified', async () => {
+    list.mockResolvedValue({ items: [caseRow('draft-1')], next_cursor: null });
+    const harness = await mount();
+    const counts = async () => Promise.all((await harness.tiles()).map((tile) => tile.text()));
+    expect(await counts()).toEqual([
+      expect.stringMatching(/1$/),
+      expect.stringMatching(/0$/),
+      expect.stringMatching(/0$/),
+    ]);
+    query.next(convertToParamMap({ state: 'draft' }));
+    expect(await counts()).toEqual([
+      expect.stringMatching(/1$/),
+      expect.stringContaining('—'),
+      expect.stringContaining('—'),
+    ]);
+  });
+
   it('renders loading while a real request remains pending', async () => {
     const pending = new Subject<ManualCaseListResponse>();
     list.mockReturnValueOnce(firstValueFrom(pending));
@@ -173,6 +193,9 @@ describe('AuthoringCaseTableComponent', () => {
 
   it('disables unsupported source and owner controls with persistent announced reasons', async () => {
     const harness = await mount();
+    expect(await (await harness.filterHelp()).getProperty<boolean>('open')).toBe(false);
+    await (await harness.toggleHelp()).click();
+    expect(await (await harness.filterHelp()).getProperty<boolean>('open')).toBe(true);
     expect(await (await harness.source()).getAttribute('disabled')).not.toBeNull();
     expect(await (await harness.owner()).getAttribute('disabled')).not.toBeNull();
     expect(await (await harness.source()).getAttribute('aria-describedby')).toBe(
@@ -333,6 +356,23 @@ describe('AuthoringCaseTableComponent', () => {
     expect(extras?.queryParamsHandling).toBe('merge');
     expect(extras?.replaceUrl).toBe(true);
     query.next(convertToParamMap({ cursor: 'second' }));
+    expect(await (await harness.search()).getProperty('value')).toBe('unapplied');
+  });
+
+  it('applies only the clicked status and keeps the unsubmitted search draft', async () => {
+    query.next(convertToParamMap({ priority: 'high' }));
+    list.mockResolvedValue({ items: [caseRow('draft-1')], next_cursor: null });
+    const harness = await mount();
+    await (await harness.search()).sendKeys('unapplied');
+    navigate.mockClear();
+    const tiles = await harness.tiles();
+    expect(tiles.length).toBe(3);
+    await tiles[0]?.click();
+    await fixture.whenStable();
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalled());
+    const extras = navigate.mock.calls[0]?.[1];
+    expect(extras?.queryParams).toMatchObject({ state: 'draft', priority: 'high' });
+    expect(extras?.queryParams).not.toHaveProperty('q', 'unapplied');
     expect(await (await harness.search()).getProperty('value')).toBe('unapplied');
   });
 

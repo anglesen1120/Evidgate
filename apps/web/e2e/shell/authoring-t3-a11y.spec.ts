@@ -81,6 +81,7 @@ test.describe('pending changes hostile text renders inert as text', () => {
     await expect(page.locator('#main-content img')).toHaveCount(0);
     await expect(page.locator('#main-content script')).toHaveCount(0);
     await expect(page.locator('#main-content [onerror]')).toHaveCount(0);
+    await expect(content.locator('img, script, [onerror]')).toHaveCount(0);
     expect(await page.evaluate(() => Object.hasOwn(globalThis, 'pwned'))).toBe(false);
     await expect(page.getByRole('alertdialog')).toHaveCount(0);
     expect(await calls(page)).toEqual([]);
@@ -117,7 +118,7 @@ test.describe('pending consent dialog keeps keyboard focus inside', () => {
     expect(await calls(page)).toEqual([]);
   });
 
-  test('a successful apply that empties the selection moves focus to the preview region', async ({
+  test('a successful apply that empties the selection moves focus to a remaining View', async ({
     page,
   }) => {
     await page.goto(localePath('en', base));
@@ -135,22 +136,25 @@ test.describe('pending consent dialog keeps keyboard focus inside', () => {
     await expect(page.locator('[data-pending-receipt]')).toBeVisible();
     // Every applied row leaves the selection, so the opener is disabled and must not hold focus.
     await expect(apply).toBeDisabled();
-    await expect(page.locator('[data-pending-preview-content]')).toBeFocused();
+    await expect(page.locator('[data-pending-preview]').first()).toBeFocused();
     expect(await calls(page)).toHaveLength(1);
   });
 
-  test('discard that removes its opener moves focus to the preview region', async ({ page }) => {
+  test('discard moves focus to the next available View after its row is removed', async ({
+    page,
+  }) => {
     await page.goto(localePath('en', base));
-    await page.locator('[data-pending-preview]').first().click();
-    const discard = page.locator('[data-pending-discard]');
-    await keyboardTo(page, discard);
+    const more = page.locator('[data-pending-more]').first();
+    await keyboardTo(page, more);
+    await page.keyboard.press('Enter');
+    await expect(page.locator('[data-pending-discard]')).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page.locator('[data-pending-cancel]')).toBeFocused();
     const dialog = page.getByRole('alertdialog');
     await page.keyboard.press('Tab');
     await page.keyboard.press('Enter');
     await expect(dialog).toHaveCount(0);
-    await expect(page.locator('[data-pending-preview-content]')).toBeFocused();
+    await expect(page.locator('[data-pending-preview]').first()).toBeFocused();
   });
 });
 

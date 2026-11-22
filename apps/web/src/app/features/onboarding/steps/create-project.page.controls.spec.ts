@@ -42,6 +42,9 @@ describe('CreateProjectPage Helm controls', () => {
       const field = requiredElement<HTMLInputElement>(root, `#${id}`);
       expect(field.getAttribute('data-slot')).toBe('input');
       expect(field.required).toBe(true);
+      expect(field.validity.valueMissing).toBe(true);
+      expect(field.getAttribute('aria-invalid')).not.toBe('true');
+      expect(field.getAttribute('data-matches-spartan-invalid')).not.toBe('true');
       expect(field.labels?.item(0)?.htmlFor).toBe(id);
       expect(field.labels?.item(0)?.textContent).not.toContain('*');
       field.focus();
@@ -108,6 +111,10 @@ describe('CreateProjectPage Helm controls', () => {
     await fixture.whenStable();
     const summary = requiredElement<HTMLElement>(root, '#onboarding-project-errors');
     expect(document.activeElement).toBe(summary);
+    for (const field of root.querySelectorAll('input[required]')) {
+      expect(field.getAttribute('aria-invalid')).toBe('true');
+      expect(field.getAttribute('data-matches-spartan-invalid')).toBe('true');
+    }
     expect(summary.querySelectorAll('a')).toHaveLength(2);
     const link = requiredElement<HTMLAnchorElement>(summary, 'a[href="#onboarding-project-name"]');
     link.click();

@@ -26,6 +26,7 @@ import { HlmLabel } from '@evidgate/ui/label';
 import { HlmCheckbox } from '@evidgate/ui/checkbox';
 import { HlmTabsImports } from '@evidgate/ui/tabs';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { createFormFeedback } from '../../../shared/forms/form-feedback';
 import { FieldFeedbackComponent } from '../../../shared/forms/field-feedback.component';
 import { FormErrorSummaryComponent } from '../../../shared/forms/form-error-summary.component';
@@ -37,6 +38,7 @@ import { ConflictDialogComponent } from '../../../shared/ui/conflict/conflict-di
 import { isApiRequestError } from '../../../core/http/api-error';
 import { AiSettingsHistoryComponent } from './ai-settings-history.component';
 import { AiSettingsVersionCardComponent } from './ai-settings-version-card.component';
+import { AiSettingsTemplatePickerComponent } from './ai-settings-template-picker.component';
 import { AiSettingsStore } from './ai-settings.store';
 import { count, FIELDS, replaceText, textOf, type TextField } from './ai-settings.model';
 
@@ -93,6 +95,7 @@ function headingLevel(data: Record<string, unknown>): number {
     HlmCheckbox,
     HlmTabsImports,
     HlmDialogImports,
+    HlmIcon,
     FieldFeedbackComponent,
     FormErrorSummaryComponent,
     PageHeaderComponent,
@@ -102,6 +105,7 @@ function headingLevel(data: Record<string, unknown>): number {
     ConflictDialogComponent,
     AiSettingsHistoryComponent,
     AiSettingsVersionCardComponent,
+    AiSettingsTemplatePickerComponent,
   ],
   providers: [AiSettingsStore],
   templateUrl: './ai-settings.page.html',
@@ -115,6 +119,7 @@ export class AiSettingsPage {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly pageHeadingLevel = headingLevel(this.route.snapshot.data);
   protected readonly fields = FIELDS;
+  protected readonly tab = signal('settings');
   protected readonly sections = sections;
   protected readonly languages: readonly ('en' | 'vi')[] = ['en', 'vi'];
   protected readonly count = count;
@@ -301,9 +306,9 @@ export class AiSettingsPage {
     const success = await this.store.save();
     if (!success && this.store.failure()?.kind === 'validation') this.feedback.submit();
   }
-  protected previewTemplate(template: AiSettingsTemplateView, event: MouseEvent): void {
+  protected previewTemplate(template: AiSettingsTemplateView, opener: HTMLButtonElement): void {
     if (!this.viewport.allowsMutation() || !this.store.canWrite()) return;
-    this.templateOpener = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+    this.templateOpener = opener;
     this.preview.set(template);
   }
   protected templateClosed(): void {

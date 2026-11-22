@@ -110,13 +110,13 @@ describe('PendingChangesPage', () => {
     const { ui } = await setup();
     expect(await ui.text()).toContain('Review this change');
     await ui.click('[data-pending-preview]');
-    expect(await ui.textAt('[data-pending-preview-content]')).toContain(
+    expect(await ui.overlayText('[data-pending-preview-content]')).toContain(
       '<script>plain text</script>',
     );
-    expect(await ui.textAt('[data-pending-preview-content]')).toContain(
+    expect(await ui.overlayText('[data-pending-preview-content]')).toContain(
       'Long comment. '.repeat(80).trim(),
     );
-    expect(await ui.count('script')).toBe(0);
+    expect(await ui.overlayCount('[data-pending-preview-content] script')).toBe(0);
     expect(await ui.count('[data-pending-apply]')).toBe(1);
   });
   it('keeps the loaded count separate from the batch selection when inspecting a change', async () => {
@@ -138,7 +138,7 @@ describe('PendingChangesPage', () => {
       listPending.mockResolvedValue({ items: [{ ...pendingRow(kind), stale }], next_cursor: null });
       const { ui } = await setup();
       await ui.click('[data-pending-preview]');
-      expect(await ui.textAt('[data-pending-preview-state]')).toContain(state);
+      expect(await ui.overlayText('[data-pending-preview-state]')).toContain(state);
       expect(apply).not.toHaveBeenCalled();
     },
   );
@@ -148,7 +148,7 @@ describe('PendingChangesPage', () => {
       listPending.mockResolvedValue({ items: [pendingRow(kind)], next_cursor: null });
       const { ui } = await setup();
       await ui.click('[data-pending-preview]');
-      const preview = await ui.textAt('[data-pending-preview-content]');
+      const preview = await ui.overlayText('[data-pending-preview-content]');
       expect(preview).toContain(
         PENDING_COPY[
           kind === 'comment'
@@ -261,14 +261,14 @@ describe('PendingChangesPage', () => {
       await store.apply();
       await store.reload();
       await ui.click('[data-pending-preview]');
-      expect(await ui.count('[data-pending-preview-content]')).toBe(1);
+      expect(await ui.overlayCount('[data-pending-preview-content]')).toBe(1);
       expect(await ui.count('[data-pending-receipt]')).toBe(1);
       listPending.mockRejectedValue(new ApiRequestError(pendingError('forbidden', 403)));
       await store[method]();
       await fixture.whenStable();
       expect(await ui.count('app-forbidden-pattern')).toBe(1);
       expect(await ui.count('app-data-table')).toBe(0);
-      expect(await ui.count('[data-pending-preview-content]')).toBe(0);
+      expect(await ui.overlayCount('[data-pending-preview-content]')).toBe(0);
       expect(await ui.count('[data-pending-receipt]')).toBe(0);
       expect(store.targetTitles()).toEqual({});
     },
@@ -279,7 +279,8 @@ describe('PendingChangesPage', () => {
       listPending.mockResolvedValue({ items: [pendingRow()], next_cursor: 'next' });
       const { ui, store, fixture } = await setup();
       await ui.click('[data-pending-preview]');
-      await ui.focusControl('[data-pending-preview]');
+      const heading = document.querySelector('[data-pending-view-title]');
+      expect(heading).not.toBeNull();
       let finish: (page: AuthoringChangePageResponse) => void = () => {
         throw new Error('Read has not started');
       };
@@ -294,15 +295,15 @@ describe('PendingChangesPage', () => {
       expect(store.queueStatus()).toBe('ready');
       expect(store.queueLoading()).toBe(true);
       expect(await ui.count('[data-pending-preview]')).toBe(1);
-      expect(await ui.textAt('[data-pending-preview-content]')).toContain('plain text');
-      expect(await ui.focused('[data-pending-preview]')).toBe(true);
+      expect(await ui.overlayText('[data-pending-preview-content]')).toContain('plain text');
+      expect(document.activeElement).toBe(heading);
       await expect(store.apply()).resolves.toBe(false);
       expect(selection).not.toHaveBeenCalled();
       finish({ items: [pendingRow()], next_cursor: null });
       await reading;
       await fixture.whenStable();
       expect(store.queueLoading()).toBe(false);
-      expect(await ui.focused('[data-pending-preview]')).toBe(true);
+      expect(document.activeElement).toBe(heading);
       await expect(store.apply()).resolves.toBe(true);
     },
   );

@@ -109,8 +109,10 @@ describe('ChecklistReviewTabComponent', () => {
     });
     const { ui } = await setup();
     expect(await ui.count('[data-review-change]')).toBe(1);
-    expect(await ui.textAt('[data-review-change]')).toContain('This item’s queued comment');
-    expect(await ui.text()).not.toContain('Another item’s queued comment');
+    await ui.click('[data-review-change]');
+    const detail = await ui.overlayText('[data-pending-preview-content]');
+    expect(detail).toContain('This item’s queued comment');
+    expect(detail).not.toContain('Another item’s queued comment');
   });
   it('renders no rows for an empty item identifier', async () => {
     listPending.mockResolvedValue({

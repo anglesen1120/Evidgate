@@ -73,7 +73,7 @@ for (const locale of LOCALES) {
   });
 
   for (const theme of THEMES)
-    for (const width of [360, 1280]) {
+    for (const width of [360, 900, 1280, 1440]) {
       test(`catalog reflows, keeps keyboard controls and passes axe (${locale}, ${theme}, ${width})`, async ({
         page,
       }) => {
@@ -85,7 +85,7 @@ for (const locale of LOCALES) {
           'ready',
         );
         await expect(page.locator(ROWS)).toHaveCount(2);
-        if (width === 1280) {
+        if (width >= 900) {
           const [status, framework, search] = await Promise.all(
             ['#catalog-status', '#catalog-framework', '#catalog-search'].map((selector) =>
               page.locator(selector).boundingBox(),
@@ -96,6 +96,27 @@ for (const locale of LOCALES) {
           expect(search.y).toBeCloseTo(status.y, 0);
           expect(framework.x).toBeGreaterThan(status.x);
           expect(search.x).toBeGreaterThan(framework.x);
+          for (const view of await page.locator(`${ROWS} [data-catalog-view]`).all()) {
+            const lines = await view.evaluate((button) => {
+              const text = document.createRange();
+              text.selectNodeContents(button);
+              return text.getClientRects().length;
+            });
+            expect(lines, 'the row action label must fit on one line').toBe(1);
+          }
+          const facts = page.locator(
+            `${ROWS} :is([data-column-id="owner"], [data-column-id="labels"]) app-data-table-value .value`,
+          );
+          await expect(facts).toHaveCount(4);
+          for (const fact of await facts.all()) {
+            expect(
+              await fact.evaluate(
+                (el) =>
+                  el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1,
+              ),
+              'ordinary owner and missing-label values must be readable without a popover',
+            ).toBe(true);
+          }
         }
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),

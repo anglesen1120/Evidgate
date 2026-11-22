@@ -4,7 +4,7 @@
   >
     <app-shell-icon [name]="'list'" />
   </span>
-  <app-page-header class="min-w-0 flex-1" [title]="copy.title" [description]="copy.description" />
+  <app-page-header class="min-w-0 flex-1" [title]="copy.title" [description]="subtitle()" />
 </div>
 <section
   hlmCard
@@ -16,8 +16,42 @@
     [titleId]="'catalog-results-heading'"
     [title]="copy.results"
   />
+  @if (store.status() === 'ready') {
+    <p class="m-0 px-(--eg-space-5) pt-(--eg-space-3) text-xs font-semibold text-muted-foreground">
+      {{ recordCopy.loadedStatus }}
+    </p>
+    <div
+      role="group"
+      [attr.aria-label]="recordCopy.loadedStatus"
+      class="relative flex min-w-0 overflow-x-auto border-b border-border px-(--eg-space-4) py-(--eg-space-2)"
+    >
+      @for (option of statusOptions; track option.value) {
+        <button
+          hlmBtn
+          [variant]="'ghost'"
+          type="button"
+          class="h-auto min-h-(--eg-control-touch) shrink-0 flex-col items-start rounded-none border-e border-border px-(--eg-space-4) aria-pressed:bg-(--eg-accent-soft)"
+          [attr.aria-pressed]="store.filters().status === option.value"
+          (click)="quickStatus(option.value)"
+        >
+          <span class="text-xs text-muted-foreground">{{ option.label }}</span>
+          @let count = loadedCounts()[option.value];
+          <span class="self-end text-xl font-semibold tabular-nums">
+            @if (count === null) {
+              <span aria-hidden="true">&mdash;</span>
+              <span class="sr-only" i18n="@@catalog.case-list.count-unverified"
+                >Count unavailable with the current filter</span
+              >
+            } @else {
+              {{ count | number }}
+            }
+          </span>
+        </button>
+      }
+    </div>
+  }
   <section
-    class="grid min-w-0 gap-(--eg-space-4) border-b border-border px-(--eg-space-5) py-(--eg-space-5) md:px-(--eg-space-6)"
+    class="grid min-w-0 gap-(--eg-space-3) border-b border-border px-(--eg-space-5) py-(--eg-space-3) md:px-(--eg-space-6)"
     aria-labelledby="catalog-filters-heading"
   >
     <div class="grid min-w-0 gap-(--eg-space-2)">
@@ -126,6 +160,14 @@
       <span>{{ capAnnouncement() }}</span>
     }
   </p>
+  @if (recordUnavailable()) {
+    <div class="flex items-center gap-(--eg-space-4) p-(--eg-space-4)" role="status">
+      <p>{{ recordCopy.unavailable }}</p>
+      <button hlmBtn type="button" [variant]="'outline'" (click)="setRecord(null)">
+        {{ recordCopy.close }}
+      </button>
+    </div>
+  }
   <app-request-state
     [status]="store.status()"
     [loadingLabel]="copy.loading"
@@ -161,8 +203,11 @@
       [canAssign]="canAssign()"
       [ownerPending]="store.ownerPending"
       [ownerFailure]="store.ownerFailure"
-      (ownerChange)="assignOwner($event)"
-      (reloadOwners)="store.reloadOwner($event)"
+      [selection]="readableSelection()"
+      (selectionChange)="setRecord($event)"
+      [ownerHelp]="ownerHelp()"
+      [saveOwner]="assignOwner"
+      [reloadOwner]="reloadOwner"
     />
   </app-request-state>
   @if (store.browseCapped()) {

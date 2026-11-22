@@ -1,5 +1,5 @@
 <section
-  class="grid min-w-0 gap-(--eg-space-7)"
+  class="grid min-w-0 gap-(--eg-space-4)"
   data-testid="onboarding-shell"
   aria-labelledby="onboarding-title"
 >
@@ -7,13 +7,13 @@
     <span
       class="grid size-(--eg-space-9) shrink-0 place-items-center rounded-(--eg-radius-md) border border-border bg-(--eg-accent-soft) text-primary md:size-(--eg-space-10)"
     >
-      <app-shell-icon [name]="'rocket'" />
+      <app-shell-icon [name]="'folder'" />
     </span>
     <app-page-header
       class="min-w-0 flex-1"
       [titleId]="'onboarding-title'"
       [title]="title"
-      [description]="description"
+      [description]="store.status() === 'ready' ? headerFacts() : description"
     />
   </header>
 
@@ -44,57 +44,93 @@
       }
     }
     @case ('ready') {
-      <section class="grid min-w-0 gap-(--eg-space-4)" aria-labelledby="onboarding-progress-title">
-        <div class="flex min-w-0 flex-wrap items-center justify-between gap-(--eg-space-3)">
-          <h2 hlmCardTitle [size]="sectionHeadingSize" id="onboarding-progress-title">
-            {{ progressLabel }}
-          </h2>
-          <p
-            class="m-0 text-sm font-semibold text-muted-foreground tabular-nums"
-            data-testid="onboarding-progress-count"
-          >
-            {{ progressText() }}
-          </p>
-        </div>
+      <section class="grid min-w-0 gap-(--eg-space-2)" aria-labelledby="onboarding-progress-title">
         <div
-          class="h-(--eg-space-3) overflow-hidden rounded-sm bg-(--eg-neutral-bg)"
-          role="progressbar"
-          [attr.aria-label]="progressLabel"
-          [attr.aria-valuemin]="0"
-          [attr.aria-valuemax]="steps.length"
-          [attr.aria-valuenow]="completedCount()"
-          [attr.aria-valuetext]="progressText()"
+          class="grid min-w-0 items-center gap-x-(--eg-space-6) gap-y-(--eg-space-3) rounded-(--eg-radius-md) border border-border bg-card px-(--eg-space-4) py-(--eg-space-3) md:grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-[minmax(0,1fr)_auto_auto] xl:py-(--eg-space-2)"
         >
-          <div
-            class="h-full bg-primary"
-            [style.width.%]="(completedCount() / steps.length) * 100"
-          ></div>
-        </div>
-        <div class="grid min-w-0 gap-(--eg-space-2) md:contents">
-          <p
-            class="m-0 text-sm font-semibold min-[768px]:hidden"
-            data-testid="onboarding-viewed-summary"
-          >
-            {{ viewedSummary() }}
-          </p>
-          <p
-            class="m-0 text-sm text-muted-foreground min-[768px]:hidden"
-            data-testid="onboarding-next-summary"
-          >
-            {{ nextSummary() }}
-          </p>
-          @if (store.project()) {
-            <p class="m-0 min-w-0 text-sm wrap-anywhere" data-testid="onboarding-project-context">
-              {{ confirmedProjectLabel }} <bdi>{{ confirmedProjectName() }}</bdi
-              >.
-              <a
-                class="inline-flex min-h-(--eg-control-touch) items-center text-primary underline underline-offset-4 focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
-                [attr.href]="resourcesHref()"
-                (click)="focusResources($event)"
-                >{{ resourcesLabel }}</a
+          <div class="grid min-w-0 gap-(--eg-space-1)">
+            <div class="flex min-w-0 flex-wrap items-baseline justify-between gap-x-(--eg-space-3)">
+              <h2
+                hlmCardTitle
+                [size]="sectionHeadingSize"
+                id="onboarding-progress-title"
+                class="m-0 text-sm font-semibold"
               >
-            </p>
+                {{ progressLabel }}
+              </h2>
+              <p
+                class="m-0 text-xs text-muted-foreground tabular-nums"
+                data-testid="onboarding-progress-count"
+              >
+                {{ progressText() }}
+              </p>
+            </div>
+            <div
+              class="h-(--eg-space-2) overflow-hidden rounded-sm bg-(--eg-neutral-bg)"
+              role="progressbar"
+              [attr.aria-label]="progressLabel"
+              [attr.aria-valuemin]="0"
+              [attr.aria-valuemax]="steps.length"
+              [attr.aria-valuenow]="completedCount()"
+              [attr.aria-valuetext]="progressText()"
+            >
+              <div
+                class="h-full bg-primary"
+                [style.width.%]="(completedCount() / steps.length) * 100"
+              ></div>
+            </div>
+            <p class="m-0 text-xs text-muted-foreground">{{ description }}</p>
+          </div>
+          @if (store.progress(); as data) {
+            <dl
+              class="m-0 grid grid-cols-3 divide-x divide-border [&>div]:grid [&>div]:content-center [&>div]:px-(--eg-space-3) [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:text-base [&_dd]:font-semibold [&_dd]:tabular-nums"
+            >
+              <div>
+                <dt class="flex items-center gap-(--eg-space-2)">
+                  <hlm-icon name="lucideCircleCheck" />{{ completedLabel }}
+                </dt>
+                <dd>{{ completedCount() }}/{{ steps.length }}</dd>
+              </div>
+              <div>
+                <dt class="flex items-center gap-(--eg-space-2)">
+                  <app-shell-icon name="plug" />{{ bindingsMetric }}
+                </dt>
+                <dd>{{ data.bindings.length }}{{ data.bindingsTruncated ? '+' : '' }}</dd>
+              </div>
+              <div>
+                <dt class="flex items-center gap-(--eg-space-2)">
+                  <app-shell-icon name="key" />{{ tokensMetric }}
+                </dt>
+                <dd>{{ data.tokens.length }}{{ data.tokensTruncated ? '+' : '' }}</dd>
+              </div>
+            </dl>
           }
+          <div class="grid min-w-0 gap-(--eg-space-2) md:col-span-full xl:col-span-1">
+            <p
+              class="m-0 text-sm font-semibold min-[768px]:hidden"
+              data-testid="onboarding-viewed-summary"
+            >
+              {{ viewedSummary() }}
+            </p>
+            <p
+              class="m-0 text-sm text-muted-foreground min-[768px]:hidden"
+              data-testid="onboarding-next-summary"
+            >
+              {{ nextSummary() }}
+            </p>
+            @if (store.project()) {
+              <p class="m-0 min-w-0 text-sm wrap-anywhere" data-testid="onboarding-project-context">
+                {{ confirmedProjectLabel }} <bdi>{{ confirmedProjectName() }}</bdi
+                >.
+                <a
+                  class="inline-flex items-center text-primary underline underline-offset-4 pointer-coarse:min-h-(--eg-control-touch) focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+                  [attr.href]="resourcesHref()"
+                  (click)="focusResources($event)"
+                  >{{ resourcesLabel }}</a
+                >
+              </p>
+            }
+          </div>
         </div>
         <button
           hlmBtn
@@ -116,17 +152,22 @@
             [class.rotate-180]="stepsExpanded()"
           />
         </button>
-        <nav aria-labelledby="onboarding-progress-title" [attr.aria-describedby]="keyboardHelpId">
+        <nav
+          class="min-w-0 max-w-full"
+          aria-labelledby="onboarding-progress-title"
+          [attr.aria-describedby]="keyboardHelpId"
+        >
           <p [id]="keyboardHelpId" class="sr-only">{{ keyboardHelp }}</p>
           <ol
             [id]="stepListId"
             [class.hidden]="viewport.narrow() && !stepsExpanded()"
-            class="m-0 grid list-none gap-(--eg-space-3) p-0 min-[768px]:grid-cols-5"
+            [class.flex]="!viewport.narrow() || stepsExpanded()"
+            class="m-0 min-w-0 max-w-full list-none flex-nowrap gap-(--eg-space-3) overflow-x-auto overscroll-x-contain scroll-auto p-(--eg-space-2)"
             data-testid="onboarding-stepper"
           >
             @for (step of steps; track step.number) {
               <li
-                class="min-w-0"
+                class="min-w-max flex-[1_0_auto]"
                 [attr.data-testid]="'onboarding-step-' + step.number"
                 [attr.data-done]="store.done()[step.number]"
                 [attr.data-current]="store.viewStep() === step.number"
@@ -136,7 +177,7 @@
                   #stepButton
                   [variant]="outlineVariant"
                   type="button"
-                  class="group grid h-full min-h-(--eg-control-touch) w-full min-w-0 grid-cols-[auto_minmax(0,1fr)] content-start items-start justify-start gap-x-(--eg-space-3) gap-y-(--eg-space-1) rounded-(--eg-radius-md) border-b-2 p-(--eg-space-4) text-start whitespace-normal focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset) aria-[current=step]:border-b-primary aria-[current=step]:bg-(--eg-accent-soft) aria-[current=step]:text-foreground aria-[disabled=true]:cursor-not-allowed md:max-xl:grid-cols-1"
+                  class="group grid h-auto min-h-(--eg-control-touch) w-full grid-cols-[auto_minmax(0,1fr)] content-center items-center justify-start gap-x-(--eg-space-3) rounded-(--eg-radius-md) border-b-2 px-(--eg-space-3) py-(--eg-space-2) text-start whitespace-nowrap focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset) aria-[current=step]:border-b-primary aria-[current=step]:bg-(--eg-accent-soft) aria-[current=step]:text-foreground aria-[disabled=true]:cursor-not-allowed"
                   [attr.data-testid]="'onboarding-select-step-' + step.number"
                   [attr.aria-current]="store.viewStep() === step.number ? 'step' : null"
                   [attr.aria-disabled]="!canSelect(step.number)"
@@ -148,7 +189,7 @@
                   (click)="selectStep(step.number)"
                 >
                   <span
-                    class="row-span-2 grid size-(--eg-control-sm) shrink-0 place-items-center rounded-(--eg-radius-sm) bg-(--eg-neutral-bg) text-sm font-semibold text-(--eg-neutral-fg) tabular-nums group-aria-[current=step]:bg-primary group-aria-[current=step]:text-primary-foreground md:max-xl:row-span-1"
+                    class="row-span-2 grid size-(--eg-space-7) shrink-0 place-items-center rounded-(--eg-radius-sm) bg-(--eg-neutral-bg) text-xs font-semibold text-(--eg-neutral-fg) tabular-nums group-aria-[current=step]:bg-primary group-aria-[current=step]:text-primary-foreground"
                     aria-hidden="true"
                     >{{ step.number }}</span
                   >
@@ -156,7 +197,7 @@
                     step.label
                   }}</span>
                   <span
-                    class="col-start-2 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-(--eg-space-2) text-xs wrap-anywhere text-muted-foreground md:max-xl:col-start-1 [&_hlm-icon]:shrink-0"
+                    class="col-start-2 flex min-w-0 items-center gap-(--eg-space-2) text-xs text-muted-foreground [&_hlm-icon]:shrink-0"
                     [attr.data-step-status]="
                       store.done()[step.number]
                         ? 'complete'
@@ -177,7 +218,7 @@
                     }
                     @if (store.viewStep() === step.number) {
                       <span
-                        class="col-start-2 font-(weight:--eg-weight-semibold) text-foreground"
+                        class="border-s border-border ps-(--eg-space-2) font-semibold text-foreground"
                         >{{ viewingLabel }}</span
                       >
                     }
@@ -226,6 +267,7 @@
                 [orgId]="orgId()"
                 [projectId]="project.id"
                 [active]="store.viewStep() === 2"
+                (viewRecord)="recordDialog.open($event)"
               />
             </div>
           }
@@ -312,6 +354,13 @@
         tabindex="-1"
         [progress]="store.progress()"
         [refreshFailed]="store.refreshFailure() !== null"
+        (viewRecord)="recordDialog.open($event)"
+      />
+      <app-onboarding-record-dialog
+        #recordDialog
+        [scope]="orgId() + ':' + (store.project()?.id ?? '')"
+        [progress]="store.progress()"
+        [step]="store.viewStep()"
       />
     }
   }

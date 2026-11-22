@@ -47,9 +47,7 @@ class TimelineHarness extends ComponentHarness {
   }
   async ids() {
     return Promise.all(
-      (await this.locatorForAll('[data-version-row]')()).map((row) =>
-        row.getAttribute('data-version-row'),
-      ),
+      (await this.locatorForAll('[data-row-id]')()).map((row) => row.getAttribute('data-row-id')),
     );
   }
   async text() {
@@ -59,7 +57,7 @@ class TimelineHarness extends ComponentHarness {
     return (await this.locatorFor(selector)()).getProperty<boolean>('disabled');
   }
   async rowText() {
-    return Promise.all((await this.locatorForAll('[data-version-row]')()).map((row) => row.text()));
+    return Promise.all((await this.locatorForAll('[data-row-id]')()).map((row) => row.text()));
   }
   async filter(value: string) {
     const input = await this.locatorFor('#case-history-filter')();
@@ -446,7 +444,7 @@ describe('TimelineComponent', () => {
         ),
     );
     const { fixture, harness } = await mount();
-    expect(await harness.count('[data-version-row]')).toBe(200);
+    expect(await harness.count('[data-row-id]')).toBe(200);
     expect(await harness.count('cdk-virtual-scroll-viewport')).toBe(0);
     await harness.click('[data-versions-more]');
     await fixture.whenStable();

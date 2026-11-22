@@ -21,7 +21,7 @@ import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-
         Version in use
       </h2>
     </header>
-    <div hlmCardContent class="grid min-w-0 gap-(--eg-space-4)">
+    <div hlmCardContent class="grid min-w-0 gap-(--eg-space-2)">
       <p class="m-0 font-semibold tabular-nums" i18n="@@authoring.ai-settings.version">
         Current version: {{ view.version_no }}
       </p>
@@ -30,18 +30,20 @@ import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-
           Using default guidance; no saved version exists yet.
         </p>
       }
-      @if (view.author || view.created_at) {
-        <dl class="m-0 grid min-w-0 gap-(--eg-space-3)">
-          @if (view.author; as author) {
-            <div class="grid min-w-0 gap-(--eg-space-2) border-t border-border pt-(--eg-space-3)">
-              <dt class="eg-type-caption text-muted-foreground">{{ authorLabel }}</dt>
-              <dd class="m-0 min-w-0">
-                <app-copyable-identifier [value]="author" [label]="authorLabel" />
-              </dd>
-            </div>
-          }
+      @if (view.version_no > 0 || view.author || view.created_at) {
+        <dl class="m-0 grid min-w-0 divide-y divide-border">
+          <div class="grid min-w-0 gap-(--eg-space-1) border-t border-border py-(--eg-space-2)">
+            <dt class="eg-type-caption text-muted-foreground">{{ authorLabel }}</dt>
+            <dd class="m-0 min-w-0">
+              @if (view.author; as author) {
+                <app-copyable-identifier [compact]="true" [value]="author" [label]="authorLabel" />
+              } @else {
+                <span i18n="@@authoring.import-export.not-supplied">Not supplied</span>
+              }
+            </dd>
+          </div>
           @if (view.created_at; as instant) {
-            <div class="grid min-w-0 gap-(--eg-space-2) border-t border-border pt-(--eg-space-3)">
+            <div class="grid min-w-0 gap-(--eg-space-1) pt-(--eg-space-2)">
               <dt class="eg-type-caption text-muted-foreground" i18n="@@authoring.ai-settings.time">
                 Saved at (UTC)
               </dt>

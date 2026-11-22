@@ -1,4 +1,4 @@
-<div class="grid min-w-0 gap-(--eg-space-6)">
+<div class="grid min-w-0 gap-(--eg-space-5)">
   @if (pageHeadingLevel === 1) {
     <div class="flex min-w-0 items-start gap-(--eg-space-4)">
       <span
@@ -8,15 +8,50 @@
       <app-page-header
         class="min-w-0 flex-1 wrap-anywhere"
         [title]="title()"
-        [description]="intro"
-      />
+        [description]="intro()"
+        ><ng-container ngProjectAs="[appPageHeaderActions]" [ngTemplateOutlet]="saveAction"
+      /></app-page-header>
     </div>
   } @else {
-    <h2 hlmCardTitle [size]="'section'">{{ title() }}</h2>
+    <div class="flex min-w-0 flex-wrap items-start justify-between gap-(--eg-space-4)">
+      <div class="min-w-0">
+        <h2 hlmCardTitle [size]="'section'">{{ title() }}</h2>
+        <p class="m-0 text-sm text-muted-foreground">{{ intro() }}</p>
+      </div>
+      <ng-container [ngTemplateOutlet]="saveAction" />
+    </div>
   }
-  <app-desktop-required-notice />
+  <ng-template #saveAction>
+    @if (tab() === 'editor' && viewport.canMutate() && status() === 'ready' && store.draft()) {
+      @if (store.base(); as base) {
+        <button
+          hlmBtn
+          type="submit"
+          [attr.form]="'manual-case-edit-form'"
+          class="min-h-(--eg-control-touch) whitespace-normal"
+          data-editor-save
+          [disabled]="blocked() && !store.saving() && !store.conflictOpen()"
+          [attr.aria-disabled]="blocked()"
+          [attr.data-disabled]="blocked() ? '' : null"
+          [attr.aria-describedby]="
+            !store.canWrite()
+              ? 'case-write-reason'
+              : base.view.state === 'retired'
+                ? 'case-retired-reason'
+                : null
+          "
+          i18n="@@authoring.editor.save"
+        >
+          Save new version
+        </button>
+      }
+    }
+  </ng-template>
+  @if (viewport.narrow()) {
+    <app-desktop-required-notice />
+  }
   <app-request-state
-    class="grid gap-(--eg-space-5)"
+    class="grid gap-(--eg-space-3)"
     [status]="status()"
     [error]="errorOf(store.head.error())"
     [retryEligible]="!!store.scope()"
@@ -47,29 +82,6 @@
           Unsaved changes are kept in this tab only.
         </p>
       }
-      @if (viewport.narrow()) {
-        <label hlmLabel for="case-panel-select" i18n="@@authoring.editor.choose-panel"
-          >Choose a section</label
-        >
-        <hlm-select [value]="tab()" (valueChange)="selectTab($event)" [itemToString]="panelLabel">
-          <hlm-select-trigger
-            [buttonId]="'case-panel-select'"
-            class="min-h-(--eg-control-touch) w-full whitespace-normal"
-            ><hlm-select-value
-          /></hlm-select-trigger>
-          <hlm-select-content *hlmSelectPortal [aria-label]="panelSelectLabel">
-            <hlm-select-item [value]="'editor'" i18n="@@authoring.editor.editor-tab"
-              >Editor</hlm-select-item
-            >
-            <hlm-select-item [value]="'review'" i18n="@@authoring.editor.review-select-option"
-              >Checklist review</hlm-select-item
-            >
-            <hlm-select-item [value]="'timeline'" i18n="@@authoring.editor.timeline-tab"
-              >Timeline</hlm-select-item
-            >
-          </hlm-select-content>
-        </hlm-select>
-      }
       <hlm-tabs
         [tab]="tab()"
         (tabActivated)="selectTab($event)"
@@ -77,8 +89,9 @@
       >
         <div
           hlmTabsList
-          [variant]="'line'"
-          [style.display]="viewport.narrow() ? 'none' : null"
+          #tabStrip
+          class="flex max-w-full min-w-0 flex-nowrap overflow-x-auto bg-transparent p-(--eg-space-2) [scrollbar-color:var(--eg-border-control)_transparent] [&>button]:max-w-none [&>button]:flex-none [&>button]:whitespace-nowrap"
+          (focusin)="revealTab(tabStrip, $event.target)"
           aria-label="Case sections"
           i18n-aria-label="@@authoring.editor.panels"
         >
@@ -99,79 +112,98 @@
           </button>
         </div>
         <div
-          class="mt-(--eg-space-5) grid min-w-0 items-start gap-(--eg-space-5) @min-[52rem]/panels:data-case-form:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
+          class="mt-(--eg-space-3) grid min-w-0 items-start gap-(--eg-space-5) @min-[52rem]/panels:data-case-form:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
           [attr.data-case-form]="tab() === 'editor' ? '' : null"
         >
           <div [hlmTabsContent]="'editor'" class="min-w-0">
             @if (store.draft(); as draft) {
               <section hlmCard class="min-w-0 gap-0 py-0" aria-labelledby="case-content-heading">
                 @if (viewport.canMutate()) {
-                  <h2
-                    hlmCardTitle
-                    id="case-content-heading"
-                    [size]="'subsection'"
-                    class="border-b border-border px-(--eg-space-6) py-(--eg-space-5)"
+                  <header
+                    class="grid gap-(--eg-space-1) border-b border-border px-(--eg-space-5) py-(--eg-space-3)"
                   >
-                    {{ contentTitle }}
-                  </h2>
+                    <h2 hlmCardTitle id="case-content-heading" [size]="'subsection'">
+                      {{ contentTitle }}
+                    </h2>
+                    <p
+                      class="m-0 text-sm text-muted-foreground"
+                      i18n="@@authoring.editor.content-hint"
+                    >
+                      Expected results change only through explicit manual edits.
+                    </p>
+                  </header>
                   <form
-                    class="grid min-w-0 gap-(--eg-space-5) p-(--eg-space-5) md:p-(--eg-space-6)"
+                    id="manual-case-edit-form"
+                    class="grid min-w-0 gap-(--eg-space-3) p-(--eg-space-4) @container/case"
                     (ngSubmit)="save()"
                     [attr.aria-busy]="store.locked()"
                   >
                     <app-form-required-note />
-                    <app-form-error-summary [summaryId]="'case-errors'" [feedback]="feedback()" />
-                    @for (field of fields; track field.key; let index = $index) {
-                      <div class="grid min-w-0 gap-2">
-                        <label hlmLabel [for]="'case-' + field.key"
-                          >{{ field.label }}
-                          <app-field-requirement [required]="field.required" />
-                        </label>
-                        @if (field.key === 'title') {
-                          <input
-                            hlmInput
-                            id="case-title"
-                            name="title"
-                            [ngModel]="draft.title"
-                            (ngModelChange)="store.editText('title', $event)"
-                            required
-                            [readOnly]="
-                              !store.canWrite() || store.locked() || base.view.state === 'retired'
-                            "
-                            [aria-describedby]="feedback().fields[index]?.describedBy() ?? null"
-                            [attr.aria-invalid]="feedback().fields[index]?.ariaInvalid()"
-                            (blur)="feedback().fields[index]?.blur()"
-                          />
-                        } @else {
-                          <textarea
-                            hlmInput
-                            rows="3"
-                            class="h-auto resize-y"
-                            [id]="'case-' + field.key"
-                            [name]="field.key"
-                            [ngModel]="draft[field.key]"
-                            (ngModelChange)="store.editText(field.key, $event)"
-                            [readOnly]="
-                              !store.canWrite() || store.locked() || base.view.state === 'retired'
-                            "
-                            [aria-describedby]="feedback().fields[index]?.describedBy() ?? null"
-                            [attr.aria-invalid]="feedback().fields[index]?.ariaInvalid()"
-                            (blur)="feedback().fields[index]?.blur()"
-                          ></textarea>
-                        }
-                        <p
-                          class="eg-type-caption text-muted-foreground tabular-nums"
-                          [id]="'case-' + field.key + '-hint'"
-                          i18n="@@authoring.editor.character-count"
+                    <app-form-error-summary
+                      class="empty:hidden"
+                      [summaryId]="'case-errors'"
+                      [feedback]="feedback()"
+                    />
+                    <div class="grid min-w-0 gap-(--eg-space-3) @min-[32rem]/case:grid-cols-2">
+                      @for (field of fields; track field.key; let index = $index) {
+                        <div
+                          class="grid min-w-0 content-start gap-(--eg-space-1)"
+                          [class.col-span-full]="field.key === 'title'"
                         >
-                          {{ count(draft[field.key]) }} / {{ field.limit }} characters
-                        </p>
-                        @if (feedback().fields[index]; as entry) {
-                          <app-field-feedback [field]="entry" />
-                        }
-                      </div>
-                    }
-                    <div class="grid min-w-0 gap-2">
+                          <div class="field-heading">
+                            <label hlmLabel [for]="'case-' + field.key"
+                              >{{ field.label }}
+                              <app-field-requirement [required]="field.required" />
+                            </label>
+                            <p
+                              class="eg-type-caption text-muted-foreground tabular-nums"
+                              [id]="'case-' + field.key + '-hint'"
+                              i18n="@@authoring.editor.character-count"
+                            >
+                              {{ count(draft[field.key]) }} / {{ field.limit }} characters
+                            </p>
+                          </div>
+                          @if (field.key === 'title') {
+                            <input
+                              hlmInput
+                              id="case-title"
+                              name="title"
+                              [ngModel]="draft.title"
+                              (ngModelChange)="store.editText('title', $event)"
+                              required
+                              [readOnly]="
+                                !store.canWrite() || store.locked() || base.view.state === 'retired'
+                              "
+                              [aria-describedby]="feedback().fields[index]?.describedBy() ?? null"
+                              [attr.aria-invalid]="feedback().fields[index]?.ariaInvalid()"
+                              (blur)="feedback().fields[index]?.blur()"
+                            />
+                          } @else {
+                            <textarea
+                              hlmInput
+                              rows="2"
+                              class="h-auto resize-y"
+                              [id]="'case-' + field.key"
+                              [name]="field.key"
+                              [ngModel]="draft[field.key]"
+                              (ngModelChange)="store.editText(field.key, $event)"
+                              [readOnly]="
+                                !store.canWrite() || store.locked() || base.view.state === 'retired'
+                              "
+                              [aria-describedby]="feedback().fields[index]?.describedBy() ?? null"
+                              [attr.aria-invalid]="feedback().fields[index]?.ariaInvalid()"
+                              (blur)="feedback().fields[index]?.blur()"
+                            ></textarea>
+                          }
+                          @if (feedback().fields[index]; as entry) {
+                            <app-field-feedback [field]="entry" />
+                          }
+                        </div>
+                      }
+                    </div>
+                    <div
+                      class="grid min-w-0 items-center gap-(--eg-space-2) @min-[32rem]/case:grid-cols-[auto_minmax(0,1fr)]"
+                    >
                       <label hlmLabel for="case-priority" i18n="@@authoring.editor.priority"
                         >Priority</label
                       >
@@ -185,7 +217,7 @@
                       >
                         <hlm-select-trigger
                           [buttonId]="'case-priority'"
-                          class="min-h-(--eg-control-touch) w-full whitespace-normal"
+                          class="w-full whitespace-normal pointer-coarse:min-h-(--eg-control-touch)"
                           [aria-describedby]="
                             feedback().fields[fields.length]?.describedBy() ?? null
                           "
@@ -201,10 +233,13 @@
                         </hlm-select-content>
                       </hlm-select>
                       @if (feedback().fields[fields.length]; as entry) {
-                        <app-field-feedback [field]="entry" />
+                        <app-field-feedback class="col-span-full" [field]="entry" />
                       }
                     </div>
-                    <section class="grid min-w-0 gap-4" aria-labelledby="case-steps-title">
+                    <section
+                      class="grid min-w-0 gap-(--eg-space-3)"
+                      aria-labelledby="case-steps-title"
+                    >
                       <h3
                         hlmCardTitle
                         [size]="'subsection'"
@@ -215,7 +250,7 @@
                       </h3>
                       @for (step of draft.steps; track step.id; let index = $index) {
                         <fieldset
-                          class="m-0 grid min-w-0 gap-(--eg-space-4) rounded-(--eg-radius-md) border border-border bg-muted p-(--eg-space-4) @container/step"
+                          class="m-0 grid min-w-0 gap-(--eg-space-3) rounded-(--eg-radius-md) border border-border bg-muted p-(--eg-space-3) @container/step"
                         >
                           <legend
                             class="px-(--eg-space-2) text-sm font-semibold"
@@ -224,17 +259,28 @@
                             Step {{ index + 1 }}
                           </legend>
                           <div
-                            class="grid min-w-0 gap-(--eg-space-4) @min-[28rem]/step:grid-cols-2"
+                            class="grid min-w-0 gap-(--eg-space-3) @min-[28rem]/step:grid-cols-2"
                           >
                             @for (field of stepFields; track field.key; let fieldIndex = $index) {
-                              <div class="grid min-w-0 gap-2 @min-[28rem]/step:last:col-span-2">
-                                <label hlmLabel [for]="'case-step-' + index + '-' + field.key"
-                                  >{{ field.label }}
-                                  <app-field-requirement [required]="field.required" />
-                                </label>
+                              <div
+                                class="grid min-w-0 content-start gap-(--eg-space-1) @min-[28rem]/step:last:col-span-2"
+                              >
+                                <div class="field-heading">
+                                  <label hlmLabel [for]="'case-step-' + index + '-' + field.key"
+                                    >{{ field.label }}
+                                    <app-field-requirement [required]="field.required" />
+                                  </label>
+                                  <p
+                                    class="eg-type-caption text-muted-foreground tabular-nums"
+                                    [id]="'case-step-' + index + '-' + field.key + '-hint'"
+                                    i18n="@@authoring.editor.step-character-count"
+                                  >
+                                    {{ count(step[field.key] ?? '') }} / 2000 characters
+                                  </p>
+                                </div>
                                 <textarea
                                   hlmInput
-                                  rows="3"
+                                  rows="2"
                                   class="h-auto resize-y"
                                   data-step-field
                                   [id]="'case-step-' + index + '-' + field.key"
@@ -255,13 +301,6 @@
                                   "
                                   (blur)="stepFeedback(index, fieldIndex)?.blur()"
                                 ></textarea>
-                                <p
-                                  class="eg-type-caption text-muted-foreground tabular-nums"
-                                  [id]="'case-step-' + index + '-' + field.key + '-hint'"
-                                  i18n="@@authoring.editor.step-character-count"
-                                >
-                                  {{ count(step[field.key] ?? '') }} / 2000 characters
-                                </p>
                                 @if (stepFeedback(index, fieldIndex); as entry) {
                                   <app-field-feedback [field]="entry" />
                                 }
@@ -354,27 +393,6 @@
                         />
                       }
                     }
-                    <div class="flex flex-wrap gap-3 border-t border-border pt-(--eg-space-5)">
-                      <button
-                        hlmBtn
-                        type="submit"
-                        class="min-h-(--eg-control-touch) whitespace-normal"
-                        data-editor-save
-                        [disabled]="blocked() && !store.saving() && !store.conflictOpen()"
-                        [attr.aria-disabled]="blocked()"
-                        [attr.data-disabled]="blocked() ? '' : null"
-                        [attr.aria-describedby]="
-                          !store.canWrite()
-                            ? 'case-write-reason'
-                            : base.view.state === 'retired'
-                              ? 'case-retired-reason'
-                              : null
-                        "
-                        i18n="@@authoring.editor.save"
-                      >
-                        Save new version
-                      </button>
-                    </div>
                   </form>
                 } @else {
                   <div class="grid min-w-0 gap-(--eg-space-4) p-(--eg-space-5)">
@@ -449,10 +467,10 @@
   [autoFocus]="'[data-leave-cancel]'"
   (stateChanged)="$event === 'closed' && resolveLeave(false)"
 >
-  <hlm-dialog-content *hlmDialogPortal [showCloseButton]="false">
+  <hlm-dialog-content *hlmDialogPortal [showCloseButton]="false" [size]="'md'">
     <header hlmDialogHeader>
       <h2 hlmDialogTitle i18n="@@authoring.editor.leave-title">Discard unsaved changes?</h2>
-      <p hlmDialogDescription i18n="@@authoring.editor.leave-description">
+      <p hlmDialogDescription hlmDialogSubject i18n="@@authoring.editor.leave-description">
         Your draft is only in this tab. Leaving discards it without saving a version.
       </p>
     </header>

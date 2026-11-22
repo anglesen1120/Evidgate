@@ -1,0 +1,10 @@
+.body {
+  min-inline-size: 0;
+  padding: var(--eg-space-2);
+}
+@media (pointer: coarse) {
+  button {
+    min-height: var(--eg-control-touch);
+    min-width: var(--eg-control-touch);
+  }
+}

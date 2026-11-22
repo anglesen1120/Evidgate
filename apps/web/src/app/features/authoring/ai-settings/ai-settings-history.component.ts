@@ -2,13 +2,17 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   inject,
+  linkedSignal,
   signal,
   viewChild,
   type TemplateRef,
 } from '@angular/core';
 import type { AiSettingsVersionSummary } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
+import { HlmDialogImports } from '@evidgate/ui/dialog';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmCard, HlmCardContent, HlmCardHeader, HlmCardTitle } from '@evidgate/ui/card';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
@@ -23,12 +27,17 @@ import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-
 import { isApiRequestError } from '../../../core/http/api-error';
 import { AiSettingsStore } from './ai-settings.store';
 import { FIELDS, textOf } from './ai-settings.model';
+import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
+import { AiSettingsSnapshotFieldsComponent } from './ai-settings-snapshot-fields.component';
 
 @Component({
   selector: 'app-ai-settings-history',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     HlmButton,
+    HlmDialogImports,
+    HlmIcon,
+    AiSettingsSnapshotFieldsComponent,
     HlmCard,
     HlmCardContent,
     HlmCardHeader,
@@ -40,244 +49,12 @@ import { FIELDS, textOf } from './ai-settings.model';
     AbsoluteTimeComponent,
     CopyableIdentifierComponent,
   ],
-  template: `
-    <div class="grid min-w-0 gap-(--eg-space-5)">
-      <section hlmCard>
-        <header hlmCardHeader class="border-b border-border">
-          <h2 hlmCardTitle [size]="'section'" i18n="@@authoring.ai-settings.history-tab">
-            Version history
-          </h2>
-        </header>
-        <div hlmCardContent class="grid min-w-0 gap-(--eg-space-4)">
-          <div class="grid min-w-0 max-w-[65ch] gap-(--eg-space-2)">
-            <label hlmLabel for="ai-history-filter" i18n="@@authoring.ai-settings.filter"
-              >Filter loaded versions by reason</label
-            >
-            <input
-              hlmInput
-              id="ai-history-filter"
-              [value]="filter()"
-              (input)="filter.set($event.target.value)"
-            />
-          </div>
-          @if (store.selectedVersion() === 0) {
-            <p
-              id="ai-compare-reason"
-              class="m-0 text-sm text-muted-foreground"
-              i18n="@@authoring.ai-settings.compare-reason"
-            >
-              View a version before choosing a second version to compare.
-            </p>
-          }
-          <ng-template #time let-row><app-absolute-time [value]="row.created_at" /></ng-template>
-          <ng-template #author let-row
-            ><app-copyable-identifier [value]="row.author_membership_id" [label]="authorLabel"
-          /></ng-template>
-          <ng-template #actions let-row>
-            <div class="flex flex-wrap gap-(--eg-space-3)">
-              <button
-                hlmBtn
-                [variant]="'outline'"
-                type="button"
-                data-ai-inspect
-                (click)="store.selectVersion(row.version_no)"
-                i18n="@@authoring.ai-settings.inspect"
-              >
-                View version {{ row.version_no }}
-              </button>
-              <button
-                hlmBtn
-                [variant]="'ghost'"
-                type="button"
-                [disabled]="store.selectedVersion() === 0"
-                [attr.aria-describedby]="store.selectedVersion() === 0 ? 'ai-compare-reason' : null"
-                (click)="store.compareWith(row.version_no)"
-                i18n="@@authoring.ai-settings.compare"
-              >
-                Compare with {{ row.version_no }}
-              </button>
-            </div>
-          </ng-template>
-          <app-request-state
-            [status]="
-              store.history.isLoading() ? 'loading' : store.history.error() ? 'error' : 'ready'
-            "
-            [error]="historyError()"
-            [empty]="rows().length === 0"
-            [emptyTitle]="filter() ? noMatch : empty"
-            [retryEligible]="true"
-            (retry)="store.history.reload()"
-          >
-            <app-data-table
-              [rows]="rows()"
-              [columns]="columns()"
-              [rowId]="rowId"
-              [caption]="historyTitle"
-            />
-          </app-request-state>
-          <nav
-            class="flex flex-wrap gap-(--eg-space-3) border-t border-border pt-(--eg-space-4)"
-            [attr.aria-label]="pagesLabel"
-          >
-            <button
-              hlmBtn
-              [variant]="'outline'"
-              type="button"
-              [disabled]="!store.cursor() || store.history.isLoading()"
-              (click)="store.firstPage(); filter.set('')"
-              i18n="@@authoring.ai-settings.first"
-            >
-              First page
-            </button>
-            <button
-              hlmBtn
-              [variant]="'outline'"
-              type="button"
-              [disabled]="
-                !store.historyPage()?.next_cursor ||
-                store.history.isLoading() ||
-                store.cursorCycle()
-              "
-              (click)="store.nextPage(); filter.set('')"
-              i18n="@@authoring.ai-settings.next"
-            >
-              Next page
-            </button>
-          </nav>
-          @if (store.cursorCycle()) {
-            <p role="alert" i18n="@@authoring.ai-settings.cursor-cycle">
-              The server repeated a page cursor. Return to the first page to retry.
-            </p>
-          }
-        </div>
-      </section>
-      @if (store.selectedVersion() > 0) {
-        <app-request-state
-          [status]="store.detail.isLoading() ? 'loading' : store.detail.error() ? 'error' : 'ready'"
-          [error]="detailError()"
-          [retryEligible]="true"
-          (retry)="store.detail.reload()"
-        >
-          @if (store.versionDetail(); as version) {
-            <section hlmCard data-ai-version-detail>
-              <header hlmCardHeader class="border-b border-border">
-                <h3 hlmCardTitle [size]="'subsection'" i18n="@@authoring.ai-settings.immutable">
-                  Version {{ version.version_no }} — read-only
-                </h3>
-              </header>
-              <div hlmCardContent class="grid min-w-0 gap-(--eg-space-4) wrap-anywhere">
-                <app-absolute-time [value]="version.created_at" />
-                <app-copyable-identifier [value]="version.settings_id" [label]="settingsIdLabel" />
-                <app-copyable-identifier [value]="version.content_hash" [label]="hashLabel" />
-                <app-copyable-identifier
-                  [value]="version.author_membership_id"
-                  [label]="authorLabel"
-                />
-                <p class="m-0 text-sm wrap-anywhere">{{ version.reason || notSet }}</p>
-                @if (version.template; as template) {
-                  <p class="m-0 text-sm text-muted-foreground">
-                    {{ template.code }} · {{ template.version }}
-                  </p>
-                }
-                <p
-                  class="m-0 text-sm text-muted-foreground"
-                  i18n="@@authoring.ai-settings.restore-unavailable"
-                >
-                  Restore is unavailable: this screen provides read-only history.
-                </p>
-                <dl
-                  class="m-0 grid min-w-0 gap-(--eg-space-4) border-t border-border pt-(--eg-space-4) wrap-anywhere sm:grid-cols-2"
-                >
-                  @for (field of fields; track field.key) {
-                    @if (field.key !== 'reason') {
-                      <div class="grid min-w-0 content-start gap-(--eg-space-2)">
-                        <dt class="text-sm font-semibold">{{ field.label }}</dt>
-                        <dd class="m-0 whitespace-pre-wrap">
-                          {{ textOf(version.settings, field.key) }}
-                        </dd>
-                      </div>
-                    }
-                  }
-                  <div class="grid min-w-0 content-start gap-(--eg-space-2)">
-                    <dt class="text-sm font-semibold" i18n="@@authoring.ai-settings.languages">
-                      Output languages
-                    </dt>
-                    <dd class="m-0">{{ version.settings.languages.join(', ') }}</dd>
-                  </div>
-                </dl>
-              </div>
-            </section>
-          }
-        </app-request-state>
-      }
-      @if (store.compareVersion() > 0 && store.selectedVersion() > 0) {
-        <app-request-state
-          [status]="
-            store.comparison.isLoading() ? 'loading' : store.comparison.error() ? 'error' : 'ready'
-          "
-          [error]="comparisonError()"
-          [retryEligible]="true"
-          (retry)="store.comparison.reload()"
-        >
-          @if (store.versionDetail(); as before) {
-            @if (store.comparedVersion(); as after) {
-              <section hlmCard data-ai-diff>
-                <header hlmCardHeader class="border-b border-border">
-                  <h3 hlmCardTitle [size]="'subsection'" i18n="@@authoring.ai-settings.diff-title">
-                    Compare version {{ before.version_no }} with {{ after.version_no }}
-                  </h3>
-                </header>
-                <div hlmCardContent class="grid min-w-0 gap-(--eg-space-4)">
-                  @for (field of fields; track field.key) {
-                    @if (
-                      field.key !== 'reason' &&
-                      textOf(before.settings, field.key) !== textOf(after.settings, field.key)
-                    ) {
-                      <section class="grid min-w-0 gap-(--eg-space-3)">
-                        <h4 class="m-0 text-sm font-semibold">{{ field.label }}</h4>
-                        <dl
-                          class="m-0 grid min-w-0 gap-(--eg-space-3) wrap-anywhere md:grid-cols-2"
-                        >
-                          <div
-                            class="min-w-0 rounded-(--eg-radius-sm) bg-muted p-(--eg-space-3) text-foreground"
-                          >
-                            <dt i18n="@@authoring.ai-settings.before">Before</dt>
-                            <dd class="m-0 whitespace-pre-wrap">
-                              {{ textOf(before.settings, field.key) }}
-                            </dd>
-                          </div>
-                          <div
-                            class="min-w-0 rounded-(--eg-radius-sm) bg-muted p-(--eg-space-3) text-foreground"
-                          >
-                            <dt i18n="@@authoring.ai-settings.after">After</dt>
-                            <dd class="m-0 whitespace-pre-wrap">
-                              {{ textOf(after.settings, field.key) }}
-                            </dd>
-                          </div>
-                        </dl>
-                      </section>
-                    }
-                  }
-                  <dl class="m-0 grid gap-(--eg-space-2) border-t border-border pt-(--eg-space-4)">
-                    <dt i18n="@@authoring.ai-settings.language-diff">
-                      Output languages (before → after)
-                    </dt>
-                    <dd class="m-0">
-                      {{ before.settings.languages.join(', ') }} →
-                      {{ after.settings.languages.join(', ') }}
-                    </dd>
-                  </dl>
-                </div>
-              </section>
-            }
-          }
-        </app-request-state>
-      }
-    </div>
-  `,
+  templateUrl: './ai-settings-history.component.html',
 })
 export class AiSettingsHistoryComponent {
   protected readonly store = inject(AiSettingsStore);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  protected readonly escape = escapeFormatChars;
   protected readonly filter = signal('');
   protected readonly fields = FIELDS;
   protected readonly textOf = textOf;
@@ -295,12 +72,33 @@ export class AiSettingsHistoryComponent {
     viewChild<TemplateRef<DataTableCellContext<AiSettingsVersionSummary>>>('author');
   private readonly actions =
     viewChild<TemplateRef<DataTableCellContext<AiSettingsVersionSummary>>>('actions');
+  private readonly comparisonActions =
+    viewChild<TemplateRef<DataTableCellContext<AiSettingsVersionSummary>>>('compare');
+  protected readonly viewedNo = linkedSignal({
+    source: this.store.scope,
+    computation: (): number | null => null,
+  });
+  private opener: HTMLButtonElement | null = null;
   protected readonly rowId = (row: AiSettingsVersionSummary): number => row.version_no;
   protected readonly rows = computed(() =>
     (this.store.historyPage()?.items ?? []).filter((row) =>
       (row.reason ?? '').toLocaleLowerCase().includes(this.filter().toLocaleLowerCase()),
     ),
   );
+  protected readonly viewed = computed(() =>
+    this.rows().find((row) => row.version_no === this.viewedNo()),
+  );
+  protected readonly loadedDetail = computed(() => {
+    const row = this.viewed();
+    if (!row) return undefined;
+    const first = this.store.versionDetail();
+    if (first?.version_no === row.version_no && first.content_hash === row.content_hash)
+      return first;
+    const second = this.store.comparedVersion();
+    return second?.version_no === row.version_no && second.content_hash === row.content_hash
+      ? second
+      : undefined;
+  });
   protected readonly historyError = computed(() => {
     const error = this.store.history.error();
     return isApiRequestError(error) ? error.error : null;
@@ -334,22 +132,54 @@ export class AiSettingsHistoryComponent {
         header: this.authorLabel,
         cell: (row) => row.author_membership_id,
         role: 'identity',
-        ...(this.author() ? { cellTemplate: this.author()! } : {}),
+        ...this.optionalTemplate(this.author()),
       },
       {
         id: 'time',
         header: $localize`:@@authoring.ai-settings.time:Saved at (UTC)`,
         cell: (row) => row.created_at,
         role: 'date',
-        ...(this.time() ? { cellTemplate: this.time()! } : {}),
+        ...this.optionalTemplate(this.time()),
+      },
+      {
+        id: 'comparison',
+        header: $localize`:@@authoring.ai-settings.comparison:Comparison`,
+        cell: () => '',
+        role: 'text',
+        ...this.optionalTemplate(this.comparisonActions()),
       },
       {
         id: 'actions',
         header: $localize`:@@authoring.ai-settings.actions:Inspection`,
         cell: () => '',
         role: 'actions',
-        ...(this.actions() ? { cellTemplate: this.actions()! } : {}),
+        ...this.optionalTemplate(this.actions()),
       },
     ],
   );
+
+  private optionalTemplate(
+    cellTemplate: TemplateRef<DataTableCellContext<AiSettingsVersionSummary>> | undefined,
+  ) {
+    return cellTemplate ? { cellTemplate } : {};
+  }
+  protected viewName(version: number): string {
+    return $localize`:@@authoring.ai-settings.view-version:View version ${version}:VERSION:`;
+  }
+  protected inspect(version: number, opener: HTMLButtonElement): void {
+    this.opener = opener;
+    this.viewedNo.set(version);
+  }
+  protected restoreFocus(): void {
+    const opener = this.opener;
+    const root = this.host.nativeElement;
+    const same = opener?.getAttribute('data-ai-version-view');
+    const target = opener?.isConnected
+      ? opener
+      : (same && root.querySelector<HTMLElement>(`[data-ai-version-view="${Number(same)}"]`)) ||
+        root.querySelector<HTMLElement>('[data-ai-version-view]') ||
+        root.querySelector<HTMLElement>('[data-ai-history-heading]');
+    target?.focus();
+    this.opener = null;
+  }
 }

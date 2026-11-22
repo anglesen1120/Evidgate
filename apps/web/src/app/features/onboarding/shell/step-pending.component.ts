@@ -25,12 +25,16 @@ import type { StepNumber } from '../data/step-derivation';
           >
             <div>
               <dt>{{ runLabel }}</dt>
-              <dd>{{ run.run_id }}</dd>
+              <dd>
+                <bdi>{{ run.run_id }}</bdi>
+              </dd>
             </div>
             @if (run.current_evidence_revision_id; as revision) {
               <div>
                 <dt>{{ evidenceLabel }}</dt>
-                <dd>{{ revision }}</dd>
+                <dd>
+                  <bdi>{{ revision }}</bdi>
+                </dd>
               </div>
             }
           </dl>

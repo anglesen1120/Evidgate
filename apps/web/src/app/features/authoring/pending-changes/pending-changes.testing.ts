@@ -52,6 +52,15 @@ export class PendingUiHarness extends ComponentHarness {
   async count(selector: string) {
     return (await this.locatorForAll(selector)()).length;
   }
+  async overlayText(selector: string) {
+    return (await this.documentRootLocatorFactory().locatorFor(selector)()).text();
+  }
+  async overlayCount(selector: string) {
+    return (await this.documentRootLocatorFactory().locatorForAll(selector)()).length;
+  }
+  async overlayClick(selector: string) {
+    await (await this.documentRootLocatorFactory().locatorFor(selector)()).click();
+  }
   async click(selector: string) {
     await (await this.locatorFor(selector)()).click();
   }

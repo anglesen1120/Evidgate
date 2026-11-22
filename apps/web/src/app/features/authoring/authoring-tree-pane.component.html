@@ -1,5 +1,3 @@
-<p id="authoring-tree-keyboard" class="tree-help">{{ copy.keyboard }}</p>
-<p id="authoring-pending-help" class="tree-help">{{ copy.pendingReason }}</p>
 <ul
   class="hierarchy"
   [attr.aria-label]="copy.hierarchy"
@@ -35,6 +33,8 @@
     {{ copy.moreRoots }}
   </button>
 }
+<p id="authoring-tree-keyboard" class="tree-help">{{ copy.keyboard }}</p>
+<p id="authoring-pending-help" class="tree-help">{{ copy.pendingReason }}</p>
 
 <ng-template #branch let-items let-depth="depth" let-ancestors="ancestors">
   @for (node of items; track node.node_id) {

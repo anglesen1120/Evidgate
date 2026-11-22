@@ -1,0 +1,20 @@
+/* Local masks cover the edge shadows only when that end of the tab strip is in view. */
+[hlmTabsList] {
+  background:
+    linear-gradient(to right, var(--eg-surface) 50%, transparent) left center / var(--eg-space-5)
+      100% local no-repeat,
+    linear-gradient(to left, var(--eg-surface) 50%, transparent) right center / var(--eg-space-5)
+      100% local no-repeat,
+    linear-gradient(to right, var(--eg-border-control), transparent) left center / var(--eg-space-3)
+      100% scroll no-repeat,
+    linear-gradient(to left, var(--eg-border-control), transparent) right center / var(--eg-space-3)
+      100% scroll no-repeat;
+}
+
+.field-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  column-gap: var(--eg-space-2);
+}

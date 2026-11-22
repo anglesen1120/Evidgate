@@ -2,13 +2,14 @@ import { ChangeDetectionStrategy, Component, input, output, signal } from '@angu
 import type { AuthoringChangeListItem } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
 import { PENDING_COPY } from './pending-changes.copy';
 import { operationLabel, PENDING_UI } from './pending-changes.ui-copy';
 
 @Component({
   selector: 'app-pending-confirm',
-  imports: [HlmButton, HlmDialogImports, CopyableIdentifierComponent],
+  imports: [HlmButton, HlmDialogImports, HlmIcon, CopyableIdentifierComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <hlm-dialog
@@ -24,48 +25,57 @@ import { operationLabel, PENDING_UI } from './pending-changes.ui-copy';
       <hlm-dialog-content
         *hlmDialogPortal
         [showCloseButton]="false"
-        class="max-h-[calc(100dvh-var(--eg-space-10))] overflow-y-auto wrap-anywhere"
+        [size]="'md'"
+        class="wrap-anywhere"
       >
         <header hlmDialogHeader class="border-b border-border pb-(--eg-space-4)">
+          <hlm-icon
+            hlmDialogStatusIcon
+            [name]="destructive() ? 'lucideTriangleAlert' : 'lucideInfo'"
+          />
           <h2 hlmDialogTitle>{{ title() }}</h2>
-          <p hlmDialogDescription>{{ description() }}</p>
+          <p hlmDialogDescription hlmDialogSubject>{{ description() }}</p>
         </header>
-        <section class="grid min-w-0 gap-(--eg-space-3)">
-          <h3 class="m-0 text-lg font-semibold">{{ idsLabel() }}</h3>
-          @if (changes().length === 0) {
-            @for (id of ids(); track id) {
-              <app-copyable-identifier [value]="id" [label]="valueLabel()" />
+        <div class="grid min-w-0 gap-(--eg-space-4) p-(--eg-space-2)">
+          <section class="grid min-w-0 gap-(--eg-space-3)">
+            <h3 class="m-0 text-lg font-semibold">{{ idsLabel() }}</h3>
+            @if (changes().length === 0) {
+              @for (id of ids(); track id) {
+                <app-copyable-identifier [value]="id" [label]="valueLabel()" />
+              }
+            }
+            @for (change of changes(); track change.change_id) {
+              <div
+                class="grid min-w-0 gap-(--eg-space-2) rounded-(--eg-radius-md) bg-(--eg-surface-raised) p-(--eg-space-4) text-foreground"
+                data-pending-consent-operation
+              >
+                <h4 class="m-0 text-base font-semibold">
+                  {{ operationLabel(change.change_type) }}
+                </h4>
+                <app-copyable-identifier [value]="change.change_id" [label]="ui.changeId" />
+                <app-copyable-identifier [value]="change.target_id" [label]="copy.targetLabel" />
+                @if (targetTitles()[change.target_id]; as title) {
+                  <p class="m-0 whitespace-pre-wrap wrap-anywhere">
+                    <bdi>{{ title }}</bdi>
+                  </p>
+                }
+                @if (change.change_type === 'delete') {
+                  <p class="m-0 whitespace-pre-wrap wrap-anywhere">{{ copy.deleteConsequence }}</p>
+                  <p class="m-0 whitespace-pre-wrap wrap-anywhere">{{ copy.impactUnavailable }}</p>
+                }
+              </div>
+            }
+          </section>
+          @if (note()) {
+            <dl class="m-0 grid min-w-0 gap-(--eg-space-2) [&_dd]:m-0">
+              <dt class="text-sm font-semibold text-muted-foreground">{{ noteLabel() }}</dt>
+              <dd class="whitespace-pre-wrap wrap-anywhere">{{ note() }}</dd>
+            </dl>
+            @if (noteHint()) {
+              <p class="text-sm text-muted-foreground">{{ noteHint() }}</p>
             }
           }
-          @for (change of changes(); track change.change_id) {
-            <div
-              class="grid min-w-0 gap-(--eg-space-2) rounded-(--eg-radius-md) bg-(--eg-surface-raised) p-(--eg-space-4) text-foreground"
-              data-pending-consent-operation
-            >
-              <h4 class="m-0 text-base font-semibold">{{ operationLabel(change.change_type) }}</h4>
-              <app-copyable-identifier [value]="change.change_id" [label]="ui.changeId" />
-              <app-copyable-identifier [value]="change.target_id" [label]="copy.targetLabel" />
-              @if (targetTitles()[change.target_id]; as title) {
-                <p class="m-0 whitespace-pre-wrap wrap-anywhere">
-                  <bdi>{{ title }}</bdi>
-                </p>
-              }
-              @if (change.change_type === 'delete') {
-                <p class="m-0 whitespace-pre-wrap wrap-anywhere">{{ copy.deleteConsequence }}</p>
-                <p class="m-0 whitespace-pre-wrap wrap-anywhere">{{ copy.impactUnavailable }}</p>
-              }
-            </div>
-          }
-        </section>
-        @if (note()) {
-          <dl class="m-0 grid min-w-0 gap-(--eg-space-2) [&_dd]:m-0">
-            <dt class="text-sm font-semibold text-muted-foreground">{{ noteLabel() }}</dt>
-            <dd class="whitespace-pre-wrap wrap-anywhere">{{ note() }}</dd>
-          </dl>
-          @if (noteHint()) {
-            <p class="text-sm text-muted-foreground">{{ noteHint() }}</p>
-          }
-        }
+        </div>
         <footer hlmDialogFooter class="border-t border-border pt-(--eg-space-4)">
           <button
             hlmBtn

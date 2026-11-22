@@ -20,8 +20,11 @@
         class="focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
         [textContent]="state().title"
       ></h1>
-      @if (store.status() === 'ready') {
-        <p class="text-muted-foreground">{{ copy.description }}</p>
+      @if (store.revision(); as revision) {
+        <p class="m-0 text-sm text-muted-foreground">
+          {{ copy.revision }} <bdi class="tabular-nums">{{ revision.revision_no }}</bdi> ·
+          <bdi>{{ revision.status }}</bdi> · <bdi class="font-mono">{{ revision.suite_id }}</bdi>
+        </p>
       }
     </div>
   </header>
@@ -44,7 +47,11 @@
         {{ copy.draft }}
       </p>
     }
-    <section hlmCard class="col-span-full gap-0 py-0" aria-labelledby="suite-identity-heading">
+    <section
+      hlmCard
+      class="col-span-full min-w-0 gap-0 py-0"
+      aria-labelledby="suite-identity-heading"
+    >
       <header hlmCardHeader class="border-b border-border px-(--eg-space-6) py-(--eg-space-5)">
         <h2 hlmCardTitle [size]="sectionHeadingSize" id="suite-identity-heading">
           {{ copy.identity }}
@@ -68,7 +75,11 @@
           <dt>{{ copy.status }}</dt>
           <dd data-revision-status>
             <span hlmBadge [variant]="'secondary'"
-              ><bdi>{{ revision.status }}</bdi></span
+              ><hlm-icon
+                name="lucideCircle"
+                class="size-(--eg-space-4)"
+                aria-hidden="true"
+              /><bdi>{{ revision.status }}</bdi></span
             >
           </dd>
         </div>
@@ -82,7 +93,12 @@
     </section>
   }
   @if (store.view(); as view) {
-    <section hlmCard class="col-span-full gap-0 py-0" aria-labelledby="suite-matrix-heading">
+    <app-suite-composition-metrics [view]="view" />
+    <section
+      hlmCard
+      class="col-span-full min-w-0 gap-0 py-0"
+      aria-labelledby="suite-matrix-heading"
+    >
       <header hlmCardHeader class="border-b border-border px-(--eg-space-6) py-(--eg-space-5)">
         <h2 hlmCardTitle [size]="sectionHeadingSize" id="suite-matrix-heading">
           {{ copy.matrix }}
@@ -120,7 +136,7 @@
           }
           <div
             hlmTableContainer
-            class="min-w-0 max-w-full focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
+            class="min-w-0 max-w-full overflow-x-auto overscroll-x-contain focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
             tabindex="0"
             role="region"
             [attr.aria-label]="copy.matrix"
@@ -132,12 +148,19 @@
               class="max-md:block [&_th]:whitespace-normal [&_td]:whitespace-normal [&_bdi]:wrap-anywhere"
               data-testid="suite-members-flat"
             >
+              <caption hlmCaption class="caption-top text-start">
+                {{
+                  copy.members
+                }}
+              </caption>
               <thead hlmTHead role="rowgroup" class="max-md:sr-only">
                 <tr hlmTr role="row">
                   <th hlmTh role="columnheader" scope="col">{{ copy.caseRevision }}</th>
                   <th hlmTh role="columnheader" scope="col">{{ copy.variantParams }}</th>
                   <th hlmTh role="columnheader" scope="col">{{ copy.required }}</th>
-                  <th hlmTh role="columnheader" scope="col">{{ copy.ordinal }}</th>
+                  <th hlmTh role="columnheader" scope="col" class="md:text-end">
+                    {{ copy.ordinal }}
+                  </th>
                   <th hlmTh role="columnheader" scope="col">{{ copy.member }}</th>
                 </tr>
               </thead>
@@ -179,7 +202,7 @@
                     <td hlmTd role="cell" class="min-w-0 align-top max-md:p-0">
                       {{ member.required ? copy.required : copy.optional }}
                     </td>
-                    <td hlmTd role="cell" class="min-w-0 align-top max-md:p-0">
+                    <td hlmTd role="cell" class="min-w-0 align-top max-md:p-0 md:text-end">
                       <span class="text-xs text-muted-foreground md:hidden"
                         >{{ copy.ordinal }}
                       </span>
@@ -216,7 +239,7 @@
         } @else {
           <div
             hlmTableContainer
-            class="hidden min-w-0 max-w-full md:block focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
+            class="hidden min-w-0 max-w-full overflow-x-auto overscroll-x-contain md:block focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
             tabindex="0"
             role="region"
             [attr.aria-label]="copy.matrix"
@@ -236,7 +259,11 @@
                   <th hlmTh scope="col">{{ copy.caseRevision }}</th>
                   @for (column of view.columns; track column.variantHash) {
                     <th hlmTh scope="col">
-                      <bdi class="identifier">{{ column.variantHash }}</bdi>
+                      <app-copyable-identifier
+                        [value]="column.variantHash"
+                        [label]="copy.variantHash"
+                        [compact]="true"
+                      />
                       @if (column.params.length === 0) {
                         <p>{{ copy.noParameters }}</p>
                       } @else {
@@ -270,7 +297,7 @@
                             </div>
                             <div>
                               <dt>{{ member.required ? copy.required : copy.optional }}</dt>
-                              <dd class="font-semibold text-primary tabular-nums">
+                              <dd class="text-end font-semibold text-primary tabular-nums">
                                 {{ copy.ordinal }} {{ member.ordinal }}
                               </dd>
                             </div>

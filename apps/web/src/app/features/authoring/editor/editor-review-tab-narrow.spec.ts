@@ -27,11 +27,10 @@ class NarrowReviewEditorHarness extends ComponentHarness {
   }
 
   async choosePanel(label: string) {
-    await (await this.locatorFor('#case-panel-select')()).click();
-    const options = await this.documentRootLocatorFactory().locatorForAll('[role="option"]')();
-    for (const option of options) {
-      if ((await option.text()).trim() === label) {
-        await option.click();
+    const tabs = await this.locatorForAll('[role="tab"]')();
+    for (const tab of tabs) {
+      if ((await tab.text()).trim() === label) {
+        await tab.click();
         return;
       }
     }
@@ -134,6 +133,9 @@ describe('Editor checklist review notice ownership', () => {
     const { fixture, ui } = await mount();
     expect(viewportWidth).toBe(360);
     expect(TestBed.inject(NarrowMutationPolicy).canMutate()).toBe(false);
+    expect(await ui.count('[role="tablist"][aria-orientation="horizontal"]')).toBe(1);
+    expect(await ui.count('[role="tab"]')).toBe(3);
+    expect(await ui.count('#case-panel-select')).toBe(0);
     await ui.choosePanel('Checklist review');
     await fixture.whenStable();
     expect(await ui.count('app-checklist-review-tab')).toBe(1);

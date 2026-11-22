@@ -68,10 +68,18 @@ describe('ConnectCiPage Helm controls', () => {
 
   it('keeps both empty credential panels named and distinguishes their action priority', () => {
     for (const kind of ['oidc', 'token']) {
-      const panel = requiredElement(root, `[data-testid="connect-${kind}-panel"]`);
+      const panel = requiredElement<HTMLElement>(root, `[data-testid="connect-${kind}-panel"]`);
       expect(panel.getAttribute('data-slot')).toBe('card');
       expect(panel.getAttribute('aria-labelledby')).toBe(`connect-${kind}-heading`);
-      expect(panel.querySelectorAll('ul > li')).toHaveLength(1);
+      const table = requiredElement<HTMLTableElement>(panel, 'table');
+      expect(requiredElement(table, 'caption').textContent).toContain(
+        kind === 'oidc' ? 'CI bindings' : 'Ingest tokens',
+      );
+      expect(table.querySelectorAll('tbody > tr')).toHaveLength(1);
+      expect(requiredElement(table, 'tbody td').textContent?.trim()).toBe(
+        kind === 'oidc' ? 'No CI bindings yet.' : 'No ingest tokens yet.',
+      );
+      expect(table.querySelector('button')).toBeNull();
     }
     expect(requiredElement(root, '[data-testid="connect-oidc-submit"]').classList).toContain(
       'spartan-button-variant-default',
