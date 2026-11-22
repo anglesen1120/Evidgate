@@ -1,0 +1,159 @@
+@let state = ctx.state();
+<header>
+  <app-page-header [title]="copy.title" [description]="copy.subtitle" />
+  @if (!ctx.isolated()) {
+    <p class="text-xs text-muted-foreground">
+      {{
+        state === 'default'
+          ? copy.snapshot
+          : state === 'approved' || state === 'rejected'
+            ? copy.atTen
+            : copy.alternative
+      }}
+    </p>
+  }
+</header>
+<app-repair-review-notice [state]="state" />
+@if (!ctx.isolated()) {
+  <app-inline-feedback
+    [announcement]="'off'"
+    [title]="copy.readonly"
+    [description]="copy.boundary"
+  />
+  <app-repair-evidence [panel]="'original'" [context]="ctx" />
+  <div class="review-grid">
+    <section hlmCard [size]="'sm'">
+      <header hlmCardHeader>
+        <h2 hlmCardTitle [size]="'section'">{{ copy.proposal }}</h2>
+      </header>
+      <div hlmCardContent>
+        <app-proposal-status [context]="ctx" />
+        <dl class="facts">
+          <div>
+            <dt>{{ copy.candidate }}</dt>
+            <dd>
+              <code>{{ record.id }}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>{{ copy.hash }}</dt>
+            <dd>
+              <code>{{ ctx.revision().hash }}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>{{ copy.revision }}</dt>
+            <dd>{{ ctx.revision().revision }}</dd>
+          </div>
+          <div>
+            <dt>{{ copy.base }}</dt>
+            <dd>
+              <code>{{ record.base }}</code>
+            </dd>
+          </div>
+        </dl>
+        @if (state === 'approved' || state === 'rejected') {
+          <p>
+            {{ copy.atTen }} · {{ record.reviewer }} · <code>{{ record.fullHash }}</code>
+          </p>
+        }
+      </div>
+    </section>
+    <app-repair-evidence [panel]="'result'" [context]="ctx" />
+  </div>
+  <app-repair-evidence [panel]="'diff'" [context]="ctx" />
+  <app-repair-evidence [panel]="'validation'" [context]="ctx" />
+  @if (ctx.revision().revision === 7) {
+    <div class="review-grid">
+      <section hlmCard [size]="'sm'">
+        <header hlmCardHeader>
+          <h2 hlmCardTitle [size]="'section'">{{ copy.manualEdit }}</h2>
+        </header>
+        <div hlmCardContent>
+          <strong>{{ record.manual }} · {{ record.author }}</strong>
+          <dl class="compare">
+            <div>
+              <dt>{{ copy.before }}</dt>
+              <dd>{{ copy.stepBefore }}</dd>
+            </div>
+            <div>
+              <dt>{{ copy.after }}</dt>
+              <dd>{{ copy.stepAfter }}</dd>
+            </div>
+          </dl>
+          <p>{{ copy.stepNote }}</p>
+        </div>
+      </section>
+      <section hlmCard [size]="'sm'">
+        <header hlmCardHeader>
+          <h2 hlmCardTitle [size]="'section'">{{ copy.structure }}</h2>
+        </header>
+        <div hlmCardContent>
+          @if (state === 'nodom') {
+            <p>{{ copy.nodom }}</p>
+          } @else {
+            <dl class="compare">
+              <div>
+                <dt>{{ copy.before }}</dt>
+                <dd>
+                  <code>{{ record.domBefore }}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>{{ copy.after }}</dt>
+                <dd>
+                  <code>{{ record.domAfter }}</code>
+                </dd>
+              </div>
+            </dl>
+            <p>{{ copy.redacted }}</p>
+          }
+        </div>
+      </section>
+    </div>
+    <div class="review-grid">
+      <section hlmCard [size]="'sm'">
+        <header hlmCardHeader>
+          <h2 hlmCardTitle [size]="'section'">{{ copy.captures }}</h2>
+        </header>
+        <div hlmCardContent>
+          <strong>{{
+            state === 'restricted' || state === 'scan' || state === 'ready' ? copy[state] : copy.off
+          }}</strong>
+          <p>{{ copy.noArtifact }}</p>
+        </div>
+      </section>
+      <section hlmCard [size]="'sm'">
+        <header hlmCardHeader>
+          <h2 hlmCardTitle [size]="'section'">{{ copy.delivery }}</h2>
+        </header>
+        <div hlmCardContent>
+          @if (state === 'observing' || state === 'merged' || state === 'closed') {
+            <strong>{{ copy[state] }}</strong>
+          } @else if (state === 'default') {
+            <strong>{{ copy.openPr }}</strong>
+          }
+          <p>{{ copy.pr }}</p>
+        </div>
+      </section>
+    </div>
+  }
+  <app-repair-evidence [panel]="'provenance'" [context]="ctx" />
+  <footer class="flex flex-wrap gap-2">
+    <a
+      hlmBtn
+      [variant]="'outline'"
+      class="min-h-11"
+      [routerLink]="ctx.link('healing-queue')"
+      [queryParams]="{ id: record.id }"
+      >{{ copy.queueLink }}</a
+    >
+    <a
+      hlmBtn
+      class="min-h-11"
+      [routerLink]="ctx.link('healing-approval')"
+      [queryParams]="{ id: record.id, state: ctx.relatedState() }"
+      >{{ copy.reviewLink }}</a
+    >
+  </footer>
+}

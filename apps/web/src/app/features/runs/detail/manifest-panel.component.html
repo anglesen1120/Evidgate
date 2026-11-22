@@ -1,7 +1,15 @@
-<section hlmCard aria-labelledby="manifest-title" class="gap-(--eg-space-5) p-(--eg-space-5)">
-  <h2 hlmCardTitle [size]="sectionSize" id="manifest-title" class="m-0">{{ copy.title }}</h2>
-  <dl>
-    <div>
+<section hlmCard aria-labelledby="manifest-title" class="gap-0 py-0">
+  <h2
+    hlmCardTitle
+    [size]="sectionSize"
+    id="manifest-title"
+    class="m-0 border-b border-(--eg-border) px-(--eg-space-5) py-(--eg-space-4)"
+    [textContent]="copy.title"
+  ></h2>
+  <dl
+    class="m-0 grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-(--eg-space-5) p-(--eg-space-5) [&>div]:min-w-0 [&_dt]:text-xs [&_dt]:leading-(--eg-leading-xs) [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:mt-(--eg-space-1) [&_dd]:flex [&_dd]:min-w-0 [&_dd]:flex-wrap [&_dd]:items-center [&_dd]:gap-(--eg-space-2) [&_bdi]:max-w-full [&_bdi]:font-mono"
+  >
+    <div class="col-span-full">
       <dt>{{ copy.hash }}</dt>
       <dd data-manifest-hash>
         @let hash = summary().manifestHash;

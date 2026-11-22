@@ -16,6 +16,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmTabsImports } from '@evidgate/ui/tabs';
 import { combineLatest } from 'rxjs';
 import type { ApiError } from '../../../core/http/api-error';
@@ -51,6 +52,7 @@ import { RunTimelineComponent } from './timeline/run-timeline.component';
     DecisionViewComponent,
     AttemptsTableComponent,
     HlmButton,
+    HlmIcon,
     HlmTabsImports,
     PageHeaderImports,
   ],
@@ -77,6 +79,20 @@ export class RunDetailPage {
   private readonly injector = inject(Injector);
 
   protected readonly detailTab = signal('evidence');
+  // The header describes the current collection, not every decision this run has ever had.
+  // Never place an older or differently pinned evaluation next to its completeness badge.
+  protected readonly summaryDecision = computed(() => {
+    if (this.store.decisionError() !== null) return null;
+    const decision = this.store.decision();
+    if (decision?.kind !== 'evaluated') return decision;
+    const latest = this.store.latestRevisionNo();
+    const pin = this.store.pinnedRevision();
+    return this.store.run()?.current_evidence_revision_id &&
+      decision.evidenceRevision === latest &&
+      (pin === null || pin === latest)
+      ? decision
+      : null;
+  });
   protected readonly producerSlots = computed(() => {
     const run = this.store.run();
     return run === null ? null : producerSlotsFromRun(run);
@@ -161,6 +177,7 @@ export class RunDetailPage {
     back: $localize`:@@runs.detail.back:Back to runs`,
     evidence: $localize`:@@runs.evidence.title:Evidence`,
     decision: $localize`:@@runs.decision.title:Latest live decision`,
+    inspectEvidence: $localize`:@@runs.detail.inspect-evidence:Inspect evidence`,
     decisionTab: $localize`:@@runs.detail.decision-tab-compact:Live decision`,
   };
   constructor() {
@@ -269,14 +286,13 @@ export class RunDetailPage {
   protected showEvidence(): void {
     const focus = () => {
       const target = this.host.nativeElement.querySelector<HTMLElement>('#evidence-title');
-      if (target) this.focusEvidenceTarget(target);
+      if (!target) return false;
+      this.focusEvidenceTarget(target);
+      return true;
     };
-    if (this.detailTab() === 'evidence') {
-      focus();
-      return;
-    }
+    if (this.detailTab() === 'evidence' && focus()) return;
     this.detailTab.set('evidence');
-    // The destination must be visible before focus leaves the now-hidden decision panel.
+    // Wait for the destination to mount or become visible before moving focus.
     afterNextRender(focus, { injector: this.injector });
   }
   /**

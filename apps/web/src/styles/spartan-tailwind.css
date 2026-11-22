@@ -13,6 +13,12 @@
 @source '../app/features/authoring';
 @source '../app/features/availability';
 @source '../app/features/catalog';
+@source '../app/features/mapping';
+@source '../app/features/deploy';
+@source '../app/features/scripts';
+@source '../app/features/failures';
+@source '../app/features/repairs';
+@source '../app/features/knowledge';
 @source '../app/features/studio';
 @source '../app/features/releases';
 @source '../app/features/quality';

@@ -74,6 +74,7 @@ import {
 } from './fixture-routes';
 import { findSettingsRetentionWriteFixture } from './fixture-settings-permissions';
 import { findCatalogOwnerPermissionsFixture } from './fixture-catalog-owner-permissions';
+import { findHealingTriagePermissionsFixture } from './fixture-healing-triage-permissions';
 import { FixtureToggles } from './fixture-toggles';
 import { findUsageSummaryFixture } from './fixture-usage-summary';
 import { caseListFixtureBody } from './fixture-case-list';
@@ -248,6 +249,10 @@ export class FixtureHttpBackend implements HttpBackend {
         this.toggles.variantFor('listPermissions'),
       );
       if (catalogOwner !== undefined) return catalogOwner;
+      const healingTriage = findHealingTriagePermissionsFixture(
+        this.toggles.variantFor('listPermissions'),
+      );
+      if (healingTriage !== undefined) return healingTriage;
     }
     // The catalogue's 200-row threshold is reviewed on a computed page, like usage summary: the
     // variant names no corpus file, and every other toggle still answers its directory.

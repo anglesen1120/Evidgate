@@ -10,15 +10,15 @@
     *hlmDialogPortal
     data-run-create-dialog
     [showCloseButton]="false"
-    class="max-h-[calc(100dvh-var(--eg-space-10))] min-w-0 overflow-y-auto wrap-anywhere"
+    class="max-h-[calc(100dvh-var(--eg-space-10))] min-w-0 gap-0 overflow-y-auto rounded-(--eg-radius-lg) border border-(--eg-border-control) bg-card p-0 text-card-foreground wrap-anywhere"
   >
-    <header hlmDialogHeader>
-      <h2 hlmDialogTitle>{{ copy.title }}</h2>
-      <p hlmDialogDescription>{{ copy.description }}</p>
+    <header hlmDialogHeader class="border-b border-border px-(--eg-space-5) py-(--eg-space-4)">
+      <h2 hlmDialogTitle class="eg-type-subsection-title">{{ copy.title }}</h2>
+      <p hlmDialogDescription class="m-0 max-w-prose">{{ copy.description }}</p>
     </header>
     <form
       novalidate
-      class="grid min-w-0 gap-(--eg-space-5)"
+      class="grid min-w-0 gap-(--eg-space-4) p-(--eg-space-5)"
       (submit)="submit($event)"
       [attr.aria-busy]="store.submitting()"
     >
@@ -87,7 +87,7 @@
         data-run-create-ref
         [open]="refExpanded()"
         (toggle)="refExpanded.set(refGroup.open)"
-        class="min-w-0"
+        class="min-w-0 rounded-(--eg-radius-md) border border-border bg-(--eg-surface-raised) px-(--eg-space-4)"
       >
         <summary
           class="min-h-(--eg-control-touch) cursor-pointer content-center rounded-(--eg-radius-sm) font-(weight:--eg-weight-medium) focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
@@ -95,7 +95,7 @@
           {{ copy.ref }}
         </summary>
         <fieldset
-          class="m-0 mt-(--eg-space-3) grid min-w-0 gap-(--eg-space-4) border-0 p-0"
+          class="m-0 grid min-w-0 gap-(--eg-space-4) border-0 px-0 pt-0 pb-(--eg-space-4)"
           [disabled]="locked()"
         >
           <legend class="sr-only">{{ copy.ref }}</legend>
@@ -252,7 +252,10 @@
       @if (store.submitting()) {
         <p role="status" class="m-0">{{ copy.submitting }}</p>
       }
-      <footer hlmDialogFooter class="gap-(--eg-space-3)">
+      <footer
+        hlmDialogFooter
+        class="flex-wrap gap-(--eg-space-3) border-t border-border pt-(--eg-space-4)"
+      >
         <button
           hlmBtn
           [variant]="'outline'"

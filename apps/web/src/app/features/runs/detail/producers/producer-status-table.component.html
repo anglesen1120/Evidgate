@@ -3,15 +3,20 @@
   id="producers"
   data-producer-status
   aria-labelledby="producers-title"
-  class="min-w-0 max-w-full gap-(--eg-space-4) p-(--eg-space-5)"
+  class="min-w-0 max-w-full gap-(--eg-space-4) rounded-(--eg-radius-lg) p-(--eg-space-5) shadow-none"
 >
-  <h2 hlmCardTitle [size]="sectionSize" id="producers-title" class="m-0">{{ copy.title }}</h2>
+  <h2
+    hlmCardTitle
+    [size]="sectionSize"
+    id="producers-title"
+    class="m-0 border-b border-border pb-(--eg-space-4)"
+    [textContent]="copy.title"
+  ></h2>
   @if (status() === 'loading') {
     <app-loading-pattern [attr.data-state]="'loading'" [label]="copy.loading" />
   } @else if (status() === 'error') {
     <app-error-pattern [attr.data-state]="'error'" [headingLevel]="3" [retryDisabled]="true" />
   } @else if (slots(); as rows) {
-    <p id="producers-event-note" class="m-0 text-muted-foreground">{{ copy.eventNote }}</p>
     @let runLateCount = runAfterCancelEvents();
     @if (runLateCount !== null && runLateCount > 0) {
       <app-status-pill
@@ -69,6 +74,12 @@
         </nav>
       }
     }
+    <p
+      id="producers-event-note"
+      class="m-0 rounded-(--eg-radius-md) bg-(--eg-surface-raised) p-(--eg-space-4) text-xs leading-(--eg-leading-xs) text-muted-foreground"
+    >
+      {{ copy.eventNote }}
+    </p>
   } @else {
     <p [attr.data-state]="'unavailable'" class="m-0 text-muted-foreground">
       {{ copy.notProvided }}
@@ -84,7 +95,7 @@
     class="flex min-w-0 items-center gap-(--eg-space-2) scroll-mt-[calc(var(--eg-topbar-height,calc(2*var(--eg-space-12)))+var(--eg-space-4))] focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
     [class.flex-wrap]="stacked"
   >
-    <bdi class="block min-w-0 flex-1"
+    <bdi class="block min-w-0 flex-1 font-mono font-medium"
       ><app-data-table-value [value]="display(slot.producerId)" [truncate]="!stacked"
     /></bdi>
     <app-copy-value-button
@@ -129,6 +140,7 @@
 </ng-template>
 <ng-template #sequenceCell let-slot>
   <div
+    class="tabular-nums"
     [attr.data-fact]="'last-sequence'"
     [attr.data-unavailable]="slot.lastSequence === null ? '' : null"
   >
@@ -141,7 +153,7 @@
 </ng-template>
 <ng-template #countCell let-slot let-stacked="stacked">
   <div
-    class="grid min-w-0 gap-(--eg-space-2)"
+    class="grid min-w-0 gap-(--eg-space-2) tabular-nums"
     [class.justify-items-end]="!stacked"
     [class.justify-items-start]="stacked"
     [attr.data-fact]="'count'"

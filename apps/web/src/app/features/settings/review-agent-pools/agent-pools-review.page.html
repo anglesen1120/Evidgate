@@ -1,0 +1,275 @@
+<header class="flex min-w-0 items-center gap-3">
+  <span
+    class="hidden size-12 shrink-0 items-center justify-center rounded-(--eg-radius-md) bg-(--eg-accent-soft) text-(--eg-accent) md:flex"
+    ><hlm-icon name="lucideActivity" /></span
+  ><app-page-header [title]="l.title" [description]="l.description" />
+</header>
+<section hlmCard class="min-w-0" [size]="'sm'">
+  <div hlmCardContent class="flex flex-wrap items-end justify-between gap-4">
+    <div class="grid gap-1">
+      <span class="text-xs text-muted-foreground">{{ l.scope }}</span
+      ><strong>{{ model().project }}</strong
+      ><span class="text-xs text-muted-foreground"
+        >{{ l.asOf }} <app-absolute-time [value]="model().capturedAt"
+      /></span>
+    </div>
+    <div class="grid gap-1">
+      <span class="text-xs text-muted-foreground">{{ l.section }}</span
+      ><strong class="text-sm">{{ l.title }}</strong>
+    </div>
+  </div>
+</section>
+<div class="md:hidden">
+  <app-inline-feedback [title]="l.mobile" [description]="l.mobileHint" [announcement]="'off'" />
+</div>
+@if (notice(); as note) {
+  @switch (state()) {
+    @case ('loading') {
+      <app-loading-pattern [layout]="'cards'" [label]="note.title" />
+    }
+    @case ('empty') {
+      <app-empty-pattern [title]="note.title" [description]="note.description" />
+    }
+    @default {
+      <app-inline-feedback
+        [title]="note.title"
+        [description]="note.description"
+        [tone]="note.tone"
+        [actionLabel]="
+          state() === 'error'
+            ? l.retry
+            : state() === '412'
+              ? l.reload
+              : state() === 'no-match'
+                ? l.clear
+                : undefined
+        "
+        (action)="recover()"
+      />
+    }
+  }
+}
+@if (showRecords()) {
+  <dl class="m-0 grid min-w-0 grid-cols-2 gap-3 lg:grid-cols-4">
+    @for (metric of model().metrics; track metric.label) {
+      <div hlmCard [size]="'sm'" class="min-w-0">
+        <div hlmCardContent class="grid gap-1">
+          <dt class="mb-2 flex flex-wrap items-center gap-2 text-sm font-semibold">
+            <span
+              class="inline-flex size-7 shrink-0 items-center justify-center rounded-(--eg-radius-sm) bg-(--eg-info-bg) text-(--eg-info-fg)"
+              ><hlm-icon [name]="metric.icon" /></span
+            >{{ metric.label }}
+          </dt>
+          <dd class="m-0 text-3xl font-bold tabular-nums">{{ metric.value | number: '2.0-0' }}</dd>
+          <dd class="m-0 text-xs text-muted-foreground">{{ metric.detail }}</dd>
+        </div>
+      </div>
+    }
+  </dl>
+  <div class="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(13rem,0.68fr)_minmax(0,1.68fr)]">
+    <section hlmCard [size]="'sm'" class="min-w-0" aria-labelledby="pool-directory">
+      <header class="grid min-w-0 gap-1 border-b border-(--eg-border) px-4 pb-3">
+        <h2 hlmCardTitle id="pool-directory">{{ l.directory }}</h2>
+        <label hlmLabel for="pool-filter">{{ l.filter }}</label
+        ><input
+          hlmInput
+          id="pool-filter"
+          #filterBox
+          type="search"
+          [value]="filter()"
+          (input)="filter.set(filterBox.value)"
+        />
+      </header>
+      <fieldset class="m-0 grid min-w-0 gap-2 border-0 px-3">
+        <legend class="sr-only">{{ l.directory }}</legend>
+        @for (pool of matches(); track pool.name) {
+          <label
+            class="flex min-h-11 min-w-0 cursor-pointer items-baseline gap-3 rounded-(--eg-radius-md) border border-(--eg-border-control) px-3 py-3 has-checked:border-(--eg-accent) has-checked:bg-(--eg-accent-soft) focus-within:outline-2 focus-within:outline-(--eg-focus)"
+            ><input
+              type="radio"
+              name="review-pool"
+              [checked]="selected()?.name === pool.name"
+              (change)="choice.set(pool.name)"
+              class="accent-(--eg-accent)" /><span class="grid min-w-0 gap-1"
+              ><strong>{{ pool.name }}</strong
+              ><small class="text-xs text-muted-foreground">{{ pool.description }}</small
+              ><app-status-pill [tone]="pool.tone" [label]="pool.badge" /></span
+          ></label>
+        }
+      </fieldset>
+      <footer
+        hlmCardFooter
+        class="border-t border-(--eg-border) pt-3 text-xs text-muted-foreground"
+      >
+        {{ l.directoryFooter }}
+      </footer>
+    </section>
+    @if (selected(); as pool) {
+      <section hlmCard [size]="'sm'" class="min-w-0" aria-labelledby="pool-detail">
+        <header class="grid min-w-0 gap-1 border-b border-(--eg-border) px-4 pb-3">
+          <h2 hlmCardTitle id="pool-detail">{{ pool.name }}</h2>
+          @if (pool.poolId; as id) {
+            <app-copyable-identifier [value]="id" [label]="l.poolId" [truncate]="false" />
+          } @else {
+            <p hlmCardDescription>{{ l.poolId }}: {{ l.unavailable }}</p>
+          }
+        </header>
+        <div hlmCardContent class="grid min-w-0 gap-4">
+          @if (pool.poolId) {
+            <dl
+              class="m-0 grid min-w-0 grid-cols-2 gap-3 text-sm lg:grid-cols-4 [&>div]:min-w-0 [&>div]:border-s-2 [&>div]:border-(--eg-border) [&>div]:ps-2 [&_dt]:mb-1 [&_dt]:text-xs [&_dt]:font-semibold [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:wrap-anywhere"
+            >
+              <div>
+                <dt>{{ l.registered }}</dt>
+                <dd>{{ model().agents.length | number }}</dd>
+              </div>
+              <div>
+                <dt>{{ l.image }}</dt>
+                <dd>
+                  <code>{{ model().image }}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>{{ l.protocol }}</dt>
+                <dd>{{ model().protocol }}</dd>
+              </div>
+              <div>
+                <dt>{{ l.epoch }}</dt>
+                <dd>{{ model().epoch }} · {{ l.current }}</dd>
+              </div>
+            </dl>
+            <section class="grid min-w-0 gap-2">
+              <h3 class="m-0 text-base font-semibold">{{ l.capabilities }}</h3>
+              @if (state() !== 'unavailable') {
+                <p class="m-0 text-xs text-muted-foreground">{{ l.capsHint }}</p>
+                <div hlmTableContainer>
+                  <table hlmTable>
+                    <caption class="sr-only">
+                      {{
+                        l.capabilities
+                      }}
+                    </caption>
+                    <thead hlmTHead>
+                      <tr hlmTr>
+                        <th hlmTh scope="col">{{ l.capability }}</th>
+                        @for (pool of model().directory; track pool.name) {
+                          <th hlmTh scope="col">{{ pool.name }}</th>
+                        }
+                      </tr>
+                    </thead>
+                    <tbody hlmTBody>
+                      @for (cap of model().capabilities; track cap.name) {
+                        <tr hlmTr>
+                          <th hlmTh scope="row">{{ cap.name }}</th>
+                          <td hlmTd>{{ cap.browser }}</td>
+                          <td hlmTd>{{ cap.mobile }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+                @if (state() === 'long') {
+                  <code class="wrap-anywhere">{{ longCapability }}</code>
+                }
+              } @else {
+                <app-status-pill [tone]="'neutral'" [label]="l.unavailable" />
+              }
+            </section>
+            <section class="grid min-w-0 gap-2">
+              <h3 class="m-0 text-base font-semibold">{{ l.registered }}</h3>
+              <p class="m-0 text-xs text-muted-foreground">{{ l.agentHint }}</p>
+              <div hlmTableContainer>
+                <table hlmTable>
+                  <caption class="sr-only">
+                    {{
+                      l.registered
+                    }}
+                  </caption>
+                  <thead hlmTHead>
+                    <tr hlmTr>
+                      @for (col of [l.agent, l.health, l.heartbeat, l.lease]; track col) {
+                        <th hlmTh scope="col">{{ col }}</th>
+                      }
+                    </tr>
+                  </thead>
+                  <tbody hlmTBody>
+                    @for (agent of model().agents; track agent.name) {
+                      <tr hlmTr>
+                        <th hlmTh scope="row">
+                          <bdi>{{ agent.name }}</bdi
+                          ><span class="block text-xs font-normal text-muted-foreground">{{
+                            agent.detail
+                          }}</span>
+                        </th>
+                        <td hlmTd>
+                          <app-status-pill [tone]="agent.tone" [label]="agent.health" />
+                        </td>
+                        <td hlmTd><app-absolute-time [value]="agent.heartbeat" /></td>
+                        <td hlmTd>
+                          {{ agent.lease }} {{ agent.job }} · {{ l.epochLabel }} {{ agent.epoch }}
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </section>
+            <section class="grid gap-2">
+              <h3 class="m-0 text-base font-semibold">{{ l.scheduling }}</h3>
+              <div>
+                <app-status-pill [tone]="'info'" [label]="l.running" />
+                <code>{{ runningJob }}</code> · {{ l.epoch }} {{ model().epoch }}
+              </div>
+              <app-inline-feedback
+                [title]="unmatchedJob"
+                [description]="l.unmatched"
+                [tone]="'warning'"
+                [announcement]="'off'"
+              />
+              <p class="m-0 text-xs text-muted-foreground">
+                {{ l.leaseStates }} <code>{{ leaseStates }}</code>
+              </p>
+              <p class="m-0 text-xs text-muted-foreground">
+                {{ l.serverHealth }} {{ l.healthHint }}
+              </p>
+            </section>
+          } @else {
+            <dl
+              class="m-0 grid min-w-0 grid-cols-2 gap-3 text-sm lg:grid-cols-4 [&>div]:min-w-0 [&>div]:border-s-2 [&>div]:border-(--eg-border) [&>div]:ps-2 [&_dt]:mb-1 [&_dt]:text-xs [&_dt]:font-semibold [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:wrap-anywhere"
+            >
+              <div>
+                <dt>{{ l.registered }}</dt>
+                <dd>{{ l.unavailable }}</dd>
+              </div>
+              <div>
+                <dt>{{ l.platform }}</dt>
+                <dd>{{ mobilePlatform }} · {{ l.requested }}</dd>
+              </div>
+              <div>
+                <dt>{{ l.engine }}</dt>
+                <dd>{{ mobileEngine }} · {{ l.requested }}</dd>
+              </div>
+              <div>
+                <dt>{{ l.protocol }}</dt>
+                <dd>{{ l.notSupplied }}</dd>
+              </div>
+            </dl>
+            <app-inline-feedback
+              [title]="unmatchedJob"
+              [description]="l.unmatched"
+              [tone]="'warning'"
+              [announcement]="'off'"
+            />
+          }
+        </div>
+      </section>
+    } @else {
+      <app-empty-pattern
+        [title]="noMatches.title"
+        [description]="noMatches.description"
+        [actionLabel]="l.clear"
+        (action)="filter.set('')"
+      />
+    }
+  </div>
+}

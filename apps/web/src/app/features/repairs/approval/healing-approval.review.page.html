@@ -1,0 +1,48 @@
+@let state = ctx.state();
+<header>
+  <app-page-header [title]="copy.title" [description]="copy.subtitle" />
+  @if (!ctx.isolated()) {
+    <p class="text-xs text-muted-foreground">
+      {{
+        state === 'default' || state === 'prepared' || state === '422'
+          ? labels.snapshot
+          : state === 'approved' || state === 'rejected'
+            ? labels.atTen
+            : labels.alternative
+      }}
+    </p>
+  }
+</header>
+<app-repair-review-notice [state]="state" />
+@if (!ctx.isolated()) {
+  <div class="review-grid">
+    <app-repair-evidence [panel]="'original'" [context]="ctx" />
+    @for (scopeKey of ctx.draftScope(); track scopeKey) {
+      <app-approval-decision [context]="ctx" />
+    }
+  </div>
+  <div class="review-grid">
+    <app-repair-evidence [panel]="'diff'" [context]="ctx" />
+    <app-repair-evidence [panel]="'result'" [context]="ctx" />
+  </div>
+  <app-repair-evidence [panel]="'validation'" [context]="ctx" />
+  <app-repair-evidence [panel]="'provenance'" [context]="ctx" />
+  <footer class="flex flex-wrap gap-2">
+    <a
+      hlmBtn
+      [variant]="'outline'"
+      class="min-h-11"
+      [routerLink]="ctx.link('shadow-detail')"
+      [queryParams]="{ id: record.id, state: ctx.relatedState() }"
+      >{{ copy.inspect }}</a
+    >
+    <a
+      hlmBtn
+      [variant]="'outline'"
+      class="min-h-11"
+      [routerLink]="ctx.link('healing-queue')"
+      [queryParams]="{ id: record.id }"
+      >{{ labels.queueLink }}</a
+    >
+  </footer>
+}

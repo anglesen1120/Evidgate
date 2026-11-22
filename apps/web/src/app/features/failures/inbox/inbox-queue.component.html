@@ -1,0 +1,176 @@
+<section hlmCard class="min-w-0 gap-0 py-0" aria-labelledby="inbox-queue-title">
+  <header class="grid gap-2 border-b border-border p-4">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h2 id="inbox-queue-title" class="m-0 text-lg font-bold">{{ c.queue }}</h2>
+      <button
+        *appDesktopMutation
+        hlmBtn
+        [variant]="'outline'"
+        type="button"
+        [disabled]="!store.checked().length || store.state() === 'submitting'"
+        [attr.aria-describedby]="'inbox-selection'"
+        (click)="review.emit(store.checked())"
+      >
+        {{ c.reviewSelected }}
+      </button>
+    </div>
+    <div
+      *appDesktopMutation
+      id="inbox-selection"
+      class="text-xs text-muted-foreground"
+      role="status"
+    >
+      @if (store.checked().length) {
+        <span data-selected-ids>{{ c.selectedIds }}: {{ store.checked().join(', ') }}</span>
+      } @else {
+        <span>{{ c.choose }}</span>
+      }
+    </div>
+    <div role="group" [attr.aria-label]="c.status" class="flex flex-wrap gap-1">
+      @for (status of statuses; track status.key) {
+        @let active = (store.query().get('status') || 'all') === status.key;
+        <button
+          hlmBtn
+          [size]="'sm'"
+          [variant]="active ? 'secondary' : 'outline'"
+          type="button"
+          [attr.aria-pressed]="active"
+          (click)="store.filter('status', status.key)"
+        >
+          {{ c[status.key] }} {{ status.count }}
+        </button>
+      }
+    </div>
+    <details>
+      <summary class="cursor-pointer py-2 font-medium">{{ c.filters }}</summary>
+      <div class="grid min-w-0 gap-3 py-2 sm:grid-cols-2">
+        @for (f of filters; track f.key) {
+          @let locked = f.key === 'label' && !!store.query().get('drift');
+          <app-inbox-choice
+            [fieldId]="'inbox-' + f.key"
+            [label]="f.title"
+            [options]="f.options"
+            [disabled]="locked"
+            [value]="locked ? 'test_drift' : store.query().get(f.key) || 'all'"
+            (changed)="store.filter(f.key, $event)"
+          />
+        }
+        <div class="grid min-w-0 gap-1">
+          <label hlmLabel for="inbox-search">{{ c.search }}</label>
+          <input
+            hlmInput
+            #search
+            id="inbox-search"
+            type="search"
+            maxlength="200"
+            [value]="store.query().get('q') || ''"
+            (input)="store.filter('q', search.value)"
+          />
+        </div>
+      </div>
+    </details>
+  </header>
+  <ol class="m-0 grid list-none gap-2 p-3">
+    @for (row of store.visible(); track row.id) {
+      @let current = store.active()?.id === row.id;
+      <li
+        hlmCard
+        [attr.data-current]="current"
+        class="min-w-0 gap-2 p-3 data-[current=true]:border-(--eg-accent) data-[current=true]:bg-(--eg-accent-soft)"
+      >
+        <div class="flex flex-wrap items-center gap-2">
+          <hlm-checkbox
+            *appDesktopMutation
+            [aria-label]="c.select + ': ' + row.id"
+            [checked]="store.checked().includes(row.id)"
+            [disabled]="store.state() === 'submitting'"
+            (checkedChange)="store.toggle(row.id, $event)"
+          />
+          <span
+            class="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-(--eg-accent-soft) text-(--eg-accent-fg)"
+          >
+            <hlm-icon
+              [name]="
+                row.source === 'pending'
+                  ? 'lucideClock'
+                  : row.id === 'inc-91'
+                    ? 'lucideOctagonX'
+                    : 'lucideActivity'
+              "
+            />
+          </span>
+          <div class="min-w-0 flex-1 basis-32">
+            <button
+              hlmBtn
+              type="button"
+              [variant]="'link'"
+              [attr.aria-pressed]="current"
+              [attr.aria-label]="c.preview + ': ' + row.title"
+              class="h-auto max-w-full justify-start p-0 text-start font-semibold whitespace-normal text-foreground"
+              (click)="store.pick(row.id)"
+            >
+              {{ row.title }}
+            </button>
+            <div class="text-xs text-muted-foreground">
+              <a
+                class="underline underline-offset-2 pointer-coarse:inline-flex pointer-coarse:min-h-(--eg-control-touch) pointer-coarse:items-center"
+                [routerLink]="store.path('failure-detail')"
+                [queryParams]="{ id: row.id }"
+                >{{ row.id }}</a
+              >
+              · {{ c[row.owner] }} · {{ row.revision }}
+            </div>
+          </div>
+          <app-status-pill
+            [tone]="row.severity === 'critical' ? 'danger' : 'neutral'"
+            [label]="c[row.severity]"
+          />
+        </div>
+        <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span hlmBadge [variant]="'secondary'">{{ row.label }}</span>
+          <span class="inline-flex flex-wrap items-center gap-1 text-muted-foreground"
+            ><hlm-icon [name]="row.status === 'triaged' ? 'lucideCheck' : 'lucideClock'" />
+            {{ c[row.status] }} · {{ c[row.context] }}</span
+          >
+        </div>
+      </li>
+    } @empty {
+      <li>
+        <app-empty-pattern
+          [bare]="true"
+          [title]="c.noMatch"
+          [description]="c.noMatchText"
+          [actionLabel]="c.clear"
+          (action)="store.clear()"
+        />
+      </li>
+    }
+  </ol>
+  <footer
+    class="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3"
+  >
+    <span class="text-xs text-muted-foreground">{{ store.matches().length }} {{ c.matching }}</span>
+    <div class="flex gap-1">
+      <button
+        hlmBtn
+        type="button"
+        [size]="'sm'"
+        [variant]="'outline'"
+        [disabled]="store.page() === 0"
+        (click)="store.paginate(false)"
+      >
+        {{ c.previous }}
+      </button>
+      <button
+        hlmBtn
+        type="button"
+        [size]="'sm'"
+        [variant]="'outline'"
+        [disabled]="store.page() !== 0 || store.matches().length <= 3"
+        (click)="store.paginate(true)"
+      >
+        {{ c.next }}
+      </button>
+    </div>
+  </footer>
+</section>
