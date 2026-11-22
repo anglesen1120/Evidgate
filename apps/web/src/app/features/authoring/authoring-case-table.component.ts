@@ -127,8 +127,16 @@ export class AuthoringCaseTableComponent {
   });
   protected readonly states = ['draft', 'approved', 'retired'] as const;
   protected quickState(state: AuthoringCaseFilters['state']): void {
-    this.choose('state', state);
-    this.apply();
+    // Only the status changes: unsubmitted search or filter edits stay in the draft.
+    this.navigate({
+      item_id: null,
+      state: null,
+      priority: null,
+      covered: null,
+      q: null,
+      cursor: null,
+      ...caseFiltersToQuery({ ...this.routeFilters(), state }),
+    });
   }
   protected readonly emptyTitle = computed(() =>
     this.store.filtered()

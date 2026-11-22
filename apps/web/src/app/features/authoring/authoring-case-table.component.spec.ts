@@ -359,6 +359,23 @@ describe('AuthoringCaseTableComponent', () => {
     expect(await (await harness.search()).getProperty('value')).toBe('unapplied');
   });
 
+  it('applies only the clicked status and keeps the unsubmitted search draft', async () => {
+    query.next(convertToParamMap({ priority: 'high' }));
+    list.mockResolvedValue({ items: [caseRow('draft-1')], next_cursor: null });
+    const harness = await mount();
+    await (await harness.search()).sendKeys('unapplied');
+    navigate.mockClear();
+    const tiles = await harness.tiles();
+    expect(tiles.length).toBe(3);
+    await tiles[0]?.click();
+    await fixture.whenStable();
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalled());
+    const extras = navigate.mock.calls[0]?.[1];
+    expect(extras?.queryParams).toMatchObject({ state: 'draft', priority: 'high' });
+    expect(extras?.queryParams).not.toHaveProperty('q', 'unapplied');
+    expect(await (await harness.search()).getProperty('value')).toBe('unapplied');
+  });
+
   it('refreshes from the first page, announces it and drops the page cursor', async () => {
     query.next(convertToParamMap({ cursor: 'second' }));
     list
