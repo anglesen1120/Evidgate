@@ -1,70 +1,93 @@
-<header class="flex min-w-0 items-start gap-3">
-  <span
-    class="grid size-12 shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent)"
-  >
-    <hlm-icon [name]="'lucideClock'" class="size-6" />
-  </span>
-  <div class="min-w-0">
-    @if (ownsPageHeading) {
-      <h1
-        hlmCardTitle
-        [size]="pageHeadingSize"
-        #heading
-        tabindex="-1"
-        class="m-0 focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring"
-      >
-        {{ copy.title }}
-      </h1>
-    } @else {
-      <h2
-        hlmCardTitle
-        [size]="sectionHeadingSize"
-        #heading
-        tabindex="-1"
-        class="m-0 focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring"
-      >
-        {{ copy.title }}
-      </h2>
-    }
-    <p class="mt-1! max-w-[65ch] text-sm text-muted-foreground">{{ copy.description }}</p>
+<header class="grid min-w-0 items-center gap-x-4 gap-y-3 @xl:grid-cols-[minmax(0,1fr)_auto]">
+  <div class="flex min-w-0 items-start gap-3">
+    <span
+      class="grid size-12 shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent)"
+    >
+      <hlm-icon [name]="'lucideClock'" class="size-6" />
+    </span>
+    <div class="min-w-0">
+      @if (ownsPageHeading) {
+        <h1
+          hlmCardTitle
+          [size]="pageHeadingSize"
+          #heading
+          tabindex="-1"
+          class="m-0 focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring"
+        >
+          {{ copy.title }}
+        </h1>
+      } @else {
+        <h2
+          hlmCardTitle
+          [size]="pageHeadingSize"
+          #heading
+          tabindex="-1"
+          class="m-0 text-[length:var(--eg-leading-md)]! focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring"
+        >
+          {{ copy.title }}
+        </h2>
+      }
+      <p class="mt-1! text-sm text-muted-foreground">
+        @if (status() === 'ready') {
+          {{ session.currentOrg()?.name }} · {{ summary()[0].caption }}: {{ summary()[0].value }} ·
+          {{ summary()[1].label }}: {{ summary()[1].value }}
+        } @else {
+          {{ copy.description }}
+        }
+      </p>
+    </div>
   </div>
+  @if (session.currentOrg(); as org) {
+    <app-audit-export [orgId]="org.id" [hasDraftChanges]="unappliedFilters()" />
+  }
 </header>
-@if (session.currentOrg(); as org) {
-  <app-audit-export
-    class="min-w-0 max-w-full"
-    [orgId]="org.id"
-    [hasDraftChanges]="unappliedFilters()"
-  />
-}
-@if (status() === 'ready') {
-  <dl data-audit-summary class="m-0 grid min-w-0 gap-3 @sm:grid-cols-2 @4xl:grid-cols-4">
-    @for (card of summary(); track card.label; let first = $first) {
+@if (status() === 'ready' && (store.rows().length > 0 || filtered())) {
+  <dl data-audit-summary class="m-0 grid min-w-0 gap-3 @sm:grid-cols-2 @2xl:grid-cols-4">
+    @for (card of summary(); track card.icon) {
       <div hlmCard class="min-w-0 gap-3 rounded-xl p-4">
-        <dt class="flex items-center gap-2 text-sm font-semibold">
+        <dt class="flex items-center gap-2 text-sm font-semibold @2xl:min-h-10 @4xl:min-h-7">
           <span
             class="grid size-7 shrink-0 place-items-center rounded-lg"
             [class]="
-              first ? 'bg-(--eg-accent-soft) text-(--eg-accent)' : 'bg-muted text-muted-foreground'
+              card.icon === 'clock'
+                ? 'bg-(--eg-accent-soft) text-(--eg-accent)'
+                : card.icon === 'people'
+                  ? 'bg-(--eg-info-bg) text-(--eg-info-fg)'
+                  : 'bg-muted text-muted-foreground'
             "
           >
-            <hlm-icon [name]="card.icon" class="size-4" />
+            @if (card.icon === 'clock') {
+              <hlm-icon [name]="'lucideClock'" class="size-4" />
+            } @else {
+              <app-shell-icon [name]="card.icon" class="size-4" />
+            }
           </span>
           {{ card.label }}
         </dt>
-        <dd class="m-0 font-(family-name:--eg-font-display) text-2xl font-bold tabular-nums">
-          {{ card.value }}
+        <dd class="m-0 grid gap-1">
+          <span
+            data-audit-value
+            class="font-(family-name:--eg-font-display) text-2xl font-bold tabular-nums"
+            >{{ card.value }}</span
+          >
+          <span class="text-sm text-muted-foreground">{{ card.caption }}</span>
         </dd>
       </div>
     }
   </dl>
 }
 <div hlmCard class="min-w-0 gap-0 overflow-visible rounded-xl p-0">
-  <header class="border-b border-border px-5 py-4">
+  <header
+    class="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4"
+  >
     <app-section-header
       [title]="activity"
       [size]="subsectionHeadingSize"
       [headingLevel]="ownsPageHeading ? 2 : 3"
     />
+    @if (status() === 'ready' && store.rows().length) {
+      <app-status-pill [tone]="'neutral'" [label]="copy.newestFirst" />
+    }
   </header>
   <form
     class="grid min-w-0 gap-3 border-b border-border px-5 py-4"
@@ -73,7 +96,7 @@
   >
     <span id="audit-filters-title" class="sr-only">{{ copy.filters }}</span>
     <div
-      class="grid min-w-0 items-start gap-3 @xl:grid-cols-2 @5xl:grid-cols-[repeat(3,minmax(0,1fr))_repeat(2,minmax(0,1.4fr))] [&_input]:box-border [&_input]:min-w-0 [&_input]:w-full"
+      class="grid min-w-0 items-start gap-3 @xl:grid-cols-2 @2xl:grid-cols-3 @5xl:grid-cols-[repeat(3,minmax(0,1fr))_repeat(2,minmax(0,1.4fr))] [&_input]:box-border [&_input]:min-w-0 [&_input]:w-full"
     >
       <div class="grid min-w-0 gap-2">
         <label hlmLabel for="audit-actor">{{ copy.actorType }}</label>
@@ -166,30 +189,32 @@
         />
       </div>
     </div>
-    <p id="audit-date-hint" class="text-xs text-muted-foreground">{{ copy.dateHint }}</p>
     @if (invalidRange()) {
       <p class="text-destructive" id="audit-range-error" role="alert">{{ copy.rangeError }}</p>
     }
-    <div class="flex flex-wrap items-end gap-2">
-      <button
-        hlmBtn
-        [variant]="'secondary'"
-        class="min-h-[var(--eg-control-touch)] whitespace-normal"
-        type="submit"
-        data-audit-apply
-      >
-        {{ copy.apply }}
-      </button>
-      <button
-        hlmBtn
-        [variant]="'outline'"
-        class="min-h-[var(--eg-control-touch)] whitespace-normal"
-        type="button"
-        data-audit-clear
-        (click)="clear()"
-      >
-        {{ copy.clear }}
-      </button>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <p id="audit-date-hint" class="text-xs text-muted-foreground">{{ copy.dateHint }}</p>
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+          hlmBtn
+          [variant]="'secondary'"
+          class="min-h-[var(--eg-control-touch)] whitespace-normal"
+          type="submit"
+          data-audit-apply
+        >
+          {{ copy.apply }}
+        </button>
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          class="min-h-[var(--eg-control-touch)] whitespace-normal"
+          type="button"
+          data-audit-clear
+          (click)="clear()"
+        >
+          {{ copy.clear }}
+        </button>
+      </div>
     </div>
   </form>
   @if (status() === 'error') {

@@ -57,6 +57,8 @@ interface ScopeFact {
       }
     </ng-template>
     <app-data-table
+      class="[&>.caption]:sr-only"
+      [rowHeight]="'compact'"
       [columns]="columns()"
       [rows]="rows()"
       [rowId]="rowId"
@@ -64,7 +66,7 @@ interface ScopeFact {
       [caption]="copy.hierarchyDescription"
     />
     <dl
-      class="m-0 flex min-w-0 flex-wrap items-baseline gap-x-(--eg-space-6) gap-y-(--eg-space-1) bg-(--eg-surface-raised) px-(--eg-space-4) py-(--eg-space-3)"
+      class="m-0 flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1 border-t border-border px-3 py-3"
     >
       <dt class="text-xs font-semibold text-muted-foreground">{{ copy.posture }}</dt>
       <dd class="m-0 font-semibold" data-healing-hierarchy-result>
@@ -140,6 +142,7 @@ export class SwitchScopeHierarchy {
         id: 'version',
         header: this.copy.version,
         role: 'number',
+        align: 'end',
         cell: (item) => item.row?.version ?? this.copy.notProvided,
         ...(versionCell === undefined ? {} : { cellTemplate: versionCell }),
       },
