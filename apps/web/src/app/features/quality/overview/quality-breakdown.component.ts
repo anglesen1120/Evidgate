@@ -87,6 +87,7 @@ export class QualityBreakdownComponent {
         header: $localize`:@@review.quality.observed:Observed runs`,
         role: 'number',
         align: 'end',
+        width: { min: 'calc(14ch + 2 * var(--eg-space-4))' },
         cell: (row) => row.runs,
       },
       {
