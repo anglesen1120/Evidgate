@@ -1,7 +1,5 @@
-<div
-  class="flex min-w-0 flex-wrap items-center gap-(--eg-space-3) rounded-(--eg-radius-md) bg-(--eg-surface-raised) p-(--eg-space-4)"
->
-  <label hlmLabel class="basis-full" for="evidence-revision-select">{{ copy.revisionLabel }}</label>
+<div class="flex min-w-0 flex-wrap items-center gap-x-(--eg-space-4) gap-y-(--eg-space-2)">
+  <label hlmLabel for="evidence-revision-select">{{ copy.revisionLabel }}</label>
   <hlm-select
     class="block w-full min-w-0 max-w-full min-[768px]:w-fit"
     [value]="selectedValue()"

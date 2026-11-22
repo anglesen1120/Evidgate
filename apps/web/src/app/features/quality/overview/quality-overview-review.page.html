@@ -1,20 +1,36 @@
-<app-page-header [title]="copy.title" [description]="showFilters() ? copy.subtitle : undefined">
-  @if (hasSnapshot()) {
-    <div appPageHeaderActions class="grid justify-items-start gap-1 sm:justify-items-end">
-      <button
-        type="button"
-        hlmBtn
-        [disabled]="true"
-        [attr.aria-describedby]="'quality-drill-reason'"
-      >
-        {{ copy.completeRuns }}
-      </button>
-      <small class="text-xs text-muted-foreground" id="quality-drill-reason">{{
-        copy.preview
-      }}</small>
-    </div>
-  }
-</app-page-header>
+<header class="flex min-w-0 items-start gap-3">
+  <span
+    class="grid size-12 shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent)"
+  >
+    <app-shell-icon name="grid" />
+  </span>
+  <app-page-header
+    class="min-w-0 grow [&_h1]:text-[length:var(--eg-space-7)]"
+    [title]="copy.title"
+    [description]="showFilters() ? project() + ' · ' + branch() : undefined"
+  >
+    @if (hasSnapshot()) {
+      <div appPageHeaderActions class="grid justify-items-start gap-1 sm:justify-items-end">
+        <span class="flex items-center gap-1 text-xs tabular-nums text-muted-foreground">
+          <hlm-icon name="lucideClock" class="size-4" />
+          <time [attr.datetime]="from()">{{ from() }}</time> —
+          <time [attr.datetime]="to()">{{ to() }}</time>
+        </span>
+        <button
+          type="button"
+          hlmBtn
+          [disabled]="true"
+          [attr.aria-describedby]="'quality-drill-reason'"
+        >
+          {{ copy.completeRuns }}
+        </button>
+        <small class="text-xs text-muted-foreground" id="quality-drill-reason">{{
+          copy.preview
+        }}</small>
+      </div>
+    }
+  </app-page-header>
+</header>
 @if (showFilters()) {
   <form
     hlmCard
@@ -116,7 +132,7 @@
           [attr.data-metric]="metric.key"
           class="min-w-0 justify-start gap-3 px-4"
         >
-          <dt class="flex items-center gap-2 font-semibold">
+          <dt class="flex items-center gap-2 border-s-2 border-(--eg-accent) ps-2 font-semibold">
             <span
               class="grid size-8 shrink-0 place-items-center rounded-md bg-(--eg-accent-soft) text-(--eg-accent)"
             >
@@ -129,18 +145,24 @@
               metric.value
             }}</strong>
             <small class="text-xs text-muted-foreground">{{ metric.description }}</small>
+            @if (
+              (metric.key === 'rate' || metric.key === 'incomplete') && metric.value.endsWith('%')
+            ) {
+              <span aria-hidden="true" class="mt-1 block h-1.5 overflow-hidden rounded-sm bg-muted">
+                <span class="block h-full bg-(--eg-accent)" [style.width]="metric.value"></span>
+              </span>
+            }
           </dd>
         </div>
       }
     </dl>
-    <div
-      class="grid min-w-0 items-start gap-4 min-[1100px]:grid-cols-[minmax(0,2.5fr)_minmax(0,1fr)]"
-    >
+    <div class="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,2.5fr)_minmax(0,1fr)]">
       <div class="grid min-w-0 gap-4">
         <app-quality-history [days]="model().days" />
         <app-quality-breakdown [model]="model()" [longNames]="state() === 'long'" />
       </div>
       <aside class="grid min-w-0 gap-4">
+        <app-quality-outcome-mix [days]="model().days" />
         <section hlmCard [size]="'sm'">
           <header hlmCardHeader class="border-b border-border">
             <h2 hlmCardTitle [size]="'subsection'">{{ copy.decisionTime }}</h2>

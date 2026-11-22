@@ -1,5 +1,31 @@
 @let s = state();
-<app-page-header [title]="c.title" [description]="s === 'ineligible' ? c.ineligible : c.intro" />
+@let hasRecord = !['404', 'loading', 'empty', '401', 'filtered'].includes(s);
+<header class="flex min-w-0 items-start gap-3">
+  <span
+    class="grid size-11 shrink-0 place-items-center rounded-md bg-(--eg-accent-soft) text-(--eg-accent-fg)"
+  >
+    <hlm-icon name="lucideClock" class="size-5" />
+  </span>
+  <app-page-header
+    class="min-w-0 flex-1 [--eg-text-2xl:var(--eg-space-7)]"
+    [title]="c.title"
+    [description]="
+      !hasRecord ? c.intro : s === 'ineligible' ? c.ineligible : record.id + ' · ' + c.asOf
+    "
+  >
+    @if (hasRecord) {
+      <a
+        appPageHeaderActions
+        hlmBtn
+        [variant]="'outline'"
+        [routerLink]="path('shadow-detail')"
+        [queryParams]="{ id: record.candidate }"
+      >
+        <hlm-icon name="lucideActivity" class="size-4" />{{ c.inspectProposal }}
+      </a>
+    }
+  </app-page-header>
+</header>
 @if (s === '404') {
   <app-not-found-pattern />
 } @else if (s === 'loading') {
@@ -18,9 +44,6 @@
     >{{ c.clear }}</a
   >
 } @else {
-  @if (s !== 'ineligible') {
-    <p class="m-0 text-sm text-muted-foreground">{{ c.asOf }}</p>
-  }
   @switch (s) {
     @case ('error') {
       <app-inline-feedback [tone]="'destructive'" [title]="c.error"
@@ -66,60 +89,6 @@
     }
   }
   <div class="grid min-w-0 items-start gap-4 lg:grid-cols-2">
-    <section hlmCard [size]="'sm'">
-      <header hlmCardHeader>
-        <h2 hlmCardTitle>{{ c.original }}</h2>
-        <app-status-pill hlmCardAction [tone]="'danger'" [label]="c.failed" />
-      </header>
-      <div hlmCardContent class="grid min-w-0 gap-3">
-        <app-inline-feedback
-          [tone]="'destructive'"
-          [announcement]="'off'"
-          [title]="c.timeout"
-          [description]="c.noHttp"
-        />
-        <dl class="m-0 grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))]">
-          <div>
-            <dt>{{ c.completeness }}</dt>
-            <dd>{{ c.incomplete }}</dd>
-          </div>
-          <div>
-            <dt>{{ c.outcome }}</dt>
-            <dd>
-              <code>{{ record.outcome }}</code>
-            </dd>
-          </div>
-          <div>
-            <dt>{{ c.decision }}</dt>
-            <dd><app-decision-chip [decision]="record.decision" [compact]="true" /></dd>
-          </div>
-          <div>
-            <dt>{{ c.source }}</dt>
-            <dd>
-              <code>{{ record.incident }} · {{ record.classification }}</code>
-            </dd>
-          </div>
-          <div>
-            <dt>{{ c.run }}</dt>
-            <dd>
-              <code>{{ record.run }} · {{ record.evidence }}</code>
-            </dd>
-          </div>
-          <div>
-            <dt>{{ c.captured }}</dt>
-            <dd><app-absolute-time [value]="record.capturedAt" /></dd>
-          </div>
-        </dl>
-        <a
-          hlmBtn
-          [variant]="'outline'"
-          class="justify-self-start"
-          [routerLink]="path('failure-detail')"
-          [queryParams]="{ id: record.incident }"
-          >{{ c.inspectFailure }}</a
-        >
-      </div>
-    </section>
     <section hlmCard [size]="'sm'">
       <header hlmCardHeader>
         <h2 hlmCardTitle>{{ c.record }}</h2>
@@ -177,22 +146,85 @@
     }
     <section hlmCard [size]="'sm'">
       <header hlmCardHeader>
+        <h2 hlmCardTitle>{{ c.original }}</h2>
+        <app-status-pill hlmCardAction [tone]="'danger'" [label]="c.failed" />
+      </header>
+      <div hlmCardContent class="grid min-w-0 gap-3">
+        <app-inline-feedback
+          [tone]="'destructive'"
+          [announcement]="'off'"
+          [title]="c.timeout"
+          [description]="c.noHttp"
+        />
+        <dl class="m-0 grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))]">
+          <div>
+            <dt>{{ c.completeness }}</dt>
+            <dd>{{ c.incomplete }}</dd>
+          </div>
+          <div>
+            <dt>{{ c.outcome }}</dt>
+            <dd>
+              <code>{{ record.outcome }}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>{{ c.decision }}</dt>
+            <dd><app-decision-chip [decision]="record.decision" [compact]="true" /></dd>
+          </div>
+          <div>
+            <dt>{{ c.source }}</dt>
+            <dd>
+              <code>{{ record.incident }} · {{ record.classification }}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>{{ c.run }}</dt>
+            <dd>
+              <code>{{ record.run }} · {{ record.evidence }}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>{{ c.captured }}</dt>
+            <dd><app-absolute-time [value]="record.capturedAt" /></dd>
+          </div>
+        </dl>
+        <a
+          hlmBtn
+          [variant]="'outline'"
+          class="justify-self-start"
+          [routerLink]="path('failure-detail')"
+          [queryParams]="{ id: record.incident }"
+          >{{ c.inspectFailure }}</a
+        >
+      </div>
+    </section>
+    <section hlmCard [size]="'sm'">
+      <header hlmCardHeader>
         <h2 hlmCardTitle>{{ c.formation }}</h2>
       </header>
-      <ul hlmCardContent class="grid gap-3">
-        <li>{{ c.label }} · <app-absolute-time [value]="record.capturedAt" /></li>
-        <li>
-          {{ c.validate }} · <code>{{ record.candidate }}</code>
+      <ul hlmCardContent class="m-0 grid list-none gap-0">
+        <li class="history-event">
+          <span>{{ c.label }}</span
+          ><app-absolute-time [value]="record.capturedAt" />
+        </li>
+        <li class="history-event">
+          <span>{{ c.validate }}</span
+          ><code>{{ record.candidate }}</code>
         </li>
         @if (s !== 'ineligible') {
-          <li>{{ c.approve }} · <app-absolute-time [value]="record.reviewedAt" /></li>
-          <li>
-            {{ c.created }} · <code>{{ record.id }}</code>
+          <li class="history-event">
+            <span>{{ c.approve }}</span
+            ><app-absolute-time [value]="record.reviewedAt" />
+          </li>
+          <li class="history-event">
+            <span>{{ c.created }}</span
+            ><code>{{ record.id }}</code>
           </li>
         }
         @if (blocked()) {
-          <li>
-            {{ c.revoked }} · <code>{{ record.id }}</code>
+          <li class="history-event">
+            <span>{{ c.revoked }}</span
+            ><code>{{ record.id }}</code>
           </li>
         }
       </ul>
@@ -243,13 +275,4 @@
     </div>
   </section>
   <app-lineage-dependents [state]="s" />
-  <footer>
-    <a
-      hlmBtn
-      [variant]="'outline'"
-      [routerLink]="path('shadow-detail')"
-      [queryParams]="{ id: record.candidate }"
-      >{{ c.inspectProposal }}</a
-    >
-  </footer>
 }

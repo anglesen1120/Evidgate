@@ -1,7 +1,8 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
-import { PageHeaderComponent } from '../../../shared/ui/page-header';
+import { HlmIcon } from '@evidgate/ui/icon';
+import { PageHeaderImports } from '../../../shared/ui/page-header';
 import { RepairEvidenceComponent } from '../shadow/repair-evidence.component';
 import { reviewContext } from '../shadow/repair-review-context';
 import { REPAIR } from '../shadow/repair-review.fixture';
@@ -18,7 +19,8 @@ import { APPROVAL_COPY } from './approval.copy';
   imports: [
     RouterLink,
     HlmButton,
-    PageHeaderComponent,
+    HlmIcon,
+    PageHeaderImports,
     RepairEvidenceComponent,
     RepairReviewNoticeComponent,
     ApprovalDecisionComponent,

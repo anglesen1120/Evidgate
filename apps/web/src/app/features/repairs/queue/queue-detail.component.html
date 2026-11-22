@@ -65,23 +65,41 @@
       </p>
       @if (row.id === 'cand-73') {
         <figure class="batches">
-          <ol>
-            @for (count of batches; track $index) {
-              <li>
-                <svg
-                  viewBox="0 0 10 7"
-                  [attr.preserveAspectRatio]="'none'"
-                  aria-hidden="true"
-                  focusable="false"
-                >
-                  <rect x="1" [attr.y]="7 - count" width="8" [attr.height]="count" />
-                </svg>
-                <span
-                  ><span class="sr-only">{{ c.batch }} </span>{{ $index + 1 }} · {{ count }}</span
-                >
-              </li>
-            }
-          </ol>
+          <div hlmTableContainer>
+            <table hlmTable class="w-full table-fixed text-center">
+              <caption hlmCaption class="sr-only">
+                {{
+                  c.samples
+                }}
+              </caption>
+              <thead hlmTHead>
+                <tr hlmTr>
+                  @for (count of batches; track $index) {
+                    <th hlmTh scope="col">
+                      <span class="sr-only">{{ c.batch }} </span>{{ $index + 1 }}
+                    </th>
+                  }
+                </tr>
+              </thead>
+              <tbody hlmTBody>
+                <tr hlmTr>
+                  @for (count of batches; track $index) {
+                    <td hlmTd>
+                      <svg
+                        viewBox="0 0 10 7"
+                        [attr.preserveAspectRatio]="'none'"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <rect x="1" [attr.y]="7 - count" width="8" [attr.height]="count" />
+                      </svg>
+                      {{ count }}
+                    </td>
+                  }
+                </tr>
+              </tbody>
+            </table>
+          </div>
           <figcaption>{{ c.samples }}</figcaption>
         </figure>
       }

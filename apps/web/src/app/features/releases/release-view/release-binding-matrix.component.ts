@@ -9,8 +9,6 @@ import {
 } from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCard, HlmCardContent, HlmCardHeader } from '@evidgate/ui/card';
-import { HlmLabel } from '@evidgate/ui/label';
-import { HlmSelectImports } from '@evidgate/ui/select';
 
 import { StatusPillComponent } from '../../../shared/ui/chips';
 import {
@@ -26,11 +24,10 @@ import {
 } from '../../../shared/ui/verdict';
 import { RELEASE_COPY } from './release-view-copy';
 import type { ReleaseReviewState } from './release-view-state';
-import {
-  componentFilter,
-  type ComponentFilter,
-  type ComponentKey,
-  type ReleaseBindingViewModel,
+import type {
+  ComponentFilter,
+  ComponentKey,
+  ReleaseBindingViewModel,
 } from './release-view.fixture';
 
 type Cell = TemplateRef<DataTableCellContext<ReleaseBindingViewModel>>;
@@ -43,8 +40,6 @@ type Cell = TemplateRef<DataTableCellContext<ReleaseBindingViewModel>>;
     HlmCard,
     HlmCardContent,
     HlmCardHeader,
-    HlmLabel,
-    HlmSelectImports,
     StatusPillComponent,
     DataTableComponent,
     SectionHeaderComponent,
@@ -63,9 +58,16 @@ export class ReleaseBindingMatrixComponent {
   readonly inspect = output<ComponentKey>();
   protected readonly copy = RELEASE_COPY;
   protected readonly rowId = (row: ReleaseBindingViewModel) => row.component;
-  protected readonly filterValue = componentFilter;
-  protected readonly filterLabel = (value: unknown) =>
-    value === 'all' ? this.copy.all : componentFilter(value);
+  protected readonly filters = computed(() => {
+    const rows = this.rows();
+    const counts = new Map<ComponentFilter, number>([['all', rows.length]]);
+    for (const { component } of rows) counts.set(component, (counts.get(component) ?? 0) + 1);
+    return Array.from(counts, ([value, count]) => ({
+      value,
+      label: value === 'all' ? this.copy.all : value,
+      count,
+    }));
+  });
   protected readonly selectedRows = computed(() =>
     this.state() === 'no-match'
       ? []
@@ -91,6 +93,7 @@ export class ReleaseBindingMatrixComponent {
       header: this.copy.component,
       role: 'identity',
       priority: 'primary',
+      width: { min: '10ch', preferred: '1%' },
       cell: (row) => row.component,
       cellTemplate: this.componentCell(),
     },
@@ -99,6 +102,7 @@ export class ReleaseBindingMatrixComponent {
       header: this.copy.digest,
       role: 'text',
       priority: 'primary',
+      width: { min: '16ch' },
       cell: (row) => row.digest,
       cellTemplate: this.digestCell(),
     },
@@ -107,6 +111,7 @@ export class ReleaseBindingMatrixComponent {
       header: this.copy.binding,
       role: 'text',
       priority: 'primary',
+      width: { min: '12ch' },
       cell: (row) => row.evaluation?.run ?? this.copy.unbound,
       cellTemplate: this.bindingCell(),
     },
@@ -115,6 +120,7 @@ export class ReleaseBindingMatrixComponent {
       header: this.copy.freshness,
       role: 'status',
       priority: 'primary',
+      width: { min: '15ch', preferred: 'auto' },
       cell: (row) => row.evaluation?.freshness ?? this.copy.missing,
       cellTemplate: this.freshnessCell(),
     },
@@ -123,6 +129,7 @@ export class ReleaseBindingMatrixComponent {
       header: this.copy.evidence,
       role: 'status',
       priority: 'primary',
+      width: { min: '14ch', preferred: 'auto' },
       cell: (row) => row.evaluation?.completeness ?? this.copy.noEvidence,
       cellTemplate: this.evidenceCell(),
     },
@@ -131,6 +138,7 @@ export class ReleaseBindingMatrixComponent {
       header: this.copy.outcome,
       role: 'status',
       priority: 'primary',
+      width: { min: '16ch', preferred: 'auto' },
       cell: (row) => row.evaluation?.outcome ?? this.copy.unavailable,
       cellTemplate: this.outcomeCell(),
     },
@@ -139,6 +147,7 @@ export class ReleaseBindingMatrixComponent {
       header: this.copy.decision,
       role: 'status',
       priority: 'primary',
+      width: { min: '14ch', preferred: 'auto' },
       cell: (row) => row.evaluation?.decision ?? this.copy.unavailable,
       cellTemplate: this.decisionCell(),
     },

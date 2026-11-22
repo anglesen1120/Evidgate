@@ -1,16 +1,27 @@
-<app-page-header [title]="copy.title" [description]="displayScope() ? copy.subtitle : undefined">
-  @if (snapshot() && state() !== 'no-match') {
-    <button
-      appPageHeaderActions
-      hlmBtn
-      type="button"
-      class="pointer-coarse:min-h-(--eg-control-touch)"
-      (click)="context()?.focus()"
-    >
-      {{ copy.openContext }}
-    </button>
-  }
-</app-page-header>
+<header class="flex min-w-0 items-start gap-3">
+  <span
+    class="grid size-12 shrink-0 place-items-center rounded-lg bg-(--eg-accent-soft) text-(--eg-accent)"
+  >
+    <app-shell-icon name="shield-check" />
+  </span>
+  <app-page-header
+    class="min-w-0 grow [&_h1]:text-[length:var(--eg-space-7)]"
+    [title]="copy.title"
+    [description]="displayScope() ? copy.subtitle : undefined"
+  >
+    @if (snapshot() && state() !== 'no-match') {
+      <button
+        appPageHeaderActions
+        hlmBtn
+        type="button"
+        class="pointer-coarse:min-h-(--eg-control-touch)"
+        (click)="context()?.focus()"
+      >
+        {{ copy.openContext }}
+      </button>
+    }
+  </app-page-header>
+</header>
 
 @if (notice(); as notice) {
   @if (notice.action; as action) {
@@ -83,16 +94,13 @@
       <section hlmCard class="min-w-0 gap-3 p-4" [attr.data-assessment]="first ? '' : null">
         <h2 class="m-0 flex items-center gap-2 text-sm font-semibold">
           <span
-            class="grid size-(--eg-control-sm) shrink-0 place-items-center rounded-md bg-secondary text-secondary-foreground"
+            class="grid size-8 shrink-0 place-items-center rounded-md bg-(--eg-accent-soft) text-(--eg-accent)"
           >
             <hlm-icon class="size-4" [name]="metric.icon" /> </span
           >{{ metric.title }}
         </h2>
         <div>
-          <p
-            class="m-0 font-(family-name:--eg-font-display) text-2xl font-bold tabular-nums"
-            [class.text-xl]="first"
-          >
+          <p class="m-0 font-(family-name:--eg-font-display) text-2xl font-bold tabular-nums">
             {{ metric.value }}
           </p>
           <p class="eg-type-caption m-0 text-muted-foreground">{{ metric.note }}</p>

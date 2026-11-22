@@ -35,6 +35,7 @@
       />
     } @else {
       <app-data-table
+        class="-mx-(--eg-space-5) [&_.caption]:sr-only [&_.scroll]:rounded-none [&_.scroll]:border-x-0"
         data-producer-scroll
         [columns]="columns()"
         [rows]="pageSlots()"

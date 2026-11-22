@@ -25,7 +25,7 @@ import type { ComponentKey, ReleaseViewModel } from './release-view.fixture';
   },
   template: `
     <section #context hlmCard tabindex="-1" aria-labelledby="release-context">
-      <header hlmCardHeader>
+      <header hlmCardHeader class="border-b border-border pb-3">
         <app-section-header [title]="copy.context" [titleId]="'release-context'" />
       </header>
       <div hlmCardContent class="grid gap-3">
@@ -53,7 +53,7 @@ import type { ComponentKey, ReleaseViewModel } from './release-view.fixture';
       </div>
     </section>
     <section hlmCard aria-labelledby="release-policy">
-      <header hlmCardHeader>
+      <header hlmCardHeader class="border-b border-border pb-3">
         <app-section-header [title]="copy.policy" [titleId]="'release-policy'" />
       </header>
       <div hlmCardContent class="grid min-w-0 gap-2 text-sm">
