@@ -107,6 +107,7 @@
         <app-request-state
           [status]="viewStatus()"
           [error]="store.treeError()"
+          [emptyIcon]="'navTree'"
           [empty]="!hasContent()"
           [loadingLabel]="copy.loading"
           [emptyTitle]="copy.noRoots"
@@ -189,6 +190,7 @@
       @if (!denied()) {
         <app-authoring-case-table [projectEmpty]="projectEmpty()">
           <app-empty-pattern
+            [icon]="'navFolder'"
             data-authoring-project-empty
             class="px-(--eg-space-5)"
             [bare]="true"

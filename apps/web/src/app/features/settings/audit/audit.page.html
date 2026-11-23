@@ -236,6 +236,7 @@
     [status]="status()"
     [loadingLabel]="copy.loading"
     [error]="store.loadError()"
+    [emptyIcon]="'navAudit'"
     [empty]="store.rows().length === 0"
     [emptyTitle]="filtered() ? copy.noMatchTitle : copy.emptyTitle"
     [emptyDescription]="filtered() ? copy.noMatchDescription : copy.emptyDescription"

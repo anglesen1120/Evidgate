@@ -20,7 +20,7 @@
   } @else if (attempts() === null) {
     <p data-attempts-unavailable class="text-muted-foreground">{{ copy.notProvided }}</p>
   } @else if (attempts()?.length === 0) {
-    <app-empty-pattern [title]="copy.empty" />
+    <app-empty-pattern [icon]="'navRun'" [title]="copy.empty" />
   } @else {
     @if (healingUnavailable()) {
       <p

@@ -116,6 +116,7 @@
                   <app-request-state
                     [status]="pageStatus(page)"
                     [error]="page?.error ?? null"
+                    [emptyIcon]="'navTree'"
                     [empty]="
                       page?.status === 'ready' &&
                       page?.items.length === 0 &&

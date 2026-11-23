@@ -18,7 +18,7 @@
       <app-loading-pattern [layout]="'cards'" [label]="n.title" />
     }
     @case ('empty') {
-      <app-empty-pattern [title]="n.title" [description]="n.description" />
+      <app-empty-pattern [icon]="'navCode'" [title]="n.title" [description]="n.description" />
     }
     @default {
       <app-inline-feedback
@@ -255,6 +255,7 @@
       </div>
       @if (showRecords && !rows().length && state() !== 'nomatch') {
         <app-empty-pattern
+          [icon]="'navCode'"
           [title]="c.noMatches"
           [description]="c.noMatchesDetail"
           [actionLabel]="c.clear"

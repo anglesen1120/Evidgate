@@ -44,9 +44,10 @@ const NEXT_STEP_IDS = ['runs', 'onboarding', 'authoring'];
         }
       </app-page-header>
       @if (!current) {
-        <app-empty-pattern [title]="noProject" />
+        <app-empty-pattern [icon]="'navGrid'" [title]="noProject" />
       } @else if (!nextSteps().length) {
         <app-empty-pattern
+          [icon]="'navGrid'"
           title="No shortcuts available for this project"
           i18n-title="@@shell.overview.no-shortcuts"
         />

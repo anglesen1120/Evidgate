@@ -31,11 +31,11 @@
 } @else if (s === 'loading') {
   <app-loading-pattern [label]="c.loading" />
 } @else if (s === 'empty') {
-  <app-empty-pattern [title]="c.empty" />
+  <app-empty-pattern [icon]="'navFile'" [title]="c.empty" />
 } @else if (s === '401') {
   <app-inline-feedback [title]="c.session" />
 } @else if (s === 'filtered') {
-  <app-empty-pattern [title]="c.filtered" /><a
+  <app-empty-pattern [icon]="'navFile'" [title]="c.filtered" /><a
     hlmBtn
     [variant]="'outline'"
     class="justify-self-start"

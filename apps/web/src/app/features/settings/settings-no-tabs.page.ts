@@ -9,7 +9,12 @@ import { EmptyPatternComponent } from '../../shared/ui/states/empty-pattern.comp
   host: { class: 'block min-w-0' },
   template: `
     <section hlmCard class="min-w-0 min-h-60 justify-start rounded-xl p-5">
-      <app-empty-pattern [bare]="true" [title]="title" [description]="description" />
+      <app-empty-pattern
+        [icon]="'navSettings'"
+        [bare]="true"
+        [title]="title"
+        [description]="description"
+      />
     </section>
   `,
 })

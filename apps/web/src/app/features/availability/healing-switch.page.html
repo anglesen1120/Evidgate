@@ -25,7 +25,12 @@
     <p class="m-0 text-sm">{{ copy.forbidden }}</p>
   </section>
 } @else if (!session.currentProject()) {
-  <app-empty-pattern data-healing-no-project role="status" [title]="copy.noProject" />
+  <app-empty-pattern
+    [icon]="'navShieldCheck'"
+    data-healing-no-project
+    role="status"
+    [title]="copy.noProject"
+  />
 } @else if (store.notFound()) {
   <app-not-found-pattern data-healing-not-found />
 } @else if (store.loading()) {
