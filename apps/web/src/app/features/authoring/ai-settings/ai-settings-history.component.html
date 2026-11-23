@@ -148,7 +148,11 @@
             </h3>
           </header>
           <div hlmCardContent class="grid min-w-0 gap-(--eg-space-4) wrap-anywhere">
-            <app-ai-settings-snapshot-fields [settings]="version.settings" />
+            <app-ai-settings-snapshot-fields
+              class="block min-w-0 @container/snapshot"
+              [inline]="true"
+              [settings]="version.settings"
+            />
           </div>
         </section>
       }
