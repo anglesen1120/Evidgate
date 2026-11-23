@@ -172,12 +172,6 @@ export class OrgOverviewPage {
   protected viewProject(name: string): string {
     return $localize`:@@orgoverview.view-project:View project ${name}:name:`;
   }
-  protected projectCount(): string {
-    const count = this.store.projectRows().length;
-    return this.store.projects.hasValue() && this.store.projects.value().more
-      ? $localize`:@@orgoverview.projects-more:Showing ${count}:count: projects; more available`
-      : $localize`:@@orgoverview.projects-count:Showing ${count}:count: projects`;
-  }
   protected memberContext(): string {
     const page = this.store.members.hasValue() ? this.store.members.value() : undefined;
     const count = page?.items.length ?? 0;
