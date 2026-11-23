@@ -58,6 +58,12 @@ let nextCopyId = 0;
       display: inline-block;
       max-inline-size: 100%;
     }
+    :host(.short-action) {
+      min-inline-size: max-content;
+    }
+    :host(.short-action) button {
+      white-space: nowrap;
+    }
     :host(.icon-only) {
       display: inline-flex;
       flex: none;

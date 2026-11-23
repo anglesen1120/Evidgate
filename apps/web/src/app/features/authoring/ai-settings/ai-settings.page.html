@@ -58,7 +58,11 @@
               i18n-aria-label="@@authoring.ai-settings.panels"
               class="h-auto w-fit min-w-0 max-w-full flex-nowrap justify-start overflow-x-auto overscroll-x-contain p-(--eg-space-2) [&>button]:flex-none [&>button]:whitespace-nowrap"
             >
-              <button [hlmTabsTrigger]="'settings'" i18n="@@authoring.ai-settings.settings-tab">
+              <button
+                #settingsTab
+                [hlmTabsTrigger]="'settings'"
+                i18n="@@authoring.ai-settings.settings-tab"
+              >
                 Settings
               </button>
               <button
@@ -316,7 +320,11 @@
                   </section>
                 }
               </div>
-              <div [hlmTabsContent]="'history'" class="min-w-0"><app-ai-settings-history /></div>
+              <div [hlmTabsContent]="'history'" class="min-w-0">
+                <app-ai-settings-history
+                  (openSettings)="tab.set('settings'); settingsTab.focus()"
+                />
+              </div>
             </div>
             <aside
               class="grid min-w-0 items-start gap-(--eg-space-5)"

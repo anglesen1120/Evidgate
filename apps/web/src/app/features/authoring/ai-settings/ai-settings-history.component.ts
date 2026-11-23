@@ -5,6 +5,7 @@ import {
   ElementRef,
   inject,
   linkedSignal,
+  output,
   signal,
   viewChild,
   type TemplateRef,
@@ -21,6 +22,7 @@ import {
   type DataTableColumn,
   type DataTableCellContext,
 } from '../../../shared/ui/data-table';
+import { EmptyPatternComponent } from '../../../shared/ui/states/empty-pattern.component';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
@@ -45,6 +47,7 @@ import { AiSettingsSnapshotFieldsComponent } from './ai-settings-snapshot-fields
     HlmInput,
     HlmLabel,
     DataTableComponent,
+    EmptyPatternComponent,
     RequestStateComponent,
     AbsoluteTimeComponent,
     CopyableIdentifierComponent,
@@ -54,6 +57,7 @@ import { AiSettingsSnapshotFieldsComponent } from './ai-settings-snapshot-fields
 export class AiSettingsHistoryComponent {
   protected readonly store = inject(AiSettingsStore);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  readonly openSettings = output<void>();
   protected readonly escape = escapeFormatChars;
   protected readonly filter = signal('');
   protected readonly fields = FIELDS;
@@ -61,10 +65,13 @@ export class AiSettingsHistoryComponent {
   protected readonly authorLabel = $localize`:@@authoring.ai-settings.author:Author membership`;
   protected readonly settingsIdLabel = $localize`:@@authoring.ai-settings.settings-id:Settings identity`;
   protected readonly hashLabel = $localize`:@@authoring.ai-settings.hash:Content hash`;
-  protected readonly historyTitle = $localize`:@@authoring.ai-settings.history-tab:Version history`;
+  protected readonly tableCaption = $localize`:@@authoring.ai-settings.saved-versions:Saved settings versions`;
   protected readonly pagesLabel = $localize`:@@authoring.ai-settings.pages:Version history pages`;
   protected readonly noMatch = $localize`:@@authoring.ai-settings.no-match:No loaded versions match this filter`;
   protected readonly empty = $localize`:@@authoring.ai-settings.empty-history:No saved settings versions`;
+  protected readonly emptyPage = $localize`:@@authoring.ai-settings.empty-page:No versions on this page`;
+  protected readonly firstVersionAction = $localize`:@@authoring.ai-settings.open-settings:Open AI settings`;
+  protected readonly firstVersionHelp = $localize`:@@authoring.ai-settings.first-version-help:Save your settings to create the first version.`;
   protected readonly notSet = $localize`:@@authoring.ai-settings.not-set:Not set`;
   private readonly time =
     viewChild<TemplateRef<DataTableCellContext<AiSettingsVersionSummary>>>('time');

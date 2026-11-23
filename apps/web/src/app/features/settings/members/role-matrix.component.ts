@@ -6,6 +6,7 @@ import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmAlert } from '@evidgate/ui/alert';
 import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
 import { MEMBERS_COPY } from './member-list.component';
+import { memberRoleLabel } from './member-role-label';
 
 const ROLE_HEADER_WIDTH: DataTableColumnWidth = {
   min: 'max-content',
@@ -39,7 +40,7 @@ const ROLE_VALUE_WIDTH: DataTableColumnWidth = { min: '0px', max: 'none' };
                   <dt class="font-semibold wrap-anywhere">{{ row.membership.invited_email }}</dt>
                   <dd class="m-0 flex flex-wrap gap-2 wrap-anywhere">
                     @for (role of row.roles; track role.id) {
-                      <span>{{ role.name }}</span>
+                      <span>{{ roleLabel(role) }}</span>
                     } @empty {
                       {{ copy.noRoles }}
                     }
@@ -101,7 +102,7 @@ const ROLE_VALUE_WIDTH: DataTableColumnWidth = { min: '0px', max: 'none' };
                     scope="col"
                     class="md:whitespace-nowrap"
                     [id]="'matrix-role-' + role.id"
-                    [textContent]="role.name"
+                    [textContent]="roleLabel(role)"
                   ></th>
                 }
               </tr>
@@ -141,7 +142,7 @@ const ROLE_VALUE_WIDTH: DataTableColumnWidth = { min: '0px', max: 'none' };
                     >
                       <span
                         class="record-label block text-xs font-medium text-muted-foreground whitespace-normal md:hidden"
-                        >{{ role.name }}</span
+                        >{{ roleLabel(role) }}</span
                       >
                       <span
                         class="text-muted-foreground data-[granted=true]:font-semibold data-[granted=true]:text-foreground md:whitespace-nowrap"
@@ -169,6 +170,7 @@ export class RoleMatrixComponent {
   }>();
   readonly headingLevel = input<2 | 3>(3);
   protected readonly copy = MEMBERS_COPY;
+  protected readonly roleLabel = memberRoleLabel;
   protected readonly subsectionHeadingSize = 'subsection' as const;
   protected readonly identityRole = 'identity' as const;
   protected readonly statusRole = 'status' as const;
