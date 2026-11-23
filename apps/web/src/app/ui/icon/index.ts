@@ -59,6 +59,17 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
           ></rect>
           <path [attr.d]="'M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2'"></path>
         }
+        @case ('lucideEllipsis') {
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+          <circle cx="5" cy="12" r="1" />
+        }
+        @case ('lucideEye') {
+          <path
+            [attr.d]="'M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0'"
+          />
+          <circle cx="12" cy="12" r="3" />
+        }
         @case ('lucideFileDiff') {
           <path
             [attr.d]="'M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z'"
@@ -103,6 +114,16 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
           <path
             [attr.d]="'m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551'"
           />
+        }
+        @case ('lucidePencil') {
+          <path
+            [attr.d]="'M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z'"
+          />
+          <path [attr.d]="'m15 5 4 4'" />
+        }
+        @case ('lucideRotateCw') {
+          <path [attr.d]="'M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8'" />
+          <path [attr.d]="'M21 3v5h-5'" />
         }
         @case ('lucideTriangleAlert') {
           <path
@@ -222,6 +243,8 @@ export const HLM_ICON_NAMES = [
   'lucideCircleCheck',
   'lucideClock',
   'lucideCopy',
+  'lucideEllipsis',
+  'lucideEye',
   'lucideFileDiff',
   'lucideGitMerge',
   'lucideInbox',
@@ -230,6 +253,8 @@ export const HLM_ICON_NAMES = [
   'lucideMaximize2',
   'lucideOctagonX',
   'lucidePaperclip',
+  'lucidePencil',
+  'lucideRotateCw',
   'lucideTriangleAlert',
   'lucideX',
   'navAudit',
