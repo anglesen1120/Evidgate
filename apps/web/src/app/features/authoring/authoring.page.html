@@ -9,27 +9,27 @@
     <app-page-header
       class="min-w-0 flex-1"
       [title]="copy.title"
-      [description]="subtitle()"
+      [description]="copy.description"
       [titleId]="'authoring-page-title'"
     >
-      <div appPageHeaderActions>
-        <ng-container *ngTemplateOutlet="refresh" />
+      <div appPageHeaderActions class="flex min-w-0 flex-wrap items-center gap-(--eg-space-3)">
+        <ng-container *ngTemplateOutlet="actions" />
       </div>
     </app-page-header>
   } @else {
     <app-section-header
       class="min-w-0 flex-1"
       [title]="copy.title"
-      [description]="subtitle()"
+      [description]="copy.description"
       [titleId]="'authoring-page-title'"
     >
-      <div appSectionHeaderActions>
-        <ng-container *ngTemplateOutlet="refresh" />
+      <div appSectionHeaderActions class="flex min-w-0 flex-wrap items-center gap-(--eg-space-3)">
+        <ng-container *ngTemplateOutlet="actions" />
       </div>
     </app-section-header>
   }
 </div>
-<ng-template #refresh>
+<ng-template #actions>
   <button
     hlmBtn
     [variant]="'outline'"
@@ -41,118 +41,163 @@
   >
     {{ copy.refresh }}
   </button>
+  @if (importRoute(); as route) {
+    <a
+      hlmBtn
+      class="eg-header-action"
+      [variant]="projectEmpty() ? 'outline' : 'default'"
+      [routerLink]="route"
+      [relativeTo]="null"
+      >{{ copy.importExport }}</a
+    >
+  }
 </ng-template>
 
-<div class="panes">
-  <section
-    hlmCard
-    class="tree-pane"
-    aria-labelledby="authoring-hierarchy-title"
-    [attr.aria-busy]="busy()"
-  >
-    <div hlmCardHeader class="border-b border-border pb-(--eg-space-4)">
-      <app-section-header
-        [title]="copy.hierarchy"
-        [description]="copy.hierarchyDescription"
-        [titleId]="'authoring-hierarchy-title'"
-        [headingLevel]="ownsPageHeading ? 2 : 3"
-        [size]="'subsection'"
-      />
-    </div>
-    <div hlmCardContent>
-      @if (store.stale() && !denied()) {
-        <app-inline-feedback
-          data-authoring-stale
-          [tone]="'warning'"
-          [title]="copy.stale"
-          [description]="copy.staleDescription"
-          [announcement]="'off'"
+@if (metrics().length) {
+  <dl class="metrics" data-authoring-metrics>
+    @for (metric of metrics(); track metric.label) {
+      <div hlmCard class="min-w-0 gap-(--eg-space-2) p-(--eg-space-5)">
+        <dt class="font-semibold">{{ metric.label }}</dt>
+        <dd class="m-0">
+          <strong class="block text-2xl tabular-nums"
+            ><app-number-value [value]="metric.count"
+          /></strong>
+          <span class="text-xs wrap-anywhere text-muted-foreground">{{ metric.scope }}</span>
+        </dd>
+      </div>
+    }
+  </dl>
+}
+<div class="panes" [class.project-empty]="projectEmpty()">
+  @if (!projectEmpty()) {
+    <section
+      hlmCard
+      class="tree-pane"
+      aria-labelledby="authoring-hierarchy-title"
+      [attr.aria-busy]="busy()"
+    >
+      <div hlmCardHeader class="border-b border-border pb-(--eg-space-4)">
+        <app-section-header
+          [title]="copy.hierarchy"
+          [description]="copy.hierarchyDescription"
+          [titleId]="'authoring-hierarchy-title'"
+          [headingLevel]="ownsPageHeading ? 2 : 3"
+          [size]="'subsection'"
         />
-      }
-      @if (hasContent() && store.treeError()) {
+      </div>
+      <div hlmCardContent>
+        @if (store.stale() && !denied()) {
+          <app-inline-feedback
+            data-authoring-stale
+            [tone]="'warning'"
+            [title]="copy.stale"
+            [description]="copy.staleDescription"
+            [announcement]="'off'"
+          />
+        }
+        @if (hasContent() && store.treeError()) {
+          <app-request-state
+            [status]="'error'"
+            [error]="store.treeError()"
+            [retryEligible]="store.treeError()?.retryable ?? false"
+            [retryBusy]="busy()"
+            (retry)="retry()"
+          />
+        }
         <app-request-state
-          [status]="'error'"
+          [status]="viewStatus()"
           [error]="store.treeError()"
+          [empty]="!hasContent()"
+          [loadingLabel]="copy.loading"
+          [emptyTitle]="copy.noRoots"
           [retryEligible]="store.treeError()?.retryable ?? false"
           [retryBusy]="busy()"
           (retry)="retry()"
-        />
-      }
-      <app-request-state
-        [status]="viewStatus()"
-        [error]="store.treeError()"
-        [empty]="!hasContent()"
-        [loadingLabel]="copy.loading"
-        [emptyTitle]="copy.empty"
-        [emptyDescription]="copy.emptyDescription"
-        [retryEligible]="store.treeError()?.retryable ?? false"
-        [retryBusy]="busy()"
-        (retry)="retry()"
-      >
-        <app-authoring-tree-pane
-          [projectId]="store.projectId() ?? ''"
-          [roots]="store.roots()"
-          [children]="store.children()"
-          [selectedNodeId]="store.selectedNodeId()"
-          [expanded]="expanded()"
-          (expandedChange)="expanded.set($event)"
-          (selectNode)="select($event)"
-          (expand)="expand($event)"
-          (loadMore)="loadMore($event)"
-        />
-      </app-request-state>
-    </div>
-  </section>
+        >
+          <app-authoring-tree-pane
+            [projectId]="store.projectId() ?? ''"
+            [roots]="store.roots()"
+            [children]="store.children()"
+            [selectedNodeId]="store.selectedNodeId()"
+            [expanded]="expanded()"
+            (expandedChange)="expanded.set($event)"
+            (selectNode)="select($event)"
+            (expand)="expand($event)"
+            (loadMore)="loadMore($event)"
+          />
+        </app-request-state>
+      </div>
+    </section>
+  }
 
-  <section hlmCard class="case-pane" data-authoring-cases aria-labelledby="authoring-cases-title">
-    <div hlmCardHeader class="case-heading border-b border-border">
-      <app-section-header
-        [title]="copy.table"
-        [titleId]="'authoring-cases-title'"
-        [headingLevel]="ownsPageHeading ? 2 : 3"
-        [size]="'subsection'"
-      />
-      @if (!denied()) {
-        <nav class="breadcrumb" data-authoring-breadcrumb [attr.aria-label]="copy.path">
-          <ol>
-            <li>
-              <button hlmBtn [variant]="'link'" type="button" (click)="select(null)">
-                {{ copy.all }}
-              </button>
-            </li>
-            @for (entry of selectedPath(); track entry.node_id) {
+  <section
+    hlmCard
+    class="case-pane"
+    data-authoring-cases
+    [attr.aria-labelledby]="projectEmpty() ? 'authoring-page-title' : 'authoring-cases-title'"
+  >
+    @if (!projectEmpty()) {
+      <div hlmCardHeader class="case-heading border-b border-border">
+        <app-section-header
+          [title]="copy.table"
+          [titleId]="'authoring-cases-title'"
+          [headingLevel]="ownsPageHeading ? 2 : 3"
+          [size]="'subsection'"
+        />
+        @if (!denied()) {
+          <nav class="breadcrumb" data-authoring-breadcrumb [attr.aria-label]="copy.path">
+            <ol>
               <li>
-                <span class="separator" aria-hidden="true">/</span>
-                @if (entry.node_id === store.selectedNodeId()) {
-                  <bdi [attr.aria-current]="'location'">{{ entry.title }}</bdi>
-                } @else {
-                  <button hlmBtn [variant]="'link'" type="button" (click)="select(entry.node_id)">
-                    <bdi>{{ entry.title }}</bdi>
+                @if (store.selectedNodeId()) {
+                  <button hlmBtn [variant]="'link'" type="button" (click)="select(null)">
+                    {{ copy.all }}
                   </button>
+                } @else {
+                  <span [attr.aria-current]="'location'">{{ copy.all }}</span>
                 }
               </li>
-            }
-          </ol>
-        </nav>
-        @if (store.selectedNode(); as selected) {
-          <dl class="selected-id">
-            <dt>{{ copy.selectedId }}</dt>
-            <dd>
-              <app-copyable-identifier
-                [value]="selected.node_id"
-                [label]="copy.selectedId"
-                [copySize]="'lg'"
-              />
-            </dd>
-          </dl>
-        } @else {
-          <p class="scope-help">{{ copy.choose }}</p>
+              @for (entry of selectedPath(); track entry.node_id) {
+                <li>
+                  <span class="separator" aria-hidden="true">/</span>
+                  @if (entry.node_id === store.selectedNodeId()) {
+                    <bdi [attr.aria-current]="'location'">{{ entry.title }}</bdi>
+                  } @else {
+                    <button hlmBtn [variant]="'link'" type="button" (click)="select(entry.node_id)">
+                      <bdi>{{ entry.title }}</bdi>
+                    </button>
+                  }
+                </li>
+              }
+            </ol>
+          </nav>
+          @if (store.selectedNode(); as selected) {
+            <dl class="selected-id">
+              <dt>{{ copy.selectedId }}</dt>
+              <dd>
+                <app-copyable-identifier
+                  [value]="selected.node_id"
+                  [label]="copy.selectedId"
+                  [copySize]="'lg'"
+                />
+              </dd>
+            </dl>
+          }
         }
-      }
-    </div>
+      </div>
+    }
     <div hlmCardContent class="px-0!">
       @if (!denied()) {
-        <app-authoring-case-table />
+        <app-authoring-case-table [projectEmpty]="projectEmpty()">
+          <app-empty-pattern
+            data-authoring-project-empty
+            class="px-(--eg-space-5)"
+            [bare]="true"
+            [title]="copy.empty"
+            [description]="copy.emptyDescription"
+            [actionLabel]="importRoute() ? copy.importExport : undefined"
+            (action)="openImport()"
+          />
+        </app-authoring-case-table>
       }
     </div>
   </section>

@@ -1,6 +1,4 @@
-// 09.1.1-T4.1/T4.2 (plan 09.1.1 §10 T4, §5; D-S68-Q4): the landing guards of `/` and
-// `/orgs/:orgId`. Their answer is computed from the server's own lists — the first organization the
-// server returned and its first project — never from a remembered scope or a guessed id.
+// A fresh landing uses the server's lists; returning Home preserves the resolved project.
 
 import { TestBed } from '@angular/core/testing';
 import {
@@ -52,6 +50,7 @@ class FakeSessionStore {
   state: SessionState = 'authenticated';
   listed: readonly OrganizationSummaryDto[] = [ORG_ONE];
   listedProjects: readonly ProjectDto[] = [];
+  selectedProject: ProjectDto | null = null;
   resolution: ScopeResolution = 'ok';
   calls: Array<{ orgId: string; projectId: string | null }> = [];
 
@@ -69,6 +68,10 @@ class FakeSessionStore {
 
   projects(): readonly ProjectDto[] {
     return this.listedProjects;
+  }
+
+  currentProject(): ProjectDto | null {
+    return this.selectedProject;
   }
 
   resolveScope(orgId: string, projectId: string | null): Promise<ScopeResolution> {
@@ -139,6 +142,14 @@ describe('landingRedirectGuard (09.1.1-T4.1)', () => {
 
     expect(urlOf(router, result)).toBe('/orgs/o-1/projects/p-1/overview');
     expect(session.calls).toEqual([{ orgId: 'o-1', projectId: null }]);
+  });
+
+  it('returns Home to the selected project without resolving an org-only scope', async () => {
+    session.listed = [ORG_ONE, ORG_TWO];
+    session.selectedProject = project('q-2', ORG_TWO.id);
+
+    expect(urlOf(router, await run())).toBe('/orgs/o-2/projects/q-2/overview');
+    expect(session.calls).toEqual([]);
   });
 
   it('lands on onboarding for an org that has no project yet', async () => {

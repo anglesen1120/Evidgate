@@ -46,4 +46,23 @@ describe('Dashboard browser fixture scenario', () => {
         : null,
     ).toBe(3);
   });
+  it('serves five distinct 100-date pages for the dense trend regression', () => {
+    const variants = (operation: string) =>
+      operation === 'listPermissions' ? 'dashboard' : 'dashboard-dense';
+    for (let page = 0; page < 5; page++) {
+      const cursor = page === 0 ? '' : `&cursor=dashboard-dense-${page}`;
+      const entry = dashboardFixture(
+        'GET',
+        '/projects/p/runs',
+        variants,
+        `/projects/p/runs?limit=100${cursor}`,
+      );
+      expect(entry?.document.body).toHaveProperty('items.length', 100);
+      expect(entry?.document.body).toHaveProperty('next_cursor', `dashboard-dense-${page + 1}`);
+      expect(entry?.document.body).toHaveProperty(
+        'items.0.created_at',
+        new Date(Date.UTC(2024, 0, 1) + page * 100 * 86_400_000).toISOString(),
+      );
+    }
+  });
 });

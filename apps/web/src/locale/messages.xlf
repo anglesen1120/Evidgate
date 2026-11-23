@@ -5142,6 +5142,76 @@
           <context context-type="linenumber">81</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="settings.members.role-viewer" datatype="html">
+        <source>Viewer</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-role-label.ts</context>
+          <context context-type="linenumber">7</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.role-qa-engineer" datatype="html">
+        <source>QA engineer</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-role-label.ts</context>
+          <context context-type="linenumber">9</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.role-test-maintainer" datatype="html">
+        <source>Test maintainer</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-role-label.ts</context>
+          <context context-type="linenumber">11</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.role-release-approver" datatype="html">
+        <source>Release approver</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-role-label.ts</context>
+          <context context-type="linenumber">13</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.role-tenant-admin" datatype="html">
+        <source>Tenant admin</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-role-label.ts</context>
+          <context context-type="linenumber">15</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.role-ci-producer" datatype="html">
+        <source>CI producer</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-role-label.ts</context>
+          <context context-type="linenumber">17</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.role-agent" datatype="html">
+        <source>Agent</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-role-label.ts</context>
+          <context context-type="linenumber">19</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.role-platform-operator" datatype="html">
+        <source>Platform operator</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-role-label.ts</context>
+          <context context-type="linenumber">21</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.role-billing-operator" datatype="html">
+        <source>Billing operator</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-role-label.ts</context>
+          <context context-type="linenumber">23</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.preview-choose-role" datatype="html">
+        <source>Choose a role to see its scope.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/role-scope-preview.component.ts</context>
+          <context context-type="linenumber">51,58</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="settings.members.preview" datatype="html">
         <source>Role scope preview</source>
         <context-group purpose="location">
@@ -6117,11 +6187,11 @@
           <context context-type="linenumber">102</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="quota.panel.projects" datatype="html">
-        <source>Per project</source>
+      <trans-unit id="quota.panel.metric-by-project" datatype="html">
+        <source> <x id="INTERPOLATION" equiv-text="{{ metricLabel(metric.metric) }}"/> by project </source>
         <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">103</context>
+          <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.html</context>
+          <context context-type="linenumber">155,156</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.project-caption" datatype="html">
@@ -9592,7 +9662,7 @@
       <trans-unit id="runs.actions.create.purpose" datatype="html"><source>Purpose</source></trans-unit>
       <trans-unit id="runs.actions.create.regular" datatype="html"><source>Regular</source></trans-unit>
       <trans-unit id="runs.actions.create.replay" datatype="html"><source>Replay</source></trans-unit>
-      <trans-unit id="runs.actions.create.replay-hint" datatype="html"><source>Replay currently returns replay_grant_invalid because replay grants are not available. A replay cannot bind to a release.</source></trans-unit>
+      <trans-unit id="runs.actions.create.replay-hint" datatype="html"><source>Replay grants are not available yet. Choose Regular to create a run.</source></trans-unit>
       <trans-unit id="runs.actions.create.grant" datatype="html"><source>Replay grant ID (optional)</source></trans-unit>
       <trans-unit id="runs.actions.create.ref" datatype="html"><source>Ref identity (optional)</source></trans-unit>
       <trans-unit id="runs.actions.create.ref-hint" datatype="html"><source>Body-supplied identity is recorded as unverified. Verified CI claims take precedence.</source></trans-unit>
@@ -9735,7 +9805,15 @@
       <trans-unit id="authoring.import-export.failure.export-wait" datatype="html"><source>The server is busy. Wait as directed by Retry-After, then retry this exact scope explicitly. Nothing is downloaded automatically.</source></trans-unit>
       <trans-unit id="authoring.import-export.failure.export-unknown" datatype="html"><source>The export could not be completed or its server file was unavailable. No file was downloaded. Retry the exact scope explicitly.</source></trans-unit>
       <trans-unit id="authoring.tree.title" datatype="html"><source>Feature tree</source></trans-unit>
-      <trans-unit id="authoring.tree.description" datatype="html"><source>Browse the project hierarchy and select a scope. Child-node counts and checklist-item counts are direct counts, not manual-case totals.</source></trans-unit>
+      <trans-unit id="authoring.tree.description" datatype="html"><source>Browse manual cases by checklist and inspect their automation coverage.</source></trans-unit>
+      <trans-unit id="authoring.tree.no-roots" datatype="html"><source>No hierarchy nodes in this project</source></trans-unit>
+      <trans-unit id="authoring.tree.import-export" datatype="html"><source>Import and export</source></trans-unit>
+      <trans-unit id="authoring.tree.category-cases" datatype="html"><source>Category cases</source></trans-unit>
+      <trans-unit id="authoring.tree.loaded-scope" datatype="html"><source>Loaded in this scope</source></trans-unit>
+      <trans-unit id="authoring.tree.direct-items" datatype="html"><source>Direct checklist items</source></trans-unit>
+      <trans-unit id="authoring.tree.loaded-cases" datatype="html"><source>Loaded cases</source></trans-unit>
+      <trans-unit id="authoring.case-table.invalid-filters" datatype="html"><source>Check filter values</source></trans-unit>
+      <trans-unit id="authoring.case-table.reset" datatype="html"><source>Reset</source></trans-unit>
       <trans-unit id="authoring.tree.hierarchy" datatype="html"><source>Project hierarchy</source></trans-unit>
       <trans-unit id="authoring.tree.hierarchy-description" datatype="html"><source>Expand a branch explicitly to load its children. Selecting a scope does not expand it.</source></trans-unit>
       <trans-unit id="authoring.tree.keyboard" datatype="html"><source>Tab reaches each visible control. Arrow keys, Home, End and typing move focus without selecting. Enter or Space activates a button.</source></trans-unit>
@@ -9746,19 +9824,18 @@
       <trans-unit id="authoring.tree.current" datatype="html"><source>Current scope</source></trans-unit>
       <trans-unit id="authoring.tree.path" datatype="html"><source>Selected node path</source></trans-unit>
       <trans-unit id="authoring.tree.all" datatype="html"><source>Project roots</source></trans-unit>
-      <trans-unit id="authoring.tree.choose" datatype="html"><source>Select a node to inspect its path.</source></trans-unit>
       <trans-unit id="authoring.tree.selected-id" datatype="html"><source>Selected node ID</source></trans-unit>
       <trans-unit id="authoring.tree.loading" datatype="html"><source>Loading project hierarchy…</source></trans-unit>
       <trans-unit id="authoring.tree.loading-children" datatype="html"><source>Loading child nodes…</source></trans-unit>
       <trans-unit id="authoring.tree.empty" datatype="html"><source>This project has no authoring content yet</source></trans-unit>
-      <trans-unit id="authoring.tree.empty-description" datatype="html"><source>A test case needs an existing checklist item. No hierarchy or parent is created by browsing.</source></trans-unit>
+      <trans-unit id="authoring.tree.empty-description" datatype="html"><source>Import a checklist and its manual cases to build the first branch of this tree.</source></trans-unit>
       <trans-unit id="authoring.tree.empty-children" datatype="html"><source>No child nodes in this scope</source></trans-unit>
       <trans-unit id="authoring.tree.refresh" datatype="html"><source>Refresh hierarchy</source></trans-unit>
       <trans-unit id="authoring.tree.stale" datatype="html"><source>Hierarchy may be stale</source></trans-unit>
       <trans-unit id="authoring.tree.stale-description" datatype="html"><source>Refresh failed; previously loaded hierarchy data is still shown. Retry to refresh this region only.</source></trans-unit>
       <trans-unit id="authoring.tree.more-roots" datatype="html"><source>Load more root nodes</source></trans-unit>
       <trans-unit id="authoring.tree.more-children" datatype="html"><source>Load more child nodes</source></trans-unit>
-      <trans-unit id="authoring.tree.table" datatype="html"><source>Case table</source></trans-unit>
+      <trans-unit id="authoring.tree.table" datatype="html"><source>Manual cases</source></trans-unit>
       <trans-unit id="authoring.tree.table-placeholder" datatype="html"><source>This separate region is reserved for the case table. Hierarchy loading and failures do not control it.</source></trans-unit>
       <trans-unit id="authoring.tree.expand" datatype="html"><source>Expand <x id="title" equiv-text="node.title"/></source></trans-unit>
       <trans-unit id="authoring.tree.collapse" datatype="html"><source>Collapse <x id="title" equiv-text="node.title"/></source></trans-unit>
@@ -9784,6 +9861,10 @@
       <trans-unit id="authoring.ai-settings.pages" datatype="html"><source>Version history pages</source></trans-unit>
       <trans-unit id="authoring.ai-settings.no-match" datatype="html"><source>No loaded versions match this filter</source></trans-unit>
       <trans-unit id="authoring.ai-settings.empty-history" datatype="html"><source>No saved settings versions</source></trans-unit>
+      <trans-unit id="authoring.ai-settings.saved-versions" datatype="html"><source>Saved settings versions</source></trans-unit>
+      <trans-unit id="authoring.ai-settings.empty-page" datatype="html"><source>No versions on this page</source></trans-unit>
+      <trans-unit id="authoring.ai-settings.open-settings" datatype="html"><source>Open AI settings</source></trans-unit>
+      <trans-unit id="authoring.ai-settings.first-version-help" datatype="html"><source>Save your settings to create the first version.</source></trans-unit>
       <trans-unit id="authoring.ai-settings.version-column" datatype="html"><source>Version</source></trans-unit>
       <trans-unit id="authoring.ai-settings.reason-column" datatype="html"><source>Reason</source></trans-unit>
       <trans-unit id="authoring.ai-settings.not-set" datatype="html"><source>Not set</source></trans-unit>
@@ -9843,19 +9924,19 @@
       <trans-unit id="authoring.case-table.select-case" datatype="html"><source>Select case <x id="code" equiv-text="row.code"/></source></trans-unit>
       <trans-unit id="authoring.case-table.loaded-count" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> cases loaded</source></trans-unit>
       <trans-unit id="authoring.case-table.scope-help" datatype="html"><source>Filters search the server list. Authoring coverage means a live automated identity is linked; it is not an execution result.</source></trans-unit>
-      <trans-unit id="authoring.case-table.filters" datatype="html"><source>Filter manual cases</source></trans-unit>
+      <trans-unit id="authoring.case-table.filters" datatype="html"><source>Filter cases</source></trans-unit>
       <trans-unit id="authoring.case-table.item" datatype="html"><source>Checklist item ID</source></trans-unit>
       <trans-unit id="authoring.case-table.item-help" datatype="html"><source>Optional exact checklist UUID. Leave blank for every checklist in this scope.</source></trans-unit>
       <trans-unit id="authoring.case-table.item-error" datatype="html"><source>Enter a complete checklist UUID or leave this filter blank.</source></trans-unit>
       <trans-unit id="authoring.case-table.priority" datatype="html"><source>Priority</source></trans-unit>
       <trans-unit id="authoring.case-table.state" datatype="html"><source>Lifecycle</source></trans-unit>
-      <trans-unit id="authoring.case-table.coverage" datatype="html"><source>Authoring coverage</source></trans-unit>
+      <trans-unit id="authoring.case-table.coverage" datatype="html"><source>Coverage</source></trans-unit>
       <trans-unit id="authoring.case-table.source" datatype="html"><source>Source</source></trans-unit>
       <trans-unit id="authoring.case-table.owner" datatype="html"><source>Owner</source></trans-unit>
       <trans-unit id="authoring.case-table.source-help" datatype="html"><source>Source filtering is unavailable: the server does not support this filter.</source></trans-unit>
       <trans-unit id="authoring.case-table.owner-help" datatype="html"><source>Owner filtering is unavailable: the server does not support this filter.</source></trans-unit>
       <trans-unit id="authoring.case-table.unavailable" datatype="html"><source>Unavailable</source></trans-unit>
-      <trans-unit id="authoring.case-table.search" datatype="html"><source>Search case titles</source></trans-unit>
+      <trans-unit id="authoring.case-table.search" datatype="html"><source>Case title</source></trans-unit>
       <trans-unit id="authoring.case-table.search-help" datatype="html"><source>Case-insensitive title search, up to 200 characters.</source></trans-unit>
       <trans-unit id="authoring.case-table.search-error" datatype="html"><source>Enter at most 200 characters before applying filters.</source></trans-unit>
       <trans-unit id="authoring.case-table.all" datatype="html"><source>All</source></trans-unit>
@@ -27036,6 +27117,7 @@
       <trans-unit id="catalog.case-view.view-name" datatype="html"><source>View <x id="name"/></source></trans-unit>
       <trans-unit id="catalog.case-view.edit-name" datatype="html"><source>Edit owner for <x id="name"/></source></trans-unit>
       <trans-unit id="authoring.case-table.manual-case" datatype="html"><source>Manual case</source></trans-unit>
+      <trans-unit id="authoring.case-table.identifiers" datatype="html"><source>Identifiers</source></trans-unit>
       <trans-unit id="authoring.case-table.priority-state" datatype="html"><source>Priority / lifecycle</source></trans-unit>
       <trans-unit id="authoring.case-table.view" datatype="html"><source>View</source></trans-unit>
       <trans-unit id="authoring.case-table.actions" datatype="html"><source>Actions</source></trans-unit>
@@ -27045,7 +27127,6 @@
       <trans-unit id="catalog.case-view.loaded-status" datatype="html"><source>Status in loaded identities</source></trans-unit>
       <trans-unit id="catalog.case-view.summary" datatype="html"><source>Summary</source></trans-unit>
       <trans-unit id="catalog.case-view.history" datatype="html"><source>Recorded history</source></trans-unit>
-      <trans-unit id="authoring.tree.loaded-roots" datatype="html"><source>Loaded roots: <x id="count"/></source></trans-unit>
       <trans-unit id="authoring.case-table.live-links" datatype="html"><source>Live links</source></trans-unit>
       <trans-unit id="authoring.case-table.loaded-states" datatype="html"><source>Lifecycle of loaded cases</source></trans-unit>
       <trans-unit id="authoring.history.view" datatype="html"><source>View</source></trans-unit>
@@ -27190,6 +27271,7 @@
       <trans-unit id="project.dashboard.attention" datatype="html"><source>Needs attention</source></trans-unit>
       <trans-unit id="project.dashboard.failures" datatype="html"><source>New FAILs</source></trans-unit>
       <trans-unit id="project.dashboard.failure-context" datatype="html"><source>FAIL decisions among sampled runs created in the last 7 days.</source></trans-unit>
+      <trans-unit id="project.dashboard.failures-unavailable" datatype="html"><source>Not available (latest runs not loaded)</source></trans-unit>
       <trans-unit id="project.dashboard.waivers" datatype="html"><source>Expiring waivers</source></trans-unit>
       <trans-unit id="project.dashboard.waiver-context" datatype="html"><source>Approved waivers expiring in the next 7 days, among up to 10 shown.</source></trans-unit>
       <trans-unit id="project.dashboard.quarantine" datatype="html"><source>Active quarantine</source></trans-unit>

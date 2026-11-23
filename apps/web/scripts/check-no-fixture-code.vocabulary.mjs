@@ -19,7 +19,19 @@ const MISSING_CODES = new Set([
   'missing_result',
 ]);
 
+// Product vocabulary: built-in role label, shared with fixtures by design. The member roles
+// screen renders these five display names for the built-in role codes, so the strings occur in
+// production code and in the roles/memberships corpora. Exact per-value entries, no patterns.
+const BUILTIN_ROLE_NAMES = new Set([
+  'Tenant admin',
+  'Release approver',
+  'Test maintainer',
+  'Platform operator',
+  'Billing operator',
+]);
+
 export const ENUM_MEMBERS = new Map([
+  ['name', BUILTIN_ROLE_NAMES],
   // `contracts/schemas/authoring-import.v1.json` `properties.format.const`, the export document's
   // discriminator; production code carries it inside longer identifiers.
   ['format', new Set(['authoring-import'])],
@@ -42,7 +54,10 @@ export const ENUM_MEMBERS = new Map([
   ['reasons', MISSING_CODES],
   // The create-run dialog's ref kind select and the `ref.trigger_event` it sends name the
   // contract's closed vocabularies, so those words occur in production too (`pull_request`).
-  ['kind', new Set(['branch', 'tag', 'pull_request'])],
+  // `kind` also names the authoring tree node kind: `enum: [module, feature, category,
+  // sub_category]` of NodeDto (and its sibling node schemas) in contracts/openapi.yaml (~14031); the feature tree
+  // page compares it, so production code carries `sub_category`.
+  ['kind', new Set(['branch', 'tag', 'pull_request', 'sub_category'])],
   ['trigger_event', new Set(['push', 'pull_request', 'schedule', 'manual', 'dispatch'])],
   // The security view renders the closed SecurityEventItem.type vocabulary, so these protocol
   // words occur in production too; an unlisted type remains fixture data.

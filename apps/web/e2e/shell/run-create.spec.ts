@@ -132,18 +132,22 @@ for (const locale of LOCALES) {
     await expect(page.locator('app-run-list-page app-page-header h1')).toBeFocused();
   });
 
-  test(`keeps replay unavailable and marks only a pull-request number required (${locale})`, async ({
+  test(`explains Replay only when selected and marks only a pull-request number required (${locale})`, async ({
     page,
   }) => {
     await page.goto(path(locale));
     await page.locator('[data-run-create-trigger]').click();
     const dialog = page.locator('[data-run-create-dialog]');
+    const warning = dialog.locator('[data-run-replay-warning]');
+    await expect(warning).toHaveCount(0);
     await dialog.locator('#run-create-purpose').click();
-    await expect(
-      page.getByRole('option').and(page.locator('[data-value="replay"]')),
-    ).toBeDisabled();
-    await page.keyboard.press('Escape');
-    await expect(dialog).toBeVisible();
+    await page.getByRole('option').and(page.locator('[data-value="replay"]')).click();
+    await expect(warning).toContainText(locale === 'vi' ? 'Thông thường' : 'Regular');
+    await expect(warning).not.toContainText('replay_grant_invalid');
+    await expect(dialog.locator('[data-run-create-submit]')).toBeDisabled();
+    await dialog.locator('#run-create-purpose').click();
+    await page.getByRole('option').and(page.locator('[data-value="regular"]')).click();
+    await expect(warning).toHaveCount(0);
     await dialog.locator('[data-run-create-ref] summary').click();
     const number = dialog.locator('#run-create-prNumber');
     const marker = dialog.locator('label[for="run-create-prNumber"] app-field-requirement');
@@ -169,6 +173,18 @@ for (const locale of LOCALES) {
       await page.locator('[data-run-create-trigger]').click();
       const dialog = page.locator('[data-run-create-dialog]');
       await expect(dialog).toBeVisible();
+      await expect(dialog.locator('footer button').first()).toBeInViewport({ ratio: 1 });
+      await expect(dialog.locator('footer button').last()).toBeInViewport({ ratio: 1 });
+      await dialog.locator('summary').click();
+      const body = dialog.locator('form');
+      expect(await body.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+      await body.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+      expect(await body.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+      expect(await dialog.evaluate((el) => el.scrollTop)).toBe(0);
+      await expect(dialog.locator('[data-slot="dialog-close"]')).toBeInViewport({ ratio: 1 });
+      for (const button of await dialog.locator('footer button').all()) {
+        await expect(button).toBeInViewport({ ratio: 1 });
+      }
       await expectNoA11yViolations(page, `create-run dialog (${locale}, ${theme})`);
       await page.keyboard.press('Escape');
       await expect(page.locator('[data-run-create-trigger]')).toBeFocused();

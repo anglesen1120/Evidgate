@@ -22,16 +22,8 @@
 //   - a phase-later entry (Q: G2+ in the G1 build) does not match at all, so it is a 404 like any
 //     other unknown path — hidden, never teased.
 //
-// Lazy boundaries: every entry loads exactly one chunk. An area that serves several entries is
-// loaded through one module per area (the same chunk for all of its entries), and the page inside
-// it reads its entry from the owning route's `data.entryId`. The one entry with a real screen
-// (`overview`) loads that single component instead.
-//
-// An entry can also own a route table of its own instead of its area's (`ENTRY_ROUTES`): the
-// `settings` entry mounts the Settings shell — a tab strip with one gated child route per tab —
-// while the other ten `settings` destinations still render the area's placeholder table, so the
-// override is per entry and never per area. Precedence in `entryRoute`: `ENTRY_PAGES` (a single
-// screen), then `ENTRY_ROUTES` (a table), then the area's table.
+// A direct page or a feature-specific table takes precedence over the area's placeholder table.
+// The source registry remains the owner of every entry's URL, phase and permission.
 //
 // The entry's own guards are NOT changed by that override: `phaseGuard` and
 // `permissionGuard(entry.permission)` run before the shell table exactly as they do for every other
@@ -92,14 +84,13 @@ const ENTRY_PAGES: Readonly<Record<string, () => Promise<Type<unknown>>>> = {
   'org-overview': () =>
     import('./features/org-overview/org-overview.page').then((m) => m.OrgOverviewPage),
   overview: () => import('./features/project/overview.page').then((m) => m.ProjectOverviewPage),
+  quota: () =>
+    import('./features/settings/quota-retention/quota-panel.component').then(
+      (m) => m.QuotaPanelComponent,
+    ),
 };
 
-/**
- * The entries that own a route table instead of the one their `area` serves (09.7.1-T1.1): the
- * `settings` entry mounts the Settings shell, whose children are one gated route per tab, while its
- * ten sibling `settings` entries keep the area's placeholder table. Keyed by entry id, so the
- * override can never spread to an entry that did not ask for it.
- */
+/** Entry-specific tables let the Settings shell and other delivered flows mount their own children. */
 const ENTRY_ROUTES: Readonly<Record<string, () => Promise<Routes>>> = {
   authoring: () => import('./features/authoring/authoring-tree.routes').then((m) => m.routes),
   settings: () => import('./features/settings/settings-shell.routes').then((m) => m.routes),
@@ -138,7 +129,7 @@ function entryRoute(entry: NavEntry): Route {
     data: { entryId: entry.id },
   };
   if (page !== undefined) {
-    return { ...common, loadComponent: page };
+    return { ...common, data: { ...common.data, pageHeadingLevel: 1 }, loadComponent: page };
   }
   return { ...common, loadChildren: table ?? areaRoutesOf(entry) };
 }

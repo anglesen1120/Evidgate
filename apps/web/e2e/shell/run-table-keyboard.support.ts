@@ -28,16 +28,18 @@ export async function tabThroughRunControls(
   page: Page,
   root: Locator,
   expectedCopies: number,
-  expectedLinks = 0,
+  isListRow = false,
 ): Promise<void> {
   const copies = root.locator('app-copy-value-button button');
   await expect(copies).toHaveCount(expectedCopies);
-  await expect(root.locator('a[href]')).toHaveCount(expectedLinks);
+  const rowActionCount = isListRow ? 1 : 0;
+  await expect(root.locator('a[href]')).toHaveCount(rowActionCount);
+  if (isListRow) await expect(root.locator('button[aria-haspopup="dialog"]')).toHaveCount(1);
   const disclosures = root.locator('app-data-table-value .value[role="button"][tabindex="0"]');
   const badges = root.locator('[hlmBadge].spartan-badge--clipped[tabindex="0"]');
   const controls = root.locator('a[href], button, [tabindex="0"]:not([role="region"])');
   await expect(controls).toHaveCount(
-    expectedCopies + expectedLinks + (await disclosures.count()) + (await badges.count()),
+    expectedCopies + 2 * rowActionCount + (await disclosures.count()) + (await badges.count()),
   );
   for (const control of await controls.all()) {
     await page.keyboard.press('Tab');
@@ -80,7 +82,8 @@ export async function tabThroughNarrowRunRecords(
   count: number,
 ): Promise<void> {
   await expect(records.locator('li[data-row-id]')).toHaveCount(count);
-  await expect(records.locator('a[href]')).toHaveCount(count * 2);
+  await expect(records.locator('a[href]')).toHaveCount(count);
+  await expect(records.locator('button[aria-haspopup="dialog"]')).toHaveCount(count);
   const copies = records.locator('app-copy-value-button button');
   await expect(copies).toHaveCount(count);
   const names = await copies.evaluateAll((buttons) =>

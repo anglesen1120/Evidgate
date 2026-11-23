@@ -178,6 +178,22 @@ for (const locale of LOCALES) {
     await expect(child).toHaveCount(0);
   });
 
+  test(`empty project offers import without table controls (${locale})`, async ({ page }) => {
+    await page.goto(
+      withVariants(base, [
+        '?fixture.variant.listAuthoringTree=empty&fixture.variant.listManualCases=empty',
+      ]),
+    );
+    const blank = page.locator('[data-authoring-project-empty]');
+    await expect(blank).toBeVisible();
+    await expect(page.locator(PAGE + ' app-empty-pattern')).toHaveCount(1);
+    await expect(
+      page.locator('[data-case-filters], [data-case-loaded], #authoring-case-page-size'),
+    ).toHaveCount(0);
+    await blank.getByRole('button').click();
+    await expect(page).toHaveURL(/\/authoring\/import-export(?:[?#]|$)/);
+  });
+
   test(`tree loading, empty, unavailable, denied and missing states leave the case region alone (${locale})`, async ({
     page,
   }) => {
@@ -388,7 +404,31 @@ for (const locale of LOCALES) {
         await page.setViewportSize({ width, height: 900 });
         await page.goto(base);
         await expect(page.locator(CASE_ROWS)).toContainText('Tuỳ chọn giao hàng');
-        await expect(page.locator(CASE_ROWS)).toContainText('018f0000-0000-7000-8000-000000000777');
+        const fieldGrid = page.locator('[data-case-filters] .filter-fields');
+        const gridLayout = await fieldGrid.evaluate((grid) => {
+          const pane = grid.closest('app-authoring-case-table');
+          if (!pane) throw new Error('Missing case pane');
+          return {
+            widthInEm: pane.clientWidth / parseFloat(getComputedStyle(pane).fontSize),
+            columns: getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+          };
+        });
+        expect(gridLayout.columns).toBe(
+          gridLayout.widthInEm >= 52 ? 5 : gridLayout.widthInEm >= 32 ? 3 : 1,
+        );
+        const widths = await fieldGrid
+          .locator('input, button[role="combobox"]')
+          .evaluateAll((fields) => fields.map((field) => field.getBoundingClientRect().width));
+        expect(widths).toHaveLength(5);
+        expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(1);
+        const identifiers = page.locator(`${CASE_ROWS} [data-case-identifiers]`).first();
+        await identifiers.click();
+        const dialog = page.getByRole('dialog');
+        await expect(dialog).toHaveAccessibleName(/SHOP-601/);
+        await expect(dialog).toContainText('018f0000-0000-7000-8000-000000000777');
+        await page.keyboard.press('Escape');
+        await expect(dialog).toHaveCount(0);
+        await expect(identifiers).toBeFocused();
         if (width === 1440) {
           await expect(page.locator(`${CASE_ROWS} [data-row-id]`).first()).toBeInViewport();
         }

@@ -79,9 +79,10 @@
         <app-dashboard-widget class="narrow" data-dashboard-attention [title]="copy.attention">
           @if (store.runs.visible() && store.decisionsVisible()) {
             <app-dashboard-metric
+              data-dashboard-failures
               [label]="copy.failures"
               [value]="failures()"
-              [description]="copy.failureContext"
+              [description]="failures() === null ? copy.failuresUnavailable : copy.failureContext"
               [loading]="store.runs.loading()"
               [error]="store.runs.error()"
               (retry)="store.runs.reload()"

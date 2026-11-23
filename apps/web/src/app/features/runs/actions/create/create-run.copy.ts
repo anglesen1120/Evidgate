@@ -8,7 +8,7 @@ export const CREATE_RUN_COPY = {
   purpose: $localize`:@@runs.actions.create.purpose:Purpose`,
   regular: $localize`:@@runs.actions.create.regular:Regular`,
   replay: $localize`:@@runs.actions.create.replay:Replay`,
-  replayHint: $localize`:@@runs.actions.create.replay-hint:Replay currently returns replay_grant_invalid because replay grants are not available. A replay cannot bind to a release.`,
+  replayHint: $localize`:@@runs.actions.create.replay-hint:Replay grants are not available yet. Choose Regular to create a run.`,
   grant: $localize`:@@runs.actions.create.grant:Replay grant ID (optional)`,
   ref: $localize`:@@runs.actions.create.ref:Ref identity (optional)`,
   refHint: $localize`:@@runs.actions.create.ref-hint:Body-supplied identity is recorded as unverified. Verified CI claims take precedence.`,

@@ -3,6 +3,7 @@ import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmBadge } from '@evidgate/ui/badge';
 import type { RolePreview } from './role-preview';
 import { MEMBERS_COPY } from './member-list.component';
+import { memberRoleLabel } from './member-role-label';
 
 @Component({
   selector: 'app-role-scope-preview',
@@ -14,14 +15,14 @@ import { MEMBERS_COPY } from './member-list.component';
       hlmCard
       class="gap-3 bg-secondary p-3 wrap-anywhere [&_p]:m-0 [&_p]:text-muted-foreground [&_ul]:m-0 [&_ul]:ps-4 [&_code]:font-mono"
       data-role-preview
-      [attr.data-preview-kind]="preview().kind"
+      [attr.data-preview-kind]="preview()?.kind ?? 'empty'"
       [attr.aria-live]="'polite'"
       aria-labelledby="members-preview-title"
     >
       <h3 hlmCardTitle id="members-preview-title">{{ copy.preview }}</h3>
       @if (preview(); as value) {
         @if (value.kind === 'ready') {
-          <p>{{ value.role.name }}</p>
+          <p>{{ roleLabel(value.role) }}</p>
           @for (group of value.groups; track group.resource) {
             <h4 class="m-0 text-sm">{{ group.resource }}</h4>
             <ul>
@@ -46,12 +47,15 @@ import { MEMBERS_COPY } from './member-list.component';
         } @else {
           <p>{{ copy.unavailable }}</p>
         }
+      } @else {
+        <p i18n="@@settings.members.preview-choose-role">Choose a role to see its scope.</p>
       }
       <p>{{ copy.authority }}</p>
     </section>
   `,
 })
 export class RoleScopePreviewComponent {
-  readonly preview = input.required<RolePreview>();
+  readonly preview = input.required<RolePreview | null>();
+  protected readonly roleLabel = memberRoleLabel;
   protected readonly copy = MEMBERS_COPY;
 }

@@ -1,13 +1,4 @@
-// 09.3.1-T1: real Chromium, fixture corpus, both locale bundles and theme token sets.
-// Cursor fixtures are selected by listRuns' catalog cursor key, never an offset.
-// The `runs` entry is phase G2, so this G1 build does not match the product address
-// (`/orgs/:orgId/projects/:projectId/runs`) and the wildcard renders the not-found pattern. Only
-// the dev-routes file-replacement seam mounts the real page, at
-// `/dev/run-list/orgs/:orgId/projects/:projectId`, under the normal shell, auth, org-scope and
-// project-scope gates plus the entry's own `run:read`. Nothing else is relaxed: the page-local
-// RunListStore and the fixture-backed RunDataService are the real ones. The page reads `projectId`
-// from the ancestor param maps and navigates its filter query relative to its own route, so the
-// URL assertions below hold on this address unchanged.
+// The fixture route mounts the real project-scoped list behind the normal permission checks.
 import { expect, test, type Page } from '@playwright/test';
 import runList from '../../../../fixtures/web-api/run-list/input.json';
 import runList250 from '../../../../fixtures/web-api/run-list-250/input.json';
@@ -17,7 +8,12 @@ import runListPage2 from '../../../../fixtures/web-api/run-list-page-2/input.jso
 import runListUnavailable from '../../../../fixtures/web-api/run-list-unavailable/input.json';
 import type { FixtureCallRecord } from '../../src/app/core/dev-fixtures/fixture-request-log';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
-import { expectCenteredRunIdentity, openRunFilters, RUN_RECORDS } from './run-list.support';
+import {
+  expectCenteredRunIdentity,
+  expectSingleLineScope,
+  openRunFilters,
+  RUN_RECORDS,
+} from './run-list.support';
 import {
   localePath,
   LOCALES,
@@ -89,6 +85,7 @@ for (const locale of LOCALES) {
     await expect(page.locator('app-run-list-page h1')).toHaveCount(1);
     await expect(page.locator('app-run-list-table [role="columnheader"]')).toHaveCount(7);
     await expect(page.locator(`${ROWS} td`).first()).toHaveCSS('vertical-align', 'middle');
+    await expectSingleLineScope(page);
     await expect(page.locator(`${ROWS} [data-run-evidence] .status-pill--neutral`)).toHaveCount(
       runList.body.items.length,
     );
@@ -268,14 +265,15 @@ for (const locale of LOCALES) {
     const last = runList250.body.items[runList250.body.items.length - 1]!;
     const lastRecord = page.locator(`${ROWS}[data-row-id="${last.run_id}"]`);
     const idLink = lastRecord.locator('[data-run-row]').getByRole('link', { name: last.run_id });
-    const viewLink = lastRecord.getByRole('link', {
+    const view = lastRecord.getByRole('button', {
       name: `${locale === 'vi' ? 'Xem' : 'View'} ${last.run_id}`,
       exact: true,
     });
-    const href = await idLink.getAttribute('href');
-    expect(href).toBeTruthy();
-    await expect(viewLink).toHaveAttribute('href', href!);
-    await idLink.focus();
+    await expect(idLink).toHaveAttribute('href', new RegExp(last.run_id));
+    await view.click();
+    await expect(page.getByRole('dialog')).toContainText(last.run_id);
+    await page.keyboard.press('Escape');
+    await expect(view).toBeFocused();
     await expect(lastRecord).toBeInViewport();
     await expect(next).toBeDisabled();
     await pager.getByRole('button').first().focus();
@@ -298,17 +296,12 @@ for (const locale of LOCALES) {
       for (const width of [768, 800, 900, 1280, 1440]) {
         await page.setViewportSize({ width, height: 800 });
         const host = page.locator('app-run-list-table app-data-table');
-        await host.evaluate(
-          () =>
-            new Promise<void>((resolve) => {
-              requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-            }),
-        );
-        const narrow = (await host.locator('.eg-table-narrow').count()) > 0;
-        expect(
-          narrow,
-          `${width}px uses ${width < 1280 ? 'readable records' : 'desktop columns'}`,
-        ).toBe(width < 1280);
+        const narrow = width < 1280;
+        await expect(
+          host.locator('.eg-table-narrow'),
+          `${width}px uses ${narrow ? 'readable records' : 'desktop columns'}`,
+        ).toHaveCount(narrow ? 1 : 0);
+        await expect(row).toHaveJSProperty('tagName', narrow ? 'LI' : 'TR');
         if (width >= 1280) {
           await expect(
             host.locator('app-decision-chip [hlmBadge].spartan-badge--clipped'),
@@ -320,7 +313,6 @@ for (const locale of LOCALES) {
             .evaluate((element) => element.scrollWidth - element.clientWidth),
           `${width}px table has no hidden horizontal facts`,
         ).toBeLessThanOrEqual(1);
-        await expect(row).toHaveJSProperty('tagName', narrow ? 'LI' : 'TR');
         if (narrow) {
           await expect(row.locator('dt')).toHaveCount(7);
           await expect(row.locator('dd')).toHaveCount(7);

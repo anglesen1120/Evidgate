@@ -66,12 +66,12 @@ describe('Members page (09.7.1-T2)', () => {
     expect(root.querySelectorAll('[data-members-row]')).toHaveLength(3);
     expect(root.textContent).toContain('owner@example.test');
     expect(root.textContent).toContain('Invitation pending');
-    expect(root.textContent).toContain(role.name);
+    expect(root.querySelector('.role-name')?.textContent?.trim()).toBe('Tenant admin');
     const matrix = root.querySelector('table[data-members-matrix]');
     expect(matrix?.querySelector('caption')?.textContent?.trim()).toBe(
       'Organization-wide role matrix',
     );
-    expect(matrix?.querySelectorAll('th[scope="col"]')).toHaveLength(2);
+    expect(matrix?.querySelector('th[id^="matrix-role-"]')?.textContent).toBe('Tenant admin');
     expect(matrix?.querySelector('[data-granted="true"]')?.textContent?.trim()).toBe('Granted');
     expect(root.querySelector('[data-members-status="removed"] [data-members-remove]')).toBeNull();
   });
@@ -191,7 +191,7 @@ describe('Members page (09.7.1-T2)', () => {
     button(dialog, '[data-members-submit]').click();
     fixture.detectChanges();
     const row = root.querySelector('[data-row-id="owner"]')!;
-    expect(row.querySelector('.role-name')?.textContent?.trim()).toBe(role.name);
+    expect(row.querySelector('.role-name')?.textContent?.trim()).toBe('Tenant admin');
     expect(root.querySelector('[data-members-matrix] [data-granted="true"]')).not.toBeNull();
     store.members.update((members) =>
       members.map((value) => (value.id === 'owner' ? { ...value, roles: [] } : value)),
@@ -318,20 +318,20 @@ describe('Members page (09.7.1-T2)', () => {
     expect(document.activeElement).toBe(root.querySelector('.page-header h2'));
   });
 
-  it('previews focused roles, marks sensitive permissions and reports unavailable instead of guessing', async () => {
+  it('instructs until a role is selected, then previews its scope and sensitive grants', async () => {
     const { fixture, root } = await render();
     button(root, '[data-members-invite-open]').click();
     fixture.detectChanges();
     await fixture.whenStable();
-    expect(root.querySelector('[data-role-preview]')?.getAttribute('data-preview-kind')).toBe(
-      'unavailable',
-    );
-    root
-      .querySelector<HTMLButtonElement>('hlm-checkbox button[role="checkbox"]')!
-      .dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
-    fixture.detectChanges();
     const preview = root.querySelector('[data-role-preview]');
-    expect(preview?.getAttribute('data-preview-kind')).toBe('ready');
+    const checkbox = button(root, 'hlm-checkbox button[role="checkbox"]');
+    checkbox.focus();
+    fixture.detectChanges();
+    expect(preview?.textContent).toContain('Choose a role to see its scope.');
+    expect(preview?.textContent).not.toContain('Preview unavailable');
+    expect(checkbox.closest('label')?.textContent).toContain('Tenant admin');
+    checkbox.click();
+    fixture.detectChanges();
     expect(preview?.textContent).toContain('membership:read');
     expect(preview?.textContent).toContain('Sensitive');
     expect(preview?.textContent).toContain('The server decides actual access.');

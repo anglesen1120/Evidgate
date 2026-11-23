@@ -1,11 +1,13 @@
 import { InteractivityChecker } from '@angular/cdk/a11y';
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { SessionStore } from '../../../core/session/session.store';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { MembersPage } from './members.page';
 import { MembersStore } from './members.store';
-import { FakeMembersStore, MEMBERS_DESKTOP } from './members-page.test-fixtures';
+import { FakeMembersStore, MEMBERS_DESKTOP, role } from './members-page.test-fixtures';
 import { activeMemberMenuTrigger, memberAction } from './member-actions.test-helpers';
 
 const dialogs = [
@@ -20,6 +22,12 @@ function required<T extends Element>(selector: string): T {
   const element = document.body.querySelector<T>(selector) ?? memberAction(document.body, selector);
   if (!element) throw new Error(`Missing element: ${selector}`);
   return element as T;
+}
+
+class InviteRolesHarness extends ComponentHarness {
+  static hostSelector = '[data-members-dialog="invite"]';
+  readonly options = this.locatorForAll('button[role="checkbox"]');
+  readonly preview = this.locatorFor('[data-role-preview]');
 }
 
 describe('Members dialog accessibility', () => {
@@ -48,6 +56,51 @@ describe('Members dialog accessibility', () => {
   afterEach(() => {
     TestBed.resetTestingModule();
     vi.restoreAllMocks();
+  });
+
+  it('announces unavailable only for a selected role and falls back when it is deselected', async () => {
+    store.roles.set([role, { ...role, id: 'custom', name: 'Night shift', is_builtin: false }]);
+    const fixture = TestBed.createComponent(MembersPage);
+    await fixture.whenStable();
+    required<HTMLButtonElement>('[data-members-invite-open]').click();
+    const dialog =
+      await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(InviteRolesHarness);
+    const [admin, custom] = await dialog.options();
+    if (!admin || !custom) throw new Error('Expected both role options');
+    const preview = await dialog.preview();
+    await custom.focus();
+    expect(await preview.text()).toContain('Choose a role to see its scope.');
+    await admin.click();
+    await custom.click();
+    expect(await preview.text()).toContain('Preview unavailable for this role');
+    await custom.click();
+    expect(await preview.text()).toContain('Tenant admin');
+    await admin.click();
+    expect(await preview.text()).toContain('Choose a role to see its scope.');
+    expect(await preview.text()).not.toContain('Preview unavailable');
+  });
+
+  it('keeps the current preview when a different checked role is unchecked', async () => {
+    store.roles.set([
+      { ...role, id: 'alpha', name: 'Alpha', is_builtin: false },
+      { ...role, id: 'beta', name: 'Beta', is_builtin: false },
+      role,
+    ]);
+    const fixture = TestBed.createComponent(MembersPage);
+    await fixture.whenStable();
+    required<HTMLButtonElement>('[data-members-invite-open]').click();
+    const dialog =
+      await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(InviteRolesHarness);
+    const [alpha, beta, admin] = await dialog.options();
+    if (!alpha || !beta || !admin) throw new Error('Expected three role options');
+    await alpha.click();
+    await beta.click();
+    await admin.click();
+    const preview = await dialog.preview();
+    expect(await preview.text()).toContain('Tenant admin');
+    await beta.click();
+    expect(await beta.getAttribute('aria-checked')).toBe('false');
+    expect(await preview.text()).toContain('Tenant admin');
   });
 
   it.each(dialogs)(
@@ -107,9 +160,7 @@ describe('Members dialog accessibility', () => {
     );
     const labelId = checkbox.getAttribute('aria-labelledby');
     expect(labelId).toBeTruthy();
-    expect(document.getElementById(labelId ?? '')?.textContent).toContain(
-      'Organization administrator',
-    );
+    expect(document.getElementById(labelId ?? '')?.textContent).toContain('Tenant admin');
     expect(checkbox.getAttribute('aria-checked')).toBe('true');
     expect(required<HTMLButtonElement>('[data-members-submit]').disabled).toBe(true);
     checkbox.click();

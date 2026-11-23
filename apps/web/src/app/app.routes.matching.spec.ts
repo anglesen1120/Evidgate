@@ -21,6 +21,7 @@
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 
+import { SessionStore } from './core/session/session.store';
 import { ACTIVE_PHASE } from './shell/nav/product-phase';
 import { NAV_ENTRIES } from './shell/nav/nav-registry';
 import {
@@ -150,6 +151,17 @@ describe('App routes (09.1.1-T4.1)', () => {
 
     expect(TestBed.inject(Router).url).toBe(`/orgs/${ORG.id}/projects/${PROJECT.id}/overview`);
     expect(document.querySelector('h1')?.textContent?.trim()).toBe(PROJECT.name);
+  });
+
+  it('keeps the overview URL and selected project in sync when Home redirects back to it', async () => {
+    const { harness } = await setUp();
+    const overview = `/orgs/${ORG.id}/projects/${PROJECT.id}/overview`;
+    await harness.navigateByUrl(overview);
+
+    await harness.navigateByUrl('/');
+
+    expect(TestBed.inject(Router).url).toBe(overview);
+    expect(TestBed.inject(SessionStore).currentProject()?.id).toBe(PROJECT.id);
   });
 
   it('sends every active entry to /forbidden when the server declares no permission', async () => {

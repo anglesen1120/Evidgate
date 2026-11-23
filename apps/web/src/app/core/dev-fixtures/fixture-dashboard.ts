@@ -40,6 +40,8 @@ export function dashboardFixture(
     status: 200,
     body: boundedBody(bodyFor(operation, path, variantFor('listPermissions')), requestUrl),
   };
+  if (operation === 'listRuns' && variant === 'dashboard-dense')
+    document.body = denseRunPage(requestUrl);
   if (variant === 'dashboard-empty')
     document.body =
       operation === 'getUsageSummary'
@@ -76,6 +78,23 @@ function boundedBody(body: unknown, requestUrl: string): unknown {
     items: body.items.slice(0, limit),
     next_cursor: body.items.length > limit ? 'dashboard-next' : null,
   };
+}
+
+function denseRunPage(requestUrl: string): unknown {
+  const cursor = new URL(requestUrl, 'https://fixtures.invalid').searchParams.get('cursor');
+  const page = cursor === null ? 0 : Number(cursor.slice('dashboard-dense-'.length));
+  const base = runs()[0];
+  if (!base) throw new Error('Dashboard fixture requires a seed run.');
+  const items: readonly RunSummary[] = Array.from({ length: 100 }, (_, offset) => {
+    const index = page * 100 + offset;
+    return {
+      ...base,
+      run_id: `018f0000-0000-7000-8000-${String(10_000 + index).padStart(12, '0')}`,
+      created_at: new Date(Date.UTC(2024, 0, 1) + index * 86_400_000).toISOString(),
+      decision: index % 3 === 0 ? 'FAIL' : index % 3 === 1 ? 'INCONCLUSIVE' : 'PASS',
+    };
+  });
+  return { items, next_cursor: `dashboard-dense-${page + 1}` };
 }
 
 function bodyFor(operation: string, path: string, grantsVariant: string): unknown {
