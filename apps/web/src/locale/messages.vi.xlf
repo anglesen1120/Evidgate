@@ -2942,7 +2942,7 @@
         <target><x id="INTERPOLATION" equiv-text="{{ metricLabel(metric.metric) }}"/> theo dự án</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.html</context>
-          <context context-type="linenumber">138,139</context>
+          <context context-type="linenumber">155,156</context>
         </context-group>
       </trans-unit>
 <trans-unit id="quota.panel.storage-title" datatype="html"><source>Daily storage counters</source><target>Số liệu lưu trữ hằng ngày</target></trans-unit>
