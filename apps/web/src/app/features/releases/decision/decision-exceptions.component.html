@@ -123,7 +123,8 @@
 <hlm-dialog [autoFocus]="'[data-slot=dialog-title]'" (closed)="restoreFocusAfterReflow()">
   <hlm-dialog-content
     *hlmDialogPortal
-    class="exception-dialog [&_.spartan-dialog-close]:min-h-(--eg-control-touch) [&_.spartan-dialog-close]:min-w-(--eg-control-touch)"
+    [size]="'lg'"
+    class="[&_.spartan-dialog-close]:min-h-(--eg-control-touch) [&_.spartan-dialog-close]:min-w-(--eg-control-touch)"
   >
     @if (current(); as record) {
       <header hlmDialogHeader class="grid gap-2">
@@ -144,26 +145,26 @@
       </header>
       <div data-detail class="grid min-h-0 content-start gap-4 overflow-y-auto overscroll-contain">
         <h3 class="font-semibold">{{ copy.reasonScope }}</h3>
-        <dl class="m-0 grid gap-3 [&_dd]:m-0 [&_dd]:font-medium [&_dt]:text-muted-foreground">
-          <div class="grid gap-1 sm:grid-cols-[1fr_2fr]">
+        <dl class="hlm-field-grid [&_dd]:font-medium">
+          <div>
             <dt>{{ copy.kind }}</dt>
             <dd>{{ record.kind }}</dd>
           </div>
-          <div class="grid gap-1 sm:grid-cols-[1fr_2fr]">
+          <div class="hlm-field-wide">
             <dt>{{ copy.caseLabel }}</dt>
             <dd>
               <bdi>{{ record.scope }}</bdi>
             </dd>
           </div>
-          <div class="grid gap-1 sm:grid-cols-[1fr_2fr]">
+          <div>
             <dt>{{ copy.owner }}</dt>
             <dd>{{ record.owner === '—' ? copy.notSupplied : record.owner }}</dd>
           </div>
-          <div class="grid gap-1 sm:grid-cols-[1fr_2fr]">
+          <div class="hlm-field-wide">
             <dt>{{ copy.reason }}</dt>
             <dd>{{ record.reason }}</dd>
           </div>
-          <div class="grid gap-1 sm:grid-cols-[1fr_2fr]">
+          <div>
             <dt>{{ copy.expires }}</dt>
             <dd>
               @if (record.expiry === '—') {
@@ -176,7 +177,7 @@
               }
             </dd>
           </div>
-          <div class="grid gap-1 sm:grid-cols-[1fr_2fr]">
+          <div class="hlm-field-wide">
             <dt>{{ copy.policy }}</dt>
             <dd>
               <bdi>{{ facts.policy }}</bdi>
@@ -186,8 +187,8 @@
         @if (record.id === 'w-28') {
           <section class="grid gap-2 border-t pt-4">
             <h3 class="font-semibold">{{ copy.history }}</h3>
-            <dl>
-              <div class="grid gap-1 sm:grid-cols-[1fr_2fr]">
+            <dl class="hlm-field-grid">
+              <div class="hlm-field-wide">
                 <dt>{{ copy.requestedBy }}</dt>
                 <dd>{{ facts.requester }}</dd>
               </div>

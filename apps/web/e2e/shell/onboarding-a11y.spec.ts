@@ -111,7 +111,7 @@ test.describe('the wizard shell is WCAG 2.2 AA clean (09.1.1 AC6, plan §8)', ()
           await expect(content).toBeVisible();
           await expect
             .poll(async () => Math.round((await content.boundingBox())?.width ?? 0))
-            .toBe(width < 600 ? width : 560);
+            .toBe(width < 600 ? width : width - 32);
           if (width < 600)
             await expect
               .poll(async () => Math.round((await content.boundingBox())?.height ?? 0))

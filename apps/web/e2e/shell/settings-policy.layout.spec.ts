@@ -1,5 +1,11 @@
 import { expect, test, type Locator } from '@playwright/test';
-import { LOCALES, seedStoredTheme, THEMES } from './support';
+import {
+  expectFieldColumns,
+  LOCALES,
+  seedStoredTheme,
+  THEMES,
+  waitForDialogAnimations,
+} from './support';
 import { HEAD_ID, PAGE, visit } from './settings-policy.support';
 
 const LABELS = {
@@ -28,13 +34,27 @@ async function labelGeometry(tab: Locator) {
 }
 
 for (const locale of LOCALES) {
-  for (const width of [360, 1440]) {
+  for (const width of [360, 768, 1440]) {
     test(`revision details fit the ${width}px viewport (${locale})`, async ({ page }) => {
       await page.setViewportSize({ width, height: 800 });
       await visit(page, locale);
       await page.locator('[data-policy-selected] [data-policy-view]').click();
+      await waitForDialogAnimations(page, '[role="dialog"]');
       const dialog = page.locator('[data-policy-view-dialog]');
-      await expect(dialog).toHaveCSS('width', width === 360 ? '360px' : '560px');
+      await expect(dialog).toHaveCSS(
+        'width',
+        `${Math.min(width < 600 ? width : width - 32, 1024)}px`,
+      );
+      const fields = dialog.locator('[data-policy-selected-metadata] dl');
+      await expectFieldColumns(fields, width === 360 ? 1 : width === 768 ? 2 : 3);
+      const id = fields.locator('div').first();
+      expect((await id.boundingBox())?.width).toBeCloseTo(
+        await fields.evaluate((el) => {
+          const style = getComputedStyle(el);
+          return el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+        }),
+        0,
+      );
       if (width === 360) await expect(dialog).toHaveCSS('height', '800px');
     });
   }

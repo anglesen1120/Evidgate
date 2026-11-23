@@ -209,6 +209,7 @@ Search here before writing UI. Paths are under `apps/web/src/app/`; test hosts a
 | Need | Use | Location |
 |---|---|---|
 | Run state and generic status | `app-run-state-pill`, `app-status-pill` | `shared/ui/chips/` |
+| Record dialog fields | `dl.hlm-field-grid` with one `div` per `dt`/`dd` pair; `.hlm-field-wide` for IDs, lists, prose and diffs. Use shared `md`/`lg`/`xl` dialog sizes. | `ui/dialog/` |
 | Hash and revision identity | `app-hash-chip`, `app-revision-chip` | `shared/ui/chips/` |
 | Evidence, outcome and decision kept as separate fields | `app-evidence-badge`, `app-outcome-pill`, `app-decision-chip` | `shared/ui/verdict/` |
 | Labels, missing-evidence reasons, waiver notice | `app-label-chip`, `app-missing-reason-list`, `app-waiver-banner` | `shared/ui/annotations/` |

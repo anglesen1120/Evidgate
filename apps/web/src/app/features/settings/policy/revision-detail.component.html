@@ -22,11 +22,12 @@
         @if (fields().length === 0) {
           <p class="m-0 p-(--eg-space-5) text-muted-foreground">{{ copy.noValues }}</p>
         }
-        <dl class="m-0 grid min-w-0 px-(--eg-space-5)" data-policy-values>
+        <dl class="hlm-field-grid px-(--eg-space-5)" data-policy-values>
           @for (field of fields(); track field.key) {
             <div
-              class="grid min-w-0 gap-(--eg-space-3) border-0 border-b border-solid border-border py-(--eg-space-4) last:border-b-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.45fr)]"
+              class="border-0 border-b border-solid border-border py-(--eg-space-4) last:border-b-0"
               [attr.data-policy-field]="field.key"
+              [class.hlm-field-wide]="typeof field.value !== 'number'"
             >
               <dt>
                 <span class="font-semibold">{{ field.label }}</span>
@@ -58,16 +59,14 @@
             {{ copy.title }} · {{ copy.revision }} {{ revision.revision_no }}
           </h3>
         </header>
-        <dl
-          class="m-0 grid min-w-0 gap-(--eg-space-4) p-(--eg-space-5) sm:grid-cols-2 [&>div]:min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0"
-        >
-          <div>
+        <dl class="hlm-field-grid p-(--eg-space-5) [&_dt]:text-xs">
+          <div class="hlm-field-wide">
             <dt>{{ copy.id }}</dt>
             <dd>
               <app-copyable-identifier [value]="revision.id" [label]="copy.id" [truncate]="false" />
             </dd>
           </div>
-          <div>
+          <div class="hlm-field-wide">
             <dt>{{ copy.hash }}</dt>
             <dd>
               <app-copyable-identifier
@@ -91,7 +90,7 @@
             <dt>{{ copy.created }}</dt>
             <dd><app-absolute-time [value]="revision.created_at" /></dd>
           </div>
-          <div>
+          <div class="hlm-field-wide">
             <dt>{{ copy.createdBy }}</dt>
             <dd>
               <app-copyable-identifier

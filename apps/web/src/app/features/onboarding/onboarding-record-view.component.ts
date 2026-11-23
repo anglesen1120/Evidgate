@@ -12,7 +12,7 @@ import {
   output,
 } from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmDialogImports } from '@evidgate/ui/dialog';
+import { HlmDialogImports, type HlmDialogSize } from '@evidgate/ui/dialog';
 import { HlmIcon } from '@evidgate/ui/icon';
 import { StatusPillComponent, type StatusTone } from '../../shared/ui/chips/status-pill.component';
 import type { OnboardingProgress } from './data/onboarding-progress.service';
@@ -25,6 +25,7 @@ export interface OnboardingRecordView {
   readonly status: string | undefined;
   readonly tone: StatusTone;
   readonly details: TemplateRef<unknown>;
+  readonly size?: HlmDialogSize;
   readonly opener: HTMLButtonElement;
 }
 
@@ -69,6 +70,7 @@ export class OnboardingRecordButtonComponent {
   readonly subject = input.required<string>();
   readonly recordTitle = input.required<string>();
   readonly recordId = input<string>();
+  readonly recordSize = input<HlmDialogSize>('md');
   readonly recordStatus = input<string>();
   readonly recordTone = input<StatusTone>('neutral');
   readonly inspect = output<OnboardingRecordView>();
@@ -85,6 +87,7 @@ export class OnboardingRecordButtonComponent {
       status: this.recordStatus(),
       tone: this.recordTone(),
       details: this.appOnboardingRecord(),
+      size: this.recordSize(),
       opener,
     });
   }
@@ -104,7 +107,7 @@ export class OnboardingRecordButtonComponent {
         [restoreFocus]="record.opener"
         (closed)="selection.set(null)"
       >
-        <hlm-dialog-content *hlmDialogPortal [size]="'md'">
+        <hlm-dialog-content *hlmDialogPortal [size]="record.size ?? 'md'">
           <header hlmDialogHeader>
             <hlm-icon
               hlmDialogStatusIcon
@@ -125,9 +128,7 @@ export class OnboardingRecordButtonComponent {
             }
             <p class="m-0 text-xs text-muted-foreground">{{ copy.readOnly }}</p>
           </header>
-          <div
-            class="min-w-0 wrap-anywhere [&_dl]:m-0 [&_dl]:grid [&_dl]:gap-(--eg-space-4) [&_dl>div]:grid [&_dl>div]:gap-(--eg-space-2) min-[400px]:[&_dl>div]:grid-cols-[minmax(8rem,36%)_minmax(0,1fr)] [&_dt]:text-muted-foreground [&_dd]:m-0"
-          >
+          <div class="min-w-0 wrap-anywhere [&_dt]:text-muted-foreground [&_dd]:m-0">
             <h3 class="mb-(--eg-space-4) text-sm font-semibold">{{ copy.summary }}</h3>
             <ng-container [ngTemplateOutlet]="record.details" />
           </div>

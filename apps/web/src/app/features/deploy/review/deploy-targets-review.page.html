@@ -231,8 +231,8 @@
   >
     <hlm-dialog-content
       *hlmDialogPortal
+      [size]="'lg'"
       class="record-dialog"
-      [class.record-edit]="mode() !== 'view'"
       [showCloseButton]="false"
       (keydown.escape)="requestClose($event)"
     >
@@ -273,18 +273,18 @@
         </header>
         @if (mode() === 'view') {
           <div class="record-body grid min-w-0 content-start gap-4">
-            <dl data-record-detail class="record-facts m-0 grid min-w-0 gap-3 text-sm">
-              <div class="min-w-0">
+            <dl data-record-detail class="hlm-field-grid text-sm">
+              <div>
                 <dt class="text-xs text-muted-foreground">{{ copy.target }}</dt>
                 <dd class="m-0 mt-1 font-semibold">
                   <bdi>{{ displayText(t.name) }}</bdi>
                 </dd>
               </div>
-              <div class="min-w-0">
+              <div>
                 <dt class="text-xs text-muted-foreground">{{ copy.order }}</dt>
                 <dd class="m-0 mt-1 font-semibold wrap-anywhere">{{ t.order }}</dd>
               </div>
-              <div class="min-w-0">
+              <div class="hlm-field-wide">
                 <dt class="text-xs text-muted-foreground">{{ copy.pin }}</dt>
                 <dd class="m-0 mt-1 font-semibold wrap-anywhere">
                   @if (
@@ -307,19 +307,19 @@
                   }
                 </dd>
               </div>
-              <div class="min-w-0">
+              <div>
                 <dt class="text-xs text-muted-foreground">{{ copy.project }}</dt>
                 <dd class="m-0 mt-1 font-semibold wrap-anywhere">
                   <bdi>{{ displayText(viewModel().project) }}</bdi>
                 </dd>
               </div>
-              <div class="min-w-0">
+              <div>
                 <dt class="text-xs text-muted-foreground">{{ copy.revision }}</dt>
                 <dd class="m-0 mt-1 font-semibold wrap-anywhere">
                   <bdi class="font-mono">{{ t.revision }}</bdi>
                 </dd>
               </div>
-              <div class="min-w-0">
+              <div>
                 <dt class="text-xs text-muted-foreground">{{ copy.asOf }}</dt>
                 <dd class="m-0"><app-absolute-time [value]="viewModel().asOf" /></dd>
               </div>
@@ -348,45 +348,51 @@
             @if (!viewport.canMutate()) {
               <app-desktop-required-notice />
             }
-            <label hlmLabel for="target-order">{{ copy.order }}</label
-            ><input
-              hlmInput
-              type="number"
-              id="target-order"
-              class="max-w-28"
-              #orderInput
-              min="1"
-              max="20"
-              required
-              [attr.inputmode]="'numeric'"
-              [value]="order() ?? ''"
-              [readOnly]="!canEdit()"
-              [attr.aria-invalid]="!validOrder()"
-              [attr.aria-describedby]="!validOrder() ? 'draft-order-feedback' : null"
-              (input)="order.set(orderInput.value ? orderInput.valueAsNumber : null)"
-            />
-            @if (!validOrder()) {
-              <p id="draft-order-feedback">{{ validationHint }}</p>
-            }
-            <label hlmLabel for="target-pin">{{ copy.pin }}</label
-            ><input
-              hlmInput
-              id="target-pin"
-              class="w-full max-w-sm"
-              #pinInput
-              required
-              maxlength="64"
-              [value]="pin()"
-              [readOnly]="!canEdit()"
-              (input)="pin.set(pinInput.value)"
-            />
-            <div class="flex items-start gap-2">
-              <hlm-checkbox
-                [inputId]="'draft-ack'"
-                [checked]="acknowledged()"
-                [disabled]="!canEdit()"
-                (checkedChange)="acknowledged.set($event)"
-              /><label hlmLabel for="draft-ack">{{ copy.ack }}</label>
+            <div class="hlm-field-grid">
+              <div>
+                <label hlmLabel for="target-order">{{ copy.order }}</label
+                ><input
+                  hlmInput
+                  type="number"
+                  id="target-order"
+                  class="max-w-28"
+                  #orderInput
+                  min="1"
+                  max="20"
+                  required
+                  [attr.inputmode]="'numeric'"
+                  [value]="order() ?? ''"
+                  [readOnly]="!canEdit()"
+                  [attr.aria-invalid]="!validOrder()"
+                  [attr.aria-describedby]="!validOrder() ? 'draft-order-feedback' : null"
+                  (input)="order.set(orderInput.value ? orderInput.valueAsNumber : null)"
+                />
+                @if (!validOrder()) {
+                  <p id="draft-order-feedback">{{ validationHint }}</p>
+                }
+              </div>
+              <div>
+                <label hlmLabel for="target-pin">{{ copy.pin }}</label
+                ><input
+                  hlmInput
+                  id="target-pin"
+                  class="w-full max-w-sm"
+                  #pinInput
+                  required
+                  maxlength="64"
+                  [value]="pin()"
+                  [readOnly]="!canEdit()"
+                  (input)="pin.set(pinInput.value)"
+                />
+              </div>
+              <div class="hlm-field-wide flex items-start gap-2">
+                <hlm-checkbox
+                  [inputId]="'draft-ack'"
+                  [checked]="acknowledged()"
+                  [disabled]="!canEdit()"
+                  (checkedChange)="acknowledged.set($event)"
+                /><label hlmLabel for="draft-ack">{{ copy.ack }}</label>
+              </div>
             </div>
           </div>
         } @else {

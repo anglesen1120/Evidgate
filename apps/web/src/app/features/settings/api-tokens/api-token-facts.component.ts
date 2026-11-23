@@ -23,9 +23,7 @@ export function apiTokenStateLabel(state: ApiTokenView['status']): string {
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
-    <dl
-      class="m-0 grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] sm:grid-cols-2 gap-3 [&>div]:min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:mt-1 [&_dd]:wrap-anywhere"
-    >
+    <dl class="hlm-field-grid [&_dt]:text-xs">
       @if (showIdentity()) {
         <div>
           <dt>{{ copy.name }}</dt>
@@ -63,13 +61,13 @@ export function apiTokenStateLabel(state: ApiTokenView['status']): string {
           }
         </dd>
       </div>
-      <div>
+      <div class="hlm-field-wide">
         <dt>{{ createdBy }}</dt>
         <dd>
           <code>{{ row().created_by }}</code>
         </dd>
       </div>
-      <div class="col-span-full border-t border-border pt-4">
+      <div class="hlm-field-wide border-t border-border pt-4">
         <dt class="font-semibold">{{ copy.permissions }}</dt>
         <dd>
           <ul class="m-0 grid min-w-0 list-none divide-y divide-border p-0 text-xs [&>li]:py-1">

@@ -2,11 +2,13 @@ hlm-dialog-content.spartan-dialog-md {
   width: 560px;
 }
 
-hlm-dialog-content.spartan-dialog-lg {
+hlm-dialog-content.spartan-dialog-lg,
+hlm-dialog-content.spartan-dialog-xl {
   width: 760px;
 }
 
 hlm-dialog-content[data-size] {
+  container: record-dialog / inline-size;
   --hlm-dialog-top: 0px;
   --hlm-dialog-bottom: 0px;
   display: flex;
@@ -21,6 +23,26 @@ hlm-dialog-content[data-size] {
 
 hlm-dialog-content[data-size] > * {
   flex: none;
+}
+
+@media (min-width: 48em) {
+  @container record-dialog (min-width: 28em) {
+    .hlm-field-grid {
+      --hlm-field-columns: 2;
+    }
+  }
+}
+
+@media (min-width: 80em) {
+  hlm-dialog-content.spartan-dialog-xl {
+    width: var(--container-5xl, 64rem);
+  }
+
+  @container record-dialog (min-width: 52rem) {
+    hlm-dialog-content.spartan-dialog-xl .hlm-field-grid {
+      --hlm-field-columns: 3;
+    }
+  }
 }
 
 /* Projection can contain several roots. Give the body its gutters without adding a wrapper. */

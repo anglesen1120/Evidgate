@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
 import type {} from '../../src/app/core/dev-fixtures/fixture-request-log';
 import {
+  expectFieldColumns,
   LOCALES,
   THEMES,
   ORG_ACME,
@@ -63,13 +64,35 @@ for (const locale of LOCALES) {
       await expect(page.locator('[data-ai-version-detail]')).toContainText(
         'Concise updated review-only checkout guidance.',
       );
+      const snapshot = page.locator('[data-ai-version-detail] dl');
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: 800 });
+        await expectFieldColumns(snapshot, width === 390 ? 1 : 2);
+        await expect(snapshot.locator('div').first()).toHaveCSS('grid-column', '1 / -1');
+      }
       await page.setViewportSize({ width: 320, height: 800 });
       await page.locator('[data-ai-version-view]').first().click();
       await waitForDialogAnimations(page, '[role="dialog"]');
       const dialog = page.getByRole('dialog');
       await expect(dialog.locator('[hlmDialogSubject]')).toContainText('3');
       await expect(dialog.locator('[hlmDialogSubject]')).not.toContainText(reason);
-      await expect(dialog.locator('dl').first()).toContainText(reason);
+      const summary = dialog.locator('dl').first();
+      const provenance = dialog.locator('dl').nth(1);
+      await expect(summary).toContainText(reason);
+      for (const width of [1440, 900, 320]) {
+        await page.setViewportSize({ width, height: 800 });
+        const columns = width === 320 ? 1 : 2;
+        await expectFieldColumns(summary, columns);
+        await expectFieldColumns(provenance, columns);
+        for (const field of [
+          summary.locator(':scope > div').filter({ hasText: reason }),
+          dialog.locator('app-ai-settings-snapshot-fields dl > div').first(),
+        ]) {
+          expect(
+            await field.evaluate((el) => el.clientWidth === el.parentElement?.clientWidth),
+          ).toBe(true);
+        }
+      }
       const content = dialog.locator('hlm-dialog-content');
       const header = dialog.locator('header');
       const contentBounds = await content.boundingBox();

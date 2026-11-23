@@ -11,7 +11,6 @@ import type { GalleryTemplateViewModel } from './studio-gallery.fixture';
   selector: 'app-gallery-template-view',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [HlmBadge, HlmButton, HlmDialogImports, HlmIcon],
-  styleUrl: './gallery-record-dialog.css',
   template: `
     <hlm-dialog
       [state]="'open'"
@@ -19,7 +18,7 @@ import type { GalleryTemplateViewModel } from './studio-gallery.fixture';
       [restoreFocus]="false"
       (closed)="dismissed.emit()"
     >
-      <hlm-dialog-content *hlmDialogPortal class="record-dialog">
+      <hlm-dialog-content *hlmDialogPortal [size]="'lg'">
         <header hlmDialogHeader>
           <h2 hlmDialogTitle tabindex="-1" data-gallery-view-title>
             <bdi>{{ item().title }}</bdi>
@@ -35,7 +34,7 @@ import type { GalleryTemplateViewModel } from './studio-gallery.fixture';
             >
           </div>
         </header>
-        <dl class="record-body facts">
+        <dl class="hlm-field-grid">
           <div>
             <dt>{{ copy.engineVariant }}</dt>
             <dd>
@@ -46,31 +45,31 @@ import type { GalleryTemplateViewModel } from './studio-gallery.fixture';
               >
             </dd>
           </div>
-          <div>
+          <div class="hlm-field-wide">
             <dt>{{ copy.intent }}</dt>
             <dd>
               <bdi>{{ escapeFormatChars(item().intent) }}</bdi>
             </dd>
           </div>
-          <div>
+          <div class="hlm-field-wide">
             <dt>{{ copy.precondition }}</dt>
             <dd>
               <bdi>{{ escapeFormatChars(item().precondition) }}</bdi>
             </dd>
           </div>
-          <div>
+          <div class="hlm-field-wide">
             <dt>{{ copy.action }}</dt>
             <dd>
               <bdi>{{ escapeFormatChars(item().action) }}</bdi>
             </dd>
           </div>
-          <div>
+          <div class="hlm-field-wide">
             <dt>{{ copy.assertions }}</dt>
             <dd>
               <bdi>{{ escapeFormatChars(item().assertion) }}</bdi>
             </dd>
           </div>
-          <div>
+          <div class="hlm-field-wide">
             <dt>{{ copy.cleanup }}</dt>
             <dd>{{ item().cleanup }}</dd>
           </div>

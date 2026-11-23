@@ -1,12 +1,14 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
+  expectFieldColumns,
   localePath,
   LOCALES,
   ORG_ACME,
   PROJECT_STOREFRONT,
   seedStoredTheme,
   THEMES,
+  waitForDialogAnimations,
   withVariants,
 } from './support';
 
@@ -141,12 +143,15 @@ for (const locale of LOCALES) {
   test(
     'record View preserves list query, Back, Forward and deep-link close (' + locale + ')',
     async ({ page }) => {
+      await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto(withVariants(base, ['?limit=25']));
       const row = page.locator(ROWS).first();
       const opener = row.locator('[data-catalog-view]');
       await opener.click();
       const dialog = page.getByRole('dialog');
       await expect(dialog.locator('#catalog-record-title')).toBeFocused();
+      await waitForDialogAnimations(page, '[role="dialog"]');
+      await expectFieldColumns(dialog.locator('app-case-record-facts dl').last(), 3);
       await expect(page).toHaveURL(/mode=view/);
       const recordUrl = page.url();
       expect(new URL(recordUrl).searchParams.get('limit')).toBe('25');

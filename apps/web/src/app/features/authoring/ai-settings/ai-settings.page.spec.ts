@@ -203,7 +203,7 @@ describe('AiSettingsPage', () => {
     expect(await dialog?.getAttribute('aria-labelledby')).toBe(await title.getAttribute('id'));
     expect(await dialog?.text()).toContain('general-en');
     expect(await dialog?.text()).toContain(reason);
-    expect(await (await harness.dialogContent()).getAttribute('data-size')).toBe('md');
+    expect(await (await harness.dialogContent()).getAttribute('data-size')).toBe('lg');
     expect(await (await harness.dialogSubject()).text()).toBe('Version 1');
     expect(await (await harness.dialogStatusIcon()).getAttribute('aria-hidden')).toBe('true');
     await vi.waitFor(async () => expect(await title.isFocused()).toBe(true));

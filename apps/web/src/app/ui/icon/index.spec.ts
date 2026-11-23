@@ -19,6 +19,7 @@ describe('HlmIcon fixed status geometry', () => {
     ['lucideActivity', ACTIVITY, false],
     ['lucideCircle', null, true],
     ['lucideCopy', 'M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2', false],
+    ['lucideInbox', 'M22 12h-6l-2 3h-4l-2-3H2', false],
     ['lucideMaximize2', 'M15 3h6v6', false],
   ] as const)(
     'renders pinned Lucide geometry for %s without an SVG-string sink',

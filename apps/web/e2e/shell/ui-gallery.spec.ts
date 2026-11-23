@@ -100,6 +100,47 @@ async function tableMetrics(page: Page): Promise<{
   });
 }
 
+for (const width of [390, 1440]) {
+  for (const positioning of ['native', 'fallback']) {
+    test(`full value stays next to its trigger at ${width}px (${positioning})`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await openGallery(page, 'en', 'light');
+      if (positioning === 'fallback') {
+        // Without a resolved anchor the panel starts at the viewport origin.
+        await page.addStyleTag({
+          content: '[popover] { position-area: none !important; inset: 0 auto auto 0; }',
+        });
+      }
+      const trigger = page
+        .locator('[aria-labelledby="gallery-hashes"] .hash-chip[tabindex]')
+        .first();
+      const panel = trigger.locator('[popover]');
+      for (const below of [true, false]) {
+        await trigger.evaluate((el, center) => {
+          el.scrollIntoView({ block: center ? 'center' : 'end', behavior: 'instant' });
+        }, below);
+        if (below) await trigger.hover();
+        else await trigger.focus();
+        await expect(panel).toBeVisible();
+        if (positioning === 'fallback') await expect(panel).toHaveClass(/eg-measured-position/);
+        const anchor = (await trigger.boundingBox())!;
+        const box = (await panel.boundingBox())!;
+        const gap = below ? box.y - anchor.y - anchor.height : anchor.y - box.y - box.height;
+        expect(Math.abs(gap), 'the panel touches the correct trigger edge').toBeLessThanOrEqual(3);
+        expect(box.x).toBeGreaterThanOrEqual(-1);
+        expect(box.x + box.width).toBeLessThanOrEqual(width + 1);
+        expect(box.x + box.width).toBeGreaterThan(anchor.x);
+        expect(box.x).toBeLessThan(anchor.x + anchor.width);
+        await page.keyboard.press('Escape');
+        await expect(panel).not.toBeVisible();
+        if (!below) await expect(trigger).toBeFocused();
+      }
+    });
+  }
+}
+
 test.describe('the gallery never scrolls sideways at 360px', () => {
   test.use({ viewport: { width: 360, height: 800 } });
 
@@ -200,6 +241,14 @@ for (const locale of LOCALES) {
       await value.focus();
       await expect(popover).toHaveAttribute('popover', 'manual');
       await expect(popover).toBeVisible();
+      const anchor = (await value.boundingBox())!;
+      const box = (await popover.boundingBox())!;
+      expect(
+        Math.min(
+          Math.abs(box.y - anchor.y - anchor.height),
+          Math.abs(anchor.y - box.y - box.height),
+        ),
+      ).toBeLessThanOrEqual(3);
       // The cell shows an abbreviated (ellipsised) value; the panel carries the whole one.
       const shownValue = (await value.innerText()).trim();
 
