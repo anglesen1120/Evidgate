@@ -73,6 +73,7 @@ import { CREDENTIAL_STATUS, CredentialRecordComponent } from './credential-recor
               <td hlmTd>
                 <app-onboarding-record
                   [appOnboardingRecord]="facts"
+                  [recordSize]="'lg'"
                   [recordTitle]="recordCopy.binding"
                   [subject]="binding.repository_full_name"
                   [recordId]="binding.id"

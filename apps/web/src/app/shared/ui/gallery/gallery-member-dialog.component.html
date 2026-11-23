@@ -34,24 +34,30 @@
         <p hlmDialogDescription>{{ confirming() ? copy.discardHint : copy.specimen }}</p>
         @if (!confirming()) {
           @if (mode() === 'view') {
-            <dl
-              class="m-0 grid grid-cols-[minmax(6rem,1fr)_minmax(0,2fr)] items-baseline gap-x-4 gap-y-2 [&_dt]:font-semibold [&_dd]:m-0 [&_dd]:text-sm [&_dd]:wrap-anywhere"
-            >
-              <dt>{{ copy.email }}</dt>
-              <dd>
-                <bdi>{{ row.email }}</bdi>
-              </dd>
-              <dt>{{ copy.status }}</dt>
-              <dd>{{ copy[row.status] }}</dd>
-              <dt>{{ copy.roles }}</dt>
-              <dd>
-                {{ copy.viewer }}
-                @if (row.reviewer) {
-                  , {{ copy.reviewer }}
-                }
-              </dd>
-              <dt>{{ copy.projects }}</dt>
-              <dd class="tabular-nums">{{ row.projects }}</dd>
+            <dl class="hlm-field-grid [&_dt]:font-semibold">
+              <div class="hlm-field-wide">
+                <dt>{{ copy.email }}</dt>
+                <dd>
+                  <bdi>{{ row.email }}</bdi>
+                </dd>
+              </div>
+              <div>
+                <dt>{{ copy.status }}</dt>
+                <dd>{{ copy[row.status] }}</dd>
+              </div>
+              <div class="hlm-field-wide">
+                <dt>{{ copy.roles }}</dt>
+                <dd>
+                  {{ copy.viewer }}
+                  @if (row.reviewer) {
+                    , {{ copy.reviewer }}
+                  }
+                </dd>
+              </div>
+              <div>
+                <dt>{{ copy.projects }}</dt>
+                <dd class="tabular-nums">{{ row.projects }}</dd>
+              </div>
             </dl>
           } @else {
             <fieldset class="m-0 grid min-w-0 gap-2 border-0 p-0" [disabled]="policy.narrow()">

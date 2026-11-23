@@ -273,9 +273,9 @@ describe.each(['en', 'vi'] as const)('Checklist review context in %s', (locale) 
 
   it('keeps all eight labelled facts in the summary and history definition lists', async () => {
     const { ui } = await mountView();
-    expect(await ui.overlayCount('[data-pending-preview-content] dl.facts')).toBe(2);
-    expect(await ui.overlayCount('[data-pending-preview-content] dl.facts dt')).toBe(8);
-    expect(await ui.overlayCount('[data-pending-preview-content] dl.facts dd')).toBe(8);
+    expect(await ui.overlayCount('[data-pending-preview-content] dl.hlm-field-grid')).toBe(2);
+    expect(await ui.overlayCount('[data-pending-preview-content] dl.hlm-field-grid dt')).toBe(8);
+    expect(await ui.overlayCount('[data-pending-preview-content] dl.hlm-field-grid dd')).toBe(8);
   });
 
   it('does not expose parent or row facts without authoring read permission', async () => {
@@ -299,7 +299,7 @@ describe.each(['en', 'vi'] as const)('Checklist review context in %s', (locale) 
         formatViolations(unexceptedViolations(contextResult.violations, A11Y_EXCEPTIONS)),
       ).toEqual([]);
       await ui.click('[data-review-change]');
-      expect(await ui.overlayCount('[data-pending-preview-content] dl.facts')).toBe(2);
+      expect(await ui.overlayCount('[data-pending-preview-content] dl.hlm-field-grid')).toBe(2);
       const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
       if (!dialog) throw new Error('Expected the change details dialog');
       const result = await axe.run(dialog, AXE_JSDOM_RUN_OPTIONS);

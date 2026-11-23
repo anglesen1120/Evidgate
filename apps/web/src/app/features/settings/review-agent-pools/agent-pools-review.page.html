@@ -189,7 +189,7 @@
     [restoreFocus]="'[data-view-record=pool][aria-expanded=true]'"
     (closed)="choice.set(null)"
   >
-    <hlm-dialog-content *hlmDialogPortal [size]="'md'" class="wrap-anywhere">
+    <hlm-dialog-content *hlmDialogPortal [size]="'lg'" class="wrap-anywhere">
       @if (selected(); as pool) {
         <header hlmDialogHeader>
           <h2 hlmDialogTitle tabindex="-1">{{ pool.name }}</h2>
@@ -202,14 +202,12 @@
         </header>
         <div class="grid min-w-0 gap-4">
           @if (pool.poolId) {
-            <dl
-              class="m-0 grid min-w-0 grid-cols-1 gap-3 text-sm sm:grid-cols-2 [&>div]:min-w-0 [&>div]:border-s-2 [&>div]:border-(--eg-border) [&>div]:ps-2 [&_dt]:mb-1 [&_dt]:text-xs [&_dt]:font-semibold [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:wrap-anywhere"
-            >
+            <dl class="hlm-field-grid text-sm [&_dt]:text-xs [&_dt]:font-semibold">
               <div>
                 <dt>{{ l.registered }}</dt>
                 <dd>{{ model().agents.length | number }}</dd>
               </div>
-              <div>
+              <div class="hlm-field-wide">
                 <dt>{{ l.image }}</dt>
                 <dd>
                   <code>{{ model().image }}</code>
@@ -301,9 +299,7 @@
               </p>
             </section>
           } @else {
-            <dl
-              class="m-0 grid min-w-0 grid-cols-1 gap-3 text-sm sm:grid-cols-2 [&>div]:min-w-0 [&>div]:border-s-2 [&>div]:border-(--eg-border) [&>div]:ps-2 [&_dt]:mb-1 [&_dt]:text-xs [&_dt]:font-semibold [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:wrap-anywhere"
-            >
+            <dl class="hlm-field-grid text-sm [&_dt]:text-xs [&_dt]:font-semibold">
               <div>
                 <dt>{{ l.registered }}</dt>
                 <dd>{{ l.unavailable }}</dd>

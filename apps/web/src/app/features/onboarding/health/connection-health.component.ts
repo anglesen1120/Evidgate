@@ -110,18 +110,18 @@ import type {
                     (inspect)="viewRecord.emit($event)"
                   />
                   <ng-template #facts>
-                    <dl>
+                    <dl class="hlm-field-grid">
                       <div>
                         <dt>{{ copy.credential }}</dt>
                         <dd>{{ row.credential.kind === 'token' ? tokenKind : bindingKind }}</dd>
                       </div>
-                      <div>
+                      <div class="hlm-field-wide">
                         <dt>{{ copy.identifier }}</dt>
                         <dd>
                           <bdi class="font-mono">{{ row.credential.id }}</bdi>
                         </dd>
                       </div>
-                      <div>
+                      <div class="hlm-field-wide">
                         <dt>{{ copy.status }}</dt>
                         <dd>
                           <app-status-pill

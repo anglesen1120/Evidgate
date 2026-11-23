@@ -7,25 +7,3 @@ th[hlmTh] {
   min-inline-size: calc(var(--eg-control-touch) + var(--eg-space-4) * 2);
   white-space: nowrap;
 }
-
-.script-details {
-  inline-size: min(560px, calc(100vw - var(--eg-space-8)));
-  max-inline-size: 100vw;
-  max-block-size: calc(100dvh - var(--eg-space-8));
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  overflow: hidden;
-  gap: 0;
-  padding: 0;
-}
-
-@media (width < 600px) {
-  .script-details {
-    inline-size: 100vw;
-    block-size: 100dvh;
-    max-block-size: 100dvh;
-    border: 0;
-    border-radius: 0;
-    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
-      env(safe-area-inset-left);
-  }
-}

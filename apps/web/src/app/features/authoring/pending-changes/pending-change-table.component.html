@@ -58,7 +58,7 @@
   [autoFocus]="'[data-pending-view-title]'"
   (closed)="restoreOpener()"
 >
-  <hlm-dialog-content *hlmDialogPortal [size]="'md'" data-pending-preview-content>
+  <hlm-dialog-content *hlmDialogPortal [size]="'xl'" data-pending-preview-content>
     @if (active(); as row) {
       <header hlmDialogHeader>
         <h2
@@ -85,8 +85,8 @@
           }
           <app-copyable-identifier [value]="row.target_id" [label]="copy.targetLabel" />
         </div>
-        <dl class="facts">
-          <div [attr.data-review-fact]="'change-id'">
+        <dl class="hlm-field-grid">
+          <div [attr.data-review-fact]="'change-id'" class="hlm-field-wide">
             <dt i18n="@@authoring.pending-changes.change-id">Change id</dt>
             <dd>
               <app-copyable-identifier [value]="row.change_id" [label]="ui.changeId" />
@@ -99,8 +99,8 @@
         >
           History
         </h3>
-        <dl class="facts">
-          <div [attr.data-review-fact]="'author-id'">
+        <dl class="hlm-field-grid">
+          <div [attr.data-review-fact]="'author-id'" class="hlm-field-wide">
             <dt i18n="@@authoring.review-context.author-id">Author membership id</dt>
             <dd>
               <app-copyable-identifier
@@ -192,7 +192,7 @@
             <dt i18n="@@authoring.pending-changes.queued-at">Queued at (UTC)</dt>
             <dd><app-absolute-time [value]="row.created_at" /></dd>
           </div>
-          <div [attr.data-review-fact]="'reason'">
+          <div [attr.data-review-fact]="'reason'" class="hlm-field-wide">
             <dt i18n="@@authoring.review-context.reason">Change reason</dt>
             <dd class="full-text">
               @if (row.reason !== null && row.reason !== undefined) {

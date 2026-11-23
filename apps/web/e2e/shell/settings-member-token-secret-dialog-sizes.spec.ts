@@ -52,7 +52,10 @@ for (const surface of ['member', 'token', 'secret'] as const) {
     for (const width of [1440, 360]) {
       await page.setViewportSize({ width, height: 900 });
       await trigger.click();
-      await expectGeometry(page, width === 1440 ? 560 : 360);
+      await expectGeometry(
+        page,
+        width === 1440 ? { member: 560, token: 760, secret: 1024 }[surface] : 360,
+      );
       await page.keyboard.press('Escape');
       await expect(page.getByRole('dialog')).toHaveCount(0);
     }

@@ -26,8 +26,8 @@ export const CREDENTIAL_STATUS = {
   imports: [DatePipe, StatusPillComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <dl>
-      <div>
+    <dl class="hlm-field-grid">
+      <div class="hlm-field-wide">
         <dt>{{ copy.identifier }}</dt>
         <dd>
           <bdi class="font-mono">{{ credential().id }}</bdi>
@@ -38,7 +38,7 @@ export const CREDENTIAL_STATUS = {
         <dd><app-status-pill [tone]="'neutral'" [label]="statuses[credential().status]" /></dd>
       </div>
       @if (binding(); as binding) {
-        <div>
+        <div class="hlm-field-wide">
           <dt>{{ repository }}</dt>
           <dd>
             <bdi>{{ binding.repository_full_name }}</bdi>
@@ -50,13 +50,13 @@ export const CREDENTIAL_STATUS = {
             <bdi class="font-mono">{{ binding.provider }}</bdi>
           </dd>
         </div>
-        <div>
+        <div class="hlm-field-wide">
           <dt>{{ repositoryId }}</dt>
           <dd>
             <bdi class="font-mono">{{ binding.repository_id }}</bdi>
           </dd>
         </div>
-        <div>
+        <div class="hlm-field-wide">
           <dt>{{ refs }}</dt>
           <dd>
             @for (ref of binding.allowed_ref_patterns; track $index) {
@@ -66,7 +66,7 @@ export const CREDENTIAL_STATUS = {
             }
           </dd>
         </div>
-        <div>
+        <div class="hlm-field-wide">
           <dt>{{ workflows }}</dt>
           <dd>
             @for (workflow of binding.allowed_workflow_refs; track $index) {
@@ -92,7 +92,7 @@ export const CREDENTIAL_STATUS = {
             >
           </dd>
         </div>
-        <div>
+        <div class="hlm-field-wide">
           <dt>{{ scopes }}</dt>
           <dd>
             <bdi>{{ token.scopes.join(', ') || none }}</bdi>
@@ -103,7 +103,7 @@ export const CREDENTIAL_STATUS = {
     <h3 class="my-(--eg-space-4) border-t border-border pt-(--eg-space-4) text-sm font-semibold">
       {{ copy.history }}
     </h3>
-    <dl>
+    <dl class="hlm-field-grid">
       <div>
         <dt>{{ created }}</dt>
         <dd>
