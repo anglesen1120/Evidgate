@@ -164,6 +164,16 @@
 <trans-unit id="settings.members.not-granted" datatype="html"><source>Not granted</source><target>Chưa cấp</target></trans-unit>
 <trans-unit id="settings.members.no-roles" datatype="html"><source>No roles assigned</source><target>Chưa có vai trò</target></trans-unit>
 <trans-unit id="settings.members.roles-unavailable" datatype="html"><source>Role catalogue unavailable. Memberships remain visible.</source><target>Danh mục vai trò không khả dụng. Danh sách thành viên vẫn hiển thị.</target></trans-unit>
+<trans-unit id="settings.members.role-viewer" datatype="html"><source>Viewer</source><target>Người xem</target></trans-unit>
+<trans-unit id="settings.members.role-qa-engineer" datatype="html"><source>QA engineer</source><target>Kỹ sư QA</target></trans-unit>
+<trans-unit id="settings.members.role-test-maintainer" datatype="html"><source>Test maintainer</source><target>Bảo trì kiểm thử</target></trans-unit>
+<trans-unit id="settings.members.role-release-approver" datatype="html"><source>Release approver</source><target>Duyệt phát hành</target></trans-unit>
+<trans-unit id="settings.members.role-tenant-admin" datatype="html"><source>Tenant admin</source><target>Quản trị tổ chức</target></trans-unit>
+<trans-unit id="settings.members.role-ci-producer" datatype="html"><source>CI producer</source><target>Bên gửi kết quả CI</target></trans-unit>
+<trans-unit id="settings.members.role-agent" datatype="html"><source>Agent</source><target>Tác nhân</target></trans-unit>
+<trans-unit id="settings.members.role-platform-operator" datatype="html"><source>Platform operator</source><target>Vận hành nền tảng</target></trans-unit>
+<trans-unit id="settings.members.role-billing-operator" datatype="html"><source>Billing operator</source><target>Vận hành thanh toán</target></trans-unit>
+<trans-unit id="settings.members.preview-choose-role" datatype="html"><source>Choose a role to see its scope.</source><target>Chọn một vai trò để xem phạm vi quyền.</target></trans-unit>
 <trans-unit id="settings.members.preview" datatype="html"><source>Role scope preview</source><target>Xem trước phạm vi vai trò</target></trans-unit>
 <trans-unit id="settings.members.preview-unavailable" datatype="html"><source>Preview unavailable for this role</source><target>Không thể xem trước vai trò này</target></trans-unit>
 <trans-unit id="settings.members.authority" datatype="html"><source>Display only. The server decides actual access.</source><target>Chỉ để tham khảo. Máy chủ quyết định quyền truy cập thực tế.</target></trans-unit>

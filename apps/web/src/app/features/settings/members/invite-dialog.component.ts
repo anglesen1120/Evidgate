@@ -30,6 +30,7 @@ import { RetryAfterComponent } from '../../../shared/ui/conflict/retry-after.com
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { MembersStore } from './members.store';
 import { MEMBERS_COPY } from './member-list.component';
+import { memberRoleLabel } from './member-role-label';
 import { RoleScopePreviewComponent } from './role-scope-preview.component';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
 import { InviteRevealComponent } from './invite-reveal.component';
@@ -119,13 +120,13 @@ import { InviteRevealComponent } from './invite-reveal.component';
                       [attr.data-role-id]="role.id"
                       [disabled]="locked()"
                       [checked]="selected().has(role.id)"
-                      (focusin)="previewId.set(role.id)"
+                      (focusin)="selected().has(role.id) && previewId.set(role.id)"
                       (checkedChange)="toggle(role.id, $event)"
-                    />{{ role.name }}
+                    />{{ roleLabel(role) }}
                   </label>
                 }
               </fieldset>
-              <app-role-scope-preview [preview]="store.preview(previewId())" />
+              <app-role-scope-preview [preview]="preview()" />
               @if (store.inviteState().error; as error) {
                 <div class="sr-only" id="members-invite-error-label">{{ copy.inviteRefused }}</div>
                 <div
@@ -201,12 +202,17 @@ export class InviteDialogComponent {
   private readonly slot = inject(RevealSlot);
 
   protected readonly copy = MEMBERS_COPY;
+  protected readonly roleLabel = memberRoleLabel;
   protected readonly revealing = signal(false);
   readonly completed = output<void>();
   protected readonly opened = signal(false);
   protected readonly email = signal('');
   protected readonly selected = signal<ReadonlySet<string>>(new Set());
-  protected readonly previewId = signal('');
+  protected readonly previewId = signal<string | null>(null);
+  protected readonly preview = computed(() => {
+    const id = this.previewId();
+    return id === null ? null : this.store.preview(id);
+  });
   private readonly inFlight = signal(false);
   protected readonly busy = computed(
     () => this.inFlight() || this.store.inviteState().phase === 'submitting',
@@ -281,7 +287,7 @@ export class InviteDialogComponent {
     this.email.set('');
     this.feedback.reset();
     this.selected.set(new Set());
-    this.previewId.set('');
+    this.previewId.set(null);
     this.store.resetMutations();
     this.slot.clear();
     this.revealing.set(false);
@@ -324,7 +330,7 @@ export class InviteDialogComponent {
     if (checked) roles.add(id);
     else roles.delete(id);
     this.selected.set(roles);
-    this.previewId.set(id);
+    this.previewId.set(checked ? id : (roles.values().next().value ?? null));
   }
   private beginCorrection(): void {
     if (!this.editableRefusal()) return;

@@ -38,6 +38,9 @@ class MemberActionsHarness extends ComponentHarness {
   readonly header = this.locatorFor('th[data-column-role="actions"]');
   readonly trigger = this.locatorFor('button[data-members-actions]');
   readonly view = this.locatorFor('[data-member-view]');
+  readonly rowView = this.locatorFor(
+    'td[data-column-role="actions"] button[aria-haspopup="dialog"]',
+  );
 }
 
 describe('MemberListComponent', () => {
@@ -110,12 +113,29 @@ describe('MemberListComponent', () => {
     },
   );
 
-  it('omits the entire mutation column without membership:write', async () => {
-    await render([member('active')]);
-    expect(root.querySelectorAll('thead th')).toHaveLength(3);
+  it('keeps View in the action column without exposing mutations to a read-only user', async () => {
+    const membership = member('active');
+    await render([membership]);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      MemberActionsHarness,
+    );
+    const view = await harness.rowView();
+    expect(await view.text()).toBe('View');
+    expect(await view.getAttribute('aria-label')).toContain(membership.invited_email);
+    await view.focus();
+    await view.click();
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog?.textContent).toContain(membership.invited_email);
+    dialog?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }),
+    );
+    await fixture.whenStable();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(await view.isFocused()).toBe(true);
     expect(
       Array.from(root.querySelectorAll('thead th'), (cell) => cell.textContent.trim()),
-    ).toEqual(['Member', 'Organization roles', 'Status']);
+    ).toEqual(['Member', 'Organization roles', 'Status', 'Actions']);
     expect(root.querySelector('[data-members-actions]')).toBeNull();
     expect(root.querySelector('app-data-table')).not.toBeNull();
     expect(root.querySelector('app-data-table')?.textContent).toContain('Members and invitations');
@@ -136,6 +156,7 @@ describe('MemberListComponent', () => {
     expect(await header.hasClass('break-words')).toBe(false);
     expect(await header.getCssValue('min-inline-size')).toBe('max-content');
     expect(await (await harness.trigger()).hasClass('whitespace-nowrap')).toBe(true);
+    expect(await (await harness.rowView()).text()).toBe('View');
   });
 
   it('uses role-based column budgets and one row menu instead of percentage widths and four actions', async () => {
@@ -192,7 +213,8 @@ describe('MemberListComponent', () => {
       expect(records?.textContent).toContain('A long assigned organization role');
       expect(
         [...root.querySelectorAll('.eg-table-fact dt')].map((label) => label.textContent),
-      ).toEqual(['Member', 'Status', 'Organization roles']);
+      ).toEqual(['Member', 'Status', 'Actions', 'Organization roles']);
+      expect(records?.querySelector('[data-member-row-view]')?.textContent?.trim()).toBe('View');
       expect(root.querySelector('[data-members-actions]')).toBeNull();
     },
   );

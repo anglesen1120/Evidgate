@@ -23,6 +23,7 @@ import { SessionStore } from '../../../core/session/session.store';
 import { RetryAfterComponent } from '../../../shared/ui/conflict/retry-after.component';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { MEMBERS_COPY } from './member-list.component';
+import { memberRoleLabel } from './member-role-label';
 import { MembersStore, type MutationState, type RoleChange } from './members.store';
 
 type RoleOperation = Pick<RoleChange, 'kind' | 'roleId'>;
@@ -83,7 +84,7 @@ type RoleOperation = Pick<RoleChange, 'kind' | 'roleId'>;
                   [disabled]="busy() || !session.has('membership:write')"
                   [checked]="selected().has(role.id)"
                   (checkedChange)="toggle(role.id, $event)"
-                />{{ role.name }}
+                />{{ roleLabel(role) }}
               </label>
             }
           </fieldset>
@@ -181,6 +182,7 @@ export class EditRolesDialogComponent {
   private readonly injector = inject(Injector);
 
   protected readonly copy = MEMBERS_COPY;
+  protected readonly roleLabel = memberRoleLabel;
   readonly completed = output<void>();
   protected readonly opened = signal(false);
   protected readonly member = signal<MembershipView | null>(null);
@@ -321,7 +323,8 @@ export class EditRolesDialogComponent {
   }
 
   protected roleName(roleId: string): string {
-    return this.store.roles().find((role) => role.id === roleId)?.name ?? roleId;
+    const role = this.store.roles().find((candidate) => candidate.id === roleId);
+    return role ? memberRoleLabel(role) : roleId;
   }
 
   protected async submit(): Promise<void> {

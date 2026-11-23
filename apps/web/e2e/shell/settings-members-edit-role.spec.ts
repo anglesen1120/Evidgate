@@ -1,42 +1,21 @@
-// 09.7.1-F6 (plan 09.7.1 §2 AC2/AC3/AC7, §10 F6): the member role edit in real Chromium, against
-// the FIXTURES build.
-//
-// What this suite can and cannot observe, stated once. The `fixtures` bundle answers the API in
-// process — `provideFixtureBackend()` replaces Angular's `HttpBackend`
-// (`apps/web/src/app/core/dev-fixtures/fixture-backend.ts:232-236`), so no network request exists
-// for Playwright to intercept, hold or count (the same reason `settings-members.qa.spec.ts:1-6`
-// sends retry/double-submit to Vitest). A case here therefore proves a *round trip happened* — the
-// dialog is `aria-busy` while the store awaits the answer, and the row then shows exactly the role
-// set of the corpus document that answered, a value the dialog never holds — and never claims to
-// have seen the `Idempotency-Key` header: that is pinned where it is observable, by
-// `core/data/members-data.service.spec.ts:375` (grant POST `{ role_id }` + the intent's key) and
-// `:422` (revoke DELETE of the one pair URL + the key), with the header's own contract in
-// `core/http/idempotency.interceptor.spec.ts`.
-//
-// The four calls the dialog makes are `getMembership` (the store's re-read after a confirmed
-// change), `grantMembershipRole`, `revokeMembershipRole` and the reads the tab already makes. Their
-// answers are selected per operation (`?fixture.variant.<operationId>=<variant>`,
-// `./support.ts`), because a static corpus cannot be changed by a write: the "after the grant" state
-// is its own document (`fixtures/web-api/membership-get-after-grant`), not something the corpus
-// derives from a preceding POST.
-//
-// Every assertion keys on the plan's §10 F6 DOM contract — `app-members-page[data-members-phase]`,
-// records `[data-row-id]` and their `.role-name` cells, the portalled row Actions menu,
-// `[data-members-edit-open]`, `[data-members-dialog="edit-roles"]`,
-// `[data-members-role-option][data-role-id]`, `[data-members-submit]`, `[data-members-error]` +
-// `[data-members-error-code]`, `[data-members-last-admin-hint]`,
-// `[data-members-applied-summary]` with `[data-members-applied-item]` /
-// `[data-members-not-applied-item]` — never on a localized label, so both locale bundles answer the
-// same. Refusal text is read from the corpus JSON the case answers with, never retyped.
+// The fixtures backend answers in-process. These tests observe the refetched role set;
+// service tests cover the HTTP request and its idempotency key.
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { MEMBER_ROWS, memberRow, openMemberAction, openMemberMenu } from './member-controls';
 
-import getAfterGrant from '../../../../fixtures/web-api/membership-get-after-grant/input.json';
+import {
+  expectedLabel,
+  expectedLabels,
+  GRANT_TARGET,
+  MEMBERSHIPS,
+  ROLES,
+  ROLES_AFTER,
+  SOLE_ADMIN,
+  TENANT_ADMIN_ROLE,
+} from './member-role-fixtures';
 import grantForbidden from '../../../../fixtures/web-api/membership-role-grant-forbidden/input.json';
 import grantUnknownRole from '../../../../fixtures/web-api/membership-role-grant-unknown-role/input.json';
 import revokeLastAdmin from '../../../../fixtures/web-api/membership-role-revoke-last-admin/input.json';
-import membershipsList from '../../../../fixtures/web-api/memberships-list/input.json';
-import rolesList from '../../../../fixtures/web-api/roles-list/input.json';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
   LOCALES,
@@ -52,73 +31,6 @@ import {
   withVariants,
 } from './support';
 
-/** One membership row of `fixtures/web-api/memberships-list`, as the corpus spells it. */
-type FixtureMembership = (typeof membershipsList.body.items)[number];
-
-/** Every membership of the corpus page. */
-const MEMBERSHIPS: readonly FixtureMembership[] = membershipsList.body.items;
-
-/** The role catalogue the dialog's checkbox group is built from. */
-const ROLES = rolesList.body.items;
-
-/**
- * The member the grant cases edit: an active member who is NOT the sole tenant_admin (`qa@acme.test`
- * in the corpus), so the corpus's `membership-get-after-grant` and `membership-role-grant-ok`
- * documents describe exactly this row. Found by status and role code, never by position.
- */
-function grantTarget(): FixtureMembership {
-  const candidate = MEMBERSHIPS.find(
-    (membership) =>
-      membership.status === 'active' &&
-      !membership.roles.some((role) => role.code === 'tenant_admin'),
-  );
-  if (candidate === undefined) {
-    throw new Error('fixtures/web-api/memberships-list holds no active non-admin member');
-  }
-  return candidate;
-}
-
-const GRANT_TARGET = grantTarget();
-
-/**
- * The role the grant cases add: the built-in `tenant_admin` of the catalogue, which the corpus's
- * `membership-role-grant-ok` / `membership-get-after-grant` documents answer with. Found by code, so
- * a corpus reorder cannot move the case onto another role.
- */
-function tenantAdminRole(): (typeof ROLES)[number] {
-  const role = ROLES.find((candidate) => candidate.code === 'tenant_admin');
-  if (role === undefined) {
-    throw new Error('fixtures/web-api/roles-list holds no tenant_admin role');
-  }
-  return role;
-}
-
-const TENANT_ADMIN_ROLE = tenantAdminRole();
-
-/** The one active `tenant_admin` of the corpus page — the row the last-admin guard protects. */
-function soleAdmin(): FixtureMembership {
-  const admins = MEMBERSHIPS.filter(
-    (membership) =>
-      membership.status === 'active' &&
-      membership.roles.some((role) => role.code === 'tenant_admin'),
-  );
-  const [only, ...rest] = admins;
-  if (only === undefined || rest.length > 0) {
-    throw new Error(
-      `fixtures/web-api/memberships-list must hold exactly one active tenant_admin, found ${String(admins.length)}`,
-    );
-  }
-  return only;
-}
-
-const SOLE_ADMIN = soleAdmin();
-
-/**
- * The role names the sole admin's row shows. The row's `tenant_admin` role is the catalogue's
- * built-in one, so its checkbox is `TENANT_ADMIN_ROLE`'s — the corpus spells both with the same id.
- */
-const SOLE_ADMIN_ROLE_NAMES = SOLE_ADMIN.roles.map((role) => role.name);
-
 /** The server's own code and text, taken from the documents the cases answer with. */
 const FORBIDDEN_CODE = grantForbidden.body.error.code;
 const FORBIDDEN_MESSAGE = grantForbidden.body.error.message;
@@ -127,14 +39,6 @@ const UNKNOWN_ROLE_MESSAGE = grantUnknownRole.body.error.message;
 const REVOKE_LAST_ADMIN_CODE = revokeLastAdmin.body.error.code;
 const REVOKE_LAST_ADMIN_MESSAGE = revokeLastAdmin.body.error.message;
 
-/** The role set the corpus says the member holds after the grant (`getMembership`'s answer). */
-const ROLE_NAMES_BEFORE = GRANT_TARGET.roles.map((role) => role.name);
-const ROLE_NAMES_AFTER = getAfterGrant.body.roles.map((role) => role.name);
-
-/**
- * The latency the "nothing is optimistic" case holds every answer with: long enough to observe the
- * page while the grant is in flight, short enough for the case to finish inside the 60 s budget.
- */
 const HELD_ANSWER = '?fixture.latency=2000';
 
 /** The edit dialog of `app-edit-roles-dialog`, selected by its own `data-members-dialog` value. */
@@ -153,13 +57,6 @@ async function rowRoleNames(row: Locator): Promise<string[]> {
   return names.map((name) => name.trim()).sort();
 }
 
-/**
- * The rendered refusal: the message paragraph exactly as the server wrote it, plus the code exactly.
- * The message is its own `<p>` and a sibling of the code, so the comparison is scoped to that
- * paragraph — the region also carries the static `last_admin` hint and, after a partial apply, the
- * applied/not-applied summary, and a whole-region comparison would trip over them rather than over
- * the message.
- */
 async function expectRefusal(region: Locator, code: string, message: string): Promise<void> {
   await expect(region).toBeVisible();
   await expect(region.locator('p').first()).toHaveText(message);
@@ -211,7 +108,9 @@ test.describe('a role change is the server’s answer, never a local guess', () 
       await expect(page.locator('[data-members-edit-open]')).toHaveCount(1);
       await page.keyboard.press('Escape');
       // The starting state is the list's own role set: one role, the one the corpus gives it.
-      await expect.poll(() => rowRoleNames(row)).toEqual([...ROLE_NAMES_BEFORE].sort());
+      await expect
+        .poll(() => rowRoleNames(row))
+        .toEqual(expectedLabels(GRANT_TARGET.roles, locale));
 
       const opener = await openMemberAction(page, row, 'edit-open');
       const dialog = page.locator(EDIT_DIALOG);
@@ -220,6 +119,13 @@ test.describe('a role change is the server’s answer, never a local guess', () 
       // The checkbox group is the whole role catalogue, and the member's own roles come checked:
       // the dialog is a draft over server data, not a second source of truth.
       await expect(dialog.locator('[data-members-role-option]')).toHaveCount(ROLES.length);
+      for (const role of ROLES) {
+        const label = expectedLabel(role, locale);
+        await expect(dialog.locator(`[data-role-id="${role.id}"] button`)).toHaveAccessibleName(
+          label,
+        );
+        await expect(page.locator(`[id="matrix-role-${role.id}"]`)).toHaveText(label);
+      }
       const granted = dialog.locator(
         `[data-members-role-option][data-role-id="${TENANT_ADMIN_ROLE.id}"] button[role="checkbox"]`,
       );
@@ -239,7 +145,7 @@ test.describe('a role change is the server’s answer, never a local guess', () 
       await expect(opener).toBeFocused();
       // The row then shows exactly the role set of the document that answered `getMembership` — a
       // value no draft on the page holds — and the page announces the change.
-      await expect.poll(() => rowRoleNames(row)).toEqual([...ROLE_NAMES_AFTER].sort());
+      await expect.poll(() => rowRoleNames(row)).toEqual(expectedLabels(ROLES_AFTER, locale));
       await expect(page.locator('app-members-page > p[role="status"]')).toHaveText(/\S/);
     });
   }
@@ -281,7 +187,7 @@ test.describe('the last admin cannot be demoted: the server refuses in its own w
       // Still open, still holding the attempt, and the row is untouched: no client-side pre-check
       // and no optimistic demotion.
       await expect(dialog).toBeVisible();
-      await expect.poll(() => rowRoleNames(row)).toEqual([...SOLE_ADMIN_ROLE_NAMES].sort());
+      await expect.poll(() => rowRoleNames(row)).toEqual(expectedLabels(SOLE_ADMIN.roles, locale));
     });
   }
 });
@@ -316,7 +222,9 @@ test.describe('a refused grant is the server’s own message, never the client�
       await expect(dialog.locator('[data-members-last-admin-hint]')).toHaveCount(0);
       await expect(dialog.locator('[data-members-applied-summary]')).toHaveCount(0);
       await expect(dialog).toBeVisible();
-      await expect.poll(() => rowRoleNames(row)).toEqual([...ROLE_NAMES_BEFORE].sort());
+      await expect
+        .poll(() => rowRoleNames(row))
+        .toEqual(expectedLabels(GRANT_TARGET.roles, locale));
     });
   }
 
@@ -349,7 +257,9 @@ test.describe('a refused grant is the server’s own message, never the client�
       await expect(dialog.locator('[data-members-last-admin-hint]')).toHaveCount(0);
       await expect(dialog.locator('[data-members-applied-summary]')).toHaveCount(0);
       await expect(dialog).toBeVisible();
-      await expect.poll(() => rowRoleNames(row)).toEqual([...ROLE_NAMES_BEFORE].sort());
+      await expect
+        .poll(() => rowRoleNames(row))
+        .toEqual(expectedLabels(GRANT_TARGET.roles, locale));
     });
   }
 });
@@ -403,12 +313,12 @@ test.describe('a granted change followed by a refused one is reported as both', 
       const notApplied = summary.locator('[data-members-not-applied-item]');
       await expect(applied).toHaveCount(1);
       await expect(notApplied).toHaveCount(1);
-      await expect(applied).toContainText(TENANT_ADMIN_ROLE.name);
-      await expect(notApplied).toContainText(revokedRole.name);
+      await expect(applied).toContainText(expectedLabel(TENANT_ADMIN_ROLE, locale));
+      await expect(notApplied).toContainText(expectedLabel(revokedRole, locale));
       await expect(dialog).toBeVisible();
 
       // The row is the refetched server row — the granted role is there — never the draft.
-      await expect.poll(() => rowRoleNames(row)).toEqual([...ROLE_NAMES_AFTER].sort());
+      await expect.poll(() => rowRoleNames(row)).toEqual(expectedLabels(ROLES_AFTER, locale));
       // No page-level "saved" announcement: the dialog, not the page, owns the partial outcome and
       // is still open on the work that was not applied.
       await expect(page.locator('app-members-page > p[role="status"]')).toHaveText('');
@@ -444,7 +354,7 @@ test.describe('nothing on the row changes before the server answers', () => {
     });
 
     const row = memberRow(page, GRANT_TARGET.id);
-    await expect.poll(() => rowRoleNames(row)).toEqual([...ROLE_NAMES_BEFORE].sort());
+    await expect.poll(() => rowRoleNames(row)).toEqual(expectedLabels(GRANT_TARGET.roles, 'en'));
 
     await openMemberAction(page, row, 'edit-open');
     const dialog = page.locator(EDIT_DIALOG);
@@ -459,12 +369,12 @@ test.describe('nothing on the row changes before the server answers', () => {
     // Held: the dialog is busy on the answer, and the row behind it is still the old role set —
     // the draft lives in the dialog and nowhere else.
     await expect(dialog).toHaveAttribute('aria-busy', 'true');
-    expect(await rowRoleNames(row)).toEqual([...ROLE_NAMES_BEFORE].sort());
+    expect(await rowRoleNames(row)).toEqual(expectedLabels(GRANT_TARGET.roles, 'en'));
     await expect(row.locator('.role-name')).toHaveCount(GRANT_TARGET.roles.length);
 
     // Only the answer changes it, and only to what the answer says.
     await expect(dialog).not.toBeVisible({ timeout: 20_000 });
-    await expect.poll(() => rowRoleNames(row)).toEqual([...ROLE_NAMES_AFTER].sort());
+    await expect.poll(() => rowRoleNames(row)).toEqual(expectedLabels(ROLES_AFTER, 'en'));
   });
 });
 
