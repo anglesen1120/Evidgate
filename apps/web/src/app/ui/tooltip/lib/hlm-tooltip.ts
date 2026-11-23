@@ -23,16 +23,18 @@ export const tooltipPositionVariants = cva('absolute', {
   },
 });
 
+export const HLM_TOOLTIP_PROVIDERS = [
+  provideBrnTooltipDefaultOptions({
+    svgClasses: DEFAULT_TOOLTIP_SVG_CLASS,
+    tooltipContentClasses: DEFAULT_TOOLTIP_CONTENT_CLASSES,
+    arrowClasses: (position: BrnTooltipPosition) => hlm(tooltipPositionVariants({ position })),
+  }),
+];
+
 @Directive({
   selector: '[hlmTooltip]',
   exportAs: 'hlmTooltip',
-  providers: [
-    provideBrnTooltipDefaultOptions({
-      svgClasses: DEFAULT_TOOLTIP_SVG_CLASS,
-      tooltipContentClasses: DEFAULT_TOOLTIP_CONTENT_CLASSES,
-      arrowClasses: (position: BrnTooltipPosition) => hlm(tooltipPositionVariants({ position })),
-    }),
-  ],
+  providers: HLM_TOOLTIP_PROVIDERS,
   hostDirectives: [
     {
       directive: BrnTooltip,
