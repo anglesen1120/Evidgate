@@ -47,7 +47,7 @@
     <app-inline-feedback [title]="notice.title" [description]="notice.description" />
   } @else {
     <app-empty-pattern
-      [icon]="state() === 'empty' ? 'navShield' : 'lucideInbox'"
+      [icon]="state() === 'empty' || state() === 'no-match' ? 'navShield' : 'lucideInbox'"
       [title]="notice.title"
       [description]="notice.description"
     />
