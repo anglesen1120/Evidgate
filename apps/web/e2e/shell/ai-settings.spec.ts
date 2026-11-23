@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
 import type {} from '../../src/app/core/dev-fixtures/fixture-request-log';
 import {
+  expectFieldColumns,
   LOCALES,
   THEMES,
   ORG_ACME,
@@ -75,7 +76,23 @@ for (const locale of LOCALES) {
       const dialog = page.getByRole('dialog');
       await expect(dialog.locator('[hlmDialogSubject]')).toContainText('3');
       await expect(dialog.locator('[hlmDialogSubject]')).not.toContainText(reason);
-      await expect(dialog.locator('dl').first()).toContainText(reason);
+      const summary = dialog.locator('dl').first();
+      const provenance = dialog.locator('dl').nth(1);
+      await expect(summary).toContainText(reason);
+      for (const width of [1440, 900, 320]) {
+        await page.setViewportSize({ width, height: 800 });
+        const columns = width === 320 ? 1 : 2;
+        await expectFieldColumns(summary, columns);
+        await expectFieldColumns(provenance, columns);
+        for (const field of [
+          summary.locator(':scope > div').filter({ hasText: reason }),
+          dialog.locator('app-ai-settings-snapshot-fields dl > div').first(),
+        ]) {
+          expect(
+            await field.evaluate((el) => el.clientWidth === el.parentElement?.clientWidth),
+          ).toBe(true);
+        }
+      }
       const content = dialog.locator('hlm-dialog-content');
       const header = dialog.locator('header');
       const contentBounds = await content.boundingBox();

@@ -1,5 +1,11 @@
 import { expect, test, type Locator } from '@playwright/test';
-import { LOCALES, seedStoredTheme, THEMES, waitForDialogAnimations } from './support';
+import {
+  expectFieldColumns,
+  LOCALES,
+  seedStoredTheme,
+  THEMES,
+  waitForDialogAnimations,
+} from './support';
 import { HEAD_ID, PAGE, visit } from './settings-policy.support';
 
 const LABELS = {
@@ -40,11 +46,7 @@ for (const locale of LOCALES) {
         `${Math.min(width < 600 ? width : width - 32, 1024)}px`,
       );
       const fields = dialog.locator('[data-policy-selected-metadata] dl');
-      await expect
-        .poll(() =>
-          fields.evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length),
-        )
-        .toBe(width === 360 ? 1 : width === 768 ? 2 : 3);
+      await expectFieldColumns(fields, width === 360 ? 1 : width === 768 ? 2 : 3);
       const id = fields.locator('div').first();
       expect((await id.boundingBox())?.width).toBeCloseTo(
         await fields.evaluate((el) => {

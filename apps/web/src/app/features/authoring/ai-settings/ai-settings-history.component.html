@@ -260,6 +260,10 @@
               <dt i18n="@@authoring.ai-settings.version-column">Version</dt>
               <dd>{{ row.version_no }}</dd>
             </div>
+            <div>
+              <dt i18n="@@authoring.ai-settings.time">Saved at (UTC)</dt>
+              <dd><app-absolute-time [value]="row.created_at" /></dd>
+            </div>
             <div class="hlm-field-wide">
               <dt i18n="@@authoring.ai-settings.reason-column">Reason</dt>
               <dd>
@@ -271,17 +275,13 @@
             Version provenance
           </h3>
           <dl class="hlm-field-grid">
-            <div class="hlm-field-wide">
+            <div>
               <dt>{{ authorLabel }}</dt>
               <dd>
                 <app-copyable-identifier [value]="row.author_membership_id" [label]="authorLabel" />
               </dd>
             </div>
             <div>
-              <dt i18n="@@authoring.ai-settings.time">Saved at (UTC)</dt>
-              <dd><app-absolute-time [value]="row.created_at" /></dd>
-            </div>
-            <div class="hlm-field-wide">
               <dt>{{ hashLabel }}</dt>
               <dd><app-copyable-identifier [value]="row.content_hash" [label]="hashLabel" /></dd>
             </div>
@@ -296,7 +296,7 @@
               </dd>
             </div>
             @if (loadedDetail(); as version) {
-              <div class="hlm-field-wide">
+              <div>
                 <dt>{{ settingsIdLabel }}</dt>
                 <dd>
                   <app-copyable-identifier
