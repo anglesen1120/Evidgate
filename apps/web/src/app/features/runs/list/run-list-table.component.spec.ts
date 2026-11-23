@@ -83,7 +83,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     const minimums = {
       id: 'calc(17ch + var(--eg-control-touch) + var(--eg-space-4) * 2 + var(--eg-space-2))',
       state: 'calc(12ch + var(--eg-space-4) * 2)',
-      evidence: 'calc(22ch + var(--eg-space-4) * 2)',
+      evidence: 'calc(18ch + var(--eg-space-4) * 2)',
       decision: 'calc(15ch + var(--eg-space-4) * 2)',
       scope: 'calc(13ch + var(--eg-space-4) * 2)',
       actions: 'max-content',

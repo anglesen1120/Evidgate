@@ -149,7 +149,7 @@ export class RunListTableComponent {
       priority: 'primary',
       overflow: 'wrap',
       // The badge label never wraps, so the floor must fit the longest one (vi) or the badge clips.
-      width: { min: 'calc(22ch + var(--eg-space-4) * 2)' },
+      width: { min: 'calc(18ch + var(--eg-space-4) * 2)' },
       cellTemplate: this.evidenceCell(),
     },
     {
