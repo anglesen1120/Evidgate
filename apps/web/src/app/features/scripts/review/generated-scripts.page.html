@@ -312,7 +312,7 @@
       [restoreFocus]="true"
       (closed)="closeView()"
     >
-      <hlm-dialog-content *hlmDialogPortal class="script-details" [showCloseButton]="false">
+      <hlm-dialog-content *hlmDialogPortal [size]="'lg'" [showCloseButton]="false">
         <header hlmDialogHeader class="relative border-b border-border p-5 pe-16">
           <h2 hlmDialogTitle tabindex="-1">{{ c.details }}</h2>
           <div class="flex min-w-0 flex-wrap items-center gap-2">
@@ -342,14 +342,12 @@
           <p hlmDialogDescription>
             <bdi>{{ escapeFormatChars(r.title) }}</bdi>
           </p>
-          <dl
-            class="m-0 grid min-w-0 text-sm [&>div]:grid [&>div]:items-baseline [&>div]:gap-x-3 [&>div]:gap-y-1 [&>div]:border-b [&>div]:border-(--eg-border) [&>div]:py-2 sm:[&>div]:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:wrap-anywhere [&_dd]:font-semibold"
-          >
-            <div>
+          <dl class="hlm-field-grid text-sm [&_dt]:text-xs [&_dd]:font-semibold">
+            <div class="hlm-field-wide">
               <dt>{{ c.approved }}</dt>
               <dd>{{ r.manualCase }} · {{ r.revision }}</dd>
             </div>
-            <div>
+            <div class="hlm-field-wide">
               <dt>{{ c.annotation }}</dt>
               <dd>
                 <code
@@ -359,7 +357,7 @@
                 <bdi>{{ escapeFormatChars(r.automated ?? c.notSupplied) }}</bdi>
               </dd>
             </div>
-            <div>
+            <div class="hlm-field-wide">
               <dt>{{ c.runEvidence }}</dt>
               <dd>
                 <code>{{ viewModel().runContext }}</code>

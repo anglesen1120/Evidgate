@@ -23,7 +23,7 @@ import { classes } from '@evidgate/ui/utils';
 import { guardDialogClose } from './guard-dialog-close';
 import { HlmDialogClose } from './hlm-dialog-close';
 
-export type HlmDialogSize = 'md' | 'lg';
+export type HlmDialogSize = 'md' | 'lg' | 'xl';
 
 type HlmDialogContentContext = {
   $component?: ComponentType<unknown>;
@@ -87,7 +87,7 @@ export class HlmDialogContent {
     optional: true,
   });
 
-  /** Omit size to retain the original desktop width; md/lg opt into fixed record chrome. */
+  /** Omit size to retain the original desktop width; an explicit size opts into record chrome. */
   public readonly size = input<HlmDialogSize | undefined>(this._dialogContext?.$size);
   /** All voluntary closes ask the same predicate. Release it after save/discard. */
   public readonly closeGuard = input<() => boolean>();
@@ -112,8 +112,7 @@ export class HlmDialogContent {
   constructor() {
     classes(() => [
       'spartan-dialog-content relative mx-auto w-[calc(100vw-var(--eg-space-8))] outline-none sm:mx-0',
-      this.size() === 'md' && 'spartan-dialog-md',
-      this.size() === 'lg' && 'spartan-dialog-lg',
+      this.size() && `spartan-dialog-${this.size()}`,
       this._dynamicComponentClass,
     ]);
     const serviceGuard = this._dialogContext?.$closeGuard;

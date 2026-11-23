@@ -8,7 +8,7 @@
   <hlm-dialog-content
     *hlmDialogPortal
     [showCloseButton]="false"
-    [size]="editing() ? 'lg' : 'md'"
+    [size]="editing() ? 'md' : 'xl'"
     [closeGuard]="allowClose"
     (keydown.escape)="escape($event)"
     [attr.aria-busy]="busy() || saving()"

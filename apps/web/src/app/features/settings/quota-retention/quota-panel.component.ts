@@ -8,6 +8,7 @@ import {
   TemplateRef,
   viewChild,
 } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import type { UsageSummaryDto, UsageSummaryMetricDto, UsageSummaryProjectDto } from '@evidgate/sdk';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmButton } from '@evidgate/ui/button';
@@ -54,6 +55,9 @@ type ProjectCell = TemplateRef<DataTableCellContext<UsageSummaryProjectDto>>;
 })
 export class QuotaPanelComponent {
   protected readonly quota = inject(QuotaStore);
+  protected readonly ownsPageHeading =
+    inject(ActivatedRoute, { optional: true })?.snapshot.data['pageHeadingLevel'] === 1;
+  protected readonly subsectionLevel = this.ownsPageHeading ? 2 : null;
   protected readonly metricLabel = quotaMetricLabel;
   protected readonly projectMetrics = computed(() =>
     this.quota.usageSummary()?.metrics.filter((metric) => metric.projects.length > 0),

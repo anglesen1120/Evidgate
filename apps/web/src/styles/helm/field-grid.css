@@ -1,0 +1,31 @@
+@layer components {
+  .hlm-field-grid {
+    display: grid;
+    grid-template-columns: repeat(var(--hlm-field-columns, 1), minmax(0, 1fr));
+    align-items: start;
+    gap: var(--eg-space-4) var(--eg-space-6);
+    min-inline-size: 0;
+    margin: 0;
+  }
+
+  .hlm-field-grid > div {
+    display: grid;
+    min-inline-size: 0;
+    align-content: start;
+    gap: var(--eg-space-2);
+    overflow-wrap: anywhere;
+  }
+
+  .hlm-field-grid > div > dt {
+    color: var(--eg-text-muted);
+  }
+
+  .hlm-field-grid > div > dd {
+    min-inline-size: 0;
+    margin: 0;
+  }
+
+  .hlm-field-grid > .hlm-field-wide {
+    grid-column: 1 / -1;
+  }
+}

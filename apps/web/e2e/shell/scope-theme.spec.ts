@@ -43,6 +43,11 @@ test.describe('scope switcher (AC4)', () => {
     // And the fixture variant that selected this session is still on the URL, because the switcher
     // rewrites segments of the current URL rather than building a new one.
     expect(new URL(page.url()).searchParams.get('fixture.variant.listPermissions')).toBe('limited');
+
+    await page.locator('a.brand').click();
+    await expect(page).toHaveURL(new RegExp(`/projects/${PROJECT_CHECKOUT}/overview$`));
+    await expectScopeValue(projectSelect, PROJECT_CHECKOUT);
+    await expect(page.locator('#main-content h1')).toHaveText('Checkout API');
   });
 
   test('choosing a project from an org-scope route opens its project screen', async ({ page }) => {

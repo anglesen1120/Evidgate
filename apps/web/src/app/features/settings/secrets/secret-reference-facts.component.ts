@@ -10,10 +10,8 @@ import { SECRETS_COPY, secretStatusLabel } from './secrets.copy';
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
-    <dl
-      class="m-0 grid min-w-0 gap-(--eg-space-4) sm:grid-cols-2 lg:grid-cols-3 [&>div]:min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:mt-(--eg-space-1) [&_dd]:wrap-anywhere"
-    >
-      <div>
+    <dl class="hlm-field-grid [&_dt]:text-xs">
+      <div class="hlm-field-wide">
         <dt>{{ copy.scope }}</dt>
         <dd>
           @for (scope of reference().scopes; track scope) {

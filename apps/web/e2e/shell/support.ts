@@ -14,7 +14,7 @@
 //    is read by the dev fixture backend (`core/dev-fixtures/fixture-toggles.ts`); the app's own
 //    query handling never sees a session fact. The variants below name corpus directories that
 //    exist in `fixtures/web-api/`.
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 /** The org and project ids of `fixtures/web-api/orgs-list` + `projects-list` (org 1). */
 export const ORG_ACME = '018f0000-0000-7000-8000-000000000001';
@@ -172,6 +172,20 @@ export async function seedStoredTheme(page: Page, theme: ShellTheme | null): Pro
       localStorage.setItem('evidgate-theme', stored);
     }
   }, theme);
+}
+
+/** Count occupied columns, not declared CSS tracks that may be empty. */
+export async function expectFieldColumns(list: Locator, count: number): Promise<void> {
+  await expect
+    .poll(() =>
+      list
+        .locator(':scope > div')
+        .evaluateAll(
+          (items) =>
+            new Set(items.map((item) => Math.round(item.getBoundingClientRect().left))).size,
+        ),
+    )
+    .toBe(count);
 }
 
 /**

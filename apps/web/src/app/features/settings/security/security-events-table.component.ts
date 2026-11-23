@@ -114,7 +114,7 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
         [autoFocus]="'first-heading'"
         (closed)="inspected.set(null)"
       >
-        <hlm-dialog-content *hlmDialogPortal [size]="'md'" data-security-dialog>
+        <hlm-dialog-content *hlmDialogPortal [size]="'lg'" data-security-dialog>
           <header hlmDialogHeader>
             <h2 hlmDialogTitle>{{ typeLabel(row.type) }}</h2>
             <div class="flex flex-wrap items-center gap-2">
@@ -124,8 +124,8 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
               /><app-absolute-time [value]="row.created_at" />
             </div>
           </header>
-          <dl class="m-0 grid min-w-0 gap-3 text-sm">
-            <div>
+          <dl class="hlm-field-grid text-sm">
+            <div class="hlm-field-wide">
               <dt class="text-muted-foreground">{{ copy.id }}</dt>
               <dd class="m-0">
                 <app-copyable-identifier [value]="row.id" [label]="copy.id" [truncate]="false" />
@@ -137,7 +137,7 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
                 <bdi>{{ row.type }}</bdi>
               </dd>
             </div>
-            <div>
+            <div [class.hlm-field-wide]="!!row.actor.id">
               <dt class="text-muted-foreground">{{ copy.actor }}</dt>
               <dd class="m-0">
                 <bdi>{{ row.actor.kind }}</bdi>
@@ -152,7 +152,7 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
                 }
               </dd>
             </div>
-            <div>
+            <div [class.hlm-field-wide]="!!row.project_id">
               <dt class="text-muted-foreground">{{ copy.project }}</dt>
               <dd class="m-0">
                 @if (row.project_id) {
@@ -166,7 +166,7 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
                 }
               </dd>
             </div>
-            <div>
+            <div [class.hlm-field-wide]="!!row.request_id">
               <dt class="text-muted-foreground">{{ copy.request }}</dt>
               <dd class="m-0">
                 @if (row.request_id) {
@@ -181,12 +181,12 @@ import { SECURITY_SEVERITY_LABELS, securityTypeLabel } from './security-events.c
               </dd>
             </div>
             @if (row.type === 'support_access') {
-              <div>
+              <div class="hlm-field-wide">
                 <dt class="text-muted-foreground">{{ copy.support }}</dt>
                 <dd class="m-0 wrap-anywhere">{{ copy.supportDescription }}</dd>
               </div>
             }
-            <div>
+            <div class="hlm-field-wide">
               <dt class="text-muted-foreground">{{ copy.metadata }}</dt>
               <dd class="m-0">
                 <pre

@@ -134,16 +134,14 @@
     [restoreFocus]="'[data-view-record=endpoint][aria-expanded=true]'"
     (closed)="viewing.set(false)"
   >
-    <hlm-dialog-content *hlmDialogPortal [size]="'md'" class="wrap-anywhere">
+    <hlm-dialog-content *hlmDialogPortal [size]="'lg'" class="wrap-anywhere">
       @if (selected(); as ep) {
         <header hlmDialogHeader>
           <h2 hlmDialogTitle tabindex="-1">{{ ep.name }}</h2>
           <p hlmDialogDescription>{{ l.endpoint }} · {{ ep.id }}</p>
         </header>
-        <dl
-          class="m-0 grid min-w-0 grid-cols-1 gap-3 text-sm sm:grid-cols-2 [&>div]:min-w-0 [&>div]:border-s-2 [&>div]:border-(--eg-border) [&>div]:ps-2 [&_dt]:mb-1 [&_dt]:text-xs [&_dt]:font-semibold [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:wrap-anywhere"
-        >
-          <div>
+        <dl class="hlm-field-grid text-sm [&_dt]:text-xs [&_dt]:font-semibold">
+          <div class="hlm-field-wide">
             <dt>{{ l.url }}</dt>
             <dd>
               <code>{{ destination() }}</code>
@@ -153,7 +151,7 @@
             <dt>{{ l.state }}</dt>
             <dd><app-status-pill [label]="ep.status" [tone]="ep.tone" /></dd>
           </div>
-          <div class="sm:col-span-2">
+          <div class="hlm-field-wide">
             <dt>{{ l.events }}</dt>
             <dd>
               @for (event of ep.events; track event) {
@@ -163,7 +161,7 @@
               }
             </dd>
           </div>
-          <div class="sm:col-span-2">
+          <div>
             <dt>{{ l.rotation }}</dt>
             <dd class="[&_.spartan-badge]:max-w-full">
               @if (ep.overlapEnd; as end) {

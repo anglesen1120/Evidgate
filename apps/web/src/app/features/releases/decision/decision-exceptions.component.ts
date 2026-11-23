@@ -62,28 +62,6 @@ type Cell = TemplateRef<DataTableCellContext<ExceptionRecord>>;
   ],
   providers: [RecordSelection],
   templateUrl: './decision-exceptions.component.html',
-  styles: `
-    .exception-dialog {
-      inline-size: min(560px, calc(100vw - 2 * var(--eg-space-5)));
-      max-inline-size: 100vw;
-      max-block-size: calc(100dvh - 2 * var(--eg-space-5));
-      grid-template-rows: auto minmax(0, 1fr) auto;
-      overflow: hidden;
-    }
-    @media (width < 600px) {
-      .exception-dialog {
-        inline-size: 100vw;
-        block-size: 100dvh;
-        max-block-size: 100dvh;
-        border: 0;
-        border-radius: 0;
-        padding-block: max(env(safe-area-inset-top), var(--eg-space-5))
-          max(env(safe-area-inset-bottom), var(--eg-space-5));
-        padding-inline: max(env(safe-area-inset-left), var(--eg-space-5))
-          max(env(safe-area-inset-right), var(--eg-space-5));
-      }
-    }
-  `,
   host: { class: 'block min-w-0 wrap-anywhere' },
 })
 export class DecisionExceptions {
