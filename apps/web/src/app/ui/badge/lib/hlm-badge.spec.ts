@@ -124,6 +124,14 @@ describe('HlmBadge clipping disclosure', () => {
     expect(show).toHaveBeenCalledTimes(3);
   });
 
+  it('dismisses the tapped badge when it scrolls out of view', async () => {
+    await clip();
+    vi.spyOn(badge, 'getBoundingClientRect').mockReturnValue(new DOMRect(30, -60, 40, 30));
+    badge.click();
+    root.dispatchEvent(new Event('scroll'));
+    expect(hide).toHaveBeenCalledOnce();
+  });
+
   it('keeps hoverable full text persistent and dismisses it after focus leaves', async () => {
     await clip();
     badge.dispatchEvent(new MouseEvent('mouseenter'));

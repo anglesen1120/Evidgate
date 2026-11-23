@@ -1,0 +1,17 @@
+[popover='manual'] {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  inline-size: max-content;
+  max-inline-size: calc(100vw - var(--eg-space-5) * 2);
+  max-block-size: calc(100dvh - var(--eg-space-5) * 2);
+  position-area: bottom span-all;
+  justify-self: anchor-center;
+  position-try-fallbacks: flip-block;
+}
+
+[popover='manual'].eg-measured-position {
+  position-area: none;
+  justify-self: start;
+  position-try-fallbacks: none;
+}

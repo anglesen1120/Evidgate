@@ -11,12 +11,14 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { openFullValuePopover } from '@evidgate/ui/utils';
 
 import { escapeFormatChars } from '../values/ref-name-display';
 
 /** Internal text renderer. Native popovers enter the top layer, outside scroll clipping. */
 @Component({
   selector: 'app-data-table-value',
+  styleUrl: '../../../ui/utils/lib/full-value-popover.css',
   host: {
     class:
       'eg-table-value block min-w-0 focus-within:outline-[length:var(--eg-focus-width)] focus-within:outline-solid focus-within:outline-ring focus-within:outline-offset-[var(--eg-focus-offset)]',
@@ -54,7 +56,7 @@ import { escapeFormatChars } from '../values/ref-name-display';
         from the accessibility tree so an open popover never announces the value again. -->
       <span
         #popover
-        class="full-value box-border m-auto max-w-[calc(100%-var(--eg-space-5)*2)] max-h-[calc(100%-var(--eg-space-5)*2)] overflow-auto rounded-(--eg-radius-lg) border border-(--eg-border-control) bg-(--eg-surface) p-[var(--eg-space-4)] font-sans text-sm text-(--eg-text) whitespace-normal [overflow-wrap:anywhere]"
+        class="full-value box-border overflow-auto rounded-(--eg-radius-lg) border border-(--eg-border-control) bg-(--eg-surface) p-[var(--eg-space-4)] font-sans text-sm text-(--eg-text) whitespace-normal [overflow-wrap:anywhere]"
         popover="manual"
         aria-hidden="true"
         (mouseenter)="cancelHide()"
@@ -84,10 +86,7 @@ export class DataTableValueComponent {
   private readonly valueElement = viewChild.required<ElementRef<HTMLElement>>('valueElement');
   private readonly popover = viewChild<ElementRef<HTMLElement>>('popover');
   private hideTimer: number | undefined;
-  private opened = false;
-  private readonly dismissOnEscape = (event: KeyboardEvent) => {
-    if (event.key === 'Escape') this.hide();
-  };
+  private closePanel: (() => void) | undefined;
 
   constructor() {
     afterRenderEffect((onCleanup) => {
@@ -119,20 +118,17 @@ export class DataTableValueComponent {
   show(): void {
     this.cancelHide();
     const element = this.popover()?.nativeElement;
-    if (!this.clipped() || !element || this.opened) return;
-    element.showPopover();
-    this.opened = true;
+    if (!this.clipped() || !element || this.closePanel) return;
+    this.closePanel = openFullValuePopover(this.valueElement().nativeElement, element, () =>
+      this.hide(),
+    );
     this.expanded.set(true);
-    // Only an open popover installs a global listener, not every rendered cell.
-    document.addEventListener('keydown', this.dismissOnEscape);
   }
 
   hide(): void {
     this.cancelHide();
-    document.removeEventListener('keydown', this.dismissOnEscape);
-    const element = this.popover()?.nativeElement;
-    if (this.opened && element?.isConnected) element.hidePopover();
-    this.opened = false;
+    this.closePanel?.();
+    this.closePanel = undefined;
     this.expanded.set(false);
   }
 
