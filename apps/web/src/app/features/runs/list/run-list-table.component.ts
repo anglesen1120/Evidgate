@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -29,6 +30,7 @@ type RunCell = TemplateRef<DataTableCellContext<RunSummary>>;
 @Component({
   selector: 'app-run-list-table',
   imports: [
+    NgTemplateOutlet,
     RouterLink,
     HlmBadge,
     HlmButton,
