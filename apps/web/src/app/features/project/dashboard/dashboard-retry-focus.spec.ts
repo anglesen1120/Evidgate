@@ -3,6 +3,7 @@ import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import type { OutputEmitterRef, Type } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { DashboardWidgetComponent } from '../../../shared/ui/dashboard/dashboard-widget.component';
+import { retryWithDashboardFocus } from '../../../shared/ui/dashboard/dashboard-retry-focus';
 import { DashboardMetricComponent } from './dashboard-metric.component';
 
 class DashboardRetryHarness extends ComponentHarness {
@@ -111,3 +112,21 @@ for (const consumer of consumers) {
     });
   });
 }
+
+describe('retryWithDashboardFocus callback', () => {
+  it('focuses the persistent target before invoking a plain retry callback once', () => {
+    const target = document.createElement('section');
+    target.tabIndex = -1;
+    document.body.append(target);
+    const retry = vi.fn(() => {
+      expect(document.activeElement).toBe(target);
+    });
+    try {
+      retryWithDashboardFocus(target, retry);
+      expect(retry).toHaveBeenCalledTimes(1);
+      expect(document.activeElement).toBe(target);
+    } finally {
+      target.remove();
+    }
+  });
+});

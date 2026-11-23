@@ -2,9 +2,7 @@
 <ng-template #decisionCell let-row>
   @if (row.runStatus === 'available') {
     <app-decision-chip [decision]="row.run?.decision" />
-  } @else if (row.runStatus === 'error') {
-    <p>{{ copy.runError }}</p>
-  } @else if (row.runStatus !== 'hidden') {
+  } @else if (row.runStatus !== 'hidden' && row.runStatus !== 'error') {
     <span>{{
       row.runStatus === 'loading'
         ? copy.loading
@@ -52,7 +50,7 @@
       [emptyIcon]="'navGrid'"
       (retry)="store.projects.reload()"
     >
-      <section #runSummary data-run-summary [attr.tabindex]="-1" [attr.aria-label]="copy.projects">
+      <section #runSummary data-run-summary [attr.tabindex]="-1">
         <app-data-table
           [rows]="store.projectRows()"
           [columns]="columns()"

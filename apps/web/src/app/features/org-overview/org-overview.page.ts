@@ -15,6 +15,7 @@ import { mapNetworkError } from '../../core/http/error-mapper';
 import { AbsoluteTimeComponent } from '../../shared/time/absolute-time.component';
 import { DashboardKpiComponent } from '../../shared/ui/dashboard/dashboard-kpi.component';
 import { DashboardMeterComponent } from '../../shared/ui/dashboard/dashboard-meter.component';
+import { retryWithDashboardFocus } from '../../shared/ui/dashboard/dashboard-retry-focus';
 import { DashboardWidgetComponent } from '../../shared/ui/dashboard/dashboard-widget.component';
 import {
   DataTableComponent,
@@ -166,8 +167,7 @@ export class OrgOverviewPage {
     return value ? (isApiRequestError(value) ? value.error : mapNetworkError()) : null;
   }
   protected retryRuns(summary: HTMLElement): void {
-    summary.focus();
-    this.store.runs.reload();
+    retryWithDashboardFocus(summary, () => this.store.runs.reload());
   }
   protected viewProject(name: string): string {
     return $localize`:@@orgoverview.view-project:View project ${name}:name:`;

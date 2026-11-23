@@ -177,6 +177,20 @@ describe('OrgOverviewPage', () => {
     expect(await harness.text()).not.toContain('No dashboard data is available');
   });
 
+  it.each([false, true])(
+    'shows one run-read error per project with decision access=%s',
+    async (canDecisions) => {
+      grants.set(new Set(['project:read', 'run:read', ...(canDecisions ? ['decision:read'] : [])]));
+      projects.listProjects.mockResolvedValue({ items: [project], next_cursor: null });
+      projects.listRuns.mockRejectedValue(new Error('offline'));
+      const fixture = TestBed.createComponent(OrgOverviewPage);
+      const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+      expect((await harness.text()).match(/Couldn’t load latest run\./g)).toHaveLength(1);
+      expect((await harness.text()).includes('Latest decision')).toBe(canDecisions);
+      expect(await harness.decisions()).toHaveLength(0);
+    },
+  );
+
   it('offers one retry for transient run failures and moves focus before replacing it', async () => {
     grants.set(new Set(['project:read', 'run:read', 'decision:read']));
     projects.listProjects.mockResolvedValue({
@@ -193,6 +207,8 @@ describe('OrgOverviewPage', () => {
     await buttons[0]?.focus();
     await buttons[0]?.click();
     expect(await (await harness.runSummary()).isFocused()).toBe(true);
+    expect(await (await harness.runSummary()).getAttribute('tabindex')).toBe('-1');
+    expect(await (await harness.runSummary()).getAttribute('aria-label')).toBeNull();
     expect(await harness.retryButtons()).toHaveLength(0);
     expect(await harness.decisions()).toHaveLength(2);
   });
