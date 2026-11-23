@@ -10,6 +10,10 @@ class ActivityHarness extends ComponentHarness {
   readonly view = this.locatorFor('button[aria-haspopup="dialog"]');
   readonly empty = this.locatorForOptional('app-empty-pattern');
   readonly loading = this.locatorForOptional('app-loading-pattern');
+  readonly titles = this.locatorForAll('app-dashboard-widget h2');
+  readonly table = this.locatorFor('app-data-table');
+  readonly tableRole = this.locatorFor('[role="table"]');
+  readonly caption = this.locatorFor('app-data-table > .caption');
   readonly emptyIcon = this.locatorFor('app-empty-pattern hlm-icon path');
 }
 class EventDialogHarness extends ComponentHarness {
@@ -54,5 +58,19 @@ describe('DashboardActivityComponent', () => {
     expect(await dialog.text()).toContain('system');
     fixture.componentRef.setInput('rows', []);
     expect(await root.getHarnessOrNull(EventDialogHarness)).toBeNull();
+  });
+  it('shows the title once and keeps the table caption for assistive tech only', async () => {
+    const fixture = TestBed.createComponent(DashboardActivityComponent);
+    fixture.componentRef.setInput('rows', [event]);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, ActivityHarness);
+    expect(await (await harness.table()).hasClass('[&>.caption]:sr-only')).toBe(true);
+    expect(await (await harness.caption()).text()).toBe('Organization activity');
+    expect(await (await harness.tableRole()).getAttribute('aria-labelledby')).toBe(
+      await (await harness.caption()).getAttribute('id'),
+    );
+    const titles = await harness.titles();
+    expect(await Promise.all(titles.map((title) => title.text()))).toEqual([
+      'Organization activity',
+    ]);
   });
 });
