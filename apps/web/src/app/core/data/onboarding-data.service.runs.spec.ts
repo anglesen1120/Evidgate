@@ -44,6 +44,16 @@ describe('OnboardingDataService (09.2.1-T1.1/T1.2)', () => {
     await expect(runs).resolves.toEqual(NO_RUNS);
   });
 
+  it('listRuns() cancels the read when the caller aborts it', async () => {
+    const controller = new AbortController();
+    const read = service.listRuns('p-1', {}, controller.signal);
+    await takeRequest(httpMock, `${API_BASE_URL}/projects/p-1/runs`);
+    controller.abort();
+    const rejection = await rejectionOf(read);
+    expect(rejection).toBeInstanceOf(DOMException);
+    expect((rejection as DOMException).name).toBe('AbortError');
+  });
+
   it('getRun() reads one run, which carries the evidence revision', async () => {
     const run = service.getRun('r-1');
     const request = await takeRequest(httpMock, `${API_BASE_URL}/runs/r-1`);

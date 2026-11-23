@@ -27315,6 +27315,7 @@
       <trans-unit id="project.dashboard.ai-used" datatype="html"><source><x id="used" equiv-text="used"/> of <x id="limit" equiv-text="limit"/> tokens used</source></trans-unit>
       <trans-unit id="shared.dashboard.trend-table" datatype="html"><source> View as table </source></trans-unit>
       <trans-unit id="shared.dashboard.trend-date" datatype="html"><source>Date (UTC)</source></trans-unit>
+      <trans-unit id="orgoverview.loading" datatype="html"><source>Loading</source></trans-unit>
 </body>
   </file>
 </xliff>

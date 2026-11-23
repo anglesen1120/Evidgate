@@ -31,6 +31,12 @@ describe('routeTemplate', () => {
     );
   });
 
+  it('keeps organization overview telemetry scoped to a route template', () => {
+    expect(routeTemplate(snapshot([null, '', 'orgs/:orgId', 'overview']))).toBe(
+      '/orgs/:orgId/overview',
+    );
+  });
+
   it('keeps a wildcard match as a wildcard', () => {
     expect(routeTemplate(snapshot(['', '**']))).toBe('/**');
     expect(routeTemplate(snapshot(['', 'projects/:projectId', '**']))).toBe(

@@ -92,8 +92,19 @@ export class OnboardingDataService {
    * keyset-orders it by `(created_at, id)` ascending, so a `limit: 1` read answers the oldest
    * project — the wizard's default resume target (plan §10 T1.1, decision (d)).
    */
-  listProjects(orgId: string, query: ProjectListQuery = {}): Promise<ProjectListResponse> {
-    return this.gateway.call((client) => listProjects({ client, path: { o: orgId }, query }));
+  listProjects(
+    orgId: string,
+    query: ProjectListQuery = {},
+    signal?: AbortSignal,
+  ): Promise<ProjectListResponse> {
+    return this.gateway.call((client) =>
+      listProjects({
+        client,
+        path: { o: orgId },
+        query,
+        ...(signal === undefined ? {} : { signal }),
+      }),
+    );
   }
 
   /**
@@ -188,8 +199,15 @@ export class OnboardingDataService {
    * One page of the project's runs (`GET /v1/projects/{p}/runs`), oldest first. A `limit: 1` read
    * answers the sample run of step 3.
    */
-  listRuns(projectId: string, query: RunListQuery = {}): Promise<RunPage> {
-    return this.gateway.call((client) => listRuns({ client, path: { p: projectId }, query }));
+  listRuns(projectId: string, query: RunListQuery = {}, signal?: AbortSignal): Promise<RunPage> {
+    return this.gateway.call((client) =>
+      listRuns({
+        client,
+        path: { p: projectId },
+        query,
+        ...(signal === undefined ? {} : { signal }),
+      }),
+    );
   }
 
   /** One run's state and current evidence revision (`GET /v1/runs/{r}`, step 4's input). */

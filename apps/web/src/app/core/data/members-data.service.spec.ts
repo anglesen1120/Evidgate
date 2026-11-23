@@ -213,6 +213,16 @@ describe('MembersDataService (09.7.1-T2)', () => {
     await expect(second).resolves.toEqual({ items: [], next_cursor: null });
   });
 
+  it('listMemberships() cancels the read when the caller aborts it', async () => {
+    const controller = new AbortController();
+    const read = service.listMemberships('o-1', undefined, 50, controller.signal);
+    await takeRequest(httpMock, MEMBERSHIPS_URL);
+    controller.abort();
+    const rejection = await rejected(read);
+    expect(rejection).toBeInstanceOf(DOMException);
+    expect((rejection as DOMException).name).toBe('AbortError');
+  });
+
   it('listMemberships() surfaces a 403 as the typed forbidden error, never a page', async () => {
     const page = service.listMemberships('other-tenant');
     const read = rejected(page);

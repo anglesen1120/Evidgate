@@ -1,0 +1,158 @@
+<app-page-header [title]="title" [description]="description()" />
+<ng-template #decisionCell let-row>
+  @if (row.runStatus === 'available') {
+    <app-decision-chip [decision]="row.run?.decision" />
+  } @else if (row.runStatus !== 'hidden' && row.runStatus !== 'error') {
+    <span>{{
+      row.runStatus === 'loading'
+        ? copy.loading
+        : row.runStatus === 'empty'
+          ? copy.noRuns
+          : copy.latestUnavailable
+    }}</span>
+  }
+</ng-template>
+<ng-template #timeCell let-row>
+  @if (row.run) {
+    <app-absolute-time [value]="row.run.created_at" />
+  } @else if (row.runStatus !== 'hidden') {
+    <span>{{
+      row.runStatus === 'loading'
+        ? copy.loading
+        : row.runStatus === 'error'
+          ? copy.runError
+          : row.runStatus === 'empty'
+            ? copy.noRuns
+            : copy.latestUnavailable
+    }}</span>
+  }
+</ng-template>
+<ng-template #viewCell let-row>
+  <a
+    hlmBtn
+    [variant]="'ghost'"
+    [routerLink]="['/orgs', store.org(), 'projects', row.project.id, 'overview']"
+    [attr.aria-label]="viewProject(row.project.name)"
+    i18n="@@orgoverview.view"
+    >View</a
+  >
+</ng-template>
+<div class="dashboard-grid">
+  @if (projectsVisible()) {
+    <app-dashboard-widget
+      class="projects"
+      [title]="copy.projects"
+      [description]="copy.projectsDescription"
+      [loading]="store.projects.isLoading()"
+      [error]="error(store.projects.error())"
+      [empty]="store.projects.hasValue() && store.projectRows().length === 0"
+      [emptyTitle]="copy.emptyProjects"
+      [emptyIcon]="'navGrid'"
+      (retry)="store.projects.reload()"
+    >
+      <section #runSummary data-run-summary [attr.tabindex]="-1">
+        <app-data-table
+          [rows]="store.projectRows()"
+          [columns]="columns()"
+          [rowId]="projectId"
+          [caption]="copy.projects"
+          [flow]="'page'"
+          [fitToContainer]="true"
+        />
+      </section>
+      @if (runErrors()) {
+        <button
+          hlmBtn
+          data-run-summary-retry
+          [variant]="'ghost'"
+          (click)="retryRuns(runSummary)"
+          i18n="@@orgoverview.retry-runs"
+        >
+          Retry run summaries
+        </button>
+      }
+      <p class="mt-3 text-sm text-muted-foreground">{{ projectCount() }}</p>
+      @if (runsVisible()) {
+        <p class="mt-2 text-sm text-muted-foreground" i18n="@@orgoverview.run-bound">
+          Latest run is available only when the bounded read contains every run (up to 50 per
+          project).
+        </p>
+      }
+    </app-dashboard-widget>
+  }
+  @if (membersVisible()) {
+    <app-dashboard-widget
+      class="members"
+      [title]="copy.members"
+      [loading]="store.members.isLoading()"
+      [error]="error(store.members.error())"
+      (retry)="store.members.reload()"
+    >
+      <div class="grid gap-4">
+        <app-dashboard-kpi [label]="copy.active" [value]="store.activeMembers()" />
+        <app-dashboard-kpi [label]="copy.pending" [value]="store.pendingInvites()" />
+      </div>
+      <p class="mt-4 text-sm text-muted-foreground">{{ memberContext() }}</p>
+    </app-dashboard-widget>
+  }
+  @if (usageVisible()) {
+    <app-dashboard-widget
+      class="usage"
+      [title]="copy.usage"
+      [loading]="store.usage.isLoading()"
+      [error]="error(store.usage.error())"
+      (retry)="store.usage.reload()"
+    >
+      @if (store.usage.hasValue()) {
+        <p class="mb-4 text-sm text-muted-foreground" i18n="@@orgoverview.period">
+          Period: {{ store.usage.value().period }}
+        </p>
+        @if (results(); as metric) {
+          <app-dashboard-meter
+            [label]="copy.results"
+            [value]="metric.used"
+            [maximum]="metric.limit"
+          >
+            <dl class="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 text-sm">
+              <dt>{{ copy.used }}</dt>
+              <dd class="text-end tabular-nums">
+                {{ metric.used === null ? copy.notMetered : (metric.used | number) }}
+              </dd>
+              <dt>{{ copy.limit }}</dt>
+              <dd class="text-end tabular-nums">
+                {{ metric.limit === null ? copy.unavailable : (metric.limit | number) }}
+              </dd>
+            </dl>
+          </app-dashboard-meter>
+        }
+        <div class="mt-5">
+          <app-dashboard-kpi
+            [label]="copy.ai"
+            [value]="store.aiUsage()?.used ?? null"
+            [unavailableLabel]="copy.notMetered"
+          />
+        </div>
+        <p class="mt-3 text-sm text-muted-foreground" i18n="@@orgoverview.ai-explanation">
+          Token usage is not a credit balance. Unavailable measurements are not zero.
+        </p>
+        @if (store.usage.value().metrics.length === 0) {
+          <p class="mt-3" i18n="@@orgoverview.empty-usage">No usage metrics returned.</p>
+        }
+      }
+    </app-dashboard-widget>
+  }
+  @if (activityVisible()) {
+    <app-dashboard-activity
+      class="activity"
+      [rows]="events()"
+      [loading]="store.activity.isLoading()"
+      [error]="error(store.activity.error())"
+      (retry)="store.activity.reload()"
+    />
+  }
+  @if (!anyWidgetVisible()) {
+    <p class="text-muted-foreground" i18n="@@orgoverview.no-access">
+      No dashboard data is available with your current permissions.
+    </p>
+  }
+</div>

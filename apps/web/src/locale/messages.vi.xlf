@@ -22880,6 +22880,7 @@
       <trans-unit id="project.dashboard.ai-used" datatype="html"><source><x id="used" equiv-text="used"/> of <x id="limit" equiv-text="limit"/> tokens used</source><target>Đã dùng <x id="used"/> trên <x id="limit"/> token</target></trans-unit>
       <trans-unit id="shared.dashboard.trend-table" datatype="html"><source> View as table </source><target>Xem dạng bảng</target></trans-unit>
       <trans-unit id="shared.dashboard.trend-date" datatype="html"><source>Date (UTC)</source><target>Ngày (UTC)</target></trans-unit>
+      <trans-unit id="orgoverview.loading" datatype="html"><source>Loading</source><target>Đang tải</target></trans-unit>
 </body>
   </file>
 </xliff>
