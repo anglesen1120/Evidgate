@@ -5142,6 +5142,76 @@
           <context context-type="linenumber">81</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="settings.members.role-viewer" datatype="html">
+        <source>Viewer</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-role-label.ts</context>
+          <context context-type="linenumber">7</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.role-qa-engineer" datatype="html">
+        <source>QA engineer</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-role-label.ts</context>
+          <context context-type="linenumber">9</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.role-test-maintainer" datatype="html">
+        <source>Test maintainer</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-role-label.ts</context>
+          <context context-type="linenumber">11</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.role-release-approver" datatype="html">
+        <source>Release approver</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-role-label.ts</context>
+          <context context-type="linenumber">13</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.role-tenant-admin" datatype="html">
+        <source>Tenant admin</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-role-label.ts</context>
+          <context context-type="linenumber">15</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.role-ci-producer" datatype="html">
+        <source>CI producer</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-role-label.ts</context>
+          <context context-type="linenumber">17</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.role-agent" datatype="html">
+        <source>Agent</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-role-label.ts</context>
+          <context context-type="linenumber">19</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.role-platform-operator" datatype="html">
+        <source>Platform operator</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-role-label.ts</context>
+          <context context-type="linenumber">21</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.role-billing-operator" datatype="html">
+        <source>Billing operator</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/member-role-label.ts</context>
+          <context context-type="linenumber">23</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="settings.members.preview-choose-role" datatype="html">
+        <source>Choose a role to see its scope.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/members/role-scope-preview.component.ts</context>
+          <context context-type="linenumber">51,58</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="settings.members.preview" datatype="html">
         <source>Role scope preview</source>
         <context-group purpose="location">
