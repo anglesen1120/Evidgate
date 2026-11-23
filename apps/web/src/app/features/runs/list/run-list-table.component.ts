@@ -148,8 +148,8 @@ export class RunListTableComponent {
       role: 'status',
       priority: 'primary',
       overflow: 'wrap',
-      // The badge label never wraps, so the column must fit it or the badge clips its text.
-      width: { min: 'max-content' },
+      // The badge label never wraps, so the floor must fit the longest one (vi) or the badge clips.
+      width: { min: 'calc(22ch + var(--eg-space-4) * 2)' },
       cellTemplate: this.evidenceCell(),
     },
     {
