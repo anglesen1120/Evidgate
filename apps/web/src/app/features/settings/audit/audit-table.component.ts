@@ -13,6 +13,7 @@ import type { AuditEntryDto } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmTooltip } from '@evidgate/ui/tooltip';
+import { auditActionLabel } from '../../../shared/audit/action-label';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import {
@@ -285,7 +286,7 @@ export class AuditTableComponent {
         priority: 'primary',
         overflow: 'truncate',
         width: ACTION_WIDTH,
-        cell: (row) => row.action,
+        cell: (row) => auditActionLabel(row.action),
       },
       {
         id: 'object',

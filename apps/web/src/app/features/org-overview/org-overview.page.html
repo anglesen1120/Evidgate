@@ -28,14 +28,14 @@
   }
 </ng-template>
 <ng-template #viewCell let-row>
-  <a
-    hlmBtn
-    [variant]="'ghost'"
-    [routerLink]="['/orgs', store.org(), 'projects', row.project.id, 'overview']"
+  <button
+    appRowAction
+    #projectTrigger
+    [label]="viewProject(row.project.name)"
     [attr.aria-label]="viewProject(row.project.name)"
-    i18n="@@orgoverview.view"
-    >View</a
-  >
+    [attr.aria-haspopup]="'dialog'"
+    (click)="inspectedProject.set({ row, trigger: projectTrigger.nativeElement })"
+  ></button>
 </ng-template>
 <div class="dashboard-grid">
   @if (projectsVisible()) {
@@ -143,7 +143,7 @@
             </dl>
           </app-dashboard-meter>
         }
-        <div class="mt-5">
+        <div class="mt-(--eg-space-5)" data-ai-usage>
           <app-dashboard-kpi
             [label]="copy.ai"
             [value]="store.aiUsage()?.used ?? null"
@@ -174,3 +174,53 @@
     </p>
   }
 </div>
+@if (inspectedProject(); as selection) {
+  <hlm-dialog
+    [state]="'open'"
+    [restoreFocus]="selection.trigger"
+    [autoFocus]="'first-heading'"
+    (closed)="inspectedProject.set(null)"
+  >
+    <hlm-dialog-content *hlmDialogPortal [size]="'md'">
+      <header hlmDialogHeader>
+        <h2 hlmDialogTitle i18n="@@orgoverview.project-details">Project details</h2>
+        <p hlmDialogDescription>
+          <bdi>{{ selection.row.project.name }}</bdi>
+        </p>
+      </header>
+      <dl class="hlm-field-grid">
+        <div class="hlm-field-wide">
+          <dt i18n="@@orgoverview.project-id">Project ID</dt>
+          <dd>
+            <app-copyable-identifier
+              [value]="selection.row.project.id"
+              [label]="copy.projects"
+              [truncate]="false"
+            />
+          </dd>
+        </div>
+        <div>
+          <dt i18n="@@orgoverview.project-name">Name</dt>
+          <dd>
+            <bdi>{{ selection.row.project.name }}</bdi>
+          </dd>
+        </div>
+        @if (selection.row.run; as run) {
+          <div>
+            <dt i18n="@@orgoverview.time-column">Latest run (UTC)</dt>
+            <dd><app-absolute-time [value]="run.created_at" /></dd>
+          </div>
+        }
+      </dl>
+      <footer hlmDialogFooter>
+        <a
+          hlmBtn
+          [variant]="'outline'"
+          [routerLink]="['/orgs', store.org(), 'projects', selection.row.project.id, 'overview']"
+          i18n="@@orgoverview.open-project"
+          >Open project</a
+        >
+      </footer>
+    </hlm-dialog-content>
+  </hlm-dialog>
+}

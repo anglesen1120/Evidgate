@@ -27316,6 +27316,13 @@
       <trans-unit id="shared.dashboard.trend-table" datatype="html"><source> View as table </source></trans-unit>
       <trans-unit id="shared.dashboard.trend-date" datatype="html"><source>Date (UTC)</source></trans-unit>
       <trans-unit id="orgoverview.loading" datatype="html"><source>Loading</source></trans-unit>
+      <trans-unit id="shared.audit.action.auth-login" datatype="html"><source>Signed in</source></trans-unit>
+      <trans-unit id="shared.audit.action.run-state-changed" datatype="html"><source>Run state changed</source></trans-unit>
+      <trans-unit id="shared.audit.action.policy-revision-create" datatype="html"><source>Policy revision created</source></trans-unit>
+      <trans-unit id="orgoverview.project-details" datatype="html"><source>Project details</source></trans-unit>
+      <trans-unit id="orgoverview.project-id" datatype="html"><source>Project ID</source></trans-unit>
+      <trans-unit id="orgoverview.project-name" datatype="html"><source>Name</source></trans-unit>
+      <trans-unit id="orgoverview.open-project" datatype="html"><source>Open project</source></trans-unit>
 </body>
   </file>
 </xliff>

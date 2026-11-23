@@ -36,28 +36,41 @@ for (const locale of LOCALES) {
         }));
         expect(metrics.scroll).toBeLessThanOrEqual(metrics.width);
         await expectNoA11yViolations(page, `org overview ${locale}/${theme}/${width}`);
-        await mkdir('/tmp/s674-shots', { recursive: true });
+        await mkdir('/tmp/s676-shots', { recursive: true });
         await page.screenshot({
-          path: `/tmp/s674-shots/org-${width}-${theme}-${locale}.png`,
+          path: `/tmp/s676-shots/org-after-${width}-${theme}-${locale}.png`,
           fullPage: true,
         });
-        const projectLink = main.locator('a[href*="/projects/"][href$="/overview"]').first();
-        await expect(projectLink).toBeVisible();
-        await expect(projectLink).toHaveAccessibleName(
+        const projectAction = main.locator('.projects button[appRowAction]').first();
+        await expect(projectAction).toBeVisible();
+        await expect(projectAction).toHaveAccessibleName(
           locale === 'vi' ? /Xem dự án / : /View project /,
         );
         for (const action of [
-          projectLink,
+          projectAction,
           main.locator('app-dashboard-activity button[aria-haspopup="dialog"]').first(),
         ]) {
-          expect(
-            await action.evaluate((element) => {
-              const text = document.createRange();
-              text.selectNodeContents(element);
-              return text.getClientRects().length;
-            }),
-          ).toBe(1);
+          const box = await action.boundingBox();
+          expect(box?.width).toBeGreaterThanOrEqual(24);
+          expect(box?.height).toBeGreaterThanOrEqual(24);
+          await expect(action.locator('hlm-icon')).toBeVisible();
+          await action.focus();
+          await expect(page.getByRole('tooltip')).toHaveText(
+            (await action.getAttribute('aria-label')) ?? '',
+          );
+          await action.press('Escape');
         }
+        await projectAction.click();
+        const dialog = page.getByRole('dialog');
+        await expect(dialog).toHaveAccessibleName(
+          locale === 'vi' ? 'Chi tiết dự án' : 'Project details',
+        );
+        await expect(
+          dialog.getByRole('link', { name: locale === 'vi' ? 'Mở dự án' : 'Open project' }),
+        ).toHaveAttribute('href', /\/projects\/[^/]+\/overview$/);
+        await dialog.press('Escape');
+        await expect(dialog).toBeHidden();
+        await expect(projectAction).toBeFocused();
       });
     }
   }
