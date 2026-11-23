@@ -170,6 +170,35 @@ for (const { width, locale } of WIDTHS.flatMap((width) =>
   });
 }
 
+for (const locale of ['en', 'vi'] as const) {
+  test(`attempts keep stacked blocks below 768px and align only desktop cells (${locale})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 767, height: 900 });
+    await openAttempts(page, locale);
+    const row = page.locator('app-attempts-table [data-attempt-row]').first();
+    const fields = row.locator('[role="rowheader"], [role="cell"]');
+    const headers = page.locator('app-attempts-table thead [role="columnheader"]');
+    await expect(fields).toHaveCount(5);
+    await expect(headers).toHaveCount(5);
+    for (const width of [767, 768, 767]) {
+      await page.setViewportSize({ width, height: 900 });
+      const stacked = width < 768;
+      await expect(row).toHaveCSS('display', stacked ? 'block' : 'table-row');
+      for (const field of await fields.all()) {
+        // Vertical alignment must not turn a stacked field back into a table cell.
+        await expect(field).toHaveCSS('display', stacked ? 'block' : 'table-cell');
+        if (!stacked) await expect(field).toHaveCSS('vertical-align', 'middle');
+      }
+      if (!stacked) {
+        for (const header of await headers.all()) {
+          await expect(header).toHaveCSS('vertical-align', 'top');
+        }
+      }
+    }
+  });
+}
+
 test('attempts layout flips between 767px and 768px on resize', async ({ page }) => {
   await seedStoredTheme(page, 'light');
   await page.setViewportSize({ width: STACKED_MAX, height: 900 });

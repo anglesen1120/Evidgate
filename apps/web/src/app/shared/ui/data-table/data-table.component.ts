@@ -171,7 +171,7 @@ export class DataTableComponent<T> {
     return rows.slice(start, start + this.pageSize);
   });
   protected readonly cellClasses =
-    'box-border min-w-0 h-[var(--eg-table-row)] px-[var(--eg-space-4)] py-[var(--eg-table-inset)] align-top whitespace-normal [overflow-wrap:anywhere] border-b border-border [&.numeric]:text-right [&.numeric]:tabular-nums';
+    'box-border min-w-0 h-[var(--eg-table-row)] px-[var(--eg-space-4)] py-[var(--eg-table-inset)] whitespace-normal [overflow-wrap:anywhere] border-b border-border [&.numeric]:text-right [&.numeric]:tabular-nums';
   protected readonly bodyCellClasses = computed(() =>
     hlm(this.cellClasses, this.virtual() ? 'py-0 border-b-0 shadow-sm' : ''),
   );

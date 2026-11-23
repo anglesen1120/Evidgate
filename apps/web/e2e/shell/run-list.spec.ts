@@ -1,6 +1,5 @@
 // 09.3.1-T1: real Chromium, fixture corpus, both locale bundles and theme token sets.
 // Cursor fixtures are selected by listRuns' catalog cursor key, never an offset.
-//
 // The `runs` entry is phase G2, so this G1 build does not match the product address
 // (`/orgs/:orgId/projects/:projectId/runs`) and the wildcard renders the not-found pattern. Only
 // the dev-routes file-replacement seam mounts the real page, at
@@ -18,7 +17,7 @@ import runListPage2 from '../../../../fixtures/web-api/run-list-page-2/input.jso
 import runListUnavailable from '../../../../fixtures/web-api/run-list-unavailable/input.json';
 import type { FixtureCallRecord } from '../../src/app/core/dev-fixtures/fixture-request-log';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
-import { openRunFilters, RUN_RECORDS } from './run-list.support';
+import { expectCenteredRunIdentity, openRunFilters, RUN_RECORDS } from './run-list.support';
 import {
   localePath,
   LOCALES,
@@ -89,6 +88,7 @@ for (const locale of LOCALES) {
     await expect(page.locator(ROWS)).toHaveCount(runList.body.items.length);
     await expect(page.locator('app-run-list-page h1')).toHaveCount(1);
     await expect(page.locator('app-run-list-table [role="columnheader"]')).toHaveCount(7);
+    await expect(page.locator(`${ROWS} td`).first()).toHaveCSS('vertical-align', 'middle');
     await expect(page.locator(`${ROWS} [data-run-evidence] .status-pill--neutral`)).toHaveCount(
       runList.body.items.length,
     );
@@ -336,9 +336,10 @@ for (const locale of LOCALES) {
             (await row.getAttribute('data-row-id')) ?? '',
           );
         } else {
+          await expectCenteredRunIdentity(row);
           const geometry = await row.evaluate((element) => {
             const cell = element.querySelector<HTMLElement>('.identifier');
-            const id = cell?.querySelector('a');
+            const id = cell?.querySelector('a > span');
             const header = element.closest('[role="table"]')?.querySelector('thead tr');
             if (!cell || !id || !header) throw new Error('Run table geometry is unavailable');
             const tableCell = cell.closest('td');

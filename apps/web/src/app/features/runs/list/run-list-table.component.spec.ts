@@ -83,8 +83,8 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
       root.querySelector('[data-run-row] [data-run-created] time')?.getAttribute('datetime'),
     ).toBe(run(1).created_at);
     const identity = root.querySelector('[data-run-row] a');
-    expect(identity?.textContent?.trim()).toBe('018f0000…00000001');
-    expect(identity?.getAttribute('aria-label')).toContain(run(1).run_id);
+    expect(identity?.querySelector('span')?.textContent?.trim()).toBe('018f0000…00000001');
+    expect(identity?.textContent).toContain(run(1).run_id);
   });
   it('keeps the empty table verdict-free with only the header row counted', async () => {
     const { root } = await render([]);
@@ -102,8 +102,11 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     expect(view?.getAttribute('aria-label')).toBe(`View ${run(1).run_id}`);
     expect(view?.classList.contains('whitespace-nowrap')).toBe(true);
     expect(view?.getAttribute('href')).toBe(link.getAttribute('href'));
-    expect(link.textContent).toContain(run(1).run_id.slice(0, 8));
-    expect(link.getAttribute('aria-label')).toBe(`${link.textContent?.trim()} (${run(1).run_id})`);
+    const preview = link.querySelector('span')?.textContent?.trim();
+    expect(preview).toContain(run(1).run_id.slice(0, 8));
+    expect(link.getAttribute('aria-label')).toBeNull();
+    expect(link.querySelector('time')?.getAttribute('datetime')).toBe(run(1).created_at);
+    expect(link.textContent?.trim().endsWith(`(${run(1).run_id})`)).toBe(true);
     expect(link.classList.contains('whitespace-nowrap')).toBe(true);
     expect(link.closest('.identifier')?.classList.contains('min-w-max')).toBe(true);
   });
@@ -140,9 +143,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     ]);
     expect(root.querySelector('app-outcome-pill')).toBeNull();
     expect(root.querySelector('time')?.getAttribute('datetime')).toBe('2026-10-27T00:00:00Z');
-    expect(root.querySelector('[data-run-row] a')?.getAttribute('aria-label')).toContain(
-      run(1).run_id,
-    );
+    expect(root.querySelector('[data-run-row] a')?.textContent).toContain(run(1).run_id);
     expect(root.querySelectorAll('[data-run-decision] [data-tone="pending"]')).toHaveLength(1);
     expect(root.querySelectorAll('[data-run-decision] [data-tone="neutral"]')).toHaveLength(1);
     expect(root.querySelector('[data-run-decision] .verdict__detail')?.textContent?.trim()).toBe(
