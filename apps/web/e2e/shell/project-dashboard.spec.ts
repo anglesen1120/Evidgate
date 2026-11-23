@@ -36,19 +36,7 @@ for (const locale of LOCALES) {
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
         ).toBe(true);
-        expect(
-          await page
-            .locator('.trend-stack')
-            .evaluateAll((stacks) =>
-              stacks.every((stack) =>
-                Array.from(stack.querySelectorAll('[data-segment]')).every(
-                  (segment) =>
-                    segment.getBoundingClientRect().bottom <=
-                    stack.getBoundingClientRect().bottom + 0.5,
-                ),
-              ),
-            ),
-        ).toBe(true);
+        expect(await page.locator('.trend-stack').evaluateAll(fullHeightStacksFit)).toBe(true);
         await expectNoA11yViolations(page, `project dashboard ${locale} ${theme} ${width}`);
         await mkdir('/tmp/s674-shots', { recursive: true });
         await page.screenshot({
@@ -125,19 +113,13 @@ test('500 sampled dates stay legible and keyboard-scrollable at 390px', async ({
         (column) => column.getBoundingClientRect().width,
       ),
     ),
-    fitsStack: Array.from(element.querySelectorAll('.trend-stack')).every((stack) =>
-      Array.from(stack.querySelectorAll('[data-segment]')).every(
-        (segment) =>
-          segment.getBoundingClientRect().bottom <= stack.getBoundingClientRect().bottom + 0.5,
-      ),
-    ),
     positiveOnly: Array.from(element.querySelectorAll('[data-segment]')).every(
       (segment) => segment.getBoundingClientRect().height > 0,
     ),
   }));
   expect(geometry.scrollable).toBe(true);
   expect(geometry.minimumWidth).toBeGreaterThanOrEqual(64);
-  expect(geometry.fitsStack).toBe(true);
+  expect(await region.locator('.trend-stack').evaluateAll(fullHeightStacksFit)).toBe(true);
   expect(geometry.positiveOnly).toBe(true);
   await region.focus();
   await expect(region).toBeFocused();
@@ -150,3 +132,20 @@ test('500 sampled dates stay legible and keyboard-scrollable at 390px', async ({
   await page.locator('[data-dashboard-trend] summary').click();
   await expect(page.locator('[data-dashboard-trend] table')).toBeVisible();
 });
+
+function fullHeightStacksFit(stacks: Element[]): boolean {
+  return stacks.every((stack) => {
+    const bounds = stack.getBoundingClientRect();
+    const segments = Array.from(stack.querySelectorAll('[data-segment]'), (segment) =>
+      segment.getBoundingClientRect(),
+    );
+    // Both fixtures fill every date to the maximum total; gaps must not shrink their evidence.
+    return (
+      segments.every(
+        (segment) => segment.top >= bounds.top - 0.5 && segment.bottom <= bounds.bottom + 0.5,
+      ) &&
+      Math.abs(segments.reduce((height, segment) => height + segment.height, 0) - bounds.height) <=
+        1
+    );
+  });
+}
