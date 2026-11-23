@@ -16,52 +16,10 @@ import { AiSettingsStore } from './ai-settings.store';
 import headDocument from '../../../../../../../fixtures/web-api/ai-settings-head/input.json';
 import versionDocument from '../../../../../../../fixtures/web-api/ai-settings-version-1/input.json';
 import templatesDocument from '../../../../../../../fixtures/web-api/ai-settings-templates/input.json';
+import { SettingsHarness } from './ai-settings.testing';
 
 provideLayoutTestStubs();
 
-class SettingsHarness extends ComponentHarness {
-  static hostSelector = 'app-ai-settings-page';
-  readonly saveButton = this.locatorFor('[data-ai-save]');
-  readonly retryButton = this.locatorFor('app-retry-after button');
-  readonly dialog = this.documentRootLocatorFactory().locatorForOptional('[role="dialog"]');
-  readonly dialogTitle = this.documentRootLocatorFactory().locatorFor('[role="dialog"] h2');
-  readonly dialogContent = this.documentRootLocatorFactory().locatorFor('hlm-dialog-content');
-  readonly dialogSubject = this.documentRootLocatorFactory().locatorFor('[hlmDialogSubject]');
-  readonly dialogStatusIcon = this.documentRootLocatorFactory().locatorFor('[hlmDialogStatusIcon]');
-  readonly view = this.locatorFor('[data-ai-version-view]');
-  readonly settingsTab = this.locatorFor('[role="tab"]:first-child');
-  readonly historyTab = this.locatorFor('[data-ai-history-tab]');
-  async attribute(selector: string, name: string) {
-    return (await this.locatorFor(selector)()).getAttribute(name);
-  }
-  async count(selector: string) {
-    return (await this.locatorForAll(selector)()).length;
-  }
-  async accessibleLabel(selector: string) {
-    const id = await this.attribute(selector, 'aria-labelledby');
-    return (await this.locatorFor('#' + id)()).text();
-  }
-  async fill(key: string, value: string) {
-    const field = await this.locatorFor('#ai-' + key)();
-    await field.setInputValue(value);
-    await field.dispatchEvent('input');
-    await field.dispatchEvent('blur');
-  }
-  async value(key: string) {
-    return (await this.locatorFor('#ai-' + key)()).getProperty<string>('value');
-  }
-  async click(selector: string) {
-    await (await this.locatorFor(selector)()).click();
-  }
-  async compose(key: string, active: boolean) {
-    await (
-      await this.locatorFor('#ai-' + key)()
-    ).dispatchEvent(active ? 'compositionstart' : 'compositionend');
-  }
-  async text() {
-    return (await this.host()).text();
-  }
-}
 describe('AiSettingsPage', () => {
   const head = headDocument.body as AiSettingsView;
   const version = versionDocument.body as AiSettingsVersion;
@@ -176,15 +134,20 @@ describe('AiSettingsPage', () => {
     expect(await harness.value('writing_style')).toBe('Retained writing draft');
     expect(await harness.text()).toContain('draft');
   });
-  it('explains a disabled Save without project write', async () => {
+  it('explains a disabled Save and omits the first-version action without project write', async () => {
     writable.set(false);
+    data.versions.mockResolvedValue({ items: [], next_cursor: null });
     const { harness } = await mount();
     expect(await (await harness.saveButton()).getProperty<boolean>('disabled')).toBe(true);
     expect(await harness.text()).toContain('project:write');
+    await harness.click('[data-ai-history-tab]');
+    expect(await harness.count('app-ai-settings-history app-empty-pattern button')).toBe(0);
   });
   it('renders version list and immutable detail from the detail fetch', async () => {
     const { harness } = await mount();
     await harness.click('[data-ai-history-tab]');
+    expect(await harness.count('#ai-compare-reason')).toBe(0);
+    expect(await harness.count('[aria-describedby="ai-compare-reason"]')).toBe(0);
     await harness.click('[data-ai-inspect]');
     expect(await harness.text()).toContain(version.settings.writing_style);
     expect(data.version).toHaveBeenCalledWith('p1', 1, expect.any(AbortSignal));
@@ -223,6 +186,7 @@ describe('AiSettingsPage', () => {
     });
     const { harness } = await mount();
     await harness.click('[data-ai-history-tab]');
+    expect(await harness.count('#ai-compare-reason')).toBe(1);
     await harness.click('[data-ai-inspect]');
     await harness.click('[data-ai-version-view="1"]');
     expect(await (await harness.dialog())?.text()).toContain(version.settings.writing_style);
@@ -316,12 +280,35 @@ describe('AiSettingsPage', () => {
     await harness.click('[data-ai-history-tab]');
     await harness.fill('history-filter', 'No matching fixture reason');
     expect(await harness.text()).toContain('No loaded versions match this filter');
+    expect(await harness.count('app-ai-settings-history app-data-table')).toBe(0);
+    expect(await harness.count('app-ai-settings-history app-empty-pattern button')).toBe(0);
   });
-  it('renders the empty history state', async () => {
-    data.versions.mockResolvedValue({ items: [], next_cursor: null });
+  it('keeps paging available instead of offering to create a first version on an empty cursor page', async () => {
+    data.versions.mockResolvedValue({ items: [], next_cursor: 'x' });
     const { harness } = await mount();
     await harness.click('[data-ai-history-tab]');
+    expect(await (await harness.emptyTitle()).text()).toBe('No versions on this page');
+    expect(await harness.count('app-ai-settings-history app-empty-pattern :is(button, a)')).toBe(0);
+    const next = await harness.nextHistoryPage();
+    expect(await next.getProperty<boolean>('disabled')).toBe(false);
+    await next.click();
+    expect(data.versions).toHaveBeenCalledWith('p1', { limit: 50, cursor: 'x' }, expect.anything());
+  });
+  it('offers one empty state that returns focus to Settings without discarding the draft', async () => {
+    data.versions.mockResolvedValue({ items: [], next_cursor: null });
+    const { harness } = await mount();
+    await harness.fill('writing_style', 'First version draft');
+    await harness.click('[data-ai-history-tab]');
     expect(await harness.text()).toContain('No saved settings versions');
+    expect(await harness.count('app-ai-settings-history app-empty-pattern')).toBe(1);
+    expect(await harness.count('app-ai-settings-history app-data-table')).toBe(0);
+    expect(await harness.count('#ai-compare-reason')).toBe(0);
+    await harness.click('app-ai-settings-history app-empty-pattern button');
+    const settings = await harness.settingsTab();
+    expect(await settings.getAttribute('aria-selected')).toBe('true');
+    expect(await settings.isFocused()).toBe(true);
+    expect(await harness.value('writing_style')).toBe('First version draft');
+    expect(data.save).not.toHaveBeenCalled();
   });
   it('reuses the same idempotency key when retrying an unchanged failed intent', async () => {
     data.save.mockRejectedValue(

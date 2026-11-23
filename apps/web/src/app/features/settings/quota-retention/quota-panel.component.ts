@@ -134,7 +134,6 @@ export class QuotaPanelComponent {
     warnedAt: $localize`:@@quota.panel.warned-at:Warning recorded`,
     blockedAt: $localize`:@@quota.panel.blocked-at:Block recorded`,
     project: $localize`:@@quota.panel.project:Project`,
-    projects: $localize`:@@quota.panel.projects:Per project`,
     projectCaption: $localize`:@@quota.panel.project-caption:Returned project counters. Organization totals are supplied separately, not calculated from these rows.`,
     recordedState: $localize`:@@quota.panel.recorded-state:Recorded quota state`,
     metric: $localize`:@@quota.panel.metric:Metric`,

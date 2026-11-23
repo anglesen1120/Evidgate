@@ -6117,11 +6117,11 @@
           <context context-type="linenumber">102</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="quota.panel.projects" datatype="html">
-        <source>Per project</source>
+      <trans-unit id="quota.panel.metric-by-project" datatype="html">
+        <source> <x id="INTERPOLATION" equiv-text="{{ metricLabel(metric.metric) }}"/> by project </source>
         <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.ts</context>
-          <context context-type="linenumber">103</context>
+          <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.html</context>
+          <context context-type="linenumber">155,156</context>
         </context-group>
       </trans-unit>
       <trans-unit id="quota.panel.project-caption" datatype="html">
@@ -9784,6 +9784,10 @@
       <trans-unit id="authoring.ai-settings.pages" datatype="html"><source>Version history pages</source></trans-unit>
       <trans-unit id="authoring.ai-settings.no-match" datatype="html"><source>No loaded versions match this filter</source></trans-unit>
       <trans-unit id="authoring.ai-settings.empty-history" datatype="html"><source>No saved settings versions</source></trans-unit>
+      <trans-unit id="authoring.ai-settings.saved-versions" datatype="html"><source>Saved settings versions</source></trans-unit>
+      <trans-unit id="authoring.ai-settings.empty-page" datatype="html"><source>No versions on this page</source></trans-unit>
+      <trans-unit id="authoring.ai-settings.open-settings" datatype="html"><source>Open AI settings</source></trans-unit>
+      <trans-unit id="authoring.ai-settings.first-version-help" datatype="html"><source>Save your settings to create the first version.</source></trans-unit>
       <trans-unit id="authoring.ai-settings.version-column" datatype="html"><source>Version</source></trans-unit>
       <trans-unit id="authoring.ai-settings.reason-column" datatype="html"><source>Reason</source></trans-unit>
       <trans-unit id="authoring.ai-settings.not-set" datatype="html"><source>Not set</source></trans-unit>
