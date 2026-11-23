@@ -33,6 +33,7 @@ import { BrnTooltip } from '@spartan-ng/brain/tooltip';
 export class RowActionComponent {
   private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly tooltip = inject(BrnTooltip);
+  readonly nativeElement = this.element.nativeElement;
   protected readonly classes = buttonVariants({ variant: 'ghost', size: 'icon-sm' });
   protected readonly isButton = this.element.nativeElement.tagName === 'BUTTON';
   readonly icon = input<HlmIconName>('lucideEye');

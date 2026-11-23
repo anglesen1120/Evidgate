@@ -16,11 +16,12 @@ import { RowActionComponent } from './row-action.component';
   template: `
     <button
       appRowAction
+      #trigger
       [label]="label()"
       [attr.aria-label]="label()"
       [disabled]="disabled()"
       [tone]="tone()"
-      (click)="clicks = clicks + 1"
+      (click)="clicks = clicks + 1; opener = trigger.nativeElement"
     ></button>
     <a appRowAction href="/projects" [label]="label()" [attr.aria-label]="label()"></a>
   `,
@@ -30,6 +31,7 @@ class Host {
   readonly disabled = signal(false);
   readonly tone = signal<'neutral' | 'danger'>('neutral');
   clicks = 0;
+  opener: HTMLElement | null = null;
 }
 
 class ActionHarness extends ComponentHarness {
@@ -122,6 +124,14 @@ describe('RowActionComponent', () => {
     expect(await action.disabled()).toBe(true);
     await action.click();
     expect(host.clicks).toBe(0);
+  });
+
+  it('exposes the native opener from template references for focus restoration', async () => {
+    const { action, host } = await setup();
+    await action.click();
+    expect(host.opener?.tagName).toBe('BUTTON');
+    host.opener?.focus();
+    expect(await action.focused()).toBe(true);
   });
 
   it('preserves anchor navigation semantics and the same contextual icon recipe', async () => {
