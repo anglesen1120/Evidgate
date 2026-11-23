@@ -1,7 +1,8 @@
 // State sheet: docs/design/web/layout.md#open-points--hand-overs
 // Dense table contract: docs/design/web/layout.md#dense-table-rules
-import { provideZonelessChangeDetection } from '@angular/core';
+import { provideZonelessChangeDetection, ViewContainerRef } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { HlmBadge } from '@evidgate/ui/badge';
 
 import type { Mock } from 'vitest';
 import { DataTableValueComponent } from './data-table-value.component';
@@ -141,6 +142,32 @@ describe('DataTableValueComponent', () => {
     expect(hide).toHaveBeenCalledTimes(3);
   });
 
+  it.each(['cell', 'badge'])(
+    'one Escape dismisses both panels with focus on the %s',
+    async (focused) => {
+      await clip();
+      const container = fixture.componentRef.injector.get(ViewContainerRef);
+      const badgeRef = container.createComponent(HlmBadge);
+      badgeRef.setInput('fullValue', 'Full evidence label');
+      await fixture.whenStable();
+      const badge = badgeRef.location.nativeElement as HTMLElement;
+      const [active, hovered] = focused === 'cell' ? [value, badge] : [badge, value];
+      const panels = [root.querySelector('[popover]'), badge.querySelector('[popover]')];
+      active.focus();
+      hovered.dispatchEvent(new MouseEvent('mouseenter'));
+      expect(show.mock.contexts).toEqual(expect.arrayContaining(panels));
+      const parentEscape = vi.fn();
+      active.parentElement!.addEventListener('keydown', parentEscape, { once: true });
+      active.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      active.parentElement!.removeEventListener('keydown', parentEscape);
+      await fixture.whenStable();
+      expect(hide.mock.contexts).toEqual(expect.arrayContaining(panels));
+      expect(value.getAttribute('aria-expanded')).toBe('false');
+      expect(document.activeElement).toBe(active);
+      expect(parentEscape).not.toHaveBeenCalled();
+    },
+  );
+
   it('R4: remeasures after resize and removes tooltip/tabstop when clipping disappears', async () => {
     await clip();
     value.dispatchEvent(new MouseEvent('click'));
@@ -150,6 +177,31 @@ describe('DataTableValueComponent', () => {
     expect(value.hasAttribute('tabindex')).toBe(false);
     expect(root.querySelector('[popover]')).toBeNull();
     expect(hide).toHaveBeenCalled();
+  });
+
+  it('follows a scrolling trigger and dismisses once it leaves the scrollport', async () => {
+    await clip();
+    vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(390);
+    vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(800);
+    vi.spyOn(root, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 100, 390, 300));
+    const anchor = vi
+      .spyOn(value, 'getBoundingClientRect')
+      .mockReturnValue(new DOMRect(300, 120, 50, 30));
+    const panel = root.querySelector<HTMLElement>('[popover]')!;
+    vi.spyOn(panel, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 140, 60));
+    value.click();
+    expect(panel.style.left).toBe('250px');
+    expect(panel.style.top).toBe('150px');
+    panel.dispatchEvent(new Event('scroll'));
+    anchor.mockReturnValue(new DOMRect(300, 110, 50, 30));
+    root.dispatchEvent(new Event('scroll'));
+    expect(panel.style.top).toBe('140px');
+    expect(hide).not.toHaveBeenCalled();
+    anchor.mockReturnValue(new DOMRect(300, 60, 50, 30));
+    root.dispatchEvent(new Event('scroll'));
+    await fixture.whenStable();
+    expect(hide).toHaveBeenCalledOnce();
+    expect(value.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('R4: dismisses a recycled clipped value and resets its text and open state', async () => {

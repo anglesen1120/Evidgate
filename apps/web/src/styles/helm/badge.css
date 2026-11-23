@@ -30,13 +30,11 @@
   }
 
   .spartan-badge__full-value {
-    @apply box-border m-auto overflow-auto;
+    @apply box-border overflow-auto;
     background: var(--eg-surface);
     color: var(--eg-text);
     border: var(--eg-border-width) solid var(--eg-border-control);
     border-radius: var(--eg-radius-md);
-    max-inline-size: calc(100% - var(--eg-space-5) * 2);
-    max-block-size: calc(100% - var(--eg-space-5) * 2);
     padding: var(--eg-space-4);
     font-size: var(--eg-text-sm);
     line-height: var(--eg-leading-sm);
