@@ -54,7 +54,10 @@ export const ENUM_MEMBERS = new Map([
   ['reasons', MISSING_CODES],
   // The create-run dialog's ref kind select and the `ref.trigger_event` it sends name the
   // contract's closed vocabularies, so those words occur in production too (`pull_request`).
-  ['kind', new Set(['branch', 'tag', 'pull_request'])],
+  // `kind` also names the authoring tree node kind: `enum: [module, feature, category,
+  // sub_category]` of NodeDto (and its sibling node schemas) in contracts/openapi.yaml (~14031); the feature tree
+  // page compares it, so production code carries `sub_category`.
+  ['kind', new Set(['branch', 'tag', 'pull_request', 'sub_category'])],
   ['trigger_event', new Set(['push', 'pull_request', 'schedule', 'manual', 'dispatch'])],
   // The security view renders the closed SecurityEventItem.type vocabulary, so these protocol
   // words occur in production too; an unlisted type remains fixture data.

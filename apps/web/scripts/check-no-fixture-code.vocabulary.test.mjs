@@ -159,3 +159,13 @@ test('a built-in role name under another member is still a leak', async () => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Tenant admin/);
 });
+
+test('sub_category is exempt under kind, another kind word is still a leak', async () => {
+  const exempt = await gate({ body: { kind: 'sub_category' } }, 'sub_category');
+  assert.equal(exempt.status, 0, exempt.stderr);
+  const other = await gate({ body: { kind: 'fixture_only_kind' } }, 'fixture_only_kind');
+  assert.equal(other.status, 1);
+  assert.match(other.stderr, /fixture_only_kind/);
+  const elsewhere = await gate({ body: { title: 'sub_category' } }, 'sub_category');
+  assert.equal(elsewhere.status, 1);
+});
