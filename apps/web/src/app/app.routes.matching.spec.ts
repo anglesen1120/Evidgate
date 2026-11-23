@@ -143,7 +143,10 @@ describe('App routes (09.1.1-T4.1)', () => {
     await harness.navigateByUrl('/');
 
     expect(TestBed.inject(Router).url).toBe(`/orgs/${ORG.id}/projects/${PROJECT.id}/overview`);
-    expect(document.querySelector('h1')?.textContent?.trim()).toBe(PROJECT.name);
+    expect(document.querySelector('h1')?.textContent?.trim()).toBe('Project overview');
+    expect(document.querySelector('app-page-header .header-description')?.textContent).toContain(
+      PROJECT.name,
+    );
   });
 
   it('keeps the overview URL and selected project in sync when Home redirects back to it', async () => {

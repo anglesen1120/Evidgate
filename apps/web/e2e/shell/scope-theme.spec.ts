@@ -27,7 +27,10 @@ test.describe('scope switcher (AC4)', () => {
     // `project:read` is not in the default corpus session, so the project screen is reached through
     // the trimmed variant, which grants it.
     await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
-    await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
+    await expect(page.locator('#main-content h1')).toHaveText('Project overview');
+    await expect(page.locator('app-page-header .header-description')).toContainText(
+      'Storefront web',
+    );
 
     const projectSelect = scopeControl(page, 1);
     await expect(projectSelect).toBeEnabled();
@@ -39,7 +42,8 @@ test.describe('scope switcher (AC4)', () => {
       .toBe(`/en/orgs/${ORG_ACME}/projects/${PROJECT_CHECKOUT}/overview`);
     // The segment after the project id is preserved, not reset to the entry route: the visitor
     // keeps reading the same screen of another project.
-    await expect(page.locator('#main-content h1')).toHaveText('Checkout API');
+    await expect(page.locator('#main-content h1')).toHaveText('Project overview');
+    await expect(page.locator('app-page-header .header-description')).toContainText('Checkout API');
     // And the fixture variant that selected this session is still on the URL, because the switcher
     // rewrites segments of the current URL rather than building a new one.
     expect(new URL(page.url()).searchParams.get('fixture.variant.listPermissions')).toBe('limited');
@@ -47,7 +51,8 @@ test.describe('scope switcher (AC4)', () => {
     await page.locator('a.brand').click();
     await expect(page).toHaveURL(new RegExp(`/projects/${PROJECT_CHECKOUT}/overview$`));
     await expectScopeValue(projectSelect, PROJECT_CHECKOUT);
-    await expect(page.locator('#main-content h1')).toHaveText('Checkout API');
+    await expect(page.locator('#main-content h1')).toHaveText('Project overview');
+    await expect(page.locator('app-page-header .header-description')).toContainText('Checkout API');
   });
 
   test('choosing a project from an org-scope route opens its project screen', async ({ page }) => {

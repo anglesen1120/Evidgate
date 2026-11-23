@@ -33,6 +33,21 @@ for (const locale of LOCALES) {
         );
         expect(wrapped).toBe(false);
         await expect(page.locator('app-project-overview h1')).toHaveCount(1);
+        await expect(page.locator('app-project-overview h1')).toHaveText(
+          locale === 'vi' ? 'Tổng quan dự án' : 'Project overview',
+        );
+        await expect(page.locator('app-project-overview app-page-header hlm-icon')).toBeVisible();
+        await expect(page.locator('[data-dashboard-incidents]')).toContainText(
+          locale === 'vi' ? 'Chưa khả dụng' : 'Not available yet',
+        );
+        await expect(
+          page.locator(
+            '[data-dashboard-incidents] button, [data-dashboard-incidents] app-error-pattern',
+          ),
+        ).toHaveCount(0);
+        await expect(page.locator('[data-dashboard-kpis] app-dashboard-kpi hlm-icon')).toHaveCount(
+          5,
+        );
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
         ).toBe(true);
@@ -147,6 +162,34 @@ test('500 sampled dates stay legible and keyboard-scrollable at 390px', async ({
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.locator('[data-dashboard-trend] summary').click();
   await expect(page.locator('[data-dashboard-trend] table')).toBeVisible();
+});
+
+test('decision bars share a bottom baseline and scale heights to run counts', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(overviewPath('en') + FIXTURE + '&fixture.variant.listRuns=dashboard-unequal');
+  const columns = page.locator('[data-dashboard-trend] .trend-column');
+  await expect(columns).toHaveCount(2);
+  const geometry = await columns.evaluateAll((elements) =>
+    elements.map((element) => {
+      const segments = Array.from(element.querySelectorAll('[data-segment]'), (segment) =>
+        segment.getBoundingClientRect(),
+      );
+      return {
+        top: Math.min(...segments.map((segment) => segment.top)),
+        bottom: Math.max(...segments.map((segment) => segment.bottom)),
+        height: segments.reduce((sum, segment) => sum + segment.height, 0),
+      };
+    }),
+  );
+  const [three, one] = geometry;
+  expect(three).toBeDefined();
+  expect(one).toBeDefined();
+  if (!three || !one) throw new Error('The unequal-count fixture must render two dates.');
+  expect(Math.abs(three.bottom - one.bottom)).toBeLessThan(1);
+  expect(three.height).toBeGreaterThan(100);
+  expect(Math.abs(three.height / one.height - 3)).toBeLessThan(0.05);
+  expect(one.top).toBeGreaterThan(three.top);
+  await expect(page.locator('[data-dashboard-trend] .trend-total')).toHaveText(['3', '1']);
 });
 
 function fullHeightStacksFit(stacks: Element[]): boolean {

@@ -13,6 +13,9 @@ class DashboardHarness extends ComponentHarness {
   readonly retry = this.locatorFor('button');
   readonly meter = this.locatorForOptional('meter');
   readonly bars = this.locatorForAll('.trend-stack [data-segment]');
+  readonly stacks = this.locatorForAll('.trend-segments');
+  readonly totals = this.locatorForAll('.trend-total');
+  readonly kpiIcon = this.locatorForOptional('h3 hlm-icon');
   readonly scrollRegion = this.locatorFor('[role="region"]');
   readonly loading = this.locatorForOptional('app-loading-pattern');
   readonly empty = this.locatorForOptional('app-empty-pattern');
@@ -81,6 +84,21 @@ describe('Dashboard primitives', () => {
     expect(await harness.text()).toContain('50%');
   });
 
+  it('only renders a decorative KPI icon on request and keeps its default tone neutral', async () => {
+    const fixture = TestBed.createComponent(DashboardKpiComponent);
+    fixture.componentRef.setInput('label', 'Recent runs');
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, DashboardHarness);
+    expect(await harness.kpiIcon()).toBeNull();
+    fixture.componentRef.setInput('icon', 'navRun');
+    const icon = await harness.kpiIcon();
+    expect(await icon?.getAttribute('aria-hidden')).toBe('true');
+    expect(await icon?.hasClass('text-[var(--eg-neutral-fg)]')).toBe(true);
+    fixture.componentRef.setInput('tone', 'danger');
+    const dangerIcon = await harness.kpiIcon();
+    expect(await dangerIcon?.hasClass('text-[var(--eg-danger-fg)]')).toBe(true);
+    expect(await dangerIcon?.hasClass('text-[var(--eg-neutral-fg)]')).toBe(false);
+  });
+
   it('does not draw a quota ratio with an unknown or zero limit', async () => {
     const fixture = TestBed.createComponent(DashboardMeterComponent);
     fixture.componentRef.setInput('label', 'AI credit');
@@ -123,5 +141,40 @@ describe('Dashboard primitives', () => {
     expect(await region.getAttribute('tabindex')).toBe('0');
     expect(await region.getAttribute('aria-label')).toBe('Recent decisions');
     expect(await segments[0]?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('scales dated stacks against the largest total and labels zero without drawing a bar', async () => {
+    const fixture = TestBed.createComponent(DecisionTrendComponent);
+    fixture.componentRef.setInput('label', 'Recent decisions');
+    fixture.componentRef.setInput(
+      'points',
+      [
+        [0, 0],
+        [3, 0],
+        [2, 4],
+      ].map(([pass, fail], i) => ({
+        id: String(i),
+        label: String(i),
+        segments: [
+          { id: 'pass', label: 'PASS', value: pass, tone: 'success' },
+          { id: 'fail', label: 'FAIL', value: fail, tone: 'danger' },
+        ],
+      })),
+    );
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, DashboardHarness);
+    const heights = await Promise.all(
+      (await harness.stacks()).map(
+        async (el) => (await el.getProperty<CSSStyleDeclaration>('style')).height,
+      ),
+    );
+    expect(heights).toEqual(['0%', '50%', '100%']);
+    const labels = await Promise.all((await harness.totals()).map((el) => el.text()));
+    expect(labels).toEqual(['0', '3', '6']);
+    const weights = await Promise.all(
+      (await harness.bars()).map(
+        async (el) => (await el.getProperty<CSSStyleDeclaration>('style')).flexGrow,
+      ),
+    );
+    expect(weights).toEqual(['3', '2', '4']);
   });
 });

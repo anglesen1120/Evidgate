@@ -31,15 +31,20 @@ export interface DashboardTrendPoint {
         @for (point of bars(); track point.id) {
           <div class="trend-column" aria-hidden="true">
             <div class="trend-stack">
-              @for (segment of point.segments; track segment.id) {
-                <span
-                  data-segment
-                  aria-hidden="true"
-                  [attr.data-tone]="segment.tone"
-                  [attr.data-pattern]="segment.pattern"
-                  [style.height.%]="segment.height"
-                ></span>
-              }
+              <div class="trend-segments" [style.height.%]="point.height">
+                @for (segment of point.segments; track segment.id) {
+                  <span
+                    data-segment
+                    aria-hidden="true"
+                    [attr.data-tone]="segment.tone"
+                    [attr.data-pattern]="segment.pattern"
+                    [style.flex-grow]="segment.value"
+                  ></span>
+                }
+                <span class="trend-total text-xs font-medium tabular-nums">
+                  {{ point.total | number }}
+                </span>
+              </div>
             </div>
             <span class="text-xs text-muted-foreground">{{ point.label }}</span>
           </div>
@@ -101,11 +106,11 @@ export interface DashboardTrendPoint {
   styles: `
     .trend-bars {
       display: flex;
-      align-items: end;
+      align-items: flex-start;
       gap: var(--eg-space-4);
       min-inline-size: 0;
       overflow-x: auto;
-      padding-block: var(--eg-space-1);
+      padding-block: calc(var(--eg-leading-xs) + var(--eg-space-1)) var(--eg-space-1);
     }
     .trend-column {
       flex: 1 0 4.5rem;
@@ -114,10 +119,26 @@ export interface DashboardTrendPoint {
       overflow-wrap: anywhere;
     }
     .trend-stack {
+      position: relative;
+      block-size: 10rem;
+      border-block-end: var(--eg-border-width) solid var(--eg-border-control);
+    }
+    .trend-segments {
+      position: absolute;
+      inset-block-end: 0;
+      inset-inline: 0;
+      max-inline-size: 4.5rem;
+      margin-inline: auto;
       display: flex;
       flex-direction: column-reverse;
-      justify-content: start;
-      block-size: 10rem;
+    }
+    .trend-segments [data-segment] {
+      flex-basis: 0;
+    }
+    .trend-total {
+      position: absolute;
+      inset-block-end: 100%;
+      inset-inline: 0;
     }
     [data-segment] {
       display: block;
@@ -179,20 +200,19 @@ export class DecisionTrendComponent {
     })),
   );
   protected readonly bars = computed(() => {
-    const points = this.points();
-    const maximum = Math.max(
-      1,
-      ...points.map((point) =>
-        point.segments.reduce((sum, segment) => sum + Math.max(0, segment.value), 0),
-      ),
-    );
-    return points.map((point) => ({
+    const totals = this.points().map((point) => ({
+      point,
+      total: point.segments.reduce((sum, segment) => sum + Math.max(0, segment.value), 0),
+    }));
+    const maximum = totals.reduce((max, { total }) => Math.max(max, total), 1);
+    return totals.map(({ point, total }) => ({
       ...point,
+      total,
+      height: (total / maximum) * 100,
       segments: point.segments
         .map((segment, index) => ({
           ...segment,
           pattern: index % 4,
-          height: (Math.max(0, segment.value) / maximum) * 100,
         }))
         .filter((segment) => segment.value > 0),
     }));
