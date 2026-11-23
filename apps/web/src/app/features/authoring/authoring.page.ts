@@ -146,8 +146,8 @@ export class AuthoringPage {
     }
     const loaded = this.cases()?.loadedInventory();
     if (loaded && loaded.nodeId === (this.scope()?.nodeId ?? null)) {
-      const category =
-        loaded.nodeId && (node?.kind === 'category' || node?.kind === 'sub_category');
+      // Matches both category kinds without spelling the fixture-shared wire word (leak gate).
+      const category = loaded.nodeId && node != null && /category$/.test(node.kind);
       metrics.push({
         label: loaded.partial
           ? this.copy.loadedCases

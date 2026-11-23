@@ -19,7 +19,19 @@ const MISSING_CODES = new Set([
   'missing_result',
 ]);
 
+// Product vocabulary: built-in role label, shared with fixtures by design. The member roles
+// screen renders these five display names for the built-in role codes, so the strings occur in
+// production code and in the roles/memberships corpora. Exact per-value entries, no patterns.
+const BUILTIN_ROLE_NAMES = new Set([
+  'Tenant admin',
+  'Release approver',
+  'Test maintainer',
+  'Platform operator',
+  'Billing operator',
+]);
+
 export const ENUM_MEMBERS = new Map([
+  ['name', BUILTIN_ROLE_NAMES],
   // `contracts/schemas/authoring-import.v1.json` `properties.format.const`, the export document's
   // discriminator; production code carries it inside longer identifiers.
   ['format', new Set(['authoring-import'])],
