@@ -89,6 +89,7 @@ for (const locale of LOCALES) {
     await expect(page.locator(ROWS)).toHaveCount(runList.body.items.length);
     await expect(page.locator('app-run-list-page h1')).toHaveCount(1);
     await expect(page.locator('app-run-list-table [role="columnheader"]')).toHaveCount(7);
+    await expect(page.locator(`${ROWS} td`).first()).toHaveCSS('vertical-align', 'middle');
     await expect(page.locator(`${ROWS} [data-run-evidence] .status-pill--neutral`)).toHaveCount(
       runList.body.items.length,
     );

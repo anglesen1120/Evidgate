@@ -146,7 +146,7 @@ export const CI_BINDINGS_COPY = {
             <table
               hlmTable
               [attr.role]="'table'"
-              class="w-full min-w-0 table-fixed max-md:block [&_td]:min-w-0 [&_td]:align-top [&_td]:whitespace-normal [&_th]:whitespace-normal"
+              class="w-full min-w-0 table-fixed max-md:block [&_td]:min-w-0 [&_td]:whitespace-normal [&_th]:whitespace-normal"
               aria-labelledby="ci-bindings-heading"
             >
               <thead

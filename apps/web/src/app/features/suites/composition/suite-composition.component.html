@@ -176,14 +176,14 @@
                       hlmTh
                       role="rowheader"
                       scope="row"
-                      class="min-w-0 whitespace-normal align-top max-md:h-auto max-md:p-0"
+                      class="min-w-0 whitespace-normal max-md:h-auto max-md:p-0"
                     >
                       <span class="block text-xs text-muted-foreground md:hidden">{{
                         copy.caseRevision
                       }}</span>
                       <bdi class="identifier font-mono">{{ member.caseRevisionId }}</bdi>
                     </th>
-                    <td hlmTd role="cell" class="min-w-0 align-top max-md:p-0">
+                    <td hlmTd role="cell" class="min-w-0 max-md:p-0">
                       <span class="block text-xs text-muted-foreground md:hidden">{{
                         copy.variantParams
                       }}</span>
@@ -199,10 +199,10 @@
                         </ul>
                       }
                     </td>
-                    <td hlmTd role="cell" class="min-w-0 align-top max-md:p-0">
+                    <td hlmTd role="cell" class="min-w-0 max-md:p-0">
                       {{ member.required ? copy.required : copy.optional }}
                     </td>
-                    <td hlmTd role="cell" class="min-w-0 align-top max-md:p-0 md:text-end">
+                    <td hlmTd role="cell" class="min-w-0 max-md:p-0 md:text-end">
                       <span class="text-xs text-muted-foreground md:hidden"
                         >{{ copy.ordinal }}
                       </span>
@@ -210,7 +210,7 @@
                         member.ordinal
                       }}</strong>
                     </td>
-                    <td hlmTd role="cell" class="min-w-0 align-top max-md:p-0">
+                    <td hlmTd role="cell" class="min-w-0 max-md:p-0">
                       <span class="block text-xs text-muted-foreground md:hidden">{{
                         copy.member
                       }}</span>
@@ -246,7 +246,7 @@
           >
             <table
               hlmTable
-              class="[&_th]:min-w-[12ch] [&_th]:whitespace-normal [&_th]:align-top [&_td]:min-w-[12ch] [&_td]:whitespace-normal [&_td]:align-top [&_bdi]:font-mono [&_bdi]:wrap-anywhere [&_ul]:m-0 [&_ul]:ps-3 [&_ul]:font-normal"
+              class="[&_th]:min-w-[12ch] [&_th]:whitespace-normal [&_thead_th]:align-top [&_td]:min-w-[12ch] [&_td]:whitespace-normal [&_bdi]:font-mono [&_bdi]:wrap-anywhere [&_ul]:m-0 [&_ul]:ps-3 [&_ul]:font-normal"
               data-testid="suite-matrix"
             >
               <caption hlmCaption class="caption-top text-start">
