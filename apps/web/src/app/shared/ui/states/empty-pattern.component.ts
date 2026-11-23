@@ -1,7 +1,7 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmIcon } from '@evidgate/ui/icon';
+import { HlmIcon, type HlmIconName } from '@evidgate/ui/icon';
 import { HlmCard, HlmCardDescription, HlmCardTitle } from '@evidgate/ui/card';
 
 @Component({
@@ -25,7 +25,7 @@ import { HlmCard, HlmCardDescription, HlmCardTitle } from '@evidgate/ui/card';
       </section>
     }
     <ng-template #content>
-      <hlm-icon [name]="'lucideCircle'" class="size-(--eg-control-sm) text-(--eg-neutral-fg)" />
+      <hlm-icon [name]="icon()" class="size-(--eg-control-sm) text-(--eg-neutral-fg)" />
       <h2
         hlmCardTitle
         class="state-panel__title m-0 font-(family-name:--eg-font-display) text-lg"
@@ -60,6 +60,7 @@ import { HlmCard, HlmCardDescription, HlmCardTitle } from '@evidgate/ui/card';
 export class EmptyPatternComponent {
   /** Contextual copy is localized by the caller; no domain result is inferred here. */
   readonly title = input.required<string>();
+  readonly icon = input<HlmIconName>('lucideInbox');
   readonly description = input<string | undefined>();
   /** The containing card owns its border and inset when this is true. */
   readonly bare = input(false);

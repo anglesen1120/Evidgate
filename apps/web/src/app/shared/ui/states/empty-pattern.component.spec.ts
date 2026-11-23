@@ -32,6 +32,17 @@ describe('EmptyPatternComponent', () => {
     root = fixture.nativeElement as HTMLElement;
   });
 
+  it('shows a decorative inbox by default and renders a caller-selected icon', () => {
+    const icon = root.querySelector('hlm-icon')!;
+    expect(icon.getAttribute('aria-hidden')).toBe('true');
+    expect(icon.querySelector('circle')).toBeNull();
+    expect(icon.querySelector('path')?.getAttribute('d')).toBe('M22 12h-6l-2 3h-4l-2-3H2');
+
+    fixture.componentRef.setInput('icon', 'lucideCheck');
+    fixture.detectChanges();
+    expect(icon.querySelector('path')?.getAttribute('d')).toBe('M20 6 9 17l-5-5');
+  });
+
   it('composes the neutral Helm card with primary button and navigation variants', () => {
     expect(root.querySelector('section')?.getAttribute('data-slot')).toBe('card');
     expect(root.querySelector('[data-slot="card-description"]')?.textContent).toBe(
