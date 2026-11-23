@@ -148,7 +148,8 @@ export class RunListTableComponent {
       role: 'status',
       priority: 'primary',
       overflow: 'wrap',
-      width: { min: 'calc(14ch + var(--eg-space-4) * 2)' },
+      // The badge label never wraps: keep the fit floor, but ask for its natural width when the row has room.
+      width: { min: 'calc(14ch + var(--eg-space-4) * 2)', preferred: 'max-content' },
       cellTemplate: this.evidenceCell(),
     },
     {

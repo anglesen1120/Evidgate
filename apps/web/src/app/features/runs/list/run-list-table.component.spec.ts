@@ -313,6 +313,17 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
         ?.getAttribute('data-row-id'),
     ).toBe(row.run_id);
   });
+  it('renders a missing ref as body-font placeholder text and keeps real refs monospaced', async () => {
+    const row = run(1);
+    const { root } = await render([run(1), run(2, { ref: { ...row.ref, name: null } })]);
+    const refs = [...root.querySelectorAll('.ref-cell > bdi')];
+    const missing = refs.filter((ref) => ref.textContent?.includes('Ref unavailable'));
+    const real = refs.filter((ref) => ref.textContent?.includes('main'));
+    expect(missing.length).toBeGreaterThan(0);
+    expect(real.length).toBeGreaterThan(0);
+    expect(missing.every((ref) => !ref.classList.contains('font-mono'))).toBe(true);
+    expect(real.every((ref) => ref.classList.contains('font-mono'))).toBe(true);
+  });
   it('escapes and isolates format characters in rerun and reprocess labels', async () => {
     const { root } = await render([
       run(1, { rerun_label: 'failed\u202E_subset', parent_run_id: run(9).run_id }),
