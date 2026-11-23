@@ -38,6 +38,7 @@ import { DashboardWidgetComponent } from './dashboard-widget.component';
       [error]="error()"
       [empty]="!loading() && !error() && rows().length === 0"
       [emptyTitle]="empty"
+      [emptyIcon]="'navAudit'"
       (retry)="retry.emit()"
     >
       <ng-template #timeCell let-row><app-absolute-time [value]="row.created_at" /></ng-template>

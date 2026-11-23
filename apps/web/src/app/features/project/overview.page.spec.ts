@@ -20,6 +20,7 @@ class OverviewHarness extends ComponentHarness {
   readonly failureValue = this.locatorFor('[data-dashboard-failures] app-number-value');
   readonly failureDescription = this.locatorFor('[data-dashboard-failures] p');
   readonly attentionMetrics = this.locatorForAll('[data-dashboard-attention] app-dashboard-metric');
+  readonly emptyIcons = this.locatorForAll('app-empty-pattern hlm-icon path');
 }
 
 function read<T>(value: T) {
@@ -53,6 +54,11 @@ const RUN: RunSummary = {
 
 function mount(rows: readonly RunSummary[] = [RUN], complete = true, allowed = true) {
   const page = { items: [], next_cursor: null };
+  const currentProject = signal<{ id: string; name: string; slug: string } | null>({
+    id: 'p1',
+    name: 'Project A',
+    slug: 'a',
+  });
   const store = {
     runs: read({ items: rows, complete }),
     waivers: read(page),
@@ -74,7 +80,7 @@ function mount(rows: readonly RunSummary[] = [RUN], complete = true, allowed = t
       {
         provide: SessionStore,
         useValue: {
-          currentProject: signal({ id: 'p1', name: 'Project A', slug: 'a' }),
+          currentProject,
           currentOrg: signal({ id: 'o1', name: 'Organization A' }),
         },
       },
@@ -85,7 +91,7 @@ function mount(rows: readonly RunSummary[] = [RUN], complete = true, allowed = t
     set: { providers: [{ provide: ProjectDashboardStore, useValue: store }] },
   });
   const fixture = TestBed.createComponent(ProjectOverviewPage);
-  return { fixture, store };
+  return { fixture, store, currentProject };
 }
 
 describe('ProjectOverviewPage dashboard', () => {
@@ -108,6 +114,14 @@ describe('ProjectOverviewPage dashboard', () => {
     expect(await harness.text()).toContain('No usage metrics returned.');
     expect(await harness.text()).toContain('No data');
     expect(await harness.runViews()).toHaveLength(0);
+    expect(
+      await Promise.all((await harness.emptyIcons()).map((path) => path.getAttribute('d'))),
+    ).toEqual([
+      'M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6',
+      'M5 3h14v18H5z M10 8l5 4-5 4z',
+      'M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6',
+      'M7 4h10v16H7zM10 8h4M10 12h4M10 16h4',
+    ]);
   });
 
   it('labels truncated ascending run pages as not latest instead of recent', async () => {
@@ -164,10 +178,28 @@ describe('ProjectOverviewPage dashboard', () => {
     );
   });
 
+  it('uses a dashboard icon when no project is selected and exposes no widgets', async () => {
+    const { fixture, currentProject } = mount();
+    currentProject.set(null);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+
+    expect(await harness.widgets()).toHaveLength(0);
+    const icons = await harness.emptyIcons();
+    expect(icons).toHaveLength(1);
+    expect(await icons[0]?.getAttribute('d')).toBe(
+      'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
+    );
+  });
+
   it('shows no restricted facts when every widget is denied', async () => {
     const { fixture } = mount([], true, false);
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
     expect(await harness.widgets()).toHaveLength(0);
     expect(await harness.text()).toContain('No dashboard data is available');
+    const icons = await harness.emptyIcons();
+    expect(icons).toHaveLength(1);
+    expect(await icons[0]?.getAttribute('d')).toBe(
+      'M12 2l8 3v6c0 5-4 9-8 11-4-2-8-6-8-11V5z M8 12l3 3 5-6',
+    );
   });
 });

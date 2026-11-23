@@ -63,11 +63,27 @@ test('one failed source leaves other dashboard facts visible and retries only lo
 });
 
 test('successful empty runs remain empty rather than a green decision', async ({ page }) => {
-  await page.goto(overviewPath('en') + FIXTURE + '&fixture.variant.listRuns=dashboard-empty');
+  await page.goto(
+    overviewPath('en') +
+      FIXTURE +
+      '&fixture.variant.listRuns=dashboard-empty&fixture.variant.getUsageSummary=dashboard-empty&fixture.variant.listAudit=dashboard-empty',
+  );
   await expect(page.locator('[data-dashboard-recent] app-empty-pattern')).toBeVisible();
   await expect(page.locator('[data-dashboard-trend] app-empty-pattern')).toBeVisible();
   await expect(page.locator('[data-dashboard-kpis]')).toContainText('No data');
   await expect(page.locator('[data-dashboard-run-view]')).toHaveCount(0);
+  for (const [widget, path] of [
+    ['recent', 'M5 3h14v18H5z M10 8l5 4-5 4z'],
+    ['trend', 'M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6'],
+    ['usage', 'M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6'],
+    ['activity', 'M7 4h10v16H7zM10 8h4M10 12h4M10 16h4'],
+  ] as const) {
+    const icon = page.locator(`[data-dashboard-${widget}] app-empty-pattern hlm-icon`);
+    await expect(icon).toBeVisible();
+    await expect(icon).toHaveAttribute('aria-hidden', 'true');
+    await expect(icon.locator('path')).toHaveAttribute('d', path);
+  }
+  await expectNoA11yViolations(page, 'empty project dashboard');
 });
 
 test('restricted widgets are hidden instead of rendering forbidden cards', async ({ page }) => {

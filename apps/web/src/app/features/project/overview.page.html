@@ -14,9 +14,9 @@
     }
   </app-page-header>
   @if (!project()) {
-    <app-empty-pattern [title]="copy.noProject" />
+    <app-empty-pattern [icon]="'navGrid'" [title]="copy.noProject" />
   } @else if (!anyVisible()) {
-    <app-empty-pattern [title]="copy.noAccess" />
+    <app-empty-pattern [icon]="'navShield'" [title]="copy.noAccess" />
   } @else {
     @if (store.runs.visible()) {
       <app-dashboard-widget
@@ -69,6 +69,7 @@
           [error]="store.runs.error()"
           [empty]="rows().length === 0"
           [emptyTitle]="copy.emptyTrend"
+          [emptyIcon]="'navChart'"
           (retry)="store.runs.reload()"
         >
           <p class="mt-0 text-sm text-muted-foreground">{{ copy.trendContext }}</p>
@@ -130,6 +131,7 @@
           [error]="store.runs.error()"
           [empty]="rows().length === 0"
           [emptyTitle]="copy.emptyRuns"
+          [emptyIcon]="'navRun'"
           (retry)="store.runs.reload()"
         >
           <app-dashboard-runs [rows]="latest()" [decisionsVisible]="store.decisionsVisible()" />
@@ -225,6 +227,7 @@
           [error]="store.usage.error()"
           [empty]="store.usage.value()?.metrics?.length === 0"
           [emptyTitle]="copy.emptyUsage"
+          [emptyIcon]="'navChart'"
           (retry)="store.usage.reload()"
         >
           <app-dashboard-meter

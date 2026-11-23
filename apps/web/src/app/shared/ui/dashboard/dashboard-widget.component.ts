@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { HlmCardImports } from '@evidgate/ui/card';
+import type { HlmIconName } from '@evidgate/ui/icon';
 import type { ApiError } from '../../../core/http/api-error';
 import { retryWithDashboardFocus } from './dashboard-retry-focus';
 import { EmptyPatternComponent } from '../states/empty-pattern.component';
@@ -39,7 +40,7 @@ import { LoadingPatternComponent } from '../states/loading-pattern.component';
             (retry)="retryWithFocus(retryHeading, retry)"
           />
         } @else if (empty()) {
-          <app-empty-pattern [bare]="true" [title]="emptyTitle()" />
+          <app-empty-pattern [bare]="true" [icon]="emptyIcon()" [title]="emptyTitle()" />
         } @else {
           <ng-content />
         }
@@ -54,6 +55,7 @@ export class DashboardWidgetComponent {
   readonly error = input<ApiError | null>(null);
   readonly empty = input(false);
   readonly emptyTitle = input('');
+  readonly emptyIcon = input<HlmIconName>('lucideInbox');
   readonly retry = output<void>();
 
   protected readonly retryWithFocus = retryWithDashboardFocus;
