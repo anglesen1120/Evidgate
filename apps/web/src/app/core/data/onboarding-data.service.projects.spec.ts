@@ -47,6 +47,16 @@ describe('OnboardingDataService (09.2.1-T1.1/T1.2)', () => {
     await expect(page).resolves.toEqual(PROJECT_PAGE);
   });
 
+  it('listProjects() cancels the read when the caller aborts it', async () => {
+    const controller = new AbortController();
+    const read = service.listProjects('o-1', {}, controller.signal);
+    await takeRequest(httpMock, PROJECTS_URL);
+    controller.abort();
+    const rejection = await rejectionOf(read);
+    expect(rejection).toBeInstanceOf(DOMException);
+    expect((rejection as DOMException).name).toBe('AbortError');
+  });
+
   it('getProject() reads one project by id', async () => {
     const project = service.getProject('p-1');
     const request = await takeRequest(httpMock, `${API_BASE_URL}/projects/p-1`);

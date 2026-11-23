@@ -4,23 +4,29 @@
     <app-decision-chip [decision]="row.run?.decision" />
   } @else if (row.runStatus === 'error') {
     <p>{{ copy.runError }}</p>
-    <button
-      hlmBtn
-      [variant]="'ghost'"
-      (click)="store.runs.reload()"
-      i18n="@@orgoverview.retry-runs"
-    >
-      Retry run summaries
-    </button>
-  } @else {
-    <span>{{ row.runStatus === 'empty' ? copy.noRuns : copy.latestUnavailable }}</span>
+  } @else if (row.runStatus !== 'hidden') {
+    <span>{{
+      row.runStatus === 'loading'
+        ? copy.loading
+        : row.runStatus === 'empty'
+          ? copy.noRuns
+          : copy.latestUnavailable
+    }}</span>
   }
 </ng-template>
 <ng-template #timeCell let-row>
   @if (row.run) {
     <app-absolute-time [value]="row.run.created_at" />
-  } @else {
-    <span>{{ row.runStatus === 'empty' ? copy.noRuns : copy.latestUnavailable }}</span>
+  } @else if (row.runStatus !== 'hidden') {
+    <span>{{
+      row.runStatus === 'loading'
+        ? copy.loading
+        : row.runStatus === 'error'
+          ? copy.runError
+          : row.runStatus === 'empty'
+            ? copy.noRuns
+            : copy.latestUnavailable
+    }}</span>
   }
 </ng-template>
 <ng-template #viewCell let-row>
@@ -34,7 +40,7 @@
   >
 </ng-template>
 <div class="dashboard-grid">
-  @if (store.canProjects() && error(store.projects.error())?.kind !== 'forbidden') {
+  @if (projectsVisible()) {
     <app-dashboard-widget
       class="projects"
       [title]="copy.projects"
@@ -43,18 +49,32 @@
       [error]="error(store.projects.error())"
       [empty]="store.projects.hasValue() && store.projectRows().length === 0"
       [emptyTitle]="copy.emptyProjects"
+      [emptyIcon]="'navGrid'"
       (retry)="store.projects.reload()"
     >
-      <app-data-table
-        [rows]="store.projectRows()"
-        [columns]="columns()"
-        [rowId]="projectId"
-        [caption]="copy.projects"
-        [flow]="'page'"
-        [fitToContainer]="true"
-      />
+      <section #runSummary data-run-summary [attr.tabindex]="-1" [attr.aria-label]="copy.projects">
+        <app-data-table
+          [rows]="store.projectRows()"
+          [columns]="columns()"
+          [rowId]="projectId"
+          [caption]="copy.projects"
+          [flow]="'page'"
+          [fitToContainer]="true"
+        />
+      </section>
+      @if (runErrors()) {
+        <button
+          hlmBtn
+          data-run-summary-retry
+          [variant]="'ghost'"
+          (click)="retryRuns(runSummary)"
+          i18n="@@orgoverview.retry-runs"
+        >
+          Retry run summaries
+        </button>
+      }
       <p class="mt-3 text-sm text-muted-foreground">{{ projectCount() }}</p>
-      @if (store.canRuns()) {
+      @if (runsVisible()) {
         <p class="mt-2 text-sm text-muted-foreground" i18n="@@orgoverview.run-bound">
           Latest run is available only when the bounded read contains every run (up to 50 per
           project).
@@ -62,7 +82,7 @@
       }
     </app-dashboard-widget>
   }
-  @if (store.canMembers() && error(store.members.error())?.kind !== 'forbidden') {
+  @if (membersVisible()) {
     <app-dashboard-widget
       class="members"
       [title]="copy.members"
@@ -77,7 +97,7 @@
       <p class="mt-4 text-sm text-muted-foreground">{{ memberContext() }}</p>
     </app-dashboard-widget>
   }
-  @if (store.canUsage() && error(store.usage.error())?.kind !== 'forbidden') {
+  @if (usageVisible()) {
     <app-dashboard-widget
       class="usage"
       [title]="copy.usage"
@@ -123,7 +143,7 @@
       }
     </app-dashboard-widget>
   }
-  @if (store.canAudit() && error(store.activity.error())?.kind !== 'forbidden') {
+  @if (activityVisible()) {
     <app-dashboard-activity
       class="activity"
       [rows]="events()"
@@ -132,7 +152,7 @@
       (retry)="store.activity.reload()"
     />
   }
-  @if (!store.canProjects() && !store.canMembers() && !store.canUsage() && !store.canAudit()) {
+  @if (!anyWidgetVisible()) {
     <p class="text-muted-foreground" i18n="@@orgoverview.no-access">
       No dashboard data is available with your current permissions.
     </p>

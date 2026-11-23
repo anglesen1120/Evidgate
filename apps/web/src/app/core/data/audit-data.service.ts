@@ -36,9 +36,19 @@ export class AuditDataService {
    * renders while the next page is on its way, and a broken cursor costs the page it was
    * following rather than the list on screen.
    */
-  list(orgId: string, query: AuditListQuery = {}, cursor?: string): Promise<AuditListResponse> {
+  list(
+    orgId: string,
+    query: AuditListQuery = {},
+    cursor?: string,
+    signal?: AbortSignal,
+  ): Promise<AuditListResponse> {
     return this.gateway.call((client) =>
-      listAudit({ client, path: { o: orgId }, query: sentQuery(query, cursor) }),
+      listAudit({
+        client,
+        path: { o: orgId },
+        query: sentQuery(query, cursor),
+        ...(signal === undefined ? {} : { signal }),
+      }),
     );
   }
 }

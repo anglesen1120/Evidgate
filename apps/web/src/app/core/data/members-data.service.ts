@@ -59,11 +59,17 @@ export class MembersDataService {
    * the rows it already renders while the next page is on its way, and a broken cursor costs the
    * page it was following rather than the list on screen.
    */
-  listMemberships(orgId: string, cursor?: string, limit?: number): Promise<MembershipListResponse> {
+  listMemberships(
+    orgId: string,
+    cursor?: string,
+    limit?: number,
+    signal?: AbortSignal,
+  ): Promise<MembershipListResponse> {
     return this.gateway.call((client) =>
       listMemberships({
         client,
         path: { o: orgId },
+        ...(signal === undefined ? {} : { signal }),
         query: {
           ...(cursor === undefined ? {} : { cursor }),
           ...(limit === undefined ? {} : { limit }),

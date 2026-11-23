@@ -1,12 +1,15 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { MembershipListResponse, ProjectDto, RunPage, UsageSummaryDto } from '@evidgate/sdk';
+import { firstValueFrom, Subject } from 'rxjs';
 
 import { AuditDataService } from '../../core/data/audit-data.service';
 import { MembersDataService } from '../../core/data/members-data.service';
 import { OnboardingDataService } from '../../core/data/onboarding-data.service';
 import { QuotaDataService } from '../../core/data/quota-data.service';
 import { SessionStore } from '../../core/session/session.store';
+import { ApiRequestError } from '../../core/http/api-error';
+import { mapNetworkError } from '../../core/http/error-mapper';
 import { OrgOverviewStore, PROJECT_LIMIT, RUN_LIMIT } from './org-overview.store';
 
 const project: ProjectDto = {
@@ -81,10 +84,23 @@ describe('OrgOverviewStore', () => {
   it('bounds all reads and preserves a successful empty membership sample as zero', async () => {
     const store = TestBed.inject(OrgOverviewStore);
     await settle();
-    expect(projects.listProjects).toHaveBeenCalledWith('o1', { limit: PROJECT_LIMIT });
-    expect(projects.listRuns).toHaveBeenCalledWith('p1', { limit: RUN_LIMIT });
-    expect(members.listMemberships).toHaveBeenCalledWith('o1', undefined, 50);
-    expect(audit.list).toHaveBeenCalledWith('o1', { limit: 5 });
+    expect(projects.listProjects).toHaveBeenCalledWith(
+      'o1',
+      { limit: PROJECT_LIMIT },
+      expect.any(AbortSignal),
+    );
+    expect(projects.listRuns).toHaveBeenCalledWith(
+      'p1',
+      { limit: RUN_LIMIT },
+      expect.any(AbortSignal),
+    );
+    expect(members.listMemberships).toHaveBeenCalledWith(
+      'o1',
+      undefined,
+      50,
+      expect.any(AbortSignal),
+    );
+    expect(audit.list).toHaveBeenCalledWith('o1', { limit: 5 }, undefined, expect.any(AbortSignal));
     expect(store.activeMembers()).toBe(0);
     expect(store.pendingInvites()).toBe(0);
     expect(store.aiUsage()).toBeNull();
@@ -176,5 +192,68 @@ describe('OrgOverviewStore', () => {
     expect(store.projectRows()).toEqual([]);
     expect(store.activeMembers()).toBeNull();
     expect(store.aiUsage()).toBeNull();
+  });
+
+  it('classifies forbidden run enrichment as hidden without losing its API error', async () => {
+    const failure = new ApiRequestError({ ...mapNetworkError(), kind: 'forbidden', status: 403 });
+    projects.listRuns.mockRejectedValue(failure);
+    const store = TestBed.inject(OrgOverviewStore);
+    await settle();
+    await vi.waitFor(() => {
+      TestBed.tick();
+      expect(store.runs.isLoading()).toBe(false);
+    });
+    expect(store.projectRows()[0]).toMatchObject({
+      project,
+      run: null,
+      runStatus: 'hidden',
+      runError: failure,
+    });
+  });
+
+  it('marks run enrichment as loading until its pending read resolves', async () => {
+    const pending = new Subject<RunPage>();
+    projects.listRuns.mockReturnValue(firstValueFrom(pending));
+    const store = TestBed.inject(OrgOverviewStore);
+    await settle();
+    expect(store.projectRows()[0]?.runStatus).toBe('loading');
+    pending.next(emptyRuns);
+    await vi.waitFor(() => {
+      TestBed.tick();
+      expect(store.projectRows()[0]?.runStatus).toBe('empty');
+    });
+  });
+
+  it('aborts an in-flight run read on organization switch and discards its late result', async () => {
+    const pending = new Subject<RunPage>();
+    const read = firstValueFrom(pending);
+    let signal: AbortSignal | undefined;
+    projects.listRuns.mockImplementationOnce((_id, _query, abortSignal: AbortSignal) => {
+      signal = abortSignal;
+      return read;
+    });
+    const store = TestBed.inject(OrgOverviewStore);
+    await settle();
+    expect(signal?.aborted).toBe(false);
+    projects.listProjects.mockResolvedValue({
+      items: [{ ...project, id: 'p2', org_id: 'o2' }],
+      next_cursor: null,
+    });
+    org.set({ id: 'o2' });
+    TestBed.tick();
+    await vi.waitFor(() => {
+      TestBed.tick();
+      expect(signal?.aborted).toBe(true);
+    });
+    await vi.waitFor(() => {
+      TestBed.tick();
+      expect(store.projectRows()[0]?.project.id).toBe('p2');
+      expect(store.projectRows()[0]?.runStatus).toBe('empty');
+    });
+    pending.next({ items: [], next_cursor: 'old-org' });
+    await read;
+    TestBed.tick();
+    expect(store.projectRows()[0]?.project.id).toBe('p2');
+    expect(store.projectRows()[0]?.runStatus).toBe('empty');
   });
 });

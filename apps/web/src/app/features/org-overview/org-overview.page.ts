@@ -68,6 +68,7 @@ export class OrgOverviewPage {
     latestUnavailable: $localize`:@@orgoverview.latest-unavailable:Latest unavailable`,
     noRuns: $localize`:@@orgoverview.no-runs:No runs yet`,
     runError: $localize`:@@orgoverview.run-error:Couldn’t load latest run.`,
+    loading: $localize`:@@orgoverview.loading:Loading`,
   };
   private readonly decisionTemplate =
     viewChild<TemplateRef<DataTableCellContext<DashboardProject>>>('decisionCell');
@@ -76,6 +77,32 @@ export class OrgOverviewPage {
   private readonly viewTemplate =
     viewChild<TemplateRef<DataTableCellContext<DashboardProject>>>('viewCell');
   protected readonly projectId = (row: DashboardProject): string => row.project.id;
+  protected readonly projectsVisible = computed(
+    () => this.store.canProjects() && this.error(this.store.projects.error())?.kind !== 'forbidden',
+  );
+  protected readonly membersVisible = computed(
+    () => this.store.canMembers() && this.error(this.store.members.error())?.kind !== 'forbidden',
+  );
+  protected readonly usageVisible = computed(
+    () => this.store.canUsage() && this.error(this.store.usage.error())?.kind !== 'forbidden',
+  );
+  protected readonly activityVisible = computed(
+    () => this.store.canAudit() && this.error(this.store.activity.error())?.kind !== 'forbidden',
+  );
+  protected readonly anyWidgetVisible = computed(
+    () =>
+      this.projectsVisible() ||
+      this.membersVisible() ||
+      this.usageVisible() ||
+      this.activityVisible(),
+  );
+  protected readonly runsVisible = computed(
+    () =>
+      this.store.canRuns() && this.store.projectRows().some((row) => row.runStatus !== 'hidden'),
+  );
+  protected readonly runErrors = computed(() =>
+    this.store.projectRows().some((row) => row.runStatus === 'error'),
+  );
   protected readonly columns = computed<readonly DataTableColumn<DashboardProject>[]>(() => {
     const decision = this.decisionTemplate();
     const time = this.timeTemplate();
@@ -87,7 +114,7 @@ export class OrgOverviewPage {
         role: 'identity',
         cell: (row) => row.project.name,
       },
-      ...(this.store.canRuns() && decision && time
+      ...(this.runsVisible() && this.store.decisionsVisible() && decision
         ? [
             {
               id: 'decision',
@@ -96,6 +123,10 @@ export class OrgOverviewPage {
               cell: () => '',
               cellTemplate: decision,
             },
+          ]
+        : []),
+      ...(this.runsVisible() && time
+        ? [
             {
               id: 'time',
               header: $localize`:@@orgoverview.time-column:Latest run (UTC)`,
@@ -133,6 +164,10 @@ export class OrgOverviewPage {
   );
   protected error(value: unknown): ApiError | null {
     return value ? (isApiRequestError(value) ? value.error : mapNetworkError()) : null;
+  }
+  protected retryRuns(summary: HTMLElement): void {
+    summary.focus();
+    this.store.runs.reload();
   }
   protected viewProject(name: string): string {
     return $localize`:@@orgoverview.view-project:View project ${name}:name:`;

@@ -108,6 +108,16 @@ describe('AuditDataService (09.7.1-T6)', () => {
     await expect(second).resolves.toEqual(EMPTY_PAGE);
   });
 
+  it('list() cancels the read when the caller aborts it', async () => {
+    const controller = new AbortController();
+    const read = service.list('o-1', {}, undefined, controller.signal);
+    await takeRequest(httpMock, AUDIT_URL);
+    controller.abort();
+    const rejection = await rejected(read);
+    expect(rejection).toBeInstanceOf(DOMException);
+    expect((rejection as DOMException).name).toBe('AbortError');
+  });
+
   it('list() sends every filter it is given as its own query parameter', async () => {
     const page = service.list(
       'o-1',
