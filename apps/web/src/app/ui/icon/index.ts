@@ -59,6 +59,12 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
           ></rect>
           <path [attr.d]="'M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2'"></path>
         }
+        @case ('lucideInbox') {
+          <path [attr.d]="'M22 12h-6l-2 3h-4l-2-3H2'"></path>
+          <path
+            [attr.d]="'m5.45 5.11-3.45 6.89v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z'"
+          ></path>
+        }
         @case ('lucideInfo') {
           <circle [attr.cx]="'12'" [attr.cy]="'12'" [attr.r]="'10'"></circle>
           <path [attr.d]="'M12 16v-4'"></path>
@@ -96,22 +102,24 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
   `,
 })
 export class HlmIcon {
-  readonly name = input.required<
-    | 'lucideActivity'
-    | 'lucideCheck'
-    | 'lucideChevronDown'
-    | 'lucideChevronLeft'
-    | 'lucideChevronRight'
-    | 'lucideChevronUp'
-    | 'lucideCircle'
-    | 'lucideCircleCheck'
-    | 'lucideClock'
-    | 'lucideCopy'
-    | 'lucideInfo'
-    | 'lucideLoader2'
-    | 'lucideMaximize2'
-    | 'lucideOctagonX'
-    | 'lucideTriangleAlert'
-    | 'lucideX'
-  >();
+  readonly name = input.required<HlmIconName>();
 }
+
+export type HlmIconName =
+  | 'lucideActivity'
+  | 'lucideCheck'
+  | 'lucideChevronDown'
+  | 'lucideChevronLeft'
+  | 'lucideChevronRight'
+  | 'lucideChevronUp'
+  | 'lucideCircle'
+  | 'lucideCircleCheck'
+  | 'lucideClock'
+  | 'lucideCopy'
+  | 'lucideInbox'
+  | 'lucideInfo'
+  | 'lucideLoader2'
+  | 'lucideMaximize2'
+  | 'lucideOctagonX'
+  | 'lucideTriangleAlert'
+  | 'lucideX';
