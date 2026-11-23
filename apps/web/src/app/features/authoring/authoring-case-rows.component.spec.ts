@@ -112,11 +112,10 @@ describe('AuthoringCaseRowsComponent', () => {
     expect(await (await harness.summary()).text()).toContain('1 of 3 loaded selected');
   });
 
-  it('never enables export or hides its visible reason, and shows canonical linked UUIDs', async () => {
+  it('never enables export or hides its visible reason', async () => {
     const { harness } = await mount();
     expect(await (await harness.exportAction()).getAttribute('aria-disabled')).toBe('true');
     expect(await (await harness.host()).text()).toContain('cannot export explicit case IDs');
-    expect(await (await harness.host()).text()).toContain('018f0000-0000-7000-8000-000000000777');
     expect(await (await harness.host()).text()).toContain('Pending change count unavailable');
   });
 
@@ -168,7 +167,7 @@ describe('AuthoringCaseRowsComponent', () => {
     expect(await (await harness.summary()).text()).toContain('1 of 201 loaded selected');
   }, 20_000);
 
-  it('gives the case code its own column and keeps the UUID in a separate cell', async () => {
+  it('keeps the full case key and its identifiers disclosure together, not in separate UUID columns', async () => {
     const { fixture } = await mount(1);
     const table = fixture.debugElement
       .query(By.directive(DataTableComponent))
@@ -176,14 +175,21 @@ describe('AuthoringCaseRowsComponent', () => {
     const columns = table.columns();
     const code = columns.find((column) => column.id === 'code');
     expect(code).toMatchObject({ role: 'identity', priority: 'primary' });
-    expect(columns.find((column) => column.id === 'id')?.cell(row(1))).toBe(row(1).case_id);
+    expect(columns.map((column) => column.id)).toEqual([
+      'select',
+      'code',
+      'priority',
+      'coverage',
+      'actions',
+    ]);
     const codeCell = (fixture.nativeElement as HTMLElement).querySelector(
       'td [data-column-id="code"]',
     );
-    const idCell = (fixture.nativeElement as HTMLElement).querySelector('td [data-column-id="id"]');
     expect((codeCell as HTMLElement).textContent).toContain('SHOP-1');
     expect((codeCell as HTMLElement).textContent).not.toContain(row(1).case_id);
-    expect((idCell as HTMLElement).textContent).toContain(row(1).case_id);
+    expect(
+      codeCell?.querySelector('[data-case-identifiers]')?.getAttribute('aria-label'),
+    ).toContain('SHOP-1');
   });
 
   it('drops a reveal request for a row missing from the result', async () => {
@@ -200,18 +206,19 @@ describe('AuthoringCaseRowsComponent', () => {
     expect(active?.closest('[data-row-id]')?.getAttribute('data-row-id')).not.toBe(missing);
   });
 
-  it('uses the shared 200-row threshold and opts fixed-height cells into virtualization', async () => {
+  it('fits the pane and keeps loaded results paged unless the fixed tracks have room', async () => {
     const { fixture } = await mount(200);
     const table = fixture.debugElement
       .query(By.directive(DataTableComponent))
       .injector.get(DataTableComponent<ManualCaseListItemDto>);
     expect(table.virtualThreshold()).toBe(200);
-    expect(table.fixedHeightCells()).toBe(true);
+    expect(table.fitToContainer()).toBe(true);
     fixture.componentRef.setInput(
       'rows',
       Array.from({ length: 201 }, (_, index) => row(index + 1)),
     );
     fixture.detectChanges();
     expect(table.rows()).toHaveLength(201);
+    expect(table.virtual()).toBe(false);
   }, 20_000);
 });

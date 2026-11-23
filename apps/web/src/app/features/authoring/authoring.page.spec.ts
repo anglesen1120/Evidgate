@@ -61,6 +61,7 @@ describe('AuthoringPage', () => {
   const selectionStatus = signal<'idle' | 'loading' | 'ready' | 'error'>('ready');
   const init = vi.fn().mockResolvedValue(undefined);
   const retryTree = vi.fn().mockResolvedValue(undefined);
+  const listManualCases = vi.fn<AuthoringDataService['listManualCases']>();
   const selectNode = vi.fn((id: string | null) => id);
   const store = {
     projectId: signal('project'),
@@ -82,7 +83,7 @@ describe('AuthoringPage', () => {
 
   beforeEach(() => {
     query.next(convertToParamMap({}));
-    params.next(convertToParamMap({ projectId: 'project' }));
+    params.next(convertToParamMap({ projectId: 'project', orgId: 'org' }));
     status.set('ready');
     error.set(null);
     stale.set(false);
@@ -93,6 +94,7 @@ describe('AuthoringPage', () => {
     selectedId.set(selected.node_id);
     path.set([root]);
     init.mockClear();
+    listManualCases.mockReset().mockResolvedValue({ items: [], next_cursor: null });
     retryTree.mockClear();
     selectNode.mockClear();
     TestBed.configureTestingModule({
@@ -102,9 +104,7 @@ describe('AuthoringPage', () => {
         provideRouter([]),
         {
           provide: AuthoringDataService,
-          useValue: {
-            listManualCases: () => Promise.resolve({ items: [], next_cursor: null }),
-          },
+          useValue: { listManualCases },
         },
         {
           provide: ActivatedRoute,
@@ -136,15 +136,67 @@ describe('AuthoringPage', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
-  it('reads the heading level from route data and keeps the table a separate neutral region', async () => {
-    const { harness } = await render();
+  it('explains the workspace and links only to implemented project actions', async () => {
+    const { fixture, harness } = await render();
+    const header = host(fixture).querySelector('app-page-header');
+    expect(header?.textContent).toContain(
+      'Browse manual cases by checklist and inspect their automation coverage.',
+    );
+    expect(
+      Array.from(header?.querySelectorAll('a') ?? [], (link) => link.getAttribute('href')),
+    ).toEqual(['/orgs/org/projects/project/authoring/import-export']);
     expect(await (await harness.heading()).text()).toBe('Feature tree');
-    expect(await (await harness.table()).text()).toContain('Case table');
+    expect(await (await harness.table()).text()).toContain('Manual cases');
     expect(await (await harness.table()).getAttribute('aria-busy')).not.toBe('true');
     expect(await harness.path()).toEqual(['Project roots', 'Module', 'Selected feature']);
     expect(await (await harness.table()).text()).toContain('Selected feature');
     expect(await (await harness.selectedId())?.text()).toContain(selected.node_id);
+    expect(host(fixture).querySelector('[data-authoring-metrics]')?.textContent).toContain(
+      'Direct checklist items',
+    );
   });
+
+  it('labels counts for the selected category and never treats a filtered count as its inventory', async () => {
+    node.set({ ...selected, kind: 'category' });
+    query.next(convertToParamMap({ node_id: selected.node_id }));
+    const { fixture } = await render();
+    const metrics = () => host(fixture).querySelector('[data-authoring-metrics]');
+    expect(metrics()?.textContent).toContain('Category cases');
+    expect(metrics()?.textContent).toContain('Selected feature');
+    query.next(convertToParamMap({ node_id: selected.node_id, q: 'unmatched' }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(metrics()?.textContent).not.toContain('Category cases');
+  });
+
+  it.each(['next cursor', 'route cursor', 'search', 'selected node', 'tree error'])(
+    'does not call the project empty with a %s',
+    async (scenario) => {
+      roots.set({ items: [], nextCursor: null, status: 'ready', error: null });
+      node.set(scenario === 'selected node' ? selected : null);
+      selectedId.set(node()?.node_id ?? null);
+      path.set([]);
+      if (scenario === 'next cursor') {
+        listManualCases.mockResolvedValue({ items: [], next_cursor: 'more' });
+      } else if (scenario === 'route cursor') query.next(convertToParamMap({ cursor: 'page-2' }));
+      else if (scenario === 'search') query.next(convertToParamMap({ q: 'no match' }));
+      else if (scenario === 'selected node')
+        query.next(convertToParamMap({ node_id: selected.node_id }));
+      else {
+        status.set('error');
+        error.set(failure);
+      }
+      const { fixture } = await render();
+      expect(host(fixture).querySelector('[data-authoring-project-empty]')).toBeNull();
+      if (scenario === 'next cursor' || scenario === 'route cursor') {
+        const labels = Array.from(
+          host(fixture).querySelectorAll('[data-authoring-metrics] dt'),
+          (item) => item.textContent?.trim(),
+        );
+        expect(labels).toEqual(['Loaded cases']);
+      }
+    },
+  );
 
   it('restores the addressed node on reload and reacts to browser query and project changes', async () => {
     query.next(convertToParamMap({ node_id: selected.node_id, q: 'untouched' }));
@@ -186,7 +238,7 @@ describe('AuthoringPage', () => {
     const { fixture, harness } = await render();
     await manualChangeDetection(async () => {
       expect(await harness.loading()).not.toBeNull();
-      expect(await (await harness.table()).text()).toContain('Case table');
+      expect(await (await harness.table()).text()).toContain('Manual cases');
     });
     status.set('error');
     error.set(failure);
@@ -203,6 +255,20 @@ describe('AuthoringPage', () => {
     path.set([]);
     const { fixture, harness } = await render();
     expect(await harness.empty()).not.toBeNull();
+    expect(host(fixture).querySelectorAll('app-empty-pattern')).toHaveLength(1);
+    expect(host(fixture).querySelector('form.filters, .pagination')).toBeNull();
+    const action = host(fixture).querySelector<HTMLButtonElement>('app-empty-pattern button');
+    expect(action?.textContent).toContain('Import and export');
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    action?.click();
+    expect(navigate).toHaveBeenCalledWith([
+      '/orgs',
+      'org',
+      'projects',
+      'project',
+      'authoring',
+      'import-export',
+    ]);
     status.set('error');
     error.set({ ...failure, kind: 'forbidden', status: 403, retryable: false });
     fixture.detectChanges();
@@ -226,7 +292,7 @@ describe('AuthoringPage', () => {
     expect(await harness.stale()).not.toBeNull();
     expect(await harness.tree()).not.toBeNull();
     expect(await harness.error()).not.toBeNull();
-    expect(await (await harness.table()).text()).toContain('Case table');
+    expect(await (await harness.table()).text()).toContain('Manual cases');
   });
 
   it('uses a section heading when the containing route already owns the page heading', async () => {

@@ -32,10 +32,14 @@ class TableHarness extends ComponentHarness {
   readonly apply = this.locatorFor('[data-case-apply]');
   readonly filterHelp = this.locatorFor('[data-case-filter-help]');
   readonly toggleHelp = this.locatorFor('[data-case-filter-help] summary');
+  readonly filters = this.locatorFor('details[data-case-filters]');
+  readonly toggleFilters = this.locatorFor('[data-case-filters] > summary');
+  readonly fields = this.locatorForAll('[data-case-filters] .filter-fields > .field');
   readonly source = this.locatorFor('#authoring-case-source');
   readonly owner = this.locatorFor('#authoring-case-owner');
   readonly loadMore = this.locatorFor('[data-case-load-more]');
   readonly refresh = this.locatorFor('[data-case-refresh]');
+  readonly refreshOptional = this.locatorForOptional('[data-case-refresh]');
   readonly empty = this.locatorForOptional('app-empty-pattern');
   readonly loading = this.locatorForOptional('app-loading-pattern');
   readonly forbidden = this.locatorForOptional('app-forbidden-pattern');
@@ -110,6 +114,15 @@ describe('AuthoringCaseTableComponent', () => {
     return TestbedHarnessEnvironment.harnessForFixture(fixture, TableHarness);
   }
 
+  it('groups the five available controls under one keyboard-operable disclosure', async () => {
+    const harness = await mount();
+    expect(await (await harness.toggleFilters()).text()).toBe('Filter cases');
+    expect(await (await harness.filters()).getProperty('open')).toBe(true);
+    expect(await harness.fields()).toHaveLength(5);
+    await (await harness.toggleFilters()).click();
+    expect(await (await harness.filters()).getProperty('open')).toBe(false);
+  });
+
   it('keeps real zeros for included lifecycles and marks excluded lifecycles unverified', async () => {
     list.mockResolvedValue({ items: [caseRow('draft-1')], next_cursor: null });
     const harness = await mount();
@@ -171,6 +184,7 @@ describe('AuthoringCaseTableComponent', () => {
     list.mockRejectedValueOnce(apiError('forbidden', 403));
     const harness = await mount();
     expect(await harness.forbidden()).not.toBeNull();
+    expect(await harness.refreshOptional()).toBeNull();
     expect(await harness.empty()).toBeNull();
     list.mockRejectedValueOnce(
       new ApiRequestError({ ...apiError('network', 0).error, retryable: true }),
@@ -211,6 +225,9 @@ describe('AuthoringCaseTableComponent', () => {
     expect(await (await harness.item()).getAttribute('aria-invalid')).toBe('true');
     expect(await (await harness.itemError()).text()).toContain('complete checklist UUID');
     expect(await (await harness.apply()).getAttribute('disabled')).not.toBeNull();
+    await (await harness.toggleFilters()).click();
+    expect(await (await harness.filters()).getProperty('open')).toBe(false);
+    expect(await (await harness.toggleFilters()).text()).toContain('Check filter values');
   });
 
   it('renders an invalid checklist link without silently requesting the unfiltered scope', async () => {
