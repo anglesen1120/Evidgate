@@ -2,8 +2,10 @@ import { ComponentHarness, manualChangeDetection } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import type { ProjectDto, RunPage } from '@evidgate/sdk';
+import { readFileSync } from 'node:fs';
 import { firstValueFrom, Subject } from 'rxjs';
 import { AuditDataService } from '../../core/data/audit-data.service';
 import { MembersDataService } from '../../core/data/members-data.service';
@@ -12,6 +14,7 @@ import { QuotaDataService } from '../../core/data/quota-data.service';
 import { SessionStore } from '../../core/session/session.store';
 import { ApiRequestError } from '../../core/http/api-error';
 import { mapNetworkError } from '../../core/http/error-mapper';
+import { PageHeaderComponent } from '../../shared/ui/page-header';
 import { OrgOverviewPage } from './org-overview.page';
 import { OrgOverviewStore } from './org-overview.store';
 
@@ -24,6 +27,15 @@ class OverviewHarness extends ComponentHarness {
   readonly retryButtons = this.locatorForAll('button[data-run-summary-retry]');
   readonly projectLinks = this.locatorForAll('a');
   readonly runSummary = this.locatorFor('[data-run-summary]');
+  readonly titleIcon = this.locatorFor('app-page-header h1 hlm-icon');
+  readonly projectTitles = this.locatorForAll('.projects h2');
+  readonly projectTable = this.locatorFor('.projects app-data-table');
+  readonly tableRole = this.locatorFor('.projects [role="table"]');
+  readonly tableCaption = this.locatorFor('.projects app-data-table > .caption');
+  readonly decisionPrefix = this.locatorFor('app-decision-chip .verdict__label');
+  readonly usageTerms = this.locatorForAll('.usage dl.hlm-field-grid > div.grid-cols-2 > dt');
+  readonly usageValues = this.locatorForAll('.usage dl.hlm-field-grid > div.grid-cols-2 > dt + dd');
+  readonly countNotice = this.locatorFor('.projects [data-project-count]');
 }
 
 const project: ProjectDto = {
@@ -108,6 +120,81 @@ describe('OrgOverviewPage', () => {
       ],
     });
   });
+  it('uses a decorative icon inside the page heading', async () => {
+    const fixture = TestBed.createComponent(OrgOverviewPage);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+    expect(await (await harness.titleIcon()).getAttribute('aria-hidden')).toBe('true');
+    const header = fixture.debugElement.query(By.directive(PageHeaderComponent));
+    expect(header.injector.get(PageHeaderComponent).icon()).toBe('navGrid');
+  });
+
+  it('shows one project title and uses the visually hidden caption to name the table', async () => {
+    projects.listProjects.mockResolvedValue({ items: [project], next_cursor: null });
+    const fixture = TestBed.createComponent(OrgOverviewPage);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+    const titles = await harness.projectTitles();
+    expect(await Promise.all(titles.map((title) => title.text()))).toEqual(['My projects']);
+    const caption = await harness.tableCaption();
+    expect(await caption.text()).toBe('My projects');
+    expect(await (await harness.tableRole()).getAttribute('aria-labelledby')).toBe(
+      await caption.getAttribute('id'),
+    );
+    expect(await (await harness.projectTable()).hasClass('[&>.caption]:sr-only')).toBe(true);
+  });
+
+  it('pairs results usage and limit with their values and preserves period and token context', async () => {
+    quota.summary.mockResolvedValue({
+      period: '2026-11',
+      metrics: [
+        { metric: 'results', used: 62, limit: null },
+        { metric: 'ai_tokens', used: 0, limit: null },
+      ],
+    });
+    const fixture = TestBed.createComponent(OrgOverviewPage);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+    const terms = await harness.usageTerms();
+    const values = await harness.usageValues();
+    expect(await Promise.all(terms.map((term) => term.text()))).toEqual(['Used', 'Limit']);
+    expect(await Promise.all(values.map((value) => value.text()))).toEqual(['62', 'Unavailable']);
+    const text = await harness.text();
+    expect(text).toContain('Period: 2026-11');
+    expect(text).toContain('Results');
+    expect(text).toMatch(/AI tokens\s*0/);
+  });
+
+  it.each([
+    [1, null, 'Showing 1 project'],
+    [2, null, 'Showing 2 projects'],
+    [1, 'next', 'Showing 1 project; more available'],
+    [2, 'next', 'Showing 2 projects; more available'],
+  ] as const)('describes %s loaded projects with cursor %s', async (count, cursor, expected) => {
+    projects.listProjects.mockResolvedValue({
+      items: count === 1 ? [project] : [project, { ...project, id: 'p2' }],
+      next_cursor: cursor,
+    });
+    const fixture = TestBed.createComponent(OrgOverviewPage);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+    expect(await (await harness.countNotice()).text()).toBe(expected);
+  });
+
+  it('uses one Vietnamese plural form for all counts in both paging states', () => {
+    const catalog = new DOMParser().parseFromString(
+      readFileSync('src/locale/messages.vi.xlf', 'utf8'),
+      'application/xml',
+    );
+    for (const [key, suffix] of [
+      ['projects-count', ''],
+      ['projects-more', '; còn dự án khác'],
+    ]) {
+      const target = catalog.querySelector(`trans-unit[id="orgoverview.${key}"] target`);
+      expect(target?.querySelector('x')?.getAttribute('id')).toBe('INTERPOLATION');
+      target?.querySelector('x')?.replaceWith('N');
+      expect(target?.textContent?.trim()).toBe(
+        `{VAR_PLURAL, plural, other {Hiển thị N dự án${suffix}}}`,
+      );
+    }
+  });
+
   it('renders independent successful empty widgets without fabricated credit', async () => {
     const fixture = TestBed.createComponent(OrgOverviewPage);
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
@@ -156,6 +243,10 @@ describe('OrgOverviewPage', () => {
     expect(await harness.text()).not.toContain('Latest decision');
     expect(await harness.text()).not.toContain('Not evaluated');
     grants.set(new Set(['project:read', 'run:read', 'decision:read']));
+    const prefix = await harness.decisionPrefix();
+    expect(await prefix.hasClass('sr-only')).toBe(true);
+    expect(await prefix.getAttribute('aria-hidden')).toBeNull();
+    expect(await prefix.text()).toBe('Decision:');
     expect(await harness.decisions()).toHaveLength(1);
     expect(await harness.text()).toContain('Latest decision');
   });

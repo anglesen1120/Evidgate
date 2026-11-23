@@ -27231,8 +27231,8 @@
       <trans-unit id="orgoverview.time-column" datatype="html"><source>Latest run (UTC)</source></trans-unit>
       <trans-unit id="orgoverview.action-column" datatype="html"><source>Action</source></trans-unit>
       <trans-unit id="orgoverview.view-project" datatype="html"><source>View project <x id="name" equiv-text="name"/></source></trans-unit>
-      <trans-unit id="orgoverview.projects-more" datatype="html"><source>Showing <x id="count" equiv-text="count"/> projects; more available</source></trans-unit>
-      <trans-unit id="orgoverview.projects-count" datatype="html"><source>Showing <x id="count" equiv-text="count"/> projects</source></trans-unit>
+      <trans-unit id="orgoverview.projects-more" datatype="html"><source>{VAR_PLURAL, plural, =1 {Showing 1 project; more available} other {Showing <x id="INTERPOLATION"/> projects; more available}}</source></trans-unit>
+      <trans-unit id="orgoverview.projects-count" datatype="html"><source>{VAR_PLURAL, plural, =1 {Showing 1 project} other {Showing <x id="INTERPOLATION"/> projects}}</source></trans-unit>
       <trans-unit id="orgoverview.members-sample" datatype="html"><source>Among <x id="count" equiv-text="count"/> memberships shown; more available</source></trans-unit>
       <trans-unit id="orgoverview.members-complete" datatype="html"><source>Among <x id="count" equiv-text="count"/> memberships</source></trans-unit>
       <trans-unit id="shared.dashboard.activity-view" datatype="html"><source> View </source></trans-unit>
