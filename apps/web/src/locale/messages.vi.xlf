@@ -22825,6 +22825,7 @@
       <trans-unit id="project.dashboard.unavailable" datatype="html"><source>Unavailable</source><target>Không khả dụng</target></trans-unit>
       <trans-unit id="project.dashboard.view-run" datatype="html"><source>View run <x id="id" equiv-text="id"/></source><target>Xem lượt chạy <x id="id"/></target></trans-unit>
       <trans-unit id="project.dashboard.runs" datatype="html"><source>Recent runs</source><target>Lượt chạy gần đây</target></trans-unit>
+      <trans-unit id="project.dashboard.summary" datatype="html"><source>Run summary</source><target>Tổng quan lượt chạy</target></trans-unit>
       <trans-unit id="project.dashboard.collecting" datatype="html"><source>Still collecting</source><target>Đang thu thập</target></trans-unit>
       <trans-unit id="project.dashboard.pending" datatype="html"><source>Not evaluated</source><target>Chưa đánh giá</target></trans-unit>
       <trans-unit id="project.dashboard.no-data" datatype="html"><source>No data</source><target>Chưa có dữ liệu</target></trans-unit>
@@ -22842,7 +22843,7 @@
       <trans-unit id="project.dashboard.quarantine" datatype="html"><source>Active quarantine</source><target>Cách ly đang áp dụng</target></trans-unit>
       <trans-unit id="project.dashboard.quarantine-context" datatype="html"><source>Active entries among up to 10 shown.</source><target>Mục đang áp dụng trong tối đa 10 mục hiển thị.</target></trans-unit>
       <trans-unit id="project.dashboard.incidents" datatype="html"><source>Incidents</source><target>Sự cố</target></trans-unit>
-      <trans-unit id="project.dashboard.incident-context" datatype="html"><source>Up to 10 returned incidents; not an unresolved-incident total.</source><target>Tối đa 10 sự cố được trả về; không phải tổng số sự cố chưa xử lý.</target></trans-unit>
+      <trans-unit id="project.dashboard.incidents-unavailable" datatype="html"><source>Not available yet</source><target>Chưa khả dụng</target></trans-unit>
       <trans-unit id="project.dashboard.authoring" datatype="html"><source>Authoring</source><target>Soạn thảo</target></trans-unit>
       <trans-unit id="project.dashboard.cases" datatype="html"><source>Manual cases</source><target>Ca kiểm thử thủ công</target></trans-unit>
       <trans-unit id="project.dashboard.case-context" datatype="html"><source>Cases shown, up to 20.</source><target>Số ca hiển thị, tối đa 20.</target></trans-unit>

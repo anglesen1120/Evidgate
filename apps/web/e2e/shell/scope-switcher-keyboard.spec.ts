@@ -33,7 +33,10 @@ test.describe('scope switcher keyboard commit (AC4)', () => {
     page,
   }) => {
     await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
-    await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
+    await expect(page.locator('#main-content h1')).toHaveText('Project overview');
+    await expect(page.locator('app-page-header .header-description')).toContainText(
+      'Storefront web',
+    );
     const projectSelect = scopeControl(page, 1);
     await expect(projectSelect).toBeEnabled();
     await expectScopeValue(projectSelect, PROJECT_STOREFRONT);
@@ -47,12 +50,16 @@ test.describe('scope switcher keyboard commit (AC4)', () => {
 
     await page.keyboard.press('Enter');
     await expect.poll(() => new URL(page.url()).pathname).toBe(CHECKOUT_OVERVIEW);
-    await expect(page.locator('#main-content h1')).toHaveText('Checkout API');
+    await expect(page.locator('#main-content h1')).toHaveText('Project overview');
+    await expect(page.locator('app-page-header .header-description')).toContainText('Checkout API');
   });
 
   test('Tab dismisses an explored option without changing scope', async ({ page }) => {
     await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
-    await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
+    await expect(page.locator('#main-content h1')).toHaveText('Project overview');
+    await expect(page.locator('app-page-header .header-description')).toContainText(
+      'Storefront web',
+    );
     const projectSelect = scopeControl(page, 1);
     await expect(projectSelect).toBeEnabled();
     const before = new URL(page.url()).pathname;

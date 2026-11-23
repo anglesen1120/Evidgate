@@ -29,6 +29,13 @@
   overflow-wrap: anywhere;
 }
 
+.header-title-with-icon {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--eg-space-3);
+}
+
 .header-description {
   margin: var(--eg-space-0);
   max-inline-size: 65ch;

@@ -50,9 +50,10 @@ describe('ProjectDashboardStore', () => {
       ]),
     );
     data = Object.fromEntries(
-      ['waivers', 'quarantine', 'incidents', 'bindings', 'tree', 'cases', 'changes', 'audit'].map(
-        (name) => [name, vi.fn(empty)],
-      ),
+      ['waivers', 'quarantine', 'bindings', 'tree', 'cases', 'changes', 'audit'].map((name) => [
+        name,
+        vi.fn(empty),
+      ]),
     );
     data['runs'] = vi.fn(() => Promise.resolve({ items: [], complete: true }));
     data['usage'] = vi.fn(() =>

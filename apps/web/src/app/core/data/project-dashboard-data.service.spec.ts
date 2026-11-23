@@ -49,7 +49,6 @@ describe('ProjectDashboardDataService', () => {
     const reads = [
       data.waivers('p', signal),
       data.quarantine('p', signal),
-      data.incidents('p', signal),
       data.bindings('p', signal),
       data.tree('p', signal),
       data.cases('p', signal),
@@ -60,7 +59,6 @@ describe('ProjectDashboardDataService', () => {
     const paths = [
       'projects/p/waivers',
       'projects/p/quarantine',
-      'projects/p/incidents',
       'projects/p/ci-bindings',
       'projects/p/authoring/tree',
       'projects/p/authoring/manual-cases',
@@ -71,7 +69,7 @@ describe('ProjectDashboardDataService', () => {
     for (const [index, path] of paths.entries()) {
       const request = await takeRequest(http, `${BASE}/${path}`);
       const query = new URL(request.request.urlWithParams).searchParams;
-      expect(query.get('limit')).toBe(String([10, 10, 10, 10, 10, 20, 20, 1, 3][index]));
+      expect(query.get('limit')).toBe(String([10, 10, 10, 10, 20, 20, 1, 3][index]));
       if (path.endsWith('/changes')) expect(query.get('state')).toBe('pending');
       request.flush(
         JSON.stringify(
@@ -82,6 +80,6 @@ describe('ProjectDashboardDataService', () => {
         { headers: JSON_HEADERS },
       );
     }
-    await expect(Promise.all(reads)).resolves.toHaveLength(9);
+    await expect(Promise.all(reads)).resolves.toHaveLength(8);
   });
 });

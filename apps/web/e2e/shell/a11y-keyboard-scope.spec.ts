@@ -124,7 +124,10 @@ function expectSameRow(
 test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
   test('desktop: Tab walks the topbar left to right, all on one row', async ({ page }) => {
     await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
-    await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
+    await expect(page.locator('#main-content h1')).toHaveText('Project overview');
+    await expect(page.locator('app-page-header .header-description')).toContainText(
+      'Storefront web',
+    );
     const startPath = new URL(page.url()).pathname;
 
     // 1–2. A fresh document starts at the top of the tab order: the skip link, then the brand.
@@ -229,7 +232,10 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
     page,
   }) => {
     await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
-    await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
+    await expect(page.locator('#main-content h1')).toHaveText('Project overview');
+    await expect(page.locator('app-page-header .header-description')).toContainText(
+      'Storefront web',
+    );
     const projectSelect = page.getByRole('combobox', { name: 'Project' });
     await expect(projectSelect).toBeEnabled();
 
@@ -242,7 +248,8 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
 
     await page.keyboard.press('Enter');
     await expect.poll(() => new URL(page.url()).pathname).toBe(CHECKOUT_OVERVIEW);
-    await expect(page.locator('#main-content h1')).toHaveText('Checkout API');
+    await expect(page.locator('#main-content h1')).toHaveText('Project overview');
+    await expect(page.locator('app-page-header .header-description')).toContainText('Checkout API');
     // A committed switch is a path change, so the shell moves focus to the new page's region.
     expect(await focusInsideTopbar(page)).toBe(false);
     await expect.poll(async () => (await activeElement(page)).id).toBe('main-content');
@@ -252,7 +259,10 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
     page,
   }) => {
     await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
-    await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
+    await expect(page.locator('#main-content h1')).toHaveText('Project overview');
+    await expect(page.locator('app-page-header .header-description')).toContainText(
+      'Storefront web',
+    );
 
     // The keyboard equivalent of the mouse path `scope-theme.spec.ts` documents: the same attempt,
     // the same destination, reached without a pointer — Tab from the skip link to the organization
@@ -280,7 +290,10 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
         LIMITED_GRANTS,
       ),
     );
-    await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
+    await expect(page.locator('#main-content h1')).toHaveText('Tổng quan dự án');
+    await expect(page.locator('app-page-header .header-description')).toContainText(
+      'Storefront web',
+    );
     const startPath = new URL(page.url()).pathname;
 
     await page.keyboard.press('Tab');
@@ -323,7 +336,10 @@ for (const width of [360, 390]) {
       page,
     }) => {
       await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
-      await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
+      await expect(page.locator('#main-content h1')).toHaveText('Project overview');
+      await expect(page.locator('app-page-header .header-description')).toContainText(
+        'Storefront web',
+      );
       await expect(page.locator('#shell-navigation')).toHaveAttribute('inert', '');
       await expect(page.locator('header.topbar [role="combobox"]')).toHaveCount(0);
       await expect(page.locator('#shell-navigation [role="combobox"]')).toHaveCount(2);
@@ -356,7 +372,10 @@ for (const width of [360, 390]) {
 
     test('opens scope in drawer order, traps focus and closes with Escape', async ({ page }) => {
       await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
-      await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
+      await expect(page.locator('#main-content h1')).toHaveText('Project overview');
+      await expect(page.locator('app-page-header .header-description')).toContainText(
+        'Storefront web',
+      );
       await walkTopbar(page, 'navigation', 'compact');
       const navToggle = page.locator('button.nav-toggle');
       const aside = page.locator('#shell-navigation');
