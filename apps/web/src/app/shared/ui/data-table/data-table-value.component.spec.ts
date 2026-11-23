@@ -152,6 +152,31 @@ describe('DataTableValueComponent', () => {
     expect(hide).toHaveBeenCalled();
   });
 
+  it('follows a scrolling trigger and dismisses once it leaves the scrollport', async () => {
+    await clip();
+    vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(390);
+    vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(800);
+    vi.spyOn(root, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 100, 390, 300));
+    const anchor = vi
+      .spyOn(value, 'getBoundingClientRect')
+      .mockReturnValue(new DOMRect(300, 120, 50, 30));
+    const panel = root.querySelector<HTMLElement>('[popover]')!;
+    vi.spyOn(panel, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 140, 60));
+    value.click();
+    expect(panel.style.left).toBe('250px');
+    expect(panel.style.top).toBe('150px');
+    panel.dispatchEvent(new Event('scroll'));
+    anchor.mockReturnValue(new DOMRect(300, 110, 50, 30));
+    root.dispatchEvent(new Event('scroll'));
+    expect(panel.style.top).toBe('140px');
+    expect(hide).not.toHaveBeenCalled();
+    anchor.mockReturnValue(new DOMRect(300, 60, 50, 30));
+    root.dispatchEvent(new Event('scroll'));
+    await fixture.whenStable();
+    expect(hide).toHaveBeenCalledOnce();
+    expect(value.getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('R4: dismisses a recycled clipped value and resets its text and open state', async () => {
     await clip();
     value.dispatchEvent(new MouseEvent('click'));
