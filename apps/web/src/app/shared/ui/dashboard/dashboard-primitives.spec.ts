@@ -12,7 +12,7 @@ class DashboardHarness extends ComponentHarness {
   readonly text = async () => (await this.host()).text();
   readonly retry = this.locatorFor('button');
   readonly meter = this.locatorForOptional('meter');
-  readonly bars = this.locatorForAll('[data-segment]');
+  readonly bars = this.locatorForAll('.trend-stack [data-segment]');
   readonly loading = this.locatorForOptional('app-loading-pattern');
   readonly empty = this.locatorForOptional('app-empty-pattern');
 }
@@ -57,6 +57,8 @@ describe('Dashboard primitives', () => {
     fixture.componentRef.setInput('value', 0);
     expect(await harness.text()).toContain('0');
     expect(await harness.text()).not.toContain('Unavailable');
+    fixture.componentRef.setInput('value', '50%');
+    expect(await harness.text()).toContain('50%');
   });
 
   it('does not draw a quota ratio with an unknown or zero limit', async () => {
@@ -72,6 +74,8 @@ describe('Dashboard primitives', () => {
     fixture.componentRef.setInput('maximum', 10);
     expect(await (await harness.meter())?.getAttribute('value')).toBe('10');
     expect(await harness.text()).toContain('Limit unavailable');
+    fixture.componentRef.setInput('value', -1);
+    expect(await harness.meter()).toBeNull();
   });
 
   it('exposes all trend values as text and preserves neutral undecided segments', async () => {

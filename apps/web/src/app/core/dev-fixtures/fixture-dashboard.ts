@@ -26,6 +26,7 @@ export function dashboardFixture(
   method: string,
   path: string,
   variantFor: (operation: string) => string,
+  requestUrl = '',
 ): FixtureEntry | undefined {
   if (method !== 'GET' || !variantFor('listPermissions').startsWith('dashboard')) return undefined;
   const operation = ROUTES.find(([, pattern]) => pattern.test(path))?.[0];
@@ -37,7 +38,7 @@ export function dashboardFixture(
     headers: {},
     latency_ms: 0,
     status: 200,
-    body: bodyFor(operation, path, variantFor('listPermissions')),
+    body: boundedBody(bodyFor(operation, path, variantFor('listPermissions')), requestUrl),
   };
   if (variant === 'dashboard-empty')
     document.body =
@@ -57,6 +58,24 @@ export function dashboardFixture(
     };
   }
   return { name: `dashboard-${operation}-${variant}`, document };
+}
+
+function boundedBody(body: unknown, requestUrl: string): unknown {
+  const limit = Number(new URL(requestUrl, 'https://fixtures.invalid').searchParams.get('limit'));
+  if (
+    limit <= 0 ||
+    !Number.isSafeInteger(limit) ||
+    body === null ||
+    typeof body !== 'object' ||
+    !('items' in body) ||
+    !Array.isArray(body.items)
+  )
+    return body;
+  return {
+    ...body,
+    items: body.items.slice(0, limit),
+    next_cursor: body.items.length > limit ? 'dashboard-next' : null,
+  };
 }
 
 function bodyFor(operation: string, path: string, grantsVariant: string): unknown {

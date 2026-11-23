@@ -2,6 +2,7 @@ import { provideZonelessChangeDetection, signal, type Type } from '@angular/core
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
+import { ProjectDashboardDataService } from '../../core/data/project-dashboard-data.service';
 import { SessionStore } from '../../core/session/session.store';
 import { ProjectOverviewPage } from '../../features/project/overview.page';
 import { NavViewService } from '../nav/nav-view';

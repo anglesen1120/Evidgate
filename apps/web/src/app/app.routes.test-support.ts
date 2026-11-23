@@ -23,6 +23,7 @@ import type { OrganizationSummaryDto, PermissionView, ProjectDto } from '@evidga
 
 import { routes } from './app.routes';
 import { IdentityDataService } from './core/data/identity-data.service';
+import { ProjectDashboardDataService } from './core/data/project-dashboard-data.service';
 import { ApiRequestError, type ApiError } from './core/http/api-error';
 import { EffectivePermissionsSource } from './core/session/effective-permissions.source';
 import { CallbackPage } from './features/auth/callback/callback.page';
@@ -317,6 +318,21 @@ export async function setUp(
       provideZonelessChangeDetection(),
       provideRouter(withComponentStubs(routes)),
       { provide: IdentityDataService, useValue: identity },
+      {
+        provide: ProjectDashboardDataService,
+        useValue: {
+          runs: async () => ({ items: [], complete: true }),
+          bindings: async () => ({ items: [] }),
+          waivers: async () => ({ items: [] }),
+          quarantine: async () => ({ items: [] }),
+          incidents: async () => ({ items: [] }),
+          tree: async () => ({ items: [] }),
+          cases: async () => ({ items: [] }),
+          changes: async () => ({ items: [] }),
+          usage: async () => ({ metrics: [] }),
+          audit: async () => ({ items: [] }),
+        },
+      },
       { provide: PermittedCodes, useValue: permitted },
       { provide: EffectivePermissionsSource, useClass: FakePermissionsSource },
     ],

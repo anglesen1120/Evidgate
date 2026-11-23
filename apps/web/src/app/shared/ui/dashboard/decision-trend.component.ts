@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
+import { HlmTableImports } from '@evidgate/ui/table';
 import type { DashboardTone } from './dashboard-kpi.component';
 
 export interface DashboardTrendSegment {
@@ -16,7 +17,7 @@ export interface DashboardTrendPoint {
 
 @Component({
   selector: 'app-decision-trend',
-  imports: [DecimalPipe],
+  imports: [DecimalPipe, HlmTableImports],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
@@ -30,6 +31,7 @@ export interface DashboardTrendPoint {
                   data-segment
                   aria-hidden="true"
                   [attr.data-tone]="segment.tone"
+                  [attr.data-pattern]="$index % 4"
                   [style.height.%]="segment.height"
                 ></span>
               }

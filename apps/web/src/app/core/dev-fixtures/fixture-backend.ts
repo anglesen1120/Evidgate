@@ -186,8 +186,11 @@ export class FixtureHttpBackend implements HttpBackend {
     request: HttpRequest<unknown>,
     relativePath: string,
   ): FixtureEntry | undefined {
-    const dashboard = dashboardFixture(request.method, relativePath, (operation) =>
-      this.toggles.variantFor(operation),
+    const dashboard = dashboardFixture(
+      request.method,
+      relativePath,
+      (operation) => this.toggles.variantFor(operation),
+      request.urlWithParams,
     );
     if (dashboard !== undefined) return dashboard;
     const capped = findBrowseCapFixture(

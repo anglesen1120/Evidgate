@@ -36,4 +36,17 @@ describe('Dashboard browser fixture scenario', () => {
     expect(dashboardFixture('GET', '/projects/p/waivers', variants)?.document.status).toBe(503);
     expect(dashboardFixture('GET', '/projects/p/runs', variants)?.document.status).toBe(200);
   });
+  it('honors a caller-provided list limit without affecting other scenarios', () => {
+    const entry = dashboardFixture('GET', '/orgs/o/audit', variant, '/orgs/o/audit?limit=3');
+    expect(entry?.document.body).toMatchObject({
+      items: expect.any(Array),
+      next_cursor: 'dashboard-next',
+    });
+    const body = entry?.document.body;
+    expect(
+      body && typeof body === 'object' && 'items' in body && Array.isArray(body.items)
+        ? body.items.length
+        : null,
+    ).toBe(3);
+  });
 });

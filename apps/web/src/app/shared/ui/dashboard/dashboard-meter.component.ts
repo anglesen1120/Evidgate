@@ -31,6 +31,7 @@ export class DashboardMeterComponent {
       maximum === null ||
       maximum <= 0 ||
       value === null ||
+      value < 0 ||
       !Number.isFinite(maximum) ||
       !Number.isFinite(value)
     )

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { HlmCard } from '@evidgate/ui/card';
 import { NumberValueComponent } from '../values/number-value.component';
 
@@ -18,12 +18,12 @@ export type DashboardTone = 'neutral' | 'success' | 'danger' | 'warning' | 'info
     >
       <h3 class="m-0 text-sm font-medium text-muted-foreground">{{ label() }}</h3>
       <p class="m-0 text-3xl font-semibold tabular-nums wrap-anywhere">
-        @if (value(); as current) {
+        @if (numericValue(); as current) {
           <app-number-value [value]="current" />
         } @else if (value() === 0) {
           <app-number-value [value]="0" />
         } @else {
-          {{ unavailableLabel() }}
+          {{ value() ?? unavailableLabel() }}
         }
       </p>
       @if (detail()) {
