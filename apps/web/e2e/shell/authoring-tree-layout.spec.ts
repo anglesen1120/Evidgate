@@ -18,7 +18,7 @@ async function expectCasesToFit(rows: Locator): Promise<void> {
         const { left, right } = el.getBoundingClientRect();
         return (
           el.scrollWidth <= el.clientWidth + 1 &&
-          [...el.querySelectorAll('[data-column-id="id"], [data-case-view]')].every((cell) => {
+          [...el.querySelectorAll('[data-case-identifiers], [data-case-view]')].every((cell) => {
             const bounds = cell.getBoundingClientRect();
             return (
               bounds.width > 0 &&
@@ -30,6 +30,37 @@ async function expectCasesToFit(rows: Locator): Promise<void> {
       }),
     )
     .toBe(true);
+}
+
+async function expectReadableDesktopRows(rows: Locator): Promise<void> {
+  const selection = rows.getByRole('columnheader').first();
+  await expect(selection).toHaveAccessibleName(/Selection|Chọn|Lựa chọn/i);
+  await expect(selection).toHaveCSS('font-size', '0px');
+  await expect(rows.locator('[data-case-key]').first()).toHaveText('SHOP-601');
+  const broken = await rows.evaluate((table) => {
+    const issues: string[] = [];
+    const selector =
+      'th:not(.cdk-column-select), [data-case-key], [data-case-view], .coverage-count';
+    for (const el of table.querySelectorAll<HTMLElement>(selector)) {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const box = range.getBoundingClientRect();
+      const cell = el.getBoundingClientRect();
+      const line = parseFloat(getComputedStyle(el).lineHeight);
+      if (box.height > line + 2 || box.right > cell.right + 1 || box.left < cell.left - 1) {
+        issues.push(el.innerText);
+      }
+    }
+    for (const group of table.querySelectorAll('.coverage-summary, .case-key-line')) {
+      const centers = [...group.children].map((child) => {
+        const r = child.getBoundingClientRect();
+        return r.top + r.height / 2;
+      });
+      if (Math.max(...centers) - Math.min(...centers) > 1) issues.push(group.textContent ?? '');
+    }
+    return issues;
+  });
+  expect(broken, 'clipped or wrapped case headers, keys, controls or coverage').toEqual([]);
 }
 
 for (const locale of LOCALES) {
@@ -69,6 +100,8 @@ for (const locale of LOCALES) {
             ).toBeVisible();
             await expect(page.locator('[data-case-loaded]')).toBeVisible();
             await expectCasesToFit(authoring.locator('app-authoring-case-rows'));
+            if (width >= 1280)
+              await expectReadableDesktopRows(authoring.locator('app-authoring-case-rows'));
             const metrics = await page.locator('[data-authoring-metrics]').innerText();
             expect.soft(metrics).toContain('2');
             if (width === 1440) {

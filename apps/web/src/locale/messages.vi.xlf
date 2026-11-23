@@ -22661,6 +22661,7 @@
       <trans-unit id="catalog.case-view.view-name" datatype="html"><source>View <x id="name"/></source><target>Xem <x id="name"/></target></trans-unit>
       <trans-unit id="catalog.case-view.edit-name" datatype="html"><source>Edit owner for <x id="name"/></source><target>Sửa người phụ trách cho <x id="name"/></target></trans-unit>
       <trans-unit id="authoring.case-table.manual-case" datatype="html"><source>Manual case</source><target>Ca kiểm thử thủ công</target></trans-unit>
+      <trans-unit id="authoring.case-table.identifiers" datatype="html"><source>Identifiers</source><target>Mã định danh</target></trans-unit>
       <trans-unit id="authoring.case-table.priority-state" datatype="html"><source>Priority / lifecycle</source><target>Ưu tiên / vòng đời</target></trans-unit>
       <trans-unit id="authoring.case-table.view" datatype="html"><source>View</source><target>Xem</target></trans-unit>
       <trans-unit id="authoring.case-table.actions" datatype="html"><source>Actions</source><target>Thao tác</target></trans-unit>

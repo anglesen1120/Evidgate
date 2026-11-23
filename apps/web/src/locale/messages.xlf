@@ -27043,6 +27043,7 @@
       <trans-unit id="catalog.case-view.view-name" datatype="html"><source>View <x id="name"/></source></trans-unit>
       <trans-unit id="catalog.case-view.edit-name" datatype="html"><source>Edit owner for <x id="name"/></source></trans-unit>
       <trans-unit id="authoring.case-table.manual-case" datatype="html"><source>Manual case</source></trans-unit>
+      <trans-unit id="authoring.case-table.identifiers" datatype="html"><source>Identifiers</source></trans-unit>
       <trans-unit id="authoring.case-table.priority-state" datatype="html"><source>Priority / lifecycle</source></trans-unit>
       <trans-unit id="authoring.case-table.view" datatype="html"><source>View</source></trans-unit>
       <trans-unit id="authoring.case-table.actions" datatype="html"><source>Actions</source></trans-unit>

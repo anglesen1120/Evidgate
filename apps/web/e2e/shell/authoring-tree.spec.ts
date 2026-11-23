@@ -421,7 +421,14 @@ for (const locale of LOCALES) {
           .evaluateAll((fields) => fields.map((field) => field.getBoundingClientRect().width));
         expect(widths).toHaveLength(5);
         expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(1);
-        await expect(page.locator(CASE_ROWS)).toContainText('018f0000-0000-7000-8000-000000000777');
+        const identifiers = page.locator(`${CASE_ROWS} [data-case-identifiers]`).first();
+        await identifiers.click();
+        const dialog = page.getByRole('dialog');
+        await expect(dialog).toHaveAccessibleName(/SHOP-601/);
+        await expect(dialog).toContainText('018f0000-0000-7000-8000-000000000777');
+        await page.keyboard.press('Escape');
+        await expect(dialog).toHaveCount(0);
+        await expect(identifiers).toBeFocused();
         if (width === 1440) {
           await expect(page.locator(`${CASE_ROWS} [data-row-id]`).first()).toBeInViewport();
         }

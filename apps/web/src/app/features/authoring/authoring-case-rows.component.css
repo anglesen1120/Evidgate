@@ -60,18 +60,42 @@
   min-inline-size: var(--eg-space-7);
   vertical-align: middle;
 }
-.coverage {
+.case-subject,
+.priority-group {
   display: grid;
   gap: var(--eg-space-2);
   min-inline-size: 0;
 }
-.virtual-cell {
+.case-key-line,
+.coverage-summary,
+.identifier-line,
+.virtual-priority,
+.virtual-subject {
   display: flex;
   align-items: center;
+  gap: var(--eg-space-2);
 }
-.virtual-cell > * {
+.case-key-line,
+.coverage-summary,
+.virtual-priority {
+  inline-size: max-content;
+  white-space: nowrap;
+}
+.case-key-line {
+  color: var(--eg-text-muted);
+  font-size: var(--eg-text-xs);
+}
+.case-key-line code,
+.identifier-line code {
+  font-family: var(--eg-font-mono);
+}
+.virtual-subject > bdi {
   flex: 1;
   min-inline-size: 0;
+}
+.identifier-line code {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
 }
 a[aria-disabled] {
   color: var(--eg-text-muted);
