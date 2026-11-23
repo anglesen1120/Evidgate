@@ -1,10 +1,5 @@
-// 09.1.1-T4.1/T4.2 (plan 09.1.1 §10 T4, §5; D-S68-Q4): where the app sends a caller who has no
-// destination in the URL — `/` and `/orgs/:orgId` are landing addresses, not pages.
-//
-// The landing answer is computed from the server's lists, never guessed: the first organization the
-// server returned, its first project (server order, keyset on `(created_at, id)`) and then the
-// project overview. An org with no project yet goes to onboarding — the one screen that can create
-// one — and a caller with no organization at all goes to `/welcome` instead of an empty shell.
+// Home preserves a resolved project. With no selection, the server's lists determine the landing:
+// the first project's overview, onboarding for an empty org, or /welcome when there is no org.
 
 import { inject } from '@angular/core';
 import { Router, type CanActivateFn, type UrlTree } from '@angular/router';
@@ -51,8 +46,8 @@ async function orgLanding(
 }
 
 /**
- * `''` — the workspace root: anonymous → `/login`, unreadable session → `/unavailable`, no org →
- * `/welcome`, otherwise the first org's landing address.
+ * The workspace root preserves a signed-in caller's project, otherwise using the first org's
+ * landing address. Anonymous and unavailable sessions never use a previous selection.
  *
  * The login redirect carries no `returnUrl`: the attempt was the root itself, and a login flow that
  * must return to `/` adds nothing a bare `/login` does not.
@@ -68,6 +63,10 @@ export const landingRedirectGuard: CanActivateFn = async () => {
   }
   if (state !== 'authenticated') {
     return router.createUrlTree([LOGIN_URL]);
+  }
+  const selected = session.currentProject();
+  if (selected !== null) {
+    return router.createUrlTree(['/orgs', selected.org_id, 'projects', selected.id, 'overview']);
   }
   const org = session.organizations()[0];
   if (org === undefined) {

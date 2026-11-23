@@ -62,6 +62,9 @@ for (const locale of LOCALES) {
         page,
       }) => {
         await page.goto(path(locale, severity, false));
+        await ready(page);
+        await expect(page.locator(`${PANEL} h1`)).toBeVisible();
+        await expect(page.locator(`${PANEL} [data-quota-metric="results"]`)).toBeVisible();
         const badge = page.locator(BADGE);
         await expect(badge).toHaveAttribute('data-quota-severity', severity);
         await expect(badge).toContainText(locale === 'vi' ? 'Kết quả' : 'Results');
