@@ -130,7 +130,7 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
     select(admin.id, false);
     expect(save().disabled).toBe(true);
     expect(root.querySelector('fieldset legend')?.textContent?.trim()).not.toBe('');
-    expect(option(admin.id).closest('label')?.textContent).toContain(admin.name);
+    expect(option(admin.id).closest('label')?.textContent).toContain('Tenant admin');
   });
 
   it('sends grants before revokes with distinct intents and announces confirmed success', async () => {
@@ -231,7 +231,7 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
     expect(root.querySelector('[data-members-applied-item]')?.textContent).toContain(viewer.name);
     expect(root.querySelectorAll('[data-members-not-applied-item]')).toHaveLength(1);
     expect(root.querySelector('[data-members-not-applied-item]')?.textContent).toContain(
-      admin.name,
+      'Tenant admin',
     );
     expect(root.querySelector('[data-members-error] p')?.textContent).toBe(lastAdmin.message);
     expect(root.querySelector('[data-members-error-code]')?.textContent).toBe('last_admin');

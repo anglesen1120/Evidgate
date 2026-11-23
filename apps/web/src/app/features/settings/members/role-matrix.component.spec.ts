@@ -7,9 +7,9 @@ import { RoleMatrixComponent } from './role-matrix.component';
 
 const ROLES: RoleView[] = ['CI producer', 'Test maintainer'].map((name, index) => ({
   id: `role-${index}`,
-  code: `role_${index}`,
+  code: index === 0 ? 'new_builtin' : 'tenant_admin',
   name,
-  is_builtin: true,
+  is_builtin: index === 0,
   created_at: '2026-11-04T00:00:00Z',
   version: 1,
 }));
@@ -62,7 +62,7 @@ describe('RoleMatrixComponent responsive records', () => {
     return { fixture, root: fixture.nativeElement as HTMLElement };
   }
 
-  it('keeps server role names intact in headers and labelled narrow records', async () => {
+  it('keeps unknown built-in and custom names even when a custom code matches a built-in', async () => {
     const { root } = await render();
     expectTableSemantics(root);
     expect(root.querySelector('table[hlmTable]')).not.toBeNull();
@@ -203,7 +203,7 @@ describe('RoleMatrixComponent responsive records', () => {
       MEMBER.invited_email,
     );
     expect(identity?.getAttribute('data-column-priority')).toBe('primary');
-    expect(root.querySelectorAll('thead th')).toHaveLength(3);
+    expect(root.querySelectorAll('thead th')).toHaveLength(4);
     expect(root.querySelector('table')?.classList.contains('eg-table-layout')).toBe(true);
     expect(root.querySelector('.role-name')?.textContent).toBe(ROLES[0]?.name);
     expect(root.querySelector('.mutation')).toBeNull();

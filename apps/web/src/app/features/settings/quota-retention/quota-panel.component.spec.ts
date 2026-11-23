@@ -19,7 +19,10 @@ class QuotaPanelHarness extends ComponentHarness {
   readonly pageTitle = this.locatorForOptional('h1#quota-title');
   readonly sectionTitle = this.locatorForOptional('h2#quota-title');
   readonly subsectionTitles = this.locatorForAll('h3');
+  readonly metricHeading = this.locatorFor('[data-quota-metric] h3');
+  readonly projectHeading = this.locatorFor('[data-quota-projects] h3');
   readonly projectRows = this.locatorForAll('app-data-table [data-row-id]');
+  readonly viewActions = this.locatorForAll('[data-quota-view]');
   readonly retry = this.locatorFor('button');
 }
 
@@ -211,6 +214,31 @@ describe('QuotaPanelComponent', () => {
     const { root } = await render();
     expect(root.querySelector('[data-quota-empty]')).not.toBeNull();
     expect(root.querySelector('[data-quota-unavailable]')).toBeNull();
+  });
+
+  it('reserves the short View label in both the project and recorded-state tables', async () => {
+    usageSummary.set({
+      period: '2026-11',
+      project: null,
+      metrics: [metric({ projects: [project()] })],
+      next_cursor: null,
+    });
+    const { harness } = await render();
+    const actions = await harness.viewActions();
+    expect(actions).toHaveLength(2);
+    for (const action of actions) expect(await action.hasClass('short-action')).toBe(true);
+  });
+
+  it('distinguishes the organization counter from its project breakdown in heading navigation', async () => {
+    usageSummary.set({
+      period: '2026-11',
+      project: null,
+      metrics: [metric({ metric: 'results', projects: [project()] })],
+      next_cursor: null,
+    });
+    const { harness } = await render();
+    expect(await (await harness.metricHeading()).text()).toBe('Results');
+    expect(await (await harness.projectHeading()).text()).toBe('Results by project');
   });
 
   it('renders the project counters, reading a null limit as unavailable and a zero as zero', async () => {

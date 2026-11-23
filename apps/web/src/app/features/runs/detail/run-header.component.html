@@ -3,9 +3,9 @@
     <div class="flex min-w-0 flex-wrap items-center gap-x-(--eg-space-5) gap-y-(--eg-space-2)">
       <div class="flex min-w-0 items-center gap-(--eg-space-2)">
         <h2 id="run-summary-title" class="m-0 min-w-0 text-sm font-medium">
-          {{ copy.id }} <bdi class="font-mono">{{ display(run().run_id) }}</bdi>
+          {{ copy.id }} <bdi class="font-mono wrap-anywhere">{{ display(run().run_id) }}</bdi>
         </h2>
-        <app-copy-value-button [value]="run().run_id" [label]="copy.id" />
+        <app-copy-value-button class="short-action" [value]="run().run_id" [label]="copy.id" />
       </div>
       <div class="flex items-center gap-(--eg-space-2)">
         <span class="eg-type-caption text-muted-foreground">{{ copy.state }}</span>
