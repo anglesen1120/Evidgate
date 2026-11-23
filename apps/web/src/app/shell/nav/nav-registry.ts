@@ -17,6 +17,19 @@ export const NAV_GROUPS: readonly NavGroupDef[] = [
 // Preview-only routes and panels inside a destination do not become product navigation.
 export const NAV_ENTRIES: readonly NavEntry[] = [
   {
+    id: 'org-overview',
+    screenId: 'org-overview',
+    group: 'workspace',
+    phase: 'G1',
+    order: 0,
+    icon: 'grid',
+    scope: 'org',
+    segment: 'overview',
+    permission: 'organization:read',
+    area: 'org-overview',
+    label: $localize`:@@shell.nav.org-overview:Organization overview`,
+  },
+  {
     id: 'overview',
     screenId: '01',
     group: 'workspace',

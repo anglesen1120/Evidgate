@@ -89,6 +89,8 @@ const AREA_ROUTES: Readonly<Record<string, () => Promise<Routes>>> = {
  * placeholder table. Every other entry is a `RouteStubPage` until its feature story lands.
  */
 const ENTRY_PAGES: Readonly<Record<string, () => Promise<Type<unknown>>>> = {
+  'org-overview': () =>
+    import('./features/org-overview/org-overview.page').then((m) => m.OrgOverviewPage),
   overview: () => import('./features/project/overview.page').then((m) => m.ProjectOverviewPage),
 };
 

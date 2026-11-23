@@ -93,8 +93,8 @@ describe('NAV_GROUPS (09.1.1-T4.1)', () => {
 
 describe('NAV_ENTRIES (09.1.1-T4.1)', () => {
   it('retains every mounted registry entry once', () => {
-    expect(NAV_ENTRIES).toHaveLength(30);
-    expect(new Set(NAV_ENTRIES.map((entry) => entry.id)).size).toBe(30);
+    expect(NAV_ENTRIES).toHaveLength(31);
+    expect(new Set(NAV_ENTRIES.map((entry) => entry.id)).size).toBe(31);
   });
 
   it('Shell_SidebarOrder_FromManifest', () => {
@@ -104,7 +104,7 @@ describe('NAV_ENTRIES (09.1.1-T4.1)', () => {
         .map((entry) => entry.screenId),
     );
     expect(screensByGroup).toEqual([
-      ['01', '23', '25', '26'],
+      ['org-overview', '01', '23', '25', '26'],
       ['03', '08', '21', '22'],
       ['12', '15', '16'],
       ['40', '42', '46', '43', '17', '20'],
@@ -118,9 +118,9 @@ describe('NAV_ENTRIES (09.1.1-T4.1)', () => {
     }
   });
 
-  it('uses unique ids and unique URL segments', () => {
+  it('uses unique ids and unique URL segments within each scope', () => {
     const ids = NAV_ENTRIES.map((entry) => entry.id);
-    const segments = NAV_ENTRIES.map((entry) => entry.segment);
+    const segments = NAV_ENTRIES.map((entry) => `${entry.scope}/${entry.segment}`);
 
     expect(new Set(ids).size).toBe(ids.length);
     expect(new Set(segments).size).toBe(segments.length);
@@ -139,7 +139,10 @@ describe('NAV_ENTRIES (09.1.1-T4.1)', () => {
   it('names the one entry whose URL segment differs from its id', () => {
     const renamed = NAV_ENTRIES.filter((entry) => entry.segment !== entry.id);
 
-    expect(renamed.map((entry) => `${entry.id}->${entry.segment}`)).toEqual(['quota->usage']);
+    expect(renamed.map((entry) => `${entry.id}->${entry.segment}`)).toEqual([
+      'org-overview->overview',
+      'quota->usage',
+    ]);
   });
 
   it('assigns every entry to a declared group, with unique order values inside a group', () => {
@@ -189,17 +192,18 @@ describe('NAV_ENTRIES (09.1.1-T4.1)', () => {
     }
   });
 
-  it('shows ten entries in the G1 build and starts no later-phase group', () => {
+  it('shows eleven entries in the G1 build and starts no later-phase group', () => {
     const visible = NAV_ENTRIES.filter((entry) => isPhaseActive(entry.phase));
 
     expect(ACTIVE_PHASE).toBe('G1');
-    expect(visible).toHaveLength(10);
+    expect(visible).toHaveLength(11);
     expect([...new Set(visible.map((entry) => entry.group))]).toEqual([
       'workspace',
       'authoring',
       'administration',
     ]);
     expect(visible.map((entry) => entry.id)).toEqual([
+      'org-overview',
       'overview',
       'onboarding',
       'authoring',

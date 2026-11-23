@@ -137,7 +137,7 @@ describe('NavViewService (09.1.1-T4.1)', () => {
       'authoring',
       'administration',
     ]);
-    expect(idsOf(view.groups(), 'workspace')).toEqual(['overview', 'onboarding']);
+    expect(idsOf(view.groups(), 'workspace')).toEqual(['org-overview', 'overview', 'onboarding']);
     expect(idsOf(view.groups(), 'authoring')).toEqual([
       'authoring',
       'pending-changes',
@@ -198,7 +198,7 @@ describe('NavViewService (09.1.1-T4.1)', () => {
     await session.bootstrap();
     await session.resolveScope(ORG.id, null);
 
-    expect(idsOf(view.groups(), 'workspace')).toEqual(['onboarding']);
+    expect(idsOf(view.groups(), 'workspace')).toEqual(['org-overview', 'onboarding']);
     expect(idsOf(view.groups(), 'administration')).toEqual([
       'members',
       'settings',
@@ -211,6 +211,7 @@ describe('NavViewService (09.1.1-T4.1)', () => {
   it('links an org-scope entry under the org and a project-scope entry under its project', async () => {
     await authenticatedWithProject();
 
+    expect(linkOf(view, 'org-overview')).toEqual(['/orgs', 'o-1', 'overview']);
     expect(linkOf(view, 'onboarding')).toEqual(['/orgs', 'o-1', 'onboarding']);
     expect(linkOf(view, 'authoring')).toEqual(['/orgs', 'o-1', 'projects', 'p-1', 'authoring']);
     expect(linkOf(view, 'settings')).toEqual(['/orgs', 'o-1', 'settings']);

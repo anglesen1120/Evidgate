@@ -3,6 +3,7 @@ import { NAV_ENTRIES, NAV_GROUPS } from './nav-registry';
 type Row = readonly [id: string, group: string, phase: string, scope: string, permission: string];
 
 const MAP: readonly Row[] = [
+  ['org-overview', 'workspace', 'G1', 'org', 'organization:read'],
   ['authoring', 'authoring', 'G1', 'project', 'authoring:read'],
   ['generation', 'authoring', 'G1', 'project', 'authoring:generate'],
   ['pending-changes', 'authoring', 'G1', 'project', 'authoring:write'],
