@@ -25,7 +25,7 @@
       <app-loading-pattern [layout]="'cards'" [label]="note.title" />
     }
     @case ('empty') {
-      <app-empty-pattern [title]="note.title" [description]="note.description" />
+      <app-empty-pattern [icon]="'navBot'" [title]="note.title" [description]="note.description" />
     }
     @default {
       <app-inline-feedback
@@ -129,6 +129,7 @@
     </div>
     @if (!matches().length) {
       <app-empty-pattern
+        [icon]="'navBot'"
         [title]="noMatches.title"
         [description]="noMatches.description"
         [actionLabel]="l.clear"

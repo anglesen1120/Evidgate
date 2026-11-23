@@ -204,6 +204,7 @@
       [status]="busy() && !hasRows() ? 'loading' : store.status()"
       [loadingLabel]="copy.loading"
       [error]="store.error()"
+      [emptyIcon]="'navList'"
       [empty]="!hasRows()"
       [emptyTitle]="emptyTitle()"
       [emptyDescription]="store.filtered() ? copy.noMatchHelp : copy.emptyHelp"

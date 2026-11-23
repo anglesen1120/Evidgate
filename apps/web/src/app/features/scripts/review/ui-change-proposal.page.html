@@ -26,7 +26,11 @@
       <app-loading-pattern [layout]="'cards'" [label]="n.title" />
     }
     @case ('empty') {
-      <app-empty-pattern [title]="n.title" [description]="n.description" />
+      <app-empty-pattern
+        [icon]="'lucideFileDiff'"
+        [title]="n.title"
+        [description]="n.description"
+      />
     }
     @default {
       <app-inline-feedback

@@ -208,7 +208,12 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
         </div>
       } @else {
         <div class="grid justify-items-start gap-3 px-5 py-4">
-          <app-empty-pattern [bare]="true" [title]="noMatches" [description]="loadedOnly" />
+          <app-empty-pattern
+            [icon]="'navKey'"
+            [bare]="true"
+            [title]="noMatches"
+            [description]="loadedOnly"
+          />
           <button hlmBtn [variant]="'outline'" type="button" (click)="query.set('')">
             {{ clearSearch }}
           </button>

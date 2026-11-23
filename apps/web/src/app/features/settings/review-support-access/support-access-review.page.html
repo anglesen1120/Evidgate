@@ -30,7 +30,7 @@
       <app-loading-pattern [label]="copy.loading" [layout]="'cards'" />
     }
     @case ('empty') {
-      <app-empty-pattern [title]="copy.empty" [description]="copy.emptyHint" />
+      <app-empty-pattern [icon]="'navLife'" [title]="copy.empty" [description]="copy.emptyHint" />
     }
     @case ('denied') {
       <app-forbidden-pattern />
@@ -56,6 +56,7 @@
   }
   @if (state() === 'filtered') {
     <app-empty-pattern
+      [icon]="'navLife'"
       [title]="copy.filtered"
       [description]="copy.filteredHint"
       [actionLabel]="copy.clear"
@@ -183,7 +184,12 @@
         </table>
       </div>
       @if (!filtered().length) {
-        <app-empty-pattern [title]="copy.filtered" [actionLabel]="copy.clear" (action)="reset()" />
+        <app-empty-pattern
+          [icon]="'navLife'"
+          [title]="copy.filtered"
+          [actionLabel]="copy.clear"
+          (action)="reset()"
+        />
       }
       <footer
         class="flex flex-wrap items-center justify-between gap-2 border-t border-border p-3 text-xs text-muted-foreground"

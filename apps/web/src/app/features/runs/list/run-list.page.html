@@ -235,6 +235,7 @@
     [class.p-(--eg-space-5)]="status() !== 'ready' || store.isEmpty()"
     [status]="status()"
     [error]="store.loadError()"
+    [emptyIcon]="'navRun'"
     [empty]="store.isEmpty()"
     [emptyTitle]="store.isFiltered() ? copy.filteredTitle : copy.emptyTitle"
     [emptyDescription]="store.isFiltered() ? copy.filteredDescription : copy.emptyDescription"

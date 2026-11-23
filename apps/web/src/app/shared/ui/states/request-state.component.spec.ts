@@ -1,6 +1,8 @@
 // State sheet: docs/design/web/state-sheet.md#error-pattern
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { HlmIcon } from '@evidgate/ui/icon';
 
 import type { ApiError } from '../../../core/http/api-error';
 import { RequestStateComponent } from './request-state.component';
@@ -26,6 +28,7 @@ function failure(overrides: Partial<ApiError> = {}): ApiError {
       [status]="status()"
       [error]="error()"
       [empty]="empty()"
+      [emptyIcon]="'navTree'"
       [emptyTitle]="'No evidence yet'"
       [emptyDescription]="'Open the feature tree to inspect cases.'"
       [emptyActionLabel]="'Open feature tree'"
@@ -253,6 +256,8 @@ describe('RequestStateComponent route-level replacement', () => {
     await fixture.whenStable();
     expect(root.querySelector('[data-testid="current-data"]')).toBeNull();
     expect(root.querySelector('app-empty-pattern h2')?.textContent).toBe('No evidence yet');
+    const glyph = fixture.debugElement.query(By.directive(HlmIcon)).injector.get(HlmIcon);
+    expect(glyph.name()).toBe('navTree');
     expect(root.textContent).not.toMatch(/\bPASS\b/);
     expect(root.querySelector('[data-tone="success"], [class*="success"]')).toBeNull();
     expect(host.actions).toEqual([]);

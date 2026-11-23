@@ -13,6 +13,7 @@ import {
   output,
 } from '@angular/core';
 
+import type { HlmIconName } from '@evidgate/ui/icon';
 import type { ApiError } from '../../../core/http/api-error';
 import { RetryAfterComponent } from '../conflict';
 import { EmptyPatternComponent } from './empty-pattern.component';
@@ -71,6 +72,7 @@ import { patternForError } from './state-pattern';
       @case ('ready') {
         @if (empty()) {
           <app-empty-pattern
+            [icon]="emptyIcon()"
             [title]="emptyTitle()"
             [description]="emptyDescription()"
             [actionLabel]="emptyActionLabel()"
@@ -95,6 +97,7 @@ export class RequestStateComponent {
   readonly loadingLabel = input<string | undefined>();
   readonly error = input<ApiError | null>(null);
   readonly empty = input(false);
+  readonly emptyIcon = input<HlmIconName>('lucideInbox');
   readonly emptyTitle = input('');
   readonly emptyDescription = input<string | undefined>();
   readonly emptyActionLabel = input<string | undefined>();
