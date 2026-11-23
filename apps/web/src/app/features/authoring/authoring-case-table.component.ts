@@ -5,6 +5,7 @@ import {
   Component,
   computed,
   ElementRef,
+  input,
   inject,
   Injector,
   linkedSignal,
@@ -114,6 +115,22 @@ export class AuthoringCaseTableComponent {
   protected readonly busy = computed(
     () => this.store.status() === 'loading' || this.request.isLoading(),
   );
+  readonly projectEmpty = input(false);
+  readonly loadedInventory = computed(() =>
+    this.store.status() === 'ready' && !this.busy() && !this.store.error() && !this.store.filtered()
+      ? { nodeId: this.store.query().node_id ?? null, count: this.store.rows().length }
+      : null,
+  );
+  readonly emptyProject = computed(() => {
+    const loaded = this.loadedInventory();
+    return (
+      !!loaded &&
+      !loaded.nodeId &&
+      loaded.count === 0 &&
+      !this.store.routeCursor() &&
+      !this.store.nextCursor()
+    );
+  });
   protected readonly hasRows = computed(() => this.store.rows().length > 0);
   protected readonly loadedStates = computed(() => {
     const counts = { draft: 0, approved: 0, retired: 0 };

@@ -1,4 +1,4 @@
-import { formatNumber, NgTemplateOutlet } from '@angular/common';
+import { NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -7,9 +7,10 @@ import {
   linkedSignal,
   LOCALE_ID,
   resource,
+  viewChild,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import type { NodeDto } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
@@ -22,6 +23,8 @@ import {
 } from '../../shared/ui/page-header';
 import { RequestStateComponent } from '../../shared/ui/states/request-state.component';
 import { InlineFeedbackComponent } from '../../shared/ui/states/inline-feedback.component';
+import { EmptyPatternComponent } from '../../shared/ui/states/empty-pattern.component';
+import { NumberValueComponent } from '../../shared/ui/values/number-value.component';
 import { CopyableIdentifierComponent } from '../../shared/ui/values/copyable-identifier.component';
 import { ShellIconComponent } from '../../shell/layout/shell-icon.component';
 import { AuthoringTreePaneComponent } from './authoring-tree-pane.component';
@@ -33,6 +36,9 @@ import { AuthoringStore } from './authoring.store';
   selector: 'app-authoring-page',
   imports: [
     NgTemplateOutlet,
+    RouterLink,
+    EmptyPatternComponent,
+    NumberValueComponent,
     HlmButton,
     HlmCardImports,
     HeaderActionsDirective,
@@ -69,6 +75,7 @@ export class AuthoringPage {
       this.route.queryParamMap,
     ]).pipe(
       map(([params, query]) => ({
+        orgId: params.map((param) => param.get('orgId')).find(Boolean) ?? null,
         projectId:
           [...params]
             .reverse()
@@ -77,7 +84,10 @@ export class AuthoringPage {
         nodeId: query.get('node_id'),
       })),
       distinctUntilChanged(
-        (before, after) => before.projectId === after.projectId && before.nodeId === after.nodeId,
+        (before, after) =>
+          before.orgId === after.orgId &&
+          before.projectId === after.projectId &&
+          before.nodeId === after.nodeId,
       ),
     ),
   );
@@ -112,15 +122,45 @@ export class AuthoringPage {
       ? [...path, node]
       : path;
   });
-  protected readonly subtitle = computed(() => {
-    if (this.viewStatus() !== 'ready') return this.copy.description;
-    const roots = formatNumber(this.store.roots().items.length, this.locale);
-    return (
-      (this.store.selectedNode()?.title ?? this.copy.all) +
-      ' · ' +
-      $localize`:@@authoring.tree.loaded-roots:Loaded roots: ${roots}:count:`
-    );
+  private readonly cases = viewChild(AuthoringCaseTableComponent);
+  protected readonly importRoute = computed(() => {
+    const scope = this.scope();
+    return scope?.orgId && scope.projectId && !this.denied()
+      ? ['/orgs', scope.orgId, 'projects', scope.projectId, 'authoring', 'import-export']
+      : null;
   });
+  protected readonly projectEmpty = computed(
+    () =>
+      this.viewStatus() === 'ready' &&
+      !this.hasContent() &&
+      !this.store.treeError() &&
+      !this.store.selectedNodeId() &&
+      this.cases()?.emptyProject() === true,
+  );
+  protected readonly metrics = computed(() => {
+    const metrics: { label: string; count: number; scope: string }[] = [];
+    if (this.denied() || this.projectEmpty()) return metrics;
+    const node = this.store.selectedNode();
+    if (node && this.store.selectionStatus() === 'ready' && !this.store.stale()) {
+      metrics.push({ label: this.copy.items, count: node.item_count, scope: node.title });
+    }
+    const loaded = this.cases()?.loadedInventory();
+    if (loaded && loaded.nodeId === (this.scope()?.nodeId ?? null)) {
+      const category =
+        loaded.nodeId && (node?.kind === 'category' || node?.kind === 'sub_category');
+      metrics.push({
+        label: category ? this.copy.categoryCases : this.copy.table,
+        count: loaded.count,
+        scope: this.copy.loadedScope,
+      });
+    }
+    return metrics;
+  });
+
+  protected openImport(): void {
+    const route = this.importRoute();
+    if (route) void this.router.navigate(route);
+  }
   /**
    * One polite line per settled read: the scope now shown, then every cap notice on screen. A
    * cap is inserted with its message, so it is spoken here rather than by the notice itself.

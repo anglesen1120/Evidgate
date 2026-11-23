@@ -178,6 +178,22 @@ for (const locale of LOCALES) {
     await expect(child).toHaveCount(0);
   });
 
+  test(`empty project offers import without table controls (${locale})`, async ({ page }) => {
+    await page.goto(
+      withVariants(base, [
+        '?fixture.variant.listAuthoringTree=empty&fixture.variant.listManualCases=empty',
+      ]),
+    );
+    const blank = page.locator('[data-authoring-project-empty]');
+    await expect(blank).toBeVisible();
+    await expect(page.locator(PAGE + ' app-empty-pattern')).toHaveCount(1);
+    await expect(
+      page.locator('[data-case-filters], [data-case-loaded], #authoring-case-page-size'),
+    ).toHaveCount(0);
+    await blank.getByRole('button').click();
+    await expect(page).toHaveURL(/\/authoring\/import-export(?:[?#]|$)/);
+  });
+
   test(`tree loading, empty, unavailable, denied and missing states leave the case region alone (${locale})`, async ({
     page,
   }) => {
@@ -388,6 +404,16 @@ for (const locale of LOCALES) {
         await page.setViewportSize({ width, height: 900 });
         await page.goto(base);
         await expect(page.locator(CASE_ROWS)).toContainText('Tuỳ chọn giao hàng');
+        const fieldGrid = page.locator('[data-case-filters] .filter-fields');
+        const columns = await fieldGrid.evaluate(
+          (grid) => getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+        );
+        expect(columns).toBe(width >= 1280 ? 5 : width >= 768 ? 3 : 1);
+        const widths = await fieldGrid
+          .locator('input, button[role="combobox"]')
+          .evaluateAll((fields) => fields.map((field) => field.getBoundingClientRect().width));
+        expect(widths).toHaveLength(5);
+        expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(1);
         await expect(page.locator(CASE_ROWS)).toContainText('018f0000-0000-7000-8000-000000000777');
         if (width === 1440) {
           await expect(page.locator(`${CASE_ROWS} [data-row-id]`).first()).toBeInViewport();

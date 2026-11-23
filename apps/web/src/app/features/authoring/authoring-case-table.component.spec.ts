@@ -32,6 +32,9 @@ class TableHarness extends ComponentHarness {
   readonly apply = this.locatorFor('[data-case-apply]');
   readonly filterHelp = this.locatorFor('[data-case-filter-help]');
   readonly toggleHelp = this.locatorFor('[data-case-filter-help] summary');
+  readonly filters = this.locatorFor('details[data-case-filters]');
+  readonly toggleFilters = this.locatorFor('[data-case-filters] > summary');
+  readonly fields = this.locatorForAll('[data-case-filters] .filter-fields > .field');
   readonly source = this.locatorFor('#authoring-case-source');
   readonly owner = this.locatorFor('#authoring-case-owner');
   readonly loadMore = this.locatorFor('[data-case-load-more]');
@@ -109,6 +112,15 @@ describe('AuthoringCaseTableComponent', () => {
     await fixture.whenStable();
     return TestbedHarnessEnvironment.harnessForFixture(fixture, TableHarness);
   }
+
+  it('groups the five available controls under one keyboard-operable disclosure', async () => {
+    const harness = await mount();
+    expect(await (await harness.toggleFilters()).text()).toBe('Filter cases');
+    expect(await (await harness.filters()).getProperty('open')).toBe(true);
+    expect(await harness.fields()).toHaveLength(5);
+    await (await harness.toggleFilters()).click();
+    expect(await (await harness.filters()).getProperty('open')).toBe(false);
+  });
 
   it('keeps real zeros for included lifecycles and marks excluded lifecycles unverified', async () => {
     list.mockResolvedValue({ items: [caseRow('draft-1')], next_cursor: null });

@@ -9735,7 +9735,12 @@
       <trans-unit id="authoring.import-export.failure.export-wait" datatype="html"><source>The server is busy. Wait as directed by Retry-After, then retry this exact scope explicitly. Nothing is downloaded automatically.</source></trans-unit>
       <trans-unit id="authoring.import-export.failure.export-unknown" datatype="html"><source>The export could not be completed or its server file was unavailable. No file was downloaded. Retry the exact scope explicitly.</source></trans-unit>
       <trans-unit id="authoring.tree.title" datatype="html"><source>Feature tree</source></trans-unit>
-      <trans-unit id="authoring.tree.description" datatype="html"><source>Browse the project hierarchy and select a scope. Child-node counts and checklist-item counts are direct counts, not manual-case totals.</source></trans-unit>
+      <trans-unit id="authoring.tree.description" datatype="html"><source>Browse manual cases by checklist and inspect their automation coverage.</source></trans-unit>
+      <trans-unit id="authoring.tree.no-roots" datatype="html"><source>No hierarchy nodes in this project</source></trans-unit>
+      <trans-unit id="authoring.tree.import-export" datatype="html"><source>Import and export</source></trans-unit>
+      <trans-unit id="authoring.tree.category-cases" datatype="html"><source>Category cases</source></trans-unit>
+      <trans-unit id="authoring.tree.loaded-scope" datatype="html"><source>Loaded in this scope</source></trans-unit>
+      <trans-unit id="authoring.case-table.reset" datatype="html"><source>Reset</source></trans-unit>
       <trans-unit id="authoring.tree.hierarchy" datatype="html"><source>Project hierarchy</source></trans-unit>
       <trans-unit id="authoring.tree.hierarchy-description" datatype="html"><source>Expand a branch explicitly to load its children. Selecting a scope does not expand it.</source></trans-unit>
       <trans-unit id="authoring.tree.keyboard" datatype="html"><source>Tab reaches each visible control. Arrow keys, Home, End and typing move focus without selecting. Enter or Space activates a button.</source></trans-unit>
@@ -9746,19 +9751,18 @@
       <trans-unit id="authoring.tree.current" datatype="html"><source>Current scope</source></trans-unit>
       <trans-unit id="authoring.tree.path" datatype="html"><source>Selected node path</source></trans-unit>
       <trans-unit id="authoring.tree.all" datatype="html"><source>Project roots</source></trans-unit>
-      <trans-unit id="authoring.tree.choose" datatype="html"><source>Select a node to inspect its path.</source></trans-unit>
       <trans-unit id="authoring.tree.selected-id" datatype="html"><source>Selected node ID</source></trans-unit>
       <trans-unit id="authoring.tree.loading" datatype="html"><source>Loading project hierarchy…</source></trans-unit>
       <trans-unit id="authoring.tree.loading-children" datatype="html"><source>Loading child nodes…</source></trans-unit>
       <trans-unit id="authoring.tree.empty" datatype="html"><source>This project has no authoring content yet</source></trans-unit>
-      <trans-unit id="authoring.tree.empty-description" datatype="html"><source>A test case needs an existing checklist item. No hierarchy or parent is created by browsing.</source></trans-unit>
+      <trans-unit id="authoring.tree.empty-description" datatype="html"><source>Import a checklist and its manual cases to build the first branch of this tree.</source></trans-unit>
       <trans-unit id="authoring.tree.empty-children" datatype="html"><source>No child nodes in this scope</source></trans-unit>
       <trans-unit id="authoring.tree.refresh" datatype="html"><source>Refresh hierarchy</source></trans-unit>
       <trans-unit id="authoring.tree.stale" datatype="html"><source>Hierarchy may be stale</source></trans-unit>
       <trans-unit id="authoring.tree.stale-description" datatype="html"><source>Refresh failed; previously loaded hierarchy data is still shown. Retry to refresh this region only.</source></trans-unit>
       <trans-unit id="authoring.tree.more-roots" datatype="html"><source>Load more root nodes</source></trans-unit>
       <trans-unit id="authoring.tree.more-children" datatype="html"><source>Load more child nodes</source></trans-unit>
-      <trans-unit id="authoring.tree.table" datatype="html"><source>Case table</source></trans-unit>
+      <trans-unit id="authoring.tree.table" datatype="html"><source>Manual cases</source></trans-unit>
       <trans-unit id="authoring.tree.table-placeholder" datatype="html"><source>This separate region is reserved for the case table. Hierarchy loading and failures do not control it.</source></trans-unit>
       <trans-unit id="authoring.tree.expand" datatype="html"><source>Expand <x id="title" equiv-text="node.title"/></source></trans-unit>
       <trans-unit id="authoring.tree.collapse" datatype="html"><source>Collapse <x id="title" equiv-text="node.title"/></source></trans-unit>
@@ -9843,19 +9847,19 @@
       <trans-unit id="authoring.case-table.select-case" datatype="html"><source>Select case <x id="code" equiv-text="row.code"/></source></trans-unit>
       <trans-unit id="authoring.case-table.loaded-count" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> cases loaded</source></trans-unit>
       <trans-unit id="authoring.case-table.scope-help" datatype="html"><source>Filters search the server list. Authoring coverage means a live automated identity is linked; it is not an execution result.</source></trans-unit>
-      <trans-unit id="authoring.case-table.filters" datatype="html"><source>Filter manual cases</source></trans-unit>
+      <trans-unit id="authoring.case-table.filters" datatype="html"><source>Filter cases</source></trans-unit>
       <trans-unit id="authoring.case-table.item" datatype="html"><source>Checklist item ID</source></trans-unit>
       <trans-unit id="authoring.case-table.item-help" datatype="html"><source>Optional exact checklist UUID. Leave blank for every checklist in this scope.</source></trans-unit>
       <trans-unit id="authoring.case-table.item-error" datatype="html"><source>Enter a complete checklist UUID or leave this filter blank.</source></trans-unit>
       <trans-unit id="authoring.case-table.priority" datatype="html"><source>Priority</source></trans-unit>
       <trans-unit id="authoring.case-table.state" datatype="html"><source>Lifecycle</source></trans-unit>
-      <trans-unit id="authoring.case-table.coverage" datatype="html"><source>Authoring coverage</source></trans-unit>
+      <trans-unit id="authoring.case-table.coverage" datatype="html"><source>Coverage</source></trans-unit>
       <trans-unit id="authoring.case-table.source" datatype="html"><source>Source</source></trans-unit>
       <trans-unit id="authoring.case-table.owner" datatype="html"><source>Owner</source></trans-unit>
       <trans-unit id="authoring.case-table.source-help" datatype="html"><source>Source filtering is unavailable: the server does not support this filter.</source></trans-unit>
       <trans-unit id="authoring.case-table.owner-help" datatype="html"><source>Owner filtering is unavailable: the server does not support this filter.</source></trans-unit>
       <trans-unit id="authoring.case-table.unavailable" datatype="html"><source>Unavailable</source></trans-unit>
-      <trans-unit id="authoring.case-table.search" datatype="html"><source>Search case titles</source></trans-unit>
+      <trans-unit id="authoring.case-table.search" datatype="html"><source>Case title</source></trans-unit>
       <trans-unit id="authoring.case-table.search-help" datatype="html"><source>Case-insensitive title search, up to 200 characters.</source></trans-unit>
       <trans-unit id="authoring.case-table.search-error" datatype="html"><source>Enter at most 200 characters before applying filters.</source></trans-unit>
       <trans-unit id="authoring.case-table.all" datatype="html"><source>All</source></trans-unit>
@@ -27045,7 +27049,6 @@
       <trans-unit id="catalog.case-view.loaded-status" datatype="html"><source>Status in loaded identities</source></trans-unit>
       <trans-unit id="catalog.case-view.summary" datatype="html"><source>Summary</source></trans-unit>
       <trans-unit id="catalog.case-view.history" datatype="html"><source>Recorded history</source></trans-unit>
-      <trans-unit id="authoring.tree.loaded-roots" datatype="html"><source>Loaded roots: <x id="count"/></source></trans-unit>
       <trans-unit id="authoring.case-table.live-links" datatype="html"><source>Live links</source></trans-unit>
       <trans-unit id="authoring.case-table.loaded-states" datatype="html"><source>Lifecycle of loaded cases</source></trans-unit>
       <trans-unit id="authoring.history.view" datatype="html"><source>View</source></trans-unit>
