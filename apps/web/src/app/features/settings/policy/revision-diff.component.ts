@@ -128,7 +128,7 @@ import { PolicyStore } from './policy.store';
               <div hlmTableContainer>
                 <table
                   hlmTable
-                  class="w-full table-fixed border-collapse [&_td]:align-top [&_th]:whitespace-normal [&_pre]:m-0 [&_pre]:whitespace-pre-wrap [&_pre]:font-mono [&_pre]:wrap-anywhere"
+                  class="w-full table-fixed border-collapse [&_th]:whitespace-normal [&_pre]:m-0 [&_pre]:whitespace-pre-wrap [&_pre]:font-mono [&_pre]:wrap-anywhere"
                   [attr.aria-labelledby]="'policy-diff-title'"
                 >
                   <thead hlmTHead class="bg-(--eg-surface-raised) text-xs">
@@ -152,10 +152,10 @@ import { PolicyStore } from './policy.store';
                             pathLabel(row.path)
                           }}</code>
                         </th>
-                        <td hlmTd>
+                        <td hlmTd class="align-top">
                           <pre>{{ row.before ?? copy.absent }}</pre>
                         </td>
-                        <td hlmTd>
+                        <td hlmTd class="align-top">
                           <div class="flex min-w-0 flex-wrap items-start gap-(--eg-space-2)">
                             <pre class="min-w-0 font-semibold text-(--eg-accent)">{{
                               row.after ?? copy.absent

@@ -16,6 +16,14 @@
 
 <ng-template #identityCell let-row let-stacked="stacked">
   @let visibleId = stacked ? row.run_id : preview(row.run_id, identifierPreviewLength);
+  <ng-template #created>
+    <span class="eg-type-caption min-w-0 text-muted-foreground tabular-nums" data-run-created>
+      @if (stacked) {
+        <span class="sr-only">{{ copy.created }}: </span>
+      }
+      <app-absolute-time [value]="row.created_at" />
+    </span>
+  </ng-template>
   <div
     class="identifier grid justify-items-start"
     [class.min-w-max]="!stacked"
@@ -25,19 +33,28 @@
   >
     <div class="flex min-w-0 max-w-full items-center gap-(--eg-space-2)">
       <a
-        class="inline-flex min-h-(--eg-control-touch) min-w-0 items-center font-mono text-primary font-(weight:--eg-weight-semibold) underline underline-offset-(--eg-space-1) hover:text-foreground active:text-foreground focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+        class="inline-flex min-h-(--eg-control-touch) min-w-0 flex-col items-start justify-center font-mono text-primary font-(weight:--eg-weight-semibold) hover:text-foreground active:text-foreground focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
         [routerLink]="[row.run_id]"
         [queryParamsHandling]="'preserve'"
         [class.whitespace-nowrap]="!stacked"
-        [attr.aria-label]="stacked ? visibleId : visibleId + ' (' + row.run_id + ')'"
-        >{{ visibleId }}</a
+        [attr.aria-label]="stacked ? visibleId : null"
       >
-      <app-copy-value-button [value]="row.run_id" [label]="copy.id" [iconOnly]="true" />
+        <span class="underline underline-offset-(--eg-space-1)">{{ visibleId }}</span>
+        @if (!stacked) {
+          <ng-container [ngTemplateOutlet]="created" />
+          <span class="sr-only">({{ row.run_id }})</span>
+        }
+      </a>
+      <app-copy-value-button
+        [class.mb-(--eg-leading-xs)]="!stacked"
+        [value]="row.run_id"
+        [label]="copy.id"
+        [iconOnly]="true"
+      />
     </div>
-    <div class="eg-type-caption min-w-0 text-muted-foreground tabular-nums" data-run-created>
-      <span class="sr-only">{{ copy.created }}: </span>
-      <app-absolute-time [value]="row.created_at" />
-    </div>
+    @if (stacked) {
+      <ng-container [ngTemplateOutlet]="created" />
+    }
   </div>
 </ng-template>
 <ng-template #stateCell let-row>
