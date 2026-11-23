@@ -11,7 +11,7 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
-import { classes } from '@evidgate/ui/utils';
+import { classes, openFullValuePopover } from '@evidgate/ui/utils';
 import { type VariantProps, cva } from 'class-variance-authority';
 
 const badgeVariants = cva(
@@ -39,6 +39,7 @@ export type BadgeVariants = VariantProps<typeof badgeVariants>;
   selector: '[hlmBadge],hlm-badge',
   exportAs: 'hlmBadge',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styleUrl: '../../utils/lib/full-value-popover.css',
   host: {
     'data-slot': 'badge',
     '[attr.data-variant]': 'variant()',
@@ -86,10 +87,7 @@ export class HlmBadge {
   private readonly label = viewChild.required<ElementRef<HTMLElement>>('label');
   private readonly popover = viewChild<ElementRef<HTMLElement>>('popover');
   private hideTimer: number | undefined;
-  private opened = false;
-  private readonly dismissOnEscape = (event: KeyboardEvent) => {
-    if (event.key === 'Escape') this.hide();
-  };
+  private closePanel: (() => void) | undefined;
 
   constructor() {
     classes(() => badgeVariants({ variant: this.variant() }));
@@ -124,22 +122,18 @@ export class HlmBadge {
   show(): void {
     this.cancelHide();
     const element = this.popover()?.nativeElement;
-    if (!this.clipped() || !element || this.opened) return;
-    element.showPopover();
-    this.opened = true;
-    document.addEventListener('keydown', this.dismissOnEscape);
+    if (!this.clipped() || !element || this.closePanel) return;
+    this.closePanel = openFullValuePopover(this.element.nativeElement, element, () => this.hide());
   }
 
   hide(): void {
     this.cancelHide();
-    document.removeEventListener('keydown', this.dismissOnEscape);
-    const element = this.popover()?.nativeElement;
-    if (this.opened && element?.isConnected) element.hidePopover();
-    this.opened = false;
+    this.closePanel?.();
+    this.closePanel = undefined;
   }
 
   protected onKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape' && this.opened) {
+    if (event.key === 'Escape' && this.closePanel) {
       event.stopPropagation();
       this.hide();
     } else if (!this.nativeAction && this.clipped() && ['Enter', ' '].includes(event.key)) {
