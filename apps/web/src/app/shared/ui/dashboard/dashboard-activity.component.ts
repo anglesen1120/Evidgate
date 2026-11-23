@@ -77,12 +77,12 @@ import { DashboardWidgetComponent } from './dashboard-widget.component';
               <bdi>{{ selection.row.action }}</bdi>
             </p>
           </header>
-          <dl class="grid min-w-0 gap-4 text-sm">
+          <dl class="hlm-field-grid">
             <div>
               <dt i18n="@@shared.dashboard.activity-time">Time (UTC)</dt>
               <dd><app-absolute-time [value]="selection.row.created_at" /></dd>
             </div>
-            <div>
+            <div class="hlm-field-wide">
               <dt i18n="@@shared.dashboard.activity-id">Event ID</dt>
               <dd>
                 <app-copyable-identifier
@@ -99,7 +99,7 @@ import { DashboardWidgetComponent } from './dashboard-widget.component';
               </dd>
             </div>
             @if (selection.row.object_id; as id) {
-              <div>
+              <div class="hlm-field-wide">
                 <dt i18n="@@shared.dashboard.activity-object">Object ID</dt>
                 <dd><app-copyable-identifier [value]="id" [label]="title" [truncate]="false" /></dd>
               </div>
