@@ -49,7 +49,7 @@ import { DashboardWidgetComponent } from './dashboard-widget.component';
           [attr.aria-haspopup]="'dialog'"
           [attr.aria-label]="viewLabel(row.action)"
           (click)="inspected.set({ row, trigger })"
-          i18n="@@shared.dashboard.activityView"
+          i18n="@@shared.dashboard.activity-view"
         >
           View
         </button>
@@ -72,18 +72,18 @@ import { DashboardWidgetComponent } from './dashboard-widget.component';
       >
         <hlm-dialog-content *hlmDialogPortal [size]="'md'">
           <header hlmDialogHeader>
-            <h2 hlmDialogTitle i18n="@@shared.dashboard.activityDetails">Organization event</h2>
+            <h2 hlmDialogTitle i18n="@@shared.dashboard.activity-details">Organization event</h2>
             <p hlmDialogDescription>
               <bdi>{{ selection.row.action }}</bdi>
             </p>
           </header>
           <dl class="grid min-w-0 gap-4 text-sm">
             <div>
-              <dt i18n="@@shared.dashboard.activityTime">Time (UTC)</dt>
+              <dt i18n="@@shared.dashboard.activity-time">Time (UTC)</dt>
               <dd><app-absolute-time [value]="selection.row.created_at" /></dd>
             </div>
             <div>
-              <dt i18n="@@shared.dashboard.activityId">Event ID</dt>
+              <dt i18n="@@shared.dashboard.activity-id">Event ID</dt>
               <dd>
                 <app-copyable-identifier
                   [value]="selection.row.id"
@@ -93,14 +93,14 @@ import { DashboardWidgetComponent } from './dashboard-widget.component';
               </dd>
             </div>
             <div>
-              <dt i18n="@@shared.dashboard.activityActor">Actor type</dt>
+              <dt i18n="@@shared.dashboard.activity-actor">Actor type</dt>
               <dd>
                 <bdi>{{ selection.row.actor_type }}</bdi>
               </dd>
             </div>
             @if (selection.row.object_id; as id) {
               <div>
-                <dt i18n="@@shared.dashboard.activityObject">Object ID</dt>
+                <dt i18n="@@shared.dashboard.activity-object">Object ID</dt>
                 <dd><app-copyable-identifier [value]="id" [label]="title" [truncate]="false" /></dd>
               </div>
             }
@@ -115,9 +115,9 @@ export class DashboardActivityComponent {
   readonly loading = input(false);
   readonly error = input<ApiError | null>(null);
   readonly retry = output<void>();
-  protected readonly title = $localize`:@@shared.dashboard.activityTitle:Organization activity`;
-  protected readonly description = $localize`:@@shared.dashboard.activityDescription:Most recent organization events. Not filtered by project.`;
-  protected readonly empty = $localize`:@@shared.dashboard.activityEmpty:No organization activity recorded.`;
+  protected readonly title = $localize`:@@shared.dashboard.activity-title:Organization activity`;
+  protected readonly description = $localize`:@@shared.dashboard.activity-description:Most recent organization events. Not filtered by project.`;
+  protected readonly empty = $localize`:@@shared.dashboard.activity-empty:No organization activity recorded.`;
   protected readonly rowId = (row: AuditEntryDto): string => row.id;
   protected readonly inspected = linkedSignal<
     readonly AuditEntryDto[],
@@ -133,7 +133,7 @@ export class DashboardActivityComponent {
     return [
       {
         id: 'action',
-        header: $localize`:@@shared.dashboard.activityAction:Action`,
+        header: $localize`:@@shared.dashboard.activity-action:Action`,
         role: 'identity',
         cell: (row) => row.action,
       },
@@ -141,7 +141,7 @@ export class DashboardActivityComponent {
         ? [
             {
               id: 'time',
-              header: $localize`:@@shared.dashboard.activityTime:Time (UTC)`,
+              header: $localize`:@@shared.dashboard.activity-time:Time (UTC)`,
               role: 'date' as const,
               cell: () => '',
               cellTemplate: time,
@@ -152,7 +152,7 @@ export class DashboardActivityComponent {
         ? [
             {
               id: 'view',
-              header: $localize`:@@shared.dashboard.activityDetailsColumn:Details`,
+              header: $localize`:@@shared.dashboard.activity-details-column:Details`,
               role: 'actions' as const,
               cell: () => '',
               cellTemplate: action,
@@ -162,6 +162,6 @@ export class DashboardActivityComponent {
     ];
   });
   protected viewLabel(action: string): string {
-    return $localize`:@@shared.dashboard.activityViewLabel:View event ${action}:action:`;
+    return $localize`:@@shared.dashboard.activity-view-label:View event ${action}:action:`;
   }
 }

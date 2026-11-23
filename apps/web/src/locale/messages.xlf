@@ -27124,6 +27124,49 @@
       <trans-unit id="review.directory.view" datatype="html"><source>View</source></trans-unit>
       <trans-unit id="review.agent-pools.pool" datatype="html"><source>Pool</source></trans-unit>
       <trans-unit id="review.agent-pools.capacity" datatype="html"><source>Reported capacity</source></trans-unit>
+      <trans-unit id="orgoverview.retry-runs" datatype="html"><source> Retry run summaries </source></trans-unit>
+      <trans-unit id="orgoverview.view" datatype="html"><source>View</source></trans-unit>
+      <trans-unit id="orgoverview.run-bound" datatype="html"><source> Latest run is available only when the bounded read contains every run (up to 50 per project). </source></trans-unit>
+      <trans-unit id="orgoverview.period" datatype="html"><source> Period: <x id="INTERPOLATION" equiv-text="{{ store.usage.value().period }}"/> </source></trans-unit>
+      <trans-unit id="orgoverview.ai-explanation" datatype="html"><source> Token usage is not a credit balance. Unavailable measurements are not zero. </source></trans-unit>
+      <trans-unit id="orgoverview.empty-usage" datatype="html"><source>No usage metrics returned.</source></trans-unit>
+      <trans-unit id="orgoverview.no-access" datatype="html"><source> No dashboard data is available with your current permissions. </source></trans-unit>
+      <trans-unit id="orgoverview.title" datatype="html"><source>Organization overview</source></trans-unit>
+      <trans-unit id="orgoverview.projects" datatype="html"><source>My projects</source></trans-unit>
+      <trans-unit id="orgoverview.projects-description" datatype="html"><source>Projects you can access in this organization.</source></trans-unit>
+      <trans-unit id="orgoverview.empty-projects" datatype="html"><source>No projects to show.</source></trans-unit>
+      <trans-unit id="orgoverview.members" datatype="html"><source>Members and invitations</source></trans-unit>
+      <trans-unit id="orgoverview.usage" datatype="html"><source>Organization usage</source></trans-unit>
+      <trans-unit id="orgoverview.active-members" datatype="html"><source>Active members</source></trans-unit>
+      <trans-unit id="orgoverview.pending-invites" datatype="html"><source>Pending invitations</source></trans-unit>
+      <trans-unit id="orgoverview.ai-tokens" datatype="html"><source>AI tokens</source></trans-unit>
+      <trans-unit id="orgoverview.not-metered" datatype="html"><source>Not metered</source></trans-unit>
+      <trans-unit id="orgoverview.results" datatype="html"><source>Results</source></trans-unit>
+      <trans-unit id="orgoverview.latest-unavailable" datatype="html"><source>Latest unavailable</source></trans-unit>
+      <trans-unit id="orgoverview.no-runs" datatype="html"><source>No runs yet</source></trans-unit>
+      <trans-unit id="orgoverview.run-error" datatype="html"><source>Couldn’t load latest run.</source></trans-unit>
+      <trans-unit id="orgoverview.project-column" datatype="html"><source>Project</source></trans-unit>
+      <trans-unit id="orgoverview.decision-column" datatype="html"><source>Latest decision</source></trans-unit>
+      <trans-unit id="orgoverview.time-column" datatype="html"><source>Latest run (UTC)</source></trans-unit>
+      <trans-unit id="orgoverview.action-column" datatype="html"><source>Action</source></trans-unit>
+      <trans-unit id="orgoverview.view-project" datatype="html"><source>View project <x id="name" equiv-text="name"/></source></trans-unit>
+      <trans-unit id="orgoverview.projects-more" datatype="html"><source>Showing <x id="count" equiv-text="count"/> projects; more available</source></trans-unit>
+      <trans-unit id="orgoverview.projects-count" datatype="html"><source>Showing <x id="count" equiv-text="count"/> projects</source></trans-unit>
+      <trans-unit id="orgoverview.members-sample" datatype="html"><source>Among <x id="count" equiv-text="count"/> memberships shown; more available</source></trans-unit>
+      <trans-unit id="orgoverview.members-complete" datatype="html"><source>Among <x id="count" equiv-text="count"/> memberships</source></trans-unit>
+      <trans-unit id="shared.dashboard.activity-view" datatype="html"><source> View </source></trans-unit>
+      <trans-unit id="shared.dashboard.activity-details" datatype="html"><source>Organization event</source></trans-unit>
+      <trans-unit id="shared.dashboard.activity-time" datatype="html"><source>Time (UTC)</source></trans-unit>
+      <trans-unit id="shared.dashboard.activity-id" datatype="html"><source>Event ID</source></trans-unit>
+      <trans-unit id="shared.dashboard.activity-actor" datatype="html"><source>Actor type</source></trans-unit>
+      <trans-unit id="shared.dashboard.activity-object" datatype="html"><source>Object ID</source></trans-unit>
+      <trans-unit id="shared.dashboard.activity-title" datatype="html"><source>Organization activity</source></trans-unit>
+      <trans-unit id="shared.dashboard.activity-description" datatype="html"><source>Most recent organization events. Not filtered by project.</source></trans-unit>
+      <trans-unit id="shared.dashboard.activity-empty" datatype="html"><source>No organization activity recorded.</source></trans-unit>
+      <trans-unit id="shared.dashboard.activity-action" datatype="html"><source>Action</source></trans-unit>
+      <trans-unit id="shared.dashboard.activity-details-column" datatype="html"><source>Details</source></trans-unit>
+      <trans-unit id="shared.dashboard.activity-view-label" datatype="html"><source>View event <x id="action" equiv-text="action"/></source></trans-unit>
+      <trans-unit id="shell.nav.org-overview" datatype="html"><source>Organization overview</source></trans-unit>
 </body>
   </file>
 </xliff>

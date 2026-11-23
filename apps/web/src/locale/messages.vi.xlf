@@ -22742,6 +22742,49 @@
 <trans-unit id="review.directory.view" datatype="html"><source>View</source><target>Xem</target></trans-unit>
 <trans-unit id="review.agent-pools.pool" datatype="html"><source>Pool</source><target>Nhóm tác nhân</target></trans-unit>
 <trans-unit id="review.agent-pools.capacity" datatype="html"><source>Reported capacity</source><target>Công suất được báo cáo</target></trans-unit>
+      <trans-unit id="orgoverview.retry-runs" datatype="html"><source> Retry run summaries </source><target>Thử tải lại tóm tắt lượt chạy</target></trans-unit>
+      <trans-unit id="orgoverview.view" datatype="html"><source>View</source><target>Xem</target></trans-unit>
+      <trans-unit id="orgoverview.run-bound" datatype="html"><source> Latest run is available only when the bounded read contains every run (up to 50 per project). </source><target>Chỉ hiển thị lượt chạy mới nhất khi dữ liệu đã tải chứa mọi lượt chạy (tối đa 50 mỗi dự án).</target></trans-unit>
+      <trans-unit id="orgoverview.period" datatype="html"><source> Period: <x id="INTERPOLATION" equiv-text="{{ store.usage.value().period }}"/> </source><target>Kỳ: <x id="INTERPOLATION"/></target></trans-unit>
+      <trans-unit id="orgoverview.ai-explanation" datatype="html"><source> Token usage is not a credit balance. Unavailable measurements are not zero. </source><target>Lượng token sử dụng không phải số dư tín dụng. Số liệu chưa có không phải là 0.</target></trans-unit>
+      <trans-unit id="orgoverview.empty-usage" datatype="html"><source>No usage metrics returned.</source><target>Không có số liệu sử dụng được trả về.</target></trans-unit>
+      <trans-unit id="orgoverview.no-access" datatype="html"><source> No dashboard data is available with your current permissions. </source><target>Quyền hiện tại của bạn không cho phép xem dữ liệu tổng quan.</target></trans-unit>
+      <trans-unit id="orgoverview.title" datatype="html"><source>Organization overview</source><target>Tổng quan tổ chức</target></trans-unit>
+      <trans-unit id="orgoverview.projects" datatype="html"><source>My projects</source><target>Dự án của tôi</target></trans-unit>
+      <trans-unit id="orgoverview.projects-description" datatype="html"><source>Projects you can access in this organization.</source><target>Các dự án bạn có thể truy cập trong tổ chức này.</target></trans-unit>
+      <trans-unit id="orgoverview.empty-projects" datatype="html"><source>No projects to show.</source><target>Không có dự án để hiển thị.</target></trans-unit>
+      <trans-unit id="orgoverview.members" datatype="html"><source>Members and invitations</source><target>Thành viên và lời mời</target></trans-unit>
+      <trans-unit id="orgoverview.usage" datatype="html"><source>Organization usage</source><target>Mức sử dụng của tổ chức</target></trans-unit>
+      <trans-unit id="orgoverview.active-members" datatype="html"><source>Active members</source><target>Thành viên đang hoạt động</target></trans-unit>
+      <trans-unit id="orgoverview.pending-invites" datatype="html"><source>Pending invitations</source><target>Lời mời đang chờ</target></trans-unit>
+      <trans-unit id="orgoverview.ai-tokens" datatype="html"><source>AI tokens</source><target>Token AI</target></trans-unit>
+      <trans-unit id="orgoverview.not-metered" datatype="html"><source>Not metered</source><target>Chưa đo lường</target></trans-unit>
+      <trans-unit id="orgoverview.results" datatype="html"><source>Results</source><target>Kết quả</target></trans-unit>
+      <trans-unit id="orgoverview.latest-unavailable" datatype="html"><source>Latest unavailable</source><target>Chưa có lượt mới nhất</target></trans-unit>
+      <trans-unit id="orgoverview.no-runs" datatype="html"><source>No runs yet</source><target>Chưa có lượt chạy</target></trans-unit>
+      <trans-unit id="orgoverview.run-error" datatype="html"><source>Couldn’t load latest run.</source><target>Không thể tải lượt chạy mới nhất.</target></trans-unit>
+      <trans-unit id="orgoverview.project-column" datatype="html"><source>Project</source><target>Dự án</target></trans-unit>
+      <trans-unit id="orgoverview.decision-column" datatype="html"><source>Latest decision</source><target>Quyết định mới nhất</target></trans-unit>
+      <trans-unit id="orgoverview.time-column" datatype="html"><source>Latest run (UTC)</source><target>Lượt chạy mới nhất (UTC)</target></trans-unit>
+      <trans-unit id="orgoverview.action-column" datatype="html"><source>Action</source><target>Thao tác</target></trans-unit>
+      <trans-unit id="orgoverview.view-project" datatype="html"><source>View project <x id="name" equiv-text="name"/></source><target>Xem dự án <x id="name"/></target></trans-unit>
+      <trans-unit id="orgoverview.projects-more" datatype="html"><source>Showing <x id="count" equiv-text="count"/> projects; more available</source><target>Đang hiển thị <x id="count"/> dự án; còn dự án khác</target></trans-unit>
+      <trans-unit id="orgoverview.projects-count" datatype="html"><source>Showing <x id="count" equiv-text="count"/> projects</source><target>Đang hiển thị <x id="count"/> dự án</target></trans-unit>
+      <trans-unit id="orgoverview.members-sample" datatype="html"><source>Among <x id="count" equiv-text="count"/> memberships shown; more available</source><target>Trong <x id="count"/> tư cách thành viên đã tải; còn dữ liệu khác</target></trans-unit>
+      <trans-unit id="orgoverview.members-complete" datatype="html"><source>Among <x id="count" equiv-text="count"/> memberships</source><target>Trong <x id="count"/> tư cách thành viên</target></trans-unit>
+      <trans-unit id="shared.dashboard.activity-view" datatype="html"><source> View </source><target>Xem</target></trans-unit>
+      <trans-unit id="shared.dashboard.activity-details" datatype="html"><source>Organization event</source><target>Sự kiện tổ chức</target></trans-unit>
+      <trans-unit id="shared.dashboard.activity-time" datatype="html"><source>Time (UTC)</source><target>Thời gian (UTC)</target></trans-unit>
+      <trans-unit id="shared.dashboard.activity-id" datatype="html"><source>Event ID</source><target>ID sự kiện</target></trans-unit>
+      <trans-unit id="shared.dashboard.activity-actor" datatype="html"><source>Actor type</source><target>Loại chủ thể</target></trans-unit>
+      <trans-unit id="shared.dashboard.activity-object" datatype="html"><source>Object ID</source><target>ID đối tượng</target></trans-unit>
+      <trans-unit id="shared.dashboard.activity-title" datatype="html"><source>Organization activity</source><target>Hoạt động tổ chức</target></trans-unit>
+      <trans-unit id="shared.dashboard.activity-description" datatype="html"><source>Most recent organization events. Not filtered by project.</source><target>Các sự kiện gần nhất của tổ chức. Không lọc theo dự án.</target></trans-unit>
+      <trans-unit id="shared.dashboard.activity-empty" datatype="html"><source>No organization activity recorded.</source><target>Chưa ghi nhận hoạt động tổ chức.</target></trans-unit>
+      <trans-unit id="shared.dashboard.activity-action" datatype="html"><source>Action</source><target>Hành động</target></trans-unit>
+      <trans-unit id="shared.dashboard.activity-details-column" datatype="html"><source>Details</source><target>Chi tiết</target></trans-unit>
+      <trans-unit id="shared.dashboard.activity-view-label" datatype="html"><source>View event <x id="action" equiv-text="action"/></source><target>Xem sự kiện <x id="action"/></target></trans-unit>
+      <trans-unit id="shell.nav.org-overview" datatype="html"><source>Organization overview</source><target>Tổng quan tổ chức</target></trans-unit>
 </body>
   </file>
 </xliff>
