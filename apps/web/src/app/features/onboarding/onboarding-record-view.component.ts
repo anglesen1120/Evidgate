@@ -59,7 +59,7 @@ export const RECORD_COPY = {
       data-onboarding-record
       [attr.aria-label]="name()"
       (click)="open(opener)"
-      class="pointer-coarse:min-h-(--eg-control-touch) pointer-coarse:min-w-(--eg-control-touch)"
+      class="short-action"
     >
       {{ view }}
     </button>

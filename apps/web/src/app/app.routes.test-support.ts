@@ -124,6 +124,15 @@ function settingsTabIdOf(route: ActivatedRoute): string {
   return typeof id === 'string' ? id : 'missing-settings-tab-id';
 }
 
+@Component({
+  selector: 'app-spec-quota-panel',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: '<p class="marker">{{ marker }}</p>',
+})
+class QuotaPanelStub {
+  readonly marker = 'quota-panel';
+}
+
 /** The Settings no-tabs state. */
 @Component({
   selector: 'app-spec-settings-no-tabs',
@@ -151,7 +160,7 @@ const COMPONENT_STUBS = new Map<unknown, Type<unknown>>([
   [SettingsShellPage, SettingsShellStub],
   [SettingsTabPlaceholderPage, SettingsTabStub],
   [SettingsNoTabsPage, SettingsNoTabsStub],
-  [QuotaPanelComponent, SettingsTabStub],
+  [QuotaPanelComponent, QuotaPanelStub],
 ]);
 
 /**

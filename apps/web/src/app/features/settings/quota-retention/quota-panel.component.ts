@@ -8,6 +8,7 @@ import {
   TemplateRef,
   viewChild,
 } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import type { UsageSummaryDto, UsageSummaryMetricDto, UsageSummaryProjectDto } from '@evidgate/sdk';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmButton } from '@evidgate/ui/button';
@@ -54,6 +55,9 @@ type ProjectCell = TemplateRef<DataTableCellContext<UsageSummaryProjectDto>>;
 })
 export class QuotaPanelComponent {
   protected readonly quota = inject(QuotaStore);
+  protected readonly ownsPageHeading =
+    inject(ActivatedRoute, { optional: true })?.snapshot.data['pageHeadingLevel'] === 1;
+  protected readonly subsectionLevel = this.ownsPageHeading ? 2 : null;
   protected readonly metricLabel = quotaMetricLabel;
   protected readonly projectMetrics = computed(() =>
     this.quota.usageSummary()?.metrics.filter((metric) => metric.projects.length > 0),
@@ -130,7 +134,6 @@ export class QuotaPanelComponent {
     warnedAt: $localize`:@@quota.panel.warned-at:Warning recorded`,
     blockedAt: $localize`:@@quota.panel.blocked-at:Block recorded`,
     project: $localize`:@@quota.panel.project:Project`,
-    projects: $localize`:@@quota.panel.projects:Per project`,
     projectCaption: $localize`:@@quota.panel.project-caption:Returned project counters. Organization totals are supplied separately, not calculated from these rows.`,
     recordedState: $localize`:@@quota.panel.recorded-state:Recorded quota state`,
     metric: $localize`:@@quota.panel.metric:Metric`,

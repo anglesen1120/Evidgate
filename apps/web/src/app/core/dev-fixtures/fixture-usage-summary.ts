@@ -15,6 +15,7 @@ import type { FixtureEntry } from './fixture-catalog-entries';
 export const USAGE_SUMMARY_VARIANTS = [
   'ok',
   'warn',
+  'per-project',
   'blocked',
   'empty',
   'unavailable',
@@ -84,6 +85,30 @@ const DOCUMENTS: Record<UsageSummaryVariant, UsageSummaryDocument> = {
       metrics: [
         metric('results', 800, 1000, { warned_at: '2026-11-01T09:00:00Z' }),
         ...measured().slice(1),
+      ],
+      next_cursor: null,
+    } satisfies UsageSummaryDto,
+  },
+  'per-project': {
+    status: 200,
+    headers: {},
+    body: {
+      period: PERIOD,
+      project: null,
+      metrics: [
+        metric('results', 120, 1000, {
+          projects: [
+            {
+              project_id: '018f0000-0000-7000-8000-000000000011',
+              scope: 'project',
+              used: 62,
+              limit: null,
+              warned_at: null,
+              blocked_at: null,
+              retry_after_seconds: null,
+            },
+          ],
+        }),
       ],
       next_cursor: null,
     } satisfies UsageSummaryDto,
