@@ -75,7 +75,7 @@
 </ng-template>
 <ng-template #refCell let-row let-stacked="stacked">
   <div class="ref-cell grid min-w-0 justify-items-start gap-(--eg-space-2)">
-    <bdi class="block min-w-0 w-full font-mono"
+    <bdi class="block min-w-0 w-full" [class.font-mono]="row.ref.name !== null"
       ><app-data-table-value
         [value]="row.ref.name === null ? copy.unavailableRef : displayRef(row.ref.name)"
         [truncate]="!stacked"
