@@ -1,107 +1,183 @@
-// Show only the project resolved by the session scope; never guess a name from the URL.
-
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
-import { HlmCard } from '@evidgate/ui/card';
-import { HlmButton } from '@evidgate/ui/button';
+import { formatDate, formatNumber } from '@angular/common';
+import { ChangeDetectionStrategy, Component, computed, inject, LOCALE_ID } from '@angular/core';
 import { RouterLink } from '@angular/router';
-
+import { HlmButton } from '@evidgate/ui/button';
 import { SessionStore } from '../../core/session/session.store';
-import { PageHeaderImports, SectionHeaderComponent } from '../../shared/ui/page-header';
+import { PageHeaderImports } from '../../shared/ui/page-header';
 import { EmptyPatternComponent } from '../../shared/ui/states/empty-pattern.component';
-import { ShellIconComponent } from '../../shell/layout/shell-icon.component';
+import { DashboardWidgetComponent } from '../../shared/ui/dashboard/dashboard-widget.component';
+import { DashboardKpiComponent } from '../../shared/ui/dashboard/dashboard-kpi.component';
+import { DashboardMeterComponent } from '../../shared/ui/dashboard/dashboard-meter.component';
+import { DashboardActivityComponent } from '../../shared/ui/dashboard/dashboard-activity.component';
+import {
+  DecisionTrendComponent,
+  type DashboardTrendPoint,
+} from '../../shared/ui/dashboard/decision-trend.component';
+import { shortDateFormat } from '../../shared/time/short-date-format';
 import { NavViewService } from '../../shell/nav/nav-view';
-
-const NEXT_STEP_IDS = ['runs', 'onboarding', 'authoring'];
+import { ProjectDashboardStore } from './dashboard/project-dashboard.store';
+import { DASHBOARD_COPY } from './dashboard/dashboard.copy';
+import { DashboardRunsComponent } from './dashboard/dashboard-runs.component';
+import { DashboardMetricComponent } from './dashboard/dashboard-metric.component';
+import {
+  decisionsByDay,
+  expiringWaivers,
+  recentFailures,
+  runCounts,
+  sampleRuns,
+} from './dashboard/dashboard-summary';
 
 @Component({
   selector: 'app-project-overview',
   imports: [
-    HlmCard,
     HlmButton,
     RouterLink,
     PageHeaderImports,
-    SectionHeaderComponent,
     EmptyPatternComponent,
-    ShellIconComponent,
+    DashboardWidgetComponent,
+    DashboardKpiComponent,
+    DashboardMeterComponent,
+    DecisionTrendComponent,
+    DashboardRunsComponent,
+    DashboardMetricComponent,
+    DashboardActivityComponent,
   ],
+  providers: [ProjectDashboardStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0 font-sans text-foreground' },
-  template: `
-    @let current = project();
-    <section
-      class="grid min-w-0 gap-(--eg-space-7) wrap-anywhere"
-      aria-labelledby="project-overview-heading"
-    >
-      <app-page-header
-        [title]="current?.name ?? overviewTitle"
-        [titleId]="'project-overview-heading'"
-        [description]="projectContext()"
-      >
-        @if (current && nextSteps()[0]; as primary) {
-          <a appPageHeaderActions hlmBtn class="eg-header-action" [routerLink]="primary.link">
-            <app-shell-icon [name]="primary.icon" />{{ primary.label }}
-          </a>
-        }
-      </app-page-header>
-      @if (!current) {
-        <app-empty-pattern [icon]="'navGrid'" [title]="noProject" />
-      } @else if (!nextSteps().length) {
-        <app-empty-pattern
-          [icon]="'navGrid'"
-          title="No shortcuts available for this project"
-          i18n-title="@@shell.overview.no-shortcuts"
-        />
-      } @else if (shortcuts().length) {
-        <nav
-          hlmCard
-          class="box-border w-full min-w-0 max-w-3xl gap-0 rounded-(--eg-radius-lg) py-0"
-          aria-labelledby="project-next-steps"
-        >
-          <app-section-header
-            class="border-0 border-b border-solid border-border px-(--eg-space-5) py-(--eg-space-4) md:px-(--eg-space-6)"
-            [titleId]="'project-next-steps'"
-            title="Next steps"
-            i18n-title="@@shell.overview.next-steps"
-            description="Choose a next step for this project."
-            i18n-description="@@shell.overview.choose-next-step"
-          />
-          <ul
-            class="m-0 flex min-w-0 list-none flex-wrap gap-(--eg-space-3) px-(--eg-space-5) py-(--eg-space-5) md:px-(--eg-space-6)"
-          >
-            @for (step of shortcuts(); track step.id) {
-              <li class="min-w-0">
-                <a hlmBtn [variant]="'outline'" class="eg-header-action" [routerLink]="step.link">
-                  <app-shell-icon [name]="step.icon" />{{ step.label }}
-                </a>
-              </li>
-            }
-          </ul>
-        </nav>
-      }
-    </section>
-  `,
+  templateUrl: './overview.page.html',
+  styleUrl: './overview.page.css',
 })
 export class ProjectOverviewPage {
+  protected readonly store = inject(ProjectDashboardStore);
   private readonly session = inject(SessionStore);
-
+  private readonly locale = inject(LOCALE_ID);
   private readonly nav = inject(NavViewService);
-
-  protected readonly overviewTitle = $localize`:@@shell.overview.title:Project overview`;
-  protected readonly noProject = $localize`:@@shell.overview.no-project:No project selected`;
-  readonly nextSteps = computed(() =>
-    this.nav
-      .groups()
-      .flatMap((group) => group.items)
-      .filter((item) => NEXT_STEP_IDS.includes(item.id))
-      .sort((left, right) => NEXT_STEP_IDS.indexOf(left.id) - NEXT_STEP_IDS.indexOf(right.id)),
-  );
-  protected readonly shortcuts = computed(() => this.nextSteps().slice(1));
-
-  /** The project the scope guards resolved, or `null` while none is current. */
+  protected readonly copy = DASHBOARD_COPY;
   readonly project = this.session.currentProject;
-  protected readonly projectContext = computed(() => {
-    const project = this.project();
-    if (!project?.case_prefix) return project?.slug;
-    return $localize`:@@shell.overview.scope-line:${project.slug}:slug: · Case prefix: ${project.case_prefix}:prefix:`;
+  protected readonly context = computed(
+    () => this.session.currentOrg()?.name ?? this.project()?.slug ?? '',
+  );
+  protected readonly rows = computed(() => sampleRuns(this.store.runs.value()));
+  protected readonly counts = computed(() => runCounts(this.rows(), this.store.decisionsVisible()));
+  protected readonly latest = computed(() => [...this.rows()].reverse().slice(0, 5));
+  protected readonly primaryAction = computed(() => {
+    const items = this.nav.groups().flatMap((group) => group.items);
+    return ['runs', 'onboarding', 'authoring']
+      .map((id) => items.find((item) => item.id === id))
+      .find((item) => item !== undefined);
+  });
+  protected readonly setupLink = computed(
+    () =>
+      this.nav
+        .groups()
+        .flatMap((group) => group.items)
+        .find((item) => item.id === 'onboarding')?.link,
+  );
+  protected readonly sampleLabel = computed(() => {
+    const count = formatNumber(this.rows().length, this.locale);
+    return this.store.runs.value()?.complete
+      ? $localize`:@@project.dashboard.last-runs:Last ${count}:count: runs`
+      : $localize`:@@project.dashboard.oldest-runs:${count}:count: oldest loaded runs — not the latest`;
+  });
+  protected readonly recentTitle = computed(() =>
+    this.store.runs.value()?.complete
+      ? this.copy.runs
+      : $localize`:@@project.dashboard.loaded-runs:Loaded runs (not the latest)`,
+  );
+  protected readonly share = (value: number): string =>
+    this.counts().total === 0
+      ? this.copy.noData
+      : `${formatNumber((value / this.counts().total) * 100, this.locale, '1.0-1')}%`;
+  protected readonly shareDetail = (value: number): string => {
+    const numerator = formatNumber(value, this.locale);
+    const denominator = formatNumber(this.counts().total, this.locale);
+    return $localize`:@@project.dashboard.share-detail:${numerator}:count: of ${denominator}:total: sampled runs`;
+  };
+  protected readonly trend = computed<readonly DashboardTrendPoint[]>(() =>
+    decisionsByDay(this.rows(), this.store.decisionsVisible()).map((day) => ({
+      id: day.day,
+      label: formatDate(`${day.day}T00:00:00Z`, shortDateFormat(this.locale), this.locale, 'UTC'),
+      segments: [
+        ...(this.store.decisionsVisible()
+          ? [
+              { id: 'pass', label: 'PASS', value: day.pass, tone: 'success' as const },
+              { id: 'fail', label: 'FAIL', value: day.fail, tone: 'danger' as const },
+              {
+                id: 'inconclusive',
+                label: 'INCONCLUSIVE',
+                value: day.inconclusive,
+                tone: 'neutral' as const,
+              },
+            ]
+          : []),
+        { id: 'pending', label: this.copy.pending, value: day.pending, tone: 'neutral' as const },
+      ],
+    })),
+  );
+  protected readonly failures = computed(() =>
+    this.store.runs.value()?.complete === true ? recentFailures(this.rows(), Date.now()) : null,
+  );
+  protected readonly waivers = computed(() =>
+    expiringWaivers(this.store.waivers.value()?.items ?? [], Date.now()),
+  );
+  protected readonly quarantines = computed(
+    () =>
+      this.store.quarantine.value()?.items.filter((row) => row.state === 'active').length ?? null,
+  );
+  protected readonly checklist = computed(
+    () =>
+      this.store.tree.value()?.items.reduce((total, node) => total + node.item_count, 0) ?? null,
+  );
+  protected readonly bindingCounts = computed(() => {
+    const rows = this.store.bindings.value()?.items ?? [];
+    return {
+      active: rows.filter((row) => row.status === 'active').length,
+      pending: rows.filter((row) => row.status === 'pending_verification').length,
+      disabled: rows.filter((row) => row.status === 'disabled').length,
+    };
+  });
+  protected readonly attentionVisible = computed(
+    () =>
+      (this.store.runs.visible() && this.store.decisionsVisible()) ||
+      this.store.waivers.visible() ||
+      this.store.quarantine.visible() ||
+      this.store.incidents.visible(),
+  );
+  protected readonly authoringVisible = computed(
+    () => this.store.cases.visible() || this.store.tree.visible() || this.store.changes.visible(),
+  );
+  protected readonly anyVisible = computed(
+    () =>
+      this.store.runs.visible() ||
+      this.attentionVisible() ||
+      this.authoringVisible() ||
+      this.store.bindings.visible() ||
+      this.store.usage.visible() ||
+      this.store.audit.visible(),
+  );
+  protected readonly ai = computed(() =>
+    this.store.usage.value()?.metrics.find((metric) => metric.metric === 'ai_tokens'),
+  );
+  protected readonly results = computed(() =>
+    this.store.usage.value()?.metrics.find((metric) => metric.metric === 'results'),
+  );
+  protected readonly quotaDescription = computed(() => {
+    const metric = this.results();
+    if (metric?.used === null || metric?.used === undefined) return this.copy.unavailable;
+    const used = formatNumber(metric.used, this.locale);
+    if (metric.limit === null)
+      return $localize`:@@project.dashboard.quota-no-limit:${used}:used: results used · Quota not set`;
+    const limit = formatNumber(metric.limit, this.locale);
+    return $localize`:@@project.dashboard.quota-used:${used}:used: of ${limit}:limit: results used`;
+  });
+  protected readonly aiDescription = computed(() => {
+    const metric = this.ai();
+    if (metric?.used === null || metric?.used === undefined) return this.copy.aiUnavailable;
+    const used = formatNumber(metric.used, this.locale);
+    if (metric.limit === null)
+      return $localize`:@@project.dashboard.ai-no-limit:${used}:used: tokens used · Quota not set`;
+    const limit = formatNumber(metric.limit, this.locale);
+    return $localize`:@@project.dashboard.ai-used:${used}:used: of ${limit}:limit: tokens used`;
   });
 }

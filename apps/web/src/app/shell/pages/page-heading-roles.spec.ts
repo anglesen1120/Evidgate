@@ -2,6 +2,7 @@ import { provideZonelessChangeDetection, signal, type Type } from '@angular/core
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
+import { ProjectDashboardDataService } from '../../core/data/project-dashboard-data.service';
 import { SessionStore } from '../../core/session/session.store';
 import { ProjectOverviewPage } from '../../features/project/overview.page';
 import { NavViewService } from '../nav/nav-view';
@@ -23,7 +24,16 @@ describe('Shell page heading roles', () => {
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([]),
-        { provide: SessionStore, useValue: { currentProject: signal(null), reload: vi.fn() } },
+        {
+          provide: SessionStore,
+          useValue: {
+            currentProject: signal(null),
+            currentOrg: signal(null),
+            has: () => false,
+            reload: vi.fn(),
+          },
+        },
+        { provide: ProjectDashboardDataService, useValue: {} },
         { provide: NavViewService, useValue: { groups: signal([]) } },
       ],
     });

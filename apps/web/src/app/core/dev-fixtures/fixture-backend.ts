@@ -77,6 +77,7 @@ import { findCatalogOwnerPermissionsFixture } from './fixture-catalog-owner-perm
 import { findHealingTriagePermissionsFixture } from './fixture-healing-triage-permissions';
 import { FixtureToggles } from './fixture-toggles';
 import { findUsageSummaryFixture } from './fixture-usage-summary';
+import { dashboardFixture } from './fixture-dashboard';
 import { caseListFixtureBody } from './fixture-case-list';
 import { findBulkCaseListFixture } from './fixture-case-list-bulk';
 import { findBrowseCapFixture } from './fixture-browse-cap';
@@ -185,6 +186,13 @@ export class FixtureHttpBackend implements HttpBackend {
     request: HttpRequest<unknown>,
     relativePath: string,
   ): FixtureEntry | undefined {
+    const dashboard = dashboardFixture(
+      request.method,
+      relativePath,
+      (operation) => this.toggles.variantFor(operation),
+      request.urlWithParams,
+    );
+    if (dashboard !== undefined) return dashboard;
     const capped = findBrowseCapFixture(
       request.method,
       relativePath,

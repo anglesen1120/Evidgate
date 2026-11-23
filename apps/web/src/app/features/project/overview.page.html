@@ -1,0 +1,261 @@
+<section
+  class="dashboard grid min-w-0 gap-(--eg-space-7) wrap-anywhere"
+  aria-labelledby="project-overview-heading"
+>
+  <app-page-header
+    [title]="project()?.name ?? copy.title"
+    [titleId]="'project-overview-heading'"
+    [description]="context()"
+  >
+    @if (primaryAction(); as action) {
+      <a appPageHeaderActions hlmBtn class="eg-header-action" [routerLink]="action.link">{{
+        action.id === 'runs' ? copy.viewRuns : action.label
+      }}</a>
+    }
+  </app-page-header>
+  @if (!project()) {
+    <app-empty-pattern [icon]="'navGrid'" [title]="copy.noProject" />
+  } @else if (!anyVisible()) {
+    <app-empty-pattern [icon]="'navShield'" [title]="copy.noAccess" />
+  } @else {
+    @if (store.runs.visible()) {
+      <app-dashboard-widget
+        data-dashboard-kpis
+        [title]="recentTitle()"
+        [description]="sampleLabel()"
+        [loading]="store.runs.loading()"
+        [error]="store.runs.error()"
+        (retry)="store.runs.reload()"
+      >
+        <div class="kpi-grid">
+          <app-dashboard-kpi
+            [label]="recentTitle()"
+            [value]="counts().total"
+            [detail]="sampleLabel()"
+          />
+          @if (store.decisionsVisible()) {
+            <app-dashboard-kpi
+              [label]="'PASS'"
+              [value]="share(counts().pass)"
+              [detail]="shareDetail(counts().pass)"
+            />
+            <app-dashboard-kpi
+              [label]="'FAIL'"
+              [value]="share(counts().fail)"
+              [detail]="shareDetail(counts().fail)"
+            />
+            <app-dashboard-kpi
+              [label]="'INCONCLUSIVE'"
+              [value]="share(counts().inconclusive)"
+              [detail]="shareDetail(counts().inconclusive)"
+            />
+          }
+          <app-dashboard-kpi
+            [label]="copy.collecting"
+            [value]="counts().collecting"
+            [detail]="sampleLabel()"
+          />
+        </div>
+      </app-dashboard-widget>
+    }
+    <div class="dashboard-grid">
+      @if (store.runs.visible() && store.decisionsVisible()) {
+        <app-dashboard-widget
+          class="wide"
+          data-dashboard-trend
+          [title]="copy.trend"
+          [description]="sampleLabel()"
+          [loading]="store.runs.loading()"
+          [error]="store.runs.error()"
+          [empty]="rows().length === 0"
+          [emptyTitle]="copy.emptyTrend"
+          [emptyIcon]="'navChart'"
+          (retry)="store.runs.reload()"
+        >
+          <p class="mt-0 text-sm text-muted-foreground">{{ copy.trendContext }}</p>
+          <app-decision-trend [label]="sampleLabel()" [points]="trend()" />
+        </app-dashboard-widget>
+      }
+      @if (attentionVisible()) {
+        <app-dashboard-widget class="narrow" data-dashboard-attention [title]="copy.attention">
+          @if (store.runs.visible() && store.decisionsVisible()) {
+            <app-dashboard-metric
+              data-dashboard-failures
+              [label]="copy.failures"
+              [value]="failures()"
+              [description]="failures() === null ? copy.failuresUnavailable : copy.failureContext"
+              [loading]="store.runs.loading()"
+              [error]="store.runs.error()"
+              (retry)="store.runs.reload()"
+            />
+          }
+          @if (store.waivers.visible()) {
+            <app-dashboard-metric
+              [label]="copy.waivers"
+              [value]="waivers()"
+              [description]="copy.waiverContext"
+              [loading]="store.waivers.loading()"
+              [error]="store.waivers.error()"
+              (retry)="store.waivers.reload()"
+            />
+          }
+          @if (store.quarantine.visible()) {
+            <app-dashboard-metric
+              [label]="copy.quarantine"
+              [value]="quarantines()"
+              [description]="copy.quarantineContext"
+              [loading]="store.quarantine.loading()"
+              [error]="store.quarantine.error()"
+              (retry)="store.quarantine.reload()"
+            />
+          }
+          @if (store.incidents.visible()) {
+            <app-dashboard-metric
+              [label]="copy.incidents"
+              [value]="store.incidents.value()?.items?.length ?? null"
+              [description]="copy.incidentContext"
+              [loading]="store.incidents.loading()"
+              [error]="store.incidents.error()"
+              (retry)="store.incidents.reload()"
+            />
+          }
+        </app-dashboard-widget>
+      }
+      @if (store.runs.visible()) {
+        <app-dashboard-widget
+          class="wide"
+          data-dashboard-recent
+          [title]="recentTitle()"
+          [description]="sampleLabel()"
+          [loading]="store.runs.loading()"
+          [error]="store.runs.error()"
+          [empty]="rows().length === 0"
+          [emptyTitle]="copy.emptyRuns"
+          [emptyIcon]="'navRun'"
+          (retry)="store.runs.reload()"
+        >
+          <app-dashboard-runs [rows]="latest()" [decisionsVisible]="store.decisionsVisible()" />
+        </app-dashboard-widget>
+      }
+      @if (authoringVisible()) {
+        <app-dashboard-widget class="narrow" data-dashboard-authoring [title]="copy.authoring">
+          @if (store.cases.visible()) {
+            <app-dashboard-metric
+              [label]="copy.cases"
+              [value]="store.cases.value()?.items?.length ?? null"
+              [description]="copy.caseContext"
+              [loading]="store.cases.loading()"
+              [error]="store.cases.error()"
+              (retry)="store.cases.reload()"
+            />
+          }
+          @if (store.tree.visible()) {
+            <app-dashboard-metric
+              [label]="copy.checklist"
+              [value]="checklist()"
+              [description]="copy.checklistContext"
+              [loading]="store.tree.loading()"
+              [error]="store.tree.error()"
+              (retry)="store.tree.reload()"
+            />
+          }
+          @if (store.changes.visible()) {
+            <app-dashboard-metric
+              [label]="copy.changes"
+              [value]="store.changes.value()?.items?.length ?? null"
+              [description]="copy.changeContext"
+              [loading]="store.changes.loading()"
+              [error]="store.changes.error()"
+              (retry)="store.changes.reload()"
+            />
+          }
+        </app-dashboard-widget>
+      }
+      @if (store.bindings.visible()) {
+        <app-dashboard-widget
+          class="half"
+          data-dashboard-ci
+          [title]="copy.ci"
+          [description]="copy.ciContext"
+          [loading]="store.bindings.loading()"
+          [error]="store.bindings.error()"
+          (retry)="store.bindings.reload()"
+        >
+          <dl class="m-0 grid gap-(--eg-space-3)">
+            <div class="flex justify-between gap-(--eg-space-3)">
+              <dt>{{ copy.activeBindings }}</dt>
+              <dd class="m-0 tabular-nums">{{ bindingCounts().active }}</dd>
+            </div>
+            <div class="flex justify-between gap-(--eg-space-3)">
+              <dt>{{ copy.pendingBindings }}</dt>
+              <dd class="m-0 tabular-nums">{{ bindingCounts().pending }}</dd>
+            </div>
+            <div class="flex justify-between gap-(--eg-space-3)">
+              <dt>{{ copy.disabledBindings }}</dt>
+              <dd class="m-0 tabular-nums">{{ bindingCounts().disabled }}</dd>
+            </div>
+          </dl>
+          @if (store.bindings.value()?.next_cursor) {
+            <p class="text-sm text-muted-foreground">{{ copy.moreBindings }}</p>
+          } @else if (!store.bindings.value()?.items?.length) {
+            <p class="text-sm text-muted-foreground">{{ copy.noBindings }}</p>
+          }
+          @if (bindingCounts().pending) {
+            <p class="text-sm">{{ copy.verifyBindings }}</p>
+          }
+          @if (bindingCounts().disabled) {
+            <p class="text-sm">{{ copy.disabledHint }}</p>
+          }
+          @if (setupLink(); as link) {
+            <a
+              hlmBtn
+              [variant]="'outline'"
+              class="mt-(--eg-space-4) eg-header-action"
+              [routerLink]="link"
+              >{{ copy.setup }}</a
+            >
+          }
+        </app-dashboard-widget>
+      }
+      @if (store.usage.visible()) {
+        <app-dashboard-widget
+          class="half"
+          data-dashboard-usage
+          [title]="copy.usage"
+          [description]="store.usage.value()?.period ?? ''"
+          [loading]="store.usage.loading()"
+          [error]="store.usage.error()"
+          [empty]="store.usage.value()?.metrics?.length === 0"
+          [emptyTitle]="copy.emptyUsage"
+          [emptyIcon]="'navChart'"
+          (retry)="store.usage.reload()"
+        >
+          <app-dashboard-meter
+            [label]="copy.results"
+            [value]="results()?.used ?? null"
+            [maximum]="results()?.limit ?? null"
+            [description]="quotaDescription()"
+          />
+          <div class="mt-(--eg-space-5)">
+            <app-dashboard-meter
+              [label]="copy.ai"
+              [value]="ai()?.used ?? null"
+              [maximum]="ai()?.limit ?? null"
+              [description]="aiDescription()"
+            />
+            <p class="mb-0 text-xs text-muted-foreground">{{ copy.creditUnavailable }}</p>
+          </div>
+        </app-dashboard-widget>
+      }
+    </div>
+    @if (store.audit.visible()) {
+      <app-dashboard-activity
+        data-dashboard-activity
+        [rows]="store.audit.value()?.items ?? []"
+        [loading]="store.audit.loading()"
+        [error]="store.audit.error()"
+        (retry)="store.audit.reload()"
+      />
+    }
+  }
+</section>

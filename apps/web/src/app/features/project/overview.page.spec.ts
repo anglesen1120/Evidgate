@@ -1,198 +1,205 @@
-// Keep the store isolated so these checks cover presentation, not project loading.
-
 import { ComponentHarness } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
-import { provideZonelessChangeDetection, signal } from '@angular/core';
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import type { ProjectDto } from '@evidgate/sdk';
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
+import type { RunSummary } from '@evidgate/sdk';
 import { SessionStore } from '../../core/session/session.store';
 import { NavViewService } from '../../shell/nav/nav-view';
-import type { NavItemView } from '../../shell/nav/nav.models';
+import { ProjectDashboardStore } from './dashboard/project-dashboard.store';
 import { ProjectOverviewPage } from './overview.page';
-
-/** One project, as `fixtures/web-api/projects-list/input.json` serves it. */
-const PROJECT: ProjectDto = {
-  id: '018f0000-0000-7000-8000-000000000011',
-  org_id: '018f0000-0000-7000-8000-000000000001',
-  name: 'Storefront web',
-  slug: 'storefront-web',
-  status: 'active',
-  default_environment_id: null,
-  created_at: '2026-10-02T09:00:00Z',
-  updated_at: '2026-10-18T11:20:00Z',
-  version: 3,
-  retention_days: null,
-  monthly_run_quota: 5000,
-  case_prefix: 'STOR',
-};
-
-const NEXT_STEPS: readonly NavItemView[] = [
-  {
-    id: 'authoring',
-    label: 'Feature tree',
-    icon: 'tree',
-    link: ['/orgs', PROJECT.org_id, 'projects', PROJECT.id, 'authoring'],
-  },
-  {
-    id: 'onboarding',
-    label: 'Onboarding',
-    icon: 'compass',
-    link: ['/orgs', PROJECT.org_id, 'onboarding'],
-  },
-  {
-    id: 'runs',
-    label: 'Runs',
-    icon: 'play',
-    link: ['/orgs', PROJECT.org_id, 'projects', PROJECT.id, 'runs'],
-  },
-];
 
 class OverviewHarness extends ComponentHarness {
   static hostSelector = 'app-project-overview';
-  readonly emptyTitle = this.locatorForOptional('app-empty-pattern h2');
-  readonly emptyActions = this.locatorForAll('app-empty-pattern a, app-empty-pattern button');
+  readonly widgets = this.locatorForAll(
+    '[data-dashboard-kpis], [data-dashboard-trend], [data-dashboard-recent], [data-dashboard-attention], [data-dashboard-authoring], [data-dashboard-ci], [data-dashboard-usage], [data-dashboard-activity]',
+  );
+  readonly text = async () => (await this.host()).text();
+  readonly runViews = this.locatorForAll('[data-dashboard-run-view]');
+  readonly failureLabel = this.locatorFor('[data-dashboard-failures] dt');
+  readonly failureValue = this.locatorFor('[data-dashboard-failures] app-number-value');
+  readonly failureDescription = this.locatorFor('[data-dashboard-failures] p');
+  readonly attentionMetrics = this.locatorForAll('[data-dashboard-attention] app-dashboard-metric');
+  readonly emptyIcons = this.locatorForAll('app-empty-pattern hlm-icon path');
 }
 
-/** Mount the page against a store whose current project is `project`. */
-function mountWith(project: ProjectDto | null, steps = NEXT_STEPS) {
+function read<T>(value: T) {
+  return {
+    value: signal<T | undefined>(value),
+    visible: signal(true),
+    loading: signal(false),
+    error: signal(null),
+    reload: vi.fn(),
+  };
+}
+const RUN: RunSummary = {
+  run_id: 'run-1',
+  state: 'collecting',
+  created_at: '2026-11-23T09:00:00Z',
+  completeness: null,
+  parent_run_id: null,
+  rerun_scope: null,
+  unverified_ref: false,
+  decision: null,
+  ref: {
+    name: 'main',
+    kind: 'branch',
+    pr_number: null,
+    head_sha: null,
+    base_sha: null,
+    trigger_event: 'push',
+    is_fork: false,
+  },
+};
+
+function mount(rows: readonly RunSummary[] = [RUN], complete = true, allowed = true) {
+  const page = { items: [], next_cursor: null };
+  const currentProject = signal<{ id: string; name: string; slug: string } | null>({
+    id: 'p1',
+    name: 'Project A',
+    slug: 'a',
+  });
+  const store = {
+    runs: read({ items: rows, complete }),
+    waivers: read(page),
+    quarantine: read(page),
+    incidents: read(page),
+    bindings: read(page),
+    cases: read(page),
+    tree: read(page),
+    changes: read(page),
+    usage: read({ metrics: [], period: '2026-11', project: null, next_cursor: null }),
+    audit: read(page),
+    decisionsVisible: signal(true),
+  };
+  if (!allowed)
+    for (const value of Object.values(store)) if ('visible' in value) value.visible.set(false);
   TestBed.configureTestingModule({
-    imports: [ProjectOverviewPage],
     providers: [
-      provideZonelessChangeDetection(),
       provideRouter([]),
       {
-        provide: NavViewService,
-        useValue: { groups: signal([{ id: 'design', label: 'Test design', items: steps }]) },
+        provide: SessionStore,
+        useValue: {
+          currentProject,
+          currentOrg: signal({ id: 'o1', name: 'Organization A' }),
+        },
       },
-      { provide: SessionStore, useValue: { currentProject: signal(project) } },
+      { provide: NavViewService, useValue: { groups: signal([]) } },
     ],
   });
+  TestBed.overrideComponent(ProjectOverviewPage, {
+    set: { providers: [{ provide: ProjectDashboardStore, useValue: store }] },
+  });
   const fixture = TestBed.createComponent(ProjectOverviewPage);
-  fixture.detectChanges();
-  return fixture;
+  return { fixture, store, currentProject };
 }
 
-function renderWith(project: ProjectDto | null, steps = NEXT_STEPS): HTMLElement {
-  return mountWith(project, steps).nativeElement as HTMLElement;
-}
+describe('ProjectOverviewPage dashboard', () => {
+  afterEach(() => vi.restoreAllMocks());
 
-describe('ProjectOverviewPage', () => {
-  it.each([
-    { project: null, steps: NEXT_STEPS, title: 'No project selected' },
-    { project: PROJECT, steps: [], title: 'No shortcuts available for this project' },
-    { project: PROJECT, steps: NEXT_STEPS.slice(-1), title: null },
-  ])('distinguishes an absent project from an empty shortcut list: $title', async (example) => {
-    const fixture = mountWith(example.project, example.steps);
-    const overview = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
-    const title = await overview.emptyTitle();
-    expect(title ? await title.text() : null).toBe(example.title);
-    expect(await overview.emptyActions()).toHaveLength(0);
+  it('renders all eight independent widgets without treating collecting as PASS', async () => {
+    const { fixture } = mount();
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+    expect(await harness.widgets()).toHaveLength(8);
+    expect(await harness.text()).toContain('Still collecting');
+    expect(await harness.text()).toContain('0%');
+    expect(await harness.text()).toContain('Not evaluated');
+    expect(await harness.runViews()).toHaveLength(1);
   });
 
-  it('shows the current project name and slug exactly as the server sent them', () => {
-    const root = renderWith(PROJECT);
-
-    expect(root.querySelector('h1')?.getAttribute('data-title-size')).toBe('page');
-    expect(root.querySelector('#project-next-steps')?.getAttribute('data-title-size')).toBe(
-      'section',
-    );
-    expect(root.querySelector('h1')?.textContent?.trim()).toBe(PROJECT.name);
-    expect(root.querySelector('app-page-header p')?.textContent?.trim()).toBe(
-      `${PROJECT.slug} · Case prefix: ${PROJECT.case_prefix}`,
-    );
-  });
-
-  it('links to the existing permitted next steps without development-status prose or invented metrics', () => {
-    const root = renderWith(PROJECT);
-    const links = Array.from(root.querySelectorAll<HTMLAnchorElement>('a'));
-    expect(root.querySelector('app-page-header a')).toBe(links[0]);
-    expect(Array.from(root.querySelectorAll('nav a'))).toEqual(links.slice(1));
-    expect(links.map((link) => link.textContent?.trim())).toEqual([
-      'Runs',
-      'Onboarding',
-      'Feature tree',
+  it('distinguishes successful empty runs from unavailable usage and hides denied widgets', async () => {
+    const { fixture } = mount([]);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+    expect(await harness.text()).toContain('No runs yet.');
+    expect(await harness.text()).toContain('No usage metrics returned.');
+    expect(await harness.text()).toContain('No data');
+    expect(await harness.runViews()).toHaveLength(0);
+    expect(
+      await Promise.all((await harness.emptyIcons()).map((path) => path.getAttribute('d'))),
+    ).toEqual([
+      'M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6',
+      'M5 3h14v18H5z M10 8l5 4-5 4z',
+      'M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6',
+      'M7 4h10v16H7zM10 8h4M10 12h4M10 16h4',
     ]);
-    expect(links.map((link) => link.getAttribute('href'))).toEqual([
-      `/orgs/${PROJECT.org_id}/projects/${PROJECT.id}/runs`,
-      `/orgs/${PROJECT.org_id}/onboarding`,
-      `/orgs/${PROJECT.org_id}/projects/${PROJECT.id}/authoring`,
-    ]);
-    expect(root.querySelector('nav')?.getAttribute('aria-labelledby')).toBe('project-next-steps');
-    expect(root.textContent).not.toContain('arrive with their own stories');
-    expect(root.textContent).not.toMatch(/\d+ (runs|releases)/);
   });
 
-  it('does not offer destinations omitted by the shared permitted navigation view', () => {
-    const root = renderWith(
-      PROJECT,
-      NEXT_STEPS.filter((item) => item.id === 'runs'),
+  it('labels truncated ascending run pages as not latest instead of recent', async () => {
+    const { fixture } = mount([RUN], false);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+    expect(await harness.text()).toContain('oldest loaded runs — not the latest');
+    expect(await harness.text()).not.toContain('Recent runs');
+  });
+
+  it.each<{ decision: Exclude<RunSummary['decision'], undefined>; count: string }>([
+    { decision: null, count: '0' },
+    { decision: 'FAIL', count: '1' },
+  ])(
+    'withholds New FAILs for incomplete $decision samples and restores $count when complete',
+    async ({ decision, count }) => {
+      vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-23T12:00:00Z'));
+      const rows = [{ ...RUN, decision }];
+      const { fixture, store } = mount(rows, false);
+      const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+      const otherMetricText = await Promise.all(
+        (await harness.attentionMetrics()).slice(1).map((metric) => metric.text()),
+      );
+
+      expect(await (await harness.failureLabel()).text()).toBe('New FAILs');
+      expect(await (await harness.failureValue()).text()).toBe('Number unavailable');
+      expect(await (await harness.failureDescription()).text()).toBe(
+        'Not available (latest runs not loaded)',
+      );
+
+      store.runs.value.set({ items: rows, complete: true });
+
+      expect(await (await harness.failureLabel()).text()).toBe('New FAILs');
+      expect(await (await harness.failureValue()).text()).toBe(count);
+      expect(await (await harness.failureDescription()).text()).toBe(
+        'FAIL decisions among sampled runs created in the last 7 days.',
+      );
+      expect(
+        await Promise.all(
+          (await harness.attentionMetrics()).slice(1).map((metric) => metric.text()),
+        ),
+      ).toEqual(otherMetricText);
+    },
+  );
+
+  it('withholds New FAILs when run sample completeness is unknown', async () => {
+    const { fixture, store } = mount();
+    store.runs.value.set(undefined);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+
+    expect(await (await harness.failureLabel()).text()).toBe('New FAILs');
+    expect(await (await harness.failureValue()).text()).toBe('Number unavailable');
+    expect(await (await harness.failureDescription()).text()).toBe(
+      'Not available (latest runs not loaded)',
     );
-    expect(root.querySelectorAll('a')).toHaveLength(1);
-    expect(root.querySelector('app-page-header a')?.textContent?.trim()).toBe('Runs');
-    expect(root.querySelector('nav')).toBeNull();
-    expect(root.textContent).not.toContain('Onboarding');
-    expect(root.textContent).not.toContain('Feature tree');
   });
 
-  it('makes the first available next step primary when runs are not available', () => {
-    const root = renderWith(
-      PROJECT,
-      NEXT_STEPS.filter((item) => item.id !== 'runs'),
+  it('uses a dashboard icon when no project is selected and exposes no widgets', async () => {
+    const { fixture, currentProject } = mount();
+    currentProject.set(null);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+
+    expect(await harness.widgets()).toHaveLength(0);
+    const icons = await harness.emptyIcons();
+    expect(icons).toHaveLength(1);
+    expect(await icons[0]?.getAttribute('d')).toBe(
+      'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
     );
-    const links = Array.from(root.querySelectorAll<HTMLAnchorElement>('a'));
-    expect(links.map((link) => link.textContent?.trim())).toEqual(['Onboarding', 'Feature tree']);
-    expect(links[0]?.classList.contains('spartan-button-variant-default')).toBe(true);
-    expect(root.querySelectorAll('.spartan-button-variant-default')).toHaveLength(1);
   });
 
-  it('keeps the truthful project summary when no next step is permitted', () => {
-    const root = renderWith(PROJECT, []);
-    expect(root.querySelector('h1')?.textContent).toBe(PROJECT.name);
-    expect(root.querySelector('nav')).toBeNull();
-    expect(root.textContent).not.toContain('Next steps');
-  });
-
-  it.each([PROJECT, null])('labels the overview section with its h1 for project %j', (project) => {
-    const root = renderWith(project);
-    const section = root.querySelector('section');
-    const heading = root.querySelector('h1');
-
-    expect(section?.querySelector('app-page-header h1')).toBe(heading);
-    expect(heading?.getAttribute('data-slot')).toBe('card-title');
-    expect(heading?.tagName).toBe('H1');
-    expect(heading?.id).toBeTruthy();
-    expect(section?.getAttribute('aria-labelledby')).toBe(heading?.id);
-    expect(root.querySelectorAll('h1')).toHaveLength(1);
-  });
-
-  it('renders the complete long unbroken project name', () => {
-    const name = 'DựÁnStorefront'.repeat(30);
-    const root = renderWith({ ...PROJECT, name });
-
-    expect(root.querySelector('h1')?.textContent).toBe(name);
-  });
-
-  it('does not import a component stylesheet', () => {
-    const relativePath = 'src/app/features/project/overview.page.ts';
-    const paths = [resolve(relativePath), resolve('apps/web', relativePath)];
-    const path = paths.find((candidate) => existsSync(candidate));
-    if (!path) throw new Error('Cannot locate overview component source');
-
-    const source = readFileSync(path, 'utf8');
-    expect(source).not.toMatch(/\bstyleUrls?\s*:/);
-    expect(source).not.toMatch(/\bimport\b[^;]*\.css/);
-  });
-
-  it('renders the empty state instead of a name when no project is current', () => {
-    const root = renderWith(null);
-
-    expect(root.querySelector('h1')?.textContent?.trim()).not.toBe('');
-    expect(root.querySelector('h1')?.textContent).not.toContain(PROJECT.name);
-    expect(root.querySelector('app-page-header p')).toBeNull();
-    expect(root.querySelector('nav')).toBeNull();
+  it('shows no restricted facts when every widget is denied', async () => {
+    const { fixture } = mount([], true, false);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+    expect(await harness.widgets()).toHaveLength(0);
+    expect(await harness.text()).toContain('No dashboard data is available');
+    const icons = await harness.emptyIcons();
+    expect(icons).toHaveLength(1);
+    expect(await icons[0]?.getAttribute('d')).toBe(
+      'M12 2l8 3v6c0 5-4 9-8 11-4-2-8-6-8-11V5z M8 12l3 3 5-6',
+    );
   });
 });
