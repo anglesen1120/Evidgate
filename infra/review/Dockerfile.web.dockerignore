@@ -20,6 +20,7 @@ fixtures/*
 src
 contracts/*
 !contracts/openapi.yaml
+!contracts/schemas/ai-settings.v1.json
 migrations
 infra/docker
 node_modules
