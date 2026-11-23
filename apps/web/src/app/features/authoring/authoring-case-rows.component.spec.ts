@@ -200,18 +200,19 @@ describe('AuthoringCaseRowsComponent', () => {
     expect(active?.closest('[data-row-id]')?.getAttribute('data-row-id')).not.toBe(missing);
   });
 
-  it('uses the shared 200-row threshold and opts fixed-height cells into virtualization', async () => {
+  it('fits the pane and keeps loaded results paged unless the fixed tracks have room', async () => {
     const { fixture } = await mount(200);
     const table = fixture.debugElement
       .query(By.directive(DataTableComponent))
       .injector.get(DataTableComponent<ManualCaseListItemDto>);
     expect(table.virtualThreshold()).toBe(200);
-    expect(table.fixedHeightCells()).toBe(true);
+    expect(table.fitToContainer()).toBe(true);
     fixture.componentRef.setInput(
       'rows',
       Array.from({ length: 201 }, (_, index) => row(index + 1)),
     );
     fixture.detectChanges();
     expect(table.rows()).toHaveLength(201);
+    expect(table.virtual()).toBe(false);
   }, 20_000);
 });

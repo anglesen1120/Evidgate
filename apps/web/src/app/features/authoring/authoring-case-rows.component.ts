@@ -61,6 +61,9 @@ export class AuthoringCaseRowsComponent {
   private readonly renderedRange = signal<ListRange | null>(null);
   private focusedSelection: HTMLElement | null = null;
   protected readonly virtual = computed(() => this.table()?.virtual() ?? false);
+  protected readonly virtualThreshold = 200;
+  protected readonly roomForFixedTracks = signal(false);
+  private readonly bulk = computed(() => this.rows().length > this.virtualThreshold);
   private readonly selectionCell = viewChild.required<CaseCell>('selectionCell');
   private readonly codeCell = viewChild.required<CaseCell>('codeCell');
   private readonly idCell = viewChild.required<CaseCell>('idCell');
@@ -75,10 +78,10 @@ export class AuthoringCaseRowsComponent {
   protected readonly visibleRows = computed(() => {
     const rows = this.rows();
     const table = this.table();
-    if (!table) return rows.slice(0, 200);
+    if (!table) return rows.slice(0, this.virtualThreshold);
     const range = this.renderedRange();
     const start = table.virtual() ? (range?.start ?? 0) : table.windowStart();
-    const end = table.virtual() ? (range?.end ?? 0) : start + 200;
+    const end = table.virtual() ? (range?.end ?? 0) : start + this.virtualThreshold;
     return rows.slice(start, end);
   });
   protected readonly selected = linkedSignal<readonly ManualCaseListItemDto[], ReadonlySet<string>>(
@@ -145,6 +148,7 @@ export class AuthoringCaseRowsComponent {
       header: this.copy.priorityState,
       cell: (row) => this.copy[row.priority],
       role: 'status',
+      width: { min: 'calc(12ch + var(--eg-space-4) * 2)' },
       cellTemplate: this.priorityCell(),
     },
     {
@@ -152,6 +156,7 @@ export class AuthoringCaseRowsComponent {
       header: this.copy.coverage,
       cell: (row) => (row.linked_live_count > 0 ? this.copy.covered : this.copy.uncovered),
       role: 'status',
+      width: { min: 'calc(14ch + var(--eg-space-4) * 2)' },
       cellTemplate: this.coverageCell(),
     },
     {
@@ -175,6 +180,18 @@ export class AuthoringCaseRowsComponent {
   ]);
 
   constructor() {
+    afterRenderEffect((cleanup) => {
+      if (!this.bulk() || typeof ResizeObserver === 'undefined') return;
+      const host = this.host.nativeElement;
+      const measure = () =>
+        this.roomForFixedTracks.set(
+          getComputedStyle(host).getPropertyValue('--case-virtual').trim() === '1',
+        );
+      measure();
+      const observer = new ResizeObserver(measure);
+      observer.observe(host);
+      cleanup(() => observer.disconnect());
+    });
     effect((cleanup) => {
       const viewport = this.table()?.viewport();
       this.renderedRange.set(null);

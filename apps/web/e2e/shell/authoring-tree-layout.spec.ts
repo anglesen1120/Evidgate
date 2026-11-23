@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import {
   localePath,
   LOCALES,
@@ -9,13 +9,36 @@ import {
   withVariants,
 } from './support';
 
+async function expectCasesToFit(rows: Locator): Promise<void> {
+  const surface = rows.locator('.spartan-table-container');
+  await expect(surface.locator('[data-case-view]').first()).toBeVisible();
+  await expect
+    .poll(() =>
+      surface.evaluate((el) => {
+        const { left, right } = el.getBoundingClientRect();
+        return (
+          el.scrollWidth <= el.clientWidth + 1 &&
+          [...el.querySelectorAll('[data-column-id="id"], [data-case-view]')].every((cell) => {
+            const bounds = cell.getBoundingClientRect();
+            return (
+              bounds.width > 0 &&
+              bounds.left >= Math.max(0, left) - 1 &&
+              bounds.right <= Math.min(innerWidth, right) + 1
+            );
+          })
+        );
+      }),
+    )
+    .toBe(true);
+}
+
 for (const locale of LOCALES) {
   const base = withVariants(
     localePath(locale, `/dev/authoring-tree/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}`),
     ['?fixture.variant.listPermissions=settings-policy-readonly'],
   );
   for (const theme of THEMES) {
-    for (const width of [1440, 900, 390]) {
+    for (const width of [1440, 1280, 900, 390]) {
       for (const empty of [false, true]) {
         test(`authoring layout acceptance (${locale}, ${theme}, ${width}, ${empty ? 'empty' : 'populated'})`, async ({
           page,
@@ -45,6 +68,7 @@ for (const locale of LOCALES) {
                 .first(),
             ).toBeVisible();
             await expect(page.locator('[data-case-loaded]')).toBeVisible();
+            await expectCasesToFit(authoring.locator('app-authoring-case-rows'));
             const metrics = await page.locator('[data-authoring-metrics]').innerText();
             expect.soft(metrics).toContain('2');
             if (width === 1440) {
@@ -104,6 +128,17 @@ for (const locale of LOCALES) {
       }
     }
   }
+
+  test(`bulk cases keep identifiers and actions inside the pane (${locale})`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(withVariants(base, ['?fixture.variant.listManualCases=bulk&limit=200']));
+    await page.locator('[data-case-load-more]').click();
+    await expect(page.locator('[data-case-loaded]')).toContainText('205');
+    const rows = page.locator('app-authoring-case-rows');
+    await expectCasesToFit(rows);
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    await expectCasesToFit(rows);
+  });
 
   test(`filtered miss on an otherwise empty project is not the project empty state (${locale})`, async ({
     page,

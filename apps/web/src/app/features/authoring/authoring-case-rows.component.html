@@ -1,21 +1,14 @@
-<div
-  role="region"
-  tabindex="0"
-  [attr.aria-label]="copy.caption"
-  class="min-w-0 max-w-full overflow-x-auto focus-visible:outline-ring"
->
-  <app-data-table
-    class="min-[900px]:min-w-[768px] [--eg-table-row:calc(var(--eg-row-default)_+_var(--eg-space-3))]!"
-    [columns]="columns()"
-    [rows]="rows()"
-    [rowId]="rowId"
-    [caption]="copy.caption"
-    [virtualThreshold]="200"
-    [fitToContainer]="false"
-    [fixedHeightCells]="true"
-    [flow]="'page'"
-  />
-</div>
+<app-data-table
+  class="[--eg-table-row:calc(var(--eg-row-default)_+_var(--eg-space-3))]!"
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowId]="rowId"
+  [caption]="copy.caption"
+  [virtualThreshold]="virtualThreshold"
+  [fitToContainer]="true"
+  [fixedHeightCells]="roomForFixedTracks()"
+  [flow]="'page'"
+/>
 @if (desktop()) {
   <div class="selection-bar" data-select-visible>
     <label

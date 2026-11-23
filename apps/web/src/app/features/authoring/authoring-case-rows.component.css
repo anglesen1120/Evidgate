@@ -3,6 +3,12 @@
   gap: var(--eg-space-4);
   min-inline-size: 0;
 }
+/* Bulk fixed-height rows place rich controls side by side rather than wrapping them. */
+@container case-pane (min-width: 70em) {
+  :host {
+    --case-virtual: 1;
+  }
+}
 .selection-bar,
 .export-bar {
   display: flex;
