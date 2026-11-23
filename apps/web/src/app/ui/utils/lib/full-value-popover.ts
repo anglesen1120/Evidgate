@@ -25,14 +25,16 @@ function positionPanel(trigger: HTMLElement, panel: HTMLElement, scrollport?: DO
   if (
     panel.style.top ||
     Math.abs(box.top - clampedTop) > 1 ||
-    box.left < 0 ||
-    box.right > width ||
+    box.left < -1 ||
+    box.right > width + 1 ||
     box.right <= anchor.left ||
     box.left >= anchor.right
   ) {
-    panel.classList.add('eg-measured-position');
-    panel.style.top = `${clampedTop}px`;
-    panel.style.left = `${Math.max(0, Math.min(anchor.left, width - box.width))}px`;
+    if (!panel.style.top) panel.classList.add('eg-measured-position');
+    const topPx = `${clampedTop}px`;
+    const leftPx = `${Math.max(0, Math.min(anchor.left, width - box.width))}px`;
+    if (panel.style.top !== topPx) panel.style.top = topPx;
+    if (panel.style.left !== leftPx) panel.style.left = leftPx;
   }
   return true;
 }
@@ -62,9 +64,15 @@ export function openFullValuePopover(
   document.addEventListener(
     'keydown',
     (event) => {
-      if (event.key === 'Escape') dismiss();
+      if (event.key !== 'Escape') return;
+      // The focused disclosure handles its own Escape without closing an enclosing dialog.
+      // Dismiss other open panels before that handler stops propagation.
+      const target = event.target;
+      if (!(target instanceof Node && (trigger.contains(target) || panel.contains(target)))) {
+        dismiss();
+      }
     },
-    { signal },
+    { capture: true, signal },
   );
   return () => {
     events.abort();

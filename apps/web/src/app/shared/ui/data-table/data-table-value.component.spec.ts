@@ -1,7 +1,8 @@
 // State sheet: docs/design/web/layout.md#open-points--hand-overs
 // Dense table contract: docs/design/web/layout.md#dense-table-rules
-import { provideZonelessChangeDetection } from '@angular/core';
+import { provideZonelessChangeDetection, ViewContainerRef } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { HlmBadge } from '@evidgate/ui/badge';
 
 import type { Mock } from 'vitest';
 import { DataTableValueComponent } from './data-table-value.component';
@@ -140,6 +141,32 @@ describe('DataTableValueComponent', () => {
     value.dispatchEvent(new FocusEvent('blur'));
     expect(hide).toHaveBeenCalledTimes(3);
   });
+
+  it.each(['cell', 'badge'])(
+    'one Escape dismisses both panels with focus on the %s',
+    async (focused) => {
+      await clip();
+      const container = fixture.componentRef.injector.get(ViewContainerRef);
+      const badgeRef = container.createComponent(HlmBadge);
+      badgeRef.setInput('fullValue', 'Full evidence label');
+      await fixture.whenStable();
+      const badge = badgeRef.location.nativeElement as HTMLElement;
+      const [active, hovered] = focused === 'cell' ? [value, badge] : [badge, value];
+      const panels = [root.querySelector('[popover]'), badge.querySelector('[popover]')];
+      active.focus();
+      hovered.dispatchEvent(new MouseEvent('mouseenter'));
+      expect(show.mock.contexts).toEqual(expect.arrayContaining(panels));
+      const parentEscape = vi.fn();
+      active.parentElement!.addEventListener('keydown', parentEscape, { once: true });
+      active.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      active.parentElement!.removeEventListener('keydown', parentEscape);
+      await fixture.whenStable();
+      expect(hide.mock.contexts).toEqual(expect.arrayContaining(panels));
+      expect(value.getAttribute('aria-expanded')).toBe('false');
+      expect(document.activeElement).toBe(active);
+      expect(parentEscape).not.toHaveBeenCalled();
+    },
+  );
 
   it('R4: remeasures after resize and removes tooltip/tabstop when clipping disappears', async () => {
     await clip();
