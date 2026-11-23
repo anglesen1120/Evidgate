@@ -12,7 +12,7 @@ import {
   output,
 } from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmDialogImports } from '@evidgate/ui/dialog';
+import { HlmDialogImports, type HlmDialogSize } from '@evidgate/ui/dialog';
 import { HlmIcon } from '@evidgate/ui/icon';
 import { StatusPillComponent, type StatusTone } from '../../shared/ui/chips/status-pill.component';
 import type { OnboardingProgress } from './data/onboarding-progress.service';
@@ -25,7 +25,7 @@ export interface OnboardingRecordView {
   readonly status: string | undefined;
   readonly tone: StatusTone;
   readonly details: TemplateRef<unknown>;
-  readonly size?: 'md' | 'lg';
+  readonly size?: HlmDialogSize;
   readonly opener: HTMLButtonElement;
 }
 
@@ -70,7 +70,7 @@ export class OnboardingRecordButtonComponent {
   readonly subject = input.required<string>();
   readonly recordTitle = input.required<string>();
   readonly recordId = input<string>();
-  readonly recordSize = input<'md' | 'lg'>('md');
+  readonly recordSize = input<HlmDialogSize>('md');
   readonly recordStatus = input<string>();
   readonly recordTone = input<StatusTone>('neutral');
   readonly inspect = output<OnboardingRecordView>();

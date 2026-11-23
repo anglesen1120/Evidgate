@@ -123,7 +123,9 @@ describe('HlmDialogFooter responsive action order', () => {
     await page.setContent(`<!doctype html><html lang="vi"><head><style>
       ${source('src/styles/tokens.css')}
       ${source('src/styles/helm/dialog.css')}
+      ${source('src/styles/helm/field-grid.css')}
       ${source('src/app/ui/dialog/lib/hlm-dialog-content.css')}
+      .spartan-dialog-lg { font-size: 12px; }
       body { margin: 0; min-height: 100dvh; display: grid; place-items: center; }
     </style></head><body>
       <hlm-dialog-content class="spartan-dialog-content spartan-dialog-${size}" data-size="${size}">

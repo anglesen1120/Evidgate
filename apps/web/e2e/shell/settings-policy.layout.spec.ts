@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from '@playwright/test';
-import { LOCALES, seedStoredTheme, THEMES } from './support';
+import { LOCALES, seedStoredTheme, THEMES, waitForDialogAnimations } from './support';
 import { HEAD_ID, PAGE, visit } from './settings-policy.support';
 
 const LABELS = {
@@ -33,6 +33,7 @@ for (const locale of LOCALES) {
       await page.setViewportSize({ width, height: 800 });
       await visit(page, locale);
       await page.locator('[data-policy-selected] [data-policy-view]').click();
+      await waitForDialogAnimations(page, '[role="dialog"]');
       const dialog = page.locator('[data-policy-view-dialog]');
       await expect(dialog).toHaveCSS(
         'width',

@@ -63,6 +63,12 @@ for (const locale of LOCALES) {
       await expect(page.locator('[data-ai-version-detail]')).toContainText(
         'Concise updated review-only checkout guidance.',
       );
+      const snapshot = page.locator('[data-ai-version-detail] dl');
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: 800 });
+        await expect(snapshot).toHaveCSS('display', 'grid');
+        await expect(snapshot.locator('div').first()).toHaveCSS('grid-column', '1 / -1');
+      }
       await page.setViewportSize({ width: 320, height: 800 });
       await page.locator('[data-ai-version-view]').first().click();
       await waitForDialogAnimations(page, '[role="dialog"]');

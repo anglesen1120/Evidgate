@@ -17,6 +17,7 @@ import { CATALOG_RECORD } from './case-record.copy';
         <div
           [class.hlm-field-wide]="
             fact.kind === 'id' ||
+            fact.key === 'name' ||
             fact.key === 'path' ||
             fact.key === 'labels' ||
             fact.key === 'requirement'
