@@ -18,6 +18,7 @@ import type { ManualCaseListItemDto } from '@evidgate/sdk';
 import type { ListRange } from '@angular/cdk/collections';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCheckbox } from '@evidgate/ui/checkbox';
+import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { StatusPillComponent } from '../../shared/ui/chips/status-pill.component';
 import { RevisionChipComponent } from '../../shared/ui/chips/revision-chip.component';
 import { DataTableComponent } from '../../shared/ui/data-table/data-table.component';
@@ -26,12 +27,13 @@ import type {
   DataTableColumn,
 } from '../../shared/ui/data-table/data-table-column';
 import { DataTableValueComponent } from '../../shared/ui/data-table/data-table-value.component';
-import { CopyableIdentifierComponent } from '../../shared/ui/values/copyable-identifier.component';
+import { CopyValueButtonComponent } from '../../shared/ui/values/copy-value-button.component';
 import { NarrowMutationPolicy } from '../../shared/ui/narrow/narrow-mutation-policy';
 import { escapeFormatChars } from '../../shared/ui/values/ref-name-display';
 import { CASE_TABLE_COPY } from './authoring-case-table.copy';
 
 type CaseCell = TemplateRef<DataTableCellContext<ManualCaseListItemDto>>;
+const selectionTrack = 'calc(var(--eg-control-touch) + var(--eg-space-2) * 2)';
 @Component({
   selector: 'app-authoring-case-rows',
   imports: [
@@ -39,9 +41,10 @@ type CaseCell = TemplateRef<DataTableCellContext<ManualCaseListItemDto>>;
     RouterLink,
     HlmButton,
     HlmCheckbox,
+    HlmDialogImports,
     DataTableComponent,
     DataTableValueComponent,
-    CopyableIdentifierComponent,
+    CopyValueButtonComponent,
     StatusPillComponent,
     RevisionChipComponent,
   ],
@@ -56,15 +59,31 @@ export class AuthoringCaseRowsComponent {
   readonly rows = input.required<readonly ManualCaseListItemDto[]>();
   readonly editorScope = input<readonly string[] | null>(null);
   protected readonly copy = CASE_TABLE_COPY;
+  protected readonly identifiers = $localize`:@@authoring.case-table.identifiers:Identifiers`;
+  protected readonly inspected = linkedSignal<ManualCaseListItemDto | null>(() => {
+    this.rows();
+    return null;
+  });
+  protected readonly identifiersForRow = computed(() => {
+    const row = this.inspected();
+    return row
+      ? [
+          { label: this.copy.id, value: row.case_id },
+          { label: this.copy.item, value: row.checklist_item_id },
+          ...row.linked_case_ids.map((value) => ({ label: this.copy.links, value })),
+        ]
+      : [];
+  });
   protected readonly desktop = this.viewport.canMutate;
   private readonly table = viewChild(DataTableComponent<ManualCaseListItemDto>);
   private readonly renderedRange = signal<ListRange | null>(null);
   private focusedSelection: HTMLElement | null = null;
   protected readonly virtual = computed(() => this.table()?.virtual() ?? false);
+  protected readonly virtualThreshold = 200;
+  protected readonly roomForFixedTracks = signal(false);
+  private readonly bulk = computed(() => this.rows().length > this.virtualThreshold);
   private readonly selectionCell = viewChild.required<CaseCell>('selectionCell');
   private readonly codeCell = viewChild.required<CaseCell>('codeCell');
-  private readonly idCell = viewChild.required<CaseCell>('idCell');
-  private readonly parentCell = viewChild.required<CaseCell>('parentCell');
   private readonly priorityCell = viewChild.required<CaseCell>('priorityCell');
   private readonly coverageCell = viewChild.required<CaseCell>('coverageCell');
   private readonly viewCell = viewChild.required<CaseCell>('viewCell');
@@ -75,10 +94,10 @@ export class AuthoringCaseRowsComponent {
   protected readonly visibleRows = computed(() => {
     const rows = this.rows();
     const table = this.table();
-    if (!table) return rows.slice(0, 200);
+    if (!table) return rows.slice(0, this.virtualThreshold);
     const range = this.renderedRange();
     const start = table.virtual() ? (range?.start ?? 0) : table.windowStart();
-    const end = table.virtual() ? (range?.end ?? 0) : start + 200;
+    const end = table.virtual() ? (range?.end ?? 0) : start + this.virtualThreshold;
     return rows.slice(start, end);
   });
   protected readonly selected = linkedSignal<readonly ManualCaseListItemDto[], ReadonlySet<string>>(
@@ -119,7 +138,8 @@ export class AuthoringCaseRowsComponent {
             role: 'actions' as const,
             priority: 'primary' as const,
             mutates: true,
-            virtualWidth: 'var(--eg-control-touch)',
+            width: { min: selectionTrack, preferred: selectionTrack, max: selectionTrack },
+            virtualWidth: selectionTrack,
             cellTemplate: this.selectionCell(),
           },
         ]
@@ -130,21 +150,15 @@ export class AuthoringCaseRowsComponent {
       cell: (row) => row.code,
       role: 'identity',
       priority: 'primary',
-      virtualWidth: 'calc(16ch + var(--eg-space-4) * 2)',
+      virtualWidth: 'calc(40ch + var(--eg-space-4) * 2)',
       cellTemplate: this.codeCell(),
-    },
-    {
-      id: 'item',
-      header: this.copy.item,
-      cell: (row) => row.checklist_item_id,
-      role: 'identity',
-      cellTemplate: this.parentCell(),
     },
     {
       id: 'priority',
       header: this.copy.priorityState,
       cell: (row) => this.copy[row.priority],
       role: 'status',
+      width: { min: 'max-content' },
       cellTemplate: this.priorityCell(),
     },
     {
@@ -152,17 +166,9 @@ export class AuthoringCaseRowsComponent {
       header: this.copy.coverage,
       cell: (row) => (row.linked_live_count > 0 ? this.copy.covered : this.copy.uncovered),
       role: 'status',
+      width: { min: 'max-content', max: 'none' },
+      virtualWidth: 'calc(32ch + var(--eg-space-4) * 2)',
       cellTemplate: this.coverageCell(),
-    },
-    {
-      id: 'id',
-      header: this.copy.id,
-      cell: (row) => row.case_id,
-      role: 'identity',
-      kind: 'identifier',
-      priority: 'secondary',
-      virtualWidth: 'calc(28ch + var(--eg-space-4) * 2)',
-      cellTemplate: this.idCell(),
     },
     {
       id: 'actions',
@@ -170,11 +176,24 @@ export class AuthoringCaseRowsComponent {
       cell: () => this.copy.view,
       role: 'actions',
       priority: 'primary',
+      width: { min: 'max-content' },
       cellTemplate: this.viewCell(),
     },
   ]);
 
   constructor() {
+    afterRenderEffect((cleanup) => {
+      if (!this.bulk() || typeof ResizeObserver === 'undefined') return;
+      const host = this.host.nativeElement;
+      const measure = () =>
+        this.roomForFixedTracks.set(
+          getComputedStyle(host).getPropertyValue('--case-virtual').trim() === '1',
+        );
+      measure();
+      const observer = new ResizeObserver(measure);
+      observer.observe(host);
+      cleanup(() => observer.disconnect());
+    });
     effect((cleanup) => {
       const viewport = this.table()?.viewport();
       this.renderedRange.set(null);

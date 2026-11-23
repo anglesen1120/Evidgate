@@ -3645,7 +3645,15 @@
       <trans-unit id="authoring.import-export.failure.export-wait" datatype="html"><source>The server is busy. Wait as directed by Retry-After, then retry this exact scope explicitly. Nothing is downloaded automatically.</source><target>Máy chủ đang bận. Chờ theo Retry-After rồi chủ động thử lại đúng phạm vi này. Không tự động tải tệp nào.</target></trans-unit>
       <trans-unit id="authoring.import-export.failure.export-unknown" datatype="html"><source>The export could not be completed or its server file was unavailable. No file was downloaded. Retry the exact scope explicitly.</source><target>Không thể hoàn tất xuất hoặc không nhận được tệp từ máy chủ. Chưa tải tệp nào. Hãy chủ động thử lại đúng phạm vi đó.</target></trans-unit>
       <trans-unit id="authoring.tree.title" datatype="html"><source>Feature tree</source><target>Cây chức năng</target></trans-unit>
-      <trans-unit id="authoring.tree.description" datatype="html"><source>Browse the project hierarchy and select a scope. Child-node counts and checklist-item counts are direct counts, not manual-case totals.</source><target>Duyệt phân cấp dự án và chọn phạm vi. Số nút con và số mục danh sách kiểm tra là số trực tiếp, không phải tổng số ca kiểm thử thủ công.</target></trans-unit>
+      <trans-unit id="authoring.tree.description" datatype="html"><source>Browse manual cases by checklist and inspect their automation coverage.</source><target>Duyệt ca kiểm thử thủ công theo checklist và xem độ bao phủ tự động hoá.</target></trans-unit>
+      <trans-unit id="authoring.tree.no-roots" datatype="html"><source>No hierarchy nodes in this project</source><target>Dự án chưa có nút phân cấp</target></trans-unit>
+      <trans-unit id="authoring.tree.import-export" datatype="html"><source>Import and export</source><target>Nhập và xuất dữ liệu</target></trans-unit>
+      <trans-unit id="authoring.tree.category-cases" datatype="html"><source>Category cases</source><target>Ca kiểm thử trong danh mục</target></trans-unit>
+      <trans-unit id="authoring.tree.loaded-scope" datatype="html"><source>Loaded in this scope</source><target>Đã tải trong phạm vi này</target></trans-unit>
+      <trans-unit id="authoring.tree.direct-items" datatype="html"><source>Direct checklist items</source><target>Mục checklist trực tiếp</target></trans-unit>
+      <trans-unit id="authoring.tree.loaded-cases" datatype="html"><source>Loaded cases</source><target>Ca kiểm thử đã tải</target></trans-unit>
+      <trans-unit id="authoring.case-table.invalid-filters" datatype="html"><source>Check filter values</source><target>Kiểm tra giá trị bộ lọc</target></trans-unit>
+      <trans-unit id="authoring.case-table.reset" datatype="html"><source>Reset</source><target>Đặt lại</target></trans-unit>
       <trans-unit id="authoring.tree.hierarchy" datatype="html"><source>Project hierarchy</source><target>Phân cấp dự án</target></trans-unit>
       <trans-unit id="authoring.tree.hierarchy-description" datatype="html"><source>Expand a branch explicitly to load its children. Selecting a scope does not expand it.</source><target>Chủ động mở rộng nhánh để tải các nút con. Chọn phạm vi không làm mở rộng nhánh.</target></trans-unit>
       <trans-unit id="authoring.tree.keyboard" datatype="html"><source>Tab reaches each visible control. Arrow keys, Home, End and typing move focus without selecting. Enter or Space activates a button.</source><target>Tab đi qua từng điều khiển đang hiển thị. Phím mũi tên, Home, End và nhập chữ chỉ chuyển tiêu điểm, không chọn phạm vi. Enter hoặc Space kích hoạt nút.</target></trans-unit>
@@ -3656,19 +3664,18 @@
       <trans-unit id="authoring.tree.current" datatype="html"><source>Current scope</source><target>Phạm vi hiện tại</target></trans-unit>
       <trans-unit id="authoring.tree.path" datatype="html"><source>Selected node path</source><target>Đường dẫn nút đã chọn</target></trans-unit>
       <trans-unit id="authoring.tree.all" datatype="html"><source>Project roots</source><target>Các nút gốc của dự án</target></trans-unit>
-      <trans-unit id="authoring.tree.choose" datatype="html"><source>Select a node to inspect its path.</source><target>Chọn một nút để xem đường dẫn.</target></trans-unit>
       <trans-unit id="authoring.tree.selected-id" datatype="html"><source>Selected node ID</source><target>Mã nút đã chọn</target></trans-unit>
       <trans-unit id="authoring.tree.loading" datatype="html"><source>Loading project hierarchy…</source><target>Đang tải phân cấp dự án…</target></trans-unit>
       <trans-unit id="authoring.tree.loading-children" datatype="html"><source>Loading child nodes…</source><target>Đang tải các nút con…</target></trans-unit>
       <trans-unit id="authoring.tree.empty" datatype="html"><source>This project has no authoring content yet</source><target>Dự án này chưa có nội dung biên soạn</target></trans-unit>
-      <trans-unit id="authoring.tree.empty-description" datatype="html"><source>A test case needs an existing checklist item. No hierarchy or parent is created by browsing.</source><target>Ca kiểm thử cần một mục danh sách kiểm tra đã có. Duyệt cây không tạo phân cấp hoặc nút cha.</target></trans-unit>
+      <trans-unit id="authoring.tree.empty-description" datatype="html"><source>Import a checklist and its manual cases to build the first branch of this tree.</source><target>Nhập checklist cùng các ca kiểm thử thủ công để tạo nhánh đầu tiên.</target></trans-unit>
       <trans-unit id="authoring.tree.empty-children" datatype="html"><source>No child nodes in this scope</source><target>Phạm vi này không có nút con</target></trans-unit>
       <trans-unit id="authoring.tree.refresh" datatype="html"><source>Refresh hierarchy</source><target>Làm mới phân cấp</target></trans-unit>
       <trans-unit id="authoring.tree.stale" datatype="html"><source>Hierarchy may be stale</source><target>Phân cấp có thể đã cũ</target></trans-unit>
       <trans-unit id="authoring.tree.stale-description" datatype="html"><source>Refresh failed; previously loaded hierarchy data is still shown. Retry to refresh this region only.</source><target>Làm mới không thành công; phân cấp đã tải vẫn hiển thị. Thử lại chỉ làm mới vùng này.</target></trans-unit>
       <trans-unit id="authoring.tree.more-roots" datatype="html"><source>Load more root nodes</source><target>Tải thêm nút gốc</target></trans-unit>
       <trans-unit id="authoring.tree.more-children" datatype="html"><source>Load more child nodes</source><target>Tải thêm nút con</target></trans-unit>
-      <trans-unit id="authoring.tree.table" datatype="html"><source>Case table</source><target>Bảng ca kiểm thử</target></trans-unit>
+      <trans-unit id="authoring.tree.table" datatype="html"><source>Manual cases</source><target>Ca kiểm thử thủ công</target></trans-unit>
       <trans-unit id="authoring.tree.table-placeholder" datatype="html"><source>This separate region is reserved for the case table. Hierarchy loading and failures do not control it.</source><target>Vùng độc lập này dành cho bảng ca kiểm thử. Việc tải hoặc lỗi của phân cấp không điều khiển vùng này.</target></trans-unit>
       <trans-unit id="authoring.tree.expand" datatype="html"><source>Expand <x id="title" equiv-text="node.title"/></source><target>Mở rộng <x id="title" equiv-text="node.title"/></target></trans-unit>
       <trans-unit id="authoring.tree.collapse" datatype="html"><source>Collapse <x id="title" equiv-text="node.title"/></source><target>Thu gọn <x id="title" equiv-text="node.title"/></target></trans-unit>
@@ -3757,19 +3764,19 @@
       <trans-unit id="authoring.case-table.select-case" datatype="html"><source>Select case <x id="code" equiv-text="row.code"/></source><target>Chọn ca kiểm thử <x id="code" equiv-text="row.code"/></target></trans-unit>
       <trans-unit id="authoring.case-table.loaded-count" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> cases loaded</source><target>Đã tải <x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> ca kiểm thử</target></trans-unit>
       <trans-unit id="authoring.case-table.scope-help" datatype="html"><source>Filters search the server list. Authoring coverage means a live automated identity is linked; it is not an execution result.</source><target>Bộ lọc tìm trong danh sách trên máy chủ. Độ bao phủ khi soạn thảo nghĩa là có liên kết đến định danh tự động hoá đang hoạt động; đây không phải kết quả thực thi.</target></trans-unit>
-      <trans-unit id="authoring.case-table.filters" datatype="html"><source>Filter manual cases</source><target>Lọc ca kiểm thử thủ công</target></trans-unit>
+      <trans-unit id="authoring.case-table.filters" datatype="html"><source>Filter cases</source><target>Lọc ca kiểm thử</target></trans-unit>
       <trans-unit id="authoring.case-table.item" datatype="html"><source>Checklist item ID</source><target>ID mục checklist</target></trans-unit>
       <trans-unit id="authoring.case-table.item-help" datatype="html"><source>Optional exact checklist UUID. Leave blank for every checklist in this scope.</source><target>UUID chính xác của mục checklist, không bắt buộc. Để trống để xem mọi checklist trong phạm vi này.</target></trans-unit>
       <trans-unit id="authoring.case-table.item-error" datatype="html"><source>Enter a complete checklist UUID or leave this filter blank.</source><target>Nhập UUID đầy đủ của mục checklist hoặc để trống bộ lọc này.</target></trans-unit>
       <trans-unit id="authoring.case-table.priority" datatype="html"><source>Priority</source><target>Mức ưu tiên</target></trans-unit>
       <trans-unit id="authoring.case-table.state" datatype="html"><source>Lifecycle</source><target>Vòng đời</target></trans-unit>
-      <trans-unit id="authoring.case-table.coverage" datatype="html"><source>Authoring coverage</source><target>Độ bao phủ khi soạn thảo</target></trans-unit>
+      <trans-unit id="authoring.case-table.coverage" datatype="html"><source>Coverage</source><target>Độ bao phủ</target></trans-unit>
       <trans-unit id="authoring.case-table.source" datatype="html"><source>Source</source><target>Nguồn</target></trans-unit>
       <trans-unit id="authoring.case-table.owner" datatype="html"><source>Owner</source><target>Người phụ trách</target></trans-unit>
       <trans-unit id="authoring.case-table.source-help" datatype="html"><source>Source filtering is unavailable: the server does not support this filter.</source><target>Chưa thể lọc theo nguồn: máy chủ không hỗ trợ bộ lọc này.</target></trans-unit>
       <trans-unit id="authoring.case-table.owner-help" datatype="html"><source>Owner filtering is unavailable: the server does not support this filter.</source><target>Chưa thể lọc theo người phụ trách: máy chủ không hỗ trợ bộ lọc này.</target></trans-unit>
       <trans-unit id="authoring.case-table.unavailable" datatype="html"><source>Unavailable</source><target>Chưa khả dụng</target></trans-unit>
-      <trans-unit id="authoring.case-table.search" datatype="html"><source>Search case titles</source><target>Tìm theo tiêu đề ca kiểm thử</target></trans-unit>
+      <trans-unit id="authoring.case-table.search" datatype="html"><source>Case title</source><target>Tiêu đề ca</target></trans-unit>
       <trans-unit id="authoring.case-table.search-help" datatype="html"><source>Case-insensitive title search, up to 200 characters.</source><target>Tìm tiêu đề không phân biệt chữ hoa, chữ thường, tối đa 200 ký tự.</target></trans-unit>
       <trans-unit id="authoring.case-table.search-error" datatype="html"><source>Enter at most 200 characters before applying filters.</source><target>Nhập tối đa 200 ký tự trước khi áp dụng bộ lọc.</target></trans-unit>
       <trans-unit id="authoring.case-table.all" datatype="html"><source>All</source><target>Tất cả</target></trans-unit>
@@ -22675,6 +22682,7 @@
       <trans-unit id="catalog.case-view.view-name" datatype="html"><source>View <x id="name"/></source><target>Xem <x id="name"/></target></trans-unit>
       <trans-unit id="catalog.case-view.edit-name" datatype="html"><source>Edit owner for <x id="name"/></source><target>Sửa người phụ trách cho <x id="name"/></target></trans-unit>
       <trans-unit id="authoring.case-table.manual-case" datatype="html"><source>Manual case</source><target>Ca kiểm thử thủ công</target></trans-unit>
+      <trans-unit id="authoring.case-table.identifiers" datatype="html"><source>Identifiers</source><target>Mã định danh</target></trans-unit>
       <trans-unit id="authoring.case-table.priority-state" datatype="html"><source>Priority / lifecycle</source><target>Ưu tiên / vòng đời</target></trans-unit>
       <trans-unit id="authoring.case-table.view" datatype="html"><source>View</source><target>Xem</target></trans-unit>
       <trans-unit id="authoring.case-table.actions" datatype="html"><source>Actions</source><target>Thao tác</target></trans-unit>
@@ -22684,7 +22692,6 @@
       <trans-unit id="catalog.case-view.loaded-status" datatype="html"><source>Status in loaded identities</source><target>Trạng thái của các định danh đã tải</target></trans-unit>
       <trans-unit id="catalog.case-view.summary" datatype="html"><source>Summary</source><target>Tóm tắt</target></trans-unit>
       <trans-unit id="catalog.case-view.history" datatype="html"><source>Recorded history</source><target>Lịch sử đã ghi nhận</target></trans-unit>
-      <trans-unit id="authoring.tree.loaded-roots" datatype="html"><source>Loaded roots: <x id="count"/></source><target>Số nút gốc đã tải: <x id="count"/></target></trans-unit>
       <trans-unit id="authoring.case-table.live-links" datatype="html"><source>Live links</source><target>Liên kết còn hiệu lực</target></trans-unit>
       <trans-unit id="authoring.case-table.loaded-states" datatype="html"><source>Lifecycle of loaded cases</source><target>Vòng đời của các ca kiểm thử đã tải</target></trans-unit>
       <trans-unit id="authoring.history.view" datatype="html"><source>View</source><target>Xem</target></trans-unit>

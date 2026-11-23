@@ -1,21 +1,14 @@
-<div
-  role="region"
-  tabindex="0"
-  [attr.aria-label]="copy.caption"
-  class="min-w-0 max-w-full overflow-x-auto focus-visible:outline-ring"
->
-  <app-data-table
-    class="min-[900px]:min-w-[768px] [--eg-table-row:calc(var(--eg-row-default)_+_var(--eg-space-3))]!"
-    [columns]="columns()"
-    [rows]="rows()"
-    [rowId]="rowId"
-    [caption]="copy.caption"
-    [virtualThreshold]="200"
-    [fitToContainer]="false"
-    [fixedHeightCells]="true"
-    [flow]="'page'"
-  />
-</div>
+<app-data-table
+  class="[--eg-table-row:calc(var(--eg-row-default)_+_var(--eg-space-3))]! [&_th]:whitespace-nowrap! [&_th.cdk-column-select]:text-[length:var(--eg-space-0)]! [&_.cdk-column-select]:px-(--eg-space-2)! [&_.cdk-column-coverage>.eg-table-value]:max-w-none!"
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowId]="rowId"
+  [caption]="copy.caption"
+  [virtualThreshold]="virtualThreshold"
+  [fitToContainer]="true"
+  [fixedHeightCells]="roomForFixedTracks()"
+  [flow]="'page'"
+/>
 @if (desktop()) {
   <div class="selection-bar" data-select-visible>
     <label
@@ -77,43 +70,33 @@
     <span class="sr-only">{{ selectName(row) }}</span>
   </label>
 </ng-template>
-<ng-template #codeCell let-row let-stacked="stacked">
-  <div class="coverage" [class.virtual-cell]="virtual()">
+<ng-template #codeCell let-row>
+  <div class="case-subject" [class.virtual-subject]="virtual()">
     <bdi class="font-semibold"
-      ><app-data-table-value [value]="row.title" [truncate]="!stacked" [fixedRow]="virtual()"
+      ><app-data-table-value [value]="row.title" [fixedRow]="virtual()"
     /></bdi>
-    <app-copyable-identifier
-      [value]="row.code"
-      [label]="copy.code"
-      [truncate]="!stacked"
-      [compact]="virtual()"
-      [copySize]="'lg'"
-    />
+    <div class="case-key-line">
+      <code data-case-key
+        ><bdi>{{ row.code }}</bdi></code
+      >
+      <app-copy-value-button [value]="row.code" [label]="copy.code" [iconOnly]="true" />
+      <button
+        hlmBtn
+        type="button"
+        [size]="'sm'"
+        [variant]="'ghost'"
+        [hlmDialogTriggerFor]="identifierDialog"
+        [attr.aria-label]="identifiers + ' · ' + row.code"
+        data-case-identifiers
+        (click)="inspected.set(row)"
+      >
+        {{ identifiers }}
+      </button>
+    </div>
   </div>
-</ng-template>
-<ng-template #idCell let-row let-stacked="stacked">
-  <div class="coverage" [class.virtual-cell]="virtual()">
-    <app-copyable-identifier
-      [value]="row.case_id"
-      [label]="copy.id"
-      [truncate]="!stacked"
-      [compact]="virtual()"
-      [copySize]="'lg'"
-    />
-    <app-revision-chip [revision]="row.version" [label]="copy.version" />
-  </div>
-</ng-template>
-<ng-template #parentCell let-row let-stacked="stacked">
-  <app-copyable-identifier
-    [value]="row.checklist_item_id"
-    [label]="copy.item"
-    [truncate]="!stacked"
-    [compact]="virtual()"
-    [copySize]="'lg'"
-  />
 </ng-template>
 <ng-template #priorityCell let-row>
-  <div class="coverage" [class.virtual-cell]="virtual()">
+  <div class="priority-group" [class.virtual-priority]="virtual()">
     <app-status-pill
       [label]="priorityLabel(row)"
       [tone]="row.priority === 'critical' || row.priority === 'high' ? 'warning' : 'neutral'"
@@ -124,24 +107,16 @@
     />
   </div>
 </ng-template>
-<ng-template #coverageCell let-row let-stacked="stacked">
-  <div class="coverage" [class.virtual-cell]="virtual()">
+<ng-template #coverageCell let-row>
+  <div class="coverage-summary">
     <app-status-pill
       [label]="row.linked_live_count > 0 ? copy.covered : copy.uncovered"
       [tone]="row.linked_live_count > 0 ? 'info' : 'neutral'"
     />
-    <span class="text-end text-xs tabular-nums text-muted-foreground"
+    <span class="coverage-count text-xs tabular-nums text-muted-foreground"
       ><span i18n="@@authoring.case-table.live-links">Live links</span>:
       {{ row.linked_live_count | number }}</span
     >
-    @if (row.linked_case_ids.length > 0) {
-      <span class="sr-only">{{ copy.links }}</span>
-      <app-data-table-value
-        [value]="row.linked_case_ids.join(', ')"
-        [truncate]="!stacked"
-        [fixedRow]="virtual()"
-      />
-    }
   </div>
 </ng-template>
 <ng-template #viewCell let-row>
@@ -151,7 +126,7 @@
       [variant]="'outline'"
       [size]="'sm'"
       data-case-view
-      class="pointer-coarse:min-h-(--eg-control-touch)"
+      class="min-w-(--eg-control-touch) whitespace-nowrap! pointer-coarse:min-h-(--eg-control-touch)"
       [routerLink]="scope.concat(row.case_id)"
       [queryParamsHandling]="'preserve'"
       [preserveFragment]="true"
@@ -162,3 +137,46 @@
     <span class="help">{{ copy.unavailableEditor }}</span>
   }
 </ng-template>
+
+<hlm-dialog
+  #identifierDialog
+  [aria-modal]="true"
+  [autoFocus]="'first-heading'"
+  [state]="inspected() ? 'open' : 'closed'"
+  (stateChanged)="$event === 'closed' && inspected.set(null)"
+>
+  <hlm-dialog-content *hlmDialogPortal [size]="'md'">
+    @if (inspected(); as row) {
+      <header hlmDialogHeader>
+        <h2 hlmDialogTitle tabindex="-1">
+          {{ identifiers }} · <bdi>{{ row.code }}</bdi>
+        </h2>
+        <p hlmDialogDescription hlmDialogSubject>
+          <bdi>{{ row.title }}</bdi>
+        </p>
+      </header>
+      <dl class="hlm-field-grid">
+        @for (fact of identifiersForRow(); track $index) {
+          <div class="hlm-field-wide">
+            <dt>{{ fact.label }}</dt>
+            <dd class="identifier-line">
+              <code
+                ><bdi>{{ fact.value }}</bdi></code
+              >
+              <app-copy-value-button [value]="fact.value" [label]="fact.label" [iconOnly]="true" />
+            </dd>
+          </div>
+        }
+        <div>
+          <dt>{{ copy.version }}</dt>
+          <dd><app-revision-chip [revision]="row.version" [label]="copy.version" /></dd>
+        </div>
+      </dl>
+      <footer hlmDialogFooter>
+        <button hlmBtn type="button" [variant]="'outline'" hlmDialogClose i18n="@@ui.close">
+          Close
+        </button>
+      </footer>
+    }
+  </hlm-dialog-content>
+</hlm-dialog>

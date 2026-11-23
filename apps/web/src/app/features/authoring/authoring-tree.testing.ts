@@ -43,7 +43,9 @@ export class AuthoringPageHarness extends ComponentHarness {
   readonly tree = this.locatorForOptional(AuthoringTreeHarness);
   readonly table = this.locatorFor('[data-authoring-cases]');
   readonly loading = this.locatorForOptional('app-loading-pattern');
-  readonly empty = this.locatorForOptional('app-empty-pattern:not(app-authoring-case-table *)');
+  readonly empty = this.locatorForOptional(
+    'app-empty-pattern[data-authoring-project-empty], app-empty-pattern:not(app-authoring-case-table *)',
+  );
   readonly error = this.locatorForOptional('app-error-pattern');
   readonly forbidden = this.locatorForOptional('app-forbidden-pattern');
   readonly notFound = this.locatorForOptional('app-not-found-pattern');
