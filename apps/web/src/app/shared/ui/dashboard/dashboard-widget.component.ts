@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { HlmCardImports } from '@evidgate/ui/card';
 import type { ApiError } from '../../../core/http/api-error';
+import { retryWithDashboardFocus } from './dashboard-retry-focus';
 import { EmptyPatternComponent } from '../states/empty-pattern.component';
 import { ErrorPatternComponent } from '../states/error-pattern.component';
 import { LoadingPatternComponent } from '../states/loading-pattern.component';
@@ -21,7 +22,7 @@ import { LoadingPatternComponent } from '../states/loading-pattern.component';
         hlmCardHeader
         class="gap-(--eg-space-2) border-b border-border px-(--eg-space-5) py-(--eg-space-4)"
       >
-        <h2 hlmCardTitle class="m-0 text-lg">{{ title() }}</h2>
+        <h2 #retryHeading hlmCardTitle [attr.tabindex]="-1" class="m-0 text-lg">{{ title() }}</h2>
         @if (description()) {
           <p hlmCardDescription class="m-0">{{ description() }}</p>
         }
@@ -35,7 +36,7 @@ import { LoadingPatternComponent } from '../states/loading-pattern.component';
             [bare]="true"
             [headingLevel]="3"
             [error]="failure"
-            (retry)="retry.emit()"
+            (retry)="retryWithFocus(retryHeading, retry)"
           />
         } @else if (empty()) {
           <app-empty-pattern [bare]="true" [title]="emptyTitle()" />
@@ -54,4 +55,6 @@ export class DashboardWidgetComponent {
   readonly empty = input(false);
   readonly emptyTitle = input('');
   readonly retry = output<void>();
+
+  protected readonly retryWithFocus = retryWithDashboardFocus;
 }

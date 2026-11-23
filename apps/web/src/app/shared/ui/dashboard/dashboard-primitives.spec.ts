@@ -13,6 +13,7 @@ class DashboardHarness extends ComponentHarness {
   readonly retry = this.locatorFor('button');
   readonly meter = this.locatorForOptional('meter');
   readonly bars = this.locatorForAll('.trend-stack [data-segment]');
+  readonly scrollRegion = this.locatorFor('[role="region"]');
   readonly loading = this.locatorForOptional('app-loading-pattern');
   readonly empty = this.locatorForOptional('app-empty-pattern');
 }
@@ -87,6 +88,7 @@ describe('Dashboard primitives', () => {
         label: '23/11/2026',
         segments: [
           { id: 'pass', label: 'PASS', value: 2, tone: 'success' },
+          { id: 'fail', label: 'FAIL', value: 0, tone: 'danger' },
           { id: 'pending', label: 'Not evaluated', value: 3, tone: 'neutral' },
         ],
       },
@@ -97,6 +99,10 @@ describe('Dashboard primitives', () => {
     const segments = await harness.bars();
     expect(segments).toHaveLength(2);
     expect(await segments[1]?.getAttribute('data-tone')).toBe('neutral');
+    expect(await segments[1]?.getAttribute('data-pattern')).toBe('2');
+    const region = await harness.scrollRegion();
+    expect(await region.getAttribute('tabindex')).toBe('0');
+    expect(await region.getAttribute('aria-label')).toBe('Recent decisions');
     expect(await segments[0]?.getAttribute('aria-hidden')).toBe('true');
   });
 });

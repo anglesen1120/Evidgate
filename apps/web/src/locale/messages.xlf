@@ -27264,6 +27264,7 @@
       <trans-unit id="project.dashboard.attention" datatype="html"><source>Needs attention</source></trans-unit>
       <trans-unit id="project.dashboard.failures" datatype="html"><source>New FAILs</source></trans-unit>
       <trans-unit id="project.dashboard.failure-context" datatype="html"><source>FAIL decisions among sampled runs created in the last 7 days.</source></trans-unit>
+      <trans-unit id="project.dashboard.failures-unavailable" datatype="html"><source>Not available (latest runs not loaded)</source></trans-unit>
       <trans-unit id="project.dashboard.waivers" datatype="html"><source>Expiring waivers</source></trans-unit>
       <trans-unit id="project.dashboard.waiver-context" datatype="html"><source>Approved waivers expiring in the next 7 days, among up to 10 shown.</source></trans-unit>
       <trans-unit id="project.dashboard.quarantine" datatype="html"><source>Active quarantine</source></trans-unit>

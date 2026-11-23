@@ -36,6 +36,19 @@ for (const locale of LOCALES) {
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
         ).toBe(true);
+        expect(
+          await page
+            .locator('.trend-stack')
+            .evaluateAll((stacks) =>
+              stacks.every((stack) =>
+                Array.from(stack.querySelectorAll('[data-segment]')).every(
+                  (segment) =>
+                    segment.getBoundingClientRect().bottom <=
+                    stack.getBoundingClientRect().bottom + 0.5,
+                ),
+              ),
+            ),
+        ).toBe(true);
         await expectNoA11yViolations(page, `project dashboard ${locale} ${theme} ${width}`);
         await mkdir('/tmp/s674-shots', { recursive: true });
         await page.screenshot({
@@ -94,4 +107,46 @@ test('run inspection is a named read-only dialog with Escape and focus return', 
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
   await expect(view).toBeFocused();
+});
+
+test('500 sampled dates stay legible and keyboard-scrollable at 390px', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 1000 });
+  await page.goto(overviewPath('en') + FIXTURE + '&fixture.variant.listRuns=dashboard-dense');
+  const region = page.locator('[data-dashboard-trend] .trend-bars');
+  await expect(region.locator('.trend-column')).toHaveCount(500);
+  await expect(region).toHaveAttribute('role', 'region');
+  await expect(region).toHaveAttribute('tabindex', '0');
+  await expect(region).toHaveAccessibleName(/\S/);
+  const geometry = await region.evaluate((element) => ({
+    scrollable: element.scrollWidth > element.clientWidth,
+    minimumWidth: Math.min(
+      ...Array.from(
+        element.querySelectorAll('.trend-column'),
+        (column) => column.getBoundingClientRect().width,
+      ),
+    ),
+    fitsStack: Array.from(element.querySelectorAll('.trend-stack')).every((stack) =>
+      Array.from(stack.querySelectorAll('[data-segment]')).every(
+        (segment) =>
+          segment.getBoundingClientRect().bottom <= stack.getBoundingClientRect().bottom + 0.5,
+      ),
+    ),
+    positiveOnly: Array.from(element.querySelectorAll('[data-segment]')).every(
+      (segment) => segment.getBoundingClientRect().height > 0,
+    ),
+  }));
+  expect(geometry.scrollable).toBe(true);
+  expect(geometry.minimumWidth).toBeGreaterThanOrEqual(64);
+  expect(geometry.fitsStack).toBe(true);
+  expect(geometry.positiveOnly).toBe(true);
+  await region.focus();
+  await expect(region).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => region.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+  await expect(page.locator('[data-dashboard-attention]')).toContainText(
+    'Not available (latest runs not loaded)',
+  );
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.locator('[data-dashboard-trend] summary').click();
+  await expect(page.locator('[data-dashboard-trend] table')).toBeVisible();
 });

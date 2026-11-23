@@ -16,6 +16,10 @@ class OverviewHarness extends ComponentHarness {
   );
   readonly text = async () => (await this.host()).text();
   readonly runViews = this.locatorForAll('[data-dashboard-run-view]');
+  readonly failureLabel = this.locatorFor('[data-dashboard-failures] dt');
+  readonly failureValue = this.locatorFor('[data-dashboard-failures] app-number-value');
+  readonly failureDescription = this.locatorFor('[data-dashboard-failures] p');
+  readonly attentionMetrics = this.locatorForAll('[data-dashboard-attention] app-dashboard-metric');
 }
 
 function read<T>(value: T) {
@@ -85,6 +89,8 @@ function mount(rows: readonly RunSummary[] = [RUN], complete = true, allowed = t
 }
 
 describe('ProjectOverviewPage dashboard', () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it('renders all eight independent widgets without treating collecting as PASS', async () => {
     const { fixture } = mount();
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
@@ -109,6 +115,53 @@ describe('ProjectOverviewPage dashboard', () => {
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
     expect(await harness.text()).toContain('oldest loaded runs — not the latest');
     expect(await harness.text()).not.toContain('Recent runs');
+  });
+
+  it.each<{ decision: Exclude<RunSummary['decision'], undefined>; count: string }>([
+    { decision: null, count: '0' },
+    { decision: 'FAIL', count: '1' },
+  ])(
+    'withholds New FAILs for incomplete $decision samples and restores $count when complete',
+    async ({ decision, count }) => {
+      vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-23T12:00:00Z'));
+      const rows = [{ ...RUN, decision }];
+      const { fixture, store } = mount(rows, false);
+      const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+      const otherMetricText = await Promise.all(
+        (await harness.attentionMetrics()).slice(1).map((metric) => metric.text()),
+      );
+
+      expect(await (await harness.failureLabel()).text()).toBe('New FAILs');
+      expect(await (await harness.failureValue()).text()).toBe('Number unavailable');
+      expect(await (await harness.failureDescription()).text()).toBe(
+        'Not available (latest runs not loaded)',
+      );
+
+      store.runs.value.set({ items: rows, complete: true });
+
+      expect(await (await harness.failureLabel()).text()).toBe('New FAILs');
+      expect(await (await harness.failureValue()).text()).toBe(count);
+      expect(await (await harness.failureDescription()).text()).toBe(
+        'FAIL decisions among sampled runs created in the last 7 days.',
+      );
+      expect(
+        await Promise.all(
+          (await harness.attentionMetrics()).slice(1).map((metric) => metric.text()),
+        ),
+      ).toEqual(otherMetricText);
+    },
+  );
+
+  it('withholds New FAILs when run sample completeness is unknown', async () => {
+    const { fixture, store } = mount();
+    store.runs.value.set(undefined);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+
+    expect(await (await harness.failureLabel()).text()).toBe('New FAILs');
+    expect(await (await harness.failureValue()).text()).toBe('Number unavailable');
+    expect(await (await harness.failureDescription()).text()).toBe(
+      'Not available (latest runs not loaded)',
+    );
   });
 
   it('shows no restricted facts when every widget is denied', async () => {

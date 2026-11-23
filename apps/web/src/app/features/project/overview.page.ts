@@ -115,7 +115,9 @@ export class ProjectOverviewPage {
       ],
     })),
   );
-  protected readonly failures = computed(() => recentFailures(this.rows(), Date.now()));
+  protected readonly failures = computed(() =>
+    this.store.runs.value()?.complete === true ? recentFailures(this.rows(), Date.now()) : null,
+  );
   protected readonly waivers = computed(() =>
     expiringWaivers(this.store.waivers.value()?.items ?? [], Date.now()),
   );

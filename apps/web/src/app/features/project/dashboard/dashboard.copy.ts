@@ -14,6 +14,7 @@ export const DASHBOARD_COPY = {
   attention: $localize`:@@project.dashboard.attention:Needs attention`,
   failures: $localize`:@@project.dashboard.failures:New FAILs`,
   failureContext: $localize`:@@project.dashboard.failure-context:FAIL decisions among sampled runs created in the last 7 days.`,
+  failuresUnavailable: $localize`:@@project.dashboard.failures-unavailable:Not available (latest runs not loaded)`,
   waivers: $localize`:@@project.dashboard.waivers:Expiring waivers`,
   waiverContext: $localize`:@@project.dashboard.waiver-context:Approved waivers expiring in the next 7 days, among up to 10 shown.`,
   quarantine: $localize`:@@project.dashboard.quarantine:Active quarantine`,

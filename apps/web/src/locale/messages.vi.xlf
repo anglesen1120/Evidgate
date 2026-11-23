@@ -22829,6 +22829,7 @@
       <trans-unit id="project.dashboard.attention" datatype="html"><source>Needs attention</source><target>Cần chú ý</target></trans-unit>
       <trans-unit id="project.dashboard.failures" datatype="html"><source>New FAILs</source><target>FAIL mới</target></trans-unit>
       <trans-unit id="project.dashboard.failure-context" datatype="html"><source>FAIL decisions among sampled runs created in the last 7 days.</source><target>Quyết định FAIL trong mẫu lượt chạy được tạo trong 7 ngày qua.</target></trans-unit>
+      <trans-unit id="project.dashboard.failures-unavailable" datatype="html"><source>Not available (latest runs not loaded)</source><target>Không có dữ liệu (chưa tải các lượt chạy mới nhất)</target></trans-unit>
       <trans-unit id="project.dashboard.waivers" datatype="html"><source>Expiring waivers</source><target>Miễn trừ sắp hết hạn</target></trans-unit>
       <trans-unit id="project.dashboard.waiver-context" datatype="html"><source>Approved waivers expiring in the next 7 days, among up to 10 shown.</source><target>Miễn trừ đã duyệt sẽ hết hạn trong 7 ngày tới, trong tối đa 10 mục hiển thị.</target></trans-unit>
       <trans-unit id="project.dashboard.quarantine" datatype="html"><source>Active quarantine</source><target>Cách ly đang áp dụng</target></trans-unit>

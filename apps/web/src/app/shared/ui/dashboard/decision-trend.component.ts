@@ -22,16 +22,21 @@ export interface DashboardTrendPoint {
   host: { class: 'block min-w-0' },
   template: `
     <figure class="m-0 grid min-w-0 gap-(--eg-space-4)" [attr.aria-label]="label()">
-      <div class="trend-bars" aria-hidden="true">
+      <div
+        class="trend-bars focus-visible:outline-solid focus-visible:outline-ring"
+        role="region"
+        tabindex="0"
+        [attr.aria-label]="label()"
+      >
         @for (point of bars(); track point.id) {
-          <div class="trend-column">
+          <div class="trend-column" aria-hidden="true">
             <div class="trend-stack">
               @for (segment of point.segments; track segment.id) {
                 <span
                   data-segment
                   aria-hidden="true"
                   [attr.data-tone]="segment.tone"
-                  [attr.data-pattern]="$index % 4"
+                  [attr.data-pattern]="segment.pattern"
                   [style.height.%]="segment.height"
                 ></span>
               }
@@ -99,10 +104,12 @@ export interface DashboardTrendPoint {
       align-items: end;
       gap: var(--eg-space-4);
       min-inline-size: 0;
+      overflow-x: auto;
+      padding-block: var(--eg-space-1);
     }
     .trend-column {
-      flex: 1;
-      min-inline-size: 0;
+      flex: 1 0 4.5rem;
+      min-inline-size: 4.5rem;
       text-align: center;
       overflow-wrap: anywhere;
     }
@@ -111,7 +118,6 @@ export interface DashboardTrendPoint {
       flex-direction: column-reverse;
       justify-content: start;
       block-size: 10rem;
-      gap: var(--eg-space-1);
     }
     [data-segment] {
       display: block;
@@ -182,10 +188,13 @@ export class DecisionTrendComponent {
     );
     return points.map((point) => ({
       ...point,
-      segments: point.segments.map((segment) => ({
-        ...segment,
-        height: (Math.max(0, segment.value) / maximum) * 100,
-      })),
+      segments: point.segments
+        .map((segment, index) => ({
+          ...segment,
+          pattern: index % 4,
+          height: (Math.max(0, segment.value) / maximum) * 100,
+        }))
+        .filter((segment) => segment.value > 0),
     }));
   });
 }
