@@ -176,15 +176,20 @@ describe('AiSettingsPage', () => {
     expect(await harness.value('writing_style')).toBe('Retained writing draft');
     expect(await harness.text()).toContain('draft');
   });
-  it('explains a disabled Save without project write', async () => {
+  it('explains a disabled Save and omits the first-version action without project write', async () => {
     writable.set(false);
+    data.versions.mockResolvedValue({ items: [], next_cursor: null });
     const { harness } = await mount();
     expect(await (await harness.saveButton()).getProperty<boolean>('disabled')).toBe(true);
     expect(await harness.text()).toContain('project:write');
+    await harness.click('[data-ai-history-tab]');
+    expect(await harness.count('app-ai-settings-history app-empty-pattern button')).toBe(0);
   });
   it('renders version list and immutable detail from the detail fetch', async () => {
     const { harness } = await mount();
     await harness.click('[data-ai-history-tab]');
+    expect(await harness.count('#ai-compare-reason')).toBe(0);
+    expect(await harness.count('[aria-describedby="ai-compare-reason"]')).toBe(0);
     await harness.click('[data-ai-inspect]');
     expect(await harness.text()).toContain(version.settings.writing_style);
     expect(data.version).toHaveBeenCalledWith('p1', 1, expect.any(AbortSignal));
@@ -223,6 +228,7 @@ describe('AiSettingsPage', () => {
     });
     const { harness } = await mount();
     await harness.click('[data-ai-history-tab]');
+    expect(await harness.count('#ai-compare-reason')).toBe(1);
     await harness.click('[data-ai-inspect]');
     await harness.click('[data-ai-version-view="1"]');
     expect(await (await harness.dialog())?.text()).toContain(version.settings.writing_style);
@@ -316,12 +322,24 @@ describe('AiSettingsPage', () => {
     await harness.click('[data-ai-history-tab]');
     await harness.fill('history-filter', 'No matching fixture reason');
     expect(await harness.text()).toContain('No loaded versions match this filter');
+    expect(await harness.count('app-ai-settings-history app-data-table')).toBe(0);
+    expect(await harness.count('app-ai-settings-history app-empty-pattern button')).toBe(0);
   });
-  it('renders the empty history state', async () => {
+  it('offers one empty state that returns focus to Settings without discarding the draft', async () => {
     data.versions.mockResolvedValue({ items: [], next_cursor: null });
     const { harness } = await mount();
+    await harness.fill('writing_style', 'First version draft');
     await harness.click('[data-ai-history-tab]');
     expect(await harness.text()).toContain('No saved settings versions');
+    expect(await harness.count('app-ai-settings-history app-empty-pattern')).toBe(1);
+    expect(await harness.count('app-ai-settings-history app-data-table')).toBe(0);
+    expect(await harness.count('#ai-compare-reason')).toBe(0);
+    await harness.click('app-ai-settings-history app-empty-pattern button');
+    const settings = await harness.settingsTab();
+    expect(await settings.getAttribute('aria-selected')).toBe('true');
+    expect(await settings.isFocused()).toBe(true);
+    expect(await harness.value('writing_style')).toBe('First version draft');
+    expect(data.save).not.toHaveBeenCalled();
   });
   it('reuses the same idempotency key when retrying an unchanged failed intent', async () => {
     data.save.mockRejectedValue(

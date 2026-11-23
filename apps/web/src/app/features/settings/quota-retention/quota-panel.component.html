@@ -146,10 +146,14 @@
       @for (metric of projectMetrics(); track metric.metric) {
         <section hlmCard class="min-w-0 gap-0 overflow-visible rounded-xl p-0" data-quota-projects>
           <header class="grid min-w-0 gap-1 border-b border-border px-5 py-4">
-            <h3 hlmCardTitle [size]="subsectionSize" [attr.aria-level]="subsectionLevel">
-              {{ metricLabel(metric.metric) }}
+            <h3
+              hlmCardTitle
+              [size]="subsectionSize"
+              [attr.aria-level]="subsectionLevel"
+              i18n="@@quota.panel.metric-by-project"
+            >
+              {{ metricLabel(metric.metric) }} by project
             </h3>
-            <p class="m-0 text-sm text-muted-foreground">{{ copy.projects }}</p>
           </header>
           <ng-template #projectAction let-row>
             <button
