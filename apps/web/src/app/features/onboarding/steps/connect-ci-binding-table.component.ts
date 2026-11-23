@@ -33,7 +33,7 @@ import { CREDENTIAL_STATUS, CredentialRecordComponent } from './credential-recor
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div hlmTableContainer class="min-w-0 max-w-full">
-      <table hlmTable class="[&_th]:whitespace-normal [&_td]:whitespace-normal">
+      <table hlmTable class="wrap-normal">
         <caption hlmCaption class="caption-top text-start">
           {{
             bindingsLabel
@@ -42,35 +42,45 @@ import { CREDENTIAL_STATUS, CredentialRecordComponent } from './credential-recor
         <thead hlmTHead>
           <tr hlmTr>
             <th hlmTh scope="col">{{ repository }}</th>
-            <th hlmTh scope="col">{{ recordCopy.status }}</th>
-            <th hlmTh scope="col">{{ createdLabel }}</th>
-            <th hlmTh scope="col">{{ recordCopy.actions }}</th>
+            <th hlmTh scope="col" class="w-px">{{ recordCopy.actions }}</th>
           </tr>
         </thead>
         <tbody hlmTBody>
           @for (binding of bindings(); track binding.id) {
             <tr
               hlmTr
-              class="h-(--eg-space-11)"
+              class="[&>td]:align-top"
               data-testid="connect-binding-row"
               [attr.data-status]="binding.status"
             >
-              <th hlmTh scope="row">
-                <bdi class="font-semibold text-foreground">{{ binding.repository_full_name }}</bdi
+              <td hlmTd>
+                <bdi class="font-semibold wrap-anywhere text-foreground">{{
+                  binding.repository_full_name
+                }}</bdi
                 ><bdi
-                  class="block max-w-[24ch] truncate font-mono text-xs font-normal text-muted-foreground"
+                  class="block w-0 min-w-full truncate font-mono text-xs text-muted-foreground"
                   >{{ binding.id }}</bdi
                 >
-              </th>
-              <td hlmTd>
-                <app-status-pill [tone]="'neutral'" [label]="statusLabels[binding.status]" />
+                <dl
+                  class="mt-(--eg-space-3) grid gap-(--eg-space-2) [&>div]:flex [&>div]:flex-wrap [&>div]:items-center [&>div]:gap-x-(--eg-space-3) [&_dt]:text-muted-foreground [&_dd]:m-0"
+                >
+                  <div>
+                    <dt>{{ recordCopy.status }}</dt>
+                    <dd>
+                      <app-status-pill [tone]="'neutral'" [label]="statusLabels[binding.status]" />
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>{{ createdLabel }}</dt>
+                    <dd>
+                      <time class="wrap-normal" [attr.datetime]="binding.created_at">{{
+                        binding.created_at | date: dateTimeFormat : '+0000'
+                      }}</time>
+                    </dd>
+                  </div>
+                </dl>
               </td>
-              <td hlmTd>
-                <time [attr.datetime]="binding.created_at">{{
-                  binding.created_at | date: dateTimeFormat : '+0000'
-                }}</time>
-              </td>
-              <td hlmTd>
+              <td hlmTd class="[&_button]:whitespace-nowrap">
                 <app-onboarding-record
                   [appOnboardingRecord]="facts"
                   [recordSize]="'lg'"
@@ -87,7 +97,7 @@ import { CREDENTIAL_STATUS, CredentialRecordComponent } from './credential-recor
             </tr>
           } @empty {
             <tr hlmTr>
-              <td hlmTd colspan="4">{{ emptyBindings }}</td>
+              <td hlmTd colspan="2">{{ emptyBindings }}</td>
             </tr>
           }
         </tbody>

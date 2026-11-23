@@ -1,3 +1,5 @@
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import type { CiBindingView, IngestTokenView } from '@evidgate/sdk';
@@ -7,14 +9,27 @@ import { SessionStore } from '../../../core/session/session.store';
 import { OnboardingStore } from '../onboarding.store';
 import { OnboardingViewport } from '../onboarding-viewport.testing';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
-import { TOKEN } from '../onboarding.store.test-support';
+import { BINDING, TOKEN } from '../onboarding.store.test-support';
 import { ConnectCiPage } from './connect-ci.page';
 import { requiredElement } from './step-controls.testing';
+
+class CiControlsHarness extends ComponentHarness {
+  static hostSelector = 'app-onboarding-connect-ci';
+  readonly requiredFields = this.locatorForAll('form [required]');
+  readonly fieldErrors = this.locatorForAll('app-field-feedback [id$="-error"]');
+  readonly bindingDate = this.locatorFor('[data-testid="connect-binding-row"] dl dd time');
+  readonly tokenPrefix = this.locatorFor('[data-testid="connect-token-row"] dl dd code');
+
+  factLabels(kind: 'binding' | 'token') {
+    return this.locatorForAll(`[data-testid="connect-${kind}-row"] dl dt`)();
+  }
+}
 
 describe('ConnectCiPage Helm controls', () => {
   let fixture: ComponentFixture<ConnectCiPage>;
   let root: HTMLElement;
   let viewport: OnboardingViewport;
+  const bindings = signal<readonly CiBindingView[]>([]);
   const tokens = signal<readonly IngestTokenView[]>([]);
   const createIngestToken = vi.fn<OnboardingDataService['createIngestToken']>();
   const rotateIngestToken = vi.fn<OnboardingDataService['rotateIngestToken']>();
@@ -26,6 +41,7 @@ describe('ConnectCiPage Helm controls', () => {
   beforeEach(async () => {
     permitted.set(true);
     viewport = new OnboardingViewport();
+    bindings.set([]);
     tokens.set([]);
     createIngestToken.mockReset();
     rotateIngestToken.mockReset();
@@ -44,7 +60,7 @@ describe('ConnectCiPage Helm controls', () => {
         {
           provide: OnboardingStore,
           useValue: {
-            bindings: signal<readonly CiBindingView[]>([]),
+            bindings,
             tokens,
             bindingsTruncated: signal(false),
             tokensTruncated: signal(false),
@@ -105,6 +121,43 @@ describe('ConnectCiPage Helm controls', () => {
       expect(field.tabIndex).toBe(0);
     }
   });
+
+  it('shows only hints on all five untouched required controls before either form is submitted', async () => {
+    const page = await TestbedHarnessEnvironment.harnessForFixture(fixture, CiControlsHarness);
+    const fields = await page.requiredFields();
+    expect(fields).toHaveLength(5);
+    expect(await page.fieldErrors()).toHaveLength(0);
+    for (const field of fields) {
+      expect(await field.getAttribute('aria-invalid')).not.toBe('true');
+      expect(await field.getAttribute('data-matches-spartan-invalid')).not.toBe('true');
+      expect(await field.getAttribute('aria-describedby')).toBe(
+        `${await field.getAttribute('id')}-hint`,
+      );
+    }
+  });
+
+  it.each([390, 1440])(
+    'keeps labelled dates and prefixes in the record rather than squeezed table columns at %ipx',
+    async (width) => {
+      viewport.setWidth(width);
+      bindings.set([BINDING]);
+      tokens.set([TOKEN]);
+      const page = await TestbedHarnessEnvironment.harnessForFixture(fixture, CiControlsHarness);
+      for (const [kind, label] of [
+        ['binding', 'Created (UTC)'],
+        ['token', 'Prefix'],
+      ] as const) {
+        const labels = await page.factLabels(kind);
+        expect(await Promise.all(labels.map((term) => term.text()))).toEqual(['Status', label]);
+      }
+      const date = await page.bindingDate();
+      expect(await date.getAttribute('datetime')).toBe(BINDING.created_at);
+      expect(await date.hasClass('wrap-normal')).toBe(true);
+      const prefix = await page.tokenPrefix();
+      expect(await prefix.text()).toBe(TOKEN.prefix);
+      expect(await prefix.hasClass('whitespace-nowrap')).toBe(true);
+    },
+  );
 
   it('explains required fields once across the two alternative methods', () => {
     expect(root.textContent?.match(/All fields required unless marked optional\./g)).toHaveLength(
@@ -167,6 +220,14 @@ describe('ConnectCiPage Helm controls', () => {
     field.dispatchEvent(new Event('blur'));
     await fixture.whenStable();
     expect(field.getAttribute('aria-invalid')).toBe('true');
+    expect(field.getAttribute('data-matches-spartan-invalid')).toBe('true');
+    expect(field.getAttribute('aria-describedby')).toContain('connect-oidc-repo-id-error');
+    field.value = '123';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    await fixture.whenStable();
+    expect(field.getAttribute('aria-invalid')).not.toBe('true');
+    expect(field.getAttribute('data-matches-spartan-invalid')).not.toBe('true');
+    expect(field.getAttribute('aria-describedby')).toBe('connect-oidc-repo-id-hint');
     expect(root.querySelector('#connect-oidc-errors')).toBeNull();
     expect(document.activeElement).toBe(field);
     expect(createCiBinding).not.toHaveBeenCalled();
