@@ -147,8 +147,10 @@ for (const locale of LOCALES) {
     );
     const quarantine = page.locator(`${DIFF_ROWS}[data-diff-path="/quarantine_ids"]`);
     await expect(quarantine).toHaveAttribute('data-diff-kind', 'added');
-    // The key is absent from the previous revision, so the whole ARRAY is the added value: set
-    // element rows appear only where both bodies carry the key.
+    for (const el of await quarantine.locator('th, td').all()) {
+      await expect(el).toHaveCSS('vertical-align', 'top');
+    }
+    // Absent from the previous revision, so the whole ARRAY is the added value (no element rows).
     await expect(quarantine.locator('pre').nth(1)).toHaveText(
       JSON.stringify(head.body.body.quarantine_ids),
     );

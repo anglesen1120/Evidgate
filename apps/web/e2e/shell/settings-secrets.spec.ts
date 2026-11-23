@@ -338,6 +338,11 @@ for (const locale of LOCALES) {
         await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
         if (variant === 'settings') {
           await expect(page.locator(CI_ROWS)).toHaveCount(ciBindings.body.items.length);
+          const cells = page.locator(CI_ROWS).first().getByRole('cell');
+          await expect(cells).toHaveCount(4);
+          for (const cell of await cells.all()) {
+            await expect(cell).toHaveCSS('vertical-align', 'middle');
+          }
           for (const [index, binding] of ciBindings.body.items.entries()) {
             const row = page.locator(CI_ROWS).nth(index);
             await expect(row.getByRole('heading')).toHaveText(binding.repository_full_name);
@@ -372,6 +377,13 @@ for (const locale of LOCALES) {
     await page.setViewportSize({ width: 360, height: 800 });
     await visit(page, locale, SETTINGS_ADMIN_GRANTS, ['?fixture.variant.listCiBindings=settings']);
     const section = page.locator(CI_SECTION);
+    const row = page.locator(CI_ROWS).first();
+    await expect(row).toHaveCSS('display', 'grid');
+    const cells = row.getByRole('cell');
+    await expect(cells).toHaveCount(4);
+    for (const cell of await cells.all()) {
+      await expect(cell).toHaveCSS('display', 'block');
+    }
     const toggles = section.locator('[data-ci-show-all]');
     await expect(toggles).toHaveCount(2);
     // The reference directory has its own filter/inspection stops. The CI section's first
