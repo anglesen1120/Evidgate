@@ -15,7 +15,17 @@ class EventDialogHarness extends ComponentHarness {
   static hostSelector = '[role="dialog"]';
   readonly text = async () => (await this.host()).text();
 }
-const event: AuditEntryDto = { id: 'event1', seq: 1, actor_type: 'system', actor_id: 'worker1', action: 'run.created', object_id: 'run1', prev_hash: '', entry_hash: 'abc', created_at: '2026-11-23T00:00:00Z' };
+const event: AuditEntryDto = {
+  id: 'event1',
+  seq: 1,
+  actor_type: 'system',
+  actor_id: 'worker1',
+  action: 'run.created',
+  object_id: 'run1',
+  prev_hash: '',
+  entry_hash: 'abc',
+  created_at: '2026-11-23T00:00:00Z',
+};
 
 describe('DashboardActivityComponent', () => {
   it('keeps loading and successful empty activity distinct', async () => {

@@ -11,31 +11,77 @@ import { ProjectOverviewPage } from './overview.page';
 
 class OverviewHarness extends ComponentHarness {
   static hostSelector = 'app-project-overview';
-  readonly emptyTitle = this.locatorForOptional('app-empty-pattern h2');
-  readonly emptyActions = this.locatorForAll('app-empty-pattern a, app-empty-pattern button');
+  readonly widgets = this.locatorForAll(
+    '[data-dashboard-kpis], [data-dashboard-trend], [data-dashboard-recent], [data-dashboard-attention], [data-dashboard-authoring], [data-dashboard-ci], [data-dashboard-usage], [data-dashboard-activity]',
+  );
+  readonly text = async () => (await this.host()).text();
+  readonly runViews = this.locatorForAll('[data-dashboard-run-view]');
 }
 
-/** Mount the page against a store whose current project is `project`. */
-function mountWith(project: ProjectDto | null, steps = NEXT_STEPS) {
+function read<T>(value: T) {
+  return {
+    value: signal<T | undefined>(value),
+    visible: signal(true),
+    loading: signal(false),
+    error: signal(null),
+    reload: vi.fn(),
+  };
+}
+const RUN: RunSummary = {
+  run_id: 'run-1',
+  state: 'collecting',
+  created_at: '2026-11-23T09:00:00Z',
+  completeness: null,
+  parent_run_id: null,
+  rerun_scope: null,
+  unverified_ref: false,
+  decision: null,
+  ref: {
+    name: 'main',
+    kind: 'branch',
+    pr_number: null,
+    head_sha: null,
+    base_sha: null,
+    trigger_event: 'push',
+    is_fork: false,
+  },
+};
+
+function mount(rows: readonly RunSummary[] = [RUN], complete = true, allowed = true) {
+  const page = { items: [], next_cursor: null };
+  const store = {
+    runs: read({ items: rows, complete }),
+    waivers: read(page),
+    quarantine: read(page),
+    incidents: read(page),
+    bindings: read(page),
+    cases: read(page),
+    tree: read(page),
+    changes: read(page),
+    usage: read({ metrics: [], period: '2026-11', project: null, next_cursor: null }),
+    audit: read(page),
+    decisionsVisible: signal(true),
+  };
+  if (!allowed)
+    for (const value of Object.values(store)) if ('visible' in value) value.visible.set(false);
   TestBed.configureTestingModule({
-    imports: [ProjectOverviewPage],
     providers: [
-      provideZonelessChangeDetection(),
       provideRouter([]),
       {
-        provide: NavViewService,
-        useValue: { groups: signal([{ id: 'design', label: 'Test design', items: steps }]) },
+        provide: SessionStore,
+        useValue: {
+          currentProject: signal({ id: 'p1', name: 'Project A', slug: 'a' }),
+          currentOrg: signal({ id: 'o1', name: 'Organization A' }),
+        },
       },
-      { provide: SessionStore, useValue: { currentProject: signal(project) } },
+      { provide: NavViewService, useValue: { groups: signal([]) } },
     ],
   });
+  TestBed.overrideComponent(ProjectOverviewPage, {
+    set: { providers: [{ provide: ProjectDashboardStore, useValue: store }] },
+  });
   const fixture = TestBed.createComponent(ProjectOverviewPage);
-  fixture.detectChanges();
-  return fixture;
-}
-
-function renderWith(project: ProjectDto | null, steps = NEXT_STEPS): HTMLElement {
-  return mountWith(project, steps).nativeElement as HTMLElement;
+  return { fixture, store };
 }
 
 describe('ProjectOverviewPage dashboard', () => {

@@ -41,18 +41,55 @@ export interface DashboardTrendPoint {
         }
       </div>
       <figcaption>
-        <ul class="m-0 grid list-none gap-(--eg-space-2) p-0 text-xs text-muted-foreground">
-          @for (point of points(); track point.id) {
-            <li>
-              <strong class="font-medium text-foreground">{{ point.label }}</strong>
-              @for (segment of point.segments; track segment.id) {
-                <span class="ms-(--eg-space-3)"
-                  >{{ segment.label }}: {{ segment.value | number }}</span
-                >
-              }
+        <ul class="m-0 mb-(--eg-space-4) flex list-none flex-wrap gap-(--eg-space-4) p-0 text-xs">
+          @for (segment of legend(); track segment.id) {
+            <li class="flex items-center gap-(--eg-space-2)">
+              <span
+                data-segment
+                aria-hidden="true"
+                class="size-(--eg-space-3)"
+                [attr.data-tone]="segment.tone"
+                [attr.data-pattern]="$index % 4"
+              ></span>
+              <span>{{ segment.label }}: {{ segment.total | number }}</span>
             </li>
           }
         </ul>
+        <details>
+          <summary
+            class="min-h-(--eg-control-touch) cursor-pointer text-sm font-medium text-primary focus-visible:outline-solid focus-visible:outline-ring"
+            i18n="@@shared.dashboard.trend-table"
+          >
+            View as table
+          </summary>
+          <div hlmTableContainer>
+            <table hlmTable>
+              <caption class="sr-only">
+                {{
+                  label()
+                }}
+              </caption>
+              <thead hlmTHead>
+                <tr hlmTr>
+                  <th hlmTh i18n="@@shared.dashboard.trend-date">Date (UTC)</th>
+                  @for (segment of points()[0]?.segments ?? []; track segment.id) {
+                    <th hlmTh>{{ segment.label }}</th>
+                  }
+                </tr>
+              </thead>
+              <tbody hlmTBody>
+                @for (point of points(); track point.id) {
+                  <tr hlmTr>
+                    <th hlmTh [attr.scope]="'row'">{{ point.label }}</th>
+                    @for (segment of point.segments; track segment.id) {
+                      <td hlmTd class="tabular-nums">{{ segment.value | number }}</td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </details>
       </figcaption>
     </figure>
   `,
@@ -93,11 +130,48 @@ export interface DashboardTrendPoint {
     [data-tone='info'] {
       background: var(--eg-info-fg);
     }
+    [data-pattern='1'] {
+      background-image: repeating-linear-gradient(
+        90deg,
+        transparent,
+        transparent var(--eg-space-2),
+        var(--eg-surface) var(--eg-space-2),
+        var(--eg-surface) var(--eg-space-3)
+      );
+    }
+    [data-pattern='2'] {
+      background-image: repeating-linear-gradient(
+        135deg,
+        transparent,
+        transparent var(--eg-space-2),
+        var(--eg-surface) var(--eg-space-2),
+        var(--eg-surface) var(--eg-space-3)
+      );
+    }
+    [data-pattern='3'] {
+      background-image: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent var(--eg-space-2),
+        var(--eg-surface) var(--eg-space-2),
+        var(--eg-surface) var(--eg-space-3)
+      );
+    }
   `,
 })
 export class DecisionTrendComponent {
   readonly label = input.required<string>();
   readonly points = input<readonly DashboardTrendPoint[]>([]);
+  protected readonly legend = computed(() =>
+    (this.points()[0]?.segments ?? []).map((segment) => ({
+      ...segment,
+      total: this.points().reduce(
+        (sum, point) =>
+          sum + Math.max(0, point.segments.find((item) => item.id === segment.id)?.value ?? 0),
+        0,
+      ),
+    })),
+  );
   protected readonly bars = computed(() => {
     const points = this.points();
     const maximum = Math.max(

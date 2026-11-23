@@ -38,4 +38,7 @@ export class DashboardKpiComponent {
   readonly detail = input('');
   readonly unavailableLabel = input('');
   readonly tone = input<DashboardTone>('neutral');
+  protected readonly numericValue = computed(() =>
+    typeof this.value() === 'number' ? this.value() : null,
+  );
 }

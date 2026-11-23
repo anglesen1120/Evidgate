@@ -24,7 +24,16 @@ describe('Shell page heading roles', () => {
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([]),
-        { provide: SessionStore, useValue: { currentProject: signal(null), reload: vi.fn() } },
+        {
+          provide: SessionStore,
+          useValue: {
+            currentProject: signal(null),
+            currentOrg: signal(null),
+            has: () => false,
+            reload: vi.fn(),
+          },
+        },
+        { provide: ProjectDashboardDataService, useValue: {} },
         { provide: NavViewService, useValue: { groups: signal([]) } },
       ],
     });
