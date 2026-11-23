@@ -22,6 +22,7 @@ import {
   type DataTableColumn,
   type DataTableCellContext,
 } from '../../../shared/ui/data-table';
+import { EmptyPatternComponent } from '../../../shared/ui/states/empty-pattern.component';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
@@ -46,6 +47,7 @@ import { AiSettingsSnapshotFieldsComponent } from './ai-settings-snapshot-fields
     HlmInput,
     HlmLabel,
     DataTableComponent,
+    EmptyPatternComponent,
     RequestStateComponent,
     AbsoluteTimeComponent,
     CopyableIdentifierComponent,

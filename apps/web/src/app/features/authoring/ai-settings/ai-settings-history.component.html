@@ -95,14 +95,20 @@
       <app-request-state
         [status]="store.history.isLoading() ? 'loading' : store.history.error() ? 'error' : 'ready'"
         [error]="historyError()"
-        [empty]="rows().length === 0"
-        [emptyTitle]="firstUse ? empty : filter() ? noMatch : emptyPage"
-        [emptyDescription]="canCreate ? firstVersionHelp : undefined"
-        [emptyActionLabel]="canCreate ? firstVersionAction : undefined"
-        (emptyAction)="openSettings.emit()"
         [retryEligible]="true"
         (retry)="store.history.reload()"
-      />
+      >
+        @if (page && !rows().length) {
+          <app-empty-pattern
+            [bare]="true"
+            [icon]="'lucideClock'"
+            [title]="firstUse ? empty : filter() ? noMatch : emptyPage"
+            [description]="canCreate ? firstVersionHelp : undefined"
+            [actionLabel]="canCreate ? firstVersionAction : undefined"
+            (action)="openSettings.emit()"
+          />
+        }
+      </app-request-state>
       @if (page && !firstUse) {
         <nav
           class="flex flex-wrap gap-(--eg-space-3) border-t border-border pt-(--eg-space-4)"

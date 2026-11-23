@@ -2937,7 +2937,14 @@
 <trans-unit id="quota.panel.summary-unavailable" datatype="html"><source>Usage summary unavailable. Try loading it again.</source><target>Tổng hợp mức sử dụng không khả dụng. Hãy thử tải lại.</target></trans-unit>
 <trans-unit id="quota.panel.retry" datatype="html"><source>Reload usage</source><target>Tải lại mức sử dụng</target></trans-unit>
 <trans-unit id="quota.badge.project-scope" datatype="html"><source>(project)</source><target>(dự án)</target></trans-unit>
-      <trans-unit id="quota.panel.metric-by-project" datatype="html"><source><x id="INTERPOLATION"/> by project</source><target><x id="INTERPOLATION"/> theo dự án</target></trans-unit>
+      <trans-unit id="quota.panel.metric-by-project" datatype="html">
+        <source> <x id="INTERPOLATION" equiv-text="{{ metricLabel(metric.metric) }}"/> by project </source>
+        <target><x id="INTERPOLATION" equiv-text="{{ metricLabel(metric.metric) }}"/> theo dự án</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.html</context>
+          <context context-type="linenumber">138,139</context>
+        </context-group>
+      </trans-unit>
 <trans-unit id="quota.panel.storage-title" datatype="html"><source>Daily storage counters</source><target>Số liệu lưu trữ hằng ngày</target></trans-unit>
 <trans-unit id="quota.panel.storage-reason" datatype="html"><source>Daily storage and egress counters are unavailable because the service does not expose a read for them.</source><target>Số liệu lưu trữ và truyền ra hằng ngày không khả dụng vì dịch vụ chưa cung cấp API đọc cho các số liệu này.</target></trans-unit>
 <trans-unit id="quota.panel.storage-bytes" datatype="html"><source>Stored bytes</source><target>Số byte lưu trữ</target></trans-unit>
