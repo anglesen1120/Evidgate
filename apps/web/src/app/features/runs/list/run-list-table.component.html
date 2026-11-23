@@ -114,14 +114,65 @@
   </div>
 </ng-template>
 <ng-template #viewCell let-row>
-  <a
+  <button
+    #trigger
+    type="button"
     hlmBtn
     [variant]="'outline'"
     [size]="'sm'"
-    class="min-h-(--eg-control-sm) min-w-(--eg-control-touch) whitespace-nowrap text-foreground visited:text-foreground pointer-coarse:min-h-(--eg-control-touch)"
-    [routerLink]="[row.run_id]"
-    [queryParamsHandling]="'preserve'"
+    class="min-h-(--eg-control-sm) min-w-(--eg-control-touch) whitespace-nowrap pointer-coarse:min-h-(--eg-control-touch)"
+    [attr.aria-haspopup]="'dialog'"
+    (click)="inspected.set({ row, trigger })"
     [attr.aria-label]="viewLabel(row.run_id)"
-    >{{ copy.view }}</a
   >
+    {{ copy.view }}
+  </button>
 </ng-template>
+
+@if (inspected(); as selection) {
+  @let row = selection.row;
+  <hlm-dialog
+    [state]="'open'"
+    [aria-modal]="true"
+    [autoFocus]="'first-heading'"
+    [restoreFocus]="selection.trigger"
+    (closed)="inspected.set(null)"
+  >
+    <hlm-dialog-content *hlmDialogPortal [size]="'md'">
+      <header hlmDialogHeader>
+        <h2 hlmDialogTitle>{{ copy.details }}</h2>
+        <p hlmDialogDescription hlmDialogSubject>
+          {{ copy.id }}: <bdi class="font-mono">{{ row.run_id }}</bdi>
+        </p>
+      </header>
+      <dl
+        class="m-0 grid min-w-0 gap-(--eg-space-4) [&>div]:grid [&>div]:gap-(--eg-space-2) min-[400px]:[&>div]:grid-cols-[minmax(8rem,36%)_minmax(0,1fr)] [&_dd]:m-0 [&_dd]:min-w-0 [&_dt]:text-muted-foreground"
+      >
+        <div>
+          <dt>{{ copy.created }}</dt>
+          <dd><app-absolute-time [value]="row.created_at" /></dd>
+        </div>
+        @for (column of columns(); track column.id) {
+          @if (column.id !== 'id' && column.id !== 'actions') {
+            <div>
+              <dt>{{ column.header }}</dt>
+              <dd>
+                <ng-container
+                  [ngTemplateOutlet]="column.cellTemplate ?? null"
+                  [ngTemplateOutletContext]="{
+                    $implicit: row,
+                    value: column.cell(row),
+                    stacked: true,
+                  }"
+                />
+              </dd>
+            </div>
+          }
+        }
+      </dl>
+      <footer hlmDialogFooter>
+        <button hlmBtn hlmDialogClose type="button" [variant]="'outline'">{{ copy.close }}</button>
+      </footer>
+    </hlm-dialog-content>
+  </hlm-dialog>
+}

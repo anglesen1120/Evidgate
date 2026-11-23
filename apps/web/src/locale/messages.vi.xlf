@@ -3485,7 +3485,7 @@
       <trans-unit id="runs.actions.create.purpose" datatype="html"><source>Purpose</source><target>Mục đích</target></trans-unit>
       <trans-unit id="runs.actions.create.regular" datatype="html"><source>Regular</source><target>Thông thường</target></trans-unit>
       <trans-unit id="runs.actions.create.replay" datatype="html"><source>Replay</source><target>Chạy phát lại</target></trans-unit>
-      <trans-unit id="runs.actions.create.replay-hint" datatype="html"><source>Replay currently returns replay_grant_invalid because replay grants are not available. A replay cannot bind to a release.</source><target>Chạy phát lại hiện trả về replay_grant_invalid vì chưa có quyền phát lại. Lượt phát lại không thể liên kết với đợt phát hành.</target></trans-unit>
+      <trans-unit id="runs.actions.create.replay-hint" datatype="html"><source>Replay grants are not available yet. Choose Regular to create a run.</source><target>Hiện chưa có quyền phát lại. Chọn Thông thường để tạo lượt chạy.</target></trans-unit>
       <trans-unit id="runs.actions.create.grant" datatype="html"><source>Replay grant ID (optional)</source><target>Mã quyền phát lại (không bắt buộc)</target></trans-unit>
       <trans-unit id="runs.actions.create.ref" datatype="html"><source>Ref identity (optional)</source><target>Định danh ref (không bắt buộc)</target></trans-unit>
       <trans-unit id="runs.actions.create.ref-hint" datatype="html"><source>Body-supplied identity is recorded as unverified. Verified CI claims take precedence.</source><target>Định danh do nội dung yêu cầu cung cấp được ghi nhận là chưa xác minh. Thông tin CI đã xác minh được ưu tiên.</target></trans-unit>

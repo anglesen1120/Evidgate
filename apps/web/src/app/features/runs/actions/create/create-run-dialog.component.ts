@@ -63,6 +63,7 @@ import { CreateRunStore } from './create-run.store';
   providers: [CreateRunStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './create-run-dialog.component.html',
+  styleUrl: './create-run-dialog.component.css',
   host: { '(document:keydown.escape)': 'escape($event)' },
 })
 export class CreateRunDialogComponent {
@@ -127,8 +128,8 @@ export class CreateRunDialogComponent {
     ),
   );
   protected readonly purposeOptions = [
-    { value: 'regular', label: this.copy.regular, disabled: false },
-    { value: 'replay', label: this.copy.replay, disabled: true },
+    { value: 'regular', label: this.copy.regular },
+    { value: 'replay', label: this.copy.replay },
   ];
   protected readonly kindOptions = [
     { value: '', label: this.copy.none },
@@ -194,7 +195,6 @@ export class CreateRunDialogComponent {
           ? this.kindOptions
           : this.triggerOptions;
     if (!options.some((option) => option.value === value)) return;
-    if (key === 'purpose' && value === 'replay') return;
     this.draft.update((current) => ({
       ...current,
       [key]: value,

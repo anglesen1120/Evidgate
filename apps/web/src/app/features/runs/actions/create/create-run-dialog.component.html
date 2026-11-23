@@ -9,16 +9,17 @@
   <hlm-dialog-content
     *hlmDialogPortal
     data-run-create-dialog
-    [showCloseButton]="false"
-    class="max-h-[calc(100dvh-var(--eg-space-10))] min-w-0 gap-0 overflow-y-auto rounded-(--eg-radius-lg) border border-(--eg-border-control) bg-card p-0 text-card-foreground wrap-anywhere"
+    [size]="'md'"
+    [showCloseButton]="!store.submitting()"
   >
-    <header hlmDialogHeader class="border-b border-border px-(--eg-space-5) py-(--eg-space-4)">
+    <header hlmDialogHeader>
       <h2 hlmDialogTitle class="eg-type-subsection-title">{{ copy.title }}</h2>
       <p hlmDialogDescription class="m-0 max-w-prose">{{ copy.description }}</p>
     </header>
     <form
+      id="run-create-form"
       novalidate
-      class="grid min-w-0 gap-(--eg-space-4) p-(--eg-space-5)"
+      class="grid min-h-0 min-w-0 content-start gap-(--eg-space-4) overflow-y-auto px-(--eg-space-2) py-(--eg-space-3)"
       (submit)="submit($event)"
       [attr.aria-busy]="store.submitting()"
     >
@@ -66,14 +67,18 @@
         >
           <hlm-select-trigger
             [buttonId]="'run-create-purpose'"
-            [aria-describedby]="field('purpose').describedBy()"
+            [aria-describedby]="
+              draft().purpose === 'replay'
+                ? 'run-create-replay-warning'
+                : field('purpose').describedBy()
+            "
             class="w-full min-h-(--eg-control-touch)"
           >
             <hlm-select-value />
           </hlm-select-trigger>
           <hlm-select-content *hlmSelectPortal [aria-label]="copy.purpose">
             @for (option of purposeOptions; track option.value) {
-              <hlm-select-item [value]="option.value" [disabled]="option.disabled">
+              <hlm-select-item [value]="option.value">
                 {{ option.label }}
               </hlm-select-item>
             }
@@ -81,7 +86,14 @@
         </hlm-select>
         <app-field-feedback [field]="field('purpose')" />
       </div>
-      <app-inline-feedback [tone]="'warning'" [title]="copy.replayHint" [announcement]="'off'" />
+      @if (draft().purpose === 'replay') {
+        <app-inline-feedback
+          id="run-create-replay-warning"
+          data-run-replay-warning
+          [tone]="'warning'"
+          [title]="copy.replayHint"
+        />
+      }
       <details
         #refGroup
         data-run-create-ref
@@ -229,10 +241,12 @@
           [title]="copy.failed"
           [description]="refusal()"
         >
-          <p class="m-0 wrap-anywhere">
-            <bdi>{{ error.code }}</bdi
-            >: {{ error.message }}
-          </p>
+          @if (error.code !== 'replay_grant_invalid') {
+            <p class="m-0 wrap-anywhere">
+              <bdi>{{ error.code }}</bdi
+              >: {{ error.message }}
+            </p>
+          }
           @if (error.requestId) {
             <p class="m-0 font-mono wrap-anywhere">
               <bdi>{{ error.requestId }}</bdi>
@@ -252,32 +266,30 @@
       @if (store.submitting()) {
         <p role="status" class="m-0">{{ copy.submitting }}</p>
       }
-      <footer
-        hlmDialogFooter
-        class="flex-wrap gap-(--eg-space-3) border-t border-border pt-(--eg-space-4)"
-      >
-        <button
-          hlmBtn
-          [variant]="'outline'"
-          type="button"
-          data-run-create-dismiss
-          class="min-h-(--eg-control-touch)"
-          [disabled]="store.submitting()"
-          (click)="dismiss()"
-        >
-          {{ copy.dismiss }}
-        </button>
-        <button
-          hlmBtn
-          type="submit"
-          data-run-create-submit
-          class="min-h-(--eg-control-touch)"
-          [disabled]="locked() || !store.retryReady()"
-          [attr.aria-describedby]="!store.retryReady() ? 'run-create-retry' : null"
-        >
-          {{ store.submitting() ? copy.submitting : copy.title }}
-        </button>
-      </footer>
     </form>
+    <footer hlmDialogFooter>
+      <button
+        hlmBtn
+        [variant]="'outline'"
+        type="button"
+        data-run-create-dismiss
+        class="min-h-(--eg-control-touch)"
+        [disabled]="store.submitting()"
+        (click)="dismiss()"
+      >
+        {{ copy.dismiss }}
+      </button>
+      <button
+        hlmBtn
+        type="submit"
+        [attr.form]="'run-create-form'"
+        data-run-create-submit
+        class="min-h-(--eg-control-touch)"
+        [disabled]="locked() || !store.retryReady() || draft().purpose === 'replay'"
+        [attr.aria-describedby]="!store.retryReady() ? 'run-create-retry' : null"
+      >
+        {{ store.submitting() ? copy.submitting : copy.title }}
+      </button>
+    </footer>
   </hlm-dialog-content>
 </hlm-dialog>

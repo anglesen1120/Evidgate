@@ -1,0 +1,9 @@
+hlm-dialog-content[data-run-create-dialog] {
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
+
+/* Keep the shared header and footer in place when the optional fields expand. */
+hlm-dialog-content > form {
+  flex: 1 1 auto;
+}

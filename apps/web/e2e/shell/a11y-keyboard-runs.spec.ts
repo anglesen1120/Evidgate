@@ -344,7 +344,7 @@ test('the 250-row narrow records keep every fact reachable and preserve focus on
   expect((await activeElement(page)).tag).not.toBe('body');
   await page.keyboard.press('Shift+Tab');
   const lastId = await records.last().getAttribute('data-row-id');
-  const lastView = records.last().getByRole('link', { name: `View ${lastId}`, exact: true });
+  const lastView = records.last().getByRole('button', { name: `View ${lastId}`, exact: true });
   await expect(lastView).toBeFocused();
   await page.keyboard.press('Shift+Tab');
   await expect(records.last().locator('app-copy-value-button button')).toBeFocused();
@@ -411,9 +411,9 @@ test('Load more appends the next page and leaves focus on the row it appended', 
   }
   await tabThroughTableScroller(page, page.locator('app-run-list-table'));
 
-  // The ID link, copy action, measured disclosures and trailing View link all precede paging.
+  // The ID link, copy action, measured disclosures and View button all precede paging.
   for (let row = 0; row < FULL_PAGE_ROWS; row++) {
-    await tabThroughRunControls(page, rows.nth(row), 1, 2);
+    await tabThroughRunControls(page, rows.nth(row), 1, true);
   }
   const loadMore = page.locator('[data-run-load-more]');
   await page.keyboard.press('Tab');
@@ -451,8 +451,7 @@ test('Load more appends the next page and leaves focus on the row it appended', 
     }
   }
 
-  await page.keyboard.press('Tab');
-  const appendedView = appended.getByRole('link', {
+  const appendedView = appended.getByRole('button', {
     name: `View ${runListPage2.body.items[0]!.run_id}`,
     exact: true,
   });

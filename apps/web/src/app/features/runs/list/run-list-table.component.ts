@@ -4,6 +4,7 @@ import {
   Component,
   computed,
   input,
+  linkedSignal,
   TemplateRef,
   viewChild,
 } from '@angular/core';
@@ -11,6 +12,7 @@ import { RouterLink } from '@angular/router';
 import type { RunSummary } from '@evidgate/sdk';
 import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmButton } from '@evidgate/ui/button';
+import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { RunStatePillComponent } from '../../../shared/ui/chips/run-state-pill.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
@@ -34,6 +36,7 @@ type RunCell = TemplateRef<DataTableCellContext<RunSummary>>;
     RouterLink,
     HlmBadge,
     HlmButton,
+    HlmDialogImports,
     AbsoluteTimeComponent,
     RunStatePillComponent,
     StatusPillComponent,
@@ -48,6 +51,10 @@ type RunCell = TemplateRef<DataTableCellContext<RunSummary>>;
 })
 export class RunListTableComponent {
   readonly rows = input.required<readonly RunSummary[]>();
+  protected readonly inspected = linkedSignal<
+    readonly RunSummary[],
+    { row: RunSummary; trigger: HTMLButtonElement } | null
+  >({ source: this.rows, computation: () => null });
   protected readonly rowId = (row: RunSummary) => row.run_id;
   protected readonly displayRef = escapeFormatChars;
   protected readonly displayLabel = escapeFormatLabel;
@@ -68,6 +75,8 @@ export class RunListTableComponent {
     id: $localize`:@@runs.list.column-id:Run id`,
     actions: $localize`:@@runs.list.column-actions:Actions`,
     view: $localize`:@@runs.list.view:View`,
+    details: $localize`:@@runs.detail.title:Run detail`,
+    close: $localize`:@@ui.close:Close`,
     state: $localize`:@@runs.list.column-state:State`,
     evidence: $localize`:@@runs.list.column-evidence:Evidence`,
     evidenceUnavailable: $localize`:@@runs.list.evidence-unavailable:Unavailable`,
@@ -95,6 +104,7 @@ export class RunListTableComponent {
       overflow: 'truncate',
       width: {
         min: `calc(${this.identifierPreviewLength}ch + var(--eg-control-touch) + var(--eg-space-4) * 2 + var(--eg-space-2))`,
+        preferred: '1%',
       },
       cellTemplate: this.identityCell(),
     },
@@ -136,6 +146,7 @@ export class RunListTableComponent {
       kind: 'branch',
       priority: 'secondary',
       overflow: 'truncate',
+      width: { preferred: 'auto' },
       cellTemplate: this.refCell(),
     },
     {
@@ -145,6 +156,7 @@ export class RunListTableComponent {
       role: 'text',
       priority: 'secondary',
       overflow: 'truncate',
+      width: { min: 'calc(13ch + var(--eg-space-4) * 2)' },
       cellTemplate: this.scopeCell(),
     },
     {
@@ -152,7 +164,7 @@ export class RunListTableComponent {
       header: this.copy.actions,
       cell: () => this.copy.view,
       role: 'actions',
-      width: { min: 'calc(9ch + var(--eg-space-4) * 2)', preferred: '1%' },
+      width: { min: 'calc(7ch + var(--eg-space-4) * 2)', preferred: '1%' },
       cellTemplate: this.viewCell(),
     },
   ]);

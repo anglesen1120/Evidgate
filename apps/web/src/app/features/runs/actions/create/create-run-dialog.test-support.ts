@@ -80,21 +80,9 @@ export class CreateRunDialogHarness extends ComponentHarness {
   async required(field: string): Promise<boolean> {
     return (await this.locatorFor(`#run-create-${field}`)()).getProperty<boolean>('required');
   }
-  async replayDisabled(): Promise<string | null> {
-    await (await this.locatorFor('#run-create-purpose')()).click();
-    const options = await this.documentRootLocatorFactory().locatorForAll('[role="option"]')();
-    for (const option of options) {
-      if ((await option.text()).trim() !== 'Replay') continue;
-      const disabled = await option.getAttribute('aria-disabled');
-      await option.click();
-      await option.sendKeys(TestKey.ESCAPE);
-      return disabled;
-    }
-    throw new Error('Missing replay option');
-  }
-  async purpose(): Promise<string> {
-    return (await this.locatorFor('#run-create-purpose')()).text();
-  }
+  readonly headerClose = this.locatorFor('[data-slot="dialog-close"]');
+  readonly footerSubmit = this.locatorFor('footer [data-run-create-submit]');
+  readonly bodyForm = this.locatorFor('form');
   async text(): Promise<string> {
     return (await this.host()).text();
   }
