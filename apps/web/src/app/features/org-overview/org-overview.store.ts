@@ -64,7 +64,8 @@ export const OrgOverviewStore = signalStore(
     const runs = resource({
       params: () => {
         const page = projects.hasValue() ? projects.value() : undefined;
-        return canRuns() && org() && page ? { org: org(), projects: page.items } : undefined;
+        // An empty request also cancels the old scope while its replacement project list loads.
+        return { org: org(), projects: canRuns() && org() && page ? page.items : [] };
       },
       loader: async ({ params, abortSignal }) =>
         Promise.all(

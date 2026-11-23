@@ -1,6 +1,12 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import type { MembershipListResponse, ProjectDto, RunPage, UsageSummaryDto } from '@evidgate/sdk';
+import type {
+  MembershipListResponse,
+  ProjectDto,
+  ProjectListResponse,
+  RunPage,
+  UsageSummaryDto,
+} from '@evidgate/sdk';
 import { firstValueFrom, Subject } from 'rxjs';
 
 import { AuditDataService } from '../../core/data/audit-data.service';
@@ -224,36 +230,54 @@ describe('OrgOverviewStore', () => {
     });
   });
 
-  it('aborts an in-flight run read on organization switch and discards its late result', async () => {
-    const pending = new Subject<RunPage>();
-    const read = firstValueFrom(pending);
-    let signal: AbortSignal | undefined;
-    projects.listRuns.mockImplementationOnce((_id, _query, abortSignal: AbortSignal) => {
-      signal = abortSignal;
-      return read;
-    });
-    const store = TestBed.inject(OrgOverviewStore);
-    await settle();
-    expect(signal?.aborted).toBe(false);
-    projects.listProjects.mockResolvedValue({
-      items: [{ ...project, id: 'p2', org_id: 'o2' }],
-      next_cursor: null,
-    });
-    org.set({ id: 'o2' });
-    TestBed.tick();
-    await vi.waitFor(() => {
+  it.each(['complete', 'forbidden'])(
+    'aborts old runs before the new project list settles as %s',
+    async (outcome) => {
+      const pending = new Subject<RunPage>();
+      const read = firstValueFrom(pending);
+      let signal: AbortSignal | undefined;
+      projects.listRuns.mockImplementationOnce((_id, _query, abortSignal: AbortSignal) => {
+        signal = abortSignal;
+        return read;
+      });
+      const store = TestBed.inject(OrgOverviewStore);
+      await settle();
+      expect(signal?.aborted).toBe(false);
+      const projectPage = new Subject<ProjectListResponse>();
+      projects.listProjects.mockReturnValue(firstValueFrom(projectPage));
+      org.set({ id: 'o2' });
       TestBed.tick();
-      expect(signal?.aborted).toBe(true);
-    });
-    await vi.waitFor(() => {
+      await vi.waitFor(() => {
+        TestBed.tick();
+        expect(signal?.aborted).toBe(true);
+      });
+      expect(store.projects.isLoading()).toBe(true);
+      expect(store.projectRows()).toEqual([]);
+      expect(projects.listRuns).toHaveBeenCalledTimes(1);
+      if (outcome === 'forbidden') {
+        projectPage.error(
+          new ApiRequestError({ ...mapNetworkError(), kind: 'forbidden', status: 403 }),
+        );
+      } else {
+        projectPage.next({
+          items: [{ ...project, id: 'p2', org_id: 'o2' }],
+          next_cursor: null,
+        });
+      }
+      await vi.waitFor(() => {
+        TestBed.tick();
+        expect(store.projects.isLoading()).toBe(false);
+        expect(store.projectRows().map((row) => row.project.id)).toEqual(
+          outcome === 'forbidden' ? [] : ['p2'],
+        );
+      });
+      pending.next({ items: [], next_cursor: 'old-org' });
+      await read;
       TestBed.tick();
-      expect(store.projectRows()[0]?.project.id).toBe('p2');
-      expect(store.projectRows()[0]?.runStatus).toBe('empty');
-    });
-    pending.next({ items: [], next_cursor: 'old-org' });
-    await read;
-    TestBed.tick();
-    expect(store.projectRows()[0]?.project.id).toBe('p2');
-    expect(store.projectRows()[0]?.runStatus).toBe('empty');
-  });
+      expect(store.projectRows().map((row) => row.project.id)).toEqual(
+        outcome === 'forbidden' ? [] : ['p2'],
+      );
+      expect(projects.listRuns).toHaveBeenCalledTimes(outcome === 'forbidden' ? 1 : 2);
+    },
+  );
 });
