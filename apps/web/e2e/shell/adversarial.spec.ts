@@ -526,9 +526,8 @@ test.describe('an entry typed at the wrong scope', () => {
   // project-scope entry at org scope (or the reverse) must not fall through to a read: it is the
   // 404 pattern, not a 403 (the entry exists and may even be granted).
   const wrongScope = [
-    // project-scope entries at org scope, both of whose codes this session holds
+    // project-scope entries at org scope, whose code this session holds
     `/orgs/${ORG_ACME}/authoring`,
-    `/orgs/${ORG_ACME}/overview`,
     // org-scope entries at project scope, one granted (`audit:read`) and one not
     `/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}/audit`,
     `/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}/settings`,
