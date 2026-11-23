@@ -191,8 +191,9 @@
             [attr.inputmode]="'numeric'"
             autocomplete="off"
             required
-            [(ngModel)]="repositoryId"
-            (input)="dismissServerReason('repository_id')"
+            #repoIdInput
+            [value]="repositoryId()"
+            (input)="repositoryId.set(repoIdInput.value); dismissServerReason('repository_id')"
             (blur)="repoIdField.blur()"
             [disabled]="busy() || !bindingPermitted()"
             [forceInvalid]="repoIdField.invalid()"
@@ -214,8 +215,11 @@
             [attr.autocapitalize]="'none'"
             spellcheck="false"
             required
-            [(ngModel)]="repositoryName"
-            (input)="dismissServerReason('repository_full_name')"
+            #repoNameInput
+            [value]="repositoryName()"
+            (input)="
+              repositoryName.set(repoNameInput.value); dismissServerReason('repository_full_name')
+            "
             (blur)="repoNameField.blur()"
             [disabled]="busy() || !bindingPermitted()"
             [forceInvalid]="repoNameField.invalid()"
@@ -237,8 +241,9 @@
             [attr.autocapitalize]="'none'"
             spellcheck="false"
             required
-            [(ngModel)]="refs"
-            (input)="dismissServerReason('allowed_ref_patterns')"
+            #refsInput
+            [value]="refs()"
+            (input)="refs.set(refsInput.value); dismissServerReason('allowed_ref_patterns')"
             (blur)="refsField.blur()"
             [disabled]="busy() || !bindingPermitted()"
             [forceInvalid]="refsField.invalid()"
@@ -260,8 +265,11 @@
             [attr.autocapitalize]="'none'"
             spellcheck="false"
             required
-            [(ngModel)]="workflows"
-            (input)="dismissServerReason('allowed_workflow_refs')"
+            #workflowsInput
+            [value]="workflows()"
+            (input)="
+              workflows.set(workflowsInput.value); dismissServerReason('allowed_workflow_refs')
+            "
             (blur)="workflowsField.blur()"
             [disabled]="busy() || !bindingPermitted()"
             [forceInvalid]="workflowsField.invalid()"
@@ -345,8 +353,9 @@
             type="text"
             autocomplete="off"
             required
-            [(ngModel)]="tokenName"
-            (input)="dismissServerReason('name')"
+            #tokenNameInput
+            [value]="tokenName()"
+            (input)="tokenName.set(tokenNameInput.value); dismissServerReason('name')"
             (blur)="tokenNameField.blur()"
             [disabled]="busy() || !tokenPermitted()"
             [forceInvalid]="tokenNameField.invalid()"
@@ -368,7 +377,7 @@
         </button>
       </form>
       <div hlmTableContainer class="min-w-0 max-w-full">
-        <table hlmTable class="[&_th]:whitespace-normal [&_td]:whitespace-normal">
+        <table hlmTable class="wrap-normal">
           <caption hlmCaption class="caption-top text-start">
             {{
               tokensLabel
@@ -377,36 +386,46 @@
           <thead hlmTHead>
             <tr hlmTr>
               <th hlmTh scope="col">{{ tokenNameField.label }}</th>
-              <th hlmTh scope="col">{{ statusLabel }}</th>
-              <th hlmTh scope="col">{{ prefixLabel }}</th>
-              <th hlmTh scope="col">{{ recordCopy.actions }}</th>
+              <th hlmTh scope="col" class="w-px whitespace-nowrap">{{ recordCopy.actions }}</th>
             </tr>
           </thead>
           <tbody hlmTBody>
             @for (token of store.tokens(); track token.id) {
               <tr
                 hlmTr
-                class="h-(--eg-space-11)"
+                class="*:align-top"
                 data-testid="connect-token-row"
                 [attr.data-status]="token.status"
               >
-                <th hlmTh scope="row">
-                  <strong class="text-foreground" [id]="'connect-token-name-' + token.id"
+                <th hlmTh scope="row" class="font-normal text-foreground">
+                  <strong
+                    class="wrap-anywhere text-foreground"
+                    [id]="'connect-token-name-' + token.id"
                     ><bdi>{{ token.name }}</bdi></strong
                   ><bdi
-                    class="block max-w-[24ch] truncate font-mono text-xs font-normal text-muted-foreground"
+                    class="block w-0 min-w-full truncate font-mono text-xs text-muted-foreground"
                     >{{ token.id }}</bdi
                   >
-                </th>
-                <td hlmTd>
-                  <app-status-pill [tone]="'neutral'" [label]="statusLabels[token.status]" />
-                </td>
-                <td hlmTd>
-                  <code
-                    ><bdi>{{ token.prefix }}</bdi></code
+                  <dl
+                    class="mt-(--eg-space-3) grid gap-(--eg-space-2) [&>div]:flex [&>div]:flex-wrap [&>div]:items-center [&>div]:gap-x-(--eg-space-3) [&_dt]:text-muted-foreground [&_dd]:m-0"
                   >
-                </td>
-                <td hlmTd>
+                    <div>
+                      <dt>{{ statusLabel }}</dt>
+                      <dd>
+                        <app-status-pill [tone]="'neutral'" [label]="statusLabels[token.status]" />
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>{{ prefixLabel }}</dt>
+                      <dd>
+                        <code class="whitespace-nowrap"
+                          ><bdi>{{ token.prefix }}</bdi></code
+                        >
+                      </dd>
+                    </div>
+                  </dl>
+                </th>
+                <td hlmTd class="[&_button]:whitespace-nowrap">
                   <div class="flex flex-wrap items-center gap-(--eg-space-2)">
                     <app-onboarding-record
                       [appOnboardingRecord]="facts"
@@ -443,7 +462,7 @@
               </tr>
             } @empty {
               <tr hlmTr>
-                <td hlmTd colspan="4">{{ emptyTokens }}</td>
+                <td hlmTd colspan="2">{{ emptyTokens }}</td>
               </tr>
             }
           </tbody>

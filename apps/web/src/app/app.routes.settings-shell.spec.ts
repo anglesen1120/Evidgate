@@ -44,10 +44,7 @@ describe('Settings shell entry override (09.7.1-T1.1)', () => {
     // The caller has the usage summary permission but no project read permission, so the
     // organization quota tab is the first destination it may open.
     expect(router.url).toBe(`/orgs/${ORG.id}/settings/quota-retention`);
-    expect(
-      document.querySelector('[data-settings-tab-body]')?.getAttribute('data-settings-tab-body'),
-    ).toBe('quota-retention');
-    expect(document.querySelector('app-route-stub')).toBeNull();
+    expect(renderedMarker()).toBe('quota-panel');
   });
 
   it('renders not found, never /forbidden, for a Settings tab the caller may not open (AC1)', async () => {
@@ -64,19 +61,14 @@ describe('Settings shell entry override (09.7.1-T1.1)', () => {
     expect(router.url).not.toBe('/forbidden');
   });
 
-  it('keeps the area stub table for the other settings destinations', async () => {
+  it('opens the quota panel from the AI credits shortcut with usage read alone', async () => {
     const quota = entryOf('quota');
-    const { harness } = await setUp(
-      new FakeIdentityData(),
-      new Set(['organization:read', 'usage:read']),
-    );
+    const { harness } = await setUp(new FakeIdentityData(), new Set(['usage:read']));
 
     await harness.navigateByUrl(urlOf(quota));
 
-    // `quota` is gated by `usage:read` and served by `features/settings/settings.routes.ts`, which
-    // no tab task has replaced yet: the placeholder table is still its destination.
+    // Usage readers do not need the separate grant that opens the Settings shell.
     expect(TestBed.inject(Router).url).toBe(`/orgs/${ORG.id}/usage`);
-    expect(document.querySelector('app-route-stub')).not.toBeNull();
-    expect(document.querySelector('h1')?.textContent?.trim()).toBe(quota.label);
+    expect(renderedMarker()).toBe('quota-panel');
   });
 });

@@ -217,10 +217,13 @@ describe('NavViewService (09.1.1-T4.1)', () => {
     expect(linkOf(view, 'ai-settings')).toEqual(['/orgs', 'o-1', 'projects', 'p-1', 'ai-settings']);
   });
 
-  it('maps the quota entry to the /usage segment', async () => {
-    await authenticatedWithProject();
+  it('offers the organization usage shortcut to a usage reader without Settings access', async () => {
+    source.granted = new Set(['usage:read']);
+    await session.bootstrap();
+    await session.resolveScope(ORG.id, null);
 
     expect(linkOf(view, 'quota')).toEqual(['/orgs', 'o-1', 'usage']);
+    expect(linkOf(view, 'settings')).toBeUndefined();
   });
 
   it('projects a separate short label without replacing the complete accessible label', async () => {

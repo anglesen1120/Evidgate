@@ -12,6 +12,12 @@
     transition: background-color var(--eg-duration-fast) var(--eg-ease);
   }
 
+  .spartan-button.short-action {
+    inline-size: max-content;
+    max-inline-size: none;
+    white-space: nowrap;
+  }
+
   .spartan-button-variant-default {
     background: var(--eg-accent);
     color: var(--eg-on-accent);
