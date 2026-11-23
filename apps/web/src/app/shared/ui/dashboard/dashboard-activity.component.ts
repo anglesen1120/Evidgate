@@ -55,7 +55,9 @@ import { DashboardWidgetComponent } from './dashboard-widget.component';
           View
         </button>
       </ng-template>
+      <!-- The widget header already shows the title; the caption only names the table for assistive tech. -->
       <app-data-table
+        class="[&>.caption]:sr-only"
         [rows]="rows()"
         [columns]="columns()"
         [rowId]="rowId"

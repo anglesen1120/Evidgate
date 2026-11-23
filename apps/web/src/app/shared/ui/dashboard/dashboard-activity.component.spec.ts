@@ -10,6 +10,8 @@ class ActivityHarness extends ComponentHarness {
   readonly view = this.locatorFor('button[aria-haspopup="dialog"]');
   readonly empty = this.locatorForOptional('app-empty-pattern');
   readonly loading = this.locatorForOptional('app-loading-pattern');
+  readonly table = this.locatorFor('app-data-table');
+  readonly caption = this.locatorFor('app-data-table > .caption');
   readonly emptyIcon = this.locatorFor('app-empty-pattern hlm-icon path');
 }
 class EventDialogHarness extends ComponentHarness {
@@ -54,5 +56,12 @@ describe('DashboardActivityComponent', () => {
     expect(await dialog.text()).toContain('system');
     fixture.componentRef.setInput('rows', []);
     expect(await root.getHarnessOrNull(EventDialogHarness)).toBeNull();
+  });
+  it('shows the title once and keeps the table caption for assistive tech only', async () => {
+    const fixture = TestBed.createComponent(DashboardActivityComponent);
+    fixture.componentRef.setInput('rows', [event]);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, ActivityHarness);
+    expect(await (await harness.table()).hasClass('[&>.caption]:sr-only')).toBe(true);
+    expect(await (await harness.caption()).text()).toBe('Organization activity');
   });
 });
