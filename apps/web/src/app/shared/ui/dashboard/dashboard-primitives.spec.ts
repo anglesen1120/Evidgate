@@ -16,6 +16,8 @@ class DashboardHarness extends ComponentHarness {
   readonly scrollRegion = this.locatorFor('[role="region"]');
   readonly loading = this.locatorForOptional('app-loading-pattern');
   readonly empty = this.locatorForOptional('app-empty-pattern');
+  readonly emptyIcon = this.locatorFor('app-empty-pattern hlm-icon');
+  readonly emptyIconPath = this.locatorFor('app-empty-pattern hlm-icon path');
 }
 
 describe('Dashboard primitives', () => {
@@ -46,6 +48,23 @@ describe('Dashboard primitives', () => {
     await (await harness.retry()).click();
     expect(retried).toBe(true);
     expect(await harness.empty()).toBeNull();
+  });
+
+  it('defaults to an inbox and forwards an optional contextual empty icon', async () => {
+    const fixture = TestBed.createComponent(DashboardWidgetComponent);
+    fixture.componentRef.setInput('title', 'Recent runs');
+    fixture.componentRef.setInput('empty', true);
+    fixture.componentRef.setInput('emptyTitle', 'No runs yet');
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, DashboardHarness);
+
+    expect(await (await harness.emptyIconPath()).getAttribute('d')).toBe(
+      'M22 12h-6l-2 3h-4l-2-3H2',
+    );
+    fixture.componentRef.setInput('emptyIcon', 'navRun');
+    expect(await (await harness.emptyIconPath()).getAttribute('d')).toBe(
+      'M5 3h14v18H5z M10 8l5 4-5 4z',
+    );
+    expect(await (await harness.emptyIcon()).getAttribute('aria-hidden')).toBe('true');
   });
 
   it('shows an unavailable KPI without inventing a zero', async () => {

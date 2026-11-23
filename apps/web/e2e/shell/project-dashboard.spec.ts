@@ -36,19 +36,7 @@ for (const locale of LOCALES) {
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
         ).toBe(true);
-        expect(
-          await page
-            .locator('.trend-stack')
-            .evaluateAll((stacks) =>
-              stacks.every((stack) =>
-                Array.from(stack.querySelectorAll('[data-segment]')).every(
-                  (segment) =>
-                    segment.getBoundingClientRect().bottom <=
-                    stack.getBoundingClientRect().bottom + 0.5,
-                ),
-              ),
-            ),
-        ).toBe(true);
+        expect(await page.locator('.trend-stack').evaluateAll(fullHeightStacksFit)).toBe(true);
         await expectNoA11yViolations(page, `project dashboard ${locale} ${theme} ${width}`);
         await mkdir('/tmp/s674-shots', { recursive: true });
         await page.screenshot({
@@ -75,11 +63,27 @@ test('one failed source leaves other dashboard facts visible and retries only lo
 });
 
 test('successful empty runs remain empty rather than a green decision', async ({ page }) => {
-  await page.goto(overviewPath('en') + FIXTURE + '&fixture.variant.listRuns=dashboard-empty');
+  await page.goto(
+    overviewPath('en') +
+      FIXTURE +
+      '&fixture.variant.listRuns=dashboard-empty&fixture.variant.getUsageSummary=dashboard-empty&fixture.variant.listAudit=dashboard-empty',
+  );
   await expect(page.locator('[data-dashboard-recent] app-empty-pattern')).toBeVisible();
   await expect(page.locator('[data-dashboard-trend] app-empty-pattern')).toBeVisible();
   await expect(page.locator('[data-dashboard-kpis]')).toContainText('No data');
   await expect(page.locator('[data-dashboard-run-view]')).toHaveCount(0);
+  for (const [widget, path] of [
+    ['recent', 'M5 3h14v18H5z M10 8l5 4-5 4z'],
+    ['trend', 'M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6'],
+    ['usage', 'M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6'],
+    ['activity', 'M7 4h10v16H7zM10 8h4M10 12h4M10 16h4'],
+  ] as const) {
+    const icon = page.locator(`[data-dashboard-${widget}] app-empty-pattern hlm-icon`);
+    await expect(icon).toBeVisible();
+    await expect(icon).toHaveAttribute('aria-hidden', 'true');
+    await expect(icon.locator('path')).toHaveAttribute('d', path);
+  }
+  await expectNoA11yViolations(page, 'empty project dashboard');
 });
 
 test('restricted widgets are hidden instead of rendering forbidden cards', async ({ page }) => {
@@ -125,19 +129,13 @@ test('500 sampled dates stay legible and keyboard-scrollable at 390px', async ({
         (column) => column.getBoundingClientRect().width,
       ),
     ),
-    fitsStack: Array.from(element.querySelectorAll('.trend-stack')).every((stack) =>
-      Array.from(stack.querySelectorAll('[data-segment]')).every(
-        (segment) =>
-          segment.getBoundingClientRect().bottom <= stack.getBoundingClientRect().bottom + 0.5,
-      ),
-    ),
     positiveOnly: Array.from(element.querySelectorAll('[data-segment]')).every(
       (segment) => segment.getBoundingClientRect().height > 0,
     ),
   }));
   expect(geometry.scrollable).toBe(true);
   expect(geometry.minimumWidth).toBeGreaterThanOrEqual(64);
-  expect(geometry.fitsStack).toBe(true);
+  expect(await region.locator('.trend-stack').evaluateAll(fullHeightStacksFit)).toBe(true);
   expect(geometry.positiveOnly).toBe(true);
   await region.focus();
   await expect(region).toBeFocused();
@@ -150,3 +148,20 @@ test('500 sampled dates stay legible and keyboard-scrollable at 390px', async ({
   await page.locator('[data-dashboard-trend] summary').click();
   await expect(page.locator('[data-dashboard-trend] table')).toBeVisible();
 });
+
+function fullHeightStacksFit(stacks: Element[]): boolean {
+  return stacks.every((stack) => {
+    const bounds = stack.getBoundingClientRect();
+    const segments = Array.from(stack.querySelectorAll('[data-segment]'), (segment) =>
+      segment.getBoundingClientRect(),
+    );
+    // Both fixtures fill every date to the maximum total; gaps must not shrink their evidence.
+    return (
+      segments.every(
+        (segment) => segment.top >= bounds.top - 0.5 && segment.bottom <= bounds.bottom + 0.5,
+      ) &&
+      Math.abs(segments.reduce((height, segment) => height + segment.height, 0) - bounds.height) <=
+        1
+    );
+  });
+}

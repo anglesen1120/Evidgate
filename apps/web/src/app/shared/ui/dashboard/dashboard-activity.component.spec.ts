@@ -10,6 +10,7 @@ class ActivityHarness extends ComponentHarness {
   readonly view = this.locatorFor('button[aria-haspopup="dialog"]');
   readonly empty = this.locatorForOptional('app-empty-pattern');
   readonly loading = this.locatorForOptional('app-loading-pattern');
+  readonly emptyIcon = this.locatorFor('app-empty-pattern hlm-icon path');
 }
 class EventDialogHarness extends ComponentHarness {
   static hostSelector = '[role="dialog"]';
@@ -37,6 +38,9 @@ describe('DashboardActivityComponent', () => {
     expect(await harness.empty()).toBeNull();
     fixture.componentRef.setInput('loading', false);
     expect(await harness.empty()).not.toBeNull();
+    expect(await (await harness.emptyIcon()).getAttribute('d')).toBe(
+      'M7 4h10v16H7zM10 8h4M10 12h4M10 16h4',
+    );
   });
   it('opens loaded event details and removes the selection when rows change', async () => {
     const fixture = TestBed.createComponent(DashboardActivityComponent);
