@@ -80,6 +80,12 @@ for (const locale of LOCALES) {
     await expect(page.locator(`${MATRIX} [data-suite-member-id]`)).toHaveCount(
       DRAFT.members.length,
     );
+    for (const header of await page.locator(`${MATRIX} thead th[scope="col"]`).all()) {
+      await expect(header).toHaveCSS('vertical-align', 'top');
+    }
+    for (const cell of await page.locator(`${MATRIX} tbody th, ${MATRIX} tbody td`).all()) {
+      await expect(cell).toHaveCSS('vertical-align', 'middle');
+    }
     // The read carries no warnings member, so the screen says the list is unavailable: it never
     // renders an empty list (which would claim "no warnings") and never a count.
     await expect(page.locator(WARNINGS_UNAVAILABLE)).toBeVisible();

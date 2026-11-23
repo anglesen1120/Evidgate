@@ -77,9 +77,12 @@
     block-size: var(--eg-table-row, var(--eg-row-default));
     padding-inline: var(--eg-space-4);
     padding-block: var(--eg-table-inset, var(--eg-space-3));
-    vertical-align: top;
     white-space: normal;
     text-align: start;
+  }
+
+  .eg-table-layout .spartan-table-head[scope='col'] {
+    vertical-align: top;
   }
 
   .eg-table-layout [data-column-role='identity'] {
