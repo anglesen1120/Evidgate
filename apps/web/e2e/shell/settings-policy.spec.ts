@@ -147,6 +147,7 @@ for (const locale of LOCALES) {
     );
     const quarantine = page.locator(`${DIFF_ROWS}[data-diff-path="/quarantine_ids"]`);
     await expect(quarantine).toHaveAttribute('data-diff-kind', 'added');
+    await expect(quarantine.getByRole('rowheader')).toHaveCSS('vertical-align', 'top');
     await expect(quarantine.getByRole('cell').nth(0)).toHaveCSS('vertical-align', 'top');
     await expect(quarantine.getByRole('cell').nth(1)).toHaveCSS('vertical-align', 'top');
     // The key is absent from the previous revision, so the whole ARRAY is the added value: set

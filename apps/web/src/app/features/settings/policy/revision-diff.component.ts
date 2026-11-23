@@ -147,7 +147,7 @@ import { PolicyStore } from './policy.store';
                         [attr.data-diff-kind]="row.kind"
                         [attr.data-diff-path]="row.path"
                       >
-                        <th hlmTh scope="row" class="py-(--eg-space-3)">
+                        <th hlmTh scope="row" class="py-(--eg-space-3) align-top">
                           <code class="block font-mono wrap-anywhere">{{
                             pathLabel(row.path)
                           }}</code>
