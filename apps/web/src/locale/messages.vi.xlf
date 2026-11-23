@@ -2947,7 +2947,14 @@
 <trans-unit id="quota.panel.summary-unavailable" datatype="html"><source>Usage summary unavailable. Try loading it again.</source><target>Tổng hợp mức sử dụng không khả dụng. Hãy thử tải lại.</target></trans-unit>
 <trans-unit id="quota.panel.retry" datatype="html"><source>Reload usage</source><target>Tải lại mức sử dụng</target></trans-unit>
 <trans-unit id="quota.badge.project-scope" datatype="html"><source>(project)</source><target>(dự án)</target></trans-unit>
-<trans-unit id="quota.panel.projects" datatype="html"><source>Per project</source><target>Theo dự án</target></trans-unit>
+      <trans-unit id="quota.panel.metric-by-project" datatype="html">
+        <source> <x id="INTERPOLATION" equiv-text="{{ metricLabel(metric.metric) }}"/> by project </source>
+        <target><x id="INTERPOLATION" equiv-text="{{ metricLabel(metric.metric) }}"/> theo dự án</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/settings/quota-retention/quota-panel.component.html</context>
+          <context context-type="linenumber">155,156</context>
+        </context-group>
+      </trans-unit>
 <trans-unit id="quota.panel.storage-title" datatype="html"><source>Daily storage counters</source><target>Số liệu lưu trữ hằng ngày</target></trans-unit>
 <trans-unit id="quota.panel.storage-reason" datatype="html"><source>Daily storage and egress counters are unavailable because the service does not expose a read for them.</source><target>Số liệu lưu trữ và truyền ra hằng ngày không khả dụng vì dịch vụ chưa cung cấp API đọc cho các số liệu này.</target></trans-unit>
 <trans-unit id="quota.panel.storage-bytes" datatype="html"><source>Stored bytes</source><target>Số byte lưu trữ</target></trans-unit>
@@ -3687,6 +3694,10 @@
       <trans-unit id="authoring.ai-settings.pages" datatype="html"><source>Version history pages</source><target>Các trang lịch sử phiên bản</target></trans-unit>
       <trans-unit id="authoring.ai-settings.no-match" datatype="html"><source>No loaded versions match this filter</source><target>Không có phiên bản đã tải khớp bộ lọc</target></trans-unit>
       <trans-unit id="authoring.ai-settings.empty-history" datatype="html"><source>No saved settings versions</source><target>Chưa có phiên bản cài đặt được lưu</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.saved-versions" datatype="html"><source>Saved settings versions</source><target>Các phiên bản cài đặt đã lưu</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.empty-page" datatype="html"><source>No versions on this page</source><target>Trang này không có phiên bản nào</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.open-settings" datatype="html"><source>Open AI settings</source><target>Mở cài đặt AI</target></trans-unit>
+      <trans-unit id="authoring.ai-settings.first-version-help" datatype="html"><source>Save your settings to create the first version.</source><target>Lưu cài đặt để tạo phiên bản đầu tiên.</target></trans-unit>
       <trans-unit id="authoring.ai-settings.version-column" datatype="html"><source>Version</source><target>Phiên bản</target></trans-unit>
       <trans-unit id="authoring.ai-settings.reason-column" datatype="html"><source>Reason</source><target>Lý do</target></trans-unit>
       <trans-unit id="authoring.ai-settings.not-set" datatype="html"><source>Not set</source><target>Chưa đặt</target></trans-unit>
@@ -4326,7 +4337,7 @@
       <trans-unit id="authoring.pending-changes.blocked-too-many" datatype="html"><source>One apply takes at most 200 exact changes.</source><target>Một lần áp dụng tối đa 200 thay đổi cụ thể.</target></trans-unit>
       <trans-unit id="authoring.pending-changes.replay-selection-changed" datatype="html"><source>The earlier apply never got an answer, so its exact selection must be retried. Restore the original selection to retry it, or reload the queue to start a new batch.</source><target>Lần áp dụng trước chưa nhận được phản hồi, nên phải thử lại đúng lựa chọn đó. Hãy khôi phục lựa chọn ban đầu để thử lại, hoặc tải lại hàng chờ để bắt đầu lô mới.</target></trans-unit>
       <trans-unit id="authoring.pending-changes.empty-title" datatype="html"><source>No pending changes</source><target>Không có thay đổi đang chờ</target></trans-unit>
-      <trans-unit id="authoring.pending-changes.empty-body" datatype="html"><source>This project has no queued authoring change.</source><target>Dự án này không có thay đổi authoring nào trong hàng chờ.</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.empty-body" datatype="html"><source>This project has no queued authoring change.</source><target>Dự án này không có thay đổi biên soạn nào trong hàng chờ.</target></trans-unit>
       <trans-unit id="authoring.pending-changes.not-found-title" datatype="html"><source>Project not found</source><target>Không tìm thấy dự án</target></trans-unit>
       <trans-unit id="authoring.pending-changes.not-found-body" datatype="html"><source>This project is unknown or not available to this account.</source><target>Dự án này không tồn tại hoặc không khả dụng với tài khoản này.</target></trans-unit>
       <trans-unit id="authoring.pending-changes.forbidden-title" datatype="html"><source>Authoring changes are not available</source><target>Không thể truy cập thay đổi authoring</target></trans-unit>

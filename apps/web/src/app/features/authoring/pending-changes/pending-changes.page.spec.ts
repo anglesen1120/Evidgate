@@ -5,6 +5,7 @@ import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { ActivatedRoute, provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 import type { AuthoringChangePageResponse } from '@evidgate/sdk';
+import { readFileSync } from 'node:fs';
 import { ApiRequestError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
 import {
@@ -105,6 +106,20 @@ describe('PendingChangesPage', () => {
     const { ui } = await setup();
     expect(await ui.text()).toContain(PENDING_COPY.emptyTitle);
     expect(apply).not.toHaveBeenCalled();
+  });
+  it('uses the Vietnamese authoring term for the confirmed empty queue body', async () => {
+    listPending.mockResolvedValue({ items: [], next_cursor: null });
+    const { ui } = await setup();
+    const catalog = new DOMParser().parseFromString(
+      readFileSync('src/locale/messages.vi.xlf', 'utf8'),
+      'application/xml',
+    );
+    const unit = catalog.querySelector('trans-unit[id="authoring.pending-changes.empty-body"]');
+    expect(unit?.querySelector('source')?.textContent).toBe(PENDING_COPY.emptyBody);
+    expect(await ui.text()).toContain(PENDING_COPY.emptyBody);
+    expect(unit?.querySelector('target')?.textContent).toBe(
+      'Dự án này không có thay đổi biên soạn nào trong hàng chờ.',
+    );
   });
   it('renders rows, exact selection, full escaped comment and no row apply', async () => {
     const { ui } = await setup();
