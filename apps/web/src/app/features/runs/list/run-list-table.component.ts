@@ -3,7 +3,10 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
+  inject,
   input,
+  linkedSignal,
   TemplateRef,
   viewChild,
 } from '@angular/core';
@@ -11,6 +14,7 @@ import { RouterLink } from '@angular/router';
 import type { RunSummary } from '@evidgate/sdk';
 import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmButton } from '@evidgate/ui/button';
+import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { RunStatePillComponent } from '../../../shared/ui/chips/run-state-pill.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
@@ -34,6 +38,7 @@ type RunCell = TemplateRef<DataTableCellContext<RunSummary>>;
     RouterLink,
     HlmBadge,
     HlmButton,
+    HlmDialogImports,
     AbsoluteTimeComponent,
     RunStatePillComponent,
     StatusPillComponent,
@@ -44,10 +49,28 @@ type RunCell = TemplateRef<DataTableCellContext<RunSummary>>;
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './run-list-table.component.html',
-  host: { class: 'block min-w-0' },
+  host: { class: 'block min-w-0', tabindex: '-1' },
 })
 export class RunListTableComponent {
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly rows = input.required<readonly RunSummary[]>();
+  readonly projectId = input.required<string | null>();
+  protected readonly inspected = linkedSignal<
+    { rows: readonly RunSummary[]; projectId: string | null },
+    string | null
+  >({
+    source: () => ({ rows: this.rows(), projectId: this.projectId() }),
+    computation: ({ rows, projectId }, previous) =>
+      previous?.value &&
+      previous.source.projectId === projectId &&
+      rows.some((row) => row.run_id === previous.value)
+        ? previous.value
+        : null,
+  });
+  protected readonly inspectedRow = computed(() => {
+    const id = this.inspected();
+    return id ? this.rows().find((row) => row.run_id === id) : undefined;
+  });
   protected readonly rowId = (row: RunSummary) => row.run_id;
   protected readonly displayRef = escapeFormatChars;
   protected readonly displayLabel = escapeFormatLabel;
@@ -63,11 +86,20 @@ export class RunListTableComponent {
   protected viewLabel(id: string): string {
     return $localize`:@@runs.list.view-run:View ${id}:runId:`;
   }
+  protected closeInspection(id: string): void {
+    this.inspected.set(null);
+    const host = this.host.nativeElement;
+    if (!host.isConnected) return;
+    const view = host.ownerDocument.getElementById(`run-view-${id}`);
+    (view && host.contains(view) ? view : host).focus();
+  }
   protected readonly copy = {
     caption: $localize`:@@runs.list.table-caption:Project runs`,
     id: $localize`:@@runs.list.column-id:Run id`,
     actions: $localize`:@@runs.list.column-actions:Actions`,
     view: $localize`:@@runs.list.view:View`,
+    details: $localize`:@@runs.detail.title:Run detail`,
+    close: $localize`:@@ui.close:Close`,
     state: $localize`:@@runs.list.column-state:State`,
     evidence: $localize`:@@runs.list.column-evidence:Evidence`,
     evidenceUnavailable: $localize`:@@runs.list.evidence-unavailable:Unavailable`,
@@ -95,6 +127,7 @@ export class RunListTableComponent {
       overflow: 'truncate',
       width: {
         min: `calc(${this.identifierPreviewLength}ch + var(--eg-control-touch) + var(--eg-space-4) * 2 + var(--eg-space-2))`,
+        preferred: '1%',
       },
       cellTemplate: this.identityCell(),
     },
@@ -136,6 +169,7 @@ export class RunListTableComponent {
       kind: 'branch',
       priority: 'secondary',
       overflow: 'truncate',
+      width: { preferred: 'auto' },
       cellTemplate: this.refCell(),
     },
     {
@@ -145,6 +179,7 @@ export class RunListTableComponent {
       role: 'text',
       priority: 'secondary',
       overflow: 'truncate',
+      width: { min: 'calc(13ch + var(--eg-space-4) * 2)' },
       cellTemplate: this.scopeCell(),
     },
     {
@@ -152,7 +187,7 @@ export class RunListTableComponent {
       header: this.copy.actions,
       cell: () => this.copy.view,
       role: 'actions',
-      width: { min: 'calc(9ch + var(--eg-space-4) * 2)', preferred: '1%' },
+      width: { min: 'max-content', preferred: '1%' },
       cellTemplate: this.viewCell(),
     },
   ]);

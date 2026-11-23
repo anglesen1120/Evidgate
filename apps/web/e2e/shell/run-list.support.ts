@@ -31,3 +31,18 @@ export async function expectCenteredRunIdentity(row: Locator): Promise<void> {
   });
   for (const offset of offsets) expect(Math.abs(offset)).toBeLessThanOrEqual(2);
 }
+
+export async function expectSingleLineScope(page: Page): Promise<void> {
+  const table = page.locator('app-run-list-table');
+  const header = table.locator('th.cdk-column-scope');
+  const label = table.locator('.scope-cell > span:not([data-run-rerun], [data-run-reprocess])');
+  for (const item of [header, label.first(), table.locator('th.cdk-column-actions')]) {
+    await expect(item).toBeVisible();
+    const lines = await item.evaluate((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      return range.getClientRects().length;
+    });
+    expect(lines).toBe(1);
+  }
+}

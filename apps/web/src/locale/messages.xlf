@@ -9662,7 +9662,7 @@
       <trans-unit id="runs.actions.create.purpose" datatype="html"><source>Purpose</source></trans-unit>
       <trans-unit id="runs.actions.create.regular" datatype="html"><source>Regular</source></trans-unit>
       <trans-unit id="runs.actions.create.replay" datatype="html"><source>Replay</source></trans-unit>
-      <trans-unit id="runs.actions.create.replay-hint" datatype="html"><source>Replay currently returns replay_grant_invalid because replay grants are not available. A replay cannot bind to a release.</source></trans-unit>
+      <trans-unit id="runs.actions.create.replay-hint" datatype="html"><source>Replay grants are not available yet. Choose Regular to create a run.</source></trans-unit>
       <trans-unit id="runs.actions.create.grant" datatype="html"><source>Replay grant ID (optional)</source></trans-unit>
       <trans-unit id="runs.actions.create.ref" datatype="html"><source>Ref identity (optional)</source></trans-unit>
       <trans-unit id="runs.actions.create.ref-hint" datatype="html"><source>Body-supplied identity is recorded as unverified. Verified CI claims take precedence.</source></trans-unit>

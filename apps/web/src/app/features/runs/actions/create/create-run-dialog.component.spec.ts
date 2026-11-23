@@ -93,7 +93,6 @@ describe('CreateRunDialogComponent', () => {
     ['validation', 422, 'release_unresolvable'],
     ['validation', 422, 'release_not_active'],
     ['validation', 422, 'fork_run_not_bindable'],
-    ['validation', 422, 'replay_grant_invalid'],
     ['validation', 422, 'replay_release_not_allowed'],
   ] as const)('shows the typed %s/%s/%s refusal as persistent text', async (kind, status, code) => {
     state.createRun.mockRejectedValue(
@@ -105,6 +104,17 @@ describe('CreateRunDialogComponent', () => {
     expect(await dialog.failure()).toContain(code);
     expect(await dialog.failure()).toContain('Refused <b>as text</b>.');
     expect(state.navigate).not.toHaveBeenCalled();
+  });
+
+  it('explains an unavailable replay grant without exposing its API code', async () => {
+    state.createRun.mockRejectedValue(
+      refusal({ kind: 'validation', status: 422, code: 'replay_grant_invalid' }),
+    );
+    const { dialog } = await renderCreateRun();
+    await dialog.set('manifestId', MANIFEST);
+    await dialog.submit();
+    expect(await dialog.failure()).toContain('The replay grant is unavailable or invalid');
+    expect(await dialog.failure()).not.toContain('replay_grant_invalid');
   });
 
   it.each(['rate_limited', 'unavailable'] as const)(
@@ -217,14 +227,42 @@ describe('CreateRunDialogComponent', () => {
     expect(await loader.hasHarness(CreateRunDialogHarness)).toBe(true);
   });
 
-  it('presents replay as disabled with its explanation and leaves regular creation available', async () => {
+  it('shows replay guidance only for Replay and never submits an unavailable replay', async () => {
     const { dialog } = await renderCreateRun();
-    expect(await dialog.text()).toContain('replay grants are not available');
-    expect(await dialog.replayDisabled()).toBe('true');
-    expect(await dialog.purpose()).toContain('Regular');
     await dialog.set('manifestId', MANIFEST);
+    expect(await dialog.text()).not.toMatch(/replay/i);
+    await dialog.choose('purpose', 'Replay');
+    expect(await dialog.text()).toContain('Choose Regular to create a run.');
+    expect(await dialog.text()).not.toContain('replay_grant_invalid');
+    expect(await dialog.disabled()).toBe(true);
+    await dialog.submit();
+    expect(state.createRun).not.toHaveBeenCalled();
+    await dialog.choose('purpose', 'Regular');
+    expect(await dialog.text()).not.toMatch(/replay/i);
     await dialog.submit();
     expect(state.createRun.mock.calls[0]?.[1]).toEqual({ manifest_id: MANIFEST });
+  });
+
+  it('ignores native form submissions in Replay without running regular validation', async () => {
+    const { dialog } = await renderCreateRun();
+    await dialog.choose('purpose', 'Replay');
+    await (await dialog.bodyForm()).dispatchEvent('submit');
+    expect(await dialog.validationSummary()).toBeNull();
+    expect(state.createRun).not.toHaveBeenCalled();
+  });
+
+  it('keeps the footer submit associated with the scrolling body and returns focus on Close', async () => {
+    const { dialog, loader, opener } = await renderCreateRun();
+    const form = await dialog.bodyForm();
+    const submit = await dialog.footerSubmit();
+    expect(await submit.getAttribute('form')).toBeTruthy();
+    expect(await submit.getAttribute('form')).toBe(await form.getAttribute('id'));
+    const close = await dialog.headerClose();
+    expect(await close.text()).toBe('Close');
+    await close.click();
+    expect(await loader.hasHarness(CreateRunDialogHarness)).toBe(false);
+    expect(document.activeElement).toBe(opener);
+    expect(state.createRun).not.toHaveBeenCalled();
   });
 
   it('marks the PR number optional except when the ref kind is pull_request', async () => {
