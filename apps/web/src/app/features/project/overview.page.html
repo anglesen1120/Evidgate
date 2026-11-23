@@ -3,9 +3,10 @@
   aria-labelledby="project-overview-heading"
 >
   <app-page-header
-    [title]="project()?.name ?? copy.title"
+    [title]="copy.title"
     [titleId]="'project-overview-heading'"
     [description]="context()"
+    [icon]="'navGrid'"
   >
     @if (primaryAction(); as action) {
       <a appPageHeaderActions hlmBtn class="eg-header-action" [routerLink]="action.link">{{
@@ -21,7 +22,7 @@
     @if (store.runs.visible()) {
       <app-dashboard-widget
         data-dashboard-kpis
-        [title]="recentTitle()"
+        [title]="copy.summary"
         [description]="sampleLabel()"
         [loading]="store.runs.loading()"
         [error]="store.runs.error()"
@@ -30,28 +31,35 @@
         <div class="kpi-grid">
           <app-dashboard-kpi
             [label]="recentTitle()"
+            [icon]="'navRun'"
             [value]="counts().total"
             [detail]="sampleLabel()"
           />
           @if (store.decisionsVisible()) {
             <app-dashboard-kpi
               [label]="'PASS'"
+              [icon]="'lucideCheck'"
+              [tone]="'success'"
               [value]="share(counts().pass)"
               [detail]="shareDetail(counts().pass)"
             />
             <app-dashboard-kpi
               [label]="'FAIL'"
               [value]="share(counts().fail)"
+              [icon]="'lucideX'"
+              [tone]="'danger'"
               [detail]="shareDetail(counts().fail)"
             />
             <app-dashboard-kpi
               [label]="'INCONCLUSIVE'"
               [value]="share(counts().inconclusive)"
               [detail]="shareDetail(counts().inconclusive)"
+              [icon]="'lucideCircle'"
             />
           }
           <app-dashboard-kpi
             [label]="copy.collecting"
+            [icon]="'lucideClock'"
             [value]="counts().collecting"
             [detail]="sampleLabel()"
           />
@@ -109,15 +117,13 @@
               (retry)="store.quarantine.reload()"
             />
           }
-          @if (store.incidents.visible()) {
-            <app-dashboard-metric
-              [label]="copy.incidents"
-              [value]="store.incidents.value()?.items?.length ?? null"
-              [description]="copy.incidentContext"
-              [loading]="store.incidents.loading()"
-              [error]="store.incidents.error()"
-              (retry)="store.incidents.reload()"
-            />
+          @if (incidentsVisible()) {
+            <dl data-dashboard-incidents class="m-0 border-t border-border py-(--eg-space-3)">
+              <dt class="text-sm font-medium">{{ copy.incidents }}</dt>
+              <dd class="m-0 mt-(--eg-space-1) text-sm text-muted-foreground">
+                {{ copy.incidentsUnavailable }}
+              </dd>
+            </dl>
           }
         </app-dashboard-widget>
       }

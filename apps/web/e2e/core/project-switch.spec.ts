@@ -20,7 +20,10 @@ test.describe('the scope switcher moves the shell', () => {
     // The seeded tenant has no `project:read`, so the project screen is reached through the
     // catalogue variant that grants it; the switcher itself is the subject here.
     await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
-    await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
+    await expect(page.locator('#main-content h1')).toHaveText('Project overview');
+    await expect(page.locator('app-page-header .header-description')).toContainText(
+      'Storefront web',
+    );
 
     const scope = new ScopeSwitcher(page);
     await expect(scope.control(1)).toBeEnabled();
@@ -28,12 +31,16 @@ test.describe('the scope switcher moves the shell', () => {
 
     await expect.poll(() => new URL(page.url()).pathname).toBe(`/en${CHECKOUT_OVERVIEW}`);
     // The screen after the project id is preserved, not reset to the entry route.
-    await expect(page.locator('#main-content h1')).toHaveText('Checkout API');
+    await expect(page.locator('#main-content h1')).toHaveText('Project overview');
+    await expect(page.locator('app-page-header .header-description')).toContainText('Checkout API');
   });
 
   test('the vi bundle keeps its locale prefix across a project switch', async ({ page }) => {
     await page.goto(withVariant(overviewPath('vi'), LIMITED_GRANTS));
-    await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
+    await expect(page.locator('#main-content h1')).toHaveText('Tổng quan dự án');
+    await expect(page.locator('app-page-header .header-description')).toContainText(
+      'Storefront web',
+    );
 
     const scope = new ScopeSwitcher(page);
     await expect(scope.control(1)).toBeEnabled();
@@ -50,7 +57,10 @@ test.describe('the scope switcher moves the shell', () => {
     page,
   }) => {
     await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
-    await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
+    await expect(page.locator('#main-content h1')).toHaveText('Project overview');
+    await expect(page.locator('app-page-header .header-description')).toContainText(
+      'Storefront web',
+    );
 
     const scope = new ScopeSwitcher(page);
     await expect(scope.control(0)).toBeEnabled();

@@ -11,7 +11,6 @@ const ROUTES: readonly [string, RegExp][] = [
   ['listRuns', /^\/projects\/[^/]+\/runs$/],
   ['listProjectWaivers', /^\/projects\/[^/]+\/waivers$/],
   ['listQuarantineEntries', /^\/projects\/[^/]+\/quarantine$/],
-  ['listIncidents', /^\/projects\/[^/]+\/incidents$/],
   ['listCiBindings', /^\/projects\/[^/]+\/ci-bindings$/],
   ['listAuthoringTree', /^\/projects\/[^/]+\/authoring\/tree$/],
   ['listManualCases', /^\/projects\/[^/]+\/authoring\/manual-cases$/],
@@ -42,6 +41,16 @@ export function dashboardFixture(
   };
   if (operation === 'listRuns' && variant === 'dashboard-dense')
     document.body = denseRunPage(requestUrl);
+  if (operation === 'listRuns' && variant === 'dashboard-unequal')
+    document.body = {
+      items: runs()
+        .slice(0, 4)
+        .map((run, index) => ({
+          ...run,
+          created_at: `2026-11-${index < 3 ? '18' : '19'}T09:00:00Z`,
+        })),
+      next_cursor: null,
+    };
   if (variant === 'dashboard-empty')
     document.body =
       operation === 'getUsageSummary'
@@ -115,14 +124,6 @@ function bodyFor(operation: string, path: string, grantsVariant: string): unknow
       return { items: waivers(project), next_cursor: null };
     case 'listQuarantineEntries':
       return { items: quarantines(project), next_cursor: null };
-    case 'listIncidents':
-      return {
-        items: [
-          { id: '018f0000-0000-7000-8000-00000000ab01' },
-          { id: '018f0000-0000-7000-8000-00000000ab02' },
-        ],
-        next_cursor: null,
-      };
     case 'getUsageSummary':
       return {
         period: '2026-11',

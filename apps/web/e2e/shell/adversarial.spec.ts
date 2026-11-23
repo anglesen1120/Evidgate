@@ -352,7 +352,10 @@ test.describe('scope switching under load', () => {
         `${LIMITED_GRANTS}&fixture.latency=400`,
       ),
     );
-    await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
+    await expect(page.locator('#main-content h1')).toHaveText('Project overview');
+    await expect(page.locator('app-page-header .header-description')).toContainText(
+      'Storefront web',
+    );
 
     const orgSelect = scopeControl(page, 0);
     await expect(orgSelect).toBeEnabled();
@@ -370,7 +373,10 @@ test.describe('scope switching under load', () => {
     expect(new URL(page.url()).pathname).toBe(
       `/en/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}/overview`,
     );
-    await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
+    await expect(page.locator('#main-content h1')).toHaveText('Project overview');
+    await expect(page.locator('app-page-header .header-description')).toContainText(
+      'Storefront web',
+    );
     await expectScopeValue(orgSelect, ORG_ACME);
     const hrefs = await page
       .locator('app-shell-nav nav a')
@@ -408,7 +414,10 @@ test.describe('history after a guard redirect', () => {
       LIMITED_GRANTS,
     );
     await page.goto(overview);
-    await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
+    await expect(page.locator('#main-content h1')).toHaveText('Project overview');
+    await expect(page.locator('app-page-header .header-description')).toContainText(
+      'Storefront web',
+    );
 
     // `settings` needs `organization:read`, which the limited set lacks.
     await page.goto(withVariant(localePath('en', `/orgs/${ORG_ACME}/settings`), LIMITED_GRANTS));
@@ -418,7 +427,10 @@ test.describe('history after a guard redirect', () => {
     await expect
       .poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
       .toBe(`/en/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}/overview`);
-    await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
+    await expect(page.locator('#main-content h1')).toHaveText('Project overview');
+    await expect(page.locator('app-page-header .header-description')).toContainText(
+      'Storefront web',
+    );
 
     await page.goForward();
     await expect.poll(() => new URL(page.url()).pathname).toBe('/en/forbidden');

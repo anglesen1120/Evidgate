@@ -2,6 +2,7 @@ import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { Component, provideZonelessChangeDetection, signal, viewChild } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HlmButton } from '@evidgate/ui/button';
+import type { HlmIconName } from '@evidgate/ui/icon';
 
 import { HeaderHarness } from './header.harness';
 import { PageHeaderComponent, PageHeaderImports } from './index';
@@ -10,7 +11,12 @@ import { PageHeaderComponent, PageHeaderImports } from './index';
   selector: 'app-page-header-test-host',
   imports: [PageHeaderImports, HlmButton],
   template: `
-    <app-page-header [title]="title()" [description]="description()" [titleId]="titleId()">
+    <app-page-header
+      [title]="title()"
+      [description]="description()"
+      [titleId]="titleId()"
+      [icon]="icon()"
+    >
       @if (showContext()) {
         <nav pageHeaderContext [attr.aria-label]="breadcrumbLabel">{{ breadcrumb }}</nav>
       }
@@ -33,6 +39,7 @@ class PageHeaderTestHost {
   readonly breadcrumbLabel = 'Breadcrumb';
   readonly breadcrumb = 'Organization / Project';
   readonly title = signal('Runs');
+  readonly icon = signal<HlmIconName | undefined>(undefined);
   readonly description = signal<string | undefined>('Inspect recorded runs.');
   readonly titleId = signal<string | undefined>('runs-title');
   readonly actionLabel = signal('Create run');
@@ -42,9 +49,13 @@ class PageHeaderTestHost {
   calls = 0;
 }
 
+class PageHeaderHarness extends HeaderHarness {
+  readonly titleIcon = this.locatorForOptional('h1 hlm-icon');
+}
+
 describe('PageHeaderComponent', () => {
   let fixture: ComponentFixture<PageHeaderTestHost>;
-  let harness: HeaderHarness;
+  let harness: PageHeaderHarness;
   let originalTheme: string | null;
 
   beforeEach(async () => {
@@ -55,7 +66,7 @@ describe('PageHeaderComponent', () => {
     }).compileComponents();
     fixture = TestBed.createComponent(PageHeaderTestHost);
     fixture.detectChanges();
-    harness = await TestbedHarnessEnvironment.loader(fixture).getHarness(HeaderHarness);
+    harness = await TestbedHarnessEnvironment.loader(fixture).getHarness(PageHeaderHarness);
   });
 
   afterEach(() => {
@@ -70,6 +81,13 @@ describe('PageHeaderComponent', () => {
     expect(await harness.getTitle()).toBe('Runs');
     expect(await harness.getTitleId()).toBe('runs-title');
     expect(await harness.getDescription()).toBe('Inspect recorded runs.');
+  });
+
+  it('renders a decorative title icon only when supplied', async () => {
+    expect(await harness.titleIcon()).toBeNull();
+    fixture.componentInstance.icon.set('navGrid');
+    expect(await (await harness.titleIcon())?.getAttribute('aria-hidden')).toBe('true');
+    expect(await harness.getTitle()).toBe('Runs');
   });
 
   it('offers the page heading as a programmatic focus destination outside the tab order', () => {

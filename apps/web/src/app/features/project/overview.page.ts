@@ -55,8 +55,8 @@ export class ProjectOverviewPage {
   private readonly nav = inject(NavViewService);
   protected readonly copy = DASHBOARD_COPY;
   readonly project = this.session.currentProject;
-  protected readonly context = computed(
-    () => this.session.currentOrg()?.name ?? this.project()?.slug ?? '',
+  protected readonly context = computed(() =>
+    [this.project()?.name, this.session.currentOrg()?.name].filter(Boolean).join(' · '),
   );
   protected readonly rows = computed(() => sampleRuns(this.store.runs.value()));
   protected readonly counts = computed(() => runCounts(this.rows(), this.store.decisionsVisible()));
@@ -137,12 +137,13 @@ export class ProjectOverviewPage {
       disabled: rows.filter((row) => row.status === 'disabled').length,
     };
   });
+  protected readonly incidentsVisible = computed(() => this.session.has('healing:triage'));
   protected readonly attentionVisible = computed(
     () =>
       (this.store.runs.visible() && this.store.decisionsVisible()) ||
       this.store.waivers.visible() ||
       this.store.quarantine.visible() ||
-      this.store.incidents.visible(),
+      this.incidentsVisible(),
   );
   protected readonly authoringVisible = computed(
     () => this.store.cases.visible() || this.store.tree.visible() || this.store.changes.visible(),

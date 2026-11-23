@@ -21,6 +21,13 @@ class OverviewHarness extends ComponentHarness {
   readonly failureDescription = this.locatorFor('[data-dashboard-failures] p');
   readonly attentionMetrics = this.locatorForAll('[data-dashboard-attention] app-dashboard-metric');
   readonly emptyIcons = this.locatorForAll('app-empty-pattern hlm-icon path');
+  readonly incidents = this.locatorFor('[data-dashboard-incidents]');
+  readonly incidentControls = this.locatorForAll('[data-dashboard-incidents] button');
+  readonly incidentErrors = this.locatorForAll(
+    '[data-dashboard-incidents] app-error-pattern, [data-dashboard-incidents] [role="alert"]',
+  );
+  readonly title = this.locatorFor('h1');
+  readonly subtitle = this.locatorFor('app-page-header .header-description');
 }
 
 function read<T>(value: T) {
@@ -63,7 +70,6 @@ function mount(rows: readonly RunSummary[] = [RUN], complete = true, allowed = t
     runs: read({ items: rows, complete }),
     waivers: read(page),
     quarantine: read(page),
-    incidents: read(page),
     bindings: read(page),
     cases: read(page),
     tree: read(page),
@@ -82,6 +88,7 @@ function mount(rows: readonly RunSummary[] = [RUN], complete = true, allowed = t
         useValue: {
           currentProject,
           currentOrg: signal({ id: 'o1', name: 'Organization A' }),
+          has: (permission: string) => allowed && permission === 'healing:triage',
         },
       },
       { provide: NavViewService, useValue: { groups: signal([]) } },
@@ -105,6 +112,21 @@ describe('ProjectOverviewPage dashboard', () => {
     expect(await harness.text()).toContain('0%');
     expect(await harness.text()).toContain('Not evaluated');
     expect(await harness.runViews()).toHaveLength(1);
+  });
+
+  it('shows incidents as neutral unavailable text without an error or retry control', async () => {
+    const { fixture } = mount();
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+    expect(await (await harness.incidents()).text()).toBe('Incidents Not available yet');
+    expect(await harness.incidentControls()).toHaveLength(0);
+    expect(await harness.incidentErrors()).toHaveLength(0);
+  });
+
+  it('keeps the overview title and both project and organization context', async () => {
+    const { fixture } = mount();
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, OverviewHarness);
+    expect(await (await harness.title()).text()).toBe('Project overview');
+    expect(await (await harness.subtitle()).text()).toBe('Project A · Organization A');
   });
 
   it('distinguishes successful empty runs from unavailable usage and hides denied widgets', async () => {
