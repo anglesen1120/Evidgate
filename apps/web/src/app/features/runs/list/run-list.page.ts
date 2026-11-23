@@ -101,7 +101,7 @@ export class RunListPage {
   protected readonly createTarget = signal<string | null>(null);
   protected readonly canCreate = computed(() => this.session.has('run:create'));
   protected readonly createCopy = CREATE_RUN_COPY;
-  private projectId: string | null = null;
+  protected projectId: string | null = null;
   private readonly loadMoreButton = viewChild<ElementRef<HTMLButtonElement>>('loadMoreControl');
   private readonly pagingRetryButton =
     viewChild<ElementRef<HTMLButtonElement>>('pagingRetryControl');

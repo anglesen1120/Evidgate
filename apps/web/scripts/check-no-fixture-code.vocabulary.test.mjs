@@ -131,3 +131,41 @@ test('another target_kind value is still a leak', async () => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /some_other_kind/);
 });
+
+for (const role of [
+  'Tenant admin',
+  'Release approver',
+  'Test maintainer',
+  'Platform operator',
+  'Billing operator',
+]) {
+  test(`the built-in role name ${role} is exempt under name`, async () => {
+    const result = await gate({ body: { items: [{ name: role }] } }, role);
+    assert.equal(result.status, 0, result.stderr);
+  });
+}
+
+test('another fixture name is still a leak', async () => {
+  const result = await gate(
+    { body: { items: [{ name: 'Fixture only role' }] } },
+    'Fixture only role',
+  );
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Fixture only role/);
+});
+
+test('a built-in role name under another member is still a leak', async () => {
+  const result = await gate({ body: { title: 'Tenant admin' } }, 'Tenant admin');
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Tenant admin/);
+});
+
+test('sub_category is exempt under kind, another kind word is still a leak', async () => {
+  const exempt = await gate({ body: { kind: 'sub_category' } }, 'sub_category');
+  assert.equal(exempt.status, 0, exempt.stderr);
+  const other = await gate({ body: { kind: 'fixture_only_kind' } }, 'fixture_only_kind');
+  assert.equal(other.status, 1);
+  assert.match(other.stderr, /fixture_only_kind/);
+  const elsewhere = await gate({ body: { title: 'sub_category' } }, 'sub_category');
+  assert.equal(elsewhere.status, 1);
+});
