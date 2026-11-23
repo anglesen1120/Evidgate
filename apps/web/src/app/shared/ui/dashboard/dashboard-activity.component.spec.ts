@@ -10,7 +10,9 @@ class ActivityHarness extends ComponentHarness {
   readonly view = this.locatorFor('button[aria-haspopup="dialog"]');
   readonly empty = this.locatorForOptional('app-empty-pattern');
   readonly loading = this.locatorForOptional('app-loading-pattern');
+  readonly titles = this.locatorForAll('app-dashboard-widget h2');
   readonly table = this.locatorFor('app-data-table');
+  readonly tableRole = this.locatorFor('[role="table"]');
   readonly caption = this.locatorFor('app-data-table > .caption');
   readonly emptyIcon = this.locatorFor('app-empty-pattern hlm-icon path');
 }
@@ -63,5 +65,12 @@ describe('DashboardActivityComponent', () => {
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, ActivityHarness);
     expect(await (await harness.table()).hasClass('[&>.caption]:sr-only')).toBe(true);
     expect(await (await harness.caption()).text()).toBe('Organization activity');
+    expect(await (await harness.tableRole()).getAttribute('aria-labelledby')).toBe(
+      await (await harness.caption()).getAttribute('id'),
+    );
+    const titles = await harness.titles();
+    expect(await Promise.all(titles.map((title) => title.text()))).toEqual([
+      'Organization activity',
+    ]);
   });
 });
