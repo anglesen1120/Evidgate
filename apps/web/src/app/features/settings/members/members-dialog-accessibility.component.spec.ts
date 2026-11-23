@@ -80,6 +80,29 @@ describe('Members dialog accessibility', () => {
     expect(await preview.text()).not.toContain('Preview unavailable');
   });
 
+  it('keeps the current preview when a different checked role is unchecked', async () => {
+    store.roles.set([
+      { ...role, id: 'alpha', name: 'Alpha', is_builtin: false },
+      { ...role, id: 'beta', name: 'Beta', is_builtin: false },
+      role,
+    ]);
+    const fixture = TestBed.createComponent(MembersPage);
+    await fixture.whenStable();
+    required<HTMLButtonElement>('[data-members-invite-open]').click();
+    const dialog =
+      await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(InviteRolesHarness);
+    const [alpha, beta, admin] = await dialog.options();
+    if (!alpha || !beta || !admin) throw new Error('Expected three role options');
+    await alpha.click();
+    await beta.click();
+    await admin.click();
+    const preview = await dialog.preview();
+    expect(await preview.text()).toContain('Tenant admin');
+    await beta.click();
+    expect(await beta.getAttribute('aria-checked')).toBe('false');
+    expect(await preview.text()).toContain('Tenant admin');
+  });
+
   it.each(dialogs)(
     '%s uses a named modal and one focus trap; Escape restores its opener',
     async (kind, selector, label) => {

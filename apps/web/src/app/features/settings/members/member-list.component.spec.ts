@@ -90,6 +90,28 @@ describe('MemberListComponent', () => {
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(await trigger.isFocused()).toBe(true);
   });
+
+  it('refreshes the inspected member by id and closes permanently when that member leaves', async () => {
+    const inspected = member('pending');
+    const unrelated = member('removed');
+    await render([inspected, unrelated]);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      MemberActionsHarness,
+    );
+    await (await harness.rowView()).click();
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog?.textContent).toContain(inspected.invited_email);
+    const refreshed = { ...inspected, invited_email: 'updated@example.test' };
+    await render([unrelated, refreshed]);
+    expect(document.querySelector('[role="dialog"]')).toBe(dialog);
+    expect(dialog?.textContent).toContain(refreshed.invited_email);
+    expect(dialog?.textContent).not.toContain(inspected.invited_email);
+    await render([unrelated]);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await render([refreshed, unrelated]);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
   it.each([
     ['pending', 'Invitation pending'],
     ['active', 'Active'],

@@ -5,9 +5,9 @@ import {
   computed,
   inject,
   input,
-  linkedSignal,
   LOCALE_ID,
   output,
+  signal,
   type TemplateRef,
   viewChild,
 } from '@angular/core';
@@ -148,7 +148,7 @@ export const MEMBERS_COPY = {
             data-member-view
             [attr.aria-haspopup]="'dialog'"
             class="h-auto max-w-full justify-start px-0 py-1 text-start font-semibold pointer-coarse:min-h-(--eg-control-touch)"
-            (click)="inspected.set({ member, trigger: emailButton })"
+            (click)="inspection.set({ id: member.id, trigger: emailButton })"
           >
             <span class="sr-only" i18n="@@settings.members.view">View member</span>
             <bdi [class.truncate]="!stacked" [class.whitespace-normal]="stacked">{{
@@ -237,7 +237,7 @@ export const MEMBERS_COPY = {
         class="pointer-coarse:min-h-(--eg-control-touch) pointer-coarse:min-w-(--eg-control-touch)"
         [attr.aria-haspopup]="'dialog'"
         [attr.aria-label]="view + ' · ' + display(member.invited_email)"
-        (click)="inspected.set({ member, trigger: viewButton })"
+        (click)="inspection.set({ id: member.id, trigger: viewButton })"
       >
         {{ view }}
       </button>
@@ -310,52 +310,53 @@ export const MEMBERS_COPY = {
       [rowId]="rowId"
       [caption]="copy.directory"
     />
-    @if (inspected(); as selection) {
-      @let member = selection.member;
+    @if (inspection(); as selection) {
       <hlm-dialog
         [aria-modal]="true"
-        [state]="'open'"
+        [state]="inspectedMember() ? 'open' : 'closed'"
         [autoFocus]="'first-heading'"
         [restoreFocus]="selection.trigger"
-        (closed)="inspected.set(null)"
+        (closed)="inspection.set(null)"
       >
         <hlm-dialog-content *hlmDialogPortal [showCloseButton]="false" [size]="'md'">
           <header hlmDialogHeader>
             <h2 hlmDialogTitle>{{ copy.member }}</h2>
             <p hlmDialogDescription>{{ copy.directory }}</p>
           </header>
-          <dl class="hlm-field-grid [&_dt]:text-xs">
-            <div class="hlm-field-wide">
-              <dt>{{ copy.email }}</dt>
-              <dd>
-                <bdi>{{ display(member.invited_email) }}</bdi>
-              </dd>
-            </div>
-            <div>
-              <dt>{{ copy.status }}</dt>
-              <dd>{{ statusLabel(member.status) }}</dd>
-            </div>
-            <div>
-              <dt i18n="@@settings.members.created">Created</dt>
-              <dd><app-absolute-time [value]="member.created_at" /></dd>
-            </div>
-            <div class="hlm-field-wide">
-              <dt>{{ copy.roles }}</dt>
-              <dd>
-                @if (member.roles.length) {
-                  <ul class="m-0 list-none p-0">
-                    @for (role of member.roles; track role.id) {
-                      <li>
-                        <bdi>{{ display(roleLabel(role)) }}</bdi>
-                      </li>
-                    }
-                  </ul>
-                } @else {
-                  {{ copy.noRoles }}
-                }
-              </dd>
-            </div>
-          </dl>
+          @if (inspectedMember(); as member) {
+            <dl class="hlm-field-grid [&_dt]:text-xs">
+              <div class="hlm-field-wide">
+                <dt>{{ copy.email }}</dt>
+                <dd>
+                  <bdi>{{ display(member.invited_email) }}</bdi>
+                </dd>
+              </div>
+              <div>
+                <dt>{{ copy.status }}</dt>
+                <dd>{{ statusLabel(member.status) }}</dd>
+              </div>
+              <div>
+                <dt i18n="@@settings.members.created">Created</dt>
+                <dd><app-absolute-time [value]="member.created_at" /></dd>
+              </div>
+              <div class="hlm-field-wide">
+                <dt>{{ copy.roles }}</dt>
+                <dd>
+                  @if (member.roles.length) {
+                    <ul class="m-0 list-none p-0">
+                      @for (role of member.roles; track role.id) {
+                        <li>
+                          <bdi>{{ display(roleLabel(role)) }}</bdi>
+                        </li>
+                      }
+                    </ul>
+                  } @else {
+                    {{ copy.noRoles }}
+                  }
+                </dd>
+              </div>
+            </dl>
+          }
           <footer hlmDialogFooter>
             <button hlmBtn hlmDialogClose [variant]="'outline'" type="button" i18n="@@ui.close">
               Close
@@ -375,10 +376,11 @@ export class MemberListComponent {
 
   readonly members = input.required<readonly MembershipView[]>();
   readonly canWrite = input(false);
-  protected readonly inspected = linkedSignal<
-    readonly MembershipView[],
-    { member: MembershipView; trigger: HTMLButtonElement } | null
-  >({ source: this.members, computation: () => null });
+  protected readonly inspection = signal<{ id: string; trigger: HTMLButtonElement } | null>(null);
+  protected readonly inspectedMember = computed(() => {
+    const selected = this.inspection();
+    return selected ? this.members().find((member) => member.id === selected.id) : undefined;
+  });
   readonly remove = output<{ member: MembershipView; opener: HTMLElement }>();
   readonly editRoles = output<{ member: MembershipView; opener: HTMLElement }>();
   readonly resend = output<{ member: MembershipView; opener: HTMLElement }>();

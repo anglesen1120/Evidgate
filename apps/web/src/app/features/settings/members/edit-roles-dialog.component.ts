@@ -63,9 +63,14 @@ type RoleOperation = Pick<RoleChange, 'kind' | 'roleId'>;
         </header>
         <div class="dialog-body grid min-w-0 gap-3 text-sm">
           <p hlmDialogDescription>{{ copy.editDescription }}</p>
-          <p>
-            <strong>{{ member()?.invited_email }}</strong>
-          </p>
+          <dl class="hlm-field-grid">
+            <div class="hlm-field-wide">
+              <dt>{{ copy.email }}</dt>
+              <dd>
+                <bdi>{{ member()?.invited_email }}</bdi>
+              </dd>
+            </div>
+          </dl>
           <fieldset
             class="m-0 min-w-0 rounded-md border border-solid border-border p-2"
             [disabled]="busy() || !session.has('membership:write')"

@@ -330,7 +330,8 @@ export class InviteDialogComponent {
     if (checked) roles.add(id);
     else roles.delete(id);
     this.selected.set(roles);
-    this.previewId.set(checked ? id : (roles.values().next().value ?? null));
+    if (checked) this.previewId.set(id);
+    else if (this.previewId() === id) this.previewId.set(roles.values().next().value ?? null);
   }
   private beginCorrection(): void {
     if (!this.editableRefusal()) return;
