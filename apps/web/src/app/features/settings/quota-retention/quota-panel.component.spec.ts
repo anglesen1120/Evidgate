@@ -5,6 +5,7 @@ import { TestBed } from '@angular/core/testing';
 import type { UsageSummaryDto, UsageSummaryMetricDto, UsageSummaryProjectDto } from '@evidgate/sdk';
 
 import { By } from '@angular/platform-browser';
+import { ActivatedRoute } from '@angular/router';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { DataTableComponent } from '../../../shared/ui/data-table/data-table.component';
 import { useLightweightTablePresentation } from '../../../shared/ui/data-table/data-table-volume.testing';
@@ -15,6 +16,9 @@ provideLayoutTestStubs();
 class QuotaPanelHarness extends ComponentHarness {
   static hostSelector = 'app-quota-panel';
   readonly metrics = this.locatorForAll('[data-quota-metric]');
+  readonly pageTitle = this.locatorForOptional('h1#quota-title');
+  readonly sectionTitle = this.locatorForOptional('h2#quota-title');
+  readonly subsectionTitles = this.locatorForAll('h3');
   readonly projectRows = this.locatorForAll('app-data-table [data-row-id]');
   readonly retry = this.locatorFor('button');
 }
@@ -83,6 +87,28 @@ describe('QuotaPanelComponent', () => {
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, QuotaPanelHarness);
     return { fixture, harness, root: fixture.nativeElement as HTMLElement };
   }
+
+  it.each([1, 2])('uses heading level %s for the quota title', async (level) => {
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: ActivatedRoute, useValue: { snapshot: { data: { pageHeadingLevel: level } } } },
+      ],
+    });
+    usageSummary.update((summary) =>
+      summary ? { ...summary, metrics: [metric({ projects: [project()] })] } : null,
+    );
+    const { harness } = await render();
+    const page = await harness.pageTitle();
+    const section = await harness.sectionTitle();
+
+    expect(await (level === 1 ? page : section)?.text()).toBe('Usage and AI credits');
+    expect(level === 1 ? section : page).toBeNull();
+    const subsections = await harness.subsectionTitles();
+    expect(subsections.length).toBeGreaterThan(0);
+    for (const title of subsections) {
+      expect(await title.getAttribute('aria-level')).toBe(level === 1 ? '2' : null);
+    }
+  });
 
   it('renders a null metric as unavailable, never zero, without exposing service diagnostics', async () => {
     const { harness, root } = await render();
