@@ -224,7 +224,7 @@
     (stateChanged)="$event === 'closed' && viewedNo.set(null)"
     (closed)="restoreFocus()"
   >
-    <hlm-dialog-content *hlmDialogPortal [size]="'md'">
+    <hlm-dialog-content *hlmDialogPortal [size]="'lg'">
       <header hlmDialogHeader>
         <hlm-icon
           hlmDialogStatusIcon
@@ -249,27 +249,29 @@
         </p>
       </header>
       <div
-        class="grid min-h-0 gap-(--eg-space-4) p-(--eg-space-2) [&_dl]:m-0 [&_dl]:grid [&_dl]:min-w-0 [&_dl]:divide-y [&_dl]:divide-border [&_dl>div]:grid [&_dl>div]:items-baseline [&_dl>div]:gap-(--eg-space-2) [&_dl>div]:py-(--eg-space-3) sm:[&_dl>div]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] [&_dt]:text-sm [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:wrap-anywhere"
+        class="grid min-h-0 gap-(--eg-space-4) p-(--eg-space-2) [&_dt]:text-sm [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:wrap-anywhere"
       >
         @if (viewed(); as row) {
-          <h3 class="m-0 text-sm font-semibold" i18n="@@authoring.history.summary">Summary</h3>
-          <dl>
+          <h3 class="mb-(--eg-space-3) text-sm font-semibold" i18n="@@authoring.history.summary">
+            Summary
+          </h3>
+          <dl class="hlm-field-grid">
             <div>
               <dt i18n="@@authoring.ai-settings.version-column">Version</dt>
               <dd>{{ row.version_no }}</dd>
             </div>
-            <div>
+            <div class="hlm-field-wide">
               <dt i18n="@@authoring.ai-settings.reason-column">Reason</dt>
               <dd>
                 <bdi>{{ row.reason || notSet }}</bdi>
               </dd>
             </div>
           </dl>
-          <h3 class="m-0 text-sm font-semibold" i18n="@@authoring.history.provenance">
+          <h3 class="mb-(--eg-space-3) text-sm font-semibold" i18n="@@authoring.history.provenance">
             Version provenance
           </h3>
-          <dl>
-            <div>
+          <dl class="hlm-field-grid">
+            <div class="hlm-field-wide">
               <dt>{{ authorLabel }}</dt>
               <dd>
                 <app-copyable-identifier [value]="row.author_membership_id" [label]="authorLabel" />
@@ -279,7 +281,7 @@
               <dt i18n="@@authoring.ai-settings.time">Saved at (UTC)</dt>
               <dd><app-absolute-time [value]="row.created_at" /></dd>
             </div>
-            <div>
+            <div class="hlm-field-wide">
               <dt>{{ hashLabel }}</dt>
               <dd><app-copyable-identifier [value]="row.content_hash" [label]="hashLabel" /></dd>
             </div>
@@ -294,7 +296,7 @@
               </dd>
             </div>
             @if (loadedDetail(); as version) {
-              <div>
+              <div class="hlm-field-wide">
                 <dt>{{ settingsIdLabel }}</dt>
                 <dd>
                   <app-copyable-identifier

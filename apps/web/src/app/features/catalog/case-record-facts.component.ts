@@ -12,24 +12,31 @@ import { CATALOG_RECORD } from './case-record.copy';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `@for (group of groups(); track group.label) {
     <h3 class="mt-(--eg-space-4) mb-(--eg-space-2) font-semibold">{{ group.label }}</h3>
-    <dl
-      class="m-0 grid grid-cols-1 items-baseline gap-x-(--eg-space-5) gap-y-(--eg-space-2) min-[600px]:grid-cols-[minmax(0,1fr)_minmax(0,1.8fr)]"
-    >
+    <dl class="hlm-field-grid">
       @for (fact of group.facts; track fact.key) {
-        <dt class="text-muted-foreground">{{ fact.label }}</dt>
-        <dd class="m-0 min-w-0 wrap-anywhere">
-          @if (fact.value === null || fact.value === undefined || fact.value === '') {
-            {{ copy.missingValue }}
-          } @else if (fact.kind === 'time') {
-            <app-absolute-time [value]="asText(fact.value)" />
-          } @else if (fact.kind === 'id') {
-            <app-copyable-identifier [value]="asText(fact.value)" [label]="fact.label" />
-          } @else if (typeof fact.value === 'number') {
-            <span class="block text-end tabular-nums">{{ fact.value | number }}</span>
-          } @else {
-            <bdi>{{ display(fact.value) }}</bdi>
-          }
-        </dd>
+        <div
+          [class.hlm-field-wide]="
+            fact.kind === 'id' ||
+            fact.key === 'path' ||
+            fact.key === 'labels' ||
+            fact.key === 'requirement'
+          "
+        >
+          <dt class="text-muted-foreground">{{ fact.label }}</dt>
+          <dd class="m-0 min-w-0 wrap-anywhere">
+            @if (fact.value === null || fact.value === undefined || fact.value === '') {
+              {{ copy.missingValue }}
+            } @else if (fact.kind === 'time') {
+              <app-absolute-time [value]="asText(fact.value)" />
+            } @else if (fact.kind === 'id') {
+              <app-copyable-identifier [value]="asText(fact.value)" [label]="fact.label" />
+            } @else if (typeof fact.value === 'number') {
+              <span class="block text-end tabular-nums">{{ fact.value | number }}</span>
+            } @else {
+              <bdi>{{ display(fact.value) }}</bdi>
+            }
+          </dd>
+        </div>
       }
     </dl>
   }`,

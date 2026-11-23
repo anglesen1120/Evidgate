@@ -52,7 +52,7 @@ for (const { route, subject, fact, param, linked } of screens) {
       await trigger.focus();
       await page.keyboard.press('Enter');
       await expectViewOpen(dialog, fact);
-      await expect(dialog.locator('hlm-dialog-content')).toHaveCSS('width', '560px');
+      await expect(dialog.locator('hlm-dialog-content')).toHaveCSS('width', '760px');
       await closeToRow(page, dialog, trigger);
     });
 

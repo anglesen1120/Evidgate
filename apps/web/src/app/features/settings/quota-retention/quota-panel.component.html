@@ -263,9 +263,9 @@
         <h2 hlmDialogTitle>{{ copy.counter }}</h2>
         <p hlmDialogDescription>{{ metricLabel(selection.metric) }}</p>
       </header>
-      <dl class="m-0 grid min-w-0 gap-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0">
+      <dl class="hlm-field-grid [&_dt]:text-xs">
         @if (row.scope === 'project') {
-          <div>
+          <div class="hlm-field-wide">
             <dt>{{ copy.project }}</dt>
             <dd>
               <app-copyable-identifier

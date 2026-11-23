@@ -118,7 +118,7 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
                         <app-shell-icon [name]="'key'" class="size-4" />
                         <bdi class="min-w-0 truncate font-bold">{{ display(row.name) }}</bdi>
                       </button>
-                      <hlm-dialog-content *hlmDialogPortal [showCloseButton]="false" [size]="'md'">
+                      <hlm-dialog-content *hlmDialogPortal [showCloseButton]="false" [size]="'lg'">
                         <header hlmDialogHeader>
                           <h2 hlmDialogTitle>
                             <bdi>{{ display(row.name) }}</bdi>

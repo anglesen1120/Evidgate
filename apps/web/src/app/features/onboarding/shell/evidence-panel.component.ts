@@ -117,21 +117,21 @@ interface LedgerRow {
                           (inspect)="viewRecord.emit($event)"
                         />
                         <ng-template #facts
-                          ><dl>
+                          ><dl class="hlm-field-grid">
                             <div>
                               <dt>{{ projectLabel }}</dt>
                               <dd>
                                 <bdi>{{ createdProject.name }}</bdi>
                               </dd>
                             </div>
-                            <div>
+                            <div class="hlm-field-wide">
                               <dt>{{ identifierLabel }}</dt>
                               <dd>
                                 <bdi class="font-mono">{{ createdProject.id }}</bdi>
                               </dd>
                             </div>
                             @if (row.key !== 'project') {
-                              <div>
+                              <div [class.hlm-field-wide]="typeof row.value !== 'number'">
                                 <dt>{{ row.resource }}</dt>
                                 <dd>
                                   @if (typeof row.value === 'number') {

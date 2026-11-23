@@ -140,9 +140,9 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
               <bdi>{{ row.action }}</bdi> · <app-absolute-time [value]="row.created_at" />
             </p>
           </header>
-          <dl class="m-0 grid min-w-0 gap-2 text-sm">
+          <dl class="hlm-field-grid text-sm">
             @if (row.request_id) {
-              <div class="min-w-0">
+              <div class="hlm-field-wide">
                 <dt class="text-xs text-muted-foreground">{{ copy.request }}</dt>
                 <dd class="m-0">
                   <app-copyable-identifier
@@ -154,7 +154,7 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
               </div>
             }
             @if (supportOf(row); as access) {
-              <div class="min-w-0">
+              <div class="hlm-field-wide">
                 <dt class="text-xs text-muted-foreground">{{ copy.support }}</dt>
                 <dd class="m-0">
                   <button
@@ -180,7 +180,7 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
                 </dd>
               </div>
             }
-            <div>
+            <div [class.hlm-field-wide]="!!row.actor_id">
               <dt class="text-xs text-muted-foreground">{{ copy.actor }}</dt>
               <dd class="m-0">
                 {{ actorLabel(row.actor_type) }}
@@ -194,7 +194,7 @@ const DETAILS_WIDTH: DataTableColumnWidth = {
               </dd>
             </div>
             @if (row.object_type || row.object_id) {
-              <div>
+              <div [class.hlm-field-wide]="!!row.object_id">
                 <dt class="text-xs text-muted-foreground">{{ copy.object }}</dt>
                 <dd class="m-0">
                   <bdi>{{ row.object_type }}</bdi>

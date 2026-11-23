@@ -6,7 +6,7 @@
   [restoreFocus]="opener()"
   (stateChanged)="$event === 'closed' && dismissed.emit()"
 >
-  <hlm-dialog-content *hlmDialogPortal [showCloseButton]="false" class="mapping-view">
+  <hlm-dialog-content *hlmDialogPortal [size]="'xl'" [showCloseButton]="false">
     <header hlmDialogHeader class="relative border-b border-border p-5 pe-16 text-start">
       <h2 hlmDialogTitle data-mapping-view-title tabindex="-1">{{ copy.details }}</h2>
       <p class="text-sm text-muted-foreground">
@@ -37,11 +37,9 @@
       >
         {{ copy.preserved }}
       </p>
-      <dl class="m-0 grid gap-3">
+      <dl class="hlm-field-grid">
         @for (fact of facts(); track fact[0]) {
-          <div
-            class="grid min-w-0 gap-1 border-b border-border pb-3 min-[480px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]"
-          >
+          <div class="border-b border-border pb-3" [class.hlm-field-wide]="fact[2]">
             <dt class="text-muted-foreground">{{ fact[0] }}</dt>
             <dd class="m-0 font-medium">
               <bdi>{{ display(fact[1] ?? '') }}</bdi>
@@ -49,7 +47,7 @@
           </div>
         }
       </dl>
-      <dl class="m-0 flex flex-wrap gap-3 border-t border-border pt-4 text-xs">
+      <dl class="hlm-field-grid border-t border-border pt-4 text-xs">
         <div>
           <dt>{{ copy.completeness }}</dt>
           <dd class="m-0">

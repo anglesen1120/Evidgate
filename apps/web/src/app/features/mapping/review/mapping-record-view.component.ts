@@ -46,28 +46,6 @@ import type {
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './mapping-record-view.component.html',
-  styles: `
-    .mapping-view {
-      width: min(560px, calc(100vw - var(--eg-space-8)));
-      max-width: 100vw;
-      max-height: calc(100dvh - var(--eg-space-8));
-      grid-template-rows: auto minmax(0, 1fr) auto;
-      overflow: hidden;
-      gap: 0;
-      padding: 0;
-    }
-    @media (width < 600px) {
-      .mapping-view {
-        width: 100vw;
-        height: 100dvh;
-        max-height: 100dvh;
-        border: 0;
-        border-radius: 0;
-        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
-          env(safe-area-inset-left);
-      }
-    }
-  `,
 })
 export class MappingRecordViewComponent {
   readonly row = input.required<MappingRowViewModel>();
@@ -80,13 +58,13 @@ export class MappingRecordViewComponent {
   protected readonly facts = computed(() => {
     const vm = this.context();
     return [
-      [this.copy.sourceName, this.row().name],
-      [this.copy.producerSuite, vm.producer + ' / ' + vm.suite],
-      [this.copy.original, this.copy.attempt],
-      [this.copy.suggestion, this.row().suggestion],
-      [this.copy.runReport, vm.run + ' / ' + vm.report],
-      [this.copy.frozen, vm.evidence],
-      [this.copy.digest, vm.digest],
-    ];
+      [this.copy.sourceName, this.row().name, true],
+      [this.copy.producerSuite, vm.producer + ' / ' + vm.suite, true],
+      [this.copy.original, this.copy.attempt, false],
+      [this.copy.suggestion, this.row().suggestion, true],
+      [this.copy.runReport, vm.run + ' / ' + vm.report, true],
+      [this.copy.frozen, vm.evidence, true],
+      [this.copy.digest, vm.digest, true],
+    ] as const;
   });
 }

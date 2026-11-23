@@ -157,10 +157,8 @@ export const MEMBERS_COPY = {
                 <h2 hlmDialogTitle>{{ copy.member }}</h2>
                 <p hlmDialogDescription>{{ copy.directory }}</p>
               </header>
-              <dl
-                class="m-0 grid content-start gap-4 sm:grid-cols-2 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:mt-1 [&_dd]:wrap-anywhere"
-              >
-                <div>
+              <dl class="hlm-field-grid [&_dt]:text-xs">
+                <div class="hlm-field-wide">
                   <dt>{{ copy.email }}</dt>
                   <dd>
                     <bdi>{{ display(member.invited_email) }}</bdi>
@@ -174,7 +172,7 @@ export const MEMBERS_COPY = {
                   <dt i18n="@@settings.members.created">Created</dt>
                   <dd><app-absolute-time [value]="member.created_at" /></dd>
                 </div>
-                <div>
+                <div class="hlm-field-wide">
                   <dt>{{ copy.roles }}</dt>
                   <dd>
                     @if (member.roles.length) {

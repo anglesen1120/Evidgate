@@ -205,7 +205,7 @@
       [restoreFocus]="'[data-view-record=grant][aria-expanded=true]'"
       (closed)="viewing.set(false)"
     >
-      <hlm-dialog-content *hlmDialogPortal [size]="'md'" class="wrap-anywhere">
+      <hlm-dialog-content *hlmDialogPortal [size]="'lg'" class="wrap-anywhere">
         @if (selected(); as g) {
           <header hlmDialogHeader>
             <h2 hlmDialogTitle tabindex="-1">{{ g.subject }}</h2>
@@ -218,38 +218,38 @@
           </header>
           <section class="border-t border-border p-4">
             <h2 class="m-0 text-base font-semibold">{{ copy.scopes }}</h2>
-            <dl class="mb-0 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-              <div class="min-w-0">
+            <dl class="hlm-field-grid text-sm">
+              <div class="hlm-field-wide">
                 <dt class="text-xs text-muted-foreground">{{ copy.grant }}</dt>
                 <dd class="m-0 mt-1 font-semibold wrap-anywhere">
                   <bdi>{{ g.ref }}</bdi>
                 </dd>
               </div>
-              <div class="min-w-0">
+              <div>
                 <dt class="text-xs text-muted-foreground">{{ copy.operator }}</dt>
                 <dd class="m-0 mt-1 font-semibold wrap-anywhere">
                   {{ g.operator ?? copy.unavailableValue }}
                 </dd>
               </div>
-              <div class="min-w-0">
+              <div class="hlm-field-wide">
                 <dt class="text-xs text-muted-foreground">{{ copy.project }}</dt>
                 <dd class="m-0 mt-1 font-semibold wrap-anywhere">
                   {{ g.project ?? copy.unavailableValue }}
                 </dd>
               </div>
-              <div class="min-w-0">
+              <div class="hlm-field-wide">
                 <dt class="text-xs text-muted-foreground">{{ copy.scope }}</dt>
                 <dd class="m-0 mt-1 font-semibold wrap-anywhere">
                   {{ g.scope ?? copy.unavailableValue }}
                 </dd>
               </div>
-              <div class="min-w-0">
+              <div>
                 <dt class="text-xs text-muted-foreground">{{ copy.expires }}</dt>
                 <dd class="m-0 mt-1 font-semibold wrap-anywhere">
                   <app-absolute-time [value]="g.until" />
                 </dd>
               </div>
-              <div class="min-w-0">
+              <div class="hlm-field-wide">
                 <dt class="text-xs text-muted-foreground">{{ copy.reason }}</dt>
                 <dd class="m-0 mt-1 font-semibold wrap-anywhere">{{ g.reason }}</dd>
               </div>
@@ -257,41 +257,41 @@
           </section>
           <section class="border-t border-border p-4">
             <h2 class="m-0 text-base font-semibold">{{ copy.record }}</h2>
-            <dl class="mb-0 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+            <dl class="hlm-field-grid text-sm">
               @if (g.status === 'requested') {
-                <div class="min-w-0">
+                <div>
                   <dt class="text-xs text-muted-foreground">{{ copy.requester }}</dt>
                   <dd class="m-0 mt-1 font-semibold wrap-anywhere">
                     {{ g.requester ?? copy.unavailableValue }}
                   </dd>
                 </div>
-                <div class="min-w-0">
+                <div>
                   <dt class="text-xs text-muted-foreground">{{ copy.approver }}</dt>
                   <dd class="m-0 mt-1 font-semibold wrap-anywhere">
                     {{ state() === 'self' ? g.requester : viewModel().approver }}
                   </dd>
                 </div>
-                <div class="min-w-0">
+                <div>
                   <dt class="text-xs text-muted-foreground">{{ copy.at }}</dt>
                   <dd class="m-0 mt-1 font-semibold wrap-anywhere">
                     <app-absolute-time [value]="g.requestedAt" />
                   </dd>
                 </div>
-                <div class="min-w-0">
+                <div class="hlm-field-wide">
                   <dt class="text-xs text-muted-foreground">{{ copy.requestId }}</dt>
                   <dd class="m-0 mt-1 font-semibold wrap-anywhere">
                     <bdi>{{ g.requestRef ?? copy.unavailableValue }}</bdi>
                   </dd>
                 </div>
               } @else {
-                <div class="min-w-0">
+                <div>
                   <dt class="text-xs text-muted-foreground">
                     {{ g.status === 'revoked' ? copy.revokedBy : copy.approvedBy }}
                   </dt>
                   <dd class="m-0 mt-1 font-semibold wrap-anywhere">{{ viewModel().approver }}</dd>
                 </div>
                 @if (g.status === 'revoked') {
-                  <div class="min-w-0">
+                  <div class="hlm-field-wide">
                     <dt class="text-xs text-muted-foreground">{{ copy.revokeReason }}</dt>
                     <dd class="m-0 mt-1 font-semibold wrap-anywhere">
                       {{

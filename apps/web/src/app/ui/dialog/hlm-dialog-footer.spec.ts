@@ -108,11 +108,14 @@ describe('HlmDialogFooter responsive action order', () => {
   );
 
   it.each([
-    { width: 390, size: 'lg', expectedWidth: 390 },
-    { width: 599, size: 'md', expectedWidth: 599 },
-    { width: 600, size: 'lg', expectedWidth: 568 },
-    { width: 900, size: 'md', expectedWidth: 560 },
-    { width: 900, size: 'lg', expectedWidth: 760 },
+    { width: 390, size: 'xl', expectedWidth: 390, columns: 1 },
+    { width: 599, size: 'md', expectedWidth: 599, columns: 1 },
+    { width: 600, size: 'lg', expectedWidth: 568, columns: 1 },
+    { width: 900, size: 'md', expectedWidth: 560, columns: 2 },
+    { width: 900, size: 'lg', expectedWidth: 760, columns: 2 },
+    { width: 1279, size: 'xl', expectedWidth: 760, columns: 2 },
+    { width: 1280, size: 'lg', expectedWidth: 760, columns: 2 },
+    { width: 1280, size: 'xl', expectedWidth: 1024, columns: 3 },
   ])('keeps $size chrome visible while only the dialog scrolls at $width px', async (scenario) => {
     const { width, size, expectedWidth } = scenario;
     const height = 700;
@@ -126,6 +129,8 @@ describe('HlmDialogFooter responsive action order', () => {
       <hlm-dialog-content class="spartan-dialog-content spartan-dialog-${size}" data-size="${size}">
         <header class="spartan-dialog-header" data-slot="dialog-header"><span hlmDialogStatusIcon aria-hidden="true">!</span>
           <h2>Đổi vai trò</h2><p hlmDialogSubject>Yêu cầu đang chờ xử lý</p></header>
+        <dl class="hlm-field-grid"><div><dt>A</dt><dd>1</dd></div><div><dt>B</dt><dd>2</dd></div>
+          <div class="hlm-field-wide"><dt>ID</dt><dd>${'x'.repeat(256)}</dd></div></dl>
         <div>${'<p>Chi tiết yêu cầu</p>'.repeat(80)}</div>
         <footer class="spartan-dialog-footer" data-slot="dialog-footer"><button>Hủy</button></footer>
       </hlm-dialog-content>
@@ -137,6 +142,12 @@ describe('HlmDialogFooter responsive action order', () => {
     if (!rect) throw new Error('Dialog has no layout box');
     expect(rect.width).toBeCloseTo(expectedWidth, 0);
     expect(rect.height).toBeCloseTo(width < 600 ? height : height - 32, 0);
+    const grid = surface.locator('dl');
+    expect(
+      await grid.evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length),
+    ).toBe(scenario.columns);
+    const wide = await grid.locator('.hlm-field-wide').boundingBox();
+    expect(wide?.width).toBeCloseTo((await grid.boundingBox())!.width, 0);
     const chrome = [header, footer];
     const before = await Promise.all(chrome.map((part) => part.boundingBox()));
     expect(
