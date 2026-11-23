@@ -1,7 +1,7 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
-import { HlmIcon } from './index';
+import { HLM_ICON_NAMES, HlmIcon } from './index';
 
 const ACTIVITY =
   'M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2';
@@ -12,6 +12,15 @@ describe('HlmIcon fixed status geometry', () => {
       imports: [HlmIcon],
       providers: [provideZonelessChangeDetection()],
     }).compileComponents();
+  });
+
+  it.each(HLM_ICON_NAMES)('renders nonempty decorative SVG for %s', (name) => {
+    const fixture = TestBed.createComponent(HlmIcon);
+    fixture.componentRef.setInput('name', name);
+    fixture.detectChanges();
+    const icon = fixture.nativeElement as HTMLElement;
+    expect(icon.getAttribute('aria-hidden')).toBe('true');
+    expect(icon.querySelector('svg[focusable="false"] > :is(path, rect, circle)')).not.toBeNull();
   });
 
   it.each([

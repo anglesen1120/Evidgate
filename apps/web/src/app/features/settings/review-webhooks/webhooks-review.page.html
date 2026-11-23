@@ -25,7 +25,7 @@
       <app-loading-pattern [layout]="'cards'" [label]="note.title" />
     }
     @case ('empty') {
-      <app-empty-pattern [title]="note.title" [description]="note.description" />
+      <app-empty-pattern [icon]="'navPlug'" [title]="note.title" [description]="note.description" />
     }
     @default {
       <app-inline-feedback
@@ -196,7 +196,7 @@
           </header>
           <div class="grid min-w-0 gap-3">
             @if (!ep.events.length) {
-              <app-empty-pattern [bare]="true" [title]="l.auditEmpty" />
+              <app-empty-pattern [icon]="'navAudit'" [bare]="true" [title]="l.auditEmpty" />
             } @else if (state() === 'pending-delivery') {
               <app-status-pill [tone]="'neutral'" [label]="l.pending" />
             } @else if (state() === 'empty-history' || state() === 'no-match') {
@@ -313,6 +313,7 @@
                 <small class="text-xs text-muted-foreground">{{ l.rows }}</small>
               } @else {
                 <app-empty-pattern
+                  [icon]="'navPlug'"
                   [bare]="true"
                   [title]="l.count + ': 0'"
                   [actionLabel]="l.reset"

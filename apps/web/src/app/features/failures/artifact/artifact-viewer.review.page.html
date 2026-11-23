@@ -47,13 +47,13 @@
 } @else if (s === 'loading') {
   <app-loading-pattern [label]="c.loading" />
 } @else if (s === 'empty') {
-  <app-empty-pattern [title]="c.empty" [description]="c.noOutcome" />
+  <app-empty-pattern [icon]="'lucidePaperclip'" [title]="c.empty" [description]="c.noOutcome" />
 } @else if (s === '401') {
   <app-inline-feedback [title]="c.expired" [description]="c.closed" />
 } @else if (snapshot().record; as record) {
   @switch (s) {
     @case ('filtered') {
-      <app-empty-pattern [title]="c.filtered" /><a
+      <app-empty-pattern [icon]="'lucidePaperclip'" [title]="c.filtered" /><a
         hlmBtn
         [variant]="'outline'"
         [routerLink]="[]"

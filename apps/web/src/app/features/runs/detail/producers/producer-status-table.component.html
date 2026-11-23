@@ -29,6 +29,7 @@
     }
     @if (rows.length === 0) {
       <app-empty-pattern
+        [icon]="'lucideActivity'"
         [attr.data-state]="'empty'"
         [title]="copy.empty"
         [description]="copy.emptyDescription"

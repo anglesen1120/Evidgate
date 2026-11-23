@@ -30,7 +30,11 @@ import type { ReviewState } from './repair-review-context';
         <app-loading-pattern [label]="copy.loading" [layout]="'cards'" />
       }
       @case ('empty') {
-        <app-empty-pattern [title]="copy.empty" [description]="copy.emptyNote" />
+        <app-empty-pattern
+          [icon]="'navQueue'"
+          [title]="copy.empty"
+          [description]="copy.emptyNote"
+        />
       }
       @case ('403') {
         <app-forbidden-pattern />

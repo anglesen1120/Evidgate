@@ -1,5 +1,10 @@
 @if (view().patchEmpty; as empty) {
-  <app-empty-pattern [title]="empty" />
+  <app-empty-pattern
+    [icon]="
+      view().state === 'nodiff' || view().state === 'unchanged' ? 'lucideFileDiff' : 'lucideInbox'
+    "
+    [title]="empty"
+  />
 } @else {
   <section hlmCard>
     <header hlmCardHeader class="border-b border-border">

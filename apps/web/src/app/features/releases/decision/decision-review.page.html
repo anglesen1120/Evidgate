@@ -138,6 +138,7 @@
   @if (vm.notice; as notice) {
     @if (vm.state === 'empty' || vm.state === 'no-match') {
       <app-empty-pattern
+        [icon]="'navShield'"
         [title]="notice.title"
         [description]="notice.body"
         [actionLabel]="notice.action"

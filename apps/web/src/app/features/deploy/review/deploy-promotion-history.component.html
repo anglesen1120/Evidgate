@@ -7,6 +7,7 @@
   />
 } @else if (!checks().length) {
   <app-empty-pattern
+    [icon]="'lucideClock'"
     [bare]="true"
     [title]="copy.emptyHistory"
     [description]="copy.emptyHistoryHint"
@@ -89,6 +90,7 @@
   </div>
   @if (!visibleChecks().length) {
     <app-empty-pattern
+      [icon]="'lucideClock'"
       [bare]="true"
       [title]="copy.noMatch"
       [description]="copy.noMatchHint"

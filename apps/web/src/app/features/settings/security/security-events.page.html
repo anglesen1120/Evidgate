@@ -186,6 +186,7 @@
       [status]="store.phase()"
       [loadingLabel]="copy.loading"
       [error]="store.loadError()"
+      [emptyIcon]="'navShieldAlert'"
       [empty]="store.rawCount() === 0"
       [emptyTitle]="store.filtered() ? copy.noMatch : copy.empty"
       [emptyDescription]="store.filtered() ? copy.noMatchDescription : copy.emptyDescription"
