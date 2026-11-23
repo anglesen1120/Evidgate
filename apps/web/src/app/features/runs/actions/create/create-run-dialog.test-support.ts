@@ -83,6 +83,7 @@ export class CreateRunDialogHarness extends ComponentHarness {
   readonly headerClose = this.locatorFor('[data-slot="dialog-close"]');
   readonly footerSubmit = this.locatorFor('footer [data-run-create-submit]');
   readonly bodyForm = this.locatorFor('form');
+  readonly validationSummary = this.locatorForOptional('#run-create-summary');
   async text(): Promise<string> {
     return (await this.host()).text();
   }

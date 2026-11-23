@@ -243,6 +243,14 @@ describe('CreateRunDialogComponent', () => {
     expect(state.createRun.mock.calls[0]?.[1]).toEqual({ manifest_id: MANIFEST });
   });
 
+  it('ignores native form submissions in Replay without running regular validation', async () => {
+    const { dialog } = await renderCreateRun();
+    await dialog.choose('purpose', 'Replay');
+    await (await dialog.bodyForm()).dispatchEvent('submit');
+    expect(await dialog.validationSummary()).toBeNull();
+    expect(state.createRun).not.toHaveBeenCalled();
+  });
+
   it('keeps the footer submit associated with the scrolling body and returns focus on Close', async () => {
     const { dialog, loader, opener } = await renderCreateRun();
     const form = await dialog.bodyForm();

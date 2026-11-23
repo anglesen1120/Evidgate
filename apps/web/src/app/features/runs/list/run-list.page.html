@@ -243,7 +243,7 @@
     [retryEligible]="retryReady() && (store.loadError()?.retryable ?? false)"
     (retry)="store.reload()"
   >
-    <app-run-list-table [rows]="store.visibleRows()" />
+    <app-run-list-table [rows]="store.visibleRows()" [projectId]="projectId" />
   </app-request-state>
   <!-- Filtered pages can have no matches while still offering an older cursor page. -->
   @if (status() === 'ready') {

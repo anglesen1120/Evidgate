@@ -211,6 +211,7 @@ export class CreateRunDialogComponent {
     event?.preventDefault();
     if (
       !this.opened() ||
+      this.draft().purpose === 'replay' ||
       this.store.submitting() ||
       !this.store.retryReady() ||
       !this.scopeMatches() ||

@@ -37,7 +37,14 @@ function run(index: number, changes: Partial<RunSummary> = {}): RunSummary {
 class RunInspectionHarness extends ComponentHarness {
   static hostSelector = 'app-run-list-table';
   readonly view = this.locatorFor('button[aria-haspopup="dialog"]');
+  viewFor(id: string) {
+    return this.locatorFor(`button[aria-label="View ${id}"]`)();
+  }
+  readonly fields = this.documentRootLocatorFactory().locatorForAll(
+    'dl.hlm-field-grid > div > dt + dd',
+  );
   readonly dialog = this.documentRootLocatorFactory().locatorFor('[role="dialog"]');
+  readonly openDialog = this.documentRootLocatorFactory().locatorForOptional('[role="dialog"]');
   readonly close = this.documentRootLocatorFactory().locatorFor('[role="dialog"] [hlmDialogClose]');
 }
 
@@ -53,6 +60,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
   async function render(rows: readonly RunSummary[]) {
     const fixture = TestBed.createComponent(RunListTableComponent);
     fixture.componentRef.setInput('rows', rows);
+    fixture.componentRef.setInput('projectId', 'project-a');
     await fixture.whenStable();
     return { fixture, root: fixture.nativeElement as HTMLElement };
   }
@@ -78,7 +86,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
       evidence: 'calc(14ch + var(--eg-space-4) * 2)',
       decision: 'calc(15ch + var(--eg-space-4) * 2)',
       scope: 'calc(13ch + var(--eg-space-4) * 2)',
-      actions: 'calc(7ch + var(--eg-space-4) * 2)',
+      actions: 'max-content',
     };
     for (const [id, minimum] of Object.entries(minimums)) {
       expect(table.columns().find((column) => column.id === id)?.width?.min).toBe(minimum);
@@ -129,9 +137,43 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     const dialog = await table.dialog();
     expect(await dialog.text()).toContain(run(3).run_id);
     expect(await dialog.text()).toContain('FAIL');
+    expect(await table.fields()).toHaveLength(6);
     expect(router.url).toBe('/?state=complete');
     await (await table.close()).click();
     expect(await view.isFocused()).toBe(true);
+  });
+  it('returns focus to the replacement View button after the table becomes narrow', async () => {
+    const { fixture } = await render([run(1), run(3)]);
+    const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, RunInspectionHarness);
+    const opener = await table.viewFor(run(3).run_id);
+    await opener.focus();
+    await opener.click();
+    fixture.debugElement
+      .query(By.directive(DataTableComponent))
+      .injector.get(DataTableComponent)
+      .narrow.set(true);
+    await fixture.whenStable();
+    await (await table.close()).click();
+    const replacement = await table.viewFor(run(3).run_id);
+    expect(await replacement.isFocused()).toBe(true);
+  });
+  it('keeps the selected run current on append and closes it permanently when removed', async () => {
+    const { fixture } = await render([run(3)]);
+    const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, RunInspectionHarness);
+    await (await table.view()).click();
+    fixture.componentRef.setInput('rows', [run(3, { decision: 'FAIL' }), run(4)]);
+    expect(await (await table.dialog()).text()).toContain('FAIL');
+    fixture.componentRef.setInput('rows', [run(4)]);
+    expect(await table.openDialog()).toBeNull();
+    fixture.componentRef.setInput('rows', [run(3), run(4)]);
+    expect(await table.openDialog()).toBeNull();
+  });
+  it('closes inspection on project change even if the same run ID is present', async () => {
+    const { fixture } = await render([run(3)]);
+    const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, RunInspectionHarness);
+    await (await table.view()).click();
+    fixture.componentRef.setInput('projectId', 'project-b');
+    expect(await table.openDialog()).toBeNull();
   });
   it('keeps collection state, evidence unavailable and stored decisions independent; no outcome column', async () => {
     const unavailable = run(5);

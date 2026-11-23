@@ -296,17 +296,12 @@ for (const locale of LOCALES) {
       for (const width of [768, 800, 900, 1280, 1440]) {
         await page.setViewportSize({ width, height: 800 });
         const host = page.locator('app-run-list-table app-data-table');
-        await host.evaluate(
-          () =>
-            new Promise<void>((resolve) => {
-              requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-            }),
-        );
-        const narrow = (await host.locator('.eg-table-narrow').count()) > 0;
-        expect(
-          narrow,
-          `${width}px uses ${width < 1280 ? 'readable records' : 'desktop columns'}`,
-        ).toBe(width < 1280);
+        const narrow = width < 1280;
+        await expect(
+          host.locator('.eg-table-narrow'),
+          `${width}px uses ${narrow ? 'readable records' : 'desktop columns'}`,
+        ).toHaveCount(narrow ? 1 : 0);
+        await expect(row).toHaveJSProperty('tagName', narrow ? 'LI' : 'TR');
         if (width >= 1280) {
           await expect(
             host.locator('app-decision-chip [hlmBadge].spartan-badge--clipped'),
@@ -318,7 +313,6 @@ for (const locale of LOCALES) {
             .evaluate((element) => element.scrollWidth - element.clientWidth),
           `${width}px table has no hidden horizontal facts`,
         ).toBeLessThanOrEqual(1);
-        await expect(row).toHaveJSProperty('tagName', narrow ? 'LI' : 'TR');
         if (narrow) {
           await expect(row.locator('dt')).toHaveCount(7);
           await expect(row.locator('dd')).toHaveCount(7);

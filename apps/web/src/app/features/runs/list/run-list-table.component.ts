@@ -3,6 +3,8 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
+  inject,
   input,
   linkedSignal,
   TemplateRef,
@@ -47,14 +49,28 @@ type RunCell = TemplateRef<DataTableCellContext<RunSummary>>;
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './run-list-table.component.html',
-  host: { class: 'block min-w-0' },
+  host: { class: 'block min-w-0', tabindex: '-1' },
 })
 export class RunListTableComponent {
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly rows = input.required<readonly RunSummary[]>();
+  readonly projectId = input.required<string | null>();
   protected readonly inspected = linkedSignal<
-    readonly RunSummary[],
-    { row: RunSummary; trigger: HTMLButtonElement } | null
-  >({ source: this.rows, computation: () => null });
+    { rows: readonly RunSummary[]; projectId: string | null },
+    string | null
+  >({
+    source: () => ({ rows: this.rows(), projectId: this.projectId() }),
+    computation: ({ rows, projectId }, previous) =>
+      previous?.value &&
+      previous.source.projectId === projectId &&
+      rows.some((row) => row.run_id === previous.value)
+        ? previous.value
+        : null,
+  });
+  protected readonly inspectedRow = computed(() => {
+    const id = this.inspected();
+    return id ? this.rows().find((row) => row.run_id === id) : undefined;
+  });
   protected readonly rowId = (row: RunSummary) => row.run_id;
   protected readonly displayRef = escapeFormatChars;
   protected readonly displayLabel = escapeFormatLabel;
@@ -69,6 +85,13 @@ export class RunListTableComponent {
   private readonly viewCell = viewChild.required<RunCell>('viewCell');
   protected viewLabel(id: string): string {
     return $localize`:@@runs.list.view-run:View ${id}:runId:`;
+  }
+  protected closeInspection(id: string): void {
+    this.inspected.set(null);
+    const host = this.host.nativeElement;
+    if (!host.isConnected) return;
+    const view = host.ownerDocument.getElementById(`run-view-${id}`);
+    (view && host.contains(view) ? view : host).focus();
   }
   protected readonly copy = {
     caption: $localize`:@@runs.list.table-caption:Project runs`,
@@ -164,7 +187,7 @@ export class RunListTableComponent {
       header: this.copy.actions,
       cell: () => this.copy.view,
       role: 'actions',
-      width: { min: 'calc(7ch + var(--eg-space-4) * 2)', preferred: '1%' },
+      width: { min: 'max-content', preferred: '1%' },
       cellTemplate: this.viewCell(),
     },
   ]);
