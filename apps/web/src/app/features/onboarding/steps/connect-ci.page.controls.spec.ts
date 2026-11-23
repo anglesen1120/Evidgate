@@ -21,7 +21,7 @@ class CiControlsHarness extends ComponentHarness {
   readonly tokenPrefix = this.locatorFor('[data-testid="connect-token-row"] dl dd code');
 
   factLabels(kind: 'binding' | 'token') {
-    return this.locatorForAll(`[data-testid="connect-${kind}-row"] dl dt`)();
+    return this.locatorForAll(`[data-testid="connect-${kind}-row"] > th[scope="row"] dl dt`)();
   }
 }
 

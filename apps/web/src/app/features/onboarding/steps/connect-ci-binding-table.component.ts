@@ -42,18 +42,18 @@ import { CREDENTIAL_STATUS, CredentialRecordComponent } from './credential-recor
         <thead hlmTHead>
           <tr hlmTr>
             <th hlmTh scope="col">{{ repository }}</th>
-            <th hlmTh scope="col" class="w-px">{{ recordCopy.actions }}</th>
+            <th hlmTh scope="col" class="w-px whitespace-nowrap">{{ recordCopy.actions }}</th>
           </tr>
         </thead>
         <tbody hlmTBody>
           @for (binding of bindings(); track binding.id) {
             <tr
               hlmTr
-              class="[&>td]:align-top"
+              class="*:align-top"
               data-testid="connect-binding-row"
               [attr.data-status]="binding.status"
             >
-              <td hlmTd>
+              <th hlmTh scope="row" class="font-normal text-foreground">
                 <bdi class="font-semibold wrap-anywhere text-foreground">{{
                   binding.repository_full_name
                 }}</bdi
@@ -79,7 +79,7 @@ import { CREDENTIAL_STATUS, CredentialRecordComponent } from './credential-recor
                     </dd>
                   </div>
                 </dl>
-              </td>
+              </th>
               <td hlmTd class="[&_button]:whitespace-nowrap">
                 <app-onboarding-record
                   [appOnboardingRecord]="facts"

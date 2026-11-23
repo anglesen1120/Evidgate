@@ -172,7 +172,6 @@
           </div>
         </dl>
       }
-      <!-- These controls use field feedback; a second NgModel validator would announce empty fields before blur. -->
       <form
         *appDesktopMutation
         class="grid min-w-0 max-w-[65ch] gap-(--eg-space-5)"
@@ -387,18 +386,18 @@
           <thead hlmTHead>
             <tr hlmTr>
               <th hlmTh scope="col">{{ tokenNameField.label }}</th>
-              <th hlmTh scope="col" class="w-px">{{ recordCopy.actions }}</th>
+              <th hlmTh scope="col" class="w-px whitespace-nowrap">{{ recordCopy.actions }}</th>
             </tr>
           </thead>
           <tbody hlmTBody>
             @for (token of store.tokens(); track token.id) {
               <tr
                 hlmTr
-                class="[&>td]:align-top"
+                class="*:align-top"
                 data-testid="connect-token-row"
                 [attr.data-status]="token.status"
               >
-                <td hlmTd>
+                <th hlmTh scope="row" class="font-normal text-foreground">
                   <strong
                     class="wrap-anywhere text-foreground"
                     [id]="'connect-token-name-' + token.id"
@@ -425,7 +424,7 @@
                       </dd>
                     </div>
                   </dl>
-                </td>
+                </th>
                 <td hlmTd class="[&_button]:whitespace-nowrap">
                   <div class="flex flex-wrap items-center gap-(--eg-space-2)">
                     <app-onboarding-record
