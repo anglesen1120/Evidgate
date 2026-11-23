@@ -18,6 +18,20 @@ for (const locale of LOCALES) {
         await expect(page.locator('app-project-overview [aria-busy="true"]')).toHaveCount(0);
         await expect(page.locator(WIDGETS)).toHaveCount(8);
         await expect(page.locator('[data-dashboard-run-view]')).toHaveCount(5);
+        const wrapped = await page.locator('[data-dashboard-run-view]').evaluateAll((buttons) =>
+          buttons.some((button) => {
+            const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT);
+            let node: Node | null;
+            while ((node = walker.nextNode())) {
+              if (!node.textContent?.trim()) continue;
+              const range = document.createRange();
+              range.selectNodeContents(node);
+              if (range.getClientRects().length > 1) return true;
+            }
+            return false;
+          }),
+        );
+        expect(wrapped).toBe(false);
         await expect(page.locator('app-project-overview h1')).toHaveCount(1);
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),

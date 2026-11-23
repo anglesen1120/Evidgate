@@ -179,7 +179,11 @@ export class DashboardRunsComponent {
       header: this.copy.view,
       cell: () => this.copy.view,
       role: 'actions',
-      width: 'calc(14ch + (var(--eg-space-4) * 2))',
+      width: {
+        min: 'calc(14ch + var(--eg-space-4) * 2)',
+        preferred: '1%',
+        max: 'calc(14ch + var(--eg-space-4) * 2)',
+      },
       cellTemplate: this.view(),
     },
   ]);
