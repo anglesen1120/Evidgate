@@ -6,6 +6,8 @@ import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import type { ProjectDto, RunPage } from '@evidgate/sdk';
 import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { firstValueFrom, Subject } from 'rxjs';
 import { AuditDataService } from '../../core/data/audit-data.service';
 import { MembersDataService } from '../../core/data/members-data.service';
@@ -179,7 +181,10 @@ describe('OrgOverviewPage', () => {
 
   it('uses one Vietnamese plural form for all counts in both paging states', () => {
     const catalog = new DOMParser().parseFromString(
-      readFileSync('src/locale/messages.vi.xlf', 'utf8'),
+      readFileSync(
+        resolve(dirname(fileURLToPath(import.meta.url)), '../../../locale/messages.vi.xlf'),
+        'utf8',
+      ),
       'application/xml',
     );
     for (const [key, suffix] of [
