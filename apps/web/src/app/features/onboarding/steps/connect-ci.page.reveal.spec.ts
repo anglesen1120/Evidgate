@@ -288,6 +288,8 @@ describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
           document
             .querySelector<HTMLButtonElement>('[data-testid="connect-rotation-confirm"]')!
             .click();
+          // Dialog close emits consent asynchronously; its first stable render can still be busy.
+          await vi.waitFor(() => expect(refresh).toHaveBeenCalledOnce());
           await fixture.whenStable();
         }
         expect(refresh).toHaveBeenCalledExactlyOnceWith('org-1', 'project-1');
