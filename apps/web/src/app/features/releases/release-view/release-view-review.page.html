@@ -46,7 +46,11 @@
   } @else if (snapshot()) {
     <app-inline-feedback [title]="notice.title" [description]="notice.description" />
   } @else {
-    <app-empty-pattern [title]="notice.title" [description]="notice.description" />
+    <app-empty-pattern
+      [icon]="state() === 'empty' || state() === 'no-match' ? 'navShield' : 'lucideInbox'"
+      [title]="notice.title"
+      [description]="notice.description"
+    />
   }
 }
 

@@ -414,6 +414,7 @@
             @if (!page.items.length) {
               <app-request-state
                 [status]="'ready'"
+                [emptyIcon]="'lucideClock'"
                 [empty]="true"
                 [emptyTitle]="copy.historyEmpty"
               />

@@ -50,10 +50,11 @@ const descriptions: Partial<Record<InboxState, readonly [string, string]>> = {
         <app-loading-pattern [layout]="'cards'" [label]="c.loading" />
       }
       @case ('empty') {
-        <app-empty-pattern [title]="c.empty" [description]="c.emptyText" />
+        <app-empty-pattern [icon]="'navInbox'" [title]="c.empty" [description]="c.emptyText" />
       }
       @case ('nomatch') {
         <app-empty-pattern
+          [icon]="'navInbox'"
           [title]="c.noMatch"
           [description]="c.noMatchText"
           [actionLabel]="c.clear"

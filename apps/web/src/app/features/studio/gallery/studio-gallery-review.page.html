@@ -144,9 +144,14 @@
   @if (state() === 'loading') {
     <app-loading-pattern [label]="copy.loading" />
   } @else if (state() === 'empty' || !viewModel().templates.length) {
-    <app-empty-pattern [title]="copy.empty" />
+    <app-empty-pattern [icon]="'navSliders'" [title]="copy.empty" />
   } @else if (!picked()) {
-    <app-empty-pattern [title]="copy.noMatch" [actionLabel]="copy.clear" (action)="clear()" />
+    <app-empty-pattern
+      [icon]="'navSliders'"
+      [title]="copy.noMatch"
+      [actionLabel]="copy.clear"
+      (action)="clear()"
+    />
   }
   @if (showGallery() && viewModel().templates.length) {
     <p role="status" class="m-0 text-xs tabular-nums text-muted-foreground">{{ shown() }}</p>

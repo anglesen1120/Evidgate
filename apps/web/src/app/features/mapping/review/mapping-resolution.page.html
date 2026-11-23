@@ -33,10 +33,15 @@
       <app-loading-pattern [layout]="'cards'" [label]="sheet().description" />
     }
     @case ('empty') {
-      <app-empty-pattern [title]="sheet().title" [description]="sheet().description" />
+      <app-empty-pattern
+        [icon]="'navMap'"
+        [title]="sheet().title"
+        [description]="sheet().description"
+      />
     }
     @case ('filtered') {
       <app-empty-pattern
+        [icon]="'navMap'"
         [title]="sheet().title"
         [description]="sheet().description"
         [actionLabel]="copy.clear"
@@ -239,6 +244,7 @@
         />
         @if (!records().length) {
           <app-empty-pattern
+            [icon]="'navMap'"
             [bare]="true"
             [title]="filter() === 'all' ? copy.emptyQueue : copy.noMatches"
           />

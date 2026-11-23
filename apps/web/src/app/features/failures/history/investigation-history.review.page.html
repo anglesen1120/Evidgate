@@ -48,7 +48,7 @@
     />
   }
   @case ('empty') {
-    <app-empty-pattern [title]="c.empty" [description]="c.emptyBody" />
+    <app-empty-pattern [icon]="'lucideClock'" [title]="c.empty" [description]="c.emptyBody" />
   }
   @case ('403') {
     <app-inline-feedback [tone]="'destructive'" [title]="c.forbidden" [description]="c.access" />
@@ -63,7 +63,12 @@
     />
   }
   @case ('nomatch') {
-    <app-empty-pattern [title]="c.nomatch" [actionLabel]="c.clear" (action)="reload()" />
+    <app-empty-pattern
+      [icon]="'lucideClock'"
+      [title]="c.nomatch"
+      [actionLabel]="c.clear"
+      (action)="reload()"
+    />
   }
   @case ('retention') {
     <app-empty-pattern [title]="c.retention" [description]="c.retentionBody" />
@@ -87,7 +92,11 @@
         >
       </section>
     } @else if (id() === 'case-search-4') {
-      <app-empty-pattern [title]="id() + ' · ' + c.search" [description]="c.noAttempts" />
+      <app-empty-pattern
+        [icon]="'lucideClock'"
+        [title]="id() + ' · ' + c.search"
+        [description]="c.noAttempts"
+      />
     } @else {
       <div class="grid min-w-0 gap-3 min-[390px]:grid-cols-2 md:grid-cols-4">
         @for (tile of tiles(); track tile.label) {

@@ -146,6 +146,7 @@
     <app-request-state
       [status]="historyStatus()"
       [error]="errorOf(store.history.error())"
+      [emptyIcon]="'lucideClock'"
       [empty]="rows().length === 0"
       [emptyTitle]="filter() ? noMatch : empty"
       [retryEligible]="true"

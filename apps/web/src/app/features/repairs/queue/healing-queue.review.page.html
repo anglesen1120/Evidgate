@@ -132,6 +132,7 @@
         />
         @if (!visible().length) {
           <app-empty-pattern
+            [icon]="'navQueue'"
             [bare]="true"
             [title]="c.filtered"
             [description]="c.filteredNote"
@@ -161,10 +162,11 @@
         <app-loading-pattern [layout]="'cards'" [label]="c.loading" />
       }
       @case ('empty') {
-        <app-empty-pattern [title]="c.empty" [description]="c.emptyNote" />
+        <app-empty-pattern [icon]="'navQueue'" [title]="c.empty" [description]="c.emptyNote" />
       }
       @case ('filtered') {
         <app-empty-pattern
+          [icon]="'navQueue'"
           [title]="c.filtered"
           [description]="c.filteredNote"
           [actionLabel]="c.clear"

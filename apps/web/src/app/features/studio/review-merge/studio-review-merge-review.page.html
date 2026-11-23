@@ -33,7 +33,7 @@
     <app-loading-pattern [layout]="'cards'" [label]="copy.loading" />
   }
   @case ('empty') {
-    <app-empty-pattern [title]="copy.empty" />
+    <app-empty-pattern [icon]="'lucideGitMerge'" [title]="copy.empty" />
   }
   @case ('404') {
     <app-empty-pattern [title]="copy.notFound" />

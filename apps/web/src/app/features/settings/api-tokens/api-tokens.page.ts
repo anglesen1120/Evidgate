@@ -143,6 +143,7 @@ import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
       <app-request-state
         [status]="status()"
         [error]="store.loadError()"
+        [emptyIcon]="'navKey'"
         [empty]="store.phase() === 'empty'"
         [emptyTitle]="copy.emptyTitle"
         [emptyDescription]="store.selectedProject() ? copy.emptyDescription : copy.noProjects"

@@ -50,7 +50,7 @@
     />
   }
   @case ('empty') {
-    <app-empty-pattern [title]="c.empty" [description]="c.emptyBody" />
+    <app-empty-pattern [icon]="'navInbox'" [title]="c.empty" [description]="c.emptyBody" />
   }
   @default {
     @if (record(); as r) {

@@ -146,6 +146,7 @@
   </ng-template>
   @if (!store.visible().length) {
     <app-empty-pattern
+      [icon]="'navInbox'"
       [bare]="true"
       [title]="c.noMatch"
       [description]="c.noMatchText"
