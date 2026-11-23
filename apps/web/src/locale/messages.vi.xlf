@@ -3633,6 +3633,9 @@
       <trans-unit id="authoring.tree.import-export" datatype="html"><source>Import and export</source><target>Nhập và xuất dữ liệu</target></trans-unit>
       <trans-unit id="authoring.tree.category-cases" datatype="html"><source>Category cases</source><target>Ca kiểm thử trong danh mục</target></trans-unit>
       <trans-unit id="authoring.tree.loaded-scope" datatype="html"><source>Loaded in this scope</source><target>Đã tải trong phạm vi này</target></trans-unit>
+      <trans-unit id="authoring.tree.direct-items" datatype="html"><source>Direct checklist items</source><target>Mục checklist trực tiếp</target></trans-unit>
+      <trans-unit id="authoring.tree.loaded-cases" datatype="html"><source>Loaded cases</source><target>Ca kiểm thử đã tải</target></trans-unit>
+      <trans-unit id="authoring.case-table.invalid-filters" datatype="html"><source>Check filter values</source><target>Kiểm tra giá trị bộ lọc</target></trans-unit>
       <trans-unit id="authoring.case-table.reset" datatype="html"><source>Reset</source><target>Đặt lại</target></trans-unit>
       <trans-unit id="authoring.tree.hierarchy" datatype="html"><source>Project hierarchy</source><target>Phân cấp dự án</target></trans-unit>
       <trans-unit id="authoring.tree.hierarchy-description" datatype="html"><source>Expand a branch explicitly to load its children. Selecting a scope does not expand it.</source><target>Chủ động mở rộng nhánh để tải các nút con. Chọn phạm vi không làm mở rộng nhánh.</target></trans-unit>

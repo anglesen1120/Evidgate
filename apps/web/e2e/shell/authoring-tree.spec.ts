@@ -405,10 +405,17 @@ for (const locale of LOCALES) {
         await page.goto(base);
         await expect(page.locator(CASE_ROWS)).toContainText('Tuỳ chọn giao hàng');
         const fieldGrid = page.locator('[data-case-filters] .filter-fields');
-        const columns = await fieldGrid.evaluate(
-          (grid) => getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+        const gridLayout = await fieldGrid.evaluate((grid) => {
+          const pane = grid.closest('app-authoring-case-table');
+          if (!pane) throw new Error('Missing case pane');
+          return {
+            widthInEm: pane.clientWidth / parseFloat(getComputedStyle(pane).fontSize),
+            columns: getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+          };
+        });
+        expect(gridLayout.columns).toBe(
+          gridLayout.widthInEm >= 52 ? 5 : gridLayout.widthInEm >= 32 ? 3 : 1,
         );
-        expect(columns).toBe(width >= 1280 ? 5 : width >= 768 ? 3 : 1);
         const widths = await fieldGrid
           .locator('input, button[role="combobox"]')
           .evaluateAll((fields) => fields.map((field) => field.getBoundingClientRect().width));

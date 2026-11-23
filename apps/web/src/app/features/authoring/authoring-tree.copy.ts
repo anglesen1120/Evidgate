@@ -29,6 +29,8 @@ export const AUTHORING_TREE_COPY = {
   table: $localize`:@@authoring.tree.table:Manual cases`,
   importExport: $localize`:@@authoring.tree.import-export:Import and export`,
   categoryCases: $localize`:@@authoring.tree.category-cases:Category cases`,
+  directItems: $localize`:@@authoring.tree.direct-items:Direct checklist items`,
+  loadedCases: $localize`:@@authoring.tree.loaded-cases:Loaded cases`,
   loadedScope: $localize`:@@authoring.tree.loaded-scope:Loaded in this scope`,
 };
 

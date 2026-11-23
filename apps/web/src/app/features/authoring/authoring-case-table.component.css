@@ -2,6 +2,7 @@
   display: grid;
   gap: var(--eg-space-3);
   min-inline-size: 0;
+  container: case-pane / inline-size;
   color: var(--eg-text);
 }
 .lifecycle-strip {
@@ -50,9 +51,12 @@
 .filter-details {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  align-items: end;
+  align-items: start;
   gap: var(--eg-space-3);
   min-inline-size: 0;
+}
+.filter-fields input {
+  block-size: var(--eg-control-touch);
 }
 .filter-disclosure {
   min-inline-size: 0;
@@ -133,12 +137,12 @@ button {
   flex: 1 1 auto;
   font-variant-numeric: tabular-nums;
 }
-@media (min-width: 768px) {
+@container case-pane (min-width: 32em) {
   .filter-fields {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
-@media (min-width: 1280px) {
+@container case-pane (min-width: 52em) {
   .filter-fields {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }

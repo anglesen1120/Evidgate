@@ -9740,6 +9740,9 @@
       <trans-unit id="authoring.tree.import-export" datatype="html"><source>Import and export</source></trans-unit>
       <trans-unit id="authoring.tree.category-cases" datatype="html"><source>Category cases</source></trans-unit>
       <trans-unit id="authoring.tree.loaded-scope" datatype="html"><source>Loaded in this scope</source></trans-unit>
+      <trans-unit id="authoring.tree.direct-items" datatype="html"><source>Direct checklist items</source></trans-unit>
+      <trans-unit id="authoring.tree.loaded-cases" datatype="html"><source>Loaded cases</source></trans-unit>
+      <trans-unit id="authoring.case-table.invalid-filters" datatype="html"><source>Check filter values</source></trans-unit>
       <trans-unit id="authoring.case-table.reset" datatype="html"><source>Reset</source></trans-unit>
       <trans-unit id="authoring.tree.hierarchy" datatype="html"><source>Project hierarchy</source></trans-unit>
       <trans-unit id="authoring.tree.hierarchy-description" datatype="html"><source>Expand a branch explicitly to load its children. Selecting a scope does not expand it.</source></trans-unit>

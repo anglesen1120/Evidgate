@@ -118,18 +118,17 @@ export class AuthoringCaseTableComponent {
   readonly projectEmpty = input(false);
   readonly loadedInventory = computed(() =>
     this.store.status() === 'ready' && !this.busy() && !this.store.error() && !this.store.filtered()
-      ? { nodeId: this.store.query().node_id ?? null, count: this.store.rows().length }
+      ? {
+          nodeId: this.store.query().node_id ?? null,
+          count: this.store.rows().length,
+          partial:
+            !!this.store.nextCursor() || !!this.store.routeCursor() || this.store.browseCapped(),
+        }
       : null,
   );
   readonly emptyProject = computed(() => {
     const loaded = this.loadedInventory();
-    return (
-      !!loaded &&
-      !loaded.nodeId &&
-      loaded.count === 0 &&
-      !this.store.routeCursor() &&
-      !this.store.nextCursor()
-    );
+    return !!loaded && !loaded.nodeId && loaded.count === 0 && !loaded.partial;
   });
   protected readonly hasRows = computed(() => this.store.rows().length > 0);
   protected readonly loadedStates = computed(() => {

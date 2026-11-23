@@ -35,7 +35,12 @@
 }
 @if (!projectEmpty()) {
   <details class="filter-disclosure" data-case-filters open>
-    <summary>{{ copy.filters }}</summary>
+    <summary>
+      {{ copy.filters }}
+      @if (searchTooLong() || itemInvalid()) {
+        <span class="ms-(--eg-space-2) text-(--eg-danger-fg)">{{ copy.invalidFilters }}</span>
+      }
+    </summary>
     <form
       class="filters"
       (ngSubmit)="apply()"
@@ -52,7 +57,10 @@
               (ngModelChange)="choose(field.key, $event)"
               [itemToString]="choiceLabel"
             >
-              <hlm-select-trigger class="w-full" [buttonId]="'authoring-case-' + field.key">
+              <hlm-select-trigger
+                class="h-(--eg-control-touch) w-full"
+                [buttonId]="'authoring-case-' + field.key"
+              >
                 <hlm-select-value [placeholder]="copy.all" />
               </hlm-select-trigger>
               <hlm-select-content *hlmSelectPortal [aria-label]="field.label">
@@ -218,7 +226,7 @@
     }
   }
 </div>
-@if (!projectEmpty() && !store.invalidLink()) {
+@if (!projectEmpty() && !store.invalidLink() && store.status() === 'ready') {
   <div
     role="group"
     class="pagination"

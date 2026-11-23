@@ -3,6 +3,7 @@ import { formatNumber } from '@angular/common';
 export const CASE_TABLE_COPY = {
   scopeHelp: $localize`:@@authoring.case-table.scope-help:Filters search the server list. Authoring coverage means a live automated identity is linked; it is not an execution result.`,
   filters: $localize`:@@authoring.case-table.filters:Filter cases`,
+  invalidFilters: $localize`:@@authoring.case-table.invalid-filters:Check filter values`,
   item: $localize`:@@authoring.case-table.item:Checklist item ID`,
   itemHelp: $localize`:@@authoring.case-table.item-help:Optional exact checklist UUID. Leave blank for every checklist in this scope.`,
   itemError: $localize`:@@authoring.case-table.item-error:Enter a complete checklist UUID or leave this filter blank.`,

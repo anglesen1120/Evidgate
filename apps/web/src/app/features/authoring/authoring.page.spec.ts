@@ -61,6 +61,7 @@ describe('AuthoringPage', () => {
   const selectionStatus = signal<'idle' | 'loading' | 'ready' | 'error'>('ready');
   const init = vi.fn().mockResolvedValue(undefined);
   const retryTree = vi.fn().mockResolvedValue(undefined);
+  const listManualCases = vi.fn<AuthoringDataService['listManualCases']>();
   const selectNode = vi.fn((id: string | null) => id);
   const store = {
     projectId: signal('project'),
@@ -93,6 +94,7 @@ describe('AuthoringPage', () => {
     selectedId.set(selected.node_id);
     path.set([root]);
     init.mockClear();
+    listManualCases.mockReset().mockResolvedValue({ items: [], next_cursor: null });
     retryTree.mockClear();
     selectNode.mockClear();
     TestBed.configureTestingModule({
@@ -102,9 +104,7 @@ describe('AuthoringPage', () => {
         provideRouter([]),
         {
           provide: AuthoringDataService,
-          useValue: {
-            listManualCases: () => Promise.resolve({ items: [], next_cursor: null }),
-          },
+          useValue: { listManualCases },
         },
         {
           provide: ActivatedRoute,
@@ -152,7 +152,7 @@ describe('AuthoringPage', () => {
     expect(await (await harness.table()).text()).toContain('Selected feature');
     expect(await (await harness.selectedId())?.text()).toContain(selected.node_id);
     expect(host(fixture).querySelector('[data-authoring-metrics]')?.textContent).toContain(
-      'Checklist items',
+      'Direct checklist items',
     );
   });
 
@@ -167,8 +167,36 @@ describe('AuthoringPage', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     expect(metrics()?.textContent).not.toContain('Category cases');
-    expect(host(fixture).querySelector('[data-case-clear]')).not.toBeNull();
   });
+
+  it.each(['next cursor', 'route cursor', 'search', 'selected node', 'tree error'])(
+    'does not call the project empty with a %s',
+    async (scenario) => {
+      roots.set({ items: [], nextCursor: null, status: 'ready', error: null });
+      node.set(scenario === 'selected node' ? selected : null);
+      selectedId.set(node()?.node_id ?? null);
+      path.set([]);
+      if (scenario === 'next cursor') {
+        listManualCases.mockResolvedValue({ items: [], next_cursor: 'more' });
+      } else if (scenario === 'route cursor') query.next(convertToParamMap({ cursor: 'page-2' }));
+      else if (scenario === 'search') query.next(convertToParamMap({ q: 'no match' }));
+      else if (scenario === 'selected node')
+        query.next(convertToParamMap({ node_id: selected.node_id }));
+      else {
+        status.set('error');
+        error.set(failure);
+      }
+      const { fixture } = await render();
+      expect(host(fixture).querySelector('[data-authoring-project-empty]')).toBeNull();
+      if (scenario === 'next cursor' || scenario === 'route cursor') {
+        const labels = Array.from(
+          host(fixture).querySelectorAll('[data-authoring-metrics] dt'),
+          (item) => item.textContent?.trim(),
+        );
+        expect(labels).toEqual(['Loaded cases']);
+      }
+    },
+  );
 
   it('restores the addressed node on reload and reacts to browser query and project changes', async () => {
     query.next(convertToParamMap({ node_id: selected.node_id, q: 'untouched' }));

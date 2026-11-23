@@ -142,14 +142,18 @@ export class AuthoringPage {
     if (this.denied() || this.projectEmpty()) return metrics;
     const node = this.store.selectedNode();
     if (node && this.store.selectionStatus() === 'ready' && !this.store.stale()) {
-      metrics.push({ label: this.copy.items, count: node.item_count, scope: node.title });
+      metrics.push({ label: this.copy.directItems, count: node.item_count, scope: node.title });
     }
     const loaded = this.cases()?.loadedInventory();
     if (loaded && loaded.nodeId === (this.scope()?.nodeId ?? null)) {
       const category =
         loaded.nodeId && (node?.kind === 'category' || node?.kind === 'sub_category');
       metrics.push({
-        label: category ? this.copy.categoryCases : this.copy.table,
+        label: loaded.partial
+          ? this.copy.loadedCases
+          : category
+            ? this.copy.categoryCases
+            : this.copy.table,
         count: loaded.count,
         scope: this.copy.loadedScope,
       });
