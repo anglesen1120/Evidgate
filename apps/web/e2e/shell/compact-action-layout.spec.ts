@@ -11,42 +11,40 @@ import {
   withVariants,
 } from './support';
 
+function actionLayoutFailures(elements: Element[]) {
+  if (elements.length === 0) return ['no visible actions'];
+  return elements.flatMap((element) => {
+    // The responsive table can replace its row nodes; scroll and measure the same live snapshot.
+    element.scrollIntoView({ behavior: 'instant', block: 'nearest', inline: 'nearest' });
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const fragments = Array.from(range.getClientRects()).filter((rect) => rect.width > 0);
+    const lines = new Set(fragments.map((rect) => Math.round(rect.top))).size;
+    const bounds = element.getBoundingClientRect();
+    const cell = element.closest('td, dd')?.getBoundingClientRect();
+    const scroller = element.closest('.spartan-table-container')?.getBoundingClientRect();
+    const left = Math.max(cell?.left ?? 0, scroller?.left ?? 0, 0);
+    const right = Math.min(cell?.right ?? innerWidth, scroller?.right ?? innerWidth, innerWidth);
+    const textFits = fragments.every(
+      (rect) => rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1,
+    );
+    const reachable = bounds.left >= left - 1 && bounds.right <= right + 1;
+    return lines === 1 && textFits && reachable
+      ? []
+      : [{ label: element.textContent?.trim(), lines, textFits, reachable }];
+  });
+}
+
 async function expectSingleLineActions(page: Page, buttons: Locator): Promise<void> {
   await expect(buttons.first()).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
   for (const width of [390, 768, 900, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    await expect(buttons.first()).toBeVisible();
-    for (const button of await buttons.all()) {
-      // A narrow table may scroll locally: its complete action must be reachable in the scroller.
-      await button.scrollIntoViewIfNeeded();
-      const layout = await button.evaluate((element) => {
-        const range = document.createRange();
-        range.selectNodeContents(element);
-        const lines = Array.from(range.getClientRects()).filter((rect) => rect.width > 0);
-        const bounds = element.getBoundingClientRect();
-        const cell = element.closest('td, dd')?.getBoundingClientRect();
-        const scroller = element.closest('.spartan-table-container')?.getBoundingClientRect();
-        const left = Math.max(cell?.left ?? 0, scroller?.left ?? 0, 0);
-        const right = Math.min(
-          cell?.right ?? innerWidth,
-          scroller?.right ?? innerWidth,
-          innerWidth,
-        );
-        return {
-          lines: lines.length,
-          textFits: lines.every(
-            (line) => line.left >= bounds.left - 1 && line.right <= bounds.right + 1,
-          ),
-          reachable: bounds.left >= left - 1 && bounds.right <= right + 1,
-        };
-      });
-      expect(layout, `short action at ${width}px`).toEqual({
-        lines: 1,
-        textFits: true,
-        reachable: true,
-      });
-    }
+    await expect
+      .poll(() => buttons.evaluateAll(actionLayoutFailures), {
+        message: `short actions at ${width}px`,
+      })
+      .toEqual([]);
   }
 }
 
@@ -55,14 +53,19 @@ for (const locale of LOCALES) {
     test.describe(`Short actions (${locale}, ${theme})`, () => {
       test.beforeEach(async ({ page }) => seedStoredTheme(page, theme));
 
-      test('quota state View labels fit on one line', async ({ page }) => {
+      test('quota project and state View labels fit on one line', async ({ page }) => {
         await page.goto(
           withVariants(localePath(locale, `/orgs/${ORG_ACME}/settings/quota-retention`), [
             SETTINGS_ADMIN_GRANTS,
-            '?fixture.variant.getUsageSummary=warn',
+            '?fixture.variant.getUsageSummary=per-project',
           ]),
         );
-        await expectSingleLineActions(page, page.locator('[data-quota-view]'));
+        const project = page.locator('[data-quota-projects] [data-quota-view]:visible');
+        const state = page.locator(
+          'table[aria-labelledby="quota-state-title"] [data-quota-view]:visible',
+        );
+        await expectSingleLineActions(page, project);
+        await expectSingleLineActions(page, state);
       });
 
       test('onboarding resource and credential View labels fit on one line', async ({ page }) => {
@@ -79,13 +82,23 @@ for (const locale of LOCALES) {
         await page.goto(runDetailPath({ locale }));
         const copy = page.locator('#run-summary-title + app-copy-value-button button');
         await expect(copy).toHaveText(locale === 'vi' ? 'Sao chép' : 'Copy');
+        await expect(copy).toHaveCSS('white-space', 'nowrap');
+        const id = page.locator('#run-summary-title bdi');
+        // Stress only the display: the fixture service's real run ID must remain a valid UUID.
+        const longId = 'a'.repeat(128);
+        await id.evaluate((node, value) => {
+          node.textContent = value;
+        }, longId);
         await expectSingleLineActions(page, copy);
         await page.setViewportSize({ width: 390, height: 900 });
-        const idEnd = await page
-          .locator('#run-summary-title bdi')
-          .evaluate((id) => id.getBoundingClientRect().right);
-        const copyStart = await copy.evaluate((button) => button.getBoundingClientRect().left);
-        expect(idEnd).toBeLessThanOrEqual(copyStart);
+        await expect(id).toHaveText(longId);
+        await expect
+          .poll(async () => {
+            const idEnd = await id.evaluate((node) => node.getBoundingClientRect().right);
+            const copyStart = await copy.evaluate((node) => node.getBoundingClientRect().left);
+            return idEnd - copyStart;
+          })
+          .toBeLessThanOrEqual(0);
       });
     });
   }
