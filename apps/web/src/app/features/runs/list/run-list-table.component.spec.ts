@@ -83,7 +83,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     const minimums = {
       id: 'calc(17ch + var(--eg-control-touch) + var(--eg-space-4) * 2 + var(--eg-space-2))',
       state: 'calc(12ch + var(--eg-space-4) * 2)',
-      evidence: 'calc(14ch + var(--eg-space-4) * 2)',
+      evidence: 'max-content',
       decision: 'calc(15ch + var(--eg-space-4) * 2)',
       scope: 'calc(13ch + var(--eg-space-4) * 2)',
       actions: 'max-content',
@@ -312,6 +312,17 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
         ?.closest('tr[data-row-id]')
         ?.getAttribute('data-row-id'),
     ).toBe(row.run_id);
+  });
+  it('renders a missing ref as body-font placeholder text and keeps real refs monospaced', async () => {
+    const row = run(1);
+    const { root } = await render([run(1), run(2, { ref: { ...row.ref, name: null } })]);
+    const refs = [...root.querySelectorAll('.ref-cell > bdi')];
+    const missing = refs.filter((ref) => ref.textContent?.includes('Ref unavailable'));
+    const real = refs.filter((ref) => ref.textContent?.includes('main'));
+    expect(missing.length).toBeGreaterThan(0);
+    expect(real.length).toBeGreaterThan(0);
+    expect(missing.every((ref) => !ref.classList.contains('font-mono'))).toBe(true);
+    expect(real.every((ref) => ref.classList.contains('font-mono'))).toBe(true);
   });
   it('escapes and isolates format characters in rerun and reprocess labels', async () => {
     const { root } = await render([
