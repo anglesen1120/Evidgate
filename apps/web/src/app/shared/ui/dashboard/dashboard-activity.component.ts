@@ -155,6 +155,11 @@ export class DashboardActivityComponent {
               header: $localize`:@@shared.dashboard.activity-details-column:Details`,
               role: 'actions' as const,
               cell: () => '',
+              width: {
+                min: 'calc(14ch + var(--eg-space-4) * 2)',
+                preferred: '1%',
+                max: 'calc(14ch + var(--eg-space-4) * 2)',
+              },
               cellTemplate: action,
             },
           ]
