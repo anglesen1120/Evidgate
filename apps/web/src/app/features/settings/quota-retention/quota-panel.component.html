@@ -159,7 +159,7 @@
               type="button"
               data-quota-view
               [attr.aria-haspopup]="'dialog'"
-              class="min-h-(--eg-control-touch)"
+              class="short-action min-h-(--eg-control-touch)"
               [attr.aria-label]="
                 copy.view + ' · ' + metricLabel(metric.metric) + ' · ' + row.project_id
               "
@@ -227,7 +227,7 @@
                         type="button"
                         [attr.aria-haspopup]="'dialog'"
                         data-quota-view
-                        class="min-h-(--eg-control-touch)"
+                        class="short-action min-h-(--eg-control-touch)"
                         [attr.aria-label]="copy.view + ' · ' + metricLabel(metric.metric)"
                         (click)="inspected.set({ row: metric, metric: metric.metric, trigger })"
                       >
