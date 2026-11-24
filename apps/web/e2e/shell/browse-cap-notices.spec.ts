@@ -14,15 +14,16 @@ import {
 } from './support';
 
 const PROJECT_PATH = `/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}`;
+const CASE_PAGE_SIZE = 50;
 const SURFACES = [
   {
     name: 'authoring cases',
-    path: `${PROJECT_PATH}/authoring?limit=200`,
+    path: `${PROJECT_PATH}/authoring?limit=${CASE_PAGE_SIZE}`,
     operation: 'listManualCases',
     endpoint: `/v1/projects/${PROJECT_STOREFRONT}/authoring/manual-cases`,
     notice: '[data-case-browse-capped]',
-    more: '[data-case-load-more]',
-    count: '[data-case-loaded]',
+    pager: 'app-authoring-case-table .pagination > app-data-table-pager',
+    rows: 'app-authoring-case-rows [data-row-id]',
     title: {
       en: 'Case list is at its load limit',
       vi: 'Danh sách ca kiểm thử đã đạt giới hạn tải',
@@ -36,12 +37,12 @@ const SURFACES = [
   },
   {
     name: 'catalog cases',
-    path: `/dev/catalog-list${PROJECT_PATH}?limit=200`,
+    path: `/dev/catalog-list${PROJECT_PATH}?limit=${CASE_PAGE_SIZE}`,
     operation: 'listCases',
     endpoint: `/v1/projects/${PROJECT_STOREFRONT}/cases`,
     notice: '[data-catalog-browse-capped]',
-    more: '[data-catalog-load-more]',
-    count: '[data-catalog-loaded]',
+    pager: '[data-catalog-pagination]',
+    rows: 'app-case-list-table [data-row-id]',
     title: {
       en: 'Case list is at its load limit',
       vi: 'Danh sách ca đã đạt giới hạn tải',
@@ -60,7 +61,7 @@ const SURFACES = [
     endpoint: `/v1/projects/${PROJECT_STOREFRONT}/authoring/tree`,
     notice: '[data-tree-browse-capped]',
     more: '[data-more="roots"]',
-    count: 'app-authoring-tree-pane [data-node-id]',
+    rows: 'app-authoring-tree-pane [data-node-id]',
     title: {
       en: 'Hierarchy list is at its load limit',
       vi: 'Danh sách phân cấp đã đạt giới hạn tải',
@@ -88,18 +89,6 @@ async function reads(page: Page, endpoint: string): Promise<string[]> {
   );
 }
 
-async function expectLoaded(page: Page, surface: Surface, count: number): Promise<void> {
-  if (surface.operation === 'listAuthoringTree') {
-    await expect(page.locator(surface.count)).toHaveCount(count);
-  } else {
-    await expect(page.locator(surface.count)).toContainText(
-      new Intl.NumberFormat((await page.locator('html').getAttribute('lang')) ?? 'en').format(
-        count,
-      ),
-    );
-  }
-}
-
 /** The cap the fixture build is seeded with, so the walk reaches it in one page per surface. */
 const SEEDED_CAP = 25;
 
@@ -114,14 +103,22 @@ async function reachCap(page: Page, surface: Surface, locale: ShellLocale): Prom
     ]),
   );
   await expect(page.locator('html')).toHaveAttribute('lang', locale);
-  await expectLoaded(page, surface, SEEDED_CAP);
+  await expect(page.locator(surface.rows)).toHaveCount(SEEDED_CAP);
   await expect(page.locator(surface.notice)).toBeVisible();
-  await expect(page.locator(surface.more)).toHaveCount(0);
+  if (surface.operation === 'listAuthoringTree') {
+    await expect(page.locator(surface.more)).toHaveCount(0);
+  } else {
+    const pager = page.locator(surface.pager);
+    await expect(pager.getByRole('status')).toHaveText(locale === 'en' ? 'Page 1' : 'Trang 1');
+    await expect(pager.locator('[data-page="next"]')).toBeDisabled();
+  }
   const requests = await reads(page, surface.endpoint);
   expect(requests).toHaveLength(1);
-  expect(requests.map((url) => new URL(url, page.url()).searchParams.get('cursor'))).toEqual([
-    null,
-  ]);
+  const query = new URL(requests[0], page.url()).searchParams;
+  expect(query.get('cursor')).toBeNull();
+  if (surface.operation !== 'listAuthoringTree') {
+    expect(query.get('limit')).toBe(String(CASE_PAGE_SIZE));
+  }
 }
 
 for (const surface of SURFACES) {
