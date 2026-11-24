@@ -62,7 +62,7 @@ for (const locale of LOCALES) {
     for (const width of [1440, 1280, 1024]) {
       await page.setViewportSize({ width, height: 900 });
       await expect(table.locator('[data-row-id]')).toHaveCount(20);
-      await expect(table.locator('.eg-table-long, .eg-table-sticky')).toHaveCount(0);
+      await expect(table.locator('.eg-table-sticky')).toHaveCount(0);
       await expect
         .poll(async () => (await ordinaryGeometry(table)).horizontalOverflow)
         .toBeLessThanOrEqual(1);

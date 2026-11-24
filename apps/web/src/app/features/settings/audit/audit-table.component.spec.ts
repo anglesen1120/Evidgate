@@ -372,10 +372,8 @@ describe('AuditTableComponent', () => {
     ]);
     const table = fixture.debugElement.query(By.directive(DataTableComponent))
       .componentInstance as DataTableComponent<AuditEntryDto>;
-    expect(table.flow()).toBe('page');
     expect(table.fitToContainer()).toBe(true);
     expect(table.rowHeight()).toBe('compact');
-    expect(root.querySelector('.eg-table-long')).toBeNull();
     expect(root.querySelector('cdk-virtual-scroll-viewport')).toBeNull();
     expect(root.querySelector('app-absolute-time')?.classList.contains('whitespace-nowrap')).toBe(
       true,

@@ -70,7 +70,6 @@ function records(count: number): readonly GalleryRecord[] {
         [rows]="specimens"
         [rowId]="recordId"
         [caption]="roleCaption"
-        [flow]="'page'"
         [fitToContainer]="true"
         [attr.data-demo]="'gallery-column-roles'"
       >

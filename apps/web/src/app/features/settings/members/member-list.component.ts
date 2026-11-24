@@ -297,7 +297,6 @@ export const MEMBERS_COPY = {
     </ng-template>
     <app-data-table
       class="[&_tbody_td]:align-middle [&_[data-column-role=actions]]:whitespace-nowrap [&_[data-column-role=actions]]:wrap-normal"
-      [flow]="'page'"
       [columns]="columns()"
       [rows]="members()"
       [rowId]="rowId"

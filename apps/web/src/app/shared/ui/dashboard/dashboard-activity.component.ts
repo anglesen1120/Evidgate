@@ -60,7 +60,6 @@ import { DashboardWidgetComponent } from './dashboard-widget.component';
         [columns]="columns()"
         [rowId]="rowId"
         [caption]="title"
-        [flow]="'page'"
         [fitToContainer]="true"
       />
     </app-dashboard-widget>

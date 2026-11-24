@@ -75,7 +75,6 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     expect(root.querySelector('[data-run-decision] [hlmBadge]')).not.toBeNull();
     expect(root.querySelector('[data-run-rerun] [hlmBadge]')).not.toBeNull();
     expect(root.querySelector('.eg-table-layout')).not.toBeNull();
-    expect(root.querySelector('.eg-table-long')).not.toBeNull();
   });
   it('budgets all seven desktop facts while retaining complete identifier provenance', async () => {
     const { fixture, root } = await render([run(1)]);
