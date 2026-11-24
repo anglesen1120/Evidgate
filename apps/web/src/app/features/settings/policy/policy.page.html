@@ -179,7 +179,7 @@
 @if (store.phase() === 'not_found') {
   <p hlmAlert class="text-muted-foreground">{{ copy.notFound }}</p>
 }
-@if (store.loadError(); as error) {
+@if (store.phase() !== 'not_found' && store.loadError(); as error) {
   <div hlmAlert [variant]="'destructive'" class="mb-3 wrap-anywhere" role="alert">
     <code>{{ error.code }}</code>
     <p>{{ error.message }}</p>

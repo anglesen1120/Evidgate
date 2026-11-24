@@ -27,13 +27,23 @@ describe('MembersDataService page size', () => {
   });
   afterEach(() => http.verify());
 
+  it('preserves the shared limit of 50 when the limit is omitted', async () => {
+    const result = service.listMemberships('org-1');
+    const request = await takeRequest(http, `${BASE}/orgs/org-1/memberships`);
+    const url = new URL(request.request.urlWithParams);
+    expect(url.searchParams.get('limit')).toBe('50');
+    expect(url.searchParams.has('cursor')).toBe(false);
+    request.flush({ items: [], next_cursor: null }, { headers: JSON_HEADERS });
+    await expect(result).resolves.toEqual({ items: [], next_cursor: null });
+  });
+
   it.each([undefined, 20, 50, 100])(
     'sends the selected limit %s with the opaque cursor',
     async (limit) => {
       const result = service.listMemberships('org-1', 'opaque+/cursor=', limit);
       const request = await takeRequest(http, `${BASE}/orgs/org-1/memberships`);
       const url = new URL(request.request.urlWithParams);
-      expect(url.searchParams.get('limit')).toBe(String(limit ?? 20));
+      expect(url.searchParams.get('limit')).toBe(String(limit ?? 50));
       expect(url.searchParams.get('cursor')).toBe('opaque+/cursor=');
       request.flush({ items: [], next_cursor: null }, { headers: JSON_HEADERS });
       await expect(result).resolves.toEqual({ items: [], next_cursor: null });

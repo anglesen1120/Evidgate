@@ -26,6 +26,17 @@ type WriteAttempt = {
   error: ApiError | null;
 };
 const idleAttempt = (): WriteAttempt => ({ scope: null, phase: 'idle', error: null });
+// Adapter failures may contain private request data; expose only a safe, retryable read failure.
+const UNRESOLVED_FAILURE: ApiError = {
+  kind: 'unexpected',
+  status: 0,
+  code: 'request_unresolved',
+  message: 'The request did not complete, so nothing was confirmed. Try again.',
+  requestId: null,
+  retryable: true,
+  details: [],
+  retryAfterSeconds: null,
+};
 // A round trip org A -> B -> A builds a fresh scope object for the same list, so an answer that
 // belongs to A is still A's: name the list by its values, never by an object's identity.
 const sameScope = (left: Scope | null | undefined, right: Scope | null | undefined): boolean =>
@@ -206,7 +217,7 @@ export const ApiTokensStore = signalStore(
     loadError: computed(() => {
       if (!store.scope()) return null;
       const error = store.pageResource.error();
-      return isApiRequestError(error) ? error.error : null;
+      return isApiRequestError(error) ? error.error : error ? UNRESOLVED_FAILURE : null;
     }),
     hasNext: computed(() => {
       const next = store.visiblePage()?.next_cursor;

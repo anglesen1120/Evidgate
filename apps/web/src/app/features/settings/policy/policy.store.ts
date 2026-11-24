@@ -218,6 +218,8 @@ export class PolicyStore {
   async setPageSize(size: number): Promise<void> {
     if (![20, 50, 100].includes(size) || size === this.pageSizeSignal()) return;
     this.pageSizeSignal.set(size);
+    // Rows served for another size cannot be shown under the new size's label.
+    this.revisionsSignal.set(NO_REVISIONS);
     await this.reload();
   }
 
@@ -244,6 +246,7 @@ export class PolicyStore {
       if (generation !== this.generation) return;
       if (!read.ok) {
         if (!isApiRequestError(read.error)) throw read.error;
+        if (classifyReadFailure(read.error).notFound) this.settleFailure(read.error);
         this.loadErrorSignal.set(read.error.error);
         return;
       }
@@ -380,36 +383,46 @@ export class PolicyStore {
 
   /** The one read every entry point shares (open's list, reload, a publish's refresh). */
   private async readList(anchor: string, generation: number, foreground: boolean): Promise<void> {
-    this.anchorRevisionId = anchor;
-    this.requestCursors = [undefined];
-    this.pendingPage = null;
-    this.pageSignal.set(1);
-    this.pagingSignal.set(false);
-    this.nextCursorSignal.set(null);
+    // Do not relabel retained background rows until the replacement page actually arrives.
+    // A foreground reload starts a new cursor walk immediately.
+    this.pagingSignal.set(true);
     if (foreground) {
+      this.anchorRevisionId = anchor;
+      this.requestCursors = [undefined];
+      this.pendingPage = null;
+      this.pageSignal.set(1);
+      this.nextCursorSignal.set(null);
       this.phaseSignal.set('loading');
       this.loadErrorSignal.set(null);
     }
 
-    const read = await settledRead(() =>
-      this.data.listRevisions(anchor, undefined, this.pageSizeSignal()),
-    );
-    if (generation !== this.generation) {
-      return;
-    }
-    if (!read.ok) {
-      // A background refresh must not cost the revision the server stored, and the rows stay as
-      // they are; its refusal still goes to the page's alert, because the screen shows a head that
-      // is no longer true. The next read that succeeds clears it.
-      if (foreground) {
-        this.settleFailure(read.error);
-      } else if (isApiRequestError(read.error)) {
-        this.loadErrorSignal.set(read.error.error);
+    try {
+      const read = await settledRead(() =>
+        this.data.listRevisions(anchor, undefined, this.pageSizeSignal()),
+      );
+      if (generation !== this.generation) {
+        return;
       }
-      return;
-    }
+      if (!read.ok) {
+        // A recoverable background failure keeps the committed rows and cursor walk. An access
+        // refusal instead clears every retained object, just like a foreground refusal.
+        if (foreground || classifyReadFailure(read.error).notFound) {
+          this.settleFailure(read.error);
+        }
+        if (isApiRequestError(read.error)) {
+          this.loadErrorSignal.set(read.error.error);
+        }
+        return;
+      }
 
-    this.applyPage(read.value);
+      this.anchorRevisionId = anchor;
+      this.requestCursors = [undefined];
+      this.pendingPage = null;
+      this.pageSignal.set(1);
+      this.applyPage(read.value);
+    } finally {
+      if (generation === this.generation) this.pagingSignal.set(false);
+    }
   }
 
   /** Writes one served page as the list, the cursor and the head the next publish quotes. */
@@ -424,6 +437,13 @@ export class PolicyStore {
   /** Writes what one failed read means: `not_found`, or `error` with the server's own copy. */
   private settleFailure(error: unknown): void {
     const failure = classifyReadFailure(error);
+    if (failure.notFound) {
+      // Every retained object belongs to the access that was just refused. Invalidate pending
+      // body and project reads too, so an older answer cannot repopulate the cleared view.
+      this.generation += 1;
+      this.clearState();
+      this.bodies.clear();
+    }
     if (failure.error !== null) {
       this.loadErrorSignal.set(failure.error);
     }

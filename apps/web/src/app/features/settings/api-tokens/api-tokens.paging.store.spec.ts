@@ -71,6 +71,44 @@ describe('ApiTokensStore record pages', () => {
     expect(h.store.loadError()).toBeNull();
   });
 
+  it('retains safe metadata after a plain later-page error and retries that cursor', async () => {
+    const h = mount(undefined, { query: { project: 'project-1', marker: 'keep' } });
+    h.list.mockResolvedValueOnce({ items: [ROW], next_cursor: 'middle' });
+    await h.settle();
+    h.list.mockRejectedValueOnce(new Error('private adapter request details'));
+    h.store.next();
+    await h.settle();
+    expect(h.store.phase()).toBe('success');
+    expect(h.store.page()).toBe(1);
+    expect(h.store.rows()).toEqual([ROW]);
+    expect(h.store.cursor()).toBe('middle');
+    expect(h.store.loadError()).toMatchObject({
+      kind: 'unexpected',
+      code: 'request_unresolved',
+      retryable: true,
+      requestId: null,
+      details: [],
+    });
+    expect(JSON.stringify(h.store.loadError())).not.toContain('private adapter request details');
+    h.list.mockResolvedValueOnce({ items: [{ ...ROW, id: 'second' }], next_cursor: null });
+    h.store.reload();
+    await h.settle();
+    expect(h.list).toHaveBeenLastCalledWith('project-1', 'middle', expect.any(AbortSignal), 20);
+    expect(h.store.page()).toBe(2);
+    expect(h.store.rows().map((row) => row.id)).toEqual(['second']);
+    expect(h.store.loadError()).toBeNull();
+  });
+
+  it('exposes a retryable generic failure when the first read throws a plain error', async () => {
+    const h = mount(() => Promise.reject(new Error('private first-page details')));
+    await h.settle();
+    expect(h.store.phase()).toBe('error');
+    expect(h.store.rows()).toEqual([]);
+    expect(h.store.loadError()?.kind).toBe('unexpected');
+    expect(h.store.loadError()?.retryable).toBe(true);
+    expect(JSON.stringify(h.store.loadError())).not.toContain('private first-page details');
+  });
+
   it('does not retain token metadata after a later authorization refusal', async () => {
     const h = mount();
     h.list.mockResolvedValueOnce({ items: [ROW], next_cursor: 'middle' });

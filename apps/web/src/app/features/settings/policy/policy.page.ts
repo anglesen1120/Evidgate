@@ -133,6 +133,15 @@ export class PolicyPage {
   constructor() {
     if (this.revisionId()) void this.store.open(this.revisionId());
     inject(DestroyRef).onDestroy(() => this.store.reset());
+    effect(() => {
+      if (this.store.phase() === 'not_found') {
+        untracked(() => {
+          this.dialog()?.close();
+          this.viewed.set(null);
+          this.published.set(null);
+        });
+      }
+    });
     let previousOrg = this.session.currentOrg()?.id ?? null;
     let previousProject = this.session.currentProject()?.id ?? null;
     effect(() => {

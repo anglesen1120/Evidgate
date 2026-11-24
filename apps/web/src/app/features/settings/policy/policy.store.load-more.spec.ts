@@ -247,6 +247,134 @@ describe('PolicyStore (09.7.1-T4)', () => {
       expect(data.listCalls.at(-1)?.cursor).toBe('1');
     });
 
+    it('preserves the committed page and cursors when a publish refresh fails', async () => {
+      data.pages = [
+        page([summary(ANCHOR_ID, 1, 'retired')], '1', HEAD_ID),
+        page([summary(SECOND_ID, 2, 'draft')], '2', HEAD_ID),
+        page([summary(HEAD_ID, 3, 'active')], null, HEAD_ID),
+      ];
+      await store.open(ANCHOR_ID);
+      await store.loadMore();
+      data.publishAnswer = {
+        created: true,
+        revision: revision(HEAD_ID, PROJECT_ID, 3, 'active'),
+      };
+      data.listManual = true;
+      expect((await store.publish('{}')).kind).toBe('created');
+      expect(store.paging()).toBe(true);
+      await store.loadMore();
+      await store.previousPage();
+      expect(data.pendingLists).toHaveLength(1);
+      expect(store.page()).toBe(2);
+      expect(store.revisions().map((row) => row.id)).toEqual([SECOND_ID]);
+      data.failList(
+        0,
+        typedFailure(
+          { error: { code: 'unavailable', message: 'Busy', request_id: HEAD_ID, retryable: true } },
+          'unavailable',
+          503,
+        ),
+      );
+      await vi.waitFor(() => expect(store.loadError()?.kind).toBe('unavailable'));
+      expect(store.phase()).toBe('ready');
+      expect(store.page()).toBe(2);
+      expect(store.revisions().map((row) => row.id)).toEqual([SECOND_ID]);
+      expect(store.hasMore()).toBe(true);
+      expect(store.headRevisionId()).toBe(HEAD_ID);
+      expect(store.paging()).toBe(false);
+      data.listManual = false;
+      await store.loadMore();
+      expect(data.listCalls.at(-1)?.cursor).toBe('2');
+      expect(store.page()).toBe(3);
+      await store.previousPage();
+      expect(data.listCalls.at(-1)?.cursor).toBe('1');
+      expect(store.revisions().map((row) => row.id)).toEqual([SECOND_ID]);
+      await store.previousPage();
+      expect(store.page()).toBe(1);
+      expect(data.listCalls.at(-1)?.cursor).toBeUndefined();
+    });
+
+    it('serializes Next after a deferred publish refresh before committing cursor history', async () => {
+      const first = page([summary(ANCHOR_ID, 1, 'retired')], '1', HEAD_ID);
+      const second = page([summary(SECOND_ID, 2, 'draft')], '2', HEAD_ID);
+      const third = page([summary(HEAD_ID, 3, 'active')], null, HEAD_ID);
+      data.pages = [first, second, third];
+      await store.open(ANCHOR_ID);
+      await store.loadMore();
+      data.publishAnswer = {
+        created: true,
+        revision: revision(HEAD_ID, PROJECT_ID, 3, 'active'),
+      };
+      data.listManual = true;
+      expect((await store.publish('{}')).kind).toBe('created');
+      expect(store.page()).toBe(2);
+      expect(store.paging()).toBe(true);
+
+      // Neither direction may create a competing answer for the refresh's generation.
+      await store.loadMore();
+      await store.previousPage();
+      expect(data.pendingLists).toHaveLength(1);
+      expect(data.listCalls).toHaveLength(3);
+      expect(store.page()).toBe(2);
+      data.settleList(0, first);
+      await vi.waitFor(() => expect(store.paging()).toBe(false));
+      expect(store.page()).toBe(1);
+      expect(store.revisions().map((row) => row.id)).toEqual([ANCHOR_ID]);
+
+      const next = store.loadMore();
+      expect(data.listCalls.at(-1)?.cursor).toBe('1');
+      data.settleList(1, second);
+      await next;
+      expect(store.page()).toBe(2);
+      expect(store.revisions().map((row) => row.id)).toEqual([SECOND_ID]);
+      data.listManual = false;
+      await store.loadMore();
+      expect(store.page()).toBe(3);
+      expect(store.revisions().map((row) => row.id)).toEqual([HEAD_ID]);
+      await store.previousPage();
+      expect(data.listCalls.at(-1)?.cursor).toBe('1');
+      expect(store.page()).toBe(2);
+      expect(store.revisions().map((row) => row.id)).toEqual([SECOND_ID]);
+      await store.previousPage();
+      expect(data.listCalls.at(-1)?.cursor).toBeUndefined();
+      expect(store.page()).toBe(1);
+      expect(store.revisions().map((row) => row.id)).toEqual([ANCHOR_ID]);
+    });
+
+    it.each([50, 100])('clears old rows when a foreground size %i reload fails', async (size) => {
+      data.pages = [
+        page([summary(ANCHOR_ID, 1, 'retired')], '1', HEAD_ID),
+        page([summary(SECOND_ID, 2, 'active')], null, HEAD_ID),
+      ];
+      await store.open(ANCHOR_ID);
+      await store.loadMore();
+      data.listManual = true;
+      const reload = store.setPageSize(size);
+      expect(store.pageSize()).toBe(size);
+      expect(store.revisions()).toEqual([]);
+      data.failList(
+        0,
+        typedFailure(
+          { error: { code: 'unavailable', message: 'Busy', request_id: HEAD_ID, retryable: true } },
+          'unavailable',
+          503,
+        ),
+      );
+      await reload;
+      expect(store.phase()).toBe('error');
+      expect(store.revisions()).toEqual([]);
+      expect(store.hasMore()).toBe(false);
+      expect(store.page()).toBe(1);
+      expect(store.pageSize()).toBe(size);
+      data.listManual = false;
+      await store.retryPage();
+      expect(store.phase()).toBe('ready');
+      expect(store.page()).toBe(1);
+      expect(store.revisions().map((row) => row.id)).toEqual([ANCHOR_ID]);
+      expect(data.listCalls.at(-1)?.cursor).toBeUndefined();
+      expect(data.listLimits.at(-1)).toBe(size);
+    });
+
     it('a newer size reset discards an older page answer', async () => {
       data.pages = [page([summary(ANCHOR_ID, 1, 'active')], '1', HEAD_ID)];
       await store.open(ANCHOR_ID);

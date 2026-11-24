@@ -60,7 +60,7 @@ export class MembersDataService {
   listMemberships(
     orgId: string,
     cursor?: string,
-    limit = 20,
+    limit = 50,
     signal?: AbortSignal,
   ): Promise<MembershipListResponse> {
     return this.gateway.call((client) =>
