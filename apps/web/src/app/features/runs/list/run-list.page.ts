@@ -12,6 +12,7 @@ import {
   inject,
   Injector,
   LOCALE_ID,
+  linkedSignal,
   signal,
   viewChild,
 } from '@angular/core';
@@ -106,6 +107,7 @@ export class RunListPage {
   protected readonly canCreate = computed(() => this.session.has('run:create'));
   protected readonly createCopy = CREATE_RUN_COPY;
   protected projectId: string | null = null;
+  private readonly subtitleProject = signal<string | null>(null);
   private readonly pagingRetryButton =
     viewChild<ElementRef<HTMLButtonElement>>('pagingRetryControl');
   private readonly pagingSection = viewChild<ElementRef<HTMLElement>>('paging');
@@ -190,11 +192,20 @@ export class RunListPage {
     const count = formatNumber(this.store.loadedCount(), this.locale);
     return $localize`:@@runs.list.of-page:Of ${count}:count: runs on this page`;
   });
-  protected readonly subtitle = computed(() =>
-    this.status() === 'ready'
-      ? `${this.copy.loadedRuns}: ${formatNumber(this.store.loadedCount(), this.locale)} · ${this.activeFilterLabel()}`
-      : this.copy.description,
-  );
+  protected readonly subtitle = linkedSignal({
+    source: () => ({
+      project: this.subtitleProject(),
+      status: this.status(),
+      text: `${this.copy.loadedRuns}: ${formatNumber(this.store.loadedCount(), this.locale)} · ${this.activeFilterLabel()}`,
+    }),
+    computation: (source, previous): string => {
+      if (source.status === 'ready') return source.text;
+      // Retained rows keep their committed summary until this project's replacement arrives.
+      if (previous && source.status === 'loading' && source.project === previous.source.project)
+        return previous.value;
+      return this.copy.description;
+    },
+  });
   protected readonly stateOptions = [
     { value: '', label: this.copy.any },
     { value: 'created', label: this.copy.created },
@@ -262,6 +273,7 @@ export class RunListPage {
           Object.keys(raw).some((key) => (raw[key] ?? '') !== (current[key] ?? ''))
         ) {
           this.projectId = projectId;
+          this.subtitleProject.set(projectId);
           void this.store.init(projectId, raw);
           // The URL is the form's source only when it actually changed. A refused ref name is never
           // written to the URL, so re-syncing on an unchanged query would wipe the very value the
