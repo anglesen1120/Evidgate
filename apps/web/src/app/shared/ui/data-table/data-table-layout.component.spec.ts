@@ -324,17 +324,19 @@ describe('Shared table column layout and reflow', () => {
     fixture.componentInstance.narrow.set(true);
     await fixture.whenStable();
     expect(root.querySelectorAll('.eg-table-record')).toHaveLength(200);
-    expect(root.querySelector('[role="status"]')?.textContent).toContain(
-      'Loaded records 1–200 of 201',
+    expect(root.querySelector('.page-range')?.textContent).toBe(
+      'Showing 1–200 of 201 loaded records',
     );
     const buttons = root.querySelectorAll<HTMLButtonElement>('.eg-table-pagination button');
-    expect(buttons[0]?.disabled).toBe(true);
+    expect(buttons[0]?.getAttribute('aria-disabled')).toBe('true');
     buttons[1]!.click();
     await fixture.whenStable();
     expect(root.querySelectorAll('.eg-table-record')).toHaveLength(1);
     expect(root.querySelector('.eg-table-record')?.getAttribute('data-row-id')).toBe('demo-200');
-    expect(root.querySelector('[role="status"]')?.textContent).toContain('201–201 of 201');
-    expect(buttons[1]?.disabled).toBe(true);
+    expect(root.querySelector('.page-range')?.textContent).toBe(
+      'Showing 201–201 of 201 loaded records',
+    );
+    expect(buttons[1]?.getAttribute('aria-disabled')).toBe('true');
     expect(root.querySelector('.scroll')?.contains(buttons[0]!)).toBe(false);
     fixture.componentRef.setInput('rows', dataTableFixtureRows(1));
     await fixture.whenStable();
@@ -342,7 +344,7 @@ describe('Shared table column layout and reflow', () => {
     expect(root.querySelector('.eg-table-pagination')).toBeNull();
   });
 
-  it('keeps pager focus on interior pages and hands it to the opposite enabled boundary button', async () => {
+  it('keeps focus on the activated button on interior pages and at either boundary', async () => {
     fixture.componentRef.setInput('columns', columns.slice(0, 1));
     fixture.componentRef.setInput('virtualThreshold', 500);
     fixture.componentRef.setInput('rows', dataTableFixtureRows(401));
@@ -353,29 +355,30 @@ describe('Shared table column layout and reflow', () => {
     next!.focus();
     next!.click();
     await fixture.whenStable();
-    expect(next!.disabled).toBe(false);
+    expect(next!.getAttribute('aria-disabled')).toBe('false');
     expect(document.activeElement).toBe(next);
     expect(root.querySelector('.body-table [data-row-id]')?.getAttribute('data-row-id')).toBe(
       'demo-200',
     );
     next!.click();
     await fixture.whenStable();
-    expect(next!.disabled).toBe(true);
-    expect(document.activeElement).toBe(previous);
+    expect(next!.getAttribute('aria-disabled')).toBe('true');
+    expect(document.activeElement).toBe(next);
     expect(root.querySelector('.body-table [data-row-id]')?.getAttribute('data-row-id')).toBe(
       'demo-400',
     );
+    previous!.focus();
     previous!.click();
     await fixture.whenStable();
-    expect(previous!.disabled).toBe(false);
+    expect(previous!.getAttribute('aria-disabled')).toBe('false');
     expect(document.activeElement).toBe(previous);
     expect(root.querySelector('.body-table [data-row-id]')?.getAttribute('data-row-id')).toBe(
       'demo-200',
     );
     previous!.click();
     await fixture.whenStable();
-    expect(previous!.disabled).toBe(true);
-    expect(document.activeElement).toBe(next);
+    expect(previous!.getAttribute('aria-disabled')).toBe('true');
+    expect(document.activeElement).toBe(previous);
     expect(root.querySelector('.body-table [data-row-id]')?.getAttribute('data-row-id')).toBe(
       'demo-0',
     );
@@ -395,7 +398,7 @@ describe('Shared table column layout and reflow', () => {
         next.click();
         elsewhere.focus();
         await fixture.whenStable();
-        expect(next.disabled).toBe(true);
+        expect(next.getAttribute('aria-disabled')).toBe('true');
         expect(document.activeElement).toBe(elsewhere);
       } finally {
         elsewhere.remove();

@@ -36,16 +36,7 @@ const failure: ApiError = {
 
 class RunPagerHarness extends ComponentHarness {
   static hostSelector = 'app-data-table-pager';
-  private readonly buttons = this.locatorForAll('button');
-  async press(label: string): Promise<void> {
-    for (const button of await this.buttons()) {
-      if ((await button.text()).includes(label)) {
-        await button.click();
-        return;
-      }
-    }
-    throw new Error(`Missing pager action ${label}`);
-  }
+  readonly next = this.locatorFor('button[data-page="next"]');
 }
 
 class RunListPageHarness extends ComponentHarness {
@@ -388,7 +379,7 @@ describe('RunListPage', () => {
     expect(root.textContent).toContain('No matching runs on this page');
     expect(root.textContent).toContain('Check another page if available');
     const pager = await TestbedHarnessEnvironment.loader(fixture).getHarness(RunPagerHarness);
-    await pager.press('Next');
+    await (await pager.next()).click();
     expect(store.next).toHaveBeenCalledTimes(1);
   });
   it.each(['', 'rerun'])('does not blame scope %j for an empty server response', async (scope) => {
@@ -405,12 +396,10 @@ describe('RunListPage', () => {
   });
   it('keeps pager focus through pending and terminal-page results', async () => {
     store.hasNext.set(true);
-    const { fixture, root } = await render();
+    const { fixture } = await render();
     const pager = await TestbedHarnessEnvironment.loader(fixture).getHarness(RunPagerHarness);
-    const next = [...root.querySelectorAll<HTMLButtonElement>('app-data-table-pager button')].find(
-      (button) => button.textContent?.includes('Next'),
-    );
-    next?.focus();
+    const next = await pager.next();
+    await next.focus();
     store.next.mockImplementation(async () => {
       store.busy.set(true);
       await Promise.resolve();
@@ -418,10 +407,10 @@ describe('RunListPage', () => {
       store.hasNext.set(false);
       store.busy.set(false);
     });
-    await pager.press('Next');
+    await next.click();
     await fixture.whenStable();
-    expect(document.activeElement).toBe(next);
-    expect(next?.getAttribute('aria-disabled')).toBe('true');
+    expect(await next.isFocused()).toBe(true);
+    expect(await next.getAttribute('aria-disabled')).toBe('true');
   });
 
   it('does not steal focus from another control after navigation', async () => {
@@ -430,7 +419,7 @@ describe('RunListPage', () => {
     const clear = root.querySelector<HTMLButtonElement>('[data-run-clear]');
     clear?.focus();
     const pager = await TestbedHarnessEnvironment.loader(fixture).getHarness(RunPagerHarness);
-    await pager.press('Next');
+    await (await pager.next()).click();
     expect(document.activeElement).toBe(clear);
   });
 

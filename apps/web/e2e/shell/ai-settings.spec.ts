@@ -137,7 +137,7 @@ for (const locale of LOCALES) {
       await expect(page.locator('[data-ai-version-detail]')).toBeVisible();
       await page
         .getByRole('button', {
-          name: locale === 'vi' ? 'Bản ghi tiếp' : 'Next records',
+          name: locale === 'vi' ? 'Trang sau' : 'Next page',
           exact: true,
         })
         .click();

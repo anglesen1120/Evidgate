@@ -1,5 +1,16 @@
 <nav class="eg-table-pagination" [attr.aria-label]="landmark()" [attr.aria-busy]="pending()">
-  <span role="status" [attr.aria-live]="'polite'" [attr.aria-atomic]="true">{{ summary() }}</span>
+  <span class="page-range">{{ summary() }}</span>
+  <!-- Reserve feedback beside the controls, using the actual translated label width. -->
+  <span
+    data-page-feedback
+    class="page-feedback"
+    [class.invisible]="!pending()"
+    [attr.role]="pending() ? 'progressbar' : null"
+    [attr.aria-label]="pending() ? loadingLabel : null"
+  >
+    <span class="page-spinner" aria-hidden="true"></span>
+    {{ loadingLabel }}
+  </span>
   @if (loadedCaption() === null) {
     <div class="size-field">
       <label hlmLabel [for]="sizeId">{{ sizeLabel }}</label>
@@ -9,7 +20,12 @@
         [ngModelOptions]="{ standalone: true }"
         (ngModelChange)="chooseSize($event, sizeField)"
       >
-        <hlm-select-trigger [buttonId]="sizeId"><hlm-select-value /></hlm-select-trigger>
+        <hlm-select-trigger
+          [buttonId]="sizeId"
+          class="min-h-(--pager-target) min-w-(--pager-target) font-normal"
+        >
+          <hlm-select-value />
+        </hlm-select-trigger>
         <hlm-select-content *hlmSelectPortal [aria-label]="sizeLabel">
           @for (size of sizes; track size) {
             <hlm-select-item [value]="size" [disabled]="busy()">{{ size }}</hlm-select-item>
@@ -19,45 +35,34 @@
     </div>
   }
   <div class="page-actions">
-    <!-- Reserve feedback beside the controls: the table header can be above the viewport. -->
-    <span
-      data-page-feedback
-      class="page-feedback"
-      [class.invisible]="!pending()"
-      [attr.role]="pending() ? 'progressbar' : null"
-      [attr.aria-label]="pending() ? loadingLabel : null"
-      [attr.aria-hidden]="pending() ? null : true"
-    >
-      <span class="page-spinner" aria-hidden="true"></span>
-      {{ loadingLabel }}
-    </span>
+    <span role="status">{{ pageLabel() }}</span>
     <button
-      #previousPage
       hlmBtn
       type="button"
       [attr.data-page]="'previous'"
       [variant]="'outline'"
+      [size]="'icon'"
+      [hlmTooltip]="previousLabel"
+      [attr.aria-label]="previousLabel"
       [class.page-boundary]="page() <= 1"
-      [disabled]="loadedCaption() !== null && page() <= 1"
-      [attr.aria-busy]="pending()"
       [attr.aria-disabled]="busy() || page() <= 1"
-      (click)="move(false, previousPage, nextPage)"
+      (click)="move(false)"
     >
-      {{ previousLabel }}
+      <hlm-icon [name]="'lucideChevronLeft'" class="size-(--eg-space-5)" />
     </button>
     <button
-      #nextPage
       hlmBtn
       type="button"
       [attr.data-page]="'next'"
       [variant]="'outline'"
+      [size]="'icon'"
+      [hlmTooltip]="nextLabel"
+      [attr.aria-label]="nextLabel"
       [class.page-boundary]="!canNext()"
-      [disabled]="loadedCaption() !== null && !canNext()"
-      [attr.aria-busy]="pending()"
       [attr.aria-disabled]="busy() || !canNext()"
-      (click)="move(true, nextPage, previousPage)"
+      (click)="move(true)"
     >
-      {{ nextLabel }}
+      <hlm-icon [name]="'lucideChevronRight'" class="size-(--eg-space-5)" />
     </button>
   </div>
 </nav>

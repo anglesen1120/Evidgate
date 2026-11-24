@@ -1,4 +1,4 @@
-import { DOCUMENT, formatNumber } from '@angular/common';
+import { formatNumber } from '@angular/common';
 import {
   afterNextRender,
   ChangeDetectionStrategy,
@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { FormsModule, type NgModel } from '@angular/forms';
 import { HlmButton } from '@evidgate/ui/button';
+import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmLabel } from '@evidgate/ui/label';
 import {
   HlmSelect,
@@ -21,6 +22,7 @@ import {
   HlmSelectTrigger,
   HlmSelectValue,
 } from '@evidgate/ui/select';
+import { HlmTooltip } from '@evidgate/ui/tooltip';
 
 let nextPagerId = 0;
 
@@ -29,6 +31,7 @@ let nextPagerId = 0;
   imports: [
     FormsModule,
     HlmButton,
+    HlmIcon,
     HlmLabel,
     HlmSelect,
     HlmSelectContent,
@@ -36,6 +39,7 @@ let nextPagerId = 0;
     HlmSelectPortal,
     HlmSelectTrigger,
     HlmSelectValue,
+    HlmTooltip,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './data-table-pager.component.html',
@@ -43,7 +47,6 @@ let nextPagerId = 0;
 })
 export class DataTablePagerComponent {
   private readonly locale = inject(LOCALE_ID);
-  private readonly document = inject(DOCUMENT);
   private readonly injector = inject(Injector);
 
   readonly page = input(1);
@@ -64,8 +67,8 @@ export class DataTablePagerComponent {
   protected readonly sizes = [20, 50, 100];
   protected readonly sizeId = `eg-table-pager-size-${nextPagerId++}`;
   protected readonly sizeLabel = $localize`:@@shared.data-table.rows-per-page:Rows per page`;
-  protected readonly previousLabel = $localize`:@@shared.data-table.previous:Previous records`;
-  protected readonly nextLabel = $localize`:@@shared.data-table.next:Next records`;
+  protected readonly previousLabel = $localize`:@@shared.data-table.previous:Previous page`;
+  protected readonly nextLabel = $localize`:@@shared.data-table.next:Next page`;
   protected readonly loadingLabel = $localize`:@@shared.states.loading.label:Loading…`;
   protected readonly landmark = computed(() => {
     const caption = this.loadedCaption();
@@ -77,39 +80,31 @@ export class DataTablePagerComponent {
     const total = this.total();
     return this.hasNext() && (total === null || this.page() * this.pageSize() < total);
   });
+  protected readonly pageLabel = computed(() => {
+    const page = formatNumber(this.page(), this.locale);
+    return $localize`:@@shared.data-table.page-number:Page ${page}:page:`;
+  });
   protected readonly summary = computed(() => {
     const total = this.total();
+    // A cursor can follow a short page, so its global ordinal is unknown.
+    const offset = total === null ? 0 : (this.page() - 1) * this.pageSize();
+    const count = this.count();
+    const shown = total === null ? count : Math.min(count, total - offset);
+    const start = formatNumber(shown > 0 ? offset + 1 : 0, this.locale);
+    const end = formatNumber(shown > 0 ? offset + shown : 0, this.locale);
     if (total === null) {
-      const page = formatNumber(this.page(), this.locale);
-      return $localize`:@@shared.data-table.page-number:Page ${page}:page:`;
+      return $localize`:@@shared.data-table.cursor-range:Showing ${start}:start:–${end}:end:`;
     }
-    const offset = (this.page() - 1) * this.pageSize();
-    const hasRows = this.count() > 0 && offset < total;
-    const start = formatNumber(hasRows ? offset + 1 : 0, this.locale);
-    const end = formatNumber(hasRows ? Math.min(total, offset + this.count()) : 0, this.locale);
     const loaded = formatNumber(total, this.locale);
     return this.loadedCaption() === null
-      ? $localize`:@@shared.data-table.range:${start}:start:–${end}:end: of ${loaded}:loaded:`
-      : $localize`:@@shared.data-table.loaded-range:Loaded records ${start}:start:–${end}:end: of ${loaded}:loaded:`;
+      ? $localize`:@@shared.data-table.range:Showing ${start}:start:–${end}:end: of ${loaded}:loaded:`
+      : $localize`:@@shared.data-table.showing-loaded-range:Showing ${start}:start:–${end}:end: of ${loaded}:loaded: loaded records`;
   });
   private awaitingRender = false;
 
-  protected move(forward: boolean, source: HTMLButtonElement, opposite: HTMLButtonElement): void {
+  protected move(forward: boolean): void {
     if ((forward ? !this.canNext() : this.page() <= 1) || !this.beginIntent()) return;
-    const owned = this.document.activeElement === source;
     (forward ? this.next : this.previous).emit();
-    if (owned && this.loadedCaption() !== null) {
-      afterNextRender(
-        () => {
-          if (!source.disabled || !opposite.isConnected || opposite.disabled) return;
-          const active = this.document.activeElement;
-          if (active === source || active === this.document.body || !active?.isConnected) {
-            opposite.focus();
-          }
-        },
-        { injector: this.injector },
-      );
-    }
   }
 
   protected chooseSize(value: unknown, field: NgModel): void {

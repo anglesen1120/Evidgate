@@ -82,7 +82,7 @@ export class PendingChangeTableComponent {
     const table = this.table();
     if (!count || !table || count > table.virtualThreshold()) return `${this.ui.loaded}: ${total}`;
     const first = formatNumber(1, this.locale);
-    return $localize`:@@shared.data-table.loaded-range:Loaded records ${first}:start:–${total}:end: of ${total}:loaded:`;
+    return $localize`:@@authoring.pending-changes.loaded-range:Loaded records ${first}:start:–${total}:end: of ${total}:loaded:`;
   });
   private opener: { button: HTMLElement; id: string; index: number } | null = null;
   protected readonly columns = computed<readonly DataTableColumn<AuthoringChangeListItem>[]>(() => {

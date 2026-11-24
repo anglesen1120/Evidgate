@@ -270,19 +270,6 @@
     font-weight: var(--eg-weight-medium);
   }
 
-  .eg-table-pagination {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--eg-space-3);
-    margin-block-start: var(--eg-space-4);
-  }
-
-  .eg-table-pagination > [role='status'] {
-    flex-basis: 100%;
-    overflow-wrap: anywhere;
-  }
-
   @media (max-width: 420px) {
     .eg-table-record {
       padding: var(--eg-space-4);
@@ -293,10 +280,6 @@
     .eg-table-layout :is(.spartan-table-head, .spartan-table-cell) {
       min-block-size: var(--eg-row-default);
       padding-block: var(--eg-space-3);
-    }
-
-    .eg-table-pagination > button {
-      min-block-size: var(--eg-control-touch);
     }
   }
 }

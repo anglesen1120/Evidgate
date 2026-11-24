@@ -423,14 +423,14 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
         expect(pager).toBeNull();
       } else {
         const buttons = pager?.querySelectorAll<HTMLButtonElement>('button');
-        expect(pager?.textContent).toContain(`Loaded records 1–200 of ${count}`);
+        expect(pager?.textContent).toContain(`1–200 of ${count}`);
         buttons?.[1]?.click();
         await fixture.whenStable();
         expect(root.querySelectorAll('[data-run-row]')).toHaveLength(count - 200);
         expect(root.querySelector('[data-run-row]')?.getAttribute('data-run-id')).toBe(
           run(200).run_id,
         );
-        expect(pager?.textContent).toContain(`Loaded records 201–${count} of ${count}`);
+        expect(pager?.textContent).toContain(`201–${count} of ${count}`);
         buttons?.[0]?.click();
         await fixture.whenStable();
         expect(root.querySelector('[data-run-row]')?.getAttribute('data-run-id')).toBe(

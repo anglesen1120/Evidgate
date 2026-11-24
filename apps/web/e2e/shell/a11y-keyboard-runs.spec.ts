@@ -133,8 +133,8 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await expect(attemptsRegion).toBeFocused();
   await expect(page.locator('app-attempts-table [data-attempt-row]')).toHaveCount(7);
   for (const [selector, rows, copies, summary] of [
-    ['app-attempts-table', 'tbody', 7, 'Page 1'],
-    ['#producers', 'app-data-table', 2, '1–2 of 2'],
+    ['app-attempts-table', 'tbody', 7, 'Showing 1–7'],
+    ['#producers', 'app-data-table', 2, 'Showing 1–2 of 2'],
   ] as const) {
     const root = page.locator(selector);
     if (selector === '#producers') await tabThroughTableScroller(page, root);
@@ -144,7 +144,7 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
     await page.keyboard.press('Tab');
     await expect(size).toBeFocused();
     await expectFocusRing(size, '2px');
-    for (const name of ['Previous records', 'Next records']) {
+    for (const name of ['Previous page', 'Next page']) {
       const button = pager.getByRole('button', { name, exact: true });
       await page.keyboard.press('Tab');
       await expect(button).toBeFocused();
@@ -152,7 +152,7 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
       await expect(button).toHaveAttribute('aria-disabled', 'true');
       await page.keyboard.press('Enter');
       await expect(button).toBeFocused();
-      await expect(pager.getByRole('status')).toHaveText(summary);
+      await expect(pager.locator('.page-range')).toHaveText(summary);
     }
   }
 
@@ -360,8 +360,8 @@ test('the narrow server pages keep every fact reachable and preserve focus on a 
   }
   await tabThroughNarrowRunRecords(page, page.locator('app-run-list-table .eg-table-records'), 20);
   const pager = page.locator('app-data-table-pager');
-  const previous = pager.getByRole('button', { name: 'Previous records', exact: true });
-  const next = pager.getByRole('button', { name: 'Next records', exact: true });
+  const previous = pager.getByRole('button', { name: 'Previous page', exact: true });
+  const next = pager.getByRole('button', { name: 'Next page', exact: true });
   await expect(previous).toHaveAttribute('aria-disabled', 'true');
   for (const control of [pager.getByRole('combobox'), previous, next]) {
     await page.keyboard.press('Tab');
@@ -443,8 +443,8 @@ test('Next replaces the page and retains its keyboard focus while busy and at th
     await tabThroughRunControls(page, rows.nth(row), 1, true);
   }
   const pager = page.locator('app-data-table-pager');
-  const previous = pager.getByRole('button', { name: 'Previous records', exact: true });
-  const next = pager.getByRole('button', { name: 'Next records', exact: true });
+  const previous = pager.getByRole('button', { name: 'Previous page', exact: true });
+  const next = pager.getByRole('button', { name: 'Next page', exact: true });
   for (const control of [pager.getByRole('combobox'), previous, next]) {
     await page.keyboard.press('Tab');
     await expect(control).toBeFocused();
@@ -488,7 +488,7 @@ test('Next preserves pager focus in fitted tablet records', async ({ page }) => 
   const rows = page.locator(RUN_RECORDS);
   await expect(rows).toHaveCount(20);
   await expect(page.locator('app-run-list-table .eg-table-narrow')).toHaveCount(1);
-  const next = page.getByRole('button', { name: 'Next records', exact: true });
+  const next = page.getByRole('button', { name: 'Next page', exact: true });
   await next.focus();
   await page.keyboard.press('Enter');
   await expect(next).toBeFocused();
