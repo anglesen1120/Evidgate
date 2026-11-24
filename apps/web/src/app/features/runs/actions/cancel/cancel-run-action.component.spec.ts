@@ -173,6 +173,46 @@ describe('CancelRunActionComponent', () => {
     expect(await h.action.focused()).toBe(true);
   });
 
+  it('focuses the status on close when the first refresh has already removed the opener', async () => {
+    const h = await setup();
+    h.refreshRun.mockImplementationOnce(() => {
+      h.run.update((run) => run && { ...run, state: 'canceled' });
+      return Promise.resolve();
+    });
+    await h.action.open();
+    await (await h.loader.getHarness(CancelDialogHarness)).submit();
+    expect(await h.loader.hasHarness(CancelDialogHarness)).toBe(false);
+    expect(await h.action.visibleTrigger()).toBeNull();
+    expect(await (await h.action.status())?.isFocused()).toBe(true);
+  });
+
+  it('hands focus from the restored opener to the status when a later refresh removes it', async () => {
+    const h = await setup();
+    await h.action.open();
+    await (await h.loader.getHarness(CancelDialogHarness)).submit();
+    expect(await h.action.focused()).toBe(true);
+    h.run.update((run) => run && { ...run, state: 'canceled' });
+    expect(await h.action.visibleTrigger()).toBeNull();
+    expect(await (await h.action.status())?.isFocused()).toBe(true);
+  });
+
+  it('leaves focus on another control when a later refresh removes the opener', async () => {
+    const h = await setup();
+    await h.action.open();
+    await (await h.loader.getHarness(CancelDialogHarness)).submit();
+    expect(await h.action.focused()).toBe(true);
+    const other = document.createElement('button');
+    document.body.append(other);
+    try {
+      other.focus();
+      h.run.update((run) => run && { ...run, state: 'canceled' });
+      expect(await h.action.visibleTrigger()).toBeNull();
+      expect(document.activeElement).toBe(other);
+    } finally {
+      other.remove();
+    }
+  });
+
   it('keeps the entered reason and typed refusal visible without another POST', async () => {
     const h = await setup();
     h.cancelRun.mockRejectedValue(

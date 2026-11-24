@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import {
+  afterRenderEffect,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  ElementRef,
+  inject,
+} from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
 import { InlineFeedbackComponent } from '../../../../shared/ui/states/inline-feedback.component';
 import { RequestStateComponent } from '../../../../shared/ui/states/request-state.component';
@@ -40,6 +49,7 @@ import { CancelRunStore } from './cancel-run.store';
     }
     @if (!store.opened() && announcement(); as announcement) {
       <app-inline-feedback
+        tabindex="-1"
         id="run-cancel-status"
         [title]="announcement"
         data-run-cancel-status
@@ -62,7 +72,36 @@ import { CancelRunStore } from './cancel-run.store';
 })
 export class CancelRunActionComponent {
   protected readonly store = inject(CancelRunStore);
+  private readonly document = inject(DOCUMENT);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   protected readonly copy = CANCEL_RUN_COPY;
+  private focusBefore: Element | null = null;
+
+  constructor() {
+    // Captured before the render that may remove the trigger or the dialog, while focus is there.
+    effect(() => {
+      this.store.opened();
+      this.terminal();
+      this.focusBefore = this.document.activeElement;
+    });
+    // Focus lost with a removed control falls to <body>; the status is the stable target.
+    // A connected trigger is left to the dialog, which restores focus to it.
+    afterRenderEffect(() => {
+      this.store.opened();
+      this.terminal();
+      const before = this.focusBefore;
+      this.focusBefore = null;
+      // A captured <body> means focus was already lost, so it is not a live control.
+      if (
+        this.host.querySelector('[data-run-cancel-trigger]') ||
+        (before !== null && before !== this.document.body && before.isConnected)
+      )
+        return;
+      const active = this.document.activeElement;
+      if (active === null || active === this.document.body)
+        this.host.querySelector<HTMLElement>('[data-run-cancel-status]')?.focus();
+    });
+  }
   protected readonly announcement = computed(() => {
     switch (this.store.phase()) {
       case 'polling':

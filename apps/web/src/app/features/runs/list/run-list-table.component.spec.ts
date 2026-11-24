@@ -229,16 +229,14 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     expect(root.querySelector('[data-run-row] a')?.textContent).toContain(run(1).run_id);
     expect(root.querySelectorAll('[data-run-decision] [data-tone="pending"]')).toHaveLength(1);
     expect(root.querySelectorAll('[data-run-decision] [data-tone="neutral"]')).toHaveLength(1);
-    expect(root.querySelector('[data-run-decision] .verdict__detail')?.textContent?.trim()).toBe(
-      'The decision could not be read. Try again.',
-    );
-    expect(root.querySelector('[data-run-decision] [hlmBadge] .verdict__detail')).toBeNull();
+    const reason = 'The decision could not be read. Try again.';
+    const cell = root.querySelector(`[data-row-id="${unavailable.run_id}"] [data-run-decision]`)!;
+    expect(cell.querySelector('.verdict__detail')).toBeNull();
+    expect(cell.querySelector('.sr-only:not(.verdict__label)')?.textContent?.trim()).toBe(reason);
     expect(root.querySelector('[data-run-decision] [title]')).toBeNull();
     const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, RunInspectionHarness);
     await (await table.viewFor(unavailable.run_id)).click();
-    expect(await (await table.dialog()).text()).toContain(
-      'The decision could not be read. Try again.',
-    );
+    expect(await (await table.dialog()).text({ exclude: '.sr-only' })).toContain(reason);
   });
   it('keeps dense state and evidence labels short with the explanation outside the badge', async () => {
     const { root } = await render([run(1)]);

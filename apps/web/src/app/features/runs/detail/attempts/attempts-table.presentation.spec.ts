@@ -35,7 +35,13 @@ describe('Attempts table shared presentation', () => {
     ]);
     expect(headers[0]?.getAttribute('data-column-priority')).toBe('primary');
     expect(headers[0]?.getAttribute('data-column-kind')).toBe('identifier');
-    expect(root.querySelectorAll('td[data-column-role="number"]')).toHaveLength(2);
+    const numericCells = root.querySelectorAll<HTMLElement>(
+      ':is(th,td)[data-column-role="number"]',
+    );
+    expect(numericCells).toHaveLength(4);
+    for (const cell of numericCells) {
+      expect(cell.style.minInlineSize).toBe('calc(12ch + var(--eg-space-4) * 2)');
+    }
     expect(root.querySelector('h2')?.getAttribute('data-title-size')).toBe('section');
   });
 

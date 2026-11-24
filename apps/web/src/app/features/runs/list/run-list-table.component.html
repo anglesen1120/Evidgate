@@ -1,7 +1,7 @@
 <app-data-table
   [busy]="fetching()"
   [progressAtPager]="true"
-  class="[&_.caption]:sr-only [&_.scroll]:rounded-none [&_.scroll]:border-x-0 [&_.verdict__detail]:sr-only [&_th.cdk-column-actions]:whitespace-nowrap"
+  class="[&_.caption]:sr-only [&_.scroll]:rounded-none [&_.scroll]:border-x-0 [&_th.cdk-column-actions]:whitespace-nowrap"
   [columns]="columns()"
   [rows]="rows()"
   [rowId]="rowId"
@@ -54,12 +54,17 @@
     <app-status-pill [tone]="'neutral'" [label]="copy.evidenceUnavailable" />
   </div>
 </ng-template>
-<ng-template #decisionCell let-row>
+<ng-template #decisionCell let-row let-inspecting="inspecting">
   <div data-run-decision>
     <app-decision-chip
+      #chip
       [decision]="row.decision === null ? 'pending' : (row.decision ?? 'unavailable')"
       [compact]="true"
+      [showDetail]="inspecting ? undefined : false"
     />
+    @if (!inspecting && chip.explanation(); as reason) {
+      <span class="sr-only">{{ reason }}</span>
+    }
   </div>
 </ng-template>
 <ng-template #scopeCell let-row let-value="value">
@@ -146,13 +151,16 @@
             >
               <dt>{{ column.header }}</dt>
               <dd>
-                <ng-container
-                  [ngTemplateOutlet]="column.cellTemplate ?? null"
-                  [ngTemplateOutletContext]="{
+                @let inspectionContext =
+                  {
                     $implicit: row,
                     value: column.cell(row),
                     stacked: true,
-                  }"
+                    inspecting: true,
+                  };
+                <ng-container
+                  [ngTemplateOutlet]="column.cellTemplate ?? null"
+                  [ngTemplateOutletContext]="inspectionContext"
                 />
               </dd>
             </div>

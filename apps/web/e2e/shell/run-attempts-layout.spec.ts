@@ -217,27 +217,28 @@ test('attempts switch between labelled records and table rows on resize', async 
 
 test('attempts stack when their columns no longer fit the container', async ({ page }) => {
   await seedStoredTheme(page, 'light');
-  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.setViewportSize({ width: 1440, height: 900 });
   await openAttempts(page);
   const table = page.locator('app-attempts-table');
-  await expect(table.locator(DESKTOP_ROW)).toHaveCount(attemptsFixture.body.items.length);
-  // Force every cell wider than the container so only the fit rule can switch the mode.
-  await page.evaluate(() => {
-    for (const cell of document.querySelectorAll<HTMLElement>(
-      'app-attempts-table th, app-attempts-table td',
-    )) {
-      cell.style.minWidth = '260px';
-      cell.style.whiteSpace = 'nowrap';
-    }
-  });
-  await page.setViewportSize({ width: 1279, height: 900 });
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await expect(table.locator(RECORD)).toHaveCount(attemptsFixture.body.items.length);
+  const grid = table.locator('app-data-table');
+  const rows = attemptsFixture.body.items.length;
+  await page.evaluate(() => (document.documentElement.style.fontSize = '150%'));
+  await expect(table.locator(DESKTOP_ROW)).toHaveCount(rows);
+  // Enlarged text raises the table's intrinsic minimum. Keep the panel above the
+  // record breakpoint so only measured overflow can switch it to records.
+  const panelWidth = 832;
+  expect(await grid.evaluate((el) => el.clientWidth)).toBeGreaterThan(panelWidth);
+  await table.evaluate((el, width) => (el.style.inlineSize = `${width}px`), panelWidth);
+  expect(await grid.evaluate((el) => el.clientWidth)).toBeGreaterThanOrEqual(768);
+  await expect(table.locator(RECORD)).toHaveCount(rows);
   await expect(table.locator(DESKTOP_ROW)).toHaveCount(0);
   const overflow = await page
     .locator('app-attempts-table .scroll')
     .evaluate((el) => el.scrollWidth - el.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
+  await table.evaluate((el) => el.style.removeProperty('inline-size'));
+  await expect(table.locator(DESKTOP_ROW)).toHaveCount(rows);
+  await expect(table.locator(RECORD)).toHaveCount(0);
 });
 
 for (const locale of ['en', 'vi'] as const) {

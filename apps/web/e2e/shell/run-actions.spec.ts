@@ -83,6 +83,7 @@ for (const locale of LOCALES) {
         locale === 'vi' ? 'có thể vẫn đang dừng lại' : 'execution may still be stopping',
       );
       await expect(trigger).toHaveCount(0);
+      await expect(status).toBeFocused();
       await expect(page.locator('#run-cancel-disabled-reason')).toContainText(
         locale === 'vi' ? 'đã ở trạng thái kết thúc' : 'already terminal',
       );
