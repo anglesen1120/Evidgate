@@ -165,7 +165,7 @@ describe('EditorPage checklist review mount', () => {
     expect(detail?.textContent).not.toContain('An unrelated case-id target');
     detail?.querySelector<HTMLButtonElement>('[data-pending-view-close]')?.click();
     await fixture.whenStable();
-    expect(listPending).toHaveBeenCalledWith(PROJECT, expect.any(AbortSignal), undefined, ITEM);
+    expect(listPending).toHaveBeenCalledWith(PROJECT, expect.any(AbortSignal), undefined, ITEM, 20);
     expect(versions).not.toHaveBeenCalled();
     expect(queue).not.toHaveBeenCalled();
     await ui.fill('review-comment', 'Unsent review comment');
