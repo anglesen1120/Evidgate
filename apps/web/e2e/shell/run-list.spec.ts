@@ -36,12 +36,7 @@ const VARIANTS = {
   unavailable: '?fixture.variant.listRuns=unavailable',
 } as const;
 const ROWS = RUN_RECORDS;
-/**
- * `?fixture.variant.listPermissions=settings-policy-readonly` — the corpus grant set that holds
- * `run:read` (with `project:read` and `organization:read`). The default `permissions-list` is the
- * G1 set and grants no run code, so without this variant the `run:read` gate on the review address
- * sends every case to `/forbidden`.
- */
+/** The review route requires the fixture grant set that includes run:read. */
 const RUN_READ_GRANT = '?fixture.variant.listPermissions=settings-policy-readonly';
 /** The filters are Helm comboboxes now: the trigger shows the selected label, not a value. */
 const FILTER_LABEL = {
@@ -63,10 +58,7 @@ async function chooseFilter(page: Page, trigger: string, label: string): Promise
 function reviewPath(locale: ShellLocale) {
   return localePath(locale, `/dev/run-list/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}`);
 }
-/**
- * The review address of the real run list, prepared for a case: the grant variant above, then the
- * case's own variants. The G2 product `runs` segment this build does not match (file comment).
- */
+/** Keep filter navigation on the real list's development review address. */
 function path(locale: ShellLocale) {
   return withVariant(reviewPath(locale), RUN_READ_GRANT);
 }
@@ -237,50 +229,59 @@ for (const locale of LOCALES) {
     await expect(page.locator(ROWS)).toHaveCount(2);
   });
 
-  test(`250 runs use bounded loaded-record pages that reach the last record (${locale})`, async ({
+  test(`250 runs use server cursor pages that reach the last record (${locale})`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto(withVariants(path(locale), [VARIANTS.large]));
     await ready(page);
     await expect(page.locator('app-run-list-table cdk-virtual-scroll-viewport')).toHaveCount(0);
-    await expect(page.locator('app-run-list-table [role="table"]')).toHaveAttribute(
-      'aria-rowcount',
-      '251',
-    );
-    await expect(page.locator(ROWS)).toHaveCount(200);
     const expectedIds = runList250.body.items.map((row) => row.run_id);
     const ids = () =>
       page.locator(ROWS).evaluateAll((rows) => rows.map((row) => row.getAttribute('data-row-id')));
-    expect(await ids()).toEqual(expectedIds.slice(0, 200));
-    const pager = page.locator('app-run-list-table nav');
-    await expect(pager.getByRole('button')).toHaveCount(2);
-    const next = pager.getByRole('button').last();
+    await expect(page.locator(ROWS)).toHaveCount(20);
+    expect(await ids()).toEqual(expectedIds.slice(0, 20));
+    const pager = page.locator('app-data-table-pager');
+    await pager.getByRole('combobox').click();
+    await page.getByRole('option', { name: '100', exact: true }).click();
+    await expect(page.locator(ROWS)).toHaveCount(100);
+    const previous = pager.getByRole('button', {
+      name: locale === 'vi' ? 'Bản ghi trước' : 'Previous records',
+      exact: true,
+    });
+    const next = pager.getByRole('button', {
+      name: locale === 'vi' ? 'Bản ghi tiếp' : 'Next records',
+      exact: true,
+    });
     await next.focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(ids).toEqual(expectedIds.slice(100, 200));
     await expect(next).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page.locator(ROWS)).toHaveCount(50);
     expect(await ids()).toEqual(expectedIds.slice(200));
-    await expect(pager.getByRole('button').first()).toBeFocused();
-    const last = runList250.body.items[runList250.body.items.length - 1]!;
+    const last = runList250.body.items.at(-1);
+    if (!last) throw new Error('The large fixture must contain a last record');
     const lastRecord = page.locator(`${ROWS}[data-row-id="${last.run_id}"]`);
-    const idLink = lastRecord.locator('[data-run-row]').getByRole('link', { name: last.run_id });
     const view = lastRecord.getByRole('button', {
       name: `${locale === 'vi' ? 'Xem' : 'View'} ${last.run_id}`,
       exact: true,
     });
-    await expect(idLink).toHaveAttribute('href', new RegExp(last.run_id));
+    await expect(lastRecord.locator('[data-run-row] a')).toHaveAttribute(
+      'href',
+      new RegExp(last.run_id),
+    );
+    const address = page.url();
     await view.click();
     await expect(page.getByRole('dialog')).toContainText(last.run_id);
     await page.keyboard.press('Escape');
     await expect(view).toBeFocused();
     await expect(lastRecord).toBeInViewport();
-    await expect(next).toBeDisabled();
-    await pager.getByRole('button').first().focus();
-    await page.keyboard.press('Enter');
-    await expect(page.locator(ROWS)).toHaveCount(200);
-    await expect(next).toBeFocused();
-    expect(await ids()).toEqual(expectedIds.slice(0, 200));
+    expect(page.url()).toBe(address);
+    expect(await ids()).toEqual(expectedIds.slice(200));
+    await expect(next).toHaveAttribute('aria-disabled', 'true');
+    await previous.click();
+    await expect.poll(ids).toEqual(expectedIds.slice(100, 200));
   });
 
   for (const mode of ['runs', 'large'] as const) {
@@ -375,24 +376,26 @@ for (const locale of LOCALES) {
   }
 }
 
-test('cursor pages preserve server ordering and append without offset pagination', async ({
+test('cursor pages preserve server ordering and replace rather than append rows', async ({
   page,
 }) => {
   await page.goto(withVariants(path('en'), [VARIANTS.pages]));
   await ready(page);
-  // Top-up may already have followed the cursor because the first fixture is deliberately short.
-  const allRows = [...runListPage1.body.items, ...runListPage2.body.items];
-  await expect(page.locator(ROWS)).toHaveCount(allRows.length);
-  expect(
-    await page
+  const ids = () =>
+    page
       .locator(ROWS)
-      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-row-id'))),
-  ).toEqual(allRows.map((row) => row.run_id));
-  await expect(page.locator('[data-run-load-more]')).toHaveCount(0);
-  // Unfiltered, the note is a plain count, never the "filtered from" phrasing.
-  await expect(page.locator('[data-run-loaded-count]')).toContainText(
-    `Loaded ${allRows.length} runs`,
+      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-row-id')));
+  await expect(page.locator(ROWS)).toHaveCount(runListPage1.body.items.length);
+  expect(await ids()).toEqual(runListPage1.body.items.map((row) => row.run_id));
+  const pager = page.locator('app-data-table-pager');
+  await pager.getByRole('button', { name: 'Next records', exact: true }).click();
+  await expect.poll(ids).toEqual(runListPage2.body.items.map((row) => row.run_id));
+  await expect(pager.getByRole('button', { name: 'Next records', exact: true })).toHaveAttribute(
+    'aria-disabled',
+    'true',
   );
+  await pager.getByRole('button', { name: 'Previous records', exact: true }).click();
+  await expect.poll(ids).toEqual(runListPage1.body.items.map((row) => row.run_id));
   expect(new URL(page.url()).searchParams.has('offset')).toBe(false);
 });
 

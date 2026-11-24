@@ -1,4 +1,4 @@
-import { DOCUMENT, formatNumber, NgTemplateOutlet } from '@angular/common';
+import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
 import { ArrayDataSource } from '@angular/cdk/collections';
 import {
   CdkFixedSizeVirtualScroll,
@@ -29,13 +29,11 @@ import {
   Injector,
   input,
   linkedSignal,
-  LOCALE_ID,
   signal,
   viewChild,
 } from '@angular/core';
 import { toObservable } from '@angular/core/rxjs-interop';
 import type { ListRange } from '@angular/cdk/collections';
-import { HlmButton } from '@evidgate/ui/button';
 import {
   HlmTable,
   HlmTableColumn,
@@ -54,6 +52,7 @@ import {
   type DataTableLayoutFocus,
   restoreTableLayoutFocus,
 } from './data-table-layout-focus';
+import { DataTablePagerComponent } from './data-table-pager.component';
 import { DataTableRecordsComponent } from './data-table-records.component';
 
 export type { DataTableColumn } from './data-table-column';
@@ -94,7 +93,7 @@ let nextTableId = 0;
     CdkFixedSizeVirtualScroll,
     DataTableCellComponent,
     DataTableRecordsComponent,
-    HlmButton,
+    DataTablePagerComponent,
     HlmTableColumn,
     HlmTable,
     HlmTableContainer,
@@ -113,8 +112,6 @@ let nextTableId = 0;
   },
 })
 export class DataTableComponent<T> {
-  private readonly locale = inject(LOCALE_ID);
-
   private readonly document = inject(DOCUMENT);
 
   private readonly injector = inject(Injector);
@@ -182,21 +179,6 @@ export class DataTableComponent<T> {
     return this.virtual() ? `max(40rem, calc(${widths.join(' + ') || '0px'}))` : null;
   });
   protected readonly probeText = 'Ág';
-  protected readonly previousLabel = $localize`:@@shared.data-table.previous:Previous records`;
-  protected readonly nextLabel = $localize`:@@shared.data-table.next:Next records`;
-  protected readonly pagesLabel = computed(() => {
-    const caption = this.caption();
-    return $localize`:@@shared.data-table.pages:${caption}:caption: — loaded record pages`;
-  });
-  protected readonly pageLabel = computed(() => {
-    const total = this.rows().length;
-    const start = formatNumber(this.pageIndex() * this.pageSize + 1, this.locale);
-    const end = formatNumber(Math.min((this.pageIndex() + 1) * this.pageSize, total), this.locale);
-    const loaded = formatNumber(total, this.locale);
-    return $localize`:@@shared.data-table.loaded-range:Loaded records ${start}:start:–${end}:end: of ${loaded}:loaded:`;
-  });
-  private readonly previousButton = viewChild<ElementRef<HTMLButtonElement>>('previousPage');
-  private readonly nextButton = viewChild<ElementRef<HTMLButtonElement>>('nextPage');
   private readonly scrollElement = viewChild.required<ElementRef<HTMLElement>>('scrollElement');
   private readonly tokenProbe = viewChild.required<ElementRef<HTMLElement>>('tokenProbe');
   private readonly range = signal<ListRange>({ start: 0, end: 0 });
@@ -251,28 +233,8 @@ export class DataTableComponent<T> {
   }
 
   protected movePage(delta: number): void {
-    const source = (delta < 0 ? this.previousButton() : this.nextButton())?.nativeElement;
-    const owned = source !== undefined && this.document.activeElement === source;
     this.pageIndex.update((page) => Math.max(0, Math.min(page + delta, this.pageCount() - 1)));
     this.scrollElement().nativeElement.scrollTop = 0;
-    if (!owned) return;
-    // A boundary disables the activated button; restore its place only if the
-    // visitor has not deliberately moved focus elsewhere before the render.
-    afterNextRender(
-      () => {
-        if (!source?.disabled) return;
-        const active: unknown = this.document.activeElement;
-        const lost =
-          !(active instanceof HTMLElement) ||
-          active === this.document.body ||
-          !active.isConnected ||
-          active === source;
-        if (!lost) return;
-        const target = (delta < 0 ? this.nextButton() : this.previousButton())?.nativeElement;
-        if (target?.isConnected && !target.disabled) target.focus();
-      },
-      { injector: this.injector },
-    );
   }
 
   private attachViewport(viewport: CdkVirtualScrollViewport): () => void {

@@ -1,28 +1,4 @@
-// 09.7.1-T6 (plan 09.7.1 §2 AC7/AC8, §4 audit row, §8 S5-adjacent + hot path, §9 "Audit export
-// cap", §10 T6.1/T6.2; COORDINATOR-DECISION S76): the Audit tab's store.
-//
-// `AuditDataService` is replaced by a hand-written fake (`list(orgId, query, cursor)`), because
-// this suite is about what the store does with pages and answers — the request side is
-// `core/data/audit-data.service.spec.ts`. The fake pages a generated corpus, so the cap cases are
-// real page counts rather than assertions about intentions:
-//
-// - a 15,000-row corpus is 75 pages of 200, and AC7's export must stop at 50 pages / 10,000 rows;
-// - a 3,000-row corpus ends by itself in 15 pages and is not capped;
-// - exactly 10,000 rows with no next cursor is not capped either — the banner is about rows left
-//   behind, not about the count reaching the cap;
-// - 50-row pages are a supported server, not a broken one: 3,000 rows finish in 60 pages, uncapped,
-//   and a server that never stops naming a cursor finishes as `capped` at the export's page bound
-//   with the rows it read — the short-page case that used to fail with a retryable-looking error;
-// - the table's own bound is 200 pages / 10,000 rows (`browseCapped`), not the shared
-//   `MAX_CURSOR_PAGES`: reaching it stops the list without a failure and without a request;
-// - a repeated cursor is a contract violation, not an export or a list;
-// - an export is generation-guarded: a reset, a reload and store destruction each supersede it, and
-//   a superseded loop publishes nothing and reads no further page.
-//
-// The rest pins the list's rules: the newest `load` wins, `loadMore` appends and keeps the rows on
-// a refusal, the filters reach the wire query with `''` omitted, and no signal holds a
-// secret-shaped field (the `no-secret-field-in-store` rule's runtime twin).
-
+// Export walks its own bounded corpus; browsing retains only the current server page.
 import { TestBed } from '@angular/core/testing';
 import type { AuditEntryDto, AuditListResponse } from '@evidgate/sdk';
 
@@ -32,13 +8,11 @@ import { AUDIT_EXPORT_CAPPED_EVENT } from '../../../core/telemetry/telemetry-nam
 import { TelemetryService } from '../../../core/telemetry/telemetry.service';
 import {
   AUDIT_EXPORT_MAX_PAGES,
-  AUDIT_MAX_PAGES,
   AuditStore,
   EMPTY_AUDIT_FILTERS,
   type AuditFilters,
 } from './audit.store';
 
-/** One typed refusal, as `ApiGateway` builds it from a server envelope. */
 function typedFailure(): ApiRequestError {
   return new ApiRequestError({
     kind: 'forbidden',
@@ -52,7 +26,6 @@ function typedFailure(): ApiRequestError {
   });
 }
 
-/** The generated corpus: `count` rows, newest first, every fifth one a support-access row. */
 function rows(count: number): AuditEntryDto[] {
   return Array.from({ length: count }, (_, index) => ({
     id: `ae-${index + 1}`,
@@ -73,7 +46,6 @@ function rows(count: number): AuditEntryDto[] {
   }));
 }
 
-/** The filters a filter case applies, one per wire parameter. */
 const FILTERS: AuditFilters = {
   actorType: 'platform_operator',
   action: 'membership.invite',
@@ -82,32 +54,20 @@ const FILTERS: AuditFilters = {
   to: '2026-10-02T00:00:00Z',
 };
 
-/**
- * The audit pages the store reads. Cursors are opaque strings the fake mints itself, so a page can
- * hand out a next cursor the test controls exactly (a fresh index, the same one again, or one).
- */
 class FakeAuditDataService {
-  /** Every row the fake can serve, in server order. */
   all: AuditEntryDto[] = [];
-  /** Rejects every call with this failure when set (used with `failOnCall` for a mid-way one). */
   failure: Error | null = null;
-  /** Rejects exactly this 1-based call with `failure`. */
   failOnCall: number | null = null;
-  /** Serves this many rows per page regardless of the requested `limit`. */
   pageSizeOverride: number | null = null;
-  /** Names the same cursor on every page, so a cursor loop has to be refused. */
   repeatCursor = false;
-  /** Answers only when the test settles the matching `pending` entry. */
   manual = false;
   readonly pending: Array<{ readonly resolve: (page: AuditListResponse) => void }> = [];
-  /** Every call the store made, in order. */
   readonly calls: Array<{
     readonly orgId: string;
     readonly query: AuditListQuery;
     readonly cursor: string | undefined;
   }> = [];
 
-  /** The index a minted cursor resumes at. */
   private readonly startByCursor = new Map<string, number>();
 
   list(orgId: string, query: AuditListQuery, cursor?: string): Promise<AuditListResponse> {
@@ -158,14 +118,13 @@ describe('AuditStore (09.7.1-T6)', () => {
 
       expect(store.phase()).toBe('ready');
       expect(store.rows().map((row) => row.seq)).toEqual(
-        Array.from({ length: 50 }, (_, index) => index + 1),
+        Array.from({ length: 20 }, (_, index) => index + 1),
       );
-      expect(store.nextCursor()).toBe('50');
-      expect(store.hasMore()).toBe(true);
+      expect(store.nextCursor()).toBe('20');
+      expect(store.hasNext()).toBe(true);
       expect(store.loadError()).toBeNull();
       expect(store.filters()).toEqual(EMPTY_AUDIT_FILTERS);
-      // One read of the first page, at the table limit, with no cursor.
-      expect(data.calls).toEqual([{ orgId: 'o-1', query: { limit: 50 }, cursor: undefined }]);
+      expect(data.calls).toEqual([{ orgId: 'o-1', query: { limit: 20 }, cursor: undefined }]);
     });
 
     it('maps every filter and omits the ones left empty', async () => {
@@ -174,7 +133,7 @@ describe('AuditStore (09.7.1-T6)', () => {
       await store.load('o-1', FILTERS);
 
       expect(data.calls[0]?.query).toEqual({
-        limit: 50,
+        limit: 20,
         actor_type: 'platform_operator',
         action: 'membership.invite',
         object_type: 'membership',
@@ -199,7 +158,7 @@ describe('AuditStore (09.7.1-T6)', () => {
       expect(store.phase()).toBe('error');
       expect(store.loadError()).toBe(failure.error);
       expect(store.rows()).toEqual([]);
-      expect(store.hasMore()).toBe(false);
+      expect(store.hasNext()).toBe(false);
     });
 
     it('reports a rejection that is not the server’s answer as a fixed failure', async () => {
@@ -246,131 +205,7 @@ describe('AuditStore (09.7.1-T6)', () => {
       // The stale answer published nothing: neither its rows nor its cursor.
       expect(store.rows()).toHaveLength(2);
       expect(store.nextCursor()).toBeNull();
-      expect(store.hasMore()).toBe(false);
-    });
-  });
-
-  describe('loadMore', () => {
-    it('follows the cursor once, appends the page and keeps one query shape', async () => {
-      data.all = rows(120);
-      await store.load('o-1', FILTERS);
-
-      await store.loadMore('o-1');
-
-      expect(store.rows()).toHaveLength(100);
-      expect(store.rows().at(-1)?.seq).toBe(100);
-      expect(store.nextCursor()).toBe('100');
-      expect(store.paging()).toBe(false);
-      expect(data.calls[1]).toEqual({
-        orgId: 'o-1',
-        query: { ...data.calls[0]?.query },
-        cursor: '50',
-      });
-    });
-
-    it('does nothing without a cursor', async () => {
-      data.all = rows(10);
-      await store.load('o-1');
-
-      await store.loadMore('o-1');
-
-      expect(data.calls).toHaveLength(1);
-      expect(store.rows()).toHaveLength(10);
-    });
-
-    it('ignores a second page while the first one is still in flight', async () => {
-      data.manual = true;
-      const loading = store.load('o-1');
-      data.pending[0]?.resolve({ items: rows(120).slice(0, 50), next_cursor: '50' });
-      await loading;
-
-      const paging = store.loadMore('o-1');
-      expect(store.paging()).toBe(true);
-      await store.loadMore('o-1');
-      expect(data.calls).toHaveLength(2);
-
-      data.pending[1]?.resolve({ items: rows(120).slice(50, 100), next_cursor: '100' });
-      await paging;
-      expect(store.rows()).toHaveLength(100);
-      expect(store.paging()).toBe(false);
-      expect(store.nextCursor()).toBe('100');
-    });
-
-    it('keeps the rows and reports the refusal when the next page fails', async () => {
-      data.all = rows(120);
-      await store.load('o-1');
-      const failure = typedFailure();
-      data.failure = failure;
-      data.failOnCall = 2;
-
-      await store.loadMore('o-1');
-
-      expect(store.rows()).toHaveLength(50);
-      expect(store.phase()).toBe('ready');
-      expect(store.paging()).toBe(false);
-      expect(store.pagingError()).toBe(failure.error);
-      expect(store.nextCursor()).toBe('50');
-    });
-
-    it('refuses a cursor it already followed', async () => {
-      data.all = rows(120);
-      data.repeatCursor = true;
-      await store.load('o-1');
-      await store.loadMore('o-1');
-
-      await expect(store.loadMore('o-1')).rejects.toThrow(/repeated cursor "same"/);
-    });
-
-    it('stops at its own page bound as a bounded list, not a failure', async () => {
-      data.all = rows(AUDIT_MAX_PAGES * 50 + 500);
-      await store.load('o-1');
-      for (let page = 1; page < AUDIT_MAX_PAGES; page += 1) {
-        await store.loadMore('o-1');
-      }
-
-      expect(store.rows()).toHaveLength(AUDIT_MAX_PAGES * 50);
-      // The log goes on, but the list is at its bound: the cursor stays, the control goes.
-      expect(store.nextCursor()).not.toBeNull();
-      expect(store.browseCapped()).toBe(true);
-      expect(store.hasMore()).toBe(false);
-      expect(store.pagingError()).toBeNull();
-
-      // A further click neither throws nor reads: there is nothing left the tab may offer.
-      const calls = data.calls.length;
-      await expect(store.loadMore('o-1')).resolves.toBeUndefined();
-      expect(data.calls).toHaveLength(calls);
-      expect(store.browseCapped()).toBe(true);
-
-      // A reload is the way back: the bound belongs to the list it was reached on.
-      await store.load('o-1');
-      expect(store.browseCapped()).toBe(false);
-      expect(store.hasMore()).toBe(true);
-    });
-
-    it('marks a short-page list capped at the bound with the rows it holds', async () => {
-      // 20-row pages: 200 pages is 4,000 rows, not the 10,000 the table limit would give, and the
-      // bound is the page count — the state must report what it holds, not a fixed row total.
-      data.all = rows(5_000);
-      data.pageSizeOverride = 20;
-      await store.load('o-1');
-      for (let page = 1; page < AUDIT_MAX_PAGES; page += 1) {
-        await store.loadMore('o-1');
-      }
-
-      expect(store.rows()).toHaveLength(AUDIT_MAX_PAGES * 20);
-      expect(store.rows().at(-1)?.seq).toBe(AUDIT_MAX_PAGES * 20);
-      expect(store.nextCursor()).not.toBeNull();
-      expect(store.browseCapped()).toBe(true);
-      expect(store.hasMore()).toBe(false);
-    });
-
-    it('ignores a page for an org this store is not showing', async () => {
-      data.all = rows(120);
-      await store.load('o-1');
-
-      await store.loadMore('o-2');
-
-      expect(data.calls).toHaveLength(1);
+      expect(store.hasNext()).toBe(false);
     });
   });
 
@@ -398,7 +233,7 @@ describe('AuditStore (09.7.1-T6)', () => {
       expect(data.calls[0]?.cursor).toBeUndefined();
       expect(store.exportState()).toEqual({ phase: 'done', rows: 10_000, capped: true });
       // The export's rows are not state: the loaded page is still exactly the page it was.
-      expect(store.rows()).toHaveLength(50);
+      expect(store.rows()).toHaveLength(20);
     });
 
     it('exports a 3,000-row list whole, without the cap', async () => {
@@ -570,7 +405,6 @@ describe('AuditStore (09.7.1-T6)', () => {
       const stale = store.exportCsv('o-1');
       expect(data.pending).toHaveLength(1);
 
-      // Exactly what audit.page.ts does on an org switch: drop the export, then load the new org.
       store.resetExport();
       const reload = store.load('o-2');
       expect(data.pending).toHaveLength(2);
@@ -581,7 +415,6 @@ describe('AuditStore (09.7.1-T6)', () => {
 
       data.pending[1]?.resolve({ items: rows(1), next_cursor: null });
       await reload;
-      // The new org's list is in state; the old org's export left no banner and read no more.
       expect(store.rows()).toHaveLength(1);
       expect(store.exportState()).toEqual({ phase: 'idle' });
       expect(data.calls).toHaveLength(2);
@@ -628,7 +461,7 @@ describe('AuditStore (09.7.1-T6)', () => {
     // A page that refuses: the rows stay on screen and the refusal is in state with them.
     data.failure = typedFailure();
     data.failOnCall = data.calls.length + 1;
-    await store.loadMore('o-1');
+    await store.next('o-1');
     await store.exportCsv('o-1');
 
     const keys = new Set<string>();

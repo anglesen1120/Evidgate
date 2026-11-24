@@ -1,0 +1,28 @@
+:host {
+  display: block;
+  min-inline-size: 0;
+  color: var(--eg-text);
+  font-size: var(--eg-text-sm);
+  line-height: var(--eg-leading-sm);
+}
+
+.eg-table-pagination > [role='status'] {
+  flex: 1 1 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.size-field,
+.page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--eg-space-2);
+  max-inline-size: 100%;
+}
+
+.page-actions button {
+  max-inline-size: 100%;
+  block-size: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

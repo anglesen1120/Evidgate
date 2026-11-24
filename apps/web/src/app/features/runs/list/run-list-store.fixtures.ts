@@ -45,21 +45,7 @@ function rows(count: number, build: (index: number) => Partial<RunSummary> = () 
   return Array.from({ length: count }, (_, index) => run(index, build(index)));
 }
 
-/**
- * Lets the store's pending continuations run, so a page the test resolved has been published (or a
- * follow-up request recorded) before the next assertion. One `await` per hop of the store's own
- * `await` chain; more turns than the chain has are harmless.
- */
-async function flush(turns = 10): Promise<void> {
-  for (let turn = 0; turn < turns; turn += 1) {
-    await Promise.resolve();
-  }
-}
-
-/**
- * The run pages the store reads. Cursors are opaque strings the fake mints itself, so a page can
- * hand out a next cursor the test controls exactly (a fresh index, the same one again, or none).
- */
+// Opaque request cursors make accidental client-side cursor arithmetic fail the navigation tests.
 class FakeRunDataService {
   /** Every row the fake can serve, in server order. */
   all: RunSummary[] = [];
@@ -69,11 +55,12 @@ class FakeRunDataService {
   failOnCall: number | null = null;
   /** Serves this many rows per page regardless of the requested `limit`. */
   pageSizeOverride: number | null = null;
-  /** Names the same cursor on every page, so a cursor loop has to be refused. */
-  repeatCursor = false;
   /** Answers only when the test settles the matching `pending` entry. */
   manual = false;
-  readonly pending: Array<{ readonly resolve: (page: RunPage) => void }> = [];
+  readonly pending: Array<{
+    readonly resolve: (page: RunPage) => void;
+    readonly reject: (error: Error) => void;
+  }> = [];
   /** Every call the store made, in order. */
   readonly calls: Array<{ readonly projectId: string; readonly request: RunListQuery }> = [];
 
@@ -84,8 +71,8 @@ class FakeRunDataService {
     this.calls.push({ projectId, request });
     if (this.manual) {
       // The executor form: the app's ES2022 lib has no `Promise.withResolvers`.
-      return new Promise<RunPage>((resolve) => {
-        this.pending.push({ resolve });
+      return new Promise<RunPage>((resolve, reject) => {
+        this.pending.push({ resolve, reject });
       });
     }
     if (
@@ -108,10 +95,10 @@ class FakeRunDataService {
     const end = start + page.length;
     let next: string | null = null;
     if (end < this.all.length) {
-      next = this.repeatCursor ? 'same' : String(end);
+      next = `opaque-page/${end}+=`;
       this.startByCursor.set(next, end);
     }
     return Promise.resolve({ items, next_cursor: next });
   }
 }
-export { typedFailure, run, rows, flush, FakeRunDataService };
+export { typedFailure, run, rows, FakeRunDataService };

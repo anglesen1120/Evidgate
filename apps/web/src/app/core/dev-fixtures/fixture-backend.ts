@@ -81,6 +81,7 @@ import { dashboardFixture } from './fixture-dashboard';
 import { caseListFixtureBody } from './fixture-case-list';
 import { findBulkCaseListFixture } from './fixture-case-list-bulk';
 import { findBrowseCapFixture } from './fixture-browse-cap';
+import { CursorPagingFixtureScenario } from './fixture-cursor-paging';
 import { AuthoringTreeFixtureScenario } from './fixture-authoring-tree';
 import { AuthoringCasesFixtureScenario } from './fixture-authoring-cases';
 import { AiSettingsFixtureScenario, aiSettingsPermissions } from './fixture-ai-settings';
@@ -130,6 +131,7 @@ export class FixtureHttpBackend implements HttpBackend {
   private readonly aiSettings = new AiSettingsFixtureScenario();
   private readonly authoringPending = new AuthoringPendingFixtureScenario();
   private readonly authoringEditor = new AuthoringEditorFixtureScenario();
+  private readonly cursorPaging = new CursorPagingFixtureScenario();
 
   handle(request: HttpRequest<unknown>): Observable<HttpEvent<unknown>> {
     const relativePath = apiRelativePath(request.url);
@@ -297,6 +299,12 @@ export class FixtureHttpBackend implements HttpBackend {
         return byId;
       }
     }
+    const paged = this.cursorPaging.entry(
+      request,
+      route.operationId,
+      this.toggles.variantFor(route.operationId),
+    );
+    if (paged !== undefined) return paged;
     const cursorParameter = route.cursorQueryParameter;
     if (cursorParameter !== undefined) {
       const requestedCursor = queryParameter(request.urlWithParams, cursorParameter);
