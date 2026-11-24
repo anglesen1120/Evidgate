@@ -4,8 +4,8 @@ import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.compon
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { DataTablePagerComponent } from '../../../shared/ui/data-table/data-table-pager.component';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import { PolicyRevisionStateComponent } from './policy-revision-state.component';
-import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmTableImports } from '@evidgate/ui/table';
 
@@ -13,7 +13,7 @@ import { HlmTableImports } from '@evidgate/ui/table';
   selector: 'app-policy-revision-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    HlmButton,
+    RowActionComponent,
     HlmTableImports,
     DataTablePagerComponent,
     HlmCardImports,
@@ -99,19 +99,16 @@ import { HlmTableImports } from '@evidgate/ui/table';
                 </td>
                 <td hlmTd [attr.role]="'cell'" class="text-end">
                   <button
-                    hlmBtn
+                    appRowAction
                     #trigger
-                    [variant]="'outline'"
+                    [label]="copy.view + ' · ' + copy.revision + ' ' + row.revision_no"
                     type="button"
                     [attr.aria-haspopup]="'dialog'"
                     data-policy-view
-                    class="min-h-(--eg-control-touch)"
                     [attr.aria-label]="copy.view + ' · ' + copy.revision + ' ' + row.revision_no"
                     [disabled]="busy()"
-                    (click)="select(row.id, trigger)"
-                  >
-                    {{ copy.view }}
-                  </button>
+                    (click)="select(row.id, trigger.nativeElement)"
+                  ></button>
                 </td>
               </tr>
             } @empty {
@@ -147,7 +144,7 @@ export class RevisionListComponent {
   readonly rows = input<readonly PolicyRevisionSummaryDto[]>([]);
   readonly headId = input<string | null>(null);
   readonly selectedId = input<string | null>(null);
-  readonly selected = output<{ id: string; trigger: HTMLButtonElement }>();
+  readonly selected = output<{ id: string; trigger: HTMLElement }>();
   protected readonly subsectionSize = 'subsection' as const;
   protected readonly headTone = 'info' as const;
   readonly hasMore = input(false);
@@ -157,7 +154,7 @@ export class RevisionListComponent {
   readonly previous = output<void>();
   readonly next = output<void>();
   readonly pageSizeChange = output<number>();
-  protected select(id: string, trigger: HTMLButtonElement): void {
+  protected select(id: string, trigger: HTMLElement): void {
     if (!this.busy() && this.rows().some((row) => row.id === id))
       this.selected.emit({ id, trigger });
   }

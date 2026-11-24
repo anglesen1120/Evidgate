@@ -8,6 +8,7 @@ import { HlmIcon } from '@evidgate/ui/icon';
 import { HlmTableImports } from '@evidgate/ui/table';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import { PageHeaderImports } from '../../../shared/ui/page-header';
 import {
   EmptyPatternComponent,
@@ -27,6 +28,7 @@ import { ArtifactPreviewComponent } from './artifact-preview.component';
   imports: [
     RouterLink,
     HlmButton,
+    RowActionComponent,
     HlmCardImports,
     HlmIcon,
     HlmTableImports,

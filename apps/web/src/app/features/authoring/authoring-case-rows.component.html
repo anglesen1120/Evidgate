@@ -81,17 +81,15 @@
       >
       <app-copy-value-button [value]="row.code" [label]="copy.code" [iconOnly]="true" />
       <button
-        hlmBtn
+        appRowAction
         type="button"
-        [size]="'sm'"
-        [variant]="'ghost'"
+        [icon]="'lucideInfo'"
+        [label]="identifiers + ' · ' + row.code"
         [hlmDialogTriggerFor]="identifierDialog"
         [attr.aria-label]="identifiers + ' · ' + row.code"
         data-case-identifiers
         (click)="inspected.set(row)"
-      >
-        {{ identifiers }}
-      </button>
+      ></button>
     </div>
   </div>
 </ng-template>
@@ -122,17 +120,14 @@
 <ng-template #viewCell let-row>
   @if (editorScope(); as scope) {
     <a
-      hlmBtn
-      [variant]="'outline'"
-      [size]="'sm'"
+      appRowAction
+      [label]="viewName(row)"
       data-case-view
-      class="min-w-(--eg-control-touch) whitespace-nowrap! pointer-coarse:min-h-(--eg-control-touch)"
       [routerLink]="scope.concat(row.case_id)"
       [queryParamsHandling]="'preserve'"
       [preserveFragment]="true"
       [attr.aria-label]="viewName(row)"
-      >{{ copy.view }}</a
-    >
+    ></a>
   } @else {
     <span class="help">{{ copy.unavailableEditor }}</span>
   }

@@ -8,7 +8,7 @@ import {
   viewChild,
 } from '@angular/core';
 import type { RunSummary } from '@evidgate/sdk';
-import { HlmButton } from '@evidgate/ui/button';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import {
@@ -26,7 +26,7 @@ import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
   imports: [
     DataTableComponent,
     AbsoluteTimeComponent,
-    HlmButton,
+    RowActionComponent,
     HlmDialogImports,
     DecisionChipComponent,
     RunStatePillComponent,
@@ -55,18 +55,14 @@ import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
     /></ng-template>
     <ng-template #view let-row>
       <button
-        hlmBtn
+        appRowAction
         #trigger
-        type="button"
         data-dashboard-run-view
-        class="whitespace-nowrap"
-        [variant]="'outline'"
+        [label]="viewLabel(row.run_id)"
         [attr.aria-haspopup]="'dialog'"
         [attr.aria-label]="viewLabel(row.run_id)"
-        (click)="inspected.set({ row, trigger })"
-      >
-        {{ copy.view }}
-      </button>
+        (click)="inspected.set({ row, trigger: trigger.nativeElement })"
+      ></button>
     </ng-template>
     @if (inspected(); as selection) {
       <hlm-dialog
@@ -126,7 +122,7 @@ export class DashboardRunsComponent {
   protected readonly rowId = (row: RunSummary) => row.run_id;
   protected readonly inspected = linkedSignal<
     readonly RunSummary[],
-    { row: RunSummary; trigger: HTMLButtonElement } | null
+    { row: RunSummary; trigger: HTMLElement } | null
   >({ source: this.rows, computation: () => null });
   private readonly identity =
     viewChild.required<TemplateRef<DataTableCellContext<RunSummary>>>('identity');

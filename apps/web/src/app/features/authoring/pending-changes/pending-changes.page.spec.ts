@@ -1,4 +1,4 @@
-import { manualChangeDetection } from '@angular/cdk/testing';
+import { ComponentHarness, manualChangeDetection } from '@angular/cdk/testing';
 import { computed, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
@@ -26,6 +26,14 @@ import {
   pendingError,
   pendingRow,
 } from './pending-changes.testing';
+
+class PreviewHarness extends ComponentHarness {
+  static hostSelector = 'button[data-pending-preview]';
+  readonly icon = this.locatorFor('hlm-icon');
+  async button() {
+    return this.host();
+  }
+}
 
 provideLayoutTestStubs();
 describe('PendingChangesPage', () => {
@@ -122,9 +130,15 @@ describe('PendingChangesPage', () => {
     );
   });
   it('renders rows, exact selection, full escaped comment and no row apply', async () => {
-    const { ui } = await setup();
+    const { fixture, ui } = await setup();
+    const action = await TestbedHarnessEnvironment.loader(fixture).getHarness(PreviewHarness);
+    const button = await action.button();
+    expect(await button.getAttribute('aria-label')).toContain(CHANGE);
+    expect(await button.getAttribute('aria-label')).toMatch(/^View /);
+    expect(await button.text({ exclude: '[popover]' })).toBe('');
+    expect(await (await action.icon()).getAttribute('aria-hidden')).toBe('true');
     expect(await ui.text()).toContain('Review this change');
-    await ui.click('[data-pending-preview]');
+    await button.click();
     expect(await ui.overlayText('[data-pending-preview-content]')).toContain(
       '<script>plain text</script>',
     );

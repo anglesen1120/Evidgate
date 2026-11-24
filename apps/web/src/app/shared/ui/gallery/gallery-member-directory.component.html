@@ -185,41 +185,33 @@
                   <div class="flex flex-wrap items-center justify-end gap-2">
                     <button
                       #view
-                      hlmBtn
-                      type="button"
-                      [variant]="'outline'"
+                      appRowAction
+                      [label]="viewLabel(row.email)"
                       [value]="row.email"
                       [attr.data-action]="'view'"
                       [attr.aria-haspopup]="'dialog'"
                       [attr.aria-label]="viewLabel(row.email)"
-                      (click)="dialog.open(row, 'view', view, view)"
-                    >
-                      {{ copy.view }}
-                    </button>
+                      (click)="dialog.open(row, 'view', view.nativeElement, view.nativeElement)"
+                    ></button>
                     @if (!policy.narrow()) {
                       <button
                         #edit
-                        hlmBtn
-                        type="button"
-                        [variant]="'ghost'"
+                        appRowAction
+                        [icon]="'lucidePencil'"
+                        [label]="editLabel(row.email)"
                         [attr.data-action]="'edit'"
                         [attr.aria-haspopup]="'dialog'"
                         [attr.aria-label]="editLabel(row.email)"
-                        (click)="dialog.open(row, 'edit', edit, view)"
-                      >
-                        {{ copy.edit }}
-                      </button>
+                        (click)="dialog.open(row, 'edit', edit.nativeElement, view.nativeElement)"
+                      ></button>
                     }
                     <button
-                      hlmBtn
-                      type="button"
-                      [variant]="'ghost'"
-                      [size]="'icon'"
+                      appRowAction
+                      [icon]="'lucideEllipsis'"
+                      [label]="moreLabel(row.email)"
                       [attr.aria-label]="moreLabel(row.email)"
                       [hlmDropdownMenuTrigger]="more"
-                    >
-                      <span aria-hidden="true">⋯</span>
-                    </button>
+                    ></button>
                     <ng-template #more
                       ><div hlmDropdownMenu>
                         <button

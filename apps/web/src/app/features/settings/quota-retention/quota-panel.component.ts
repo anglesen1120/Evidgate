@@ -11,7 +11,6 @@ import {
 import { ActivatedRoute } from '@angular/router';
 import type { UsageSummaryDto, UsageSummaryMetricDto, UsageSummaryProjectDto } from '@evidgate/sdk';
 import { HlmDialogImports } from '@evidgate/ui/dialog';
-import { HlmButton } from '@evidgate/ui/button';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmTableImports } from '@evidgate/ui/table';
@@ -20,6 +19,7 @@ import type { NavIconName } from '../../../shell/nav/nav.models';
 import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { DataTableComponent } from '../../../shared/ui/data-table/data-table.component';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import type {
   DataTableCellContext,
   DataTableColumn,
@@ -37,7 +37,7 @@ type ProjectCell = TemplateRef<DataTableCellContext<UsageSummaryProjectDto>>;
   imports: [
     HlmCardImports,
     HlmDialogImports,
-    HlmButton,
+    RowActionComponent,
     CopyableIdentifierComponent,
     HlmTableImports,
     ShellIconComponent,
@@ -67,7 +67,7 @@ export class QuotaPanelComponent {
     {
       row: UsageSummaryMetricDto | UsageSummaryProjectDto;
       metric: string;
-      trigger: HTMLButtonElement;
+      trigger: HTMLElement;
     } | null
   >({ source: this.quota.usageSummary, computation: () => null });
   protected readonly pageSize = 'page' as const;

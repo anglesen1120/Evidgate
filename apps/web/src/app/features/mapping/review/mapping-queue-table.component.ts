@@ -9,7 +9,7 @@ import {
   TemplateRef,
   viewChild,
 } from '@angular/core';
-import { HlmButton } from '@evidgate/ui/button';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import { HlmIcon } from '@evidgate/ui/icon';
 import { StatusPillComponent } from '../../../shared/ui/chips';
 import { DataTableComponent } from '../../../shared/ui/data-table/data-table.component';
@@ -25,7 +25,7 @@ type Cell = TemplateRef<DataTableCellContext<MappingRowViewModel>>;
 
 @Component({
   selector: 'app-mapping-queue-table',
-  imports: [DataTableComponent, StatusPillComponent, HlmButton, HlmIcon],
+  imports: [DataTableComponent, StatusPillComponent, RowActionComponent, HlmIcon],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class:
@@ -60,21 +60,14 @@ type Cell = TemplateRef<DataTableCellContext<MappingRowViewModel>>;
     </ng-template>
     <ng-template #actions let-row>
       <button
-        hlmBtn
+        appRowAction
         #opener
-        type="button"
-        class="shrink-0 whitespace-nowrap"
-        [variant]="'outline'"
-        [size]="'sm'"
         [attr.aria-haspopup]="'dialog'"
         [attr.data-row]="row.id"
-        (click)="view.emit({ row, opener })"
-      >
-        {{ copy.view
-        }}<span class="sr-only"
-          >&ngsp;<bdi>{{ display(row.name) }}</bdi></span
-        >
-      </button>
+        [label]="copy.view + ' ' + display(row.name)"
+        [attr.aria-label]="copy.view + ' ' + display(row.name)"
+        (click)="view.emit({ row, opener: opener.nativeElement })"
+      ></button>
     </ng-template>
   `,
 })
@@ -82,7 +75,7 @@ export class MappingQueueTableComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly rows = input.required<readonly MappingRowViewModel[]>();
   readonly selectedId = input<string>();
-  readonly view = output<{ row: MappingRowViewModel; opener: HTMLButtonElement }>();
+  readonly view = output<{ row: MappingRowViewModel; opener: HTMLElement }>();
   protected readonly copy = mappingCopy;
   protected readonly display = escapeFormatChars;
   protected readonly stateLabel = (row: MappingRowViewModel) => this.copy[row.state];

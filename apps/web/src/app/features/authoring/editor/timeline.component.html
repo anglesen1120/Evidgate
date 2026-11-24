@@ -103,33 +103,28 @@
         [class.flex-nowrap]="virtualRows()"
       >
         <button
-          hlmBtn
-          [variant]="'outline'"
+          appRowAction
           type="button"
-          class="min-h-(--eg-control-touch)"
-          [class.whitespace-normal]="!virtualRows()"
-          [class.whitespace-nowrap]="virtualRows()"
+          label="View version {{ row.version_no }}"
+          i18n-label="@@authoring.editor.inspect-version"
+          aria-label="View version {{ row.version_no }}"
+          i18n-aria-label="@@authoring.editor.inspect-version"
           [attr.data-inspect-version]="row.version_id"
           (click)="store.selectVersion(row.version_id)"
-          i18n="@@authoring.editor.inspect-version"
-        >
-          View version {{ row.version_no }}
-        </button>
+        ></button>
         <button
-          hlmBtn
-          [variant]="'ghost'"
+          appRowAction
           type="button"
-          class="min-h-(--eg-control-touch)"
-          [class.whitespace-normal]="!virtualRows()"
-          [class.whitespace-nowrap]="virtualRows()"
+          [icon]="'lucideFileDiff'"
+          label="Compare with {{ row.version_no }}"
+          i18n-label="@@authoring.editor.compare-version"
+          aria-label="Compare with {{ row.version_no }}"
+          i18n-aria-label="@@authoring.editor.compare-version"
           [attr.data-compare-version]="row.version_id"
           [disabled]="!store.selected() || store.selected() === row.version_id"
           [attr.aria-describedby]="!store.selected() ? 'case-comparison-reason' : null"
           (click)="store.compareVersion(row.version_id)"
-          i18n="@@authoring.editor.compare-version"
-        >
-          Compare with {{ row.version_no }}
-        </button>
+        ></button>
       </div>
     </ng-template>
     @if (store.history.error() && historyStatus() === 'ready') {

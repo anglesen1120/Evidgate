@@ -30,18 +30,16 @@
   <div class="flex flex-nowrap items-center justify-end gap-(--eg-space-2) whitespace-nowrap">
     <button
       #opener
-      hlmBtn
-      [variant]="'outline'"
+      appRowAction
+      [label]="ui.view + ' ' + operationLabel(row.change_type) + ' · ' + row.change_id"
       type="button"
       [hlmDialogTriggerFor]="viewDialog"
       data-pending-preview
       [attr.data-review-change]="selection() ? null : ''"
       [attr.data-pending-change-id]="row.change_id"
       [attr.aria-label]="ui.view + ' ' + operationLabel(row.change_type) + ' · ' + row.change_id"
-      (click)="inspect(row, opener)"
-    >
-      {{ ui.view }}
-    </button>
+      (click)="inspect(row, opener.nativeElement)"
+    ></button>
     @if (more(); as menu) {
       <ng-container
         [ngTemplateOutlet]="menu"

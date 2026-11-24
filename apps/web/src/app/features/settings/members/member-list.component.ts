@@ -23,6 +23,7 @@ import {
   BADGE_TONE_CLASSES,
 } from '../../../shared/ui/chips/badge-classes';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
+import { RowActionComponent } from '../../../shared/ui/data-table/row-action.component';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import {
   DataTableComponent,
@@ -116,6 +117,7 @@ export const MEMBERS_COPY = {
   selector: 'app-member-list',
   imports: [
     StatusPillComponent,
+    RowActionComponent,
     DataTableComponent,
     DatePipe,
     AbsoluteTimeComponent,
@@ -226,34 +228,28 @@ export const MEMBERS_COPY = {
     <ng-template #actionsCell let-member>
       <button
         #viewButton
-        hlmBtn
-        [variant]="'outline'"
-        [size]="'sm'"
+        appRowAction
+        [label]="view + ' · ' + display(member.invited_email)"
         type="button"
         data-member-row-view
-        class="pointer-coarse:min-h-(--eg-control-touch) pointer-coarse:min-w-(--eg-control-touch)"
         [attr.aria-haspopup]="'dialog'"
         [attr.aria-label]="view + ' · ' + display(member.invited_email)"
-        (click)="inspection.set({ id: member.id, trigger: viewButton })"
-      >
-        {{ view }}
-      </button>
+        (click)="inspection.set({ id: member.id, trigger: viewButton.nativeElement })"
+      ></button>
       @if (canWrite() && !viewport.narrow() && member.status !== 'removed') {
         <button
-          hlmBtn
+          appRowAction
           #actionsButton
-          [variant]="'ghost'"
+          [icon]="'lucideEllipsis'"
           type="button"
-          [size]="'icon-sm'"
-          class="mutation ms-2 min-h-(--eg-control-sm) min-w-max whitespace-nowrap pointer-coarse:min-h-(--eg-control-touch)"
+          class="mutation ms-2"
+          [label]="copy.actions + ' ' + display(member.invited_email)"
+          [attr.aria-label]="copy.actions + ' ' + display(member.invited_email)"
           [hlmDropdownMenuTrigger]="actionsMenu"
           data-members-actions
           [attr.data-members-status]="member.status"
           [attr.data-membership-id]="member.id"
-        >
-          <span aria-hidden="true" class="text-lg leading-none">⋯</span>
-          <span class="sr-only">{{ copy.actions }} {{ member.invited_email }}</span>
-        </button>
+        ></button>
         <ng-template #actionsMenu>
           <hlm-dropdown-menu
             class="min-w-max [&_button]:justify-start [&_button]:text-start [&_button]:whitespace-nowrap"
@@ -263,7 +259,7 @@ export const MEMBERS_COPY = {
                 hlmDropdownMenuItem
                 type="button"
                 data-members-edit-open
-                (triggered)="requestEditRoles(member, actionsButton)"
+                (triggered)="requestEditRoles(member, actionsButton.nativeElement)"
               >
                 {{ copy.editRoles }}
               </button>
@@ -273,7 +269,7 @@ export const MEMBERS_COPY = {
                 hlmDropdownMenuItem
                 type="button"
                 data-members-resend-open
-                (triggered)="requestResend(member, actionsButton)"
+                (triggered)="requestResend(member, actionsButton.nativeElement)"
               >
                 {{ copy.resend }}
               </button>
@@ -281,7 +277,7 @@ export const MEMBERS_COPY = {
                 hlmDropdownMenuItem
                 type="button"
                 data-members-cancel-invite-open
-                (triggered)="requestCancelInvite(member, actionsButton)"
+                (triggered)="requestCancelInvite(member, actionsButton.nativeElement)"
               >
                 {{ copy.cancelInvite }}
               </button>
@@ -291,7 +287,7 @@ export const MEMBERS_COPY = {
               [variant]="'destructive'"
               type="button"
               data-members-remove
-              (triggered)="requestRemove(member, actionsButton)"
+              (triggered)="requestRemove(member, actionsButton.nativeElement)"
             >
               {{ copy.remove }}
             </button>
@@ -373,7 +369,7 @@ export class MemberListComponent {
 
   readonly members = input.required<readonly MembershipView[]>();
   readonly canWrite = input(false);
-  protected readonly inspection = signal<{ id: string; trigger: HTMLButtonElement } | null>(null);
+  protected readonly inspection = signal<{ id: string; trigger: HTMLElement } | null>(null);
   protected readonly inspectedMember = computed(() => {
     const selected = this.inspection();
     return selected ? this.members().find((member) => member.id === selected.id) : undefined;

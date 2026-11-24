@@ -35,6 +35,11 @@ class RevisionHistoryHarness extends ComponentHarness {
   readonly size = this.locatorFor('app-data-table-pager hlm-select-trigger button');
   readonly options = this.documentRootLocatorFactory().locatorForAll('[role="option"]');
 }
+class RevisionActionsHarness extends ComponentHarness {
+  static hostSelector = 'app-policy-revision-list';
+  readonly view = this.locatorFor('button[data-policy-view]');
+  readonly viewIcon = this.locatorFor('button[data-policy-view] hlm-icon');
+}
 describe('RevisionListComponent', () => {
   afterEach(() => TestBed.resetTestingModule());
   it('renders localized state, UTC creation time, full recoverable hash and head marker', async () => {
@@ -97,7 +102,7 @@ describe('RevisionListComponent', () => {
     await (await harness.next()).click();
     expect(next).toHaveBeenCalledTimes(1);
   });
-  it('makes selection keyboard-operable and exposes the selected detail relationship', async () => {
+  it('makes icon-only selection keyboard-operable and exposes the selected detail relationship', async () => {
     const fixture = TestBed.createComponent(RevisionListComponent);
     const selected = vi.fn();
     fixture.componentInstance.selected.subscribe(selected);
@@ -105,17 +110,23 @@ describe('RevisionListComponent', () => {
     fixture.componentRef.setInput('selectedId', row.id);
     const harness = await TestbedHarnessEnvironment.harnessForFixture(
       fixture,
-      RevisionHistoryHarness,
+      RevisionActionsHarness,
     );
     const action = await harness.view();
-    await action.focus();
+    expect(await action.text({ exclude: '[popover]' })).toBe('');
+    expect(await action.getAttribute('aria-label')).toBe('View · Revision 3');
+    expect(await action.getProperty('type')).toBe('button');
     expect(await action.getAttribute('aria-haspopup')).toBe('dialog');
+    expect(await (await harness.viewIcon()).getAttribute('aria-hidden')).toBe('true');
+    await action.focus();
     await action.click();
     expect(selected).toHaveBeenCalledExactlyOnceWith({
       id: row.id,
-      trigger: expect.any(HTMLButtonElement) as unknown,
+      trigger: expect.any(HTMLElement) as unknown,
     });
     fixture.componentRef.setInput('busy', true);
+    await fixture.whenStable();
+    expect(await action.getProperty('disabled')).toBe(true);
     await action.click();
     expect(selected).toHaveBeenCalledTimes(1);
   });

@@ -20,7 +20,7 @@ class MappingHarness extends ComponentHarness {
   readonly filterConflict = this.locatorFor('button[data-mapping-filter="conflicted"]');
   readonly footer = this.locatorFor('[data-queue] footer');
   readonly selection = this.locatorFor('[data-mapping-identity][aria-current="true"]');
-  readonly pickConflict = this.locatorFor('button[data-row="map-63"]');
+  readonly pickConflict = this.locatorFor('button[aria-label="View Checkout confirmation"]');
   readonly pickResolved = this.locatorFor('button[data-row="map-64"]');
   readonly table = this.locatorFor('[role="table"]');
   readonly caption = this.locatorFor('app-data-table .caption');
@@ -105,7 +105,8 @@ describe('Mapping resolution review', () => {
       'case-checkout-17 / case-checkout-22',
     );
     const trigger = await page.pickConflict();
-    expect(await trigger.text()).toContain('Checkout confirmation');
+    expect(await trigger.text({ exclude: '[popover]' })).toBe('');
+    expect(await trigger.getAttribute('aria-label')).toBe('View Checkout confirmation');
     const url = TestBed.inject(Router).url;
     await trigger.focus();
     await trigger.click();

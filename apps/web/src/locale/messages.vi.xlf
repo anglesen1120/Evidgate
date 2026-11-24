@@ -22608,7 +22608,6 @@
       <trans-unit id="catalog.case-view.history" datatype="html"><source>Recorded history</source><target>Lịch sử đã ghi nhận</target></trans-unit>
       <trans-unit id="authoring.case-table.live-links" datatype="html"><source>Live links</source><target>Liên kết còn hiệu lực</target></trans-unit>
       <trans-unit id="authoring.case-table.loaded-states" datatype="html"><source>Lifecycle of loaded cases</source><target>Vòng đời của các ca kiểm thử đã tải</target></trans-unit>
-      <trans-unit id="authoring.history.view" datatype="html"><source>View</source><target>Xem</target></trans-unit>
       <trans-unit id="authoring.history.summary" datatype="html"><source>Summary</source><target>Tóm tắt</target></trans-unit>
       <trans-unit id="authoring.history.provenance" datatype="html"><source>Version provenance</source><target>Nguồn gốc phiên bản</target></trans-unit>
       <trans-unit id="authoring.import-export.version-time" datatype="html"><source>Created at (UTC)</source><target>Thời điểm tạo (UTC)</target></trans-unit>

@@ -1,10 +1,12 @@
 import { InteractivityChecker } from '@angular/cdk/a11y';
 import { ComponentHarness, TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { SupportAccessReviewPage } from './support-access-review.page';
 import { supportAccessFixture } from './support-access-review.fixture';
 
@@ -12,7 +14,7 @@ class PageHarness extends ComponentHarness {
   static hostSelector = 'app-support-access-review';
   readonly title = this.locatorFor('h1');
   readonly snapshot = this.locatorFor('[data-snapshot-time] time');
-  readonly choices = this.locatorForAll('[data-view-record]');
+  readonly choices = this.locatorForAll('button[data-view-record]');
   readonly dialog = this.documentRootLocatorFactory().locatorForOptional('[role="dialog"]');
   async open(index = 0) {
     const trigger = (await this.choices())[index];
@@ -23,7 +25,16 @@ class PageHarness extends ComponentHarness {
   }
   readonly badge = this.locatorFor('tbody app-status-pill');
   readonly badgeIcon = this.locatorFor('tbody app-status-pill hlm-icon');
-  readonly decision = this.locatorForOptional('[data-grant-action]');
+  readonly decision = this.locatorForOptional('button[data-grant-action]');
+  readonly decisionIcon = this.locatorFor('button[data-grant-action] hlm-icon');
+  readonly viewIcons = this.locatorForAll('button[data-view-record] hlm-icon');
+  readonly decisionDialog = this.documentRootLocatorFactory().locatorForOptional(
+    '[role="dialog"], [role="alertdialog"]',
+  );
+  readonly cancel = this.documentRootLocatorFactory().locatorFor('#grant-cancel');
+  readonly confirm = this.documentRootLocatorFactory().locatorFor(
+    '[role="dialog"] footer button:not(#grant-cancel), [role="alertdialog"] footer button:not(#grant-cancel)',
+  );
   readonly historicalAction = this.locatorForOptional(
     '[data-grant-row="sg-40"] [data-grant-action]',
   );
@@ -33,11 +44,46 @@ class PageHarness extends ComponentHarness {
 describe('SupportAccessReviewPage', () => {
   provideLayoutTestStubs();
 
+  it.each([
+    ['ready', 'Approve support access · sg-41', false],
+    ['approved', 'Revoke support access · sg-41', true],
+  ] as const)(
+    'keeps the %s decision contextual and requires confirmation',
+    async (state, name, danger) => {
+      const { page, params } = await render(state);
+      params.next(convertToParamMap({ state, section: 'admin-preview' }));
+      const action = await page.decision();
+      if (!action) throw new Error('Expected support decision action');
+      expect(await action.text({ exclude: '[popover]' })).toBe('');
+      expect(await action.getAttribute('aria-label')).toBe(name);
+      expect(await action.hasClass('row-action-danger')).toBe(danger);
+      expect(await (await page.decisionIcon()).getAttribute('aria-hidden')).toBe('true');
+      expect(await action.getProperty('disabled')).toBe(false);
+      await action.focus();
+      await action.click();
+      const dialog = await page.decisionDialog();
+      if (!dialog) throw new Error('Expected support decision confirmation');
+      expect(await dialog.getAttribute('role')).toBe(danger ? 'alertdialog' : 'dialog');
+      expect(await dialog.text()).toContain('sg-41');
+      expect(await (await page.cancel()).isFocused()).toBe(true);
+      expect(await (await page.confirm()).getProperty('disabled')).toBe(true);
+      await (await page.cancel()).click();
+      expect(await page.decisionDialog()).toBeNull();
+      expect(await action.isFocused()).toBe(true);
+      expect(await action.getAttribute('aria-label')).toBe(name);
+    },
+  );
   async function render(state: string) {
     const params = new BehaviorSubject(convertToParamMap({ state }));
     TestBed.configureTestingModule({
       imports: [SupportAccessReviewPage],
-      providers: [{ provide: ActivatedRoute, useValue: { queryParamMap: params } }],
+      providers: [
+        { provide: ActivatedRoute, useValue: { queryParamMap: params } },
+        {
+          provide: NarrowMutationPolicy,
+          useValue: { canMutate: signal(true), narrow: signal(false), allowsMutation: () => true },
+        },
+      ],
     });
     vi.spyOn(TestBed.inject(InteractivityChecker), 'isVisible').mockReturnValue(true);
     const fixture = TestBed.createComponent(SupportAccessReviewPage);
@@ -96,8 +142,15 @@ describe('SupportAccessReviewPage', () => {
     expect(await (await page.badge()).text()).toContain('Requested');
     expect(await (await page.badgeIcon()).getAttribute('aria-hidden')).toBe('true');
     expect(await (await page.decision())?.getProperty('disabled')).toBe(true);
+    const decision = await page.decision();
+    expect(await decision?.text({ exclude: '[popover]' })).toBe('');
+    expect(await decision?.getAttribute('aria-label')).toBe('Approve support access · sg-41');
+    await decision?.click();
     expect(await page.dialog()).toBeNull();
     const trigger = await page.open(1);
+    expect(await trigger.text({ exclude: '[popover]' })).toBe('');
+    expect(await trigger.getProperty('type')).toBe('button');
+    expect(await trigger.getAttribute('aria-label')).toBe('View · sg-40');
     const dialog = await page.dialog();
     if (!dialog) throw new Error('Expected historical grant details');
     const text = await dialog.text();

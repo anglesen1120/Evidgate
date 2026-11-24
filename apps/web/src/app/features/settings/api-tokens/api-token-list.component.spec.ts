@@ -13,6 +13,8 @@ class TokenListHarness extends ComponentHarness {
   readonly search = this.locatorFor('#api-token-search');
   readonly inspectButtons = this.locatorForAll('[data-api-inspect]');
   readonly rowFacts = this.locatorForAll('[data-api-token-row] app-api-token-facts');
+  readonly revokeButtons = this.locatorForAll('button[data-api-revoke]');
+  readonly revokeIcon = this.locatorFor('button[data-api-revoke] hlm-icon');
   readonly detail = this.documentRootLocatorFactory().locatorForOptional('[role="dialog"]');
   async open(index = 0) {
     const trigger = (await this.inspectButtons())[index];
@@ -199,20 +201,28 @@ describe('ApiTokenListComponent', () => {
   });
 
   it('gates revoke by permission, busy state and viewport', async () => {
-    const { root, fixture, wide } = await render(
+    const { root, fixture, wide, harness } = await render(
       [ROW, { ...ROW, id: 'old', status: 'revoked' }],
       true,
     );
     const revoke = vi.fn();
     fixture.componentInstance.revoke.subscribe(revoke);
-    const button = root.querySelector<HTMLButtonElement>('[data-api-revoke]');
-    expect(root.querySelectorAll('[data-api-revoke]')).toHaveLength(1);
-    button?.click();
+    const buttons = await harness.revokeButtons();
+    expect(buttons).toHaveLength(1);
+    const button = buttons[0];
+    if (!button) throw new Error('Expected token Revoke action');
+    expect(await button.text({ exclude: '[popover]' })).toBe('');
+    expect(await button.getAttribute('aria-label')).toBe(`Revoke token: ${ROW.name}`);
+    expect(await button.hasClass('row-action-danger')).toBe(true);
+    expect(await (await harness.revokeIcon()).getAttribute('aria-hidden')).toBe('true');
+    expect(await button.getProperty('type')).toBe('button');
+    await button.focus();
+    await button.click();
     expect(revoke).toHaveBeenCalledWith(ROW);
     fixture.componentRef.setInput('busy', true);
     await fixture.whenStable();
-    expect(button?.disabled).toBe(true);
-    button?.click();
+    expect(await button.getProperty('disabled')).toBe(true);
+    await button.click();
     expect(revoke).toHaveBeenCalledTimes(1);
     wide.set(false);
     await fixture.whenStable();

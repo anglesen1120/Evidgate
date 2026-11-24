@@ -83,7 +83,7 @@ export class PolicyPage {
   protected readonly mutationPolicy = inject(NarrowMutationPolicy);
 
   protected readonly canWrite = computed(() => this.session.has('policy:write'));
-  protected readonly viewed = signal<{ id: string; trigger: HTMLButtonElement } | null>(null);
+  protected readonly viewed = signal<{ id: string; trigger: HTMLElement } | null>(null);
   protected readonly compareTab = 'compare' as const;
   protected readonly activationTab = 'activation' as const;
   protected readonly revisionId = signal(this.route.snapshot.queryParamMap.get('revision') ?? '');
@@ -183,7 +183,7 @@ export class PolicyPage {
     this.published.set(result);
     this.targetId.set(result.revision.id);
   }
-  protected viewRevision(selection: { id: string; trigger: HTMLButtonElement }): void {
+  protected viewRevision(selection: { id: string; trigger: HTMLElement }): void {
     if (this.store.publishing() || this.store.phase() === 'loading') return;
     this.selectRevision(selection.id);
     this.viewed.set(selection);

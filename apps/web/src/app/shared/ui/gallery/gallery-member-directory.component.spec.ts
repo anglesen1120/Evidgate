@@ -15,8 +15,8 @@ class DirectoryHarness extends ComponentHarness {
   static hostSelector = 'app-gallery-member-directory';
   readonly caption = this.locatorFor('caption');
   readonly columns = this.locatorForAll('th[scope="col"]');
-  readonly view = this.locatorFor('tbody tr:first-child [data-action="view"]');
-  readonly edit = this.locatorFor('tbody tr:first-child [data-action="edit"]');
+  readonly view = this.locatorFor('tbody tr:first-child button[aria-label^="View "]');
+  readonly edit = this.locatorFor('tbody tr:first-child button[aria-label^="Edit roles for "]');
   readonly edits = this.locatorForAll('[data-action="edit"]');
   readonly firstRow = this.locatorFor('tbody tr:first-child');
   readonly range = this.locatorFor('[data-range]');
@@ -152,6 +152,7 @@ describe('Member directory specimen', () => {
     const { table, root } = await mount();
     const trigger = await table.view();
     expect(await trigger.getAttribute('aria-label')).toBe('View linh@example.test');
+    expect(await trigger.text({ exclude: '[popover]' })).toBe('');
     await trigger.click();
     const dialog = await root.getHarness(MemberDialogHarness);
     const title = await dialog.title();
