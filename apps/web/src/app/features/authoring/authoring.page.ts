@@ -25,8 +25,8 @@ import { RequestStateComponent } from '../../shared/ui/states/request-state.comp
 import { InlineFeedbackComponent } from '../../shared/ui/states/inline-feedback.component';
 import { EmptyPatternComponent } from '../../shared/ui/states/empty-pattern.component';
 import { NumberValueComponent } from '../../shared/ui/values/number-value.component';
-import { CopyableIdentifierComponent } from '../../shared/ui/values/copyable-identifier.component';
 import { ShellIconComponent } from '../../shell/layout/shell-icon.component';
+import { AuthoringNodeDetailsComponent } from './authoring-node-details.component';
 import { AuthoringTreePaneComponent } from './authoring-tree-pane.component';
 import { AuthoringCaseTableComponent } from './authoring-case-table.component';
 import { AUTHORING_TREE_COPY, treeBrowseCappedHelp } from './authoring-tree.copy';
@@ -47,7 +47,7 @@ import { AuthoringStore } from './authoring.store';
     SectionHeaderComponent,
     RequestStateComponent,
     InlineFeedbackComponent,
-    CopyableIdentifierComponent,
+    AuthoringNodeDetailsComponent,
     AuthoringTreePaneComponent,
     AuthoringCaseTableComponent,
   ],

@@ -2,22 +2,16 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
 import type {} from '../../src/app/core/dev-fixtures/fixture-request-log';
 import {
-  localePath,
-  LOCALES,
-  ORG_ACME,
-  PROJECT_STOREFRONT,
-  seedStoredTheme,
-  THEMES,
-  withVariants,
-} from './support';
+  authoringTreePath,
+  IDS,
+  LEAF,
+  PAGE,
+  readOnlyTreePath,
+  ROOT,
+  TREE,
+} from './authoring-tree.helpers';
+import { LOCALES, seedStoredTheme, THEMES, withVariants } from './support';
 
-const PAGE = 'app-authoring-page';
-const TREE = 'app-authoring-tree-pane';
-const IDS = [101, 102, 103, 104, 105, 106, 107].map(
-  (suffix) => `018f0000-0000-7000-8000-000000000${suffix}`,
-);
-const ROOT = IDS[0] ?? '';
-const LEAF = IDS[6] ?? '';
 const ACCOUNT = '018f0000-0000-7000-8000-000000000108';
 
 async function tabTo(page: Page, target: Locator): Promise<void> {
@@ -29,27 +23,8 @@ async function tabTo(page: Page, target: Locator): Promise<void> {
 }
 
 for (const locale of LOCALES) {
-  const path = localePath(
-    locale,
-    `/dev/authoring-tree/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}`,
-  );
-  const base = withVariants(path, ['?fixture.variant.listPermissions=settings-policy-readonly']);
-  const labels =
-    locale === 'vi'
-      ? {
-          title: 'Cây chức năng',
-          all: 'Các nút gốc của dự án',
-          moreRoots: 'Tải thêm nút gốc',
-          moreChildren: 'Tải thêm nút con',
-          pending: 'Chưa có số thay đổi đang chờ',
-        }
-      : {
-          title: 'Feature tree',
-          all: 'Project roots',
-          moreRoots: 'Load more root nodes',
-          moreChildren: 'Load more child nodes',
-          pending: 'Pending change count unavailable',
-        };
+  const base = readOnlyTreePath(locale);
+  const projectRoots = locale === 'vi' ? 'Các nút gốc của dự án' : 'Project roots';
 
   test(`tree native Tab and arrow model never selects on focus (${locale})`, async ({ page }) => {
     await page.goto(base);
@@ -98,7 +73,7 @@ for (const locale of LOCALES) {
     await page.goto(withVariants(base, [`?node_id=${LEAF}&cursor=old-case-cursor`]));
     const crumbs = page.locator('[data-authoring-breadcrumb] li');
     await expect(crumbs).toHaveCount(8);
-    await expect(crumbs.first()).toHaveText(labels.all);
+    await expect(crumbs.first()).toHaveText(projectRoots);
     await expect(crumbs.nth(1)).toContainText('Thanh toán');
     await expect(crumbs.last()).toContainText('Tổng kết kiểm thử');
     await expect(page.locator(`[data-disclosure="${ROOT}"]`)).toHaveAttribute(
@@ -122,46 +97,6 @@ for (const locale of LOCALES) {
     await expect(crumbs).toHaveCount(1);
     expect(new URL(page.url()).searchParams.has('node_id')).toBe(false);
   });
-
-  for (const theme of THEMES)
-    for (const width of [360, 1280]) {
-      test(`tree counts, deep wrapped titles, scoped paging and axe (${locale}, ${theme}, ${width})`, async ({
-        page,
-      }) => {
-        await seedStoredTheme(page, theme);
-        await page.setViewportSize({ width, height: 900 });
-        await page.goto(base);
-        await expect(page.locator(`${PAGE} h1`)).toHaveText(labels.title);
-        const root = page.locator(`[data-node-id="${ROOT}"]`);
-        await expect(root.locator('dd')).toHaveText(['2', '2', '—']);
-        await expect(page.locator('#authoring-pending-help')).toContainText(labels.pending);
-        const disclosure = await root.locator('[data-disclosure]').boundingBox();
-        if (!disclosure) throw new Error('The root disclosure is not visible.');
-        expect(Math.min(disclosure.width, disclosure.height)).toBeGreaterThanOrEqual(24);
-        await page.getByRole('button', { name: labels.moreRoots, exact: true }).click();
-        await expect(page.locator(`${TREE} [data-node-id]`)).toHaveCount(3);
-        for (let level = 0; level < 6; level++) {
-          await page.locator(`[data-disclosure="${IDS[level]}"]`).click();
-          await expect(page.locator(`[data-node-id="${IDS[level + 1]}"]`)).toBeVisible();
-        }
-        await expect(page.locator(`${TREE} [data-node-id]`)).toHaveCount(9);
-        await page.getByRole('button', { name: labels.moreChildren, exact: true }).click();
-        await expect(page.locator(`${TREE} [data-node-id]`)).toHaveCount(10);
-        const depth4 = await page.locator(`[data-node-id="${IDS[3]}"]`).boundingBox();
-        const depth7 = await page.locator(`[data-node-id="${LEAF}"]`).boundingBox();
-        if (!depth4 || !depth7) throw new Error('The deep hierarchy is not visible.');
-        expect(Math.abs(depth4.x - depth7.x)).toBeLessThanOrEqual(1);
-        const longTitle = await page.locator(`[data-scope="${IDS[3]}"] bdi`).boundingBox();
-        if (!longTitle) throw new Error('The long Vietnamese title is not visible.');
-        expect(longTitle.height).toBeGreaterThan(24);
-        await expect(page.locator('[data-authoring-cases]')).toBeVisible();
-        expect(await page.locator('[data-authoring-cases]').getAttribute('aria-busy')).toBeNull();
-        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-          true,
-        );
-        await expectNoA11yViolations(page, PAGE);
-      });
-    }
 
   test(`tree returns focus before collapsing a focused descendant (${locale})`, async ({
     page,
@@ -259,22 +194,6 @@ for (const locale of LOCALES) {
   });
 }
 
-test.describe('authoring tree coarse pointer targets', () => {
-  test.use({ hasTouch: true });
-  test('keeps scope and disclosure targets at least 44px on touch devices', async ({ page }) => {
-    await page.setViewportSize({ width: 360, height: 900 });
-    await page.goto(
-      localePath('vi', `/dev/authoring-tree/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}`),
-    );
-    for (const selector of [`[data-disclosure="${ROOT}"]`, `[data-scope="${ROOT}"]`]) {
-      const box = await page.locator(selector).boundingBox();
-      if (!box) throw new Error('The node control is not visible.');
-      expect(box.width).toBeGreaterThanOrEqual(44);
-      expect(box.height).toBeGreaterThanOrEqual(44);
-    }
-  });
-});
-
 const CASE_TABLE = 'app-authoring-case-table';
 const CASE_ROWS = 'app-authoring-case-rows';
 const CHECKLIST = '018f0000-0000-7000-8000-000000000201';
@@ -289,10 +208,7 @@ async function lastCaseQuery(page: Page): Promise<Record<string, string>> {
 }
 
 for (const locale of LOCALES) {
-  const base = withVariants(
-    localePath(locale, `/dev/authoring-tree/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}`),
-    ['?fixture.variant.listPermissions=settings-policy-readonly'],
-  );
+  const base = readOnlyTreePath(locale);
 
   test(`case table sends every supported filter and restores URL history (${locale})`, async ({
     page,
@@ -457,10 +373,7 @@ test('case table keeps a bounded visible page while browsing more than 200 cases
   page,
 }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
-  const base = localePath(
-    'en',
-    `/dev/authoring-tree/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}`,
-  );
+  const base = authoringTreePath('en');
   await page.goto(withVariants(base, ['?fixture.variant.listManualCases=bulk&limit=100']));
   const pager = page.locator(`${CASE_TABLE} app-data-table-pager`);
   const rows = page.locator(`${CASE_ROWS} [data-row-id]`);

@@ -19,7 +19,7 @@ import { HlmIcon } from '@evidgate/ui/icon';
 import { RETAINED_ROWS_CAP } from '../../shared/keyset-retention';
 import { RequestStateComponent } from '../../shared/ui/states/request-state.component';
 import { InlineFeedbackComponent } from '../../shared/ui/states/inline-feedback.component';
-import { NumberValueComponent } from '../../shared/ui/values/number-value.component';
+import { AuthoringNodeDetailsComponent } from './authoring-node-details.component';
 import { AUTHORING_TREE_COPY, treeBrowseCappedHelp } from './authoring-tree.copy';
 import type { AuthoringNodePage } from './authoring.store';
 
@@ -31,7 +31,7 @@ import type { AuthoringNodePage } from './authoring.store';
     HlmIcon,
     RequestStateComponent,
     InlineFeedbackComponent,
-    NumberValueComponent,
+    AuthoringNodeDetailsComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './authoring-tree-pane.component.html',
@@ -184,7 +184,8 @@ export class AuthoringTreePaneComponent {
     if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
-    const id = target.dataset['disclosure'] ?? target.dataset['scope'];
+    const id =
+      target.dataset['disclosure'] ?? target.dataset['scope'] ?? target.dataset['nodeDetails'];
     if (!id) return;
     const index = this.visible().findIndex((node) => node.node_id === id);
     const node = this.visible()[index];
