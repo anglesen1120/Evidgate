@@ -1,21 +1,6 @@
-// The shared-UI data table as it behaves in a real Chromium at the narrow end — 360px is the width
-// the owner reported mid-word breaks and wrapped badges at in earlier design rounds, so it is the
-// width that can regress.
-//
-// Everything here is a layout property jsdom cannot have: real scroll boxes, a classic scrollbar
-// that takes width, a sticky header, the top layer of a native popover, and the accessibility tree
-// Chromium builds. The gutter assertion runs under the classic scrollbar this headless Chrome
-// draws by default (measured non-zero); if a future Chrome or launch flag switches to overlay
-// scrollbars, that assertion fails loudly rather than letting the column-alignment check measure a
-// width the user can never see.
-//
-// Defects this file finds in `shared/ui` are REPORTED, not fixed (the task owns `shell/**` only).
-//
-// The table has two anatomies: below a 768px container it renders stacked records, at or above it a
-// single real table (header row + body rows in one grid). So the 360px reflow budget covers the
-// narrow end, table mechanics are asserted at the narrowest width where the table renders, and
-// value clipping is asserted on the fixed-layout (virtual) table, whose equal column shares clip
-// every value regardless of the container width.
+// Real browser geometry covers page-flow tables, bounded virtual windows and
+// top-layer disclosures that jsdom cannot measure. Below a 768px container,
+// ordinary tables reflow to labelled records instead of squeezing their columns.
 import { expect, test, type Page } from '@playwright/test';
 
 import { localePath, LOCALES, THEMES } from './support';
@@ -56,16 +41,15 @@ async function tableMetrics(page: Page): Promise<{
     scrollHeight: number;
     clientHeight: number;
   };
-  header: Box;
+  firstHeaderCell: Box;
   headerCells: readonly { left: number; width: number }[];
   bodyCells: readonly { left: number; width: number }[];
 }> {
   return page.evaluate(() => {
     const root = document.querySelector('[data-demo="table-small"]') as HTMLElement;
     const scroll = root.querySelector('.scroll') as HTMLElement;
-    // One table, one grid: the header row's first cell is the sticky element (`thead th` carries
-    // the sticky rule) and the body's first row is the first `tbody` row.
-    const header = root.querySelector('thead tr > *') as HTMLElement;
+    // The ordinary table's first header cell marks the top of the grid before the page scrolls.
+    const firstHeaderCell = root.querySelector('thead tr > *') as HTMLElement;
     const box = (element: Element) => {
       const rect = element.getBoundingClientRect();
       return {
@@ -93,7 +77,7 @@ async function tableMetrics(page: Page): Promise<{
         scrollHeight: scroll.scrollHeight,
         clientHeight: scroll.clientHeight,
       },
-      header: box(header),
+      firstHeaderCell: box(firstHeaderCell),
       headerCells: cells('thead tr > *'),
       bodyCells: cells('tbody tr:first-child > *'),
     };
@@ -218,6 +202,29 @@ for (const locale of LOCALES) {
         return { scrollHeight: viewport.scrollHeight, clientHeight: viewport.clientHeight };
       });
       expect(virtual.scrollHeight).toBeGreaterThan(virtual.clientHeight);
+      const specimen = page.locator('[data-demo="table-virtual"]');
+      const viewport = specimen.locator('cdk-virtual-scroll-viewport');
+      const scroller = specimen.locator('.spartan-table-container');
+      const header = specimen.locator('thead th').first();
+      await expect(header).toHaveCSS('position', 'sticky');
+      await header.scrollIntoViewIfNeeded();
+      const headerTop = await header.evaluate((element) => element.getBoundingClientRect().top);
+      await viewport.evaluate((element) => {
+        element.scrollTop = 200;
+      });
+      await expect
+        .poll(() => header.evaluate((element) => element.getBoundingClientRect().top))
+        .toBe(headerTop);
+      await expect(scroller).toHaveCSS('overflow-x', 'auto');
+      expect(await scroller.evaluate((element) => element.scrollWidth)).toBeGreaterThan(
+        await scroller.evaluate((element) => element.clientWidth),
+      );
+      await scroller.evaluate((element) => {
+        element.scrollLeft = 100;
+      });
+      await expect
+        .poll(() => scroller.evaluate((element) => element.scrollLeft))
+        .toBeGreaterThan(0);
     });
 
     test('a clipped value opens a native popover in the top layer, unclipped', async ({ page }) => {
@@ -359,7 +366,7 @@ test.describe('column alignment at a desktop width', () => {
     await openGallery(page, 'en', 'light');
     const metrics = await tableMetrics(page);
     expect(metrics.headerCells).toEqual(metrics.bodyCells);
-    expect(Math.abs(metrics.header.top - metrics.scroll.top)).toBeLessThanOrEqual(1.5);
+    expect(Math.abs(metrics.firstHeaderCell.top - metrics.scroll.top)).toBeLessThanOrEqual(1.5);
   });
 });
 

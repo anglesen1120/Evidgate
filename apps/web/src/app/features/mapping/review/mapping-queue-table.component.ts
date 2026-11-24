@@ -37,7 +37,6 @@ type Cell = TemplateRef<DataTableCellContext<MappingRowViewModel>>;
       [rows]="rows()"
       [rowId]="rowId"
       [columns]="columns()"
-      [flow]="'page'"
       [fitToContainer]="true"
     />
     <ng-template #identity let-row>

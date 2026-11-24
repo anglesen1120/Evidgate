@@ -12,7 +12,7 @@ import { HlmTableImports, type DataTableColumnWidth } from '../index';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [HlmTableImports],
   template: `
-    <div hlmTableContainer class="eg-table-long" role="region" [attr.aria-label]="records">
+    <div hlmTableContainer role="region" [attr.aria-label]="records">
       <table hlmTable class="eg-table-layout">
         <caption hlmCaption>
           {{
@@ -100,11 +100,11 @@ describe('HlmTableColumn', () => {
     expect(root.querySelector('td')?.getAttribute('data-column-overflow')).toBe('truncate');
     expect(root.querySelectorAll('[data-column-role="number"]')).toHaveLength(2);
     expect(root.querySelectorAll('[data-column-role="date"]')).toHaveLength(2);
-    expect(root.querySelector('.eg-table-long')?.getAttribute('aria-label')).toBe('Records');
+    expect(root.querySelector('[hlmTableContainer]')?.getAttribute('aria-label')).toBe('Records');
     expect(root.querySelector('[role="grid"]')).toBeNull();
     for (const column of root.querySelectorAll<HTMLElement>('[hlmTableColumn]'))
       expectNoWidthOverrides(column);
-    // CSS performs intrinsic sizing, sticky layout and token resolution; jsdom cannot measure it.
+    // CSS performs intrinsic sizing and token resolution; jsdom cannot measure it.
   });
 
   it('applies one optional width contract to native col, th and td hosts', async () => {

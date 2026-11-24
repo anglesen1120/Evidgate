@@ -34,7 +34,6 @@ type Cell = TemplateRef<DataTableCellContext<Template>>;
       [columns]="columns()"
       [rows]="rows()"
       [rowId]="rowId"
-      [flow]="'page'"
       [fitToContainer]="true"
     />
     <ng-template #subject let-item>
