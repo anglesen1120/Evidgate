@@ -2461,6 +2461,7 @@
 <trans-unit id="runs.list.empty-description" datatype="html"><source>Runs will appear here when a producer creates them.</source><target>Các lượt chạy sẽ xuất hiện khi nguồn gửi dữ liệu tạo chúng.</target></trans-unit>
 <trans-unit id="runs.list.page-filtered-title" datatype="html"><source>No matching runs on this page</source><target>Không có lượt chạy phù hợp trên trang này</target></trans-unit>
 <trans-unit id="runs.list.page-filtered-description" datatype="html"><source>Check another page if available, or change the selected run scope.</source><target>Hãy xem trang khác nếu có hoặc đổi phạm vi lượt chạy đã chọn.</target></trans-unit>
+<trans-unit id="runs.list.server-empty-title" datatype="html"><source>No matching runs</source><target>Không có lượt chạy phù hợp</target></trans-unit>
 <trans-unit id="runs.list.server-empty-description" datatype="html"><source>Change or clear the filters to see other runs.</source><target>Hãy đổi hoặc xóa bộ lọc để xem các lượt chạy khác.</target></trans-unit>
 <trans-unit id="runs.list.empty-page-title" datatype="html"><source>No runs on this page</source><target>Không có lượt chạy trên trang này</target></trans-unit>
 <trans-unit id="runs.list.empty-page-description" datatype="html"><source>Use Previous to revisit a page, or Next to search further when available.</source><target>Chọn Trang trước để quay lại, hoặc Trang sau để tìm tiếp nếu có.</target></trans-unit>

@@ -149,7 +149,10 @@ export class RunListPage {
       title: $localize`:@@runs.list.empty-page-title:No runs on this page`,
       description: $localize`:@@runs.list.empty-page-description:Use Previous to revisit a page, or Next to search further when available.`,
     },
-    serverEmptyDescription: $localize`:@@runs.list.server-empty-description:Change or clear the filters to see other runs.`,
+    emptyServer: {
+      title: $localize`:@@runs.list.server-empty-title:No matching runs`,
+      description: $localize`:@@runs.list.server-empty-description:Change or clear the filters to see other runs.`,
+    },
     pagination: $localize`:@@runs.list.page-pagination:Run pages`,
     retryMore: $localize`:@@runs.list.page-retry:Retry page`,
     refRejected: $localize`:@@runs.list.ref-invalid:Ref name not applied: use 1 to 255 characters with no control characters.`,
@@ -157,9 +160,7 @@ export class RunListPage {
   protected readonly emptyMessage = computed(() => {
     if (this.store.filters().scope && this.store.loadedCount() > 0) return this.copy.emptyScope;
     if (this.store.page() > 1 || this.store.hasNext()) return this.copy.emptyPage;
-    if (this.store.isFiltered()) {
-      return { title: this.copy.emptyPage.title, description: this.copy.serverEmptyDescription };
-    }
+    if (this.store.isFiltered()) return this.copy.emptyServer;
     return this.copy.emptyProject;
   });
   protected readonly loadedMetrics = computed(() => {

@@ -379,9 +379,11 @@ describe('RunListPage', () => {
     store.isEmpty = computed(() => store.visibleRows().length === 0);
     const { fixture, root } = await render();
     expect(root.textContent).toContain('No runs recorded');
+    store.hasNext.set(true);
+    await fixture.whenStable();
+    expect(root.textContent).toContain('No runs on this page');
     store.filters.set({ ...emptyFilters, scope: 'rerun' });
     store.rows.set([run]);
-    store.hasNext.set(true);
     await fixture.whenStable();
     expect(root.textContent).toContain('No matching runs on this page');
     expect(root.textContent).toContain('Check another page if available');
@@ -392,13 +394,15 @@ describe('RunListPage', () => {
   it.each(['', 'rerun'])('does not blame scope %j for an empty server response', async (scope) => {
     query.next(convertToParamMap({ state: 'queued', ref: 'main', scope }));
     store.rows.set([]);
-    const { root } = await render();
+    const { fixture, root } = await render();
     const empty = root.querySelector('app-empty-pattern');
-    expect(empty?.textContent).toContain('No runs on this page');
+    expect(empty?.querySelector('h2')?.textContent?.trim()).toBe('No matching runs');
     expect(empty?.textContent).toContain('Change or clear the filters');
     expect(empty?.textContent).not.toContain('selected run scope');
+    store.page.set(2);
+    await fixture.whenStable();
+    expect(empty?.querySelector('h2')?.textContent?.trim()).toBe('No runs on this page');
   });
-
   it('keeps pager focus through pending and terminal-page results', async () => {
     store.hasNext.set(true);
     const { fixture, root } = await render();
