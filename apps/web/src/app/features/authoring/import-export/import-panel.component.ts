@@ -1,8 +1,5 @@
-<<<<<<< HEAD
 import { rowsDuringFetch } from '../../../shared/ui/data-table/rows-during-fetch';
-=======
 import { FieldHintComponent } from '../../../shared/ui/forms/field-hint.component';
->>>>>>> origin/develop
 import {
   afterRenderEffect,
   ChangeDetectionStrategy,

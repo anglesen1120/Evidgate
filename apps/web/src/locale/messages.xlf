@@ -1124,11 +1124,7 @@
         <source> Filter availability and help </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/authoring-case-table.component.html</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">144,147</context>
-=======
-          <context context-type="linenumber">146,149</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">156,159</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.case-table.scope-help" datatype="html">
@@ -3801,11 +3797,7 @@
         <source>Row <x id="INDEX" equiv-text="detail.index"/> — <x id="FIELD" equiv-text="importFieldLabel(detail.path)"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/import-export/import-panel.component.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">176</context>
-=======
-          <context context-type="linenumber">163</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">178</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.review-context.parent-item" datatype="html">
@@ -3855,44 +3847,28 @@
         <source><x id="START_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;commentLength()&quot; /&gt;"/><x id="CLOSE_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;commentLimit&quot; /&gt;"/> of <x id="START_TAG_APP_NUMBER_VALUE_1" ctype="x-app_number_value_1" equiv-text="&lt;app-number-value [value]=&quot;commentLimit&quot; /&gt;"/><x id="CLOSE_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;commentLimit&quot; /&gt;"/> characters </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/checklist-review-tab.component.html</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">124,127</context>
-=======
-          <context context-type="linenumber">125,128</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">130,133</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.reason-character-count" datatype="html">
         <source><x id="START_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;reasonLength()&quot; /&gt;"/><x id="CLOSE_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;reasonLimit&quot; /&gt;"/> of <x id="START_TAG_APP_NUMBER_VALUE_1" ctype="x-app_number_value_1" equiv-text="&lt;app-number-value [value]=&quot;reasonLimit&quot; /&gt;"/><x id="CLOSE_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;reasonLimit&quot; /&gt;"/> characters </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/checklist-review-tab.component.html</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">151,154</context>
-=======
-          <context context-type="linenumber">152,155</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">157,160</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.comment-too-long" datatype="html">
         <source>Use no more than 2,000 characters for the comment.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/checklist-review-tab.component.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">88</context>
-=======
-          <context context-type="linenumber">89</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">90</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.reason-too-long" datatype="html">
         <source>Use no more than 500 characters for the reason.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/checklist-review-tab.component.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">89</context>
-=======
-          <context context-type="linenumber">90</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">91</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.view-title" datatype="html">
@@ -4547,11 +4523,7 @@
         <source>More actions</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/authoring/pending-changes/pending-changes.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">190</context>
-=======
-          <context context-type="linenumber">186</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">192</context>
         </context-group>
       </trans-unit>
       <trans-unit id="authoring.pending-changes.atomic-scope" datatype="html">
@@ -5524,33 +5496,21 @@
         <source><x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> loaded</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.html</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">153,154</context>
-=======
-          <context context-type="linenumber">151,152</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">156,157</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.loaded-search-no-results" datatype="html">
         <source>No matching identities in loaded results.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.html</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">156,160</context>
-=======
-          <context context-type="linenumber">154,158</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">159,163</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.loaded-search-results" datatype="html">
         <source><x id="INTERPOLATION" equiv-text="{{ store.visibleRows().length | number }}"/> matching identities in loaded results.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.html</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">160,162</context>
-=======
-          <context context-type="linenumber">158,160</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">163,165</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.title" datatype="html">
@@ -5746,11 +5706,7 @@
         <source>Loaded identities: <x id="count" equiv-text="formatNumber(this.store.rows().length, this.locale)"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/catalog/case-list.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">213</context>
-=======
-          <context context-type="linenumber">208</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">212</context>
         </context-group>
       </trans-unit>
       <trans-unit id="catalog.case-view.name" datatype="html">
@@ -11323,11 +11279,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">204</context>
-=======
-          <context context-type="linenumber">205</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">207</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.record.binding-kind" datatype="html">
@@ -11639,11 +11591,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">211</context>
-=======
-          <context context-type="linenumber">212</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">214</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.record.view" datatype="html">
@@ -12145,11 +12093,7 @@
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">212</context>
-=======
-          <context context-type="linenumber">213</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">215</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/credential-record.component.ts</context>
@@ -12308,143 +12252,91 @@
         <source>Choose one connection method. Next becomes available only after the server confirms a binding or token.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">198</context>
-=======
-          <context context-type="linenumber">199</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">201</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.oidc-title" datatype="html">
         <source>GitHub Actions (OIDC)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">199</context>
-=======
-          <context context-type="linenumber">200</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">202</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.oidc-hint" datatype="html">
         <source>Set the one-time challenge as the repository variable EVIDGATE_BINDING_CHALLENGE. The binding becomes active after the first CI exchange; the browser never exchanges CI credentials.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">200</context>
-=======
-          <context context-type="linenumber">201</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">203</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.workflow-hint" datatype="html">
         <source>In your workflow, grant permissions: id-token: write. Pass the GitHub OIDC JWT and EVIDGATE_BINDING_CHALLENGE to your CI-side Evidgate exchange. Keep the challenge out of workflow files and logs.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">201</context>
-=======
-          <context context-type="linenumber">202</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">204</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.binding-submit" datatype="html">
         <source>Create CI binding</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">202</context>
-=======
-          <context context-type="linenumber">203</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">205</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.binding-permission" datatype="html">
         <source>Ask your organisation owner for permission to create CI bindings.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">203</context>
-=======
-          <context context-type="linenumber">204</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">206</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.token-hint" datatype="html">
         <source>Use an ingest token when OIDC is not available. Save the one-time value in your CI secret manager, never in source control.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">205</context>
-=======
-          <context context-type="linenumber">206</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">208</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.token-submit" datatype="html">
         <source>Create ingest token</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">206</context>
-=======
-          <context context-type="linenumber">207</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">209</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.token-permission" datatype="html">
         <source>Ask your organisation owner for permission to create or rotate ingest tokens.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">207</context>
-=======
-          <context context-type="linenumber">208</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">210</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.busy" datatype="html">
         <source>Saving connection…</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">208</context>
-=======
-          <context context-type="linenumber">209</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">211</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.tokens" datatype="html">
         <source>Ingest tokens</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">209</context>
-=======
-          <context context-type="linenumber">210</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">212</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.empty-tokens" datatype="html">
         <source>No ingest tokens yet.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">210</context>
-=======
-          <context context-type="linenumber">211</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">213</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.not-set" datatype="html">
         <source>Not set</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">213</context>
-=======
-          <context context-type="linenumber">214</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">216</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/credential-record.component.ts</context>
@@ -12455,176 +12347,112 @@
         <source>Rotate token</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">214</context>
-=======
-          <context context-type="linenumber">215</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">217</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.overlap" datatype="html">
         <source>The previous token continues verifying until (UTC):</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">215</context>
-=======
-          <context context-type="linenumber">216</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">218</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.challenge-heading" datatype="html">
         <source>Save your binding challenge</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">216</context>
-=======
-          <context context-type="linenumber">217</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">219</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.token-heading" datatype="html">
         <source>Save your ingest token</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">217</context>
-=======
-          <context context-type="linenumber">218</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">220</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.reveal-warning" datatype="html">
         <source>Shown only once. Save this value before leaving this step. If copying fails, select and copy the value manually.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">218</context>
-=======
-          <context context-type="linenumber">219</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">221</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.copy" datatype="html">
         <source>Copy value</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">219</context>
-=======
-          <context context-type="linenumber">220</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">222</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.copied" datatype="html">
         <source>Value copied.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">220</context>
-=======
-          <context context-type="linenumber">221</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">223</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.dismiss" datatype="html">
         <source>Dismiss secret</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">221</context>
-=======
-          <context context-type="linenumber">222</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">224</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.refresh-failed" datatype="html">
         <source>The connection was saved, but progress could not be refreshed. Retry loading metadata; do not create the connection again.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">222</context>
-=======
-          <context context-type="linenumber">223</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">225</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.failure-heading" datatype="html">
         <source>The connection was not saved</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">223</context>
-=======
-          <context context-type="linenumber">224</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">226</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.details-label" datatype="html">
         <source>The server refused these values</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">224</context>
-=======
-          <context context-type="linenumber">225</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">227</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.refresh" datatype="html">
         <source>Retry loading metadata</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">225</context>
-=======
-          <context context-type="linenumber">226</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">228</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.response-uncertain" datatype="html">
         <source>It may have been saved. Reload the connection data before trying again.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">226</context>
-=======
-          <context context-type="linenumber">227</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">229</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.reveal-shown" datatype="html">
         <source>A one-time value is shown. Save it before leaving this step.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">227</context>
-=======
-          <context context-type="linenumber">228</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">230</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.list-truncated" datatype="html">
         <source>Showing the first <x id="CONNECT_LIST_LIMIT" equiv-text="CONNECT_LIST_LIMIT"/> entries; more exist, so a newer entry may not appear here.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">228</context>
-=======
-          <context context-type="linenumber">229</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">231</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.connect.rotate-named" datatype="html">
         <source>Rotate token <x id="TOKEN_NAME" equiv-text="name"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/onboarding/steps/connect-ci.page.ts</context>
-<<<<<<< HEAD
-          <context context-type="linenumber">352</context>
-=======
-          <context context-type="linenumber">353</context>
->>>>>>> origin/develop
+          <context context-type="linenumber">355</context>
         </context-group>
       </trans-unit>
       <trans-unit id="onboarding.create.name" datatype="html">
@@ -31659,28 +31487,28 @@
         <source> View as table </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/decision-trend.component.ts</context>
-          <context context-type="linenumber">123,127</context>
+          <context context-type="linenumber">129,133</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.trend-days" datatype="html">
         <source>Daily decision counts</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/decision-trend.component.ts</context>
-          <context context-type="linenumber">267</context>
+          <context context-type="linenumber">273</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.trend-date" datatype="html">
         <source>Date (UTC)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/decision-trend.component.ts</context>
-          <context context-type="linenumber">268</context>
+          <context context-type="linenumber">274</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.dashboard.trend-total" datatype="html">
         <source>Total</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/dashboard/decision-trend.component.ts</context>
-          <context context-type="linenumber">269</context>
+          <context context-type="linenumber">275</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.data-table.rows-per-page" datatype="html">
