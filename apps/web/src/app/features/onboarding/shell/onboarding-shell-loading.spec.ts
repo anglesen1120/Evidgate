@@ -8,6 +8,15 @@ describe('OnboardingShellComponent loading announcements', () => {
   let root: HTMLElement;
   let store: ShellStore;
 
+  async function expectSetupAnnouncement() {
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(root.querySelector('app-loading-pattern [role="status"]')?.textContent?.trim()).toBe(
+        'Loading project setup',
+      );
+    });
+  }
+
   beforeEach(async () => {
     ({ fixture, root, store } = await mountShell());
   });
@@ -18,23 +27,21 @@ describe('OnboardingShellComponent loading announcements', () => {
     const loading = root.querySelector('app-loading-pattern [role="status"]');
     expect(loading).not.toBeNull();
     expect(loading?.getAttribute('aria-live')).toBe('polite');
-    expect(loading?.getAttribute('aria-busy')).toBe('true');
-    expect(loading?.querySelector('h2')?.textContent?.trim()).toBe('Loading project setup');
+    expect(root.querySelector('app-loading-pattern [aria-busy="true"]')).not.toBeNull();
+    await expectSetupAnnouncement();
     expect(loading?.textContent).not.toContain('Loading evidence');
   });
 
   it('removes the loading announcement when ready and uses setup copy again on the next read', async () => {
     for (let read = 0; read < 2; read += 1) {
-      expect(root.querySelector('app-loading-pattern')).toBeNull();
+      expect(root.querySelector('app-loading-pattern [data-table-progress]')).toBeNull();
       store.status.set('loading');
       await fixture.whenStable();
       expect(root.querySelectorAll('app-loading-pattern [role="status"]')).toHaveLength(1);
-      expect(root.querySelector('app-loading-pattern h2')?.textContent?.trim()).toBe(
-        'Loading project setup',
-      );
+      await expectSetupAnnouncement();
       store.status.set('ready');
       await fixture.whenStable();
-      expect(root.querySelector('app-loading-pattern')).toBeNull();
+      expect(root.querySelector('app-loading-pattern [data-table-progress]')).toBeNull();
     }
   });
 
@@ -43,12 +50,10 @@ describe('OnboardingShellComponent loading announcements', () => {
     store.status.set('error');
     await fixture.whenStable();
     expect(root.querySelector('app-error-pattern')).not.toBeNull();
-    expect(root.querySelector('app-loading-pattern')).toBeNull();
+    expect(root.querySelector('app-loading-pattern [data-table-progress]')).toBeNull();
     store.status.set('loading');
     await fixture.whenStable();
     expect(root.querySelector('app-error-pattern')).toBeNull();
-    expect(root.querySelector('app-loading-pattern h2')?.textContent?.trim()).toBe(
-      'Loading project setup',
-    );
+    await expectSetupAnnouncement();
   });
 });

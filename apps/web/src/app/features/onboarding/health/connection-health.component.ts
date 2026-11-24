@@ -1,3 +1,4 @@
+import { LoadingPatternComponent } from '../../../shared/ui/states/loading-pattern.component';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
@@ -34,6 +35,7 @@ import type {
 @Component({
   selector: 'app-connection-health',
   imports: [
+    LoadingPatternComponent,
     DatePipe,
     NgTemplateOutlet,
     StatusPillComponent,
@@ -68,8 +70,13 @@ import type {
         <app-status-pill [tone]="tones[health().state]" [label]="stateLabels[health().state]" />
       </header>
       <p>{{ reasonLabels[health().reason] }}</p>
+      <app-loading-pattern [layout]="'table'" [busy]="fetching()" [hasRows]="rows().length > 0" />
       <div hlmTableContainer class="min-w-0 max-w-full">
-        <table hlmTable class="[&_th]:whitespace-normal [&_td]:whitespace-normal">
+        <table
+          [attr.aria-busy]="fetching()"
+          hlmTable
+          class="[&_th]:whitespace-normal [&_td]:whitespace-normal"
+        >
           <caption hlmCaption class="caption-top text-start">
             {{
               credentialHealth
@@ -190,6 +197,7 @@ import type {
 export class ConnectionHealthComponent {
   protected readonly dateTimeFormat = shortDateFormat(inject(LOCALE_ID), true, '24h');
 
+  readonly fetching = input(false);
   readonly health = input.required<ConnectionHealth>();
   readonly tokens = input.required<readonly IngestTokenView[]>();
   readonly bindingsTruncated = input(false);

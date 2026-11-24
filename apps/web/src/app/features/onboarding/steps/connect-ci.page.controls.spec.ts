@@ -65,6 +65,7 @@ describe('ConnectCiPage Helm controls', () => {
             bindingsTruncated: signal(false),
             tokensTruncated: signal(false),
             project: signal({ slug: 'storefront-web' }),
+            refreshing: signal(false),
             refreshFailure,
             refresh,
           },

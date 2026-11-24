@@ -4,6 +4,9 @@
 >
   {{ caption() }}
 </p>
+@if (busy() !== undefined) {
+  <app-loading-pattern [layout]="'table'" [busy]="busy() === true" [hasRows]="rows().length > 0" />
+}
 <span
   #tokenProbe
   class="token-probe eg-table-probe"
@@ -21,6 +24,7 @@
 >
   @if (narrow()) {
     <app-data-table-records
+      [busy]="busy() === true"
       [columns]="columns()"
       [rows]="pageRows()"
       [rowId]="rowId()"
@@ -30,6 +34,7 @@
     <div
       class="table-semantics"
       role="table"
+      [attr.aria-busy]="busy() ?? null"
       [attr.aria-labelledby]="captionId"
       [attr.aria-rowcount]="rows().length + 1"
       [attr.aria-colcount]="columns().length"
@@ -60,6 +65,7 @@
 </div>
 @if (paged()) {
   <app-data-table-pager
+    [busy]="busy() === true"
     [loadedCaption]="caption()"
     [page]="pageIndex() + 1"
     [pageSize]="pageSize"
@@ -169,7 +175,7 @@
       ></tr>
     }
   </table>
-  @if (body && rows().length === 0) {
+  @if (body && !busy() && rows().length === 0) {
     <table hlmTable class="empty-table" role="presentation">
       <tr hlmTr role="presentation">
         <td hlmTd role="presentation" [class]="cellClasses" [attr.colspan]="columns().length || 1">

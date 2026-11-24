@@ -1,3 +1,4 @@
+import { LoadingPatternComponent } from '../../../shared/ui/states/loading-pattern.component';
 import { DOCUMENT } from '@angular/common';
 import {
   ChangeDetectionStrategy,
@@ -16,7 +17,6 @@ import type { CiBindingView } from '@evidgate/sdk';
 import { HlmAlert } from '@evidgate/ui/alert';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCard } from '@evidgate/ui/card';
-import { HlmSkeleton } from '@evidgate/ui/skeleton';
 import { HlmTableImports } from '@evidgate/ui/table';
 import type { ApiError } from '../../../core/http/api-error';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
@@ -55,11 +55,11 @@ export const CI_BINDINGS_COPY = {
 @Component({
   selector: 'app-ci-binding-list',
   imports: [
+    LoadingPatternComponent,
     StatusPillComponent,
     HlmAlert,
     HlmButton,
     HlmCard,
-    HlmSkeleton,
     HlmTableImports,
     AbsoluteTimeComponent,
     DataTablePagerComponent,
@@ -75,9 +75,9 @@ export const CI_BINDINGS_COPY = {
       class="min-w-0 gap-0 rounded-lg py-0"
       data-ci-bindings
       aria-labelledby="ci-bindings-heading"
-      [attr.aria-busy]="loading() || loadingMore()"
     >
       <header
+        [attr.aria-busy]="loading() || loadingMore()"
         class="grid min-w-0 gap-(--eg-space-2) border-0 border-b border-solid border-border p-(--eg-space-5)"
       >
         <h2
@@ -91,6 +91,12 @@ export const CI_BINDINGS_COPY = {
         <p class="text-muted-foreground">{{ copy.description }}</p>
         <p class="text-xs text-muted-foreground">{{ copy.order }}</p>
       </header>
+      <app-loading-pattern
+        [layout]="'table'"
+        [busy]="!forbidden() && (loading() || loadingMore())"
+        [hasRows]="rows().length > 0"
+        [label]="loadingMore() ? copy.loadingMore : copy.loading"
+      />
       @if (forbidden()) {
         <p
           hlmAlert
@@ -102,13 +108,7 @@ export const CI_BINDINGS_COPY = {
           {{ copy.forbidden }}
         </p>
       } @else {
-        @if (loading()) {
-          <p role="status">{{ copy.loading }}</p>
-          <div hlmCard class="binding-skeleton gap-3 p-4" aria-hidden="true">
-            <span hlmSkeleton class="h-6"></span><span hlmSkeleton class="h-6"></span
-            ><span hlmSkeleton class="h-6"></span>
-          </div>
-        } @else if (phase() === 'empty' || (phase() === 'ready' && rows().length === 0)) {
+        @if (phase() === 'empty' || (phase() === 'ready' && rows().length === 0)) {
           <p role="status" class="p-(--eg-space-5) text-muted-foreground" data-ci-empty>
             {{ copy.empty }}
           </p>
@@ -148,6 +148,7 @@ export const CI_BINDINGS_COPY = {
             i18n-aria-label="@@settings.secrets.ci.records"
           >
             <table
+              [attr.aria-busy]="loading() || loadingMore()"
               hlmTable
               [attr.role]="'table'"
               class="w-full min-w-0 table-fixed max-md:block [&_td]:min-w-0 [&_td]:whitespace-normal [&_th]:whitespace-normal"
@@ -288,8 +289,6 @@ export const CI_BINDINGS_COPY = {
           />
         </div>
       }
-      <!-- Outside the state branch: the live region must exist in every phase, forbidden included. -->
-      <p class="empty:hidden" role="status">{{ loadingMore() ? copy.loadingMore : '' }}</p>
     </section>
   `,
 })

@@ -30,6 +30,29 @@ describe('LoadingPatternComponent', () => {
     root = fixture.nativeElement as HTMLElement;
   });
 
+  it('announces concurrent empty tables with the same label only once', async () => {
+    const second = TestBed.createComponent(LoadingPatternComponent);
+    for (const table of [fixture, second]) {
+      table.componentRef.setInput('layout', 'table');
+      table.componentRef.setInput('busy', true);
+      table.detectChanges();
+    }
+    await vi.waitFor(() => {
+      for (const table of [fixture, second]) {
+        table.detectChanges();
+        expect(
+          (table.nativeElement as HTMLElement).querySelector('[data-table-progress]'),
+        ).not.toBeNull();
+      }
+    });
+    const messages = [fixture, second].map((table) =>
+      (table.nativeElement as HTMLElement)
+        .querySelector('[role="status"][aria-live="polite"]')
+        ?.textContent?.trim(),
+    );
+    expect(messages.sort()).toEqual(['', 'Loading…']);
+  });
+
   it('uses Helm card and decorative skeleton while retaining one polite announcement', () => {
     expect(root.querySelector('section')?.getAttribute('data-slot')).toBe('card');
     expect(root.querySelector('[data-slot="skeleton"]')?.getAttribute('aria-hidden')).toBe('true');

@@ -5,6 +5,7 @@
   class="min-w-0 max-w-full overflow-x-auto focus-visible:outline-ring"
 >
   <app-data-table
+    [busy]="fetching()"
     class="min-[900px]:min-w-[768px] [--eg-table-row:calc(var(--eg-row-default)_+_var(--eg-space-3))]!"
     [columns]="columns()"
     [rows]="rows()"

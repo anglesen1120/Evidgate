@@ -29,7 +29,8 @@ describe('ApiTokensPage states', () => {
     complete({ items: [ROW], next_cursor: null });
     await h.settle();
     expect(h.root.querySelector('app-api-token-list')).not.toBeNull();
-    expect(h.root.querySelector('app-loading-pattern')).toBeNull();
+    expect(h.root.querySelector('[data-table-progress]')).toBeNull();
+    expect(h.root.querySelector('table')?.getAttribute('aria-busy')).toBe('false');
   });
 
   it('shows an explanatory empty state and a create next step that opens the store', async () => {

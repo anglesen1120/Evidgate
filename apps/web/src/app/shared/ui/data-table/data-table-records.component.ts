@@ -12,7 +12,7 @@ import type { DataTableColumn } from './data-table-column';
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
-    <ol class="eg-table-records" [attr.aria-label]="caption()">
+    <ol class="eg-table-records" [attr.aria-busy]="busy()" [attr.aria-label]="caption()">
       @for (row of rows(); track rowId()(row)) {
         <li class="eg-table-record" [attr.data-row-id]="rowId()(row)">
           <dl>
@@ -27,7 +27,9 @@ import type { DataTableColumn } from './data-table-column';
           </dl>
         </li>
       } @empty {
-        <li class="eg-table-record" i18n="@@shared.data-table.no-rows">No rows</li>
+        @if (!busy()) {
+          <li class="eg-table-record" i18n="@@shared.data-table.no-rows">No rows</li>
+        }
       }
     </ol>
   `,
@@ -35,6 +37,7 @@ import type { DataTableColumn } from './data-table-column';
 export class DataTableRecordsComponent<T> {
   private readonly viewport = inject(NarrowMutationPolicy);
 
+  readonly busy = input(false);
   readonly columns = input.required<readonly DataTableColumn<T>[]>();
   readonly rows = input.required<readonly T[]>();
   readonly rowId = input.required<(row: T) => string | number>();

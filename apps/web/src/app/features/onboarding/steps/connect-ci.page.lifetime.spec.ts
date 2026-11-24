@@ -47,6 +47,7 @@ describe('ConnectCiPage command lifetime boundaries', () => {
             project: signal({ slug: 'web' }),
             done: signal({ 2: true }),
             canGoNext: signal(true),
+            refreshing: signal(false),
             refreshFailure: signal(null),
             refresh,
           },

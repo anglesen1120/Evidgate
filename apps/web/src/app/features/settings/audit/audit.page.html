@@ -91,7 +91,7 @@
   </header>
   <form
     class="grid min-w-0 gap-3 border-b border-border px-5 py-4"
-    (ngSubmit)="apply()"
+    (ngSubmit)="!(status() === 'loading' || store.paging()) && apply()"
     aria-labelledby="audit-filters-title"
   >
     <span id="audit-filters-title" class="sr-only">{{ copy.filters }}</span>
@@ -211,6 +211,8 @@
           [variant]="'secondary'"
           class="min-h-[var(--eg-control-touch)] whitespace-normal"
           type="submit"
+          [disabled]="status() === 'loading' || store.paging()"
+          [attr.aria-busy]="status() === 'loading' || store.paging()"
           data-audit-apply
         >
           {{ copy.apply }}
@@ -220,8 +222,10 @@
           [variant]="'outline'"
           class="min-h-[var(--eg-control-touch)] whitespace-normal"
           type="button"
+          [disabled]="status() === 'loading' || store.paging()"
+          [attr.aria-busy]="status() === 'loading' || store.paging()"
           data-audit-clear
-          (click)="clear()"
+          (click)="!(status() === 'loading' || store.paging()) && clear()"
         >
           {{ copy.clear }}
         </button>
@@ -244,7 +248,8 @@
     }
   }
   <app-request-state
-    [status]="status()"
+    [status]="status() === 'loading' && store.rows().length ? 'ready' : status()"
+    [tableLoading]="true"
     [loadingLabel]="copy.loading"
     [error]="store.loadError()"
     [emptyIcon]="'navAudit'"
@@ -256,13 +261,11 @@
     [retryEligible]="retryReady() && (store.loadError()?.retryable ?? false)"
     (retry)="reload()"
   >
-    <section class="grid min-w-0 gap-0" [attr.aria-busy]="store.paging()">
-      <app-audit-table [rows]="store.rows()" />
-      <p role="status" class="px-4 text-sm" [attr.aria-live]="'polite'">
-        @if (store.paging()) {
-          {{ copy.loadingPage }}
-        }
-      </p>
+    <section class="grid min-w-0 gap-0">
+      <app-audit-table
+        [fetching]="status() === 'loading' || store.paging()"
+        [rows]="store.rows()"
+      />
     </section>
   </app-request-state>
   @if (pagingAlert(); as failure) {

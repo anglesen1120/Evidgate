@@ -240,7 +240,7 @@ export const RunListStore = signalStore(
         patchState(
           store,
           first
-            ? { status: 'error', loadError: failure, busy: false }
+            ? { status: 'error', loadError: failure, rows: NO_ROWS, busy: false }
             : { pagingError: failure, busy: false },
         );
         return;
@@ -258,7 +258,7 @@ export const RunListStore = signalStore(
       });
     }
 
-    async function restart(cursor: string | null = null): Promise<void> {
+    async function restart(cursor: string | null = null, retainRows = true): Promise<void> {
       newestRead += 1;
       pendingTarget = null;
       patchState(store, {
@@ -266,7 +266,7 @@ export const RunListStore = signalStore(
         loadError: null,
         pagingError: null,
         busy: false,
-        rows: NO_ROWS,
+        rows: retainRows ? store.rows() : NO_ROWS,
         nextCursor: null,
         requestCursors: [cursor],
         page: 1,
@@ -293,9 +293,10 @@ export const RunListStore = signalStore(
           )
         )
           return;
+        const sameProject = ownerProject === projectId;
         ownerProject = projectId;
         patchState(store, { filters, pageSize, refRejected: false });
-        await restart(cursor);
+        await restart(cursor, sameProject);
       },
 
       async setFilters(patch: Partial<RunListFilters>): Promise<void> {

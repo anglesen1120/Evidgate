@@ -45,11 +45,13 @@ describe('HealingSwitchPage', () => {
   });
 
   it('reserves a loading status until the resolution answers', async () => {
-    const { root, data, settle, advance } = mount({ holdReads: true });
+    const { root, data, settle, advance, until } = mount({ holdReads: true });
     await advance();
-    expect(root.querySelector('[role="status"][aria-busy="true"]')?.textContent).toContain(
-      'Loading the healing switch',
-    );
+    const status = root.querySelector('app-loading-pattern [role="status"][aria-live="polite"]');
+    expect(status).not.toBeNull();
+    expect(status?.closest('[aria-busy="true"]')).toBeNull();
+    expect(root.querySelector('app-loading-pattern [aria-busy="true"]')).not.toBeNull();
+    await until(() => status?.textContent?.includes('Loading the healing switch') === true);
 
     data.releaseRead('p-1', resolution());
     await settle();

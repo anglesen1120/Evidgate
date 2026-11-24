@@ -54,6 +54,7 @@ export class PendingChangeTableComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
   private readonly locale = inject(LOCALE_ID);
+  readonly fetching = input(false);
   readonly rows = input.required<readonly AuthoringChangeListItem[]>();
   readonly caption = input.required<string>();
   readonly selection = input<ChangeCell>();

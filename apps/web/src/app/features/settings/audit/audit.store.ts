@@ -141,6 +141,7 @@ export const AuditStore = signalStore(
     async function loadFirstPage(orgId: string, filters?: AuditFilters): Promise<void> {
       const sequence = ++newestLoad;
       const applied = filters ?? store.filters();
+      const retainedRows = orgId === ownerOrg ? store.rows() : NO_ROWS;
       ownerOrg = orgId;
       cursors = [undefined];
       pendingPage = null;
@@ -148,7 +149,7 @@ export const AuditStore = signalStore(
         phase: 'loading',
         loadError: null,
         filters: applied,
-        rows: NO_ROWS,
+        rows: retainedRows,
         nextCursor: null,
         page: 1,
         paging: false,
@@ -166,6 +167,7 @@ export const AuditStore = signalStore(
         if (sequence !== newestLoad) return;
         patchState(store, {
           phase: 'error',
+          rows: NO_ROWS,
           loadError: isApiRequestError(error) ? error.error : UNRESOLVED_FAILURE,
         });
       }

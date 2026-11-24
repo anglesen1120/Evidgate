@@ -1,4 +1,5 @@
 <app-data-table
+  [busy]="fetching()"
   class="[--eg-row-default:var(--eg-space-11)]"
   [rows]="rows()"
   [columns]="columns()"
@@ -33,6 +34,7 @@
       [label]="ui.view + ' ' + operationLabel(row.change_type) + ' · ' + row.change_id"
       type="button"
       [hlmDialogTriggerFor]="viewDialog"
+      [disabled]="fetching()"
       data-pending-preview
       [attr.data-review-change]="selection() ? null : ''"
       [attr.data-pending-change-id]="row.change_id"

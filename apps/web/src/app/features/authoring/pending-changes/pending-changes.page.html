@@ -45,7 +45,8 @@
     ></section>
   }
   <app-request-state
-    [status]="status()"
+    [tableLoading]="true"
+    [status]="readBusy() && displayRows().length ? 'ready' : status()"
     [error]="store.queueError()"
     [emptyIcon]="'navQueue'"
     [empty]="store.empty() && store.page() === 1"
@@ -55,9 +56,6 @@
     [retryBusy]="readBusy()"
     (retry)="store.retryPage()"
   >
-    @if (readBusy()) {
-      <p class="m-0" role="status">{{ copy.refreshing }}</p>
-    }
     <dl hlmCard class="scope-counts">
       <div>
         <dt><hlm-icon [name]="'lucideClock'" />{{ copy.queueScope }}</dt>
@@ -131,7 +129,7 @@
         hlmCard
         class="region queue-panel"
         [attr.aria-label]="copy.queueTitle"
-        [attr.aria-busy]="store.applying() || readBusy()"
+        [attr.aria-busy]="store.applying() || null"
       >
         <app-section-header
           [title]="copy.queueTitle"
@@ -143,7 +141,7 @@
               hlmBtn
               [variant]="'outline'"
               type="button"
-              [disabled]="busy()"
+              [disabled]="busy() || readBusy()"
               (click)="store.selectAll()"
             >
               {{ copy.selectAll }}
@@ -153,7 +151,7 @@
               [variant]="'ghost'"
               type="button"
               data-pending-clear-selection
-              [disabled]="busy()"
+              [disabled]="busy() || readBusy()"
               (click)="store.clearSelection()"
             >
               {{ copy.clearSelection }}
@@ -161,7 +159,8 @@
           </div>
         </app-section-header>
         <app-pending-change-table
-          [rows]="store.rows()"
+          [fetching]="readBusy()"
+          [rows]="displayRows()"
           [caption]="copy.queueScope"
           [selection]="selectionCell"
           [more]="moreCell"
@@ -362,7 +361,7 @@
     [inputId]="'pending-select-' + row.change_id"
     [aria-labelledby]="'pending-select-label-' + row.change_id"
     [checked]="store.selectedIdSet().has(row.change_id)"
-    [disabled]="busy()"
+    [disabled]="busy() || readBusy()"
     (checkedChange)="store.toggle(row.change_id)"
   />
   <span [id]="'pending-select-label-' + row.change_id" class="sr-only"
@@ -377,6 +376,7 @@
       [variant]="'ghost'"
       type="button"
       [hlmDropdownMenuTrigger]="menu"
+      [disabled]="readBusy()"
       data-pending-more
       [attr.aria-label]="moreLabel + ': ' + operationLabel(row.change_type) + ' ' + row.change_id"
     >
@@ -388,7 +388,7 @@
           hlmDropdownMenuItem
           type="button"
           data-pending-discard
-          [disabled]="store.discardBlocked() || busy() || !store.retryReady()"
+          [disabled]="store.discardBlocked() || busy() || readBusy() || !store.retryReady()"
           (triggered)="openDiscard(row.change_id, moreButton)"
         >
           {{ copy.discardAction }}

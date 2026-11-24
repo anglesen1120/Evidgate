@@ -128,12 +128,16 @@ function readFirstPage(
   run.firstPage = controller;
   run.seen = new Set<string>();
   run.pending = null;
+  const sameScope =
+    host.projectId() === projectId &&
+    host.query().framework === query.framework &&
+    host.query().status === query.status;
   host.patch({
     projectId,
     query,
     phase: 'loading',
     loadError: null,
-    rows: NO_ROWS,
+    ...(sameScope ? {} : { rows: NO_ROWS }),
     nextCursor: null,
     page: 1,
     requestCursors: [null],

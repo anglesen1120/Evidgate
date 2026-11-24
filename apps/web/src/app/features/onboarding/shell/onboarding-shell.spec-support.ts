@@ -56,6 +56,7 @@ export interface ShellStore {
   readonly status: WritableSignal<'loading' | 'ready' | 'error'>;
   readonly failure: WritableSignal<'forbidden' | 'not-found' | 'unavailable' | null>;
   readonly progress: WritableSignal<OnboardingProgress | null>;
+  readonly refreshing: WritableSignal<boolean>;
   readonly refreshFailure: WritableSignal<'forbidden' | 'not-found' | 'unavailable' | null>;
   readonly viewStep: WritableSignal<StepNumber>;
   readonly currentStep: WritableSignal<StepNumber | 'enabled'>;
@@ -99,6 +100,7 @@ export function shellStore(options: ShellStoreOptions = {}): ShellStore {
     status: signal<'loading' | 'ready' | 'error'>('ready'),
     failure: signal<'forbidden' | 'not-found' | 'unavailable' | null>(null),
     progress: signal<OnboardingProgress | null>(null),
+    refreshing: signal(false),
     refreshFailure: signal<'forbidden' | 'not-found' | 'unavailable' | null>(null),
     recordActivation: vi.fn<(orgId: string, activation: PolicyActivationStateDto) => void>(),
     viewStep,

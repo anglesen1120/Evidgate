@@ -92,6 +92,7 @@
         class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere aria-disabled:pointer-events-auto aria-disabled:cursor-default aria-disabled:bg-muted aria-disabled:text-muted-foreground"
         type="button"
         [attr.aria-disabled]="busy() || refreshing() ? 'true' : null"
+        [attr.aria-busy]="refreshing()"
         (click)="refresh()"
       >
         {{ refreshLabel }}
@@ -112,6 +113,7 @@
   </p>
   <div class="grid min-w-0 items-start gap-(--eg-space-5) xl:grid-cols-2">
     <app-connection-health
+      [fetching]="store.refreshing()"
       class="block min-w-0"
       [health]="health()"
       [tokens]="store.tokens()"
@@ -291,6 +293,7 @@
         </button>
       </form>
       <app-connect-ci-binding-table
+        [fetching]="store.refreshing()"
         [bindings]="store.bindings()"
         [truncated]="store.bindingsTruncated()"
         (viewRecord)="viewRecord.emit($event)"
@@ -376,8 +379,13 @@
           {{ tokenSubmit }}
         </button>
       </form>
+      <app-loading-pattern
+        [layout]="'table'"
+        [busy]="store.refreshing()"
+        [hasRows]="store.tokens().length > 0"
+      />
       <div hlmTableContainer class="min-w-0 max-w-full">
-        <table hlmTable class="wrap-normal">
+        <table [attr.aria-busy]="store.refreshing()" hlmTable class="wrap-normal">
           <caption hlmCaption class="caption-top text-start">
             {{
               tokensLabel

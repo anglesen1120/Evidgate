@@ -27,7 +27,7 @@ class BindingPagerHarness extends ComponentHarness {
   readonly previous = this.locatorFor('app-data-table-pager button[data-page="previous"]');
   readonly size = this.locatorFor('app-data-table-pager hlm-select-trigger button');
   readonly summary = this.locatorFor('app-data-table-pager [role="status"]');
-  readonly section = this.locatorFor('section');
+  readonly table = this.locatorFor('table');
   readonly retry = this.locatorForOptional('[data-ci-retry]');
   readonly heading = this.locatorFor('h2');
 }
@@ -75,10 +75,13 @@ describe('CiBindingListComponent (09.7.1-F15)', () => {
   }
 
   it.each(['idle', 'loading'] as const)('renders %s as an accessible skeleton', async (phase) => {
-    const { root } = await render(phase, []);
-    expect(root.querySelector('section')?.getAttribute('aria-busy')).toBe('true');
-    expect(root.querySelector('[role="status"]')?.textContent).toContain('Loading CI bindings');
-    expect(root.querySelector('.binding-skeleton')?.getAttribute('aria-hidden')).toBe('true');
+    const { root, fixture } = await render(phase, []);
+    expect(root.querySelector('header')?.getAttribute('aria-busy')).toBe('true');
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(root.querySelector('[role="status"]')?.textContent).toContain('Loading CI bindings');
+    });
+    expect(root.querySelector('[data-table-progress]')?.getAttribute('aria-hidden')).toBe('true');
     expect(root.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(3);
     expect(root.querySelector('[data-ci-empty]')).toBeNull();
   });
@@ -185,7 +188,7 @@ describe('CiBindingListComponent (09.7.1-F15)', () => {
     fixture.componentRef.setInput('loadingMore', true);
     expect(await next.getAttribute('aria-disabled')).toBe('true');
     expect(await next.getAttribute('aria-busy')).toBe('true');
-    expect(await (await pager.section()).getAttribute('aria-busy')).toBe('true');
+    expect(await (await pager.table()).getAttribute('aria-busy')).toBe('true');
     expect(await next.isFocused()).toBe(true);
     await next.click();
     expect(more).toHaveBeenCalledTimes(1);
@@ -344,7 +347,9 @@ describe('CiBindingListComponent (09.7.1-F15)', () => {
     'keeps the role=status live region mounted in the %s phase',
     async (phase) => {
       const { root } = await render(phase, phase === 'ready' ? rows : []);
-      const region = root.querySelector<HTMLElement>('[data-ci-bindings] > p:last-child');
+      const region = root.querySelector<HTMLElement>(
+        '[data-ci-bindings] > app-loading-pattern [role="status"]',
+      );
       expect(region?.getAttribute('role')).toBe('status');
       expect(region?.closest('[data-ci-bindings]')).not.toBeNull();
     },

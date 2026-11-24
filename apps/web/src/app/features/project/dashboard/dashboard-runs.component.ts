@@ -36,6 +36,7 @@ import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
   host: { class: 'block min-w-0' },
   template: `
     <app-data-table
+      [busy]="fetching()"
       [rows]="rows()"
       [columns]="columns()"
       [rowId]="rowId"
@@ -115,6 +116,7 @@ import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
   `,
 })
 export class DashboardRunsComponent {
+  readonly fetching = input(false);
   readonly rows = input.required<readonly RunSummary[]>();
   readonly decisionsVisible = input(false);
   protected readonly displayRef = escapeFormatChars;

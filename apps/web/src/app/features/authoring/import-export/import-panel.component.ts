@@ -1,3 +1,4 @@
+import { rowsDuringFetch } from '../../../shared/ui/data-table/rows-during-fetch';
 import { FieldHintComponent } from '../../../shared/ui/forms/field-hint.component';
 import {
   afterRenderEffect,
@@ -107,6 +108,20 @@ export class ImportPanelComponent {
     () => this.store.work().error?.details.some((detail) => detail.path === '/header') ?? false,
   );
   protected readonly history = computed(() => this.store.historyDisplay());
+  private readonly historyScope = computed(
+    () => {
+      const work = this.store.work();
+      return this.store.canReadHistory() && work.file && work.project
+        ? { file: work.file, project: work.project, batch: work.committed?.batch_id }
+        : null;
+    },
+    { equal: (a, b) => a?.file === b?.file && a?.project === b?.project && a?.batch === b?.batch },
+  );
+  protected readonly historyRows = rowsDuringFetch(
+    this.historyScope,
+    this.store.history.isLoading,
+    () => this.history()?.page?.items ?? [],
+  );
   protected readonly report = computed(
     () => this.store.work().committed ?? this.store.work().report,
   );

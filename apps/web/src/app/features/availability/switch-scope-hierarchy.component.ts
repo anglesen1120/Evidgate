@@ -57,6 +57,7 @@ interface ScopeFact {
       }
     </ng-template>
     <app-data-table
+      [busy]="fetching()"
       class="[&>.caption]:sr-only"
       [rowHeight]="'compact'"
       [columns]="columns()"
@@ -77,6 +78,7 @@ interface ScopeFact {
 export class SwitchScopeHierarchy {
   private readonly session = inject(SessionStore);
 
+  readonly fetching = input(false);
   readonly resolution = input.required<HealingSwitchResolutionView>();
   protected readonly copy = HEALING_SWITCH_COPY;
   protected readonly modeLabel = modeLabel;

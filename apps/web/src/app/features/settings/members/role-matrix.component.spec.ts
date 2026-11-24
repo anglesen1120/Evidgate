@@ -182,14 +182,16 @@ describe('RoleMatrixComponent responsive records', () => {
     const { fixture, root } = await render();
     fixture.componentRef.setInput('matrix', { columns: [], rows: [] });
     await fixture.whenStable();
-    expect(root.querySelector('[role="status"]')?.textContent).toContain(
+    expect(root.querySelector('[hlmAlert][role="status"]')?.textContent).toContain(
       'Role catalogue unavailable',
     );
     expect(root.querySelector('table')).toBeNull();
     fixture.componentRef.setInput('matrix', { columns: ROLES, rows: [] });
     await fixture.whenStable();
     expect(root.querySelector('table')).not.toBeNull();
-    expect(root.querySelector('[role="status"]')).toBeNull();
+    expect(root.querySelector('[hlmAlert][role="status"]')).toBeNull();
+    const progress = root.querySelector('app-live-status [role="status"][aria-live="polite"]');
+    expect(progress?.textContent?.trim()).toBe('');
   });
 
   it('gives member-directory values corresponding headers and narrow record labels', async () => {

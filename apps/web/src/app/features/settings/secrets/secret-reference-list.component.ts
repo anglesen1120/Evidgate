@@ -1,3 +1,4 @@
+import { LoadingPatternComponent } from '../../../shared/ui/states/loading-pattern.component';
 import { DecimalPipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
@@ -31,6 +32,7 @@ import { SECRETS_COPY, secretStatusLabel } from './secrets.copy';
 @Component({
   selector: 'app-secret-reference-list',
   imports: [
+    LoadingPatternComponent,
     StatusPillComponent,
     RotationReminderChipComponent,
     HlmButton,
@@ -56,6 +58,7 @@ export class SecretReferenceListComponent {
   private readonly viewport = inject(NarrowMutationPolicy);
   private readonly clock = inject(ROTATION_CLOCK);
 
+  readonly fetching = input(false);
   readonly rows = input.required<readonly IngestTokenView[]>();
   readonly canWrite = input(false);
   readonly busy = input(false);

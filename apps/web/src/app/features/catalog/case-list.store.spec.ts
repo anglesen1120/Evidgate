@@ -356,7 +356,7 @@ describe('CaseListStore', () => {
       expect(store.page()).toBe(2);
       store.setPageSize(100);
       TestBed.tick();
-      expect(store.rows()).toEqual([]);
+      expect(store.rows().map((row) => row.id)).toEqual(['next-case']);
       await settle();
       expect(store.pageSize()).toBe(100);
       expect(store.page()).toBe(1);

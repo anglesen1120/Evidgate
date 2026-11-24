@@ -19,7 +19,7 @@
 
   @switch (store.status()) {
     @case ('loading') {
-      <app-loading-pattern [label]="loadingLabel" />
+      <app-loading-pattern [layout]="'table'" [busy]="true" [label]="loadingLabel" />
     }
     @case ('error') {
       @switch (store.failure()) {
@@ -349,6 +349,7 @@
         </footer>
       </section>
       <app-onboarding-evidence-panel
+        [fetching]="store.refreshing()"
         #resourcesLedger
         id="onboarding-resources"
         tabindex="-1"

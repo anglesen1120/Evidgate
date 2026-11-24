@@ -1,3 +1,4 @@
+import { rowsDuringFetch } from '../../../shared/ui/data-table/rows-during-fetch';
 import { formatNumber } from '@angular/common';
 import {
   ChangeDetectionStrategy,
@@ -127,11 +128,7 @@ import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
     }
     @if (store.canWrite() && store.scope() && store.phase() !== 'forbidden') {
       <app-desktop-required-notice />
-    } @else if (
-      !store.canWrite() &&
-      store.scope() &&
-      (store.phase() === 'success' || store.phase() === 'empty')
-    ) {
+    } @else if (!store.canWrite() && store.scope() && showServedPage()) {
       <p
         class="my-4 border-b border-border pb-3 text-xs text-muted-foreground"
         i18n="@@settings.read-only"
@@ -143,7 +140,8 @@ import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
       <app-not-found-pattern />
     } @else {
       <app-request-state
-        [status]="status()"
+        [tableLoading]="true"
+        [status]="status() === 'loading' && displayRows().length ? 'ready' : status()"
         [error]="store.loadError()"
         [emptyIcon]="'navKey'"
         [empty]="store.phase() === 'empty'"
@@ -153,9 +151,10 @@ import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
         (retry)="reload()"
       >
         <app-api-token-list
-          [rows]="store.rows()"
+          [fetching]="store.pageResource.isLoading()"
+          [rows]="displayRows()"
           [canWrite]="store.canWrite()"
-          [busy]="store.creating() || store.revoking()"
+          [busy]="store.creating() || store.revoking() || store.pageResource.isLoading()"
           (revoke)="revokeSelection.set($event)"
         />
       </app-request-state>
@@ -256,12 +255,22 @@ export class ApiTokensPage {
     return activated !== null && resolved !== activated;
   });
   protected readonly copy = API_TOKENS_COPY;
+  protected readonly displayRows = rowsDuringFetch(
+    this.store.scope,
+    this.store.pageResource.isLoading,
+    this.store.rows,
+  );
+  protected readonly showServedPage = computed(
+    () =>
+      this.store.phase() === 'success' ||
+      this.store.phase() === 'empty' ||
+      (this.store.pageResource.isLoading() && this.displayRows().length > 0),
+  );
   protected readonly subtitle = computed(() => {
-    if (this.store.phase() !== 'success' && this.store.phase() !== 'empty')
-      return this.copy.description;
+    if (!this.showServedPage()) return this.copy.description;
     return [
       escapeFormatChars(this.projectLabel(this.store.selectedProject())),
-      `${this.copy.directory}: ${formatNumber(this.store.rows().length, this.locale)}`,
+      `${this.copy.directory}: ${formatNumber(this.displayRows().length, this.locale)}`,
       $localize`:@@settings.count-on-page:On this page`,
       this.copy.order,
     ]

@@ -92,6 +92,7 @@ describe('ConnectCiPage field reasons and re-read focus', () => {
             project: signal<{ readonly slug: string } | null>({ slug: 'acme-web' }),
             done: computed(() => ({ 2: bindings().length + tokens().length > 0 })),
             canGoNext: computed(() => bindings().length + tokens().length > 0),
+            refreshing: signal(false),
             refreshFailure,
             refresh,
           },

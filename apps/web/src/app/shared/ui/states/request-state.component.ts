@@ -38,7 +38,11 @@ import { patternForError } from './state-pattern';
   template: `
     @switch (status()) {
       @case ('loading') {
-        <app-loading-pattern [label]="loadingLabel()" />
+        <app-loading-pattern
+          [layout]="tableLoading() ? 'table' : 'summary'"
+          [busy]="true"
+          [label]="loadingLabel()"
+        />
       }
       @case ('error') {
         @switch (pattern()) {
@@ -94,6 +98,7 @@ export class RequestStateComponent {
   private readonly injector = inject(Injector);
 
   readonly status = input<'loading' | 'ready' | 'error'>('loading');
+  readonly tableLoading = input(false);
   readonly loadingLabel = input<string | undefined>();
   readonly error = input<ApiError | null>(null);
   readonly empty = input(false);

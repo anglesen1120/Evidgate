@@ -1,5 +1,6 @@
 // Server-derived connection metadata and a component-scoped, one-time reveal: secret-bearing
 // commands never create an Idempotency intent and never auto-retry.
+import { LoadingPatternComponent } from '../../../shared/ui/states/loading-pattern.component';
 import { FieldHintComponent } from '../../../shared/ui/forms/field-hint.component';
 import { DatePipe, DOCUMENT, NgTemplateOutlet } from '@angular/common';
 import {
@@ -88,6 +89,7 @@ import {
 @Component({
   selector: 'app-onboarding-connect-ci',
   imports: [
+    LoadingPatternComponent,
     FieldHintComponent,
     DatePipe,
     NgTemplateOutlet,

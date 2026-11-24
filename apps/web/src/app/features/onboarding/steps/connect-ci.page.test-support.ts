@@ -82,6 +82,7 @@ export class ConnectionPageTestContext {
     project: this.project,
     done: this.done,
     canGoNext: this.canGoNext,
+    refreshing: signal(false),
     refreshFailure: this.refreshFailure,
     refresh: this.refresh,
   };

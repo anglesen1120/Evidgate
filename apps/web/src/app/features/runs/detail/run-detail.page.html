@@ -38,6 +38,7 @@
   </app-page-header>
 </div>
 <app-request-state
+  [tableLoading]="true"
   [status]="requestStatus()"
   [error]="store.loadError()"
   [retryEligible]="retryEligible()"
