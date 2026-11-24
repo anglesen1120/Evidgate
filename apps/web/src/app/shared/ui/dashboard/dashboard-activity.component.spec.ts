@@ -25,7 +25,7 @@ const event: AuditEntryDto = {
   seq: 1,
   actor_type: 'system',
   actor_id: 'worker1',
-  action: 'run.created',
+  action: 'auth.login',
   object_id: 'run1',
   prev_hash: '',
   entry_hash: 'abc',
@@ -50,14 +50,27 @@ describe('DashboardActivityComponent', () => {
     const fixture = TestBed.createComponent(DashboardActivityComponent);
     fixture.componentRef.setInput('rows', [event]);
     const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, ActivityHarness);
-    expect(await harness.text()).toContain('run.created');
+    expect(await harness.text()).toContain('Signed in');
+    expect(await harness.text()).not.toContain('auth.login');
+    expect(await (await harness.view()).getAttribute('aria-label')).toBe('View event Signed in');
     await (await harness.view()).click();
     const root = TestbedHarnessEnvironment.documentRootLoader(fixture);
     const dialog = await root.getHarness(EventDialogHarness);
     expect(await dialog.text()).toContain('event1');
     expect(await dialog.text()).toContain('system');
+    expect(await dialog.text()).toContain('auth.login');
     fixture.componentRef.setInput('rows', []);
     expect(await root.getHarnessOrNull(EventDialogHarness)).toBeNull();
+  });
+  it('shows unknown actions unchanged in both table and details', async () => {
+    const fixture = TestBed.createComponent(DashboardActivityComponent);
+    fixture.componentRef.setInput('rows', [{ ...event, action: 'future.action' }]);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, ActivityHarness);
+    expect(await harness.text()).toContain('future.action');
+    await (await harness.view()).click();
+    const dialog =
+      await TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(EventDialogHarness);
+    expect(await dialog.text()).toContain('future.action');
   });
   it('shows the title once and keeps the table caption for assistive tech only', async () => {
     const fixture = TestBed.createComponent(DashboardActivityComponent);

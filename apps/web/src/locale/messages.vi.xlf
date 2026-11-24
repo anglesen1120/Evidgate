@@ -263,14 +263,6 @@
         <source>Project overview</source>
         <target>Tổng quan dự án</target>
       </trans-unit>
-<trans-unit id="shell.overview.scope-line" datatype="html">
-        <source><x id="slug" equiv-text="project.slug"/> · Case prefix: <x id="prefix" equiv-text="project.case_prefix"/></source>
-        <target><x id="slug" equiv-text="project.slug"/> · Tiền tố ca kiểm thử: <x id="prefix" equiv-text="project.case_prefix"/></target>
-      </trans-unit>
-<trans-unit id="shell.overview.no-shortcuts" datatype="html">
-        <source>No shortcuts available for this project</source>
-        <target>Không có lối tắt cho dự án này</target>
-      </trans-unit>
 <trans-unit id="shared.label-chip.flaky" datatype="html">
         <source>Flaky</source>
         <target>Chập chờn</target>
@@ -2378,7 +2370,6 @@
 <trans-unit id="settings.policy.reload" datatype="html"><source>Reload revisions</source><target>Tải lại các phiên bản</target></trans-unit>
 <trans-unit id="settings.policy.published-new" datatype="html"><source>New revision published.</source><target>Đã xuất bản phiên bản mới.</target></trans-unit>
 <trans-unit id="settings.policy.published-unchanged" datatype="html"><source>Policy unchanged. Existing revision returned.</source><target>Chính sách không thay đổi. Máy chủ trả về phiên bản hiện có.</target></trans-unit>
-<trans-unit id="settings.policy.revisions" datatype="html"><source>Revisions</source><target>Các phiên bản</target></trans-unit>
 <trans-unit id="settings.policy.revisions-empty" datatype="html"><source>No revisions available.</source><target>Chưa có phiên bản nào.</target></trans-unit>
 <trans-unit id="settings.policy.revision" datatype="html"><source>Revision</source><target>Phiên bản</target></trans-unit>
 <trans-unit id="settings.policy.head" datatype="html"><source>Head</source><target>Mới nhất</target></trans-unit>
@@ -2980,7 +2971,6 @@
 <trans-unit id="retention.retry-save" datatype="html"><source>Retry saving retention</source><target>Thử lưu lại thời hạn</target></trans-unit>
 <trans-unit id="settings.tab.api-tokens" datatype="html"><source>API tokens</source><target>Mã truy cập API</target></trans-unit>
 <trans-unit id="settings.api-tokens.title" datatype="html"><source>API tokens</source><target>Mã truy cập API</target></trans-unit>
-<trans-unit id="settings.api-tokens.description" datatype="html"><source>Manage expiring, least-privilege credentials for this project. Token values cannot be read again.</source><target>Quản lý thông tin xác thực có thời hạn và quyền tối thiểu cho dự án này. Không thể đọc lại giá trị mã truy cập.</target></trans-unit>
 <trans-unit id="settings.api-tokens.project" datatype="html"><source>Project</source><target>Dự án</target></trans-unit>
 <trans-unit id="settings.api-tokens.create" datatype="html"><source>Create token</source><target>Tạo mã truy cập</target></trans-unit>
 <trans-unit id="settings.api-tokens.directory" datatype="html"><source>Project API tokens</source><target>Mã truy cập API của dự án</target></trans-unit>
@@ -3018,7 +3008,6 @@
 <trans-unit id="settings.api-tokens.revoke-saved" datatype="html"><source>Token revoked. The list is refreshed from the server.</source><target>Đã thu hồi mã truy cập. Danh sách được tải lại từ máy chủ.</target></trans-unit>
 <trans-unit id="settings.api-tokens.escalation" datatype="html"><source>These permissions cannot be granted to this token. Review the server explanation below.</source><target>Không thể cấp các quyền này cho mã truy cập. Xem giải thích của máy chủ bên dưới.</target></trans-unit>
 <trans-unit id="settings.api-tokens.uncertain" datatype="html"><source>The create response was not received. Check the token list and revoke any token you cannot recover before creating another.</source><target>Chưa nhận được phản hồi tạo mã. Hãy kiểm tra danh sách và thu hồi mã không thể khôi phục trước khi tạo mã khác.</target></trans-unit>
-<trans-unit id="settings.api-tokens.inspect" datatype="html"><source>Inspect</source><target>Kiểm tra</target></trans-unit>
 <trans-unit id="settings.api-tokens.close-and-check" datatype="html"><source>Close and check token list</source><target>Đóng và xem danh sách token</target></trans-unit>
 <trans-unit id="settings.api-tokens.actions" datatype="html"><source>Actions</source><target>Thao tác</target></trans-unit>
 <trans-unit id="healingswitch.title" datatype="html"><source>Healing switch</source><target>Công tắc tự phục hồi</target></trans-unit>
@@ -3129,8 +3118,6 @@
 <trans-unit id="settings.audit.object-hint" datatype="html"><source>Use the exact object type, for example run or policy_revision.</source><target>Nhập đúng loại đối tượng, ví dụ run hoặc policy_revision.</target></trans-unit>
 <trans-unit id="settings.members.show-full-matrix" datatype="html"><source>Show all roles</source><target>Xem tất cả vai trò</target></trans-unit>
 <trans-unit id="settings.members.show-granted-only" datatype="html"><source>Show granted roles only</source><target>Chỉ xem vai trò đã cấp</target></trans-unit>
-<trans-unit id="shell.overview.choose-next-step" datatype="html"><source> Choose a next step for this project. </source><target>Chọn bước tiếp theo cho dự án này.</target></trans-unit>
-<trans-unit id="shell.overview.next-steps" datatype="html"><source> Next steps </source><target>Bước tiếp theo</target></trans-unit>
 <trans-unit id="shared.forms.error-summary.title" datatype="html"><source>There is a problem</source><target>Có thông tin cần sửa</target></trans-unit>
 <trans-unit id="shared.forms.field.optional" datatype="html"><source>(optional)</source><target>(không bắt buộc)</target></trans-unit>
 <trans-unit id="shared.forms.field.required" datatype="html"><source>(required)</source><target>(bắt buộc)</target></trans-unit>
@@ -3346,7 +3333,6 @@
       <trans-unit id="settings.secrets.metadata" datatype="html"><source>Metadata only. A prefix identifies a reference; it does not authenticate.</source><target>Chỉ có siêu dữ liệu. Tiền tố dùng để nhận diện tham chiếu, không dùng để xác thực.</target></trans-unit>
       <trans-unit id="settings.secrets.no-matches" datatype="html"><source>No references match these filters</source><target>Không có tham chiếu khớp với các bộ lọc này</target></trans-unit>
       <trans-unit id="settings.secrets.search" datatype="html"><source>Search name or prefix</source><target>Tìm theo tên hoặc tiền tố</target></trans-unit>
-      <trans-unit id="settings.secrets.summary" datatype="html"><source>Reference summary</source><target>Tổng quan tham chiếu</target></trans-unit>
       <trans-unit id="runs.detail.decision-tab-compact" datatype="html"><source>Live decision</source><target>Quyết định</target></trans-unit>
       <trans-unit id="runs.detail.producers.count-mismatch-short" datatype="html"><source>Mismatch</source><target>Không khớp</target></trans-unit>
       <trans-unit id="runs.detail.producers.expected-unset" datatype="html"><source>Expected unset</source><target>Chưa có dự kiến</target></trans-unit>
@@ -3403,11 +3389,9 @@
       <trans-unit id="catalog.title" datatype="html"><source>Test catalog</source><target>Danh mục kiểm thử</target></trans-unit>
       <trans-unit id="catalog.description" datatype="html"><source>Browse stable automated test identities in this project. A missing identity is not a failed test.</source><target>Duyệt định danh kiểm thử tự động ổn định trong dự án. Định danh bị thiếu không có nghĩa là kiểm thử thất bại.</target></trans-unit>
       <trans-unit id="catalog.filters" datatype="html"><source>Filter test identities</source><target>Lọc định danh kiểm thử</target></trans-unit>
-      <trans-unit id="catalog.filter-hint" datatype="html"><source>Status and framework filter the server list. Search matches name or ID in this page only; it never loads additional pages.</source><target>Trạng thái và framework lọc danh sách trên máy chủ. Tìm kiếm chỉ khớp tên hoặc mã trong trang này và không tải thêm trang.</target></trans-unit>
       <trans-unit id="catalog.status" datatype="html"><source>Status</source><target>Trạng thái</target></trans-unit>
       <trans-unit id="catalog.framework" datatype="html"><source>Framework</source><target>Framework</target></trans-unit>
       <trans-unit id="catalog.framework-hint" datatype="html"><source>Exact framework name, for example playwright. Leave blank for all frameworks.</source><target>Tên framework chính xác, ví dụ playwright. Để trống để xem mọi framework.</target></trans-unit>
-      <trans-unit id="catalog.search" datatype="html"><source>Search name or ID in this page</source><target>Tìm tên hoặc mã trong trang này</target></trans-unit>
       <trans-unit id="catalog.all" datatype="html"><source>Active and missing</source><target>Đang hoạt động và bị thiếu</target></trans-unit>
       <trans-unit id="catalog.active" datatype="html"><source>Active</source><target>Đang hoạt động</target></trans-unit>
       <trans-unit id="catalog.missing" datatype="html"><source>Missing</source><target>Bị thiếu</target></trans-unit>
@@ -3417,17 +3401,9 @@
       <trans-unit id="catalog.loading" datatype="html"><source>Loading test identities…</source><target>Đang tải định danh kiểm thử…</target></trans-unit>
       <trans-unit id="catalog.empty-title" datatype="html"><source>No test identities in this project</source><target>Dự án chưa có định danh kiểm thử</target></trans-unit>
       <trans-unit id="catalog.empty-description" datatype="html"><source>Test identities appear here after catalog ingestion. No test outcome is inferred from an empty catalog.</source><target>Định danh kiểm thử xuất hiện sau khi nhập danh mục. Danh mục trống không xác định kết quả kiểm thử.</target></trans-unit>
-      <trans-unit id="catalog.no-match-title" datatype="html"><source>No matching identities in this page</source><target>Không có định danh khớp trong trang này</target></trans-unit>
-      <trans-unit id="catalog.no-match-description" datatype="html"><source>Clear the filters to return to the supplied page. A local search does not inspect unloaded results.</source><target>Xoá bộ lọc để trở về trang dữ liệu đã cung cấp. Tìm kiếm cục bộ không kiểm tra kết quả chưa tải.</target></trans-unit>
-      <trans-unit id="catalog.search-no-results" datatype="html"><source>No matching identities in this page.</source><target>Không có định danh khớp trong trang này.</target></trans-unit>
-      <trans-unit id="catalog.search-results" datatype="html"><source>Matching identities in this page: <x id="INTERPOLATION" equiv-text="{{ store.visibleRows().length | number }}"/></source><target>Số định danh khớp trong trang này: <x id="INTERPOLATION" equiv-text="{{ store.visibleRows().length | number }}"/></target></trans-unit>
-      <trans-unit id="catalog.more" datatype="html"><source>More results exist. Only this response page is shown.</source><target>Vẫn còn kết quả khác. Chỉ hiển thị trang phản hồi này.</target></trans-unit>
-      <trans-unit id="catalog.contract-note" datatype="html"><source>Owner is shown as a membership ID. This list does not supply revision, platform, level, purpose or rename history; these columns are not displayed.</source><target>Người phụ trách được hiển thị bằng mã thành viên. Danh sách không cung cấp phiên bản, nền tảng, cấp, mục đích hoặc lịch sử đổi tên nên không hiển thị các cột này.</target></trans-unit>
-      <trans-unit id="catalog.table-caption" datatype="html"><source>Test identities in this page</source><target>Định danh kiểm thử trong trang này</target></trans-unit>
       <trans-unit id="catalog.column-identity" datatype="html"><source>Identity / name</source><target>Định danh / tên</target></trans-unit>
       <trans-unit id="catalog.stable-id" datatype="html"><source>Stable identity</source><target>Định danh ổn định</target></trans-unit>
       <trans-unit id="catalog.case-id" datatype="html"><source>Case ID</source><target>Mã ca kiểm thử</target></trans-unit>
-      <trans-unit id="catalog.owner" datatype="html"><source>Owner membership</source><target>Mã người phụ trách</target></trans-unit>
       <trans-unit id="catalog.unassigned" datatype="html"><source>Unassigned</source><target>Chưa gán</target></trans-unit>
       <trans-unit id="catalog.unresolved" datatype="html"><source>The catalog request did not complete. Try again.</source><target>Yêu cầu danh mục chưa hoàn tất. Hãy thử lại.</target></trans-unit>
       <trans-unit id="catalog.loaded-filter-hint" datatype="html"><source>Status and framework filter the server list. Search matches name or ID in loaded results only; it never loads more results.</source><target>Trạng thái và framework lọc danh sách trên máy chủ. Tìm kiếm chỉ khớp tên hoặc mã trong kết quả đã tải và không tự tải thêm kết quả.</target></trans-unit>
@@ -3458,7 +3434,6 @@
       <trans-unit id="catalog.owner-denied" datatype="html"><source>Owner permission was refused. The previous owner is restored. Check permission, then reload to retry.</source><target>Quyền gán người phụ trách bị từ chối. Đã khôi phục người phụ trách trước đó. Kiểm tra quyền rồi tải lại để thử lại.</target></trans-unit>
       <trans-unit id="catalog.owner-conflict" datatype="html"><source>The case changed. The previous owner is restored. Reload the list, then choose the owner again.</source><target>Ca kiểm thử đã thay đổi. Đã khôi phục người phụ trách trước đó. Tải lại danh sách rồi chọn lại người phụ trách.</target></trans-unit>
       <trans-unit id="catalog.owner-failed" datatype="html"><source>The owner could not be saved. The previous owner is restored. Reload to retry.</source><target>Không thể lưu người phụ trách. Đã khôi phục người phụ trách trước đó. Tải lại để thử lại.</target></trans-unit>
-      <trans-unit id="catalog.owner-for" datatype="html"><source>Owner for <x id="name" equiv-text="name"/></source><target>Người phụ trách của <x id="name" equiv-text="name"/></target></trans-unit>
       <trans-unit id="catalog.owner-unknown" datatype="html"><source>Member details unavailable</source><target>Chưa có thông tin thành viên</target></trans-unit>
       <trans-unit id="catalog.owners-empty" datatype="html"><source>No active members are available to assign. Existing ownership is unchanged.</source><target>Không có thành viên đang hoạt động để gán. Người phụ trách hiện tại được giữ nguyên.</target></trans-unit>
       <trans-unit id="catalog.members-unresolved" datatype="html"><source>The member names did not load. The owner is shown by id.</source><target>Không tải được tên thành viên. Người phụ trách được hiển thị theo mã.</target></trans-unit>
@@ -3553,7 +3528,6 @@
       <trans-unit id="authoring.import-export.prefix" datatype="html"><source>Project code prefix</source><target>Tiền tố mã dự án</target></trans-unit>
       <trans-unit id="authoring.import-export.import-tab" datatype="html"><source>Import</source><target>Nhập dữ liệu</target></trans-unit>
       <trans-unit id="authoring.import-export.export-tab" datatype="html"><source>Export</source><target>Xuất dữ liệu</target></trans-unit>
-      <trans-unit id="authoring.import-export.intake" datatype="html"><source>File and target</source><target>Tệp và đích nhập</target></trans-unit>
       <trans-unit id="authoring.import-export.file" datatype="html"><source>Source file</source><target>Tệp nguồn</target></trans-unit>
       <trans-unit id="authoring.import-export.file-limits" datatype="html"><source>CSV, JSON or XLSX. The server accepts at most 5 MiB and 5,000 data rows. File selection is not validation.</source><target>CSV, JSON hoặc XLSX. Máy chủ nhận tối đa 5 MiB và 5.000 dòng dữ liệu. Chọn tệp chưa có nghĩa là tệp đã được kiểm tra.</target></trans-unit>
       <trans-unit id="authoring.import-export.format" datatype="html"><source>Format</source><target>Định dạng</target></trans-unit>
@@ -3636,7 +3610,6 @@
       <trans-unit id="authoring.import-export.failure.sign-in" datatype="html"><source>Sign in again before retrying. No request is sent automatically after sign-in.</source><target>Đăng nhập lại trước khi thử lại. Không tự động gửi yêu cầu sau khi đăng nhập.</target></trans-unit>
       <trans-unit id="authoring.import-export.failure.not-found" datatype="html"><source>This project or node was not found. No file is available.</source><target>Không tìm thấy dự án hoặc nút này. Không có tệp để tải.</target></trans-unit>
       <trans-unit id="authoring.import-export.failure.unknown" datatype="html"><source>The request could not be completed. Its outcome is unconfirmed; retry only the same intent.</source><target>Không thể hoàn tất yêu cầu. Chưa xác nhận được kết quả; chỉ thử lại cùng một ý định.</target></trans-unit>
-      <trans-unit id="authoring.import-export.row-label" datatype="html"><source>Row <x id="INDEX" equiv-text="detail.index"/></source><target>Dòng <x id="INDEX" equiv-text="detail.index"/></target></trans-unit>
       <trans-unit id="authoring.import-export.failure.export-filters" datatype="html"><source>Export filters were refused. Check the format, node UUID and included kinds. No file was downloaded.</source><target>Bộ lọc xuất bị từ chối. Kiểm tra định dạng, UUID của nút và các loại được xuất. Chưa tải tệp nào.</target></trans-unit>
       <trans-unit id="authoring.import-export.failure.export-wait" datatype="html"><source>The server is busy. Wait as directed by Retry-After, then retry this exact scope explicitly. Nothing is downloaded automatically.</source><target>Máy chủ đang bận. Chờ theo Retry-After rồi chủ động thử lại đúng phạm vi này. Không tự động tải tệp nào.</target></trans-unit>
       <trans-unit id="authoring.import-export.failure.export-unknown" datatype="html"><source>The export could not be completed or its server file was unavailable. No file was downloaded. Retry the exact scope explicitly.</source><target>Không thể hoàn tất xuất hoặc không nhận được tệp từ máy chủ. Chưa tải tệp nào. Hãy chủ động thử lại đúng phạm vi đó.</target></trans-unit>
@@ -3672,7 +3645,6 @@
       <trans-unit id="authoring.tree.more-roots" datatype="html"><source>Load more root nodes</source><target>Tải thêm nút gốc</target></trans-unit>
       <trans-unit id="authoring.tree.more-children" datatype="html"><source>Load more child nodes</source><target>Tải thêm nút con</target></trans-unit>
       <trans-unit id="authoring.tree.table" datatype="html"><source>Manual cases</source><target>Ca kiểm thử thủ công</target></trans-unit>
-      <trans-unit id="authoring.tree.table-placeholder" datatype="html"><source>This separate region is reserved for the case table. Hierarchy loading and failures do not control it.</source><target>Vùng độc lập này dành cho bảng ca kiểm thử. Việc tải hoặc lỗi của phân cấp không điều khiển vùng này.</target></trans-unit>
       <trans-unit id="authoring.tree.expand" datatype="html"><source>Expand <x id="title" equiv-text="node.title"/></source><target>Mở rộng <x id="title" equiv-text="node.title"/></target></trans-unit>
       <trans-unit id="authoring.tree.collapse" datatype="html"><source>Collapse <x id="title" equiv-text="node.title"/></source><target>Thu gọn <x id="title" equiv-text="node.title"/></target></trans-unit>
       <trans-unit id="authoring.tree.select" datatype="html"><source>Select scope <x id="title" equiv-text="node.title"/></source><target>Chọn phạm vi <x id="title" equiv-text="node.title"/></target></trans-unit>
@@ -3741,7 +3713,6 @@
       <trans-unit id="authoring.ai-settings.cancel" datatype="html"><source>Cancel</source><target>Hủy</target></trans-unit>
       <trans-unit id="authoring.ai-settings.replace" datatype="html"><source>Replace draft</source><target>Thay bản nháp</target></trans-unit>
       <trans-unit id="authoring.ai-settings.filter" datatype="html"><source>Filter loaded versions by reason</source><target>Lọc phiên bản đã tải theo lý do</target></trans-unit>
-      <trans-unit id="authoring.ai-settings.inspect" datatype="html"><source>View version <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></source><target>Xem phiên bản <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></target></trans-unit>
       <trans-unit id="authoring.ai-settings.compare" datatype="html"><source>Compare with <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></source><target>So sánh với <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></target></trans-unit>
       <trans-unit id="authoring.ai-settings.first" datatype="html"><source>First page</source><target>Trang đầu</target></trans-unit>
       <trans-unit id="authoring.ai-settings.next" datatype="html"><source>Next page</source><target>Trang tiếp</target></trans-unit>
@@ -3755,7 +3726,6 @@
       <trans-unit id="authoring.ai-settings.url-error" datatype="html"><source>Enter an absolute HTTP or HTTPS URL without credentials.</source><target>Nhập URL HTTP hoặc HTTPS tuyệt đối không chứa thông tin đăng nhập.</target></trans-unit>
       <trans-unit id="authoring.ai-settings.stale" datatype="html"><source>Refresh failed. Previously loaded settings and your unsaved draft are retained.</source><target>Không thể làm mới. Cài đặt đã tải và bản nháp chưa lưu của bạn được giữ lại.</target></trans-unit>
       <trans-unit id="authoring.ai-settings.cursor-cycle" datatype="html"><source>The server repeated a page cursor. Return to the first page to retry.</source><target>Máy chủ lặp lại con trỏ trang. Quay về trang đầu để thử lại.</target></trans-unit>
-      <trans-unit id="authoring.ai-settings.compare-reason" datatype="html"><source>View a version before choosing a second version to compare.</source><target>Xem một phiên bản trước khi chọn phiên bản thứ hai để so sánh.</target></trans-unit>
       <trans-unit id="authoring.case-table.selection-summary" datatype="html"><source> <x id="INTERPOLATION" equiv-text="{{ selectedCount() | number }}"/> of <x id="INTERPOLATION_1" equiv-text="{{ rows().length | number }}"/> loaded selected; applies to visible rows only </source><target>Đã chọn <x id="INTERPOLATION" equiv-text="{{ selectedCount() | number }}"/> trong <x id="INTERPOLATION_1" equiv-text="{{ rows().length | number }}"/> ca đã tải; chỉ áp dụng cho các hàng đang hiển thị</target></trans-unit>
       <trans-unit id="authoring.case-table.select-case" datatype="html"><source>Select case <x id="code" equiv-text="row.code"/></source><target>Chọn ca kiểm thử <x id="code" equiv-text="row.code"/></target></trans-unit>
       <trans-unit id="authoring.case-table.loaded-count" datatype="html"><source><x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> cases loaded</source><target>Đã tải <x id="INTERPOLATION" equiv-text="{{ store.rows().length | number }}"/> ca kiểm thử</target></trans-unit>
@@ -3866,10 +3836,6 @@
       <trans-unit id="authoring.editor.character-count" datatype="html">
         <source><x id="INTERPOLATION" equiv-text="{{ count(draft[field.key]) }}"/> / <x id="INTERPOLATION_1" equiv-text="{{ field.limit }}"/> characters</source>
         <target state="translated"><x id="INTERPOLATION" equiv-text="{{ count(draft[field.key]) }}"/> / <x id="INTERPOLATION_1" equiv-text="{{ field.limit }}"/> ký tự</target>
-      </trans-unit>
-      <trans-unit id="authoring.editor.choose-panel" datatype="html">
-        <source>Choose a section</source>
-        <target state="translated">Chọn phần</target>
       </trans-unit>
       <trans-unit id="authoring.editor.compare-version" datatype="html">
         <source>Compare with <x id="INTERPOLATION" equiv-text="{{ row.version_no }}"/></source>
@@ -4305,8 +4271,6 @@
       <trans-unit id="authoring.pending-changes.back" datatype="html"><source>Back to feature tree</source><target>Quay lại cây tính năng</target></trans-unit>
       <trans-unit id="authoring.pending-changes.queue-title" datatype="html"><source>Queued changes</source><target>Thay đổi trong hàng chờ</target></trans-unit>
       <trans-unit id="authoring.pending-changes.queue-scope" datatype="html"><source>Loaded pending changes</source><target>Các thay đổi đang chờ đã tải</target></trans-unit>
-      <trans-unit id="authoring.pending-changes.preview-title" datatype="html"><source>Selected change</source><target>Thay đổi đã chọn</target></trans-unit>
-      <trans-unit id="authoring.pending-changes.preview-none" datatype="html"><source>Choose a queued change to read its preview.</source><target>Chọn một thay đổi trong hàng chờ để xem bản xem trước.</target></trans-unit>
       <trans-unit id="authoring.pending-changes.select-all" datatype="html"><source>Select every loaded change</source><target>Chọn tất cả thay đổi đã tải</target></trans-unit>
       <trans-unit id="authoring.pending-changes.clear-selection" datatype="html"><source>Clear the selection</source><target>Bỏ chọn tất cả</target></trans-unit>
       <trans-unit id="authoring.pending-changes.selection-summary" datatype="html"><source>Selected changes</source><target>Thay đổi đã chọn</target></trans-unit>
@@ -4362,7 +4326,6 @@
       <trans-unit id="authoring.pending-changes.new-item-label" datatype="html"><source>New item</source><target>Mục mới</target></trans-unit>
       <trans-unit id="authoring.pending-changes.lineage-label" datatype="html"><source>Lineage</source><target>Phả hệ</target></trans-unit>
       <trans-unit id="authoring.pending-changes.author-label" datatype="html"><source>Author</source><target>Tác giả</target></trans-unit>
-      <trans-unit id="authoring.pending-changes.queued-source" datatype="html"><source>Queued source</source><target>Nguồn xếp hàng</target></trans-unit>
       <trans-unit id="authoring.pending-changes.impact-unavailable" datatype="html"><source>The affected cases and the full before/after impact are not supplied by this response.</source><target>Phản hồi này không cung cấp các ca bị ảnh hưởng và tác động đầy đủ trước/sau.</target></trans-unit>
       <trans-unit id="authoring.pending-changes.loaded-scope" datatype="html"><source>Loaded count, not the project total</source><target>Số lượng đã tải, không phải tổng của dự án</target></trans-unit>
       <trans-unit id="authoring.pending-changes.atomic-scope" datatype="html"><source>One atomic batch, exact reviewed selection</source><target>Một lô nguyên tử, đúng các thay đổi đã xem xét</target></trans-unit>
@@ -4375,7 +4338,6 @@
       <trans-unit id="authoring.pending-changes.structural-unavailable" datatype="html"><source>Unavailable until structural apply lands. Merge and split changes stay queued and block Apply when selected.</source><target>Chưa khả dụng cho đến khi hỗ trợ áp dụng thay đổi cấu trúc. Thay đổi gộp và tách vẫn trong hàng chờ và chặn Áp dụng khi được chọn.</target></trans-unit>
       <trans-unit id="authoring.pending-changes.stale-queue" datatype="html"><source>Refresh failed. These are previously loaded changes, not a confirmed current queue.</source><target>Không thể làm mới. Đây là các thay đổi đã tải trước đó, chưa xác nhận là hàng chờ hiện tại.</target></trans-unit>
       <trans-unit id="authoring.pending-changes.select-change" datatype="html"><source>Select change</source><target>Chọn thay đổi</target></trans-unit>
-      <trans-unit id="authoring.pending-changes.preview-action" datatype="html"><source>Preview</source><target>Xem trước</target></trans-unit>
       <trans-unit id="authoring.pending-changes.change-id" datatype="html"><source>Change id</source><target>Mã thay đổi</target></trans-unit>
       <trans-unit id="authoring.pending-changes.load-more" datatype="html"><source>Load more changes</source><target>Tải thêm thay đổi</target></trans-unit>
       <trans-unit id="authoring.pending-changes.batch-summary" datatype="html"><source>Batch summary</source><target>Tóm tắt lô</target></trans-unit>
@@ -4408,10 +4370,8 @@
       <trans-unit id="authoring.pending-changes.delete-consequence" datatype="html"><source>Applying this delete removes the named target item.</source><target>Áp dụng thao tác xoá này sẽ xoá mục được nêu.</target></trans-unit>
       <trans-unit id="authoring.pending-changes.comment-too-long" datatype="html"><source>Use no more than 2,000 characters for the comment.</source><target>Nhập tối đa 2.000 ký tự cho bình luận.</target></trans-unit>
       <trans-unit id="authoring.pending-changes.reason-too-long" datatype="html"><source>Use no more than 500 characters for the reason.</source><target>Nhập tối đa 500 ký tự cho lý do.</target></trans-unit>
-      <trans-unit id="authoring.pending-changes.character-count" datatype="html"><source><x id="START_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;app-number-value&gt;"/><x id="CLOSE_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;/app-number-value&gt;"/> of <x id="START_TAG_APP-NUMBER-VALUE_1" ctype="x-app-number-value" equiv-text="&lt;app-number-value&gt;"/><x id="CLOSE_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;/app-number-value&gt;"/> characters </source><target><x id="START_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;app-number-value&gt;"/><x id="CLOSE_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;/app-number-value&gt;"/> / <x id="START_TAG_APP-NUMBER-VALUE_1" ctype="x-app-number-value" equiv-text="&lt;app-number-value&gt;"/><x id="CLOSE_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;/app-number-value&gt;"/> ký tự </target></trans-unit>
-      <trans-unit id="authoring.pending-changes.reason-character-count" datatype="html"><source><x id="START_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;app-number-value&gt;"/><x id="CLOSE_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;/app-number-value&gt;"/> of <x id="START_TAG_APP-NUMBER-VALUE_1" ctype="x-app-number-value" equiv-text="&lt;app-number-value&gt;"/><x id="CLOSE_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;/app-number-value&gt;"/> characters </source><target><x id="START_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;app-number-value&gt;"/><x id="CLOSE_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;/app-number-value&gt;"/> / <x id="START_TAG_APP-NUMBER-VALUE_1" ctype="x-app-number-value" equiv-text="&lt;app-number-value&gt;"/><x id="CLOSE_TAG_APP-NUMBER-VALUE" ctype="x-app-number-value" equiv-text="&lt;/app-number-value&gt;"/> ký tự </target></trans-unit>
-      <trans-unit id="authoring.editor.review-tab-label" datatype="html"><source>Checklist review</source><target>Xem xét danh sách kiểm tra</target></trans-unit>
-      <trans-unit id="authoring.editor.review-select-option" datatype="html"><source>Checklist review</source><target>Xem xét danh sách kiểm tra</target></trans-unit>
+      <trans-unit id="authoring.pending-changes.character-count" datatype="html"><source><x id="START_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;commentLength()&quot; /&gt;"/><x id="CLOSE_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;commentLimit&quot; /&gt;"/> of <x id="START_TAG_APP_NUMBER_VALUE_1" ctype="x-app_number_value_1" equiv-text="&lt;app-number-value [value]=&quot;commentLimit&quot; /&gt;"/><x id="CLOSE_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;commentLimit&quot; /&gt;"/> characters </source><target><x id="START_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;commentLength()&quot; /&gt;"/><x id="CLOSE_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;commentLimit&quot; /&gt;"/> / <x id="START_TAG_APP_NUMBER_VALUE_1" ctype="x-app_number_value_1" equiv-text="&lt;app-number-value [value]=&quot;commentLimit&quot; /&gt;"/><x id="CLOSE_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;commentLimit&quot; /&gt;"/> ký tự </target></trans-unit>
+      <trans-unit id="authoring.pending-changes.reason-character-count" datatype="html"><source><x id="START_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;reasonLength()&quot; /&gt;"/><x id="CLOSE_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;reasonLimit&quot; /&gt;"/> of <x id="START_TAG_APP_NUMBER_VALUE_1" ctype="x-app_number_value_1" equiv-text="&lt;app-number-value [value]=&quot;reasonLimit&quot; /&gt;"/><x id="CLOSE_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;reasonLimit&quot; /&gt;"/> characters </source><target><x id="START_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;reasonLength()&quot; /&gt;"/><x id="CLOSE_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;reasonLimit&quot; /&gt;"/> / <x id="START_TAG_APP_NUMBER_VALUE_1" ctype="x-app_number_value_1" equiv-text="&lt;app-number-value [value]=&quot;reasonLimit&quot; /&gt;"/><x id="CLOSE_TAG_APP_NUMBER_VALUE" ctype="x-app_number_value" equiv-text="&lt;app-number-value [value]=&quot;reasonLimit&quot; /&gt;"/> ký tự </target></trans-unit>
       <trans-unit id="authoring.editor.review-tab-trigger" datatype="html"><source>Checklist review</source><target>Xem xét danh sách kiểm tra</target></trans-unit>
       <trans-unit id="catalog.browse-capped" datatype="html"><source>Case list is at its load limit</source><target>Danh sách ca đã đạt giới hạn tải</target></trans-unit>
       <trans-unit id="catalog.browse-capped-help" datatype="html"><source>Narrow the status or framework filters to reach cases beyond the <x id="cap" equiv-text="formatNumber(this.cap, this.locale)"/> loaded here. Search only checks loaded results.</source><target>Thu hẹp bộ lọc trạng thái hoặc framework để xem các ca ngoài <x id="cap" equiv-text="formatNumber(this.cap, this.locale)"/> ca đã tải ở đây. Tìm kiếm chỉ kiểm tra kết quả đã tải.</target></trans-unit>
@@ -10924,14 +10884,6 @@
           <context context-type="linenumber">20</context>
         </context-group>
       </trans-unit>
-<trans-unit id="review.quality.flake-limit" datatype="html">
-        <source>2 cases shown · server limit 50. Flake rate is not a pass rate or a person-level ranking.</source>
-        <target>Hiển thị 2 ca · giới hạn máy chủ 50. Tỷ lệ chập chờn không phải tỷ lệ đạt hoặc xếp hạng cá nhân.</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/quality/overview/quality-breakdown.component.ts</context>
-          <context context-type="linenumber">21</context>
-        </context-group>
-      </trans-unit>
 <trans-unit id="review.quality.bindings" datatype="html">
         <source>Suite and component evidence</source>
         <target>Bằng chứng theo bộ kiểm thử và thành phần</target>
@@ -11115,14 +11067,6 @@
 <trans-unit id="review.quality.title" datatype="html">
         <source>Quality overview</source>
         <target>Tổng quan chất lượng</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/quality/overview/quality-overview-review.page.ts</context>
-          <context context-type="linenumber">60</context>
-        </context-group>
-      </trans-unit>
-<trans-unit id="review.quality.subtitle" datatype="html">
-        <source>storefront-web · Historical outcomes and collection health</source>
-        <target>storefront-web · Kết quả lịch sử và tình trạng thu thập</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quality/overview/quality-overview-review.page.ts</context>
           <context context-type="linenumber">60</context>
@@ -22120,7 +22064,6 @@
           <context context-type="linenumber">210</context>
         </context-group>
       </trans-unit>
-<trans-unit id="suites.composition.description" datatype="html"><source>Inspect pinned case revisions, their variants and the inputs used to plan execution.</source><target>Xem các phiên bản ca kiểm thử đã ghim, các biến thể tương ứng và dữ liệu đầu vào dùng để lập kế hoạch thực thi.</target></trans-unit>
 <trans-unit id="suites.composition.identity" datatype="html"><source>Composition identity</source><target>Thông tin cấu hình</target></trans-unit>
 <trans-unit id="suites.composition.suite" datatype="html"><source>Suite</source><target>Bộ kiểm thử</target></trans-unit>
         <trans-unit id="settings.shell-intro" datatype="html"><source>Open a section to manage settings for your organization or project.</source><target>Chọn một mục để quản lý cài đặt của tổ chức hoặc dự án.</target></trans-unit>
@@ -22174,18 +22117,6 @@
       <trans-unit id="settings.security-safe-data" datatype="html">
         <source>Safe event data</source>
         <target>Dữ liệu sự kiện an toàn</target>
-      </trans-unit>
-      <trans-unit id="settings.security-visible-events" datatype="html">
-        <source>Visible events on this page</source>
-        <target>Sự kiện hiển thị trên trang này</target>
-      </trans-unit>
-      <trans-unit id="settings.security-page-critical" datatype="html">
-        <source>Critical events on this page</source>
-        <target>Sự kiện nghiêm trọng trên trang này</target>
-      </trans-unit>
-      <trans-unit id="settings.security-page-support" datatype="html">
-        <source>Support events on this page</source>
-        <target>Sự kiện hỗ trợ trên trang này</target>
       </trans-unit>
       <trans-unit id="settings.security-event-catalog" datatype="html">
         <source>Event catalog</source>
@@ -22270,10 +22201,6 @@
       <trans-unit id="authoring.import-export.download-summary" datatype="html">
         <source>Download summary</source>
         <target>Tóm tắt nội dung tải xuống</target>
-      </trans-unit>
-      <trans-unit id="authoring.pending-changes.queue-instructions" datatype="html">
-        <source>Open an operation to preview it. Use the checkboxes to select changes for the batch.</source>
-        <target>Mở một thao tác để xem trước. Đánh dấu các thay đổi muốn đưa vào lô.</target>
       </trans-unit>
       <trans-unit id="catalog.results-title" datatype="html">
         <source>Catalog results</source>
@@ -22702,7 +22629,6 @@
       <trans-unit id="authoring.import-export.version-id" datatype="html"><source>Version ID</source><target>Mã phiên bản</target></trans-unit>
       <trans-unit id="authoring.import-export.field-name" datatype="html"><source>Field name</source><target>Tên trường</target></trans-unit>
       <trans-unit id="authoring.import-export.meaning" datatype="html"><source>Meaning</source><target>Ý nghĩa</target></trans-unit>
-      <trans-unit id="authoring.import-export.loaded-versions" datatype="html"><source>Versions on this page: <x id="INTERPOLATION"/></source><target>Số phiên bản trên trang này: <x id="INTERPOLATION"/></target></trans-unit>
       <trans-unit id="authoring.ai-settings.select-first" datatype="html"><source>Select a first version, then choose another version to compare.</source><target>Chọn phiên bản thứ nhất, sau đó chọn một phiên bản khác để so sánh.</target></trans-unit>
       <trans-unit id="authoring.ai-settings.select-baseline" datatype="html"><source>Select version <x id="INTERPOLATION"/></source><target>Chọn phiên bản <x id="INTERPOLATION"/></target></trans-unit>
       <trans-unit id="authoring.ai-settings.snapshot-title" datatype="html"><source>Settings version details</source><target>Chi tiết phiên bản cài đặt</target></trans-unit>
@@ -22767,9 +22693,8 @@
 <trans-unit id="review.agent-pools.pool" datatype="html"><source>Pool</source><target>Nhóm tác nhân</target></trans-unit>
 <trans-unit id="review.agent-pools.capacity" datatype="html"><source>Reported capacity</source><target>Công suất được báo cáo</target></trans-unit>
       <trans-unit id="orgoverview.retry-runs" datatype="html"><source> Retry run summaries </source><target>Thử tải lại tóm tắt lượt chạy</target></trans-unit>
-      <trans-unit id="orgoverview.view" datatype="html"><source>View</source><target>Xem</target></trans-unit>
       <trans-unit id="orgoverview.run-bound" datatype="html"><source> Latest run is available only when the bounded read contains every run (up to 50 per project). </source><target>Chỉ hiển thị lượt chạy mới nhất khi dữ liệu đã tải chứa mọi lượt chạy (tối đa 50 mỗi dự án).</target></trans-unit>
-      <trans-unit id="orgoverview.period" datatype="html"><source> Period: <x id="INTERPOLATION" equiv-text="{{ store.usage.value().period }}"/> </source><target>Kỳ: <x id="INTERPOLATION"/></target></trans-unit>
+      <trans-unit id="orgoverview.period" datatype="html"><source> Period: <x id="INTERPOLATION" equiv-text="{{ store.usage.value().period }}"/> </source><target>Kỳ: <x id="INTERPOLATION" equiv-text="{{ store.usage.value().period }}"/></target></trans-unit>
       <trans-unit id="orgoverview.ai-explanation" datatype="html"><source> Token usage is not a credit balance. Unavailable measurements are not zero. </source><target>Lượng token sử dụng không phải số dư tín dụng. Số liệu chưa có không phải là 0.</target></trans-unit>
       <trans-unit id="orgoverview.empty-usage" datatype="html"><source>No usage metrics returned.</source><target>Không có số liệu sử dụng được trả về.</target></trans-unit>
       <trans-unit id="orgoverview.no-access" datatype="html"><source> No dashboard data is available with your current permissions. </source><target>Quyền hiện tại của bạn không cho phép xem dữ liệu tổng quan.</target></trans-unit>
@@ -22791,12 +22716,11 @@
       <trans-unit id="orgoverview.decision-column" datatype="html"><source>Latest decision</source><target>Quyết định mới nhất</target></trans-unit>
       <trans-unit id="orgoverview.time-column" datatype="html"><source>Latest run (UTC)</source><target>Lượt chạy mới nhất (UTC)</target></trans-unit>
       <trans-unit id="orgoverview.action-column" datatype="html"><source>Action</source><target>Thao tác</target></trans-unit>
-      <trans-unit id="orgoverview.view-project" datatype="html"><source>View project <x id="name" equiv-text="name"/></source><target>Xem dự án <x id="name"/></target></trans-unit>
+      <trans-unit id="orgoverview.view-project" datatype="html"><source>View project <x id="name" equiv-text="name"/></source><target>Xem dự án <x id="name" equiv-text="name"/></target></trans-unit>
       <trans-unit id="orgoverview.projects-more" datatype="html"><source>{VAR_PLURAL, plural, =1 {Showing 1 project; more available} other {Showing <x id="INTERPOLATION"/> projects; more available}}</source><target>{VAR_PLURAL, plural, other {Hiển thị <x id="INTERPOLATION"/> dự án; còn dự án khác}}</target></trans-unit>
       <trans-unit id="orgoverview.projects-count" datatype="html"><source>{VAR_PLURAL, plural, =1 {Showing 1 project} other {Showing <x id="INTERPOLATION"/> projects}}</source><target>{VAR_PLURAL, plural, other {Hiển thị <x id="INTERPOLATION"/> dự án}}</target></trans-unit>
-      <trans-unit id="orgoverview.members-sample" datatype="html"><source>Among <x id="count" equiv-text="count"/> memberships shown; more available</source><target>Trong <x id="count"/> tư cách thành viên đã tải; còn dữ liệu khác</target></trans-unit>
-      <trans-unit id="orgoverview.members-complete" datatype="html"><source>Among <x id="count" equiv-text="count"/> memberships</source><target>Trong <x id="count"/> tư cách thành viên</target></trans-unit>
-      <trans-unit id="shared.dashboard.activity-view" datatype="html"><source> View </source><target>Xem</target></trans-unit>
+      <trans-unit id="orgoverview.members-sample" datatype="html"><source>Among <x id="count" equiv-text="count"/> memberships shown; more available</source><target>Trong <x id="count" equiv-text="count"/> tư cách thành viên đã tải; còn dữ liệu khác</target></trans-unit>
+      <trans-unit id="orgoverview.members-complete" datatype="html"><source>Among <x id="count" equiv-text="count"/> memberships</source><target>Trong <x id="count" equiv-text="count"/> tư cách thành viên</target></trans-unit>
       <trans-unit id="shared.dashboard.activity-details" datatype="html"><source>Organization event</source><target>Sự kiện tổ chức</target></trans-unit>
       <trans-unit id="shared.dashboard.activity-time" datatype="html"><source>Time (UTC)</source><target>Thời gian (UTC)</target></trans-unit>
       <trans-unit id="shared.dashboard.activity-id" datatype="html"><source>Event ID</source><target>ID sự kiện</target></trans-unit>
@@ -22807,7 +22731,7 @@
       <trans-unit id="shared.dashboard.activity-empty" datatype="html"><source>No organization activity recorded.</source><target>Chưa ghi nhận hoạt động tổ chức.</target></trans-unit>
       <trans-unit id="shared.dashboard.activity-action" datatype="html"><source>Action</source><target>Hành động</target></trans-unit>
       <trans-unit id="shared.dashboard.activity-details-column" datatype="html"><source>Details</source><target>Chi tiết</target></trans-unit>
-      <trans-unit id="shared.dashboard.activity-view-label" datatype="html"><source>View event <x id="action" equiv-text="action"/></source><target>Xem sự kiện <x id="action"/></target></trans-unit>
+      <trans-unit id="shared.dashboard.activity-view-label" datatype="html"><source>View event <x id="action" equiv-text="auditActionLabel(action)"/></source><target>Xem sự kiện <x id="action" equiv-text="auditActionLabel(action)"/></target></trans-unit>
       <trans-unit id="shell.nav.org-overview" datatype="html"><source>Organization overview</source><target>Tổng quan tổ chức</target></trans-unit>
       <trans-unit id="project.dashboard.runs-caption" datatype="html"><source>Runs in this sample</source><target>Các lượt chạy trong mẫu này</target></trans-unit>
       <trans-unit id="project.dashboard.run" datatype="html"><source>Run</source><target>Lượt chạy</target></trans-unit>
@@ -22877,13 +22801,27 @@
       <trans-unit id="shared.dashboard.trend-table" datatype="html"><source> View as table </source><target>Xem dạng bảng</target></trans-unit>
       <trans-unit id="shared.dashboard.trend-date" datatype="html"><source>Date (UTC)</source><target>Ngày (UTC)</target></trans-unit>
       <trans-unit id="orgoverview.loading" datatype="html"><source>Loading</source><target>Đang tải</target></trans-unit>
-      <trans-unit id="catalog.page-filter-hint" datatype="html"><source>Status and framework filter the server list. Search matches name or ID on the current page only.</source><target>Trạng thái và framework lọc danh sách trên máy chủ. Tìm kiếm chỉ đối chiếu tên hoặc mã trên trang hiện tại.</target></trans-unit>
-      <trans-unit id="catalog.page-search" datatype="html"><source>Search name or ID on this page</source><target>Tìm tên hoặc mã trên trang này</target></trans-unit>
-      <trans-unit id="catalog.page-no-match-description" datatype="html"><source>Clear the filters or browse another page. Local search only checks the current page.</source><target>Xóa bộ lọc hoặc chuyển sang trang khác. Tìm kiếm cục bộ chỉ kiểm tra trang hiện tại.</target></trans-unit>
-      <trans-unit id="catalog.page-load-failed" datatype="html"><source>The requested page could not be loaded. The displayed page is unchanged.</source><target>Không thể tải trang được yêu cầu. Trang đang hiển thị không thay đổi.</target></trans-unit>
-      <trans-unit id="catalog.retry-page" datatype="html"><source>Retry page</source><target>Thử tải lại trang</target></trans-unit>
-      <trans-unit id="runs.detail.attempts.page-loading" datatype="html"><source>Loading attempts page</source><target>Đang tải trang lượt chạy</target></trans-unit>
-      <trans-unit id="runs.detail.attempts.page-loaded" datatype="html"><source>Attempts page loaded</source><target>Đã tải trang lượt chạy</target></trans-unit>
+      <trans-unit id="shared.audit.action.auth-login" datatype="html"><source>Signed in</source><target>Đăng nhập</target></trans-unit>
+      <trans-unit id="shared.audit.action.run-state-changed" datatype="html"><source>Run state changed</source><target>Thay đổi trạng thái lượt chạy</target></trans-unit>
+      <trans-unit id="shared.audit.action.policy-revision-create" datatype="html"><source>Policy revision created</source><target>Tạo phiên bản chính sách</target></trans-unit>
+      <trans-unit id="shared.audit.action.artifact-download-denied" datatype="html"><source>Artifact download denied</source><target>Từ chối tải xuống hiện vật</target></trans-unit>
+      <trans-unit id="shared.audit.action.membership-bind" datatype="html"><source>Membership linked</source><target>Liên kết tư cách thành viên</target></trans-unit>
+      <trans-unit id="shared.audit.action.release-bind" datatype="html"><source>Release linked</source><target>Liên kết bản phát hành</target></trans-unit>
+      <trans-unit id="shared.audit.action.run-cancel" datatype="html"><source>Run canceled</source><target>Hủy lượt chạy</target></trans-unit>
+      <trans-unit id="shared.audit.action.run-finalize" datatype="html"><source>Run shard finalized</source><target>Hoàn tất phân đoạn của lượt chạy</target></trans-unit>
+      <trans-unit id="shared.audit.action.usage-invoice-worksheet-read" datatype="html"><source>Invoice worksheet viewed</source><target>Xem bảng tính hóa đơn</target></trans-unit>
+      <trans-unit id="shared.audit.action.usage-statement-refused" datatype="html"><source>Usage statement refused</source><target>Từ chối bảng kê sử dụng</target></trans-unit>
+      <trans-unit id="shared.audit.action.usage-statement-replayed" datatype="html"><source>Existing usage statement returned</source><target>Trả lại bảng kê sử dụng hiện có</target></trans-unit>
+      <trans-unit id="shared.audit.action.usage-statement-issued" datatype="html"><source>Usage statement issued</source><target>Phát hành bảng kê sử dụng</target></trans-unit>
+      <trans-unit id="shared.audit.action.usage-cost-per-tenant-read" datatype="html"><source>Tenant cost viewed</source><target>Xem chi phí của tổ chức</target></trans-unit>
+      <trans-unit id="shared.audit.action.usage-entry-redated" datatype="html"><source>Usage entry date changed</source><target>Thay đổi ngày của mục sử dụng</target></trans-unit>
+      <trans-unit id="shared.audit.action.usage-reconciliation-read" datatype="html"><source>Usage reconciliation viewed</source><target>Xem đối soát sử dụng</target></trans-unit>
+      <trans-unit id="shared.audit.action.usage-ledger-read" datatype="html"><source>Usage ledger viewed</source><target>Xem sổ sử dụng</target></trans-unit>
+      <trans-unit id="shared.audit.action.usage-quota-raise" datatype="html"><source>Usage quota raised</source><target>Tăng hạn mức sử dụng</target></trans-unit>
+      <trans-unit id="orgoverview.project-details" datatype="html"><source>Project details</source><target>Chi tiết dự án</target></trans-unit>
+      <trans-unit id="orgoverview.project-id" datatype="html"><source>Project ID</source><target>Mã dự án</target></trans-unit>
+      <trans-unit id="orgoverview.project-name" datatype="html"><source>Name</source><target>Tên</target></trans-unit>
+      <trans-unit id="orgoverview.open-project" datatype="html"><source>Open project</source><target>Mở dự án</target></trans-unit>
 </body>
   </file>
 </xliff>
