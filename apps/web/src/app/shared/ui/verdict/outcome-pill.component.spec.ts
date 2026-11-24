@@ -33,8 +33,6 @@ describe('OutcomePillComponent', () => {
     expect(root.querySelector('span.verdict')?.getAttribute('data-tone')).toBe(tone);
     const badge = root.querySelector('[hlmBadge]');
     expect(badge?.getAttribute('data-slot')).toBe('badge');
-    expect(badge?.classList.contains(`bg-[var(--eg-${tone}-bg)]`)).toBe(true);
-    expect(badge?.classList.contains(`text-[var(--eg-${tone}-fg)]`)).toBe(true);
     expect(root.querySelector('.verdict__label')?.textContent?.trim()).toBe('Outcome:');
     expect(root.querySelector('.verdict__value')?.textContent).toBe(label);
     expect(root.textContent).not.toMatch(/PASS|FAIL|Evidence complete/);

@@ -268,3 +268,7 @@ Search here before writing UI. Paths are under `apps/web/src/app/`; test hosts a
 ## Single-page table footers
 
 On a terminal first page at the default size, keep the localized range as plain text rather than showing a navigation landmark, page number or controls. Keep the pager whenever there is a next cursor or previous page. Keep the size selector and pager when a smaller size would split the result (more than 20 records), or when a larger size is selected so the user can switch back even on a short page. A fixed window of loaded rows has no size selector. Keep a shown pager and its visible loading label during a fetch. If a later request fails and the displayed page is retained, keep its pager visible alongside recovery, without indicating that it is still loading. If a settled result removes a focused control, move focus to the remaining range without adding a Tab stop or moving focus from elsewhere.
+
+## Record decisions and feedback
+
+In record rows, only the stored release decision gets a colored badge. Show lifecycle, evidence completeness and test outcome as independent, muted labels with their own icons; neither a completed run nor passing tests implies a PASS decision. Keep a missing decision neutral with a clock, and distinguish it from a failed decision read. A failed collection read has an unknown count, not zero: show retry when eligible, and reserve the empty state and its filter-reset action for a successful read.

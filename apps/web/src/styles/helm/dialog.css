@@ -20,6 +20,7 @@
     border: var(--eg-border-width) solid var(--eg-border-control);
     border-radius: var(--eg-radius-lg);
     background: var(--eg-surface);
+    box-shadow: var(--eg-elevation-2);
     color: var(--eg-text);
     font-size: var(--eg-text-sm);
     line-height: var(--eg-leading-sm);
@@ -53,7 +54,7 @@
 
   .spartan-dialog-title {
     margin: 0;
-    font: var(--eg-weight-bold) var(--eg-text-md) / var(--eg-leading-md) var(--eg-font-display);
+    font: var(--eg-weight-bold) var(--eg-text-lg) / var(--eg-leading-lg) var(--eg-font-display);
   }
 
   .spartan-dialog-description {

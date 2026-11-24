@@ -1,8 +1,16 @@
 // State sheet: docs/design/web/state-sheet.md#loading-pattern
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { LoadingPatternComponent } from './loading-pattern.component';
+
+class TableLoadingHarness extends ComponentHarness {
+  static hostSelector = 'app-loading-pattern';
+  readonly placeholders = this.locatorForAll('[hlmSkeleton]');
+  readonly progress = this.locatorForOptional('[role="progressbar"]');
+}
 
 const rows = [
   ['default', 'implemented — polite busy region'],
@@ -51,6 +59,27 @@ describe('LoadingPatternComponent', () => {
         ?.textContent?.trim(),
     );
     expect(messages.sort()).toEqual(['', 'Loading…']);
+  });
+
+  it('reserves decorative row space before slow feedback, but not over existing rows', async () => {
+    const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, TableLoadingHarness);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      fixture.componentRef.setInput('layout', 'table');
+      fixture.componentRef.setInput('busy', true);
+      fixture.detectChanges();
+      const placeholders = await table.placeholders();
+      expect(placeholders.length).toBeGreaterThan(0);
+      for (const row of placeholders) expect(await row.getAttribute('aria-hidden')).toBe('true');
+      expect(await table.progress()).toBeNull();
+      fixture.componentRef.setInput('hasRows', true);
+      fixture.detectChanges();
+      expect(await table.placeholders()).toHaveLength(0);
+    } finally {
+      fixture.componentRef.setInput('busy', false);
+      fixture.detectChanges();
+      vi.useRealTimers();
+    }
   });
 
   it('uses Helm card and decorative skeleton while retaining one polite announcement', () => {

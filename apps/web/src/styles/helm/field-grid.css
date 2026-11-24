@@ -3,7 +3,7 @@
     display: grid;
     grid-template-columns: repeat(var(--hlm-field-columns, 1), minmax(0, 1fr));
     align-items: start;
-    gap: var(--eg-space-4) var(--eg-space-6);
+    gap: var(--eg-space-5) var(--eg-space-7);
     min-inline-size: 0;
     margin: 0;
   }
@@ -18,14 +18,20 @@
 
   .hlm-field-grid > div > dt {
     color: var(--eg-text-muted);
+    font-size: var(--eg-text-xs);
+    line-height: var(--eg-leading-xs);
   }
 
   .hlm-field-grid > div > dd {
     min-inline-size: 0;
     margin: 0;
+    color: var(--eg-text);
+    font-size: var(--eg-text-sm);
+    line-height: var(--eg-leading-sm);
   }
 
-  .hlm-field-grid > .hlm-field-wide {
+  .hlm-field-grid > .hlm-field-wide,
+  .hlm-field-grid > div:has(> dd > app-copyable-identifier) {
     grid-column: 1 / -1;
   }
 }

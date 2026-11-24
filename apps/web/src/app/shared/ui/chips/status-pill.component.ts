@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmIcon } from '@evidgate/ui/icon';
 
-import { BADGE_CLASSES, BADGE_ICON_NAMES, BADGE_TONE_CLASSES } from './badge-classes';
+import { BADGE_ICON_NAMES, QUIET_BADGE_CLASSES } from './badge-classes';
 
 export type StatusTone = 'success' | 'info' | 'warning' | 'danger' | 'neutral';
 
@@ -18,8 +18,8 @@ export type StatusTone = 'success' | 'info' | 'warning' | 'danger' | 'neutral';
     <span
       hlmBadge
       [fullValue]="fullValue()"
-      [variant]="'secondary'"
-      [class]="badgeClasses()"
+      [variant]="'ghost'"
+      [class]="badgeClasses"
       class="status-pill"
       [class.status-pill--success]="hasLabel() && tone() === 'success'"
       [class.status-pill--info]="hasLabel() && tone() === 'info'"
@@ -49,9 +49,7 @@ export class StatusPillComponent {
   protected readonly icons = BADGE_ICON_NAMES;
 
   protected readonly hasLabel = computed(() => Boolean(this.label()?.trim()));
-  protected readonly badgeClasses = computed(
-    () => `${BADGE_CLASSES} ${BADGE_TONE_CLASSES[this.hasLabel() ? this.tone() : 'neutral']}`,
-  );
+  protected readonly badgeClasses = QUIET_BADGE_CLASSES;
   protected readonly displayLabel = computed(() =>
     this.hasLabel()
       ? this.label()

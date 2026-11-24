@@ -22776,6 +22776,7 @@
 <trans-unit id="shared.field-hint.name" datatype="html"><source>Hint: <x id="label" equiv-text="this.label()"/></source><target>Gợi ý: <x id="label" equiv-text="this.label()"/></target></trans-unit>
 <trans-unit id="shared.data-table.cursor-range" datatype="html"><source>Showing <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/></source><target>Hiển thị <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/></target></trans-unit>
 <trans-unit id="shared.data-table.showing-loaded-range" datatype="html"><source>Showing <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> of <x id="loaded" equiv-text="loaded"/> loaded records</source><target>Hiển thị <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> trên <x id="loaded" equiv-text="loaded"/> bản ghi đã tải</target></trans-unit>
+<trans-unit id="shared.states.error.unknown-count" datatype="html"><source>The record count is unknown.</source><target>Chưa xác định được số lượng bản ghi.</target></trans-unit>
 </body>
   </file>
 </xliff>

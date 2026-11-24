@@ -41,17 +41,15 @@ const summaryCards = [0, 1, 2, 3] as const;
             [attr.aria-label]="announceProgress() ? (label() ?? loadingLabel) : null"
             [attr.aria-hidden]="announceProgress() ? null : true"
           ></span>
-          @if (!hasRows()) {
-            <div class="grid gap-(--eg-space-2) p-(--eg-space-3)" aria-hidden="true">
-              @for (field of fields; track field) {
-                <span
-                  hlmSkeleton
-                  class="h-(--eg-row-default) motion-reduce:animate-none"
-                  aria-hidden="true"
-                ></span>
-              }
-            </div>
-          }
+        }
+        @if (busy() && !hasRows()) {
+          <div aria-hidden="true" [class.invisible]="!visible()">
+            @for (field of fields; track field) {
+              <div hlmSkeleton class="loading-row" aria-hidden="true">
+                <span></span><span></span><span></span>
+              </div>
+            }
+          </div>
         }
       </div>
     } @else if (bare()) {
