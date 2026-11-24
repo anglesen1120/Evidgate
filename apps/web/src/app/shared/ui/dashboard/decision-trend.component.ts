@@ -1,6 +1,26 @@
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
+import { FocusKeyManager, type FocusableOption } from '@angular/cdk/a11y';
+import { Directionality } from '@angular/cdk/bidi';
+import { DecimalPipe, formatNumber } from '@angular/common';
+import {
+  afterRenderEffect,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  ElementRef,
+  inject,
+  Injector,
+  input,
+  linkedSignal,
+  LOCALE_ID,
+  Renderer2,
+  signal,
+  viewChild,
+  viewChildren,
+} from '@angular/core';
+import { HlmButton } from '@evidgate/ui/button';
 import { HlmTableImports } from '@evidgate/ui/table';
+import { openFullValuePopover } from '@evidgate/ui/utils';
 import type { DashboardTone } from './dashboard-kpi.component';
 
 export interface DashboardTrendSegment {
@@ -17,7 +37,7 @@ export interface DashboardTrendPoint {
 
 @Component({
   selector: 'app-decision-trend',
-  imports: [DecimalPipe, HlmTableImports],
+  imports: [DecimalPipe, HlmButton, HlmTableImports],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
@@ -28,28 +48,58 @@ export interface DashboardTrendPoint {
         tabindex="0"
         [attr.aria-label]="label()"
       >
-        @for (point of bars(); track point.id) {
-          <div class="trend-column" aria-hidden="true">
-            <div class="trend-stack">
-              <div class="trend-segments" [style.height.%]="point.height">
-                @for (segment of point.segments; track segment.id) {
-                  <span
-                    data-segment
-                    aria-hidden="true"
-                    [attr.data-tone]="segment.tone"
-                    [attr.data-pattern]="segment.pattern"
-                    [style.flex-grow]="segment.value"
-                  ></span>
-                }
-                <span class="trend-total text-xs font-medium tabular-nums">
-                  {{ point.total | number }}
-                </span>
+        <div class="trend-days" role="toolbar" [attr.aria-label]="daysLabel">
+          @for (point of bars(); track point.id) {
+            <div class="trend-column">
+              <div class="trend-stack">
+                <button
+                  #bar
+                  hlmBtn
+                  type="button"
+                  [variant]="'ghost'"
+                  class="trend-trigger"
+                  [tabIndex]="tabStop() === point.id ? 0 : -1"
+                  [attr.aria-label]="point.summary"
+                  (focus)="focusDay(point.id, bar, point.summary)"
+                  (blur)="blurDay(bar)"
+                  (pointerenter)="hoverDay($event, bar, point.summary)"
+                  (pointerleave)="leave($event, bar)"
+                  (pointerdown)="beginTap($event, bar)"
+                  (pointercancel)="closingTap = null"
+                  (click)="activate(bar, point.summary)"
+                  (keydown)="navigate($event, $index)"
+                >
+                  <span class="trend-segments" aria-hidden="true" [style.height.%]="point.height">
+                    @for (segment of point.segments; track segment.id) {
+                      <span
+                        data-segment
+                        aria-hidden="true"
+                        [attr.data-tone]="segment.tone"
+                        [attr.data-pattern]="segment.pattern"
+                        [style.flex-grow]="segment.value"
+                      ></span>
+                    }
+                    <span class="trend-total text-xs font-medium tabular-nums">
+                      {{ point.total | number }}
+                    </span>
+                  </span>
+                </button>
               </div>
+              <span aria-hidden="true" class="text-xs text-muted-foreground">{{
+                point.label
+              }}</span>
             </div>
-            <span class="text-xs text-muted-foreground">{{ point.label }}</span>
-          </div>
-        }
+          }
+        </div>
       </div>
+      <span
+        #panel
+        popover="manual"
+        class="spartan-tooltip-content overflow-auto whitespace-pre-line tabular-nums"
+        [attr.role]="inspection() ? 'tooltip' : null"
+        (pointerleave)="leave($event)"
+        >{{ inspection()?.summary }}</span
+      >
       <figcaption>
         <ul class="m-0 mb-(--eg-space-4) flex list-none flex-wrap gap-(--eg-space-4) p-0 text-xs">
           @for (segment of legend(); track segment.id) {
@@ -81,7 +131,7 @@ export interface DashboardTrendPoint {
               </caption>
               <thead hlmTHead>
                 <tr hlmTr>
-                  <th hlmTh i18n="@@shared.dashboard.trend-date">Date (UTC)</th>
+                  <th hlmTh>{{ dateLabel }}</th>
                   @for (segment of points()[0]?.segments ?? []; track segment.id) {
                     <th hlmTh>{{ segment.label }}</th>
                   }
@@ -103,14 +153,20 @@ export interface DashboardTrendPoint {
       </figcaption>
     </figure>
   `,
+  styleUrl: '../../../ui/utils/lib/full-value-popover.css',
   styles: `
     .trend-bars {
-      display: flex;
-      align-items: flex-start;
-      gap: var(--eg-space-4);
+      padding-inline: calc(var(--eg-focus-width) + var(--eg-focus-offset));
       min-inline-size: 0;
       overflow-x: auto;
       padding-block: calc(var(--eg-leading-xs) + var(--eg-space-1)) var(--eg-space-1);
+    }
+    .trend-days {
+      display: flex;
+      inline-size: max-content;
+      min-inline-size: 100%;
+      align-items: flex-start;
+      gap: var(--eg-space-4);
     }
     .trend-column {
       flex: 1 0 4.5rem;
@@ -122,6 +178,20 @@ export interface DashboardTrendPoint {
       position: relative;
       block-size: 10rem;
       border-block-end: var(--eg-border-width) solid var(--eg-border-control);
+    }
+    .trend-trigger {
+      display: block;
+      position: relative;
+      block-size: 100%;
+      inline-size: 4.5rem;
+      margin-inline: auto;
+      border: 0;
+      padding: 0;
+      cursor: help;
+    }
+    .trend-trigger:focus-visible {
+      outline: var(--eg-focus-width) solid var(--eg-focus);
+      outline-offset: var(--eg-focus-offset);
     }
     .trend-segments {
       position: absolute;
@@ -187,8 +257,37 @@ export interface DashboardTrendPoint {
   `,
 })
 export class DecisionTrendComponent {
+  private readonly locale = inject(LOCALE_ID);
+  private readonly injector = inject(Injector);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly renderer = inject(Renderer2);
+  private readonly directionality = inject(Directionality);
   readonly label = input.required<string>();
   readonly points = input<readonly DashboardTrendPoint[]>([]);
+  protected readonly daysLabel = $localize`:@@shared.dashboard.trend-days:Daily decision counts`;
+  protected readonly dateLabel = $localize`:@@shared.dashboard.trend-date:Date (UTC)`;
+  private readonly totalLabel = $localize`:@@shared.dashboard.trend-total:Total`;
+  private readonly panel = viewChild.required<ElementRef<HTMLElement>>('panel');
+  private readonly buttons = viewChildren<ElementRef<HTMLButtonElement>>('bar');
+  private readonly navigation = new FocusKeyManager<FocusableOption>(
+    computed(() =>
+      this.buttons().map(({ nativeElement }) => ({ focus: () => nativeElement.focus() })),
+    ),
+    this.injector,
+  )
+    .withVerticalOrientation(false)
+    .withHomeAndEnd();
+  protected closingTap: HTMLButtonElement | null = null;
+  private readonly focusedDay = signal<string | null>(null);
+  protected readonly tabStop = computed(() => {
+    const focused = this.focusedDay();
+    return this.points().some((day) => day.id === focused) ? focused : this.points()[0]?.id;
+  });
+  // Never keep a stale day's readout open after the dashboard replaces its sample.
+  protected readonly inspection = linkedSignal<
+    readonly DashboardTrendPoint[],
+    { trigger: HTMLButtonElement; summary: string } | null
+  >({ source: this.points, computation: () => null });
   protected readonly legend = computed(() =>
     (this.points()[0]?.segments ?? []).map((segment) => ({
       ...segment,
@@ -208,6 +307,13 @@ export class DecisionTrendComponent {
     return totals.map(({ point, total }) => ({
       ...point,
       total,
+      summary: [
+        `${this.dateLabel}: ${point.label}`,
+        ...point.segments.map(
+          ({ label, value }) => `${label}: ${formatNumber(value, this.locale)}`,
+        ),
+        `${this.totalLabel}: ${formatNumber(total, this.locale)}`,
+      ].join('\n'),
       height: (total / maximum) * 100,
       segments: point.segments
         .map((segment, index) => ({
@@ -217,4 +323,83 @@ export class DecisionTrendComponent {
         .filter((segment) => segment.value > 0),
     }));
   });
+
+  constructor() {
+    this.destroyRef.onDestroy(() => this.navigation.destroy());
+    // The tooltip primitive ignores touch. Use the same top-layer anchor as full table values.
+    afterRenderEffect((onCleanup) => {
+      const current = this.inspection();
+      if (!current) return;
+      const panel = this.panel().nativeElement;
+      const dismiss = () => {
+        if (this.inspection() === current) this.inspection.set(null);
+      };
+      const close = openFullValuePopover(current.trigger, panel, dismiss);
+      const unlisten = this.renderer.listen(
+        'document',
+        'pointerdown',
+        (event: PointerEvent) => {
+          if (!this.inside(event.target, current.trigger, panel)) dismiss();
+        },
+        { capture: true },
+      );
+      onCleanup(() => {
+        unlisten();
+        close();
+      });
+    });
+  }
+
+  protected beginTap(event: PointerEvent, trigger: HTMLButtonElement): void {
+    // Touch can focus the button before click. Toggle from the state at finger-down.
+    this.closingTap =
+      event.pointerType === 'touch' && this.inspection()?.trigger === trigger ? trigger : null;
+  }
+
+  protected activate(trigger: HTMLButtonElement, summary: string): void {
+    if (this.closingTap === trigger) this.blurDay(trigger);
+    else this.inspect(trigger, summary);
+    this.closingTap = null;
+  }
+
+  private inspect(trigger: HTMLButtonElement, summary: string): void {
+    if (this.inspection()?.trigger !== trigger) this.inspection.set({ trigger, summary });
+  }
+
+  protected focusDay(id: string, trigger: HTMLButtonElement, summary: string): void {
+    this.focusedDay.set(id);
+    this.inspect(trigger, summary);
+  }
+
+  protected blurDay(trigger: HTMLButtonElement): void {
+    if (this.inspection()?.trigger === trigger) this.inspection.set(null);
+  }
+
+  protected hoverDay(event: PointerEvent, trigger: HTMLButtonElement, summary: string): void {
+    if (event.pointerType === 'mouse' || event.pointerType === 'pen')
+      this.inspect(trigger, summary);
+  }
+
+  protected leave(event: PointerEvent, from?: HTMLButtonElement): void {
+    const current = this.inspection();
+    if (!current || event.pointerType === 'touch' || (from && from !== current.trigger)) return;
+    if (current.trigger.ownerDocument.activeElement === current.trigger) return;
+    if (!this.inside(event.relatedTarget, current.trigger, this.panel().nativeElement)) {
+      this.inspection.set(null);
+    }
+  }
+
+  protected navigate(event: KeyboardEvent, index: number): void {
+    if (event.key === 'Escape' && this.inspection()) {
+      event.stopPropagation();
+      this.inspection.set(null);
+      return;
+    }
+    this.navigation.updateActiveItem(index);
+    this.navigation.withHorizontalOrientation(this.directionality.value).onKeydown(event);
+  }
+
+  private inside(target: EventTarget | null, trigger: HTMLElement, panel: HTMLElement): boolean {
+    return target instanceof Node && (trigger.contains(target) || panel.contains(target));
+  }
 }

@@ -1,5 +1,5 @@
 import { mkdir } from 'node:fs/promises';
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
 import { LOCALES, THEMES, overviewPath, seedStoredTheme, waitForDialogAnimations } from './support';
 
@@ -58,9 +58,33 @@ for (const locale of LOCALES) {
           path: `/tmp/s674-shots/project-${width}-${theme}-${locale}.png`,
           fullPage: true,
         });
+        await expectDayReadout(page, locale, width);
       });
     }
   }
+}
+
+async function expectDayReadout(page: Page, locale: string, width: number): Promise<void> {
+  const chart = page.locator('app-decision-trend');
+  const day = chart.getByRole('toolbar').getByRole('button').first();
+  const values = chart.getByRole('tooltip');
+  await day.hover();
+  await expect(values).toContainText(locale === 'vi' ? 'Chưa đánh giá:' : 'Not evaluated:');
+  await expect(values).toContainText(locale === 'vi' ? 'Tổng:' : 'Total:');
+  await expect(day).toHaveAccessibleName(/PASS: \d+.*FAIL: \d+.*INCONCLUSIVE: \d+/);
+  const [bar, tip] = await Promise.all([day.boundingBox(), values.boundingBox()]);
+  if (!bar || !tip) throw new Error('Expected visible bounds for the day and its values.');
+  expect(tip.x).toBeGreaterThanOrEqual(0);
+  expect(tip.x + tip.width).toBeLessThanOrEqual(width + 1);
+  expect(tip.x + tip.width).toBeGreaterThan(bar.x);
+  expect(tip.x).toBeLessThan(bar.x + bar.width);
+  expect(
+    Math.min(Math.abs(tip.y - bar.y - bar.height), Math.abs(bar.y - tip.y - tip.height)),
+  ).toBeLessThanOrEqual(2);
+  await values.hover();
+  await expect(values).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(values).toBeHidden();
 }
 
 test('one failed source leaves other dashboard facts visible and retries only locally', async ({
