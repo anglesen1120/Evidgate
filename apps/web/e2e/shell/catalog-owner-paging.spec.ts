@@ -70,21 +70,27 @@ for (const locale of LOCALES) {
   const labels =
     locale === 'vi'
       ? {
-          more: 'Tải thêm',
+          next: 'Bản ghi tiếp',
+          previous: 'Bản ghi trước',
+          page: 'Trang',
           count: 'định danh đã tải',
+          loaded: 'Số định danh đã tải:',
           narrow: 'rộng từ 768 pixel',
           retry: 'Tải lại để thử lại',
         }
       : {
-          more: 'Load more',
+          next: 'Next records',
+          previous: 'Previous records',
+          page: 'Page',
           count: 'loaded',
+          loaded: 'Loaded identities:',
           narrow: 'at least 768 pixels wide',
           retry: 'Reload to retry',
         };
 
   for (const theme of THEMES) {
     for (const width of [360, 1280]) {
-      test(`catalog owner and append controls stay accessible (${locale}, ${theme}, ${width})`, async ({
+      test(`catalog owner and paging controls stay accessible (${locale}, ${theme}, ${width})`, async ({
         page,
       }) => {
         await seedStoredTheme(page, theme);
@@ -104,13 +110,40 @@ for (const locale of LOCALES) {
           await expect(page.locator('[data-catalog-owner-pending]')).toHaveCount(0);
           await expect(page.locator('[data-catalog-owner-error]')).toHaveCount(0);
         }
-        const more = page.getByRole('button', { name: labels.more, exact: true });
-        await tabTo(page, more);
+        const next = page.locator('app-data-table-pager [data-page="next"]');
+        const previous = page.locator('app-data-table-pager [data-page="previous"]');
+        const pageNumber = page.locator('app-data-table-pager [role="status"]');
+        await expect(next).toHaveText(labels.next);
+        await expect(previous).toHaveText(labels.previous);
+        await expect(pageNumber).toHaveText(`${labels.page} 1`);
+        await tabTo(page, next);
         await page.keyboard.press('Enter');
-        await expect(page.locator(ROWS)).toHaveCount(3);
-        await expect(page.locator(ROWS).nth(2)).toBeFocused();
-        await expect(page.locator('[data-catalog-loaded]')).toContainText(`3 ${labels.count}`);
-        await expect(page.locator('[data-catalog-summary]')).toContainText(`3 ${labels.count}`);
+        await expect(page.locator(ROWS)).toHaveCount(1);
+        await expect(page.locator(ROWS)).toContainText('018f0000-0000-7000-8000-0000000c0021');
+        await expect(page.locator(ROWS)).not.toContainText('018f0000-0000-7000-8000-0000000c0017');
+        await expect(next).toBeFocused();
+        await expect(next).toHaveAttribute('aria-disabled', 'true');
+        await expect(pageNumber).toHaveText(`${labels.page} 2`);
+        await expect(page.locator('app-page-header .header-description')).toContainText(
+          `${labels.loaded} 1`,
+        );
+        await expect(page.locator('[data-catalog-summary]')).toContainText(`1 ${labels.count}`);
+        await expectNoA11yViolations(page, 'app-case-list-page');
+        await tabTo(page, previous);
+        await page.keyboard.press('Enter');
+        await expect(page.locator(ROWS)).toHaveCount(2);
+        await expect(page.locator('app-case-list-table')).toContainText(
+          '018f0000-0000-7000-8000-0000000c0017',
+        );
+        await expect(page.locator('app-case-list-table')).not.toContainText(
+          '018f0000-0000-7000-8000-0000000c0021',
+        );
+        await expect(previous).toBeFocused();
+        await expect(previous).toHaveAttribute('aria-disabled', 'true');
+        await expect(pageNumber).toHaveText(`${labels.page} 1`);
+        await expect(page.locator('app-page-header .header-description')).toContainText(
+          `${labels.loaded} 2`,
+        );
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
           true,
         );
@@ -144,7 +177,7 @@ for (const locale of LOCALES) {
     'record View preserves list query, Back, Forward and deep-link close (' + locale + ')',
     async ({ page }) => {
       await page.setViewportSize({ width: 1440, height: 900 });
-      await page.goto(withVariants(base, ['?limit=25']));
+      await page.goto(withVariants(base, ['?limit=50']));
       const row = page.locator(ROWS).first();
       const opener = row.locator('[data-catalog-view]');
       await opener.click();
@@ -154,7 +187,7 @@ for (const locale of LOCALES) {
       await expectFieldColumns(dialog.locator('app-case-record-facts dl').last(), 3);
       await expect(page).toHaveURL(/mode=view/);
       const recordUrl = page.url();
-      expect(new URL(recordUrl).searchParams.get('limit')).toBe('25');
+      expect(new URL(recordUrl).searchParams.get('limit')).toBe('50');
       await page.goBack();
       await expect(dialog).toHaveCount(0);
       await expect(opener).toBeFocused();
@@ -165,7 +198,7 @@ for (const locale of LOCALES) {
       await page.keyboard.press('Escape');
       await expect(dialog).toHaveCount(0);
       await expect(page).not.toHaveURL(/record=/);
-      expect(new URL(page.url()).searchParams.get('limit')).toBe('25');
+      expect(new URL(page.url()).searchParams.get('limit')).toBe('50');
     },
   );
 
@@ -195,15 +228,29 @@ for (const locale of LOCALES) {
   test(`catalog page size stays in the URL and resets the cursor (${locale})`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto(base);
-    await tabTo(page, page.locator('#catalog-page-size'));
+    const size = page.locator('app-data-table-pager hlm-select-trigger button');
+    await expect(size).toContainText('20');
+    await page.locator('app-data-table-pager [data-page="next"]').click();
+    await expect(page.locator(ROWS)).toHaveCount(1);
+    await expect(page.locator('app-data-table-pager [role="status"]')).toHaveText(
+      `${labels.page} 2`,
+    );
+    await tabTo(page, size);
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('option', { name: '25', exact: true })).toBeVisible();
-    await moveHome(page, page.locator('#catalog-page-size'));
+    await expect(page.getByRole('option', { name: '20', exact: true })).toBeVisible();
+    await moveHome(page, size);
+    await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
-    await expect(page).toHaveURL(/limit=25/);
+    await expect(page).toHaveURL(/limit=50/);
     expect(new URL(page.url()).searchParams.has('cursor')).toBe(false);
+    await expect(page.locator(ROWS)).toHaveCount(2);
+    await expect(page.locator('app-data-table-pager [role="status"]')).toHaveText(
+      `${labels.page} 1`,
+    );
     await page.reload();
-    await expect(page.locator('#catalog-page-size')).toContainText('25');
-    await expect(page.locator('[data-catalog-loaded]')).toContainText(`2 ${labels.count}`);
+    await expect(size).toContainText('50');
+    await expect(page.locator('app-page-header .header-description')).toContainText(
+      `${labels.loaded} 2`,
+    );
   });
 }

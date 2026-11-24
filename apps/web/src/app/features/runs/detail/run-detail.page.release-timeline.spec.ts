@@ -265,7 +265,7 @@ describe('RunDetailPage release and timeline regions', () => {
     const titles = root.querySelectorAll('h1');
     expect(titles).toHaveLength(1);
     expect(titles[0]?.getAttribute('data-title-size')).toBe('page');
-    expect(titles[0]?.textContent).toBe('Run detail');
+    expect(titles[0]?.textContent?.trim()).toBe('Run detail');
     const pair = root.querySelector('[data-run-history-context]');
     expect([...(pair?.children ?? [])].map((node) => node.tagName.toLowerCase())).toEqual([
       'app-run-timeline',

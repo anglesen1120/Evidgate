@@ -222,61 +222,18 @@
     />
   }
   @if (store.status() === 'ready') {
-    <nav
-      class="flex min-w-0 flex-wrap items-center gap-(--eg-space-4) border-t border-border px-(--eg-space-5) py-(--eg-space-4) md:px-(--eg-space-6)"
-      [attr.aria-label]="copy.pagination"
-      [attr.aria-busy]="store.loadingMore()"
+    <app-data-table-pager
+      class="block border-t border-border px-(--eg-space-5) py-(--eg-space-4) md:px-(--eg-space-6)"
+      [page]="store.page()"
+      [pageSize]="store.pageSize() ?? 20"
+      [count]="store.rows().length"
+      [hasNext]="store.hasMore()"
+      [busy]="store.loadingMore()"
+      (previous)="store.previousPage()"
+      (next)="store.nextPage()"
+      (pageSizeChange)="setPageSize($event)"
       data-catalog-pagination
-    >
-      <div class="flex min-w-0 flex-wrap items-center gap-(--eg-space-3)">
-        <label hlmLabel for="catalog-page-size">{{ copy.pageSize }}</label>
-        <hlm-select
-          [ngModel]="store.pageSize()"
-          (ngModelChange)="setPageSize($event)"
-          [itemToString]="pageSizeLabel"
-        >
-          <hlm-select-trigger
-            [buttonId]="'catalog-page-size'"
-            class="min-h-(--eg-control-touch) min-w-(--eg-control-touch)"
-          >
-            <hlm-select-value />
-          </hlm-select-trigger>
-          <hlm-select-content *hlmSelectPortal [aria-label]="copy.pageSize">
-            @for (size of pageSizes; track size) {
-              <hlm-select-item [value]="size" class="min-h-(--eg-control-touch)">{{
-                size | number
-              }}</hlm-select-item>
-            }
-          </hlm-select-content>
-        </hlm-select>
-      </div>
-      <p
-        #loadedSummary
-        tabindex="-1"
-        class="eg-type-caption flex min-w-0 flex-wrap items-center gap-x-(--eg-space-4) gap-y-(--eg-space-2) tabular-nums text-muted-foreground focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-solid focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
-        data-catalog-loaded
-      >
-        <span i18n="@@catalog.loaded-count">{{ store.rows().length | number }} loaded</span>
-        @if (store.isFiltered()) {
-          <span class="text-foreground" i18n="@@catalog.matches-loaded"
-            >Matches in loaded results: {{ store.visibleRows().length | number }}</span
-          >
-        }
-      </p>
-      @if (store.hasMore()) {
-        <button
-          hlmBtn
-          type="button"
-          [variant]="'outline'"
-          class="ms-auto min-h-(--eg-control-touch) max-w-full whitespace-normal"
-          [disabled]="store.loadingMore()"
-          (click)="loadMore($event)"
-          data-catalog-load-more
-        >
-          {{ store.loadingMore() ? copy.loadingMore : copy.loadMore }}
-        </button>
-      }
-    </nav>
+    />
     @if (store.loadMoreFailure(); as failure) {
       <app-inline-feedback
         class="mx-(--eg-space-5) mb-(--eg-space-4) block md:mx-(--eg-space-6)"
@@ -285,7 +242,7 @@
         [description]="failure.message"
         [actionLabel]="failure.retryable ? copy.retryMore : undefined"
         [actionDisabled]="store.loadingMore()"
-        (action)="loadMore()"
+        (action)="retryPage()"
         data-catalog-page-error
       />
     }
