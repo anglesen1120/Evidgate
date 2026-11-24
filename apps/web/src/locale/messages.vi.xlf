@@ -22770,9 +22770,9 @@
 <trans-unit id="authoring.ai-settings.history-order" datatype="html"><source>Fixed server order: newest version first</source><target>Thứ tự máy chủ cố định: phiên bản mới nhất trước</target></trans-unit>
 <trans-unit id="authoring.ai-settings.page-filter" datatype="html"><source>Filter this page by reason</source><target>Lọc lý do trên trang này</target></trans-unit>
 <trans-unit id="authoring.ai-settings.page-no-match" datatype="html"><source>No versions on this page match this filter</source><target>Không có phiên bản nào trên trang này khớp với bộ lọc</target></trans-unit>
+<trans-unit id="authoring.case-table.order" datatype="html"><source>Case code ascending; case ID breaks ties</source><target>Mã ca kiểm thử tăng dần; sắp theo ID nếu trùng mã</target></trans-unit>
 <trans-unit id="authoring.case-table.empty-page" datatype="html"><source>No manual cases on this page</source><target>Không có ca kiểm thử thủ công trên trang này</target></trans-unit>
 <trans-unit id="authoring.case-table.empty-page-help" datatype="html"><source>Use Previous records to return to an earlier page, or refresh to start again.</source><target>Dùng nút Bản ghi trước để quay lại trang trước hoặc làm mới để bắt đầu lại.</target></trans-unit>
-<trans-unit id="authoring.case-table.order" datatype="html"><source>Case code ascending; case ID breaks ties</source><target>Mã ca kiểm thử tăng dần; sắp theo ID nếu trùng mã</target></trans-unit>
 <trans-unit id="authoring.editor.history-page-filter" datatype="html"><source>Filter this page by reason</source><target>Lọc lý do trên trang này</target></trans-unit>
 <trans-unit id="authoring.editor.history-page-no-match" datatype="html"><source>No versions on this page match this filter</source><target>Không có phiên bản nào trên trang này khớp với bộ lọc</target></trans-unit>
 <trans-unit id="authoring.pending-changes.ordered-caption" datatype="html"><source><x id="caption" equiv-text="caption"/> — Oldest first (server order)</source><target><x id="caption" equiv-text="caption"/> — Cũ nhất trước (thứ tự máy chủ)</target></trans-unit>
