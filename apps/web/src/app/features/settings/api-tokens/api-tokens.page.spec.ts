@@ -58,7 +58,7 @@ describe('ApiTokensPage states', () => {
     expect(option).toBeDefined();
     option?.click();
     await h.settle();
-    expect(h.list).toHaveBeenLastCalledWith('project-2', undefined, expect.any(AbortSignal));
+    expect(h.list).toHaveBeenLastCalledWith('project-2', undefined, expect.any(AbortSignal), 20);
     expect(h.root.querySelector('#api-tokens-project-value')?.textContent).toBe('Other project');
   });
 
@@ -112,14 +112,16 @@ describe('ApiTokensPage states', () => {
         replaceUrl: false,
       }),
     );
-    expect(h.list).toHaveBeenLastCalledWith('project-2', undefined, expect.any(AbortSignal));
+    expect(h.list).toHaveBeenLastCalledWith('project-2', undefined, expect.any(AbortSignal), 20);
   });
 
   it('writes the page cursor together with its project', async () => {
     const h = mount();
     h.list.mockResolvedValueOnce({ items: [ROW], next_cursor: 'next-page' });
     await h.settle();
-    const next = h.root.querySelector<HTMLButtonElement>('[data-api-next]');
+    const next = h.root.querySelector<HTMLButtonElement>(
+      'app-data-table-pager [data-page="next"][aria-disabled="false"]',
+    );
     if (!next) throw new Error('Missing next-page control');
     next.click();
     await h.settle();
@@ -135,7 +137,7 @@ describe('ApiTokensPage states', () => {
   it('returns to the first page as a click of its own, keeping a history entry', async () => {
     const h = mount(undefined, { query: { project: 'project-1', cursor: 'page-2' } });
     await h.settle();
-    expect(h.list).toHaveBeenLastCalledWith('project-1', 'page-2', expect.any(AbortSignal));
+    expect(h.list).toHaveBeenLastCalledWith('project-1', 'page-2', expect.any(AbortSignal), 20);
     const first = h.root.querySelector<HTMLButtonElement>('[data-api-first]');
     if (!first) throw new Error('Missing first-page control');
     first.click();
@@ -268,7 +270,7 @@ describe('ApiTokensPage states', () => {
         replaceUrl: true,
       }),
     );
-    expect(h.list).toHaveBeenLastCalledWith('project-1', undefined, expect.any(AbortSignal));
+    expect(h.list).toHaveBeenLastCalledWith('project-1', undefined, expect.any(AbortSignal), 20);
   });
 
   it('drops the URL cursor when a revoke conflict re-reads the first page', async () => {
@@ -303,7 +305,9 @@ describe('ApiTokensPage states', () => {
 });
 
 function openNextPage(root: HTMLElement): void {
-  const next = root.querySelector<HTMLButtonElement>('[data-api-next]');
+  const next = root.querySelector<HTMLButtonElement>(
+    'app-data-table-pager [data-page="next"][aria-disabled="false"]',
+  );
   if (!next) throw new Error('Missing next-page control');
   next.click();
 }

@@ -18,6 +18,7 @@ import type { MembershipView } from '@evidgate/sdk';
 import { SessionStore } from '../../../core/session/session.store';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
+import { DataTablePagerComponent } from '../../../shared/ui/data-table/data-table-pager.component';
 import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import {
   SettingsPageCountsComponent,
@@ -44,6 +45,7 @@ import { CancelInviteDialogComponent } from './cancel-invite-dialog.component';
     SettingsPageCountsComponent,
     RequestStateComponent,
     MemberListComponent,
+    DataTablePagerComponent,
     RoleMatrixComponent,
     InviteDialogComponent,
     RemoveDialogComponent,
@@ -76,11 +78,7 @@ export class MembersPage {
     const phase = this.store.phase();
     return phase === 'idle' ? 'loading' : phase;
   });
-  // Keep variable-height semantic rows bounded; cursor pages remain explicit, never load all.
-  protected readonly offset = signal(0);
-  protected readonly visibleMembers = computed(() =>
-    this.store.members().slice(this.offset(), this.offset() + 200),
-  );
+  protected readonly visibleMembers = this.store.members;
   protected readonly counts = computed(() => {
     let active = 0;
     let pending = 0;
@@ -126,10 +124,7 @@ export class MembersPage {
       rows: matrix.rows.filter((row) => ids.has(row.membership.id)),
     };
   });
-  protected readonly more = computed(
-    () => this.offset() + 200 < this.store.members().length || this.store.hasMore(),
-  );
-  protected readonly paging = signal(false);
+  protected readonly paging = computed(() => this.store.busy());
   protected readonly saved = signal(false);
   protected readonly retryReady = signal(true);
   /**
@@ -139,20 +134,17 @@ export class MembersPage {
    */
   private readonly pagingFailure = signal(false);
   /**
-   * Whether the store's `loadError` is stale. A refused page sets it and keeps `phase` `ready`
-   * (`members.store.ts` `loadMore`), and a later page that arrives does not clear it, so the page
-   * hides it once a page loaded — the store is not edited for this.
-   */
-  private readonly storedErrorCleared = signal(false);
-  /**
    * The paging alert above the pagination nav: the server's own refusal with its code, or the
    * generic message for a contract violation. `null` while the request-state owns the read state
    * (`phase` not `ready`), because there the shared error pattern already speaks for the page.
    */
   protected readonly pagingAlert = computed<{ message: string; code: string | null } | null>(() => {
     if (this.store.phase() !== 'ready') return null;
-    if (this.pagingFailure()) return { message: this.copy.loadMoreFailed, code: null };
-    if (this.storedErrorCleared()) return null;
+    if (this.pagingFailure())
+      return {
+        message: $localize`:@@settings.members.page-load-failed:The members page could not be loaded. The members already shown are unchanged.`,
+        code: null,
+      };
     const failure = this.store.loadError();
     return failure === null ? null : { message: failure.message, code: failure.code };
   });
@@ -166,7 +158,6 @@ export class MembersPage {
   constructor() {
     effect(() => {
       const org = this.session.currentOrg();
-      this.offset.set(0);
       this.saved.set(false);
       untracked(() => {
         this.clearPagingAlert();
@@ -187,7 +178,6 @@ export class MembersPage {
   protected reload(): void {
     const org = this.session.currentOrg();
     if (org) {
-      this.offset.set(0);
       this.clearPagingAlert();
       void this.store.load(org.id);
     }
@@ -235,52 +225,35 @@ export class MembersPage {
   }
   protected completed(removed = false): void {
     this.saved.set(true);
-    this.offset.set(0);
     this.clearPagingAlert();
     if (removed) this.heading().nativeElement.focus();
   }
-  protected previous(): void {
-    this.offset.update((offset) => Math.max(0, offset - 200));
-    this.heading().nativeElement.focus();
+  protected previous(): Promise<void> {
+    return this.navigate(false);
   }
-  /**
-   * Paging. Next stays the retry control: a refused page leaves the rows and the cursor alone, so
-   * the same button asks again, and this method never rejects — the click handler would otherwise
-   * be an unhandled rejection. A typed server refusal already lives in `loadError`; anything the
-   * store re-throws (a contract violation) becomes the generic alert, never a message built from
-   * the thrown value.
-   */
-  protected async next(): Promise<void> {
-    if (this.paging()) return;
-    this.paging.set(true);
-    const previousError = this.store.loadError();
+
+  protected next(): Promise<void> {
+    return this.navigate(true);
+  }
+
+  protected async changePageSize(size: number): Promise<void> {
+    this.clearPagingAlert();
+    await this.store.setPageSize(size);
+  }
+
+  private async navigate(forward: boolean): Promise<void> {
+    if (this.paging() || !this.retryReady()) return;
     try {
-      if (this.offset() + 200 >= this.store.members().length) {
-        await this.store.loadMore();
-        // The store keeps a refusal in `loadError` and does not clear it when a later page
-        // arrives, so the page clears its own copy: an unchanged error means this read answered.
-        this.storedErrorCleared.set(this.store.loadError() === previousError);
-      } else {
-        this.storedErrorCleared.set(true);
-      }
+      await (forward ? this.store.loadMore() : this.store.previous());
       this.pagingFailure.set(false);
-      if (this.offset() + 200 < this.store.members().length)
-        this.offset.update((offset) => offset + 200);
     } catch {
       this.pagingFailure.set(true);
-      this.storedErrorCleared.set(false);
-    } finally {
-      this.paging.set(false);
     }
-    // A page that answered moves the reader to the list heading; a refusal or a violation leaves
-    // focus where it was — on Next, the retry control, next to the alert that just appeared —
-    // instead of scrolling away from the alert to a heading whose rows did not change.
     if (this.pagingAlert() === null) this.heading().nativeElement.focus();
   }
 
   /** Forgets both paging alerts, so a new org, reload or mutation does not inherit one. */
   private clearPagingAlert(): void {
     this.pagingFailure.set(false);
-    this.storedErrorCleared.set(false);
   }
 }

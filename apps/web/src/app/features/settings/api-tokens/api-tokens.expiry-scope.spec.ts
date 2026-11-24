@@ -120,7 +120,7 @@ describe('API token expiry and scope boundaries', () => {
       return true;
     });
     await h.settle();
-    expect(h.list).toHaveBeenLastCalledWith('project-1', 'page-2', expect.any(AbortSignal));
+    expect(h.list).toHaveBeenLastCalledWith('project-1', 'page-2', expect.any(AbortSignal), 20);
     h.revoke.mockRejectedValueOnce(
       writeFailure({
         kind: 'conflict',
@@ -134,7 +134,7 @@ describe('API token expiry and scope boundaries', () => {
     await h.settle();
     expect(h.store.cursor()).toBeUndefined();
     expect(h.query.value.get('cursor')).toBeNull();
-    expect(h.list).toHaveBeenLastCalledWith('project-1', undefined, expect.any(AbortSignal));
+    expect(h.list).toHaveBeenLastCalledWith('project-1', undefined, expect.any(AbortSignal), 20);
     expect(h.store.rows()[0]?.status).toBe('revoked');
     expect(h.store.revokeError()?.message).toBe('This token is already revoked.');
   });

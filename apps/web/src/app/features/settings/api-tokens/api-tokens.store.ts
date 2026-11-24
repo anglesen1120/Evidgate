@@ -1,4 +1,4 @@
-import { computed, inject, linkedSignal, resource } from '@angular/core';
+import { computed, inject, linkedSignal, resource, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
 import type { ApiTokenCreatedResponse, ApiTokenView, CreateApiTokenRequest } from '@evidgate/sdk';
@@ -26,6 +26,17 @@ type WriteAttempt = {
   error: ApiError | null;
 };
 const idleAttempt = (): WriteAttempt => ({ scope: null, phase: 'idle', error: null });
+// Adapter failures may contain private request data; expose only a safe, retryable read failure.
+const UNRESOLVED_FAILURE: ApiError = {
+  kind: 'unexpected',
+  status: 0,
+  code: 'request_unresolved',
+  message: 'The request did not complete, so nothing was confirmed. Try again.',
+  requestId: null,
+  retryable: true,
+  details: [],
+  retryAfterSeconds: null,
+};
 // A round trip org A -> B -> A builds a fresh scope object for the same list, so an answer that
 // belongs to A is still A's: name the list by its values, never by an object's identity.
 const sameScope = (left: Scope | null | undefined, right: Scope | null | undefined): boolean =>
@@ -50,10 +61,12 @@ export const ApiTokensStore = signalStore(
     createOrigin: CreateOrigin | null;
     createAttempt: WriteAttempt;
     revokeAttempt: WriteAttempt;
+    pageSize: number;
   }>({
     createOrigin: null,
     createAttempt: idleAttempt(),
     revokeAttempt: idleAttempt(),
+    pageSize: 20,
   }),
   withProps((store) => {
     const session = inject(SessionStore);
@@ -102,11 +115,13 @@ export const ApiTokensStore = signalStore(
         scope: scope(),
         project: query?.()?.get('project'),
         cursor: query?.()?.get('cursor') ?? undefined,
+        size: store.pageSize(),
       }),
       // A URL that still names the cursor it named before is the page's own readback of a page the
       // store has since retired (a create or revoke restarted the list), not a new request. A page
       // the user moved to is not that: its navigation never landed, so the landing keeps the URL.
       computation: (source, previous): string | undefined => {
+        if (previous && source.size !== previous.source.size) return undefined;
         if (source.project !== source.scope?.project) return undefined;
         // A re-emission naming the cursor the URL already named is not a navigation: while Next is
         // in flight it must not hand the page back to the entry the user is leaving.
@@ -128,14 +143,52 @@ export const ApiTokensStore = signalStore(
         return staleRetirement ? undefined : source.cursor;
       },
     });
+    const requestCursors = linkedSignal<(string | undefined)[]>(() => {
+      scope();
+      store.pageSize();
+      return [untracked(cursor)];
+    });
     const pageResource = resource({
       params: () => {
         const active = scope();
-        return active ? { ...active, cursor: cursor() } : undefined;
+        return active ? { ...active, cursor: cursor(), limit: store.pageSize() } : undefined;
       },
       loader: async ({ params, abortSignal }) => {
-        const page = await data.list(params.project, params.cursor, abortSignal);
-        return { items: page.items.map(metadata), next_cursor: page.next_cursor };
+        const page = await data.list(params.project, params.cursor, abortSignal, params.limit);
+        return {
+          items: page.items.map(metadata),
+          next_cursor: page.next_cursor,
+          cursor: params.cursor,
+        };
+      },
+    });
+    const visiblePage = linkedSignal({
+      source: () => ({
+        scope: scope(),
+        size: store.pageSize(),
+        value: pageResource.hasValue() ? pageResource.value() : undefined,
+        error: pageResource.error(),
+      }),
+      computation: (
+        source,
+        previous,
+      ):
+        | { items: ApiTokenView[]; next_cursor: string | null; cursor: string | undefined }
+        | undefined => {
+        if (!source.scope) return undefined;
+        const error = source.error;
+        if (
+          isApiRequestError(error) &&
+          (error.error.kind === 'forbidden' ||
+            error.error.kind === 'unauthenticated' ||
+            error.error.kind === 'not_found')
+        )
+          return undefined;
+        if (source.value) return source.value;
+        return sameScope(source.scope, previous?.source.scope) &&
+          source.size === previous?.source.size
+          ? previous?.value
+          : undefined;
       },
     });
     return {
@@ -150,22 +203,34 @@ export const ApiTokensStore = signalStore(
       cursor,
       move,
       pageResource,
+      visiblePage,
+      requestCursors,
     };
   }),
   withComputed((store) => ({
-    rows: computed(() =>
-      store.scope() && store.pageResource.hasValue() ? store.pageResource.value().items : [],
-    ),
+    rows: computed(() => store.visiblePage()?.items ?? []),
+    page: computed(() => {
+      const cursor = store.visiblePage()?.cursor;
+      const index = store.requestCursors().indexOf(cursor);
+      return index < 0 ? 1 : index + 1;
+    }),
     loadError: computed(() => {
       if (!store.scope()) return null;
       const error = store.pageResource.error();
-      return isApiRequestError(error) ? error.error : null;
+      return isApiRequestError(error) ? error.error : error ? UNRESOLVED_FAILURE : null;
     }),
-    hasNext: computed(() =>
-      store.scope() && store.pageResource.hasValue()
-        ? !!store.pageResource.value().next_cursor
-        : false,
-    ),
+    hasNext: computed(() => {
+      const next = store.visiblePage()?.next_cursor;
+      const index = store.requestCursors().indexOf(store.visiblePage()?.cursor);
+      return (
+        !!next &&
+        next !== store.cursor() &&
+        !store
+          .requestCursors()
+          .slice(0, index + 1)
+          .includes(next)
+      );
+    }),
     // The dialog belongs to the project it was opened on, even if the selection moves under it.
     createOpen: computed(() => store.createOrigin() !== null),
     creating: computed(() => store.createAttempt().phase === 'submitting'),
@@ -183,13 +248,12 @@ export const ApiTokensStore = signalStore(
     phase: computed<ApiTokensPhase>(() => {
       if (!store.canRead()) return 'forbidden';
       if (!store.scope()) return 'empty';
+      if (store.visiblePage()) return store.visiblePage()?.items.length ? 'success' : 'empty';
       if (store.pageResource.isLoading()) return 'loading';
       const error = store.pageResource.error();
       if (error)
         return isApiRequestError(error) && error.error.kind === 'forbidden' ? 'forbidden' : 'error';
-      return store.pageResource.hasValue() && store.pageResource.value().items.length > 0
-        ? 'success'
-        : 'empty';
+      return 'empty';
     }),
   })),
   withMethods((store) => ({
@@ -201,10 +265,25 @@ export const ApiTokensStore = signalStore(
       store.move.held = undefined;
       store.cursor.set(cursor);
     },
+    setPageSize(size: number): void {
+      if (![20, 50, 100].includes(size)) return;
+      if (size === store.pageSize() && store.page() === 1) return;
+      store.move.held = undefined;
+      patchState(store, { pageSize: size });
+      store.cursor.set(undefined);
+    },
+    previous(): void {
+      if (store.pageResource.isLoading() || store.page() <= 1) return;
+      const cursor = store.requestCursors()[store.page() - 2];
+      store.cursor.set(cursor);
+      store.move.held = cursor;
+    },
     next(): void {
-      if (!store.pageResource.isLoading() && store.pageResource.hasValue()) {
-        const cursor = store.pageResource.value().next_cursor;
+      if (!store.pageResource.isLoading() && store.hasNext()) {
+        const cursor = store.visiblePage()?.next_cursor;
         if (cursor && cursor !== store.cursor()) {
+          const history = store.requestCursors().slice(0, store.page() - 1);
+          store.requestCursors.set([...history, store.visiblePage()?.cursor, cursor]);
           store.cursor.set(cursor);
           store.move.held = cursor;
         }
@@ -230,6 +309,7 @@ export const ApiTokensStore = signalStore(
     // page the server no longer accepts once a row moves.
     reloadFirst(): void {
       store.move.held = undefined;
+      store.requestCursors.set([undefined]);
       if (store.cursor() === undefined) store.pageResource.reload();
       else store.cursor.set(undefined);
     },

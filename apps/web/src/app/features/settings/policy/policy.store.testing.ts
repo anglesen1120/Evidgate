@@ -114,6 +114,7 @@ export class FakePolicyDataService {
   pages: readonly PolicyRevisionPage[] = [];
   readonly getCalls: string[] = [];
   readonly listCalls: Array<{ revisionId: string; cursor: string | undefined }> = [];
+  readonly listLimits: number[] = [];
   readonly publishCalls: Array<{ projectId: string; body: unknown; ifMatch: string | null }> = [];
   getFailure: Error | null = null;
   listFailure: Error | null = null;
@@ -144,8 +145,9 @@ export class FakePolicyDataService {
       : Promise.resolve(stored);
   }
 
-  listRevisions(revisionId: string, cursor?: string): Promise<PolicyRevisionPage> {
+  listRevisions(revisionId: string, cursor?: string, limit = 20): Promise<PolicyRevisionPage> {
     this.listCalls.push({ revisionId, cursor });
+    this.listLimits.push(limit);
     if (this.listManual) {
       return new Promise<PolicyRevisionPage>((resolve, reject) => {
         this.pendingLists.push({ resolve, reject });

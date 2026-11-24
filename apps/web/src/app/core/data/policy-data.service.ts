@@ -22,9 +22,6 @@ import { ApiGateway } from '../http/api-gateway';
 /** The query of `GET /v1/policies/{id}/revisions` without its optionality, so `{}` is legal. */
 type PolicyRevisionListQuery = NonNullable<ListPolicyRevisionsData['query']>;
 
-/** The contract's maximum page size for this route (00 §9.1: `limit` ≤ 200). */
-const POLICY_REVISION_PAGE_LIMIT = 200;
-
 /** An `ETag`'s weak marker, which RFC 9110 allows in front of the quoted value. */
 const WEAK_ETAG_PREFIX = 'W/';
 
@@ -105,8 +102,12 @@ export class PolicyDataService {
    * keeps the rows it already renders while the next page is on its way, and knows the head the
    * next publish must quote without a second request.
    */
-  async listRevisions(anyRevisionId: string, cursor?: string): Promise<PolicyRevisionPage> {
-    const query: PolicyRevisionListQuery = { limit: POLICY_REVISION_PAGE_LIMIT };
+  async listRevisions(
+    anyRevisionId: string,
+    cursor?: string,
+    limit = 20,
+  ): Promise<PolicyRevisionPage> {
+    const query: PolicyRevisionListQuery = { limit };
     if (cursor !== undefined) {
       query.cursor = cursor;
     }

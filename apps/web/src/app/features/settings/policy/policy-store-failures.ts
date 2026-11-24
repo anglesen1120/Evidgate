@@ -6,11 +6,10 @@ import { isApiRequestError, type ApiError, type ApiErrorKind } from '../../../co
 import { conflictFromError } from '../../../shared/ui/conflict/conflict-details';
 
 /**
- * The refusals indistinguishable from "there is no such revision": a `404` and a `403` for a
- * reason other than the antiforgery token. Both become `not_found`, so the tab cannot tell an id
- * it may not see from an id that does not exist.
+ * The refusals indistinguishable from "there is no such revision": missing, forbidden or an
+ * expired session. Antiforgery failures have their own kind and remain recoverable errors.
  */
-const REFUSAL_KINDS: readonly ApiErrorKind[] = ['not_found', 'forbidden'];
+const REFUSAL_KINDS: readonly ApiErrorKind[] = ['not_found', 'forbidden', 'unauthenticated'];
 
 /** No fields to compare in a policy conflict: the dialog learns the head, not a field snapshot. */
 const NO_CONFLICT_FIELDS: Readonly<Record<string, string>> = {};

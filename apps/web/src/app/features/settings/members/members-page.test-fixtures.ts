@@ -57,6 +57,9 @@ export class FakeMembersStore {
   readonly phase = signal<'loading' | 'ready' | 'error'>('ready');
   readonly loadError = signal<ApiError | null>(null);
   readonly hasMore = signal(false);
+  readonly page = signal(1);
+  readonly pageSize = signal(20);
+  readonly busy = signal(false);
   readonly inviteState = signal<Mutation>({ phase: 'idle', error: null });
   readonly removeState = signal<Mutation>({ phase: 'idle', error: null });
   readonly editState = signal<Mutation>({ phase: 'idle', error: null });
@@ -74,7 +77,16 @@ export class FakeMembersStore {
   );
   readonly memberById = (id: string) => this.members().find((value) => value.id === id);
   readonly load = vi.fn(() => Promise.resolve());
-  readonly loadMore = vi.fn(() => Promise.resolve());
+  readonly loadMore = vi.fn(() => {
+    this.loadError.set(null);
+    return Promise.resolve();
+  });
+  readonly previous = vi.fn(() => Promise.resolve());
+  readonly setPageSize = vi.fn((size: number) => {
+    this.pageSize.set(size);
+    this.page.set(1);
+    return Promise.resolve();
+  });
   readonly invite = vi.fn<
     (email: string, roleIds: readonly string[], intent: Intent) => Promise<IssuedInvite | null>
   >(() => Promise.resolve({ membershipId: 'new', inviteToken: 'page-create-once' }));

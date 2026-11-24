@@ -14,7 +14,7 @@ describe('ApiTokensStore', () => {
     await h.settle();
     expect(h.store.phase()).toBe('success');
     expect(h.store.rows()).toEqual([ROW]);
-    expect(h.list).toHaveBeenCalledWith('project-1', undefined, expect.any(AbortSignal));
+    expect(h.list).toHaveBeenCalledWith('project-1', undefined, expect.any(AbortSignal), 20);
     expect(h.store.rows()[0]).not.toHaveProperty('created_at');
   });
 
@@ -92,7 +92,7 @@ describe('ApiTokensStore', () => {
     h.list.mockResolvedValueOnce({ items: [{ ...ROW, id: 'row-2' }], next_cursor: null });
     h.store.next();
     await h.settle();
-    expect(h.list).toHaveBeenLastCalledWith('project-1', 'next-page', expect.any(AbortSignal));
+    expect(h.list).toHaveBeenLastCalledWith('project-1', 'next-page', expect.any(AbortSignal), 20);
     expect(h.store.rows().map((row) => row.id)).toEqual(['row-2']);
     expect(h.store.hasNext()).toBe(false);
     h.store.next();
@@ -118,7 +118,7 @@ describe('ApiTokensStore', () => {
       await h.settle();
       expect(h.store.cursor()).toBe('page-3');
       expect(h.list).toHaveBeenCalledTimes(reads);
-      expect(h.list).toHaveBeenLastCalledWith('project-1', 'page-3', expect.any(AbortSignal));
+      expect(h.list).toHaveBeenLastCalledWith('project-1', 'page-3', expect.any(AbortSignal), 20);
     });
 
     it('hands the page back to the URL once the navigation has settled', async () => {
@@ -142,7 +142,7 @@ describe('ApiTokensStore', () => {
     await h.settle();
     h.projects.set([project('project-2', 'Other')]);
     await h.settle();
-    expect(h.list).toHaveBeenLastCalledWith('project-2', undefined, expect.any(AbortSignal));
+    expect(h.list).toHaveBeenLastCalledWith('project-2', undefined, expect.any(AbortSignal), 20);
     expect(h.store.selectedProject()).toBe('project-2');
   });
 
@@ -166,7 +166,7 @@ describe('ApiTokensStore', () => {
     });
     await h.settle();
     expect(h.store.selectedProject()).toBe('project-2');
-    expect(h.list).toHaveBeenCalledWith('project-2', 'page-2', expect.any(AbortSignal));
+    expect(h.list).toHaveBeenCalledWith('project-2', 'page-2', expect.any(AbortSignal), 20);
   });
 
   it('ignores a cursor that arrives without the project it belongs to', async () => {
@@ -174,7 +174,7 @@ describe('ApiTokensStore', () => {
     await h.settle();
     expect(h.store.selectedProject()).toBe('project-1');
     expect(h.store.cursor()).toBeUndefined();
-    expect(h.list).toHaveBeenCalledWith('project-1', undefined, expect.any(AbortSignal));
+    expect(h.list).toHaveBeenCalledWith('project-1', undefined, expect.any(AbortSignal), 20);
   });
 
   it('drops the page cursor when the selection moves to another project', async () => {
@@ -189,7 +189,7 @@ describe('ApiTokensStore', () => {
     expect(h.store.selectedProject()).toBe('project-2');
     // The URL still names project-1's page; applying it to project-2 would page the wrong list.
     expect(h.store.cursor()).toBeUndefined();
-    expect(h.list).toHaveBeenLastCalledWith('project-2', undefined, expect.any(AbortSignal));
+    expect(h.list).toHaveBeenLastCalledWith('project-2', undefined, expect.any(AbortSignal), 20);
   });
 
   it('names the project a create dialog was opened for after the selection moves', async () => {

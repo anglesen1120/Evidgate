@@ -91,6 +91,11 @@ export class MembersStore {
   private readonly phaseSignal = signal<MembersPhase>('idle');
   private readonly loadErrorSignal = signal<ApiError | null>(null);
   private readonly nextCursorSignal = signal<string | null>(null);
+  private readonly pageSignal = signal(1);
+  private readonly pageSizeSignal = signal(20);
+  private readonly busySignal = signal(false);
+  /** Only opaque request cursors are retained; visible rows belong to one committed page. */
+  private requestCursors: (string | undefined)[] = [undefined];
   private readonly inviteStateSignal = signal<MutationState>(IDLE);
   private readonly resendStateSignal = signal<MutationState>(IDLE);
   private readonly cancelStateSignal = signal<MutationState>(IDLE);
@@ -113,13 +118,6 @@ export class MembersStore {
     refreshMember: (orgId, membershipId) => this.refreshMember(orgId, membershipId),
   });
 
-  /**
-   * The cursors this store already asked for, so a server that hands one back a second time is a
-   * contract violation instead of an endless list of the same rows.
-   */
-  private readonly followedCursors = new Set<string>();
-  /** Pages read for the current org's list, the first page included; bounded by the page cap. */
-  private pagesRead = 1;
   /** The org the loaded list belongs to. A mutation reloads from it, so the scope cannot drift. */
   private orgId: string | null = null;
   /** Bumped by every `load`; a read of an older generation never writes state. */
@@ -137,7 +135,7 @@ export class MembersStore {
    */
   private removeAttempt = 0;
 
-  /** The org's memberships, in server order, as many cursor pages as have been followed. */
+  /** The current server page, in server order. */
   readonly members = this.membersSignal.asReadonly();
   /** The roles the server listed — built-ins plus the org's own rows, in server order. */
   readonly roles = this.rolesSignal.asReadonly();
@@ -149,6 +147,9 @@ export class MembersStore {
   readonly loadError = this.loadErrorSignal.asReadonly();
   /** True while the server named another page, so the page's next control can be offered. */
   readonly hasMore = computed(() => this.nextCursorSignal() !== null);
+  readonly page = this.pageSignal.asReadonly();
+  readonly pageSize = this.pageSizeSignal.asReadonly();
+  readonly busy = this.busySignal.asReadonly();
   /**
    * Members x roles read columns-first: every granted cell comes from the role objects the server
    * put on the membership, so a cell is never inferred from a role *name* or code.
@@ -190,19 +191,7 @@ export class MembersStore {
     return previews;
   });
 
-  /**
-   * Reads the org's first membership page, the whole role list and the permission catalogue from
-   * the first page, then becomes `ready`.
-   *
-   * The three reads are independent, so they run together and settle separately (`settledRead`):
-   * a `403` on the catalogue must not hide a member list the caller is allowed to see. A substrate
-   * failure of ANY kind degrades — a swallowed contract violation would be a lie in the other
-   * direction, and the matrix/preview already say "unavailable" when their input is missing.
-   *
-   * Never rejects: the page calls `void store.load(...)` from an effect, so a rejection would be an
-   * unhandled promise rejection. A cancellation or a bug leaves the typed error `null`, and the tab
-   * renders the generic error pattern rather than a message the server never sent.
-   */
+  /** Load roles in full, independently of the selected membership page size. */
   async load(orgId: string): Promise<void> {
     const generation = ++this.generation;
     // Another org owns the mutation states now: an answer from the previous one is not this page's
@@ -214,12 +203,14 @@ export class MembersStore {
     this.orgId = orgId;
     this.phaseSignal.set('loading');
     this.loadErrorSignal.set(null);
-    this.followedCursors.clear();
+    this.requestCursors = [undefined];
+    this.pageSignal.set(1);
+    this.busySignal.set(false);
+    this.membersSignal.set(NO_MEMBERS);
     this.nextCursorSignal.set(null);
-    this.pagesRead = 1;
 
     const [membersRead, rolesRead, catalogueRead] = await Promise.all([
-      settledRead(() => this.data.listMemberships(orgId)),
+      settledRead(() => this.data.listMemberships(orgId, undefined, this.pageSizeSignal())),
       settledRead(() => this.data.listRoles()),
       settledRead(() => this.data.listPermissions()),
     ]);
@@ -243,53 +234,54 @@ export class MembersStore {
     }
   }
 
-  /**
-   * Follows the member list's `next_cursor` once and appends the page, so the screen keeps the rows
-   * it already shows while the next one is on its way (00 §9.1 keyset cursor; never "load all").
-   *
-   * A cursor already followed, or a {@link MAX_CURSOR_PAGES}-th page that still names another one,
-   * is a contract violation and throws a plain `Error` — the same two refusals as
-   * `IdentityDataService`, so a broken cursor costs visibility of the bug, not a hung tab. A typed
-   * server refusal is not a bug: it becomes `loadError` and the rows already read stay on screen
-   * (the error state only takes over when there is nothing to show).
-   */
-  async loadMore(): Promise<void> {
-    const orgId = this.orgId;
-    const cursor = this.nextCursorSignal();
-    if (orgId === null || cursor === null) {
-      return;
-    }
-    if (this.followedCursors.has(cursor)) {
-      throw new Error(`the membership list repeated cursor "${cursor}"`);
-    }
-    if (this.pagesRead >= MAX_CURSOR_PAGES) {
-      throw new Error(`the membership list did not finish within ${MAX_CURSOR_PAGES} pages`);
-    }
+  /** Next remains the retry action after a failed forward read. */
+  loadMore(): Promise<void> {
+    return this.navigate(this.pageSignal() + 1);
+  }
 
-    const generation = this.generation;
-    const read = await settledRead(() => this.data.listMemberships(orgId, cursor));
-    // A reload (another org, or a mutation's reload) owns the state now: this page belongs to a
-    // list nobody renders any more.
-    if (generation !== this.generation) {
-      return;
-    }
+  previous(): Promise<void> {
+    return this.navigate(this.pageSignal() - 1);
+  }
+
+  async setPageSize(size: number): Promise<void> {
+    if (![20, 50, 100].includes(size) || size === this.pageSizeSignal()) return;
+    this.pageSizeSignal.set(size);
+    if (this.orgId !== null) await this.load(this.orgId);
+  }
+
+  private async navigate(target: number): Promise<void> {
+    const orgId = this.orgId;
+    if (orgId === null || this.busySignal() || this.phaseSignal() !== 'ready' || target < 1) return;
+    const forward = target > this.pageSignal();
+    const cursor = forward ? this.nextCursorSignal() : this.requestCursors[target - 1];
+    if (cursor === null) return;
+    if (forward && this.requestCursors.includes(cursor))
+      throw new Error(`the membership list repeated cursor "${cursor}"`);
+    if (target > MAX_CURSOR_PAGES)
+      throw new Error(`the membership list did not finish within ${MAX_CURSOR_PAGES} pages`);
+    const generation = ++this.generation;
+    this.busySignal.set(true);
+    this.loadErrorSignal.set(null);
+    const read = await settledRead(() =>
+      this.data.listMemberships(orgId, cursor, this.pageSizeSignal()),
+    );
+    if (generation !== this.generation) return;
+    this.busySignal.set(false);
     if (!read.ok) {
-      // Only a typed refusal is the server's answer; a contract violation is re-thrown.
-      if (!isApiRequestError(read.error)) {
-        throw read.error;
-      }
-      this.loadErrorSignal.set(read.error.error);
-      if (this.membersSignal().length === 0) {
+      if (!isApiRequestError(read.error)) throw read.error;
+      const failure = read.error.error;
+      this.loadErrorSignal.set(failure);
+      if (['forbidden', 'unauthenticated', 'not_found'].includes(failure.kind)) {
+        this.membersSignal.set(NO_MEMBERS);
+        this.nextCursorSignal.set(null);
         this.phaseSignal.set('error');
       }
       return;
     }
-
-    this.followedCursors.add(cursor);
-    this.pagesRead += 1;
-    const page = read.value;
-    this.membersSignal.update((members) => [...members, ...page.items]);
-    this.nextCursorSignal.set(page.next_cursor);
+    this.requestCursors = [...this.requestCursors.slice(0, target - 1), cursor ?? undefined];
+    this.membersSignal.set(read.value.items);
+    this.nextCursorSignal.set(read.value.next_cursor);
+    this.pageSignal.set(target);
   }
 
   /** `MembersInviteFlow.invite`: the token leaves with the answer, the list reloads behind it. */
