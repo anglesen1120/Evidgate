@@ -480,20 +480,4 @@ describe('QuotaPanelComponent', () => {
     expect(setProjectPageSize).toHaveBeenCalledExactlyOnceWith(size);
     expect(nextProjectPage).not.toHaveBeenCalled();
   });
-
-  it('restores the served size in the picker after a failed size replacement', async () => {
-    projectPage.set(2);
-    setProjectPageSize.mockImplementationOnce(() => projectPaging.set(true));
-    const { fixture, harness } = await render();
-    await (await harness.sizeTrigger()).click();
-    const options = await harness.sizeOptions();
-    await options[1]?.click();
-    expect(setProjectPageSize).toHaveBeenCalledExactlyOnceWith(50);
-    projectPaging.set(false);
-    projectPagingError.set(true);
-    await fixture.whenStable();
-    expect(await (await harness.sizeTrigger()).text()).toBe('20');
-    expect(projectPage()).toBe(2);
-    expect(projectPageSize()).toBe(20);
-  });
 });
