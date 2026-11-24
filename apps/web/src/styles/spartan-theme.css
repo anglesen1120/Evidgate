@@ -17,7 +17,7 @@ html[data-theme='dark'] {
   --accent: var(--eg-accent-soft);
   --accent-foreground: var(--eg-accent);
   --destructive: var(--eg-danger-fg);
-  --destructive-foreground: var(--eg-surface);
+  --destructive-foreground: var(--eg-danger-bg);
   --border: var(--eg-border);
   --input: var(--eg-border-control);
   --ring: var(--eg-focus);
@@ -67,15 +67,15 @@ html[data-theme='dark'] {
   --radius-xs: var(--eg-radius-sm);
   --radius-sm: var(--eg-radius-sm);
   --radius-md: var(--eg-radius-md);
-  --radius-lg: var(--eg-radius-lg);
+  --radius-lg: var(--eg-radius-surface);
   --radius-xl: var(--eg-radius-lg);
   --radius-2xl: var(--eg-radius-lg);
   --radius-full: var(--eg-radius-pill);
   /* Bare `none` invalidates Tailwind's composed shadow list, including focus rings. */
   --shadow-xs: 0 0 #0000;
   --shadow-sm: var(--eg-elevation-1);
-  --shadow-md: 0 0 #0000;
-  --shadow-lg: 0 0 #0000;
+  --shadow-md: var(--eg-elevation-2);
+  --shadow-lg: var(--eg-elevation-2);
   --default-transition-duration: var(--eg-duration-fast);
   --default-transition-timing-function: var(--eg-ease);
 }

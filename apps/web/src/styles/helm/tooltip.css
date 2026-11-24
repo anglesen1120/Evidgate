@@ -14,4 +14,10 @@
     z-index: var(--eg-z-menu);
     overflow-wrap: anywhere;
   }
+
+  @media (forced-colors: active) {
+    .spartan-tooltip-content {
+      border: var(--eg-border-width) solid currentColor;
+    }
+  }
 }

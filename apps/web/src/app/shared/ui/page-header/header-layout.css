@@ -40,6 +40,8 @@
   margin: var(--eg-space-0);
   max-inline-size: 65ch;
   color: var(--eg-text-muted);
+  font-size: var(--eg-text-sm);
+  line-height: var(--eg-leading-md);
 }
 
 .header-actions {
