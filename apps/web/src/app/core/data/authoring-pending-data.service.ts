@@ -23,14 +23,20 @@ export interface AuthoringPendingSelection {
 export class AuthoringPendingDataService {
   private readonly gateway = inject(ApiGateway);
 
-  listPending(project: string, signal?: AbortSignal, cursor?: string, targetId?: string) {
+  listPending(
+    project: string,
+    signal?: AbortSignal,
+    cursor?: string,
+    targetId?: string,
+    limit = 20,
+  ) {
     return this.gateway.call((client) =>
       listAuthoringChanges({
         client,
         path: { p: project },
         query: {
           state: 'pending',
-          limit: 200,
+          limit,
           ...(cursor ? { cursor } : {}),
           ...(targetId ? { target_id: targetId } : {}),
         },

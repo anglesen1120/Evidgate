@@ -109,6 +109,78 @@ describe('PendingChangesPage', () => {
       root: TestbedHarnessEnvironment.documentRootLoader(fixture),
     };
   }
+  it('uses the shared cursor pager, replaces rows and keeps Previous available on an empty last page', async () => {
+    const row = pendingRow();
+    const nextRow = { ...row, change_id: ITEM };
+    listPending.mockResolvedValueOnce({ items: [row], next_cursor: 'c2' });
+    const { ui, store } = await setup();
+    expect(await ui.count('app-data-table-pager')).toBe(1);
+    expect(await ui.text()).toContain('Oldest first (server order)');
+    expect(await ui.text()).toContain('Server filter: pending changes.');
+    expect(await ui.textAt('app-data-table-pager [role="status"]')).toBe('Page 1');
+    listPending.mockResolvedValueOnce({ items: [nextRow], next_cursor: 'c3' });
+    await ui.click('app-data-table-pager [data-page="next"]');
+    expect(store.rows()).toEqual([nextRow]);
+    expect(await ui.textAt('app-data-table-pager [role="status"]')).toBe('Page 2');
+    listPending.mockResolvedValueOnce({ items: [], next_cursor: null });
+    await ui.click('app-data-table-pager [data-page="next"]');
+    expect(store.rows()).toEqual([]);
+    expect(await ui.count('app-data-table-pager')).toBe(1);
+    expect(await ui.textAt('app-data-table-pager [role="status"]')).toBe('Page 3');
+    listPending.mockResolvedValueOnce({ items: [nextRow], next_cursor: 'c3' });
+    await ui.click('app-data-table-pager [data-page="previous"]');
+    expect(store.rows()).toEqual([nextRow]);
+    expect(store.page()).toBe(2);
+  });
+  it.each([
+    ['rate_limited', 429],
+    ['unavailable', 503],
+  ] as const)(
+    'reloads the accepted queue after discard %s, then permits explicit replay',
+    async (kind, status) => {
+      discard.mockRejectedValueOnce(
+        new ApiRequestError({ ...pendingError(kind, status), retryable: true }),
+      );
+      const { ui, store, fixture } = await setup();
+      await store.discard(CHANGE);
+      await fixture.whenStable();
+      expect(store.pendingPage()).toBeNull();
+      expect(store.rows()).toHaveLength(1);
+      await ui.click('app-retry-after button');
+      expect(listPending).toHaveBeenCalledTimes(2);
+      expect(discard).toHaveBeenCalledTimes(1);
+      expect(store.queueStale()).toBe(false);
+      expect(await store.discard(CHANGE)).toBe(true);
+      expect(discard.mock.calls[1]?.[2]).toBe(discard.mock.calls[0]?.[2]);
+      expect(store.rows()).toEqual([]);
+    },
+  );
+  it.each([
+    ['rate_limited', 429],
+    ['unavailable', 503],
+  ] as const)(
+    'retries a failed later queue page after %s without restarting at page one',
+    async (kind, status) => {
+      listPending.mockResolvedValueOnce({ items: [pendingRow()], next_cursor: 'second' });
+      const { ui, store, fixture } = await setup();
+      listPending.mockRejectedValueOnce(
+        new ApiRequestError({ ...pendingError(kind, status), retryable: true }),
+      );
+      await store.next();
+      await fixture.whenStable();
+      expect(store.page()).toBe(1);
+      expect(store.pendingPage()).toEqual({ page: 2, cursor: 'second' });
+      const second = { ...pendingRow(), change_id: ITEM };
+      listPending.mockResolvedValueOnce({ items: [second], next_cursor: null });
+      await ui.click('app-retry-after button');
+      expect(listPending.mock.lastCall?.[2]).toBe('second');
+      expect(listPending).toHaveBeenCalledTimes(3);
+      expect(store.page()).toBe(2);
+      expect(store.rows()).toEqual([second]);
+      expect(store.pendingPage()).toBeNull();
+      expect(discard).not.toHaveBeenCalled();
+    },
+  );
   it('renders a confirmed empty queue without an apply mutation', async () => {
     listPending.mockResolvedValue({ items: [], next_cursor: null });
     const { ui } = await setup();
@@ -282,7 +354,7 @@ describe('PendingChangesPage', () => {
     expect(apply).not.toHaveBeenCalled();
     await dialog.cancel();
   });
-  it.each(['loadMore', 'reload'] as const)(
+  it.each(['next', 'reload'] as const)(
     'hides cached rows, preview and receipt when %s is forbidden',
     async (method) => {
       listPending.mockResolvedValue({ items: [pendingRow()], next_cursor: 'next' });
@@ -302,7 +374,7 @@ describe('PendingChangesPage', () => {
       expect(store.targetTitles()).toEqual({});
     },
   );
-  it.each(['loadMore', 'reload'] as const)(
+  it.each(['next', 'reload'] as const)(
     'keeps the preview, queue and focused control during %s and prevents a competing apply',
     async (method) => {
       listPending.mockResolvedValue({ items: [pendingRow()], next_cursor: 'next' });
@@ -328,11 +400,17 @@ describe('PendingChangesPage', () => {
       expect(document.activeElement).toBe(heading);
       await expect(store.apply()).resolves.toBe(false);
       expect(selection).not.toHaveBeenCalled();
-      finish({ items: [pendingRow()], next_cursor: null });
+      const nextRow = { ...pendingRow(), change_id: ITEM };
+      finish({ items: [method === 'next' ? nextRow : pendingRow()], next_cursor: null });
       await reading;
       await fixture.whenStable();
       expect(store.queueLoading()).toBe(false);
-      expect(document.activeElement).toBe(heading);
+      if (method === 'reload') expect(document.activeElement).toBe(heading);
+      else {
+        expect(await ui.overlayCount('[data-pending-preview-content]')).toBe(0);
+        expect(store.rows()).toEqual([nextRow]);
+        selection.mockResolvedValueOnce({ items: [nextRow], batchEtag: '"next-batch"' });
+      }
       await expect(store.apply()).resolves.toBe(true);
     },
   );

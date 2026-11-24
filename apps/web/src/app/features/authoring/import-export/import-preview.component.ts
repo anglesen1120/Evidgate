@@ -7,12 +7,15 @@ import {
   inject,
   Injector,
   input,
+  linkedSignal,
+  signal,
   TemplateRef,
   viewChild,
   viewChildren,
 } from '@angular/core';
 import type { ErrorEnvelopeDetail, ImportResponse, ImportRowDto } from '@evidgate/sdk';
 import { DataTableComponent } from '../../../shared/ui/data-table/data-table.component';
+import { DataTablePagerComponent } from '../../../shared/ui/data-table/data-table-pager.component';
 import type {
   DataTableColumn,
   DataTableCellContext,
@@ -38,7 +41,7 @@ interface PreviewRow {
 
 @Component({
   selector: 'app-import-preview',
-  imports: [DataTableComponent, DataTableValueComponent],
+  imports: [DataTableComponent, DataTableValueComponent, DataTablePagerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
@@ -89,11 +92,21 @@ interface PreviewRow {
       </span>
     </ng-template>
     <app-data-table
-      [rows]="rows()"
+      [rows]="visibleRows()"
       [columns]="columns()"
       [rowId]="rowId"
       [caption]="copy.previewTitle"
       [fixedHeightCells]="true"
+    />
+    <app-data-table-pager
+      [page]="page()"
+      [pageSize]="pageSize()"
+      [total]="rows().length"
+      [count]="visibleRows().length"
+      [hasNext]="page() * pageSize() < rows().length"
+      (previous)="move(-1)"
+      (next)="move(1)"
+      (pageSizeChange)="setPageSize($event)"
     />
   `,
 })
@@ -113,7 +126,16 @@ export class ImportPreviewComponent {
   private readonly statusCell =
     viewChild.required<TemplateRef<DataTableCellContext<PreviewRow>>>('statusCell');
   protected readonly rowId = (row: PreviewRow): number => row.index;
-  protected readonly fixedRows = computed(() => this.rows().length > 200);
+  protected readonly pageSize = signal(20);
+  protected readonly page = linkedSignal({
+    source: () => ({ rows: this.rows(), size: this.pageSize() }),
+    computation: () => 1,
+  });
+  protected readonly visibleRows = computed(() => {
+    const offset = (this.page() - 1) * this.pageSize();
+    return this.rows().slice(offset, offset + this.pageSize());
+  });
+  protected readonly fixedRows = computed(() => this.visibleRows().length > 200);
   protected readonly rows = computed<readonly PreviewRow[]>(() => {
     const reports = new Map(this.report()?.rows.map((row) => [row.index, row]));
     const locals = new Map(this.local()?.rows.map((row) => [row.index, row]));
@@ -202,11 +224,25 @@ export class ImportPreviewComponent {
     },
   ]);
 
+  protected move(delta: number): void {
+    const next = this.page() + delta;
+    if (next >= 1 && next <= Math.ceil(this.rows().length / this.pageSize())) this.page.set(next);
+  }
+
+  protected setPageSize(size: number): void {
+    if ([20, 50, 100].includes(size)) this.pageSize.set(size);
+  }
+
   reveal(index: number, path?: string): void {
     const position = this.rows().findIndex((row) => row.index === index);
-    this.table().revealRow(position);
-    afterNextRender(() => this.document.getElementById(importProblemTarget(index, path))?.focus(), {
-      injector: this.injector,
-    });
+    if (position < 0) return;
+    this.page.set(Math.floor(position / this.pageSize()) + 1);
+    afterNextRender(
+      () => {
+        this.table().revealRow(position % this.pageSize());
+        this.document.getElementById(importProblemTarget(index, path))?.focus();
+      },
+      { injector: this.injector },
+    );
   }
 }

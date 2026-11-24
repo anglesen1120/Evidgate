@@ -1,9 +1,7 @@
 import { ComponentHarness, manualChangeDetection } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
-import { CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import { signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import { By } from '@angular/platform-browser';
 import {
   ActivatedRoute,
   convertToParamMap,
@@ -19,8 +17,8 @@ import { apiError } from '../../shared/testing/http-data.testing';
 import { provideLayoutTestStubs } from '../../shared/testing/layout.testing';
 import { NarrowMutationPolicy } from '../../shared/ui/narrow/narrow-mutation-policy';
 import { AuthoringDataService } from './authoring-data.service';
-import { AuthoringCaseRowsComponent } from './authoring-case-rows.component';
 import { AuthoringCaseTableComponent } from './authoring-case-table.component';
+import { AuthoringCaseTableStore } from './authoring-case-table.store';
 
 class TableHarness extends ComponentHarness {
   static hostSelector = 'app-authoring-case-table';
@@ -37,7 +35,8 @@ class TableHarness extends ComponentHarness {
   readonly fields = this.locatorForAll('[data-case-filters] .filter-fields > .field');
   readonly source = this.locatorFor('#authoring-case-source');
   readonly owner = this.locatorFor('#authoring-case-owner');
-  readonly loadMore = this.locatorFor('[data-case-load-more]');
+  readonly loadMore = this.locatorFor('.pagination > app-data-table-pager [data-page="next"]');
+  readonly previous = this.locatorFor('.pagination > app-data-table-pager [data-page="previous"]');
   readonly refresh = this.locatorFor('[data-case-refresh]');
   readonly refreshOptional = this.locatorForOptional('[data-case-refresh]');
   readonly empty = this.locatorForOptional('app-empty-pattern');
@@ -45,18 +44,21 @@ class TableHarness extends ComponentHarness {
   readonly forbidden = this.locatorForOptional('app-forbidden-pattern');
   readonly error = this.locatorForOptional('app-error-pattern');
   readonly wait = this.locatorForOptional('app-retry-after');
-  readonly retry = this.locatorFor('app-retry-after button');
+  readonly retry = this.locatorFor('app-error-pattern button, app-retry-after button');
   readonly retryOptional = this.locatorForOptional(
     'app-error-pattern button, app-retry-after button',
   );
-  readonly moreOptional = this.locatorForOptional('[data-case-load-more]');
+  readonly moreOptional = this.locatorForOptional(
+    '.pagination > app-data-table-pager [data-page="next"][aria-disabled="false"]',
+  );
   readonly invalidLink = this.locatorForOptional('[data-case-invalid-link]');
   readonly capped = this.locatorForOptional('[data-case-browse-capped]');
   readonly capAnnouncement = this.locatorFor('app-live-status [role="status"]');
   readonly cappedLiveRegions = this.locatorForAll(
     '[data-case-browse-capped] [role="status"], [data-case-browse-capped] [aria-live]',
   );
-  readonly loaded = this.locatorFor('[data-case-loaded]');
+  readonly loaded = this.locatorFor('.pagination > app-data-table-pager [role="status"]');
+  readonly scopeHelp = this.locatorFor('#authoring-case-scope-help');
   readonly clearEmpty = this.locatorFor('app-empty-pattern button');
   readonly invalidClear = this.locatorFor('[data-case-invalid-link] button');
 }
@@ -83,7 +85,7 @@ describe('AuthoringCaseTableComponent', () => {
   let fixture: ComponentFixture<AuthoringCaseTableComponent>;
   beforeEach(() => {
     query.next(convertToParamMap({}));
-    navigate.mockClear();
+    navigate.mockReset().mockResolvedValue(true);
     list.mockReset().mockResolvedValue({ items: [], next_cursor: null });
     TestBed.configureTestingModule({
       imports: [AuthoringCaseTableComponent],
@@ -113,6 +115,77 @@ describe('AuthoringCaseTableComponent', () => {
     await fixture.whenStable();
     return TestbedHarnessEnvironment.harnessForFixture(fixture, TableHarness);
   }
+
+  it.each(['refresh', 'retry'] as const)(
+    'retains page two and its URL on a failed refresh, then synchronizes %s success',
+    async (recovery) => {
+      navigate.mockImplementation((_commands, extras) => {
+        query.next(convertToParamMap(extras?.queryParams ?? {}));
+        return Promise.resolve(true);
+      });
+      list
+        .mockResolvedValueOnce({ items: [caseRow('first')], next_cursor: 'second' })
+        .mockResolvedValueOnce({ items: [caseRow('second')], next_cursor: 'third' });
+      const harness = await mount();
+      const store = fixture.debugElement.injector.get(AuthoringCaseTableStore);
+      await (await harness.loadMore()).click();
+      expect(query.value.get('cursor')).toBe('second');
+      expect(store.page()).toBe(2);
+      const pending = new Subject<ManualCaseListResponse>();
+      list.mockReturnValueOnce(firstValueFrom(pending));
+      navigate.mockClear();
+      await manualChangeDetection(async () => {
+        await (await harness.refresh()).click();
+        fixture.detectChanges();
+        expect(list).toHaveBeenCalledTimes(3);
+        expect(navigate).not.toHaveBeenCalled();
+        expect(query.value.get('cursor')).toBe('second');
+        expect(store.rows().map((row) => row.case_id)).toEqual(['second']);
+        expect(store.requestCursors()).toEqual([null, 'second']);
+        pending.error(
+          new ApiRequestError({ ...apiError('unavailable', 503).error, retryable: true }),
+        );
+      });
+      await fixture.whenStable();
+      expect(store.page()).toBe(2);
+      expect(store.requestCursors()).toEqual([null, 'second']);
+      expect(store.rows().map((row) => row.case_id)).toEqual(['second']);
+      expect(query.value.get('cursor')).toBe('second');
+      expect(navigate).not.toHaveBeenCalled();
+      list.mockResolvedValueOnce({ items: [caseRow('fresh')], next_cursor: 'fresh-second' });
+      await (await (recovery === 'retry' ? harness.retry() : harness.refresh())).click();
+      expect(store.page()).toBe(1);
+      expect(store.requestCursors()).toEqual([null]);
+      expect(store.rows().map((row) => row.case_id)).toEqual(['fresh']);
+      expect(query.value.get('cursor')).toBeNull();
+      expect(list).toHaveBeenCalledTimes(4);
+      expect(list.mock.lastCall?.[1]).not.toHaveProperty('cursor');
+      expect(navigate).toHaveBeenCalledExactlyOnceWith(
+        [],
+        expect.objectContaining({ queryParams: { cursor: null }, replaceUrl: true }),
+      );
+    },
+  );
+
+  it('synchronizes a successful refresh retry from a directly linked cursor', async () => {
+    query.next(convertToParamMap({ cursor: 'linked-page' }));
+    navigate.mockImplementation((_commands, extras) => {
+      query.next(convertToParamMap(extras?.queryParams ?? {}));
+      return Promise.resolve(true);
+    });
+    list.mockResolvedValueOnce({ items: [caseRow('linked')], next_cursor: null });
+    const harness = await mount();
+    list.mockRejectedValueOnce(
+      new ApiRequestError({ ...apiError('unavailable', 503).error, retryable: true }),
+    );
+    await (await harness.refresh()).click();
+    expect(query.value.get('cursor')).toBe('linked-page');
+    list.mockResolvedValueOnce({ items: [caseRow('fresh')], next_cursor: null });
+    await (await harness.retry()).click();
+    expect(query.value.get('cursor')).toBeNull();
+    expect(await (await harness.host()).text()).toContain('SHOP-fresh');
+    expect(list).toHaveBeenCalledTimes(3);
+  });
 
   it('groups the five available controls under one keyboard-operable disclosure', async () => {
     const harness = await mount();
@@ -246,7 +319,28 @@ describe('AuthoringCaseTableComponent', () => {
     expect(list).not.toHaveBeenCalled();
   });
 
-  it('retains cases but removes Retry and load-more after a non-advancing page', async () => {
+  it('keeps server filter scope visible and labels the fixed code order', async () => {
+    list.mockResolvedValueOnce({ items: [caseRow('1')], next_cursor: null });
+    const harness = await mount();
+    expect(await (await harness.filterHelp()).getProperty('open')).toBe(false);
+    expect(await (await harness.scopeHelp()).text()).toContain('Filters search the server list');
+    expect(await (await harness.host()).text()).toContain(
+      'Case code ascending; case ID breaks ties',
+    );
+  });
+
+  it('describes an empty later page without claiming that the project is empty', async () => {
+    list
+      .mockResolvedValueOnce({ items: [caseRow('1')], next_cursor: 'empty-tail' })
+      .mockResolvedValueOnce({ items: [], next_cursor: null });
+    const harness = await mount();
+    await (await harness.loadMore()).click();
+    expect(await (await harness.empty())?.text()).toContain('No manual cases on this page');
+    expect(await (await harness.empty())?.text()).not.toContain('project has no manual cases');
+    expect(await (await harness.previous()).getAttribute('aria-disabled')).toBe('false');
+  });
+
+  it('retains cases but disables Next and removes Retry after a non-advancing page', async () => {
     list
       .mockResolvedValueOnce({ items: [caseRow('1')], next_cursor: 'same' })
       .mockResolvedValueOnce({ items: [caseRow('2')], next_cursor: 'same' });
@@ -257,7 +351,7 @@ describe('AuthoringCaseTableComponent', () => {
     expect(await harness.retryOptional()).toBeNull();
     expect(await (await harness.host()).text()).toContain('SHOP-1');
     expect(await (await harness.host()).text()).toContain('server repeated the case cursor');
-    expect(await (await harness.loaded()).isFocused()).toBe(true);
+    expect(await (await harness.loaded()).text()).toContain('Page 1');
     const text = await (await harness.host()).text();
     expect(text).not.toContain('Retry explicitly');
     expect(text).not.toContain('Case list may be stale');
@@ -290,37 +384,26 @@ describe('AuthoringCaseTableComponent', () => {
     list.mockRejectedValueOnce(apiError('network', 0));
     await (await harness.refresh()).click();
     expect(await (await harness.capped())?.text()).toContain('Narrow the filters');
-    expect(await (await harness.host()).text()).toContain('10,000 cases loaded');
+    expect(await (await harness.loaded()).text()).toContain('Page 1');
   }, 20_000);
 
-  it('syncs the accepted cap cursor and hands pager focus to the first newly retained row', async () => {
+  it('syncs the accepted page cursor and displays only the next page', async () => {
     list
-      .mockResolvedValueOnce({
-        items: Array.from({ length: 9_800 }, (_, i) => caseRow(String(i))),
-        next_cursor: 'last-retained',
-      })
-      .mockResolvedValueOnce({
-        items: Array.from({ length: 200 }, (_, i) => caseRow(String(9_800 + i))),
-        next_cursor: 'beyond-cap',
-      });
+      .mockResolvedValueOnce({ items: [caseRow('1')], next_cursor: 'second' })
+      .mockResolvedValueOnce({ items: [caseRow('2')], next_cursor: null });
     const harness = await mount();
-    const rows = fixture.debugElement
-      .query(By.directive(AuthoringCaseRowsComponent))
-      .injector.get(AuthoringCaseRowsComponent);
-    // jsdom has no element.scrollTo: the reveal is browser behaviour, the focus request is ours.
-    vi.spyOn(CdkVirtualScrollViewport.prototype, 'scrollToIndex').mockImplementation(() => {});
-    const focusRow = vi.spyOn(rows, 'focusRow');
-    await (await harness.loadMore()).focus();
     await (await harness.loadMore()).click();
-    await vi.waitFor(() => expect(focusRow).toHaveBeenCalledWith('9800'));
     expect(await harness.moreOptional()).toBeNull();
+    expect(await (await harness.host()).text()).toContain('SHOP-2');
+    expect(await (await harness.host()).text()).not.toContain('SHOP-1');
+    expect(await (await harness.loaded()).text()).toContain('Page 2');
     expect(navigate.mock.lastCall?.[1]).toMatchObject({
-      queryParams: { cursor: 'last-retained' },
+      queryParams: { cursor: 'second' },
       replaceUrl: true,
     });
-  }, 20_000);
+  });
 
-  it('moves pager focus to the loaded count when the last page adds no rows', async () => {
+  it('keeps Previous reachable when the last page has no new rows', async () => {
     list
       .mockResolvedValueOnce({ items: [caseRow('1')], next_cursor: 'tail' })
       .mockResolvedValueOnce({ items: [caseRow('1')], next_cursor: null });
@@ -328,8 +411,9 @@ describe('AuthoringCaseTableComponent', () => {
     await (await harness.loadMore()).focus();
     await (await harness.loadMore()).click();
     expect(await harness.moreOptional()).toBeNull();
-    expect(await (await harness.host()).text()).toContain('1 cases loaded');
-    expect(await (await harness.loaded()).isFocused()).toBe(true);
+    expect(await (await harness.loaded()).text()).toContain('Page 2');
+    const previous = await harness.previous();
+    expect(await previous.getAttribute('aria-disabled')).toBe('false');
   });
 
   it('does not steal focus when the user leaves a pending terminal pager', async () => {

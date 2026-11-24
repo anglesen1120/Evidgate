@@ -299,7 +299,9 @@ describe('AiSettingsPage', () => {
     const { harness } = await mount();
     await harness.click('[data-ai-history-tab]');
     await harness.fill('history-filter', 'No matching fixture reason');
-    expect(await harness.text()).toContain('No loaded versions match this filter');
+    expect(await harness.text()).toContain('No versions on this page match this filter');
+    expect(await harness.text()).toContain('Filter this page by reason');
+    expect(await harness.text()).toContain('Fixed server order: newest version first');
     expect(await harness.count('app-ai-settings-history app-data-table')).toBe(0);
     expect(await harness.count('app-ai-settings-history app-empty-pattern button')).toBe(0);
   });
@@ -312,7 +314,7 @@ describe('AiSettingsPage', () => {
     const next = await harness.nextHistoryPage();
     expect(await next.getProperty<boolean>('disabled')).toBe(false);
     await next.click();
-    expect(data.versions).toHaveBeenCalledWith('p1', { limit: 50, cursor: 'x' }, expect.anything());
+    expect(data.versions).toHaveBeenCalledWith('p1', { limit: 20, cursor: 'x' }, expect.anything());
   });
   it('offers one empty state that returns focus to Settings without discarding the draft', async () => {
     data.versions.mockResolvedValue({ items: [], next_cursor: null });
@@ -482,6 +484,26 @@ describe('AiSettingsPage', () => {
     await fixture.whenStable();
     expect(store.cursor()).toBeUndefined();
     expect(store.cursorPath()).toEqual([]);
-    expect(data.versions).toHaveBeenLastCalledWith('p1', { limit: 50 }, expect.any(AbortSignal));
+    expect(data.versions).toHaveBeenLastCalledWith('p1', { limit: 20 }, expect.any(AbortSignal));
+  });
+  it('resets cursor paging when the reason filter changes and clears the filter on navigation', async () => {
+    data.versions.mockImplementation((_project: string, query: { cursor?: string }) =>
+      Promise.resolve({
+        items: [{ ...version, reason: query.cursor ? 'Older reason' : 'First reason' }],
+        next_cursor: query.cursor ? null : 'older',
+      }),
+    );
+    const { fixture, harness } = await mount();
+    const store = fixture.debugElement.injector.get(AiSettingsStore);
+    await harness.click('[data-ai-history-tab]');
+    await (await harness.nextHistoryPage()).click();
+    expect(store.page()).toBe(2);
+    await harness.fill('history-filter', 'First');
+    expect(store.page()).toBe(1);
+    expect(store.cursorPath()).toEqual([]);
+    expect(await harness.text()).toContain('First reason');
+    await (await harness.nextHistoryPage()).click();
+    expect(await harness.value('history-filter')).toBe('');
+    expect(await harness.text()).toContain('Older reason');
   });
 });

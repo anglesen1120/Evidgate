@@ -48,12 +48,12 @@
     [status]="status()"
     [error]="store.queueError()"
     [emptyIcon]="'navQueue'"
-    [empty]="store.empty()"
+    [empty]="store.empty() && store.page() === 1"
     [emptyTitle]="copy.emptyTitle"
     [emptyDescription]="copy.emptyBody"
     [retryEligible]="store.retryReady()"
     [retryBusy]="readBusy()"
-    (retry)="store.reload()"
+    (retry)="store.retryPage()"
   >
     @if (readBusy()) {
       <p class="m-0" role="status">{{ copy.refreshing }}</p>
@@ -88,7 +88,7 @@
         [variant]="'outline'"
         type="button"
         [disabled]="!store.retryReady() || busy()"
-        (click)="store.reload()"
+        (click)="store.retryPage()"
       >
         {{ copy.conflictReload }}
       </button>
@@ -135,7 +135,7 @@
       >
         <app-section-header
           [title]="copy.queueTitle"
-          description="View a change to inspect its details. Use the checkboxes to select the changes to apply."
+          description="Server filter: pending changes. View a change to inspect its details. Use the checkboxes to select the changes to apply."
           i18n-description="@@authoring.pending-changes.view-instructions"
         >
           <div appSectionHeaderActions class="actions">
@@ -166,19 +166,17 @@
           [selection]="selectionCell"
           [more]="moreCell"
         />
-        @if (store.nextCursor()) {
-          <button
-            hlmBtn
-            [variant]="'outline'"
-            type="button"
-            class="w-fit"
-            [disabled]="busy() || !store.retryReady()"
-            [attr.aria-disabled]="readBusy()"
-            (click)="store.loadMore()"
-          >
-            {{ ui.loadMore }}
-          </button>
-        }
+        <app-data-table-pager
+          [page]="store.page()"
+          [pageSize]="store.pageSize()"
+          [total]="null"
+          [count]="store.rows().length"
+          [hasNext]="store.nextCursor() !== null"
+          [busy]="busy() || readBusy() || !store.retryReady() || store.applyRequest() !== null"
+          (previous)="store.previous()"
+          (next)="store.next()"
+          (pageSizeChange)="store.setPageSize($event)"
+        />
       </section>
       <section
         hlmCard

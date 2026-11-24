@@ -185,7 +185,10 @@ describe('ImportExportPage presentation and route heading contract', () => {
     const { fixture, harness } = await setup(file());
     const opener = `button[aria-label="View version 3 of ${history.items[0]?.entity_id}"]`;
     expect(await harness.textAt('[data-import-history] .caption')).toBe(IMPEX_COPY.history);
-    expect(await harness.textAt('[data-history-range]')).toBe('Showing 1–1 of 1 loaded versions');
+    expect(await harness.textAt('[data-import-history]')).toContain('newest first (server order)');
+    expect(await harness.textAt('[data-import-history] app-data-table-pager [role="status"]')).toBe(
+      'Page 1',
+    );
     expect(await harness.attr(opener, 'aria-label')).toContain(
       'View version 3 of ' + history.items[0]?.entity_id,
     );
@@ -332,7 +335,7 @@ describe('ImportExportPage presentation and route heading contract', () => {
     const { store, harness } = await setup(file());
     expect(await harness.attr('[data-history-refresh]', 'disabled')).not.toBeNull();
     store.refreshHistory();
-    store.olderHistory();
+    store.nextHistory();
     expect(versions).toHaveBeenCalledTimes(1);
     expect(await harness.text()).toContain('Safe title');
   });

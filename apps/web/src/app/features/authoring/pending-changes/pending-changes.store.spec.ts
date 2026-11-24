@@ -25,17 +25,23 @@ describe('PendingChangesStore queue reads', () => {
     });
     await store().init(PROJECT);
     await settle();
-    expect(listPending).toHaveBeenCalledWith(PROJECT, expect.any(AbortSignal), undefined);
+    expect(listPending).toHaveBeenCalledWith(
+      PROJECT,
+      expect.any(AbortSignal),
+      undefined,
+      undefined,
+      20,
+    );
     expect(store().queueStatus()).toBe('ready');
     expect(store().selectedIds()).toEqual([COMMENT_ID, DELETE_ID]);
     expect(store().nextCursor()).toBe('cursor-2');
     expect(store().empty()).toBe(false);
   });
 
-  it('keeps a target scope across reload and loadMore and refetches when the scope changes', async () => {
+  it('keeps a target scope across reload and next and refetches when the scope changes', async () => {
     listPending.mockResolvedValue({ items: [change(COMMENT_ID, 'comment')], next_cursor: 'c2' });
     await store().init(PROJECT, { targetId: TARGET_ID });
-    await store().loadMore();
+    await store().next();
     await store().reload();
     expect(listPending.mock.calls.map((call) => [call[2], call[3]])).toEqual([
       [undefined, TARGET_ID],
@@ -48,9 +54,16 @@ describe('PendingChangesStore queue reads', () => {
       expect.any(AbortSignal),
       undefined,
       OTHER_TARGET,
+      20,
     );
     await store().init(PROJECT);
-    expect(listPending).toHaveBeenLastCalledWith(PROJECT, expect.any(AbortSignal), undefined);
+    expect(listPending).toHaveBeenLastCalledWith(
+      PROJECT,
+      expect.any(AbortSignal),
+      undefined,
+      undefined,
+      20,
+    );
   });
 
   it('distinguishes an empty queue from a not-found or forbidden read', async () => {

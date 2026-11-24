@@ -28,6 +28,7 @@ import { DesktopMutationDirective } from '../../../shared/ui/narrow/desktop-muta
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
 import { NumberValueComponent } from '../../../shared/ui/values/number-value.component';
+import { DataTablePagerComponent } from '../../../shared/ui/data-table';
 import { createFormFeedback } from '../../../shared/forms/form-feedback';
 import { FieldFeedbackComponent } from '../../../shared/forms/field-feedback.component';
 import { FormErrorSummaryComponent } from '../../../shared/forms/form-error-summary.component';
@@ -57,6 +58,7 @@ import { PendingConfirmComponent } from './pending-confirm.component';
     DesktopMutationDirective,
     PendingChangeTableComponent,
     CopyableIdentifierComponent,
+    DataTablePagerComponent,
     NumberValueComponent,
     PendingConfirmComponent,
     FieldFeedbackComponent,
