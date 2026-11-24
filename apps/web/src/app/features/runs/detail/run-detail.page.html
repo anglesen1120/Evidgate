@@ -63,8 +63,12 @@
             [error]="store.attemptsError()"
             [hasMore]="store.hasMoreAttempts()"
             [loadingMore]="store.attemptsLoadingMore()"
+            [page]="store.attemptsPage()"
+            [pageSize]="store.attemptsPageSize()"
             (retry)="retryAttempts()"
-            (loadMore)="loadMoreAttempts()"
+            (next)="nextAttempts()"
+            (previous)="previousAttempts()"
+            (pageSizeChange)="setAttemptsPageSize($event)"
           />
           <app-producer-status-table
             [slots]="producerSlots()"

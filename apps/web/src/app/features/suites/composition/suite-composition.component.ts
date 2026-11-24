@@ -7,6 +7,7 @@ import {
   ElementRef,
   inject,
   linkedSignal,
+  signal,
   untracked,
   viewChild,
 } from '@angular/core';
@@ -19,6 +20,7 @@ import { HlmButton } from '@evidgate/ui/button';
 import { HlmCard, HlmCardContent, HlmCardHeader, HlmCardTitle } from '@evidgate/ui/card';
 import { HlmTableImports } from '@evidgate/ui/table';
 import { LoadingPatternComponent } from '../../../shared/ui/states/loading-pattern.component';
+import { DataTablePagerComponent } from '../../../shared/ui/data-table/data-table-pager.component';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values';
 import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { LIST_CHUNK } from './suite-composition.model';
@@ -44,6 +46,7 @@ import {
     HlmCardHeader,
     HlmCardTitle,
     LoadingPatternComponent,
+    DataTablePagerComponent,
     ShellIconComponent,
     HlmTableImports,
   ],
@@ -140,10 +143,18 @@ export class SuiteCompositionComponent {
     }
   });
 
-  /**
-   * How many rows each chunked list shows. Both derive from the served view, so a new revision
-   * starts again at one chunk instead of inheriting how far the previous one was opened.
-   */
+  protected readonly pageSize = signal(20);
+  protected readonly memberPage = linkedSignal({
+    source: () => ({ view: this.store.view(), size: this.pageSize() }),
+    computation: () => 1,
+  });
+  protected readonly memberPageCount = computed(() =>
+    Math.max(1, Math.ceil((this.store.view()?.flatMembers.length ?? 0) / this.pageSize())),
+  );
+  protected readonly pageMembers = computed(() => {
+    const start = (this.memberPage() - 1) * this.pageSize();
+    return (this.store.view()?.flatMembers ?? []).slice(start, start + this.pageSize());
+  });
   protected readonly memberLimit = linkedSignal({
     source: () => this.store.view(),
     computation: () => LIST_CHUNK,
@@ -167,6 +178,15 @@ export class SuiteCompositionComponent {
     const total = this.store.view()?.flatMembers.length ?? 0;
     if (this.visibleMembers().length >= total) return;
     this.memberLimit.update((limit) => limit + LIST_CHUNK);
+  }
+
+  protected moveMemberPage(delta: number): void {
+    this.memberPage.update((page) => Math.max(1, Math.min(page + delta, this.memberPageCount())));
+  }
+
+  protected changePageSize(size: number): void {
+    if (![20, 50, 100].includes(size) || size === this.pageSize()) return;
+    this.pageSize.set(size);
   }
 
   protected showMoreDependencies(): void {

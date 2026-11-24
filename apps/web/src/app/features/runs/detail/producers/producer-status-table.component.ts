@@ -4,12 +4,13 @@ import {
   computed,
   input,
   linkedSignal,
+  signal,
   TemplateRef,
   viewChild,
 } from '@angular/core';
-import { HlmButton } from '@evidgate/ui/button';
 import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
 import { DataTableComponent } from '../../../../shared/ui/data-table/data-table.component';
+import { DataTablePagerComponent } from '../../../../shared/ui/data-table/data-table-pager.component';
 import type {
   DataTableCellContext,
   DataTableColumn,
@@ -33,10 +34,10 @@ import type { ProducerSlot, ProducerStatus } from './producer-slots';
     HlmCard,
     HlmCardTitle,
     DataTableComponent,
+    DataTablePagerComponent,
     CopyValueButtonComponent,
     DataTableValueComponent,
     NumberValueComponent,
-    HlmButton,
     StatusPillComponent,
     EmptyPatternComponent,
     ErrorPatternComponent,
@@ -66,19 +67,20 @@ export class ProducerStatusTableComponent {
   private readonly eventsCell =
     viewChild.required<TemplateRef<DataTableCellContext<ProducerSlot>>>('eventsCell');
 
-  // Variable-height badges need bounded pages rather than clipped virtual rows.
-  // A fragment selects its page once; ordinary polling preserves the reader's page.
-  protected readonly pageSize = 200;
-  protected readonly pageCount = computed(() => {
-    return Math.max(1, Math.ceil((this.slots()?.length ?? 0) / this.pageSize));
-  });
+  protected readonly pageSize = signal(20);
+  protected readonly pageCount = computed(() =>
+    Math.max(1, Math.ceil((this.slots()?.length ?? 0) / this.pageSize())),
+  );
   protected readonly pageIndex = linkedSignal<
-    { anchor: string | null; slots: readonly ProducerSlot[] | null },
+    { anchor: string | null; slots: readonly ProducerSlot[] | null; size: number },
     number
   >({
-    source: () => ({ anchor: this.targetAnchor(), slots: this.slots() }),
-    computation: ({ anchor, slots }, previous) => {
-      const lastPage = Math.max(0, Math.ceil((slots?.length ?? 0) / this.pageSize) - 1);
+    source: () => ({
+      anchor: this.targetAnchor(),
+      slots: this.slots(),
+      size: this.pageSize(),
+    }),
+    computation: ({ anchor, slots, size }, previous) => {
       if (
         anchor !== null &&
         (previous === undefined ||
@@ -87,20 +89,34 @@ export class ProducerStatusTableComponent {
       ) {
         const index =
           slots?.findIndex((slot) => producerAnchorId(slot.producerId) === anchor) ?? -1;
-        if (index >= 0) return Math.floor(index / this.pageSize);
+        if (index >= 0) return Math.floor(index / size);
+        return 0;
       }
-      return Math.min(previous?.value ?? 0, lastPage);
+      if (
+        previous === undefined ||
+        previous.source.size !== size ||
+        previous.source.anchor !== anchor
+      ) {
+        return 0;
+      }
+      const priorSlots = previous.source.slots;
+      if (
+        slots !== priorSlots &&
+        (slots === null ||
+          priorSlots === null ||
+          slots.length !== priorSlots.length ||
+          slots.some((slot, index) => slot.producerId !== priorSlots[index]?.producerId))
+      ) {
+        return 0;
+      }
+      const lastPage = Math.max(0, Math.ceil((slots?.length ?? 0) / size) - 1);
+      return Math.min(previous.value, lastPage);
     },
   });
   protected readonly pageSlots = computed(() => {
     const slots = this.slots() ?? [];
-    const start = this.pageIndex() * this.pageSize;
-    return slots.length <= this.pageSize ? slots : slots.slice(start, start + this.pageSize);
-  });
-  protected readonly pageLabel = computed(() => {
-    const page = this.pageIndex() + 1;
-    const pages = this.pageCount();
-    return $localize`:@@runs.detail.producers.page:Page ${page}:page: of ${pages}:pages:`;
+    const start = this.pageIndex() * this.pageSize();
+    return slots.slice(start, start + this.pageSize());
   });
 
   protected readonly producerAnchorId = producerAnchorId;
@@ -125,9 +141,6 @@ export class ProducerStatusTableComponent {
     staleEpoch: $localize`:@@runs.detail.producers.stale-epoch-short:Stale epoch`,
     afterCancel: $localize`:@@runs.detail.producers.after-cancel-short:After cancel`,
     eventNote: $localize`:@@runs.detail.producers.event-note:After-cancel event counts are informational only; a stale-epoch event on a closed shard makes the evidence incomplete.`,
-    previous: $localize`:@@runs.detail.producers.previous:Previous producers`,
-    next: $localize`:@@runs.detail.producers.next:Next producers`,
-    pagination: $localize`:@@runs.detail.producers.pagination:Producer pages`,
   };
   protected readonly columns = computed<readonly DataTableColumn<ProducerSlot>[]>(() => [
     {
@@ -207,6 +220,11 @@ export class ProducerStatusTableComponent {
 
   protected movePage(delta: number): void {
     this.pageIndex.update((page) => Math.max(0, Math.min(page + delta, this.pageCount() - 1)));
+  }
+
+  protected changePageSize(size: number): void {
+    if (![20, 50, 100].includes(size) || size === this.pageSize()) return;
+    this.pageSize.set(size);
   }
 
   protected openCountLabel(count: number): string {
