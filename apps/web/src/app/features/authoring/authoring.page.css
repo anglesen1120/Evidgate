@@ -2,6 +2,7 @@
   display: grid;
   gap: var(--eg-space-7);
   min-inline-size: 0;
+  container: authoring-page / inline-size;
 }
 .metrics {
   display: grid;
@@ -73,27 +74,29 @@ app-inline-feedback {
 button {
   scroll-margin-block-start: calc(var(--eg-space-12) + var(--eg-space-7));
 }
-@media (min-width: 1200px) {
-  .panes:not(.project-empty) {
-    /* Wrap the panes when the shell leaves too little room for deep nodes and a native table. */
-    display: flex;
-    flex-wrap: wrap;
-  }
-  .tree-pane {
-    flex: 4 1 0;
-    min-inline-size: min(100%, calc(var(--eg-control-touch) * 7));
-  }
-  .case-pane {
-    flex: 11 1 0;
-    min-inline-size: min(100%, calc(var(--eg-control-touch) * 18));
-  }
-}
-@media (768px <= width < 1200px) {
-  .tree-pane {
+@media (min-width: 768px) {
+  /* Status-only cards have no tree controls for a keyboard user to focus and scroll. */
+  .panes:not(.project-empty) > .tree-pane:where(:has(app-authoring-tree-pane)) {
     max-block-size: calc(var(--eg-control-touch) * 4);
     overflow-y: auto;
     overscroll-behavior-y: contain;
     scroll-padding-block: var(--eg-space-2);
+  }
+}
+@media (min-width: 1200px) {
+  /* The split needs seven touch units for readable tree labels, eighteen to keep the
+     case table above its 768px stacking threshold, and the 12px gap: 308 + 792 + 12. */
+  @container authoring-page (min-width: 1112px) {
+    .panes:not(.project-empty) {
+      grid-template-columns: minmax(calc(var(--eg-control-touch) * 7), 0.8fr) minmax(
+          calc(var(--eg-control-touch) * 18),
+          2.2fr
+        );
+    }
+    .panes:not(.project-empty) > .tree-pane {
+      max-block-size: none;
+      overflow-y: visible;
+    }
   }
 }
 @media (max-width: 767px) {
