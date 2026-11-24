@@ -2312,14 +2312,8 @@
 <trans-unit id="settings.audit.empty-description" datatype="html"><source>Audit events will appear here when activity is recorded.</source><target>Sự kiện kiểm toán sẽ xuất hiện tại đây khi hoạt động được ghi nhận.</target></trans-unit>
 <trans-unit id="settings.audit.no-match-title" datatype="html"><source>No results match these filters</source><target>Không có kết quả khớp bộ lọc</target></trans-unit>
 <trans-unit id="settings.audit.no-match-description" datatype="html"><source>Clear or narrow the filters to review audit activity.</source><target>Xóa hoặc thu hẹp bộ lọc để xem hoạt động kiểm toán.</target></trans-unit>
-<trans-unit id="settings.audit.pagination" datatype="html"><source>Audit activity pages</source><target>Các trang hoạt động kiểm toán</target></trans-unit>
-<trans-unit id="settings.audit.previous" datatype="html"><source>Previous rows</source><target>Các dòng trước</target></trans-unit>
-<trans-unit id="settings.audit.next" datatype="html"><source>Next rows</source><target>Các dòng tiếp theo</target></trans-unit>
-<trans-unit id="settings.audit.load-more" datatype="html"><source>Load more</source><target>Tải thêm</target></trans-unit>
-<trans-unit id="settings.audit.loading-more" datatype="html"><source>Loading more activity…</source><target>Đang tải thêm hoạt động…</target></trans-unit>
-<trans-unit id="settings.audit.paging-retry" datatype="html"><source>Retry loading more</source><target>Thử tải thêm lần nữa</target></trans-unit>
-<trans-unit id="settings.audit.paging-failed" datatype="html"><source>The next audit page could not be loaded. The rows already shown are unchanged.</source><target>Không thể tải trang kiểm toán tiếp theo. Các dòng đã hiển thị được giữ nguyên.</target></trans-unit>
-<trans-unit id="settings.audit.browse-capped" datatype="html"><source>Showing the newest <x id="rows" equiv-text="formatNumber(rows, this.locale)"/> rows. Narrow the filters to review older activity.</source><target>Đang hiển thị <x id="rows" equiv-text="formatNumber(rows, this.locale)"/> dòng mới nhất. Thu hẹp bộ lọc để xem hoạt động cũ hơn.</target></trans-unit>
+<trans-unit id="settings.audit.loading-page" datatype="html"><source>Loading activity page…</source><target>Đang tải trang hoạt động…</target></trans-unit>
+<trans-unit id="settings.audit.page-retry" datatype="html"><source>Retry loading page</source><target>Thử tải lại trang</target></trans-unit>
 <trans-unit id="settings.members.resend" datatype="html"><source>Resend invite</source><target>Gửi lại lời mời</target></trans-unit>
 <trans-unit id="settings.members.cancel-invite" datatype="html"><source>Cancel invite</source><target>Huỷ lời mời</target></trans-unit>
 <trans-unit id="settings.members.resend-title" datatype="html"><source>Renew this invitation?</source><target>Làm mới lời mời này?</target></trans-unit>
@@ -2461,11 +2455,11 @@
 <trans-unit id="runs.list.title" datatype="html"><source>Runs</source><target>Lượt chạy</target></trans-unit>
 <trans-unit id="runs.list.description" datatype="html"><source>Review collection state and the latest stored decision. Open a run for evidence completeness.</source><target>Xem trạng thái thu thập và quyết định đã lưu mới nhất. Mở lượt chạy để xem độ đầy đủ của bằng chứng.</target></trans-unit>
 <trans-unit id="runs.list.filters" datatype="html"><source>Filter runs</source><target>Lọc lượt chạy</target></trans-unit>
-<trans-unit id="runs.list.filter-hint" datatype="html"><source>Decision and ref name filter the server list. State and run scope filter loaded runs only. Load more to search older runs.</source><target>Quyết định và tên tham chiếu lọc danh sách trên máy chủ. Trạng thái và phạm vi chỉ lọc các lượt chạy đã tải. Tải thêm để tìm các lượt chạy cũ hơn.</target></trans-unit>
-<trans-unit id="runs.list.state-filter" datatype="html"><source>State in loaded runs</source><target>Trạng thái trong các lượt đã tải</target></trans-unit>
+<trans-unit id="runs.list.page-filter-hint" datatype="html"><source>Decision and ref name filter the server list. State and run scope filter this page only. Next searches further.</source><target>Quyết định và tên tham chiếu lọc danh sách trên máy chủ. Trạng thái và phạm vi lượt chạy chỉ lọc trang này. Trang sau tìm tiếp.</target></trans-unit>
+<trans-unit id="runs.list.page-state-filter" datatype="html"><source>State on this page</source><target>Trạng thái trên trang này</target></trans-unit>
 <trans-unit id="runs.list.decision-filter" datatype="html"><source>Decision</source><target>Quyết định</target></trans-unit>
 <trans-unit id="runs.list.decision-hint" datatype="html"><source>The latest live evaluation determines the decision. Not evaluated means no live evaluation yet.</source><target>Quyết định dựa trên lần đánh giá hiện hành mới nhất. Chưa đánh giá nghĩa là chưa có lần đánh giá hiện hành nào.</target></trans-unit>
-<trans-unit id="runs.list.scope-filter" datatype="html"><source>Scope in loaded runs</source><target>Phạm vi trong các lượt đã tải</target></trans-unit>
+<trans-unit id="runs.list.page-scope-filter" datatype="html"><source>Scope on this page</source><target>Phạm vi trên trang này</target></trans-unit>
 <trans-unit id="runs.list.ref-filter" datatype="html"><source>Ref name (exact match)</source><target>Tên tham chiếu (khớp chính xác)</target></trans-unit>
 <trans-unit id="runs.list.any" datatype="html"><source>All</source><target>Tất cả</target></trans-unit>
 <trans-unit id="runs.list.original" datatype="html"><source>Original run</source><target>Lượt chạy gốc</target></trans-unit>
@@ -2475,15 +2469,14 @@
 <trans-unit id="runs.list.clear" datatype="html"><source>Clear filters</source><target>Xóa bộ lọc</target></trans-unit>
 <trans-unit id="runs.list.empty-title" datatype="html"><source>No runs recorded</source><target>Chưa ghi nhận lượt chạy nào</target></trans-unit>
 <trans-unit id="runs.list.empty-description" datatype="html"><source>Runs will appear here when a producer creates them.</source><target>Các lượt chạy sẽ xuất hiện khi nguồn gửi dữ liệu tạo chúng.</target></trans-unit>
-<trans-unit id="runs.list.filtered-title" datatype="html"><source>No matching runs in the loaded rows</source><target>Không có lượt chạy khớp trong các hàng đã tải</target></trans-unit>
-<trans-unit id="runs.list.filtered-description" datatype="html"><source>No loaded runs match these filters. Load more when available, or clear filters.</source><target>Không có lượt chạy đã tải nào khớp các bộ lọc này. Tải thêm khi có thể hoặc xóa bộ lọc.</target></trans-unit>
-<trans-unit id="runs.list.pagination" datatype="html"><source>More runs</source><target>Các lượt chạy tiếp theo</target></trans-unit>
-<trans-unit id="runs.list.more" datatype="html"><source>Load more</source><target>Tải thêm</target></trans-unit>
-<trans-unit id="runs.list.loading-more" datatype="html"><source>Loading more runs…</source><target>Đang tải thêm lượt chạy…</target></trans-unit>
-<trans-unit id="runs.list.capped" datatype="html"><source>Automatic browsing paused. Load more to continue, or narrow the ref name.</source><target>Đã tạm dừng tự động duyệt. Tải thêm để tiếp tục hoặc giới hạn tên tham chiếu.</target></trans-unit>
-<trans-unit id="runs.list.retry-more" datatype="html"><source>Retry loading more</source><target>Thử tải thêm lần nữa</target></trans-unit>
-<trans-unit id="runs.list.loaded-count" datatype="html"><source>Filtered from <x id="count" equiv-text="formatNumber(this.store.loadedCount(), this.locale)"/> loaded runs.</source><target>Đã lọc từ <x id="count" equiv-text="formatNumber(this.store.loadedCount(), this.locale)"/> lượt chạy đã tải.</target></trans-unit>
-<trans-unit id="runs.list.loaded-plain" datatype="html"><source>Loaded <x id="count" equiv-text="formatNumber(this.store.loadedCount(), this.locale)"/> runs.</source><target>Đã tải <x id="count" equiv-text="formatNumber(this.store.loadedCount(), this.locale)"/> lượt chạy.</target></trans-unit>
+<trans-unit id="runs.list.page-filtered-title" datatype="html"><source>No matching runs on this page</source><target>Không có lượt chạy phù hợp trên trang này</target></trans-unit>
+<trans-unit id="runs.list.page-filtered-description" datatype="html"><source>No runs on this page match these filters. Next searches further when available, or clear filters.</source><target>Không có lượt chạy nào trên trang này khớp bộ lọc. Chọn Trang sau để tìm tiếp nếu có, hoặc xóa bộ lọc.</target></trans-unit>
+<trans-unit id="runs.list.empty-page-title" datatype="html"><source>No runs on this page</source><target>Không có lượt chạy trên trang này</target></trans-unit>
+<trans-unit id="runs.list.empty-page-description" datatype="html"><source>Use Previous to revisit a page, or Next to search further when available.</source><target>Chọn Trang trước để quay lại, hoặc Trang sau để tìm tiếp nếu có.</target></trans-unit>
+<trans-unit id="runs.list.page-pagination" datatype="html"><source>Run pages</source><target>Các trang lượt chạy</target></trans-unit>
+<trans-unit id="runs.list.page-retry" datatype="html"><source>Retry page</source><target>Tải lại trang</target></trans-unit>
+<trans-unit id="runs.list.page-filtered-count" datatype="html"><source>Filtered from <x id="count" equiv-text="formatNumber(this.store.loadedCount(), this.locale)"/> runs on this page.</source><target>Lọc từ <x id="count" equiv-text="formatNumber(this.store.loadedCount(), this.locale)"/> lượt chạy trên trang này.</target></trans-unit>
+<trans-unit id="runs.list.page-count" datatype="html"><source>Fetched <x id="count" equiv-text="formatNumber(this.store.loadedCount(), this.locale)"/> runs on this page.</source><target>Đã tải <x id="count" equiv-text="formatNumber(this.store.loadedCount(), this.locale)"/> lượt chạy trên trang này.</target></trans-unit>
 <trans-unit id="runs.list.ref-invalid" datatype="html"><source>Ref name not applied: use 1 to 255 characters with no control characters.</source><target>Tên tham chiếu không được áp dụng: dùng từ 1 đến 255 ký tự và không có ký tự điều khiển.</target></trans-unit>
 <trans-unit id="runs.list.table-caption" datatype="html"><source>Project runs</source><target>Lượt chạy của dự án</target></trans-unit>
 <trans-unit id="runs.list.column-id" datatype="html"><source>Run id</source><target>Mã lượt chạy</target></trans-unit>
@@ -3134,7 +3127,6 @@
 <trans-unit id="settings.audit.export-unapplied" datatype="html"><source>Filters have unapplied changes. Apply or clear them before exporting.</source><target>Bộ lọc có thay đổi chưa áp dụng. Hãy áp dụng hoặc xóa bộ lọc trước khi xuất.</target></trans-unit>
 <trans-unit id="settings.audit.export-unbounded" datatype="html"><source>No time limit</source><target>Không giới hạn thời gian</target></trans-unit>
 <trans-unit id="settings.audit.object-hint" datatype="html"><source>Use the exact object type, for example run or policy_revision.</source><target>Nhập đúng loại đối tượng, ví dụ run hoặc policy_revision.</target></trans-unit>
-<trans-unit id="settings.audit.row-range" datatype="html"><source>Rows <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> of <x id="total" equiv-text="formatNumber(total, this.locale)"/> loaded.</source><target>Dòng <x id="start"/>–<x id="end"/> trên <x id="total"/> dòng đã tải.</target></trans-unit>
 <trans-unit id="settings.members.show-full-matrix" datatype="html"><source>Show all roles</source><target>Xem tất cả vai trò</target></trans-unit>
 <trans-unit id="settings.members.show-granted-only" datatype="html"><source>Show granted roles only</source><target>Chỉ xem vai trò đã cấp</target></trans-unit>
 <trans-unit id="shell.overview.choose-next-step" datatype="html"><source> Choose a next step for this project. </source><target>Chọn bước tiếp theo cho dự án này.</target></trans-unit>
@@ -3200,6 +3192,10 @@
 <trans-unit id="shared.gallery.values.title" datatype="html"><source> Times, numbers and identifiers </source><target>Thời gian, số và định danh</target></trans-unit>
 <trans-unit id="shared.narrow.desktop-required.description" datatype="html"><source>Use a wider screen to make changes. You can still inspect information, copy values and navigate.</source><target>Hãy dùng màn hình rộng hơn để thay đổi. Bạn vẫn có thể xem thông tin, sao chép giá trị và điều hướng.</target></trans-unit>
 <trans-unit id="shared.narrow.desktop-required.title" datatype="html"><source>Desktop required</source><target>Cần dùng máy tính</target></trans-unit>
+<trans-unit id="shared.data-table.rows-per-page" datatype="html"><source>Rows per page</source><target>Số hàng mỗi trang</target></trans-unit>
+<trans-unit id="shared.data-table.pagination" datatype="html"><source>Table pagination</source><target>Phân trang bảng</target></trans-unit>
+<trans-unit id="shared.data-table.page-number" datatype="html"><source>Page <x id="page" equiv-text="page"/></source><target>Trang <x id="page" equiv-text="page"/></target></trans-unit>
+<trans-unit id="shared.data-table.range" datatype="html"><source><x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> of <x id="loaded" equiv-text="loaded"/></source><target><x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> trên <x id="loaded" equiv-text="loaded"/></target></trans-unit>
 <trans-unit id="shared.data-table.loaded-range" datatype="html"><source>Loaded records <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> of <x id="loaded" equiv-text="loaded"/></source><target>Bản ghi đã tải <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> trên <x id="loaded" equiv-text="loaded"/></target></trans-unit>
 <trans-unit id="shared.data-table.next" datatype="html"><source>Next records</source><target>Bản ghi tiếp</target></trans-unit>
 <trans-unit id="shared.data-table.pages" datatype="html"><source><x id="caption" equiv-text="caption"/> — loaded record pages</source><target>Các trang bản ghi đã tải của <x id="caption" equiv-text="caption"/></target></trans-unit>
@@ -22353,11 +22349,11 @@
 <trans-unit id="repairs.queue.showing" datatype="html"><source>Showing <x id="visible" equiv-text="visible"/> of <x id="total" equiv-text="total"/></source><target>Hiển thị <x id="visible" equiv-text="visible"/> trên <x id="total" equiv-text="total"/></target></trans-unit>
 <trans-unit id="runs.detail.latest-freeze" datatype="html"><source>Latest loaded freeze</source><target>Bản đóng băng mới nhất đã tải</target></trans-unit>
 <trans-unit id="runs.detail.header-version" datatype="html"><source>Version <x id="version" equiv-text="version"/></source><target>Phiên bản <x id="version" equiv-text="version"/></target></trans-unit>
-<trans-unit id="runs.list.loaded-runs" datatype="html"><source>Loaded runs</source><target>Lượt chạy đã tải</target></trans-unit>
+<trans-unit id="runs.list.page-runs" datatype="html"><source>Runs on this page</source><target>Lượt chạy trên trang này</target></trans-unit>
 <trans-unit id="runs.list.failed-decisions" datatype="html"><source>Stored FAIL decisions</source><target>Quyết định FAIL đã lưu</target></trans-unit>
 <trans-unit id="runs.list.labeled-reruns" datatype="html"><source>Labeled reruns</source><target>Lượt chạy lại có nhãn</target></trans-unit>
 <trans-unit id="runs.list.showing" datatype="html"><source>Showing <x id="shown" equiv-text="shown"/></source><target>Đang hiển thị <x id="shown" equiv-text="shown"/></target></trans-unit>
-<trans-unit id="runs.list.of-loaded" datatype="html"><source>Of <x id="count" equiv-text="count"/> loaded runs</source><target>Trong số <x id="count" equiv-text="count"/> lượt chạy đã tải</target></trans-unit>
+<trans-unit id="runs.list.of-page" datatype="html"><source>Of <x id="count" equiv-text="count"/> runs on this page</source><target>Trong <x id="count" equiv-text="count"/> lượt chạy trên trang này</target></trans-unit>
       <trans-unit id="review.deploy-targets.actions" datatype="html">
         <source>Actions</source>
         <target>Thao tác</target>

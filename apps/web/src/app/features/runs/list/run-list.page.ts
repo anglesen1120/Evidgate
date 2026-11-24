@@ -30,6 +30,7 @@ import { CreateRunDialogComponent } from '../actions/create/create-run-dialog.co
 import { CREATE_RUN_COPY } from '../actions/create/create-run.copy';
 import { PageHeaderComponent, PageHeaderImports } from '../../../shared/ui/page-header';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
+import { DataTablePagerComponent } from '../../../shared/ui/data-table/data-table-pager.component';
 import { RunListTableComponent } from './run-list-table.component';
 import { NumberValueComponent } from '../../../shared/ui/values/number-value.component';
 import { EMPTY_RUN_LIST_FILTERS, RunListStore } from './run-list.store';
@@ -50,6 +51,7 @@ import { EMPTY_RUN_LIST_FILTERS, RunListStore } from './run-list.store';
     NumberValueComponent,
     RequestStateComponent,
     RunListTableComponent,
+    DataTablePagerComponent,
     CreateRunDialogComponent,
   ],
   providers: [RunListStore],
@@ -83,8 +85,6 @@ export class RunListPage {
 
   private readonly injector = inject(Injector);
 
-  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
-
   protected draft = { ...EMPTY_RUN_LIST_FILTERS };
   protected readonly activeFilterLabel = computed(() => {
     const count = formatNumber(
@@ -102,7 +102,6 @@ export class RunListPage {
   protected readonly canCreate = computed(() => this.session.has('run:create'));
   protected readonly createCopy = CREATE_RUN_COPY;
   protected projectId: string | null = null;
-  private readonly loadMoreButton = viewChild<ElementRef<HTMLButtonElement>>('loadMoreControl');
   private readonly pagingRetryButton =
     viewChild<ElementRef<HTMLButtonElement>>('pagingRetryControl');
   private readonly pagingSection = viewChild<ElementRef<HTMLElement>>('paging');
@@ -111,17 +110,17 @@ export class RunListPage {
   protected readonly copy = {
     title: $localize`:@@runs.list.title:Runs`,
     description: $localize`:@@runs.list.description:Review collection state and the latest stored decision. Open a run for evidence completeness.`,
-    loadedRuns: $localize`:@@runs.list.loaded-runs:Loaded runs`,
+    loadedRuns: $localize`:@@runs.list.page-runs:Runs on this page`,
     failedDecisions: $localize`:@@runs.list.failed-decisions:Stored FAIL decisions`,
     reruns: $localize`:@@runs.list.labeled-reruns:Labeled reruns`,
     register: $localize`:@@runs.list.table-caption:Project runs`,
     filters: $localize`:@@runs.list.filters:Filter runs`,
-    filterHint: $localize`:@@runs.list.filter-hint:Decision and ref name filter the server list. State and run scope filter loaded runs only. Load more to search older runs.`,
-    state: $localize`:@@runs.list.state-filter:State in loaded runs`,
+    filterHint: $localize`:@@runs.list.page-filter-hint:Decision and ref name filter the server list. State and run scope filter this page only. Next searches further.`,
+    state: $localize`:@@runs.list.page-state-filter:State on this page`,
     decision: $localize`:@@runs.list.decision-filter:Decision`,
     decisionHint: $localize`:@@runs.list.decision-hint:The latest live evaluation determines the decision. Not evaluated means no live evaluation yet.`,
     pending: $localize`:@@shared.decision-chip.pending:Not evaluated`,
-    scope: $localize`:@@runs.list.scope-filter:Scope in loaded runs`,
+    scope: $localize`:@@runs.list.page-scope-filter:Scope on this page`,
     ref: $localize`:@@runs.list.ref-filter:Ref name (exact match)`,
     any: $localize`:@@runs.list.any:All`,
     created: $localize`:@@shared.run-state.created:Created`,
@@ -138,13 +137,12 @@ export class RunListPage {
     clear: $localize`:@@runs.list.clear:Clear filters`,
     emptyTitle: $localize`:@@runs.list.empty-title:No runs recorded`,
     emptyDescription: $localize`:@@runs.list.empty-description:Runs will appear here when a producer creates them.`,
-    filteredTitle: $localize`:@@runs.list.filtered-title:No matching runs in the loaded rows`,
-    filteredDescription: $localize`:@@runs.list.filtered-description:No loaded runs match these filters. Load more when available, or clear filters.`,
-    pagination: $localize`:@@runs.list.pagination:More runs`,
-    more: $localize`:@@runs.list.more:Load more`,
-    loadingMore: $localize`:@@runs.list.loading-more:Loading more runs…`,
-    capped: $localize`:@@runs.list.capped:Automatic browsing paused. Load more to continue, or narrow the ref name.`,
-    retryMore: $localize`:@@runs.list.retry-more:Retry loading more`,
+    filteredTitle: $localize`:@@runs.list.page-filtered-title:No matching runs on this page`,
+    filteredDescription: $localize`:@@runs.list.page-filtered-description:No runs on this page match these filters. Next searches further when available, or clear filters.`,
+    emptyPageTitle: $localize`:@@runs.list.empty-page-title:No runs on this page`,
+    emptyPageDescription: $localize`:@@runs.list.empty-page-description:Use Previous to revisit a page, or Next to search further when available.`,
+    pagination: $localize`:@@runs.list.page-pagination:Run pages`,
+    retryMore: $localize`:@@runs.list.page-retry:Retry page`,
     refRejected: $localize`:@@runs.list.ref-invalid:Ref name not applied: use 1 to 255 characters with no control characters.`,
   };
   protected readonly loadedSummary = computed(() => {
@@ -173,7 +171,7 @@ export class RunListPage {
   });
   protected readonly ofLoaded = computed(() => {
     const count = formatNumber(this.store.loadedCount(), this.locale);
-    return $localize`:@@runs.list.of-loaded:Of ${count}:count: loaded runs`;
+    return $localize`:@@runs.list.of-page:Of ${count}:count: runs on this page`;
   });
   protected readonly subtitle = computed(() =>
     this.status() === 'ready'
@@ -235,7 +233,10 @@ export class RunListPage {
           .find(Boolean);
         if (!projectId) return;
         const raw = Object.fromEntries(
-          ['state', 'decision', 'scope', 'ref'].map((key) => [key, query.get(key) ?? undefined]),
+          ['state', 'decision', 'scope', 'ref', 'cursor', 'pageSize'].map((key) => [
+            key,
+            query.get(key) ?? undefined,
+          ]),
         );
         const current = this.store.toQuery();
         // A form submission already updated the store. Its own URL emission must not reset rows.
@@ -263,12 +264,7 @@ export class RunListPage {
 
   protected apply(): void {
     void this.store.setFilters({ ...this.draft });
-    const query = this.store.toQuery();
-    void this.router.navigate([], {
-      relativeTo: this.route,
-      queryParams: { state: null, decision: null, scope: null, ref: null, ...query },
-      queryParamsHandling: 'merge',
-    });
+    this.syncQuery();
   }
 
   protected clear(): void {
@@ -276,76 +272,58 @@ export class RunListPage {
     this.apply();
   }
 
-  /**
-   * The next cursor page (or the retry of one), keeping the visitor's place.
-   *
-   * Both controls are removed by a successful follow — Load more once the cursor ends, the retry
-   * button once the failure clears — and neither is disabled for its own request, so the control
-   * that had focus stays focusable while the page is on its way. When the render does remove it,
-   * focus moves to the continuation instead of dropping to `body`: the first row this follow
-   * appended, else the control that replaced it, else the paging region. A visitor who moved focus
-   * elsewhere keeps it.
-   */
-  protected async loadMore(): Promise<void> {
-    const active: unknown = this.document.activeElement;
-    const owned =
-      active instanceof HTMLElement &&
-      (active === this.loadMoreButton()?.nativeElement ||
-        active === this.pagingRetryButton()?.nativeElement);
-    const shownBefore = this.store.visibleRows().length;
-    try {
-      await this.store.loadMore();
-    } finally {
-      if (owned) {
-        afterNextRender(() => this.handoffAfterLoadMore(shownBefore), {
-          injector: this.injector,
-        });
-      }
+  protected async navigatePage(direction: 'next' | 'previous' | 'retryPage'): Promise<void> {
+    const failure = this.store.pagingError();
+    if (failure && (!failure.retryable || !this.retryReady())) return;
+    const active = this.document.activeElement;
+    const ownedRetry = active === this.pagingRetryButton()?.nativeElement;
+    await this.store[direction]();
+    this.syncQuery();
+    if (ownedRetry) {
+      afterNextRender(() => this.restorePagingFocus(), { injector: this.injector });
     }
   }
 
-  private handoffAfterLoadMore(shownBefore: number): void {
-    const active: unknown = this.document.activeElement;
-    // The browser moves focus to `body` when the control under it is removed; a test environment
-    // may leave it on the detached node instead, so both count as the same loss. Any other live
-    // element means the visitor moved on, and their own focus wins.
-    const lost =
-      !(active instanceof HTMLElement) || active === this.document.body || !active.isConnected;
-    if (!lost) return;
+  protected async changePageSize(size: number): Promise<void> {
+    const active = this.document.activeElement;
+    const owned = active instanceof HTMLElement && active.closest('app-data-table-pager') !== null;
+    const request = this.store.setPageSize(size);
+    this.syncQuery();
+    await request;
+    if (owned) {
+      afterNextRender(() => this.restorePagingFocus(), { injector: this.injector });
+    }
+  }
+
+  private syncQuery(): void {
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: {
+        state: null,
+        decision: null,
+        scope: null,
+        ref: null,
+        cursor: null,
+        pageSize: null,
+        ...this.store.toQuery(),
+      },
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  private restorePagingFocus(): void {
+    const active = this.document.activeElement;
+    if (active instanceof HTMLElement && active !== this.document.body && active.isConnected)
+      return;
     const retry = this.pagingRetryButton()?.nativeElement;
-    const loadMore = this.loadMoreButton()?.nativeElement;
-    const appended = this.host.nativeElement.querySelectorAll('[data-run-row]')[shownBefore];
-    const appendedLink =
-      appended instanceof HTMLElement ? appended.querySelector<HTMLElement>('a') : null;
-    // A control that is disabled at this moment cannot take focus, so it is not a candidate: a
-    // follow that failed again with a Retry-After wait leaves the retry button disabled, and
-    // focusing it would silently leave the place on `body`.
-    const usable = (candidate: HTMLElement | null | undefined): candidate is HTMLElement =>
-      candidate instanceof HTMLElement && !candidate.matches(':disabled');
-    const target = [
-      this.store.pagingError() !== null ? retry : undefined,
-      appendedLink,
-      loadMore,
-      retry,
-      this.pagingSection()?.nativeElement,
-    ].find(usable);
-    if (target === undefined) return;
-    const addedTabIndex = !target.hasAttribute('tabindex');
-    if (addedTabIndex) target.setAttribute('tabindex', '-1');
-    target.focus();
-    if (addedTabIndex) {
-      target.addEventListener('blur', () => target.removeAttribute('tabindex'), { once: true });
-    }
+    const target = retry && !retry.disabled ? retry : this.pagingSection()?.nativeElement;
+    target?.focus();
   }
 
-  /**
-   * The loaded-row count, worded for what the list is actually showing: with no filter it is a
-   * plain count, and only a filtered view says "filtered from", because only then is the number
-   * larger than what the table shows.
-   */
   protected loadedText(): string {
+    const count = formatNumber(this.store.loadedCount(), this.locale);
     return this.store.isFiltered()
-      ? $localize`:@@runs.list.loaded-count:Filtered from ${formatNumber(this.store.loadedCount(), this.locale)}:count: loaded runs.`
-      : $localize`:@@runs.list.loaded-plain:Loaded ${formatNumber(this.store.loadedCount(), this.locale)}:count: runs.`;
+      ? $localize`:@@runs.list.page-filtered-count:Filtered from ${count}:count: runs on this page.`
+      : $localize`:@@runs.list.page-count:Fetched ${count}:count: runs on this page.`;
   }
 }

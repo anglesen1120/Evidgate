@@ -237,8 +237,20 @@
     [error]="store.loadError()"
     [emptyIcon]="'navRun'"
     [empty]="store.isEmpty()"
-    [emptyTitle]="store.isFiltered() ? copy.filteredTitle : copy.emptyTitle"
-    [emptyDescription]="store.isFiltered() ? copy.filteredDescription : copy.emptyDescription"
+    [emptyTitle]="
+      store.isFiltered()
+        ? copy.filteredTitle
+        : store.page() > 1 || store.hasNext()
+          ? copy.emptyPageTitle
+          : copy.emptyTitle
+    "
+    [emptyDescription]="
+      store.isFiltered()
+        ? copy.filteredDescription
+        : store.page() > 1 || store.hasNext()
+          ? copy.emptyPageDescription
+          : copy.emptyDescription
+    "
     [emptyActionLabel]="store.isFiltered() ? copy.clear : undefined"
     (emptyAction)="clear()"
     [retryEligible]="retryReady() && (store.loadError()?.retryable ?? false)"
@@ -252,7 +264,8 @@
       #paging
       class="pagination flex min-w-0 flex-wrap items-center gap-(--eg-space-3) rounded-b-(--eg-radius-lg) border-t border-border px-(--eg-space-5) py-(--eg-space-4) focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
       [attr.aria-label]="copy.pagination"
-      [attr.aria-busy]="store.loadingMore()"
+      tabindex="-1"
+      [attr.aria-busy]="store.busy()"
     >
       <p
         class="eg-type-caption me-auto min-w-0 text-muted-foreground tabular-nums wrap-anywhere"
@@ -262,14 +275,6 @@
       >
         {{ showing() }} · {{ loadedText() }}
       </p>
-      @if (store.autoLoadCapped() || store.browseCapped()) {
-        <p
-          class="eg-type-caption w-full text-muted-foreground wrap-anywhere"
-          data-run-browse-capped
-        >
-          {{ copy.capped }}
-        </p>
-      }
       @if (store.pagingError(); as failure) {
         <div
           hlmAlert
@@ -288,37 +293,26 @@
               [variant]="'outline'"
               type="button"
               class="min-h-[var(--eg-control-touch)] justify-self-start whitespace-normal transition-none"
-              [disabled]="!retryReady()"
-              (click)="loadMore()"
+              [attr.aria-disabled]="!retryReady() || store.busy()"
+              (click)="retryReady() && !store.busy() && navigatePage('retryPage')"
             >
               {{ copy.retryMore }}
             </button>
           }
         </div>
       }
-      @if (store.hasMore() && !store.pagingError()) {
-        <!-- Keep focus during the request; the store guards against duplicate follows. -->
-        <button
-          #loadMoreControl
-          hlmBtn
-          [variant]="'outline'"
-          type="button"
-          class="ms-auto h-auto min-h-(--eg-control-touch) whitespace-normal transition-none"
-          data-run-load-more
-          (click)="loadMore()"
-        >
-          {{ copy.more }}
-        </button>
-      }
-      <p
-        class="eg-type-caption text-muted-foreground"
-        [class.sr-only]="!store.loadingMore()"
-        role="status"
-      >
-        @if (store.loadingMore()) {
-          {{ copy.loadingMore }}
-        }
-      </p>
+      <app-data-table-pager
+        class="block min-w-0 w-full"
+        [page]="store.page()"
+        [pageSize]="store.pageSize()"
+        [total]="null"
+        [count]="store.loadedCount()"
+        [hasNext]="store.hasNext()"
+        [busy]="store.busy()"
+        (previous)="navigatePage('previous')"
+        (next)="navigatePage('next')"
+        (pageSizeChange)="changePageSize($event)"
+      />
     </section>
   }
 </section>

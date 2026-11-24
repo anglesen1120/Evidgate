@@ -246,83 +246,48 @@
     (retry)="reload()"
   >
     <section class="grid min-w-0 gap-0" [attr.aria-busy]="store.paging()">
-      <app-audit-table [rows]="visibleRows()" />
-      @if (pagingAlert(); as failure) {
-        <div
-          hlmAlert
-          [variant]="'destructive'"
-          class="grid gap-3 wrap-anywhere"
-          role="alert"
-          data-audit-paging-error
-        >
-          <p>{{ failure.message }}</p>
-          @if (failure.code) {
-            <code>{{ failure.code }}</code>
-          }
-          <button
-            hlmBtn
-            [variant]="'outline'"
-            class="min-h-[var(--eg-control-touch)] whitespace-normal"
-            type="button"
-            [disabled]="store.paging()"
-            (click)="loadMore()"
-          >
-            {{ copy.retry }}
-          </button>
-        </div>
-      }
+      <app-audit-table [rows]="store.rows()" />
       <p role="status" class="px-4 text-sm" [attr.aria-live]="'polite'">
         @if (store.paging()) {
-          {{ copy.loadingMore }}
+          {{ copy.loadingPage }}
         }
       </p>
-      @if (store.browseCapped()) {
-        <p role="status" class="px-4 py-2" data-audit-browse-capped>
-          {{ browseCappedText(store.rows().length) }}
-        </p>
-      }
-      <footer
-        class="flex min-w-0 flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3"
-      >
-        <p class="text-xs text-muted-foreground" data-audit-row-range>{{ rowRange() }}</p>
-        <nav class="flex flex-wrap gap-2" [attr.aria-label]="copy.pagination">
-          <button
-            hlmBtn
-            [variant]="'outline'"
-            class="min-h-[var(--eg-control-touch)] whitespace-normal"
-            type="button"
-            data-audit-previous
-            [disabled]="offset() === 0 || store.paging()"
-            (click)="previous()"
-          >
-            {{ copy.previous }}
-          </button>
-          <button
-            hlmBtn
-            [variant]="'outline'"
-            class="min-h-[var(--eg-control-touch)] whitespace-normal"
-            type="button"
-            data-audit-next
-            [disabled]="!nextWindow() || store.paging()"
-            (click)="next()"
-          >
-            {{ copy.next }}
-          </button>
-          @if (store.hasMore()) {
-            <button
-              hlmBtn
-              [variant]="'outline'"
-              class="min-h-[var(--eg-control-touch)] whitespace-normal"
-              type="button"
-              data-audit-load-more
-              [disabled]="store.paging()"
-              (click)="loadMore()"
-            >
-              {{ copy.loadMore }}
-            </button>
-          }
-        </nav>
-      </footer>
     </section>
   </app-request-state>
+  @if (pagingAlert(); as failure) {
+    <div
+      hlmAlert
+      [variant]="'destructive'"
+      class="grid gap-3 wrap-anywhere"
+      role="alert"
+      data-audit-paging-error
+    >
+      <p>{{ failure.message }}</p>
+      @if (failure.code) {
+        <code>{{ failure.code }}</code>
+      }
+      <button
+        hlmBtn
+        [variant]="'outline'"
+        class="min-h-[var(--eg-control-touch)] whitespace-normal"
+        type="button"
+        [disabled]="store.paging() || !retryReady()"
+        (click)="retryPage()"
+      >
+        {{ copy.retry }}
+      </button>
+    </div>
+  }
+  @if (session.currentOrg()) {
+    <app-data-table-pager
+      [page]="store.page()"
+      [pageSize]="store.pageSize()"
+      [count]="store.rows().length"
+      [hasNext]="store.hasNext()"
+      [busy]="store.paging() || status() !== 'ready' || !retryReady()"
+      (previous)="previous()"
+      (next)="next()"
+      (pageSizeChange)="changePageSize($event)"
+    />
+  }
 </div>

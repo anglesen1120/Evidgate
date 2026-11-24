@@ -1,12 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { RunDataService } from '../data/run-data.service';
-import {
-  EMPTY_RUN_LIST_FILTERS,
-  RUN_LIST_AUTO_PAGES,
-  RUN_LIST_PAGE_LIMIT,
-  RunListStore,
-} from './run-list.store';
-import { FakeRunDataService, flush, rows, run, typedFailure } from './run-list-store.fixtures';
+import { EMPTY_RUN_LIST_FILTERS, RUN_LIST_PAGE_LIMIT, RunListStore } from './run-list.store';
+import { FakeRunDataService, rows, run, typedFailure } from './run-list-store.fixtures';
 
 describe('RunListStore (09.3.1-T1)', () => {
   let data: FakeRunDataService;
@@ -31,8 +26,8 @@ describe('RunListStore (09.3.1-T1)', () => {
       expect(store.rows()).toHaveLength(RUN_LIST_PAGE_LIMIT);
       expect(store.loadedCount()).toBe(RUN_LIST_PAGE_LIMIT);
       expect(store.visibleRows()).toHaveLength(RUN_LIST_PAGE_LIMIT);
-      expect(store.hasMore()).toBe(true);
-      expect(store.autoLoadCapped()).toBe(false);
+      expect(store.hasNext()).toBe(true);
+      expect(store.page()).toBe(1);
       expect(store.loadError()).toBeNull();
       expect(data.calls).toEqual([{ projectId: 'p-1', request: { limit: RUN_LIST_PAGE_LIMIT } }]);
     });
@@ -130,7 +125,7 @@ describe('RunListStore (09.3.1-T1)', () => {
       expect(store.status()).toBe('error');
       expect(store.loadError()).toBe(failure.error);
       expect(store.rows()).toEqual([]);
-      expect(store.hasMore()).toBe(false);
+      expect(store.hasNext()).toBe(false);
     });
 
     it('reports a rejection that is not the server’s answer as a fixed failure', async () => {
@@ -145,36 +140,18 @@ describe('RunListStore (09.3.1-T1)', () => {
   });
 
   describe('client-side filters', () => {
-    it('tops up pages until the filtered view holds one page', async () => {
-      // The first page is all `complete`; the runs the filter is about start on page two.
-      data.all = rows(200, (index) => ({ state: index < 50 ? 'complete' : 'running' }));
-
+    it('filters only the current page and never automatically fetches matches', async () => {
+      data.all = rows(1000, (index) => ({ state: index < 20 ? 'queued' : 'running' }));
       await store.init('p-1', { state: 'running' });
-
-      expect(data.calls).toHaveLength(2);
-      expect(store.loadedCount()).toBe(100);
-      expect(store.visibleRows()).toHaveLength(RUN_LIST_PAGE_LIMIT);
-      expect(store.visibleRows().every((row) => row.state === 'running')).toBe(true);
-      expect(store.autoLoadCapped()).toBe(false);
-      expect(store.hasMore()).toBe(true);
-      // No row is served twice by the walk, so none is rendered twice.
-      expect(new Set(store.rows().map((row) => row.run_id)).size).toBe(store.rows().length);
-    });
-
-    it('stops at the trigger bound when no row matches, and says so', async () => {
-      data.all = rows(1000, () => ({ state: 'queued' }));
-
-      await store.init('p-1', { state: 'complete' });
-
-      // One first page plus the bound's pages, no matter how many the server still names.
-      expect(data.calls).toHaveLength(1 + RUN_LIST_AUTO_PAGES);
-      expect(store.autoLoadCapped()).toBe(true);
-      expect(store.browseCapped()).toBe(true);
-      expect(store.hasMore()).toBe(true);
+      expect(data.calls).toHaveLength(1);
+      expect(store.rows()).toHaveLength(20);
       expect(store.visibleRows()).toEqual([]);
       expect(store.isEmpty()).toBe(true);
-      expect(store.isFiltered()).toBe(true);
-      expect(store.loadedCount()).toBe(RUN_LIST_PAGE_LIMIT * (1 + RUN_LIST_AUTO_PAGES));
+      expect(store.hasNext()).toBe(true);
+      await store.next();
+      expect(data.calls).toHaveLength(2);
+      expect(store.visibleRows()).toHaveLength(20);
+      expect(store.page()).toBe(2);
     });
 
     it.each(['pending', 'PASS', 'FAIL', 'INCONCLUSIVE'] as const)(
@@ -199,16 +176,19 @@ describe('RunListStore (09.3.1-T1)', () => {
       },
     );
 
-    it('follows short and empty decision-filtered pages using the cursor, not their length', async () => {
+    it('follows empty decision-filtered pages only on explicit navigation', async () => {
       data.pageSizeOverride = 1;
-      data.all = rows(9, (index) => ({ decision: index === 0 || index === 8 ? 'FAIL' : 'PASS' }));
+      data.all = rows(3, (index) => ({ decision: index === 1 ? 'PASS' : 'FAIL' }));
       await store.init('p-1', { decision: 'FAIL', ref: 'main' });
       expect(store.visibleRows().map((row) => row.run_id)).toEqual(['run-0']);
-      expect(store.hasMore()).toBe(true);
-      expect(store.autoLoadCapped()).toBe(true);
-      await store.loadMore();
-      expect(store.visibleRows().map((row) => row.run_id)).toEqual(['run-0', 'run-8']);
-      expect(store.hasMore()).toBe(false);
+      await store.next();
+      expect(store.rows()).toEqual([]);
+      expect(store.page()).toBe(2);
+      expect(store.hasNext()).toBe(true);
+      await store.next();
+      expect(store.visibleRows().map((row) => row.run_id)).toEqual(['run-2']);
+      expect(store.hasNext()).toBe(false);
+      expect(data.calls).toHaveLength(3);
       expect(
         data.calls.every(
           ({ request }) => request.decision === 'FAIL' && request.refName === 'main',
@@ -257,30 +237,30 @@ describe('RunListStore (09.3.1-T1)', () => {
       expect(store.visibleRows()).toHaveLength(5);
     });
 
-    it('re-filters the loaded rows without a request when no page is needed', async () => {
+    it('restarts page one when a local filter changes', async () => {
       data.all = rows(10, (index) => ({ state: index === 0 ? 'canceled' : 'complete' }));
       await store.init('p-1');
       expect(data.calls).toHaveLength(1);
 
       await store.setFilters({ state: 'canceled' });
 
-      expect(data.calls).toHaveLength(1);
+      expect(data.calls).toHaveLength(2);
       expect(store.loadedCount()).toBe(10);
       expect(store.visibleRows().map((row) => row.run_id)).toEqual(['run-0']);
       expect(store.isFiltered()).toBe(true);
       expect(store.isEmpty()).toBe(false);
     });
 
-    it('restarts the walk when the ref filter changes', async () => {
+    it('restarts page one when the ref filter changes', async () => {
       data.all = rows(4);
       await store.init('p-1');
       await store.setFilters({ state: 'complete' });
-      expect(data.calls).toHaveLength(1);
+      expect(data.calls).toHaveLength(2);
 
       await store.setFilters({ refName: 'refs/heads/main' });
 
-      expect(data.calls).toHaveLength(2);
-      expect(data.calls[1]?.request).toEqual({
+      expect(data.calls).toHaveLength(3);
+      expect(data.calls[2]?.request).toEqual({
         limit: RUN_LIST_PAGE_LIMIT,
         refName: 'refs/heads/main',
       });
@@ -309,165 +289,6 @@ describe('RunListStore (09.3.1-T1)', () => {
         scope: '',
         refName: 'refs/heads/main',
       });
-    });
-  });
-
-  describe('paging', () => {
-    it('appends the next page and stops at a null cursor', async () => {
-      data.all = rows(120);
-      await store.init('p-1');
-
-      await store.loadMore();
-
-      expect(store.loadedCount()).toBe(100);
-      expect(store.visibleRows()).toHaveLength(100);
-      expect(store.autoLoadCapped()).toBe(false);
-      expect(new Set(store.rows().map((row) => row.run_id)).size).toBe(100);
-
-      await store.loadMore();
-
-      expect(store.loadedCount()).toBe(120);
-      expect(store.hasMore()).toBe(false);
-
-      // No cursor left: a further click reads nothing.
-      await store.loadMore();
-      expect(data.calls).toHaveLength(3);
-    });
-
-    it('does not report the list empty while a top-up page is still in flight', async () => {
-      data.manual = true;
-      // Page 1 holds no row the filter matches, so the store publishes `ready` and immediately
-      // starts the top-up walk. The empty pattern must not flash for that window.
-      const read = store.init('p-1', { state: 'running' });
-      data.pending[0]?.resolve({
-        items: rows(RUN_LIST_PAGE_LIMIT, () => ({ state: 'complete' })),
-        next_cursor: '50',
-      });
-      await flush();
-
-      expect(store.status()).toBe('ready');
-      expect(store.loadingMore()).toBe(true);
-      expect(store.visibleRows()).toEqual([]);
-      expect(store.isEmpty()).toBe(false);
-
-      data.pending[1]?.resolve({
-        items: rows(3, (index) => ({ run_id: `match-${index}`, state: 'running' })),
-        next_cursor: null,
-      });
-      await read;
-
-      expect(store.loadingMore()).toBe(false);
-      expect(store.isEmpty()).toBe(false);
-      expect(store.visibleRows()).toHaveLength(3);
-    });
-
-    it('does nothing before the first read', async () => {
-      await store.loadMore();
-
-      expect(data.calls).toEqual([]);
-    });
-
-    it('refuses a repeated cursor as a contract violation', async () => {
-      // The filter matches none of the pages, so the walk keeps following — and the fake names the
-      // same cursor every time.
-      data.all = rows(120, () => ({ state: 'queued' }));
-      data.repeatCursor = true;
-
-      await expect(store.init('p-1', { state: 'running' })).rejects.toThrow(
-        /repeated cursor "same"/,
-      );
-    });
-
-    it('keeps the rows and reports a typed paging failure, then retries the same cursor', async () => {
-      data.all = rows(120);
-      await store.init('p-1');
-      const failure = typedFailure();
-      data.failure = failure;
-      data.failOnCall = 2;
-
-      await store.loadMore();
-
-      expect(store.pagingError()).toBe(failure.error);
-      expect(store.loadedCount()).toBe(RUN_LIST_PAGE_LIMIT);
-      expect(store.loadingMore()).toBe(false);
-      expect(store.status()).toBe('ready');
-
-      // A refused cursor was never followed, so the control that shows the failure can retry it.
-      data.failure = null;
-      await store.loadMore();
-
-      expect(store.pagingError()).toBeNull();
-      expect(store.loadedCount()).toBe(100);
-      expect(data.calls[2]?.request.cursor).toBe(data.calls[1]?.request.cursor);
-    });
-
-    it('lets the newest read win when two answers arrive out of order', async () => {
-      data.manual = true;
-
-      const first = store.init('p-1');
-      const second = store.init('p-2');
-      expect(data.pending).toHaveLength(2);
-
-      data.pending[1]?.resolve({ items: [run(2)], next_cursor: null });
-      await second;
-      data.pending[0]?.resolve({ items: [run(1), run(10)], next_cursor: null });
-      await first;
-
-      expect(store.visibleRows().map((row) => row.run_id)).toEqual(['run-2']);
-      expect(data.calls.map((call) => call.projectId)).toEqual(['p-1', 'p-2']);
-    });
-
-    it('does not start a second walk while a page is in flight', async () => {
-      data.manual = true;
-      // The filter matches none of page 1, so a top-up for the next cursor is in flight.
-      const read = store.init('p-1', { state: 'running' });
-      data.pending[0]?.resolve({
-        items: rows(RUN_LIST_PAGE_LIMIT, () => ({ state: 'complete' })),
-        next_cursor: '50',
-      });
-      await flush();
-      expect(data.pending).toHaveLength(2);
-      expect(data.calls).toHaveLength(2);
-
-      await store.setFilters({ state: 'complete' });
-
-      // The chip tap applies the filters but leaves the running walk alone: no cursor is requested
-      // twice and no page can be appended twice.
-      expect(data.calls).toHaveLength(2);
-      expect(store.filters().state).toBe('complete');
-
-      data.pending[1]?.resolve({
-        items: rows(RUN_LIST_PAGE_LIMIT, (index) => ({ run_id: `page-2-${index}` })),
-        next_cursor: null,
-      });
-      await flush();
-      await read;
-
-      expect(data.calls).toHaveLength(2);
-      expect(store.loadedCount()).toBe(2 * RUN_LIST_PAGE_LIMIT);
-    });
-
-    it('drops a page of a superseded read instead of appending it', async () => {
-      data.all = rows(120);
-      await store.init('p-1');
-      data.manual = true;
-
-      const slow = store.loadMore();
-      const restart = store.reload();
-      expect(data.pending).toHaveLength(2);
-
-      // The restart's first page answers while the earlier follow is still in flight.
-      data.pending[1]?.resolve({ items: [run(0)], next_cursor: null });
-      await restart;
-      expect(store.loadedCount()).toBe(1);
-
-      data.pending[0]?.resolve({
-        items: rows(50, (index) => ({ run_id: `stale-${index}` })),
-        next_cursor: null,
-      });
-      await slow;
-
-      expect(store.rows().map((row) => row.run_id)).toEqual(['run-0']);
     });
   });
 });

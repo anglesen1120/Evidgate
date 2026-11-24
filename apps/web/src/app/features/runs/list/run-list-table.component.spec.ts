@@ -127,7 +127,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
   });
   it('opens the selected run in place and returns focus to View without changing the filter', async () => {
     const router = TestBed.inject(Router);
-    await router.navigateByUrl('/?state=complete');
+    await router.navigateByUrl('/?state=complete&pageSize=50&cursor=opaque-page');
     const { fixture } = await render([run(3, { decision: 'FAIL' })]);
     const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, RunInspectionHarness);
     const view = await table.view();
@@ -138,9 +138,10 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     expect(await dialog.text()).toContain(run(3).run_id);
     expect(await dialog.text()).toContain('FAIL');
     expect(await table.fields()).toHaveLength(6);
-    expect(router.url).toBe('/?state=complete');
+    expect(router.url).toBe('/?state=complete&pageSize=50&cursor=opaque-page');
     await (await table.close()).click();
     expect(await view.isFocused()).toBe(true);
+    expect(router.url).toBe('/?state=complete&pageSize=50&cursor=opaque-page');
   });
   it('returns focus to the replacement View button after the table becomes narrow', async () => {
     const { fixture } = await render([run(1), run(3)]);
@@ -174,6 +175,14 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     await (await table.view()).click();
     fixture.componentRef.setInput('projectId', 'project-b');
     expect(await table.openDialog()).toBeNull();
+  });
+  it.each([20, 50, 100])('renders a %i-row server page without a nested pager', async (count) => {
+    const { fixture, root } = await render(Array.from({ length: count }, (_, index) => run(index)));
+    const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, RunInspectionHarness);
+    expect(await table.viewFor(run(count - 1).run_id)).toBeDefined();
+    expect(root.querySelectorAll('[data-run-row]')).toHaveLength(count);
+    expect(root.querySelector('app-data-table-pager')).toBeNull();
+    expect(root.querySelector('[data-table-pagination]')).toBeNull();
   });
   it('keeps collection state, evidence unavailable and stored decisions independent; no outcome column', async () => {
     const unavailable = run(5);

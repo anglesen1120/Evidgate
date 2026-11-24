@@ -31,22 +31,27 @@ export const run: RunSummary = {
 export function pageStore() {
   const filters = signal<RunListFilters>({ ...emptyFilters });
   const rows = signal<readonly RunSummary[]>([run]);
+  const page = signal(1);
+  const pageSize = signal(20);
+  const cursor = signal('');
   return {
     filters,
     rows,
+    page,
+    pageSize,
     visibleRows: rows,
     status: signal<'idle' | 'loading' | 'ready' | 'error'>('ready'),
     loadError: signal<ApiError | null>(null),
     pagingError: signal<ApiError | null>(null),
-    loadingMore: signal(false),
-    hasMore: signal(false),
-    browseCapped: signal(false),
-    autoLoadCapped: signal(false),
+    busy: signal(false),
+    hasNext: signal(false),
     refRejected: signal(false),
     loadedCount: computed(() => rows().length),
     isEmpty: computed(() => rows().length === 0),
     isFiltered: computed(() => Object.values(filters()).some(Boolean)),
     init: vi.fn((_project: string, query: Record<string, string | undefined>) => {
+      if (query['pageSize']) pageSize.set(Number(query['pageSize']));
+      cursor.set(query['cursor'] ?? '');
       filters.set({
         state: (query['state'] ?? '') as RunListFilters['state'],
         decision: (query['decision'] ?? '') as RunListFilters['decision'],
@@ -54,9 +59,11 @@ export function pageStore() {
         refName: query['ref'] ?? '',
       });
     }),
-    setFilters: vi.fn((patch: Partial<RunListFilters>) =>
-      filters.update((current) => ({ ...current, ...patch })),
-    ),
+    setFilters: vi.fn((patch: Partial<RunListFilters>) => {
+      filters.update((current) => ({ ...current, ...patch }));
+      page.set(1);
+      cursor.set('');
+    }),
     toQuery: () =>
       Object.fromEntries(
         Object.entries({
@@ -64,9 +71,19 @@ export function pageStore() {
           decision: filters().decision,
           scope: filters().scope,
           ref: filters().refName,
+          cursor: cursor(),
+          pageSize: pageSize() === 20 ? '' : String(pageSize()),
         }).filter(([, value]) => value !== ''),
       ),
-    loadMore: vi.fn(),
+    next: vi.fn<() => Promise<void>>(() => Promise.resolve()),
+    previous: vi.fn<() => Promise<void>>(() => Promise.resolve()),
+    retryPage: vi.fn<() => Promise<void>>(() => Promise.resolve()),
+    setPageSize: vi.fn((size: number) => {
+      pageSize.set(size);
+      page.set(1);
+      cursor.set('');
+      return Promise.resolve();
+    }),
     reload: vi.fn(),
   };
 }
