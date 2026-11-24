@@ -1,20 +1,22 @@
-// The member cases of the composition screen: the chunked flat table's keyboard activation and the
-// note that counts the members a repeated variant cell cannot draw. They share the route, the
-// TestBed host and the fixtures with `suite-composition.component.spec.ts`, which keeps the matrix,
-// strategy and state cases.
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import type { SuiteRevisionDto } from '@evidgate/sdk';
 import { SuitesDataService } from '../../../core/data/suites-data.service';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { routes } from '../suites.routes';
 import { SuiteCompositionComponent } from './suite-composition.component';
+import { SuiteCompositionHarness } from './suite-composition.harness';
+import { SuiteCompositionStore } from './suite-composition.store';
 import {
   gridRevision,
   readyRevision as revision,
   sparseGridRevision,
 } from './suite-composition.testing';
+
+provideLayoutTestStubs();
 
 // Applies to every test in this file. Idle wall of the slowest is 190 ms; the smoke run hit the
 // 5000 ms default here after the fuzz stage (CPU contention), so 15 s keeps a ~1.3x margin only (11.3 s of 15 s under smoke load).
@@ -46,26 +48,27 @@ describe('SuiteCompositionComponent members', { timeout: 15_000 }, () => {
 
   it('is activated by Enter and Space, which the page never captures', async () => {
     getRevision.mockResolvedValue(sparseGridRevision(61, 41, 201));
-    const { root } = await open();
-    const rows = () => root.querySelectorAll('[data-testid="suite-members-flat"] tbody tr');
-    const more = root.querySelector<HTMLButtonElement>('[data-testid="suite-members-more"]');
-    if (more === null) throw new Error('The chunked member list rendered no Show more control');
-    // A native button is what makes the keyboard activation the browser's job: it turns Enter and
-    // Space into a click itself, so any key handler here would fire the press twice.
-    expect(more.tagName).toBe('BUTTON');
-    expect(more.type).toBe('button');
-    more.focus();
-    expect(document.activeElement).toBe(more);
+    const { root, harness } = await open();
+    const page = await TestbedHarnessEnvironment.loader(harness.fixture).getHarness(
+      SuiteCompositionHarness,
+    );
+    const next = await page.next();
+    expect(await next.getProperty('tagName')).toBe('BUTTON');
+    expect(await next.getAttribute('type')).toBe('button');
+    await next.focus();
+    expect(await next.isFocused()).toBe(true);
+    const nativeNext = root.querySelector<HTMLButtonElement>('button[data-page="next"]');
+    if (!nativeNext) throw new Error('The member pager rendered no Next control');
 
     for (const key of ['Enter', ' ']) {
       const keydown = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
       // jsdom runs no default action for a key press, so this asserts the half that belongs to the
       // page: neither key is swallowed, which is what lets the browser complete the activation.
-      const notCaptured = more.dispatchEvent(keydown);
+      const notCaptured = nativeNext.dispatchEvent(keydown);
       expect(notCaptured, `${key} reaches the control`).toBe(true);
       expect(keydown.defaultPrevented, `${key} is not cancelled`).toBe(false);
     }
-    expect(rows()).toHaveLength(200);
+    expect(await page.flatRows()).toHaveLength(20);
   });
 
   it('says how many members a repeated variant cell hides, and keeps the first one', async () => {
@@ -153,7 +156,7 @@ describe('SuiteCompositionComponent members', { timeout: 15_000 }, () => {
     }
     expect(table.querySelector('thead tr')?.getAttribute('role')).toBe('row');
     const rows = [...table.querySelectorAll('tbody tr')];
-    expect(rows).toHaveLength(200);
+    expect(rows).toHaveLength(20);
     for (const row of rows) {
       expect(row.getAttribute('role')).toBe('row');
       const cells = [...row.children];
@@ -217,5 +220,89 @@ describe('SuiteCompositionComponent members', { timeout: 15_000 }, () => {
     more?.click();
     harness.fixture.detectChanges();
     expect(mobile?.querySelectorAll('li')).toHaveLength(225);
+  });
+
+  it.each([50, 100])('resets the flat page when choosing size %i', async (size) => {
+    getRevision.mockResolvedValue(sparseGridRevision(61, 41, 123));
+    const { harness } = await open();
+    const page = await TestbedHarnessEnvironment.loader(harness.fixture).getHarness(
+      SuiteCompositionHarness,
+    );
+    await (await page.next()).click();
+    await page.chooseSize(size);
+    expect(await (await page.summary()).text()).toBe(`1–${size} of 123`);
+    expect(await page.flatRows()).toHaveLength(size);
+    expect((await page.ids())[0]).toBe('member-0');
+  });
+
+  it('shows nonoverlapping first, middle and final flat pages', async () => {
+    getRevision.mockResolvedValue(sparseGridRevision(61, 41, 61));
+    const { harness } = await open();
+    const page = await TestbedHarnessEnvironment.loader(harness.fixture).getHarness(
+      SuiteCompositionHarness,
+    );
+    const seen = await page.ids();
+    expect(await (await page.summary()).text()).toBe('1–20 of 61');
+    for (const range of ['21–40 of 61', '41–60 of 61', '61–61 of 61']) {
+      await (await page.next()).click();
+      expect(await (await page.summary()).text()).toBe(range);
+      seen.push(...(await page.ids()));
+    }
+    expect(seen).toHaveLength(61);
+    expect(new Set(seen).size).toBe(61);
+    const next = await page.next();
+    expect(await next.getAttribute('aria-disabled')).toBe('true');
+    await next.focus();
+    expect(await next.isFocused()).toBe(true);
+    await next.click();
+    expect(await (await page.summary()).text()).toBe('61–61 of 61');
+    expect(await page.ids()).toEqual(['member-60']);
+  });
+
+  it('keeps the 2500-cell matrix intact and pages only above that bound', async () => {
+    getRevision.mockResolvedValue(sparseGridRevision(50, 50, 50));
+    const { root, harness } = await open();
+    expect(root.querySelectorAll('[data-suite-matrix-row]')).toHaveLength(50);
+    expect(root.querySelectorAll('[data-testid="suite-matrix"] tbody td')).toHaveLength(2500);
+    expect(root.querySelector('app-data-table-pager')).toBeNull();
+    const next = { ...sparseGridRevision(51, 50, 51), id: 'above-matrix-bound' };
+    getRevision.mockResolvedValue(next);
+    await harness.navigateByUrl(
+      `/projects/project-1/suites/revisions/${next.id}`,
+      SuiteCompositionComponent,
+    );
+    await harness.fixture.whenStable();
+    const page = await TestbedHarnessEnvironment.loader(harness.fixture).getHarness(
+      SuiteCompositionHarness,
+    );
+    expect(root.querySelector('[data-testid="suite-matrix"]')).toBeNull();
+    expect(await page.flatRows()).toHaveLength(20);
+    expect(await (await page.summary()).text()).toBe('1–20 of 51');
+  });
+
+  it('resets replaced, reordered, filtered and shrinking revision data to the first page', async () => {
+    const original = sparseGridRevision(61, 41, 123);
+    getRevision.mockResolvedValue(original);
+    const { harness } = await open();
+    const store = harness.routeDebugElement?.injector.get(SuiteCompositionStore);
+    if (!store) throw new Error('Missing composition store');
+    const page = await TestbedHarnessEnvironment.loader(harness.fixture).getHarness(
+      SuiteCompositionHarness,
+    );
+    for (const changed of [
+      { ...original },
+      { ...original, members: [...original.members].reverse() },
+      { ...original, members: original.members.slice(0, 61) },
+    ]) {
+      await (await page.next()).click();
+      getRevision.mockResolvedValue(changed);
+      await store.load(changed.id);
+      expect(await (await page.summary()).text()).toBe(`1–20 of ${changed.members.length}`);
+      const previous = await page.previous();
+      expect(await previous.getAttribute('aria-disabled')).toBe('true');
+      await previous.click();
+      expect(await (await page.summary()).text()).toBe(`1–20 of ${changed.members.length}`);
+      expect((await page.ids())[0]).toBe(changed.members[0]?.id);
+    }
   });
 });

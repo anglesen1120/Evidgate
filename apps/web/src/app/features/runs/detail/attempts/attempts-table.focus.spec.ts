@@ -1,10 +1,40 @@
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { ApiError } from '../../../../core/http/api-error';
+import { provideLayoutTestStubs } from '../../../../shared/testing/layout.testing';
 import { AttemptsTableComponent } from './attempts-table.component';
-import { render, requiredElement, row, rows } from './attempts-table.test-support';
+import { render, row } from './attempts-table.test-support';
 
-describe('AttemptsTableComponent focus', () => {
+class AttemptsHarness extends ComponentHarness {
+  static hostSelector = 'app-attempts-table';
+  readonly next = this.locatorFor('[data-page="next"]');
+  readonly previous = this.locatorFor('[data-page="previous"]');
+  readonly summary = this.locatorFor('app-data-table-pager [role="status"]');
+  readonly trigger = this.locatorFor('hlm-select-trigger button');
+  readonly options = this.documentRootLocatorFactory().locatorForAll('[role="option"]');
+  readonly rows = this.locatorForAll('[data-attempt-row]');
+  readonly retry = this.locatorFor('app-error-pattern button');
+  readonly region = this.locatorForOptional('.table-scroll');
+  readonly heading = this.locatorFor('#attempts-title');
+  readonly announcement = this.locatorFor('[data-attempts-status]');
+  readonly order = this.locatorFor('[data-attempts-order]');
+}
+
+const networkFailure: ApiError = {
+  kind: 'network',
+  status: 0,
+  code: '',
+  message: '',
+  requestId: null,
+  retryable: true,
+  details: [],
+  retryAfterSeconds: null,
+};
+
+describe('AttemptsTableComponent server pagination', () => {
+  provideLayoutTestStubs();
   beforeEach(() =>
     TestBed.configureTestingModule({
       imports: [AttemptsTableComponent],
@@ -12,207 +42,110 @@ describe('AttemptsTableComponent focus', () => {
     }),
   );
   afterEach(() => TestBed.resetTestingModule());
-  describe('follow-up focus and announcements', () => {
-    const networkFailure: ApiError = {
-      kind: 'network',
-      status: 0,
-      code: '',
-      message: '',
-      requestId: null,
-      retryable: true,
-      details: [],
-      retryAfterSeconds: null,
-    };
 
-    it('moves focus to the pager reach when the last page removes a focused Load more', async () => {
-      const input = Array.from({ length: 120 }, (_, index) =>
-        row({ executionKey: `execution-${index}` }),
-      );
-      const { root, fixture } = await render(input.slice(0, 100));
-      fixture.componentRef.setInput('hasMore', true);
-      await fixture.whenStable();
-      const more = requiredElement<HTMLButtonElement>(root, '[data-attempts-load-more]');
-      const loaded = vi.fn();
-      fixture.componentInstance.loadMore.subscribe(loaded);
-      more.focus();
-      more.click();
-      expect(loaded).toHaveBeenCalledTimes(1);
-      fixture.componentRef.setInput('loadingMore', true);
-      await fixture.whenStable();
-      // The read settles as the last page: the focused control is gone, so focus must not fall
-      // to `body` (WCAG 2.4.3) — it moves to the pager's forward reach.
-      fixture.componentRef.setInput('attempts', [...input]);
-      fixture.componentRef.setInput('hasMore', false);
-      fixture.componentRef.setInput('loadingMore', false);
-      await fixture.whenStable();
-      expect(root.querySelector('[data-attempts-load-more]')).toBeNull();
-      const next = requiredElement<HTMLButtonElement>(root, '[data-attempts-next]');
-      expect(next.disabled).toBe(false);
-      expect(document.activeElement).toBe(next);
-    });
-
-    it('moves focus to the table region when the last page leaves no pager behind', async () => {
-      const first = Array.from({ length: 40 }, (_, index) =>
-        row({ executionKey: `execution-${index}` }),
-      );
-      const appended = Array.from({ length: 5 }, (_, index) =>
-        row({ executionKey: `later-${index}` }),
-      );
-      const { root, fixture } = await render(first);
-      fixture.componentRef.setInput('hasMore', true);
-      await fixture.whenStable();
-      const more = requiredElement<HTMLButtonElement>(root, '[data-attempts-load-more]');
-      more.focus();
-      more.click();
-      fixture.componentRef.setInput('attempts', [...first, ...appended]);
-      fixture.componentRef.setInput('hasMore', false);
-      await fixture.whenStable();
-      expect(root.querySelector('[data-attempts-load-more]')).toBeNull();
-      expect(root.querySelector('nav')).toBeNull();
-      expect(document.activeElement).toBe(root.querySelector('.table-scroll'));
-    });
-
-    it('leaves focus where the visitor moved while the last page was in flight', async () => {
-      const input = Array.from({ length: 120 }, (_, index) =>
-        row({ executionKey: `execution-${index}` }),
-      );
-      const { root, fixture } = await render(input.slice(0, 100));
-      fixture.componentRef.setInput('hasMore', true);
-      await fixture.whenStable();
-      const more = requiredElement<HTMLButtonElement>(root, '[data-attempts-load-more]');
-      more.click();
-      const elsewhere = document.createElement('button');
-      document.body.append(elsewhere);
-      try {
-        // The visitor tabbed out of the panel while the read was in flight.
-        elsewhere.focus();
-        fixture.componentRef.setInput('loadingMore', true);
-        await fixture.whenStable();
-        fixture.componentRef.setInput('attempts', [...input]);
-        fixture.componentRef.setInput('hasMore', false);
-        fixture.componentRef.setInput('loadingMore', false);
-        await fixture.whenStable();
-        expect(root.querySelector('[data-attempts-load-more]')).toBeNull();
-        expect(document.activeElement).toBe(elsewhere);
-      } finally {
-        elsewhere.remove();
-      }
-    });
-
-    it('moves focus to Load more when the retry clears a focused follow-up failure', async () => {
-      const { root, fixture } = await render([row()]);
-      fixture.componentRef.setInput('hasMore', true);
-      fixture.componentRef.setInput('error', networkFailure);
-      await fixture.whenStable();
-      const retry = requiredElement<HTMLButtonElement>(root, 'app-error-pattern button');
-      const retried = vi.fn();
-      fixture.componentInstance.loadMore.subscribe(retried);
-      retry.focus();
-      retry.click();
-      expect(retried).toHaveBeenCalledTimes(1);
-      // The parent clears the failure and marks the retried read in flight: the block that held the
-      // focused Retry is gone for the whole request, so the place moves on now, not at settle.
-      fixture.componentRef.setInput('error', null);
-      fixture.componentRef.setInput('loadingMore', true);
-      await fixture.whenStable();
-      expect(root.querySelector('app-error-pattern')).toBeNull();
-      const more = requiredElement<HTMLButtonElement>(root, '[data-attempts-load-more]');
-      expect(more.getAttribute('aria-busy')).toBe('true');
-      expect(document.activeElement).toBe(more);
-      fixture.componentRef.setInput('loadingMore', false);
-      await fixture.whenStable();
-      expect(document.activeElement).toBe(more);
-    });
-
-    it('moves focus to the panel heading when a first-page retry removes the focused Retry', async () => {
-      const { root, fixture } = await render(null);
-      fixture.componentRef.setInput('status', 'error');
-      fixture.componentRef.setInput('error', networkFailure);
-      await fixture.whenStable();
-      const retry = requiredElement<HTMLButtonElement>(root, 'app-error-pattern button');
-      const retried = vi.fn();
-      fixture.componentInstance.retry.subscribe(retried);
-      retry.focus();
-      retry.click();
-      expect(retried).toHaveBeenCalledTimes(1);
-      fixture.componentRef.setInput('status', 'loading');
-      fixture.componentRef.setInput('error', null);
-      await fixture.whenStable();
-      expect(root.querySelector('app-error-pattern')).toBeNull();
-      const heading = requiredElement(root, '#attempts-title');
-      expect(document.activeElement).toBe(heading);
-      fixture.componentRef.setInput('attempts', [row()]);
-      fixture.componentRef.setInput('status', 'ready');
-      await fixture.whenStable();
-      expect(rows(root)).toHaveLength(1);
-      expect(document.activeElement).toBe(heading);
-    });
-
-    it('marks the attempts region busy and announces progress outside the busy region', async () => {
-      const { root, fixture } = await render([row()]);
-      fixture.componentRef.setInput('hasMore', true);
-      await fixture.whenStable();
-      const region = requiredElement(root, '.table-scroll');
-      const status = requiredElement(root, '[data-attempts-status]');
-      expect(status.getAttribute('role')).toBe('status');
-      expect(region.contains(status)).toBe(false);
-      expect(region.getAttribute('aria-busy')).toBeNull();
-      expect(status.textContent?.trim()).toBe('');
-
-      fixture.componentRef.setInput('loadingMore', true);
-      await fixture.whenStable();
-      expect(region.getAttribute('aria-busy')).toBe('true');
-      expect(root.querySelector('[data-attempts-load-more]')?.getAttribute('aria-busy')).toBe(
-        'true',
-      );
-      expect(status.textContent?.trim()).toBe('Loading more attempts');
-      expect(region.contains(status)).toBe(false);
-
-      fixture.componentRef.setInput('attempts', [row(), row({ attemptNo: 2 })]);
-      fixture.componentRef.setInput('loadingMore', false);
-      await fixture.whenStable();
-      expect(region.getAttribute('aria-busy')).toBeNull();
-      expect(status.textContent?.trim()).toBe('More attempts loaded');
-    });
-
-    it('announces no completion when the follow-up page fails', async () => {
-      const { root, fixture } = await render([row()]);
-      fixture.componentRef.setInput('hasMore', true);
-      fixture.componentRef.setInput('loadingMore', true);
-      await fixture.whenStable();
-      const status = requiredElement(root, '[data-attempts-status]');
-      expect(status.textContent?.trim()).toBe('Loading more attempts');
-      fixture.componentRef.setInput('error', networkFailure);
-      fixture.componentRef.setInput('loadingMore', false);
-      await fixture.whenStable();
-      expect(root.querySelector('app-error-pattern')).not.toBeNull();
-      expect(status.textContent?.trim()).toBe('');
-    });
-
-    it.each(['loading', 'error', 'unavailable', 'empty', 'ready'] as const)(
-      'keeps the follow-up live region mounted in the %s phase',
-      async (phase) => {
-        const { root, fixture } = await render(
-          phase === 'ready' ? [row()] : phase === 'empty' ? [] : null,
-        );
-        fixture.componentRef.setInput(
-          'status',
-          phase === 'error' ? 'error' : phase === 'loading' ? 'loading' : 'ready',
-        );
-        if (phase === 'error') fixture.componentRef.setInput('error', networkFailure);
-        await fixture.whenStable();
-        const marker = {
-          loading: 'app-loading-pattern',
-          error: 'app-error-pattern',
-          unavailable: '[data-attempts-unavailable]',
-          empty: 'app-empty-pattern',
-          ready: 'table',
-        }[phase];
-        expect(root.querySelector(marker)).not.toBeNull();
-        const status = root.querySelector<HTMLElement>('[data-attempts-status]');
-        expect(status?.getAttribute('role')).toBe('status');
-        expect(status?.closest('section')).not.toBeNull();
-      },
+  it('renders the supplied server page without local slicing and emits independent page intents', async () => {
+    const input = Array.from({ length: 100 }, (_, index) =>
+      row({ executionKey: `execution-${index}` }),
     );
+    const { fixture } = await render(input);
+    const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, AttemptsHarness);
+    const next = vi.fn();
+    const previous = vi.fn();
+    fixture.componentInstance.next.subscribe(next);
+    fixture.componentInstance.previous.subscribe(previous);
+    fixture.componentRef.setInput('hasMore', true);
+    fixture.componentRef.setInput('pageSize', 100);
+    expect(await table.rows()).toHaveLength(100);
+    expect(await (await table.summary()).text()).toBe('Page 1');
+    expect(await (await table.order()).text()).toBe(
+      'Server order: execution key ascending, then attempt number ascending.',
+    );
+    await (await table.previous()).click();
+    expect(previous).not.toHaveBeenCalled();
+    await (await table.next()).focus();
+    await (await table.next()).click();
+    expect(next).toHaveBeenCalledOnce();
+    fixture.componentRef.setInput('loadingMore', true);
+    await (await table.next()).click();
+    expect(next).toHaveBeenCalledOnce();
+    fixture.componentRef.setInput('attempts', [row({ executionKey: 'last-page' })]);
+    fixture.componentRef.setInput('page', 2);
+    fixture.componentRef.setInput('hasMore', false);
+    fixture.componentRef.setInput('loadingMore', false);
+    expect(await table.rows()).toHaveLength(1);
+    expect(await (await table.summary()).text()).toBe('Page 2');
+    expect(await (await table.next()).isFocused()).toBe(true);
+    await (await table.next()).click();
+    expect(next).toHaveBeenCalledOnce();
+    await (await table.previous()).click();
+    expect(previous).toHaveBeenCalledOnce();
+  });
+
+  it('offers only 20, 50 and 100 rows and emits the selected size', async () => {
+    const { fixture } = await render([row()]);
+    const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, AttemptsHarness);
+    const changed = vi.fn();
+    fixture.componentInstance.pageSizeChange.subscribe(changed);
+    expect(await (await table.trigger()).text()).toContain('20');
+    await (await table.trigger()).click();
+    const options = await table.options();
+    expect(await Promise.all(options.map((option) => option.text()))).toEqual(['20', '50', '100']);
+    await options[1]?.click();
+    expect(changed).toHaveBeenCalledExactlyOnceWith(50);
+  });
+
+  it('keeps previous navigation and page size reachable on an empty last page', async () => {
+    const { fixture } = await render([]);
+    fixture.componentRef.setInput('page', 2);
+    const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, AttemptsHarness);
+    expect(await (await table.summary()).text()).toBe('Page 2');
+    expect(await (await table.previous()).getAttribute('aria-disabled')).toBe('false');
+    expect(await (await table.next()).getAttribute('aria-disabled')).toBe('true');
+    expect(await table.trigger()).toBeTruthy();
+  });
+
+  it.each([true, false])(
+    'keeps retry focus meaningful with retained rows: %s',
+    async (retained) => {
+      const { fixture } = await render(retained ? [row()] : null);
+      fixture.componentRef.setInput('status', retained ? 'ready' : 'error');
+      fixture.componentRef.setInput('error', networkFailure);
+      const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, AttemptsHarness);
+      const retry = vi.fn();
+      fixture.componentInstance.retry.subscribe(retry);
+      await (await table.retry()).focus();
+      await (await table.retry()).click();
+      expect(retry).toHaveBeenCalledOnce();
+      fixture.componentRef.setInput('error', null);
+      fixture.componentRef.setInput('loadingMore', true);
+      if (!retained) fixture.componentRef.setInput('status', 'loading');
+      await fixture.whenStable();
+      const destination = retained ? await table.region() : await table.heading();
+      expect(await destination?.isFocused()).toBe(true);
+    },
+  );
+
+  it('announces loading outside the busy table and no false completion after failure', async () => {
+    const { fixture, root } = await render([row()]);
+    const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, AttemptsHarness);
+    fixture.componentRef.setInput('loadingMore', true);
+    expect(await (await table.region())?.getAttribute('aria-busy')).toBe('true');
+    expect(await (await table.announcement()).text()).toBe('Loading attempts page');
+    expect(root.querySelector('.table-scroll [data-attempts-status]')).toBeNull();
+    fixture.componentRef.setInput('error', networkFailure);
+    fixture.componentRef.setInput('loadingMore', false);
+    expect(await (await table.announcement()).text()).toBe('');
+    expect(await table.rows()).toHaveLength(1);
+  });
+
+  it('announces a successfully replaced page', async () => {
+    const { fixture } = await render([row()]);
+    const table = await TestbedHarnessEnvironment.harnessForFixture(fixture, AttemptsHarness);
+    fixture.componentRef.setInput('loadingMore', true);
+    await fixture.whenStable();
+    fixture.componentRef.setInput('attempts', [row({ executionKey: 'next-page' })]);
+    fixture.componentRef.setInput('loadingMore', false);
+    expect(await (await table.announcement()).text()).toBe('Attempts page loaded');
+    expect(await table.rows()).toHaveLength(1);
   });
 });

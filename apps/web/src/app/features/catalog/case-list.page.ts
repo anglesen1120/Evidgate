@@ -1,4 +1,4 @@
-import { DecimalPipe, DOCUMENT, formatNumber, Location } from '@angular/common';
+import { DecimalPipe, formatNumber, Location } from '@angular/common';
 import {
   afterNextRender,
   ChangeDetectionStrategy,
@@ -30,6 +30,7 @@ import { SessionStore } from '../../core/session/session.store';
 import { PageHeaderImports, SectionHeaderImports } from '../../shared/ui/page-header';
 import { RequestStateComponent } from '../../shared/ui/states/request-state.component';
 import { InlineFeedbackComponent } from '../../shared/ui/states/inline-feedback.component';
+import { DataTablePagerComponent } from '../../shared/ui/data-table/data-table-pager.component';
 import { RETAINED_ROWS_CAP } from '../../shared/keyset-retention';
 import { NarrowMutationPolicy } from '../../shared/ui/narrow/narrow-mutation-policy';
 import { ShellIconComponent } from '../../shell/layout/shell-icon.component';
@@ -58,6 +59,7 @@ import {
     SectionHeaderImports,
     RequestStateComponent,
     InlineFeedbackComponent,
+    DataTablePagerComponent,
     CaseListTableComponent,
     ShellIconComponent,
   ],
@@ -75,13 +77,13 @@ export class CaseListPage {
   private readonly router = inject(Router);
   protected readonly members = inject(CatalogMembersReader);
   private readonly viewport = inject(NarrowMutationPolicy);
-  private readonly injector = inject(Injector);
   private readonly session = inject(SessionStore);
-  private readonly document = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
   private readonly locale = inject(LOCALE_ID);
   private readonly cap = inject(RETAINED_ROWS_CAP);
   private readonly location = inject(Location);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
   private readonly recordNavigation = {};
   protected readonly recordCopy = CATALOG_RECORD;
   private readonly query = toSignal(this.route.queryParamMap);
@@ -147,13 +149,13 @@ export class CaseListPage {
   protected readonly copy = {
     title: $localize`:@@catalog.title:Test catalog`,
     description: $localize`:@@catalog.description:Browse stable automated test identities in this project. A missing identity is not a failed test.`,
-    results: $localize`:@@catalog.results-title:Catalog results`,
+    results: $localize`:@@catalog.results-oldest-first:Catalog results (oldest first)`,
     filters: $localize`:@@catalog.filters:Filter test identities`,
-    filterHint: $localize`:@@catalog.loaded-filter-hint:Status and framework filter the server list. Search matches name or ID in loaded results only; it never loads more results.`,
+    filterHint: $localize`:@@catalog.page-filter-hint:Status and framework filter the server list. Search matches name or ID on the current page only.`,
     status: $localize`:@@catalog.status:Status`,
     framework: $localize`:@@catalog.framework:Framework`,
     frameworkHint: $localize`:@@catalog.framework-hint:Exact framework name, for example playwright. Leave blank for all frameworks.`,
-    search: $localize`:@@catalog.loaded-search:Search name or ID in loaded results`,
+    search: $localize`:@@catalog.page-search:Search name or ID on this page`,
     all: $localize`:@@catalog.all:Active and missing`,
     active: $localize`:@@catalog.active:Active`,
     missing: $localize`:@@catalog.missing:Missing`,
@@ -164,16 +166,12 @@ export class CaseListPage {
     emptyTitle: $localize`:@@catalog.empty-title:No test identities in this project`,
     emptyDescription: $localize`:@@catalog.empty-description:Test identities appear here after catalog ingestion. No test outcome is inferred from an empty catalog.`,
     noMatchTitle: $localize`:@@catalog.loaded-no-match-title:No matching identities in loaded results`,
-    noMatchDescription: $localize`:@@catalog.loaded-no-match-description:Clear the filters to return to loaded results, or load more identities below. Local search does not inspect unloaded results.`,
+    noMatchDescription: $localize`:@@catalog.page-no-match-description:Clear the filters or browse another page. Local search only checks the current page.`,
     contractNote: $localize`:@@catalog.available-fields-note:This list does not supply revision, platform, level, purpose or rename history; these columns are not displayed.`,
     browseCapped: $localize`:@@catalog.browse-capped:Case list is at its load limit`,
     browseCappedHelp: $localize`:@@catalog.browse-capped-help:Narrow the status or framework filters to reach cases beyond the ${formatNumber(this.cap, this.locale)}:cap: loaded here. Search only checks loaded results.`,
-    pagination: $localize`:@@catalog.pagination:Catalog pagination`,
-    pageSize: $localize`:@@catalog.page-size:Page size`,
-    loadMore: $localize`:@@catalog.load-more:Load more`,
-    loadingMore: $localize`:@@catalog.loading-more:Loading more identities…`,
-    loadMoreFailed: $localize`:@@catalog.load-more-failed:More identities could not be loaded. Loaded results are unchanged.`,
-    retryMore: $localize`:@@catalog.retry-more:Retry loading more`,
+    loadMoreFailed: $localize`:@@catalog.page-load-failed:The requested page could not be loaded. The displayed page is unchanged.`,
+    retryMore: $localize`:@@catalog.retry-page:Retry page`,
     ownersLoading: $localize`:@@catalog.owners-loading:Loading owner choices…`,
     ownersFailed: $localize`:@@catalog.owners-failed:Owner choices could not be loaded. Existing ownership is unchanged.`,
     retryOwners: $localize`:@@catalog.retry-owners:Retry owner choices`,
@@ -214,9 +212,6 @@ export class CaseListPage {
   protected readonly statusLabel = (value: unknown) =>
     this.statusOptions.find((option) => option.value === value)?.label ?? this.copy.all;
   private readonly table = viewChild(CaseListTableComponent);
-  private readonly loadedSummary = viewChild<ElementRef<HTMLElement>>('loadedSummary');
-  protected readonly pageSizes = [25, 50, 100, 200] as const;
-  protected readonly pageSizeLabel = (value: unknown) => String(value);
   /** The cap notice is inserted with its message; the mounted summary region speaks it. */
   protected readonly capAnnouncement = computed(() =>
     this.store.browseCapped() ? `${this.copy.browseCapped}. ${this.copy.browseCappedHelp}` : '',
@@ -291,6 +286,26 @@ export class CaseListPage {
     this.destroyRef.onDestroy(() => this.members.clear());
   }
 
+  protected retryPage(): void {
+    const host = this.host.nativeElement;
+    const document = host.ownerDocument;
+    const origin = document.activeElement;
+    const restore = !!origin && !!host.querySelector('[data-catalog-page-error]')?.contains(origin);
+    void this.store.retryPage();
+    if (!restore) return;
+    afterNextRender(
+      () => {
+        if (document.activeElement !== origin && document.activeElement !== document.body) return;
+        const heading = host.querySelector<HTMLElement>('#catalog-results-heading');
+        if (heading) {
+          heading.tabIndex = -1;
+          heading.focus();
+        }
+      },
+      { injector: this.injector },
+    );
+  }
+
   protected setPageSize(size: number): void {
     this.store.setPageSize(size);
     void this.router.navigate([], {
@@ -298,30 +313,6 @@ export class CaseListPage {
       queryParamsHandling: 'merge',
       queryParams: { limit: size, cursor: null },
     });
-  }
-
-  protected async loadMore(event?: Event): Promise<void> {
-    const source = event?.currentTarget ?? this.document.activeElement;
-    const initiated =
-      source instanceof HTMLElement &&
-      source.matches('[data-catalog-load-more], [data-catalog-page-error] button');
-    const ownsFocus = () =>
-      initiated &&
-      (this.document.activeElement === source ||
-        this.document.activeElement === this.document.body);
-    const previous = new Set(this.store.rows().map((row) => row.id));
-    const scope = this.routeState();
-    const appended = await this.store.loadMore();
-    if (!appended || scope !== this.routeState() || !ownsFocus()) return;
-    const first = this.store.visibleRows().find((row) => !previous.has(row.id));
-    afterNextRender(
-      () => {
-        if (!ownsFocus() || scope !== this.routeState()) return;
-        if (first) this.table()?.focusRow(first.id, ownsFocus);
-        else this.loadedSummary()?.nativeElement.focus();
-      },
-      { injector: this.injector },
-    );
   }
 
   protected readonly assignOwner = async (row: CaseDto, membershipId: string): Promise<boolean> => {
@@ -394,7 +385,7 @@ export class CaseListPage {
   }
 
   protected apply(draft: CaseListFilters = this.draft()): void {
-    // Only server filters invalidate a cursor; local search stays on loaded results.
+    // Search is local to the displayed server page; the store resets it to page one.
     const filters = caseFiltersFromQuery(caseFiltersToQuery(draft));
     const previous = this.store.filters();
     const serverChanged =

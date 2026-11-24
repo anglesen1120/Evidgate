@@ -19,8 +19,11 @@ class CatalogBoundsHarness extends ComponentHarness {
   readonly noticeLiveRegions = this.locatorForAll(
     '[data-catalog-browse-capped] [role="status"], [data-catalog-browse-capped] [aria-live]',
   );
-  readonly more = this.locatorForOptional('[data-catalog-load-more]');
+  readonly next = this.locatorFor('app-data-table-pager [data-page="next"]');
   readonly empty = this.locatorForOptional('app-empty-pattern');
+  readonly loaded = this.locatorFor('app-page-header .header-description');
+  readonly rows = this.locatorForAll('app-case-list-table [data-row-id]');
+  readonly viewport = this.locatorForOptional('cdk-virtual-scroll-viewport');
 }
 
 describe('catalog retained-row cap notice', () => {
@@ -62,7 +65,10 @@ describe('catalog retained-row cap notice', () => {
       },
     });
   });
-  afterEach(() => TestBed.resetTestingModule());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    TestBed.resetTestingModule();
+  });
 
   async function render(count: number, cursor: string | null) {
     const first = CASE_LIST_FIXTURE.items[0];
@@ -93,7 +99,7 @@ describe('catalog retained-row cap notice', () => {
     expect(await summary.getAttribute('role')).toBe('status');
     expect(await summary.text()).toContain('Case list is at its load limit');
     expect(await summary.text()).toContain('10,000');
-    expect(await harness.more()).toBeNull();
+    expect(await (await harness.next()).getAttribute('aria-disabled')).toBe('true');
 
     query.next(convertToParamMap({ q: 'no-loaded-case-has-this-name' }));
     expect(await harness.empty()).not.toBeNull();
@@ -112,6 +118,16 @@ describe('catalog retained-row cap notice', () => {
     const summary = await (await harness.summary()).text();
     expect(summary).toContain('10,000 loaded');
     expect(summary).not.toContain('at its load limit');
-    expect(await harness.more()).toBeNull();
+    expect(await (await harness.next()).getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('uses the shared virtual viewport when an oversized server page exceeds 200 rows', async () => {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1280);
+    const { harness } = await render(201, null);
+    expect(await harness.viewport()).not.toBeNull();
+    const rows = await harness.rows();
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.length).toBeLessThan(201);
+    expect(await (await harness.loaded()).text()).toContain('Loaded identities: 201');
   });
 });
