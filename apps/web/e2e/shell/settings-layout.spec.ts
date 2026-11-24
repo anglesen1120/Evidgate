@@ -110,20 +110,28 @@ for (const locale of LOCALES) {
         node.getAnimations({ subtree: true }).map((animation) => animation.finished),
       );
     });
-    for (const item of await menu.getByRole('menuitem').all()) {
-      await expect(item).toHaveCSS('justify-content', 'flex-start');
+    const items = menu.getByRole('menuitem');
+    await expect(items.first()).toBeVisible();
+    for (const item of await items.all()) {
       await expect(item).toHaveCSS('text-align', 'start');
+      await expect(item).toHaveCSS('justify-content', 'flow-start');
       await expect(item).toHaveCSS('white-space', 'nowrap');
-      const contentFits = await item.evaluate((node) => {
+      const bounds = await item.evaluate((node) => {
         const range = document.createRange();
         range.selectNodeContents(node);
         const style = getComputedStyle(node);
-        return (
-          range.getBoundingClientRect().width <=
-          node.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) + 1
-        );
+        const label = range.getBoundingClientRect();
+        const start =
+          node.getBoundingClientRect().left + node.clientLeft + parseFloat(style.paddingLeft);
+        return {
+          startOffset: label.left - start,
+          available:
+            node.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+          width: label.width,
+        };
       });
-      expect(contentFits).toBe(true);
+      expect(Math.abs(bounds.startOffset)).toBeLessThanOrEqual(1);
+      expect(bounds.width).toBeLessThanOrEqual(bounds.available + 1);
     }
     await page.keyboard.press('Escape');
     await expect(menu).not.toBeVisible();
