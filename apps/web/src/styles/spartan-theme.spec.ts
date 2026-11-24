@@ -176,8 +176,9 @@ describe('Spartan theme contract', () => {
     expect(card).not.toMatch(/ring-(foreground|1)/);
   });
 
-  it('uses eight-pixel control and twelve-pixel card radii', () => {
-    expect(rootTokens.get('--eg-radius-md')).toBe('8px');
+  it('distinguishes control, bounded surface and modal radii', () => {
+    expect(rootTokens.get('--eg-radius-md')).toBe('6px');
+    expect(rootTokens.get('--eg-radius-surface')).toBe('10px');
     expect(rootTokens.get('--eg-radius-lg')).toBe('12px');
     for (const [family, selector] of [
       ['button', '.spartan-button'],
@@ -190,8 +191,10 @@ describe('Spartan theme contract', () => {
       );
     }
     expect(declarations(source('helm/card.css'), '.spartan-card').get('border-radius')).toBe(
-      'var(--eg-radius-lg)',
+      'var(--eg-radius-surface)',
     );
+    const dialog = declarations(source('helm/dialog.css'), '.spartan-dialog-content');
+    expect(dialog.get('border-radius')).toBe('var(--eg-radius-lg)');
   });
 
   it('rejects a raw value, a non-Evidgate reference and a missing token', () => {

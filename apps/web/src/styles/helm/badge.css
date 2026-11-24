@@ -33,8 +33,9 @@
     @apply box-border overflow-auto;
     background: var(--eg-surface);
     color: var(--eg-text);
-    border: var(--eg-border-width) solid var(--eg-border-control);
+    border: var(--eg-border-width) solid var(--eg-border);
     border-radius: var(--eg-radius-md);
+    box-shadow: var(--eg-elevation-2);
     padding: var(--eg-space-4);
     font-size: var(--eg-text-sm);
     line-height: var(--eg-leading-sm);
@@ -59,7 +60,11 @@
 
   .spartan-badge-variant-outline {
     background: var(--eg-surface);
-    color: var(--eg-text);
+    color: var(--eg-text-muted);
+    border-color: var(--eg-border);
+  }
+
+  :is(a[href], button, .spartan-badge--clipped).spartan-badge-variant-outline {
     border-color: var(--eg-border-control);
   }
 

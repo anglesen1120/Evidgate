@@ -4,18 +4,18 @@
   :root {
     /* [DECISION] Native controls follow the resolved light theme by default. */
     color-scheme: light;
-    --eg-bg: #f5f8fa;
+    --eg-bg: #f8fafb;
     --eg-surface: #ffffff;
-    --eg-surface-raised: #f5f8fa;
-    --eg-text: #172b3a;
-    --eg-text-muted: #526471;
-    --eg-border: #dce5eb;
-    --eg-border-control: #7a8c99;
+    --eg-surface-raised: #f2f5f6;
+    --eg-text: #192a34;
+    --eg-text-muted: #50616c;
+    --eg-border: #d9e1e5;
+    --eg-border-control: #70818b;
     --eg-accent: #006b66;
     --eg-accent-soft: #e8f5f2;
     --eg-on-accent: #ffffff;
-    --eg-focus: #006b66;
-    --eg-scrim: #10202b99;
+    --eg-focus: var(--eg-accent);
+    --eg-scrim: #10202b88;
 
     --eg-success-fg: #11633d;
     --eg-success-bg: #e9f5ee;
@@ -23,16 +23,15 @@
     --eg-danger-bg: #fceef0;
     --eg-warning-fg: #805500;
     --eg-warning-bg: #fff5dc;
-    --eg-info-fg: #245ea1;
-    --eg-info-bg: #ecf3fc;
-    --eg-neutral-fg: #526471;
-    --eg-neutral-bg: #eff3f6;
+    --eg-info-fg: var(--eg-accent);
+    --eg-info-bg: var(--eg-accent-soft);
+    --eg-neutral-fg: var(--eg-text-muted);
+    --eg-neutral-bg: #edf1f3;
 
     /* [DECISION] Pending is independently named, neutral and verdict-free. */
-    --eg-pending-fg: #526471;
-    --eg-pending-bg: #eff3f6;
-    --eg-pending-border: #7a8c99;
-    /* [DECISION] Explicit text-role alias; v2 uses accent directly for links. */
+    --eg-pending-fg: var(--eg-neutral-fg);
+    --eg-pending-bg: var(--eg-neutral-bg);
+    --eg-pending-border: var(--eg-border-control);
     --eg-accent-fg: var(--eg-accent);
 
     --eg-font-display: 'Manrope', 'Public Sans', system-ui, sans-serif;
@@ -72,7 +71,8 @@
     --eg-space-12: 64px;
 
     --eg-radius-sm: 4px;
-    --eg-radius-md: 8px;
+    --eg-radius-md: 6px;
+    --eg-radius-surface: 10px;
     --eg-radius-lg: 12px;
     --eg-radius-pill: 999px;
     --eg-border-width: 1px;
@@ -88,10 +88,10 @@
     --eg-focus-width: 2px;
     --eg-focus-offset: 2px;
 
-    /* [DECISION] Preserve v2 flat overlays, sticky separator and navigation scrim. */
+    /* Reserve elevation for transient surfaces; content cards stay flat. */
     --eg-elevation-0: none;
     --eg-elevation-1: 0 1px 0 var(--eg-border);
-    --eg-elevation-2: none;
+    --eg-elevation-2: 0 12px 40px #10202b25;
     --eg-elevation-3: 0 0 0 100vmax var(--eg-scrim);
     /* [DECISION] Documentation/JS only: custom properties cannot parameterize media queries. */
     --eg-bp-tablet: 768px;
@@ -113,18 +113,17 @@
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme='light']) {
       color-scheme: dark;
-      --eg-bg: #101416;
-      --eg-surface: #191e21;
-      --eg-surface-raised: #20272b;
+      --eg-bg: #14191d;
+      --eg-surface: #191f23;
+      --eg-surface-raised: #182025;
       --eg-text: #e5eef4;
-      --eg-text-muted: #a8bac7;
-      --eg-border: #334a59;
-      --eg-border-control: #7f98a8;
+      --eg-text-muted: #acbbc5;
+      --eg-border: #344149;
+      --eg-border-control: #82959f;
       --eg-accent: #76d8cb;
       --eg-accent-soft: #153d3b;
       --eg-on-accent: #10202b;
-      --eg-focus: #76d8cb;
-      --eg-scrim: #10202b99;
+      --eg-scrim: #050b11ae;
 
       --eg-success-fg: #90dcad;
       --eg-success-bg: #153b2a;
@@ -132,39 +131,26 @@
       --eg-danger-bg: #49242b;
       --eg-warning-fg: #f2cd7a;
       --eg-warning-bg: #40341c;
-      --eg-info-fg: #a7cbfa;
-      --eg-info-bg: #1c3555;
       --eg-neutral-fg: #b8c7d2;
-      --eg-neutral-bg: #263844;
-
-      /* [DECISION] Dark equivalents of independent neutral pending and accent text roles. */
-      --eg-pending-fg: #b8c7d2;
-      --eg-pending-bg: #263844;
-      --eg-pending-border: #7f98a8;
-      --eg-accent-fg: var(--eg-accent);
-      /* [DECISION] Reuse v2 theme-aware border/scrim; do not invent darker shadows. */
-      --eg-elevation-0: none;
-      --eg-elevation-1: 0 1px 0 var(--eg-border);
-      --eg-elevation-2: none;
-      --eg-elevation-3: 0 0 0 100vmax var(--eg-scrim);
+      --eg-neutral-bg: #29343b;
+      --eg-elevation-2: 0 12px 40px #05090d44;
     }
   }
 
   html[data-theme='dark'] {
     /* [DECISION] Explicit user dark choice wins regardless of the OS preference. */
     color-scheme: dark;
-    --eg-bg: #101416;
-    --eg-surface: #191e21;
-    --eg-surface-raised: #20272b;
+    --eg-bg: #14191d;
+    --eg-surface: #191f23;
+    --eg-surface-raised: #182025;
     --eg-text: #e5eef4;
-    --eg-text-muted: #a8bac7;
-    --eg-border: #334a59;
-    --eg-border-control: #7f98a8;
+    --eg-text-muted: #acbbc5;
+    --eg-border: #344149;
+    --eg-border-control: #82959f;
     --eg-accent: #76d8cb;
     --eg-accent-soft: #153d3b;
     --eg-on-accent: #10202b;
-    --eg-focus: #76d8cb;
-    --eg-scrim: #10202b99;
+    --eg-scrim: #050b11ae;
 
     --eg-success-fg: #90dcad;
     --eg-success-bg: #153b2a;
@@ -172,20 +158,8 @@
     --eg-danger-bg: #49242b;
     --eg-warning-fg: #f2cd7a;
     --eg-warning-bg: #40341c;
-    --eg-info-fg: #a7cbfa;
-    --eg-info-bg: #1c3555;
     --eg-neutral-fg: #b8c7d2;
-    --eg-neutral-bg: #263844;
-
-    /* [DECISION] Dark equivalents of independent neutral pending and accent text roles. */
-    --eg-pending-fg: #b8c7d2;
-    --eg-pending-bg: #263844;
-    --eg-pending-border: #7f98a8;
-    --eg-accent-fg: var(--eg-accent);
-    /* [DECISION] Reuse v2 theme-aware border/scrim; do not invent darker shadows. */
-    --eg-elevation-0: none;
-    --eg-elevation-1: 0 1px 0 var(--eg-border);
-    --eg-elevation-2: none;
-    --eg-elevation-3: 0 0 0 100vmax var(--eg-scrim);
+    --eg-neutral-bg: #29343b;
+    --eg-elevation-2: 0 12px 40px #05090d44;
   }
 }

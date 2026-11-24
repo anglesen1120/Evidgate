@@ -20,7 +20,7 @@
   }
 
   .spartan-input:disabled {
-    background: var(--eg-neutral-bg);
+    background: transparent;
     color: var(--eg-text-muted);
     cursor: not-allowed;
   }

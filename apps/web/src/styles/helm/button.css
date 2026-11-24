@@ -75,12 +75,16 @@
     [aria-disabled='true'],
     [data-disabled]:not([data-disabled='false'])
   ) {
-    background: var(--eg-neutral-bg);
+    background: transparent;
     color: var(--eg-text-muted);
     border-color: var(--eg-border-control);
     box-shadow: none;
     text-decoration: none;
     cursor: not-allowed;
+
+    &:where(.spartan-button-variant-ghost, .spartan-button-variant-link) {
+      border-color: transparent;
+    }
   }
 
   .spartan-button[aria-busy='true'] {
