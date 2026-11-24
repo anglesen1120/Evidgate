@@ -1,9 +1,45 @@
-import { ComponentHarness, manualChangeDetection } from '@angular/cdk/testing';
+import { ComponentHarness, manualChangeDetection, TestKey } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
-import { provideZonelessChangeDetection } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+} from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { HlmSelect } from '@evidgate/ui/select';
 import { provideLayoutTestStubs } from '../../testing/layout.testing';
 import { DataTablePagerComponent } from './data-table-pager.component';
+
+@Component({
+  imports: [DataTablePagerComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <app-data-table-pager
+      [pageSize]="served()"
+      [busy]="busy()"
+      (pageSizeChange)="request($event)"
+    />
+  `,
+})
+class PagerOwner {
+  readonly served = signal(20);
+  readonly busy = signal(false);
+  readonly requests: number[] = [];
+  readonly retryTarget = signal<number | null>(null);
+
+  request(size: number): void {
+    this.requests.push(size);
+    this.retryTarget.set(size);
+    this.busy.set(true);
+  }
+
+  retry(): void {
+    const target = this.retryTarget();
+    if (target !== null) this.request(target);
+  }
+}
 
 class PagerHarness extends ComponentHarness {
   static hostSelector = 'app-data-table-pager';
@@ -14,6 +50,13 @@ class PagerHarness extends ComponentHarness {
   readonly previous = this.locatorFor('button[data-page="previous"]');
   readonly next = this.locatorFor('button[data-page="next"]');
   readonly options = this.documentRootLocatorFactory().locatorForAll('[role="option"]');
+
+  async sizeOption(size: number) {
+    for (const option of await this.options()) {
+      if ((await option.text()) === String(size)) return option;
+    }
+    throw new Error(`Missing page size ${size}`);
+  }
 }
 
 async function render() {
@@ -63,6 +106,28 @@ describe('DataTablePagerComponent', () => {
     expect(next).toHaveBeenCalledTimes(more ? 1 : 0);
   });
 
+  it.each([
+    { page: 1, hasNext: true, previousMuted: true, nextMuted: false },
+    { page: 2, hasNext: false, previousMuted: false, nextMuted: true },
+    { page: 1, hasNext: false, previousMuted: true, nextMuted: true },
+  ])('keeps server boundaries focusable on page $page with hasNext=$hasNext', async (row) => {
+    const { fixture, pager } = await render();
+    fixture.componentRef.setInput('page', row.page);
+    fixture.componentRef.setInput('hasNext', row.hasNext);
+    const actions = [
+      [await pager.previous(), row.previousMuted],
+      [await pager.next(), row.nextMuted],
+    ] as const;
+    for (const [button, muted] of actions) {
+      expect(await button.hasClass('page-boundary')).toBe(muted);
+      expect(await button.getAttribute('aria-disabled')).toBe(String(muted));
+      expect(await button.getProperty('disabled')).toBe(false);
+      expect(await button.getProperty('tabIndex')).toBe(0);
+      await button.focus();
+      expect(await button.isFocused()).toBe(true);
+    }
+  });
+
   it('blocks repeat activation and keeps focus while busy', async () => {
     const { fixture, pager, next } = await render();
     fixture.componentRef.setInput('hasNext', true);
@@ -75,7 +140,13 @@ describe('DataTablePagerComponent', () => {
     fixture.componentRef.setInput('busy', true);
     const nav = await pager.nav();
     expect(await nav.getAttribute('aria-busy')).toBe('true');
-    expect(await button.getAttribute('aria-disabled')).toBe('true');
+    for (const action of [await pager.previous(), button]) {
+      expect(await action.hasClass('page-boundary')).toBe(false);
+      expect(await action.getAttribute('aria-busy')).toBe('true');
+      expect(await action.getAttribute('aria-disabled')).toBe('true');
+      expect(await action.getProperty('disabled')).toBe(false);
+      expect(await action.getProperty('tabIndex')).toBe(0);
+    }
     await button.click();
     expect(next).toHaveBeenCalledTimes(1);
     expect(await button.isFocused()).toBe(true);
@@ -98,6 +169,85 @@ describe('DataTablePagerComponent', () => {
     if (!option) throw new Error('Missing page size');
     await option.click();
     expect(size.mock.calls).toEqual([[chosen]]);
+  });
+
+  it('restores the served size after failure and accepts the same request on retry', async () => {
+    const fixture = TestBed.createComponent(PagerOwner);
+    const owner = fixture.componentInstance;
+    const pager = await TestbedHarnessEnvironment.loader(fixture).getHarness(PagerHarness);
+    const trigger = await pager.trigger();
+    expect(await trigger.text()).toBe('20');
+    await trigger.click();
+    await (await pager.sizeOption(50)).click();
+    expect(owner.requests).toEqual([50]);
+    expect(await (await pager.nav()).getAttribute('aria-busy')).toBe('true');
+
+    owner.busy.set(false);
+    await fixture.whenStable();
+    expect(await trigger.text()).toBe('20');
+    await trigger.click();
+    expect(await (await pager.sizeOption(20)).getAttribute('aria-selected')).toBe('true');
+    const retry = await pager.sizeOption(50);
+    await manualChangeDetection(async () => {
+      await Promise.all([retry.click(), retry.click()]);
+    });
+    expect(owner.requests).toEqual([50, 50]);
+
+    owner.served.set(50);
+    owner.busy.set(false);
+    await fixture.whenStable();
+    expect(await trigger.text()).toBe('50');
+    await trigger.click();
+    const committed = await pager.sizeOption(50);
+    expect(await committed.getAttribute('aria-selected')).toBe('true');
+    await committed.click();
+    expect(owner.requests).toEqual([50, 50]);
+  });
+
+  it('leaves the failed target with the owner when the owner retries without reselecting', async () => {
+    const fixture = TestBed.createComponent(PagerOwner);
+    const owner = fixture.componentInstance;
+    const pager = await TestbedHarnessEnvironment.loader(fixture).getHarness(PagerHarness);
+    const trigger = await pager.trigger();
+    await trigger.click();
+    await (await pager.sizeOption(50)).click();
+    owner.busy.set(false);
+    await fixture.whenStable();
+    expect(await trigger.text()).toBe('20');
+    expect(owner.retryTarget()).toBe(50);
+    owner.retry();
+    await fixture.whenStable();
+    expect(owner.requests).toEqual([50, 50]);
+    expect(await trigger.text()).toBe('20');
+    owner.served.set(50);
+    owner.busy.set(false);
+    await fixture.whenStable();
+    expect(await trigger.text()).toBe('50');
+  });
+
+  it('cancels a keyboard-opened size menu without emitting and restores trigger focus', async () => {
+    const { pager, size } = await render();
+    const trigger = await pager.trigger();
+    await trigger.focus();
+    await trigger.sendKeys(TestKey.ENTER);
+    const current = await pager.sizeOption(20);
+    expect(await current.getAttribute('aria-selected')).toBe('true');
+    await current.sendKeys(TestKey.ESCAPE);
+    expect(await pager.options()).toHaveLength(0);
+    expect(await trigger.isFocused()).toBe(true);
+    expect(await trigger.text()).toBe('20');
+    expect(size).not.toHaveBeenCalled();
+  });
+
+  it('refuses malformed or unsupported size changes from the select', async () => {
+    const { fixture, size } = await render();
+    const select = fixture.debugElement.query(By.directive(HlmSelect));
+    for (const invalid of [null, '50', 25]) {
+      select.triggerEventHandler('ngModelChange', invalid);
+    }
+    expect(size).not.toHaveBeenCalled();
+    select.triggerEventHandler('ngModelChange', 50);
+    expect(size.mock.calls).toEqual([[50]]);
   });
 
   it('does not reload when the active page size is selected again', async () => {
